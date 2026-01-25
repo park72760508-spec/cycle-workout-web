@@ -5906,6 +5906,30 @@ Output Format (JSON Only):
       );
     }
     
+    // [Optimization] Data Sanitization: Reduce payload size by removing technical IDs
+    // Keep ONLY what AI needs for analysis
+    function sanitizeLogs(logs) {
+      if (!Array.isArray(logs)) return [];
+      return logs.map(function(log) {
+        return {
+          // Keep ONLY what AI needs for analysis
+          date: log.date,
+          title: log.title,
+          duration_min: Math.round((log.duration_sec || 0) / 60), // Convert to min
+          distance_km: log.distance_km,
+          tss: log.tss,
+          if: log.if,
+          avg_watts: log.avg_watts,
+          weighted_watts: log.weighted_watts, // NP (Normalized Power)
+          avg_hr: log.avg_hr,
+          max_hr: log.max_hr,
+          avg_cadence: log.avg_cadence,
+          rpe: log.rpe
+          // EXPLICITLY REMOVE: activity_id, user_id, streams, source, created_at, id, etc.
+        };
+      });
+    }
+    
     // ===== PerformanceDashboard Component (Direct Firebase Access - No Iframe) =====
     function PerformanceDashboard() {
       const [userProfile, setUserProfile] = useState(null);
@@ -5931,251 +5955,247 @@ Output Format (JSON Only):
       const retryLogsRef = useRef(null);
       const aiAnalysisInProgressRef = useRef(false);
       
-      // [통합 SPA] PC/모바일 동일 로직: window.currentUser → auth.currentUser → Firestore 직접 조회
+      // [통합 SPA] PC/모바일 동일 로직: window.currentUser → auth.onAuthStateChanged → Firestore 직접 조회
+      // [핵심 수정] 모바일 환경에서 Firebase Auth 초기화 속도 차이 대응: auth.onAuthStateChanged 사용
       useEffect(function profileLoadEffect() {
-        async function loadUserProfile() {
+        var unsubscribeAuth = null;
+        
+        async function loadData(user) {
+          // 1. 사용자 정보가 없으면 로딩 종료
+          if (!user) {
+            console.warn('[Dashboard] No user found via Auth listener');
+            setUserProfile(null);
+            setLoading(false);
+            return;
+          }
+          
           try {
-            // ===== 1) window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
-            var selectedUser = window.currentUser;
-            var userId = null;
-            var userName = null;
+            var userId = user.uid;
+            var firestore = window.firestoreV9 || window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
             
-            if (selectedUser && selectedUser.id) {
-              // 프로필 선택 화면에서 선택한 사용자 사용
-              userId = selectedUser.id;
-              userName = selectedUser.name || '사용자';
-              console.log('[Dashboard] Using selected user from window.currentUser:', userId);
+            // 2. Firestore에서 유저 프로필 조회
+            var userDoc = await firestore.collection('users').doc(userId).get();
+            
+            var profileData = null;
+            if (userDoc.exists) {
+              var userData = userDoc.data();
+              var ftp = Number(userData.ftp) || 0;
+              var weight = Number(userData.weight) || 0;
+              var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+              var challenge = userData.challenge || 'Fitness';
               
-              // Firestore에서 최신 정보 가져오기
-              var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
-              if (firestore) {
-                try {
-                  const userDoc = await firestore.collection('users').doc(userId).get();
-                  if (userDoc.exists) {
-                    const userData = userDoc.data();
-                    const ftp = Number(userData.ftp) || 0;
-                    const weight = Number(userData.weight) || 0;
-                    const wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-                    const challenge = userData.challenge || 'Fitness';
-                    // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
-                    var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
-                    console.log('[Dashboard] User challenge:', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
-                    if (typeof window.getWeeklyTargetTSS === 'function') {
-                      var targetInfo = window.getWeeklyTargetTSS(challenge);
-                      console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
-                      weeklyTarget = targetInfo.target;
-                    } else {
-                      console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
-                    }
-                    console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
-                    
-                    setUserProfile({
-                      id: userId,
-                      name: userData.name || userName,
-                      ftp: ftp,
-                      weight: weight,
-                      grade: userData.grade || '2',
-                      challenge: challenge,
-                      acc_points: userData.acc_points || 0,
-                      rem_points: userData.rem_points || 0,
-                      ...userData
-                    });
-                    
-                    setStats({
-                      ftp: ftp,
-                      wkg: parseFloat(wkg),
-                      weight: weight,
-                      totalPoints: Number(userData.acc_points || 0),
-                      currentPoints: Number(userData.rem_points || 0),
-                      weeklyGoal: weeklyTarget,
-                      weeklyProgress: 0
-                    });
-                    
-                    setStravaStatus({
-                      connected: !!(userData.strava_refresh_token),
-                      lastSync: userData.strava_last_sync || null
-                    });
-                    
-                    setLoading(false);
-                    return;
-                  }
-                } catch (e) {
-                  console.error('[Dashboard] Error loading user from Firestore:', e);
-                }
-              }
-              
-              // Firestore 실패 시 선택한 사용자 정보 사용
-              const ftp = Number(selectedUser.ftp) || 0;
-              const weight = Number(selectedUser.weight) || 0;
-              const wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-              const challenge = selectedUser.challenge || 'Fitness';
-              // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
-              var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
-              console.log('[Dashboard] User challenge (from selectedUser):', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
+              var weeklyTarget = 225;
               if (typeof window.getWeeklyTargetTSS === 'function') {
                 var targetInfo = window.getWeeklyTargetTSS(challenge);
-                console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
                 weeklyTarget = targetInfo.target;
-              } else {
-                console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
               }
-              console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
               
-              setUserProfile({
+              profileData = {
                 id: userId,
-                name: userName,
+                name: userData.name || user.displayName || '사용자',
                 ftp: ftp,
                 weight: weight,
-                grade: selectedUser.grade || '2',
+                grade: userData.grade || '2',
                 challenge: challenge,
-                acc_points: selectedUser.acc_points || 0,
-                rem_points: selectedUser.rem_points || 0,
-                ...selectedUser
-              });
+                acc_points: userData.acc_points || 0,
+                rem_points: userData.rem_points || 0,
+                strava_refresh_token: userData.strava_refresh_token,
+                strava_last_sync: userData.strava_last_sync
+              };
               
+              // 통계 상태 업데이트
               setStats({
                 ftp: ftp,
                 wkg: parseFloat(wkg),
                 weight: weight,
-                totalPoints: Number(selectedUser.acc_points || 0),
-                currentPoints: Number(selectedUser.rem_points || 0),
+                totalPoints: Number(userData.acc_points || 0),
+                currentPoints: Number(userData.rem_points || 0),
                 weeklyGoal: weeklyTarget,
                 weeklyProgress: 0
               });
               
               setStravaStatus({
-                connected: !!(selectedUser.strava_refresh_token),
-                lastSync: selectedUser.strava_last_sync || null
+                connected: !!(userData.strava_refresh_token),
+                lastSync: userData.strava_last_sync || null
               });
-              
-              setLoading(false);
-              return;
+            } else {
+              // 문서가 없을 경우 기본값
+              profileData = { 
+                id: userId, 
+                name: user.displayName || '사용자', 
+                ftp: 0, 
+                weight: 0, 
+                grade: '2', 
+                acc_points: 0, 
+                rem_points: 0 
+              };
             }
             
-            // ===== 2) auth.currentUser (로그인 사용자) — Firestore 직접 조회 =====
-            var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-            if (!auth) {
-              console.warn('[Dashboard] Auth not available');
-              setUserProfile({ id: '', name: '인증 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
-              setLoading(false);
-              return;
-            }
+            setUserProfile(profileData);
+            // 프로필 로드 성공 후 로딩 상태는 recentLogs 로드 등 후속 작업 완료 시 풀리도록 여기서는 false로 두지 않거나, 
+            // 전체 구조에 따라 setLoading(false)를 보류합니다. (보통은 데이터가 다 왔을 때 끄는 것이 자연스러움)
             
-            // [모바일 대응] Auth 세션 복원 대기 (IndexedDB에서 복원하는 동안 최대 3초)
-            var currentUser = auth.currentUser;
-            if (!currentUser) {
-              console.log('[Dashboard] Auth session restoring (mobile), waiting up to 3s...');
-              try {
-                currentUser = await new Promise(function(resolve, reject) {
-                  var timeout = setTimeout(function() {
-                    unsubscribe();
-                    reject(new Error('Auth timeout'));
-                  }, 3000);
-                  var unsubscribe = auth.onAuthStateChanged(function(user) {
-                    clearTimeout(timeout);
-                    unsubscribe();
-                    resolve(user);
-                  });
-                });
-              } catch (e) {
-                console.warn('[Dashboard] Auth wait failed:', e.message);
-                currentUser = null;
-              }
-            }
-            
-            if (!currentUser) {
-              console.warn('[Dashboard] No authenticated user after waiting');
-              setUserProfile({ id: '', name: '인증 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
-              setLoading(false);
-              return;
-            }
-            userId = currentUser.uid;
-            console.log('[Dashboard] Loading profile for authenticated user:', userId);
-            
-            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
-            if (!firestore) {
-              setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
-              setLoading(false);
-              return;
-            }
-            
-            try {
-              var userDoc = await firestore.collection('users').doc(userId).get();
-              if (userDoc.exists) {
-                var userData = userDoc.data();
-                var id = userId;
-                var name = userData.name || currentUser.displayName || '사용자';
-                var ftp = Number(userData.ftp) || 0;
-                var weight = Number(userData.weight) || 0;
-                var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-                var challenge = userData.challenge || 'Fitness';
-                var weeklyTarget = 225;
-                if (typeof window.getWeeklyTargetTSS === 'function') {
-                  var targetInfo = window.getWeeklyTargetTSS(challenge);
-                  weeklyTarget = targetInfo.target;
-                }
-                setUserProfile({ id: id, name: name, ftp: ftp, weight: weight, grade: userData.grade || '2', challenge: challenge, acc_points: userData.acc_points || 0, rem_points: userData.rem_points || 0, ...userData });
-                setStats({ ftp: ftp, wkg: parseFloat(wkg), weight: weight, totalPoints: Number(userData.acc_points || 0), currentPoints: Number(userData.rem_points || 0), weeklyGoal: weeklyTarget, weeklyProgress: 0 });
-                setStravaStatus({ connected: !!(userData.strava_refresh_token), lastSync: userData.strava_last_sync || null });
-              } else {
-                setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
-              }
-            } catch (e) {
-              console.error('[Dashboard] Error loading user profile:', e);
-              setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
-            }
-            
-            setLoading(false);
           } catch (e) {
-            console.error('[Dashboard] Error in loadUserProfile:', e);
-            setLoading(false);
+            console.error('[Dashboard] Profile load error:', e);
+            setUserProfile(null);
+            setLoading(false); // 에러 시 로딩 해제 필수
           }
         }
         
-        loadUserProfile();
+        // 3. [핵심 수정] Auth 상태 변화 감지 (모바일 지연 대응)
+        // 먼저 window.currentUser 확인 (프로필 선택 화면에서 선택한 사용자)
+        var selectedUser = window.currentUser;
+        if (selectedUser && selectedUser.id) {
+          // 프로필 선택 화면에서 선택한 사용자 사용
+          (async function() {
+            var userId = selectedUser.id;
+            var userName = selectedUser.name || '사용자';
+            console.log('[Dashboard] Using selected user from window.currentUser:', userId);
+            
+            // Firestore에서 최신 정보 가져오기
+            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            if (firestore) {
+              try {
+                var userDoc = await firestore.collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                  var userData = userDoc.data();
+                  var ftp = Number(userData.ftp) || 0;
+                  var weight = Number(userData.weight) || 0;
+                  var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+                  var challenge = userData.challenge || 'Fitness';
+                  var weeklyTarget = 225;
+                  if (typeof window.getWeeklyTargetTSS === 'function') {
+                    var targetInfo = window.getWeeklyTargetTSS(challenge);
+                    weeklyTarget = targetInfo.target;
+                  }
+                  
+                  setUserProfile({
+                    id: userId,
+                    name: userData.name || userName,
+                    ftp: ftp,
+                    weight: weight,
+                    grade: userData.grade || '2',
+                    challenge: challenge,
+                    acc_points: userData.acc_points || 0,
+                    rem_points: userData.rem_points || 0
+                  });
+                  
+                  setStats({
+                    ftp: ftp,
+                    wkg: parseFloat(wkg),
+                    weight: weight,
+                    totalPoints: Number(userData.acc_points || 0),
+                    currentPoints: Number(userData.rem_points || 0),
+                    weeklyGoal: weeklyTarget,
+                    weeklyProgress: 0
+                  });
+                  
+                  setStravaStatus({
+                    connected: !!(userData.strava_refresh_token),
+                    lastSync: userData.strava_last_sync || null
+                  });
+                  
+                  setLoading(false);
+                  return;
+                }
+              } catch (e) {
+                console.error('[Dashboard] Error loading user from Firestore:', e);
+              }
+            }
+            
+            // Firestore 실패 시 선택한 사용자 정보 사용
+            var ftp = Number(selectedUser.ftp) || 0;
+            var weight = Number(selectedUser.weight) || 0;
+            var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+            var challenge = selectedUser.challenge || 'Fitness';
+            var weeklyTarget = 225;
+            if (typeof window.getWeeklyTargetTSS === 'function') {
+              var targetInfo = window.getWeeklyTargetTSS(challenge);
+              weeklyTarget = targetInfo.target;
+            }
+            
+            setUserProfile({
+              id: userId,
+              name: userName,
+              ftp: ftp,
+              weight: weight,
+              grade: selectedUser.grade || '2',
+              challenge: challenge,
+              acc_points: selectedUser.acc_points || 0,
+              rem_points: selectedUser.rem_points || 0
+            });
+            
+            setStats({
+              ftp: ftp,
+              wkg: parseFloat(wkg),
+              weight: weight,
+              totalPoints: Number(selectedUser.acc_points || 0),
+              currentPoints: Number(selectedUser.rem_points || 0),
+              weeklyGoal: weeklyTarget,
+              weeklyProgress: 0
+            });
+            
+            setStravaStatus({
+              connected: !!(selectedUser.strava_refresh_token),
+              lastSync: selectedUser.strava_last_sync || null
+            });
+            
+            setLoading(false);
+          })();
+          return;
+        }
+        
+        // window.currentUser가 없으면 auth.onAuthStateChanged 사용
+        var auth = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        
+        if (auth) {
+          // 이미 로드된 상태라면 즉시 실행
+          if (auth.currentUser) {
+            loadData(auth.currentUser);
+          } else {
+            // 로드되지 않았다면 리스너 등록 (모바일 대응)
+            unsubscribeAuth = auth.onAuthStateChanged(function(user) {
+              if (user) {
+                loadData(user);
+              } else {
+                setLoading(false); // 유저가 없으면 로딩 끔
+              }
+            });
+          }
+        } else {
+          setLoading(false);
+        }
+        
+        return function cleanup() {
+          if (unsubscribeAuth) unsubscribeAuth();
+        };
       }, []);
       
-      // 최근 훈련 로그 로드 (Event-Driven Auth Guard: stelvio-auth-ready 대기)
-      useEffect(() => {
+      // 최근 훈련 로그 로드 (수정됨: 이벤트 대기 제거, 프로필 의존성만 사용)
+      useEffect(function() {
         var isMounted = true;
-        
+
         async function loadRecentLogs() {
-          if (!userProfile || !userProfile.id) return;
-          
-          // [Safety Guard] currentUser null 체크 - Firestore 쿼리 전 차단
-          var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (!auth) {
-            console.warn('[Dashboard] Auth not available');
-            setLogsLoadError('인증이 필요합니다');
-            setLogsLoaded(true);
+          if (!userProfile || !userProfile.id) {
             setLogsLoading(false);
             return;
           }
-          
-          var currentUser = auth.currentUser;
-          if (!currentUser) {
-            console.warn('[Dashboard] Blocked premature data load (User is null)');
-            setLogsLoadError('인증이 필요합니다');
-            setLogsLoaded(true);
-            setLogsLoading(false);
-            return; // STOP execution if no user
-          }
-          
+
           if (!isMounted) return;
-          
+
           setLogsLoading(true);
           setLogsLoadError(null);
-          
+
           try {
-            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            var firestore = window.firestoreV9 || window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
             if (!firestore) {
               throw new Error('Firestore not available');
             }
-            
+
             var thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-            
+
             var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
             var logsSnapshot;
             try {
@@ -6184,7 +6204,7 @@ Output Format (JSON Only):
               console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
               logsSnapshot = await userLogsRef.limit(100).get();
             }
-            
+
             var raw = [];
             logsSnapshot.docs.forEach(function(doc) {
               var d = doc.data();
@@ -6194,11 +6214,12 @@ Output Format (JSON Only):
             });
             raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
             var logs = raw.slice(0, 30);
-            
-            setRecentLogs(logs);
-            setLogsLoaded(true);
-            setLogsLoading(false);
-            
+
+            if (isMounted) {
+              setRecentLogs(logs);
+              setLogsLoaded(true);
+            }
+
             // Calculate weekly TSS
             var today = new Date();
             var dayOfWeek = today.getDay();
@@ -6207,7 +6228,7 @@ Output Format (JSON Only):
             monday.setDate(today.getDate() + mondayOffset);
             monday.setHours(0, 0, 0, 0);
             var mondayStr = monday.toISOString().split('T')[0];
-            
+
             var weeklyTss = 0;
             logs.forEach(function(log) {
               if (log.date && log.date >= mondayStr) {
@@ -6215,24 +6236,21 @@ Output Format (JSON Only):
               }
             });
             var weeklyTssRounded = Math.round(weeklyTss);
-            
+
             // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
             var challenge = userProfile.challenge || 'Fitness';
-            var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
-            console.log('[Dashboard] User challenge (from userProfile):', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
+            var weeklyTarget = 225;
             if (typeof window.getWeeklyTargetTSS === 'function') {
               var targetInfo = window.getWeeklyTargetTSS(challenge);
-              console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
               weeklyTarget = targetInfo.target;
-            } else {
-              console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
             }
-            console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
-            
-            setStats(function(prev) {
-              return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
-            });
-            
+
+            if (isMounted) {
+              setStats(function(prev) {
+                return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+              });
+            }
+
             var last7 = logs.slice(0, 7).reverse();
             var chartData = last7.map(function(log) {
               return {
@@ -6241,74 +6259,35 @@ Output Format (JSON Only):
                 fatigue: (Number(log.tss) || 0) * 0.7
               };
             });
-            setFitnessData(chartData);
-            
-            retryLogsRef.current = function() {
-              loadRecentLogs();
-            };
+            if (isMounted) setFitnessData(chartData);
+
+            if (isMounted) {
+              retryLogsRef.current = function() {
+                loadRecentLogs();
+              };
+            }
           } catch (e) {
             console.error('[Dashboard] Error loading logs:', e);
-            setLogsLoadError(e.message || '훈련 로그 로드 실패');
-            setLogsLoaded(true);
-            setLogsLoading(false);
-            setRecentLogs([]);
-          }
-        }
-        
-        function startLoading() {
-          if (!isMounted) return;
-          // Check currentUser one last time to be safe
-          var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (auth && auth.currentUser) {
-            console.log('[Mobile Debug] [Dashboard] Auth Signal Received. Loading Data...');
-            loadRecentLogs();
-          } else {
-            console.warn('[Mobile Debug] [Dashboard] Auth Signal received but currentUser still null. Waiting...');
-            // Retry after short delay (mobile auth restoration can be delayed)
-            setTimeout(function() {
-              if (isMounted && auth && auth.currentUser) {
-                console.log('[Mobile Debug] [Dashboard] Retry: currentUser now available. Loading...');
-                loadRecentLogs();
-              }
-            }, 500);
-          }
-        }
-        
-        // Strategy 1: Check if Auth is ALREADY ready (Fast PC)
-        if (window.isAuthReady) {
-          var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (auth && auth.currentUser && userProfile && userProfile.id) {
-            console.log('[Mobile Debug] [Dashboard] Auth already ready (PC). Loading data...');
-            startLoading();
-          }
-        }
-        // Strategy 2: Wait for the Signal (Slow Mobile) - Show spinner while waiting
-        else {
-          console.log('[Mobile Debug] [Dashboard] Waiting for Auth Ready Signal...');
-          setLogsLoading(true);
-          setLogsLoadError(null);
-          window.addEventListener('stelvio-auth-ready', startLoading);
-          
-          // Timeout fallback: 5초 후에도 신호가 없으면 경고
-          setTimeout(function() {
-            if (!window.isAuthReady) {
-              console.warn('[Mobile Debug] [Dashboard] Auth signal timeout (5s). User may not be logged in.');
+            if (isMounted) {
+              setLogsLoadError(e.message || '훈련 로그 로드 실패');
+              setLogsLoaded(true);
+              setRecentLogs([]);
             }
-          }, 5000);
-        }
-        
-        // Also trigger when userProfile changes (if auth is ready)
-        if (userProfile && userProfile.id && window.isAuthReady) {
-          var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (auth && auth.currentUser) {
-            console.log('[Mobile Debug] [Dashboard] userProfile changed and auth ready. Loading data...');
-            startLoading();
+          } finally {
+            if (isMounted) {
+              setLogsLoading(false);
+            }
           }
         }
-        
+
+        if (userProfile && userProfile.id) {
+          loadRecentLogs();
+        } else {
+          setLogsLoading(false);
+        }
+
         return function cleanup() {
           isMounted = false;
-          window.removeEventListener('stelvio-auth-ready', startLoading);
         };
       }, [userProfile]);
       
@@ -6380,6 +6359,10 @@ Output Format (JSON Only):
             apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
             if (!apiKey || !String(apiKey).trim()) {
               console.warn('[Mobile Debug] [AI] No API Key found on this device.');
+              // Show alert for missing API key
+              if (typeof alert === 'function') {
+                alert('⚠️ Gemini API 키가 없습니다. [설정]에서 키를 입력해주세요.');
+              }
               setCoachData({
                 condition_score: 50,
                 training_status: 'Building Base',
@@ -6441,20 +6424,29 @@ Output Format (JSON Only):
             // [Mobile Bulletproof] Mark analysis as in progress
             aiAnalysisInProgressRef.current = true;
             setLoading(true);
-            console.log('[Mobile Debug] [AI] Sending request to Gemini... (Tokens: 8192, Timeout: 30s, ' + logScope + ' data)');
+            
+            // [Optimization] Prepare Light Payload - Sanitize logs to reduce payload size
+            var cleanLogs = sanitizeLogs(logsToSend);
+            console.log('[AI] Sending ' + cleanLogs.length + ' logs (Sanitized) to Gemini...', {
+              originalCount: logsToSend.length,
+              sanitizedCount: cleanLogs.length,
+              device: isMobileDevice ? 'mobile' : 'desktop',
+              scope: logScope
+            });
             
             // [Mobile Bulletproof] 2. 타임아웃 래퍼 (30초 안전 밸브)
             currentTimeoutId = null;
             var timeoutPromise = new Promise(function(_, reject) {
               currentTimeoutId = setTimeout(function() {
-                reject(new Error('AI 분석 시간이 초과되었습니다. (네트워크 지연)'));
+                reject(new Error('네트워크 지연: 분석 시간이 초과되었습니다.'));
               }, 30000);
             });
             
             if (typeof window.callGeminiCoach === 'function') {
               try {
+                // Call Gemini with sanitized logs (Race against timeout)
                 var analysis = await Promise.race([
-                  window.callGeminiCoach(userProfile, logsToSend),
+                  window.callGeminiCoach(userProfile, cleanLogs), // Send CLEAN logs
                   timeoutPromise
                 ]);
                 
@@ -6483,14 +6475,23 @@ Output Format (JSON Only):
                   currentTimeoutId = null;
                 }
                 var errMsg = (error && error.message) ? error.message : '알 수 없는 오류';
-                console.error('[Mobile Debug] [AI] Analysis Failed:', error);
+                console.error('[AI Error]', error);
+                
+                // Handle timeout specifically
+                var errorDisplay = errMsg;
+                if (errMsg.indexOf('네트워크 지연') !== -1 || errMsg.indexOf('시간이 초과') !== -1 || errMsg.indexOf('Network Timeout') !== -1) {
+                  errorDisplay = '네트워크 지연: 분석 시간이 초과되었습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.';
+                } else if (errMsg.indexOf('Failed to fetch') !== -1) {
+                  errorDisplay = '네트워크 오류: 인터넷 연결을 확인하거나, 방화벽이 API 요청을 차단했을 수 있습니다.';
+                }
+                
                 setCoachData({
                   condition_score: 50,
                   training_status: 'Building Base',
                   vo2max_estimate: 40,
                   coach_comment: (userProfile && userProfile.name || '사용자') + '님, 데이터 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
                   recommended_workout: 'Active Recovery (Z1)',
-                  error_reason: errMsg
+                  error_reason: errorDisplay
                 });
               }
             } else {
@@ -6518,9 +6519,14 @@ Output Format (JSON Only):
             });
           } finally {
             // [Mobile Bulletproof] 3. ALWAYS Stop Spinner (무한 로딩 방지)
+            // Clear timeout if still active
+            if (currentTimeoutId) {
+              clearTimeout(currentTimeoutId);
+              currentTimeoutId = null;
+            }
             aiAnalysisInProgressRef.current = false;
             if (isMounted) {
-              setLoading(false);
+              setLoading(false); // ALWAYS Stop Spinner
             }
           }
         }
