@@ -6003,38 +6003,45 @@ function initializeCurrentScreen(screenId) {
       break;
     }
 
-    // ▼▼▼ [Bluetooth Coach 복구 코드] 전문가 검증 완료 ▼▼▼
     case 'bluetoothTrainingCoachScreen':
-      console.log('🚀 [System] Bluetooth Training Coach 모드 진입');
-      
-      // 1. 안전 장치: DOM 요소가 렌더링될 시간을 확보
+      console.log('🚀 [System] Bluetooth Coach 모드 진입 (Optimized)');
+
+      // 1. [강제 청소] 기존 Firebase 구독 및 상태 초기화 (메모리 누수 방지)
+      if (window.bluetoothCoachState) {
+          // Firebase 구독 해제
+          if (window.bluetoothCoachState.firebaseSubscriptions) {
+              Object.entries(window.bluetoothCoachState.firebaseSubscriptions).forEach(([key, unsubscribe]) => {
+                  if (typeof unsubscribe === 'function') {
+                      try { unsubscribe(); console.log(`🧹 구독 해제: ${key}`); } catch(e) {}
+                  }
+              });
+              window.bluetoothCoachState.firebaseSubscriptions = {};
+          }
+          // 주요 상태 리셋
+          window.bluetoothCoachState.powerMeters = [];
+          window.bluetoothCoachState.trainingState = 'idle';
+          window.bluetoothCoachState.countdownTriggered = [];
+      }
+
+      // 2. [DOM 렌더링 대기]
       setTimeout(() => {
         const gridContainer = document.getElementById('bluetoothCoachPowerMeterGrid');
         
-        // 2. DOM 무결성 검사
         if (!gridContainer) {
-          console.error('❌ [Critical] #bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다. index.html 구조를 확인하세요.');
-          // 비상 복구: 컨테이너가 없으면 동적으로 생성 시도 (옵션)
+          console.error('❌ [Critical] #bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
           return;
         }
 
-        // 3. 메모리 누수 방지 (기존 상태 정리)
-        if (window.bluetoothCoachState && typeof window.bluetoothCoachState.cleanup === 'function') {
-           window.bluetoothCoachState.cleanup();
-        }
-
-        // 4. 초기화 함수 실행 (의존성 체크 포함)
+        // 3. [초기화 실행]
         if (typeof window.initBluetoothCoachDashboard === 'function') {
-          console.log('✅ [System] 대시보드 초기화 함수 실행 (initBluetoothCoachDashboard)');
+          console.log('✅ 대시보드 초기화 시작');
           window.initBluetoothCoachDashboard();
         } else {
-          console.error('❌ [Error] bluetoothCoachDashboard.js 스크립트가 로드되지 않았습니다.');
-          // 사용자에게 알림 토스트 띄우기 (있는 경우)
-          if(typeof showToast === 'function') showToast('대시보드 모듈 로드 실패', 'error');
+          console.error('❌ initBluetoothCoachDashboard 함수가 로드되지 않았습니다.');
+          // 비상 로드 시도 (옵션: 필요시 스크립트 동적 로드 로직 추가 가능)
         }
-      }, 150); // 150ms 딜레이로 안정성 확보
+      }, 150);
       break;
-    // ▲▲▲ [Bluetooth Coach 복구 코드 끝] ▲▲▲
       
     default:
       console.log('기타 화면 초기화:', screenId);
