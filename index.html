@@ -5927,63 +5927,11 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       const retryLogsRef = useRef(null);
       
-      // [Event-Driven Auth Guard] Auth 준비 후에만 프로필 로드 (모바일 Race Condition 방지)
-      useEffect(function authGuardedProfileEffect() {
-        var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-        var currentUser = auth ? auth.currentUser : null;
-        var pendingUserData = null; // 이벤트로 받은 userData 임시 저장
-        
-        async function loadUserProfile(eventUserData) {
+      // [통합 SPA] PC/모바일 동일 로직: window.currentUser → auth.currentUser → Firestore 직접 조회
+      useEffect(function profileLoadEffect() {
+        async function loadUserProfile() {
           try {
-            // ===== 우선순위 1: 이벤트로 받은 userData (가장 신뢰성 높음) =====
-            if (eventUserData) {
-              console.log('[Dashboard] Using userData from event:', eventUserData.id);
-              var userData = eventUserData;
-              var userId = userData.id;
-              var ftp = Number(userData.ftp) || 0;
-              var weight = Number(userData.weight) || 0;
-              var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-              var challenge = userData.challenge || 'Fitness';
-              
-              // 사용자 등급별 주간 목표 TSS 가져오기
-              var weeklyTarget = 225;
-              if (typeof window.getWeeklyTargetTSS === 'function') {
-                var targetInfo = window.getWeeklyTargetTSS(challenge);
-                weeklyTarget = targetInfo.target;
-              }
-              
-              setUserProfile({
-                id: userId,
-                name: userData.name || '사용자',
-                ftp: ftp,
-                weight: weight,
-                grade: userData.grade || '2',
-                challenge: challenge,
-                acc_points: userData.acc_points || 0,
-                rem_points: userData.rem_points || 0,
-                ...userData
-              });
-              
-              setStats({
-                ftp: ftp,
-                wkg: parseFloat(wkg),
-                weight: weight,
-                totalPoints: Number(userData.acc_points || 0),
-                currentPoints: Number(userData.rem_points || 0),
-                weeklyGoal: weeklyTarget,
-                weeklyProgress: 0
-              });
-              
-              setStravaStatus({
-                connected: !!(userData.strava_refresh_token),
-                lastSync: userData.strava_last_sync || null
-              });
-              
-              setLoading(false);
-              return;
-            }
-            
-            // ===== 우선순위 2: window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
+            // ===== 1) window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
             var selectedUser = window.currentUser;
             var userId = null;
             var userName = null;
@@ -6100,140 +6048,45 @@ Output Format (JSON Only):
               return;
             }
             
-            // ===== Fallback: Firebase Auth currentUser (Firestore 세션 복원 대기) =====
+            // ===== 2) auth.currentUser (로그인 사용자) — Firestore 직접 조회 =====
             var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-            if (!auth) {
-              console.warn('[Dashboard] Auth not available, waiting...');
-              var attempts = 0;
-              while (!auth && attempts < 20) {
-                await new Promise(r => setTimeout(r, 500));
-                auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-                attempts++;
-              }
-            }
-            
-            if (!auth) {
-              console.error('[Dashboard] Auth not available after waiting');
+            if (!auth || !auth.currentUser) {
+              console.warn('[Dashboard] No auth / currentUser');
               setUserProfile({ id: '', name: '인증 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
               setLoading(false);
               return;
             }
             
             var currentUser = auth.currentUser;
-            if (!currentUser) {
-              console.log('[Dashboard] Waiting for auth state...');
-              await new Promise((resolve) => {
-                var unsubscribe = auth.onAuthStateChanged(function(user) {
-                  unsubscribe();
-                  resolve(user);
-                });
-                setTimeout(() => {
-                  unsubscribe();
-                  resolve(null);
-                }, 5000);
-              });
-              currentUser = auth.currentUser;
-            }
-            
-            if (!currentUser) {
-              console.error('[Dashboard] No authenticated user');
-              setUserProfile({ id: '', name: '로그인 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
-              setLoading(false);
-              return;
-            }
-            
             userId = currentUser.uid;
             console.log('[Dashboard] Loading profile for authenticated user:', userId);
             
-            // Load from Firestore (모바일: 세션 복원 대기 후 재시도)
             var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
             if (!firestore) {
-              console.warn('[Dashboard] Firestore not available, using basic profile');
               setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
               setLoading(false);
               return;
             }
             
-            // [모바일 대응] Firestore 세션 복원 확인 후 쿼리 (최대 3회 재시도)
-            var maxRetries = 3;
-            var retryDelay = 1000; // 1초
-            var userDoc = null;
-            var lastError = null;
-            
-            for (var retry = 0; retry < maxRetries; retry++) {
-              try {
-                userDoc = await firestore.collection('users').doc(userId).get();
-                if (userDoc.exists) {
-                  break; // 성공
-                }
-                lastError = new Error('User document not found');
-                break; // 문서가 없으면 재시도 불필요
-              } catch (e) {
-                lastError = e;
-                console.warn('[Dashboard] Firestore query failed (attempt ' + (retry + 1) + '/' + maxRetries + '):', e.message);
-                
-                // permission-denied인 경우 세션 복원 대기 후 재시도
-                if (e.code === 'permission-denied' && retry < maxRetries - 1) {
-                  console.log('[Dashboard] Waiting for Firestore session restoration...');
-                  await new Promise(r => setTimeout(r, retryDelay));
-                  retryDelay *= 1.5; // 지수 백오프
-                } else {
-                  break; // 다른 오류이거나 최대 재시도 횟수 도달
-                }
-              }
-            }
-            
-            if (userDoc && userDoc.exists) {
-              try {
-                const userData = userDoc.data();
+            try {
+              var userDoc = await firestore.collection('users').doc(userId).get();
               if (userDoc.exists) {
-                const userData = userDoc.data();
-                const id = userId;
-                const name = userData.name || currentUser.displayName || '사용자';
-                const ftp = Number(userData.ftp) || 0;
-                const weight = Number(userData.weight) || 0;
-                const wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-                const challenge = userData.challenge || 'Fitness';
-                // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
-                var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
-                console.log('[Dashboard] User challenge (from Firestore):', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
+                var userData = userDoc.data();
+                var id = userId;
+                var name = userData.name || currentUser.displayName || '사용자';
+                var ftp = Number(userData.ftp) || 0;
+                var weight = Number(userData.weight) || 0;
+                var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+                var challenge = userData.challenge || 'Fitness';
+                var weeklyTarget = 225;
                 if (typeof window.getWeeklyTargetTSS === 'function') {
                   var targetInfo = window.getWeeklyTargetTSS(challenge);
-                  console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
                   weeklyTarget = targetInfo.target;
-                } else {
-                  console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
                 }
-                console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
-                
-                setUserProfile({
-                  id: id,
-                  name: name,
-                  ftp: ftp,
-                  weight: weight,
-                  grade: userData.grade || '2',
-                  challenge: challenge,
-                  acc_points: userData.acc_points || 0,
-                  rem_points: userData.rem_points || 0,
-                  ...userData
-                });
-                
-                setStats({
-                  ftp: ftp,
-                  wkg: parseFloat(wkg),
-                  weight: weight,
-                  totalPoints: Number(userData.acc_points || 0),
-                  currentPoints: Number(userData.rem_points || 0),
-                  weeklyGoal: weeklyTarget,
-                  weeklyProgress: 0
-                });
-                
-                setStravaStatus({
-                  connected: !!(userData.strava_refresh_token),
-                  lastSync: userData.strava_last_sync || null
-                });
+                setUserProfile({ id: id, name: name, ftp: ftp, weight: weight, grade: userData.grade || '2', challenge: challenge, acc_points: userData.acc_points || 0, rem_points: userData.rem_points || 0, ...userData });
+                setStats({ ftp: ftp, wkg: parseFloat(wkg), weight: weight, totalPoints: Number(userData.acc_points || 0), currentPoints: Number(userData.rem_points || 0), weeklyGoal: weeklyTarget, weeklyProgress: 0 });
+                setStravaStatus({ connected: !!(userData.strava_refresh_token), lastSync: userData.strava_last_sync || null });
               } else {
-                console.warn('[Dashboard] User document not found');
                 setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
               }
             } catch (e) {
@@ -6248,67 +6101,10 @@ Output Format (JSON Only):
           }
         }
         
-        // A. 이미 Auth 준비됨 (PC/빠른 복원)
-        if (window.isAuthReady && currentUser && window.currentUser) {
-          console.log('[Dashboard] Auth already ready. Loading data...');
-          loadUserProfile(window.currentUser); // window.currentUser를 userData로 전달
-          return;
-        }
-        
-        // B. Auth 대기 (모바일, 느린 복원) — 이벤트 구독
-        console.log('[Dashboard] Waiting for Auth Signal...');
-        
-        // stelvio-userdata-ready 이벤트 핸들러 (우선순위 높음: userData 포함)
-        var handleUserDataReady = function(e) {
-          var userData = e.detail && e.detail.userData;
-          if (userData) {
-            console.log('[Dashboard] stelvio-userdata-ready received. Loading data with userData...');
-            loadUserProfile(userData);
-          } else {
-            console.warn('[Dashboard] stelvio-userdata-ready received but no userData in detail');
-            // fallback: window.currentUser 확인
-            if (window.currentUser) {
-              loadUserProfile(window.currentUser);
-            }
-          }
-        };
-        
-        // stelvio-auth-ready 이벤트 핸들러 (fallback)
-        var handleAuthReady = function(e) {
-          console.log('[Dashboard] stelvio-auth-ready received. Waiting for userData...');
-          // userData가 설정될 때까지 대기 (최대 3초)
-          var checkInterval = setInterval(function() {
-            if (window.currentUser) {
-              clearInterval(checkInterval);
-              console.log('[Dashboard] window.currentUser available. Loading data...');
-              loadUserProfile(window.currentUser);
-            }
-          }, 200);
-          
-          setTimeout(function() {
-            clearInterval(checkInterval);
-            if (!window.currentUser) {
-              console.warn('[Dashboard] window.currentUser not available after 3s, trying auth.currentUser...');
-              loadUserProfile(null); // null 전달 시 auth.currentUser로 fallback
-            }
-          }, 3000);
-        };
-        
-        window.addEventListener('stelvio-userdata-ready', handleUserDataReady);
-        window.addEventListener('stelvio-auth-ready', handleAuthReady);
-        
-        var timeoutId = setTimeout(function() {
-          if (!window.isAuthReady) console.warn('[Dashboard] Auth signal timeout (5s).');
-        }, 5000);
-        
-        return function cleanup() {
-          window.removeEventListener('stelvio-userdata-ready', handleUserDataReady);
-          window.removeEventListener('stelvio-auth-ready', handleAuthReady);
-          clearTimeout(timeoutId);
-        };
+        loadUserProfile();
       }, []);
       
-      // 최근 훈련 로그 로드 (userProfile 설정 후 실행; Auth는 stelvio-auth-ready 이후 보장)
+      // 최근 훈련 로그 로드 (userProfile 설정 후 실행; PC/모바일 동일 로직)
       useEffect(() => {
         async function loadRecentLogs() {
           if (!userProfile || !userProfile.id) return;
@@ -6335,41 +6131,13 @@ Output Format (JSON Only):
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
             
-            // [모바일 대응] Firestore 세션 복원 확인 후 쿼리 (최대 3회 재시도)
-            var maxRetries = 3;
-            var retryDelay = 1000;
-            var logsSnapshot = null;
-            var lastError = null;
-            
-            for (var retry = 0; retry < maxRetries; retry++) {
-              try {
-                var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
-                try {
-                  logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
-                  break; // 성공
-                } catch (indexErr) {
-                  // 인덱스 오류는 재시도하지 않고 limit만 사용
-                  console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
-                  logsSnapshot = await userLogsRef.limit(100).get();
-                  break; // 성공
-                }
-              } catch (e) {
-                lastError = e;
-                console.warn('[Dashboard] Firestore logs query failed (attempt ' + (retry + 1) + '/' + maxRetries + '):', e.message);
-                
-                // permission-denied인 경우 세션 복원 대기 후 재시도
-                if (e.code === 'permission-denied' && retry < maxRetries - 1) {
-                  console.log('[Dashboard] Waiting for Firestore session restoration...');
-                  await new Promise(r => setTimeout(r, retryDelay));
-                  retryDelay *= 1.5; // 지수 백오프
-                } else {
-                  break; // 다른 오류이거나 최대 재시도 횟수 도달
-                }
-              }
-            }
-            
-            if (!logsSnapshot) {
-              throw lastError || new Error('Failed to load logs after retries');
+            var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+            var logsSnapshot;
+            try {
+              logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+            } catch (indexErr) {
+              console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+              logsSnapshot = await userLogsRef.limit(100).get();
             }
             
             var raw = [];
