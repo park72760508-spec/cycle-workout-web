@@ -3361,13 +3361,34 @@ if (!window.showScreen) {
 
       // Bluetooth Training Coach 화면 전환 시 초기화
       if (id === 'bluetoothTrainingCoachScreen') {
+        console.log('🚀 [showScreen] Bluetooth Coach 화면 전환 감지');
+        
+        // 1. 기존 리스너 정리
+        if (window.bluetoothCoachState && window.bluetoothCoachState.firebaseSubscriptions) {
+          console.log('🧹 [showScreen] 기존 Firebase 구독 정리 중...');
+          Object.values(window.bluetoothCoachState.firebaseSubscriptions).forEach(unsubscribe => {
+            if (typeof unsubscribe === 'function') {
+              unsubscribe();
+            }
+          });
+          window.bluetoothCoachState.firebaseSubscriptions = {};
+        }
+        
+        // 2. DOM 렌더링 대기 후 초기화
         setTimeout(() => {
+          const targetDiv = document.getElementById('bluetoothCoachPowerMeterGrid');
+          if (!targetDiv) {
+            console.error('❌ [showScreen] 치명적 오류: #bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+            return;
+          }
+          
           if (typeof window.initBluetoothCoachDashboard === 'function') {
+            console.log('✅ [showScreen] 초기화 함수 실행');
             window.initBluetoothCoachDashboard();
           } else {
-            console.error('[Bluetooth Coach] initBluetoothCoachDashboard function not available');
+            console.error('❌ [showScreen] initBluetoothCoachDashboard 함수가 로드되지 않았습니다.');
           }
-        }, 100);
+        }, 200);
       }
 
       // 훈련 스케줄 목록 화면: initializeCurrentScreen에서 처리하므로 여기서는 제거
@@ -5982,13 +6003,38 @@ function initializeCurrentScreen(screenId) {
       break;
     }
 
-    case 'bluetoothTrainingCoachScreen': // <--- 이 ID가 로그와 일치해야 함
-      console.log('✅ Bluetooth Coach 초기화 진입: ID 일치함');
-      if (typeof window.initBluetoothCoachDashboard === 'function') {
-        setTimeout(() => window.initBluetoothCoachDashboard(), 100);
-      } else {
-        console.error('❌ initBluetoothCoachDashboard 함수가 없습니다. 스크립트 로드 확인 필요');
+    case 'bluetoothTrainingCoachScreen':
+      console.log('🚀 Bluetooth Coach 화면 진입 시도...');
+      
+      // 1. 기존 리스너 정리 (백업 파일 로직 참조)
+      if (window.bluetoothCoachState && window.bluetoothCoachState.firebaseSubscriptions) {
+        console.log('🧹 기존 Firebase 구독 정리 중...');
+        Object.values(window.bluetoothCoachState.firebaseSubscriptions).forEach(unsubscribe => {
+          if (typeof unsubscribe === 'function') {
+            unsubscribe();
+          }
+        });
+        window.bluetoothCoachState.firebaseSubscriptions = {};
+        console.log('✅ 기존 구독 정리 완료');
       }
+      
+      // 2. DOM 렌더링 대기 후 초기화
+      setTimeout(() => {
+        const targetDiv = document.getElementById('bluetoothCoachPowerMeterGrid');
+        if (!targetDiv) {
+          console.error('❌ 치명적 오류: #bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다. HTML ID를 확인하세요.');
+          return;
+        }
+        console.log('✅ DOM 요소 확인 완료: #bluetoothCoachPowerMeterGrid');
+        
+        if (typeof window.initBluetoothCoachDashboard === 'function') {
+          console.log('✅ 초기화 함수 실행');
+          window.initBluetoothCoachDashboard();
+        } else {
+          console.error('❌ 초기화 함수(initBluetoothCoachDashboard)가 로드되지 않았습니다.');
+          console.error('   스크립트 로드 순서를 확인하세요: bluetoothCoachDashboard.js가 app.js보다 먼저 로드되어야 합니다.');
+        }
+      }, 200); // 0.2초 딜레이로 안정성 확보
       break;
       
     default:
