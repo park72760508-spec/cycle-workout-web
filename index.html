@@ -4032,16 +4032,6 @@
               }).catch(err => {
                 console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시하고 계속 진행):', err);
               });
-              
-              // Iframe에 인증 완료 알림 (Data Proxy Bridge)
-              var iframes = document.querySelectorAll('iframe');
-              iframes.forEach(function(iframe) {
-                try {
-                  iframe.contentWindow.postMessage({ type: 'AUTH_READY', userId: user.uid }, '*');
-                } catch (e) {
-                  console.warn('[Auth Guard] Failed to notify iframe:', e);
-                }
-              });
             }
           });
           
@@ -4437,16 +4427,6 @@
                 }) : Promise.resolve()
               ]).catch(err => {
                 console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시):', err);
-              });
-              
-              // Iframe에 인증 완료 알림 (Data Proxy Bridge)
-              var iframes = document.querySelectorAll('iframe');
-              iframes.forEach(function(iframe) {
-                try {
-                  iframe.contentWindow.postMessage({ type: 'AUTH_READY', userId: user.uid }, '*');
-                } catch (e) {
-                  console.warn('[Auth Guard] Failed to notify iframe:', e);
-                }
               });
             }
           });
@@ -5947,8 +5927,11 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       const retryLogsRef = useRef(null);
       
-      // 사용자 프로필 로드 (Direct Firebase Access - window.currentUser 우선 사용)
-      useEffect(() => {
+      // [Event-Driven Auth Guard] Auth 준비 후에만 프로필 로드 (모바일 Race Condition 방지)
+      useEffect(function authGuardedProfileEffect() {
+        var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        var currentUser = auth ? auth.currentUser : null;
+        
         async function loadUserProfile() {
           try {
             // ===== 우선순위: window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
@@ -6186,53 +6169,38 @@ Output Format (JSON Only):
           }
         }
         
-        loadUserProfile();
+        // A. 이미 Auth 준비됨 (PC/빠른 복원)
+        if (window.isAuthReady && currentUser) {
+          console.log('[Dashboard] Auth already ready. Loading data...');
+          loadUserProfile();
+          return;
+        }
+        
+        // B. Auth 대기 (모바일, 느린 복원) — stelvio-auth-ready 이벤트 구독
+        console.log('[Dashboard] Waiting for Auth Signal...');
+        var handleAuthReady = function() {
+          console.log('[Dashboard] stelvio-auth-ready received. Loading data...');
+          loadUserProfile();
+        };
+        window.addEventListener('stelvio-auth-ready', handleAuthReady);
+        var timeoutId = setTimeout(function() {
+          if (!window.isAuthReady) console.warn('[Dashboard] Auth signal timeout (5s).');
+        }, 5000);
+        
+        return function cleanup() {
+          window.removeEventListener('stelvio-auth-ready', handleAuthReady);
+          clearTimeout(timeoutId);
+        };
       }, []);
       
-      // 최근 훈련 로그 로드 (Direct Firestore Access with Auth Guard)
+      // 최근 훈련 로그 로드 (userProfile 설정 후 실행; Auth는 stelvio-auth-ready 이후 보장)
       useEffect(() => {
         async function loadRecentLogs() {
           if (!userProfile || !userProfile.id) return;
           
-          // [Auth Guard] 인증 상태 확인
           var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (!auth) {
-            console.warn('[Dashboard] Auth not available, waiting...');
-            var attempts = 0;
-            while (!auth && attempts < 20) {
-              await new Promise(r => setTimeout(r, 500));
-              auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-              attempts++;
-            }
-          }
-          
-          if (!auth) {
-            console.error('[Dashboard] Auth not available after waiting');
-            setLogsLoadError('인증이 필요합니다');
-            setLogsLoaded(true);
-            setLogsLoading(false);
-            return;
-          }
-          
-          // 인증 상태 확인
-          var currentUser = auth.currentUser;
-          if (!currentUser) {
-            console.log('[Dashboard] Waiting for auth state before loading logs...');
-            await new Promise((resolve) => {
-              var unsubscribe = auth.onAuthStateChanged(function(user) {
-                unsubscribe();
-                resolve(user);
-              });
-              setTimeout(() => {
-                unsubscribe();
-                resolve(null);
-              }, 5000);
-            });
-            currentUser = auth.currentUser;
-          }
-          
-          if (!currentUser) {
-            console.error('[Dashboard] No authenticated user, cannot load logs');
+          if (!auth || !auth.currentUser) {
+            console.warn('[Dashboard] Auth not ready for logs (profile loaded too early?). Skipping.');
             setLogsLoadError('인증이 필요합니다');
             setLogsLoaded(true);
             setLogsLoading(false);
@@ -6428,6 +6396,18 @@ Output Format (JSON Only):
           setLoading(false);
         }
       }, [userProfile, recentLogs, retryCoach, logsLoaded, logsLoading, logsLoadError]);
+      
+      // [Unified SPA] AI Pairing: 동일 window이므로 window.isSensorConnected 직접 폴링
+      useEffect(function sensorPollEffect() {
+        function updateSensorStatus() {
+          setAiPairingStatus(!!window.isSensorConnected);
+        }
+        updateSensorStatus();
+        var statusInterval = setInterval(updateSensorStatus, 1000);
+        return function cleanup() {
+          clearInterval(statusInterval);
+        };
+      }, []);
       
       const getGradeBadge = (grade) => {
         const badges = {
@@ -6821,338 +6801,10 @@ Output Format (JSON Only):
       // 래핑 완료 플래그 설정
       window._performanceDashboardWrapped = true;
     })();
-    
-    // ===== [Mobile Fix] Data Proxy Bridge for Iframe Dashboard =====
-    // This allows the Dashboard Iframe to request data via the Main App, bypassing mobile Iframe security restrictions
-    // Optimized with request queuing and robust Auth state handling
-    
-    (function() {
-      // Request queue for handling requests that arrive before Auth is ready
-      var requestQueue = [];
-      var isAuthReady = false;
-      var authReadyCallbacks = [];
-      
-      // Helper: Get current auth instance
-      function getAuth() {
-        return window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-      }
-      
-      // Helper: Get current user (with retry logic)
-      function getCurrentUser() {
-        var auth = getAuth();
-        if (!auth) return null;
-        return auth.currentUser;
-      }
-      
-      // Helper: Wait for Auth to be ready (with timeout)
-      function waitForAuth(timeoutMs) {
-        timeoutMs = timeoutMs || 10000; // 10 second default timeout
-        return new Promise(function(resolve, reject) {
-          var auth = getAuth();
-          if (!auth) {
-            reject(new Error('Auth not available'));
-            return;
-          }
-          
-          var currentUser = auth.currentUser;
-          if (currentUser) {
-            resolve(currentUser);
-            return;
-          }
-          
-          // Wait for auth state change
-          var unsubscribe = auth.onAuthStateChanged(function(user) {
-            unsubscribe();
-            if (user) {
-              isAuthReady = true;
-              // Process queued requests
-              processQueuedRequests();
-              resolve(user);
-            } else {
-              reject(new Error('No authenticated user'));
-            }
-          });
-          
-          // Timeout
-          setTimeout(function() {
-            unsubscribe();
-            reject(new Error('Auth timeout'));
-          }, timeoutMs);
-        });
-      }
-      
-      // Process queued requests once Auth is ready
-      function processQueuedRequests() {
-        if (requestQueue.length === 0) return;
-        
-        console.log('[Proxy] Processing', requestQueue.length, 'queued requests');
-        var queue = requestQueue.slice();
-        requestQueue = [];
-        
-        queue.forEach(function(request) {
-          handleLogRequest(request.data, request.source);
-        });
-      }
-      
-      // Main handler for log requests
-      async function handleLogRequest(data, source) {
-        var userId = data.userId;
-        var requestId = data.requestId || null; // Optional request ID for targeted response
-        
-        try {
-          // Ensure Auth is ready
-          var currentUser = getCurrentUser();
-          if (!currentUser) {
-            console.log('[Proxy] Auth not ready, waiting...');
-            try {
-              currentUser = await waitForAuth(5000);
-            } catch (authError) {
-              console.warn('[Proxy] Auth wait failed:', authError.message);
-              sendErrorResponse(source, userId, requestId, 'Authentication required. Please log in.');
-              return;
-            }
-          }
-          
-          // Verify userId matches authenticated user (security check)
-          if (userId && userId !== currentUser.uid) {
-            console.warn('[Proxy] User ID mismatch. Requested:', userId, 'Authenticated:', currentUser.uid);
-            sendErrorResponse(source, userId, requestId, 'Permission denied: User ID mismatch');
-            return;
-          }
-          
-          // Use authenticated user's ID if not provided
-          var targetUserId = userId || currentUser.uid;
-          
-          console.log('[Proxy] Fetching logs for:', targetUserId);
-          
-          // Determine date range (30 days)
-          var thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-          
-          // Query Firestore (Support both v9 and Compat)
-          var logsSnapshot;
-          var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
-          
-          if (!firestore && !window.firestoreV9) {
-            throw new Error('Firestore not available');
-          }
-          
-          try {
-            // Try Firestore v9 first if available
-            if (window.firestoreV9) {
-              try {
-                var firestoreV9Module = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-                var logsRef = firestoreV9Module.collection(window.firestoreV9, 'users', targetUserId, 'logs');
-                var q = firestoreV9Module.query(
-                  logsRef, 
-                  firestoreV9Module.where('date', '>=', dateStr), 
-                  firestoreV9Module.orderBy('date', 'desc'), 
-                  firestoreV9Module.limit(50)
-                );
-                logsSnapshot = await firestoreV9Module.getDocs(q);
-              } catch (v9Error) {
-                console.warn('[Proxy] Firestore v9 failed, using compat:', v9Error);
-                logsSnapshot = await firestore.collection('users').doc(targetUserId).collection('logs')
-                  .where('date', '>=', dateStr).orderBy('date', 'desc').limit(50).get();
-              }
-            } else {
-              logsSnapshot = await firestore.collection('users').doc(targetUserId).collection('logs')
-                .where('date', '>=', dateStr).orderBy('date', 'desc').limit(50).get();
-            }
-          } catch (queryError) {
-            // Handle index errors gracefully
-            if (queryError.code === 'failed-precondition' || (queryError.message && queryError.message.indexOf('index') !== -1)) {
-              console.warn('[Proxy] Index error, using limit only:', queryError);
-              if (window.firestoreV9) {
-                try {
-                  var firestoreV9Module = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-                  var logsRef = firestoreV9Module.collection(window.firestoreV9, 'users', targetUserId, 'logs');
-                  var q = firestoreV9Module.query(logsRef, firestoreV9Module.limit(100));
-                  logsSnapshot = await firestoreV9Module.getDocs(q);
-                } catch (e) {
-                  logsSnapshot = await firestore.collection('users').doc(targetUserId).collection('logs').limit(100).get();
-                }
-              } else {
-                logsSnapshot = await firestore.collection('users').doc(targetUserId).collection('logs').limit(100).get();
-              }
-            } else {
-              throw queryError;
-            }
-          }
-          
-          // Process logs
-          var raw = [];
-          logsSnapshot.forEach(function(doc) {
-            var d = doc.data();
-            if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
-              raw.push({ id: doc.id, ...d });
-            }
-          });
-          
-          // Sort by date (descending)
-          raw.sort(function(a, b) {
-            return (b.date || '').localeCompare(a.date || '');
-          });
-          
-          var logs = raw.slice(0, 30);
-          
-          // Send response
-          sendLogsResponse(source, targetUserId, requestId, logs);
-          console.log('[Proxy] Sent', logs.length, 'logs to Dashboard');
-          
-        } catch (error) {
-          console.error('[Proxy] Error fetching logs:', error);
-          var errorMessage = error.message || 'Failed to fetch logs';
-          
-          // Don't expose internal errors to iframe
-          if (error.code === 'permission-denied') {
-            errorMessage = 'Permission denied. Please ensure you are logged in.';
-          } else if (error.code === 'unavailable') {
-            errorMessage = 'Service temporarily unavailable. Please try again.';
-          }
-          
-          sendErrorResponse(source, userId, requestId, errorMessage);
-        }
-      }
-      
-      // Helper: Send logs response
-      function sendLogsResponse(source, userId, requestId, logs) {
-        var message = {
-          type: 'DASHBOARD_LOGS_DATA',
-          logs: logs,
-          userId: userId
-        };
-        if (requestId) message.requestId = requestId;
-        
-        if (source && source.origin) {
-          // Send to specific source if available
-          try {
-            source.postMessage(message, '*');
-          } catch (e) {
-            console.warn('[Proxy] Failed to send to source:', e);
-            broadcastToIframes(message);
-          }
-        } else {
-          // Broadcast to all iframes
-          broadcastToIframes(message);
-        }
-      }
-      
-      // Helper: Send error response
-      function sendErrorResponse(source, userId, requestId, errorMessage) {
-        var message = {
-          type: 'DASHBOARD_LOGS_ERROR',
-          error: errorMessage,
-          userId: userId
-        };
-        if (requestId) message.requestId = requestId;
-        
-        if (source && source.origin) {
-          try {
-            source.postMessage(message, '*');
-          } catch (e) {
-            console.warn('[Proxy] Failed to send error to source:', e);
-            broadcastToIframes(message);
-          }
-        } else {
-          broadcastToIframes(message);
-        }
-      }
-      
-      // Helper: Broadcast to all iframes
-      function broadcastToIframes(message) {
-        document.querySelectorAll('iframe').forEach(function(iframe) {
-          try {
-            iframe.contentWindow.postMessage(message, '*');
-          } catch (e) {
-            console.warn('[Proxy] Failed to send message to iframe:', e);
-          }
-        });
-      }
-      
-      // Main message event listener
-      window.addEventListener('message', async function(e) {
-        if (!e.data || !e.data.type) return;
-        
-        // Security: Only accept messages from same origin or trusted sources
-        // (In production, you might want to validate e.origin)
-        
-        // 1. Handle Log Requests from Dashboard
-        if (e.data.type === 'REQUEST_LOGS') {
-          var currentUser = getCurrentUser();
-          
-          if (!currentUser) {
-            // Queue the request if Auth is not ready
-            console.log('[Proxy] Auth not ready, queuing request for userId:', e.data.userId);
-            requestQueue.push({
-              data: e.data,
-              source: e.source,
-              timestamp: Date.now()
-            });
-            
-            // Try to wait for Auth (non-blocking)
-            waitForAuth(5000).catch(function(err) {
-              console.warn('[Proxy] Auth wait failed for queued request:', err.message);
-              // Request will timeout in Dashboard
-            });
-            return;
-          }
-          
-          // Process immediately if Auth is ready
-          handleLogRequest(e.data, e.source);
-        }
-        
-        // 2. Handle Status Requests
-        if (e.data.type === 'REQUEST_STATUS') {
-          var isConnected = window.isSensorConnected || false;
-          var message = { type: 'AI_CONNECTION_STATUS', isConnected: isConnected };
-          
-          if (e.source && e.source.origin) {
-            try {
-              e.source.postMessage(message, '*');
-            } catch (err) {
-              console.warn('[Proxy] Failed to send status:', err);
-              broadcastToIframes(message);
-            }
-          } else {
-            broadcastToIframes(message);
-          }
-        }
-      });
-      
-      // Initialize: Check if Auth is already ready
-      (function checkAuthReady() {
-        var currentUser = getCurrentUser();
-        if (currentUser) {
-          isAuthReady = true;
-          processQueuedRequests();
-        } else {
-          // Monitor Auth state changes
-          var auth = getAuth();
-          if (auth) {
-            auth.onAuthStateChanged(function(user) {
-              if (user && !isAuthReady) {
-                isAuthReady = true;
-                processQueuedRequests();
-              } else if (!user) {
-                isAuthReady = false;
-                requestQueue = []; // Clear queue on logout
-              }
-            });
-          }
-        }
-      })();
-    })();
   </script>
   
   <!-- Performance Dashboard: CSS Styles (Scoped) -->
   <style>
-    /* Dashboard Container Scoping */
-    #performance-dashboard-container {
-      /* Tailwind classes will be scoped here - prevents conflicts with existing styles */
-    }
-    
     /* Scrollbar hiding for dashboard */
     #performance-dashboard-container {
       -ms-overflow-style: none;
