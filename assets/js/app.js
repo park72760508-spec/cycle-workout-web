@@ -9664,6 +9664,10 @@ async function saveGeminiApiKey() {
     apiKeyInput.type = 'password'; // 보안을 위해 password 타입 유지
     apiKeyInput.disabled = true; // 저장 후 텍스트 상자 비활성화
     
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-gemini-apikey-changed', { detail: { hasKey: true } }));
+    } catch (e) { console.warn('[saveGeminiApiKey] dispatchEvent failed:', e); }
+    
     if (typeof showToast === 'function') {
       showToast('API 키가 확인되고 저장되었습니다.', 'success');
     } else {
@@ -11895,6 +11899,9 @@ function saveGeminiApiKeyFromSettings() {
     apiKeyInput.type = 'password';
     apiKeyInput.disabled = true;
     localStorage.setItem('geminiApiKeyDisabled', 'true');
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-gemini-apikey-changed', { detail: { hasKey: true } }));
+    } catch (e) { console.warn('[saveGeminiApiKeyFromSettings] dispatchEvent failed:', e); }
     alert('API 키가 저장되었습니다.');
   }
   
@@ -15857,7 +15864,12 @@ function initMobileErgController() {
   var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
   if (window.isSensorConnected !== anyConnected) {
     window.isSensorConnected = anyConnected;
-    console.log('[BLE] Global Flag SET: isSensorConnected =', anyConnected);
+    console.log('[Mobile Debug] [BLE] Global Flag SET: isSensorConnected =', anyConnected);
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected } }));
+    } catch (e) {
+      console.warn('[BLE] dispatchEvent stelvio-sensor-update failed:', e);
+    }
   }
 
   // 케이던스 업데이트 (Edge AI 분석용)
