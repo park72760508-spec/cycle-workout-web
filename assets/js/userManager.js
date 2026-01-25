@@ -705,6 +705,14 @@ function initAuthStateListener() {
             window.isPhoneAuthenticated = true;
           }
           
+          // [Event-Driven Auth] userData 로드 완료 후 Dashboard에 신호 (userData 포함)
+          console.log('[Auth] UserData loaded. Signaling Dashboard with userData...');
+          try {
+            window.dispatchEvent(new CustomEvent('stelvio-userdata-ready', { detail: { user: firebaseUser, userData: userData } }));
+          } catch (e) {
+            console.warn('[Auth] dispatchEvent stelvio-userdata-ready failed:', e);
+          }
+          
           // 사용자 정보 상세 로그
           console.log('✅ 인증된 사용자 정보 설정 완료 (UID 직접 조회):', {
             uid: firebaseUser.uid,
