@@ -2650,13 +2650,19 @@
     <div class="connection-main-container">
       <div class="connection-form-container">
         <div class="connection-form-card">
-          <div class="connection-header">
-            <h1><img src="assets/img/train.png" alt="훈련 준비" style="width: 48px; height: 48px; vertical-align: middle; margin-right: 8px;" /> 훈련 준비</h1>
+          <div class="connection-header training-ready-header-row">
+            <div class="training-ready-title-row">
+              <button type="button" class="training-ready-back-btn" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(function() { window.loadUsers(); }, 200); } }" aria-label="뒤로 가기">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <img src="assets/img/train.png" alt="" class="training-ready-header-icon" />
+              <h1 class="training-ready-title">훈련 준비</h1>
+            </div>
             <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
           </div>
 
-          <!-- 워크아웃 정보 섹션 -->
-          <div class="connection-device-section">
+          <!-- 워크아웃 정보 섹션 (스크롤 없음) -->
+          <div class="connection-device-section training-ready-workout-block">
             <h3 class="mb-15" id="previewWorkoutName" style="margin-bottom: 8px !important;">워크아웃</h3>
             <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px;">
               <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
@@ -2672,8 +2678,8 @@
                 <span style="font-size: 13px; color: #666;">예상 TSS</span>
               </div>
             </div>
-            <!-- 세그먼트 그래프 -->
-            <div class="segment-preview" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 12px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;">
+            <!-- 세그먼트 그래프 (모바일 선택 버튼과 동일 테두리) -->
+            <div class="segment-preview segment-preview-graph" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }">
               <!-- 워크아웃 미선택 시 표시될 막대그래프 placeholder -->
               <div id="segmentPreviewPlaceholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 180px; opacity: 0.3; padding: 20px;">
                 <div style="display: flex; align-items: flex-end; justify-content: center; gap: 4px; flex: 1;">
@@ -2693,33 +2699,21 @@
             </div>
           </div>
 
-          <!-- Select Dashboard 섹션 -->
-          <div class="connection-device-section">
+          <!-- Select Dashboard 섹션 (스크롤 없음) -->
+          <div class="connection-device-section training-ready-select-dashboard">
             <h3 class="mb-15" style="margin-bottom: 8px !important;">Select Dashboard</h3>
             <div class="grid-2 gap-10 mb-15" style="margin-bottom: 12px !important;">
-              <!-- 좌측: 개인 훈련 화면 -->
-              <button class="btn btn-device" id="btnStartTraining" onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
+              <!-- 좌측: 개인 훈련 화면 (워크아웃 선택 시 활성화) -->
+              <button class="btn btn-device" id="btnStartTraining" disabled onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
                 <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
                 <span>노트북</span>
               </button>
-              <!-- 우측: 모바일 대시보드 화면 -->
-              <button class="btn btn-device" id="btnMobileDashboard" onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
+              <!-- 우측: 모바일 대시보드 화면 (워크아웃 선택 시 활성화) -->
+              <button class="btn btn-device" id="btnMobileDashboard" disabled onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
                 <img src="assets/img/mobile.png" alt="모바일" class="device-btn-icon" />
                 <span>모바일</span>
               </button>
             </div>
-          </div>
-
-          <!-- 하단 버튼 -->
-          <div class="connection-exit-container">
-            <button class="btn btn-exit-inline" id="btnBackToWorkouts" aria-label="뒤로 가기">
-              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-              <span>뒤로 가기</span>
-            </button>
-            <button class="btn btn-primary btn-with-icon" id="btnSelectWorkoutForTraining" onclick="openWorkoutSelectionForTrainingReady()" aria-label="워크아웃 선택">
-              <img src="assets/img/workout.png" alt="워크아웃" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-              <span>워크아웃</span>
-            </button>
           </div>
         </div>
       </div>
