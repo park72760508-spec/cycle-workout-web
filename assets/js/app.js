@@ -5981,6 +5981,16 @@ function initializeCurrentScreen(screenId) {
       }
       break;
     }
+
+    case 'bluetoothTrainingCoachScreen':
+      console.log('Bluetooth Coach 화면 진입 - 초기화 시작');
+      if (typeof window.initBluetoothCoachDashboard === 'function') {
+        // 약간의 지연 후 초기화 (DOM 렌더링 보장)
+        setTimeout(() => window.initBluetoothCoachDashboard(), 100);
+      } else {
+        console.error('initBluetoothCoachDashboard 함수를 찾을 수 없습니다.');
+      }
+      break;
       
     default:
       console.log('기타 화면 초기화:', screenId);
