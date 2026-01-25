@@ -1154,8 +1154,13 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingReadyScreen .training-ready-select-dashboard .grid-2 {
   margin-bottom: 0 !important; /* 확인: 0px */
 }
-/* "워크아웃을 선택하세요." 문구: 주황색, 약간 희미하게 */
-#trainingReadyScreen .workout-select-placeholder-text {
+/* "워크아웃을 선택하세요." 문구: 주황색, 약간 희미하게 (강제 적용 - 모든 가능한 선택자 포함) */
+#trainingReadyScreen .workout-select-placeholder-text,
+#trainingReadyScreen #segmentPreviewPlaceholder .workout-select-placeholder-text,
+#segmentPreviewPlaceholder .workout-select-placeholder-text,
+#segmentPreviewPlaceholder div.workout-select-placeholder-text,
+#trainingReadyScreen #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text,
+#segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text {
   color: rgba(255, 152, 0, 0.55) !important; /* 주황색, 약간 희미 (55% opacity) */
 }
 
@@ -2924,20 +2929,6 @@ button[aria-disabled="true"] {
 
 .segment-preview:active {
   background-color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* 훈련 준비 화면 세그먼트 그래프 placeholder 텍스트 스타일 - 더 진한 회색 */
-#segmentPreviewPlaceholder div:last-child {
-  color: #666 !important;
-}
-
-.segment-preview:active {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* 훈련 준비 화면 세그먼트 그래프 placeholder 텍스트 스타일 - 더 진한 회색 */
-#segmentPreviewPlaceholder div:last-child {
-  color: #666 !important;
 }
 
 /* 훈련 준비 화면 세그먼트 그래프 컨테이너 - 고정 크기 */
