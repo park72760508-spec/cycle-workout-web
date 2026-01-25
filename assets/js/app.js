@@ -10090,13 +10090,6 @@ function updateRPEModalContent(modal, challenge) {
   if (closestBtn) {
     closestBtn.classList.add('selected');
   }
-  
-  // 확인 버튼 초기화
-  const confirmBtn = modal.querySelector('#rpeConfirmBtn');
-  if (confirmBtn) {
-    confirmBtn.disabled = false;
-    confirmBtn.style.opacity = '1';
-  }
 }
 
 function closeRPEModal() {
@@ -10135,12 +10128,8 @@ function selectRPECondition(adjustment, conditionName) {
   
   console.log(`RPE 컨디션 선택: ${conditionName} (${(adjustment * 100).toFixed(0)}%)`);
   
-  // 확인 버튼 활성화
-  const confirmBtn = document.getElementById('rpeConfirmBtn');
-  if (confirmBtn) {
-    confirmBtn.disabled = false;
-    confirmBtn.style.opacity = '1';
-  }
+  // 상태 버튼 클릭 시 바로 확인 기능 실행
+  confirmRPESelection();
 }
 
 function confirmRPESelection() {
