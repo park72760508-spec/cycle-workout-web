@@ -5558,7 +5558,7 @@ Output Format (JSON Only):
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
       var generationConfig = {
-        maxOutputTokens: 10000,
+        maxOutputTokens: 8192,
         temperature: 0.7,
         topP: 0.8,
         topK: 40
@@ -5638,7 +5638,7 @@ Output Format (JSON Only):
           var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
           if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
             if (attempt < 2) {
-              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 10000 ? 10000 : generationConfig.maxOutputTokens * 2);
+              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 8192 ? 8192 : generationConfig.maxOutputTokens * 2);
               body.generationConfig = generationConfig;
               throw new Error('MAX_TOKENS - 재시도');
             } else {
@@ -6290,18 +6290,14 @@ Output Format (JSON Only):
         };
       }, [userProfile]);
       
-      // Gemini AI 코치 분석 호출
+      // Gemini AI 코치 분석 (Sensor 독립: logsLoaded만 의존, aiConnected 미사용)
       useEffect(() => {
         async function fetchCoachAnalysis() {
           if (!userProfile) {
             setLoading(false);
             return;
           }
-          
-          if (!logsLoaded || logsLoading) {
-            return;
-          }
-          
+          if (!logsLoaded || logsLoading) return;
           if (logsLoadError) {
             setCoachData({
               condition_score: 50,
@@ -6315,7 +6311,7 @@ Output Format (JSON Only):
             setLoading(false);
             return;
           }
-          
+          console.log('[Dashboard] Data ready. Starting AI Analysis (Sensor independent)...');
           var logs = Array.isArray(recentLogs) ? recentLogs : [];
           var logsTssSum = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
           var logsHash = logs.length > 0 
@@ -6383,20 +6379,8 @@ Output Format (JSON Only):
         }
       }, [userProfile, recentLogs, retryCoach, logsLoaded, logsLoading, logsLoadError]);
       
-      // AI Pairing Status (Simple Polling since we are in the same window)
-      useEffect(function sensorPollEffect() {
-        function updateSensorStatus() {
-          // Read directly from global variable managed by app.js logic
-          if (window.isSensorConnected !== undefined) {
-            setAiPairingStatus(!!window.isSensorConnected);
-          }
-        }
-        updateSensorStatus();
-        var statusInterval = setInterval(updateSensorStatus, 1000);
-        return function cleanup() {
-          clearInterval(statusInterval);
-        };
-      }, []);
+      // AI 페어링: Gemini Coach 분석 결과만 사용. HR/트레이너/PM 센서 연결과 별개 동작.
+      // aiPairingStatus는 fetchCoachAnalysis 내에서만 설정 (분석 성공→연결됨, 실패/오류→연결 대기).
       
       const getGradeBadge = (grade) => {
         const badges = {
