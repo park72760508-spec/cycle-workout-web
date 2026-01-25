@@ -3332,12 +3332,20 @@ if (!window.showScreen) {
             if (existingCanvas) {
               existingCanvas.remove();
             }
+            // Select Dashboard 버튼 비활성화
+            const btnStart = document.getElementById('btnStartTraining');
+            const btnMobile = document.getElementById('btnMobileDashboard');
+            if (btnStart) { btnStart.disabled = true; }
+            if (btnMobile) { btnMobile.disabled = true; }
           } else {
-            // 워크아웃이 있으면 updateTrainingReadyScreenWithWorkout에서 처리
-            // 여기서는 placeholder만 숨김
+            // 워크아웃이 있으면 placeholder만 숨김, Select Dashboard 버튼 활성화
             if (placeholder && !existingCanvas) {
               placeholder.style.display = 'none';
             }
+            const btnStart = document.getElementById('btnStartTraining');
+            const btnMobile = document.getElementById('btnMobileDashboard');
+            if (btnStart) { btnStart.disabled = false; }
+            if (btnMobile) { btnMobile.disabled = false; }
           }
         }, 200);
       }
@@ -4691,21 +4699,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnStartTraining.addEventListener("click", () => startWithCountdown(5));
   }
 
-  // 워크아웃 선택 버튼 이벤트 핸들러 (훈련 준비 화면용)
-  const btnSelectWorkoutForTraining = safeGetElement("btnSelectWorkoutForTraining");
-  if (btnSelectWorkoutForTraining) {
-    btnSelectWorkoutForTraining.addEventListener("click", () => {
-      if (typeof openWorkoutSelectionForTrainingReady === 'function') {
-        openWorkoutSelectionForTrainingReady();
-      } else {
-        console.warn('openWorkoutSelectionForTrainingReady function not found');
-        if (typeof showToast === 'function') {
-          showToast('워크아웃 선택 기능을 찾을 수 없습니다', 'error');
-        }
-      }
-    });
-  }
-
   // trainingModeScreen의 카드들에 이벤트 리스너 추가
   const individualTrainingCard = safeGetElement("individualTrainingCard");
   if (individualTrainingCard) {
@@ -4731,16 +4724,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof showToast === 'function') {
           showToast('그룹 훈련 기능을 찾을 수 없습니다', 'error');
         }
-      }
-    });
-  }
-
-  // 훈련 준비 → 베이스캠프 화면으로 이동
-  const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
-  if (btnBackToWorkouts) {
-    btnBackToWorkouts.addEventListener("click", () => {
-      if (typeof showScreen === "function") {
-        showScreen("basecampScreen");
       }
     });
   }
@@ -12169,6 +12152,12 @@ function updateTrainingReadyScreenWithWorkout(workout) {
       segmentPreview.style.maxHeight = '200px';
     }
   }
+
+  // 워크아웃 선택 시 Select Dashboard 버튼 활성화
+  const btnStart = document.getElementById('btnStartTraining');
+  const btnMobile = document.getElementById('btnMobileDashboard');
+  if (btnStart) { btnStart.disabled = false; }
+  if (btnMobile) { btnMobile.disabled = false; }
 }
 
 // 전역 함수로 등록
