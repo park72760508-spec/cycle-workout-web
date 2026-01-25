@@ -6049,14 +6049,71 @@ Output Format (JSON Only):
             
           } catch (e) {
             console.error('[Dashboard] Profile load error:', e);
+            // 모바일 폴백: Firestore 실패 시 localStorage 사용자 사용
+            try {
+              var stored = localStorage.getItem('currentUser');
+              if (stored) {
+                var parsed = JSON.parse(stored);
+                if (parsed && parsed.id) {
+                  var ftp = Number(parsed.ftp) || 0;
+                  var weight = Number(parsed.weight) || 0;
+                  var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+                  var ch = parsed.challenge || 'Fitness';
+                  var wt = 225;
+                  if (typeof window.getWeeklyTargetTSS === 'function') {
+                    var ti = window.getWeeklyTargetTSS(ch);
+                    wt = ti.target;
+                  }
+                  setUserProfile({
+                    id: parsed.id,
+                    name: parsed.name || '사용자',
+                    ftp: ftp,
+                    weight: weight,
+                    grade: parsed.grade || '2',
+                    challenge: ch,
+                    acc_points: parsed.acc_points || 0,
+                    rem_points: parsed.rem_points || 0
+                  });
+                  setStats({
+                    ftp: ftp,
+                    wkg: parseFloat(wkg),
+                    weight: weight,
+                    totalPoints: Number(parsed.acc_points || 0),
+                    currentPoints: Number(parsed.rem_points || 0),
+                    weeklyGoal: wt,
+                    weeklyProgress: 0
+                  });
+                  setLoading(false);
+                  return;
+                }
+              }
+            } catch (e2) {
+              console.warn('[Dashboard] localStorage fallback failed:', e2);
+            }
             setUserProfile(null);
-            setLoading(false); // 에러 시 로딩 해제 필수
+            setLoading(false);
           }
         }
         
         // 3. [핵심 수정] Auth 상태 변화 감지 (모바일 지연 대응)
         // 먼저 window.currentUser 확인 (프로필 선택 화면에서 선택한 사용자)
         var selectedUser = window.currentUser;
+        // 모바일/새로고침 대응: localStorage에서 사용자 복원 (apiGetUser 실패·직접 진입 시)
+        if (!selectedUser || !selectedUser.id) {
+          try {
+            var stored = localStorage.getItem('currentUser');
+            if (stored) {
+              var parsed = JSON.parse(stored);
+              if (parsed && parsed.id) {
+                selectedUser = parsed;
+                window.currentUser = parsed;
+                console.log('[Dashboard] Restored user from localStorage:', parsed.id);
+              }
+            }
+          } catch (e) {
+            console.warn('[Dashboard] localStorage currentUser parse failed:', e);
+          }
+        }
         if (selectedUser && selectedUser.id) {
           // 프로필 선택 화면에서 선택한 사용자 사용
           (async function() {
@@ -6639,6 +6696,32 @@ Output Format (JSON Only):
               <div className="skeleton w-32 h-32 rounded-full mx-auto mb-4"></div>
               <div className="skeleton w-48 h-6 mx-auto mb-2"></div>
               <div className="skeleton w-64 h-4 mx-auto"></div>
+            </div>
+          </div>
+        );
+      }
+      
+      if (!userProfile || !userProfile.id) {
+        return (
+          <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 flex items-center justify-center px-4">
+            <div className="text-center max-w-sm">
+              <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-2xl mx-auto mb-4">👤</div>
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">사용자 정보가 없습니다</h2>
+              <p className="text-sm text-gray-600 mb-6">프로필 선택 화면에서 사용자를 선택한 뒤 대시보드를 이용해 주세요.</p>
+              <button
+                type="button"
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:opacity-90 active:opacity-80"
+                onClick={function() {
+                  if (typeof showScreen === 'function') {
+                    showScreen('profileScreen');
+                    if (typeof window.loadUsers === 'function') {
+                      setTimeout(function() { window.loadUsers(); }, 200);
+                    }
+                  }
+                }}
+              >
+                프로필 선택으로 이동
+              </button>
             </div>
           </div>
         );
