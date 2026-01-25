@@ -1035,7 +1035,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 훈련 준비 화면 카드 여백 최소화 */
 #trainingReadyScreen .connection-form-card {
-  padding: 25px 30px 0px 30px !important; /* 상단 25px, 좌우 30px, 하단 0px (Select Dashboard 하단 여백 제거) */
+  padding: 25px 30px 10px 30px !important; /* 상단 25px, 좌우 30px, 하단 10px (좌표 표기용 최소 여백) */
 }
 
 .connection-header {
@@ -1138,7 +1138,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 20px;
 }
 
-/* 훈련 준비 화면: 간격 단위 = 노트북/모바일 버튼 gap(10px). 그래프 하단 ↔ Select Dashboard = 동일 간격 */
+/* 훈련 준비 화면: 그래프 하단 ↔ Select Dashboard 간격 = 20px (노트북/모바일 버튼 gap의 2배) */
 #trainingReadyScreen .training-ready-workout-block {
   margin-bottom: var(--tr-gap) !important;
   padding-bottom: 0 !important; /* 공유 connection-device-section padding-bottom 100px 제거 */
@@ -1197,7 +1197,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 훈련 준비 화면: Y 좌표 표기 (노트북 버튼 하단 / 전체 블럭 하단) */
 .training-ready-coord-display {
-  margin-top: 8px;
+  margin-top: 0;
   padding: 6px 10px;
   font-size: 11px;
   color: #64748b;
@@ -2779,7 +2779,7 @@ button[aria-disabled="true"] {
 /* 훈련 준비 화면을 무선 기기 연결 화면과 같은 디자인으로 변경 */
 /* Pull-to-refresh 방지 (iOS & Android) */
 #trainingReadyScreen {
-  --tr-gap: 10px; /* 노트북/모바일 버튼 gap = 그래프 하단 ↔ Select Dashboard 간격 */
+  --tr-gap: 20px; /* 그래프 하단 ↔ Select Dashboard 간격 (노트북/모바일 버튼 gap의 2배) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
@@ -14811,7 +14811,6 @@ body.mobile-dashboard-active {
 }
 
 /* 각 화면의 컨텐츠 영역 - 스크롤바 제거 */
-#trainingReadyScreen .connection-form-card,
 #trainingRoomScreen .connection-form-card,
 #playerListScreen .connection-form-card {
   display: flex;
@@ -14823,6 +14822,15 @@ body.mobile-dashboard-active {
   /* 스크롤바 숨김 (Webkit) */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
+}
+/* 훈련 준비 화면: 콘텐츠 크기에 맞춤 */
+#trainingReadyScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 /* Webkit 브라우저 스크롤바 숨김 */
@@ -14910,17 +14918,21 @@ body.mobile-dashboard-active {
 @supports (height: 100dvh) {
   /* dvh를 지원하는 브라우저 (최신 Android Chrome 포함) */
   #connectionScreen,
-  #trainingReadyScreen,
   #trainingRoomScreen,
   #playerListScreen {
     min-height: 100dvh;
   }
+  #trainingReadyScreen {
+    min-height: auto;
+  }
   
   #connectionScreen .connection-form-card,
-  #trainingReadyScreen .connection-form-card,
   #trainingRoomScreen .connection-form-card,
   #playerListScreen .connection-form-card {
     height: 100dvh;
+  }
+  #trainingReadyScreen .connection-form-card {
+    height: auto !important;
   }
 }
 
