@@ -667,15 +667,7 @@ function initAuthStateListener() {
   // 인증 상태 변경 리스너 설정
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
-      // [Event-Driven Auth] 세션 복원 직후 즉시 신호 (Dashboard 등이 Firestore 쿼리 전 대기)
       window.isAuthReady = true;
-      console.log('[Auth] Session restored. Signaling Dashboard...');
-      try {
-        window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { user: firebaseUser } }));
-      } catch (e) {
-        console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
-      }
-      
       // 로그인 상태: UID로 직접 users/{uid} 문서 가져오기 (간단하고 빠름)
       try {
         const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
@@ -703,14 +695,6 @@ function initAuthStateListener() {
           
           if (isPhoneLogin && typeof window !== 'undefined') {
             window.isPhoneAuthenticated = true;
-          }
-          
-          // [Event-Driven Auth] userData 로드 완료 후 Dashboard에 신호 (userData 포함)
-          console.log('[Auth] UserData loaded. Signaling Dashboard with userData...');
-          try {
-            window.dispatchEvent(new CustomEvent('stelvio-userdata-ready', { detail: { user: firebaseUser, userData: userData } }));
-          } catch (e) {
-            console.warn('[Auth] dispatchEvent stelvio-userdata-ready failed:', e);
           }
           
           // 사용자 정보 상세 로그
