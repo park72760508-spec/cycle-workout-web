@@ -1048,6 +1048,53 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 15px !important; /* 30px에서 15px로 최소화 */
 }
 
+/* 훈련 준비 화면: 이미지+제목 같은 라인, 뒤로가기 버튼 제목 좌측 */
+#trainingReadyScreen .connection-header.training-ready-header-row {
+  text-align: left;
+}
+#trainingReadyScreen .training-ready-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  margin-bottom: 4px;
+}
+#trainingReadyScreen .training-ready-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+}
+#trainingReadyScreen .training-ready-back-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+#trainingReadyScreen .training-ready-header-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-title {
+  font-size: 1.8em;
+  margin: 0;
+  color: #1e293b;
+  flex: 1;
+}
+
 /* 무선 기기 연결 화면 헤더 여백 최소화 */
 #connectionScreen .connection-header {
   margin-bottom: 20px !important; /* 30px에서 20px로 최소화 */
@@ -1084,6 +1131,34 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 #trainingReadyScreen .segment-preview {
   margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+}
+
+/* 워크아웃 블럭 · Select Dashboard 스크롤 제거 */
+#trainingReadyScreen .training-ready-workout-block,
+#trainingReadyScreen .training-ready-select-dashboard {
+  overflow: hidden !important;
+  -webkit-overflow-scrolling: auto;
+}
+
+/* 워크아웃 그래프 블럭: 모바일 선택 버튼과 동일 테두리 */
+#trainingReadyScreen .segment-preview.segment-preview-graph {
+  text-align: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  min-height: 200px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+#trainingReadyScreen .segment-preview.segment-preview-graph:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 #trainingReadyScreen .grid-2 {
@@ -14621,11 +14696,10 @@ body.mobile-dashboard-active {
 
 /* ==========================================================
    [하단 버튼 인식율 향상 - iOS & Android 호환]
-   적용 화면: 무선 기기 연결, 훈련 준비, Live Training Rooms, Join Session
+   적용 화면: Live Training Rooms, Join Session (훈련 준비는 footer 제거됨)
    ========================================================== */
 
-/* 공통 스타일: 모든 화면의 connection-exit-container에 적용 */
-#trainingReadyScreen .connection-exit-container,
+/* 공통 스타일: connection-exit-container에 적용 */
 #trainingRoomScreen .connection-exit-container,
 #playerListScreen .connection-exit-container {
   position: fixed;
@@ -14778,7 +14852,6 @@ body.mobile-dashboard-active {
 
 /* 버튼 스타일 최적화 (터치 인식율 향상 - iOS & Android) */
 #connectionScreen .connection-exit-container .btn,
-#trainingReadyScreen .connection-exit-container .btn,
 #trainingRoomScreen .connection-exit-container .btn,
 #playerListScreen .connection-exit-container .btn {
   /* 클릭 영역 확보를 위해 min-height 설정 */
@@ -14799,7 +14872,6 @@ body.mobile-dashboard-active {
 }
 
 #connectionScreen .connection-exit-container .btn:active,
-#trainingReadyScreen .connection-exit-container .btn:active,
 #trainingRoomScreen .connection-exit-container .btn:active,
 #playerListScreen .connection-exit-container .btn:active {
   transform: scale(0.96);
@@ -14827,7 +14899,6 @@ body.mobile-dashboard-active {
 /* 모바일 최적화 (480px 이하) - iOS & Android 공통 */
 @media (max-width: 480px) {
   #connectionScreen .connection-exit-container,
-  #trainingReadyScreen .connection-exit-container,
   #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
     /* Android: Safe Area 미지원 시 16px만 적용 */
@@ -14841,7 +14912,6 @@ body.mobile-dashboard-active {
   }
   
   #connectionScreen .connection-exit-container .btn,
-  #trainingReadyScreen .connection-exit-container .btn,
   #trainingRoomScreen .connection-exit-container .btn,
   #playerListScreen .connection-exit-container .btn {
     min-height: 48px !important;
@@ -14861,7 +14931,6 @@ body.mobile-dashboard-active {
 @media (max-width: 480px) and (orientation: portrait) {
   /* Android 세로 모드에서 제스처 바 높이 고려 */
   #connectionScreen .connection-exit-container,
-  #trainingReadyScreen .connection-exit-container,
   #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
     /* Android 제스처 바 높이 대략 16-24px + 여백 16px */
@@ -14874,7 +14943,6 @@ body.mobile-dashboard-active {
 /* Android 가로 모드 최적화 */
 @media (max-width: 768px) and (orientation: landscape) {
   #connectionScreen .connection-exit-container,
-  #trainingReadyScreen .connection-exit-container,
   #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
     /* 가로 모드에서는 주소창이 보이지 않으므로 패딩 감소 */
@@ -14884,7 +14952,6 @@ body.mobile-dashboard-active {
   }
   
   #connectionScreen .connection-exit-container .btn,
-  #trainingReadyScreen .connection-exit-container .btn,
   #trainingRoomScreen .connection-exit-container .btn,
   #playerListScreen .connection-exit-container .btn {
     min-height: 44px !important;
