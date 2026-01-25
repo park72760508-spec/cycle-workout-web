@@ -1157,7 +1157,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 #segmentPreviewPlaceholder div.workout-select-placeholder-text,
 #trainingReadyScreen #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text,
 #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text {
-  color: rgba(255, 152, 0, 0.55) !important; /* 주황색, 약간 희미 (55% opacity) */
+  color: rgba(255, 152, 0, 0.85) !important; /* 주황색, 30% 더 진하게 (85% opacity) */
 }
 
 /* 훈련 준비 화면: h3 제목 하단 여백 */
