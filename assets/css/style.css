@@ -1035,7 +1035,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 훈련 준비 화면 카드 여백 최소화 */
 #trainingReadyScreen .connection-form-card {
-  padding: 25px 30px 10px 30px !important; /* 상단 25px, 좌우 30px, 하단 10px로 최소화 */
+  padding: 25px 30px 0px 30px !important; /* 상단 25px, 좌우 30px, 하단 0px (Select Dashboard 하단 여백 제거) */
 }
 
 .connection-header {
@@ -1141,17 +1141,21 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingReadyScreen .connection-device-section {
   margin-bottom: 12px !important;
 }
-/* 워크아웃 블럭 ↔ Select Dashboard 간격 최소 */
+/* 워크아웃 블럭 ↔ Select Dashboard 간격 최소화 (현재: 6px → 4px로 변경) */
 #trainingReadyScreen .training-ready-workout-block {
-  margin-bottom: 6px !important;
+  margin-bottom: 4px !important; /* 6px에서 4px로 최소화 */
 }
-/* Select Dashboard 블럭 하단 여백 제거 */
+/* Select Dashboard 블럭 하단 여백 제거 (현재: margin-bottom: 0, padding-bottom: 0) */
 #trainingReadyScreen .training-ready-select-dashboard {
-  margin-bottom: 0 !important;
-  padding-bottom: 0 !important;
+  margin-bottom: 0 !important; /* 확인: 0px */
+  padding-bottom: 0 !important; /* 확인: 0px */
 }
 #trainingReadyScreen .training-ready-select-dashboard .grid-2 {
-  margin-bottom: 0 !important;
+  margin-bottom: 0 !important; /* 확인: 0px */
+}
+/* "워크아웃을 선택하세요." 문구 색상: 흐릿한 주황색 */
+#trainingReadyScreen .workout-select-placeholder-text {
+  color: rgba(255, 152, 0, 0.6) !important; /* 흐릿한 주황색 (orange with 60% opacity) */
 }
 
 #trainingReadyScreen .connection-device-section h3 {
