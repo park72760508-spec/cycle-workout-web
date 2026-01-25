@@ -6101,6 +6101,10 @@ Output Format (JSON Only):
           
           try {
             isDataLoading = true; // 데이터 로딩 시작
+            if (loadingTimeout) {
+              clearTimeout(loadingTimeout);
+              createTimeout(true); // 15초로 연장
+            }
             var userId = user.uid;
             // Firestore v8 compat SDK만 사용 (v9는 동적 import 문제로 제외)
             var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
@@ -6238,105 +6242,99 @@ Output Format (JSON Only):
         }
         if (selectedUser && selectedUser.id) {
           // 프로필 선택 화면에서 선택한 사용자 사용
+          // 타임아웃 방지: selectedUser 정보를 즉시 설정하고, Firestore는 백그라운드에서 업데이트
+          var userId = selectedUser.id;
+          var userName = selectedUser.name || '사용자';
+          console.log('[Dashboard] Using selected user from window.currentUser:', userId);
+          
+          // 즉시 사용자 정보 설정 (타임아웃 방지)
+          var immediateProfile = {
+            id: userId,
+            name: userName,
+            ftp: Number(selectedUser.ftp) || 0,
+            weight: Number(selectedUser.weight) || 0,
+            grade: selectedUser.grade || '2',
+            challenge: selectedUser.challenge || 'Fitness',
+            acc_points: selectedUser.acc_points || 0,
+            rem_points: selectedUser.rem_points || 0
+          };
+          var immediateWkg = immediateProfile.weight > 0 ? (immediateProfile.ftp / immediateProfile.weight).toFixed(2) : 0;
+          var immediateChallenge = immediateProfile.challenge;
+          var immediateWeeklyTarget = 225;
+          if (typeof window.getWeeklyTargetTSS === 'function') {
+            var targetInfo = window.getWeeklyTargetTSS(immediateChallenge);
+            immediateWeeklyTarget = targetInfo.target;
+          }
+          
+          setUserProfile(immediateProfile);
+          setStats({
+            ftp: immediateProfile.ftp,
+            wkg: parseFloat(immediateWkg),
+            weight: immediateProfile.weight,
+            totalPoints: Number(immediateProfile.acc_points || 0),
+            currentPoints: Number(immediateProfile.rem_points || 0),
+            weeklyGoal: immediateWeeklyTarget,
+            weeklyProgress: 0
+          });
+          setStravaStatus({
+            connected: !!(selectedUser.strava_refresh_token),
+            lastSync: selectedUser.strava_last_sync || null
+          });
+          
+          // 타임아웃 클리어 및 로딩 종료 (즉시 사용자 정보 표시)
+          if (loadingTimeout) clearTimeout(loadingTimeout);
+          setLoading(false);
+          
+          // 백그라운드에서 Firestore 최신 정보 가져오기 (선택적 업데이트)
           (async function() {
             try {
-              isDataLoading = true; // 데이터 로딩 시작
-              var userId = selectedUser.id;
-              var userName = selectedUser.name || '사용자';
-              console.log('[Dashboard] Using selected user from window.currentUser:', userId);
-              
-              // Firestore에서 최신 정보 가져오기
               var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
               if (firestore) {
-                try {
-                  var userDoc = await firestore.collection('users').doc(userId).get();
-                  if (userDoc.exists) {
-                    var userData = userDoc.data();
-                    var ftp = Number(userData.ftp) || 0;
-                    var weight = Number(userData.weight) || 0;
-                    var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-                    var challenge = userData.challenge || 'Fitness';
-                    var weeklyTarget = 225;
-                    if (typeof window.getWeeklyTargetTSS === 'function') {
-                      var targetInfo = window.getWeeklyTargetTSS(challenge);
-                      weeklyTarget = targetInfo.target;
-                    }
-                    
-                    setUserProfile({
-                      id: userId,
-                      name: userData.name || userName,
-                      ftp: ftp,
-                      weight: weight,
-                      grade: userData.grade || '2',
-                      challenge: challenge,
-                      acc_points: userData.acc_points || 0,
-                      rem_points: userData.rem_points || 0
-                    });
-                    
-                    setStats({
+                var userDoc = await firestore.collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                  var userData = userDoc.data();
+                  var ftp = Number(userData.ftp) || 0;
+                  var weight = Number(userData.weight) || 0;
+                  var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+                  var challenge = userData.challenge || 'Fitness';
+                  var weeklyTarget = 225;
+                  if (typeof window.getWeeklyTargetTSS === 'function') {
+                    var targetInfo = window.getWeeklyTargetTSS(challenge);
+                    weeklyTarget = targetInfo.target;
+                  }
+                  
+                  // 최신 정보로 업데이트 (사용자 경험 개선)
+                  setUserProfile({
+                    id: userId,
+                    name: userData.name || userName,
+                    ftp: ftp,
+                    weight: weight,
+                    grade: userData.grade || '2',
+                    challenge: challenge,
+                    acc_points: userData.acc_points || 0,
+                    rem_points: userData.rem_points || 0
+                  });
+                  setStats(function(prev) {
+                    return {
+                      ...prev,
                       ftp: ftp,
                       wkg: parseFloat(wkg),
                       weight: weight,
                       totalPoints: Number(userData.acc_points || 0),
                       currentPoints: Number(userData.rem_points || 0),
-                      weeklyGoal: weeklyTarget,
-                      weeklyProgress: 0
-                    });
-                    
-                    setStravaStatus({
-                      connected: !!(userData.strava_refresh_token),
-                      lastSync: userData.strava_last_sync || null
-                    });
-                    
-                    setLoading(false);
-                    return;
-                  }
-                } catch (e) {
-                  console.error('[Dashboard] Error loading user from Firestore:', e);
+                      weeklyGoal: weeklyTarget
+                    };
+                  });
+                  setStravaStatus({
+                    connected: !!(userData.strava_refresh_token),
+                    lastSync: userData.strava_last_sync || null
+                  });
+                  console.log('[Dashboard] User profile updated from Firestore');
                 }
               }
-              
-              // Firestore 실패 시 선택한 사용자 정보 사용
-              var ftp = Number(selectedUser.ftp) || 0;
-              var weight = Number(selectedUser.weight) || 0;
-              var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
-              var challenge = selectedUser.challenge || 'Fitness';
-              var weeklyTarget = 225;
-              if (typeof window.getWeeklyTargetTSS === 'function') {
-                var targetInfo = window.getWeeklyTargetTSS(challenge);
-                weeklyTarget = targetInfo.target;
-              }
-              
-              setUserProfile({
-                id: userId,
-                name: userName,
-                ftp: ftp,
-                weight: weight,
-                grade: selectedUser.grade || '2',
-                challenge: challenge,
-                acc_points: selectedUser.acc_points || 0,
-                rem_points: selectedUser.rem_points || 0
-              });
-              
-              setStats({
-                ftp: ftp,
-                wkg: parseFloat(wkg),
-                weight: weight,
-                totalPoints: Number(selectedUser.acc_points || 0),
-                currentPoints: Number(selectedUser.rem_points || 0),
-                weeklyGoal: weeklyTarget,
-                weeklyProgress: 0
-              });
-              
-              setStravaStatus({
-                connected: !!(selectedUser.strava_refresh_token),
-                lastSync: selectedUser.strava_last_sync || null
-              });
-              
-              setLoading(false);
-            } catch (err) {
-              console.error('[Dashboard] Error in selectedUser path:', err);
-              setLoading(false);
+            } catch (e) {
+              console.warn('[Dashboard] Background Firestore update failed (non-critical):', e);
+              // 백그라운드 업데이트 실패는 무시 (이미 selectedUser 정보로 표시됨)
             }
           })();
           return;
@@ -6348,13 +6346,17 @@ Output Format (JSON Only):
         if (auth) {
           // 이미 로드된 상태라면 즉시 실행
           if (auth.currentUser) {
-            clearTimeout(loadingTimeout);
+            if (loadingTimeout) clearTimeout(loadingTimeout);
+            isDataLoading = true;
+            createTimeout(true); // 15초로 연장
             loadData(auth.currentUser);
           } else {
             // 로드되지 않았다면 리스너 등록 (모바일 대응)
             unsubscribeAuth = auth.onAuthStateChanged(function(user) {
-              clearTimeout(loadingTimeout);
+              if (loadingTimeout) clearTimeout(loadingTimeout);
               if (user) {
+                isDataLoading = true;
+                createTimeout(true); // 15초로 연장
                 loadData(user);
               } else {
                 setLoading(false); // 유저가 없으면 로딩 끔
@@ -6362,7 +6364,7 @@ Output Format (JSON Only):
             });
           }
         } else {
-          clearTimeout(loadingTimeout);
+          if (loadingTimeout) clearTimeout(loadingTimeout);
           setLoading(false);
         }
         
