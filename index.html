@@ -2668,8 +2668,8 @@
 
           <!-- 워크아웃 정보 섹션 (스크롤 없음) -->
           <div class="connection-device-section training-ready-workout-block">
-            <h3 class="mb-15" id="previewWorkoutName" style="margin-bottom: 8px !important;">워크아웃</h3>
-            <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px;">
+            <h3 id="previewWorkoutName" class="training-ready-h3">워크아웃</h3>
+            <div class="preview-stats training-ready-preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
               <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
                 <strong id="previewDuration" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0분</strong>
                 <span style="font-size: 13px; color: #666;">총 시간</span>
@@ -2704,10 +2704,10 @@
             </div>
           </div>
 
-          <!-- Select Dashboard 섹션 (스크롤 없음) -->
+          <!-- Select Dashboard 섹션 (스크롤 없음): 그래프 하단 ↔ 본 문구 간격 = 노트북/모바일 버튼 gap(10px) -->
           <div class="connection-device-section training-ready-select-dashboard">
-            <h3 class="mb-15" style="margin-bottom: 8px !important;">Select Dashboard</h3>
-            <div class="grid-2 gap-10 training-ready-dashboard-grid">
+            <h3 class="training-ready-h3">Select Dashboard</h3>
+            <div class="grid-2 training-ready-dashboard-grid">
               <!-- 좌측: 개인 훈련 화면 (워크아웃 선택 시 활성화) -->
               <button class="btn btn-device" id="btnStartTraining" disabled onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
                 <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
