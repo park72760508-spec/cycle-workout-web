@@ -1050,14 +1050,33 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 훈련 준비 화면: 이미지+제목 같은 라인, 뒤로가기 버튼 제목 좌측 */
 #trainingReadyScreen .connection-header.training-ready-header-row {
-  text-align: left;
+  text-align: center;
 }
-#trainingReadyScreen .training-ready-title-row {
+/* 상단: [뒤로가기 좌측] [이미지+제목 중앙] [스페이서] */
+#trainingReadyScreen .training-ready-header-top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   flex-wrap: nowrap;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+}
+#trainingReadyScreen .training-ready-back-wrap {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+#trainingReadyScreen .training-ready-header-spacer {
+  width: 48px;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-title-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 #trainingReadyScreen .training-ready-back-btn {
   display: inline-flex;
@@ -1073,7 +1092,6 @@ h1,h2,h3,h4 { font-weight: 600; }
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
-  flex-shrink: 0;
 }
 #trainingReadyScreen .training-ready-back-btn:hover {
   background: rgba(0, 0, 0, 0.06);
@@ -1092,7 +1110,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   font-size: 1.8em;
   margin: 0;
   color: #1e293b;
-  flex: 1;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-subtitle {
+  text-align: center;
+  margin: 0;
 }
 
 /* 무선 기기 연결 화면 헤더 여백 최소화 */
@@ -1117,7 +1139,19 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 훈련 준비 화면 device-section 여백 최소화 */
 #trainingReadyScreen .connection-device-section {
-  margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+  margin-bottom: 12px !important;
+}
+/* 워크아웃 블럭 ↔ Select Dashboard 간격 최소 */
+#trainingReadyScreen .training-ready-workout-block {
+  margin-bottom: 6px !important;
+}
+/* Select Dashboard 블럭 하단 여백 제거 */
+#trainingReadyScreen .training-ready-select-dashboard {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+#trainingReadyScreen .training-ready-select-dashboard .grid-2 {
+  margin-bottom: 0 !important;
 }
 
 #trainingReadyScreen .connection-device-section h3 {
