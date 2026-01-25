@@ -5799,9 +5799,22 @@ if (typeof window.originalShowScreen === 'undefined') {
       screen.style.visibility = 'hidden';
     });
     
-    // 선택된 화면 완전히 표시
+    // 선택된 화면 완전히 표시 (진단 코드 추가됨)
     const targetScreen = document.getElementById(screenId);
+    
+    // [진단 로그 1] 화면 요소 탐색 결과 확인
+    console.log(`🔎 [진단] ID 찾기 시도: '${screenId}' -> 결과: ${targetScreen ? '✅ 발견됨' : '❌ NULL (없음)'}`);
+    
     if (targetScreen) {
+      // [진단 로그 1-1] 요소 발견 시 상세 정보
+      console.log(`🔎 [진단] 발견된 요소 상세:`, {
+        id: targetScreen.id,
+        tagName: targetScreen.tagName,
+        className: targetScreen.className,
+        currentDisplay: window.getComputedStyle(targetScreen).display,
+        currentVisibility: window.getComputedStyle(targetScreen).visibility
+      });
+      
       targetScreen.classList.add('active');
       
       // connectionScreen 특별 처리
@@ -5817,12 +5830,39 @@ if (typeof window.originalShowScreen === 'undefined') {
       
       console.log('✅ 화면 전환 완료:', screenId);
       
+      // [진단 로그 2] 초기화 함수 호출 직전
+      console.log(`▶️ [진단] initializeCurrentScreen('${screenId}') 호출 시작`);
+      console.log(`▶️ [진단] initializeCurrentScreen 함수 존재 여부: ${typeof initializeCurrentScreen === 'function' ? '✅ 있음' : '❌ 없음'}`);
+      
       // 화면별 초기화
       if (typeof initializeCurrentScreen === 'function') {
-        initializeCurrentScreen(screenId);
+        try {
+          initializeCurrentScreen(screenId);
+          console.log(`✅ [진단] initializeCurrentScreen('${screenId}') 호출 완료 (에러 없음)`);
+        } catch (error) {
+          console.error(`💥 [진단/Error] initializeCurrentScreen 실행 중 오류 발생:`, error);
+          console.error(`💥 [진단/Error] 에러 스택:`, error.stack);
+        }
+      } else {
+        console.error(`💥 [진단/Error] initializeCurrentScreen 함수가 정의되지 않았습니다!`);
       }
     } else {
-      console.error('❌ 화면을 찾을 수 없습니다:', screenId);
+      // [진단 로그 3] 치명적 오류 발견
+      console.error(`🚨 [Critical Error] HTML에서 id="${screenId}" 요소를 찾을 수 없습니다!`);
+      console.error(`👉 해결책: index.html 파일에 <div id="${screenId}"> 태그가 있는지 확인하세요.`);
+      
+      // 모든 .screen 요소 확인 (디버깅용)
+      const allScreens = document.querySelectorAll('.screen');
+      console.error(`🔍 [진단] 현재 페이지의 모든 .screen 요소:`, Array.from(allScreens).map(el => ({
+        id: el.id,
+        tagName: el.tagName,
+        display: window.getComputedStyle(el).display
+      })));
+      
+      // 개발자용 강제 알림
+      if (screenId === 'bluetoothTrainingCoachScreen') {
+        alert(`[오류] index.html에 #${screenId} 요소가 없습니다.\nID 철자를 확인하세요.\n\n현재 페이지의 .screen 요소 ID 목록을 콘솔에서 확인하세요.`);
+      }
     }
   };
 }
