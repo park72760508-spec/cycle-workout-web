@@ -5541,6 +5541,9 @@ Output Format (JSON Only):
       var isBluefy = /Bluefy/i.test(ua) || (window.navigator && window.navigator.standalone === false && window.navigator.standalone !== undefined);
       return isMobileUA || isTouchDevice || isBluefy;
     }
+    if (typeof window !== 'undefined') {
+      window.isMobile = isMobile;
+    }
     
     async function callGeminiCoach(userProfile, recentLogs) {
       var apiKey;
@@ -6366,6 +6369,11 @@ Output Format (JSON Only):
             return;
           }
           
+          // [Mobile vs PC] 휴대폰: 최근 10일만 전송(페이로드 경량화). PC: 30일 전송.
+          var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+          var logsToSend = isMobileDevice ? logs.slice(0, 10) : logs;
+          var logScope = isMobileDevice ? '10d' : '30d';
+          
           // [Mobile Bulletproof] 1. API 키 체크 (localStorage 접근 실패 대비)
           var apiKey = null;
           try {
@@ -6397,10 +6405,10 @@ Output Format (JSON Only):
             return;
           }
           
-          console.log('[Mobile Debug] [AI] API Key found. Checking cache...');
-          var logsTssSum = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
-          var logsHash = logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') + '_' + Math.round(logsTssSum);
-          var cacheKey = 'coach_analysis_' + userProfile.id + '_' + logsHash;
+          console.log('[Mobile Debug] [AI] API Key found. Scope: ' + logScope + ' (' + logsToSend.length + ' logs). Checking cache...');
+          var logsTssSum = logsToSend.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
+          var logsHash = logsToSend.length + '_' + (logsToSend[0] && logsToSend[0].date || '') + '_' + (logsToSend[logsToSend.length - 1] && logsToSend[logsToSend.length - 1].date || '') + '_' + Math.round(logsTssSum);
+          var cacheKey = 'coach_analysis_' + userProfile.id + '_' + logScope + '_' + logsHash;
           
           try {
             var useCache = false;
@@ -6433,7 +6441,7 @@ Output Format (JSON Only):
             // [Mobile Bulletproof] Mark analysis as in progress
             aiAnalysisInProgressRef.current = true;
             setLoading(true);
-            console.log('[Mobile Debug] [AI] Sending request to Gemini... (Tokens: 8192, Timeout: 30s)');
+            console.log('[Mobile Debug] [AI] Sending request to Gemini... (Tokens: 8192, Timeout: 30s, ' + logScope + ' data)');
             
             // [Mobile Bulletproof] 2. 타임아웃 래퍼 (30초 안전 밸브)
             currentTimeoutId = null;
@@ -6446,7 +6454,7 @@ Output Format (JSON Only):
             if (typeof window.callGeminiCoach === 'function') {
               try {
                 var analysis = await Promise.race([
-                  window.callGeminiCoach(userProfile, logs),
+                  window.callGeminiCoach(userProfile, logsToSend),
                   timeoutPromise
                 ]);
                 
