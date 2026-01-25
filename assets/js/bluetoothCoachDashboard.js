@@ -1755,31 +1755,74 @@ function updateWorkoutSegmentGraph() {
  * 컨트롤 버튼 이벤트 설정
  */
 function setupControlButtons() {
+  console.log('🎮 [진단] setupControlButtons 함수 호출됨');
+  
   // 워크아웃 선택 버튼은 이미 HTML에서 onclick으로 연결됨
   
   // 건너뛰기 버튼
   const skipBtn = document.getElementById('btnSkipSegmentBluetoothCoach');
   if (skipBtn) {
-    skipBtn.addEventListener('click', () => {
-      skipCurrentBluetoothCoachSegmentTraining();
-    });
+    // 기존 이벤트 리스너 제거 후 추가 (중복 방지)
+    skipBtn.replaceWith(skipBtn.cloneNode(true));
+    const newSkipBtn = document.getElementById('btnSkipSegmentBluetoothCoach');
+    if (newSkipBtn) {
+      newSkipBtn.addEventListener('click', () => {
+        console.log('🎮 [진단] 건너뛰기 버튼 클릭됨');
+        if (typeof skipCurrentBluetoothCoachSegmentTraining === 'function') {
+          skipCurrentBluetoothCoachSegmentTraining();
+        } else {
+          console.error('🎮 [진단/Error] skipCurrentBluetoothCoachSegmentTraining 함수가 없습니다!');
+        }
+      });
+      console.log('🎮 [진단] 건너뛰기 버튼 이벤트 연결 완료');
+    }
+  } else {
+    console.warn('🎮 [진단] btnSkipSegmentBluetoothCoach 버튼을 찾을 수 없습니다.');
   }
   
-  // 일시정지/재생 버튼
+  // 일시정지/재생 버튼 (시작 버튼)
   const togglePauseBtn = document.getElementById('btnTogglePauseBluetoothCoach');
   if (togglePauseBtn) {
-    togglePauseBtn.addEventListener('click', () => {
-      toggleStartPauseBluetoothCoachTraining();
-    });
+    // 기존 이벤트 리스너 제거 후 추가 (중복 방지)
+    togglePauseBtn.replaceWith(togglePauseBtn.cloneNode(true));
+    const newToggleBtn = document.getElementById('btnTogglePauseBluetoothCoach');
+    if (newToggleBtn) {
+      newToggleBtn.addEventListener('click', () => {
+        console.log('🎮 [진단] 시작/일시정지 버튼 클릭됨');
+        if (typeof toggleStartPauseBluetoothCoachTraining === 'function') {
+          toggleStartPauseBluetoothCoachTraining();
+        } else {
+          console.error('🎮 [진단/Error] toggleStartPauseBluetoothCoachTraining 함수가 없습니다!');
+        }
+      });
+      console.log('🎮 [진단] 시작/일시정지 버튼 이벤트 연결 완료');
+    }
+  } else {
+    console.error('🎮 [진단/Error] btnTogglePauseBluetoothCoach 버튼을 찾을 수 없습니다!');
   }
   
   // 종료 버튼
   const stopBtn = document.getElementById('btnStopTrainingBluetoothCoach');
   if (stopBtn) {
-    stopBtn.addEventListener('click', () => {
-      stopBluetoothCoachTraining();
-    });
+    // 기존 이벤트 리스너 제거 후 추가 (중복 방지)
+    stopBtn.replaceWith(stopBtn.cloneNode(true));
+    const newStopBtn = document.getElementById('btnStopTrainingBluetoothCoach');
+    if (newStopBtn) {
+      newStopBtn.addEventListener('click', () => {
+        console.log('🎮 [진단] 종료 버튼 클릭됨');
+        if (typeof stopBluetoothCoachTraining === 'function') {
+          stopBluetoothCoachTraining();
+        } else {
+          console.error('🎮 [진단/Error] stopBluetoothCoachTraining 함수가 없습니다!');
+        }
+      });
+      console.log('🎮 [진단] 종료 버튼 이벤트 연결 완료');
+    }
+  } else {
+    console.warn('🎮 [진단] btnStopTrainingBluetoothCoach 버튼을 찾을 수 없습니다.');
   }
+  
+  console.log('🎮 [진단] setupControlButtons 완료');
 }
 
 /**
@@ -1985,6 +2028,19 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
     window.bluetoothCoachState.currentWorkout = loadedWorkout;
     // 주의: window.currentWorkout은 Indoor Training에서 사용하므로 덮어쓰지 않음
     // Bluetooth Coach는 window.bluetoothCoachState.currentWorkout만 사용
+    
+    console.log('🎮 [진단] 워크아웃 선택 완료:', {
+      id: loadedWorkout.id,
+      title: loadedWorkout.title,
+      segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0,
+      storedIn: 'bluetoothCoachState.currentWorkout'
+    });
+    
+    // 버튼 상태 업데이트 (워크아웃 선택 후 시작 버튼 활성화)
+    if (typeof updateBluetoothCoachTrainingButtons === 'function') {
+      updateBluetoothCoachTrainingButtons();
+      console.log('🎮 [진단] 버튼 상태 업데이트 완료');
+    }
     
     // Firebase에 workoutPlan 및 workoutId 저장
     if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
@@ -2213,12 +2269,30 @@ window.openWorkoutSelectionModalForBluetoothCoach = openWorkoutSelectionModalFor
  * 워크아웃 카운트다운 후 훈련 시작 (Indoor Training의 startTrainingWithCountdown 참고)
  */
 function startBluetoothCoachTrainingWithCountdown() {
-  if (!window.bluetoothCoachState.currentWorkout) {
+  console.log('🎮 [진단] startBluetoothCoachTrainingWithCountdown 함수 호출됨');
+  
+  // 워크아웃 확인 (강화된 검증)
+  const hasWorkout = window.bluetoothCoachState && 
+                     window.bluetoothCoachState.currentWorkout && 
+                     window.bluetoothCoachState.currentWorkout.segments &&
+                     Array.isArray(window.bluetoothCoachState.currentWorkout.segments) &&
+                     window.bluetoothCoachState.currentWorkout.segments.length > 0;
+  
+  if (!hasWorkout) {
+    console.error('🎮 [진단/Error] 워크아웃이 선택되지 않았습니다!');
+    console.error('🎮 [진단/Error] currentWorkout 상태:', {
+      exists: !!(window.bluetoothCoachState && window.bluetoothCoachState.currentWorkout),
+      hasSegments: !!(window.bluetoothCoachState?.currentWorkout?.segments),
+      segmentsLength: window.bluetoothCoachState?.currentWorkout?.segments?.length || 0
+    });
+    
     if (typeof showToast === 'function') {
-      showToast('워크아웃을 선택해주세요.');
+      showToast('워크아웃을 선택해주세요.', 'error');
     }
     return;
   }
+  
+  console.log('🎮 [진단] 워크아웃 확인 완료, 카운트다운 시작');
   
   // Firebase에 시작 카운트다운 상태 전송
   if (typeof db !== 'undefined') {
@@ -2342,14 +2416,39 @@ function startBluetoothCoachTrainingWithCountdown() {
  * 시작/일시정지 토글 (Indoor Training의 toggleStartPauseTraining 참고)
  */
 function toggleStartPauseBluetoothCoachTraining() {
-  const state = window.bluetoothCoachState.trainingState;
+  console.log('🎮 [진단] toggleStartPauseBluetoothCoachTraining 함수 호출됨');
+  
+  const state = window.bluetoothCoachState ? window.bluetoothCoachState.trainingState : 'idle';
+  const hasWorkout = window.bluetoothCoachState && 
+                     window.bluetoothCoachState.currentWorkout && 
+                     window.bluetoothCoachState.currentWorkout.segments &&
+                     Array.isArray(window.bluetoothCoachState.currentWorkout.segments) &&
+                     window.bluetoothCoachState.currentWorkout.segments.length > 0;
+  
+  console.log('🎮 [진단] 현재 상태:', {
+    trainingState: state,
+    hasWorkout: hasWorkout,
+    currentWorkout: window.bluetoothCoachState?.currentWorkout ? '있음' : '없음'
+  });
   
   if (state === 'idle' || state === 'finished') {
+    if (!hasWorkout) {
+      console.error('🎮 [진단/Error] 워크아웃이 선택되지 않았습니다!');
+      if (typeof showToast === 'function') {
+        showToast('워크아웃을 먼저 선택해주세요.', 'error');
+      }
+      return;
+    }
+    console.log('🎮 [진단] 워크아웃 시작 시도 (카운트다운 포함)');
     startBluetoothCoachTrainingWithCountdown();
   } else if (state === 'running') {
+    console.log('🎮 [진단] 훈련 일시정지');
     pauseBluetoothCoachTraining();
   } else if (state === 'paused') {
+    console.log('🎮 [진단] 훈련 재개');
     resumeBluetoothCoachTraining();
+  } else {
+    console.warn('🎮 [진단] 알 수 없는 상태:', state);
   }
 }
 
@@ -3135,3 +3234,76 @@ console.log('[Bluetooth Coach] 노출된 함수 확인:', {
   initBluetoothCoachDashboard: typeof window.initBluetoothCoachDashboard,
   renderBluetoothCoachDashboard: typeof window.renderBluetoothCoachDashboard
 });
+
+/* ==================================================================================
+   [Self-Starter] 자동 실행 감지 센서 (Final Fix)
+   설명: app.js의 호출 여부와 관계없이, 화면이 노출되면 스스로 감지하여 데이터를 로드합니다.
+   ================================================================================== */
+(function() {
+    // 중복 실행 방지 플래그
+    let isInitializing = false;
+    let lastCheckTime = 0;
+
+    // 1초 간격으로 화면 상태 모니터링
+    setInterval(() => {
+        const now = Date.now();
+        // 너무 빈번한 체크 방지 (최소 500ms 간격)
+        if (now - lastCheckTime < 500) return;
+        lastCheckTime = now;
+
+        const screenEl = document.getElementById('bluetoothTrainingCoachScreen');
+        const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
+        
+        // 조건 1: 화면 요소가 존재하고
+        // 조건 2: 화면이 현재 눈에 보이며 (display != none)
+        // 조건 3: 속도계 그리드가 비어있고 (초기화 안 됨)
+        // 조건 4: 현재 초기화 진행 중이 아닐 때
+        if (screenEl && gridEl && 
+            window.getComputedStyle(screenEl).display !== 'none' && 
+            gridEl.children.length === 0 &&
+            !isInitializing) {
+            
+            console.log('⚡ [Self-Starter] 화면 노출 감지! 대시보드 자동 초기화 시작...');
+            isInitializing = true;
+            
+            // 1. 초기화 함수 실행
+            if (typeof window.initBluetoothCoachDashboard === 'function') {
+                try {
+                    window.initBluetoothCoachDashboard();
+                    console.log('⚡ [Self-Starter] initBluetoothCoachDashboard 호출 완료');
+                } catch (error) {
+                    console.error('⚡ [Self-Starter] 초기화 중 오류:', error);
+                    isInitializing = false;
+                    return;
+                }
+                
+                // 2. 안전장치: 1.5초 후에도 비어있으면 데이터 강제 로드 (Firebase 연동)
+                setTimeout(() => {
+                    if (gridEl && gridEl.children.length === 0) {
+                        console.log('⚡ [Self-Starter] 데이터 로드 재시도 (updateBluetoothCoachTracksFromFirebase)...');
+                        if (typeof window.updateBluetoothCoachTracksFromFirebase === 'function') {
+                            window.updateBluetoothCoachTracksFromFirebase().then(() => {
+                                console.log('⚡ [Self-Starter] 재시도 완료');
+                                isInitializing = false;
+                            }).catch(err => {
+                                console.error('⚡ [Self-Starter] 재시도 실패:', err);
+                                isInitializing = false;
+                            });
+                        } else {
+                            console.warn('⚡ [Self-Starter] updateBluetoothCoachTracksFromFirebase 함수가 없습니다.');
+                            isInitializing = false;
+                        }
+                    } else {
+                        console.log('⚡ [Self-Starter] 데이터 로드 성공 확인');
+                        isInitializing = false;
+                    }
+                }, 1500);
+            } else {
+                console.error('⚡ [Self-Starter] initBluetoothCoachDashboard 함수가 없습니다!');
+                isInitializing = false;
+            }
+        }
+    }, 1000);
+    
+    console.log('⚡ [Self-Starter] 자동 감지 센서 활성화됨 (1초 간격 모니터링)');
+})();
