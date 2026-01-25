@@ -1035,7 +1035,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 훈련 준비 화면 카드 여백 최소화 */
 #trainingReadyScreen .connection-form-card {
-  padding: 25px 30px 10px 30px !important; /* 상단 25px, 좌우 30px, 하단 10px (좌표 표기용 최소 여백) */
+  padding: 25px 30px 0 30px !important; /* 상단 25px, 좌우 30px, 하단 0 */
 }
 
 .connection-header {
@@ -1171,7 +1171,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 #segmentPreviewPlaceholder div.workout-select-placeholder-text,
 #trainingReadyScreen #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text,
 #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text {
-  color: rgba(255, 152, 0, 0.85) !important;
+  color: #e65100 !important; /* 주황색, 더 진하게 (Material orange 900) */
 }
 
 /* 워크아웃 그래프 블럭: 모바일 선택 버튼과 동일 테두리 */
@@ -1193,17 +1193,6 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingReadyScreen .segment-preview.segment-preview-graph:hover {
   background-color: rgba(255, 255, 255, 0.8);
   border-color: rgba(59, 130, 246, 0.4);
-}
-
-/* 훈련 준비 화면: Y 좌표 표기 (노트북 버튼 하단 / 전체 블럭 하단) */
-.training-ready-coord-display {
-  margin-top: 0;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: #64748b;
-  background: #f1f5f9;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
 }
 
 /* 무선 기기 연결 화면의 파워미터 연결 버튼 블럭 하단 여백 제거 */
