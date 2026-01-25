@@ -2651,14 +2651,19 @@
       <div class="connection-form-container">
         <div class="connection-form-card">
           <div class="connection-header training-ready-header-row">
-            <div class="training-ready-title-row">
-              <button type="button" class="training-ready-back-btn" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(function() { window.loadUsers(); }, 200); } }" aria-label="뒤로 가기">
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
-              </button>
-              <img src="assets/img/train.png" alt="" class="training-ready-header-icon" />
-              <h1 class="training-ready-title">훈련 준비</h1>
+            <div class="training-ready-header-top">
+              <div class="training-ready-back-wrap">
+                <button type="button" class="training-ready-back-btn" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(function() { window.loadUsers(); }, 200); } }" aria-label="뒤로 가기">
+                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+              </div>
+              <div class="training-ready-title-center">
+                <img src="assets/img/train.png" alt="" class="training-ready-header-icon" />
+                <h1 class="training-ready-title">훈련 준비</h1>
+              </div>
+              <div class="training-ready-header-spacer"></div>
             </div>
-            <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
+            <p class="subtitle training-ready-subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
           </div>
 
           <!-- 워크아웃 정보 섹션 (스크롤 없음) -->
@@ -2702,7 +2707,7 @@
           <!-- Select Dashboard 섹션 (스크롤 없음) -->
           <div class="connection-device-section training-ready-select-dashboard">
             <h3 class="mb-15" style="margin-bottom: 8px !important;">Select Dashboard</h3>
-            <div class="grid-2 gap-10 mb-15" style="margin-bottom: 12px !important;">
+            <div class="grid-2 gap-10 training-ready-dashboard-grid">
               <!-- 좌측: 개인 훈련 화면 (워크아웃 선택 시 활성화) -->
               <button class="btn btn-device" id="btnStartTraining" disabled onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
                 <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
