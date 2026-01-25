@@ -3702,7 +3702,10 @@
   <div id="rpeConditionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeRPEModal();">
     <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation();">
       <div class="modal-header">
-        <h2>컨디션별 강도 보정</h2>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <img id="rpeModalChallengeIcon" src="assets/img/yellow.png" alt="" style="width: 32px; height: 32px; object-fit: contain; flex-shrink: 0;">
+          <h2 style="margin: 0; flex: 1;">컨디션별 강도 보정</h2>
+        </div>
         <button class="modal-close" onclick="closeRPEModal()">&times;</button>
       </div>
       <div class="modal-body">
