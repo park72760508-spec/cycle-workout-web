@@ -6256,33 +6256,47 @@ Output Format (JSON Only):
           setLogsLoadError(null);
 
           try {
-            // Firestore v8 compat SDK만 사용 (v9는 동적 import 문제로 제외)
-            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
-            if (!firestore) {
-              throw new Error('Firestore not available');
-            }
-
             var thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
 
-            var logsSnapshot;
-            // Firestore v8 compat SDK 사용 (v9는 동적 import 문제로 제외)
-            var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
-            try {
-              logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
-            } catch (indexErr) {
-              console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
-              logsSnapshot = await userLogsRef.limit(100).get();
+            var raw = [];
+            // 1) authV9(전화번호 로그인) 사용 시 권한 오류 방지: getUserTrainingLogs(firestoreV9) 우선 사용
+            if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
+              try {
+                var fetched = await window.getUserTrainingLogs(userProfile.id, { limit: 50 });
+                raw = Array.isArray(fetched) ? fetched : [];
+              } catch (e) {
+                console.warn('[Dashboard] getUserTrainingLogs failed, falling back to v8:', e);
+                raw = [];
+              }
+            }
+            // 2) 폴백: Firestore v8 compat
+            if (raw.length === 0) {
+              var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+              if (!firestore) {
+                throw new Error('Firestore not available');
+              }
+              var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+              var logsSnapshot;
+              try {
+                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+              } catch (indexErr) {
+                console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+                logsSnapshot = await userLogsRef.limit(100).get();
+              }
+              logsSnapshot.docs.forEach(function(doc) {
+                var d = doc.data();
+                if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                  raw.push({ id: doc.id, ...d });
+                }
+              });
+            } else {
+              raw = raw.filter(function(d) {
+                return (d.source === 'strava' || !d.source) && d.date && d.date >= dateStr;
+              });
             }
 
-            var raw = [];
-            logsSnapshot.docs.forEach(function(doc) {
-              var d = doc.data();
-              if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
-                raw.push({ id: doc.id, ...d });
-              }
-            });
             raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
             var logs = raw.slice(0, 30);
 
