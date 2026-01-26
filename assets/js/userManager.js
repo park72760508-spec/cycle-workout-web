@@ -40,6 +40,51 @@ function formatPoints(points) {
   return num.toString();
 }
 
+// expiry_date를 "YYYY-MM-DD" 형식으로 정규화하는 헬퍼 함수
+function normalizeExpiryDate(dateValue) {
+  if (!dateValue) return '';
+  
+  // 이미 "YYYY-MM-DD" 형식의 문자열인 경우
+  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    return dateValue;
+  }
+  
+  // Date 객체인 경우
+  if (dateValue instanceof Date) {
+    return dateValue.toISOString().split('T')[0];
+  }
+  
+  // Firestore Timestamp인 경우
+  if (dateValue && typeof dateValue === 'object' && dateValue.toDate) {
+    return dateValue.toDate().toISOString().split('T')[0];
+  }
+  
+  // seconds 필드가 있는 경우 (Timestamp 객체)
+  if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
+    return new Date(dateValue.seconds * 1000).toISOString().split('T')[0];
+  }
+  
+  // 문자열인 경우 Date로 파싱 시도
+  if (typeof dateValue === 'string') {
+    try {
+      const date = new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+      // "YYYY-MM-DD" 형식이 아닌 경우 첫 10자리만 추출
+      if (dateValue.length >= 10) {
+        return dateValue.substring(0, 10);
+      }
+    } catch (e) {
+      console.warn('[normalizeExpiryDate] 날짜 파싱 실패:', dateValue, e);
+    }
+  }
+  
+  // 변환 실패 시 빈 문자열 반환
+  console.warn('[normalizeExpiryDate] 알 수 없는 날짜 형식:', dateValue);
+  return '';
+}
+
 // Firestore users 컬렉션 참조
 // v9 Modular SDK와 v8 Compat SDK 모두 지원
 // 주의: v9 Modular SDK는 authV9와 연결되고, v8 Compat SDK는 auth와 연결됨
@@ -1205,7 +1250,7 @@ async function apiCreateUser(userData) {
       gender: String(userData.gender || ''),
       created_at: now,
       grade: String(userData.grade || '2'), // 기본값: "2"
-      expiry_date: userData.expiry_date || defaultExpiryDate,
+      expiry_date: normalizeExpiryDate(userData.expiry_date) || defaultExpiryDate,
       challenge: String(userData.challenge || 'Fitness'), // 기본값: "Fitness"
       acc_points: 0, // 기본값: 0
       rem_points: 0, // 기본값: 0
@@ -1263,7 +1308,7 @@ async function apiUpdateUser(id, userData) {
     if (userData.birth_year != null) updateData.birth_year = parseInt(userData.birth_year);
     if (userData.gender != null) updateData.gender = String(userData.gender);
     if (userData.grade != null) updateData.grade = String(userData.grade);
-    if (userData.expiry_date != null) updateData.expiry_date = String(userData.expiry_date);
+    if (userData.expiry_date != null) updateData.expiry_date = normalizeExpiryDate(userData.expiry_date);
     if (userData.challenge != null) updateData.challenge = String(userData.challenge);
     if (userData.acc_points != null) updateData.acc_points = parseFloat(userData.acc_points);
     if (userData.rem_points != null) updateData.rem_points = parseFloat(userData.rem_points);
@@ -2076,7 +2121,7 @@ async function saveUser() {
       const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
 
       if (gradeEl) userData.grade = String(gradeEl.value || '2');
-      if (expiryEl && expiryEl.value) userData.expiry_date = expiryEl.value;
+      if (expiryEl && expiryEl.value) userData.expiry_date = normalizeExpiryDate(expiryEl.value);
       if (accPointsEl && accPointsEl.value) userData.acc_points = parseFloat(accPointsEl.value) || 0;
       if (remPointsEl && remPointsEl.value) userData.rem_points = parseFloat(remPointsEl.value) || 0;
       if (lastTrainingDateEl && lastTrainingDateEl.value) userData.last_training_date = lastTrainingDateEl.value;
@@ -2381,7 +2426,7 @@ async function performUpdateFromModal() {
       const stravaExpiresAtEl = document.getElementById('editUserStravaExpiresAt');
       
       if (gradeEl) userData.grade = String(gradeEl.value || '2');
-      if (expiryEl && expiryEl.value) userData.expiry_date = expiryEl.value;
+      if (expiryEl && expiryEl.value) userData.expiry_date = normalizeExpiryDate(expiryEl.value);
       if (accPointsEl && accPointsEl.value !== '') userData.acc_points = parseFloat(accPointsEl.value) || 0;
       if (remPointsEl && remPointsEl.value !== '') userData.rem_points = parseFloat(remPointsEl.value) || 0;
       if (lastTrainingDateEl && lastTrainingDateEl.value) userData.last_training_date = lastTrainingDateEl.value;
@@ -2577,7 +2622,7 @@ async function completeUserInfo() {
       ftp: ftp,
       weight: weight,
       challenge: challenge,
-      expiry_date: extendedExpiryDate // 3개월 무료 연장 적용
+      expiry_date: normalizeExpiryDate(extendedExpiryDate) // 3개월 무료 연장 적용
     };
     
     const result = await apiUpdateUser(currentUser.uid, updateData);
@@ -2682,7 +2727,7 @@ async function performUpdate() {
       const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
       
       if (gradeEl) userData.grade = String(gradeEl.value || '2');
-      if (expiryEl && expiryEl.value) userData.expiry_date = expiryEl.value;
+      if (expiryEl && expiryEl.value) userData.expiry_date = normalizeExpiryDate(expiryEl.value);
       if (accPointsEl && accPointsEl.value !== '') userData.acc_points = parseFloat(accPointsEl.value) || 0;
       if (remPointsEl && remPointsEl.value !== '') userData.rem_points = parseFloat(remPointsEl.value) || 0;
       if (lastTrainingDateEl && lastTrainingDateEl.value) userData.last_training_date = lastTrainingDateEl.value;
