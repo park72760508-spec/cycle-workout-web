@@ -4318,6 +4318,12 @@ function exitBluetoothIndividualTraining() {
     
     // 확인 대화상자
     if (confirm('초기화면으로 나가시겠습니까?')) {
+        // 화면 잠금 방지 해제 (화면 나가기 전에 해제)
+        if (typeof window.wakeLockControl !== 'undefined' && typeof window.wakeLockControl.release === 'function') {
+            console.log('[Bluetooth 개인 훈련] 화면 나가기 - 화면 잠금 방지 해제');
+            window.wakeLockControl.release();
+        }
+        
         // 초기화면으로 이동 (bluetoothIndividual.html은 독립 페이지이므로 index.html로 이동)
         // showScreen 함수는 index.html 내부에서만 작동하므로 직접 URL 이동
         window.location.href = 'index.html#basecampScreen';
