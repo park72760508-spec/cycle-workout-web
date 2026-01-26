@@ -7543,6 +7543,32 @@ Output Format (JSON Only):
       background-size: 1000px;
       animation: shimmer 2s infinite;
     }
+    
+    /* Powered by Strava Footer */
+    .strava-powered-footer {
+      width: 100%;
+      text-align: center;
+      background-color: transparent;
+      padding-top: 30px;
+      padding-bottom: 20px;
+    }
+    
+    .strava-powered-footer a {
+      display: inline-block;
+      text-decoration: none;
+      transition: opacity 0.2s ease;
+    }
+    
+    .strava-powered-footer a:hover {
+      opacity: 0.8;
+    }
+    
+    .strava-powered-footer img {
+      height: 28px;
+      width: auto;
+      display: block;
+      margin: 0 auto;
+    }
   </style>
   
   <!-- 환영 오버레이 (사용자 등록 시) - body의 직접 자식으로 배치 -->
@@ -7558,5 +7584,12 @@ Output Format (JSON Only):
       <button class="welcome-close-btn" onclick="closeUserWelcomeModal()" style="width: 100%; padding: 14px; background: rgba(255, 255, 255, 0.95); border: 2px solid #ffd700; border-radius: 10px; color: #ff6b35; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);">지금 훈련 시작하기</button>
     </div>
   </div>
+  
+  <!-- Powered by Strava Footer -->
+  <footer class="strava-powered-footer">
+    <a href="https://www.strava.com" target="_blank" rel="noopener noreferrer">
+      <img src="assets/img/api_strava.png" alt="Powered by Strava" />
+    </a>
+  </footer>
 </body>
 </html>
