@@ -3938,7 +3938,7 @@ async function checkFirebaseRawData(roomId) {
 }
 
 /**
- * 일괄 퇴실 (모든 트랙의 사용자 및 심박계 삭제, grade=1,3만 사용 가능)
+ * 일괄 퇴실 (모든 트랙의 사용자 및 디바이스 정보 삭제, grade=1,3만 사용 가능)
  */
 async function clearAllTracksData() {
   // grade 확인
@@ -3959,7 +3959,7 @@ async function clearAllTracksData() {
     return;
   }
   
-  if (!confirm('모든 트랙의 사용자와 심박계 정보를 삭제하시겠습니까?\n(스마트로라, 파워메터, Gear, Brake는 유지됩니다)')) {
+  if (!confirm('모든 트랙의 사용자 및 디바이스 정보를 삭제하시겠습니까?\n(사용자 정보, 스마트로라, 파워메터, 기어, 브레이크, 심박계가 모두 삭제됩니다)')) {
     return;
   }
   
@@ -3984,19 +3984,38 @@ async function clearAllTracksData() {
     if (typeof db !== 'undefined') {
       const sessionId = roomId;
       
-      // 모든 트랙(1~10) 처리
+      // devices/track 값을 읽어서 트랙 개수 확인 (기본값 10)
+      let maxTracks = 10;
+      try {
+        const trackSnapshot = await db.ref(`sessions/${sessionId}/devices/track`).once('value');
+        const trackValue = trackSnapshot.val();
+        if (trackValue !== null && trackValue !== undefined) {
+          maxTracks = Number(trackValue) || 10;
+        }
+        console.log(`[clearAllTracksData] 트랙 개수: ${maxTracks}`);
+      } catch (e) {
+        console.warn('[clearAllTracksData] track 값 읽기 실패, 기본값 10 사용:', e);
+      }
+      
+      // 모든 트랙 처리
       const promises = [];
-      for (let i = 1; i <= 10; i++) {
-        // users 삭제
+      for (let i = 1; i <= maxTracks; i++) {
+        // 1. users 삭제 (userId, userName, weight, ftp)
         promises.push(db.ref(`sessions/${sessionId}/users/${i}`).remove());
         
-        // devices에서 심박계만 삭제
+        // 2. devices에서 모든 디바이스 정보 null로 설정 (track은 유지)
         promises.push(
           db.ref(`sessions/${sessionId}/devices/${i}`).once('value').then(snapshot => {
             const deviceData = snapshot.val();
             if (deviceData) {
+              // track 필드는 제외하고 모든 디바이스 필드를 null로 설정
               return db.ref(`sessions/${sessionId}/devices/${i}`).update({
-                heartRateId: null
+                smartTrainerId: null,
+                powerMeterId: null,
+                heartRateId: null,
+                gear: null,
+                brake: null
+                // track 필드는 update에 포함하지 않아서 유지됨
               });
             }
           })
@@ -4006,7 +4025,7 @@ async function clearAllTracksData() {
       await Promise.all(promises);
       
       if (typeof showToast === 'function') {
-        showToast('모든 트랙의 사용자 및 심박계가 삭제되었습니다.', 'success');
+        showToast(`모든 트랙(${maxTracks}개)의 사용자 및 디바이스 정보가 삭제되었습니다.`, 'success');
       }
       
       // Player List 다시 로드
