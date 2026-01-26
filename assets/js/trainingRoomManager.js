@@ -3986,11 +3986,13 @@ async function clearAllTracksData() {
       
       // devices/track 값을 읽어서 트랙 개수 확인 (기본값 10)
       let maxTracks = 10;
+      let savedTrackValue = null; // devices/track 값을 보존하기 위해 저장
       try {
         const trackSnapshot = await db.ref(`sessions/${sessionId}/devices/track`).once('value');
         const trackValue = trackSnapshot.val();
         if (trackValue !== null && trackValue !== undefined) {
           maxTracks = Number(trackValue) || 10;
+          savedTrackValue = maxTracks; // 원래 track 값 저장
         }
         console.log(`[clearAllTracksData] 트랙 개수: ${maxTracks}`);
       } catch (e) {
@@ -4023,6 +4025,16 @@ async function clearAllTracksData() {
       }
       
       await Promise.all(promises);
+      
+      // devices/track 필드 명시적으로 보존 (삭제 방지)
+      if (savedTrackValue !== null) {
+        try {
+          await db.ref(`sessions/${sessionId}/devices/track`).set(savedTrackValue);
+          console.log(`[clearAllTracksData] devices/track 필드 보존 완료: ${savedTrackValue}`);
+        } catch (e) {
+          console.error('[clearAllTracksData] devices/track 필드 보존 실패:', e);
+        }
+      }
       
       if (typeof showToast === 'function') {
         showToast(`모든 트랙(${maxTracks}개)의 사용자 및 디바이스 정보가 삭제되었습니다.`, 'success');
