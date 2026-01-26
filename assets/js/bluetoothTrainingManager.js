@@ -999,11 +999,42 @@ async function clearAllBluetoothTracksData() {
   try {
     if (typeof db !== 'undefined') {
       const sessionId = roomId;
-      await db.ref(`sessions/${sessionId}/users`).remove();
-      await db.ref(`sessions/${sessionId}/devices`).remove();
+      
+      // Step 1: Fetch the current track count from devices/track (default to 10 if null)
+      let maxTracks = 10;
+      try {
+        const trackSnapshot = await db.ref(`sessions/${sessionId}/devices/track`).once('value');
+        const trackValue = trackSnapshot.val();
+        if (trackValue !== null && trackValue !== undefined) {
+          maxTracks = Number(trackValue) || 10;
+        }
+        console.log(`[clearAllBluetoothTracksData] Step 1 - 트랙 개수 확인: ${maxTracks}`);
+      } catch (e) {
+        console.warn('[clearAllBluetoothTracksData] Step 1 - track 값 읽기 실패, 기본값 10 사용:', e);
+      }
+      
+      // Step 2: Remove the entire users node using .remove()
+      try {
+        await db.ref(`sessions/${sessionId}/users`).remove();
+        console.log(`[clearAllBluetoothTracksData] Step 2 - users 노드 전체 삭제 완료`);
+      } catch (e) {
+        console.error('[clearAllBluetoothTracksData] Step 2 - users 노드 삭제 실패:', e);
+        throw e;
+      }
+      
+      // Step 3: Atomic Overwrite - Reset the devices node using .set() instead of .remove()
+      // This will automatically clear all other child nodes (smartTrainerId, etc.) 
+      // while preserving the track count in a single operation
+      try {
+        await db.ref(`sessions/${sessionId}/devices`).set({ track: maxTracks });
+        console.log(`[clearAllBluetoothTracksData] Step 3 - devices 노드 Atomic Overwrite 완료 (track: ${maxTracks})`);
+      } catch (e) {
+        console.error('[clearAllBluetoothTracksData] Step 3 - devices 노드 Atomic Overwrite 실패:', e);
+        throw e;
+      }
       
       if (typeof showToast === 'function') {
-        showToast('모든 트랙이 초기화되었습니다.', 'success');
+        showToast(`모든 트랙(${maxTracks}개)이 초기화되었습니다.`, 'success');
       }
       
       if (typeof renderBluetoothPlayerList === 'function') {
