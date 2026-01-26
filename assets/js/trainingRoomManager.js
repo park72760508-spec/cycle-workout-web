@@ -3984,56 +3984,36 @@ async function clearAllTracksData() {
     if (typeof db !== 'undefined') {
       const sessionId = roomId;
       
-      // devices/track 값을 읽어서 트랙 개수 확인 (기본값 10)
+      // Step 1: Fetch the current track count from devices/track (default to 10 if null)
       let maxTracks = 10;
-      let savedTrackValue = null; // devices/track 값을 보존하기 위해 저장
       try {
         const trackSnapshot = await db.ref(`sessions/${sessionId}/devices/track`).once('value');
         const trackValue = trackSnapshot.val();
         if (trackValue !== null && trackValue !== undefined) {
           maxTracks = Number(trackValue) || 10;
-          savedTrackValue = maxTracks; // 원래 track 값 저장
         }
-        console.log(`[clearAllTracksData] 트랙 개수: ${maxTracks}`);
+        console.log(`[clearAllTracksData] Step 1 - 트랙 개수 확인: ${maxTracks}`);
       } catch (e) {
-        console.warn('[clearAllTracksData] track 값 읽기 실패, 기본값 10 사용:', e);
+        console.warn('[clearAllTracksData] Step 1 - track 값 읽기 실패, 기본값 10 사용:', e);
       }
       
-      // 모든 트랙 처리
-      const promises = [];
-      for (let i = 1; i <= maxTracks; i++) {
-        // 1. users 삭제 (userId, userName, weight, ftp)
-        promises.push(db.ref(`sessions/${sessionId}/users/${i}`).remove());
-        
-        // 2. devices에서 모든 디바이스 정보 null로 설정 (track은 유지)
-        promises.push(
-          db.ref(`sessions/${sessionId}/devices/${i}`).once('value').then(snapshot => {
-            const deviceData = snapshot.val();
-            if (deviceData) {
-              // track 필드는 제외하고 모든 디바이스 필드를 null로 설정
-              return db.ref(`sessions/${sessionId}/devices/${i}`).update({
-                smartTrainerId: null,
-                powerMeterId: null,
-                heartRateId: null,
-                gear: null,
-                brake: null
-                // track 필드는 update에 포함하지 않아서 유지됨
-              });
-            }
-          })
-        );
+      // Step 2: Remove the entire users node using .remove()
+      try {
+        await db.ref(`sessions/${sessionId}/users`).remove();
+        console.log(`[clearAllTracksData] Step 2 - users 노드 전체 삭제 완료`);
+      } catch (e) {
+        console.error('[clearAllTracksData] Step 2 - users 노드 삭제 실패:', e);
+        throw e;
       }
       
-      await Promise.all(promises);
-      
-      // devices/track 필드 명시적으로 보존 (삭제 방지)
-      if (savedTrackValue !== null) {
-        try {
-          await db.ref(`sessions/${sessionId}/devices/track`).set(savedTrackValue);
-          console.log(`[clearAllTracksData] devices/track 필드 보존 완료: ${savedTrackValue}`);
-        } catch (e) {
-          console.error('[clearAllTracksData] devices/track 필드 보존 실패:', e);
-        }
+      // Step 3: Reset the devices node using .set() instead of .update()
+      // This atomic operation clears all child nodes (smartTrainerId, etc.) while preserving the track count
+      try {
+        await db.ref(`sessions/${sessionId}/devices`).set({ track: maxTracks });
+        console.log(`[clearAllTracksData] Step 3 - devices 노드 리셋 완료 (track: ${maxTracks})`);
+      } catch (e) {
+        console.error('[clearAllTracksData] Step 3 - devices 노드 리셋 실패:', e);
+        throw e;
       }
       
       if (typeof showToast === 'function') {
@@ -4269,9 +4249,37 @@ async function renderBluetoothPlayerList() {
         maxTrackNumber = devicesData.track;
         console.log('[Bluetooth Player List] Firebase devices에서 트랙 개수 가져옴:', maxTrackNumber);
       } else {
-        // track 값이 없으면 디폴트 10개 할당
-        maxTrackNumber = 10;
-        console.log('[Bluetooth Player List] Firebase devices에 track 값이 없어 디폴트 10개 할당');
+        // track 값이 없으면 실제 존재하는 트랙 번호를 확인하여 최대값 사용
+        const existingTrackNumbers = [];
+        if (devicesData) {
+          Object.keys(devicesData).forEach(key => {
+            const trackNum = parseInt(key, 10);
+            if (!isNaN(trackNum) && trackNum > 0 && trackNum <= 50) { // 최대 50개까지 확인
+              existingTrackNumbers.push(trackNum);
+            }
+          });
+        }
+        
+        // users 데이터에서도 트랙 번호 확인
+        if (usersData) {
+          Object.keys(usersData).forEach(key => {
+            const trackNum = parseInt(key, 10);
+            if (!isNaN(trackNum) && trackNum > 0 && trackNum <= 50) {
+              if (!existingTrackNumbers.includes(trackNum)) {
+                existingTrackNumbers.push(trackNum);
+              }
+            }
+          });
+        }
+        
+        if (existingTrackNumbers.length > 0) {
+          maxTrackNumber = Math.max(...existingTrackNumbers);
+          console.log('[Bluetooth Player List] devices/track 값이 없어 실제 존재하는 트랙 번호로 계산:', maxTrackNumber, '(존재하는 트랙:', existingTrackNumbers.sort((a, b) => a - b).join(', '), ')');
+        } else {
+          // 트랙 번호도 없으면 디폴트 10개 할당
+          maxTrackNumber = 10;
+          console.log('[Bluetooth Player List] Firebase devices에 track 값이 없고 실제 트랙도 없어 디폴트 10개 할당');
+        }
       }
       
       // users 정보 가져오기 (트랙별 사용자 데이터) - devicesData는 이미 위에서 가져옴
