@@ -4006,13 +4006,14 @@ async function clearAllTracksData() {
         throw e;
       }
       
-      // Step 3: Reset the devices node using .set() instead of .update()
-      // This atomic operation clears all child nodes (smartTrainerId, etc.) while preserving the track count
+      // Step 3: Atomic Overwrite - Reset the devices node using .set() instead of .update()
+      // This will automatically clear all other child nodes (smartTrainerId, etc.) 
+      // while preserving the track count in a single operation
       try {
         await db.ref(`sessions/${sessionId}/devices`).set({ track: maxTracks });
-        console.log(`[clearAllTracksData] Step 3 - devices 노드 리셋 완료 (track: ${maxTracks})`);
+        console.log(`[clearAllTracksData] Step 3 - devices 노드 Atomic Overwrite 완료 (track: ${maxTracks})`);
       } catch (e) {
-        console.error('[clearAllTracksData] Step 3 - devices 노드 리셋 실패:', e);
+        console.error('[clearAllTracksData] Step 3 - devices 노드 Atomic Overwrite 실패:', e);
         throw e;
       }
       
