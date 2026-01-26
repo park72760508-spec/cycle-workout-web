@@ -1898,15 +1898,18 @@ button[aria-disabled="true"] {
 #profileScreen .profile-strava-button {
   background: #fc4c02;
   color: #fff;
-  border: none;
+  border: 2px solid rgba(252, 76, 2, 0.4) !important;
   padding: 12px 24px;
   border-radius: 10px;
   font-weight: 600;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.3) !important;
 }
 
 #profileScreen .profile-strava-button:hover {
   opacity: 0.9;
+  border-color: rgba(252, 76, 2, 0.6) !important;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.4) !important;
 }
 
 /* Strava 동기화 버튼 - Strava 연결 버튼과 동일한 스타일 */
