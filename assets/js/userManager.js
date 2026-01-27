@@ -1965,10 +1965,6 @@ async function selectUser(userId) {
 
     showToast(`${user.name}님이 선택되었습니다.`);
     
-    if (typeof showRPEModal === 'function') {
-      showRPEModal();
-    }
-    
   } catch (error) {
     console.error('사용자 선택 실패:', error);
     showToast('사용자 선택 중 오류가 발생했습니다.');
