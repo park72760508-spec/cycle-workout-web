@@ -1308,7 +1308,11 @@ async function apiUpdateUser(id, userData) {
     if (userData.birth_year != null) updateData.birth_year = parseInt(userData.birth_year);
     if (userData.gender != null) updateData.gender = String(userData.gender);
     if (userData.grade != null) updateData.grade = String(userData.grade);
-    if (userData.expiry_date != null) updateData.expiry_date = normalizeExpiryDate(userData.expiry_date);
+    // expiry_date는 string 형식으로 유지 (Firestore가 자동으로 Timestamp로 변환하는 것을 방지)
+    if (userData.expiry_date != null) {
+      const normalizedDate = normalizeExpiryDate(userData.expiry_date);
+      updateData.expiry_date = normalizedDate ? String(normalizedDate) : '';
+    }
     if (userData.challenge != null) updateData.challenge = String(userData.challenge);
     if (userData.acc_points != null) updateData.acc_points = parseFloat(userData.acc_points);
     if (userData.rem_points != null) updateData.rem_points = parseFloat(userData.rem_points);
