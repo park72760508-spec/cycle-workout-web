@@ -2383,6 +2383,23 @@ button[aria-disabled="true"] {
   margin-bottom: 8px;
 }
 
+.mini-calendar-font-info {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 4px 0;
+  font-size: 9px;
+  color: #999;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.mini-calendar-font-info strong {
+  color: #666;
+  font-weight: 600;
+}
+
 .mini-calendar-weekday {
   text-align: center;
   font-size: 11px;
@@ -2503,9 +2520,14 @@ button[aria-disabled="true"] {
   border-color: rgba(64, 224, 208, 0.6);
 }
 
-.day-number {
+/* 미니 달력의 날짜 숫자 - 명시적으로 폰트 사이즈 지정 (다른 .day-number 스타일 오버라이드) */
+.mini-calendar-day .day-number {
   position: relative;
   z-index: 1;
+  font-size: 11px !important; /* 요일과 동일한 크기로 강제 지정 */
+  font-weight: inherit !important; /* 부모의 font-weight 상속 */
+  color: inherit !important; /* 부모의 color 상속 */
+  line-height: 1 !important; /* line-height도 명시적으로 지정 */
 }
 
 /* ========== 훈련 상세 정보 모달 스타일 ========== */
