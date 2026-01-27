@@ -2351,6 +2351,12 @@ async function performUpdateFromModal() {
     return;
   }
 
+  // 저장 중 오버레이 표시
+  const savingOverlay = document.getElementById('editUserModalSavingOverlay');
+  if (savingOverlay) {
+    savingOverlay.classList.remove('hidden');
+  }
+
   // 권한 체크
   let viewer = null, authUser = null;
   try { viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(_) {}
@@ -2367,6 +2373,10 @@ async function performUpdateFromModal() {
   
   // 권한 확인: 관리자(grade=1)만 모든 사용자 수정 가능, 일반 사용자(grade=2,3)는 본인만 수정 가능
   if (viewerGrade !== '1' && (!viewerId || String(currentEditUserId) !== viewerId)) {
+    // 오버레이 숨기기
+    if (savingOverlay) {
+      savingOverlay.classList.add('hidden');
+    }
     showToast('본인 계정만 수정할 수 있습니다.', 'warning');
     return;
   }
@@ -2382,6 +2392,10 @@ async function performUpdateFromModal() {
   const challenge = document.getElementById('editUserChallenge')?.value || 'Fitness';
 
   if (!name || !ftp || !weight || !birthYear || !gender) {
+    // 오버레이 숨기기
+    if (savingOverlay) {
+      savingOverlay.classList.add('hidden');
+    }
     showToast('모든 필수 필드를 입력해주세요.');
     return;
   }
@@ -2421,6 +2435,11 @@ async function performUpdateFromModal() {
 
     const result = await apiUpdateUser(currentEditUserId, userData);
 
+    // 오버레이 숨기기
+    if (savingOverlay) {
+      savingOverlay.classList.add('hidden');
+    }
+
     if (result.success) {
       showToast('사용자 정보가 수정되었습니다.');
       closeEditUserModal();
@@ -2431,6 +2450,10 @@ async function performUpdateFromModal() {
 
   } catch (error) {
     console.error('사용자 업데이트 실패:', error);
+    // 오버레이 숨기기
+    if (savingOverlay) {
+      savingOverlay.classList.add('hidden');
+    }
     showToast('사용자 수정 중 오류가 발생했습니다.');
   }
 }
