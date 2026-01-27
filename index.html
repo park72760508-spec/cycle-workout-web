@@ -879,6 +879,41 @@
       flex: 1;
     }
 
+    /* 저장 중 오버레이 스타일 */
+    .edit-user-saving-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10001;
+      border-radius: 12px;
+    }
+
+    .edit-user-saving-overlay.hidden {
+      display: none;
+    }
+
+    .edit-user-saving-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .edit-user-saving-content .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
     /* 관리자(grade=1) 전용: 구독기간 날짜 텍스트 박스와 마지막 운동날짜 텍스트 박스 넓이를 보유포인트 텍스트 박스 넓이와 같게 */
     /* 모든 form-row는 동일한 그리드 구조 유지 */
     #editUserModal #editAdminFieldsSection .form-row {
@@ -950,6 +985,7 @@
     }
 
     .edit-user-modal-content {
+      position: relative;
       background: white;
       border-radius: 16px;
       width: 90%;
@@ -1877,6 +1913,14 @@
             <img src="assets/img/check-ok.png" alt="수정" id="editUserSaveIcon" onclick="performUpdateFromModal()" style="position: absolute; left: 20px; width: 24px; height: 24px; cursor: pointer; z-index: 10;" />
             <h3 id="editUserModalTitle" style="margin: 0; text-align: center; flex: 1;">사용자 정보 수정</h3>
             <button class="modal-close" onclick="closeEditUserModal()" aria-label="닫기" style="position: absolute; right: 20px;">&times;</button>
+          </div>
+          
+          <!-- 저장 중 오버레이 (스피너 + 메시지) -->
+          <div id="editUserModalSavingOverlay" class="edit-user-saving-overlay hidden">
+            <div class="edit-user-saving-content">
+              <div class="spinner"></div>
+              <div style="margin-top: 16px; font-size: 16px; color: #333; font-weight: 500;">저장 중......</div>
+            </div>
           </div>
           
           <div class="modal-body edit-user-modal-body">
