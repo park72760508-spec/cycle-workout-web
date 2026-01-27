@@ -1358,8 +1358,8 @@
       <h2 class="celebration-title" style="font-size: 1.8em; font-weight: bold; color: #fff; margin: 0 0 15px 0; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); line-height: 1.3;">가입 완료!</h2>
       <div class="celebration-message" id="register-celebration-message" style="font-size: 1.1em; color: #fff; line-height: 1.8; margin-bottom: 25px; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);">
         <strong id="register-celebration-name" style="font-size: 1.2em;">사용자</strong>님,<br>
-        STELVIO AI에 오신 것을 환영합니다<br><br>
-        <span style="font-size: 1.05em; font-weight: 600;">백만킬로 아카데미 회원 특별 이벤트</span><br>
+        STELVIO AI 캠프에 오신 것을 환영합니다<br><br>
+        <span style="font-size: 1.05em; font-weight: 600;">STELVIO AI 런칭 축하 특별 이벤트</span><br>
         <span style="font-size: 1.1em; font-weight: 700; color: #ffeb3b; text-shadow: 0 0 10px rgba(255, 235, 59, 0.5);">3개월 무료이용권이 부여되었습니다.</span>
       </div>
       <button class="celebration-button" id="registerCelebrationCloseBtn" onclick="closeRegisterCelebration()" style="background: #fff; color: #667eea; border: none; border-radius: 12px; padding: 14px 32px; font-size: 1.1em; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: all 0.3s ease;">
@@ -2989,6 +2989,11 @@
       <div id="mobile-bike-id-display" class="mobile-bike-badge" style="background-color: #00d4aa; color: #000; padding: 5px 12px; border-radius: 15px; font-weight: bold; font-size: 1.1em; display: inline-block;">Bike ?</div>
       <div id="mobile-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
       <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+        <!-- 사용자 정보 수정 버튼 -->
+        <button id="mobileDashboardEditUserBtn" class="mobile-bluetooth-connect-btn" onclick="if (typeof window.currentUser !== 'undefined' && window.currentUser && window.currentUser.id && typeof editUser === 'function') { editUser(window.currentUser.id); } else if (typeof getViewerId === 'function') { const viewerId = getViewerId(); if (viewerId && typeof editUser === 'function') { editUser(viewerId); } } else { console.warn('사용자 정보를 불러올 수 없습니다.'); }" title="사용자 정보 수정" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; transition: all 0.2s;">
+          <img src="assets/img/check-ok.png" alt="수정" style="width: 16px; height: 16px;">
+          <span>수정</span>
+        </button>
         <div style="position: relative;">
           <button id="mobileBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleMobileBluetoothDropdown()">
             <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
