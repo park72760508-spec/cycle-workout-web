@@ -2383,26 +2383,9 @@ button[aria-disabled="true"] {
   margin-bottom: 8px;
 }
 
-.mini-calendar-font-info {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 8px;
-  padding: 4px 0;
-  font-size: 9px;
-  color: #999;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.mini-calendar-font-info strong {
-  color: #666;
-  font-weight: 600;
-}
-
 .mini-calendar-weekday {
   text-align: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #666;
   padding: 4px 0;
@@ -2427,13 +2410,13 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px; /* 요일 표시와 동일한 크기 */
+  font-size: 12px; /* 요일 표시와 동일한 크기 */
   color: var(--text, #374151);
   cursor: default;
   border-radius: 12px; /* 보유포인트와 동일한 border-radius */
   position: relative;
   transition: all 0.2s ease;
-  padding: 4px 8px; /* 보유포인트와 동일한 padding */
+  padding: 1px 2px; /* 훈련 표시 상자 1/4로 축소 (기존 4px 8px -> 1px 2px) */
 }
 
 .mini-calendar-day.other-month {
@@ -2524,7 +2507,7 @@ button[aria-disabled="true"] {
 .mini-calendar-day .day-number {
   position: relative;
   z-index: 1;
-  font-size: 11px !important; /* 요일과 동일한 크기로 강제 지정 */
+  font-size: 12px !important; /* 요일과 동일한 크기로 강제 지정 */
   font-weight: inherit !important; /* 부모의 font-weight 상속 */
   color: inherit !important; /* 부모의 color 상속 */
   line-height: 1 !important; /* line-height도 명시적으로 지정 */
@@ -2688,12 +2671,18 @@ button[aria-disabled="true"] {
 
 /* 모바일 반응형 */
 @media (max-width: 768px) {
+  .training-detail-modal {
+    /* 모바일에서도 중앙 정렬 유지 */
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
   .training-detail-modal-content {
     width: 95%;
-    max-height: 95vh;
-    border-radius: 16px 16px 0 0;
-    margin-top: auto;
-    margin-bottom: 0;
+    max-width: 450px; /* 모바일에서도 최대 너비 제한 */
+    max-height: 90vh; /* 화면 높이의 90%로 제한하여 중앙에 위치 */
+    border-radius: 12px; /* 둥근 모서리 유지 */
+    margin: 0 !important; /* margin 제거하여 중앙 정렬 */
   }
 
   .training-detail-header {
@@ -2706,12 +2695,12 @@ button[aria-disabled="true"] {
 
   .training-detail-body {
     padding: 15px;
-    max-height: calc(95vh - 140px);
+    max-height: calc(90vh - 140px);
   }
 
   .mini-calendar-day {
-    font-size: 10px;
-    padding: 3px 6px;
+    font-size: 11px;
+    padding: 1px 2px; /* 모바일에서도 훈련 표시 상자 1/4 크기 유지 */
   }
 }
 
