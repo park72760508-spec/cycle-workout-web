@@ -5339,7 +5339,12 @@
     <div class="connection-main-container">
       <div class="connection-form-container">
         <div class="connection-form-card basecamp-card">
-          <div class="connection-header bluetooth-session-header-row">
+          <div class="connection-header basecamp-header">
+            <!-- 제목 이미지 배경으로 처리 -->
+          </div>
+
+          <div class="connection-device-section basecamp-device-section">
+            <!-- 뒤로 가기 버튼 + 제목 + 일괄 퇴실 버튼 (베이스캠프 스타일) -->
             <div class="bluetooth-session-header-top">
               <div class="bluetooth-session-back-wrap">
                 <button type="button" class="bluetooth-session-back-btn" onclick="if (typeof showScreen === 'function') { showScreen('trainingRoomScreen'); }" aria-label="뒤로 가기">
@@ -5347,7 +5352,7 @@
                 </button>
               </div>
               <div class="bluetooth-session-title-center">
-                <h1 class="bluetooth-session-title">Live Training Session</h1>
+                <h3 class="basecamp-status-bar">Live Training Session</h3>
               </div>
               <div class="bluetooth-session-exit-wrap">
                 <button type="button" class="bluetooth-session-exit-btn" onclick="if(typeof clearAllBluetoothTracksData === 'function') clearAllBluetoothTracksData()" aria-label="퇴실" title="퇴실">
@@ -5355,9 +5360,7 @@
                 </button>
               </div>
             </div>
-          </div>
-
-          <div class="connection-device-section basecamp-device-section">
+            
             <!-- 트랙 목록 (고정 10개) -->
             <div id="bluetoothPlayerListContent" class="player-list-content">
               <!-- 트랙이 여기에 동적으로 추가됩니다 (항상 10개 고정) -->
