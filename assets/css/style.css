@@ -2344,7 +2344,7 @@ button[aria-disabled="true"] {
   width: 100%;
 }
 
-/* 사용자 카드 - 훈련등급 표시 블럭과 동일한 넓이 (240px) */
+/* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
 #profileScreen .user-card{
   background:var(--card-bg); 
   border:1px solid var(--card-border); 
@@ -2353,7 +2353,8 @@ button[aria-disabled="true"] {
   color:var(--text);
   box-shadow:0 6px 18px rgba(0,0,0,.06);
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-  width: 240px; /* 훈련등급 표시 블럭과 동일한 넓이 */
+  width: 100%; /* 그리드에 맞춰 자동으로 넓이 조정 */
+  min-width: 240px; /* 최소 넓이 */
   max-width: 100%; /* 모바일 대응 */
   box-sizing: border-box;
 }
