@@ -13705,8 +13705,59 @@ line[id^="needle-"] {
   display: none; /* 베이스캠프처럼 헤더 숨김 */
 }
 
-/* Training Room 화면: 제목만 표시 (베이스캠프 Choose Your Path와 동일한 구조) */
-/* 뒤로 가기 버튼 제거 - 베이스캠프와 동일한 구조 */
+/* Training Room 화면: 상단 뒤로가기 + 제목 (베이스캠프 스타일) */
+#trainingRoomScreen .training-room-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  margin-bottom: 15px;
+}
+
+#trainingRoomScreen .training-room-back-wrap {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+#trainingRoomScreen .training-room-header-spacer {
+  width: 48px;
+  flex-shrink: 0;
+}
+
+#trainingRoomScreen .training-room-title-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+#trainingRoomScreen .training-room-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+#trainingRoomScreen .training-room-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+}
+
+#trainingRoomScreen .training-room-back-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
 
 /* Training Room 제목: 베이스캠프 status-bar 스타일 (Choose Your Path와 동일) */
 #trainingRoomScreen .basecamp-status-bar {
@@ -13724,16 +13775,13 @@ line[id^="needle-"] {
   }
 }
 
-/* Live Training Session 화면: 상단 뒤로가기(좌측) + 제목(중앙) + 퇴실 이미지(우측) */
-#bluetoothPlayerListScreen .connection-header.bluetooth-session-header-row {
-  text-align: center;
-  margin-bottom: 12px;
-}
+/* Live Training Session 화면: 상단 뒤로가기(좌측) + 제목(중앙) + 퇴실 이미지(우측) - 베이스캠프 스타일 */
 #bluetoothPlayerListScreen .bluetooth-session-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
+  margin-bottom: 15px;
 }
 #bluetoothPlayerListScreen .bluetooth-session-back-wrap {
   width: 48px;
@@ -13799,17 +13847,19 @@ line[id^="needle-"] {
   background: rgba(0, 0, 0, 0.1);
   opacity: 0.7;
 }
-#bluetoothPlayerListScreen .bluetooth-session-title {
-  font-size: 1.8em;
-  font-weight: 700;
+/* Live Training Session 제목: 베이스캠프 status-bar 스타일 */
+#bluetoothPlayerListScreen .basecamp-status-bar {
+  color: #000000 !important;
+  font-weight: 900 !important;
+  text-align: center;
+  font-size: 24px !important;
+  letter-spacing: 0.5px;
   margin: 0;
-  color: #1e293b;
-  flex-shrink: 0;
 }
 
 @media (max-width: 480px) {
-  #bluetoothPlayerListScreen .bluetooth-session-title {
-    font-size: 1.44em; /* 휴대폰에서 20% 축소 (1.8 × 0.8) */
+  #bluetoothPlayerListScreen .basecamp-status-bar {
+    font-size: 20px !important; /* 휴대폰에서 약간 축소 */
   }
 }
 
@@ -14679,59 +14729,63 @@ body.mobile-dashboard-active {
    ========================================================== */
 
 /* 1. 전체 화면 스크롤 튕김 방지 (Live Training Session 전용) */
+/* Live Training Session 화면: 베이스캠프와 동일한 구조 및 디자인 */
 #bluetoothPlayerListScreen {
-  /* 주소창 때문에 버튼이 밀려 내려가는 것을 방지 */
-  /* Android 호환: dvh 미지원 시 vh로 폴백 */
-  min-height: 100vh; /* 폴백 */
-  min-height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
-  /* 터치 시 화면 전체가 바운스되는 것을 막아 터치 정확도 향상 */
+  position: relative;
+  overflow: hidden;
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  -webkit-overflow-scrolling: touch;
 }
 
 #bluetoothPlayerListScreen.active {
-  display: flex;
+  display: flex !important;
+  align-items: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
+  justify-content: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
+  min-height: 100vh; /* 베이스캠프와 동일: 전체 화면 높이 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); /* 베이스캠프와 동일한 배경 */
+  background-attachment: fixed;
+  padding: 20px;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
 }
 
-/* 2. 메인 컨텐츠 영역 (스크롤 가능) */
-#bluetoothPlayerListScreen .connection-form-card {
-  display: flex;
-  flex-direction: column;
-  /* Android 호환: dvh 미지원 시 vh로 폴백 */
-  height: 100vh; /* 폴백 */
-  height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
-  overflow: hidden;
+/* Live Training Session 화면 컨테이너: 베이스캠프와 동일한 구조 */
+#bluetoothPlayerListScreen .connection-main-container {
+  position: relative;
+  z-index: 1;
 }
 
-#bluetoothPlayerListScreen .connection-device-section {
-  flex: 1;
-  overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
-  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+#bluetoothPlayerListScreen .connection-form-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Live Training Session 화면: 베이스캠프 스타일 적용 */
+#bluetoothPlayerListScreen .connection-header.basecamp-header {
+  display: none; /* 베이스캠프처럼 헤더 숨김 */
+}
+
+/* Live Training Session 화면: 디바이스 섹션 (베이스캠프 스타일) */
+#bluetoothPlayerListScreen .connection-device-section.basecamp-device-section {
+  background-color: #ffffff !important;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 20px;
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  /* 스크롤 가능하도록 설정 */
+  max-height: calc(100vh - 200px); /* 화면 높이에 맞춰 조정 */
+  overflow-y: auto;
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
   padding-bottom: 120px;
-}
-
-/* Android Chrome 주소창 대응 (스크롤 시 주소창이 나타나거나 사라질 때) */
-@supports (height: 100dvh) {
-  /* dvh를 지원하는 브라우저 (최신 Android Chrome 포함) */
-  #bluetoothPlayerListScreen {
-    min-height: 100dvh;
-  }
-  
-  #bluetoothPlayerListScreen .connection-form-card {
-    height: 100dvh;
-  }
 }
 
 /* ==========================================================
