@@ -4404,29 +4404,109 @@ async function openBluetoothPlayerList() {
 /**
  * 타임아웃이 있는 Promise 래퍼
  */
+/**
+ * 모바일 환경 감지
+ */
+function isMobileDevice() {
+  if (typeof window === 'undefined') return false;
+  
+  // User Agent 기반 감지
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+  const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+  const isMobileUA = mobileRegex.test(userAgent);
+  
+  // 화면 크기 기반 감지 (추가 확인)
+  const isMobileScreen = window.innerWidth <= 768;
+  
+  // 터치 지원 여부 확인
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  
+  return isMobileUA || (isMobileScreen && isTouchDevice);
+}
+
+/**
+ * 네트워크 상태 감지 (Connection API 사용)
+ */
+function getNetworkInfo() {
+  if (typeof navigator !== 'undefined' && navigator.connection) {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    return {
+      effectiveType: conn.effectiveType || 'unknown', // 'slow-2g', '2g', '3g', '4g'
+      downlink: conn.downlink || 0, // Mbps
+      rtt: conn.rtt || 0, // ms
+      saveData: conn.saveData || false
+    };
+  }
+  return null;
+}
+
+/**
+ * 타임아웃이 있는 Promise 래퍼 (모바일 최적화)
+ */
 function withTimeout(promise, timeoutMs, errorMessage = '요청 시간 초과') {
+  // 모바일 환경 감지
+  const isMobile = isMobileDevice();
+  const networkInfo = getNetworkInfo();
+  
+  // 모바일이거나 느린 네트워크인 경우 타임아웃 증가
+  let adjustedTimeout = timeoutMs;
+  if (isMobile) {
+    adjustedTimeout = timeoutMs * 2; // 모바일은 2배
+    console.log('[withTimeout] 모바일 환경 감지, 타임아웃 증가:', timeoutMs, '→', adjustedTimeout, 'ms');
+  }
+  
+  // 네트워크 상태에 따른 추가 조정
+  if (networkInfo) {
+    if (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') {
+      adjustedTimeout = adjustedTimeout * 1.5; // 느린 네트워크는 1.5배 추가 증가
+      console.log('[withTimeout] 느린 네트워크 감지:', networkInfo.effectiveType, ', 타임아웃:', adjustedTimeout, 'ms');
+    } else if (networkInfo.rtt > 500) {
+      adjustedTimeout = adjustedTimeout * 1.3; // 높은 지연시간은 1.3배 증가
+      console.log('[withTimeout] 높은 지연시간 감지:', networkInfo.rtt, 'ms, 타임아웃:', adjustedTimeout, 'ms');
+    }
+  }
+  
   return Promise.race([
     promise,
     new Promise((_, reject) => 
-      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+      setTimeout(() => reject(new Error(errorMessage)), adjustedTimeout)
     )
   ]);
 }
 
 /**
- * 재시도 로직이 있는 함수 실행
+ * 재시도 로직이 있는 함수 실행 (모바일 최적화)
  */
 async function withRetry(fn, maxRetries = 3, delayMs = 1000) {
+  const isMobile = isMobileDevice();
+  const networkInfo = getNetworkInfo();
+  
+  // 모바일이거나 느린 네트워크인 경우 재시도 횟수 증가
+  let adjustedRetries = maxRetries;
+  let adjustedDelay = delayMs;
+  
+  if (isMobile) {
+    adjustedRetries = maxRetries + 1; // 모바일은 재시도 1회 추가
+    adjustedDelay = delayMs * 0.8; // 초기 지연 시간 약간 감소 (빠른 재시도)
+    console.log('[withRetry] 모바일 환경 감지, 재시도 횟수 증가:', maxRetries, '→', adjustedRetries);
+  }
+  
+  // 느린 네트워크인 경우 재시도 간격 조정
+  if (networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g')) {
+    adjustedDelay = delayMs * 1.2; // 느린 네트워크는 재시도 간격 증가
+    console.log('[withRetry] 느린 네트워크 감지, 재시도 간격 조정:', delayMs, '→', adjustedDelay, 'ms');
+  }
+  
   let lastError;
-  for (let i = 0; i < maxRetries; i++) {
+  for (let i = 0; i < adjustedRetries; i++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      if (i < maxRetries - 1) {
-        console.warn(`[재시도 ${i + 1}/${maxRetries}] 실패, ${delayMs}ms 후 재시도...`, error.message);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-        delayMs *= 1.5; // 지수 백오프
+      if (i < adjustedRetries - 1) {
+        const currentDelay = adjustedDelay * Math.pow(1.5, i); // 지수 백오프
+        console.warn(`[재시도 ${i + 1}/${adjustedRetries}] 실패, ${Math.round(currentDelay)}ms 후 재시도...`, error.message);
+        await new Promise(resolve => setTimeout(resolve, currentDelay));
       }
     }
   }
@@ -4457,7 +4537,7 @@ function createDefaultTracks(count = 10) {
 
 /**
  * Bluetooth Player List 렌더링 (트랙 수 고정: 항상 10개)
- * 개선: 타임아웃, 재시도, 에러 핸들링 강화
+ * 개선: 타임아웃, 재시도, 에러 핸들링 강화, 모바일 최적화, 점진적 로딩
  */
 async function renderBluetoothPlayerList() {
   const playerListContent = document.getElementById('bluetoothPlayerListContent');
@@ -4466,14 +4546,54 @@ async function renderBluetoothPlayerList() {
     return;
   }
 
-  // 로딩 표시
+  // 모바일 환경 감지
+  const isMobile = isMobileDevice();
+  const networkInfo = getNetworkInfo();
+  
+  // 로딩 표시 (모바일 최적화 메시지)
+  const loadingMessage = isMobile 
+    ? '트랙 정보를 불러오는 중... (모바일 최적화 모드)'
+    : '트랙 정보를 불러오는 중...';
+  
   playerListContent.innerHTML = `
     <div style="text-align: center; padding: 40px;">
       <div class="spinner" style="margin: 0 auto 20px;"></div>
-      <p style="color: #666;">트랙 정보를 불러오는 중...</p>
+      <p style="color: #666;">${loadingMessage}</p>
+      ${networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') 
+        ? '<p style="color: #f59e0b; font-size: 12px; margin-top: 8px;">느린 네트워크 감지: 로딩 시간이 다소 걸릴 수 있습니다</p>'
+        : ''}
     </div>
   `;
+  
+  // 점진적 로딩: 먼저 기본 트랙을 표시하고 데이터를 점진적으로 업데이트
+  const showProgressiveLoading = isMobile && networkInfo && 
+    (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g' || networkInfo.rtt > 500);
+  
+  if (showProgressiveLoading) {
+    console.log('[Bluetooth Player List] 점진적 로딩 모드 활성화');
+    // 기본 트랙을 먼저 표시하여 사용자 경험 개선
+    const defaultTracks = createDefaultTracks(10);
+    const initialHtml = defaultTracks.map(track => `
+      <div class="player-track-item" data-track-number="${track.trackNumber}">
+        <div class="player-track-number-fixed">
+          <div class="player-track-number-header">트랙${track.trackNumber}</div>
+        </div>
+        <div class="player-track-content">
+          <div class="player-track-user-section">
+            <div class="player-track-name no-user">로딩 중...</div>
+          </div>
+          <div class="player-track-action">
+            <button class="btn btn-secondary btn-default-style" disabled>로딩 중</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    playerListContent.innerHTML = initialHtml;
+  }
 
+  // 성능 측정 시작
+  const performanceStart = performance.now();
+  
   // 전체 함수를 try-catch로 감싸서 모든 에러 처리 (스피너가 항상 제거되도록 보장)
   let tracks = [];
   let roomId = null;
@@ -4484,9 +4604,13 @@ async function renderBluetoothPlayerList() {
   let isAdmin = false;
   let hasMyTrack = false;
   
+  // 캐싱: 최근 로드한 데이터를 메모리에 저장 (5초간 유효)
+  const CACHE_KEY = 'bluetoothPlayerListCache';
+  const CACHE_DURATION = 5000; // 5초
+  const now = Date.now();
+  
   try {
-
-    // Training Room id 가져오기
+    // Training Room id 가져오기 (먼저 roomId 확인)
     try {
       if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
         roomId = currentSelectedTrainingRoom.id;
@@ -4501,13 +4625,43 @@ async function renderBluetoothPlayerList() {
     } catch (e) {
       console.warn('[Bluetooth Player List] roomId 가져오기 실패:', e);
     }
-
-    // 트랙 정보 가져오기 및 최대 트랙 수 계산 (Live Training Session 전용)
-  
-    // Firebase 연결 확인
-    const isFirebaseAvailable = typeof db !== 'undefined' && db !== null;
     
-    if (roomId && isFirebaseAvailable) {
+    // 캐시 확인 (같은 roomId인 경우)
+    let useCache = false;
+    if (typeof sessionStorage !== 'undefined' && roomId) {
+      try {
+        const cachedData = sessionStorage.getItem(CACHE_KEY);
+        if (cachedData) {
+          const parsed = JSON.parse(cachedData);
+          const cacheAge = now - parsed.timestamp;
+          
+          // 캐시가 유효하고 같은 roomId인 경우 사용
+          if (cacheAge < CACHE_DURATION && parsed.roomId === String(roomId) && parsed.tracks && parsed.tracks.length > 0) {
+            console.log('[Bluetooth Player List] ✅ 캐시된 데이터 사용 (', Math.round(cacheAge), 'ms 전)');
+            tracks = parsed.tracks;
+            maxTrackNumber = parsed.maxTrackNumber || 10;
+            useCache = true;
+            
+            // 캐시된 데이터로 즉시 렌더링 (성능 개선)
+            const cacheLoadTime = performance.now() - performanceStart;
+            console.log('[Bluetooth Player List] 📊 캐시 로딩 시간:', Math.round(cacheLoadTime), 'ms');
+          } else {
+            console.log('[Bluetooth Player List] 캐시 만료 또는 roomId 불일치, 새로 로드');
+          }
+        }
+      } catch (cacheError) {
+        console.warn('[Bluetooth Player List] 캐시 읽기 오류:', cacheError);
+      }
+    }
+    
+    // 캐시를 사용하지 않는 경우에만 Firebase에서 로드
+    if (!useCache) {
+      // 트랙 정보 가져오기 및 최대 트랙 수 계산 (Live Training Session 전용)
+      
+      // Firebase 연결 확인
+      const isFirebaseAvailable = typeof db !== 'undefined' && db !== null;
+      
+      if (roomId && isFirebaseAvailable) {
       try {
       const sessionId = roomId;
       
@@ -4515,18 +4669,46 @@ async function renderBluetoothPlayerList() {
       const devicesRef = db.ref(`sessions/${sessionId}/devices`);
       const usersRef = db.ref(`sessions/${sessionId}/users`);
       
-      // 타임아웃 10초, 최대 3회 재시도
+      // 모바일 최적화: 타임아웃 및 재시도 조정
+      const isMobile = isMobileDevice();
+      const networkInfo = getNetworkInfo();
+      
+      // 기본 타임아웃: PC 10초, 모바일 20초
+      let baseTimeout = isMobile ? 20000 : 10000;
+      
+      // 네트워크 상태에 따른 추가 조정
+      if (networkInfo) {
+        if (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') {
+          baseTimeout = 30000; // 매우 느린 네트워크는 30초
+        } else if (networkInfo.effectiveType === '3g') {
+          baseTimeout = isMobile ? 25000 : 15000; // 3G는 중간값
+        }
+      }
+      
+      // 재시도 횟수: PC 3회, 모바일 4회
+      const maxRetries = isMobile ? 4 : 3;
+      const initialDelay = isMobile ? 800 : 1000; // 모바일은 약간 빠른 재시도
+      
+      console.log('[Bluetooth Player List] 로딩 설정:', {
+        isMobile,
+        networkType: networkInfo?.effectiveType || 'unknown',
+        timeout: baseTimeout,
+        maxRetries,
+        initialDelay
+      });
+      
+      // 타임아웃 및 재시도 적용
       const [devicesSnapshot, usersSnapshot] = await withRetry(
         () => withTimeout(
           Promise.all([
             devicesRef.once('value'),
             usersRef.once('value')
           ]),
-          10000, // 10초 타임아웃
+          baseTimeout, // 동적 타임아웃
           'Firebase 데이터 로드 시간 초과'
         ),
-        3, // 최대 3회 재시도
-        1000 // 초기 지연 1초
+        maxRetries, // 동적 재시도 횟수
+        initialDelay // 동적 초기 지연
       );
       
       const devicesData = devicesSnapshot.val() || {};
@@ -4600,6 +4782,26 @@ async function renderBluetoothPlayerList() {
           heartRateId: deviceData?.heartRateId || null
         });
       }
+      
+      // 성능 측정: Firebase 로드 완료
+      const firebaseLoadTime = performance.now() - performanceStart;
+      console.log('[Bluetooth Player List] 📊 Firebase 로드 시간:', Math.round(firebaseLoadTime), 'ms');
+      
+      // 캐시 저장 (성공적으로 로드한 경우)
+      if (typeof sessionStorage !== 'undefined' && tracks.length > 0) {
+        try {
+          const cacheData = {
+            tracks: tracks,
+            maxTrackNumber: maxTrackNumber,
+            roomId: roomId,
+            timestamp: now
+          };
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+          console.log('[Bluetooth Player List] ✅ 데이터 캐시 저장 완료');
+        } catch (cacheError) {
+          console.warn('[Bluetooth Player List] 캐시 저장 오류:', cacheError);
+        }
+      }
     } catch (error) {
       console.error('[Bluetooth Player List] ❌ 트랙 정보 로드 오류:', error);
       console.error('[Bluetooth Player List] 오류 상세:', {
@@ -4608,22 +4810,24 @@ async function renderBluetoothPlayerList() {
         roomId: roomId,
         isFirebaseAvailable: isFirebaseAvailable
       });
-      // 오류 발생 시 기본 10개 트랙 생성 (사용자는 계속 사용 가능)
-      maxTrackNumber = 10;
+        // 오류 발생 시 기본 10개 트랙 생성 (사용자는 계속 사용 가능)
+        maxTrackNumber = 10;
+        const defaultTracks = createDefaultTracks(10);
+        tracks.push(...defaultTracks);
+      }
+    } else {
+      // roomId가 없거나 Firebase가 사용 불가능한 경우 기본 10개 트랙 생성
+      if (!roomId) {
+        console.warn('[Bluetooth Player List] ⚠️ roomId가 없어 기본 트랙으로 표시합니다.');
+      }
+      const isFirebaseAvailable = typeof db !== 'undefined' && db !== null;
+      if (!isFirebaseAvailable) {
+        console.warn('[Bluetooth Player List] ⚠️ Firebase가 사용 불가능하여 기본 트랙으로 표시합니다.');
+      }
       const defaultTracks = createDefaultTracks(10);
       tracks.push(...defaultTracks);
     }
-  } else {
-    // roomId가 없거나 Firebase가 사용 불가능한 경우 기본 10개 트랙 생성
-    if (!roomId) {
-      console.warn('[Bluetooth Player List] ⚠️ roomId가 없어 기본 트랙으로 표시합니다.');
-    }
-    if (!isFirebaseAvailable) {
-      console.warn('[Bluetooth Player List] ⚠️ Firebase가 사용 불가능하여 기본 트랙으로 표시합니다.');
-    }
-      const defaultTracks = createDefaultTracks(10);
-      tracks.push(...defaultTracks);
-    }
+    } // 캐시 사용하지 않는 경우의 Firebase 로드 블록 종료
 
     // tracks 배열이 비어있으면 기본 트랙 생성 (안전장치)
     if (tracks.length === 0) {
@@ -4797,7 +5001,17 @@ async function renderBluetoothPlayerList() {
     }).join('');
     
     // 렌더링 성공 시 HTML 업데이트
-    playerListContent.innerHTML = tracksHtml;
+    // 점진적 로딩 모드에서는 부드러운 전환을 위해 requestAnimationFrame 사용
+    if (showProgressiveLoading) {
+      // 모바일에서 부드러운 전환을 위해 약간의 지연 후 업데이트
+      requestAnimationFrame(() => {
+        playerListContent.innerHTML = tracksHtml;
+        console.log('[Bluetooth Player List] ✅ 트랙 정보 렌더링 완료 (점진적 로딩):', tracks.length, '개 트랙');
+      });
+    } else {
+      playerListContent.innerHTML = tracksHtml;
+      console.log('[Bluetooth Player List] ✅ 트랙 정보 렌더링 완료:', tracks.length, '개 트랙');
+    }
     
     // 일괄 퇴실 버튼 표시 여부
     const btnClearAllTracks = document.getElementById('btnClearAllBluetoothTracks');
@@ -4809,7 +5023,11 @@ async function renderBluetoothPlayerList() {
       }
     }
     
-      console.log('[Bluetooth Player List] ✅ 트랙 정보 렌더링 완료:', tracks.length, '개 트랙');
+    // 성능 로그 (모바일에서만)
+    if (isMobile) {
+      const loadTime = performance.now();
+      console.log('[Bluetooth Player List] 📱 모바일 로딩 완료 시간:', Math.round(loadTime), 'ms');
+    }
     } catch (renderError) {
       console.error('[Bluetooth Player List] ❌ 렌더링 오류:', renderError);
       // 렌더링 실패 시에도 기본 트랙으로 표시
