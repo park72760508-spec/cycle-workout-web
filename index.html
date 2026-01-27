@@ -845,6 +845,44 @@
       display: none !important;
     }
 
+    /* 사용자 정보 수정 모달 헤더 스타일 */
+    #editUserModal .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 15px 20px;
+    }
+
+    #editUserModal #editUserSaveIcon {
+      position: absolute;
+      left: 20px;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      z-index: 10;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    #editUserModal #editUserSaveIcon:hover {
+      opacity: 0.8;
+      transform: scale(1.1);
+    }
+
+    #editUserModal #editUserSaveIcon:active {
+      transform: scale(0.95);
+    }
+
+    #editUserModal #editUserModalTitle {
+      margin: 0;
+      text-align: center;
+      flex: 1;
+    }
+
+    /* 관리자(grade=1) 전용: 구독기간 날짜 텍스트 박스와 마지막 운동날짜 텍스트 박스 넓이를 보유포인트 텍스트 박스 넓이와 같게 */
+    /* 구독기간은 이미 form-row 안에 있어서 50% 넓이 유지됨 */
+    /* 마지막 운동날짜는 form-row로 감싸서 50% 넓이로 변경됨 */
+
     /* 사용자 정보 완성 모달 스타일 (휴대폰 최적화) */
     #completeUserInfoModal {
       position: fixed !important;
@@ -1802,9 +1840,10 @@
       <div id="editUserModal" class="modal hidden" style="z-index: 10000;">
         <div class="modal-overlay" onclick="closeEditUserModal()"></div>
         <div class="modal-content edit-user-modal-content">
-          <div class="modal-header">
-            <h3 id="editUserModalTitle">사용자 정보 수정</h3>
-            <button class="modal-close" onclick="closeEditUserModal()" aria-label="닫기">&times;</button>
+          <div class="modal-header" style="display: flex; align-items: center; justify-content: center; position: relative; padding: 15px 20px;">
+            <img src="assets/img/check-ok.png" alt="수정" id="editUserSaveIcon" onclick="performUpdateFromModal()" style="position: absolute; left: 20px; width: 24px; height: 24px; cursor: pointer; z-index: 10;" />
+            <h3 id="editUserModalTitle" style="margin: 0; text-align: center; flex: 1;">사용자 정보 수정</h3>
+            <button class="modal-close" onclick="closeEditUserModal()" aria-label="닫기" style="position: absolute; right: 20px;">&times;</button>
           </div>
           
           <div class="modal-body edit-user-modal-body">
@@ -2023,10 +2062,15 @@
                 </div>
               </div>
               
-              <div class="form-group" style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">마지막 운동날짜 (last_training_date)</label>
-                <input type="date" id="editUserLastTrainingDate" 
-                       style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">마지막 운동날짜 (last_training_date)</label>
+                  <input type="date" id="editUserLastTrainingDate" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <!-- 빈 공간 (보유포인트와 같은 넓이 유지) -->
+                </div>
               </div>
               
               <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
@@ -2053,10 +2097,7 @@
             </div>
           </div>
           
-          <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; justify-content: flex-end;">
-            <button class="btn btn-success" id="btnUpdateUser" onclick="performUpdateFromModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">수정</button>
-            <button class="btn btn-secondary" onclick="closeEditUserModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
-          </div>
+          <!-- 하단 수정/취소 버튼 제거 -->
         </div>
       </div>
 
