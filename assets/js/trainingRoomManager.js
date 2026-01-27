@@ -201,7 +201,26 @@ async function getUsersListWithCache() {
     return [];
   }
   
-  // 재시도 로직이 포함된 사용자 목록 로드
+  // 재시도 로직이 포함된 사용자 목록 로드 (모바일 최적화: 더 많은 재시도)
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const networkInfo = getNetworkInfoForTrainingRooms();
+  
+  // 모바일 환경에서 재시도 횟수 증가
+  const maxRetries = isMobile ? 4 : 2; // 모바일: 4회, PC: 2회
+  const initialDelay = isMobile ? 300 : 500; // 모바일: 더 빠른 재시도
+  
+  // 느린 네트워크인 경우 재시도 횟수 추가 증가
+  const adjustedRetries = (networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g')) 
+    ? maxRetries + 1 
+    : maxRetries;
+  
+  console.log('[Training Room] 사용자 목록 로드 설정:', {
+    isMobile,
+    networkType: networkInfo?.effectiveType || 'unknown',
+    maxRetries: adjustedRetries,
+    initialDelay
+  });
+  
   try {
     const usersResult = await withRetryForTrainingRooms(
       async () => {
@@ -220,8 +239,8 @@ async function getUsersListWithCache() {
         }
         return result.items;
       },
-      2, // 최대 2회 재시도
-      500 // 초기 지연 500ms
+      adjustedRetries, // 동적 재시도 횟수
+      initialDelay // 동적 초기 지연
     );
     
     if (usersResult && Array.isArray(usersResult) && usersResult.length > 0) {
@@ -407,10 +426,11 @@ async function loadTrainingRooms() {
       trainingRoomList = [];
     }
 
-    // 사용자 목록 처리
+    // 사용자 목록 처리 (모바일 최적화: 강화된 폴백 및 재시도)
     let usersList = [];
     if (users.status === 'fulfilled') {
       usersList = users.value || [];
+      console.log('[Training Room] ✅ 사용자 목록 로드 성공:', usersList.length, '명');
     } else {
       console.error('[Training Room] 사용자 목록 로드 실패:', users.reason);
       // 폴백: 전역 변수에서 사용자 목록 확인
@@ -423,6 +443,26 @@ async function loadTrainingRooms() {
         console.log('[Training Room] 폴백: window.userProfiles에서 사용자 목록 사용:', usersList.length, '명');
       } else {
         console.warn('[Training Room] ⚠️ 사용자 목록을 가져올 수 없습니다. Manager 정보가 표시되지 않을 수 있습니다.');
+        
+        // 모바일 환경에서 추가 재시도 (비동기)
+        if (isMobile) {
+          console.log('[Training Room] 📱 모바일 환경: 사용자 목록 재시도 시작...');
+          setTimeout(async () => {
+            try {
+              const retryUsers = await getUsersListWithCache();
+              if (retryUsers && retryUsers.length > 0) {
+                console.log('[Training Room] ✅ 재시도 성공: 사용자 목록 로드 완료:', retryUsers.length, '명');
+                // 사용자 목록이 로드되면 다시 렌더링
+                if (trainingRoomList.length > 0) {
+                  renderTrainingRoomList(trainingRoomList, retryUsers);
+                  console.log('[Training Room] 🔄 Manager 정보 업데이트 완료');
+                }
+              }
+            } catch (retryError) {
+              console.warn('[Training Room] 재시도 실패:', retryError);
+            }
+          }, 1000); // 1초 후 재시도
+        }
       }
     }
     
@@ -469,10 +509,34 @@ async function loadTrainingRooms() {
       console.log('[Training Room] 📱 모바일 로딩 완료 시간:', Math.round(loadTime), 'ms');
     }
     
-    // 사용자 목록이 비어있으면 경고 및 재시도 제안
+    // 사용자 목록이 비어있을 때 추가 처리 (모바일 최적화)
     if (usersList.length === 0) {
       console.warn('[Training Room] ⚠️ 사용자 목록이 비어있습니다. Manager 정보를 표시할 수 없습니다.');
-      console.log('[Training Room] 💡 사용자 목록을 다시 로드하려면 화면을 새로고침하거나 다시 시도해주세요.');
+      
+      // 모바일 환경에서 지연 재시도 (네트워크 지연 대응)
+      if (isMobile) {
+        console.log('[Training Room] 📱 모바일 환경: 지연 재시도 예약 (2초 후)');
+        setTimeout(async () => {
+          try {
+            console.log('[Training Room] 🔄 지연 재시도: 사용자 목록 다시 로드 시도...');
+            const delayedUsers = await getUsersListWithCache();
+            if (delayedUsers && delayedUsers.length > 0) {
+              console.log('[Training Room] ✅ 지연 재시도 성공: 사용자 목록 로드 완료:', delayedUsers.length, '명');
+              // 사용자 목록이 로드되면 다시 렌더링
+              if (trainingRoomList.length > 0) {
+                renderTrainingRoomList(trainingRoomList, delayedUsers);
+                console.log('[Training Room] 🔄 Manager 정보 업데이트 완료 (지연 재시도)');
+              }
+            } else {
+              console.warn('[Training Room] 지연 재시도 실패: 사용자 목록이 여전히 비어있습니다.');
+            }
+          } catch (delayedError) {
+            console.warn('[Training Room] 지연 재시도 오류:', delayedError);
+          }
+        }, 2000); // 2초 후 재시도
+      } else {
+        console.log('[Training Room] 💡 사용자 목록을 다시 로드하려면 화면을 새로고침하거나 다시 시도해주세요.');
+      }
     }
   } catch (error) {
     console.error('[Training Room] ❌ 목록 로드 오류:', error);
@@ -512,9 +576,28 @@ function renderTrainingRoomList(rooms, users = []) {
     console.log('[Training Room] renderTrainingRoomList - 파라미터로 전달된 사용자 목록:', users.length, '명');
   }
 
-  // 사용자 목록이 비어있으면 경고 로그
+  // 사용자 목록이 비어있으면 경고 로그 및 모바일 재시도
   if (!users || users.length === 0) {
     console.warn('[Training Room] ⚠️ 사용자 목록이 비어있습니다. Manager 정보를 표시할 수 없습니다.');
+    
+    // 모바일 환경에서 사용자 목록이 비어있을 때 비동기 재시도
+    const isMobile = isMobileDeviceForTrainingRooms();
+    if (isMobile && rooms.length > 0) {
+      console.log('[Training Room] 📱 모바일 환경: 렌더링 후 사용자 목록 재시도 예약...');
+      setTimeout(async () => {
+        try {
+          const retryUsers = await getUsersListWithCache();
+          if (retryUsers && retryUsers.length > 0) {
+            console.log('[Training Room] ✅ 렌더링 후 재시도 성공: 사용자 목록 로드 완료:', retryUsers.length, '명');
+            // 사용자 목록이 로드되면 다시 렌더링
+            renderTrainingRoomList(rooms, retryUsers);
+            console.log('[Training Room] 🔄 Manager 정보 업데이트 완료 (렌더링 후 재시도)');
+          }
+        } catch (retryError) {
+          console.warn('[Training Room] 렌더링 후 재시도 실패:', retryError);
+        }
+      }, 1500); // 1.5초 후 재시도
+    }
   }
 
   listContainer.innerHTML = rooms.map((room, index) => {
@@ -526,8 +609,10 @@ function renderTrainingRoomList(rooms, users = []) {
     let coachName = '';
     
     if (userId && users && users.length > 0) {
-      // 다양한 ID 형식에 대응 (문자열, 숫자 등)
+      // 다양한 ID 형식에 대응 (문자열, 숫자 등) - 모바일 최적화
       const userIdStr = String(userId).trim();
+      const userIdNum = Number(userIdStr);
+      const isNumeric = !isNaN(userIdNum);
       
       const coach = users.find(u => {
         // 여러 필드에서 ID 확인 (id, userId, uid 등)
@@ -539,29 +624,58 @@ function renderTrainingRoomList(rooms, users = []) {
         
         // 정확한 매칭 또는 숫자 변환 후 매칭
         return userIds.some(uid => {
-          if (uid === userIdStr) return true;
-          // 숫자로 변환 가능한 경우 숫자 비교
-          const userIdNum = Number(userIdStr);
-          const uidNum = Number(uid);
-          if (!isNaN(userIdNum) && !isNaN(uidNum) && userIdNum === uidNum) {
+          const uidTrimmed = uid.trim();
+          
+          // 1. 정확한 문자열 매칭
+          if (uidTrimmed === userIdStr) {
             return true;
           }
+          
+          // 2. 숫자로 변환 가능한 경우 숫자 비교
+          if (isNumeric) {
+            const uidNum = Number(uidTrimmed);
+            if (!isNaN(uidNum) && userIdNum === uidNum) {
+              return true;
+            }
+          }
+          
+          // 3. 대소문자 무시 매칭 (문자열 ID의 경우)
+          if (uidTrimmed.toLowerCase() === userIdStr.toLowerCase()) {
+            return true;
+          }
+          
           return false;
         });
       });
       
-      coachName = coach ? (coach.name || coach.userName || '') : '';
+      coachName = coach ? (coach.name || coach.userName || coach.displayName || '') : '';
       
-      // 디버깅 로그 (매칭 실패 시)
+      // 디버깅 로그 (매칭 실패 시 - 모바일에서 더 상세한 로그)
       if (!coachName && userId) {
-        console.warn(`[Training Room] ⚠️ Coach를 찾을 수 없음 - room.user_id: ${userId} (타입: ${typeof userId}), users 배열 길이: ${users.length}`);
-        if (users.length > 0) {
-          console.log('[Training Room] 사용자 ID 샘플 (처음 5개):', users.slice(0, 5).map(u => ({
-            id: u.id,
-            userId: u.userId,
-            uid: u.uid,
-            name: u.name
-          })));
+        const isMobile = isMobileDeviceForTrainingRooms();
+        if (isMobile) {
+          console.warn(`[Training Room] ⚠️ [모바일] Coach를 찾을 수 없음 - room.user_id: ${userId} (타입: ${typeof userId}, 문자열: "${userIdStr}", 숫자: ${isNumeric ? userIdNum : 'N/A'}), users 배열 길이: ${users.length}`);
+          if (users.length > 0) {
+            console.log('[Training Room] [모바일] 사용자 ID 샘플 (처음 10개):', users.slice(0, 10).map(u => ({
+              id: u.id,
+              idType: typeof u.id,
+              userId: u.userId,
+              userIdType: typeof u.userId,
+              uid: u.uid,
+              uidType: typeof u.uid,
+              name: u.name
+            })));
+          }
+        } else {
+          console.warn(`[Training Room] ⚠️ Coach를 찾을 수 없음 - room.user_id: ${userId} (타입: ${typeof userId}), users 배열 길이: ${users.length}`);
+          if (users.length > 0) {
+            console.log('[Training Room] 사용자 ID 샘플 (처음 5개):', users.slice(0, 5).map(u => ({
+              id: u.id,
+              userId: u.userId,
+              uid: u.uid,
+              name: u.name
+            })));
+          }
         }
       } else if (coachName) {
         console.log(`[Training Room] ✅ Coach 매칭 성공 - room.user_id: ${userId}, coach.name: ${coachName}`);
