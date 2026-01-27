@@ -2330,6 +2330,350 @@ button[aria-disabled="true"] {
   line-height: 1.4;
 }
 
+/* ========== 월간 훈련 이력 미니 달력 스타일 ========== */
+.mini-calendar-container {
+  width: 100%;
+}
+
+.mini-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--card-border, #e5e7eb);
+}
+
+.mini-calendar-nav-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--text, #374151);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  width: 32px;
+  height: 32px;
+}
+
+.mini-calendar-nav-btn:hover {
+  background: rgba(46, 116, 232, 0.1);
+  color: #2e74e8;
+}
+
+.mini-calendar-nav-btn:active {
+  transform: scale(0.95);
+}
+
+.mini-calendar-month-year {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong, #111827);
+  text-align: center;
+  flex: 1;
+}
+
+.mini-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.mini-calendar-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  padding: 4px 0;
+}
+
+.mini-calendar-weekday:first-child {
+  color: #dc2626; /* 일요일 - 빨간색 */
+}
+
+.mini-calendar-weekday:last-child {
+  color: #2563eb; /* 토요일 - 파란색 */
+}
+
+.mini-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.mini-calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text, #374151);
+  cursor: default;
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.mini-calendar-day.other-month {
+  color: #d1d5db;
+  opacity: 0.5;
+}
+
+.mini-calendar-day.sunday {
+  color: #dc2626;
+}
+
+.mini-calendar-day.saturday {
+  color: #2563eb;
+}
+
+.mini-calendar-day.has-training {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mini-calendar-day.has-training:hover {
+  transform: scale(1.1);
+  background-color: rgba(64, 224, 208, 0.2);
+}
+
+.mini-calendar-day.has-training .day-number {
+  position: relative;
+  z-index: 1;
+}
+
+.mini-calendar-day.has-training::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  background-color: rgba(64, 224, 208, 0.3);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.mini-calendar-day.today {
+  font-weight: 700;
+}
+
+.mini-calendar-day.today::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  border: 2px solid #2e74e8;
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.mini-calendar-day.today.has-training::after {
+  border-color: rgba(64, 224, 208, 0.6);
+}
+
+.day-number {
+  position: relative;
+  z-index: 1;
+}
+
+/* ========== 훈련 상세 정보 모달 스타일 ========== */
+.training-detail-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-out;
+  backdrop-filter: blur(4px);
+}
+
+.training-detail-modal.hidden {
+  display: none !important;
+}
+
+.training-detail-modal-content {
+  position: relative;
+  background: rgba(30, 30, 30, 0.95);
+  border: 2px solid #00d4aa;
+  border-radius: 12px;
+  padding: 0;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+  animation: slideUp 0.4s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.training-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.3);
+  position: relative;
+}
+
+.training-detail-title {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #00d4aa;
+  margin: 0;
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
+.training-detail-close {
+  background: rgba(0, 212, 170, 0.2);
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  color: #00d4aa;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.training-detail-close:hover {
+  background: rgba(0, 212, 170, 0.3);
+  transform: scale(1.1);
+}
+
+.training-detail-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.training-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.training-detail-item:last-child {
+  border-bottom: none;
+}
+
+.training-detail-label {
+  font-size: 0.9em;
+  color: #aaa;
+  font-weight: 500;
+}
+
+.training-detail-value {
+  font-size: 1em;
+  color: #00d4aa;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);
+}
+
+.training-detail-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(0, 212, 170, 0.3);
+  display: flex;
+  justify-content: center;
+}
+
+.training-detail-footer .btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%);
+  border: none;
+  border-radius: 8px;
+  color: #000;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
+}
+
+.training-detail-footer .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 212, 170, 0.5);
+}
+
+.training-detail-footer .btn:active {
+  transform: translateY(0);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .training-detail-modal-content {
+    width: 95%;
+    max-height: 95vh;
+    border-radius: 16px 16px 0 0;
+    margin-top: auto;
+    margin-bottom: 0;
+  }
+
+  .training-detail-header {
+    padding: 15px;
+  }
+
+  .training-detail-title {
+    font-size: 1.2em;
+  }
+
+  .training-detail-body {
+    padding: 15px;
+    max-height: calc(95vh - 140px);
+  }
+
+  .mini-calendar-day {
+    font-size: 11px;
+  }
+
+  .mini-calendar-day.has-training::before {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 /* 사용자 목록 (범례와 함께 표시) */
 .user-list-with-legend {
   width: 100%; /* 전체 너비 사용 (그리드가 자동으로 조정) */
@@ -13709,28 +14053,27 @@ line[id^="needle-"] {
 #trainingRoomScreen .training-room-header-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: nowrap;
   margin-bottom: 15px;
+  gap: 12px; /* 뒤로 가기 버튼과 제목 사이 간격 */
 }
 
 #trainingRoomScreen .training-room-back-wrap {
-  width: 48px;
   flex-shrink: 0;
   display: flex;
   justify-content: flex-start;
 }
 
 #trainingRoomScreen .training-room-header-spacer {
-  width: 48px;
-  flex-shrink: 0;
+  display: none; /* 우측 스페이서 제거 */
 }
 
 #trainingRoomScreen .training-room-title-center {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* 좌측 정렬로 변경 */
   min-width: 0;
 }
 
