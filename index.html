@@ -1804,30 +1804,39 @@
       </div>
     </div>
     
-    <!-- 훈련 목적 범례 -->
+    <!-- 월간 훈련 이력 미니 달력 -->
     <div class="challenge-legend-container">
       <div class="challenge-legend-card">
-        <div class="challenge-legend-header">훈련 등급</div>
-        <div class="challenge-legend-list">
-          <div class="challenge-legend-item">
-            <img src="assets/img/yellow.png" alt="Fitness" class="challenge-legend-icon" />
-            <span class="challenge-legend-text">Fitness (일반 피트니스/다이어트)</span>
+        <div class="mini-calendar-container">
+          <!-- 달력 헤더 -->
+          <div class="mini-calendar-header">
+            <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigate('prev')" aria-label="이전 달">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span class="mini-calendar-month-year" id="miniCalendarMonthYear">2026년 1월</span>
+            <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigate('next')" aria-label="다음 달">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
-          <div class="challenge-legend-item">
-            <img src="assets/img/green.png" alt="GranFondo" class="challenge-legend-icon" />
-            <span class="challenge-legend-text">GranFondo (그란폰도)</span>
+          
+          <!-- 요일 헤더 -->
+          <div class="mini-calendar-weekdays">
+            <div class="mini-calendar-weekday">일</div>
+            <div class="mini-calendar-weekday">월</div>
+            <div class="mini-calendar-weekday">화</div>
+            <div class="mini-calendar-weekday">수</div>
+            <div class="mini-calendar-weekday">목</div>
+            <div class="mini-calendar-weekday">금</div>
+            <div class="mini-calendar-weekday">토</div>
           </div>
-          <div class="challenge-legend-item">
-            <img src="assets/img/blue.png" alt="Racing" class="challenge-legend-icon" />
-            <span class="challenge-legend-text">Racing (레이싱)</span>
-          </div>
-          <div class="challenge-legend-item">
-            <img src="assets/img/orenge.png" alt="Elite" class="challenge-legend-icon" />
-            <span class="challenge-legend-text">Elite (엘리트 선수)</span>
-          </div>
-          <div class="challenge-legend-item">
-            <img src="assets/img/red.png" alt="PRO" class="challenge-legend-icon" />
-            <span class="challenge-legend-text">PRO (프로 선수)</span>
+          
+          <!-- 달력 그리드 -->
+          <div class="mini-calendar-grid" id="miniCalendarGrid">
+            <!-- 달력 날짜들이 여기에 동적으로 생성됩니다 -->
           </div>
         </div>
       </div>
@@ -3996,6 +4005,362 @@
     };
     
     console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
+  </script>
+  
+  <!-- ========== 월간 훈련 이력 미니 달력 JavaScript ========== -->
+  <script>
+    // 달력 상태 관리
+    let miniCalendarState = {
+      currentYear: new Date().getFullYear(),
+      currentMonth: new Date().getMonth(), // 0-11
+      trainingLogs: [], // 현재 사용자의 훈련 로그
+      currentUserId: null
+    };
+
+    /**
+     * 날짜 문자열 파싱
+     * 형식: "2026년 1월 27일 PM 5시 39분 9초 UTC+9"
+     * 또는 Firestore Timestamp 객체
+     */
+    function parseTrainingDate(dateValue) {
+      if (!dateValue) return null;
+      
+      // Firestore Timestamp인 경우
+      if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+        return dateValue.toDate();
+      }
+      
+      // 이미 Date 객체인 경우
+      if (dateValue instanceof Date) {
+        return dateValue;
+      }
+      
+      // 문자열인 경우 파싱
+      if (typeof dateValue === 'string') {
+        // "2026년 1월 27일 PM 5시 39분 9초 UTC+9" 형식 파싱
+        const match = dateValue.match(/(\d{4})년\s+(\d{1,2})월\s+(\d{1,2})일/);
+        if (match) {
+          const year = parseInt(match[1], 10);
+          const month = parseInt(match[2], 10) - 1; // 0-based
+          const day = parseInt(match[3], 10);
+          return new Date(year, month, day);
+        }
+        
+        // ISO 형식 시도
+        const isoDate = new Date(dateValue);
+        if (!isNaN(isoDate.getTime())) {
+          return isoDate;
+        }
+      }
+      
+      return null;
+    }
+
+    /**
+     * 날짜를 YYYY-MM-DD 형식의 키로 변환
+     */
+    function getDateKey(date) {
+      if (!date) return null;
+      const d = date instanceof Date ? date : parseTrainingDate(date);
+      if (!d) return null;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * Firebase에서 훈련 로그 가져오기
+     */
+    async function fetchTrainingLogsForCalendar(userId) {
+      if (!userId) {
+        console.warn('[MiniCalendar] userId가 없습니다.');
+        return [];
+      }
+
+      try {
+        // getUserTrainingLogs 함수 사용 (최대 100개 가져오기)
+        const logs = await window.getUserTrainingLogs(userId, { limit: 100 });
+        
+        console.log(`[MiniCalendar] ${logs.length}개의 훈련 로그를 가져왔습니다.`);
+        
+        // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
+        const logsByDate = {};
+        logs.forEach(log => {
+          const dateKey = getDateKey(log.date);
+          if (dateKey) {
+            if (!logsByDate[dateKey]) {
+              logsByDate[dateKey] = [];
+            }
+            logsByDate[dateKey].push(log);
+          }
+        });
+        
+        return logsByDate;
+      } catch (error) {
+        console.error('[MiniCalendar] 훈련 로그 가져오기 실패:', error);
+        return {};
+      }
+    }
+
+    /**
+     * 달력 렌더링
+     */
+    async function renderMiniCalendar() {
+      const gridEl = document.getElementById('miniCalendarGrid');
+      const monthYearEl = document.getElementById('miniCalendarMonthYear');
+      
+      if (!gridEl || !monthYearEl) {
+        console.warn('[MiniCalendar] 달력 요소를 찾을 수 없습니다.');
+        return;
+      }
+
+      const { currentYear, currentMonth } = miniCalendarState;
+      
+      // 월/년 표시 업데이트
+      monthYearEl.textContent = `${currentYear}년 ${currentMonth + 1}월`;
+      
+      // 그리드 초기화
+      gridEl.innerHTML = '';
+      
+      // 현재 월의 첫 날과 마지막 날
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const firstDayOfWeek = firstDay.getDay(); // 0(일) ~ 6(토)
+      const daysInMonth = lastDay.getDate();
+      
+      // 이전 달의 마지막 날들
+      const prevMonthLastDay = new Date(currentYear, currentMonth, 0).getDate();
+      
+      // 이전 달 날짜들 추가
+      for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+        const day = prevMonthLastDay - i;
+        const dateKey = getDateKey(new Date(currentYear, currentMonth - 1, day));
+        const dayEl = createCalendarDay(day, 'other-month', dateKey);
+        gridEl.appendChild(dayEl);
+      }
+      
+      // 현재 달 날짜들 추가
+      const today = new Date();
+      const todayKey = getDateKey(today);
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(currentYear, currentMonth, day);
+        const dateKey = getDateKey(date);
+        const dayOfWeek = date.getDay();
+        
+        let className = '';
+        if (dayOfWeek === 0) className = 'sunday';
+        else if (dayOfWeek === 6) className = 'saturday';
+        
+        // 오늘인지 확인
+        if (dateKey === todayKey) {
+          className += ' today';
+        }
+        
+        // 훈련 기록이 있는지 확인
+        const hasTraining = miniCalendarState.trainingLogs[dateKey] && 
+                           miniCalendarState.trainingLogs[dateKey].length > 0;
+        if (hasTraining) {
+          className += ' has-training';
+        }
+        
+        const dayEl = createCalendarDay(day, className, dateKey);
+        gridEl.appendChild(dayEl);
+      }
+      
+      // 다음 달 날짜들 추가 (달력 완성)
+      const totalCells = gridEl.children.length;
+      const remainingCells = 42 - totalCells; // 6주 * 7일 = 42
+      
+      for (let day = 1; day <= remainingCells && day <= 14; day++) {
+        const dateKey = getDateKey(new Date(currentYear, currentMonth + 1, day));
+        const dayEl = createCalendarDay(day, 'other-month', dateKey);
+        gridEl.appendChild(dayEl);
+      }
+    }
+
+    /**
+     * 달력 날짜 셀 생성
+     */
+    function createCalendarDay(day, className, dateKey) {
+      const dayEl = document.createElement('div');
+      dayEl.className = `mini-calendar-day ${className}`.trim();
+      dayEl.innerHTML = `<span class="day-number">${day}</span>`;
+      
+      // 훈련 기록이 있는 날짜는 클릭 가능
+      if (className.includes('has-training')) {
+        dayEl.style.cursor = 'pointer';
+        dayEl.addEventListener('click', () => {
+          showTrainingDetailModal(dateKey);
+        });
+      }
+      
+      return dayEl;
+    }
+
+    /**
+     * 달력 월 이동
+     */
+    function miniCalendarNavigate(direction) {
+      if (direction === 'prev') {
+        miniCalendarState.currentMonth--;
+        if (miniCalendarState.currentMonth < 0) {
+          miniCalendarState.currentMonth = 11;
+          miniCalendarState.currentYear--;
+        }
+      } else if (direction === 'next') {
+        miniCalendarState.currentMonth++;
+        if (miniCalendarState.currentMonth > 11) {
+          miniCalendarState.currentMonth = 0;
+          miniCalendarState.currentYear++;
+        }
+      }
+      
+      renderMiniCalendar();
+    }
+
+    /**
+     * 훈련 상세 정보 모달 표시
+     */
+    async function showTrainingDetailModal(dateKey) {
+      const modal = document.getElementById('trainingDetailModal');
+      const body = document.getElementById('trainingDetailBody');
+      
+      if (!modal || !body) {
+        console.warn('[MiniCalendar] 모달 요소를 찾을 수 없습니다.');
+        return;
+      }
+      
+      const logs = miniCalendarState.trainingLogs[dateKey];
+      if (!logs || logs.length === 0) {
+        console.warn('[MiniCalendar] 해당 날짜의 훈련 기록이 없습니다.');
+        return;
+      }
+      
+      // 첫 번째 로그 사용 (같은 날 여러 훈련이 있으면 첫 번째 것)
+      const log = logs[0];
+      
+      // 날짜 포맷팅
+      const date = parseTrainingDate(log.date);
+      const dateStr = date ? 
+        `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일` : 
+        '날짜 정보 없음';
+      
+      // 시간 포맷팅 (초 -> MM:SS)
+      const formatDuration = (seconds) => {
+        if (!seconds) return '0분 0초';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}분 ${secs}초`;
+      };
+      
+      // 상세 정보 HTML 생성
+      body.innerHTML = `
+        <div class="training-detail-item">
+          <span class="training-detail-label">날짜</span>
+          <span class="training-detail-value">${dateStr}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">거리</span>
+          <span class="training-detail-value">${log.distance_km ? log.distance_km.toFixed(2) + ' km' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">훈련시간</span>
+          <span class="training-detail-value">${formatDuration(log.duration_sec)}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">IF (Intensity Factor)</span>
+          <span class="training-detail-value">${log.if ? log.if.toFixed(2) : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">TSS (Training Stress Score)</span>
+          <span class="training-detail-value">${log.tss || '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">Kilojoules (KJ)</span>
+          <span class="training-detail-value">${log.kilojoules ? log.kilojoules.toFixed(0) + ' KJ' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">평균 케이던스</span>
+          <span class="training-detail-value">${log.avg_cadence ? log.avg_cadence.toFixed(0) + ' rpm' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">평균 심박</span>
+          <span class="training-detail-value">${log.avg_hr ? log.avg_hr.toFixed(0) + ' bpm' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">평균 파워</span>
+          <span class="training-detail-value">${log.avg_watts ? log.avg_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">NP (Normalized Power)</span>
+          <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+      `;
+      
+      // 모달 표시
+      modal.classList.remove('hidden');
+    }
+
+    /**
+     * 훈련 상세 정보 모달 닫기
+     */
+    function closeTrainingDetailModal() {
+      const modal = document.getElementById('trainingDetailModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    }
+
+    /**
+     * 프로필 화면 진입 시 달력 초기화
+     */
+    async function initMiniCalendar(userId) {
+      if (!userId) {
+        console.warn('[MiniCalendar] userId가 없습니다.');
+        return;
+      }
+      
+      // 현재 사용자 ID 저장
+      miniCalendarState.currentUserId = userId;
+      
+      // 훈련 로그 가져오기
+      miniCalendarState.trainingLogs = await fetchTrainingLogsForCalendar(userId);
+      
+      // 달력 렌더링
+      await renderMiniCalendar();
+    }
+
+    // 프로필 화면 표시 시 달력 초기화 (기존 showScreen 함수 확장 또는 이벤트 리스너 추가)
+    // 기존 loadUsers 함수가 호출될 때 달력도 함께 초기화되도록 설정
+    const originalLoadUsers = window.loadUsers;
+    if (typeof originalLoadUsers === 'function') {
+      window.loadUsers = async function(...args) {
+        const result = originalLoadUsers.apply(this, args);
+        
+        // 프로필 화면이 활성화되어 있고 현재 사용자가 있으면 달력 초기화
+        const profileScreen = document.getElementById('profileScreen');
+        if (profileScreen && profileScreen.classList.contains('active')) {
+          const currentUser = window.currentUser;
+          if (currentUser && currentUser.id) {
+            setTimeout(() => {
+              initMiniCalendar(currentUser.id);
+            }, 300); // loadUsers 완료 후 약간의 지연
+          }
+        }
+        
+        return result;
+      };
+    }
+
+    // 전역 함수로 노출
+    window.miniCalendarNavigate = miniCalendarNavigate;
+    window.showTrainingDetailModal = showTrainingDetailModal;
+    window.closeTrainingDetailModal = closeTrainingDetailModal;
+    window.initMiniCalendar = initMiniCalendar;
+    
+    console.log('✅ 월간 훈련 이력 미니 달력 스크립트 로드 완료');
   </script>
   
   <!-- 전화번호 기반 로그인 핸들러 -->
@@ -7616,6 +7981,16 @@ Output Format (JSON Only):
           directScreenSwitch(screenId);
         }
         
+        // Profile Screen인 경우 달력 초기화
+        if (screenId === 'profileScreen') {
+          setTimeout(function() {
+            var currentUser = window.currentUser;
+            if (currentUser && currentUser.id && typeof window.initMiniCalendar === 'function') {
+              window.initMiniCalendar(currentUser.id);
+            }
+          }, 300);
+        }
+        
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
           // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
@@ -7705,6 +8080,22 @@ Output Format (JSON Only):
         <!-- 메시지가 여기에 동적으로 삽입됩니다 -->
       </div>
       <button class="welcome-close-btn" onclick="closeUserWelcomeModal()" style="width: 100%; padding: 14px; background: rgba(255, 255, 255, 0.95); border: 2px solid #ffd700; border-radius: 10px; color: #ff6b35; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);">지금 훈련 시작하기</button>
+    </div>
+  </div>
+
+  <!-- 훈련 상세 정보 모달 -->
+  <div id="trainingDetailModal" class="training-detail-modal hidden" onclick="if(event.target === this) closeTrainingDetailModal();">
+    <div class="training-detail-modal-content" onclick="event.stopPropagation();">
+      <div class="training-detail-header">
+        <h3 class="training-detail-title">훈련 상세 정보</h3>
+        <button class="training-detail-close" onclick="closeTrainingDetailModal()" aria-label="닫기">✖</button>
+      </div>
+      <div class="training-detail-body" id="trainingDetailBody">
+        <!-- 상세 정보가 여기에 동적으로 표시됩니다 -->
+      </div>
+      <div class="training-detail-footer">
+        <button class="btn btn-success" onclick="closeTrainingDetailModal()">확인</button>
+      </div>
     </div>
   </div>
 </body>
