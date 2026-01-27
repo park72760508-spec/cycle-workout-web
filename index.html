@@ -880,8 +880,41 @@
     }
 
     /* 관리자(grade=1) 전용: 구독기간 날짜 텍스트 박스와 마지막 운동날짜 텍스트 박스 넓이를 보유포인트 텍스트 박스 넓이와 같게 */
-    /* 구독기간은 이미 form-row 안에 있어서 50% 넓이 유지됨 */
-    /* 마지막 운동날짜는 form-row로 감싸서 50% 넓이로 변경됨 */
+    /* 모든 form-row는 동일한 그리드 구조 유지 */
+    #editUserModal #editAdminFieldsSection .form-row {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px !important;
+    }
+    
+    /* form-group 내부의 모든 입력 필드는 100% 넓이 (부모의 50%를 차지) */
+    #editUserModal #editAdminFieldsSection .form-row .form-group {
+      width: 100%;
+    }
+    
+    #editUserModal #editAdminFieldsSection .form-row .form-group input,
+    #editUserModal #editAdminFieldsSection .form-row .form-group select {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    
+    /* 구독기간 날짜 입력창 */
+    #editUserModal #editUserExpiryDate {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    
+    /* 마지막 운동날짜 입력창 */
+    #editUserModal #editUserLastTrainingDate {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    
+    /* 보유포인트 입력창 (기준) */
+    #editUserModal #editUserRemPoints {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
 
     /* 사용자 정보 완성 모달 스타일 (휴대폰 최적화) */
     #completeUserInfoModal {
