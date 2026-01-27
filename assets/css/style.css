@@ -13650,15 +13650,19 @@ line[id^="needle-"] {
   display: flex !important;
   align-items: flex-start;
   justify-content: center;
-  min-height: auto;
-  height: auto;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
   padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-top: calc(20px + env(safe-area-inset-top));
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+  overflow-y: auto; /* 내용이 많을 경우 스크롤 가능 */
+  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
 }
 
 /* Training Room 화면 배경 이미지 - 베이스캠프와 동일 */
@@ -13684,6 +13688,9 @@ line[id^="needle-"] {
   z-index: 1;
   width: 100%;
   max-width: 100%;
+  height: auto;
+  min-height: auto;
+  flex-shrink: 0; /* 내용에 맞게 축소 */
 }
 
 #trainingRoomScreen .connection-form-container {
@@ -13691,6 +13698,9 @@ line[id^="needle-"] {
   z-index: 1;
   width: 100%;
   max-width: 100%;
+  height: auto;
+  min-height: auto;
+  flex-shrink: 0; /* 내용에 맞게 축소 */
 }
 
 /* Training Room 화면: 상단 뒤로가기(베이스캠프) + 제목 (사용자 대시보드 뒤로가기와 동일 스타일) */
@@ -14172,6 +14182,9 @@ line[id^="needle-"] {
 .training-room-list {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.1);
+  width: 100%;
+  height: auto;
+  min-height: auto;
 }
 
 .training-room-list::-webkit-scrollbar {
@@ -14190,6 +14203,57 @@ line[id^="needle-"] {
 
 .training-room-list::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 212, 170, 0.7);
+}
+
+/* ========== 모바일 최적화 (Training Room 화면) ========== */
+@media (max-width: 768px) {
+  #trainingRoomScreen.active {
+    padding: 10px !important;
+    padding-top: calc(10px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #trainingRoomScreen .connection-form-card {
+    padding: 15px 12px !important;
+    border-radius: 16px !important;
+  }
+
+  #trainingRoomScreen .connection-header.training-room-header-row {
+    margin-bottom: 8px !important;
+  }
+
+  #trainingRoomScreen .connection-device-section {
+    padding-bottom: 5px !important;
+  }
+
+  #trainingRoomScreen .training-room-list {
+    gap: 12px !important;
+    margin-bottom: 10px !important;
+    /* 모바일에서는 1열로 표시 */
+    grid-template-columns: 1fr !important;
+  }
+
+  #trainingRoomScreen .training-room-title {
+    font-size: 1.2em !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #trainingRoomScreen.active {
+    padding: 8px !important;
+    padding-top: calc(8px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #trainingRoomScreen .connection-form-card {
+    padding: 12px 10px !important;
+    border-radius: 12px !important;
+  }
+
+  #trainingRoomScreen .training-room-list {
+    gap: 10px !important;
+    margin-bottom: 8px !important;
+  }
 }
 
 /* ========== 모바일 대시보드 화면 스타일 (individual.html과 동일) ========== */
@@ -14800,10 +14864,13 @@ body.mobile-dashboard-active {
 #trainingRoomScreen .connection-form-card {
   display: flex;
   flex-direction: column;
-  height: auto; /* 목록 개수에 따라 자동 조정 */
-  min-height: auto;
-  max-height: none;
-  overflow: visible; /* 내용이 넘치면 표시 */
+  height: auto !important; /* 목록 개수에 따라 자동 조정 */
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important; /* 내용이 넘치면 표시 */
+  flex-shrink: 0; /* 내용에 맞게 축소 */
+  /* 모바일 최적화: 패딩 조정 */
+  padding: 20px 15px !important;
   /* 스크롤바 숨김 (Webkit) */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
@@ -14851,14 +14918,15 @@ body.mobile-dashboard-active {
 
 #trainingReadyScreen .connection-device-section,
 #trainingRoomScreen .connection-device-section {
-  flex: 0 0 auto; /* 내용에 맞게 높이 자동 조정 */
-  overflow: visible; /* 스크롤 불필요 - 내용에 맞게 높이 조정 */
+  flex: 0 0 auto !important; /* 내용에 맞게 높이 자동 조정 */
+  overflow: visible !important; /* 스크롤 불필요 - 내용에 맞게 높이 조정 */
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
   /* 하단 여백 최소화 */
-  padding-bottom: 20px;
+  padding-bottom: 10px !important;
+  margin-bottom: 0 !important;
   /* 스크롤바 숨김 */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
