@@ -4070,6 +4070,46 @@
     }
 
     /**
+     * 한국 공휴일/법정휴일 체크
+     * 주요 공휴일: 신정, 설날, 삼일절, 어린이날, 부처님오신날, 현충일, 광복절, 추석, 개천절, 한글날, 크리스마스
+     */
+    function isHoliday(year, month, day) {
+      const date = new Date(year, month, day);
+      const dayOfWeek = date.getDay();
+      
+      // 일요일은 공휴일로 처리하지 않음 (별도로 처리)
+      if (dayOfWeek === 0) return false;
+      
+      // 고정 공휴일
+      const fixedHolidays = [
+        { month: 0, day: 1 },   // 신정 (1월 1일)
+        { month: 2, day: 1 },   // 삼일절 (3월 1일)
+        { month: 4, day: 5 },   // 어린이날 (5월 5일)
+        { month: 5, day: 6 },   // 현충일 (6월 6일)
+        { month: 7, day: 15 }, // 광복절 (8월 15일)
+        { month: 9, day: 3 },   // 개천절 (10월 3일)
+        { month: 9, day: 9 },   // 한글날 (10월 9일)
+        { month: 11, day: 25 }  // 크리스마스 (12월 25일)
+      ];
+      
+      // 부처님오신날 (음력 기반, 대략 4월 말~5월 초, 여기서는 5월 15일로 근사치 사용)
+      // 실제로는 음력을 계산해야 하지만, 간단하게 5월 15일로 처리
+      if (month === 4 && day === 15) return true;
+      
+      // 고정 공휴일 체크
+      for (const holiday of fixedHolidays) {
+        if (month === holiday.month && day === holiday.day) {
+          return true;
+        }
+      }
+      
+      // 설날과 추석은 음력 기반이므로 복잡함. 여기서는 간단하게 처리하지 않음
+      // 필요시 별도 라이브러리나 API를 사용하여 정확한 날짜 계산 필요
+      
+      return false;
+    }
+
+    /**
      * Firebase에서 훈련 로그 가져오기
      */
     async function fetchTrainingLogsForCalendar(userId) {
@@ -4150,8 +4190,14 @@
         const dayOfWeek = date.getDay();
         
         let className = '';
-        if (dayOfWeek === 0) className = 'sunday';
-        else if (dayOfWeek === 6) className = 'saturday';
+        // 공휴일 체크 (일요일보다 우선)
+        if (isHoliday(currentYear, currentMonth, day)) {
+          className = 'holiday';
+        } else if (dayOfWeek === 0) {
+          className = 'sunday';
+        } else if (dayOfWeek === 6) {
+          className = 'saturday';
+        }
         
         // 오늘인지 확인
         if (dateKey === todayKey) {
