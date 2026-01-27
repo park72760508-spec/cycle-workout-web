@@ -1911,13 +1911,6 @@ async function loadUsers() {
 }
 
 async function selectUser(userId) {
-  const userCard = document.querySelector(`.user-card[data-user-id="${userId}"]`);
-  
-  if (userCard) {
-    userCard.style.opacity = '0.6';
-    userCard.style.pointerEvents = 'none';
-  }
-  
   try {
     const result = await apiGetUser(userId);
     
@@ -1938,10 +1931,6 @@ async function selectUser(userId) {
       
       if (diffDays < 0) {
         showToast('사용기간이 만료되어 선택할 수 없습니다.');
-        if (userCard) {
-          userCard.style.opacity = '1';
-          userCard.style.pointerEvents = 'auto';
-        }
         return;
       }
     }
@@ -1968,10 +1957,6 @@ async function selectUser(userId) {
   } catch (error) {
     console.error('사용자 선택 실패:', error);
     showToast('사용자 선택 중 오류가 발생했습니다.');
-    if (userCard) {
-      userCard.style.opacity = '1';
-      userCard.style.pointerEvents = 'auto';
-    }
   }
 }
 
