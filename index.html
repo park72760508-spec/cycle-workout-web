@@ -1667,7 +1667,21 @@
   <!-- 2) 프로필 선택 화면 -->
   <div id="profileScreen" class="screen">
     <div class="header">
-      <h1><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button
+          class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all"
+          onclick="showScreen('basecampScreen')"
+          style="padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+          onmouseover="this.style.backgroundColor='#f3f4f6'"
+          onmouseout="this.style.backgroundColor='transparent'"
+          aria-label="뒤로 가기"
+        >
+          <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+        </button>
+        <h1 style="margin: 0; flex: 1;"><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
+      </div>
       <p class="subtitle">훈련할 사용자를 선택하세요</p>
     </div>
     
@@ -2180,15 +2194,14 @@
                   style="flex: 1; min-width: 120px; padding: 12px 20px; font-size: 16px; border-radius: 8px;">취소</button>
         </div>
       </div>
-
+    
 
     
-  <!-- ✅ 뒤로 가기 버튼 -->
-  <div class="profile-exit-container">
-    <button class="btn btn-exit-inline" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
-      <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-      <span>뒤로 가기</span>
-    </button>
+  <!-- ✅ Strava 이미지 (하단) -->
+  <div class="profile-exit-container" style="text-align: center; padding-top: 20px; padding-bottom: 10px;">
+    <a href="https://www.strava.com" target="_blank" rel="noopener noreferrer" style="display: inline-block; text-decoration: none; transition: opacity 0.2s ease;">
+      <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: block; margin: 0 auto;" />
+    </a>
   </div>
     
   </div>
