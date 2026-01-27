@@ -13648,12 +13648,14 @@ line[id^="needle-"] {
 
 #trainingRoomScreen.active {
   display: flex !important;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  min-height: 100vh;
+  min-height: auto;
+  height: auto;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -13680,11 +13682,15 @@ line[id^="needle-"] {
 #trainingRoomScreen .connection-main-container {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 100%;
 }
 
 #trainingRoomScreen .connection-form-container {
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Training Room 화면: 상단 뒤로가기(베이스캠프) + 제목 (사용자 대시보드 뒤로가기와 동일 스타일) */
@@ -14791,7 +14797,18 @@ body.mobile-dashboard-active {
 }
 
 /* 각 화면의 컨텐츠 영역 - 스크롤바 제거 */
-#trainingRoomScreen .connection-form-card,
+#trainingRoomScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  height: auto; /* 목록 개수에 따라 자동 조정 */
+  min-height: auto;
+  max-height: none;
+  overflow: visible; /* 내용이 넘치면 표시 */
+  /* 스크롤바 숨김 (Webkit) */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
 #playerListScreen .connection-form-card {
   display: flex;
   flex-direction: column;
@@ -14833,7 +14850,20 @@ body.mobile-dashboard-active {
 }
 
 #trainingReadyScreen .connection-device-section,
-#trainingRoomScreen .connection-device-section,
+#trainingRoomScreen .connection-device-section {
+  flex: 0 0 auto; /* 내용에 맞게 높이 자동 조정 */
+  overflow: visible; /* 스크롤 불필요 - 내용에 맞게 높이 조정 */
+  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  /* 하단 여백 최소화 */
+  padding-bottom: 20px;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
 #playerListScreen .connection-device-section {
   flex: 1;
   overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
