@@ -13646,23 +13646,30 @@ line[id^="needle-"] {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Training Room 화면: 베이스캠프와 동일한 구조 및 디자인 */
+#trainingRoomScreen {
+  position: relative;
+  overflow: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #trainingRoomScreen.active {
   display: flex !important;
-  align-items: flex-start;
-  justify-content: center;
-  min-height: auto !important;
-  height: auto !important;
-  max-height: none !important;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  align-items: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
+  justify-content: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
+  min-height: 100vh; /* 베이스캠프와 동일: 전체 화면 높이 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); /* 베이스캠프와 동일한 배경 */
   background-attachment: fixed;
   padding: 20px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
-  padding-top: calc(20px + env(safe-area-inset-top));
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
-  overflow-y: auto; /* 내용이 많을 경우 스크롤 가능 */
-  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* Training Room 화면 배경 이미지 - 베이스캠프와 동일 */
@@ -13682,25 +13689,15 @@ line[id^="needle-"] {
   filter: blur(2px);
 }
 
-/* Training Room 화면 컨테이너 z-index 조정 */
+/* Training Room 화면 컨테이너: 베이스캠프와 동일한 구조 */
 #trainingRoomScreen .connection-main-container {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  min-height: auto;
-  flex-shrink: 0; /* 내용에 맞게 축소 */
 }
 
 #trainingRoomScreen .connection-form-container {
   position: relative;
   z-index: 1;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  min-height: auto;
-  flex-shrink: 0; /* 내용에 맞게 축소 */
 }
 
 /* Training Room 화면: 베이스캠프 스타일 적용 */
@@ -13708,61 +13705,10 @@ line[id^="needle-"] {
   display: none; /* 베이스캠프처럼 헤더 숨김 */
 }
 
-/* Training Room 화면: 상단 뒤로가기 + 제목 (베이스캠프 스타일) */
-#trainingRoomScreen .training-room-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: nowrap;
-  margin-bottom: 15px;
-}
+/* Training Room 화면: 제목만 표시 (베이스캠프 Choose Your Path와 동일한 구조) */
+/* 뒤로 가기 버튼 제거 - 베이스캠프와 동일한 구조 */
 
-#trainingRoomScreen .training-room-back-wrap {
-  width: 48px;
-  flex-shrink: 0;
-  display: flex;
-  justify-content: flex-start;
-}
-
-#trainingRoomScreen .training-room-header-spacer {
-  width: 48px;
-  flex-shrink: 0;
-}
-
-#trainingRoomScreen .training-room-title-center {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-}
-
-#trainingRoomScreen .training-room-back-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: transparent;
-  color: #4b5563;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-
-#trainingRoomScreen .training-room-back-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #1e293b;
-}
-
-#trainingRoomScreen .training-room-back-btn:active {
-  background: rgba(0, 0, 0, 0.1);
-}
-
-/* Training Room 제목을 베이스캠프 status-bar 스타일로 */
+/* Training Room 제목: 베이스캠프 status-bar 스타일 (Choose Your Path와 동일) */
 #trainingRoomScreen .basecamp-status-bar {
   color: #000000 !important;
   font-weight: 900 !important;
