@@ -44,6 +44,87 @@ restoreAuthenticatedRooms();
  * Training Room 목록 로드
  * id, user_id, title, password 정보를 가져옴
  */
+/**
+ * 타임아웃이 있는 fetch 래퍼
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('요청 시간 초과');
+    }
+    throw error;
+  }
+}
+
+/**
+ * 재시도 로직이 있는 함수 실행
+ */
+async function withRetryForTrainingRooms(fn, maxRetries = 2, delayMs = 500) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (i < maxRetries - 1) {
+        console.warn(`[Training Room] 재시도 ${i + 1}/${maxRetries} - ${delayMs}ms 후 재시도...`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        delayMs *= 1.5; // 지수 백오프
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * 사용자 목록 가져오기 (캐싱 지원)
+ */
+async function getUsersListWithCache() {
+  // 이미 로드된 사용자 목록이 있으면 재사용 (캐싱)
+  if (Array.isArray(window.users) && window.users.length > 0) {
+    console.log('[Training Room] 캐시된 사용자 목록 사용:', window.users.length, '명');
+    return window.users;
+  }
+  
+  // apiGetUsers 함수 확인
+  const apiGetUsersFn = typeof window.apiGetUsers === 'function' 
+    ? window.apiGetUsers 
+    : (typeof apiGetUsers === 'function' ? apiGetUsers : null);
+  
+  if (!apiGetUsersFn) {
+    console.warn('[Training Room] apiGetUsers 함수를 찾을 수 없습니다.');
+    return [];
+  }
+  
+  try {
+    const usersResult = await apiGetUsersFn();
+    if (usersResult && usersResult.success && usersResult.items) {
+      const users = usersResult.items;
+      window.users = users; // 전역 변수에 캐시 저장
+      console.log('[Training Room] 사용자 목록 로드 성공:', users.length, '명');
+      return users;
+    }
+  } catch (userError) {
+    console.error('[Training Room] 사용자 목록 로드 오류:', userError);
+  }
+  
+  return [];
+}
+
+/**
+ * Training Room 목록 로드 (최적화: 병렬 처리, 타임아웃, 재시도, 캐싱)
+ */
 async function loadTrainingRooms() {
   const listContainer = document.getElementById('trainingRoomList');
   if (!listContainer) {
@@ -60,29 +141,56 @@ async function loadTrainingRooms() {
   `;
 
   try {
-    // 구글시트에서 TrainingSchedules 목록 가져오기
-    // 응답 데이터: { id, user_id, title, password, ... }
-    const url = `${window.GAS_URL}?action=listTrainingSchedules`;
-    const response = await fetch(url);
-    const result = await response.json();
+    // Training Room 목록과 사용자 목록을 병렬로 로드 (성능 최적화)
+    const [roomsResult, users] = await Promise.allSettled([
+      // Training Room 목록 가져오기 (타임아웃 8초, 최대 2회 재시도)
+      withRetryForTrainingRooms(
+        async () => {
+          const url = `${window.GAS_URL}?action=listTrainingSchedules`;
+          const response = await fetchWithTimeout(url, {}, 8000); // 8초 타임아웃
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          
+          if (!result.success) {
+            throw new Error(result.error || 'Training Room 목록을 불러오는데 실패했습니다');
+          }
+          
+          return result.items || [];
+        },
+        2, // 최대 2회 재시도
+        500 // 초기 지연 500ms
+      ),
+      // 사용자 목록 가져오기 (캐싱 지원)
+      getUsersListWithCache()
+    ]);
 
-    if (!result.success) {
-      throw new Error(result.error || 'Training Room 목록을 불러오는데 실패했습니다');
+    // Training Room 목록 처리
+    if (roomsResult.status === 'fulfilled') {
+      trainingRoomList = roomsResult.value || [];
+      
+      // 데이터 구조 확인 (디버깅용 - 프로덕션에서는 제거 가능)
+      if (trainingRoomList.length > 0 && console.log) {
+        console.log('[Training Room] 로드된 Room 데이터 구조:', trainingRoomList[0]);
+        console.log('[Training Room] 각 Room 정보:', trainingRoomList.map(room => ({
+          id: room.id,
+          user_id: room.user_id || room.userId,
+          title: room.title,
+          hasPassword: !!(room.password && String(room.password).trim() !== '')
+        })));
+      }
+    } else {
+      console.error('[Training Room] 목록 로드 실패:', roomsResult.reason);
+      trainingRoomList = [];
     }
 
-    trainingRoomList = result.items || [];
+    // 사용자 목록 처리
+    const usersList = users.status === 'fulfilled' ? users.value : [];
     
-    // 데이터 구조 확인 (디버깅용)
-    if (trainingRoomList.length > 0) {
-      console.log('[Training Room] 로드된 Room 데이터 구조:', trainingRoomList[0]);
-      console.log('[Training Room] 각 Room 정보:', trainingRoomList.map(room => ({
-        id: room.id,
-        user_id: room.user_id || room.userId,
-        title: room.title,
-        hasPassword: !!(room.password && String(room.password).trim() !== '')
-      })));
-    }
-    
+    // Training Room 목록이 비어있으면 빈 상태 표시
     if (trainingRoomList.length === 0) {
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -92,37 +200,26 @@ async function loadTrainingRooms() {
       return;
     }
 
-    // 사용자 목록 가져오기 (Users 테이블에서)
-    let users = [];
-    try {
-      if (typeof window.apiGetUsers === 'function') {
-        const usersResult = await window.apiGetUsers();
-        if (usersResult && usersResult.success && usersResult.items) {
-          users = usersResult.items;
-          window.users = users; // 전역 변수에 저장
-          console.log('[Training Room] 사용자 목록 로드 성공:', users.length, '명');
-        }
-      } else if (typeof apiGetUsers === 'function') {
-        const usersResult = await apiGetUsers();
-        if (usersResult && usersResult.success && usersResult.items) {
-          users = usersResult.items;
-          window.users = users; // 전역 변수에 저장
-          console.log('[Training Room] 사용자 목록 로드 성공:', users.length, '명');
-        }
-      } else {
-        console.warn('[Training Room] apiGetUsers 함수를 찾을 수 없습니다.');
-      }
-    } catch (userError) {
-      console.error('[Training Room] 사용자 목록 로드 오류:', userError);
-    }
-
     // 목록 렌더링 (사용자 목록과 함께)
-    renderTrainingRoomList(trainingRoomList, users);
+    renderTrainingRoomList(trainingRoomList, usersList);
+    
+    console.log('[Training Room] ✅ 목록 로드 완료:', trainingRoomList.length, '개 Room,', usersList.length, '명 사용자');
   } catch (error) {
-    console.error('[Training Room] 목록 로드 오류:', error);
+    console.error('[Training Room] ❌ 목록 로드 오류:', error);
+    console.error('[Training Room] 오류 상세:', {
+      message: error.message,
+      stack: error.stack
+    });
+    
+    // 에러 발생 시에도 빈 상태로 표시 (사용자는 계속 사용 가능)
     listContainer.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-        <p style="color: #dc3545;">오류: ${error.message}</p>
+        <p style="color: #dc3545; margin-bottom: 10px;">Training Room 목록을 불러올 수 없습니다</p>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">${error.message || '네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.'}</p>
+        <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
+                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+          다시 시도
+        </button>
       </div>
     `;
   }
