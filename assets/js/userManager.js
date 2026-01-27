@@ -1819,7 +1819,7 @@ async function loadUsers() {
               </div>
             </div>
             <div class="user-actions" onclick="event.stopPropagation();">
-              <button class="btn-dashboard" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; margin-right: 4px; transition: all 0.2s;">📊 대시보드</button>
+              <button class="btn-dashboard" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>
               ${canEdit ? `
                 <button class="btn-edit"   onclick="editUser('${user.id}')"   title="수정">✏️</button>
                 <button class="btn-delete ${deleteButtonClass}" onclick="deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}>🗑️</button>
