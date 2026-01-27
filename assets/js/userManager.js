@@ -2164,7 +2164,7 @@ async function editUser(userId) {
           : String(mergedViewer?.grade ?? '2'));
     const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
     
-    // 권한 확인: 관리자는 모든 사용자 수정 가능, 일반 사용자는 본인만 수정 가능
+    // 권한 확인: 관리자(grade=1)만 모든 사용자 수정 가능, 일반 사용자(grade=2,3)는 본인만 수정 가능
     if (viewerGrade !== '1' && (!viewerId || String(userId) !== viewerId)) {
       showToast('본인 계정만 수정할 수 있습니다.', 'warning');
       return;
@@ -2221,7 +2221,7 @@ async function editUser(userId) {
       }
     }
     
-    // 관리자 전용 필드 섹션 표시/숨김 처리 (위에서 선언한 viewerGrade 재사용)
+    // 관리자 전용 필드 섹션 표시/숨김 처리 (위에서 선언한 viewerGrade 재사용, grade=1만 관리자)
     const isAdmin = (viewerGrade === '1');
     const adminFieldsSection = document.getElementById('editAdminFieldsSection');
     if (adminFieldsSection) {
@@ -2380,7 +2380,7 @@ async function performUpdateFromModal() {
         : String(mergedViewer?.grade ?? '2'));
   const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
   
-  // 권한 확인: 관리자는 모든 사용자 수정 가능, 일반 사용자는 본인만 수정 가능
+  // 권한 확인: 관리자(grade=1)만 모든 사용자 수정 가능, 일반 사용자(grade=2,3)는 본인만 수정 가능
   if (viewerGrade !== '1' && (!viewerId || String(currentEditUserId) !== viewerId)) {
     showToast('본인 계정만 수정할 수 있습니다.', 'warning');
     return;
@@ -2413,8 +2413,7 @@ async function performUpdateFromModal() {
       challenge
     };
 
-    // 관리자 전용 필드 업데이트
-    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+    // 관리자 전용 필드 업데이트 (grade=1만 관리자 권한)
     if (viewerGrade === '1') {
       const gradeEl = document.getElementById('editUserGrade');
       const expiryEl = document.getElementById('editUserExpiryDate');
