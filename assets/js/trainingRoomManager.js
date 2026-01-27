@@ -45,11 +45,79 @@ restoreAuthenticatedRooms();
  * id, user_id, title, password 정보를 가져옴
  */
 /**
- * 타임아웃이 있는 fetch 래퍼
+ * 모바일 환경 감지 (Live Training Rooms용 - 공통 함수 사용)
+ */
+function isMobileDeviceForTrainingRooms() {
+  // Live Training Session의 isMobileDevice 함수가 있으면 사용, 없으면 직접 구현
+  if (typeof isMobileDevice === 'function') {
+    return isMobileDevice();
+  }
+  
+  if (typeof window === 'undefined') return false;
+  
+  // User Agent 기반 감지
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+  const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+  const isMobileUA = mobileRegex.test(userAgent);
+  
+  // 화면 크기 기반 감지 (추가 확인)
+  const isMobileScreen = window.innerWidth <= 768;
+  
+  // 터치 지원 여부 확인
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  
+  return isMobileUA || (isMobileScreen && isTouchDevice);
+}
+
+/**
+ * 네트워크 상태 감지 (Live Training Rooms용 - 공통 함수 사용)
+ */
+function getNetworkInfoForTrainingRooms() {
+  // Live Training Session의 getNetworkInfo 함수가 있으면 사용, 없으면 직접 구현
+  if (typeof getNetworkInfo === 'function') {
+    return getNetworkInfo();
+  }
+  
+  if (typeof navigator !== 'undefined' && navigator.connection) {
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    return {
+      effectiveType: conn.effectiveType || 'unknown',
+      downlink: conn.downlink || 0,
+      rtt: conn.rtt || 0,
+      saveData: conn.saveData || false
+    };
+  }
+  return null;
+}
+
+/**
+ * 타임아웃이 있는 fetch 래퍼 (모바일 최적화 적용)
  */
 async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  // 모바일 환경 감지
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const networkInfo = getNetworkInfoForTrainingRooms();
+  
+  // 모바일이거나 느린 네트워크인 경우 타임아웃 증가
+  let adjustedTimeout = timeoutMs;
+  if (isMobile) {
+    adjustedTimeout = timeoutMs * 2; // 모바일은 2배
+    console.log('[Training Room] 모바일 환경 감지, 타임아웃 증가:', timeoutMs, '→', adjustedTimeout, 'ms');
+  }
+  
+  // 네트워크 상태에 따른 추가 조정
+  if (networkInfo) {
+    if (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') {
+      adjustedTimeout = adjustedTimeout * 1.5; // 느린 네트워크는 1.5배 추가 증가
+      console.log('[Training Room] 느린 네트워크 감지:', networkInfo.effectiveType, ', 타임아웃:', adjustedTimeout, 'ms');
+    } else if (networkInfo.rtt > 500) {
+      adjustedTimeout = adjustedTimeout * 1.3; // 높은 지연시간은 1.3배 증가
+      console.log('[Training Room] 높은 지연시간 감지:', networkInfo.rtt, 'ms, 타임아웃:', adjustedTimeout, 'ms');
+    }
+  }
+  
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), adjustedTimeout);
   
   try {
     const response = await fetch(url, {
@@ -68,19 +136,39 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 /**
- * 재시도 로직이 있는 함수 실행
+ * 재시도 로직이 있는 함수 실행 (모바일 최적화 적용)
  */
 async function withRetryForTrainingRooms(fn, maxRetries = 2, delayMs = 500) {
+  // 모바일 환경 감지
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const networkInfo = getNetworkInfoForTrainingRooms();
+  
+  // 모바일이거나 느린 네트워크인 경우 재시도 횟수 증가
+  let adjustedRetries = maxRetries;
+  let adjustedDelay = delayMs;
+  
+  if (isMobile) {
+    adjustedRetries = maxRetries + 1; // 모바일은 재시도 1회 추가
+    adjustedDelay = delayMs * 0.8; // 초기 지연 시간 약간 감소 (빠른 재시도)
+    console.log('[Training Room] 모바일 환경 감지, 재시도 횟수 증가:', maxRetries, '→', adjustedRetries);
+  }
+  
+  // 느린 네트워크인 경우 재시도 간격 조정
+  if (networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g')) {
+    adjustedDelay = delayMs * 1.2; // 느린 네트워크는 재시도 간격 증가
+    console.log('[Training Room] 느린 네트워크 감지, 재시도 간격 조정:', delayMs, '→', adjustedDelay, 'ms');
+  }
+  
   let lastError;
-  for (let i = 0; i < maxRetries; i++) {
+  for (let i = 0; i < adjustedRetries; i++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      if (i < maxRetries - 1) {
-        console.warn(`[Training Room] 재시도 ${i + 1}/${maxRetries} - ${delayMs}ms 후 재시도...`, error.message);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-        delayMs *= 1.5; // 지수 백오프
+      if (i < adjustedRetries - 1) {
+        const currentDelay = adjustedDelay * Math.pow(1.5, i); // 지수 백오프
+        console.warn(`[Training Room] 재시도 ${i + 1}/${adjustedRetries} - ${Math.round(currentDelay)}ms 후 재시도...`, error.message);
+        await new Promise(resolve => setTimeout(resolve, currentDelay));
       }
     }
   }
@@ -169,31 +257,113 @@ async function getUsersListWithCache() {
 }
 
 /**
- * Training Room 목록 로드 (최적화: 병렬 처리, 타임아웃, 재시도, 캐싱)
+ * Training Room 목록 로드 (최적화: 병렬 처리, 타임아웃, 재시도, 캐싱, 모바일 최적화)
  */
 async function loadTrainingRooms() {
+  // 성능 측정 시작
+  const performanceStart = performance.now();
+  
   const listContainer = document.getElementById('trainingRoomList');
   if (!listContainer) {
     console.error('[Training Room] 목록 컨테이너를 찾을 수 없습니다.');
     return;
   }
-
-  // 로딩 표시
+  
+  // 모바일 최적화: 환경 감지
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const networkInfo = getNetworkInfoForTrainingRooms();
+  
+  // 캐싱: 최근 로드한 데이터를 메모리에 저장 (5초간 유효)
+  const CACHE_KEY = 'trainingRoomsListCache';
+  const CACHE_DURATION = 5000; // 5초
+  const now = Date.now();
+  
+  // 캐시 확인
+  let useCache = false;
+  let cachedRooms = [];
+  let cachedUsers = [];
+  
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const cachedData = sessionStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        const cacheAge = now - parsed.timestamp;
+        
+        // 캐시가 유효한 경우 사용
+        if (cacheAge < CACHE_DURATION && parsed.rooms && Array.isArray(parsed.rooms) && parsed.rooms.length >= 0) {
+          console.log('[Training Room] ✅ 캐시된 데이터 사용 (', Math.round(cacheAge), 'ms 전)');
+          cachedRooms = parsed.rooms;
+          cachedUsers = parsed.users || [];
+          useCache = true;
+          
+          // 캐시된 데이터로 즉시 렌더링 (성능 개선)
+          const cacheLoadTime = performance.now() - performanceStart;
+          console.log('[Training Room] 📊 캐시 로딩 시간:', Math.round(cacheLoadTime), 'ms');
+          
+          // 즉시 렌더링
+          renderTrainingRoomList(cachedRooms, cachedUsers);
+          trainingRoomList = cachedRooms;
+          
+          return; // 캐시 사용 시 조기 반환
+        } else {
+          console.log('[Training Room] 캐시 만료, 새로 로드');
+        }
+      }
+    } catch (cacheError) {
+      console.warn('[Training Room] 캐시 읽기 오류:', cacheError);
+    }
+  }
+  
+  // 모바일 최적화 로딩 메시지
+  const loadingMessage = isMobile 
+    ? 'Training Room 목록을 불러오는 중... (모바일 최적화 모드)'
+    : 'Training Room 목록을 불러오는 중...';
+  
+  // 로딩 표시 업데이트 (모바일 최적화 메시지)
   listContainer.innerHTML = `
     <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
       <div class="spinner" style="margin: 0 auto 20px;"></div>
-      <p style="color: #666;">Training Room 목록을 불러오는 중...</p>
+      <p style="color: #666;">${loadingMessage}</p>
+      ${networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') 
+        ? '<p style="color: #f59e0b; font-size: 12px; margin-top: 8px;">느린 네트워크 감지: 로딩 시간이 다소 걸릴 수 있습니다</p>'
+        : ''}
     </div>
   `;
 
   try {
-    // Training Room 목록과 사용자 목록을 병렬로 로드 (성능 최적화)
+    // 모바일 최적화: 타임아웃 및 재시도 조정
+    // 기본 타임아웃: PC 8초, 모바일 16초
+    let baseTimeout = isMobile ? 16000 : 8000;
+    
+    // 네트워크 상태에 따른 추가 조정
+    if (networkInfo) {
+      if (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') {
+        baseTimeout = 24000; // 매우 느린 네트워크는 24초
+      } else if (networkInfo.effectiveType === '3g') {
+        baseTimeout = isMobile ? 20000 : 12000; // 3G는 중간값
+      }
+    }
+    
+    // 재시도 횟수: PC 2회, 모바일 3회
+    const maxRetries = isMobile ? 3 : 2;
+    const initialDelay = isMobile ? 400 : 500; // 모바일은 약간 빠른 재시도
+    
+    console.log('[Training Room] 로딩 설정:', {
+      isMobile,
+      networkType: networkInfo?.effectiveType || 'unknown',
+      timeout: baseTimeout,
+      maxRetries,
+      initialDelay
+    });
+    
+    // Training Room 목록과 사용자 목록을 병렬로 로드 (성능 최적화 + 모바일 최적화)
     const [roomsResult, users] = await Promise.allSettled([
-      // Training Room 목록 가져오기 (타임아웃 8초, 최대 2회 재시도)
+      // Training Room 목록 가져오기 (동적 타임아웃, 동적 재시도)
       withRetryForTrainingRooms(
         async () => {
           const url = `${window.GAS_URL}?action=listTrainingSchedules`;
-          const response = await fetchWithTimeout(url, {}, 8000); // 8초 타임아웃
+          const response = await fetchWithTimeout(url, {}, baseTimeout); // 동적 타임아웃
           
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -207,8 +377,8 @@ async function loadTrainingRooms() {
           
           return result.items || [];
         },
-        2, // 최대 2회 재시도
-        500 // 초기 지연 500ms
+        maxRetries, // 동적 재시도 횟수
+        initialDelay // 동적 초기 지연
       ),
       // 사용자 목록 가져오기 (캐싱 지원)
       getUsersListWithCache()
@@ -217,6 +387,10 @@ async function loadTrainingRooms() {
     // Training Room 목록 처리
     if (roomsResult.status === 'fulfilled') {
       trainingRoomList = roomsResult.value || [];
+      
+      // 성능 측정: API 로드 완료
+      const apiLoadTime = performance.now() - performanceStart;
+      console.log('[Training Room] 📊 API 로드 시간:', Math.round(apiLoadTime), 'ms');
       
       // 데이터 구조 확인 (디버깅용 - 프로덕션에서는 제거 가능)
       if (trainingRoomList.length > 0 && console.log) {
@@ -252,6 +426,21 @@ async function loadTrainingRooms() {
       }
     }
     
+    // 캐시 저장 (성공적으로 로드한 경우)
+    if (typeof sessionStorage !== 'undefined' && trainingRoomList.length >= 0) {
+      try {
+        const cacheData = {
+          rooms: trainingRoomList,
+          users: usersList,
+          timestamp: now
+        };
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+        console.log('[Training Room] ✅ 데이터 캐시 저장 완료');
+      } catch (cacheError) {
+        console.warn('[Training Room] 캐시 저장 오류:', cacheError);
+      }
+    }
+    
     // Training Room 목록이 비어있으면 빈 상태 표시
     if (trainingRoomList.length === 0) {
       listContainer.innerHTML = `
@@ -263,9 +452,22 @@ async function loadTrainingRooms() {
     }
 
     // 목록 렌더링 (사용자 목록과 함께)
-    renderTrainingRoomList(trainingRoomList, usersList);
+    // 점진적 로딩: 모바일에서 부드러운 전환을 위해 requestAnimationFrame 사용
+    if (isMobile && networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g' || networkInfo.rtt > 500)) {
+      requestAnimationFrame(() => {
+        renderTrainingRoomList(trainingRoomList, usersList);
+        console.log('[Training Room] ✅ 목록 로드 완료 (점진적 로딩):', trainingRoomList.length, '개 Room,', usersList.length, '명 사용자');
+      });
+    } else {
+      renderTrainingRoomList(trainingRoomList, usersList);
+      console.log('[Training Room] ✅ 목록 로드 완료:', trainingRoomList.length, '개 Room,', usersList.length, '명 사용자');
+    }
     
-    console.log('[Training Room] ✅ 목록 로드 완료:', trainingRoomList.length, '개 Room,', usersList.length, '명 사용자');
+    // 성능 로그 (모바일에서만)
+    if (isMobile) {
+      const loadTime = performance.now();
+      console.log('[Training Room] 📱 모바일 로딩 완료 시간:', Math.round(loadTime), 'ms');
+    }
     
     // 사용자 목록이 비어있으면 경고 및 재시도 제안
     if (usersList.length === 0) {
