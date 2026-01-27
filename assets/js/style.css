@@ -327,6 +327,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 #basecampScreen {
   position: relative;
   overflow: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #basecampScreen.active {
@@ -340,6 +344,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 베이스캠프 배경 이미지 - 흐리게 */
@@ -400,6 +407,19 @@ h1,h2,h3,h4 { font-weight: 600; }
   border-radius: 12px;
   padding: 15px;
   margin-bottom: 20px;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
+#basecampScreen .connection-device-section,
+#basecampScreen .connection-main-container {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
@@ -788,25 +808,6 @@ h1,h2,h3,h4 { font-weight: 600; }
   padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
 }
 
-/* Training Room 화면 하단 버튼 영역 안전거리 확보 */
-#trainingRoomScreen .connection-exit-container {
-  margin-top: 24px !important;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  
-  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
-  padding-top: 20px !important;
-  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
-  
-  /* 버튼이 확실히 위에 오도록 설정 */
-  position: relative;
-  z-index: 50;
-}
-
-/* Training Room 화면 카드 하단 여백 조정 */
-#trainingRoomScreen .connection-form-card {
-  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
-}
-
 /* Join Session 화면 하단 버튼 영역 안전거리 확보 */
 #playerListScreen .connection-exit-container {
   margin-top: 24px !important;
@@ -980,10 +981,28 @@ h1,h2,h3,h4 { font-weight: 600; }
   max-width: 500px;
   width: 100%;
   margin: 0 auto;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.connection-main-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .connection-form-container {
   animation: slideInUp 0.6s ease;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.connection-form-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .connection-form-card {
@@ -995,9 +1014,94 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
 }
 
+/* 훈련 준비 화면 카드 여백 최소화 */
+#trainingReadyScreen .connection-form-card {
+  padding: 25px 30px 0 30px !important; /* 상단 25px, 좌우 30px, 하단 0 */
+}
+
 .connection-header {
   text-align: center;
   margin-bottom: 30px;
+}
+
+/* 훈련 준비 화면 헤더 여백 최소화 */
+#trainingReadyScreen .connection-header {
+  margin-bottom: 15px !important; /* 30px에서 15px로 최소화 */
+}
+
+/* 훈련 준비 화면: 이미지+제목 같은 라인, 뒤로가기 버튼 제목 좌측 */
+#trainingReadyScreen .connection-header.training-ready-header-row {
+  text-align: center;
+}
+/* 상단: [뒤로가기 좌측] [이미지+제목 중앙] [스페이서] */
+#trainingReadyScreen .training-ready-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  margin-bottom: 6px;
+}
+#trainingReadyScreen .training-ready-back-wrap {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+#trainingReadyScreen .training-ready-header-spacer {
+  width: 48px;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-title-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+#trainingReadyScreen .training-ready-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+#trainingReadyScreen .training-ready-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+}
+#trainingReadyScreen .training-ready-back-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+#trainingReadyScreen .training-ready-header-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-title {
+  font-size: 1.8em;
+  font-weight: 700; /* 굵은 폰트 */
+  margin: 0;
+  color: #1e293b;
+  flex-shrink: 0;
+}
+#trainingReadyScreen .training-ready-subtitle {
+  text-align: center;
+  margin: 0;
+}
+
+/* 무선 기기 연결 화면 헤더 여백 최소화 */
+#connectionScreen .connection-header {
+  margin-bottom: 20px !important; /* 30px에서 20px로 최소화 */
 }
 
 .connection-header h1 {
@@ -1015,10 +1119,77 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 20px;
 }
 
+/* 훈련 준비 화면: 그래프 하단 ↔ Select Dashboard 간격 = 20px (노트북/모바일 버튼 gap의 2배) */
+#trainingReadyScreen .training-ready-workout-block {
+  margin-bottom: var(--tr-gap) !important;
+  padding-bottom: 0 !important; /* 공유 connection-device-section padding-bottom 100px 제거 */
+  overflow: hidden !important;
+  -webkit-overflow-scrolling: auto;
+}
+#trainingReadyScreen .training-ready-select-dashboard {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  -webkit-overflow-scrolling: auto;
+}
+#trainingReadyScreen .training-ready-select-dashboard .training-ready-dashboard-grid {
+  gap: var(--tr-gap);
+  margin-bottom: 0 !important;
+}
+#trainingReadyScreen .training-ready-h3 {
+  margin-bottom: 8px !important;
+}
+#trainingReadyScreen .training-ready-preview-stats {
+  margin-bottom: 12px !important;
+}
+#trainingReadyScreen .segment-preview {
+  margin-bottom: 0 !important;
+}
+/* "워크아웃을 선택하세요." 문구: 주황색 */
+#trainingReadyScreen .workout-select-placeholder-text,
+#trainingReadyScreen #segmentPreviewPlaceholder .workout-select-placeholder-text,
+#segmentPreviewPlaceholder .workout-select-placeholder-text,
+#segmentPreviewPlaceholder div.workout-select-placeholder-text,
+#trainingReadyScreen #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text,
+#segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text {
+  color: #e65100 !important; /* 주황색, 더 진하게 (Material orange 900) */
+}
+
+/* 워크아웃 그래프 블럭: 모바일 선택 버튼과 동일 테두리 */
+#trainingReadyScreen .segment-preview.segment-preview-graph {
+  text-align: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  min-height: 200px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+#trainingReadyScreen .segment-preview.segment-preview-graph:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* 무선 기기 연결 화면의 파워미터 연결 버튼 블럭 하단 여백 제거 */
+#connectionScreen .connection-device-section {
+  margin-bottom: 0 !important;
+}
+
 .connection-device-section h3 {
   font-size: 1.1em;
   color: #1e293b;
   margin-bottom: 15px;
+}
+
+/* 무선 기기 연결 화면 h3 여백 최소화 */
+#connectionScreen .connection-device-section h3 {
+  margin-bottom: 10px !important; /* 15px에서 10px로 최소화 */
 }
 
 .connection-status-card,
@@ -1032,8 +1203,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 다음 단계로 & 나가기 버튼 컨테이너 */
 .connection-exit-container {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   text-align: center;
   display: flex;
@@ -1041,6 +1212,100 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* ==========================================================
+   무선 기기 연결 화면 여백 최소화 (전체 통합)
+   ========================================================== */
+
+/* connection-form-card 여백 최소화 */
+#connectionScreen .connection-form-card {
+  padding: 25px 35px 5px 35px !important; /* 상단 25px, 하단 5px로 최소화 */
+  margin-bottom: 0 !important;
+}
+
+/* connection-header 여백 최소화 */
+#connectionScreen .connection-header {
+  margin-bottom: 15px !important; /* 30px에서 15px로 최소화 */
+}
+
+/* connection-device-section 여백 조정 (하단 버튼 블럭 높이만큼 공간 확보) */
+#connectionScreen .connection-device-section {
+  margin-bottom: 0 !important;
+  /* 뒤로 가기/다음 단계로 버튼 블럭 높이만큼 padding-bottom 추가 */
+  /* 버튼 높이(50px) + padding-top(8px) + padding-bottom(8px + Safe Area) + border(1px) = 약 80px */
+  padding-bottom: 80px !important; /* 하단 버튼이 가려지지 않도록 공간 확보 */
+}
+
+#connectionScreen .connection-device-section h3 {
+  margin-bottom: 8px !important; /* 15px에서 8px로 최소화 */
+}
+
+#connectionScreen .connection-device-section .grid-2 {
+  margin-bottom: 0 !important; /* mb-15 클래스 무시 */
+}
+
+/* connection-exit-container 여백 최소화 */
+#connectionScreen .connection-exit-container {
+  margin-top: 4px !important; /* 16px에서 4px로 최소화 */
+  padding-top: 8px !important; /* 16px에서 8px로 최소화 */
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* 연결 정보 리스트 완전 제거 */
+#connectionScreen #connectedDevicesList {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+/* iOS 안내 영역 완전 제거 */
+#connectionScreen #iosInfo {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+#connectionScreen #iosInfo.hidden {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 연결 상태 영역 완전 제거 */
+#connectionScreen #connectionStatus {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+#connectionScreen #connectionStatus.hidden {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* connection-status-card도 공간 차지하지 않도록 */
+#connectionScreen .connection-status-card {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
 }
 
 /* 다음 단계로 버튼 (녹색톤) */
@@ -1439,6 +1704,18 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
+#connectionScreen .btn-device.connected.erg-mode-active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #2563eb;
+}
+
+#connectionScreen .btn-device.connected.erg-mode-active:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
 /* 연결된 상태의 span - 위치와 크기는 연결 전과 동일, 색상만 녹색으로 변경 */
 #connectionScreen .btn-device.connected span {
   order: -1 !important; /* 이미지 위에 표시 */
@@ -1453,6 +1730,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 0 !important;
   position: relative !important;
   z-index: 1 !important;
+}
+
+/* ERG 모드 활성화 시 span 색상을 파랑색으로 변경 */
+#connectionScreen .btn-device.connected.erg-mode-active span {
+  color: #2563eb !important;
 }
 
 /* iOS 안내/아이콘 카드 */
@@ -1579,6 +1861,58 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
+/* 프로필 선택 화면 액션 버튼 (새로고침, Strava 연결) - 뒤로 가기 버튼과 동일한 스타일 */
+#profileScreen .profile-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(239, 68, 68, 0.2);
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 44px;
+}
+
+#profileScreen .profile-action-button:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+#profileScreen .profile-action-button:active {
+  transform: translateY(0);
+}
+
+/* Strava 연결 버튼 - callback.html의 "앱으로 돌아가기" 버튼 스타일 적용 */
+#profileScreen .profile-strava-button {
+  background: #fc4c02;
+  color: #fff;
+  border: 2px solid rgba(252, 76, 2, 0.4) !important;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.3) !important;
+}
+
+#profileScreen .profile-strava-button:hover {
+  opacity: 0.9;
+  border-color: rgba(252, 76, 2, 0.6) !important;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.4) !important;
+}
+
+/* Strava 동기화 버튼 - Strava 연결 버튼과 동일한 스타일 */
 /* 캘린더 관련 버튼 이미지 스타일 - 기기선택 화면과 동일한 패턴 */
 .btn-icon-image {
   width: 21px;
@@ -1949,7 +2283,7 @@ button[aria-disabled="true"] {
   border-radius: 14px;
   padding: 16px;
   box-shadow: 0 6px 18px rgba(0,0,0,.06);
-  min-width: 240px;
+  width: 240px;
   flex-shrink: 0;
 }
 
@@ -1998,37 +2332,162 @@ button[aria-disabled="true"] {
 
 /* 사용자 목록 (범례와 함께 표시) */
 .user-list-with-legend {
-  flex: 1;
-  min-width: 0;
+  width: 100%; /* 전체 너비 사용 (그리드가 자동으로 조정) */
+  flex-shrink: 0;
 }
 
 #profileScreen #userList{
-  display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
-  gap:12px; margin-bottom:16px;
+  display:grid; 
+  grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
+  gap:12px; 
+  margin-bottom:16px;
+  width: 100%;
 }
+
+/* 사용자 카드 - 화면 크기에 따라 넓이 조정 */
 #profileScreen .user-card{
-  background:var(--card-bg); border:1px solid var(--card-border); border-radius:14px;
-  padding:14px; color:var(--text);
+  background:var(--card-bg); 
+  border:1px solid var(--card-border); 
+  border-radius:14px;
+  padding:14px; 
+  color:var(--text);
   box-shadow:0 6px 18px rgba(0,0,0,.06);
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  width: 100%; /* 그리드에 맞춰 자동으로 넓이 조정 */
+  min-width: 240px; /* 최소 넓이 */
+  max-width: 100%; /* 모바일 대응 */
+  box-sizing: border-box;
 }
-#profileScreen .user-card:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.08); border-color:#d1d5db; }
+
+/* 모바일 화면 대응 - 카드가 화면 너비에 맞게 조정 */
+@media (max-width: 640px) {
+  #profileScreen #userList{
+    grid-template-columns: 1fr; /* 모바일에서는 1열로 표시 */
+    gap: 12px;
+  }
+  
+  #profileScreen .user-card{
+    width: 100%; /* 모바일에서는 전체 너비 사용 */
+    max-width: 100%;
+  }
+}
+
+#profileScreen .user-card:hover{ 
+  transform:translateY(-2px); 
+  box-shadow:0 10px 24px rgba(0,0,0,.08); 
+  border-color:#d1d5db; 
+}
+
+#profileScreen .user-card .user-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+#profileScreen .user-card .user-name-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0; /* 텍스트 오버플로우 방지 */
+}
+
+#profileScreen .user-card .user-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 #profileScreen .user-card .user-name{ 
   font-weight:700; 
   font-size:16px; 
   color:var(--text-strong); 
-  margin-bottom:4px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  line-height: 1.4;
 }
 
+/* 포인트 배지 스타일 */
+#profileScreen .user-card .user-points {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+#profileScreen .user-card .point-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#profileScreen .user-card .point-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 누적 포인트 - 붉은 계열 투명 상자 */
+#profileScreen .user-card .point-badge.point-accumulated {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+#profileScreen .user-card .point-badge.point-accumulated .point-icon {
+  font-size: 14px;
+  filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.3));
+}
+
+/* 보유 포인트 - 민트색 투명 상자 */
+#profileScreen .user-card .point-badge.point-remaining {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #059669;
+}
+
+#profileScreen .user-card .point-badge.point-remaining .point-icon {
+  font-size: 14px;
+  filter: drop-shadow(0 1px 2px rgba(16, 185, 129, 0.3));
+}
+
+#profileScreen .user-card .point-icon {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+#profileScreen .user-card .point-value {
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+/* 훈련등급 아이콘 - 카드 크기에 맞게 조정 */
 .user-name-icon {
-  height: 2em; /* 16px (글자 크기) * 2 = 2배 크기 */
+  height: 2em; /* 16px (글자 크기) * 2 = 32px */
   width: auto;
   vertical-align: middle;
+  flex-shrink: 0; /* 아이콘 크기 고정 */
 }
 #profileScreen .user-card .user-meta{ color:var(--text-muted); font-size:13px; }
+
+/* 삭제 버튼 비활성화 스타일 */
+#profileScreen .btn-delete.disabled,
+#profileScreen .btn-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 
 #profileScreen .btn{
   display:inline-flex; align-items:center; justify-content:center;
@@ -2292,6 +2751,14 @@ button[aria-disabled="true"] {
 
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
 /* 훈련 준비 화면을 무선 기기 연결 화면과 같은 디자인으로 변경 */
+/* Pull-to-refresh 방지 (iOS & Android) */
+#trainingReadyScreen {
+  --tr-gap: 20px; /* 그래프 하단 ↔ Select Dashboard 간격 (노트북/모바일 버튼 gap의 2배) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #trainingReadyScreen.active {
   display: flex !important;
   align-items: center;
@@ -2300,6 +2767,9 @@ button[aria-disabled="true"] {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -2314,7 +2784,8 @@ button[aria-disabled="true"] {
   justify-content: center;
   gap: 12px;
   padding: 24px 20px;
-  min-height: 160px;
+  min-height: 128px; /* 160px의 80% */
+  height: 80%; /* 부모 컨테이너 높이의 80% */
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
   border: 2px solid rgba(59, 130, 246, 0.3);
   border-radius: 12px;
@@ -2428,20 +2899,6 @@ button[aria-disabled="true"] {
 
 .segment-preview:active {
   background-color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* 훈련 준비 화면 세그먼트 그래프 placeholder 텍스트 스타일 - 더 진한 회색 */
-#segmentPreviewPlaceholder div:last-child {
-  color: #666 !important;
-}
-
-.segment-preview:active {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* 훈련 준비 화면 세그먼트 그래프 placeholder 텍스트 스타일 - 더 진한 회색 */
-#segmentPreviewPlaceholder div:last-child {
-  color: #666 !important;
 }
 
 /* 훈련 준비 화면 세그먼트 그래프 컨테이너 - 고정 크기 */
@@ -3393,11 +3850,28 @@ button[aria-disabled="true"] {
   padding: 25px;
   border-top: 1px solid #e5e7eb;
   display: flex;
+  flex-direction: row; /* 가로 방향으로 배치 */
   gap: 15px;
   justify-content: center;
+  align-items: center; /* 수직 중앙 정렬 */
+  flex-wrap: nowrap; /* 한 줄로 표시 */
 }
 
 /* 워크아웃 선택 모달 푸터의 connection-exit-container 스타일 */
+#workoutSelectionModal {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#workoutSelectionModal .modal-content {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #workoutSelectionModal .modal-footer {
   justify-content: center;
 }
@@ -3420,17 +3894,18 @@ button[aria-disabled="true"] {
 }
 
 .modal-footer .btn {
+  flex: 1; /* 남은 공간을 균등하게 차지 */
   min-height: 50px;
   min-width: 100px;
   padding: 15px 25px;
+  display: inline-flex; /* 인라인 플렉스로 변경 */
+  align-items: center; /* 수직 중앙 정렬 */
+  justify-content: center; /* 수평 중앙 정렬 */
   font-size: 16px;
   position: relative;
   z-index: 100001;
   cursor: pointer;
   -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: manipulation;
 }
 
 /* 워크아웃 선택 테이블 스타일 */
@@ -4096,6 +4571,17 @@ button[aria-disabled="true"] {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes celebrationPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5), 0 0 100px rgba(255, 107, 53, 0.3); }
+  50% { transform: scale(1.05); box-shadow: 0 25px 70px rgba(255, 215, 0, 0.7), 0 0 120px rgba(255, 107, 53, 0.5); }
+}
+
+@keyframes celebrationBounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-10px) rotate(-5deg); }
+  75% { transform: translateY(-10px) rotate(5deg); }
 }
 
 @keyframes fadeInUp {
@@ -7636,6 +8122,50 @@ button[aria-disabled="true"] {
   box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
 }
 
+/* 훈련일지: Firebase logs 기반, 날짜만 표시 */
+#trainingJournalScreen .calendar-day.journal-day-only {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: default;
+}
+
+/* 훈련한 날: 투명 녹색 */
+#trainingJournalScreen .calendar-day.journal-has-training {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.35) 0%, rgba(74, 222, 128, 0.4) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+}
+
+/* 훈련 없는 날: 회색 계열 */
+#trainingJournalScreen .calendar-day.journal-no-training-day {
+  background: linear-gradient(135deg, rgba(229, 231, 235, 0.85) 0%, rgba(209, 213, 219, 0.9) 100%);
+  border: 1px solid rgba(156, 163, 175, 0.4);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* 훈련일지 날짜 글자: 휴대폰에서 잘 보이도록 확대 */
+#trainingJournalScreen .calendar-day-number.journal-day-number {
+  font-size: clamp(14px, 4.2vw, 22px);
+  font-weight: 800;
+  color: #064e3b;
+  margin: 0;
+  padding: 0.15em 0.4em;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-width: auto;
+}
+
+#trainingJournalScreen .calendar-day.journal-no-training-day .calendar-day-number.journal-day-number {
+  color: #4b5563;
+}
+
+#trainingJournalScreen .calendar-day.journal-has-training .calendar-day-number.journal-day-number {
+  color: #065f46;
+}
+
 /* 훈련일지 컨트롤 버튼 레이아웃 */
 .training-journal-controls {
   position: relative;
@@ -9786,6 +10316,17 @@ button[aria-disabled="true"] {
   width: 90%;
   max-width: 500px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#rpeConditionModal {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #rpeConditionModal .modal-header,
@@ -9834,13 +10375,22 @@ button[aria-disabled="true"] {
 #rpeConditionModal .modal-body,
 #expiryWarningModal .modal-body {
   padding: 24px;
+  padding-top: calc(24px + 3%);
+  /* 버튼 hover 시 상단 라인이 숨겨지지 않도록 추가 여백 확보 */
+  overflow: visible;
 }
 
 .rpe-condition-grid {
   display: grid;
+  /* 4개 버튼의 폭넓이를 동일하게 유지 (2x2 그리드) */
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  margin-top: 16px;
+  margin-top: calc(16px + 3%);
+  /* 좌우 여백 추가로 hover 시 좌측 버튼의 좌측 라인이 숨겨지지 않도록 */
+  padding-left: 8px;
+  padding-right: 8px;
+  /* 스크롤바가 생기지 않도록 overflow 처리 */
+  overflow: hidden;
 }
 
 .rpe-condition-btn {
@@ -9864,7 +10414,9 @@ button[aria-disabled="true"] {
   border-color: #2e74e8;
   background: #f0f7ff;
   box-shadow: 0 2px 8px rgba(46, 116, 232, 0.15);
-  transform: translateY(-2px);
+  /* transform: translateY 제거 - 상단 버튼 라인이 숨겨지는 문제 방지 */
+  /* scale 대신 box-shadow만 강화하여 라인이 숨겨지지 않도록 */
+  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.2);
 }
 
 .rpe-condition-btn.selected {
@@ -11340,6 +11892,15 @@ button[aria-disabled="true"] {
   margin-bottom: 30px;
 }
 
+/* Bluetooth Training Coach 화면: 속도계 그리드 표시 보장 */
+#bluetoothTrainingCoachScreen .speedometer-grid,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 200px !important; /* 최소 높이 보장 */
+}
+
 .speedometer-container {
   background: rgba(15, 23, 42, 0.8);
   border-radius: 16px;
@@ -12349,6 +12910,13 @@ line[id^="needle-"] {
 
 /* ========== Player List 화면 (모바일/태블릿 최적화) ========== */
 /* 훈련 참가 화면을 Training Room 화면 구조로 변경 */
+#playerListScreen {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #playerListScreen.active {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 197, 253, 0.08) 100%);
   padding: 20px;
@@ -12357,6 +12925,9 @@ line[id^="needle-"] {
   min-height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 훈련 참가 화면 배경 이미지 */
@@ -13069,19 +13640,36 @@ line[id^="needle-"] {
 #trainingRoomScreen {
   position: relative;
   overflow: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Training Room 화면: 베이스캠프와 동일한 구조 및 디자인 */
+#trainingRoomScreen {
+  position: relative;
+  overflow: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #trainingRoomScreen.active {
   display: flex !important;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  align-items: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
+  justify-content: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
+  min-height: 100vh; /* 베이스캠프와 동일: 전체 화면 높이 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); /* 베이스캠프와 동일한 배경 */
   background-attachment: fixed;
   padding: 20px;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* Training Room 화면 배경 이미지 - 베이스캠프와 동일 */
@@ -13101,7 +13689,7 @@ line[id^="needle-"] {
   filter: blur(2px);
 }
 
-/* Training Room 화면 컨테이너 z-index 조정 */
+/* Training Room 화면 컨테이너: 베이스캠프와 동일한 구조 */
 #trainingRoomScreen .connection-main-container {
   position: relative;
   z-index: 1;
@@ -13112,9 +13700,168 @@ line[id^="needle-"] {
   z-index: 1;
 }
 
-/* Training Room 화면 헤더 숨김 (베이스캠프와 동일) */
-#trainingRoomScreen .basecamp-header {
-  display: none;
+/* Training Room 화면: 베이스캠프 스타일 적용 */
+#trainingRoomScreen .connection-header.basecamp-header {
+  display: none; /* 베이스캠프처럼 헤더 숨김 */
+}
+
+/* Training Room 화면: 상단 뒤로가기 + 제목 (베이스캠프 스타일) */
+#trainingRoomScreen .training-room-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  margin-bottom: 15px;
+}
+
+#trainingRoomScreen .training-room-back-wrap {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+#trainingRoomScreen .training-room-header-spacer {
+  width: 48px;
+  flex-shrink: 0;
+}
+
+#trainingRoomScreen .training-room-title-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+#trainingRoomScreen .training-room-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+#trainingRoomScreen .training-room-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+}
+
+#trainingRoomScreen .training-room-back-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Training Room 제목: 베이스캠프 status-bar 스타일 (Choose Your Path와 동일) */
+#trainingRoomScreen .basecamp-status-bar {
+  color: #000000 !important;
+  font-weight: 900 !important;
+  text-align: center;
+  font-size: 24px !important;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  #trainingRoomScreen .basecamp-status-bar {
+    font-size: 20px !important; /* 휴대폰에서 약간 축소 */
+  }
+}
+
+/* Live Training Session 화면: 상단 뒤로가기(좌측) + 제목(중앙) + 퇴실 이미지(우측) */
+#bluetoothPlayerListScreen .connection-header.bluetooth-session-header-row {
+  text-align: center;
+  margin-bottom: 12px;
+}
+#bluetoothPlayerListScreen .bluetooth-session-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+#bluetoothPlayerListScreen .bluetooth-session-back-wrap {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+#bluetoothPlayerListScreen .bluetooth-session-exit-wrap {
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+#bluetoothPlayerListScreen .bluetooth-session-title-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+}
+#bluetoothPlayerListScreen .bluetooth-session-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+#bluetoothPlayerListScreen .bluetooth-session-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1e293b;
+}
+#bluetoothPlayerListScreen .bluetooth-session-back-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+#bluetoothPlayerListScreen .bluetooth-session-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+#bluetoothPlayerListScreen .bluetooth-session-exit-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  opacity: 0.8;
+}
+#bluetoothPlayerListScreen .bluetooth-session-exit-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 0.7;
+}
+#bluetoothPlayerListScreen .bluetooth-session-title {
+  font-size: 1.8em;
+  font-weight: 700;
+  margin: 0;
+  color: #1e293b;
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  #bluetoothPlayerListScreen .bluetooth-session-title {
+    font-size: 1.44em; /* 휴대폰에서 20% 축소 (1.8 × 0.8) */
+  }
 }
 
 /* 훈련방 목록 화면 로고 확대 */
@@ -13441,8 +14188,15 @@ line[id^="needle-"] {
 
 /* ========== Training Room 목록 스크롤바 스타일 ========== */
 .training-room-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.1);
+  width: 100%;
+  height: auto;
+  min-height: auto;
 }
 
 .training-room-list::-webkit-scrollbar {
@@ -13461,6 +14215,57 @@ line[id^="needle-"] {
 
 .training-room-list::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 212, 170, 0.7);
+}
+
+/* ========== 모바일 최적화 (Training Room 화면) ========== */
+@media (max-width: 768px) {
+  #trainingRoomScreen.active {
+    padding: 10px !important;
+    padding-top: calc(10px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #trainingRoomScreen .connection-form-card {
+    padding: 15px 12px !important;
+    border-radius: 16px !important;
+  }
+
+  #trainingRoomScreen .connection-header.training-room-header-row {
+    margin-bottom: 8px !important;
+  }
+
+  #trainingRoomScreen .connection-device-section {
+    padding-bottom: 5px !important;
+  }
+
+  #trainingRoomScreen .training-room-list {
+    gap: 12px !important;
+    margin-bottom: 10px !important;
+    /* 모바일에서는 1열로 표시 */
+    grid-template-columns: 1fr !important;
+  }
+
+  #trainingRoomScreen .training-room-title {
+    font-size: 1.2em !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #trainingRoomScreen.active {
+    padding: 8px !important;
+    padding-top: calc(8px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #trainingRoomScreen .connection-form-card {
+    padding: 12px 10px !important;
+    border-radius: 12px !important;
+  }
+
+  #trainingRoomScreen .training-room-list {
+    gap: 10px !important;
+    margin-bottom: 8px !important;
+  }
 }
 
 /* ========== 모바일 대시보드 화면 스타일 (individual.html과 동일) ========== */
@@ -13508,6 +14313,38 @@ body.mobile-dashboard-active {
   height: 100% !important;
 }
 
+/* 모바일 대시보드 가로 모드 방지 */
+@media screen and (orientation: landscape) {
+  #mobileDashboardScreen.active {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  #mobileDashboardScreen.active::before {
+    content: '세로 모드로 기기를 회전해주세요';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 10000;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  #mobileDashboardScreen.active > * {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+}
+
 #mobileDashboardScreen.screen {
   display: none !important;
 }
@@ -13536,6 +14373,7 @@ body.mobile-dashboard-active {
   min-height: 80px; /* 최소 높이 보장 (20% 축소: 100px * 0.8 = 80px) */
   position: relative;
   overflow: hidden; /* 넘치는 내용 숨김 */
+  z-index: 1; /* 연결 버튼 메뉴가 앞에 표시되도록 낮은 z-index 설정 */
 }
 
 /* 모바일 환경 최적화 */
@@ -13718,6 +14556,19 @@ body.mobile-dashboard-active {
 ========================================================== */
 
 /* 속도계 컨테이너 크기 보정 */
+/* 모바일 대시보드 메인 콘텐츠 (속도계 영역) */
+.mobile-main-content {
+  flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 */
+  display: flex;
+  flex-direction: column; /* 세로 방향 배치 (속도계 + 세그먼트 정보) */
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  min-height: 0; /* flex 아이템이 축소 가능하도록 설정 */
+  overflow: hidden; /* 넘치는 내용 숨김 */
+  padding: 10px 0; /* 상하 여백 추가 */
+}
+
 .mobile-gauge-container {
   width: 90vw;
   max-width: 500px;
@@ -13725,6 +14576,123 @@ body.mobile-dashboard-active {
   aspect-ratio: 230 / 260; 
   position: relative;
   margin: 0 auto;
+  margin-bottom: -30px; /* 세그먼트 정보를 Y 좌표 환산 230 위치로 이동 (260 - 30 = 230) */
+}
+
+/* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
+#mobile-segment-info {
+  text-align: center;
+  font-size: 0.9em;
+  color: #ccc;
+  margin-top: 0px; /* Y 좌표 환산 230px 위치로 조정 */
+  margin-bottom: 0px; /* Y 좌표 환산 230px 위치로 조정 */
+  padding: 0 10px;
+  min-height: 20px; /* 최소 높이 보장 */
+}
+
+/* 모바일 대시보드 블루투스 연결 버튼 (독립적 구동) */
+.mobile-bluetooth-connect-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: #fff;
+  font-size: 0.85em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+.mobile-bluetooth-connect-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.mobile-bluetooth-connect-btn.has-connection {
+  background: rgba(0, 212, 170, 0.2);
+  border-color: #00d4aa;
+  color: #00d4aa;
+}
+.mobile-bluetooth-connect-btn.has-connection.erg-mode-active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+.mobile-bluetooth-connect-btn.has-connection.erg-mode-active:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: #2563eb;
+}
+.mobile-bluetooth-connect-btn .mobile-bluetooth-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 모바일 대시보드 블루투스 연결 드롭다운 (독립적 구동) */
+.mobile-bluetooth-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 280px; /* 스마트 트레이너 미연결이 1줄로 표시되도록 넓이 확대 */
+  z-index: 10002; /* 세그먼트 그래프(z-index: 1)와 헤더(z-index: 10001) 위에 표시되도록 z-index 증가 */
+  display: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.mobile-bluetooth-dropdown.show {
+  display: block;
+}
+.mobile-bluetooth-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  color: #fff;
+  font-size: 0.9em;
+}
+.mobile-bluetooth-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.mobile-bluetooth-dropdown-item.connected {
+  color: #00d4aa;
+}
+.mobile-bluetooth-dropdown-item img {
+  width: 24px;
+  height: 24px;
+}
+.mobile-bluetooth-dropdown-item .status {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: #888;
+}
+.mobile-bluetooth-dropdown-item.connected .status {
+  color: #00d4aa;
+}
+
+/* 종료 메뉴 항목 스타일 (모바일 개인 훈련 대시보드 전용, 독립적 구동) */
+.mobile-bluetooth-dropdown-item-exit {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.mobile-bluetooth-dropdown-item-exit:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.mobile-bluetooth-dropdown-item-exit img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(340deg) brightness(98%) contrast(96%);
+}
+
+.mobile-bluetooth-dropdown-item-exit:hover img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(340deg) brightness(98%) contrast(96%);
 }
 
 /* 버튼 네온 스타일 (흰색 바탕용 그림자 조정) */
@@ -13768,7 +14736,9 @@ body.mobile-dashboard-active {
   min-height: 100vh; /* 폴백 */
   min-height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
   /* 터치 시 화면 전체가 바운스되는 것을 막아 터치 정확도 향상 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
+  overscroll-behavior: none;
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
   overflow: hidden;
   display: flex;
@@ -13777,6 +14747,9 @@ body.mobile-dashboard-active {
 
 #bluetoothPlayerListScreen.active {
   display: flex;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 2. 메인 컨텐츠 영역 (스크롤 가능) */
@@ -13793,12 +14766,32 @@ body.mobile-dashboard-active {
   flex: 1;
   overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
   padding-bottom: 120px;
 }
 
-/* 3. 하단 컨트롤 패널 (Floating Dock - iOS & Android 호환) */
-#bluetoothPlayerListScreen .connection-exit-container {
+/* Android Chrome 주소창 대응 (스크롤 시 주소창이 나타나거나 사라질 때) */
+@supports (height: 100dvh) {
+  /* dvh를 지원하는 브라우저 (최신 Android Chrome 포함) */
+  #bluetoothPlayerListScreen {
+    min-height: 100dvh;
+  }
+  
+  #bluetoothPlayerListScreen .connection-form-card {
+    height: 100dvh;
+  }
+}
+
+/* ==========================================================
+   [하단 버튼 인식율 향상 - iOS & Android 호환]
+   적용 화면: Join Session (Live Training Rooms는 하단 버튼 제거됨)
+   ========================================================== */
+
+/* 공통 스타일: connection-exit-container에 적용 */
+#playerListScreen .connection-exit-container {
   position: fixed;
   bottom: 0;
   left: 0;
@@ -13835,130 +14828,23 @@ body.mobile-dashboard-active {
   flex-wrap: wrap;
 }
 
-/* 버튼 스타일 최적화 (터치 인식율 향상 - iOS & Android) */
-#bluetoothPlayerListScreen .connection-exit-container .btn {
-  /* 클릭 영역 확보를 위해 min-height 설정 */
-  min-height: 50px !important;
-  min-width: 50px !important;
-  padding: 14px 24px !important;
-  font-size: 16px !important;
-  font-weight: bold !important;
-  cursor: pointer;
-  /* 터치 피드백 개선 */
-  transition: transform 0.1s ease, opacity 0.1s ease;
-  /* Android 터치 하이라이트 제거 */
-  -webkit-tap-highlight-color: transparent;
-  /* Android 터치 영역 확보 */
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-#bluetoothPlayerListScreen .connection-exit-container .btn:active {
-  transform: scale(0.96);
-  opacity: 0.9;
-}
-
-/* Android Chrome 주소창 대응 (스크롤 시 주소창이 나타나거나 사라질 때) */
-@supports (height: 100dvh) {
-  /* dvh를 지원하는 브라우저 (최신 Android Chrome 포함) */
-  #bluetoothPlayerListScreen {
-    min-height: 100dvh;
-  }
-  
-  #bluetoothPlayerListScreen .connection-form-card {
-    height: 100dvh;
-  }
-}
-
-/* 모바일 최적화 (480px 이하) - iOS & Android 공통 */
-@media (max-width: 480px) {
-  #bluetoothPlayerListScreen .connection-exit-container {
-    /* Android: Safe Area 미지원 시 16px만 적용 */
-    padding-bottom: 16px !important;
-    /* iOS: Safe Area + 16px */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
-    padding-top: 12px !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-    gap: 8px;
-  }
-  
-  #bluetoothPlayerListScreen .connection-exit-container .btn {
-    min-height: 48px !important;
-    min-width: 48px !important;
-    padding: 12px 20px !important;
-    font-size: 14px !important;
-  }
-}
-
-/* Android 특화 최적화 (제스처 네비게이션 바 대응) */
-@media (max-width: 480px) and (orientation: portrait) {
-  /* Android 세로 모드에서 제스처 바 높이 고려 */
-  #bluetoothPlayerListScreen .connection-exit-container {
-    /* Android 제스처 바 높이 대략 16-24px + 여백 16px */
-    padding-bottom: 24px !important;
-    /* iOS는 Safe Area 적용 */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
-  }
-}
-
-/* Android 가로 모드 최적화 */
-@media (max-width: 768px) and (orientation: landscape) {
-  #bluetoothPlayerListScreen .connection-exit-container {
-    /* 가로 모드에서는 주소창이 보이지 않으므로 패딩 감소 */
-    padding-bottom: 12px !important;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
-    padding-top: 10px !important;
-  }
-  
-  #bluetoothPlayerListScreen .connection-exit-container .btn {
-    min-height: 44px !important;
-    padding: 10px 18px !important;
-    font-size: 14px !important;
-  }
-}
-
-/* ==========================================================
-   [하단 버튼 인식율 향상 - iOS & Android 호환]
-   적용 화면: 무선 기기 연결, 훈련 준비, Live Training Rooms, Join Session
-   ========================================================== */
-
-/* 공통 스타일: 모든 화면의 connection-exit-container에 적용 */
-#connectionScreen .connection-exit-container,
-#trainingReadyScreen .connection-exit-container,
-#trainingRoomScreen .connection-exit-container,
-#playerListScreen .connection-exit-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  margin-top: 0 !important;
-  border-top: 1px solid rgba(34, 197, 94, 0.15); /* basecamp-card와 동일한 테두리 색상 */
-  background-color: rgba(255, 255, 255, 0.98); /* 흰색 반투명 배경 (basecamp-card와 조화) */
-  backdrop-filter: blur(25px); /* basecamp-card와 동일한 블러 효과 */
-  -webkit-backdrop-filter: blur(25px); /* iOS Safari 호환 */
-  
-  /* [핵심 기술 1] Safe Area 확보 + 추가 여백(20px) */
-  padding-bottom: 20px; /* Android 기본값 (Safe Area 미지원) */
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); /* iOS Safe Area + 여백 */
-  padding-top: 16px !important;
+/* 무선 기기 연결 화면 connection-exit-container는 fixed가 아닌 일반 배치 */
+#connectionScreen .connection-exit-container {
+  position: relative !important; /* fixed 제거 */
+  bottom: auto !important;
+  left: auto !important;
+  width: auto !important;
+  margin-top: 8px !important; /* 4px에서 8px로 조정 */
+  padding-top: 12px !important; /* 8px에서 12px로 조정 */
+  padding-bottom: 12px !important; /* 하단 여백 추가 */
   padding-left: 16px !important;
   padding-right: 16px !important;
-  
-  /* [핵심 기술 2] Z-Index 및 그림자 처리 */
-  z-index: 1000;
-  box-shadow: 0 -4px 20px rgba(34, 197, 94, 0.15); /* basecamp-card와 조화로운 녹색 계열 그림자 */
-  
-  /* [핵심 기술 3] 터치 동작 최적화 */
-  touch-action: manipulation; /* 더블탭 줌 등 딜레이 제거 */
-  -webkit-tap-highlight-color: transparent; /* Android 터치 하이라이트 제거 */
-  
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background-color: transparent !important; /* 배경 투명 */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important; /* 그림자 제거 */
+  z-index: auto !important;
 }
 
 /* 각 화면의 메인 컨테이너 높이 조정 */
@@ -13981,36 +14867,120 @@ body.mobile-dashboard-active {
 #trainingRoomScreen.active,
 #playerListScreen.active {
   display: flex;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
-/* 각 화면의 컨텐츠 영역 스크롤 가능하게 */
-#connectionScreen .connection-form-card,
-#trainingReadyScreen .connection-form-card,
-#trainingRoomScreen .connection-form-card,
+/* 각 화면의 컨텐츠 영역 - 스크롤바 제거 */
+#trainingRoomScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  height: auto !important; /* 목록 개수에 따라 자동 조정 */
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important; /* 내용이 넘치면 표시 */
+  flex-shrink: 0; /* 내용에 맞게 축소 */
+  /* 모바일 최적화: 패딩 조정 */
+  padding: 20px 15px !important;
+  /* 스크롤바 숨김 (Webkit) */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
 #playerListScreen .connection-form-card {
   display: flex;
   flex-direction: column;
   /* Android 호환: dvh 미지원 시 vh로 폴백 */
   height: 100vh; /* 폴백 */
   height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
-  overflow: hidden;
+  overflow: hidden; /* 스크롤바 제거 */
+  /* 스크롤바 숨김 (Webkit) */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+/* 훈련 준비 화면: 콘텐츠 크기에 맞춤 */
+#trainingReadyScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
-#connectionScreen .connection-device-section,
+/* Webkit 브라우저 스크롤바 숨김 */
+#trainingReadyScreen .connection-form-card::-webkit-scrollbar,
+#trainingRoomScreen .connection-form-card::-webkit-scrollbar,
+#playerListScreen .connection-form-card::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 무선 기기 연결 화면은 높이 제한 없이 콘텐츠에 맞춤 */
+#connectionScreen .connection-form-card {
+  display: flex !important;
+  flex-direction: column !important;
+  height: auto !important; /* 고정 높이 제거 */
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 #trainingReadyScreen .connection-device-section,
-#trainingRoomScreen .connection-device-section,
+/* Training Room 화면의 device-section: 베이스캠프 스타일 유지 */
+#trainingRoomScreen .connection-device-section.basecamp-device-section {
+  /* 베이스캠프 스타일 유지 (흰색 배경, 둥근 모서리, 패딩) */
+  background-color: #ffffff !important;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 20px;
+  flex: 0 0 auto !important; /* 내용에 맞게 높이 자동 조정 */
+  overflow: visible !important; /* 스크롤 불필요 - 내용에 맞게 높이 조정 */
+  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
 #playerListScreen .connection-device-section {
   flex: 1;
   overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
-  /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
-  padding-bottom: 120px;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 (최소화) */
+  padding-bottom: 100px;
+  /* 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+/* Webkit 브라우저 스크롤바 숨김 */
+#trainingReadyScreen .connection-device-section::-webkit-scrollbar,
+#trainingRoomScreen .connection-device-section::-webkit-scrollbar,
+#playerListScreen .connection-device-section::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 무선 기기 연결 화면 connection-device-section 최적화 */
+#connectionScreen .connection-device-section {
+  flex: 0 0 auto !important; /* flex: 1 제거하여 공간 차지 최소화 */
+  overflow: visible !important; /* 스크롤 불필요 */
+  /* 하단 버튼 블럭 높이만큼 padding-bottom 추가 (버튼이 가려지지 않도록) */
+  padding-bottom: 80px !important; /* 버튼 높이(50px) + padding(16px) + Safe Area(약 14px) = 약 80px */
+  margin-bottom: 0 !important;
 }
 
 /* 버튼 스타일 최적화 (터치 인식율 향상 - iOS & Android) */
 #connectionScreen .connection-exit-container .btn,
-#trainingReadyScreen .connection-exit-container .btn,
-#trainingRoomScreen .connection-exit-container .btn,
 #playerListScreen .connection-exit-container .btn {
   /* 클릭 영역 확보를 위해 min-height 설정 */
   min-height: 50px !important;
@@ -14030,8 +15000,6 @@ body.mobile-dashboard-active {
 }
 
 #connectionScreen .connection-exit-container .btn:active,
-#trainingReadyScreen .connection-exit-container .btn:active,
-#trainingRoomScreen .connection-exit-container .btn:active,
 #playerListScreen .connection-exit-container .btn:active {
   transform: scale(0.96);
   opacity: 0.9;
@@ -14041,25 +15009,27 @@ body.mobile-dashboard-active {
 @supports (height: 100dvh) {
   /* dvh를 지원하는 브라우저 (최신 Android Chrome 포함) */
   #connectionScreen,
-  #trainingReadyScreen,
   #trainingRoomScreen,
   #playerListScreen {
     min-height: 100dvh;
   }
+  #trainingReadyScreen {
+    min-height: auto;
+  }
   
   #connectionScreen .connection-form-card,
-  #trainingReadyScreen .connection-form-card,
   #trainingRoomScreen .connection-form-card,
   #playerListScreen .connection-form-card {
     height: 100dvh;
+  }
+  #trainingReadyScreen .connection-form-card {
+    height: auto !important;
   }
 }
 
 /* 모바일 최적화 (480px 이하) - iOS & Android 공통 */
 @media (max-width: 480px) {
   #connectionScreen .connection-exit-container,
-  #trainingReadyScreen .connection-exit-container,
-  #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
     /* Android: Safe Area 미지원 시 16px만 적용 */
     padding-bottom: 16px !important;
@@ -14072,13 +15042,17 @@ body.mobile-dashboard-active {
   }
   
   #connectionScreen .connection-exit-container .btn,
-  #trainingReadyScreen .connection-exit-container .btn,
-  #trainingRoomScreen .connection-exit-container .btn,
   #playerListScreen .connection-exit-container .btn {
     min-height: 48px !important;
     min-width: 48px !important;
     padding: 12px 20px !important;
     font-size: 14px !important;
+  }
+  
+  /* 모바일에서도 하단 버튼 블럭 높이만큼 공간 확보 */
+  #connectionScreen .connection-device-section {
+    /* 모바일 버튼 높이(48px) + padding(16px) + Safe Area(약 16px) = 약 80px */
+    padding-bottom: 80px !important;
   }
 }
 
@@ -14086,8 +15060,6 @@ body.mobile-dashboard-active {
 @media (max-width: 480px) and (orientation: portrait) {
   /* Android 세로 모드에서 제스처 바 높이 고려 */
   #connectionScreen .connection-exit-container,
-  #trainingReadyScreen .connection-exit-container,
-  #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
     /* Android 제스처 바 높이 대략 16-24px + 여백 16px */
     padding-bottom: 24px !important;
@@ -14099,8 +15071,6 @@ body.mobile-dashboard-active {
 /* Android 가로 모드 최적화 */
 @media (max-width: 768px) and (orientation: landscape) {
   #connectionScreen .connection-exit-container,
-  #trainingReadyScreen .connection-exit-container,
-  #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
     /* 가로 모드에서는 주소창이 보이지 않으므로 패딩 감소 */
     padding-bottom: 12px !important;
@@ -14109,8 +15079,6 @@ body.mobile-dashboard-active {
   }
   
   #connectionScreen .connection-exit-container .btn,
-  #trainingReadyScreen .connection-exit-container .btn,
-  #trainingRoomScreen .connection-exit-container .btn,
   #playerListScreen .connection-exit-container .btn {
     min-height: 44px !important;
     padding: 10px 18px !important;
@@ -14137,88 +15105,13 @@ body.mobile-dashboard-active {
 #rpeConditionModal .rpe-condition-grid {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden; /* 가로 스크롤 방지 */
   -webkit-overflow-scrolling: touch;
   /* 하단 버튼 영역 확보 */
   padding-bottom: 20px;
+  /* 상단 버튼 라인이 숨겨지지 않도록 여백 확보 (문구·버튼 사이 3% 추가) */
+  padding-top: calc(10px + 3%);
+  margin-top: calc(16px + 3%);
 }
 
-/* 모달 하단 버튼 컨테이너 - 모달 내부 블록 하단에 배치 */
-#rpeConditionModal .connection-exit-container,
-#rpeConditionModal .modal-footer,
-#rpeConditionModal .rpe-modal-footer {
-  position: relative; /* fixed에서 relative로 변경 - 모달 내부에 배치 */
-  bottom: auto; /* bottom: 0 제거 */
-  left: auto; /* left: 0 제거 */
-  width: 100%;
-  margin-top: 0 !important;
-  border-top: 1px solid rgba(34, 197, 94, 0.15); /* basecamp-card와 동일한 테두리 색상 */
-  background-color: rgba(255, 255, 255, 0.98); /* 흰색 반투명 배경 (basecamp-card와 조화) */
-  backdrop-filter: blur(25px); /* basecamp-card와 동일한 블러 효과 */
-  -webkit-backdrop-filter: blur(25px); /* iOS Safari 호환 */
-  
-  /* Safe Area 확보 (모달 내부이므로 상대적 패딩) */
-  padding-bottom: 20px;
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
-  padding-top: 16px !important;
-  padding-left: 16px !important;
-  padding-right: 16px !important;
-  
-  z-index: 1; /* 모달 내부에서만 위에 */
-  box-shadow: 0 -4px 20px rgba(34, 197, 94, 0.15); /* basecamp-card와 조화로운 녹색 계열 그림자 */
-  
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-#rpeConditionModal .connection-exit-container .btn,
-#rpeConditionModal .modal-footer .btn,
-#rpeConditionModal .rpe-modal-footer .btn {
-  min-height: 50px !important;
-  min-width: 50px !important;
-  padding: 14px 24px !important;
-  font-size: 16px !important;
-  font-weight: bold !important;
-  cursor: pointer;
-  transition: transform 0.1s ease, opacity 0.1s ease;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-#rpeConditionModal .connection-exit-container .btn:active,
-#rpeConditionModal .modal-footer .btn:active,
-#rpeConditionModal .rpe-modal-footer .btn:active {
-  transform: scale(0.96);
-  opacity: 0.9;
-}
-
-/* 모바일 최적화 */
-@media (max-width: 480px) {
-  #rpeConditionModal .connection-exit-container,
-  #rpeConditionModal .modal-footer,
-  #rpeConditionModal .rpe-modal-footer {
-    padding-bottom: 16px !important;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
-    padding-top: 12px !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-    gap: 8px;
-  }
-  
-  #rpeConditionModal .connection-exit-container .btn,
-  #rpeConditionModal .modal-footer .btn,
-  #rpeConditionModal .rpe-modal-footer .btn {
-    min-height: 48px !important;
-    min-width: 48px !important;
-    padding: 12px 20px !important;
-    font-size: 14px !important;
-  }
-}
 
