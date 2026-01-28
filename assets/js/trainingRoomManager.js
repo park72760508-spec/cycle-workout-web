@@ -378,9 +378,74 @@ async function loadTrainingRooms() {
     
     // Training Room 목록과 사용자 목록을 병렬로 로드 (성능 최적화 + 모바일 최적화)
     const [roomsResult, users] = await Promise.allSettled([
-      // Training Room 목록 가져오기 (동적 타임아웃, 동적 재시도)
+      // ✅ 데이터 소스 업그레이드: Firestore 우선 사용 (GAS → Firestore Migration)
       withRetryForTrainingRooms(
         async () => {
+          // Firestore 인스턴스 확인 (window.firestoreV9 또는 db)
+          const firestoreDb = window.firestoreV9 || (typeof db !== 'undefined' && db ? db : null);
+          
+          // Firestore가 있으면 우선 사용
+          if (firestoreDb) {
+            try {
+              console.log('[Training Room] 🔥 Firestore에서 Training Room 목록 로드 시도...');
+              
+              // Firestore v9 모듈 방식 (Modular SDK) - 동적 import
+              let collection, query, where, getDocs;
+              
+              // 이미 로드된 경우 window에서 가져오기, 없으면 동적 import
+              if (window.firebase && window.firebase.firestore) {
+                // Firebase v8 호환 모드
+                const db = window.firebase.firestore();
+                const querySnapshot = await db.collection('training_schedules')
+                  .where('status', '==', 'active')
+                  .get();
+                
+                const rooms = [];
+                querySnapshot.forEach((doc) => {
+                  rooms.push({
+                    id: doc.id,
+                    ...doc.data()
+                  });
+                });
+                
+                console.log(`[Training Room] ✅ Firestore(v8)에서 ${rooms.length}개 Room 로드 완료`);
+                return rooms;
+              } else {
+                // Firestore v9 모듈 방식
+                try {
+                  const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+                  collection = firestoreModule.collection;
+                  query = firestoreModule.query;
+                  where = firestoreModule.where;
+                  getDocs = firestoreModule.getDocs;
+                  
+                  // training_schedules 컬렉션에서 활성 상태만 필터링
+                  const schedulesRef = collection(firestoreDb, 'training_schedules');
+                  const q = query(schedulesRef, where('status', '==', 'active'));
+                  const querySnapshot = await getDocs(q);
+                  
+                  const rooms = [];
+                  querySnapshot.forEach((doc) => {
+                    rooms.push({
+                      id: doc.id,
+                      ...doc.data()
+                    });
+                  });
+                  
+                  console.log(`[Training Room] ✅ Firestore(v9)에서 ${rooms.length}개 Room 로드 완료`);
+                  return rooms;
+                } catch (importError) {
+                  console.warn('[Training Room] ⚠️ Firestore v9 모듈 import 실패:', importError);
+                  throw importError;
+                }
+              }
+            } catch (firestoreError) {
+              console.warn('[Training Room] ⚠️ Firestore 로드 실패, GAS로 폴백:', firestoreError);
+              // Firestore 실패 시 GAS로 폴백
+            }
+          }
+          
+          // GAS API 폴백 (Firestore가 없거나 실패한 경우)
           const url = `${window.GAS_URL}?action=listTrainingSchedules`;
           const response = await fetchWithTimeout(url, {}, baseTimeout); // 동적 타임아웃
           
@@ -394,6 +459,7 @@ async function loadTrainingRooms() {
             throw new Error(result.error || 'Training Room 목록을 불러오는데 실패했습니다');
           }
           
+          console.log(`[Training Room] ✅ GAS API에서 ${result.items?.length || 0}개 Room 로드 완료`);
           return result.items || [];
         },
         maxRetries, // 동적 재시도 횟수
@@ -600,85 +666,69 @@ function renderTrainingRoomList(rooms, users = []) {
     }
   }
 
-  listContainer.innerHTML = rooms.map((room, index) => {
+  // ✅ 성능 최적화: 사용자 목록을 Map으로 변환 (O(N^2) → O(1))
+  // userId를 Key로 하는 Map 생성 (String으로 통일하여 숫자형/문자형 ID 불일치 문제 해결)
+  const userMap = new Map();
+  if (users && users.length > 0) {
+    users.forEach(u => {
+      // 여러 필드에서 ID 추출 (id, userId, uid)
+      const ids = [
+        String(u.id || '').trim(),
+        String(u.userId || '').trim(),
+        String(u.uid || '').trim()
+      ].filter(id => id !== ''); // 빈 문자열 제거
+      
+      // 각 ID를 Key로 사용하여 Map에 저장 (대소문자 구분 없이)
+      ids.forEach(id => {
+        const idLower = id.toLowerCase();
+        // 이미 존재하지 않으면 저장 (첫 번째 매칭 우선)
+        if (!userMap.has(idLower)) {
+          userMap.set(idLower, u);
+        }
+        // 원본 ID도 저장 (정확한 매칭용)
+        if (!userMap.has(id)) {
+          userMap.set(id, u);
+        }
+      });
+    });
+    console.log(`[Training Room] ✅ 사용자 Map 생성 완료: ${userMap.size}개 키 (${users.length}명 사용자)`);
+  }
+
+  // 모바일 환경 감지
+  const isMobile = isMobileDeviceForTrainingRooms();
+  
+  // ✅ UI 블로킹 방지: DocumentFragment 사용하여 DOM 조작 최소화
+  const fragment = document.createDocumentFragment();
+  const tempDiv = document.createElement('div');
+  
+  // HTML 문자열 생성
+  const htmlStrings = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
     
-    // user_id로 코치 이름 찾기 (Users 테이블의 id와 매칭)
+    // user_id로 코치 이름 찾기 (Map 사용 - O(1) 조회)
     const userId = room.user_id || room.userId;
     let coachName = '';
     
-    if (userId && users && users.length > 0) {
-      // 다양한 ID 형식에 대응 (문자열, 숫자 등) - 모바일 최적화
+    if (userId && userMap.size > 0) {
       const userIdStr = String(userId).trim();
-      const userIdNum = Number(userIdStr);
-      const isNumeric = !isNaN(userIdNum);
+      const userIdLower = userIdStr.toLowerCase();
       
-      const coach = users.find(u => {
-        // 여러 필드에서 ID 확인 (id, userId, uid 등)
-        const userIds = [
-          String(u.id || '').trim(),
-          String(u.userId || '').trim(),
-          String(u.uid || '').trim()
-        ];
-        
-        // 정확한 매칭 또는 숫자 변환 후 매칭
-        return userIds.some(uid => {
-          const uidTrimmed = uid.trim();
-          
-          // 1. 정확한 문자열 매칭
-          if (uidTrimmed === userIdStr) {
-            return true;
-          }
-          
-          // 2. 숫자로 변환 가능한 경우 숫자 비교
-          if (isNumeric) {
-            const uidNum = Number(uidTrimmed);
-            if (!isNaN(uidNum) && userIdNum === uidNum) {
-              return true;
-            }
-          }
-          
-          // 3. 대소문자 무시 매칭 (문자열 ID의 경우)
-          if (uidTrimmed.toLowerCase() === userIdStr.toLowerCase()) {
-            return true;
-          }
-          
-          return false;
-        });
-      });
+      // Map에서 즉시 조회 (O(1))
+      const coach = userMap.get(userIdStr) || userMap.get(userIdLower);
       
-      coachName = coach ? (coach.name || coach.userName || coach.displayName || '') : '';
-      
-      // 디버깅 로그 (매칭 실패 시 - 모바일에서 더 상세한 로그)
-      if (!coachName && userId) {
-        const isMobile = isMobileDeviceForTrainingRooms();
-        if (isMobile) {
-          console.warn(`[Training Room] ⚠️ [모바일] Coach를 찾을 수 없음 - room.user_id: ${userId} (타입: ${typeof userId}, 문자열: "${userIdStr}", 숫자: ${isNumeric ? userIdNum : 'N/A'}), users 배열 길이: ${users.length}`);
-          if (users.length > 0) {
-            console.log('[Training Room] [모바일] 사용자 ID 샘플 (처음 10개):', users.slice(0, 10).map(u => ({
-              id: u.id,
-              idType: typeof u.id,
-              userId: u.userId,
-              userIdType: typeof u.userId,
-              uid: u.uid,
-              uidType: typeof u.uid,
-              name: u.name
-            })));
-          }
-        } else {
-          console.warn(`[Training Room] ⚠️ Coach를 찾을 수 없음 - room.user_id: ${userId} (타입: ${typeof userId}), users 배열 길이: ${users.length}`);
-          if (users.length > 0) {
-            console.log('[Training Room] 사용자 ID 샘플 (처음 5개):', users.slice(0, 5).map(u => ({
-              id: u.id,
-              userId: u.userId,
-              uid: u.uid,
-              name: u.name
-            })));
-          }
+      if (coach) {
+        coachName = coach.name || coach.userName || coach.displayName || '';
+        if (coachName) {
+          console.log(`[Training Room] ✅ Coach 매칭 성공 (Map) - room.user_id: ${userId}, coach.name: ${coachName}`);
         }
-      } else if (coachName) {
-        console.log(`[Training Room] ✅ Coach 매칭 성공 - room.user_id: ${userId}, coach.name: ${coachName}`);
+      } else {
+        // 디버깅 로그 (매칭 실패 시)
+        if (isMobile) {
+          console.warn(`[Training Room] ⚠️ [모바일] Coach를 찾을 수 없음 - room.user_id: ${userId}, Map 크기: ${userMap.size}`);
+        } else {
+          console.warn(`[Training Room] ⚠️ Coach를 찾을 수 없음 - room.user_id: ${userId}, Map 크기: ${userMap.size}`);
+        }
       }
     } else if (userId) {
       console.warn(`[Training Room] ⚠️ 사용자 목록이 비어있어 Coach를 찾을 수 없음 - room.user_id: ${userId}`);
@@ -709,7 +759,26 @@ function renderTrainingRoomList(rooms, users = []) {
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
-  }).join('');
+  });
+  
+  // 모바일 환경에서 requestAnimationFrame 사용하여 렌더링 작업을 메인 스레드 대기열에 배치
+  if (isMobile) {
+    requestAnimationFrame(() => {
+      tempDiv.innerHTML = htmlStrings.join('');
+      while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+      }
+      listContainer.innerHTML = '';
+      listContainer.appendChild(fragment);
+    });
+  } else {
+    tempDiv.innerHTML = htmlStrings.join('');
+    while (tempDiv.firstChild) {
+      fragment.appendChild(tempDiv.firstChild);
+    }
+    listContainer.innerHTML = '';
+    listContainer.appendChild(fragment);
+  }
 
   // 모바일 터치 이벤트를 위한 명시적 이벤트 리스너 추가
   // 모든 카드에 터치 이벤트 리스너 추가 (모바일에서 onclick이 작동하지 않을 수 있음)
@@ -1254,14 +1323,14 @@ async function renderPlayerList() {
         // Firebase에서 직접 가져오기
         const sessionId = roomId;
         
-        // users 정보 가져오기
-        const usersRef = db.ref(`sessions/${sessionId}/users`);
-        const usersSnapshot = await usersRef.once('value');
-        const usersData = usersSnapshot.val() || {};
+        // ✅ 성능 최적화: 병렬 처리 (Promise.all 사용)
+        // users와 devices 정보를 동시에 가져오기
+        const [usersSnapshot, devicesSnapshot] = await Promise.all([
+          db.ref(`sessions/${sessionId}/users`).once('value'),
+          db.ref(`sessions/${sessionId}/devices`).once('value')
+        ]);
         
-        // devices 정보 가져오기
-        const devicesRef = db.ref(`sessions/${sessionId}/devices`);
-        const devicesSnapshot = await devicesRef.once('value');
+        const usersData = usersSnapshot.val() || {};
         const devicesData = devicesSnapshot.val() || {};
         
         console.log('[Player List] Firebase users 데이터:', usersData);
@@ -1762,7 +1831,29 @@ function renderTrainingRoomListForModal(rooms, users = []) {
     listContainer.removeEventListener('click', existingClickHandler, false);
   }
 
-  listContainer.innerHTML = rooms.map((room, index) => {
+  // ✅ 성능 최적화: 사용자 목록을 Map으로 변환 (O(N^2) → O(1))
+  const userMap = new Map();
+  if (users && users.length > 0) {
+    users.forEach(u => {
+      const id = String(u.id || '').trim();
+      if (id !== '') {
+        const idLower = id.toLowerCase();
+        if (!userMap.has(idLower)) {
+          userMap.set(idLower, u);
+        }
+        if (!userMap.has(id)) {
+          userMap.set(id, u);
+        }
+      }
+    });
+    console.log(`[Training Room Modal] ✅ 사용자 Map 생성 완료: ${userMap.size}개 키 (${users.length}명 사용자)`);
+  }
+
+  // ✅ UI 블로킹 방지: DocumentFragment 사용
+  const fragment = document.createDocumentFragment();
+  const tempDiv = document.createElement('div');
+  
+  const htmlStrings = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
     const roomIdStr = String(room.id);
@@ -1774,21 +1865,21 @@ function renderTrainingRoomListForModal(rooms, users = []) {
       authenticatedTrainingRooms.has(roomIdStr)
     );
     
-    // user_id로 코치 이름 찾기 (Users 테이블의 id와 매칭)
+    // user_id로 코치 이름 찾기 (Map 사용 - O(1) 조회)
     const userId = room.user_id || room.userId;
     let coachName = '';
     
-    if (userId && users.length > 0) {
-      const coach = users.find(u => {
-        const userIdStr = String(userId);
-        const userStr = String(u.id || '');
-        return userIdStr === userStr;
-      });
+    if (userId && userMap.size > 0) {
+      const userIdStr = String(userId).trim();
+      const userIdLower = userIdStr.toLowerCase();
+      
+      // Map에서 즉시 조회 (O(1))
+      const coach = userMap.get(userIdStr) || userMap.get(userIdLower);
       coachName = coach ? (coach.name || '') : '';
       
       // 디버깅 로그
       if (!coachName && userId) {
-        console.log(`[Training Room Modal] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+        console.log(`[Training Room Modal] Coach를 찾을 수 없음 - user_id: ${userId}, Map 크기: ${userMap.size}`);
       }
     }
     
@@ -1840,7 +1931,27 @@ function renderTrainingRoomListForModal(rooms, users = []) {
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
-  }).join('');
+  });
+  
+  // DocumentFragment를 사용하여 DOM 조작 최소화
+  const isMobile = isMobileDeviceForTrainingRooms();
+  if (isMobile) {
+    requestAnimationFrame(() => {
+      tempDiv.innerHTML = htmlStrings.join('');
+      while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+      }
+      listContainer.innerHTML = '';
+      listContainer.appendChild(fragment);
+    });
+  } else {
+    tempDiv.innerHTML = htmlStrings.join('');
+    while (tempDiv.firstChild) {
+      fragment.appendChild(tempDiv.firstChild);
+    }
+    listContainer.innerHTML = '';
+    listContainer.appendChild(fragment);
+  }
 
   // ========== 최고 수준의 클릭 차단 로직 ==========
   // 1. Capturing phase에서 차단 (가장 먼저 실행)
