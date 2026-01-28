@@ -5110,7 +5110,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // 뒤로 가기 버튼 개선 (소리 효과 제거, 클릭 인식 강화) - 먼저 처리
     if (typeof window.enhanceBackButton === 'function') {
-      window.enhanceBackButton('btnBackFromUserManual');
       window.enhanceBackButton('btnBackFromMyCareer');
     } else {
       console.warn('⚠️ enhanceBackButton 함수를 찾을 수 없습니다.');
@@ -5140,13 +5139,13 @@ document.addEventListener("DOMContentLoaded", () => {
       mutation.addedNodes.forEach(function(node) {
         if (node.nodeType === 1) { // Element node
           // 추가된 노드가 뒤로 가기 버튼인 경우
-          if (node.id === 'btnBackFromUserManual' || node.id === 'btnBackFromMyCareer') {
+          if (node.id === 'btnBackFromMyCareer') {
             if (typeof window.enhanceBackButton === 'function') {
               window.enhanceBackButton(node.id);
             }
           }
           // 추가된 노드 내부의 뒤로 가기 버튼도 확인
-          const backButtons = node.querySelectorAll && node.querySelectorAll('#btnBackFromUserManual, #btnBackFromMyCareer');
+          const backButtons = node.querySelectorAll && node.querySelectorAll('#btnBackFromMyCareer');
           if (backButtons) {
             backButtons.forEach(button => {
               if (typeof window.enhanceBackButton === 'function') {
