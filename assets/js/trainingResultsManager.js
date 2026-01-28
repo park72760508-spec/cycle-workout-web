@@ -452,7 +452,9 @@ async function getUnappliedStravaActivities(userId, userCreatedDate = '') {
           tss: Number(data.tss || 0),
           date: activityDate,
           title: data.title || '',
-          created_at: data.created_at || ''
+          created_at: data.created_at || '',
+          distance_km: Number(data.distance_km || 0),
+          source: data.source || 'strava'
         });
       }
     });

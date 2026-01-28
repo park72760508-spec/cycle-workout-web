@@ -518,11 +518,20 @@ async function fetchAndProcessStravaData() {
               // ✅ 수정: 포인트 적립은 가입일 이후 활동만 적용
               const activityTss = mappedActivity.tss || 0;
               const isAfterCreatedDate = !userCreatedDate || !dateStr || dateStr >= userCreatedDate;
+              const distanceKm = mappedActivity.distance_km || 0;
+              const isStravaSource = mappedActivity.source === 'strava';
               
-              // 같은 날짜에 stelvio 로그가 없고, 가입일 이후 활동인 경우에만 TSS 누적
-              if (!stelvioLogDates.has(dateStr) && isAfterCreatedDate) {
+              // 포인트 적립 조건:
+              // 1. 같은 날짜에 stelvio 로그가 없고
+              // 2. 가입일 이후 활동이고
+              // 3. source가 'strava'이고 distance_km이 0이 아닌 경우에만 TSS 누적
+              const shouldAccumulateTss = !stelvioLogDates.has(dateStr) && 
+                                         isAfterCreatedDate && 
+                                         !(isStravaSource && distanceKm === 0);
+              
+              if (shouldAccumulateTss) {
                 totalTss += activityTss;
-                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss}, 날짜: ${dateStr}, 생성일: ${userCreatedDate || '미설정'})`);
+                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss}, 날짜: ${dateStr}, 거리: ${distanceKm}km, 생성일: ${userCreatedDate || '미설정'})`);
                 
                 // TSS 적립 완료 표시
                 if (typeof window.markStravaActivityTssApplied === 'function') {
@@ -536,8 +545,10 @@ async function fetchAndProcessStravaData() {
               } else {
                 if (!isAfterCreatedDate) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 가입일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
-                } else {
+                } else if (stelvioLogDates.has(dateStr)) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 같은 날짜에 stelvio 로그 존재): ${actId}`);
+                } else if (isStravaSource && distanceKm === 0) {
+                  console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - source가 'strava'이고 distance_km이 0): ${actId} (거리: ${distanceKm}km)`);
                 }
                 // TSS를 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
                 if (typeof window.markStravaActivityTssApplied === 'function') {
@@ -556,6 +567,8 @@ async function fetchAndProcessStravaData() {
               if (unapplied) {
                 // ✅ 수정: 포인트 적립은 가입일 이후 활동만 적용
                 const isAfterCreatedDate = !userCreatedDate || !dateStr || dateStr >= userCreatedDate;
+                const distanceKm = unapplied.distance_km || 0;
+                const isStravaSource = unapplied.source === 'strava';
                 
                 if (!isAfterCreatedDate) {
                   console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외 (가입일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
@@ -570,10 +583,15 @@ async function fetchAndProcessStravaData() {
                   continue;
                 }
                 
-                // 같은 날짜에 stelvio 로그가 없고, 가입일 이후 활동인 경우에만 TSS 누적
-                if (!stelvioLogDates.has(dateStr)) {
+                // 포인트 적립 조건:
+                // 1. 같은 날짜에 stelvio 로그가 없고
+                // 2. source가 'strava'이고 distance_km이 0이 아닌 경우에만 TSS 누적
+                const shouldAccumulateTss = !stelvioLogDates.has(dateStr) && 
+                                           !(isStravaSource && distanceKm === 0);
+                
+                if (shouldAccumulateTss) {
                   totalTss += unapplied.tss;
-                  console.log(`[fetchAndProcessStravaData] ✅ 기존 활동 TSS 누적: ${actId} (TSS: ${unapplied.tss}, 날짜: ${dateStr})`);
+                  console.log(`[fetchAndProcessStravaData] ✅ 기존 활동 TSS 누적: ${actId} (TSS: ${unapplied.tss}, 날짜: ${dateStr}, 거리: ${distanceKm}km)`);
                   
                   // TSS 적립 완료 표시
                   if (typeof window.markStravaActivityTssApplied === 'function') {
@@ -584,8 +602,12 @@ async function fetchAndProcessStravaData() {
                     }
                   }
                 } else {
-                  console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외: ${actId} - 같은 날짜에 stelvio 로그 존재`);
-                  // stelvio 로그가 있는 날짜는 TSS를 적립하지 않으므로 tss_applied를 true로 표시
+                  if (stelvioLogDates.has(dateStr)) {
+                    console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외: ${actId} - 같은 날짜에 stelvio 로그 존재`);
+                  } else if (isStravaSource && distanceKm === 0) {
+                    console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외: ${actId} - source가 'strava'이고 distance_km이 0 (거리: ${distanceKm}km)`);
+                  }
+                  // TSS를 적립하지 않으므로 tss_applied를 true로 표시
                   if (typeof window.markStravaActivityTssApplied === 'function') {
                     try {
                       await window.markStravaActivityTssApplied(userId, actId);
