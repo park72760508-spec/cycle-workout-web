@@ -11869,6 +11869,60 @@ function closeSettingsModal() {
   }
 }
 
+// Privacy Policy 모달 관련 함수
+async function openPrivacyPolicyModal() {
+  const modal = document.getElementById('privacyPolicyModal');
+  const contentDiv = document.getElementById('privacyPolicyContent');
+  
+  if (!modal || !contentDiv) {
+    console.error('Privacy Policy 모달을 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 모달 표시
+  modal.classList.remove('hidden');
+  
+  // privacy.html 내용 로드
+  try {
+    const response = await fetch('/privacy.html');
+    if (!response.ok) {
+      throw new Error('Privacy Policy 파일을 불러올 수 없습니다.');
+    }
+    const html = await response.text();
+    
+    // HTML 파싱하여 body 내용만 추출
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const bodyContent = doc.body.innerHTML;
+    
+    // 스타일 적용된 컨테이너로 감싸서 표시
+    contentDiv.innerHTML = `
+      <div style="max-width: 800px; margin: 0 auto;">
+        ${bodyContent}
+      </div>
+    `;
+  } catch (error) {
+    console.error('Privacy Policy 로드 오류:', error);
+    contentDiv.innerHTML = `
+      <div style="text-align: center; color: #dc2626; padding: 20px;">
+        <p>Privacy Policy를 불러오는 중 오류가 발생했습니다.</p>
+        <p style="font-size: 14px; color: #999; margin-top: 10px;">${error.message}</p>
+      </div>
+    `;
+  }
+}
+
+function closePrivacyPolicyModal() {
+  const modal = document.getElementById('privacyPolicyModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// 전역 함수로 등록
+window.openPrivacyPolicyModal = openPrivacyPolicyModal;
+window.closePrivacyPolicyModal = closePrivacyPolicyModal;
+
 function loadGeminiApiKeyToSettings() {
   const apiKey = localStorage.getItem('geminiApiKey');
   const apiKeyInput = document.getElementById('settingsGeminiApiKey');
