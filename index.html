@@ -1695,7 +1695,21 @@
           </div>
 
           <div class="connection-device-section basecamp-device-section">
-            <h3 class="mb-15 basecamp-status-bar">사용자 메뉴얼</h3>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+              <button
+                class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all"
+                onclick="showScreen('basecampScreen')"
+                style="padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
+                onmouseover="this.style.backgroundColor='#f3f4f6'"
+                onmouseout="this.style.backgroundColor='transparent'"
+                aria-label="뒤로 가기"
+              >
+                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+              </button>
+              <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0;">사용자 메뉴얼</h3>
+            </div>
             <div style="padding: 20px; text-align: left; color: #333; line-height: 1.8;">
               <h4 style="color: #15803d; margin-bottom: 15px; font-size: 18px;">📖 사용 가이드</h4>
               <div style="margin-bottom: 25px;">
@@ -1771,14 +1785,6 @@
                 </p>
               </div>
             </div>
-          </div>
-
-          <!-- 뒤로 가기 버튼 -->
-          <div class="connection-exit-container">
-            <button class="btn btn-exit-inline enhanced-back-button" id="btnBackFromUserManual" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
-              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-              <span>뒤로 가기</span>
-            </button>
           </div>
         </div>
       </div>
