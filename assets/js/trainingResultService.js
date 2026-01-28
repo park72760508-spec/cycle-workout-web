@@ -266,15 +266,15 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         expiryDateAsDate = addDaysToDate(expiryDateAsDate, 1);
       }
       
-      // Firestore Timestamp로 변환
-      newExpiryDate = Timestamp.fromDate(expiryDateAsDate);
+      // YYYY-MM-DD 형식으로 변환 (Timestamp 대신 문자열 형식 사용)
+      newExpiryDate = expiryDateAsDate.toISOString().split('T')[0];
       
       console.log('[saveTrainingSession] 포인트 및 구독 연장:', {
         earnedPoints,
         newAccPoints,
         newRemPoints,
         extendedDays,
-        newExpiryDate: expiryDateAsDate.toISOString()
+        newExpiryDate: newExpiryDate
       });
       
       // 5. 사용자 정보 업데이트 (Transaction 내에서)
@@ -368,7 +368,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       extendedDays: result.extendedDays,
       newRemPoints: result.userUpdateData.rem_points,
       newAccPoints: result.userUpdateData.acc_points,
-      newExpiryDate: result.userUpdateData.expiry_date.toDate().toISOString(),
+      newExpiryDate: result.userUpdateData.expiry_date,
       trainingLogId: trainingLogDocRef.id
     });
     
@@ -378,7 +378,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       extendedDays: result.extendedDays,
       newRemPoints: result.userUpdateData.rem_points,
       newAccPoints: result.userUpdateData.acc_points,
-      newExpiryDate: result.userUpdateData.expiry_date.toDate().toISOString(),
+      newExpiryDate: result.userUpdateData.expiry_date,
       trainingLogId: trainingLogDocRef.id
     };
     
