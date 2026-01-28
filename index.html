@@ -1592,10 +1592,12 @@
             <div class="auth-input-group">
               <label for="registerBirthYearInput" class="auth-label-left">생년 *</label>
               <input 
-                type="number" 
+                type="text" 
                 id="registerBirthYearInput" 
                 placeholder="1972" 
-                min="1900"
+                maxlength="4"
+                pattern="[0-9]{4}"
+                inputmode="numeric"
                 required
               >
             </div>
@@ -4975,8 +4977,9 @@
         return;
       }
       
-      if (!birthYear || birthYear < 1900) {
-        showRegisterStatus('생년을 올바르게 입력해주세요. (1900년 이상)', 'error');
+      const currentYear = new Date().getFullYear();
+      if (!birthYear || birthYear < 1900 || birthYear > currentYear) {
+        showRegisterStatus(`생년을 올바르게 입력해주세요. (1900년 ~ ${currentYear}년)`, 'error');
         birthYearInput.focus();
         return;
       }
@@ -5310,6 +5313,45 @@
         // 입력 시 숫자가 아닌 문자 제거 (추가 보안)
         registerPasswordInput.addEventListener('input', (e) => {
           e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+      }
+      
+      // 사용자 등록 생년 입력 필드 - 숫자만 입력되고 4자리까지만 입력되도록 제한
+      const registerBirthYearInput = document.getElementById('registerBirthYearInput');
+      if (registerBirthYearInput) {
+        // 숫자만 입력되도록 제한
+        registerBirthYearInput.addEventListener('keypress', (e) => {
+          // 숫자(0-9) 또는 Enter 키만 허용
+          if (!/[0-9]/.test(e.key) && e.key !== 'Enter') {
+            e.preventDefault();
+            return false;
+          }
+          // 4자리까지만 입력되도록 제한
+          if (registerBirthYearInput.value.length >= 4 && e.key !== 'Enter' && !e.key.match(/^(Backspace|Delete|ArrowLeft|ArrowRight|Tab)$/)) {
+            e.preventDefault();
+            return false;
+          }
+          if (e.key === 'Enter') {
+            registerSubmitBtn?.click();
+          }
+        });
+        
+        // 입력 시 4자리까지만 유지
+        registerBirthYearInput.addEventListener('input', (e) => {
+          const value = e.target.value.replace(/[^0-9]/g, ''); // 숫자가 아닌 문자 제거
+          if (value.length > 4) {
+            e.target.value = value.substring(0, 4); // 4자리까지만 유지
+          } else {
+            e.target.value = value;
+          }
+        });
+        
+        // 붙여넣기 시 숫자가 아닌 문자 제거하고 4자리까지만 유지
+        registerBirthYearInput.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+          const numericOnly = pastedText.replace(/[^0-9]/g, '').substring(0, 4); // 숫자만 추출하고 4자리까지만
+          registerBirthYearInput.value = numericOnly;
         });
       }
       
