@@ -4482,6 +4482,32 @@
       };
     }
 
+    // 화면 회전 및 리사이즈 시 달력 재렌더링 (테두리 박스 크기 원복)
+    let resizeTimer = null;
+    function handleOrientationChange() {
+      // 디바운싱: 빠른 연속 호출 방지
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      
+      resizeTimer = setTimeout(async () => {
+        const profileScreen = document.getElementById('profileScreen');
+        if (profileScreen && profileScreen.classList.contains('active')) {
+          // 프로필 화면이 활성화되어 있고 달력이 초기화되어 있으면 재렌더링
+          if (miniCalendarState.currentUserId) {
+            console.log('[MiniCalendar] 화면 회전/리사이즈 감지 - 달력 재렌더링');
+            // 약간의 지연 후 재렌더링 (브라우저가 레이아웃 재계산 완료 후)
+            await new Promise(resolve => setTimeout(resolve, 50));
+            await renderMiniCalendar();
+          }
+        }
+      }, 150); // 150ms 디바운싱
+    }
+    
+    // 화면 회전 및 리사이즈 이벤트 리스너 등록
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('resize', handleOrientationChange);
+    
     // 전역 함수로 노출
     window.miniCalendarNavigate = miniCalendarNavigate;
     window.showTrainingDetailModal = showTrainingDetailModal;
