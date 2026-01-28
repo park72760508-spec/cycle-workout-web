@@ -2392,6 +2392,8 @@ button[aria-disabled="true"] {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  width: 100%; /* 화면 크기 변경 시 전체 너비 사용 */
+  box-sizing: border-box;
 }
 
 .mini-calendar-day {
@@ -2406,6 +2408,8 @@ button[aria-disabled="true"] {
   position: relative;
   transition: all 0.2s ease;
   padding: 1px 2px; /* 훈련 표시 상자 1/4로 축소 (기존 4px 8px -> 1px 2px) */
+  min-width: 0; /* 화면 크기 변경 시 크기 재계산 보장 */
+  box-sizing: border-box; /* padding 포함 크기 계산 */
 }
 
 .mini-calendar-day.other-month {
