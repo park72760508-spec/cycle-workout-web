@@ -3078,11 +3078,6 @@
       <div id="mobile-bike-id-display" class="mobile-bike-badge" style="background-color: #00d4aa; color: #000; padding: 5px 12px; border-radius: 15px; font-weight: bold; font-size: 1.1em; display: inline-block;">Bike ?</div>
       <div id="mobile-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
       <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
-        <!-- 사용자 정보 수정 버튼 -->
-        <button id="mobileDashboardEditUserBtn" class="mobile-bluetooth-connect-btn" onclick="if (typeof window.currentUser !== 'undefined' && window.currentUser && window.currentUser.id && typeof editUser === 'function') { editUser(window.currentUser.id); } else if (typeof getViewerId === 'function') { const viewerId = getViewerId(); if (viewerId && typeof editUser === 'function') { editUser(viewerId); } } else { console.warn('사용자 정보를 불러올 수 없습니다.'); }" title="사용자 정보 수정" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 6px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 14px; transition: all 0.2s;">
-          <img src="assets/img/check-ok.png" alt="수정" style="width: 16px; height: 16px;">
-          <span>수정</span>
-        </button>
         <div style="position: relative;">
           <button id="mobileBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleMobileBluetoothDropdown()">
             <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
