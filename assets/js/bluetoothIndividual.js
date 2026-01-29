@@ -867,6 +867,24 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => 
         // 사용자 이름 저장
         if (data.userName) {
             currentUserInfo.userName = String(data.userName);
+            // window.currentUser도 업데이트 (없으면 생성)
+            if (!window.currentUser) {
+                window.currentUser = {};
+            }
+            window.currentUser.name = String(data.userName);
+            // localStorage에도 저장
+            try {
+                const storedUser = localStorage.getItem('currentUser');
+                if (storedUser) {
+                    const userData = JSON.parse(storedUser);
+                    userData.name = String(data.userName);
+                    localStorage.setItem('currentUser', JSON.stringify(userData));
+                } else {
+                    localStorage.setItem('currentUser', JSON.stringify({ name: String(data.userName) }));
+                }
+            } catch (e) {
+                console.warn('[BluetoothIndividual] localStorage 저장 실패:', e);
+            }
         }
         
         // 사용자 FTP 저장
@@ -879,7 +897,7 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => 
             currentUserInfo.weight = Number(data.weight);
         }
         
-        // 사용자 이름 업데이트
+        // 사용자 이름 업데이트 (강화된 함수 사용)
         updateUserName(data);
         
         // TARGET 파워 업데이트
@@ -887,29 +905,175 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => 
     }
 });
 
-// 사용자 이름 업데이트 함수
+// Firebase에서 사용자 정보 실시간 업데이트 감지 (추가 보강)
+// sessions/{SESSION_ID}/users/{myTrackId}의 변경사항을 실시간으로 감지
+db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data && data.userName) {
+        // 사용자 이름이 업데이트되면 즉시 반영
+        const userName = String(data.userName).trim();
+        if (userName && userName !== 'null' && userName !== 'undefined') {
+            currentUserInfo.userName = userName;
+            if (!window.currentUser) {
+                window.currentUser = {};
+            }
+            window.currentUser.name = userName;
+            
+            // UI 업데이트
+            const bikeIdDisplay = document.getElementById('bike-id-display');
+            if (bikeIdDisplay && bikeIdDisplay.innerText.startsWith('Track ')) {
+                bikeIdDisplay.innerText = userName;
+                console.log('[BluetoothIndividual] ✅ 사용자 이름 실시간 업데이트:', userName);
+            }
+        }
+    }
+});
+
+// 사용자 이름 업데이트 함수 (강화된 버전 - 여러 소스에서 사용자 정보 확인)
 function updateUserName(data) {
     const bikeIdDisplay = document.getElementById('bike-id-display');
-    if (!bikeIdDisplay) return;
-    
-    // 사용자 이름 추출 (우선순위: data.userName > window.currentUser.name > null)
-    let userName = null;
-    if (data && data.userName) {
-        userName = String(data.userName).trim();
-    } else if (window.currentUser && window.currentUser.name) {
-        userName = String(window.currentUser.name).trim();
+    if (!bikeIdDisplay) {
+        console.warn('[BluetoothIndividual] bike-id-display 요소를 찾을 수 없습니다.');
+        return;
     }
     
-    if (userName) {
+    // 사용자 이름 추출 (우선순위: data.userName > currentUserInfo.userName > window.currentUser.name > localStorage > null)
+    let userName = null;
+    
+    // 1순위: Firebase에서 받은 data.userName
+    if (data && data.userName) {
+        userName = String(data.userName).trim();
+        console.log('[BluetoothIndividual] 사용자 이름 (Firebase data):', userName);
+    }
+    // 2순위: currentUserInfo.userName (이미 저장된 값)
+    else if (currentUserInfo && currentUserInfo.userName) {
+        userName = String(currentUserInfo.userName).trim();
+        console.log('[BluetoothIndividual] 사용자 이름 (currentUserInfo):', userName);
+    }
+    // 3순위: window.currentUser.name
+    else if (window.currentUser && window.currentUser.name) {
+        userName = String(window.currentUser.name).trim();
+        console.log('[BluetoothIndividual] 사용자 이름 (window.currentUser):', userName);
+    }
+    // 4순위: localStorage에서 가져오기
+    else {
+        try {
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+                const userData = JSON.parse(storedUser);
+                if (userData && userData.name) {
+                    userName = String(userData.name).trim();
+                    // window.currentUser도 업데이트
+                    if (!window.currentUser) {
+                        window.currentUser = userData;
+                    }
+                    console.log('[BluetoothIndividual] 사용자 이름 (localStorage):', userName);
+                }
+            }
+        } catch (e) {
+            console.warn('[BluetoothIndividual] localStorage 사용자 정보 파싱 실패:', e);
+        }
+    }
+    
+    if (userName && userName !== 'null' && userName !== 'undefined') {
         bikeIdDisplay.innerText = userName;
-        console.log('[BluetoothIndividual] 사용자 이름 표시:', userName);
+        console.log('[BluetoothIndividual] ✅ 사용자 이름 표시 완료:', userName);
     } else {
-        // 이름이 없으면 Track 번호 표시
+        // 이름이 없으면 Track 번호 표시 (임시)
         bikeIdDisplay.innerText = `Track ${myTrackId}`;
+        console.warn('[BluetoothIndividual] ⚠️ 사용자 이름을 찾을 수 없어 Track 번호 표시:', myTrackId);
+        
+        // 사용자 정보를 다시 시도하여 로드 (비동기)
+        setTimeout(() => {
+            loadUserInfoAndUpdateName();
+        }, 500);
     }
     
     // 상단 사용자 이름 라벨의 나가기 기능 제거 (종료 메뉴로 이동)
     // 클릭 이벤트 제거 - 나가기 기능은 종료 메뉴로 이동
+}
+
+// 사용자 정보를 로드하고 이름을 업데이트하는 함수 (재시도 로직 포함)
+async function loadUserInfoAndUpdateName() {
+    const bikeIdDisplay = document.getElementById('bike-id-display');
+    if (!bikeIdDisplay) return;
+    
+    // 이미 사용자 이름이 표시되어 있으면 중단
+    if (bikeIdDisplay.innerText && !bikeIdDisplay.innerText.startsWith('Track ')) {
+        console.log('[BluetoothIndividual] 이미 사용자 이름이 표시되어 있음:', bikeIdDisplay.innerText);
+        return;
+    }
+    
+    let userName = null;
+    
+    // 1순위: localStorage에서 가져오기
+    try {
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedUser) {
+            const userData = JSON.parse(storedUser);
+            if (userData && userData.name) {
+                userName = String(userData.name).trim();
+                if (!window.currentUser) {
+                    window.currentUser = userData;
+                }
+                console.log('[BluetoothIndividual] 사용자 이름 로드 (localStorage):', userName);
+            }
+        }
+    } catch (e) {
+        console.warn('[BluetoothIndividual] localStorage 사용자 정보 파싱 실패:', e);
+    }
+    
+    // 2순위: window.currentUser 확인
+    if (!userName && window.currentUser && window.currentUser.name) {
+        userName = String(window.currentUser.name).trim();
+        console.log('[BluetoothIndividual] 사용자 이름 로드 (window.currentUser):', userName);
+    }
+    
+    // 3순위: Firebase에서 사용자 정보 가져오기 (userId가 있는 경우)
+    if (!userName && currentUserIdForSession) {
+        try {
+            if (window.firestore && window.firestore.collection) {
+                const userDoc = await window.firestore.collection('users').doc(currentUserIdForSession).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    if (userData && userData.name) {
+                        userName = String(userData.name).trim();
+                        window.currentUser = userData;
+                        localStorage.setItem('currentUser', JSON.stringify(userData));
+                        console.log('[BluetoothIndividual] 사용자 이름 로드 (Firestore):', userName);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('[BluetoothIndividual] Firestore에서 사용자 정보 가져오기 실패:', error);
+        }
+    }
+    
+    // 4순위: Firebase Realtime Database에서 사용자 정보 가져오기
+    if (!userName && currentUserIdForSession && db) {
+        try {
+            const userSnapshot = await db.ref(`users/${currentUserIdForSession}`).once('value');
+            const userData = userSnapshot.val();
+            if (userData && userData.name) {
+                userName = String(userData.name).trim();
+                if (!window.currentUser) {
+                    window.currentUser = userData;
+                }
+                localStorage.setItem('currentUser', JSON.stringify(userData));
+                console.log('[BluetoothIndividual] 사용자 이름 로드 (Firebase Realtime DB):', userName);
+            }
+        } catch (error) {
+            console.warn('[BluetoothIndividual] Firebase Realtime DB에서 사용자 정보 가져오기 실패:', error);
+        }
+    }
+    
+    // 사용자 이름 업데이트
+    if (userName && userName !== 'null' && userName !== 'undefined') {
+        bikeIdDisplay.innerText = userName;
+        console.log('[BluetoothIndividual] ✅ 사용자 이름 업데이트 완료:', userName);
+    } else {
+        console.warn('[BluetoothIndividual] ⚠️ 사용자 이름을 찾을 수 없습니다. Track 번호 유지:', myTrackId);
+    }
 }
 
 // 3. 훈련 상태 구독 (타이머, 세그먼트 정보)
@@ -4487,34 +4651,50 @@ function initializeCelebrationModal() {
     }
 }
 
-// 사용자 정보 초기화 함수 (window.currentUser에서 가져오기)
+// 사용자 정보 초기화 함수 (window.currentUser에서 가져오기) - 강화된 버전
 function initializeUserInfo() {
     try {
-        // window.currentUser가 있으면 사용자 이름 표시
+        let userName = null;
+        
+        // 1순위: window.currentUser 확인
         if (window.currentUser && window.currentUser.name) {
-            const userNameEl = document.getElementById('bluetoothUserName');
-            if (userNameEl) {
-                userNameEl.textContent = window.currentUser.name;
-                console.log('[Bluetooth 개인 훈련] 사용자 이름 표시:', window.currentUser.name);
-            }
-        } else {
-            // localStorage에서 가져오기 시도
+            userName = String(window.currentUser.name).trim();
+            console.log('[Bluetooth 개인 훈련] 사용자 이름 (window.currentUser):', userName);
+        } 
+        // 2순위: localStorage에서 가져오기
+        else {
             const storedUser = localStorage.getItem('currentUser');
             if (storedUser) {
                 try {
                     const userData = JSON.parse(storedUser);
                     if (userData && userData.name) {
+                        userName = String(userData.name).trim();
                         window.currentUser = userData;
-                        const userNameEl = document.getElementById('bluetoothUserName');
-                        if (userNameEl) {
-                            userNameEl.textContent = userData.name;
-                            console.log('[Bluetooth 개인 훈련] 사용자 이름 표시 (localStorage):', userData.name);
-                        }
+                        console.log('[Bluetooth 개인 훈련] 사용자 이름 (localStorage):', userName);
                     }
                 } catch (e) {
                     console.warn('[Bluetooth 개인 훈련] localStorage 사용자 정보 파싱 실패:', e);
                 }
             }
+        }
+        
+        // 사용자 이름이 있으면 모든 관련 요소 업데이트
+        if (userName && userName !== 'null' && userName !== 'undefined') {
+            // bike-id-display 요소 업데이트 (메인 표시)
+            const bikeIdDisplay = document.getElementById('bike-id-display');
+            if (bikeIdDisplay) {
+                bikeIdDisplay.innerText = userName;
+                console.log('[Bluetooth 개인 훈련] ✅ bike-id-display 업데이트:', userName);
+            }
+            
+            // bluetoothUserName 요소 업데이트 (있는 경우)
+            const userNameEl = document.getElementById('bluetoothUserName');
+            if (userNameEl) {
+                userNameEl.textContent = userName;
+                console.log('[Bluetooth 개인 훈련] ✅ bluetoothUserName 업데이트:', userName);
+            }
+        } else {
+            console.warn('[Bluetooth 개인 훈련] ⚠️ 사용자 이름을 찾을 수 없습니다.');
         }
     } catch (error) {
         console.warn('[Bluetooth 개인 훈련] 사용자 정보 초기화 실패:', error);
@@ -4548,6 +4728,18 @@ if (document.readyState === 'loading') {
         
         // 사용자 정보 초기화 (window.currentUser에서 가져오기)
         initializeUserInfo();
+        
+        // 사용자 이름 즉시 로드 및 업데이트 (비동기 로딩 타이밍 문제 해결)
+        loadUserInfoAndUpdateName();
+        
+        // 추가 재시도 (Firebase 데이터가 늦게 도착할 수 있으므로)
+        setTimeout(() => {
+            loadUserInfoAndUpdateName();
+        }, 1000);
+        
+        setTimeout(() => {
+            loadUserInfoAndUpdateName();
+        }, 3000);
         
         // 속도계 눈금 및 레이블 생성 (즉시 실행)
         setTimeout(() => {
