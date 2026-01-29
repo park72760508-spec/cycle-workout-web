@@ -104,9 +104,24 @@ async function refreshStravaTokenForUser(userId, refreshToken) {
 /**
  * 스트라바 활동 목록 가져오기
  * Code.gs의 fetchStravaActivities를 프론트엔드로 마이그레이션
+ * @param {string} accessToken - Strava access token
+ * @param {number} perPage - 페이지당 항목 수 (기본값: 200, Strava 최대값)
+ * @param {number} after - Unix timestamp (활동 시작 시간이 이 값 이후인 활동만 반환, 선택사항)
+ * @param {number} before - Unix timestamp (활동 시작 시간이 이 값 이전인 활동만 반환, 선택사항)
  */
-async function fetchStravaActivities(accessToken, perPage = 30) {
-  const url = `https://www.strava.com/api/v3/athlete/activities?per_page=${perPage}`;
+async function fetchStravaActivities(accessToken, perPage = 200, after = null, before = null) {
+  const params = new URLSearchParams();
+  params.append('per_page', String(perPage));
+  
+  if (after !== null && after !== undefined) {
+    params.append('after', String(after));
+  }
+  
+  if (before !== null && before !== undefined) {
+    params.append('before', String(before));
+  }
+  
+  const url = `https://www.strava.com/api/v3/athlete/activities?${params.toString()}`;
 
   try {
     const response = await fetch(url, {
@@ -302,8 +317,11 @@ function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
 /**
  * 스트라바 활동 동기화 및 포인트 적립 (Firebase)
  * Code.gs의 fetchAndProcessStravaData를 Firebase로 마이그레이션
+ * @param {object} options - 옵션 객체
+ * @param {number} options.after - Unix timestamp (활동 시작 시간이 이 값 이후인 활동만 반환, 선택사항)
+ * @param {number} options.before - Unix timestamp (활동 시작 시간이 이 값 이전인 활동만 반환, 선택사항)
  */
-async function fetchAndProcessStravaData() {
+async function fetchAndProcessStravaData(options = {}) {
   const errors = [];
   let processed = 0;
   let newActivitiesTotal = 0;
@@ -367,8 +385,16 @@ async function fetchAndProcessStravaData() {
         continue;
       }
 
-      // 활동 조회
-      const actResult = await fetchStravaActivities(tokenResult.accessToken, 30);
+      // 활동 조회 (날짜 범위가 지정된 경우 사용)
+      const afterTimestamp = options.after || null;
+      const beforeTimestamp = options.before || null;
+      
+      const actResult = await fetchStravaActivities(
+        tokenResult.accessToken, 
+        200, // per_page를 200으로 증가 (Strava 최대값)
+        afterTimestamp,
+        beforeTimestamp
+      );
       if (!actResult.success) {
         errors.push(`사용자 ${userId}: 활동 조회 실패 - ${actResult.error || ''}`);
         continue;
@@ -796,8 +822,10 @@ async function exchangeStravaCode(code, userId) {
 /**
  * 스트라바 데이터 동기화 (UI에서 호출용)
  * 진행 상태 표시 및 결과 알림 포함
+ * @param {Date} startDate - 시작일 (선택사항)
+ * @param {Date} endDate - 종료일 (선택사항)
  */
-async function syncStravaData() {
+async function syncStravaData(startDate = null, endDate = null) {
   const btn = document.getElementById('btnSyncStrava');
   const originalText = btn ? btn.textContent : '🔄 스트라바 동기화';
   
@@ -815,8 +843,22 @@ async function syncStravaData() {
     
     console.log('[syncStravaData] 🚀 스트라바 동기화 시작');
     
+    // 날짜를 Unix timestamp로 변환
+    const options = {};
+    if (startDate) {
+      options.after = Math.floor(startDate.getTime() / 1000);
+      console.log('[syncStravaData] 시작일:', startDate.toISOString(), '→ after:', options.after);
+    }
+    if (endDate) {
+      // 종료일은 해당 날짜의 23:59:59까지 포함하도록 설정
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      options.before = Math.floor(endOfDay.getTime() / 1000);
+      console.log('[syncStravaData] 종료일:', endDate.toISOString(), '→ before:', options.before);
+    }
+    
     // 동기화 실행
-    const result = await fetchAndProcessStravaData();
+    const result = await fetchAndProcessStravaData(options);
     
     console.log('[syncStravaData] ✅ 동기화 완료:', result);
     
@@ -880,6 +922,123 @@ async function syncStravaData() {
   }
 }
 
+/**
+ * Strava 동기화 날짜 선택 모달 열기
+ */
+function openStravaSyncModal() {
+  const modal = document.getElementById('stravaSyncModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    
+    // 날짜 입력 필드 초기화
+    const startDateInput = document.getElementById('stravaSyncStartDate');
+    const endDateInput = document.getElementById('stravaSyncEndDate');
+    
+    if (startDateInput) startDateInput.value = '';
+    if (endDateInput) {
+      // 종료일은 오늘로 기본 설정
+      const today = new Date();
+      endDateInput.value = today.toISOString().split('T')[0];
+    }
+  }
+}
+
+/**
+ * Strava 동기화 날짜 선택 모달 닫기
+ */
+function closeStravaSyncModal() {
+  const modal = document.getElementById('stravaSyncModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+/**
+ * Strava 동기화 날짜 범위 빠른 설정
+ */
+function setStravaSyncDateRange(range) {
+  const startDateInput = document.getElementById('stravaSyncStartDate');
+  const endDateInput = document.getElementById('stravaSyncEndDate');
+  
+  if (!startDateInput || !endDateInput) return;
+  
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  endDateInput.value = today.toISOString().split('T')[0];
+  
+  const startDate = new Date();
+  
+  switch (range) {
+    case 'week':
+      startDate.setDate(startDate.getDate() - 7);
+      break;
+    case 'month':
+      startDate.setMonth(startDate.getMonth() - 1);
+      break;
+    case '3months':
+      startDate.setMonth(startDate.getMonth() - 3);
+      break;
+    default:
+      return;
+  }
+  
+  startDate.setHours(0, 0, 0, 0);
+  startDateInput.value = startDate.toISOString().split('T')[0];
+}
+
+/**
+ * Strava 동기화 날짜 범위 초기화
+ */
+function clearStravaSyncDateRange() {
+  const startDateInput = document.getElementById('stravaSyncStartDate');
+  const endDateInput = document.getElementById('stravaSyncEndDate');
+  
+  if (startDateInput) startDateInput.value = '';
+  if (endDateInput) {
+    const today = new Date();
+    endDateInput.value = today.toISOString().split('T')[0];
+  }
+}
+
+/**
+ * Strava 동기화 확인 및 실행
+ */
+async function confirmStravaSync() {
+  const startDateInput = document.getElementById('stravaSyncStartDate');
+  const endDateInput = document.getElementById('stravaSyncEndDate');
+  
+  let startDate = null;
+  let endDate = null;
+  
+  if (startDateInput && startDateInput.value) {
+    startDate = new Date(startDateInput.value);
+    startDate.setHours(0, 0, 0, 0);
+  }
+  
+  if (endDateInput && endDateInput.value) {
+    endDate = new Date(endDateInput.value);
+    endDate.setHours(23, 59, 59, 999);
+  }
+  
+  // 날짜 유효성 검사
+  if (startDate && endDate && startDate > endDate) {
+    if (typeof window.showToast === 'function') {
+      window.showToast('시작일이 종료일보다 늦을 수 없습니다.', 'error');
+    } else {
+      alert('시작일이 종료일보다 늦을 수 없습니다.');
+    }
+    return;
+  }
+  
+  // 모달 닫기
+  closeStravaSyncModal();
+  
+  // 동기화 실행
+  await syncStravaData(startDate, endDate);
+}
+
 // 전역 함수로 등록
 window.refreshStravaTokenForUser = refreshStravaTokenForUser;
 window.fetchStravaActivities = fetchStravaActivities;
@@ -889,3 +1048,8 @@ window.mapStravaActivityToSchema = mapStravaActivityToSchema;
 window.fetchAndProcessStravaData = fetchAndProcessStravaData;
 window.exchangeStravaCode = exchangeStravaCode;
 window.syncStravaData = syncStravaData;
+window.openStravaSyncModal = openStravaSyncModal;
+window.closeStravaSyncModal = closeStravaSyncModal;
+window.setStravaSyncDateRange = setStravaSyncDateRange;
+window.clearStravaSyncDateRange = clearStravaSyncDateRange;
+window.confirmStravaSync = confirmStravaSync;
