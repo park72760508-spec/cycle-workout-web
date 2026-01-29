@@ -807,7 +807,8 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
         // userId가 있으면 비동기 조회, 없으면 즉시 UI 업데이트
         if (userId) {
           // Fire-and-forget: await 없이 비동기 호출 (가장 단순한 로직)
-          resolveManagerName(db, userId, elementId);
+          // db와 useV9를 함께 전달하여 v9/v8 호환성 보장
+          resolveManagerName(db, useV9, userId, elementId);
         } else {
           // userId가 없으면 즉시 "코치 없음"으로 업데이트 (무한 로딩 방지)
           const managerEl = document.getElementById(elementId);
@@ -853,10 +854,11 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
  * training_rooms의 userId를 Document ID로 사용하여 users 컬렉션에서 직접 조회
  * 
  * @param {Object} db - Firestore 인스턴스 (Dependency Injection - 필수)
+ * @param {boolean} useV9 - Firebase v9 Modular SDK 사용 여부
  * @param {string} userId - users 컬렉션의 문서 ID (Document ID)
  * @param {string} elementId - DOM 요소 ID (예: 'manager-1')
  */
-async function resolveManagerName(db, userId, elementId) {
+async function resolveManagerName(db, useV9, userId, elementId) {
   const el = document.getElementById(elementId);
   if (!el) {
     console.warn('[ManagerName] DOM 요소를 찾을 수 없습니다:', elementId);
@@ -877,21 +879,48 @@ async function resolveManagerName(db, userId, elementId) {
   }
 
   try {
-    // 사용자 정의 로직: users 컬렉션에서 userId(Document ID)로 바로 조회
-    const userDoc = await db.collection('users').doc(String(userId).trim()).get();
+    const userIdStr = String(userId).trim();
+    let userDoc = null;
+    let userData = null;
     
-    if (userDoc.exists) {
-      const userName = userDoc.data().name || '이름 없음';
+    if (useV9) {
+      // Firebase v9 Modular SDK
+      const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const usersRef = collection(db, 'users');
+      const userDocRef = doc(usersRef, userIdStr);
+      const docSnapshot = await getDoc(userDocRef);
+      
+      if (docSnapshot.exists()) {
+        userData = docSnapshot.data();
+      }
+    } else {
+      // Firebase v8 Compat SDK: db.collection('users').doc(userId).get()
+      userDoc = await db.collection('users').doc(userIdStr).get();
+      
+      if (userDoc.exists) {
+        userData = userDoc.data();
+      }
+    }
+    
+    if (userData) {
+      const userName = userData.name || '이름 없음';
       el.textContent = `코치: ${userName}`;
       el.className = 'training-room-coach has-coach';
       console.log('[ManagerName] ✅ Success - elementId:', elementId, ', userName:', userName);
     } else {
-      console.log('[ManagerName] User not found for ID:', userId);
+      console.log('[ManagerName] User not found for ID:', userIdStr);
       el.textContent = '코치: (알 수 없음)';
       el.className = 'training-room-coach no-coach';
     }
   } catch (e) {
     console.error('[ManagerName] Name fetch error:', e);
+    console.error('[ManagerName] Error details:', {
+      message: e.message,
+      stack: e.stack,
+      db: db,
+      useV9: useV9,
+      userId: userId
+    });
     el.textContent = '코치: (오류)';
     el.className = 'training-room-coach no-coach';
   }
