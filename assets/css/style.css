@@ -14190,7 +14190,33 @@ line[id^="needle-"] {
 }
 
 #trainingRoomScreen .training-room-header-spacer {
-  display: none; /* 우측 스페이서 제거 */
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+#trainingRoomScreen .training-room-create-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#trainingRoomScreen .training-room-create-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+#trainingRoomScreen .training-room-create-btn:active {
+  background: rgba(0, 0, 0, 0.1);
 }
 
 #trainingRoomScreen .training-room-title-center {
@@ -14240,6 +14266,119 @@ line[id^="needle-"] {
   #trainingRoomScreen .basecamp-status-bar {
     font-size: 20px !important; /* 휴대폰에서 약간 축소 */
   }
+}
+
+/* ========== Training Room 생성 오버레이 팝업 (Live Training Rooms 블럭과 동일 구조) ========== */
+.training-room-create-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.training-room-create-overlay.hidden {
+  display: none !important;
+}
+
+.training-room-create-popup {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.training-room-create-card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.training-room-create-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.training-room-create-save-btn,
+.training-room-create-close-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.training-room-create-save-btn:hover,
+.training-room-create-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.training-room-create-title {
+  flex: 1;
+  text-align: center;
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.training-room-create-body {
+  padding: 24px 20px;
+  background: #ffffff;
+}
+
+.training-room-create-body .form-group {
+  margin-bottom: 18px;
+}
+
+.training-room-create-body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.training-room-create-body label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.training-room-create-body input[type="text"],
+.training-room-create-body input[type="password"],
+.training-room-create-body select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+.training-room-create-body input:focus,
+.training-room-create-body select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 /* Live Training Session 화면: 상단 뒤로가기(좌측) + 제목(중앙) + 퇴실 이미지(우측) - 베이스캠프 스타일 */
