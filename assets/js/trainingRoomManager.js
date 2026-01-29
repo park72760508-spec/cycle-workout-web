@@ -440,7 +440,16 @@ async function loadTrainingRooms() {
                 }
               }
             } catch (firestoreError) {
-              console.warn('[Training Room] ⚠️ Firestore 로드 실패, GAS로 폴백:', firestoreError);
+              // 권한 오류는 정상적인 폴백 시나리오이므로 조용히 처리
+              const isPermissionError = firestoreError.code === 'permission-denied' || 
+                                       firestoreError.message?.includes('Missing or insufficient permissions') ||
+                                       firestoreError.message?.includes('insufficient permissions');
+              
+              if (isPermissionError) {
+                console.log('[Training Room] ℹ️ Firestore 권한 없음, GAS로 폴백 (정상 동작)');
+              } else {
+                console.warn('[Training Room] ⚠️ Firestore 로드 실패, GAS로 폴백:', firestoreError.message || firestoreError);
+              }
               // Firestore 실패 시 GAS로 폴백
             }
           }
