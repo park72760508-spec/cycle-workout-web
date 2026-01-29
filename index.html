@@ -4738,6 +4738,8 @@
      * 프로필 선택 화면의 fetchTrainingLogsForCalendar와 동일한 로직 적용
      */
     async function fetchTrainingLogsForCalendarJournal(userId) {
+      console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId);
+      
       if (!userId) {
         console.warn('[MiniCalendarJournal] userId가 없습니다.');
         return {};
@@ -4747,17 +4749,29 @@
         // getUserTrainingLogs 함수 사용 (최대 100개 가져오기)
         if (typeof window.getUserTrainingLogs !== 'function') {
           console.error('[MiniCalendarJournal] window.getUserTrainingLogs 함수를 찾을 수 없습니다.');
+          console.error('[MiniCalendarJournal] window 객체 확인:', {
+            hasGetUserTrainingLogs: typeof window.getUserTrainingLogs,
+            hasFirestoreV9: !!window.firestoreV9
+          });
           return {};
         }
 
+        console.log('[MiniCalendarJournal] getUserTrainingLogs 호출 시작...');
         const logs = await window.getUserTrainingLogs(userId, { limit: 100 });
         
-        console.log(`[MiniCalendarJournal] ${logs.length}개의 훈련 로그를 가져왔습니다.`);
+        console.log(`[MiniCalendarJournal] ✅ ${logs.length}개의 훈련 로그를 가져왔습니다.`);
+        
+        if (logs.length === 0) {
+          console.warn('[MiniCalendarJournal] ⚠️ 훈련 로그가 없습니다. userId:', userId);
+          return {};
+        }
+        
         console.log('[MiniCalendarJournal] 로그 샘플:', logs.slice(0, 3).map(log => ({
           id: log.id,
           date: log.date,
           dateType: typeof log.date,
-          hasToDate: log.date && typeof log.date.toDate === 'function'
+          hasToDate: log.date && typeof log.date.toDate === 'function',
+          title: log.title || '제목 없음'
         })));
         
         // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
@@ -4797,13 +4811,20 @@
         
         console.log(`[MiniCalendarJournal] 날짜별 그룹화 완료: ${Object.keys(logsByDate).length}개의 날짜에 훈련 기록이 있습니다.`);
         console.log('[MiniCalendarJournal] 날짜별 로그 개수:', Object.entries(logsByDate).map(([date, logs]) => `${date}: ${logs.length}개`));
+        console.log('[MiniCalendarJournal] 날짜별 그룹화 완료:', {
+          totalDates: Object.keys(logsByDate).length,
+          dateKeys: Object.keys(logsByDate).sort().slice(0, 10)
+        });
+        
         return logsByDate;
       } catch (error) {
-        console.error('[MiniCalendarJournal] 훈련 로그 가져오기 실패:', error);
+        console.error('[MiniCalendarJournal] ❌ 훈련 로그 가져오기 실패:', error);
         console.error('[MiniCalendarJournal] 오류 상세:', {
           message: error.message,
           stack: error.stack,
-          userId: userId
+          userId: userId,
+          errorName: error.name,
+          errorCode: error.code
         });
         return {};
       }
@@ -4838,8 +4859,25 @@
         currentMonthDateRange: {
           first: getDateKeyJournal(new Date(currentYear, currentMonth, 1)),
           last: getDateKeyJournal(new Date(currentYear, currentMonth + 1, 0))
-        }
+        },
+        hasCurrentUserId: !!miniCalendarStateJournal.currentUserId,
+        currentUserId: miniCalendarStateJournal.currentUserId
       });
+      
+      // 훈련 로그가 없고 userId가 있으면 다시 가져오기 시도
+      if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && miniCalendarStateJournal.currentUserId) {
+        console.warn('[MiniCalendarJournal] ⚠️ 훈련 로그가 비어있습니다. 다시 가져오기 시도...');
+        fetchTrainingLogsForCalendarJournal(miniCalendarStateJournal.currentUserId)
+          .then(logs => {
+            console.log('[MiniCalendarJournal] 재시도 성공:', Object.keys(logs).length, '개 날짜');
+            miniCalendarStateJournal.trainingLogs = logs;
+            // 재렌더링
+            renderMiniCalendarJournal();
+          })
+          .catch(error => {
+            console.error('[MiniCalendarJournal] 재시도 실패:', error);
+          });
+      }
       
       // 현재 월의 첫 날과 마지막 날
       const firstDay = new Date(currentYear, currentMonth, 1);
@@ -4960,6 +4998,8 @@
      * 훈련일지 화면용 달력 월 이동
      */
     function miniCalendarNavigateJournal(direction) {
+      console.log('[MiniCalendarJournal] 달력 네비게이션:', direction);
+      
       if (direction === 'prev') {
         miniCalendarStateJournal.currentMonth--;
         if (miniCalendarStateJournal.currentMonth < 0) {
@@ -4974,7 +5014,21 @@
         }
       }
       
-      renderMiniCalendarJournal();
+      // 훈련 로그가 없으면 다시 가져오기 시도
+      if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && miniCalendarStateJournal.currentUserId) {
+        console.log('[MiniCalendarJournal] 훈련 로그가 없어서 다시 가져오기 시도...');
+        fetchTrainingLogsForCalendarJournal(miniCalendarStateJournal.currentUserId)
+          .then(logs => {
+            miniCalendarStateJournal.trainingLogs = logs;
+            renderMiniCalendarJournal();
+          })
+          .catch(error => {
+            console.error('[MiniCalendarJournal] 네비게이션 중 로그 가져오기 실패:', error);
+            renderMiniCalendarJournal();
+          });
+      } else {
+        renderMiniCalendarJournal();
+      }
     }
 
     /**
@@ -5064,8 +5118,14 @@
      * 훈련일지 화면 진입 시 달력 초기화
      */
     async function initMiniCalendarJournal(userId) {
+      console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
+      console.log('[MiniCalendarJournal] userId:', userId);
+      console.log('[MiniCalendarJournal] userId 타입:', typeof userId);
+      
       if (!userId) {
-        console.warn('[MiniCalendarJournal] userId가 없습니다.');
+        console.warn('[MiniCalendarJournal] ⚠️ userId가 없습니다.');
+        console.warn('[MiniCalendarJournal] window.currentUser:', window.currentUser);
+        console.warn('[MiniCalendarJournal] localStorage currentUser:', localStorage.getItem('currentUser'));
         return;
       }
       
@@ -5075,14 +5135,19 @@
       console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
       
       // 훈련 로그 가져오기
+      console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 호출 전...');
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
       
-      console.log('[MiniCalendarJournal] 훈련 로그 로드 완료:', Object.keys(miniCalendarStateJournal.trainingLogs).length, '개 날짜');
+      console.log('[MiniCalendarJournal] 훈련 로그 로드 완료:', {
+        dateCount: Object.keys(miniCalendarStateJournal.trainingLogs).length,
+        dateKeys: Object.keys(miniCalendarStateJournal.trainingLogs).sort().slice(0, 10),
+        totalLogs: Object.values(miniCalendarStateJournal.trainingLogs).reduce((sum, logs) => sum + logs.length, 0)
+      });
       
       // 달력 렌더링
       await renderMiniCalendarJournal();
       
-      console.log('[MiniCalendarJournal] 달력 렌더링 완료');
+      console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
     }
 
     // 전역 함수로 노출
