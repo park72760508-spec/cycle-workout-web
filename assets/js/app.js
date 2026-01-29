@@ -5971,15 +5971,18 @@ function initializeCurrentScreen(screenId) {
       break;
       
       case 'trainingJournalScreen':
-      // 훈련일지 화면: 캘린더 자동 로드
-      console.log('훈련일지 화면 진입 - 캘린더 로딩 시작');
-      if (typeof loadTrainingJournalCalendar === 'function') {
-        // 현재 월로 초기화
-        trainingJournalCurrentMonth = new Date().getMonth();
-        trainingJournalCurrentYear = new Date().getFullYear();
-        loadTrainingJournalCalendar();
+      // 훈련일지 화면: 미니 달력 자동 로드
+      console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
+      if (typeof initMiniCalendarJournal === 'function') {
+        const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const userId = currentUser?.id;
+        if (userId) {
+          initMiniCalendarJournal(userId);
+        } else {
+          console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
+        }
       } else {
-        console.warn('loadTrainingJournalCalendar function not available');
+        console.warn('initMiniCalendarJournal function not available');
       }
       break;
 
