@@ -15471,17 +15471,25 @@ function handleMobileToggle() {
     return;
   }
 
-  // 현재 일시정지 상태 확인
-  const isCurrentlyPaused = ts.paused;
+  // 현재 일시정지 상태 확인 (명확한 상태 체크)
+  const isCurrentlyPaused = ts.paused === true;
 
+  console.log('[Mobile Toggle] 현재 상태:', {
+    paused: ts.paused,
+    timerId: ts.timerId,
+    isCurrentlyPaused: isCurrentlyPaused
+  });
+
+  // 토글: 일시정지 상태면 재개, 실행 중이면 일시정지
+  // setMobilePaused 함수 내부에서 버튼 이미지도 업데이트하므로 여기서는 호출만 함
   if (isCurrentlyPaused) {
-    // [현재 일시정지 상태] -> 재개(Resume) - 모바일 전용 처리
+    // [현재 일시정지 상태] -> 재개(Resume)
+    console.log('[Mobile Toggle] 일시정지 → 재개');
     setMobilePaused(false);
-    if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
   } else {
-    // [현재 실행 상태] -> 일시정지(Pause) - 모바일 전용 처리
+    // [현재 실행 상태] -> 일시정지(Pause)
+    console.log('[Mobile Toggle] 실행 → 일시정지');
     setMobilePaused(true);
-    if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
   }
   
   // 추가 안전 장치: syncMobileToggleIcon 호출하여 버튼 상태 동기화
@@ -15607,24 +15615,44 @@ function handleMobileStop() {
 }
 
 // [상태 동기화] 외부 요인(자동 일시정지 등)으로 상태 변경 시 버튼 이미지 동기화
-// app.js의 updateTrainingDisplay 또는 updateTimeUI 내부에서 호출 권장
+// 모바일 개인훈련 대시보드 전용: window.mobileTrainingState 사용
 function syncMobileToggleIcon() {
   const btnImg = document.getElementById('imgMobileToggle');
   if (!btnImg) return;
   
-  // trainingState가 없으면 기본값으로 처리
-  if (!window.trainingState) {
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return;
+  }
+  
+  // 모바일 전용 상태 사용 (window.mobileTrainingState)
+  const mts = window.mobileTrainingState;
+  
+  if (!mts) {
+    // 상태가 없으면 기본값으로 처리
     btnImg.setAttribute('href', 'assets/img/play0.png');
     return;
   }
-
+  
   // 타이머가 돌고 있고, 일시정지 상태가 아니면 -> pause0.png (멈출 수 있음)
   // 그 외(일시정지 중이거나 훈련 전) -> play0.png (시작/재개 할 수 있음)
-  const isRunning = window.trainingState.timerId !== null;
-  const isPaused = window.trainingState.paused;
-
+  const isRunning = mts.timerId !== null && mts.timerId !== undefined;
+  const isPaused = mts.paused === true;
+  
   // SVG <image> 요소는 href 속성 사용 (src가 아님)
   const currentHref = btnImg.getAttribute('href') || '';
+  
+  console.log('[Mobile Toggle Sync] 상태 확인:', {
+    isRunning,
+    isPaused,
+    timerId: mts.timerId,
+    currentHref
+  });
   
   if (isRunning && !isPaused) {
     // 실행 중: pause0.png
