@@ -443,18 +443,19 @@ async function getUsersListWithCache() {
 }
 
 /**
- * Training Room 목록 로드 (완전 재작성: 무한 재시도 제거, Auth 상태 확정 대기)
+ * Training Room 목록 로드
+ * trainingResultService.js의 안정적인 패턴을 적용하여 단순화함
+ * - 복잡한 폴링/타임아웃 제거
+ * - Firebase SDK 기본 기능에 충실
+ * - Client-side filtering으로 인덱스 이슈 방지
  */
 async function loadTrainingRooms() {
-  const performanceStart = performance.now();
   const listContainer = document.getElementById('trainingRoomList');
   
   if (!listContainer) {
     console.error('[Training Room] 목록 컨테이너를 찾을 수 없습니다.');
     return;
   }
-  
-  const isMobile = isMobileDeviceForTrainingRooms();
   
   // 로딩 UI 표시
   listContainer.innerHTML = `
@@ -465,46 +466,67 @@ async function loadTrainingRooms() {
   `;
 
   try {
-    // Step 1: Firebase Auth 상태가 확정될 때까지 대기 (가장 중요!)
-    console.log('[Training Room] Step 1: Firebase Auth 상태 확정 대기...');
-    await waitForAuthReady(3000); // 최대 3초 대기
-    console.log('[Training Room] ✅ Step 1 완료: Firebase Auth 상태 확정됨');
+    // trainingResultService.js 패턴: Firestore 인스턴스 직접 가져오기 (단순화)
+    // v9 우선, 없으면 v8 사용
+    let db = null;
+    let useV9 = false;
     
-    // Step 2: Firestore 인스턴스 대기
-    console.log('[Training Room] Step 2: Firestore 인스턴스 대기...');
-    const firestoreInstance = await waitForFirestore(isMobile ? 10000 : 5000);
-    console.log('[Training Room] ✅ Step 2 완료: Firestore 인스턴스 확보, useV9:', firestoreInstance.useV9);
+    if (window.firestoreV9) {
+      db = window.firestoreV9;
+      useV9 = true;
+    } else if (window.firebase && typeof window.firebase.firestore === 'function') {
+      db = window.firebase.firestore();
+      useV9 = false;
+    } else if (window.firestore) {
+      db = window.firestore;
+      useV9 = false;
+    }
     
-    // Step 3: training_rooms 컬렉션 조회 (단순화)
-    console.log('[Training Room] Step 3: training_rooms 컬렉션 조회 시작...');
-    const { db: firestoreDb, useV9 } = firestoreInstance;
+    if (!db) {
+      throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firestoreV9 또는 window.firebase.firestore()를 확인하세요.');
+    }
     
+    console.log('[Training Room] Firestore 인스턴스 확보, useV9:', useV9);
+    
+    // trainingResultService.js 패턴: 단순한 쿼리 실행
+    // training_rooms 컬렉션 전체 조회 후 client-side filtering (인덱스 이슈 방지)
     let rooms = [];
     
-    if (!useV9) {
-      // Firebase v8 호환 모드
-      const roomsSnapshot = await firestoreDb.collection(TRAINING_ROOMS_COLLECTION).get();
-      rooms = roomsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data(), title: doc.data().title || doc.data().name, _sourceCollection: 'training_rooms' }))
+    if (useV9) {
+      // Firebase v9 Modular SDK (trainingResultService.js와 동일한 패턴)
+      const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const roomsRef = collection(db, TRAINING_ROOMS_COLLECTION);
+      const querySnapshot = await getDocs(roomsRef);
+      
+      rooms = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          title: doc.data().title || doc.data().name,
+          _sourceCollection: 'training_rooms'
+        }))
         .filter(room => room.status !== 'inactive'); // Client-side filtering
     } else {
-      // Firebase v9 Modular SDK
-      const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      const { collection, getDocs } = firestoreModule;
-      const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
-      const roomsSnapshot = await getDocs(roomsRef);
-      rooms = roomsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data(), title: doc.data().title || doc.data().name, _sourceCollection: 'training_rooms' }))
+      // Firebase v8 호환 모드
+      const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
+      
+      rooms = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          title: doc.data().title || doc.data().name,
+          _sourceCollection: 'training_rooms'
+        }))
         .filter(room => room.status !== 'inactive'); // Client-side filtering
     }
     
-    console.log('[Training Room] ✅ Step 3 완료: ', rooms.length, '개 Room 로드');
+    console.log('[Training Room] ✅', rooms.length, '개 Room 로드 완료');
     
-    // Step 4: 사용자 목록 로드 (병렬 처리 없이 순차 처리)
+    // 사용자 목록 로드 (실패해도 계속 진행)
     let usersList = [];
     try {
       usersList = await getUsersListWithCache();
-      console.log('[Training Room] ✅ 사용자 목록 로드:', usersList.length, '명');
+      console.log('[Training Room] ✅ 사용자 목록:', usersList.length, '명');
     } catch (userError) {
       console.warn('[Training Room] ⚠️ 사용자 목록 로드 실패 (계속 진행):', userError);
       // 폴백: 전역 변수 확인
@@ -515,7 +537,7 @@ async function loadTrainingRooms() {
       }
     }
     
-    // Step 5: 데이터 저장 및 렌더링
+    // 데이터 저장 및 렌더링
     trainingRoomList = rooms;
     
     // 캐시 저장
@@ -542,8 +564,7 @@ async function loadTrainingRooms() {
       renderTrainingRoomList(rooms, usersList);
     }
     
-    const loadTime = performance.now() - performanceStart;
-    console.log('[Training Room] ✅ 목록 로드 완료 (', Math.round(loadTime), 'ms):', rooms.length, '개 Room,', usersList.length, '명 사용자');
+    console.log('[Training Room] ✅ 목록 로드 완료:', rooms.length, '개 Room,', usersList.length, '명 사용자');
     
   } catch (error) {
     console.error('[Training Room] ❌ 목록 로드 오류:', error);
@@ -553,7 +574,7 @@ async function loadTrainingRooms() {
       stack: error.stack
     });
     
-    // 에러 UI 표시 (무한 재시도 제거 - 사용자가 버튼을 클릭할 때만 재시도)
+    // 에러 UI 표시 (trainingResultService.js 패턴: 단순한 에러 처리)
     const errorCode = error.code || 'unknown';
     const errorMessage = error.message || '알 수 없는 오류';
     const isPermissionError = errorCode === 'permission-denied' || 
@@ -568,7 +589,6 @@ async function loadTrainingRooms() {
             ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' 
             : '네트워크 연결을 확인하고 다시 시도해주세요.'}
         </p>
-        ${isMobile ? '<p style="color: #f59e0b; font-size: 12px; margin-bottom: 20px;">모바일 환경: Firebase 초기화에 시간이 걸릴 수 있습니다.</p>' : ''}
         <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
                 style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
           다시 시도
