@@ -740,6 +740,62 @@ function renderTrainingRoomList(rooms, users = []) {
     `;
   });
   
+  // 렌더링 완료 후 실행할 콜백 함수
+  const afterRenderCallback = () => {
+    // 모바일 터치 이벤트를 위한 명시적 이벤트 리스너 추가
+    // 모든 카드에 터치 이벤트 리스너 추가 (모바일에서 onclick이 작동하지 않을 수 있음)
+    setTimeout(() => {
+      document.querySelectorAll('.training-room-card').forEach(card => {
+        // 기존 터치 이벤트 리스너 제거 (중복 방지)
+        if (card._cardTouchHandler) {
+          card.removeEventListener('touchend', card._cardTouchHandler);
+          card._cardTouchHandler = null;
+        }
+        
+        const roomId = card.getAttribute('data-room-id');
+        if (roomId) {
+          // 터치 이벤트 핸들러 추가 (모바일용)
+          const cardTouchHandler = (e) => {
+            // 슬라이드 스위치 컨테이너나 버튼 영역을 터치한 경우 무시
+            if (e.target.closest('.device-connection-switch-container') || 
+                e.target.closest('.training-room-action-buttons')) {
+              return;
+            }
+            
+            // 카드 영역을 터치한 경우에만 Room 선택
+            e.stopPropagation();
+            selectTrainingRoom(roomId);
+          };
+          
+          card.addEventListener('touchend', cardTouchHandler, { passive: true });
+          card._cardTouchHandler = cardTouchHandler;
+        }
+      });
+    }, 0);
+
+    // Update Later 패턴: 렌더링 완료 후 비동기적으로 관리자 이름 업데이트
+    // DOM 요소가 준비될 때까지 약간의 지연을 두고 실행
+    setTimeout(() => {
+      // 각 방에 대해 updateManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
+      rooms.forEach(room => {
+        const userId = room.user_id || room.userId;
+        const roomIdStr = String(room.id); // 명시적으로 문자열 변환
+        
+        if (userId) {
+          updateManagerName(userId, roomIdStr);
+        } else {
+          // user_id가 없으면 "코치 없음"으로 업데이트
+          const managerElId = `manager-name-${roomIdStr}`;
+          const managerEl = document.getElementById(managerElId);
+          if (managerEl && managerEl.textContent === '...') {
+            managerEl.textContent = '코치 없음';
+            managerEl.className = 'training-room-coach no-coach';
+          }
+        }
+      });
+    }, 50); // DOM 렌더링 완료를 위한 짧은 지연
+  };
+
   // 모바일 환경에서 requestAnimationFrame 사용하여 렌더링 작업을 메인 스레드 대기열에 배치
   if (isMobile) {
     requestAnimationFrame(() => {
@@ -749,6 +805,9 @@ function renderTrainingRoomList(rooms, users = []) {
       }
       listContainer.innerHTML = '';
       listContainer.appendChild(fragment);
+      
+      // 렌더링 완료 후 콜백 실행
+      afterRenderCallback();
     });
   } else {
     tempDiv.innerHTML = htmlStrings.join('');
@@ -757,58 +816,10 @@ function renderTrainingRoomList(rooms, users = []) {
     }
     listContainer.innerHTML = '';
     listContainer.appendChild(fragment);
+    
+    // 렌더링 완료 후 콜백 실행
+    afterRenderCallback();
   }
-
-  // 모바일 터치 이벤트를 위한 명시적 이벤트 리스너 추가
-  // 모든 카드에 터치 이벤트 리스너 추가 (모바일에서 onclick이 작동하지 않을 수 있음)
-  setTimeout(() => {
-    document.querySelectorAll('.training-room-card').forEach(card => {
-      // 기존 터치 이벤트 리스너 제거 (중복 방지)
-      if (card._cardTouchHandler) {
-        card.removeEventListener('touchend', card._cardTouchHandler);
-        card._cardTouchHandler = null;
-      }
-      
-      const roomId = card.getAttribute('data-room-id');
-      if (roomId) {
-        // 터치 이벤트 핸들러 추가 (모바일용)
-        const cardTouchHandler = (e) => {
-          // 슬라이드 스위치 컨테이너나 버튼 영역을 터치한 경우 무시
-          if (e.target.closest('.device-connection-switch-container') || 
-              e.target.closest('.training-room-action-buttons')) {
-            return;
-          }
-          
-          // 카드 영역을 터치한 경우에만 Room 선택
-          e.stopPropagation();
-          selectTrainingRoom(roomId);
-        };
-        
-        card.addEventListener('touchend', cardTouchHandler, { passive: true });
-        card._cardTouchHandler = cardTouchHandler;
-      }
-    });
-  }, 0);
-
-  // Update Later 패턴: 렌더링 후 비동기적으로 관리자 이름 업데이트
-  // 빠른 렌더링을 위해 즉시 실행하지 않고 다음 이벤트 루프에서 실행
-  setTimeout(() => {
-    // 각 방에 대해 updateManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
-    rooms.forEach(room => {
-      const userId = room.user_id || room.userId;
-      if (userId) {
-        updateManagerName(userId, room.id);
-      } else {
-        // user_id가 없으면 "코치 없음"으로 업데이트
-        const managerElId = `manager-name-${room.id}`;
-        const managerEl = document.getElementById(managerElId);
-        if (managerEl && managerEl.textContent === '...') {
-          managerEl.textContent = '코치 없음';
-          managerEl.className = 'training-room-coach no-coach';
-        }
-      }
-    });
-  }, 0);
 
   // CSS는 style.css에 정의되어 있음 (동적 스타일 추가 불필요)
 }
@@ -826,11 +837,23 @@ async function updateManagerName(userId, roomId) {
     return;
   }
   
-  const managerElId = `manager-name-${roomId}`;
-  const managerEl = document.getElementById(managerElId);
+  // roomId를 명시적으로 문자열로 변환
+  const roomIdStr = String(roomId);
+  const managerElId = `manager-name-${roomIdStr}`;
+  
+  // DOM 요소가 준비될 때까지 대기 (최대 5회, 100ms 간격)
+  let managerEl = document.getElementById(managerElId);
+  let retryCount = 0;
+  const maxRetries = 5;
+  
+  while (!managerEl && retryCount < maxRetries) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    managerEl = document.getElementById(managerElId);
+    retryCount++;
+  }
   
   if (!managerEl) {
-    console.warn('[Training Room] updateManagerName: DOM 요소를 찾을 수 없습니다.', managerElId);
+    console.warn('[Training Room] updateManagerName: DOM 요소를 찾을 수 없습니다 (재시도 실패).', managerElId);
     return;
   }
   
