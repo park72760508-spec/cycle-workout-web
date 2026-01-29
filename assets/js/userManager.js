@@ -1231,6 +1231,47 @@ async function apiCreateUser(userData) {
       return { success: false, error: '로그인이 필요합니다.' };
     }
     
+    // 전화번호(contact) 중복 검사
+    const inputContact = String(userData.contact || '').trim();
+    if (inputContact) {
+      // 전화번호 정규화 및 숫자만 추출
+      const normalizedContact = typeof standardizePhoneFormat === 'function' 
+        ? standardizePhoneFormat(inputContact)
+        : (typeof formatPhoneForDB === 'function' ? formatPhoneForDB(inputContact) : inputContact);
+      
+      // 숫자만 추출 (하이픈, 공백 등 제거)
+      const onlyDigits = typeof unformatPhone === 'function' 
+        ? unformatPhone(normalizedContact)
+        : String(normalizedContact).replace(/\D+/g, '');
+      
+      if (onlyDigits && onlyDigits.length > 0) {
+        // 전체 사용자 목록 조회하여 중복 확인
+        const listRes = await apiGetUsers();
+        const users = (listRes && (listRes.items || listRes.users || listRes.data)) || [];
+        
+        const isDuplicated = users.some(u => {
+          const uContact = String(u?.contact || '').trim();
+          if (!uContact) return false;
+          
+          // 기존 사용자의 전화번호도 정규화 및 숫자만 추출
+          const uNormalized = typeof standardizePhoneFormat === 'function' 
+            ? standardizePhoneFormat(uContact)
+            : (typeof formatPhoneForDB === 'function' ? formatPhoneForDB(uContact) : uContact);
+          const uDigits = typeof unformatPhone === 'function' 
+            ? unformatPhone(uNormalized)
+            : String(uNormalized).replace(/\D+/g, '');
+          
+          // 숫자만 비교 (하이픈, 공백 등 무시)
+          return uDigits === onlyDigits && uDigits.length > 0;
+        });
+        
+        if (isDuplicated) {
+          console.warn('[apiCreateUser] 전화번호 중복:', inputContact);
+          return { success: false, error: '이미 등록된 계정입니다.' };
+        }
+      }
+    }
+    
     // 기존 Google Sheets 필드 구조로 데이터 준비
     const now = new Date().toISOString();
     const defaultExpiryDate = (() => {
@@ -1446,7 +1487,7 @@ async function unifiedCreateUser(userData, source = 'profile') {
     });
 
     if (isDuplicated) {
-      throw new Error('✅ 이미 등록된 사용자입니다.');
+      throw new Error('이미 등록된 계정입니다.');
     }
 
     if (!userData.expiry_date) {
