@@ -5977,7 +5977,10 @@ function initializeCurrentScreen(screenId) {
         const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
         const userId = currentUser?.id;
         if (userId) {
-          initMiniCalendarJournal(userId);
+          // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 초기화
+          setTimeout(() => {
+            initMiniCalendarJournal(userId);
+          }, 100);
         } else {
           console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
         }
