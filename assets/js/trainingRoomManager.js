@@ -3459,11 +3459,61 @@ function escapeHtml(text) {
 
 /* ========== Training Room 생성 오버레이 팝업 ========== */
 const TRAINING_ROOMS_COLLECTION = 'training_rooms';
+const USERS_COLLECTION = 'users';
 
 /**
- * grade=3 권한 사용자 목록 반환
+ * Firestore users 컬렉션에서 grade=3 사용자 목록 조회
+ */
+async function getGrade3UsersFromFirestore() {
+  try {
+    if (window.firebase && window.firebase.firestore) {
+      const db = window.firebase.firestore();
+      const snapshot = await db.collection(USERS_COLLECTION)
+        .where('grade', '==', '3')
+        .get();
+      const users = [];
+      snapshot.forEach((doc) => {
+        users.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      console.log('[Training Room] Firestore users에서 grade=3 사용자', users.length, '명 로드');
+      return users;
+    }
+    if (window.firestoreV9) {
+      const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const collection = firestoreModule.collection;
+      const query = firestoreModule.query;
+      const where = firestoreModule.where;
+      const getDocs = firestoreModule.getDocs;
+      const usersRef = collection(window.firestoreV9, USERS_COLLECTION);
+      const q = query(usersRef, where('grade', '==', '3'));
+      const snapshot = await getDocs(q);
+      const users = [];
+      snapshot.forEach((doc) => {
+        users.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      console.log('[Training Room] Firestore(v9) users에서 grade=3 사용자', users.length, '명 로드');
+      return users;
+    }
+  } catch (e) {
+    console.warn('[Training Room] Firestore users 조회 실패:', e);
+  }
+  return [];
+}
+
+/**
+ * grade=3 권한 사용자 목록 반환 (Firestore users 우선, 없으면 캐시/API 폴백)
  */
 async function getGrade3Users() {
+  const fromFirestore = await getGrade3UsersFromFirestore();
+  if (Array.isArray(fromFirestore) && fromFirestore.length > 0) {
+    return fromFirestore;
+  }
   const users = await getUsersListWithCache();
   if (!Array.isArray(users)) return [];
   return users.filter(u => String(u.grade || '') === '3');
