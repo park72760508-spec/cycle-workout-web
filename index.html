@@ -3893,25 +3893,63 @@
         <button onclick="closeStravaSyncModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;">&times;</button>
       </div>
       <div class="modal-body" style="margin-bottom: 20px;">
-        <p style="margin: 0 0 20px 0; color: #6b7280; font-size: 0.95em;">동기화할 기간을 선택하세요. 날짜를 선택하지 않으면 최근 30개의 활동을 가져옵니다.</p>
+        <p style="margin: 0 0 20px 0; color: #6b7280; font-size: 0.95em;">동기화할 기간을 선택하세요. 년/월을 선택하지 않으면 최근 30개의 활동을 가져옵니다.</p>
         
         <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">시작일</label>
-          <input type="date" id="stravaSyncStartDate" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s;" />
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">시작 년/월</label>
+          <div style="display: flex; gap: 8px;">
+            <select id="stravaSyncStartYear" style="flex: 1; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;">
+              <!-- 년도 옵션이 동적으로 생성됩니다 -->
+            </select>
+            <select id="stravaSyncStartMonth" style="flex: 1; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;">
+              <option value="">월 선택</option>
+              <option value="1">1월</option>
+              <option value="2">2월</option>
+              <option value="3">3월</option>
+              <option value="4">4월</option>
+              <option value="5">5월</option>
+              <option value="6">6월</option>
+              <option value="7">7월</option>
+              <option value="8">8월</option>
+              <option value="9">9월</option>
+              <option value="10">10월</option>
+              <option value="11">11월</option>
+              <option value="12">12월</option>
+            </select>
+          </div>
         </div>
         
         <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">종료일</label>
-          <input type="date" id="stravaSyncEndDate" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s;" />
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">종료 년/월</label>
+          <div style="display: flex; gap: 8px;">
+            <select id="stravaSyncEndYear" style="flex: 1; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;">
+              <!-- 년도 옵션이 동적으로 생성됩니다 -->
+            </select>
+            <select id="stravaSyncEndMonth" style="flex: 1; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;">
+              <option value="">월 선택</option>
+              <option value="1">1월</option>
+              <option value="2">2월</option>
+              <option value="3">3월</option>
+              <option value="4">4월</option>
+              <option value="5">5월</option>
+              <option value="6">6월</option>
+              <option value="7">7월</option>
+              <option value="8">8월</option>
+              <option value="9">9월</option>
+              <option value="10">10월</option>
+              <option value="11">11월</option>
+              <option value="12">12월</option>
+            </select>
+          </div>
         </div>
         
         <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <button onclick="setStravaSyncDateRange('week')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 1주일</button>
-          <button onclick="setStravaSyncDateRange('month')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 1개월</button>
-          <button onclick="setStravaSyncDateRange('3months')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 3개월</button>
+          <button onclick="setStravaSyncMonthRange('1month')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 1개월</button>
+          <button onclick="setStravaSyncMonthRange('3months')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 3개월</button>
+          <button onclick="setStravaSyncMonthRange('6months')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 6개월</button>
         </div>
         
-        <button onclick="clearStravaSyncDateRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">날짜 초기화</button>
+        <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
       </div>
       <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
         <button onclick="closeStravaSyncModal()" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">취소</button>
