@@ -3879,9 +3879,44 @@
         <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
         <span>뒤로 가기</span>
       </button>
-      <button class="btn btn-exit-inline enhanced-back-button" id="btnStravaTrainingJournal" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 연결" title="Strava 연결">
+      <button class="btn btn-exit-inline enhanced-back-button" id="btnStravaTrainingJournal" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화">
         <img src="assets/img/strava.png" alt="Strava" style="width: 21px; height: 21px; vertical-align: middle;" />
       </button>
+    </div>
+  </div>
+
+  <!-- Strava 동기화 날짜 선택 모달 -->
+  <div id="stravaSyncModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);" onclick="if(event.target === this) closeStravaSyncModal();">
+    <div class="modal-content" style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);" onclick="event.stopPropagation();">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; font-size: 1.3em; color: #1f2937;">Strava 동기화</h3>
+        <button onclick="closeStravaSyncModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;">&times;</button>
+      </div>
+      <div class="modal-body" style="margin-bottom: 20px;">
+        <p style="margin: 0 0 20px 0; color: #6b7280; font-size: 0.95em;">동기화할 기간을 선택하세요. 날짜를 선택하지 않으면 최근 30개의 활동을 가져옵니다.</p>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">시작일</label>
+          <input type="date" id="stravaSyncStartDate" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s;" />
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">종료일</label>
+          <input type="date" id="stravaSyncEndDate" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s;" />
+        </div>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button onclick="setStravaSyncDateRange('week')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 1주일</button>
+          <button onclick="setStravaSyncDateRange('month')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 1개월</button>
+          <button onclick="setStravaSyncDateRange('3months')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 3개월</button>
+        </div>
+        
+        <button onclick="clearStravaSyncDateRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">날짜 초기화</button>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button onclick="closeStravaSyncModal()" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">취소</button>
+        <button onclick="confirmStravaSync()" style="padding: 12px 24px; background: #fc4c02; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; transition: all 0.2s;">동기화 시작</button>
+      </div>
     </div>
   </div>
 
