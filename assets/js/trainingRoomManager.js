@@ -4005,6 +4005,7 @@ async function submitTrainingRoomCreate() {
     }
 
     let firestoreDocId = null;
+    let trainingRoomId = null; // Realtime Database sessionId로 사용할 id 필드 값 (숫자)
 
     if (isEditMode && editId) {
       // 수정 모드 (권한 체크에서 확정된 컬렉션/문서 ID 사용)
@@ -4020,6 +4021,7 @@ async function submitTrainingRoomCreate() {
           let snap = await firestoreDb.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
           if (!snap.empty) {
             const d = snap.docs[0];
+            const docData = d.data();
             const updateData = {
               title: title,
               track_count: trackCount,
@@ -4030,11 +4032,14 @@ async function submitTrainingRoomCreate() {
             };
             await d.ref.update(updateData);
             firestoreDocId = d.id;
-            console.log('[Training Room] 수정 완료 (training_rooms, id 필드 조회):', d.id);
+            // Realtime Database용: 문서의 id 필드 값 사용
+            trainingRoomId = docData.id || numId;
+            console.log('[Training Room] 수정 완료 (training_rooms, id 필드 조회):', d.id, ', trainingRoomId:', trainingRoomId);
           } else {
             snap = await firestoreDb.collection('training_schedules').where('id', '==', numId).limit(1).get();
             if (!snap.empty) {
               const d = snap.docs[0];
+              const docData = d.data();
               const updateData = {
                 title: title,
                 track_count: trackCount,
@@ -4045,7 +4050,9 @@ async function submitTrainingRoomCreate() {
               };
               await d.ref.update(updateData);
               firestoreDocId = d.id;
-              console.log('[Training Room] 수정 완료 (training_schedules, id 필드 조회):', d.id);
+              // Realtime Database용: 문서의 id 필드 값 사용
+              trainingRoomId = docData.id || numId;
+              console.log('[Training Room] 수정 완료 (training_schedules, id 필드 조회):', d.id, ', trainingRoomId:', trainingRoomId);
             } else {
               if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
               return;
@@ -4056,6 +4063,7 @@ async function submitTrainingRoomCreate() {
           return;
         }
       } else {
+        const docData = doc.data();
         const updateData = {
           title: title,
           track_count: trackCount,
@@ -4066,7 +4074,9 @@ async function submitTrainingRoomCreate() {
         };
         await docRef.update(updateData);
         firestoreDocId = docIdForUpdate;
-        console.log('[Training Room] 수정 완료 (' + collectionName + '):', docIdForUpdate);
+        // Realtime Database용: 문서의 id 필드 값 사용
+        trainingRoomId = docData.id || parseInt(String(editId), 10);
+        console.log('[Training Room] 수정 완료 (' + collectionName + '):', docIdForUpdate, ', trainingRoomId:', trainingRoomId);
       }
     } else {
       // 생성 모드
@@ -4085,12 +4095,15 @@ async function submitTrainingRoomCreate() {
       const colRef = firestoreDb.collection(TRAINING_ROOMS_COLLECTION);
       const docRef = await colRef.add(docData);
       firestoreDocId = docRef.id;
+      // Realtime Database용: 생성한 문서의 id 필드 값 사용
+      trainingRoomId = nextId;
       
-      console.log('[Training Room] 생성 완료:', nextId);
+      console.log('[Training Room] 생성 완료:', nextId, ', Firestore 문서 ID:', firestoreDocId);
     }
 
-    // Realtime Database > sessions/{roomId}/devices 에 track 값 반영 (firebaseConfig.js의 window.db 사용)
-    if (firestoreDocId) {
+    // Realtime Database > sessions/{trainingRoomId}/devices 에 track 값 반영
+    // trainingRoomId는 Firestore 문서의 id 필드 값 (숫자: 1, 2, 3, ...)
+    if (trainingRoomId != null) {
       try {
         // Realtime Database: firebaseConfig.js에서 window.db = firebase.database() 로 초기화됨
         const realtimeDb = (typeof window !== 'undefined' && window.db && typeof window.db.ref === 'function')
@@ -4100,7 +4113,7 @@ async function submitTrainingRoomCreate() {
             : null;
         
         if (realtimeDb && realtimeDb.ref) {
-          const roomId = String(firestoreDocId);
+          const roomId = String(trainingRoomId); // 숫자를 문자열로 변환 (예: "1", "2", "3")
           const trackValue = Number(trackCount);
           await realtimeDb.ref(`sessions/${roomId}/devices`).set({ track: trackValue });
           console.log('[Training Room] Realtime Database 반영 완료: sessions/' + roomId + '/devices/track = ' + trackValue);
@@ -4110,6 +4123,8 @@ async function submitTrainingRoomCreate() {
       } catch (realtimeError) {
         console.warn('[Training Room] Realtime Database 업데이트 실패:', realtimeError);
       }
+    } else {
+      console.warn('[Training Room] trainingRoomId가 없어 Realtime Database 업데이트를 건너뜁니다.');
     }
 
     closeTrainingRoomCreateModal();
