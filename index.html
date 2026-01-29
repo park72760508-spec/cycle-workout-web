@@ -4654,7 +4654,12 @@
      * 프로필 선택 화면의 getDateKey와 동일한 로직
      */
     function getDateKeyJournal(date) {
-      if (!date) return null;
+      if (!date) {
+        if (window.DEBUG_MODE) {
+          console.warn('[getDateKeyJournal] date가 null 또는 undefined입니다.');
+        }
+        return null;
+      }
       
       // Firestore Timestamp 처리
       let d = null;
@@ -4666,12 +4671,31 @@
         d = parseTrainingDateJournal(date);
       }
       
-      if (!d) return null;
+      if (!d) {
+        if (window.DEBUG_MODE) {
+          console.warn('[getDateKeyJournal] 날짜 파싱 실패:', {
+            input: date,
+            type: typeof date,
+            hasToDate: date && typeof date.toDate === 'function'
+          });
+        }
+        return null;
+      }
+      
+      // 유효한 Date 객체인지 확인
+      if (isNaN(d.getTime())) {
+        if (window.DEBUG_MODE) {
+          console.warn('[getDateKeyJournal] 유효하지 않은 날짜:', d);
+        }
+        return null;
+      }
       
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      const dateKey = `${year}-${month}-${day}`;
+      
+      return dateKey;
     }
 
     /**
@@ -4754,9 +4778,21 @@
               date: log.date,
               dateType: typeof log.date,
               hasToDate: log.date && typeof log.date.toDate === 'function',
-              logId: log.id
+              logId: log.id,
+              logSample: JSON.stringify(log).substring(0, 200)
             });
           }
+        });
+        
+        // 디버깅: 날짜 키 생성 결과 확인
+        console.log('[MiniCalendarJournal] 날짜별 그룹화 결과:', {
+          totalDates: Object.keys(logsByDate).length,
+          dateKeys: Object.keys(logsByDate).sort().slice(0, 10),
+          sampleDate: Object.keys(logsByDate)[0] ? {
+            key: Object.keys(logsByDate)[0],
+            logsCount: logsByDate[Object.keys(logsByDate)[0]].length,
+            firstLog: logsByDate[Object.keys(logsByDate)[0]][0]
+          } : null
         });
         
         console.log(`[MiniCalendarJournal] 날짜별 그룹화 완료: ${Object.keys(logsByDate).length}개의 날짜에 훈련 기록이 있습니다.`);
@@ -4798,7 +4834,11 @@
         year: currentYear,
         month: currentMonth + 1,
         trainingLogsCount: Object.keys(miniCalendarStateJournal.trainingLogs).length,
-        trainingLogsSample: Object.keys(miniCalendarStateJournal.trainingLogs).slice(0, 5)
+        trainingLogsSample: Object.keys(miniCalendarStateJournal.trainingLogs).sort().slice(0, 10),
+        currentMonthDateRange: {
+          first: getDateKeyJournal(new Date(currentYear, currentMonth, 1)),
+          last: getDateKeyJournal(new Date(currentYear, currentMonth + 1, 0))
+        }
       });
       
       // 현재 월의 첫 날과 마지막 날
@@ -4813,8 +4853,20 @@
       // 이전 달 날짜들 추가
       for (let i = firstDayOfWeek - 1; i >= 0; i--) {
         const day = prevMonthLastDay - i;
-        const dateKey = getDateKeyJournal(new Date(currentYear, currentMonth - 1, day));
-        const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
+        const date = new Date(currentYear, currentMonth - 1, day);
+        const dateKey = getDateKeyJournal(date);
+        
+        // 훈련 기록이 있는지 확인
+        const logsForDate = miniCalendarStateJournal.trainingLogs[dateKey];
+        const hasTraining = logsForDate && logsForDate.length > 0;
+        
+        let className = 'other-month';
+        if (hasTraining) {
+          className += ' has-training';
+          console.log(`[MiniCalendarJournal] ✅ 이전 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+        }
+        
+        const dayEl = createCalendarDayJournal(day, className, dateKey);
         gridEl.appendChild(dayEl);
       }
       
@@ -4847,7 +4899,13 @@
         const hasTraining = logsForDate && logsForDate.length > 0;
         if (hasTraining) {
           className += ' has-training';
-          console.log(`[MiniCalendarJournal] ✅ 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+          console.log(`[MiniCalendarJournal] ✅ 현재 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+        } else {
+          // 디버깅: 훈련 기록이 없는 경우에도 날짜 키 확인
+          if (window.DEBUG_MODE) {
+            const availableKeys = Object.keys(miniCalendarStateJournal.trainingLogs).slice(0, 5);
+            console.log(`[MiniCalendarJournal] ⚠️ 훈련 기록 없음: ${dateKey} (사용 가능한 키 샘플: ${availableKeys.join(', ')})`);
+          }
         }
         
         const dayEl = createCalendarDayJournal(day, className, dateKey);
@@ -4859,8 +4917,20 @@
       const remainingCells = 42 - totalCells; // 6주 * 7일 = 42
       
       for (let day = 1; day <= remainingCells && day <= 14; day++) {
-        const dateKey = getDateKeyJournal(new Date(currentYear, currentMonth + 1, day));
-        const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
+        const date = new Date(currentYear, currentMonth + 1, day);
+        const dateKey = getDateKeyJournal(date);
+        
+        // 훈련 기록이 있는지 확인
+        const logsForDate = miniCalendarStateJournal.trainingLogs[dateKey];
+        const hasTraining = logsForDate && logsForDate.length > 0;
+        
+        let className = 'other-month';
+        if (hasTraining) {
+          className += ' has-training';
+          console.log(`[MiniCalendarJournal] ✅ 다음 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+        }
+        
+        const dayEl = createCalendarDayJournal(day, className, dateKey);
         gridEl.appendChild(dayEl);
       }
       
