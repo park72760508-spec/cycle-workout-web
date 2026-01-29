@@ -697,10 +697,10 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
     // 사용자 요구사항: elementId는 `manager-${doc.id}` 형식
     const managerNameElId = `manager-${room.id}`;
     
-    // 초기 표시 텍스트: userId가 있으면 "..." (나중에 업데이트), 없으면 "코치 없음"
+    // 초기 표시 텍스트: userId가 있으면 "..." (나중에 업데이트), 없으면 "관리자 없음"
     // userId 필드를 우선적으로 사용 (user_id는 폴백) - 필드명 안전장치
     const userId = room.userId || room.user_id;
-    const initialManagerText = userId ? '...' : '코치 없음';
+    const initialManagerText = userId ? '...' : '관리자 없음';
     const initialManagerClass = userId ? 'no-coach loading' : 'no-coach';
     
     return `
@@ -714,6 +714,7 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
            style="cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;">
         <div class="training-room-content">
           <div class="training-room-name-section" style="display: flex; align-items: center; gap: 8px;">
+            ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
             <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0;">
               ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
             </div>
@@ -731,7 +732,6 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
               ${hasPassword ? `
               <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
               ` : ''}
-              ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
             </div>
           </div>
           <div class="training-room-coach-section">
@@ -810,10 +810,10 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
           // db와 useV9를 함께 전달하여 v9/v8 호환성 보장
           resolveManagerName(db, useV9, userId, elementId);
         } else {
-          // userId가 없으면 즉시 "코치 없음"으로 업데이트 (무한 로딩 방지)
+          // userId가 없으면 즉시 "관리자 없음"으로 업데이트 (무한 로딩 방지)
           const managerEl = document.getElementById(elementId);
           if (managerEl) {
-            managerEl.textContent = '코치: 없음';
+            managerEl.textContent = '관리자: 없음';
             managerEl.className = 'training-room-coach no-coach';
           }
         }
@@ -866,14 +866,14 @@ async function resolveManagerName(db, useV9, userId, elementId) {
   }
   
   if (!userId) {
-    el.textContent = '코치: 없음';
+    el.textContent = '관리자: 없음';
     el.className = 'training-room-coach no-coach';
     return;
   }
 
   if (!db) {
     console.error('[ManagerName] db 인스턴스가 전달되지 않았습니다.');
-    el.textContent = '코치: (오류)';
+    el.textContent = '관리자: (오류)';
     el.className = 'training-room-coach no-coach';
     return;
   }
@@ -904,12 +904,12 @@ async function resolveManagerName(db, useV9, userId, elementId) {
     
     if (userData) {
       const userName = userData.name || '이름 없음';
-      el.textContent = `코치: ${userName}`;
+      el.textContent = `관리자: ${userName}`;
       el.className = 'training-room-coach has-coach';
       console.log('[ManagerName] ✅ Success - elementId:', elementId, ', userName:', userName);
     } else {
       console.log('[ManagerName] User not found for ID:', userIdStr);
-      el.textContent = '코치: (알 수 없음)';
+      el.textContent = '관리자: (알 수 없음)';
       el.className = 'training-room-coach no-coach';
     }
   } catch (e) {
@@ -921,7 +921,7 @@ async function resolveManagerName(db, useV9, userId, elementId) {
       useV9: useV9,
       userId: userId
     });
-    el.textContent = '코치: (오류)';
+    el.textContent = '관리자: (오류)';
     el.className = 'training-room-coach no-coach';
   }
 }
@@ -967,11 +967,11 @@ async function updateManagerName(db, useV9, userId, roomId) {
     return; // 이미 업데이트됨
   }
   
-  // userId가 없으면 "코치 없음" 처리
+  // userId가 없으면 "관리자 없음" 처리
   const userIdStr = String(userId).trim();
   if (!userIdStr) {
-    console.log('[ManagerFetch] userId가 비어있음 - 코치 없음 처리');
-    managerEl.textContent = '코치 없음';
+    console.log('[ManagerFetch] userId가 비어있음 - 관리자 없음 처리');
+    managerEl.textContent = '관리자 없음';
     managerEl.className = 'training-room-coach no-coach';
     return;
   }
@@ -1018,7 +1018,7 @@ async function updateManagerName(db, useV9, userId, roomId) {
       const managerName = userData.name || userData.nickname || userData.userName || userData.displayName || '알 수 없음';
       
       if (managerName && managerName !== '알 수 없음') {
-        managerEl.textContent = `Manager: ${managerName}`;
+        managerEl.textContent = `관리자: ${managerName}`;
         managerEl.className = 'training-room-coach has-coach';
         console.log(`[ManagerFetch] ✅ Success for Room ${roomIdStr} - Manager: ${managerName}`);
       } else {
@@ -1028,7 +1028,7 @@ async function updateManagerName(db, useV9, userId, roomId) {
       }
     } else {
       // 문서가 존재하지 않음
-      managerEl.textContent = '코치 없음';
+      managerEl.textContent = '관리자 없음';
       managerEl.className = 'training-room-coach no-coach';
       console.warn(`[ManagerFetch] User document not found - roomId: ${roomIdStr}, userId: ${userIdStr}`);
     }
@@ -1167,12 +1167,14 @@ async function selectTrainingRoom(roomId) {
   if (selectedCard) {
     selectedCard.classList.add('selected');
     
-    // 체크마크 추가
-    if (!selectedCard.querySelector('.training-room-check')) {
+    // 체크마크 추가 (title 좌측에 배치)
+    const nameSection = selectedCard.querySelector('.training-room-name-section');
+    if (nameSection && !nameSection.querySelector('.training-room-check')) {
       const checkMark = document.createElement('div');
       checkMark.className = 'training-room-check';
       checkMark.textContent = '✓';
-      selectedCard.appendChild(checkMark);
+      // name-section의 첫 번째 자식으로 추가 (title 좌측)
+      nameSection.insertBefore(checkMark, nameSection.firstChild);
     }
     
     // 버튼 추가
@@ -2201,8 +2203,9 @@ function renderTrainingRoomListForModal(rooms, users = []) {
            style="${finalIsAuthenticated ? 'cursor: default; pointer-events: none;' : 'cursor: pointer;'}"
            ${finalIsAuthenticated ? 'onclick="return false;"' : ''}>
         <div class="training-room-content">
-          <div class="training-room-name-section">
-            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}">
+          <div class="training-room-name-section" style="display: flex; align-items: center; gap: 8px;">
+            ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
+            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0;">
               ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
             </div>
             ${hasPassword ? `
@@ -2211,11 +2214,10 @@ function renderTrainingRoomListForModal(rooms, users = []) {
           </div>
           <div class="training-room-coach-section">
             <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
-              ${coachName ? `Manager: ${escapeHtml(coachName)}` : '코치 없음'}
+              ${coachName ? `관리자: ${escapeHtml(coachName)}` : '관리자 없음'}
             </div>
           </div>
         </div>
-        ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
   });
@@ -2564,11 +2566,14 @@ async function selectTrainingRoomForModal(roomId) {
           });
         }
         
-        if (!card.querySelector('.training-room-check')) {
+        // 체크마크 추가 (title 좌측에 배치)
+        const nameSection = card.querySelector('.training-room-name-section');
+        if (nameSection && !nameSection.querySelector('.training-room-check')) {
           const checkMark = document.createElement('div');
           checkMark.className = 'training-room-check';
           checkMark.textContent = '✓';
-          card.appendChild(checkMark);
+          // name-section의 첫 번째 자식으로 추가 (title 좌측)
+          nameSection.insertBefore(checkMark, nameSection.firstChild);
         }
       }
     });
