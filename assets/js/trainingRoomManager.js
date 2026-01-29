@@ -3997,8 +3997,9 @@ async function submitTrainingRoomCreate() {
   }
 
   try {
-    const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
-    if (!db) {
+    // Firestore 인스턴스 (로컬 변수명 firestoreDb 사용 → 전역 window.db와 구분)
+    const firestoreDb = window.firebase && window.firebase.firestore ? window.firebase.firestore() : (window.firestore || null);
+    if (!firestoreDb) {
       if (typeof showToast === 'function') showToast('Firestore를 사용할 수 없습니다.', 'error');
       return;
     }
@@ -4009,14 +4010,14 @@ async function submitTrainingRoomCreate() {
       // 수정 모드 (권한 체크에서 확정된 컬렉션/문서 ID 사용)
       const collectionName = window._trainingRoomEditCollection || TRAINING_ROOMS_COLLECTION;
       const docIdForUpdate = String(window._trainingRoomEditId || editId);
-      const docRef = db.collection(collectionName).doc(docIdForUpdate);
+      const docRef = firestoreDb.collection(collectionName).doc(docIdForUpdate);
       const doc = await docRef.get();
 
       if (!doc.exists) {
         // id 필드로 한 번 더 조회 (권한 체크와 저장 경로 차이 대비)
         const numId = parseInt(String(editId), 10);
         if (!isNaN(numId)) {
-          let snap = await db.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
+          let snap = await firestoreDb.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
           if (!snap.empty) {
             const d = snap.docs[0];
             const updateData = {
@@ -4031,7 +4032,7 @@ async function submitTrainingRoomCreate() {
             firestoreDocId = d.id;
             console.log('[Training Room] 수정 완료 (training_rooms, id 필드 조회):', d.id);
           } else {
-            snap = await db.collection('training_schedules').where('id', '==', numId).limit(1).get();
+            snap = await firestoreDb.collection('training_schedules').where('id', '==', numId).limit(1).get();
             if (!snap.empty) {
               const d = snap.docs[0];
               const updateData = {
@@ -4081,32 +4082,33 @@ async function submitTrainingRoomCreate() {
         created_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
       };
 
-      const colRef = db.collection(TRAINING_ROOMS_COLLECTION);
+      const colRef = firestoreDb.collection(TRAINING_ROOMS_COLLECTION);
       const docRef = await colRef.add(docData);
       firestoreDocId = docRef.id;
       
       console.log('[Training Room] 생성 완료:', nextId);
     }
 
-    // Realtime Database > sessions/{roomId}/devices/track 업데이트
+    // Realtime Database > sessions/{roomId}/devices 에 track 값 반영 (firebaseConfig.js의 window.db 사용)
     if (firestoreDocId) {
       try {
-        // Realtime Database 인스턴스 가져오기
-        const realtimeDb = (typeof db !== 'undefined' && db && db.ref) 
-          ? db  // 전역 db가 Realtime Database인 경우
-          : (window.firebase && window.firebase.database) 
-            ? window.firebase.database() 
+        // Realtime Database: firebaseConfig.js에서 window.db = firebase.database() 로 초기화됨
+        const realtimeDb = (typeof window !== 'undefined' && window.db && typeof window.db.ref === 'function')
+          ? window.db
+          : (typeof firebase !== 'undefined' && firebase.database)
+            ? firebase.database()
             : null;
         
         if (realtimeDb && realtimeDb.ref) {
-          const sessionId = String(firestoreDocId);
-          await realtimeDb.ref(`sessions/${sessionId}/devices`).set({ track: trackCount });
-          console.log(`[Training Room] Realtime Database devices/track 업데이트 완료: sessions/${sessionId}/devices/track = ${trackCount}`);
+          const roomId = String(firestoreDocId);
+          const trackValue = Number(trackCount);
+          await realtimeDb.ref(`sessions/${roomId}/devices`).set({ track: trackValue });
+          console.log('[Training Room] Realtime Database 반영 완료: sessions/' + roomId + '/devices/track = ' + trackValue);
         } else {
-          console.warn('[Training Room] Realtime Database 인스턴스를 찾을 수 없습니다.');
+          console.warn('[Training Room] Realtime Database 인스턴스를 찾을 수 없습니다. (window.db 또는 firebase.database 확인)');
         }
       } catch (realtimeError) {
-        console.warn('[Training Room] Realtime Database 업데이트 실패 (무시):', realtimeError);
+        console.warn('[Training Room] Realtime Database 업데이트 실패:', realtimeError);
       }
     }
 
