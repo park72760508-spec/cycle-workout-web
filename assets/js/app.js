@@ -12118,6 +12118,33 @@ async function selectWorkoutForTrainingReady(workout) {
       console.warn('[Training Ready] 로컬 스토리지 저장 실패:', e);
     }
     
+    // Realtime Database에 users/{userId}/workout 경로에 저장 (개인훈련용)
+    try {
+      const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const userId = currentUser?.id || currentUser?.uid;
+      
+      if (userId && typeof db !== 'undefined' && db) {
+        const userWorkoutRef = db.ref(`users/${userId}/workout`);
+        
+        // workoutId 저장
+        if (normalizedWorkout.id) {
+          await userWorkoutRef.child('workoutId').set(normalizedWorkout.id);
+          console.log('[Training Ready] workoutId saved to users/' + userId + '/workout/workoutId:', normalizedWorkout.id);
+        }
+        
+        // workoutPlan 저장 (segments 배열)
+        if (normalizedWorkout.segments && Array.isArray(normalizedWorkout.segments) && normalizedWorkout.segments.length > 0) {
+          await userWorkoutRef.child('workoutPlan').set(normalizedWorkout.segments);
+          console.log('[Training Ready] workoutPlan saved to users/' + userId + '/workout/workoutPlan:', normalizedWorkout.segments.length, 'segments');
+        }
+      } else {
+        console.warn('[Training Ready] 사용자 ID가 없거나 Realtime Database가 초기화되지 않아 users/{userId}/workout에 저장하지 않습니다.');
+      }
+    } catch (dbError) {
+      console.error('[Training Ready] Realtime Database 저장 실패:', dbError);
+      // DB 저장 실패해도 계속 진행 (localStorage는 이미 저장됨)
+    }
+    
     // 훈련 준비 화면 업데이트
     updateTrainingReadyScreenWithWorkout(normalizedWorkout);
     

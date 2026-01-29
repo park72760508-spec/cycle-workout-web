@@ -6512,14 +6512,21 @@ async function selectWorkoutForTraining(workoutId) {
         window.indoorTrainingState.currentWorkout = loadedWorkout;
         window.currentWorkout = loadedWorkout;
         
-        // Firebase에 workoutPlan 및 workoutId 저장 (개인 대시보드 세그먼트 그래프 표시용)
+        // Firebase에 workoutPlan 및 workoutId 저장 (개인 대시보드용: users/{userId}/workout 경로)
+        // 주의: 훈련 준비 화면에서 이미 users/{userId}/workout에 저장하므로 여기서는 저장하지 않음
+        // 단, indoorTrainingDashboard에서 직접 워크아웃을 선택한 경우에만 저장
         if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
-            const sessionId = getSessionId();
-            if (sessionId) {
+            // 현재 사용자 ID 가져오기
+            const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+            const userId = currentUser?.id || currentUser?.uid;
+            
+            if (userId) {
+                const userWorkoutRef = db.ref(`users/${userId}/workout`);
+                
                 // workoutPlan 저장 (세그먼트 배열)
-                db.ref(`sessions/${sessionId}/workoutPlan`).set(loadedWorkout.segments)
+                userWorkoutRef.child('workoutPlan').set(loadedWorkout.segments)
                     .then(() => {
-                        console.log('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
+                        console.log('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 완료 (users/' + userId + '/workout/workoutPlan)');
                     })
                     .catch(error => {
                         console.error('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 실패:', error);
@@ -6527,9 +6534,9 @@ async function selectWorkoutForTraining(workoutId) {
                 
                 // workoutId 저장 (개인훈련 대시보드 훈련 종료 시 사용)
                 if (loadedWorkout.id) {
-                    db.ref(`sessions/${sessionId}/workoutId`).set(loadedWorkout.id)
+                    userWorkoutRef.child('workoutId').set(loadedWorkout.id)
                         .then(() => {
-                            console.log('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 완료:', loadedWorkout.id, sessionId);
+                            console.log('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 완료 (users/' + userId + '/workout/workoutId):', loadedWorkout.id);
                         })
                         .catch(error => {
                             console.error('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
@@ -6538,7 +6545,7 @@ async function selectWorkoutForTraining(workoutId) {
                     console.warn('[Indoor Training] 워크아웃 ID가 없어 workoutId를 저장할 수 없습니다.');
                 }
             } else {
-                console.warn('[Indoor Training] SESSION_ID를 찾을 수 없어 workoutPlan과 workoutId를 저장할 수 없습니다.');
+                console.warn('[Indoor Training] 사용자 ID를 찾을 수 없어 workoutPlan과 workoutId를 저장할 수 없습니다.');
             }
         }
         
@@ -7356,13 +7363,19 @@ const _originalStartTraining = window.startTraining;
 window.startTraining = function() {
     _originalStartTraining();
     // 워크아웃 전체 정보 업로드 (그래프 그리기용)
+    // 개인훈련 대시보드용: users/{userId}/workout 경로에 저장
     if (window.indoorTrainingState.currentWorkout && typeof db !== 'undefined') {
-        const sessionId = getSessionId();
-        if (sessionId) {
+        // 현재 사용자 ID 가져오기
+        const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const userId = currentUser?.id || currentUser?.uid;
+        
+        if (userId) {
+            const userWorkoutRef = db.ref(`users/${userId}/workout`);
+            
             // workoutPlan 저장 (세그먼트 배열)
-            db.ref(`sessions/${sessionId}/workoutPlan`).set(window.indoorTrainingState.currentWorkout.segments)
+            userWorkoutRef.child('workoutPlan').set(window.indoorTrainingState.currentWorkout.segments)
                 .then(() => {
-                    console.log('[Indoor Training] workoutPlan Firebase 저장 완료:', sessionId);
+                    console.log('[Indoor Training] workoutPlan Firebase 저장 완료 (users/' + userId + '/workout/workoutPlan)');
                 })
                 .catch(error => {
                     console.error('[Indoor Training] workoutPlan Firebase 저장 실패:', error);
@@ -7370,9 +7383,9 @@ window.startTraining = function() {
             
             // workoutId 저장 (개인훈련 대시보드 훈련 종료 시 사용)
             if (window.indoorTrainingState.currentWorkout.id) {
-                db.ref(`sessions/${sessionId}/workoutId`).set(window.indoorTrainingState.currentWorkout.id)
+                userWorkoutRef.child('workoutId').set(window.indoorTrainingState.currentWorkout.id)
                     .then(() => {
-                        console.log('[Indoor Training] workoutId Firebase 저장 완료:', window.indoorTrainingState.currentWorkout.id, sessionId);
+                        console.log('[Indoor Training] workoutId Firebase 저장 완료 (users/' + userId + '/workout/workoutId):', window.indoorTrainingState.currentWorkout.id);
                     })
                     .catch(error => {
                         console.error('[Indoor Training] workoutId Firebase 저장 실패:', error);
@@ -7381,7 +7394,7 @@ window.startTraining = function() {
                 console.warn('[Indoor Training] 워크아웃 ID가 없어 workoutId를 저장할 수 없습니다.');
             }
         } else {
-            console.warn('[Indoor Training] SESSION_ID를 찾을 수 없어 workoutPlan과 workoutId를 저장할 수 없습니다.');
+            console.warn('[Indoor Training] 사용자 ID를 찾을 수 없어 workoutPlan과 workoutId를 저장할 수 없습니다.');
         }
     }
     uploadToFirebase(); // 즉시 전송

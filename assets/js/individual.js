@@ -171,6 +171,7 @@ window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애�
 
 /**
  * Workout ID를 가져오는 헬퍼 함수 (비동기)
+ * 개인훈련 대시보드: users/{userId}/workout 경로에서 읽기
  * @returns {Promise<string|null>} workoutId 또는 null
  */
 async function getWorkoutId() {
@@ -184,18 +185,25 @@ async function getWorkoutId() {
         return lastWorkoutId;
     }
     
-    // 3순위: Firebase에서 직접 가져오기
+    // 3순위: Firebase에서 users/{userId}/workout/workoutId에서 가져오기 (개인훈련용)
     try {
-        const snapshot = await db.ref(`sessions/${SESSION_ID}/workoutId`).once('value');
-        const workoutId = snapshot.val();
-        if (workoutId) {
-            // 가져온 값 저장
-            if (!window.currentWorkout) {
-                window.currentWorkout = {};
+        // 현재 사용자 ID 가져오기
+        const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const userId = currentUser?.id || currentUser?.uid;
+        
+        if (userId) {
+            const snapshot = await db.ref(`users/${userId}/workout/workoutId`).once('value');
+            const workoutId = snapshot.val();
+            if (workoutId) {
+                // 가져온 값 저장
+                if (!window.currentWorkout) {
+                    window.currentWorkout = {};
+                }
+                window.currentWorkout.id = workoutId;
+                lastWorkoutId = workoutId;
+                console.log('[Individual] workoutId loaded from users/' + userId + '/workout/workoutId:', workoutId);
+                return workoutId;
             }
-            window.currentWorkout.id = workoutId;
-            lastWorkoutId = workoutId;
-            return workoutId;
         }
     } catch (error) {
         console.error('[getWorkoutId] Firebase에서 workoutId 가져오기 실패:', error);
@@ -411,37 +419,55 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
 });
 
 // 4. 워크아웃 정보 구독 (세그먼트 그래프 표시용)
-db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
-    const segments = snapshot.val();
-    if (segments && Array.isArray(segments) && segments.length > 0) {
-        // 워크아웃 객체 생성
-        if (!window.currentWorkout) {
-            window.currentWorkout = {};
-        }
-        window.currentWorkout.segments = segments;
+// 개인훈련 대시보드: users/{userId}/workout/workoutPlan 경로에서 읽기
+(async () => {
+    try {
+        // 현재 사용자 ID 가져오기
+        const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const userId = currentUser?.id || currentUser?.uid;
         
-        // 워크아웃 ID 가져오기 (Firebase에서 확인)
-        // workoutPlan이 업데이트될 때 workoutId도 함께 확인하여 저장
-        // 헬퍼 함수를 사용하여 workoutId 가져오기
-        (async () => {
-            try {
-                const workoutId = await getWorkoutId();
-                if (workoutId) {
-                    console.log('[Individual] workoutPlan 업데이트 시 workoutId 확인:', workoutId);
-                } else {
-                    // workoutId가 없어도 경고만 출력 (나중에 로드될 수 있음)
-                    console.log('[Individual] workoutPlan은 있지만 workoutId를 아직 찾을 수 없습니다. (나중에 로드될 수 있음)');
+        if (userId) {
+            const userWorkoutPlanRef = db.ref(`users/${userId}/workout/workoutPlan`);
+            userWorkoutPlanRef.on('value', (snapshot) => {
+                const segments = snapshot.val();
+                if (segments && Array.isArray(segments) && segments.length > 0) {
+                    // 워크아웃 객체 생성
+                    if (!window.currentWorkout) {
+                        window.currentWorkout = {};
+                    }
+                    window.currentWorkout.segments = segments;
+                    console.log('[Individual] workoutPlan loaded from users/' + userId + '/workout/workoutPlan:', segments.length, 'segments');
+                    
+                    // 워크아웃 ID 가져오기 (Firebase에서 확인)
+                    // workoutPlan이 업데이트될 때 workoutId도 함께 확인하여 저장
+                    // 헬퍼 함수를 사용하여 workoutId 가져오기
+                    (async () => {
+                        try {
+                            const workoutId = await getWorkoutId();
+                            if (workoutId) {
+                                console.log('[Individual] workoutPlan 업데이트 시 workoutId 확인:', workoutId);
+                            } else {
+                                // workoutId가 없어도 경고만 출력 (나중에 로드될 수 있음)
+                                console.log('[Individual] workoutPlan은 있지만 workoutId를 아직 찾을 수 없습니다. (나중에 로드될 수 있음)');
+                            }
+                        } catch (error) {
+                            console.warn('[Individual] workoutId 가져오기 실패:', error);
+                        }
+                    })();
+                    
+                    // 세그먼트 그래프 그리기
+                    updateSegmentGraph(segments, currentSegmentIndex);
+                    // TARGET 파워 업데이트 (워크아웃 정보 로드 시)
+                    updateTargetPower();
                 }
-            } catch (error) {
-                console.warn('[Individual] workoutId 가져오기 실패:', error);
-            }
-        })();
-        
-        // 세그먼트 그래프 그리기
-        updateSegmentGraph(segments, currentSegmentIndex);
-        // TARGET 파워 업데이트 (워크아웃 정보 로드 시)
-        updateTargetPower();
+            });
+        } else {
+            console.warn('[Individual] 사용자 ID가 없어 users/{userId}/workout/workoutPlan을 구독할 수 없습니다.');
+        }
+    } catch (error) {
+        console.error('[Individual] users/{userId}/workout/workoutPlan 구독 실패:', error);
     }
+})();
 });
 
 // =========================================================
