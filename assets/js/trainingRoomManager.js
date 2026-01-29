@@ -3791,12 +3791,95 @@ const TRAINING_ROOMS_COLLECTION = 'training_rooms';
 const USERS_COLLECTION = 'users';
 
 /**
- * Firestore users 컬렉션에서 grade=3 사용자 목록 조회
+ * Firebase Auth 상태 대기 (모바일 최적화)
+ */
+async function waitForAuthReady(maxWaitMs = 3000) {
+  return new Promise((resolve) => {
+    const auth = window.authV9 || (window.firebase && window.firebase.auth ? window.firebase.auth() : null);
+    
+    if (!auth) {
+      console.warn('[Training Room] Auth 인스턴스를 찾을 수 없습니다.');
+      resolve(false);
+      return;
+    }
+    
+    // 이미 로그인 상태가 확인되면 즉시 반환
+    if (auth.currentUser) {
+      resolve(true);
+      return;
+    }
+    
+    // onAuthStateChanged로 상태 확인
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      unsubscribe();
+      resolve(!!user);
+    });
+    
+    // 타임아웃 설정
+    setTimeout(() => {
+      unsubscribe();
+      resolve(false);
+    }, maxWaitMs);
+  });
+}
+
+/**
+ * Firestore users 컬렉션에서 grade=3 사용자 목록 조회 (모바일 최적화)
  */
 async function getGrade3UsersFromFirestore() {
+  const isMobile = isMobileDeviceForTrainingRooms();
+  
   try {
-    if (window.firebase && window.firebase.firestore) {
-      const db = window.firebase.firestore();
+    // 모바일 환경에서 Auth 대기 (권한 오류 방지)
+    if (isMobile) {
+      const authReady = await waitForAuthReady(3000);
+      if (!authReady) {
+        console.warn('[Training Room] 모바일: Auth 준비 대기 시간 초과, 계속 진행');
+      }
+    }
+    
+    // Firestore 인스턴스 가져오기
+    let db = null;
+    let useV9 = false;
+    
+    if (window.firestoreV9) {
+      db = window.firestoreV9;
+      useV9 = true;
+    } else if (window.firebase && window.firebase.firestore) {
+      db = window.firebase.firestore();
+      useV9 = false;
+    } else if (window.firestore) {
+      db = window.firestore;
+      useV9 = false;
+    }
+    
+    if (!db) {
+      console.warn('[Training Room] Firestore 인스턴스를 찾을 수 없습니다.');
+      return [];
+    }
+    
+    // Firestore 쿼리 실행
+    if (useV9) {
+      // Firebase v9 Modular SDK
+      const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const collection = firestoreModule.collection;
+      const query = firestoreModule.query;
+      const where = firestoreModule.where;
+      const getDocs = firestoreModule.getDocs;
+      const usersRef = collection(db, USERS_COLLECTION);
+      const q = query(usersRef, where('grade', '==', '3'));
+      const snapshot = await getDocs(q);
+      const users = [];
+      snapshot.forEach((doc) => {
+        users.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      console.log('[Training Room] Firestore(v9) users에서 grade=3 사용자', users.length, '명 로드');
+      return users;
+    } else {
+      // Firebase v8 Compat SDK
       const snapshot = await db.collection(USERS_COLLECTION)
         .where('grade', '==', '3')
         .get();
@@ -3810,42 +3893,70 @@ async function getGrade3UsersFromFirestore() {
       console.log('[Training Room] Firestore users에서 grade=3 사용자', users.length, '명 로드');
       return users;
     }
-    if (window.firestoreV9) {
-      const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      const collection = firestoreModule.collection;
-      const query = firestoreModule.query;
-      const where = firestoreModule.where;
-      const getDocs = firestoreModule.getDocs;
-      const usersRef = collection(window.firestoreV9, USERS_COLLECTION);
-      const q = query(usersRef, where('grade', '==', '3'));
-      const snapshot = await getDocs(q);
-      const users = [];
-      snapshot.forEach((doc) => {
-        users.push({
-          id: doc.id,
-          ...doc.data()
-        });
-      });
-      console.log('[Training Room] Firestore(v9) users에서 grade=3 사용자', users.length, '명 로드');
-      return users;
-    }
   } catch (e) {
     console.warn('[Training Room] Firestore users 조회 실패:', e);
+    console.warn('[Training Room] 오류 상세:', {
+      message: e.message,
+      code: e.code,
+      stack: e.stack
+    });
   }
   return [];
 }
 
 /**
  * grade=3 권한 사용자 목록 반환 (Firestore users 우선, 없으면 캐시/API 폴백)
+ * 모바일 환경에서도 안정적으로 동작하도록 개선
  */
 async function getGrade3Users() {
-  const fromFirestore = await getGrade3UsersFromFirestore();
-  if (Array.isArray(fromFirestore) && fromFirestore.length > 0) {
-    return fromFirestore;
+  const isMobile = isMobileDeviceForTrainingRooms();
+  
+  try {
+    // 1순위: Firestore에서 직접 조회
+    const fromFirestore = await getGrade3UsersFromFirestore();
+    if (Array.isArray(fromFirestore) && fromFirestore.length > 0) {
+      console.log('[Training Room] ✅ Firestore에서 grade=3 사용자 로드 성공:', fromFirestore.length, '명');
+      return fromFirestore;
+    }
+    
+    // 2순위: 캐시/API에서 로드 후 필터링
+    console.log('[Training Room] Firestore 조회 실패, 캐시/API에서 로드 시도...');
+    const users = await getUsersListWithCache();
+    
+    if (!Array.isArray(users) || users.length === 0) {
+      console.warn('[Training Room] ⚠️ 사용자 목록을 가져올 수 없습니다.');
+      
+      // 모바일 환경에서 재시도
+      if (isMobile) {
+        console.log('[Training Room] 📱 모바일: 사용자 목록 재시도...');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+        const retryUsers = await getUsersListWithCache();
+        if (Array.isArray(retryUsers) && retryUsers.length > 0) {
+          const grade3Users = retryUsers.filter(u => String(u.grade || '') === '3');
+          console.log('[Training Room] ✅ 재시도 성공: grade=3 사용자', grade3Users.length, '명');
+          return grade3Users;
+        }
+      }
+      
+      return [];
+    }
+    
+    // grade=3 필터링
+    const grade3Users = users.filter(u => {
+      const grade = String(u.grade || '');
+      return grade === '3';
+    });
+    
+    console.log('[Training Room] ✅ 캐시/API에서 grade=3 사용자 필터링 완료:', grade3Users.length, '명');
+    return grade3Users;
+  } catch (error) {
+    console.error('[Training Room] ❌ getGrade3Users 오류:', error);
+    console.error('[Training Room] 오류 상세:', {
+      message: error.message,
+      stack: error.stack
+    });
+    return [];
   }
-  const users = await getUsersListWithCache();
-  if (!Array.isArray(users)) return [];
-  return users.filter(u => String(u.grade || '') === '3');
 }
 
 /**
