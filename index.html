@@ -8867,6 +8867,41 @@ Output Format (JSON Only):
           }, 300);
         }
         
+        // Training Journal Screen인 경우 미니 달력 초기화
+        if (screenId === 'trainingJournalScreen') {
+          console.log('[showScreen] 훈련일지 화면 전환 - 미니 달력 초기화 시작');
+          setTimeout(function() {
+            var currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+            var userId = currentUser?.id;
+            
+            console.log('[showScreen] 훈련일지 초기화 - userId:', userId, 'hasInitFunction:', typeof window.initMiniCalendarJournal === 'function');
+            
+            if (userId && typeof window.initMiniCalendarJournal === 'function') {
+              console.log('[showScreen] initMiniCalendarJournal 호출');
+              window.initMiniCalendarJournal(userId);
+            } else if (!userId) {
+              console.warn('[showScreen] 훈련일지: 사용자 ID를 찾을 수 없습니다.');
+            } else {
+              console.warn('[showScreen] initMiniCalendarJournal 함수를 찾을 수 없습니다.');
+              // 함수가 로드될 때까지 재시도
+              var retryCount = 0;
+              var maxRetries = 20;
+              var checkAndInit = function() {
+                if (typeof window.initMiniCalendarJournal === 'function') {
+                  console.log('[showScreen] initMiniCalendarJournal 재시도 성공');
+                  window.initMiniCalendarJournal(userId);
+                } else if (retryCount < maxRetries) {
+                  retryCount++;
+                  setTimeout(checkAndInit, 100);
+                } else {
+                  console.error('[showScreen] initMiniCalendarJournal 함수를 찾을 수 없습니다 (최대 재시도 횟수 초과)');
+                }
+              };
+              setTimeout(checkAndInit, 100);
+            }
+          }, 200);
+        }
+        
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
           // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
