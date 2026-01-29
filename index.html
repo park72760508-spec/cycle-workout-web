@@ -5962,13 +5962,55 @@
               <div class="training-room-title-center">
                 <h3 class="basecamp-status-bar">Live Training Rooms</h3>
               </div>
-              <div class="training-room-header-spacer"></div>
+              <div class="training-room-header-spacer">
+                <button type="button" class="training-room-create-btn" onclick="if (typeof openTrainingRoomCreateModal === 'function') { openTrainingRoomCreateModal(); }" aria-label="Training Room 생성">
+                  <img src="assets/img/save1.png" alt="Training Room 생성" class="training-room-create-icon" style="width: 24px; height: 24px; display: block;" />
+                </button>
+              </div>
             </div>
             
             <!-- Training Room 목록 -->
             <div id="trainingRoomList" class="training-room-list">
               <!-- Training Room 목록이 여기에 동적으로 추가됩니다 -->
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Training Room 생성 오버레이 팝업 ========== -->
+  <div id="trainingRoomCreateOverlay" class="training-room-create-overlay hidden" onclick="if (event.target === this && typeof closeTrainingRoomCreateModal === 'function') { closeTrainingRoomCreateModal(); }">
+    <div class="training-room-create-popup" onclick="event.stopPropagation()">
+      <div class="connection-form-card basecamp-card training-room-create-card">
+        <div class="training-room-create-header">
+          <button type="button" class="training-room-create-save-btn" onclick="if (typeof submitTrainingRoomCreate === 'function') { submitTrainingRoomCreate(); }" aria-label="저장">
+            <img src="assets/img/check-ok.png" alt="저장" style="width: 24px; height: 24px; display: block;" />
+          </button>
+          <h3 class="basecamp-status-bar training-room-create-title">Training Room 생성</h3>
+          <button type="button" class="training-room-create-close-btn" onclick="if (typeof closeTrainingRoomCreateModal === 'function') { closeTrainingRoomCreateModal(); }" aria-label="닫기">
+            <span style="font-size: 24px; line-height: 1;">✕</span>
+          </button>
+        </div>
+        <div class="connection-device-section basecamp-device-section training-room-create-body">
+          <div class="form-group">
+            <label for="createRoomName">Training Room Name</label>
+            <input type="text" id="createRoomName" placeholder="예: A동 훈련실" maxlength="100" />
+          </div>
+          <div class="form-group">
+            <label for="createRoomTrackCount">Track 설치 수</label>
+            <input type="text" id="createRoomTrackCount" placeholder="숫자만 입력" inputmode="numeric" pattern="[0-9]*" maxlength="4" />
+          </div>
+          <div class="form-group">
+            <label for="createRoomManager">관리자</label>
+            <select id="createRoomManager">
+              <option value="">관리자 선택 (grade=3 권한 사용자)</option>
+              <!-- grade=3 사용자 목록이 동적으로 채워집니다 -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="createRoomPassword">비밀번호 (4자리 숫자, 미입력 시 공개방)</label>
+            <input type="password" id="createRoomPassword" placeholder="4자리 숫자 또는 비워두기" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" />
           </div>
         </div>
       </div>
