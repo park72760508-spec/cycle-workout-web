@@ -4613,11 +4613,23 @@
 
     /**
      * 날짜를 YYYY-MM-DD 형식의 키로 변환 (훈련일지 화면용)
+     * 프로필 선택 화면의 getDateKey와 동일한 로직
      */
     function getDateKeyJournal(date) {
       if (!date) return null;
-      const d = date instanceof Date ? date : parseTrainingDateJournal(date);
+      
+      // Firestore Timestamp 처리
+      let d = null;
+      if (date.toDate && typeof date.toDate === 'function') {
+        d = date.toDate();
+      } else if (date instanceof Date) {
+        d = date;
+      } else {
+        d = parseTrainingDateJournal(date);
+      }
+      
       if (!d) return null;
+      
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
@@ -4661,6 +4673,7 @@
 
     /**
      * Firebase에서 훈련 로그 가져오기 (훈련일지 화면용)
+     * 프로필 선택 화면의 fetchTrainingLogsForCalendar와 동일한 로직 적용
      */
     async function fetchTrainingLogsForCalendarJournal(userId) {
       if (!userId) {
@@ -4678,29 +4691,53 @@
         const logs = await window.getUserTrainingLogs(userId, { limit: 100 });
         
         console.log(`[MiniCalendarJournal] ${logs.length}개의 훈련 로그를 가져왔습니다.`);
+        console.log('[MiniCalendarJournal] 로그 샘플:', logs.slice(0, 3).map(log => ({
+          id: log.id,
+          date: log.date,
+          dateType: typeof log.date,
+          hasToDate: log.date && typeof log.date.toDate === 'function'
+        })));
         
         // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
+        // 프로필 선택 화면의 fetchTrainingLogsForCalendar와 동일한 로직
         const logsByDate = {};
         logs.forEach(log => {
+          // getDateKeyJournal 함수가 Firestore Timestamp를 자동으로 처리하므로
+          // log.date를 그대로 전달
           const dateKey = getDateKeyJournal(log.date);
           if (dateKey) {
             if (!logsByDate[dateKey]) {
               logsByDate[dateKey] = [];
             }
             logsByDate[dateKey].push(log);
+            console.log(`[MiniCalendarJournal] 로그 날짜 매핑: ${dateKey} - ${log.title || log.id || '제목 없음'}`);
+          } else {
+            console.warn('[MiniCalendarJournal] 날짜 키를 생성할 수 없음:', {
+              date: log.date,
+              dateType: typeof log.date,
+              hasToDate: log.date && typeof log.date.toDate === 'function',
+              logId: log.id
+            });
           }
         });
         
         console.log(`[MiniCalendarJournal] 날짜별 그룹화 완료: ${Object.keys(logsByDate).length}개의 날짜에 훈련 기록이 있습니다.`);
+        console.log('[MiniCalendarJournal] 날짜별 로그 개수:', Object.entries(logsByDate).map(([date, logs]) => `${date}: ${logs.length}개`));
         return logsByDate;
       } catch (error) {
         console.error('[MiniCalendarJournal] 훈련 로그 가져오기 실패:', error);
+        console.error('[MiniCalendarJournal] 오류 상세:', {
+          message: error.message,
+          stack: error.stack,
+          userId: userId
+        });
         return {};
       }
     }
 
     /**
      * 훈련일지 화면용 달력 렌더링
+     * 프로필 선택 화면의 renderMiniCalendar와 동일한 로직 적용
      */
     async function renderMiniCalendarJournal() {
       const gridEl = document.getElementById('miniCalendarGridJournal');
@@ -4718,6 +4755,13 @@
       
       // 그리드 초기화
       gridEl.innerHTML = '';
+      
+      console.log('[MiniCalendarJournal] 달력 렌더링 시작:', {
+        year: currentYear,
+        month: currentMonth + 1,
+        trainingLogsCount: Object.keys(miniCalendarStateJournal.trainingLogs).length,
+        trainingLogsSample: Object.keys(miniCalendarStateJournal.trainingLogs).slice(0, 5)
+      });
       
       // 현재 월의 첫 날과 마지막 날
       const firstDay = new Date(currentYear, currentMonth, 1);
@@ -4761,11 +4805,11 @@
         }
         
         // 훈련 기록이 있는지 확인
-        const hasTraining = miniCalendarStateJournal.trainingLogs[dateKey] && 
-                           miniCalendarStateJournal.trainingLogs[dateKey].length > 0;
+        const logsForDate = miniCalendarStateJournal.trainingLogs[dateKey];
+        const hasTraining = logsForDate && logsForDate.length > 0;
         if (hasTraining) {
           className += ' has-training';
-          console.log(`[MiniCalendarJournal] 훈련 기록 발견: ${dateKey} - ${miniCalendarStateJournal.trainingLogs[dateKey].length}개`);
+          console.log(`[MiniCalendarJournal] ✅ 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
         }
         
         const dayEl = createCalendarDayJournal(day, className, dateKey);
@@ -4781,6 +4825,8 @@
         const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
         gridEl.appendChild(dayEl);
       }
+      
+      console.log('[MiniCalendarJournal] 달력 렌더링 완료 - 총 셀 수:', gridEl.children.length);
     }
 
     /**
