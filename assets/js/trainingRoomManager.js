@@ -696,9 +696,9 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
     // 관리자 이름 표시용 고유 ID 생성 (Render First 패턴)
     const managerNameElId = `manager-name-${room.id}`;
     
-    // 초기 표시 텍스트: userId가 있으면 "로딩중..." (나중에 업데이트), 없으면 "코치 없음"
-    // userId 필드를 우선적으로 사용 (user_id는 폴백)
-    const userId = room.userId || room.user_id;
+    // 초기 표시 텍스트: user_id가 있으면 "로딩중..." (나중에 업데이트), 없으면 "코치 없음"
+    // user_id 필드를 우선적으로 사용 (userId는 폴백) - Firestore DB 필드명과 일치
+    const userId = room.user_id || room.userId;
     const initialManagerText = userId ? '로딩중...' : '코치 없음';
     const initialManagerClass = userId ? 'no-coach loading' : 'no-coach';
     
@@ -798,18 +798,19 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
       // 각 방에 대해 fetchAndDisplayManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
       // Fire-and-forget 패턴: await 없이 호출하여 목록 로딩 속도 저하 방지
       rooms.forEach(room => {
-        // userId 필드를 우선적으로 사용 (user_id는 폴백)
-        const userId = room.userId || room.user_id;
+        // user_id 필드를 우선적으로 사용 (userId는 폴백) - Firestore DB 필드명과 일치
+        const userId = room.user_id || room.userId;
         const roomIdStr = String(room.id); // 명시적으로 문자열 변환
         const managerSpanId = `manager-name-${roomIdStr}`;
         
+        // userId가 있으면 비동기 조회, 없으면 즉시 UI 업데이트
         if (userId) {
           // Fire-and-forget: await 없이 비동기 호출
           fetchAndDisplayManagerName(db, useV9, userId, managerSpanId);
         } else {
-          // userId가 없으면 "코치 없음"으로 업데이트
+          // userId가 없으면 즉시 "코치 없음"으로 업데이트 (무한 로딩 방지)
           const managerEl = document.getElementById(managerSpanId);
-          if (managerEl && (managerEl.textContent === '...' || managerEl.textContent === '로딩중...')) {
+          if (managerEl) {
             managerEl.textContent = '코치 없음';
             managerEl.className = 'training-room-coach no-coach';
           }
@@ -859,24 +860,35 @@ async function fetchAndDisplayManagerName(db, useV9, userId, elementId) {
   // 파라미터 유효성 검사
   if (!db) {
     console.error('[ManagerFetch] db 인스턴스가 전달되지 않았습니다.');
+    // db가 없어도 UI는 업데이트 (무한 로딩 방지)
+    const el = document.getElementById(elementId);
+    if (el) {
+      el.textContent = '코치: (불러오기 실패)';
+      el.className = 'training-room-coach no-coach';
+    }
     return;
   }
   
-  if (!userId || !elementId) {
-    console.warn('[ManagerFetch] userId 또는 elementId가 없습니다.', { userId, elementId });
+  // DOM 요소 찾기 (userId 체크 전에 먼저 찾아서 UI 업데이트 가능하게 함)
+  const el = document.getElementById(elementId);
+  if (!el) {
+    console.warn('[ManagerFetch] DOM 요소를 찾을 수 없습니다:', elementId);
+    return;
+  }
+  
+  // userId가 없거나 비어있는 경우 UI 업데이트 후 종료 (무한 로딩 방지)
+  if (!userId) {
+    console.warn('[ManagerFetch] userId가 없습니다.', { elementId });
+    el.textContent = '코치: (미지정)';
+    el.className = 'training-room-coach no-coach';
     return;
   }
   
   const userIdStr = String(userId).trim();
   if (!userIdStr) {
-    console.warn('[ManagerFetch] userId가 비어있습니다.');
-    return;
-  }
-  
-  // DOM 요소 찾기
-  const el = document.getElementById(elementId);
-  if (!el) {
-    console.warn('[ManagerFetch] DOM 요소를 찾을 수 없습니다:', elementId);
+    console.warn('[ManagerFetch] userId가 비어있습니다.', { elementId });
+    el.textContent = '코치: (미지정)';
+    el.className = 'training-room-coach no-coach';
     return;
   }
   
@@ -917,19 +929,24 @@ async function fetchAndDisplayManagerName(db, useV9, userId, elementId) {
     }
     
     // 데이터 처리 및 UI 업데이트
-    if (userData && userData.name) {
-      // name 필드가 있으면 표시
-      el.textContent = `코치: ${userData.name}`;
-      el.className = 'training-room-coach has-coach';
-      console.log(`[ManagerFetch] ✅ Success - elementId: ${elementId}, Manager: ${userData.name}`);
-    } else if (userData) {
-      // 문서는 존재하지만 name 필드가 없음
-      el.textContent = '코치: (정보 없음)';
-      el.className = 'training-room-coach no-coach';
-      console.warn(`[ManagerFetch] ⚠️ User document found but name field is missing - elementId: ${elementId}, userId: ${userIdStr}`);
+    if (userData) {
+      // name 필드 우선, 없으면 nickname, 그것도 없으면 기본값
+      const managerName = userData.name || userData.nickname || userData.userName || userData.displayName;
+      
+      if (managerName) {
+        // 이름이 있으면 표시
+        el.textContent = `코치: ${managerName}`;
+        el.className = 'training-room-coach has-coach';
+        console.log(`[ManagerFetch] ✅ Success - elementId: ${elementId}, Manager: ${managerName}`);
+      } else {
+        // 문서는 존재하지만 이름 필드가 없음
+        el.textContent = '코치: (정보 없음)';
+        el.className = 'training-room-coach no-coach';
+        console.warn(`[ManagerFetch] ⚠️ User document found but name field is missing - elementId: ${elementId}, userId: ${userIdStr}`);
+      }
     } else {
       // 문서가 존재하지 않음
-      el.textContent = '코치: (정보 없음)';
+      el.textContent = '코치: (탈퇴한 유저)';
       el.className = 'training-room-coach no-coach';
       console.warn(`[ManagerFetch] User document not found - elementId: ${elementId}, userId: ${userIdStr}`);
     }
