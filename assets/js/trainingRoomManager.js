@@ -381,12 +381,44 @@ async function loadTrainingRooms() {
       // ✅ Firebase Firestore만 사용 (GAS 제거)
       withRetryForTrainingRooms(
         async () => {
-          // Firestore 인스턴스 확인 (window.firestoreV9 또는 db)
-          const firestoreDb = window.firestoreV9 || (typeof db !== 'undefined' && db ? db : null);
+          // Firestore 인스턴스 확인 (우선순위: window.firebase.firestore > window.firestoreV9 > window.firestore)
+          let firestoreDb = null;
+          let useV9 = false;
           
-          // Firestore 필수 체크
-          if (!firestoreDb && !(window.firebase && window.firebase.firestore)) {
-            throw new Error('Firestore를 사용할 수 없습니다. Firebase가 초기화되지 않았습니다.');
+          // 1순위: Firebase v8 호환 모드 (window.firebase.firestore)
+          if (window.firebase && typeof window.firebase.firestore === 'function') {
+            try {
+              firestoreDb = window.firebase.firestore();
+              console.log('[Training Room] ✅ Firebase v8 호환 모드 Firestore 인스턴스 사용');
+            } catch (e) {
+              console.warn('[Training Room] Firebase v8 Firestore 초기화 실패:', e);
+            }
+          }
+          
+          // 2순위: Firebase v9 Modular SDK (window.firestoreV9)
+          if (!firestoreDb && window.firestoreV9) {
+            firestoreDb = window.firestoreV9;
+            useV9 = true;
+            console.log('[Training Room] ✅ Firebase v9 Modular SDK Firestore 인스턴스 사용');
+          }
+          
+          // 3순위: window.firestore (firebaseConfig.js에서 설정)
+          if (!firestoreDb && window.firestore) {
+            firestoreDb = window.firestore;
+            console.log('[Training Room] ✅ window.firestore 인스턴스 사용');
+          }
+          
+          // Firestore 필수 체크 및 디버깅 정보
+          if (!firestoreDb) {
+            const debugInfo = {
+              hasWindowFirebase: !!(window.firebase),
+              hasFirebaseFirestore: !!(window.firebase && window.firebase.firestore),
+              hasFirestoreV9: !!window.firestoreV9,
+              hasWindowFirestore: !!window.firestore,
+              isMobile: isMobileDeviceForTrainingRooms()
+            };
+            console.error('[Training Room] ❌ Firestore 인스턴스를 찾을 수 없습니다. 디버깅 정보:', debugInfo);
+            throw new Error('Firestore를 사용할 수 없습니다. Firebase가 초기화되지 않았습니다. 디버깅 정보: ' + JSON.stringify(debugInfo));
           }
           
           console.log('[Training Room] 🔥 Firestore에서 Training Room 목록 로드 시도...');
@@ -394,8 +426,8 @@ async function loadTrainingRooms() {
           // Firestore v9 모듈 방식 (Modular SDK) - 동적 import
           let collection, query, where, getDocs;
           
-          // 이미 로드된 경우 window에서 가져오기, 없으면 동적 import
-          if (window.firebase && window.firebase.firestore) {
+          // Firebase v8 호환 모드 사용 (window.firebase.firestore가 있는 경우)
+          if (window.firebase && typeof window.firebase.firestore === 'function' && !useV9) {
                 // Firebase v8 호환 모드 - 병렬 쿼리로 속도 향상
                 const db = window.firebase.firestore();
                 const rooms = [];
@@ -441,11 +473,8 @@ async function loadTrainingRooms() {
                 
                 console.log(`[Training Room] ✅ Firestore(v8)에서 ${rooms.length}개 Room 로드 완료 (병렬 쿼리)`);
                 return rooms;
-              } else {
+              } else if (useV9 && firestoreDb) {
                 // Firestore v9 모듈 방식 - 병렬 쿼리로 속도 향상
-                if (!firestoreDb) {
-                  throw new Error('Firestore v9 인스턴스를 찾을 수 없습니다.');
-                }
                 
                 const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
                 collection = firestoreModule.collection;
@@ -502,6 +531,9 @@ async function loadTrainingRooms() {
                 
                 console.log(`[Training Room] ✅ Firestore(v9)에서 ${rooms.length}개 Room 로드 완료 (병렬 쿼리)`);
                 return rooms;
+              } else {
+                // Firestore 인스턴스를 찾을 수 없는 경우
+                throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firebase.firestore() 또는 window.firestoreV9를 확인하세요.');
               }
         },
         maxRetries, // 동적 재시도 횟수
@@ -518,6 +550,8 @@ async function loadTrainingRooms() {
       // 성능 측정: API 로드 완료
       const apiLoadTime = performance.now() - performanceStart;
       console.log('[Training Room] 📊 API 로드 시간:', Math.round(apiLoadTime), 'ms');
+      console.log('[Training Room] 📱 모바일 환경:', isMobile ? '예' : '아니오');
+      console.log('[Training Room] 📊 로드된 Room 개수:', trainingRoomList.length);
       
       // 데이터 구조 확인 (디버깅용 - 프로덕션에서는 제거 가능)
       if (trainingRoomList.length > 0 && console.log) {
@@ -528,9 +562,28 @@ async function loadTrainingRooms() {
           title: room.title,
           hasPassword: !!(room.password && String(room.password).trim() !== '')
         })));
+      } else if (trainingRoomList.length === 0) {
+        console.warn('[Training Room] ⚠️ 로드된 Room이 0개입니다. Firestore에 데이터가 있는지 확인하세요.');
+        console.log('[Training Room] 디버깅 정보:', {
+          isMobile,
+          networkType: networkInfo?.effectiveType || 'unknown',
+          firebaseAvailable: !!(window.firebase && window.firebase.firestore),
+          firestoreV9Available: !!window.firestoreV9,
+          windowFirestoreAvailable: !!window.firestore
+        });
       }
     } else {
       console.error('[Training Room] ❌ Firebase Firestore에서 목록 로드 실패:', roomsResult.reason);
+      console.error('[Training Room] 에러 상세:', {
+        message: roomsResult.reason?.message,
+        code: roomsResult.reason?.code,
+        stack: roomsResult.reason?.stack,
+        isMobile,
+        networkType: networkInfo?.effectiveType || 'unknown',
+        firebaseAvailable: !!(window.firebase && window.firebase.firestore),
+        firestoreV9Available: !!window.firestoreV9,
+        windowFirestoreAvailable: !!window.firestore
+      });
       trainingRoomList = [];
       
       // 에러 메시지 표시
@@ -539,6 +592,7 @@ async function loadTrainingRooms() {
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
           <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
           <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Firebase Firestore 연결 오류: ${errorMessage}</p>
+          ${isMobile ? '<p style="color: #f59e0b; font-size: 12px; margin-bottom: 10px;">모바일 환경: 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.</p>' : ''}
           <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
                   style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
             다시 시도
@@ -604,14 +658,19 @@ async function loadTrainingRooms() {
     }
     
     // Training Room 목록이 비어있으면 빈 상태 표시
-    if (trainingRoomList.length === 0) {
+    // 단, 쿼리가 성공했을 때만 빈 상태 메시지 표시 (실패 시는 위에서 에러 메시지 표시됨)
+    if (trainingRoomList.length === 0 && roomsResult.status === 'fulfilled') {
+      console.log('[Training Room] ℹ️ Firestore 쿼리는 성공했지만 등록된 Room이 없습니다.');
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
           <p style="color: #666;">등록된 Training Room이 없습니다.</p>
+          ${isMobile ? '<p style="color: #999; font-size: 12px; margin-top: 10px;">새로운 Training Room을 생성하려면 상단의 생성 버튼을 사용하세요.</p>' : ''}
         </div>
       `;
       return;
     }
+    
+    // 쿼리 실패 시는 위에서 이미 에러 메시지를 표시하고 return 했으므로 여기까지 오지 않음
 
     // 목록 렌더링 (사용자 목록과 함께)
     // 점진적 로딩: 모바일에서 부드러운 전환을 위해 requestAnimationFrame 사용
