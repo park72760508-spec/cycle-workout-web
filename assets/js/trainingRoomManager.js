@@ -3943,51 +3943,88 @@ async function openTrainingRoomCreateModal() {
     }
   }
 
-  // 모바일 환경에서 저장 버튼 이벤트 리스너 명시적으로 추가 (터치 이벤트 지원)
+  // 저장 버튼 이벤트 리스너 명시적으로 추가 (모바일 터치 이벤트 강화)
   const isMobile = isMobileDeviceForTrainingRooms();
-  const saveBtn = document.querySelector('.training-room-create-save-btn');
+  const saveBtn = document.getElementById('btnTrainingRoomSave') || document.querySelector('.training-room-create-save-btn');
+  
   if (saveBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
+    // 기존 이벤트 리스너 완전 제거 (중복 방지)
     if (saveBtn._saveBtnClickHandler) {
-      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler);
-      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchHandler);
+      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler, true);
+      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler, false);
+    }
+    if (saveBtn._saveBtnTouchStartHandler) {
+      saveBtn.removeEventListener('touchstart', saveBtn._saveBtnTouchStartHandler, true);
+      saveBtn.removeEventListener('touchstart', saveBtn._saveBtnTouchStartHandler, false);
+    }
+    if (saveBtn._saveBtnTouchEndHandler) {
+      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchEndHandler, true);
+      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchEndHandler, false);
     }
     
-    // 클릭 이벤트 핸들러
-    const clickHandler = (e) => {
+    // 통합 이벤트 핸들러 (클릭과 터치 모두 처리)
+    const handleSave = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log('[Training Room] 저장 버튼 클릭 (click)');
-      if (typeof submitTrainingRoomCreate === 'function') {
-        submitTrainingRoomCreate();
+      e.stopImmediatePropagation();
+      
+      console.log('[Training Room] 저장 버튼 이벤트 발생:', e.type, ', 모바일:', isMobile);
+      
+      // 함수 존재 확인 및 호출
+      if (typeof window.submitTrainingRoomCreate === 'function') {
+        console.log('[Training Room] submitTrainingRoomCreate 함수 호출 시작');
+        window.submitTrainingRoomCreate().catch(err => {
+          console.error('[Training Room] 저장 중 오류:', err);
+        });
+      } else if (typeof submitTrainingRoomCreate === 'function') {
+        console.log('[Training Room] submitTrainingRoomCreate 함수 호출 시작 (로컬)');
+        submitTrainingRoomCreate().catch(err => {
+          console.error('[Training Room] 저장 중 오류:', err);
+        });
       } else {
         console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
+        console.error('[Training Room] window.submitTrainingRoomCreate:', typeof window.submitTrainingRoomCreate);
+        console.error('[Training Room] submitTrainingRoomCreate:', typeof submitTrainingRoomCreate);
+        if (typeof showToast === 'function') {
+          showToast('저장 기능을 사용할 수 없습니다. 페이지를 새로고침해주세요.', 'error');
+        }
       }
     };
     
-    // 터치 이벤트 핸들러 (모바일)
-    const touchHandler = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('[Training Room] 저장 버튼 터치 (touchend)');
-      if (typeof submitTrainingRoomCreate === 'function') {
-        submitTrainingRoomCreate();
-      } else {
-        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
-      }
-    };
+    // 클릭 이벤트 (PC 및 모바일 모두)
+    saveBtn.addEventListener('click', handleSave, { passive: false, capture: false });
     
-    // 이벤트 리스너 추가
-    saveBtn.addEventListener('click', clickHandler, { passive: false });
+    // 모바일 터치 이벤트 (touchstart와 touchend 모두 처리)
     if (isMobile) {
-      saveBtn.addEventListener('touchend', touchHandler, { passive: false });
+      // touchstart로 즉시 처리 (더 빠른 반응)
+      saveBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Training Room] 저장 버튼 touchstart');
+        handleSave(e);
+      }, { passive: false, capture: false });
+      
+      // touchend도 처리 (이중 안전장치)
+      saveBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Training Room] 저장 버튼 touchend');
+        handleSave(e);
+      }, { passive: false, capture: false });
     }
     
-    // 핸들러 참조 저장 (나중에 제거하기 위해)
-    saveBtn._saveBtnClickHandler = clickHandler;
-    saveBtn._saveBtnTouchHandler = touchHandler;
+    // 핸들러 참조 저장
+    saveBtn._saveBtnClickHandler = handleSave;
     
-    console.log('[Training Room] 저장 버튼 이벤트 리스너 추가 완료 (모바일:', isMobile, ')');
+    // 버튼 스타일 강화 (모바일에서 클릭 가능하도록)
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.style.touchAction = 'manipulation';
+    saveBtn.style.webkitTapHighlightColor = 'rgba(0, 0, 0, 0.1)';
+    saveBtn.style.userSelect = 'none';
+    
+    console.log('[Training Room] ✅ 저장 버튼 이벤트 리스너 추가 완료 (모바일:', isMobile, ', 버튼 ID:', saveBtn.id, ')');
+  } else {
+    console.error('[Training Room] 저장 버튼을 찾을 수 없습니다.');
   }
 
   if (typeof showToast === 'function') {
@@ -4130,51 +4167,86 @@ async function openTrainingRoomEditModal(roomId) {
     }
   }
 
-  // 모바일 환경에서 저장 버튼 이벤트 리스너 명시적으로 추가 (터치 이벤트 지원)
+  // 저장 버튼 이벤트 리스너 명시적으로 추가 (모바일 터치 이벤트 강화)
   const isMobile = isMobileDeviceForTrainingRooms();
-  const saveBtn = document.querySelector('.training-room-create-save-btn');
+  const saveBtn = document.getElementById('btnTrainingRoomSave') || document.querySelector('.training-room-create-save-btn');
+  
   if (saveBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
+    // 기존 이벤트 리스너 완전 제거 (중복 방지)
     if (saveBtn._saveBtnClickHandler) {
-      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler);
-      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchHandler);
+      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler, true);
+      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler, false);
+    }
+    if (saveBtn._saveBtnTouchStartHandler) {
+      saveBtn.removeEventListener('touchstart', saveBtn._saveBtnTouchStartHandler, true);
+      saveBtn.removeEventListener('touchstart', saveBtn._saveBtnTouchStartHandler, false);
+    }
+    if (saveBtn._saveBtnTouchEndHandler) {
+      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchEndHandler, true);
+      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchEndHandler, false);
     }
     
-    // 클릭 이벤트 핸들러
-    const clickHandler = (e) => {
+    // 통합 이벤트 핸들러 (클릭과 터치 모두 처리)
+    const handleSave = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log('[Training Room] 저장 버튼 클릭 (click) - 수정 모드');
-      if (typeof submitTrainingRoomCreate === 'function') {
-        submitTrainingRoomCreate();
+      e.stopImmediatePropagation();
+      
+      console.log('[Training Room] 저장 버튼 이벤트 발생 (수정 모드):', e.type, ', 모바일:', isMobile);
+      
+      // 함수 존재 확인 및 호출
+      if (typeof window.submitTrainingRoomCreate === 'function') {
+        console.log('[Training Room] submitTrainingRoomCreate 함수 호출 시작 (수정 모드)');
+        window.submitTrainingRoomCreate().catch(err => {
+          console.error('[Training Room] 저장 중 오류:', err);
+        });
+      } else if (typeof submitTrainingRoomCreate === 'function') {
+        console.log('[Training Room] submitTrainingRoomCreate 함수 호출 시작 (수정 모드, 로컬)');
+        submitTrainingRoomCreate().catch(err => {
+          console.error('[Training Room] 저장 중 오류:', err);
+        });
       } else {
-        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
+        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다 (수정 모드)');
+        if (typeof showToast === 'function') {
+          showToast('저장 기능을 사용할 수 없습니다. 페이지를 새로고침해주세요.', 'error');
+        }
       }
     };
     
-    // 터치 이벤트 핸들러 (모바일)
-    const touchHandler = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('[Training Room] 저장 버튼 터치 (touchend) - 수정 모드');
-      if (typeof submitTrainingRoomCreate === 'function') {
-        submitTrainingRoomCreate();
-      } else {
-        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
-      }
-    };
+    // 클릭 이벤트 (PC 및 모바일 모두)
+    saveBtn.addEventListener('click', handleSave, { passive: false, capture: false });
     
-    // 이벤트 리스너 추가
-    saveBtn.addEventListener('click', clickHandler, { passive: false });
+    // 모바일 터치 이벤트 (touchstart와 touchend 모두 처리)
     if (isMobile) {
-      saveBtn.addEventListener('touchend', touchHandler, { passive: false });
+      // touchstart로 즉시 처리 (더 빠른 반응)
+      saveBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Training Room] 저장 버튼 touchstart (수정 모드)');
+        handleSave(e);
+      }, { passive: false, capture: false });
+      
+      // touchend도 처리 (이중 안전장치)
+      saveBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Training Room] 저장 버튼 touchend (수정 모드)');
+        handleSave(e);
+      }, { passive: false, capture: false });
     }
     
-    // 핸들러 참조 저장 (나중에 제거하기 위해)
-    saveBtn._saveBtnClickHandler = clickHandler;
-    saveBtn._saveBtnTouchHandler = touchHandler;
+    // 핸들러 참조 저장
+    saveBtn._saveBtnClickHandler = handleSave;
     
-    console.log('[Training Room] 저장 버튼 이벤트 리스너 추가 완료 (수정 모드, 모바일:', isMobile, ')');
+    // 버튼 스타일 강화 (모바일에서 클릭 가능하도록)
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.style.touchAction = 'manipulation';
+    saveBtn.style.webkitTapHighlightColor = 'rgba(0, 0, 0, 0.1)';
+    saveBtn.style.userSelect = 'none';
+    
+    console.log('[Training Room] ✅ 저장 버튼 이벤트 리스너 추가 완료 (수정 모드, 모바일:', isMobile, ', 버튼 ID:', saveBtn.id, ')');
+  } else {
+    console.error('[Training Room] 저장 버튼을 찾을 수 없습니다 (수정 모드).');
   }
 
   if (typeof showToast === 'function') {
