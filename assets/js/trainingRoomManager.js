@@ -779,16 +779,10 @@ function renderTrainingRoomList(rooms, users = []) {
            style="cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;">
         <div class="training-room-content">
           <div class="training-room-name-section" style="display: flex; align-items: center; gap: 8px;">
-            <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
-              <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}">
-                ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
-              </div>
-              ${hasPassword ? `
-                <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
-              ` : ''}
+            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0;">
+              ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
             </div>
-            ${canEdit || canDelete ? `
-            <div class="training-room-actions" onclick="event.stopPropagation();" style="display: flex; gap: 8px; flex-shrink: 0;">
+            <div class="training-room-actions" onclick="event.stopPropagation();" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
               ${canEdit ? `
               <button type="button" class="training-room-edit-btn" onclick="openTrainingRoomEditModal('${room.id}')" aria-label="수정" title="수정">
                 <img src="assets/img/check-ok.png" alt="수정" style="width: 20px; height: 20px; display: block;" />
@@ -799,8 +793,11 @@ function renderTrainingRoomList(rooms, users = []) {
                 <span style="font-size: 20px; line-height: 1; color: #dc3545;">✕</span>
               </button>
               ` : ''}
+              ${hasPassword ? `
+              <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
+              ` : ''}
+              ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
             </div>
-            ` : ''}
           </div>
           <div class="training-room-coach-section">
             <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
@@ -808,7 +805,6 @@ function renderTrainingRoomList(rooms, users = []) {
             </div>
           </div>
         </div>
-        ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
   });
@@ -3631,35 +3627,63 @@ async function openTrainingRoomEditModal(roomId) {
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
   const currentUserId = currentUser?.id || currentUser?.uid || '';
   
-  try {
-    const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
-    if (!db) {
-      if (typeof showToast === 'function') showToast('Firestore를 사용할 수 없습니다.', 'error');
-      return;
+  // 1순위: 메모리의 trainingRoomList에서 찾기 (가장 빠름)
+  let roomData = null;
+  const roomIdStr = String(roomId);
+  if (Array.isArray(trainingRoomList) && trainingRoomList.length > 0) {
+    roomData = trainingRoomList.find(r => String(r.id) === roomIdStr);
+    if (roomData) {
+      console.log('[Training Room] 메모리에서 Training Room 찾음:', roomData);
     }
-
-    const docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(roomId));
-    const doc = await docRef.get();
-    
-    if (!doc.exists) {
-      if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
-      return;
-    }
-
-    const data = doc.data();
-    const roomManagerId = String(data.user_id || data.userId || '');
-    const isAdmin = userGrade === '1';
-    const isManager = roomManagerId && String(currentUserId) === roomManagerId;
-    
-    if (!isAdmin && !isManager) {
-      if (typeof showToast === 'function') {
-        showToast('Training Room 수정 권한이 없습니다. 관리자(grade=1) 또는 지정된 관리자만 수정할 수 있습니다.', 'error');
+  }
+  
+  // 2순위: Firestore에서 찾기 (training_rooms 우선, 없으면 training_schedules)
+  if (!roomData) {
+    try {
+      const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
+      if (!db) {
+        if (typeof showToast === 'function') showToast('Firestore를 사용할 수 없습니다.', 'error');
+        return;
       }
+
+      // training_rooms에서 먼저 찾기
+      let docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(roomIdStr);
+      let doc = await docRef.get();
+      
+      if (doc.exists) {
+        roomData = { id: doc.id, ...doc.data() };
+        console.log('[Training Room] training_rooms에서 찾음:', roomData);
+      } else {
+        // training_schedules에서 찾기
+        docRef = db.collection('training_schedules').doc(roomIdStr);
+        doc = await docRef.get();
+        
+        if (doc.exists) {
+          roomData = { id: doc.id, ...doc.data() };
+          console.log('[Training Room] training_schedules에서 찾음:', roomData);
+        }
+      }
+      
+      if (!roomData) {
+        if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+        return;
+      }
+    } catch (e) {
+      console.error('[Training Room] Firestore 조회 실패:', e);
+      if (typeof showToast === 'function') showToast('Training Room 정보를 불러올 수 없습니다.', 'error');
       return;
     }
-  } catch (e) {
-    console.error('[Training Room] 권한 확인 실패:', e);
-    if (typeof showToast === 'function') showToast('권한 확인 중 오류가 발생했습니다.', 'error');
+  }
+
+  // 권한 확인
+  const roomManagerId = String(roomData.user_id || roomData.userId || '');
+  const isAdmin = userGrade === '1';
+  const isManager = roomManagerId && String(currentUserId) === roomManagerId;
+  
+  if (!isAdmin && !isManager) {
+    if (typeof showToast === 'function') {
+      showToast('Training Room 수정 권한이 없습니다. 관리자(grade=1) 또는 지정된 관리자만 수정할 수 있습니다.', 'error');
+    }
     return;
   }
   
@@ -3683,53 +3707,33 @@ async function openTrainingRoomEditModal(roomId) {
   const titleEl = document.querySelector('.training-room-create-title');
 
   if (titleEl) titleEl.textContent = 'Training Room 수정';
+  
+  // roomData에서 정보 로드
+  if (nameEl) nameEl.value = roomData.title || roomData.name || '';
+  if (trackEl) trackEl.value = String(roomData.track_count || 0);
+  if (passwordEl) passwordEl.value = roomData.password || '';
 
-  try {
-    const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
-    if (!db) {
-      if (typeof showToast === 'function') showToast('Firestore를 사용할 수 없습니다.', 'error');
-      return;
+  if (managerEl) {
+    managerEl.innerHTML = '<option value="">관리자 선택 (grade=3 권한 사용자)</option>';
+    try {
+      const grade3Users = await getGrade3Users();
+      const currentManagerId = String(roomData.user_id || roomData.userId || '');
+      grade3Users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = String(u.id || '');
+        opt.textContent = (u.name || '이름 없음') + ' (grade=3)';
+        if (String(u.id) === currentManagerId) {
+          opt.selected = true;
+        }
+        managerEl.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('[Training Room] grade=3 사용자 로드 실패:', e);
     }
+  }
 
-    const docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(roomId);
-    const doc = await docRef.get();
-    
-    if (!doc.exists) {
-      if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
-      return;
-    }
-
-    const data = doc.data();
-    
-    if (nameEl) nameEl.value = data.title || '';
-    if (trackEl) trackEl.value = String(data.track_count || 0);
-    if (passwordEl) passwordEl.value = data.password || '';
-
-    if (managerEl) {
-      managerEl.innerHTML = '<option value="">관리자 선택 (grade=3 권한 사용자)</option>';
-      try {
-        const grade3Users = await getGrade3Users();
-        const currentManagerId = String(data.user_id || data.userId || '');
-        grade3Users.forEach(u => {
-          const opt = document.createElement('option');
-          opt.value = String(u.id || '');
-          opt.textContent = (u.name || '이름 없음') + ' (grade=3)';
-          if (String(u.id) === currentManagerId) {
-            opt.selected = true;
-          }
-          managerEl.appendChild(opt);
-        });
-      } catch (e) {
-        console.warn('[Training Room] grade=3 사용자 로드 실패:', e);
-      }
-    }
-
-    if (typeof showToast === 'function') {
-      showToast('Training Room 수정', 'info');
-    }
-  } catch (e) {
-    console.error('[Training Room] 수정 모달 열기 실패:', e);
-    if (typeof showToast === 'function') showToast('Training Room 정보를 불러올 수 없습니다.', 'error');
+  if (typeof showToast === 'function') {
+    showToast('Training Room 수정', 'info');
   }
 }
 
@@ -3818,11 +3822,26 @@ async function submitTrainingRoomCreate() {
     try {
       const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
       if (db) {
-        const docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
-        const doc = await docRef.get();
+        // training_rooms에서 먼저 찾기
+        let docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
+        let doc = await docRef.get();
+        let roomData = null;
+        let collectionName = TRAINING_ROOMS_COLLECTION;
+        
         if (doc.exists) {
-          const data = doc.data();
-          const roomManagerId = String(data.user_id || data.userId || '');
+          roomData = doc.data();
+        } else {
+          // training_schedules에서 찾기
+          docRef = db.collection('training_schedules').doc(String(editId));
+          doc = await docRef.get();
+          if (doc.exists) {
+            roomData = doc.data();
+            collectionName = 'training_schedules';
+          }
+        }
+        
+        if (roomData) {
+          const roomManagerId = String(roomData.user_id || roomData.userId || '');
           const isAdmin = userGrade === '1';
           const isManager = roomManagerId && String(currentUserId) === roomManagerId;
           
@@ -3832,6 +3851,14 @@ async function submitTrainingRoomCreate() {
             }
             return;
           }
+          
+          // 컬렉션 정보 저장 (나중에 업데이트할 때 사용)
+          window._trainingRoomEditCollection = collectionName;
+        } else {
+          if (typeof showToast === 'function') {
+            showToast('Training Room을 찾을 수 없습니다.', 'error');
+          }
+          return;
         }
       }
     } catch (e) {
@@ -3881,28 +3908,52 @@ async function submitTrainingRoomCreate() {
 
     if (isEditMode && editId) {
       // 수정 모드
-      const docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(editId);
+      // 컬렉션 정보 확인 (권한 체크 시 저장됨)
+      const collectionName = window._trainingRoomEditCollection || TRAINING_ROOMS_COLLECTION;
+      
+      const docRef = db.collection(collectionName).doc(String(editId));
       const doc = await docRef.get();
       
       if (!doc.exists) {
-        if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
-        return;
+        // training_rooms에서 찾기 시도 (fallback)
+        if (collectionName === 'training_schedules') {
+          const altDocRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
+          const altDoc = await altDocRef.get();
+          if (altDoc.exists) {
+            const updateData = {
+              title: title,
+              track_count: trackCount,
+              user_id: managerId || null,
+              userId: managerId || null,
+              password: password || '',
+              updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
+            };
+            await altDocRef.update(updateData);
+            firestoreDocId = editId;
+            console.log('[Training Room] 수정 완료 (training_rooms):', editId);
+          } else {
+            if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+            return;
+          }
+        } else {
+          if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+          return;
+        }
+      } else {
+        const updateData = {
+          title: title,
+          track_count: trackCount,
+          user_id: managerId || null,
+          userId: managerId || null,
+          password: password || '',
+          updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
+        };
+
+        await docRef.update(updateData);
+        firestoreDocId = editId;
+        
+        console.log('[Training Room] 수정 완료 (' + collectionName + '):', editId);
       }
-
-      const existingData = doc.data();
-      const updateData = {
-        title: title,
-        track_count: trackCount,
-        user_id: managerId || null,
-        userId: managerId || null,
-        password: password || '',
-        updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
-      };
-
-      await docRef.update(updateData);
-      firestoreDocId = editId;
-      
-      console.log('[Training Room] 수정 완료:', editId);
     } else {
       // 생성 모드
       const nextId = await getNextTrainingRoomId();
@@ -3975,8 +4026,28 @@ async function deleteTrainingRoom(roomId) {
       return;
     }
 
-    const docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(roomId));
-    await docRef.delete();
+    const roomIdStr = String(roomId);
+    
+    // training_rooms에서 먼저 찾아서 삭제
+    let docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(roomIdStr);
+    let doc = await docRef.get();
+    
+    if (doc.exists) {
+      await docRef.delete();
+      console.log('[Training Room] 삭제 완료 (training_rooms):', roomIdStr);
+    } else {
+      // training_schedules에서 찾아서 삭제
+      docRef = db.collection('training_schedules').doc(roomIdStr);
+      doc = await docRef.get();
+      
+      if (doc.exists) {
+        await docRef.delete();
+        console.log('[Training Room] 삭제 완료 (training_schedules):', roomIdStr);
+      } else {
+        if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+        return;
+      }
+    }
 
     if (typeof showToast === 'function') showToast('Training Room이 삭제되었습니다.', 'success');
     loadTrainingRooms();
