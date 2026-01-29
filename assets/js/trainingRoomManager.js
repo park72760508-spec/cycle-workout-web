@@ -136,7 +136,60 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 /**
+ * Firebase Auth가 준비될 때까지 대기 (모바일 최적화)
+ * @param {number} maxWaitMs - 최대 대기 시간 (밀리초), 기본값: 모바일 3000ms, PC 2000ms
+ * @returns {Promise<void>}
+ */
+async function waitForAuth(maxWaitMs = null) {
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const timeout = maxWaitMs || (isMobile ? 3000 : 2000); // 모바일: 3초, PC: 2초
+  const pollInterval = 200; // 200ms마다 확인
+  const startTime = Date.now();
+  let attempt = 0;
+  
+  console.log('[Mobile Debug] waitForAuth 시작 - 최대 대기:', timeout, 'ms, 모바일:', isMobile);
+  
+  while (Date.now() - startTime < timeout) {
+    attempt++;
+    
+    try {
+      // Firebase Auth 인스턴스 확인
+      let auth = null;
+      if (window.firebase && typeof window.firebase.auth === 'function') {
+        auth = window.firebase.auth();
+      } else if (window.auth) {
+        auth = window.auth;
+      }
+      
+      if (auth) {
+        // currentUser 확인 (로그인 상태가 아니어도 auth 인스턴스는 있어야 함)
+        // 모바일에서는 Auth 초기화가 완료될 때까지 대기
+        const currentUser = auth.currentUser;
+        console.log('[Mobile Debug] ✅ Firebase Auth 인스턴스 확인 완료 (시도:', attempt, ', 경과:', Date.now() - startTime, 'ms, 로그인:', !!currentUser, ')');
+        return; // Auth 인스턴스가 있으면 성공
+      }
+    } catch (e) {
+      console.log('[Mobile Debug] ⏳ Firebase Auth 초기화 시도 중... (시도:', attempt, ')');
+    }
+    
+    // 아직 준비되지 않음 - 대기 후 재시도
+    if (attempt % 5 === 0) { // 5번마다 로그 출력 (1초마다)
+      console.log('[Mobile Debug] ⏳ Firebase Auth 대기 중... (시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
+    }
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+  
+  // 타임아웃 발생 (경고만 출력하고 계속 진행 - Auth가 없어도 Firestore는 조회 가능할 수 있음)
+  console.warn('[Mobile Debug] ⚠️ Firebase Auth 대기 타임아웃 (계속 진행):', {
+    isMobile: isMobile,
+    elapsed: Date.now() - startTime,
+    attempts: attempt
+  });
+}
+
+/**
  * Firestore 인스턴스가 준비될 때까지 폴링 방식으로 대기 (모바일 최적화)
+ * Firebase Auth 대기 로직 포함 (권한 오류 방지)
  * @param {number} maxWaitMs - 최대 대기 시간 (밀리초), 기본값: 모바일 10000ms, PC 5000ms
  * @returns {Promise<{db: any, useV9: boolean}>} Firestore 인스턴스와 사용할 SDK 버전
  */
@@ -148,6 +201,16 @@ async function waitForFirestore(maxWaitMs = null) {
   let attempt = 0;
   
   console.log('[Mobile Debug] waitForFirestore 시작 - 최대 대기:', timeout, 'ms, 모바일:', isMobile);
+  
+  // 모바일 환경에서는 Firebase Auth가 준비될 때까지 먼저 대기 (권한 오류 방지)
+  if (isMobile) {
+    try {
+      await waitForAuth(3000); // 최대 3초 대기
+      console.log('[Mobile Debug] Firebase Auth 대기 완료, Firestore 인스턴스 확인 시작');
+    } catch (authError) {
+      console.warn('[Mobile Debug] Firebase Auth 대기 중 오류 (계속 진행):', authError);
+    }
+  }
   
   while (Date.now() - startTime < timeout) {
     attempt++;
@@ -456,7 +519,7 @@ async function loadTrainingRooms() {
     
     // Training Room 목록과 사용자 목록을 병렬로 로드 (성능 최적화 + 모바일 최적화)
     const [roomsResult, users] = await Promise.allSettled([
-      // ✅ Firebase Firestore만 사용 (GAS 제거)
+      // ✅ training_rooms 컬렉션만 조회 (training_schedules 제거)
       withRetryForTrainingRooms(
         async () => {
           const { db: firestoreDb, useV9 } = firestoreInstance;
@@ -476,214 +539,92 @@ async function loadTrainingRooms() {
             }
           }
           
-          // Firestore v9 모듈 방식 (Modular SDK) - 동적 import
-          let collection, query, where, getDocs;
-          
           // Firebase v8 호환 모드 사용
           if (!useV9) {
-            console.log('[Mobile Debug] Step 3: Firebase v8 호환 모드 쿼리 시작');
+            console.log('[Mobile Debug] Step 3: Firebase v8 호환 모드 쿼리 시작 (training_rooms만)');
             const db = firestoreDb;
+            
+            // ✅ training_rooms 컬렉션만 조회 (전체 조회 후 client-side filtering)
+            // 부등호 쿼리(.where('status', '!=', 'inactive'))는 인덱스 오류를 유발할 수 있으므로 제거
+            console.log('[Mobile Debug] Step 3-1: training_rooms 전체 조회 시작 (client-side filtering 적용)');
+            const roomsSnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
+            
             const rooms = [];
+            const totalDocs = roomsSnapshot.size;
+            console.log('[Mobile Debug] Step 3-2: training_rooms 조회 완료, 총', totalDocs, '개 문서');
             
-            // 모바일에서는 Firestore SDK의 자체 재시도 로직을 신뢰하고 타임아웃을 제거하거나 매우 길게 설정
-            // Firestore는 오프라인 지속성과 자체 재시도 로직이 있으므로 인위적인 타임아웃은 제거
-            console.log('[Mobile Debug] Step 3-1: training_schedules 쿼리 시작');
-            const scheduleQuery = db.collection('training_schedules')
-              .where('status', '==', 'active')
-              .get();
-            
-            console.log('[Mobile Debug] Step 3-2: training_rooms 쿼리 시작');
-            const roomsQuery = db.collection(TRAINING_ROOMS_COLLECTION)
-              .where('status', '!=', 'inactive')
-              .get()
-              .catch(e => {
-                // status 필드가 없는 경우를 대비해 전체 조회로 폴백
-                console.warn('[Mobile Debug] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
-                return db.collection(TRAINING_ROOMS_COLLECTION).get();
-              });
-            
-            // 두 컬렉션을 병렬로 조회 (타임아웃 없이 Firestore SDK에 신뢰)
-            console.log('[Mobile Debug] Step 3-3: 병렬 쿼리 실행 (Promise.allSettled)');
-            const [scheduleResult, roomsResult] = await Promise.allSettled([
-              scheduleQuery,
-              roomsQuery
-            ]);
-                
-            // training_schedules 처리 (부분 성공 허용)
-            console.log('[Mobile Debug] Step 3-4: training_schedules 결과 처리');
-            if (scheduleResult.status === 'fulfilled') {
-              const scheduleCount = scheduleResult.value.size || 0;
-              console.log('[Mobile Debug] ✅ training_schedules 쿼리 성공:', scheduleCount, '개 문서');
-              scheduleResult.value.forEach((doc) => {
-                rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
-              });
-            } else {
-              const errorMsg = scheduleResult.reason?.message || scheduleResult.reason || '알 수 없는 오류';
-              const errorCode = scheduleResult.reason?.code || 'unknown';
-              console.error('[Mobile Debug] ❌ training_schedules 로드 실패:', errorMsg, '코드:', errorCode);
-              console.error('[Mobile Debug] training_schedules 실패 상세:', {
-                code: errorCode,
-                message: errorMsg,
-                stack: scheduleResult.reason?.stack,
-                isMobile: isMobile
-              });
-              // 부분 실패는 허용 - training_rooms만이라도 로드되면 계속 진행
-            }
-            
-            // training_rooms 처리 (부분 성공 허용)
-            console.log('[Mobile Debug] Step 3-5: training_rooms 결과 처리');
-            if (roomsResult.status === 'fulfilled') {
-              const roomsCount = roomsResult.value.size || 0;
-              console.log('[Mobile Debug] ✅ training_rooms 쿼리 성공:', roomsCount, '개 문서');
-              roomsResult.value.forEach((doc) => {
-                const data = doc.data();
-                // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
-                if (data.status !== 'inactive') {
-                  rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
-                }
-              });
-            } else {
-              const errorMsg = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
-              const errorCode = roomsResult.reason?.code || 'unknown';
-              console.error('[Mobile Debug] ❌ training_rooms 로드 실패:', errorMsg, '코드:', errorCode);
-              console.error('[Mobile Debug] training_rooms 실패 상세:', {
-                code: errorCode,
-                message: errorMsg,
-                stack: roomsResult.reason?.stack,
-                isMobile: isMobile
-              });
-              // 부분 실패는 허용 - training_schedules만이라도 로드되면 계속 진행
-            }
-            
-            console.log('[Mobile Debug] Step 3 완료: 총', rooms.length, '개 Room 로드');
-            console.log('[Mobile Debug] 쿼리 결과 요약:', {
-              scheduleSuccess: scheduleResult.status === 'fulfilled',
-              scheduleCount: scheduleResult.status === 'fulfilled' ? scheduleResult.value.size : 0,
-              roomsSuccess: roomsResult.status === 'fulfilled',
-              roomsCount: roomsResult.status === 'fulfilled' ? roomsResult.value.size : 0,
-              totalRooms: rooms.length,
-              isMobile: isMobile
+            // Client-side filtering: inactive 상태 제외
+            roomsSnapshot.forEach((doc) => {
+              const data = doc.data();
+              // status가 'inactive'가 아닌 경우만 포함
+              if (data.status !== 'inactive') {
+                rooms.push({ 
+                  id: doc.id, 
+                  ...data, 
+                  title: data.title || data.name, 
+                  _sourceCollection: 'training_rooms' 
+                });
+              }
             });
             
-            // 두 쿼리 모두 실패한 경우에만 에러 발생
-            if (scheduleResult.status !== 'fulfilled' && roomsResult.status !== 'fulfilled') {
-              const errorMsg = 'training_schedules와 training_rooms 모두 로드 실패';
-              console.error('[Mobile Debug] ❌ 모든 쿼리 실패:', errorMsg);
-              throw new Error(errorMsg + '. training_schedules: ' + (scheduleResult.reason?.message || 'unknown') + ', training_rooms: ' + (roomsResult.reason?.message || 'unknown'));
-            }
+            const filteredCount = rooms.length;
+            console.log('[Mobile Debug] ✅ training_rooms 쿼리 성공:', filteredCount, '개 Room (전체', totalDocs, '개 중)');
+            console.log('[Mobile Debug] 쿼리 결과 요약:', {
+              totalDocs: totalDocs,
+              filteredRooms: filteredCount,
+              isMobile: isMobile
+            });
             
             // 모바일에서 빈 결과인 경우 경고
             if (rooms.length === 0 && isMobile) {
               console.warn('[Mobile Debug] ⚠️ [모바일] 쿼리는 성공했지만 결과가 비어있습니다.');
-              console.warn('[Mobile Debug] 가능한 원인: 1) 실제로 데이터가 없음, 2) 권한 문제, 3) 네트워크 문제');
+              console.warn('[Mobile Debug] 가능한 원인: 1) 실제로 데이터가 없음, 2) 모든 Room이 inactive 상태, 3) 권한 문제');
             }
             
             return rooms;
           } else if (useV9) {
             // Firestore v9 모듈 방식
-            console.log('[Mobile Debug] Step 3: Firebase v9 Modular SDK 쿼리 시작');
+            console.log('[Mobile Debug] Step 3: Firebase v9 Modular SDK 쿼리 시작 (training_rooms만)');
             
             const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-            collection = firestoreModule.collection;
-            query = firestoreModule.query;
-            where = firestoreModule.where;
-            getDocs = firestoreModule.getDocs;
+            const { collection, getDocs } = firestoreModule;
+            
+            // ✅ training_rooms 컬렉션만 조회 (전체 조회 후 client-side filtering)
+            // 부등호 쿼리는 인덱스 오류를 유발할 수 있으므로 제거
+            console.log('[Mobile Debug] Step 3-1: training_rooms 전체 조회 시작 (v9, client-side filtering 적용)');
+            const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
+            const roomsSnapshot = await getDocs(roomsRef);
             
             const rooms = [];
+            const totalDocs = roomsSnapshot.size;
+            console.log('[Mobile Debug] Step 3-2: training_rooms 조회 완료 (v9), 총', totalDocs, '개 문서');
             
-            console.log('[Mobile Debug] Step 3-1: training_schedules 쿼리 시작 (v9)');
-            const scheduleQueryV9 = (async () => {
-              const schedulesRef = collection(firestoreDb, 'training_schedules');
-              const q = query(schedulesRef, where('status', '==', 'active'));
-              return await getDocs(q);
-            })();
-            
-            console.log('[Mobile Debug] Step 3-2: training_rooms 쿼리 시작 (v9)');
-            const roomsQueryV9 = (async () => {
-              try {
-                const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
-                const q = query(roomsRef, where('status', '!=', 'inactive'));
-                return await getDocs(q);
-              } catch (e) {
-                // status 필드가 없는 경우를 대비해 전체 조회로 폴백
-                console.warn('[Mobile Debug] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
-                const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
-                return await getDocs(roomsRef);
+            // Client-side filtering: inactive 상태 제외
+            roomsSnapshot.forEach((doc) => {
+              const data = doc.data();
+              // status가 'inactive'가 아닌 경우만 포함
+              if (data.status !== 'inactive') {
+                rooms.push({ 
+                  id: doc.id, 
+                  ...data, 
+                  title: data.title || data.name, 
+                  _sourceCollection: 'training_rooms' 
+                });
               }
-            })();
-            
-            // 두 컬렉션을 병렬로 조회 (타임아웃 없이 Firestore SDK에 신뢰)
-            console.log('[Mobile Debug] Step 3-3: 병렬 쿼리 실행 (v9, Promise.allSettled)');
-            const [scheduleResult, roomsResult] = await Promise.allSettled([
-              scheduleQueryV9,
-              roomsQueryV9
-            ]);
-            
-            // training_schedules 처리 (부분 성공 허용)
-            console.log('[Mobile Debug] Step 3-4: training_schedules 결과 처리 (v9)');
-            if (scheduleResult.status === 'fulfilled') {
-              const scheduleCount = scheduleResult.value.size || 0;
-              console.log('[Mobile Debug] ✅ training_schedules 쿼리 성공 (v9):', scheduleCount, '개 문서');
-              scheduleResult.value.forEach((doc) => {
-                rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
-              });
-            } else {
-              const errorMsg = scheduleResult.reason?.message || scheduleResult.reason || '알 수 없는 오류';
-              const errorCode = scheduleResult.reason?.code || 'unknown';
-              console.error('[Mobile Debug] ❌ training_schedules 로드 실패 (v9):', errorMsg, '코드:', errorCode);
-              console.error('[Mobile Debug] training_schedules 실패 상세 (v9):', {
-                code: errorCode,
-                message: errorMsg,
-                stack: scheduleResult.reason?.stack,
-                isMobile: isMobile
-              });
-            }
-            
-            // training_rooms 처리 (부분 성공 허용)
-            console.log('[Mobile Debug] Step 3-5: training_rooms 결과 처리 (v9)');
-            if (roomsResult.status === 'fulfilled') {
-              const roomsCount = roomsResult.value.size || 0;
-              console.log('[Mobile Debug] ✅ training_rooms 쿼리 성공 (v9):', roomsCount, '개 문서');
-              roomsResult.value.forEach((doc) => {
-                const data = doc.data();
-                // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
-                if (data.status !== 'inactive') {
-                  rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
-                }
-              });
-            } else {
-              const errorMsg = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
-              const errorCode = roomsResult.reason?.code || 'unknown';
-              console.error('[Mobile Debug] ❌ training_rooms 로드 실패 (v9):', errorMsg, '코드:', errorCode);
-              console.error('[Mobile Debug] training_rooms 실패 상세 (v9):', {
-                code: errorCode,
-                message: errorMsg,
-                stack: roomsResult.reason?.stack,
-                isMobile: isMobile
-              });
-            }
-            
-            console.log('[Mobile Debug] Step 3 완료 (v9): 총', rooms.length, '개 Room 로드');
-            console.log('[Mobile Debug] 쿼리 결과 요약 (v9):', {
-              scheduleSuccess: scheduleResult.status === 'fulfilled',
-              scheduleCount: scheduleResult.status === 'fulfilled' ? scheduleResult.value.size : 0,
-              roomsSuccess: roomsResult.status === 'fulfilled',
-              roomsCount: roomsResult.status === 'fulfilled' ? roomsResult.value.size : 0,
-              totalRooms: rooms.length,
-              isMobile: isMobile
             });
             
-            // 두 쿼리 모두 실패한 경우에만 에러 발생
-            if (scheduleResult.status !== 'fulfilled' && roomsResult.status !== 'fulfilled') {
-              const errorMsg = 'training_schedules와 training_rooms 모두 로드 실패 (v9)';
-              console.error('[Mobile Debug] ❌ 모든 쿼리 실패 (v9):', errorMsg);
-              throw new Error(errorMsg + '. training_schedules: ' + (scheduleResult.reason?.message || 'unknown') + ', training_rooms: ' + (roomsResult.reason?.message || 'unknown'));
-            }
+            const filteredCount = rooms.length;
+            console.log('[Mobile Debug] ✅ training_rooms 쿼리 성공 (v9):', filteredCount, '개 Room (전체', totalDocs, '개 중)');
+            console.log('[Mobile Debug] 쿼리 결과 요약 (v9):', {
+              totalDocs: totalDocs,
+              filteredRooms: filteredCount,
+              isMobile: isMobile
+            });
             
             // 모바일에서 빈 결과인 경우 경고
             if (rooms.length === 0 && isMobile) {
               console.warn('[Mobile Debug] ⚠️ [모바일] 쿼리는 성공했지만 결과가 비어있습니다 (v9).');
-              console.warn('[Mobile Debug] 가능한 원인: 1) 실제로 데이터가 없음, 2) 권한 문제, 3) 네트워크 문제');
+              console.warn('[Mobile Debug] 가능한 원인: 1) 실제로 데이터가 없음, 2) 모든 Room이 inactive 상태, 3) 권한 문제');
             }
             
             return rooms;
@@ -742,19 +683,41 @@ async function loadTrainingRooms() {
       });
       trainingRoomList = [];
       
-      // 에러 메시지 표시
+      // 에러 메시지 표시 (사용자 친화적 메시지)
+      const errorCode = roomsResult.reason?.code || 'unknown';
       const errorMessage = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
+      
+      // 권한 오류인 경우 특별 처리
+      const isPermissionError = errorCode === 'permission-denied' || 
+                                 errorMessage.toLowerCase().includes('permission') ||
+                                 errorMessage.toLowerCase().includes('권한');
+      
+      const userFriendlyMessage = isPermissionError 
+        ? '목록을 불러오는 중입니다. 잠시만 기다려주세요.'
+        : '목록을 불러오는 중입니다. 잠시만 기다려주세요.';
+      
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-          <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
-          <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Firebase Firestore 연결 오류: ${errorMessage}</p>
+          <div class="spinner" style="margin: 0 auto 20px;"></div>
+          <p style="color: #666; font-size: 14px; margin-bottom: 20px;">${userFriendlyMessage}</p>
           ${isMobile ? '<p style="color: #f59e0b; font-size: 12px; margin-bottom: 10px;">모바일 환경: 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.</p>' : ''}
           <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
-                  style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+                  style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin-top: 10px;">
             다시 시도
           </button>
         </div>
       `;
+      
+      // 자동 재시도 (모바일 환경에서만, 권한 오류인 경우)
+      if (isMobile && isPermissionError) {
+        console.log('[Training Room] 📱 모바일 권한 오류 감지, 2초 후 자동 재시도...');
+        setTimeout(() => {
+          if (typeof loadTrainingRooms === 'function') {
+            loadTrainingRooms();
+          }
+        }, 2000);
+      }
+      
       return;
     }
 
@@ -832,30 +795,22 @@ async function loadTrainingRooms() {
             if (firestoreDb) {
               let retryRooms = [];
               
-              // training_schedules 전체 조회 (필터 없이)
-              try {
-                const scheduleSnapshot = await firestoreDb.collection('training_schedules').get();
-                scheduleSnapshot.forEach((doc) => {
-                  const data = doc.data();
-                  if (data.status === 'active' || !data.status) {
-                    retryRooms.push({ id: doc.id, ...data, _sourceCollection: 'training_schedules' });
-                  }
-                });
-                console.log('[Training Room] 📱 [모바일] 재시도 - training_schedules:', scheduleSnapshot.size, '개');
-              } catch (e) {
-                console.warn('[Training Room] 📱 [모바일] 재시도 - training_schedules 실패:', e);
-              }
-              
-              // training_rooms 전체 조회 (필터 없이)
+              // ✅ training_rooms만 전체 조회 (필터 없이)
               try {
                 const roomsSnapshot = await firestoreDb.collection(TRAINING_ROOMS_COLLECTION).get();
                 roomsSnapshot.forEach((doc) => {
                   const data = doc.data();
+                  // Client-side filtering: inactive 상태 제외
                   if (data.status !== 'inactive') {
-                    retryRooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
+                    retryRooms.push({ 
+                      id: doc.id, 
+                      ...data, 
+                      title: data.title || data.name, 
+                      _sourceCollection: 'training_rooms' 
+                    });
                   }
                 });
-                console.log('[Training Room] 📱 [모바일] 재시도 - training_rooms:', roomsSnapshot.size, '개');
+                console.log('[Training Room] 📱 [모바일] 재시도 - training_rooms:', roomsSnapshot.size, '개 (필터링 후:', retryRooms.length, '개)');
               } catch (e) {
                 console.warn('[Training Room] 📱 [모바일] 재시도 - training_rooms 실패:', e);
               }
@@ -4008,7 +3963,7 @@ async function openTrainingRoomEditModal(roomId) {
     }
   }
   
-  // 2순위: Firestore에서 찾기 (training_rooms 우선, 없으면 training_schedules)
+  // 2순위: Firestore에서 찾기 (training_rooms만 조회)
   if (!roomData) {
     try {
       const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
@@ -4017,7 +3972,7 @@ async function openTrainingRoomEditModal(roomId) {
         return;
       }
 
-      // training_rooms에서 먼저 찾기
+      // ✅ training_rooms에서만 찾기 (training_schedules 제거)
       let docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(roomIdStr);
       let doc = await docRef.get();
       
@@ -4025,16 +3980,6 @@ async function openTrainingRoomEditModal(roomId) {
         roomData = { id: doc.id, ...doc.data(), _sourceCollection: 'training_rooms' };
         window._trainingRoomEditCollection = 'training_rooms';
         console.log('[Training Room] training_rooms에서 찾음:', roomData);
-      } else {
-        // training_schedules에서 찾기
-        docRef = db.collection('training_schedules').doc(roomIdStr);
-        doc = await docRef.get();
-        
-        if (doc.exists) {
-          roomData = { id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' };
-          window._trainingRoomEditCollection = 'training_schedules';
-          console.log('[Training Room] training_schedules에서 찾음:', roomData);
-        }
       }
       
       if (!roomData) {
@@ -4062,16 +4007,8 @@ async function openTrainingRoomEditModal(roomId) {
             window._trainingRoomEditCollection = TRAINING_ROOMS_COLLECTION;
             roomData = { id: d.id, ...d.data(), _sourceCollection: 'training_rooms' };
             console.log('[Training Room] GAS 방 → Firestore training_rooms 문서 ID로 매핑:', d.id);
-          } else {
-            found = await db.collection('training_schedules').where('id', '==', numId).limit(1).get();
-            if (!found.empty) {
-              const d = found.docs[0];
-              window._trainingRoomEditId = d.id;
-              window._trainingRoomEditCollection = 'training_schedules';
-              roomData = { id: d.id, ...d.data(), _sourceCollection: 'training_schedules' };
-              console.log('[Training Room] GAS 방 → Firestore training_schedules 문서 ID로 매핑:', d.id);
-            }
           }
+          // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
         }
       }
     } catch (e) {
@@ -4243,12 +4180,7 @@ async function submitTrainingRoomCreate() {
             roomData = doc.data();
             collectionName = TRAINING_ROOMS_COLLECTION;
           } else {
-            docRef = db.collection('training_schedules').doc(String(editId));
-            doc = await docRef.get();
-            if (doc.exists) {
-              roomData = doc.data();
-              collectionName = 'training_schedules';
-            }
+            // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
           }
         }
 
@@ -4263,16 +4195,8 @@ async function submitTrainingRoomCreate() {
               roomData = doc.data();
               collectionName = TRAINING_ROOMS_COLLECTION;
               window._trainingRoomEditId = doc.id;
-            } else {
-              snap = await db.collection('training_schedules').where('id', '==', numId).limit(1).get();
-              if (!snap.empty) {
-                doc = snap.docs[0];
-                docRef = doc.ref;
-                roomData = doc.data();
-                collectionName = 'training_schedules';
-                window._trainingRoomEditId = doc.id;
-              }
             }
+            // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
           }
         }
 
@@ -4372,27 +4296,9 @@ async function submitTrainingRoomCreate() {
             trainingRoomId = docData.id || numId;
             console.log('[Training Room] 수정 완료 (training_rooms, id 필드 조회):', d.id, ', trainingRoomId:', trainingRoomId);
           } else {
-            snap = await firestoreDb.collection('training_schedules').where('id', '==', numId).limit(1).get();
-            if (!snap.empty) {
-              const d = snap.docs[0];
-              const docData = d.data();
-              const updateData = {
-                title: title,
-                track_count: trackCount,
-                user_id: managerId || null,
-                userId: managerId || null,
-                password: password || '',
-                updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
-              };
-              await d.ref.update(updateData);
-              firestoreDocId = d.id;
-              // Realtime Database용: 문서의 id 필드 값 사용
-              trainingRoomId = docData.id || numId;
-              console.log('[Training Room] 수정 완료 (training_schedules, id 필드 조회):', d.id, ', trainingRoomId:', trainingRoomId);
-            } else {
-              if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
-              return;
-            }
+            // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
+            if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+            return;
           }
         } else {
           if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
@@ -4513,17 +4419,9 @@ async function deleteTrainingRoom(roomId) {
       await docRef.delete();
       console.log('[Training Room] 삭제 완료 (training_rooms):', roomIdStr);
     } else {
-      // training_schedules에서 찾아서 삭제
-      docRef = db.collection('training_schedules').doc(roomIdStr);
-      doc = await docRef.get();
-      
-      if (doc.exists) {
-        await docRef.delete();
-        console.log('[Training Room] 삭제 완료 (training_schedules):', roomIdStr);
-      } else {
-        if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
-        return;
-      }
+      // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
+      if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+      return;
     }
 
     if (typeof showToast === 'function') showToast('Training Room이 삭제되었습니다.', 'success');
