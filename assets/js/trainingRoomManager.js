@@ -694,12 +694,13 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
     const canDelete = isAdmin; // 삭제는 grade=1만
     
     // 관리자 이름 표시용 고유 ID 생성 (Render First 패턴)
-    const managerNameElId = `manager-name-${room.id}`;
+    // 사용자 요구사항: elementId는 `manager-${doc.id}` 형식
+    const managerNameElId = `manager-${room.id}`;
     
-    // 초기 표시 텍스트: user_id가 있으면 "로딩중..." (나중에 업데이트), 없으면 "코치 없음"
-    // user_id 필드를 우선적으로 사용 (userId는 폴백) - Firestore DB 필드명과 일치
-    const userId = room.user_id || room.userId;
-    const initialManagerText = userId ? '로딩중...' : '코치 없음';
+    // 초기 표시 텍스트: userId가 있으면 "..." (나중에 업데이트), 없으면 "코치 없음"
+    // userId 필드를 우선적으로 사용 (user_id는 폴백) - 필드명 안전장치
+    const userId = room.userId || room.user_id;
+    const initialManagerText = userId ? '...' : '코치 없음';
     const initialManagerClass = userId ? 'no-coach loading' : 'no-coach';
     
     return `
@@ -795,23 +796,23 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
         return;
       }
       
-      // 각 방에 대해 fetchAndDisplayManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
+      // 각 방에 대해 resolveManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
       // Fire-and-forget 패턴: await 없이 호출하여 목록 로딩 속도 저하 방지
       rooms.forEach(room => {
-        // user_id 필드를 우선적으로 사용 (userId는 폴백) - Firestore DB 필드명과 일치
-        const userId = room.user_id || room.userId;
+        // userId 필드를 우선적으로 사용 (user_id는 폴백) - 필드명 안전장치
+        const userId = room.userId || room.user_id;
         const roomIdStr = String(room.id); // 명시적으로 문자열 변환
-        const managerSpanId = `manager-name-${roomIdStr}`;
+        const elementId = `manager-${roomIdStr}`;
         
         // userId가 있으면 비동기 조회, 없으면 즉시 UI 업데이트
         if (userId) {
-          // Fire-and-forget: await 없이 비동기 호출
-          fetchAndDisplayManagerName(db, useV9, userId, managerSpanId);
+          // Fire-and-forget: await 없이 비동기 호출 (가장 단순한 로직)
+          resolveManagerName(db, userId, elementId);
         } else {
           // userId가 없으면 즉시 "코치 없음"으로 업데이트 (무한 로딩 방지)
-          const managerEl = document.getElementById(managerSpanId);
+          const managerEl = document.getElementById(elementId);
           if (managerEl) {
-            managerEl.textContent = '코치 없음';
+            managerEl.textContent = '코치: 없음';
             managerEl.className = 'training-room-coach no-coach';
           }
         }
@@ -848,122 +849,51 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
 }
 
 /**
- * 관리자 이름 직접 조회 및 표시 함수 (간단한 Firestore 쿼리)
- * training_rooms의 userId 필드를 사용하여 users 컬렉션에서 직접 조회
+ * 관리자 이름 조회 및 표시 함수 (가장 단순한 로직)
+ * training_rooms의 userId를 Document ID로 사용하여 users 컬렉션에서 직접 조회
  * 
  * @param {Object} db - Firestore 인스턴스 (Dependency Injection - 필수)
- * @param {boolean} useV9 - Firebase v9 Modular SDK 사용 여부
- * @param {string} userId - users 컬렉션의 문서 ID
- * @param {string} elementId - DOM 요소 ID (예: 'manager-name-1')
+ * @param {string} userId - users 컬렉션의 문서 ID (Document ID)
+ * @param {string} elementId - DOM 요소 ID (예: 'manager-1')
  */
-async function fetchAndDisplayManagerName(db, useV9, userId, elementId) {
-  // 파라미터 유효성 검사
-  if (!db) {
-    console.error('[ManagerFetch] db 인스턴스가 전달되지 않았습니다.');
-    // db가 없어도 UI는 업데이트 (무한 로딩 방지)
-    const el = document.getElementById(elementId);
-    if (el) {
-      el.textContent = '코치: (불러오기 실패)';
-      el.className = 'training-room-coach no-coach';
-    }
-    return;
-  }
-  
-  // DOM 요소 찾기 (userId 체크 전에 먼저 찾아서 UI 업데이트 가능하게 함)
+async function resolveManagerName(db, userId, elementId) {
   const el = document.getElementById(elementId);
   if (!el) {
-    console.warn('[ManagerFetch] DOM 요소를 찾을 수 없습니다:', elementId);
+    console.warn('[ManagerName] DOM 요소를 찾을 수 없습니다:', elementId);
     return;
   }
   
-  // userId가 없거나 비어있는 경우 UI 업데이트 후 종료 (무한 로딩 방지)
   if (!userId) {
-    console.warn('[ManagerFetch] userId가 없습니다.', { elementId });
-    el.textContent = '코치: (미지정)';
+    el.textContent = '코치: 없음';
     el.className = 'training-room-coach no-coach';
     return;
   }
-  
-  const userIdStr = String(userId).trim();
-  if (!userIdStr) {
-    console.warn('[ManagerFetch] userId가 비어있습니다.', { elementId });
-    el.textContent = '코치: (미지정)';
+
+  if (!db) {
+    console.error('[ManagerName] db 인스턴스가 전달되지 않았습니다.');
+    el.textContent = '코치: (오류)';
     el.className = 'training-room-coach no-coach';
     return;
   }
-  
-  // 이미 업데이트되었는지 확인 ("로딩중..." 또는 "..." 상태가 아니면 스킵)
-  if (el.textContent !== '로딩중...' && el.textContent !== '...') {
-    return; // 이미 업데이트됨
-  }
-  
-  console.log('[ManagerFetch] 조회 시작 - elementId:', elementId, ', userId:', userIdStr, ', useV9:', useV9);
-  
+
   try {
-    let userData = null;
+    // 사용자 정의 로직: users 컬렉션에서 userId(Document ID)로 바로 조회
+    const userDoc = await db.collection('users').doc(String(userId).trim()).get();
     
-    if (useV9) {
-      // Firebase v9 Modular SDK
-      const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      const usersRef = collection(db, 'users');
-      const userDocRef = doc(usersRef, userIdStr);
-      const docSnapshot = await getDoc(userDocRef);
-      
-      if (docSnapshot.exists()) {
-        userData = docSnapshot.data();
-        console.log('[ManagerFetch] 데이터 수신 성공 (v9) - elementId:', elementId, ', userData:', userData);
-      } else {
-        console.warn('[ManagerFetch] User document not found (v9) - userId:', userIdStr);
-      }
+    if (userDoc.exists) {
+      const userName = userDoc.data().name || '이름 없음';
+      el.textContent = `코치: ${userName}`;
+      el.className = 'training-room-coach has-coach';
+      console.log('[ManagerName] ✅ Success - elementId:', elementId, ', userName:', userName);
     } else {
-      // Firebase v8 Compat SDK: db.collection('users').doc(userId).get()
-      const userDocRef = db.collection('users').doc(userIdStr);
-      const userDoc = await userDocRef.get();
-      
-      if (userDoc.exists) {
-        userData = userDoc.data();
-        console.log('[ManagerFetch] 데이터 수신 성공 (v8) - elementId:', elementId, ', userData:', userData);
-      } else {
-        console.warn('[ManagerFetch] User document not found (v8) - userId:', userIdStr);
-      }
-    }
-    
-    // 데이터 처리 및 UI 업데이트
-    if (userData) {
-      // name 필드 우선, 없으면 nickname, 그것도 없으면 기본값
-      const managerName = userData.name || userData.nickname || userData.userName || userData.displayName;
-      
-      if (managerName) {
-        // 이름이 있으면 표시
-        el.textContent = `코치: ${managerName}`;
-        el.className = 'training-room-coach has-coach';
-        console.log(`[ManagerFetch] ✅ Success - elementId: ${elementId}, Manager: ${managerName}`);
-      } else {
-        // 문서는 존재하지만 이름 필드가 없음
-        el.textContent = '코치: (정보 없음)';
-        el.className = 'training-room-coach no-coach';
-        console.warn(`[ManagerFetch] ⚠️ User document found but name field is missing - elementId: ${elementId}, userId: ${userIdStr}`);
-      }
-    } else {
-      // 문서가 존재하지 않음
-      el.textContent = '코치: (탈퇴한 유저)';
-      el.className = 'training-room-coach no-coach';
-      console.warn(`[ManagerFetch] User document not found - elementId: ${elementId}, userId: ${userIdStr}`);
-    }
-  } catch (error) {
-    // 예외 발생 시 안전하게 처리 (Fail-safe: UI 업데이트 필수)
-    console.error(`[ManagerFetch] ❌ Error getting manager - elementId: ${elementId}, userId: ${userIdStr}`, error);
-    console.error('[ManagerFetch] Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
-    
-    // 에러 발생 시에도 UI 업데이트 (무한 로딩 방지)
-    if (el) {
+      console.log('[ManagerName] User not found for ID:', userId);
       el.textContent = '코치: (알 수 없음)';
       el.className = 'training-room-coach no-coach';
     }
+  } catch (e) {
+    console.error('[ManagerName] Name fetch error:', e);
+    el.textContent = '코치: (오류)';
+    el.className = 'training-room-coach no-coach';
   }
 }
 
