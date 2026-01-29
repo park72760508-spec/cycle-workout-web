@@ -378,112 +378,131 @@ async function loadTrainingRooms() {
     
     // Training Room 목록과 사용자 목록을 병렬로 로드 (성능 최적화 + 모바일 최적화)
     const [roomsResult, users] = await Promise.allSettled([
-      // ✅ 데이터 소스 업그레이드: Firestore 우선 사용 (GAS → Firestore Migration)
+      // ✅ Firebase Firestore만 사용 (GAS 제거)
       withRetryForTrainingRooms(
         async () => {
           // Firestore 인스턴스 확인 (window.firestoreV9 또는 db)
           const firestoreDb = window.firestoreV9 || (typeof db !== 'undefined' && db ? db : null);
           
-          // Firestore가 있으면 우선 사용
-          if (firestoreDb) {
-            try {
-              console.log('[Training Room] 🔥 Firestore에서 Training Room 목록 로드 시도...');
-              
-              // Firestore v9 모듈 방식 (Modular SDK) - 동적 import
-              let collection, query, where, getDocs;
-              
-              // 이미 로드된 경우 window에서 가져오기, 없으면 동적 import
-              if (window.firebase && window.firebase.firestore) {
-                // Firebase v8 호환 모드
+          // Firestore 필수 체크
+          if (!firestoreDb && !(window.firebase && window.firebase.firestore)) {
+            throw new Error('Firestore를 사용할 수 없습니다. Firebase가 초기화되지 않았습니다.');
+          }
+          
+          console.log('[Training Room] 🔥 Firestore에서 Training Room 목록 로드 시도...');
+          
+          // Firestore v9 모듈 방식 (Modular SDK) - 동적 import
+          let collection, query, where, getDocs;
+          
+          // 이미 로드된 경우 window에서 가져오기, 없으면 동적 import
+          if (window.firebase && window.firebase.firestore) {
+                // Firebase v8 호환 모드 - 병렬 쿼리로 속도 향상
                 const db = window.firebase.firestore();
                 const rooms = [];
-                // training_schedules (기존)
-                const scheduleSnapshot = await db.collection('training_schedules')
-                  .where('status', '==', 'active')
-                  .get();
-                scheduleSnapshot.forEach((doc) => {
-                  rooms.push({ id: doc.id, ...doc.data() });
-                });
-                // training_rooms (생성 팝업으로 만든 방) 병합
-                try {
-                  const roomsSnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
-                  roomsSnapshot.forEach((doc) => {
+                
+                // 두 컬렉션을 병렬로 조회 (속도 향상)
+                const [scheduleResult, roomsResult] = await Promise.allSettled([
+                  // training_schedules (기존)
+                  db.collection('training_schedules')
+                    .where('status', '==', 'active')
+                    .get(),
+                  // training_rooms (생성 팝업으로 만든 방) - 서버 측 필터링
+                  db.collection(TRAINING_ROOMS_COLLECTION)
+                    .where('status', '!=', 'inactive')
+                    .get()
+                    .catch(e => {
+                      // status 필드가 없는 경우를 대비해 전체 조회 후 필터링
+                      console.warn('[Training Room] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
+                      return db.collection(TRAINING_ROOMS_COLLECTION).get();
+                    })
+                ]);
+                
+                // training_schedules 처리
+                if (scheduleResult.status === 'fulfilled') {
+                  scheduleResult.value.forEach((doc) => {
+                    rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
+                  });
+                } else {
+                  console.warn('[Training Room] training_schedules 로드 실패 (무시):', scheduleResult.reason?.message || scheduleResult.reason);
+                }
+                
+                // training_rooms 처리
+                if (roomsResult.status === 'fulfilled') {
+                  roomsResult.value.forEach((doc) => {
                     const data = doc.data();
+                    // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
                     if (data.status !== 'inactive') {
-                      rooms.push({ id: doc.id, ...data, title: data.title || data.name });
+                      rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
                     }
                   });
-                } catch (e) {
-                  console.warn('[Training Room] training_rooms 로드 실패 (무시):', e.message);
+                } else {
+                  console.warn('[Training Room] training_rooms 로드 실패 (무시):', roomsResult.reason?.message || roomsResult.reason);
                 }
-                console.log(`[Training Room] ✅ Firestore(v8)에서 ${rooms.length}개 Room 로드 완료`);
+                
+                console.log(`[Training Room] ✅ Firestore(v8)에서 ${rooms.length}개 Room 로드 완료 (병렬 쿼리)`);
                 return rooms;
               } else {
-                // Firestore v9 모듈 방식
-                try {
-                  const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-                  collection = firestoreModule.collection;
-                  query = firestoreModule.query;
-                  where = firestoreModule.where;
-                  getDocs = firestoreModule.getDocs;
-                  
-                  const rooms = [];
-                  const schedulesRef = collection(firestoreDb, 'training_schedules');
-                  const q = query(schedulesRef, where('status', '==', 'active'));
-                  const querySnapshot = await getDocs(q);
-                  querySnapshot.forEach((doc) => {
-                    rooms.push({ id: doc.id, ...doc.data() });
-                  });
-                  try {
-                    const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
-                    const roomsSnapshot = await getDocs(roomsRef);
-                    roomsSnapshot.forEach((doc) => {
-                      const data = doc.data();
-                      if (data.status !== 'inactive') {
-                        rooms.push({ id: doc.id, ...data, title: data.title || data.name });
-                      }
-                    });
-                  } catch (e) {
-                    console.warn('[Training Room] training_rooms 로드 실패 (무시):', e.message);
-                  }
-                  console.log(`[Training Room] ✅ Firestore(v9)에서 ${rooms.length}개 Room 로드 완료`);
-                  return rooms;
-                } catch (importError) {
-                  console.warn('[Training Room] ⚠️ Firestore v9 모듈 import 실패:', importError);
-                  throw importError;
+                // Firestore v9 모듈 방식 - 병렬 쿼리로 속도 향상
+                if (!firestoreDb) {
+                  throw new Error('Firestore v9 인스턴스를 찾을 수 없습니다.');
                 }
+                
+                const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+                collection = firestoreModule.collection;
+                query = firestoreModule.query;
+                where = firestoreModule.where;
+                getDocs = firestoreModule.getDocs;
+                
+                const rooms = [];
+                
+                // 두 컬렉션을 병렬로 조회 (속도 향상)
+                const [scheduleResult, roomsResult] = await Promise.allSettled([
+                  // training_schedules (기존)
+                  (async () => {
+                    const schedulesRef = collection(firestoreDb, 'training_schedules');
+                    const q = query(schedulesRef, where('status', '==', 'active'));
+                    return await getDocs(q);
+                  })(),
+                  // training_rooms (생성 팝업으로 만든 방) - 서버 측 필터링
+                  (async () => {
+                    try {
+                      const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
+                      const q = query(roomsRef, where('status', '!=', 'inactive'));
+                      return await getDocs(q);
+                    } catch (e) {
+                      // status 필드가 없는 경우를 대비해 전체 조회 후 필터링
+                      console.warn('[Training Room] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
+                      const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
+                      return await getDocs(roomsRef);
+                    }
+                  })()
+                ]);
+                
+                // training_schedules 처리
+                if (scheduleResult.status === 'fulfilled') {
+                  scheduleResult.value.forEach((doc) => {
+                    rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
+                  });
+                } else {
+                  console.warn('[Training Room] training_schedules 로드 실패 (무시):', scheduleResult.reason?.message || scheduleResult.reason);
+                }
+                
+                // training_rooms 처리
+                if (roomsResult.status === 'fulfilled') {
+                  roomsResult.value.forEach((doc) => {
+                    const data = doc.data();
+                    // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
+                    if (data.status !== 'inactive') {
+                      rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
+                    }
+                  });
+                } else {
+                  console.warn('[Training Room] training_rooms 로드 실패 (무시):', roomsResult.reason?.message || roomsResult.reason);
+                }
+                
+                console.log(`[Training Room] ✅ Firestore(v9)에서 ${rooms.length}개 Room 로드 완료 (병렬 쿼리)`);
+                return rooms;
               }
-            } catch (firestoreError) {
-              // 권한 오류는 정상적인 폴백 시나리오이므로 조용히 처리
-              const isPermissionError = firestoreError.code === 'permission-denied' || 
-                                       firestoreError.message?.includes('Missing or insufficient permissions') ||
-                                       firestoreError.message?.includes('insufficient permissions');
-              
-              if (isPermissionError) {
-                console.log('[Training Room] ℹ️ Firestore 권한 없음, GAS로 폴백 (정상 동작)');
-              } else {
-                console.warn('[Training Room] ⚠️ Firestore 로드 실패, GAS로 폴백:', firestoreError.message || firestoreError);
-              }
-              // Firestore 실패 시 GAS로 폴백
-            }
-          }
-          
-          // GAS API 폴백 (Firestore가 없거나 실패한 경우)
-          const url = `${window.GAS_URL}?action=listTrainingSchedules`;
-          const response = await fetchWithTimeout(url, {}, baseTimeout); // 동적 타임아웃
-          
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          
-          const result = await response.json();
-          
-          if (!result.success) {
-            throw new Error(result.error || 'Training Room 목록을 불러오는데 실패했습니다');
-          }
-          
-          console.log(`[Training Room] ✅ GAS API에서 ${result.items?.length || 0}개 Room 로드 완료`);
-          return result.items || [];
         },
         maxRetries, // 동적 재시도 횟수
         initialDelay // 동적 초기 지연
@@ -511,8 +530,22 @@ async function loadTrainingRooms() {
         })));
       }
     } else {
-      console.error('[Training Room] 목록 로드 실패:', roomsResult.reason);
+      console.error('[Training Room] ❌ Firebase Firestore에서 목록 로드 실패:', roomsResult.reason);
       trainingRoomList = [];
+      
+      // 에러 메시지 표시
+      const errorMessage = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
+      listContainer.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+          <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
+          <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Firebase Firestore 연결 오류: ${errorMessage}</p>
+          <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
+                  style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+            다시 시도
+          </button>
+        </div>
+      `;
+      return;
     }
 
     // 사용자 목록 처리 (모바일 최적화: 강화된 폴백 및 재시도)
@@ -634,11 +667,11 @@ async function loadTrainingRooms() {
       stack: error.stack
     });
     
-    // 에러 발생 시에도 빈 상태로 표시 (사용자는 계속 사용 가능)
+    // 에러 발생 시 Firebase Firestore 연결 오류로 표시
     listContainer.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-        <p style="color: #dc3545; margin-bottom: 10px;">Training Room 목록을 불러올 수 없습니다</p>
-        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">${error.message || '네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.'}</p>
+        <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Firebase Firestore 연결 오류: ${error.message || '네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.'}</p>
         <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
                 style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
           다시 시도
@@ -3634,6 +3667,8 @@ async function openTrainingRoomEditModal(roomId) {
     roomData = trainingRoomList.find(r => String(r.id) === roomIdStr);
     if (roomData) {
       console.log('[Training Room] 메모리에서 Training Room 찾음:', roomData);
+      // 수정 시 사용할 컬렉션/문서 ID 저장 (Firestore 조회에 필요)
+      window._trainingRoomEditCollection = roomData._sourceCollection || TRAINING_ROOMS_COLLECTION;
     }
   }
   
@@ -3651,7 +3686,8 @@ async function openTrainingRoomEditModal(roomId) {
       let doc = await docRef.get();
       
       if (doc.exists) {
-        roomData = { id: doc.id, ...doc.data() };
+        roomData = { id: doc.id, ...doc.data(), _sourceCollection: 'training_rooms' };
+        window._trainingRoomEditCollection = 'training_rooms';
         console.log('[Training Room] training_rooms에서 찾음:', roomData);
       } else {
         // training_schedules에서 찾기
@@ -3659,7 +3695,8 @@ async function openTrainingRoomEditModal(roomId) {
         doc = await docRef.get();
         
         if (doc.exists) {
-          roomData = { id: doc.id, ...doc.data() };
+          roomData = { id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' };
+          window._trainingRoomEditCollection = 'training_schedules';
           console.log('[Training Room] training_schedules에서 찾음:', roomData);
         }
       }
@@ -3672,6 +3709,37 @@ async function openTrainingRoomEditModal(roomId) {
       console.error('[Training Room] Firestore 조회 실패:', e);
       if (typeof showToast === 'function') showToast('Training Room 정보를 불러올 수 없습니다.', 'error');
       return;
+    }
+  }
+
+  // GAS에서 로드된 방: Firestore에 동일 id 필드로 문서가 있는지 조회해 문서 ID 확보
+  if (roomData._sourceCollection === 'gas') {
+    try {
+      const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
+      if (db) {
+        const numId = parseInt(roomIdStr, 10);
+        if (!isNaN(numId)) {
+          let found = await db.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
+          if (!found.empty) {
+            const d = found.docs[0];
+            window._trainingRoomEditId = d.id;
+            window._trainingRoomEditCollection = TRAINING_ROOMS_COLLECTION;
+            roomData = { id: d.id, ...d.data(), _sourceCollection: 'training_rooms' };
+            console.log('[Training Room] GAS 방 → Firestore training_rooms 문서 ID로 매핑:', d.id);
+          } else {
+            found = await db.collection('training_schedules').where('id', '==', numId).limit(1).get();
+            if (!found.empty) {
+              const d = found.docs[0];
+              window._trainingRoomEditId = d.id;
+              window._trainingRoomEditCollection = 'training_schedules';
+              roomData = { id: d.id, ...d.data(), _sourceCollection: 'training_schedules' };
+              console.log('[Training Room] GAS 방 → Firestore training_schedules 문서 ID로 매핑:', d.id);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Training Room] GAS 방 Firestore 매핑 조회 실패:', e);
     }
   }
 
@@ -3694,9 +3762,11 @@ async function openTrainingRoomEditModal(roomId) {
     window._trainingRoomCreateInputsInited = true;
   }
   
-  // 수정 모드 플래그 설정
+  // 수정 모드 플래그 설정 (GAS 방은 위에서 Firestore 문서 ID로 이미 설정됨)
   window._trainingRoomEditMode = true;
-  window._trainingRoomEditId = String(roomId);
+  if (window._trainingRoomEditId == null || window._trainingRoomEditId === '') {
+    window._trainingRoomEditId = String(roomId);
+  }
   
   overlay.classList.remove('hidden');
 
@@ -3822,37 +3892,66 @@ async function submitTrainingRoomCreate() {
     try {
       const db = window.firebase && window.firebase.firestore ? window.firebase.firestore() : null;
       if (db) {
-        // training_rooms에서 먼저 찾기
-        let docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
-        let doc = await docRef.get();
         let roomData = null;
-        let collectionName = TRAINING_ROOMS_COLLECTION;
-        
+        let collectionName = window._trainingRoomEditCollection || TRAINING_ROOMS_COLLECTION;
+        let docRef = db.collection(collectionName).doc(String(editId));
+        let doc = await docRef.get();
+
         if (doc.exists) {
           roomData = doc.data();
         } else {
-          // training_schedules에서 찾기
-          docRef = db.collection('training_schedules').doc(String(editId));
+          // 문서 ID로 못 찾으면 다른 컬렉션/문서 ID로 시도
+          docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
           doc = await docRef.get();
           if (doc.exists) {
             roomData = doc.data();
-            collectionName = 'training_schedules';
+            collectionName = TRAINING_ROOMS_COLLECTION;
+          } else {
+            docRef = db.collection('training_schedules').doc(String(editId));
+            doc = await docRef.get();
+            if (doc.exists) {
+              roomData = doc.data();
+              collectionName = 'training_schedules';
+            }
           }
         }
-        
+
+        // 문서 ID로 못 찾은 경우: id 필드(숫자)로 쿼리 (GAS/레거시 대응)
+        if (!roomData) {
+          const numId = parseInt(String(editId), 10);
+          if (!isNaN(numId)) {
+            let snap = await db.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
+            if (!snap.empty) {
+              doc = snap.docs[0];
+              docRef = doc.ref;
+              roomData = doc.data();
+              collectionName = TRAINING_ROOMS_COLLECTION;
+              window._trainingRoomEditId = doc.id;
+            } else {
+              snap = await db.collection('training_schedules').where('id', '==', numId).limit(1).get();
+              if (!snap.empty) {
+                doc = snap.docs[0];
+                docRef = doc.ref;
+                roomData = doc.data();
+                collectionName = 'training_schedules';
+                window._trainingRoomEditId = doc.id;
+              }
+            }
+          }
+        }
+
         if (roomData) {
           const roomManagerId = String(roomData.user_id || roomData.userId || '');
           const isAdmin = userGrade === '1';
           const isManager = roomManagerId && String(currentUserId) === roomManagerId;
-          
+
           if (!isAdmin && !isManager) {
             if (typeof showToast === 'function') {
               showToast('Training Room 수정 권한이 없습니다. 관리자(grade=1) 또는 지정된 관리자만 수정할 수 있습니다.', 'error');
             }
             return;
           }
-          
-          // 컬렉션 정보 저장 (나중에 업데이트할 때 사용)
+
           window._trainingRoomEditCollection = collectionName;
         } else {
           if (typeof showToast === 'function') {
@@ -3907,19 +4006,19 @@ async function submitTrainingRoomCreate() {
     let firestoreDocId = null;
 
     if (isEditMode && editId) {
-      // 수정 모드
-      // 컬렉션 정보 확인 (권한 체크 시 저장됨)
+      // 수정 모드 (권한 체크에서 확정된 컬렉션/문서 ID 사용)
       const collectionName = window._trainingRoomEditCollection || TRAINING_ROOMS_COLLECTION;
-      
-      const docRef = db.collection(collectionName).doc(String(editId));
+      const docIdForUpdate = String(window._trainingRoomEditId || editId);
+      const docRef = db.collection(collectionName).doc(docIdForUpdate);
       const doc = await docRef.get();
-      
+
       if (!doc.exists) {
-        // training_rooms에서 찾기 시도 (fallback)
-        if (collectionName === 'training_schedules') {
-          const altDocRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
-          const altDoc = await altDocRef.get();
-          if (altDoc.exists) {
+        // id 필드로 한 번 더 조회 (권한 체크와 저장 경로 차이 대비)
+        const numId = parseInt(String(editId), 10);
+        if (!isNaN(numId)) {
+          let snap = await db.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
+          if (!snap.empty) {
+            const d = snap.docs[0];
             const updateData = {
               title: title,
               track_count: trackCount,
@@ -3928,12 +4027,28 @@ async function submitTrainingRoomCreate() {
               password: password || '',
               updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
             };
-            await altDocRef.update(updateData);
-            firestoreDocId = editId;
-            console.log('[Training Room] 수정 완료 (training_rooms):', editId);
+            await d.ref.update(updateData);
+            firestoreDocId = d.id;
+            console.log('[Training Room] 수정 완료 (training_rooms, id 필드 조회):', d.id);
           } else {
-            if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
-            return;
+            snap = await db.collection('training_schedules').where('id', '==', numId).limit(1).get();
+            if (!snap.empty) {
+              const d = snap.docs[0];
+              const updateData = {
+                title: title,
+                track_count: trackCount,
+                user_id: managerId || null,
+                userId: managerId || null,
+                password: password || '',
+                updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
+              };
+              await d.ref.update(updateData);
+              firestoreDocId = d.id;
+              console.log('[Training Room] 수정 완료 (training_schedules, id 필드 조회):', d.id);
+            } else {
+              if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
+              return;
+            }
           }
         } else {
           if (typeof showToast === 'function') showToast('Training Room을 찾을 수 없습니다.', 'error');
@@ -3948,11 +4063,9 @@ async function submitTrainingRoomCreate() {
           password: password || '',
           updated_at: new Date().toISOString ? new Date().toISOString() : new Date().toLocaleString()
         };
-
         await docRef.update(updateData);
-        firestoreDocId = editId;
-        
-        console.log('[Training Room] 수정 완료 (' + collectionName + '):', editId);
+        firestoreDocId = docIdForUpdate;
+        console.log('[Training Room] 수정 완료 (' + collectionName + '):', docIdForUpdate);
       }
     } else {
       // 생성 모드
