@@ -553,7 +553,7 @@ async function loadTrainingRooms() {
       }
     }
     
-    // 렌더링
+    // 렌더링 (db와 useV9 전달)
     if (rooms.length === 0) {
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -561,7 +561,7 @@ async function loadTrainingRooms() {
         </div>
       `;
     } else {
-      renderTrainingRoomList(rooms, usersList);
+      renderTrainingRoomList(rooms, usersList, db, useV9);
     }
     
     console.log('[Training Room] ✅ 목록 로드 완료:', rooms.length, '개 Room,', usersList.length, '명 사용자');
@@ -602,8 +602,10 @@ async function loadTrainingRooms() {
  * Training Room 목록 렌더링
  * @param {Array} rooms - Training Room 목록
  * @param {Array} users - 사용자 목록 (옵션)
+ * @param {Object} db - Firestore 인스턴스 (Dependency Injection)
+ * @param {boolean} useV9 - Firebase v9 Modular SDK 사용 여부
  */
-function renderTrainingRoomList(rooms, users = []) {
+function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
   const listContainer = document.getElementById('trainingRoomList');
   if (!listContainer) return;
 
@@ -628,8 +630,8 @@ function renderTrainingRoomList(rooms, users = []) {
           const retryUsers = await getUsersListWithCache();
           if (retryUsers && retryUsers.length > 0) {
             console.log('[Training Room] ✅ 렌더링 후 재시도 성공: 사용자 목록 로드 완료:', retryUsers.length, '명');
-            // 사용자 목록이 로드되면 다시 렌더링
-            renderTrainingRoomList(rooms, retryUsers);
+            // 사용자 목록이 로드되면 다시 렌더링 (db와 useV9도 전달)
+            renderTrainingRoomList(rooms, retryUsers, db, useV9);
             console.log('[Training Room] 🔄 Manager 정보 업데이트 완료 (렌더링 후 재시도)');
           }
         } catch (retryError) {
@@ -776,13 +778,30 @@ function renderTrainingRoomList(rooms, users = []) {
     // Update Later 패턴: 렌더링 완료 후 비동기적으로 관리자 이름 업데이트
     // DOM 요소가 준비될 때까지 약간의 지연을 두고 실행
     setTimeout(() => {
+      // db 인스턴스가 없으면 경고하고 스킵
+      if (!db) {
+        console.warn('[Training Room] renderTrainingRoomList: db 인스턴스가 없어 관리자 이름을 업데이트할 수 없습니다.');
+        // db가 없어도 기본값으로 업데이트는 진행
+        rooms.forEach(room => {
+          const roomIdStr = String(room.id);
+          const managerElId = `manager-name-${roomIdStr}`;
+          const managerEl = document.getElementById(managerElId);
+          if (managerEl && managerEl.textContent === '...') {
+            managerEl.textContent = '알 수 없음';
+            managerEl.className = 'training-room-coach no-coach';
+          }
+        });
+        return;
+      }
+      
       // 각 방에 대해 updateManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
       rooms.forEach(room => {
         const userId = room.user_id || room.userId;
         const roomIdStr = String(room.id); // 명시적으로 문자열 변환
         
         if (userId) {
-          updateManagerName(userId, roomIdStr);
+          // db와 useV9를 명시적으로 전달 (Dependency Injection)
+          updateManagerName(db, useV9, userId, roomIdStr);
         } else {
           // user_id가 없으면 "코치 없음"으로 업데이트
           const managerElId = `manager-name-${roomIdStr}`;
@@ -825,14 +844,21 @@ function renderTrainingRoomList(rooms, users = []) {
 }
 
 /**
- * 관리자 이름 비동기 업데이트 함수 (직접 Firestore 쿼리 - 외부 의존성 제거)
+ * 관리자 이름 비동기 업데이트 함수 (Dependency Injection 패턴 적용)
  * training_rooms 컬렉션의 user_id 필드를 사용하여 users 컬렉션에서 문서 ID로 직접 조회
  * 
+ * @param {Object} db - Firestore 인스턴스 (Dependency Injection - 필수)
+ * @param {boolean} useV9 - Firebase v9 Modular SDK 사용 여부
  * @param {string} userId - training_rooms 문서의 user_id 필드 값 (users 컬렉션의 문서 ID)
  * @param {string|number} roomId - Training Room ID (DOM 요소 ID 생성용)
  */
-async function updateManagerName(userId, roomId) {
-  // 1. ID 유효성 검사
+async function updateManagerName(db, useV9, userId, roomId) {
+  // 1. 파라미터 유효성 검사
+  if (!db) {
+    console.error('[ManagerFetch] db 인스턴스가 전달되지 않았습니다.');
+    return;
+  }
+  
   if (!userId || !roomId) {
     console.warn('[ManagerFetch] userId 또는 roomId가 없습니다.', { userId, roomId });
     return;
@@ -872,40 +898,13 @@ async function updateManagerName(userId, roomId) {
     return;
   }
   
-  console.log('[ManagerFetch] ID 조회 시작 - roomId:', roomIdStr, ', userId:', userIdStr);
+  console.log('[ManagerFetch] ID 조회 시작 - roomId:', roomIdStr, ', userId:', userIdStr, ', useV9:', useV9);
   
   try {
-    // 2. Firestore 인스턴스 가져오기 (외부 의존성 없이 직접 접근)
-    let firestoreDb = null;
-    let useV9 = false;
+    // 2. 전달받은 db 인스턴스 사용 (Dependency Injection)
+    const firestoreDb = db;
     
-    // 1순위: Firebase v8 호환 모드
-    if (window.firebase && typeof window.firebase.firestore === 'function') {
-      firestoreDb = window.firebase.firestore();
-      useV9 = false;
-      console.log('[ManagerFetch] Firestore 인스턴스 확보 (v8)');
-    }
-    // 2순위: Firebase v9 Modular SDK
-    else if (window.firestoreV9) {
-      firestoreDb = window.firestoreV9;
-      useV9 = true;
-      console.log('[ManagerFetch] Firestore 인스턴스 확보 (v9)');
-    }
-    // 3순위: window.firestore
-    else if (window.firestore) {
-      firestoreDb = window.firestore;
-      useV9 = false;
-      console.log('[ManagerFetch] Firestore 인스턴스 확보 (window.firestore)');
-    }
-    
-    if (!firestoreDb) {
-      console.error('[ManagerFetch] Firestore 인스턴스를 찾을 수 없습니다.');
-      managerEl.textContent = '알 수 없음';
-      managerEl.className = 'training-room-coach no-coach';
-      return;
-    }
-    
-    // 3. 직접 Firestore 쿼리 실행 (외부 의존성 없음)
+    // 3. 직접 Firestore 쿼리 실행
     let userDoc = null;
     let userData = null;
     
@@ -956,10 +955,19 @@ async function updateManagerName(userId, roomId) {
       console.warn(`[ManagerFetch] User document not found - roomId: ${roomIdStr}, userId: ${userIdStr}`);
     }
   } catch (error) {
-    // 예외 발생 시 안전하게 처리
+    // 예외 발생 시 안전하게 처리 (Fail-safe: UI 업데이트 필수)
     console.error(`[ManagerFetch] ❌ Error getting manager for Room ${roomIdStr} - userId: ${userIdStr}`, error);
-    managerEl.textContent = '알 수 없음';
-    managerEl.className = 'training-room-coach no-coach';
+    console.error('[ManagerFetch] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // 에러 발생 시에도 UI 업데이트 (무한 로딩 방지)
+    if (managerEl) {
+      managerEl.textContent = '알 수 없음';
+      managerEl.className = 'training-room-coach no-coach';
+    }
   }
 }
 
