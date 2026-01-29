@@ -1959,18 +1959,70 @@ function openCoachMode() {
     return;
   }
 
-  // 현재 모드 확인
-  let mode = window.deviceConnectionMode || sessionStorage.getItem('deviceConnectionMode') || 'bluetooth';
-
+  console.log('[Coach Mode] Coach 모드 열기 시작');
+  
+  // 현재 모드 확인 (우선순위: 로컬 변수 > 전역 변수 > sessionStorage > 기본값 'bluetooth')
+  let mode = null;
+  
+  // 1순위: 로컬 변수 deviceConnectionMode (trainingRoomManager.js의 전역 변수)
+  if (typeof deviceConnectionMode !== 'undefined' && deviceConnectionMode) {
+    mode = deviceConnectionMode;
+    console.log('[Coach Mode] 로컬 변수에서 모드 확인:', mode);
+  }
+  // 2순위: 전역 변수 window.deviceConnectionMode
+  else if (window.deviceConnectionMode && (window.deviceConnectionMode === 'bluetooth' || window.deviceConnectionMode === 'ant')) {
+    mode = window.deviceConnectionMode;
+    console.log('[Coach Mode] 전역 변수에서 모드 확인:', mode);
+  }
+  // 3순위: sessionStorage
+  else {
+    const savedMode = sessionStorage.getItem('deviceConnectionMode');
+    if (savedMode && (savedMode === 'bluetooth' || savedMode === 'ant')) {
+      mode = savedMode;
+      console.log('[Coach Mode] sessionStorage에서 모드 확인:', mode);
+      // 로컬 변수와 전역 변수에도 동기화
+      deviceConnectionMode = mode;
+      window.deviceConnectionMode = mode;
+    }
+  }
+  
+  // 기본값: 'bluetooth' (초기 로딩 상태)
+  if (!mode) {
+    mode = 'bluetooth';
+    console.log('[Coach Mode] 기본값 사용:', mode);
+    // 기본값도 저장
+    deviceConnectionMode = mode;
+    window.deviceConnectionMode = mode;
+    sessionStorage.setItem('deviceConnectionMode', mode);
+  }
+  
+  console.log('[Coach Mode] 최종 디바이스 연결 방식:', mode);
+  
   if (mode === 'bluetooth') {
-    // Bluetooth 모드이면 바로 코치 화면으로
+    // Bluetooth 모드이면 바로 Bluetooth Training Coach 화면으로
+    console.log('[Coach Mode] Bluetooth 모드 → bluetoothTrainingCoachScreen으로 이동');
     if (typeof showScreen === 'function') {
-        showScreen('bluetoothTrainingCoachScreen');
+      showScreen('bluetoothTrainingCoachScreen');
+      
+      // 블루투스 코치용 트랙 정보 로드 (필요 시)
+      if (typeof updateBluetoothCoachTracksFromFirebase === 'function') {
+        setTimeout(() => {
+          console.log('[Coach Mode] 블루투스 코치 트랙 정보 로드 시작');
+          updateBluetoothCoachTracksFromFirebase();
+        }, 300);
+      }
+    } else {
+      console.error('[Coach Mode] showScreen 함수를 찾을 수 없습니다.');
+      showToast('화면 전환 함수를 찾을 수 없습니다.', 'error');
     }
   } else {
     // ANT+ 모드이면 모드 선택(Race/Training) 모달 띄우기
+    console.log('[Coach Mode] ANT+ 모드 → Indoor Training 모드 선택 화면으로 이동');
     if (typeof showIndoorModeSelectionModal === 'function') {
       showIndoorModeSelectionModal();
+    } else {
+      console.error('[Coach Mode] showIndoorModeSelectionModal 함수를 찾을 수 없습니다.');
+      showToast('Indoor 모드 선택 함수를 찾을 수 없습니다.', 'error');
     }
   }
 }
@@ -3571,7 +3623,18 @@ function updateDeviceConnectionSwitchForScreen(mode) {
  * 현재 디바이스 연결 방식 가져오기
  */
 function getDeviceConnectionMode() {
-  return deviceConnectionMode || 'ant';
+  // 우선순위: 로컬 변수 > 전역 변수 > sessionStorage > 기본값 'bluetooth'
+  if (typeof deviceConnectionMode !== 'undefined' && deviceConnectionMode) {
+    return deviceConnectionMode;
+  }
+  if (window.deviceConnectionMode && (window.deviceConnectionMode === 'bluetooth' || window.deviceConnectionMode === 'ant')) {
+    return window.deviceConnectionMode;
+  }
+  const savedMode = sessionStorage.getItem('deviceConnectionMode');
+  if (savedMode && (savedMode === 'bluetooth' || savedMode === 'ant')) {
+    return savedMode;
+  }
+  return 'bluetooth'; // 기본값: bluetooth (초기 로딩 상태)
 }
 
 /**
