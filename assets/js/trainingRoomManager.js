@@ -5584,14 +5584,28 @@ async function clearAllTracksData() {
         throw e;
       }
       
-      // Step 3: Atomic Overwrite - Reset the devices node using .set() instead of .update()
-      // This will automatically clear all other child nodes (smartTrainerId, etc.) 
-      // while preserving the track count in a single operation
+      // Step 3: Remove all track-specific device data (트랙 1부터 maxTracks까지)
+      // 트랙별 디바이스 정보를 명시적으로 삭제하여 트랙 1번이 남는 문제 해결
       try {
-        await db.ref(`sessions/${sessionId}/devices`).set({ track: maxTracks });
-        console.log(`[clearAllTracksData] Step 3 - devices 노드 Atomic Overwrite 완료 (track: ${maxTracks})`);
+        const deviceRemovePromises = [];
+        for (let trackNum = 1; trackNum <= maxTracks; trackNum++) {
+          deviceRemovePromises.push(
+            db.ref(`sessions/${sessionId}/devices/${trackNum}`).remove()
+          );
+        }
+        await Promise.all(deviceRemovePromises);
+        console.log(`[clearAllTracksData] Step 3 - 트랙 1~${maxTracks} 디바이스 정보 삭제 완료`);
       } catch (e) {
-        console.error('[clearAllTracksData] Step 3 - devices 노드 Atomic Overwrite 실패:', e);
+        console.error('[clearAllTracksData] Step 3 - 트랙별 디바이스 정보 삭제 실패:', e);
+        throw e;
+      }
+      
+      // Step 4: Ensure track count is preserved
+      try {
+        await db.ref(`sessions/${sessionId}/devices/track`).set(maxTracks);
+        console.log(`[clearAllTracksData] Step 4 - track 개수 보존 완료 (track: ${maxTracks})`);
+      } catch (e) {
+        console.error('[clearAllTracksData] Step 4 - track 개수 보존 실패:', e);
         throw e;
       }
       
