@@ -931,15 +931,43 @@ function openStravaSyncModal() {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
     
-    // 날짜 입력 필드 초기화
-    const startDateInput = document.getElementById('stravaSyncStartDate');
-    const endDateInput = document.getElementById('stravaSyncEndDate');
+    // 년도 옵션 생성 (현재 년도부터 5년 전까지)
+    const currentYear = new Date().getFullYear();
+    const startYearSelect = document.getElementById('stravaSyncStartYear');
+    const endYearSelect = document.getElementById('stravaSyncEndYear');
     
-    if (startDateInput) startDateInput.value = '';
-    if (endDateInput) {
-      // 종료일은 오늘로 기본 설정
-      const today = new Date();
-      endDateInput.value = today.toISOString().split('T')[0];
+    if (startYearSelect) {
+      startYearSelect.innerHTML = '<option value="">년도 선택</option>';
+      for (let year = currentYear; year >= currentYear - 5; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = `${year}년`;
+        startYearSelect.appendChild(option);
+      }
+    }
+    
+    if (endYearSelect) {
+      endYearSelect.innerHTML = '<option value="">년도 선택</option>';
+      for (let year = currentYear; year >= currentYear - 5; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = `${year}년`;
+        if (year === currentYear) {
+          option.selected = true; // 종료 년도는 현재 년도로 기본 설정
+        }
+        endYearSelect.appendChild(option);
+      }
+    }
+    
+    // 월 선택 초기화
+    const startMonthSelect = document.getElementById('stravaSyncStartMonth');
+    const endMonthSelect = document.getElementById('stravaSyncEndMonth');
+    
+    if (startMonthSelect) startMonthSelect.value = '';
+    if (endMonthSelect) {
+      // 종료 월은 현재 월로 기본 설정
+      const currentMonth = new Date().getMonth() + 1;
+      endMonthSelect.value = currentMonth;
     }
   }
 }
@@ -956,49 +984,76 @@ function closeStravaSyncModal() {
 }
 
 /**
- * Strava 동기화 날짜 범위 빠른 설정
+ * Strava 동기화 년/월 범위 빠른 설정
  */
-function setStravaSyncDateRange(range) {
-  const startDateInput = document.getElementById('stravaSyncStartDate');
-  const endDateInput = document.getElementById('stravaSyncEndDate');
+function setStravaSyncMonthRange(range) {
+  const startYearSelect = document.getElementById('stravaSyncStartYear');
+  const startMonthSelect = document.getElementById('stravaSyncStartMonth');
+  const endYearSelect = document.getElementById('stravaSyncEndYear');
+  const endMonthSelect = document.getElementById('stravaSyncEndMonth');
   
-  if (!startDateInput || !endDateInput) return;
+  if (!startYearSelect || !startMonthSelect || !endYearSelect || !endMonthSelect) return;
   
   const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  endDateInput.value = today.toISOString().split('T')[0];
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
   
-  const startDate = new Date();
+  // 종료 년/월은 현재 년/월로 설정
+  endYearSelect.value = currentYear;
+  endMonthSelect.value = currentMonth;
+  
+  // 시작 년/월 계산
+  let startYear = currentYear;
+  let startMonth = currentMonth;
   
   switch (range) {
-    case 'week':
-      startDate.setDate(startDate.getDate() - 7);
-      break;
-    case 'month':
-      startDate.setMonth(startDate.getMonth() - 1);
+    case '1month':
+      startMonth = currentMonth - 1;
+      if (startMonth <= 0) {
+        startMonth = 12;
+        startYear = currentYear - 1;
+      }
       break;
     case '3months':
-      startDate.setMonth(startDate.getMonth() - 3);
+      startMonth = currentMonth - 3;
+      if (startMonth <= 0) {
+        startMonth = 12 + startMonth;
+        startYear = currentYear - 1;
+      }
+      break;
+    case '6months':
+      startMonth = currentMonth - 6;
+      if (startMonth <= 0) {
+        startMonth = 12 + startMonth;
+        startYear = currentYear - 1;
+      }
       break;
     default:
       return;
   }
   
-  startDate.setHours(0, 0, 0, 0);
-  startDateInput.value = startDate.toISOString().split('T')[0];
+  startYearSelect.value = startYear;
+  startMonthSelect.value = startMonth;
 }
 
 /**
- * Strava 동기화 날짜 범위 초기화
+ * Strava 동기화 년/월 범위 초기화
  */
-function clearStravaSyncDateRange() {
-  const startDateInput = document.getElementById('stravaSyncStartDate');
-  const endDateInput = document.getElementById('stravaSyncEndDate');
+function clearStravaSyncMonthRange() {
+  const startYearSelect = document.getElementById('stravaSyncStartYear');
+  const startMonthSelect = document.getElementById('stravaSyncStartMonth');
+  const endYearSelect = document.getElementById('stravaSyncEndYear');
+  const endMonthSelect = document.getElementById('stravaSyncEndMonth');
   
-  if (startDateInput) startDateInput.value = '';
-  if (endDateInput) {
-    const today = new Date();
-    endDateInput.value = today.toISOString().split('T')[0];
+  if (startYearSelect) startYearSelect.value = '';
+  if (startMonthSelect) startMonthSelect.value = '';
+  if (endYearSelect) {
+    const currentYear = new Date().getFullYear();
+    endYearSelect.value = currentYear;
+  }
+  if (endMonthSelect) {
+    const currentMonth = new Date().getMonth() + 1;
+    endMonthSelect.value = currentMonth;
   }
 }
 
@@ -1006,30 +1061,55 @@ function clearStravaSyncDateRange() {
  * Strava 동기화 확인 및 실행
  */
 async function confirmStravaSync() {
-  const startDateInput = document.getElementById('stravaSyncStartDate');
-  const endDateInput = document.getElementById('stravaSyncEndDate');
+  const startYearSelect = document.getElementById('stravaSyncStartYear');
+  const startMonthSelect = document.getElementById('stravaSyncStartMonth');
+  const endYearSelect = document.getElementById('stravaSyncEndYear');
+  const endMonthSelect = document.getElementById('stravaSyncEndMonth');
   
   let startDate = null;
   let endDate = null;
   
-  if (startDateInput && startDateInput.value) {
-    startDate = new Date(startDateInput.value);
-    startDate.setHours(0, 0, 0, 0);
+  // 시작 년/월이 모두 선택된 경우
+  if (startYearSelect && startMonthSelect && startYearSelect.value && startMonthSelect.value) {
+    const startYear = parseInt(startYearSelect.value, 10);
+    const startMonth = parseInt(startMonthSelect.value, 10) - 1; // 0-based
+    startDate = new Date(startYear, startMonth, 1, 0, 0, 0, 0); // 해당 월의 1일 00:00:00
   }
   
-  if (endDateInput && endDateInput.value) {
-    endDate = new Date(endDateInput.value);
-    endDate.setHours(23, 59, 59, 999);
+  // 종료 년/월이 모두 선택된 경우
+  if (endYearSelect && endMonthSelect && endYearSelect.value && endMonthSelect.value) {
+    const endYear = parseInt(endYearSelect.value, 10);
+    const endMonth = parseInt(endMonthSelect.value, 10) - 1; // 0-based
+    // 해당 월의 마지막 날 23:59:59
+    const lastDay = new Date(endYear, endMonth + 1, 0).getDate();
+    endDate = new Date(endYear, endMonth, lastDay, 23, 59, 59, 999);
   }
   
-  // 날짜 유효성 검사
+  // 년/월 유효성 검사
   if (startDate && endDate && startDate > endDate) {
     if (typeof window.showToast === 'function') {
-      window.showToast('시작일이 종료일보다 늦을 수 없습니다.', 'error');
+      window.showToast('시작 년/월이 종료 년/월보다 늦을 수 없습니다.', 'error');
     } else {
-      alert('시작일이 종료일보다 늦을 수 없습니다.');
+      alert('시작 년/월이 종료 년/월보다 늦을 수 없습니다.');
     }
     return;
+  }
+  
+  // 시작 년/월만 선택된 경우 종료 년/월을 시작 년/월과 동일하게 설정
+  if (startDate && !endDate) {
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth();
+    const lastDay = new Date(startYear, startMonth + 1, 0).getDate();
+    endDate = new Date(startYear, startMonth, lastDay, 23, 59, 59, 999);
+    console.log('[confirmStravaSync] 시작 년/월만 선택됨 - 종료 년/월을 시작 년/월과 동일하게 설정:', endDate);
+  }
+  
+  // 종료 년/월만 선택된 경우 시작 년/월을 종료 년/월과 동일하게 설정
+  if (!startDate && endDate) {
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth();
+    startDate = new Date(endYear, endMonth, 1, 0, 0, 0, 0);
+    console.log('[confirmStravaSync] 종료 년/월만 선택됨 - 시작 년/월을 종료 년/월과 동일하게 설정:', startDate);
   }
   
   // 모달 닫기
@@ -1050,6 +1130,6 @@ window.exchangeStravaCode = exchangeStravaCode;
 window.syncStravaData = syncStravaData;
 window.openStravaSyncModal = openStravaSyncModal;
 window.closeStravaSyncModal = closeStravaSyncModal;
-window.setStravaSyncDateRange = setStravaSyncDateRange;
-window.clearStravaSyncDateRange = clearStravaSyncDateRange;
+window.setStravaSyncMonthRange = setStravaSyncMonthRange;
+window.clearStravaSyncMonthRange = clearStravaSyncMonthRange;
 window.confirmStravaSync = confirmStravaSync;
