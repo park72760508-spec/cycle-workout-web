@@ -4013,6 +4013,53 @@ async function openTrainingRoomCreateModal() {
     }
   }
 
+  // 모바일 환경에서 저장 버튼 이벤트 리스너 명시적으로 추가 (터치 이벤트 지원)
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const saveBtn = document.querySelector('.training-room-create-save-btn');
+  if (saveBtn) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    if (saveBtn._saveBtnClickHandler) {
+      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler);
+      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchHandler);
+    }
+    
+    // 클릭 이벤트 핸들러
+    const clickHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[Training Room] 저장 버튼 클릭 (click)');
+      if (typeof submitTrainingRoomCreate === 'function') {
+        submitTrainingRoomCreate();
+      } else {
+        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
+      }
+    };
+    
+    // 터치 이벤트 핸들러 (모바일)
+    const touchHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[Training Room] 저장 버튼 터치 (touchend)');
+      if (typeof submitTrainingRoomCreate === 'function') {
+        submitTrainingRoomCreate();
+      } else {
+        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
+      }
+    };
+    
+    // 이벤트 리스너 추가
+    saveBtn.addEventListener('click', clickHandler, { passive: false });
+    if (isMobile) {
+      saveBtn.addEventListener('touchend', touchHandler, { passive: false });
+    }
+    
+    // 핸들러 참조 저장 (나중에 제거하기 위해)
+    saveBtn._saveBtnClickHandler = clickHandler;
+    saveBtn._saveBtnTouchHandler = touchHandler;
+    
+    console.log('[Training Room] 저장 버튼 이벤트 리스너 추가 완료 (모바일:', isMobile, ')');
+  }
+
   if (typeof showToast === 'function') {
     showToast('Training Room 생성', 'info');
   }
@@ -4153,6 +4200,53 @@ async function openTrainingRoomEditModal(roomId) {
     }
   }
 
+  // 모바일 환경에서 저장 버튼 이벤트 리스너 명시적으로 추가 (터치 이벤트 지원)
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const saveBtn = document.querySelector('.training-room-create-save-btn');
+  if (saveBtn) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    if (saveBtn._saveBtnClickHandler) {
+      saveBtn.removeEventListener('click', saveBtn._saveBtnClickHandler);
+      saveBtn.removeEventListener('touchend', saveBtn._saveBtnTouchHandler);
+    }
+    
+    // 클릭 이벤트 핸들러
+    const clickHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[Training Room] 저장 버튼 클릭 (click) - 수정 모드');
+      if (typeof submitTrainingRoomCreate === 'function') {
+        submitTrainingRoomCreate();
+      } else {
+        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
+      }
+    };
+    
+    // 터치 이벤트 핸들러 (모바일)
+    const touchHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[Training Room] 저장 버튼 터치 (touchend) - 수정 모드');
+      if (typeof submitTrainingRoomCreate === 'function') {
+        submitTrainingRoomCreate();
+      } else {
+        console.error('[Training Room] submitTrainingRoomCreate 함수를 찾을 수 없습니다.');
+      }
+    };
+    
+    // 이벤트 리스너 추가
+    saveBtn.addEventListener('click', clickHandler, { passive: false });
+    if (isMobile) {
+      saveBtn.addEventListener('touchend', touchHandler, { passive: false });
+    }
+    
+    // 핸들러 참조 저장 (나중에 제거하기 위해)
+    saveBtn._saveBtnClickHandler = clickHandler;
+    saveBtn._saveBtnTouchHandler = touchHandler;
+    
+    console.log('[Training Room] 저장 버튼 이벤트 리스너 추가 완료 (수정 모드, 모바일:', isMobile, ')');
+  }
+
   if (typeof showToast === 'function') {
     showToast('Training Room 수정', 'info');
   }
@@ -4222,13 +4316,27 @@ async function getNextTrainingRoomId() {
  * Training Room 생성/수정 제출 (Firestore training_rooms에 저장)
  */
 async function submitTrainingRoomCreate() {
+  console.log('[Training Room] submitTrainingRoomCreate 함수 호출됨');
+  
+  // 모바일 환경 확인
+  const isMobile = isMobileDeviceForTrainingRooms();
+  console.log('[Training Room] 모바일 환경:', isMobile);
+  
   // 권한 체크
   const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
   const currentUserId = currentUser?.id || currentUser?.uid || '';
   
+  console.log('[Training Room] 사용자 정보:', {
+    userId: currentUserId,
+    userGrade: userGrade,
+    userName: currentUser?.name
+  });
+  
   const isEditMode = window._trainingRoomEditMode === true;
   const editId = window._trainingRoomEditId;
+  
+  console.log('[Training Room] 모드:', isEditMode ? '수정' : '생성', ', editId:', editId);
 
   // 생성 모드: grade=1만 허용
   if (!isEditMode && userGrade !== '1') {
