@@ -5984,8 +5984,8 @@
     <div class="training-room-create-popup" onclick="event.stopPropagation()">
       <div class="connection-form-card basecamp-card training-room-create-card">
         <div class="training-room-create-header">
-          <button type="button" class="training-room-create-save-btn" onclick="if (typeof submitTrainingRoomCreate === 'function') { submitTrainingRoomCreate(); }" aria-label="저장">
-            <img src="assets/img/check-ok.png" alt="저장" style="width: 24px; height: 24px; display: block;" />
+          <button type="button" class="training-room-create-save-btn" id="btnTrainingRoomSave" aria-label="저장">
+            <img src="assets/img/check-ok.png" alt="저장" style="width: 24px; height: 24px; display: block; pointer-events: none;" />
           </button>
           <h3 class="basecamp-status-bar training-room-create-title">Training Room 생성</h3>
           <button type="button" class="training-room-create-close-btn" onclick="if (typeof closeTrainingRoomCreateModal === 'function') { closeTrainingRoomCreateModal(); }" aria-label="닫기">
