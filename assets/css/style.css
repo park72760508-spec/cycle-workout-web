@@ -14381,6 +14381,52 @@ line[id^="needle-"] {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+/* ========== Training Room 카드 수정/삭제 버튼 ========== */
+.training-room-name-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.training-room-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.training-room-edit-btn,
+.training-room-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.training-room-edit-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.training-room-edit-btn:active {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.training-room-delete-btn:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.training-room-delete-btn:active {
+  background: rgba(220, 53, 69, 0.2);
+}
+
 /* Live Training Session 화면: 상단 뒤로가기(좌측) + 제목(중앙) + 퇴실 이미지(우측) - 베이스캠프 스타일 */
 #bluetoothPlayerListScreen .bluetooth-session-header-top {
   display: flex;
