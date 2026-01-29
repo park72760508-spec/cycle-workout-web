@@ -681,6 +681,7 @@ function renderTrainingRoomList(rooms, users = []) {
   const tempDiv = document.createElement('div');
   
   // HTML 문자열 생성 (Render First 패턴: 즉시 렌더링)
+  // 관리자 이름은 나중에 비동기로 업데이트되므로 초기값만 설정
   const htmlStrings = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
@@ -690,53 +691,13 @@ function renderTrainingRoomList(rooms, users = []) {
     const canEdit = isAdmin || (roomManagerId && String(currentUserId) === roomManagerId);
     const canDelete = isAdmin; // 삭제는 grade=1만
     
-    // user_id로 코치 이름 찾기 (Map 사용 - O(1) 조회)
-    // 렌더링 시점에 이미 있는 경우에만 표시, 없으면 "불러오는 중..." 표시 후 비동기 업데이트
-    const userId = room.user_id || room.userId;
-    let coachName = '';
-    let coachDisplayText = '불러오는 중...';
-    let coachClassName = 'no-coach loading';
-    
-    if (userId && userMap.size > 0) {
-      const userIdStr = String(userId).trim();
-      const userIdLower = userIdStr.toLowerCase();
-      
-      // Map에서 즉시 조회 (O(1))
-      const coach = userMap.get(userIdStr) || userMap.get(userIdLower);
-      
-      if (coach) {
-        coachName = coach.name || coach.userName || coach.displayName || '';
-        if (coachName) {
-          coachDisplayText = `Manager: ${escapeHtml(coachName)}`;
-          coachClassName = 'has-coach';
-          console.log(`[Training Room] ✅ Coach 매칭 성공 (Map) - room.user_id: ${userId}, coach.name: ${coachName}`);
-        } else {
-          coachDisplayText = '코치 없음';
-          coachClassName = 'no-coach';
-        }
-      } else {
-        // Map에 없으면 나중에 비동기 조회 예정
-        coachDisplayText = '불러오는 중...';
-        coachClassName = 'no-coach loading';
-        if (isMobile) {
-          console.warn(`[Training Room] ⚠️ [모바일] Coach를 찾을 수 없음 - room.user_id: ${userId}, Map 크기: ${userMap.size}`);
-        } else {
-          console.warn(`[Training Room] ⚠️ Coach를 찾을 수 없음 - room.user_id: ${userId}, Map 크기: ${userMap.size}`);
-        }
-      }
-    } else if (userId) {
-      // userId는 있지만 userMap이 비어있음 - 나중에 비동기 조회 예정
-      coachDisplayText = '불러오는 중...';
-      coachClassName = 'no-coach loading';
-      console.warn(`[Training Room] ⚠️ 사용자 목록이 비어있어 Coach를 찾을 수 없음 - room.user_id: ${userId}`);
-    } else {
-      // userId가 없음
-      coachDisplayText = '코치 없음';
-      coachClassName = 'no-coach';
-    }
-    
-    // 관리자 이름 표시용 고유 ID 생성
+    // 관리자 이름 표시용 고유 ID 생성 (Render First 패턴)
     const managerNameElId = `manager-name-${room.id}`;
+    
+    // 초기 표시 텍스트: user_id가 있으면 "..." (나중에 업데이트), 없으면 "코치 없음"
+    const userId = room.user_id || room.userId;
+    const initialManagerText = userId ? '...' : '코치 없음';
+    const initialManagerClass = userId ? 'no-coach loading' : 'no-coach';
     
     return `
       <div class="training-room-card ${isSelected ? 'selected' : ''}" 
@@ -770,8 +731,8 @@ function renderTrainingRoomList(rooms, users = []) {
             </div>
           </div>
           <div class="training-room-coach-section">
-            <div class="training-room-coach ${coachClassName}" id="${managerNameElId}">
-              ${coachDisplayText}
+            <div class="training-room-coach ${initialManagerClass}" id="${managerNameElId}">
+              ${initialManagerText}
             </div>
           </div>
         </div>
@@ -832,123 +793,94 @@ function renderTrainingRoomList(rooms, users = []) {
   // Update Later 패턴: 렌더링 후 비동기적으로 관리자 이름 업데이트
   // 빠른 렌더링을 위해 즉시 실행하지 않고 다음 이벤트 루프에서 실행
   setTimeout(() => {
-    updateManagerNamesAsync(rooms, userMap);
+    // 각 방에 대해 updateManagerName 함수를 호출하여 관리자 이름을 비동기로 업데이트
+    rooms.forEach(room => {
+      const userId = room.user_id || room.userId;
+      if (userId) {
+        updateManagerName(userId, room.id);
+      } else {
+        // user_id가 없으면 "코치 없음"으로 업데이트
+        const managerElId = `manager-name-${room.id}`;
+        const managerEl = document.getElementById(managerElId);
+        if (managerEl && managerEl.textContent === '...') {
+          managerEl.textContent = '코치 없음';
+          managerEl.className = 'training-room-coach no-coach';
+        }
+      }
+    });
   }, 0);
 
   // CSS는 style.css에 정의되어 있음 (동적 스타일 추가 불필요)
 }
 
 /**
- * 관리자 이름 비동기 업데이트 (Update Later 패턴)
- * 렌더링 후 각 방의 managerId로 사용자 정보를 조회하여 업데이트
- * @param {Array} rooms - Training Room 목록
- * @param {Map} userMap - 사용자 Map (이미 있는 경우 재사용)
+ * 관리자 이름 비동기 업데이트 함수 (Fetch Later 패턴)
+ * training_rooms 컬렉션의 user_id 필드를 사용하여 users 컬렉션에서 문서 ID로 조회
+ * 
+ * @param {string} userId - training_rooms 문서의 user_id 필드 값 (users 컬렉션의 문서 ID)
+ * @param {string|number} roomId - Training Room ID (DOM 요소 ID 생성용)
  */
-async function updateManagerNamesAsync(rooms, userMap = null) {
-  if (!rooms || rooms.length === 0) return;
-  
-  // userMap이 없으면 먼저 사용자 목록 로드 시도
-  if (!userMap || userMap.size === 0) {
-    try {
-      const users = await getUsersListWithCache();
-      if (users && users.length > 0) {
-        userMap = new Map();
-        users.forEach(u => {
-          const ids = [
-            String(u.id || '').trim(),
-            String(u.userId || '').trim(),
-            String(u.uid || '').trim()
-          ].filter(id => id !== '');
-          
-          ids.forEach(id => {
-            const idLower = id.toLowerCase();
-            if (!userMap.has(idLower)) {
-              userMap.set(idLower, u);
-            }
-            if (!userMap.has(id)) {
-              userMap.set(id, u);
-            }
-          });
-        });
-        console.log('[Training Room] ✅ 비동기 업데이트: 사용자 Map 생성 완료:', userMap.size, '개 키');
-      }
-    } catch (error) {
-      console.warn('[Training Room] ⚠️ 비동기 업데이트: 사용자 목록 로드 실패:', error);
-    }
+async function updateManagerName(userId, roomId) {
+  if (!userId || !roomId) {
+    console.warn('[Training Room] updateManagerName: userId 또는 roomId가 없습니다.', { userId, roomId });
+    return;
   }
   
-  // 각 방의 관리자 이름 업데이트
-  const updatePromises = rooms.map(async (room) => {
-    const managerId = room.user_id || room.userId;
-    if (!managerId) {
-      // managerId가 없으면 "코치 없음"으로 업데이트
-      const managerElId = `manager-name-${room.id}`;
-      const managerEl = document.getElementById(managerElId);
-      if (managerEl && managerEl.textContent === '불러오는 중...') {
-        managerEl.textContent = '코치 없음';
-        managerEl.className = 'training-room-coach no-coach';
-      }
+  const managerElId = `manager-name-${roomId}`;
+  const managerEl = document.getElementById(managerElId);
+  
+  if (!managerEl) {
+    console.warn('[Training Room] updateManagerName: DOM 요소를 찾을 수 없습니다.', managerElId);
+    return;
+  }
+  
+  // 이미 업데이트되었는지 확인 ("..." 상태가 아니면 스킵)
+  if (managerEl.textContent !== '...') {
+    return; // 이미 업데이트됨
+  }
+  
+  try {
+    // apiGetUser 함수 사용 (users 컬렉션에서 문서 ID로 직접 조회)
+    const apiGetUserFn = typeof window.apiGetUser === 'function' 
+      ? window.apiGetUser 
+      : (typeof apiGetUser === 'function' ? apiGetUser : null);
+    
+    if (!apiGetUserFn) {
+      console.warn('[Training Room] updateManagerName: apiGetUser 함수를 찾을 수 없습니다.');
+      managerEl.textContent = '알 수 없음';
+      managerEl.className = 'training-room-coach no-coach';
       return;
     }
     
-    const managerElId = `manager-name-${room.id}`;
-    const managerEl = document.getElementById(managerElId);
-    if (!managerEl) return; // 요소가 없으면 스킵
+    // users 컬렉션에서 문서 ID(userId)로 조회
+    const result = await apiGetUserFn(String(userId));
     
-    // 이미 업데이트되었는지 확인 (불러오는 중... 상태가 아니면 스킵)
-    if (managerEl.textContent !== '불러오는 중...') {
-      return; // 이미 업데이트됨
-    }
-    
-    // 1순위: userMap에서 조회 (빠름)
-    if (userMap && userMap.size > 0) {
-      const userIdStr = String(managerId).trim();
-      const userIdLower = userIdStr.toLowerCase();
-      const coach = userMap.get(userIdStr) || userMap.get(userIdLower);
+    if (result && result.success && result.item) {
+      // 찾은 유저 문서의 name 필드 값을 화면에 표시
+      const userName = result.item.name || result.item.userName || result.item.displayName || '';
       
-      if (coach) {
-        const coachName = coach.name || coach.userName || coach.displayName || '';
-        if (coachName) {
-          managerEl.textContent = `Manager: ${coachName}`;
-          managerEl.className = 'training-room-coach has-coach';
-          console.log(`[Training Room] ✅ 비동기 업데이트 성공 (Map) - room.id: ${room.id}, manager: ${coachName}`);
-          return;
-        }
+      if (userName) {
+        managerEl.textContent = `Manager: ${userName}`;
+        managerEl.className = 'training-room-coach has-coach';
+        console.log(`[Training Room] ✅ 관리자 이름 업데이트 성공 - room.id: ${roomId}, user_id: ${userId}, name: ${userName}`);
+      } else {
+        // name 필드가 없으면 "알 수 없음"으로 표시
+        managerEl.textContent = '알 수 없음';
+        managerEl.className = 'training-room-coach no-coach';
+        console.warn(`[Training Room] ⚠️ 유저 문서는 찾았지만 name 필드가 없음 - room.id: ${roomId}, user_id: ${userId}`);
       }
-    }
-    
-    // 2순위: apiGetUser로 직접 조회 (느리지만 정확함)
-    try {
-      const apiGetUserFn = typeof window.apiGetUser === 'function' 
-        ? window.apiGetUser 
-        : (typeof apiGetUser === 'function' ? apiGetUser : null);
-      
-      if (apiGetUserFn) {
-        const result = await apiGetUserFn(String(managerId));
-        if (result && result.success && result.item) {
-          const coachName = result.item.name || result.item.userName || result.item.displayName || '';
-          if (coachName) {
-            managerEl.textContent = `Manager: ${coachName}`;
-            managerEl.className = 'training-room-coach has-coach';
-            console.log(`[Training Room] ✅ 비동기 업데이트 성공 (API) - room.id: ${room.id}, manager: ${coachName}`);
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.warn(`[Training Room] ⚠️ 비동기 업데이트 실패 (API) - room.id: ${room.id}, managerId: ${managerId}`, error);
-    }
-    
-    // 조회 실패 시 "코치 없음"으로 업데이트
-    if (managerEl.textContent === '불러오는 중...') {
+    } else {
+      // 유저를 찾을 수 없으면 "코치 없음"으로 표시
       managerEl.textContent = '코치 없음';
       managerEl.className = 'training-room-coach no-coach';
+      console.warn(`[Training Room] ⚠️ 유저를 찾을 수 없음 - room.id: ${roomId}, user_id: ${userId}`, result?.error || 'Unknown error');
     }
-  });
-  
-  // 모든 업데이트를 병렬로 실행 (빠른 속도 유지)
-  await Promise.allSettled(updatePromises);
-  console.log('[Training Room] ✅ 비동기 관리자 이름 업데이트 완료');
+  } catch (error) {
+    // 예외 발생 시 "알 수 없음"으로 표시
+    console.error(`[Training Room] ❌ 관리자 이름 업데이트 실패 - room.id: ${roomId}, user_id: ${userId}`, error);
+    managerEl.textContent = '알 수 없음';
+    managerEl.className = 'training-room-coach no-coach';
+  }
 }
 
 /**
