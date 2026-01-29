@@ -4535,9 +4535,134 @@
     let miniCalendarStateJournal = {
       currentYear: new Date().getFullYear(),
       currentMonth: new Date().getMonth(), // 0-11
-      trainingLogs: [], // 현재 사용자의 훈련 로그
+      trainingLogs: {}, // 현재 사용자의 훈련 로그 (날짜별 그룹화)
       currentUserId: null
     };
+
+    /**
+     * 날짜 문자열 파싱 (훈련일지 화면용)
+     */
+    function parseTrainingDateJournal(dateValue) {
+      if (!dateValue) return null;
+      
+      // Firestore Timestamp인 경우
+      if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+        return dateValue.toDate();
+      }
+      
+      // 이미 Date 객체인 경우
+      if (dateValue instanceof Date) {
+        return dateValue;
+      }
+      
+      // 문자열인 경우 파싱
+      if (typeof dateValue === 'string') {
+        // "2026년 1월 27일 PM 5시 39분 9초 UTC+9" 형식 파싱
+        const match = dateValue.match(/(\d{4})년\s+(\d{1,2})월\s+(\d{1,2})일/);
+        if (match) {
+          const year = parseInt(match[1], 10);
+          const month = parseInt(match[2], 10) - 1; // 0-based
+          const day = parseInt(match[3], 10);
+          return new Date(year, month, day);
+        }
+        
+        // ISO 형식 시도
+        const isoDate = new Date(dateValue);
+        if (!isNaN(isoDate.getTime())) {
+          return isoDate;
+        }
+      }
+      
+      return null;
+    }
+
+    /**
+     * 날짜를 YYYY-MM-DD 형식의 키로 변환 (훈련일지 화면용)
+     */
+    function getDateKeyJournal(date) {
+      if (!date) return null;
+      const d = date instanceof Date ? date : parseTrainingDateJournal(date);
+      if (!d) return null;
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    /**
+     * 한국 공휴일/법정휴일 체크 (훈련일지 화면용)
+     */
+    function isHolidayJournal(year, month, day) {
+      const date = new Date(year, month, day);
+      const dayOfWeek = date.getDay();
+      
+      // 일요일은 공휴일로 처리하지 않음 (별도로 처리)
+      if (dayOfWeek === 0) return false;
+      
+      // 고정 공휴일
+      const fixedHolidays = [
+        { month: 0, day: 1 },   // 신정 (1월 1일)
+        { month: 2, day: 1 },   // 삼일절 (3월 1일)
+        { month: 4, day: 5 },   // 어린이날 (5월 5일)
+        { month: 5, day: 6 },   // 현충일 (6월 6일)
+        { month: 7, day: 15 }, // 광복절 (8월 15일)
+        { month: 9, day: 3 },   // 개천절 (10월 3일)
+        { month: 9, day: 9 },   // 한글날 (10월 9일)
+        { month: 11, day: 25 }  // 크리스마스 (12월 25일)
+      ];
+      
+      // 부처님오신날 (음력 기반, 대략 4월 말~5월 초, 여기서는 5월 15일로 근사치 사용)
+      if (month === 4 && day === 15) return true;
+      
+      // 고정 공휴일 체크
+      for (const holiday of fixedHolidays) {
+        if (month === holiday.month && day === holiday.day) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+
+    /**
+     * Firebase에서 훈련 로그 가져오기 (훈련일지 화면용)
+     */
+    async function fetchTrainingLogsForCalendarJournal(userId) {
+      if (!userId) {
+        console.warn('[MiniCalendarJournal] userId가 없습니다.');
+        return {};
+      }
+
+      try {
+        // getUserTrainingLogs 함수 사용 (최대 100개 가져오기)
+        if (typeof window.getUserTrainingLogs !== 'function') {
+          console.error('[MiniCalendarJournal] window.getUserTrainingLogs 함수를 찾을 수 없습니다.');
+          return {};
+        }
+
+        const logs = await window.getUserTrainingLogs(userId, { limit: 100 });
+        
+        console.log(`[MiniCalendarJournal] ${logs.length}개의 훈련 로그를 가져왔습니다.`);
+        
+        // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
+        const logsByDate = {};
+        logs.forEach(log => {
+          const dateKey = getDateKeyJournal(log.date);
+          if (dateKey) {
+            if (!logsByDate[dateKey]) {
+              logsByDate[dateKey] = [];
+            }
+            logsByDate[dateKey].push(log);
+          }
+        });
+        
+        console.log(`[MiniCalendarJournal] 날짜별 그룹화 완료: ${Object.keys(logsByDate).length}개의 날짜에 훈련 기록이 있습니다.`);
+        return logsByDate;
+      } catch (error) {
+        console.error('[MiniCalendarJournal] 훈련 로그 가져오기 실패:', error);
+        return {};
+      }
+    }
 
     /**
      * 훈련일지 화면용 달력 렌더링
@@ -4571,23 +4696,23 @@
       // 이전 달 날짜들 추가
       for (let i = firstDayOfWeek - 1; i >= 0; i--) {
         const day = prevMonthLastDay - i;
-        const dateKey = getDateKey(new Date(currentYear, currentMonth - 1, day));
+        const dateKey = getDateKeyJournal(new Date(currentYear, currentMonth - 1, day));
         const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
         gridEl.appendChild(dayEl);
       }
       
       // 현재 달 날짜들 추가
       const today = new Date();
-      const todayKey = getDateKey(today);
+      const todayKey = getDateKeyJournal(today);
       
       for (let day = 1; day <= daysInMonth; day++) {
         const date = new Date(currentYear, currentMonth, day);
-        const dateKey = getDateKey(date);
+        const dateKey = getDateKeyJournal(date);
         const dayOfWeek = date.getDay();
         
         let className = '';
         // 공휴일 체크 (일요일보다 우선)
-        if (isHoliday(currentYear, currentMonth, day)) {
+        if (isHolidayJournal(currentYear, currentMonth, day)) {
           className = 'holiday';
         } else if (dayOfWeek === 0) {
           className = 'sunday';
@@ -4605,6 +4730,7 @@
                            miniCalendarStateJournal.trainingLogs[dateKey].length > 0;
         if (hasTraining) {
           className += ' has-training';
+          console.log(`[MiniCalendarJournal] 훈련 기록 발견: ${dateKey} - ${miniCalendarStateJournal.trainingLogs[dateKey].length}개`);
         }
         
         const dayEl = createCalendarDayJournal(day, className, dateKey);
@@ -4616,7 +4742,7 @@
       const remainingCells = 42 - totalCells; // 6주 * 7일 = 42
       
       for (let day = 1; day <= remainingCells && day <= 14; day++) {
-        const dateKey = getDateKey(new Date(currentYear, currentMonth + 1, day));
+        const dateKey = getDateKeyJournal(new Date(currentYear, currentMonth + 1, day));
         const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
         gridEl.appendChild(dayEl);
       }
@@ -4757,11 +4883,17 @@
       // 현재 사용자 ID 저장
       miniCalendarStateJournal.currentUserId = userId;
       
+      console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
+      
       // 훈련 로그 가져오기
-      miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendar(userId);
+      miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+      
+      console.log('[MiniCalendarJournal] 훈련 로그 로드 완료:', Object.keys(miniCalendarStateJournal.trainingLogs).length, '개 날짜');
       
       // 달력 렌더링
       await renderMiniCalendarJournal();
+      
+      console.log('[MiniCalendarJournal] 달력 렌더링 완료');
     }
 
     // 전역 함수로 노출
