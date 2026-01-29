@@ -4089,11 +4089,22 @@ async function submitTrainingRoomCreate() {
     }
 
     // Realtime Database > sessions/{roomId}/devices/track 업데이트
-    if (typeof db !== 'undefined' && db && db.ref && firestoreDocId) {
+    if (firestoreDocId) {
       try {
-        const sessionId = String(firestoreDocId);
-        await db.ref(`sessions/${sessionId}/devices`).set({ track: trackCount });
-        console.log(`[Training Room] Realtime Database devices/track 업데이트 완료: sessions/${sessionId}/devices/track = ${trackCount}`);
+        // Realtime Database 인스턴스 가져오기
+        const realtimeDb = (typeof db !== 'undefined' && db && db.ref) 
+          ? db  // 전역 db가 Realtime Database인 경우
+          : (window.firebase && window.firebase.database) 
+            ? window.firebase.database() 
+            : null;
+        
+        if (realtimeDb && realtimeDb.ref) {
+          const sessionId = String(firestoreDocId);
+          await realtimeDb.ref(`sessions/${sessionId}/devices`).set({ track: trackCount });
+          console.log(`[Training Room] Realtime Database devices/track 업데이트 완료: sessions/${sessionId}/devices/track = ${trackCount}`);
+        } else {
+          console.warn('[Training Room] Realtime Database 인스턴스를 찾을 수 없습니다.');
+        }
       } catch (realtimeError) {
         console.warn('[Training Room] Realtime Database 업데이트 실패 (무시):', realtimeError);
       }
