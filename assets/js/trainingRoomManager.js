@@ -136,6 +136,74 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 /**
+ * Firestore 인스턴스가 준비될 때까지 폴링 방식으로 대기 (모바일 최적화)
+ * @param {number} maxWaitMs - 최대 대기 시간 (밀리초), 기본값: 모바일 10000ms, PC 5000ms
+ * @returns {Promise<{db: any, useV9: boolean}>} Firestore 인스턴스와 사용할 SDK 버전
+ */
+async function waitForFirestore(maxWaitMs = null) {
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const timeout = maxWaitMs || (isMobile ? 10000 : 5000); // 모바일: 10초, PC: 5초
+  const pollInterval = 200; // 200ms마다 확인
+  const startTime = Date.now();
+  let attempt = 0;
+  
+  console.log('[Mobile Debug] waitForFirestore 시작 - 최대 대기:', timeout, 'ms, 모바일:', isMobile);
+  
+  while (Date.now() - startTime < timeout) {
+    attempt++;
+    let firestoreDb = null;
+    let useV9 = false;
+    
+    // 1순위: Firebase v8 호환 모드
+    if (window.firebase && typeof window.firebase.firestore === 'function') {
+      try {
+        firestoreDb = window.firebase.firestore();
+        useV9 = false;
+        console.log('[Mobile Debug] ✅ Firestore 인스턴스 확보 성공 (v8, 시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
+        return { db: firestoreDb, useV9: false };
+      } catch (e) {
+        console.log('[Mobile Debug] ⏳ Firestore v8 초기화 시도 중... (시도:', attempt, ')');
+      }
+    }
+    
+    // 2순위: Firebase v9 Modular SDK
+    if (!firestoreDb && window.firestoreV9) {
+      firestoreDb = window.firestoreV9;
+      useV9 = true;
+      console.log('[Mobile Debug] ✅ Firestore 인스턴스 확보 성공 (v9, 시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
+      return { db: firestoreDb, useV9: true };
+    }
+    
+    // 3순위: window.firestore
+    if (!firestoreDb && window.firestore) {
+      firestoreDb = window.firestore;
+      useV9 = false;
+      console.log('[Mobile Debug] ✅ Firestore 인스턴스 확보 성공 (window.firestore, 시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
+      return { db: firestoreDb, useV9: false };
+    }
+    
+    // 아직 준비되지 않음 - 대기 후 재시도
+    if (attempt % 5 === 0) { // 5번마다 로그 출력 (1초마다)
+      console.log('[Mobile Debug] ⏳ Firestore 인스턴스 대기 중... (시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
+    }
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+  
+  // 타임아웃 발생
+  const debugInfo = {
+    hasWindowFirebase: !!(window.firebase),
+    hasFirebaseFirestore: !!(window.firebase && window.firebase.firestore),
+    hasFirestoreV9: !!window.firestoreV9,
+    hasWindowFirestore: !!window.firestore,
+    isMobile: isMobile,
+    elapsed: Date.now() - startTime,
+    attempts: attempt
+  };
+  console.error('[Mobile Debug] ❌ Firestore 인스턴스 대기 타임아웃:', debugInfo);
+  throw new Error('Firestore 인스턴스를 찾을 수 없습니다. 타임아웃: ' + timeout + 'ms. 디버깅 정보: ' + JSON.stringify(debugInfo));
+}
+
+/**
  * 재시도 로직이 있는 함수 실행 (모바일 최적화 적용)
  */
 async function withRetryForTrainingRooms(fn, maxRetries = 2, delayMs = 500) {
@@ -351,19 +419,30 @@ async function loadTrainingRooms() {
   `;
 
   try {
-    // 모바일 최적화: 타임아웃 및 재시도 조정
-    // 기본 타임아웃: PC 8초, 모바일 16초
-    let baseTimeout = isMobile ? 16000 : 8000;
-    
-    // 네트워크 상태에 따른 추가 조정
-    if (networkInfo) {
-      if (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') {
-        baseTimeout = 24000; // 매우 느린 네트워크는 24초
-      } else if (networkInfo.effectiveType === '3g') {
-        baseTimeout = isMobile ? 20000 : 12000; // 3G는 중간값
-      }
+    // [Mobile Debug] Step 1: Firestore 인스턴스 대기 (폴링 방식) - 최상단에서 실행
+    console.log('[Mobile Debug] Step 1: Firestore 인스턴스 대기 시작...');
+    let firestoreInstance = null;
+    try {
+      firestoreInstance = await waitForFirestore(isMobile ? 10000 : 5000);
+      console.log('[Mobile Debug] Step 1 완료: Firestore 인스턴스 확보 성공, useV9:', firestoreInstance.useV9);
+    } catch (waitError) {
+      console.error('[Mobile Debug] Step 1 실패: Firestore 인스턴스 대기 실패:', waitError);
+      const errorMessage = waitError?.message || waitError || '알 수 없는 오류';
+      listContainer.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+          <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Firestore 초기화 실패</p>
+          <p style="color: #666; font-size: 14px; margin-bottom: 20px;">${errorMessage}</p>
+          ${isMobile ? '<p style="color: #f59e0b; font-size: 12px; margin-top: 10px;">모바일 환경: Firebase 스크립트 로딩을 기다리는 중일 수 있습니다. 잠시 후 다시 시도해주세요.</p>' : ''}
+          <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
+                  style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+            다시 시도
+          </button>
+        </div>
+      `;
+      return;
     }
     
+    // 모바일 최적화: 타임아웃 및 재시도 조정
     // 재시도 횟수: PC 2회, 모바일 3회
     const maxRetries = isMobile ? 3 : 2;
     const initialDelay = isMobile ? 400 : 500; // 모바일은 약간 빠른 재시도
@@ -371,7 +450,6 @@ async function loadTrainingRooms() {
     console.log('[Training Room] 로딩 설정:', {
       isMobile,
       networkType: networkInfo?.effectiveType || 'unknown',
-      timeout: baseTimeout,
       maxRetries,
       initialDelay
     });
@@ -381,306 +459,238 @@ async function loadTrainingRooms() {
       // ✅ Firebase Firestore만 사용 (GAS 제거)
       withRetryForTrainingRooms(
         async () => {
-          // Firestore 인스턴스 확인 (우선순위: window.firebase.firestore > window.firestoreV9 > window.firestore)
-          let firestoreDb = null;
-          let useV9 = false;
+          const { db: firestoreDb, useV9 } = firestoreInstance;
           
-          // 1순위: Firebase v8 호환 모드 (window.firebase.firestore)
-          if (window.firebase && typeof window.firebase.firestore === 'function') {
-            try {
-              firestoreDb = window.firebase.firestore();
-              console.log('[Training Room] ✅ Firebase v8 호환 모드 Firestore 인스턴스 사용');
-            } catch (e) {
-              console.warn('[Training Room] Firebase v8 Firestore 초기화 실패:', e);
-            }
-          }
+          console.log('[Mobile Debug] Step 2: Firestore 쿼리 시작, useV9:', useV9);
           
-          // 2순위: Firebase v9 Modular SDK (window.firestoreV9)
-          if (!firestoreDb && window.firestoreV9) {
-            firestoreDb = window.firestoreV9;
-            useV9 = true;
-            console.log('[Training Room] ✅ Firebase v9 Modular SDK Firestore 인스턴스 사용');
-          }
-          
-          // 3순위: window.firestore (firebaseConfig.js에서 설정)
-          if (!firestoreDb && window.firestore) {
-            firestoreDb = window.firestore;
-            console.log('[Training Room] ✅ window.firestore 인스턴스 사용');
-          }
-          
-          // Firestore 필수 체크 및 디버깅 정보
-          if (!firestoreDb) {
-            const debugInfo = {
-              hasWindowFirebase: !!(window.firebase),
-              hasFirebaseFirestore: !!(window.firebase && window.firebase.firestore),
-              hasFirestoreV9: !!window.firestoreV9,
-              hasWindowFirestore: !!window.firestore,
-              isMobile: isMobileDeviceForTrainingRooms()
-            };
-            console.error('[Training Room] ❌ Firestore 인스턴스를 찾을 수 없습니다. 디버깅 정보:', debugInfo);
-            throw new Error('Firestore를 사용할 수 없습니다. Firebase가 초기화되지 않았습니다. 디버깅 정보: ' + JSON.stringify(debugInfo));
-          }
-          
-          console.log('[Training Room] 🔥 Firestore에서 Training Room 목록 로드 시도...');
-          
-          // 모바일 환경에서 Firestore 인스턴스 재확인 (초기화 지연 대응)
-          const isMobile = isMobileDeviceForTrainingRooms();
+          // 모바일에서 인증 상태 확인 (Firestore 보안 규칙 대응)
           if (isMobile) {
-            console.log('[Training Room] 📱 [모바일] 환경 감지 - Firestore 인스턴스 및 인증 상태 확인 중...');
-            
-            // Firestore 인스턴스가 없으면 재확인
-            if (!firestoreDb) {
-              console.log('[Training Room] 📱 [모바일] Firestore 인스턴스 재확인 중...');
-              // 모바일에서 초기화 지연을 고려하여 재시도
-              for (let i = 0; i < 3; i++) {
-                await new Promise(resolve => setTimeout(resolve, 300 * (i + 1)));
-                if (window.firebase && typeof window.firebase.firestore === 'function') {
-                  firestoreDb = window.firebase.firestore();
-                  useV9 = false;
-                  console.log('[Training Room] 📱 [모바일] Firestore 인스턴스 재확인 성공 (시도', i + 1, ')');
-                  break;
-                } else if (window.firestoreV9) {
-                  firestoreDb = window.firestoreV9;
-                  useV9 = true;
-                  console.log('[Training Room] 📱 [모바일] FirestoreV9 인스턴스 재확인 성공 (시도', i + 1, ')');
-                  break;
-                } else if (window.firestore) {
-                  firestoreDb = window.firestore;
-                  useV9 = false;
-                  console.log('[Training Room] 📱 [모바일] window.firestore 재확인 성공 (시도', i + 1, ')');
-                  break;
-                }
-              }
-            }
-            
-            // 모바일에서 인증 상태 확인 (Firestore 보안 규칙 대응)
             try {
               const auth = window.firebase?.auth?.() || window.auth || null;
               if (auth) {
                 const currentUser = auth.currentUser;
-                console.log('[Training Room] 📱 [모바일] 인증 상태:', currentUser ? '로그인됨 (' + (currentUser.uid || 'unknown') + ')' : '로그인 안 됨');
-              } else {
-                console.log('[Training Room] 📱 [모바일] 인증 인스턴스를 찾을 수 없음');
+                console.log('[Mobile Debug] 인증 상태:', currentUser ? '로그인됨 (' + (currentUser.uid || 'unknown') + ')' : '로그인 안 됨');
               }
             } catch (authError) {
-              console.warn('[Training Room] 📱 [모바일] 인증 상태 확인 실패:', authError);
+              console.warn('[Mobile Debug] 인증 상태 확인 실패:', authError);
             }
-          }
-          
-          if (!firestoreDb) {
-            const debugInfo = {
-              hasWindowFirebase: !!(window.firebase),
-              hasFirebaseFirestore: !!(window.firebase && window.firebase.firestore),
-              hasFirestoreV9: !!window.firestoreV9,
-              hasWindowFirestore: !!window.firestore,
-              isMobile: isMobile
-            };
-            console.error('[Training Room] ❌ Firestore 인스턴스를 찾을 수 없습니다. 디버깅 정보:', debugInfo);
-            throw new Error('Firestore를 사용할 수 없습니다. Firebase가 초기화되지 않았습니다. 디버깅 정보: ' + JSON.stringify(debugInfo));
           }
           
           // Firestore v9 모듈 방식 (Modular SDK) - 동적 import
           let collection, query, where, getDocs;
           
-          // Firebase v8 호환 모드 사용 (window.firebase.firestore가 있는 경우)
-          if (window.firebase && typeof window.firebase.firestore === 'function' && !useV9) {
-                // Firebase v8 호환 모드 - 병렬 쿼리로 속도 향상
-                const db = firestoreDb;
-                const rooms = [];
+          // Firebase v8 호환 모드 사용
+          if (!useV9) {
+            console.log('[Mobile Debug] Step 3: Firebase v8 호환 모드 쿼리 시작');
+            const db = firestoreDb;
+            const rooms = [];
+            
+            // 모바일에서는 Firestore SDK의 자체 재시도 로직을 신뢰하고 타임아웃을 제거하거나 매우 길게 설정
+            // Firestore는 오프라인 지속성과 자체 재시도 로직이 있으므로 인위적인 타임아웃은 제거
+            console.log('[Mobile Debug] Step 3-1: training_schedules 쿼리 시작');
+            const scheduleQuery = db.collection('training_schedules')
+              .where('status', '==', 'active')
+              .get();
+            
+            console.log('[Mobile Debug] Step 3-2: training_rooms 쿼리 시작');
+            const roomsQuery = db.collection(TRAINING_ROOMS_COLLECTION)
+              .where('status', '!=', 'inactive')
+              .get()
+              .catch(e => {
+                // status 필드가 없는 경우를 대비해 전체 조회로 폴백
+                console.warn('[Mobile Debug] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
+                return db.collection(TRAINING_ROOMS_COLLECTION).get();
+              });
+            
+            // 두 컬렉션을 병렬로 조회 (타임아웃 없이 Firestore SDK에 신뢰)
+            console.log('[Mobile Debug] Step 3-3: 병렬 쿼리 실행 (Promise.allSettled)');
+            const [scheduleResult, roomsResult] = await Promise.allSettled([
+              scheduleQuery,
+              roomsQuery
+            ]);
                 
-                // 모바일에서 타임아웃 래퍼 추가 (30초)
-                const queryWithTimeout = (queryPromise, timeoutMs = 30000) => {
-                  if (!isMobile) return queryPromise;
-                  return Promise.race([
-                    queryPromise,
-                    new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('쿼리 타임아웃 (' + timeoutMs + 'ms)')), timeoutMs)
-                    )
-                  ]);
-                };
-                
-                // 두 컬렉션을 병렬로 조회 (속도 향상)
-                const [scheduleResult, roomsResult] = await Promise.allSettled([
-                  // training_schedules (기존)
-                  queryWithTimeout(
-                    db.collection('training_schedules')
-                      .where('status', '==', 'active')
-                      .get(),
-                    isMobile ? 30000 : 15000
-                  ),
-                  // training_rooms (생성 팝업으로 만든 방) - 서버 측 필터링
-                  queryWithTimeout(
-                    db.collection(TRAINING_ROOMS_COLLECTION)
-                      .where('status', '!=', 'inactive')
-                      .get()
-                      .catch(e => {
-                        // status 필드가 없는 경우를 대비해 전체 조회 후 필터링
-                        console.warn('[Training Room] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
-                        return db.collection(TRAINING_ROOMS_COLLECTION).get();
-                      }),
-                    isMobile ? 30000 : 15000
-                  )
-                ]);
-                
-                // training_schedules 처리
-                if (scheduleResult.status === 'fulfilled') {
-                  const scheduleCount = scheduleResult.value.size || 0;
-                  console.log('[Training Room] training_schedules 쿼리 성공:', scheduleCount, '개 문서');
-                  scheduleResult.value.forEach((doc) => {
-                    rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
-                  });
-                } else {
-                  const errorMsg = scheduleResult.reason?.message || scheduleResult.reason || '알 수 없는 오류';
-                  console.warn('[Training Room] training_schedules 로드 실패:', errorMsg);
-                  console.warn('[Training Room] training_schedules 실패 상세:', {
-                    code: scheduleResult.reason?.code,
-                    stack: scheduleResult.reason?.stack,
-                    isMobile: isMobileDeviceForTrainingRooms()
-                  });
+            // training_schedules 처리 (부분 성공 허용)
+            console.log('[Mobile Debug] Step 3-4: training_schedules 결과 처리');
+            if (scheduleResult.status === 'fulfilled') {
+              const scheduleCount = scheduleResult.value.size || 0;
+              console.log('[Mobile Debug] ✅ training_schedules 쿼리 성공:', scheduleCount, '개 문서');
+              scheduleResult.value.forEach((doc) => {
+                rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
+              });
+            } else {
+              const errorMsg = scheduleResult.reason?.message || scheduleResult.reason || '알 수 없는 오류';
+              const errorCode = scheduleResult.reason?.code || 'unknown';
+              console.error('[Mobile Debug] ❌ training_schedules 로드 실패:', errorMsg, '코드:', errorCode);
+              console.error('[Mobile Debug] training_schedules 실패 상세:', {
+                code: errorCode,
+                message: errorMsg,
+                stack: scheduleResult.reason?.stack,
+                isMobile: isMobile
+              });
+              // 부분 실패는 허용 - training_rooms만이라도 로드되면 계속 진행
+            }
+            
+            // training_rooms 처리 (부분 성공 허용)
+            console.log('[Mobile Debug] Step 3-5: training_rooms 결과 처리');
+            if (roomsResult.status === 'fulfilled') {
+              const roomsCount = roomsResult.value.size || 0;
+              console.log('[Mobile Debug] ✅ training_rooms 쿼리 성공:', roomsCount, '개 문서');
+              roomsResult.value.forEach((doc) => {
+                const data = doc.data();
+                // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
+                if (data.status !== 'inactive') {
+                  rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
                 }
-                
-                // training_rooms 처리
-                if (roomsResult.status === 'fulfilled') {
-                  const roomsCount = roomsResult.value.size || 0;
-                  console.log('[Training Room] training_rooms 쿼리 성공:', roomsCount, '개 문서');
-                  roomsResult.value.forEach((doc) => {
-                    const data = doc.data();
-                    // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
-                    if (data.status !== 'inactive') {
-                      rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
-                    }
-                  });
-                } else {
-                  const errorMsg = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
-                  console.warn('[Training Room] training_rooms 로드 실패:', errorMsg);
-                  console.warn('[Training Room] training_rooms 실패 상세:', {
-                    code: roomsResult.reason?.code,
-                    stack: roomsResult.reason?.stack,
-                    isMobile: isMobileDeviceForTrainingRooms()
-                  });
-                }
-                
-                console.log(`[Training Room] ✅ Firestore(v8)에서 ${rooms.length}개 Room 로드 완료 (병렬 쿼리)`);
-                console.log('[Training Room] 📊 쿼리 결과 상세:', {
-                  scheduleSuccess: scheduleResult.status === 'fulfilled',
-                  roomsSuccess: roomsResult.status === 'fulfilled',
-                  totalRooms: rooms.length,
-                  isMobile: isMobileDeviceForTrainingRooms()
-                });
-                
-                // 모바일에서 빈 결과인 경우 경고
-                if (rooms.length === 0 && isMobileDeviceForTrainingRooms()) {
-                  console.warn('[Training Room] ⚠️ [모바일] 쿼리는 성공했지만 결과가 비어있습니다. 권한 또는 네트워크 문제일 수 있습니다.');
-                }
-                
-                return rooms;
-              } else if (useV9 && firestoreDb) {
-                // Firestore v9 모듈 방식 - 병렬 쿼리로 속도 향상
-                
-                const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-                collection = firestoreModule.collection;
-                query = firestoreModule.query;
-                where = firestoreModule.where;
-                getDocs = firestoreModule.getDocs;
-                
-                const rooms = [];
-                
-                // 모바일에서 타임아웃 래퍼 추가 (30초)
-                const queryWithTimeoutV9 = (queryPromise, timeoutMs = 30000) => {
-                  if (!isMobile) return queryPromise;
-                  return Promise.race([
-                    queryPromise,
-                    new Promise((_, reject) => 
-                      setTimeout(() => reject(new Error('쿼리 타임아웃 (' + timeoutMs + 'ms)')), timeoutMs)
-                    )
-                  ]);
-                };
-                
-                // 두 컬렉션을 병렬로 조회 (속도 향상)
-                const [scheduleResult, roomsResult] = await Promise.allSettled([
-                  // training_schedules (기존)
-                  queryWithTimeoutV9(
-                    (async () => {
-                      const schedulesRef = collection(firestoreDb, 'training_schedules');
-                      const q = query(schedulesRef, where('status', '==', 'active'));
-                      return await getDocs(q);
-                    })(),
-                    isMobile ? 30000 : 15000
-                  ),
-                  // training_rooms (생성 팝업으로 만든 방) - 서버 측 필터링
-                  queryWithTimeoutV9(
-                    (async () => {
-                      try {
-                        const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
-                        const q = query(roomsRef, where('status', '!=', 'inactive'));
-                        return await getDocs(q);
-                      } catch (e) {
-                        // status 필드가 없는 경우를 대비해 전체 조회 후 필터링
-                        console.warn('[Training Room] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
-                        const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
-                        return await getDocs(roomsRef);
-                      }
-                    })(),
-                    isMobile ? 30000 : 15000
-                  )
-                ]);
-                
-                // training_schedules 처리
-                if (scheduleResult.status === 'fulfilled') {
-                  const scheduleCount = scheduleResult.value.size || 0;
-                  console.log('[Training Room] training_schedules 쿼리 성공 (v9):', scheduleCount, '개 문서');
-                  scheduleResult.value.forEach((doc) => {
-                    rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
-                  });
-                } else {
-                  const errorMsg = scheduleResult.reason?.message || scheduleResult.reason || '알 수 없는 오류';
-                  console.warn('[Training Room] training_schedules 로드 실패 (v9):', errorMsg);
-                  console.warn('[Training Room] training_schedules 실패 상세 (v9):', {
-                    code: scheduleResult.reason?.code,
-                    stack: scheduleResult.reason?.stack,
-                    isMobile: isMobileDeviceForTrainingRooms()
-                  });
-                }
-                
-                // training_rooms 처리
-                if (roomsResult.status === 'fulfilled') {
-                  const roomsCount = roomsResult.value.size || 0;
-                  console.log('[Training Room] training_rooms 쿼리 성공 (v9):', roomsCount, '개 문서');
-                  roomsResult.value.forEach((doc) => {
-                    const data = doc.data();
-                    // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
-                    if (data.status !== 'inactive') {
-                      rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
-                    }
-                  });
-                } else {
-                  const errorMsg = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
-                  console.warn('[Training Room] training_rooms 로드 실패 (v9):', errorMsg);
-                  console.warn('[Training Room] training_rooms 실패 상세 (v9):', {
-                    code: roomsResult.reason?.code,
-                    stack: roomsResult.reason?.stack,
-                    isMobile: isMobileDeviceForTrainingRooms()
-                  });
-                }
-                
-                console.log(`[Training Room] ✅ Firestore(v9)에서 ${rooms.length}개 Room 로드 완료 (병렬 쿼리)`);
-                console.log('[Training Room] 📊 쿼리 결과 상세 (v9):', {
-                  scheduleSuccess: scheduleResult.status === 'fulfilled',
-                  roomsSuccess: roomsResult.status === 'fulfilled',
-                  totalRooms: rooms.length,
-                  isMobile: isMobileDeviceForTrainingRooms()
-                });
-                
-                // 모바일에서 빈 결과인 경우 경고
-                if (rooms.length === 0 && isMobileDeviceForTrainingRooms()) {
-                  console.warn('[Training Room] ⚠️ [모바일] 쿼리는 성공했지만 결과가 비어있습니다. 권한 또는 네트워크 문제일 수 있습니다.');
-                }
-                
-                return rooms;
-              } else {
-                // Firestore 인스턴스를 찾을 수 없는 경우
-                throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firebase.firestore() 또는 window.firestoreV9를 확인하세요.');
+              });
+            } else {
+              const errorMsg = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
+              const errorCode = roomsResult.reason?.code || 'unknown';
+              console.error('[Mobile Debug] ❌ training_rooms 로드 실패:', errorMsg, '코드:', errorCode);
+              console.error('[Mobile Debug] training_rooms 실패 상세:', {
+                code: errorCode,
+                message: errorMsg,
+                stack: roomsResult.reason?.stack,
+                isMobile: isMobile
+              });
+              // 부분 실패는 허용 - training_schedules만이라도 로드되면 계속 진행
+            }
+            
+            console.log('[Mobile Debug] Step 3 완료: 총', rooms.length, '개 Room 로드');
+            console.log('[Mobile Debug] 쿼리 결과 요약:', {
+              scheduleSuccess: scheduleResult.status === 'fulfilled',
+              scheduleCount: scheduleResult.status === 'fulfilled' ? scheduleResult.value.size : 0,
+              roomsSuccess: roomsResult.status === 'fulfilled',
+              roomsCount: roomsResult.status === 'fulfilled' ? roomsResult.value.size : 0,
+              totalRooms: rooms.length,
+              isMobile: isMobile
+            });
+            
+            // 두 쿼리 모두 실패한 경우에만 에러 발생
+            if (scheduleResult.status !== 'fulfilled' && roomsResult.status !== 'fulfilled') {
+              const errorMsg = 'training_schedules와 training_rooms 모두 로드 실패';
+              console.error('[Mobile Debug] ❌ 모든 쿼리 실패:', errorMsg);
+              throw new Error(errorMsg + '. training_schedules: ' + (scheduleResult.reason?.message || 'unknown') + ', training_rooms: ' + (roomsResult.reason?.message || 'unknown'));
+            }
+            
+            // 모바일에서 빈 결과인 경우 경고
+            if (rooms.length === 0 && isMobile) {
+              console.warn('[Mobile Debug] ⚠️ [모바일] 쿼리는 성공했지만 결과가 비어있습니다.');
+              console.warn('[Mobile Debug] 가능한 원인: 1) 실제로 데이터가 없음, 2) 권한 문제, 3) 네트워크 문제');
+            }
+            
+            return rooms;
+          } else if (useV9) {
+            // Firestore v9 모듈 방식
+            console.log('[Mobile Debug] Step 3: Firebase v9 Modular SDK 쿼리 시작');
+            
+            const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+            collection = firestoreModule.collection;
+            query = firestoreModule.query;
+            where = firestoreModule.where;
+            getDocs = firestoreModule.getDocs;
+            
+            const rooms = [];
+            
+            console.log('[Mobile Debug] Step 3-1: training_schedules 쿼리 시작 (v9)');
+            const scheduleQueryV9 = (async () => {
+              const schedulesRef = collection(firestoreDb, 'training_schedules');
+              const q = query(schedulesRef, where('status', '==', 'active'));
+              return await getDocs(q);
+            })();
+            
+            console.log('[Mobile Debug] Step 3-2: training_rooms 쿼리 시작 (v9)');
+            const roomsQueryV9 = (async () => {
+              try {
+                const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
+                const q = query(roomsRef, where('status', '!=', 'inactive'));
+                return await getDocs(q);
+              } catch (e) {
+                // status 필드가 없는 경우를 대비해 전체 조회로 폴백
+                console.warn('[Mobile Debug] training_rooms status 필터 쿼리 실패, 전체 조회로 폴백:', e.message);
+                const roomsRef = collection(firestoreDb, TRAINING_ROOMS_COLLECTION);
+                return await getDocs(roomsRef);
               }
+            })();
+            
+            // 두 컬렉션을 병렬로 조회 (타임아웃 없이 Firestore SDK에 신뢰)
+            console.log('[Mobile Debug] Step 3-3: 병렬 쿼리 실행 (v9, Promise.allSettled)');
+            const [scheduleResult, roomsResult] = await Promise.allSettled([
+              scheduleQueryV9,
+              roomsQueryV9
+            ]);
+            
+            // training_schedules 처리 (부분 성공 허용)
+            console.log('[Mobile Debug] Step 3-4: training_schedules 결과 처리 (v9)');
+            if (scheduleResult.status === 'fulfilled') {
+              const scheduleCount = scheduleResult.value.size || 0;
+              console.log('[Mobile Debug] ✅ training_schedules 쿼리 성공 (v9):', scheduleCount, '개 문서');
+              scheduleResult.value.forEach((doc) => {
+                rooms.push({ id: doc.id, ...doc.data(), _sourceCollection: 'training_schedules' });
+              });
+            } else {
+              const errorMsg = scheduleResult.reason?.message || scheduleResult.reason || '알 수 없는 오류';
+              const errorCode = scheduleResult.reason?.code || 'unknown';
+              console.error('[Mobile Debug] ❌ training_schedules 로드 실패 (v9):', errorMsg, '코드:', errorCode);
+              console.error('[Mobile Debug] training_schedules 실패 상세 (v9):', {
+                code: errorCode,
+                message: errorMsg,
+                stack: scheduleResult.reason?.stack,
+                isMobile: isMobile
+              });
+            }
+            
+            // training_rooms 처리 (부분 성공 허용)
+            console.log('[Mobile Debug] Step 3-5: training_rooms 결과 처리 (v9)');
+            if (roomsResult.status === 'fulfilled') {
+              const roomsCount = roomsResult.value.size || 0;
+              console.log('[Mobile Debug] ✅ training_rooms 쿼리 성공 (v9):', roomsCount, '개 문서');
+              roomsResult.value.forEach((doc) => {
+                const data = doc.data();
+                // status 필터링이 서버에서 안 된 경우 클라이언트에서 필터링
+                if (data.status !== 'inactive') {
+                  rooms.push({ id: doc.id, ...data, title: data.title || data.name, _sourceCollection: 'training_rooms' });
+                }
+              });
+            } else {
+              const errorMsg = roomsResult.reason?.message || roomsResult.reason || '알 수 없는 오류';
+              const errorCode = roomsResult.reason?.code || 'unknown';
+              console.error('[Mobile Debug] ❌ training_rooms 로드 실패 (v9):', errorMsg, '코드:', errorCode);
+              console.error('[Mobile Debug] training_rooms 실패 상세 (v9):', {
+                code: errorCode,
+                message: errorMsg,
+                stack: roomsResult.reason?.stack,
+                isMobile: isMobile
+              });
+            }
+            
+            console.log('[Mobile Debug] Step 3 완료 (v9): 총', rooms.length, '개 Room 로드');
+            console.log('[Mobile Debug] 쿼리 결과 요약 (v9):', {
+              scheduleSuccess: scheduleResult.status === 'fulfilled',
+              scheduleCount: scheduleResult.status === 'fulfilled' ? scheduleResult.value.size : 0,
+              roomsSuccess: roomsResult.status === 'fulfilled',
+              roomsCount: roomsResult.status === 'fulfilled' ? roomsResult.value.size : 0,
+              totalRooms: rooms.length,
+              isMobile: isMobile
+            });
+            
+            // 두 쿼리 모두 실패한 경우에만 에러 발생
+            if (scheduleResult.status !== 'fulfilled' && roomsResult.status !== 'fulfilled') {
+              const errorMsg = 'training_schedules와 training_rooms 모두 로드 실패 (v9)';
+              console.error('[Mobile Debug] ❌ 모든 쿼리 실패 (v9):', errorMsg);
+              throw new Error(errorMsg + '. training_schedules: ' + (scheduleResult.reason?.message || 'unknown') + ', training_rooms: ' + (roomsResult.reason?.message || 'unknown'));
+            }
+            
+            // 모바일에서 빈 결과인 경우 경고
+            if (rooms.length === 0 && isMobile) {
+              console.warn('[Mobile Debug] ⚠️ [모바일] 쿼리는 성공했지만 결과가 비어있습니다 (v9).');
+              console.warn('[Mobile Debug] 가능한 원인: 1) 실제로 데이터가 없음, 2) 권한 문제, 3) 네트워크 문제');
+            }
+            
+            return rooms;
+          } else {
+            // 이 경우는 waitForFirestore에서 이미 처리되었으므로 발생하지 않아야 함
+            throw new Error('Firestore 인스턴스를 찾을 수 없습니다. waitForFirestore가 실패했을 수 있습니다.');
+          }
         },
         maxRetries, // 동적 재시도 횟수
         initialDelay // 동적 초기 지연
