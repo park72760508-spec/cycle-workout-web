@@ -5973,20 +5973,39 @@ function initializeCurrentScreen(screenId) {
       case 'trainingJournalScreen':
       // 훈련일지 화면: 미니 달력 자동 로드
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
-      if (typeof initMiniCalendarJournal === 'function') {
-        const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-        const userId = currentUser?.id;
-        if (userId) {
-          // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 초기화
-          setTimeout(() => {
-            initMiniCalendarJournal(userId);
-          }, 100);
+      console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
+      console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
+      
+      // 함수가 로드될 때까지 대기 (최대 2초)
+      const checkAndInit = (retryCount = 0) => {
+        if (typeof window.initMiniCalendarJournal === 'function') {
+          const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          const userId = currentUser?.id;
+          console.log('현재 사용자 정보:', { userId, hasCurrentUser: !!currentUser, userName: currentUser?.name });
+          
+          if (userId) {
+            // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 초기화
+            setTimeout(() => {
+              console.log('initMiniCalendarJournal 호출 시도 - userId:', userId);
+              window.initMiniCalendarJournal(userId);
+            }, 100);
+          } else {
+            console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
+            console.warn('currentUser:', currentUser);
+            console.warn('localStorage currentUser:', localStorage.getItem('currentUser'));
+          }
+        } else if (retryCount < 20) {
+          // 함수가 아직 로드되지 않았으면 100ms 후 재시도
+          console.log(`initMiniCalendarJournal 대기 중... (${retryCount + 1}/20)`);
+          setTimeout(() => checkAndInit(retryCount + 1), 100);
         } else {
-          console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
+          console.error('❌ initMiniCalendarJournal function not available after 2 seconds');
+          console.error('window.initMiniCalendarJournal:', window.initMiniCalendarJournal);
+          console.error('사용 가능한 window 함수들:', Object.keys(window).filter(k => k.includes('Calendar')));
         }
-      } else {
-        console.warn('initMiniCalendarJournal function not available');
-      }
+      };
+      
+      checkAndInit();
       break;
 
     case 'performanceDashboardScreen': {
