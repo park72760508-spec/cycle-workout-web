@@ -3837,29 +3837,39 @@
       <p class="subtitle">나의 훈련 이력을 확인하세요</p>
     </div>
     
-    <div class="card training-journal-controls">
-      <div class="journal-nav-left">
-        <!-- 왼쪽 공간 (비어있음) -->
-      </div>
-      <div class="journal-nav-center">
-        <button class="journal-nav-prev" onclick="loadTrainingJournalCalendar('prev')" style="background: none; border: none; cursor: pointer; padding: 8px;">
-          <img src="assets/img/next1.png" alt="이전" style="width: 24px; height: 24px;" />
-        </button>
-        <span id="trainingJournalMonth" class="journal-month-label">2024년 1월</span>
-        <button class="journal-nav-next" onclick="loadTrainingJournalCalendar('next')" style="background: none; border: none; cursor: pointer; padding: 8px;">
-          <img src="assets/img/next1.png" alt="다음" style="width: 24px; height: 24px; transform: rotate(180deg);" />
-        </button>
-      </div>
-      <div class="journal-nav-right">
-        <!-- 오른쪽 공간 (비어있음) -->
-      </div>
-    </div>
-    
-    
-    <div id="trainingJournalCalendar" class="training-calendar">
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <div class="loading-text">캘린더를 불러오는 중...</div>
+    <!-- 월간 훈련 이력 미니 달력 -->
+    <div class="card">
+      <div class="mini-calendar-container">
+        <!-- 달력 헤더 -->
+        <div class="mini-calendar-header">
+          <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigateJournal('prev')" aria-label="이전 달">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span class="mini-calendar-month-year" id="miniCalendarMonthYearJournal">2026년 1월</span>
+          <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigateJournal('next')" aria-label="다음 달">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+        
+        <!-- 요일 헤더 -->
+        <div class="mini-calendar-weekdays">
+          <div class="mini-calendar-weekday">일</div>
+          <div class="mini-calendar-weekday">월</div>
+          <div class="mini-calendar-weekday">화</div>
+          <div class="mini-calendar-weekday">수</div>
+          <div class="mini-calendar-weekday">목</div>
+          <div class="mini-calendar-weekday">금</div>
+          <div class="mini-calendar-weekday">토</div>
+        </div>
+        
+        <!-- 달력 그리드 -->
+        <div class="mini-calendar-grid" id="miniCalendarGridJournal">
+          <!-- 달력 날짜들이 여기에 동적으로 생성됩니다 -->
+        </div>
       </div>
     </div>
     
@@ -4517,6 +4527,248 @@
     window.initMiniCalendar = initMiniCalendar;
     
     console.log('✅ 월간 훈련 이력 미니 달력 스크립트 로드 완료');
+  </script>
+  
+  <!-- ========== 훈련일지 화면용 미니 달력 JavaScript ========== -->
+  <script>
+    // 훈련일지 화면용 달력 상태 관리
+    let miniCalendarStateJournal = {
+      currentYear: new Date().getFullYear(),
+      currentMonth: new Date().getMonth(), // 0-11
+      trainingLogs: [], // 현재 사용자의 훈련 로그
+      currentUserId: null
+    };
+
+    /**
+     * 훈련일지 화면용 달력 렌더링
+     */
+    async function renderMiniCalendarJournal() {
+      const gridEl = document.getElementById('miniCalendarGridJournal');
+      const monthYearEl = document.getElementById('miniCalendarMonthYearJournal');
+      
+      if (!gridEl || !monthYearEl) {
+        console.warn('[MiniCalendarJournal] 달력 요소를 찾을 수 없습니다.');
+        return;
+      }
+
+      const { currentYear, currentMonth } = miniCalendarStateJournal;
+      
+      // 월/년 표시 업데이트
+      monthYearEl.textContent = `${currentYear}년 ${currentMonth + 1}월`;
+      
+      // 그리드 초기화
+      gridEl.innerHTML = '';
+      
+      // 현재 월의 첫 날과 마지막 날
+      const firstDay = new Date(currentYear, currentMonth, 1);
+      const lastDay = new Date(currentYear, currentMonth + 1, 0);
+      const firstDayOfWeek = firstDay.getDay(); // 0(일) ~ 6(토)
+      const daysInMonth = lastDay.getDate();
+      
+      // 이전 달의 마지막 날들
+      const prevMonthLastDay = new Date(currentYear, currentMonth, 0).getDate();
+      
+      // 이전 달 날짜들 추가
+      for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+        const day = prevMonthLastDay - i;
+        const dateKey = getDateKey(new Date(currentYear, currentMonth - 1, day));
+        const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
+        gridEl.appendChild(dayEl);
+      }
+      
+      // 현재 달 날짜들 추가
+      const today = new Date();
+      const todayKey = getDateKey(today);
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(currentYear, currentMonth, day);
+        const dateKey = getDateKey(date);
+        const dayOfWeek = date.getDay();
+        
+        let className = '';
+        // 공휴일 체크 (일요일보다 우선)
+        if (isHoliday(currentYear, currentMonth, day)) {
+          className = 'holiday';
+        } else if (dayOfWeek === 0) {
+          className = 'sunday';
+        } else if (dayOfWeek === 6) {
+          className = 'saturday';
+        }
+        
+        // 오늘인지 확인
+        if (dateKey === todayKey) {
+          className += ' today';
+        }
+        
+        // 훈련 기록이 있는지 확인
+        const hasTraining = miniCalendarStateJournal.trainingLogs[dateKey] && 
+                           miniCalendarStateJournal.trainingLogs[dateKey].length > 0;
+        if (hasTraining) {
+          className += ' has-training';
+        }
+        
+        const dayEl = createCalendarDayJournal(day, className, dateKey);
+        gridEl.appendChild(dayEl);
+      }
+      
+      // 다음 달 날짜들 추가 (달력 완성)
+      const totalCells = gridEl.children.length;
+      const remainingCells = 42 - totalCells; // 6주 * 7일 = 42
+      
+      for (let day = 1; day <= remainingCells && day <= 14; day++) {
+        const dateKey = getDateKey(new Date(currentYear, currentMonth + 1, day));
+        const dayEl = createCalendarDayJournal(day, 'other-month', dateKey);
+        gridEl.appendChild(dayEl);
+      }
+    }
+
+    /**
+     * 훈련일지 화면용 달력 날짜 셀 생성
+     */
+    function createCalendarDayJournal(day, className, dateKey) {
+      const dayEl = document.createElement('div');
+      dayEl.className = `mini-calendar-day ${className}`.trim();
+      dayEl.innerHTML = `<span class="day-number">${day}</span>`;
+      
+      // 훈련 기록이 있는 날짜는 클릭 가능
+      if (className.includes('has-training')) {
+        dayEl.style.cursor = 'pointer';
+        dayEl.addEventListener('click', () => {
+          showTrainingDetailModalJournal(dateKey);
+        });
+      }
+      
+      return dayEl;
+    }
+
+    /**
+     * 훈련일지 화면용 달력 월 이동
+     */
+    function miniCalendarNavigateJournal(direction) {
+      if (direction === 'prev') {
+        miniCalendarStateJournal.currentMonth--;
+        if (miniCalendarStateJournal.currentMonth < 0) {
+          miniCalendarStateJournal.currentMonth = 11;
+          miniCalendarStateJournal.currentYear--;
+        }
+      } else if (direction === 'next') {
+        miniCalendarStateJournal.currentMonth++;
+        if (miniCalendarStateJournal.currentMonth > 11) {
+          miniCalendarStateJournal.currentMonth = 0;
+          miniCalendarStateJournal.currentYear++;
+        }
+      }
+      
+      renderMiniCalendarJournal();
+    }
+
+    /**
+     * 훈련일지 화면용 훈련 상세 정보 모달 표시
+     */
+    async function showTrainingDetailModalJournal(dateKey) {
+      const modal = document.getElementById('trainingDetailModal');
+      const body = document.getElementById('trainingDetailBody');
+      
+      if (!modal || !body) {
+        console.warn('[MiniCalendarJournal] 모달 요소를 찾을 수 없습니다.');
+        return;
+      }
+      
+      const logs = miniCalendarStateJournal.trainingLogs[dateKey];
+      if (!logs || logs.length === 0) {
+        console.warn('[MiniCalendarJournal] 해당 날짜의 훈련 기록이 없습니다.');
+        return;
+      }
+      
+      // 첫 번째 로그 사용 (같은 날 여러 훈련이 있으면 첫 번째 것)
+      const log = logs[0];
+      
+      // 날짜 포맷팅
+      const date = parseTrainingDate(log.date);
+      const dateStr = date ? 
+        `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일` : 
+        '날짜 정보 없음';
+      
+      // 시간 포맷팅 (초 -> MM:SS)
+      const formatDuration = (seconds) => {
+        if (!seconds) return '0분 0초';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}분 ${secs}초`;
+      };
+      
+      // 상세 정보 HTML 생성
+      body.innerHTML = `
+        <div class="training-detail-item">
+          <span class="training-detail-label">날짜</span>
+          <span class="training-detail-value">${dateStr}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">거리</span>
+          <span class="training-detail-value">${log.distance_km ? log.distance_km.toFixed(2) + ' km' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">훈련시간</span>
+          <span class="training-detail-value">${formatDuration(log.duration_sec)}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">IF (Intensity Factor)</span>
+          <span class="training-detail-value">${log.if ? log.if.toFixed(2) : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">TSS (Training Stress Score)</span>
+          <span class="training-detail-value">${log.tss || '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">Kilojoules (KJ)</span>
+          <span class="training-detail-value">${log.kilojoules ? log.kilojoules.toFixed(0) + ' KJ' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">평균 케이던스</span>
+          <span class="training-detail-value">${log.avg_cadence ? log.avg_cadence.toFixed(0) + ' rpm' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">평균 심박</span>
+          <span class="training-detail-value">${log.avg_hr ? log.avg_hr.toFixed(0) + ' bpm' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">평균 파워</span>
+          <span class="training-detail-value">${log.avg_watts ? log.avg_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">NP (Normalized Power)</span>
+          <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+      `;
+      
+      // 모달 표시
+      modal.classList.remove('hidden');
+    }
+
+    /**
+     * 훈련일지 화면 진입 시 달력 초기화
+     */
+    async function initMiniCalendarJournal(userId) {
+      if (!userId) {
+        console.warn('[MiniCalendarJournal] userId가 없습니다.');
+        return;
+      }
+      
+      // 현재 사용자 ID 저장
+      miniCalendarStateJournal.currentUserId = userId;
+      
+      // 훈련 로그 가져오기
+      miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendar(userId);
+      
+      // 달력 렌더링
+      await renderMiniCalendarJournal();
+    }
+
+    // 전역 함수로 노출
+    window.miniCalendarNavigateJournal = miniCalendarNavigateJournal;
+    window.initMiniCalendarJournal = initMiniCalendarJournal;
+    
+    console.log('✅ 훈련일지 화면용 미니 달력 스크립트 로드 완료');
   </script>
   
   <!-- 전화번호 기반 로그인 핸들러 -->
