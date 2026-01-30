@@ -12827,68 +12827,87 @@ async function startMobileDashboard() {
 }
 
 /**
+ * 모바일 대시보드 Pull-to-refresh 방지 해제 (종료 시 스크롤 복원용)
+ * 훈련 종료/다른 화면 이동 시 반드시 호출하여 document/body 스크롤 잠금 해제
+ */
+function teardownMobileDashboardPullToRefreshPrevention() {
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const refs = window.__mobileDashboardP2RHandlers;
+  if (!refs) return;
+
+  if (mobileScreen) {
+    if (refs.touchStartHandler) mobileScreen.removeEventListener('touchstart', refs.touchStartHandler, { capture: true });
+    if (refs.touchMoveHandler) mobileScreen.removeEventListener('touchmove', refs.touchMoveHandler, { capture: true });
+    if (refs.touchEndHandler) mobileScreen.removeEventListener('touchend', refs.touchEndHandler, { capture: true });
+  }
+  if (refs.documentTouchMoveHandler) document.removeEventListener('touchmove', refs.documentTouchMoveHandler, { capture: true });
+  if (refs.beforeUnloadHandler) window.removeEventListener('beforeunload', refs.beforeUnloadHandler);
+
+  window.__mobileDashboardP2RHandlers = null;
+  console.log('[Mobile Dashboard] Pull-to-refresh 방지 해제 (스크롤 복원)');
+}
+
+/**
  * 모바일 대시보드 Pull-to-refresh 방지 초기화 (Bluefy/iOS 강화 버전)
+ * 종료 시 teardownMobileDashboardPullToRefreshPrevention() 호출 필수
  */
 function initializeMobileDashboardPullToRefreshPrevention() {
   const mobileScreen = document.getElementById('mobileDashboardScreen');
   if (!mobileScreen) return;
-  
+
+  // 이미 등록된 리스너가 있으면 먼저 해제 (중복 방지)
+  teardownMobileDashboardPullToRefreshPrevention();
+
   // iOS/Bluefy 감지
   function isIOS() {
     const ua = navigator.userAgent || '';
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
-  
+
   function isBluefy() {
     const ua = navigator.userAgent || '';
     return /Bluefy/i.test(ua);
   }
-  
+
   const isIOSDevice = isIOS();
   const isBluefyApp = isBluefy();
-  
+
   let touchStartY = 0;
   let touchStartTime = 0;
   let isScrolling = false;
   let lastScrollY = 0;
-  
+
   // 훈련 중인지 확인
   function isTrainingActive() {
     return window.trainingState && window.trainingState.timerId !== null;
   }
-  
+
   // 스크롤 위치 확인 (더 정확한 방법)
   function isAtTop() {
-    // window.scrollY가 0이거나, mobileScreen의 scrollTop이 0인 경우
-    return (window.scrollY === 0 || window.scrollY <= 1) && 
+    return (window.scrollY === 0 || window.scrollY <= 1) &&
            (mobileScreen.scrollTop === 0 || mobileScreen.scrollTop <= 1);
   }
-  
-  // 터치 시작
+
   const touchStartHandler = (e) => {
     touchStartY = e.touches[0].clientY;
     touchStartTime = Date.now();
     isScrolling = false;
     lastScrollY = window.scrollY || mobileScreen.scrollTop || 0;
   };
-  
-  // 터치 이동 중 - iOS/Bluefy에서는 더 적극적으로 차단
+
   const touchMoveHandler = (e) => {
     if (!e.touches || e.touches.length === 0) return;
-    
+
     const touchY = e.touches[0].clientY;
     const deltaY = touchY - touchStartY;
     const currentScrollY = window.scrollY || mobileScreen.scrollTop || 0;
-    
-    // 스크롤 중인지 확인
+
     if (Math.abs(currentScrollY - lastScrollY) > 1) {
       isScrolling = true;
     }
     lastScrollY = currentScrollY;
-    
-    // 훈련 중이고, 스크롤이 맨 위에 있고, 아래로 당기는 동작일 때
+
     if (isTrainingActive() && isAtTop() && deltaY > 0 && !isScrolling) {
-      // iOS/Bluefy에서는 더 일찍 차단 (10px 이상만)
       const threshold = (isIOSDevice || isBluefyApp) ? 10 : 30;
       if (deltaY > threshold) {
         e.preventDefault();
@@ -12897,8 +12916,7 @@ function initializeMobileDashboardPullToRefreshPrevention() {
         return false;
       }
     }
-    
-    // iOS/Bluefy에서 훈련 중일 때는 아래로 당기는 모든 동작 차단 (더 강력)
+
     if ((isIOSDevice || isBluefyApp) && isTrainingActive() && isAtTop() && deltaY > 5) {
       e.preventDefault();
       e.stopPropagation();
@@ -12906,29 +12924,19 @@ function initializeMobileDashboardPullToRefreshPrevention() {
       return false;
     }
   };
-  
-  // 터치 종료
-  const touchEndHandler = (e) => {
+
+  const touchEndHandler = () => {
     touchStartY = 0;
     touchStartTime = 0;
     isScrolling = false;
   };
-  
-  // 이벤트 리스너 등록 (capture phase에서도 처리)
-  mobileScreen.addEventListener('touchstart', touchStartHandler, { passive: true, capture: true });
-  mobileScreen.addEventListener('touchmove', touchMoveHandler, { passive: false, capture: true });
-  mobileScreen.addEventListener('touchend', touchEndHandler, { passive: true, capture: true });
-  
-  // document 레벨에서도 차단 (Bluefy 대응)
-  document.addEventListener('touchmove', (e) => {
+
+  const documentTouchMoveHandler = (e) => {
     const target = e.target;
-    // mobileDashboardScreen 내부 요소인지 확인
     if (mobileScreen.contains(target) || target === mobileScreen) {
       if (isTrainingActive() && isAtTop()) {
         const touchY = e.touches && e.touches[0] ? e.touches[0].clientY : 0;
         const deltaY = touchY - touchStartY;
-        
-        // 아래로 당기는 동작 차단
         if (deltaY > 5 && (isIOSDevice || isBluefyApp)) {
           e.preventDefault();
           e.stopPropagation();
@@ -12937,17 +12945,30 @@ function initializeMobileDashboardPullToRefreshPrevention() {
         }
       }
     }
-  }, { passive: false, capture: true });
-  
-  // beforeunload 이벤트로 새로고침 방지 (훈련 중일 때)
-  window.addEventListener('beforeunload', (e) => {
+  };
+
+  const beforeUnloadHandler = (e) => {
     if (isTrainingActive()) {
       e.preventDefault();
       e.returnValue = '훈련이 진행 중입니다. 정말 나가시겠습니까?';
       return e.returnValue;
     }
-  });
-  
+  };
+
+  mobileScreen.addEventListener('touchstart', touchStartHandler, { passive: true, capture: true });
+  mobileScreen.addEventListener('touchmove', touchMoveHandler, { passive: false, capture: true });
+  mobileScreen.addEventListener('touchend', touchEndHandler, { passive: true, capture: true });
+  document.addEventListener('touchmove', documentTouchMoveHandler, { passive: false, capture: true });
+  window.addEventListener('beforeunload', beforeUnloadHandler);
+
+  window.__mobileDashboardP2RHandlers = {
+    touchStartHandler,
+    touchMoveHandler,
+    touchEndHandler,
+    documentTouchMoveHandler,
+    beforeUnloadHandler
+  };
+
   console.log('[Mobile Dashboard] Pull-to-refresh 방지 초기화 완료', {
     isIOS: isIOSDevice,
     isBluefy: isBluefyApp,
@@ -14487,11 +14508,24 @@ function cleanupMobileDashboard() {
   
   // 화면 방향 고정 해제
   unlockScreenOrientation();
-  
+
+  // Pull-to-refresh / 터치 스크롤 방지 리스너 해제 (다른 화면에서 스크롤 잠금 해제)
+  if (typeof teardownMobileDashboardPullToRefreshPrevention === 'function') {
+    teardownMobileDashboardPullToRefreshPrevention();
+  }
+
   // body 클래스 제거
   document.body.classList.remove('mobile-dashboard-active');
-  
-  console.log('[Mobile Dashboard] 정리 완료');
+
+  // iOS/Bluefy: 다른 화면에서 스크롤 복원을 위해 overflow 명시적 해제
+  document.body.style.overflow = '';
+  document.body.style.position = '';
+  if (document.documentElement) {
+    document.documentElement.style.overflow = '';
+    document.documentElement.style.position = '';
+  }
+
+  console.log('[Mobile Dashboard] 정리 완료 (스크롤 방지 해제)');
 }
 
 // 화면 전환 시 정리
@@ -15942,6 +15976,10 @@ function exitMobileIndividualTraining() {
   
   // 확인 대화상자
   if (confirm('초기화면으로 나가시겠습니까?')) {
+    // 종료 시 스크롤 방지 해제 (다른 화면에서 스크롤 잠금 해제 - iOS/Bluefy 대응)
+    if (typeof cleanupMobileDashboard === 'function') {
+      cleanupMobileDashboard();
+    }
     // 초기화면으로 이동 (모바일 대시보드는 index.html 내부 화면이므로 showScreen 사용)
     if (typeof showScreen === 'function') {
       showScreen('basecampScreen');
