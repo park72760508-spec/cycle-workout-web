@@ -3874,14 +3874,19 @@
     </div>
     
     <!-- 하단 뒤로 가기 버튼 + Strava 연결 -->
-    <div class="connection-exit-container" style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom));">
-      <button class="btn btn-exit-inline enhanced-back-button" onclick="showScreen('myCareerScreen')" aria-label="뒤로 가기">
-        <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-        <span>뒤로 가기</span>
-      </button>
-      <button class="btn btn-exit-inline enhanced-back-button" id="btnStravaTrainingJournal" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화">
-        <img src="assets/img/strava.png" alt="Strava" style="width: 21px; height: 21px; vertical-align: middle;" />
-      </button>
+    <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom));">
+      <div style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <button class="btn btn-exit-inline enhanced-back-button" onclick="showScreen('myCareerScreen')" aria-label="뒤로 가기">
+          <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          <span>뒤로 가기</span>
+        </button>
+        <button class="btn btn-exit-inline profile-strava-button" id="btnStravaTrainingJournal" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화" style="flex: 1; min-width: 140px; padding: 0; background: transparent; cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;">
+          <img src="assets/img/btn_strava.png" alt="Connect with Strava" style="height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block;" />
+        </button>
+      </div>
+      <p style="text-align: center; font-size: 12px; color: #6b7280; margin: 0; padding: 0;">
+        By connecting, you agree to our <a href="#" onclick="event.preventDefault(); if(typeof openPrivacyPolicyModal==='function'){openPrivacyPolicyModal();} return false;" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Privacy Policy</a>
+      </p>
     </div>
   </div>
 
