@@ -2950,7 +2950,10 @@
 <div id="trainingScreen" class="screen">
   <!-- 1. 최상단: 사용자 정보 + 연결 버튼 (모바일 개인훈련 대시보드와 동일 디자인/기능, 독립 ID) -->
 <div class="enhanced-training-user-info enhanced-training-user-info-with-connect" id="userPanel">
-  <div id="userInfo" class="enhanced-training-user-info-left"></div>
+  <div class="enhanced-training-user-info-left training-screen-top-row">
+    <div id="trainingScreenGradeIcon" class="training-screen-grade-icon" aria-hidden="true"></div>
+    <div id="userInfo" class="enhanced-training-user-info-text"></div>
+  </div>
   <div class="enhanced-training-connect-wrap" style="position: relative;">
     <button id="trainingScreenBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleBluetoothDropdown('trainingScreen')">
       <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
