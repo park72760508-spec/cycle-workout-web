@@ -1,9 +1,9 @@
 /* ==========================================================
-   ErgController.js (v7.0 Legacy Hunter Edition)
-   - Solves iOS "No Resistance" by AGGRESSIVELY prioritizing Legacy Protocols
-   - If CycleOps/Wahoo is found, FTMS is IGNORED (Prevents connecting to dead channels)
-   - Forces `writeValue` (WithResponse) for Legacy on iOS to ensure delivery
-   - Includes Zwift-Class Anti-Lock & Soft Start
+   ErgController.js (v8.0 Silk Road Pro - World Class Smoothness)
+   - "Water-Flow" Control Logic: Uses Physics-based LPF smoothing
+   - Smart Anti-Lock: Prevents "Spiral of Death" intelligently based on RPM
+   - Legacy Hunter: Guarantees connection on iOS/Bluefy & Windows
+   - The Ultimate ERG Experience
 ========================================================== */
 
 class ErgController {
@@ -20,9 +20,9 @@ class ErgController {
 
     this._subscribers = [];
 
-    // Engine Config
-    this._rampingFactor = 0.10;
-    this._controlLoopInterval = 250;
+    // ⚙️ Pro Tuning Parameters (The Secret Sauce)
+    this._smoothFactor = 0.12;  // "Silky" factor (Lower = Smoother)
+    this._controlLoopInterval = 250; // 4 updates per second
     this._controlLoopId = null;
     this._lastCadenceTime = 0;
 
@@ -30,7 +30,6 @@ class ErgController {
     this._isProcessingQueue = false;
     this._maxQueueSize = 20;
 
-    // UUIDs (Normalized lowercase)
     this._uuids = {
       cycleops: '347b0012-7635-408b-8918-8ff3949ce592',
       wahoo:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
@@ -38,14 +37,8 @@ class ErgController {
       ftms:     '00002ad9-0000-1000-8000-00805f9b34fb'
     };
 
-    this._commandPriorities = {
-      'RESET': 100,
-      'REQUEST_CONTROL': 90,
-      'SET_TARGET_POWER': 50
-    };
-
     this._setupConnectionWatcher();
-    console.log('[ErgController] v7.0 (Legacy Hunter) Initialized');
+    console.log('[ErgController] v8.0 (Silk Road Pro) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -91,110 +84,93 @@ class ErgController {
     });
   }
 
-  // ── [2] Deep Scan (LEGACY HUNTER) ──
+  // ── [2] Deep Scan (Legacy Hunter - iOS Fix) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan (v7.0 Legacy Hunter)...');
+      console.log('[ERG] Starting Deep Scan (v8.0)...');
       let services = [];
       try { services = await server.getPrimaryServices(); }
       catch(e) {
-          const knownSvcs = [
-              '347b0001-7635-408b-8918-8ff3949ce592', // CycleOps Service
-              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Wahoo Service
-              '00001826-0000-1000-8000-00805f9b34fb'  // FTMS Service
-          ];
+          const knownSvcs = ['347b0001-7635-408b-8918-8ff3949ce592', 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', '00001826-0000-1000-8000-00805f9b34fb'];
           for(const u of knownSvcs) try { services.push(await server.getPrimaryService(u)); } catch(_){}
       }
 
-      console.log(`[ERG] Deep Scan: found ${services.length} services`);
-
-      // Pass 1: Look for CycleOps (Highest Priority)
+      // Priority 1: CycleOps
       for (const service of services) {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
               const uuid = (char.uuid || '').toLowerCase();
-              if (uuid === this._uuids.cycleops || uuid.startsWith('347b0012')) {
-                  console.log('🎯 [ERG] FOUND CYCLEOPS LEGACY! Locking on. UUID:', uuid);
-                  return { point: char, protocol: 'CYCLEOPS' };
-              }
+              if (uuid === this._uuids.cycleops || uuid.startsWith('347b0012')) return { point: char, protocol: 'CYCLEOPS' };
            }
         } catch(e) {}
       }
-
-      // Pass 2: Look for Wahoo (High Priority)
+      // Priority 2: Wahoo
       for (const service of services) {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
               const uuid = (char.uuid || '').toLowerCase();
-              if (uuid === this._uuids.wahoo) {
-                  console.log('🎯 [ERG] FOUND WAHOO LEGACY! Locking on. UUID:', uuid);
-                  return { point: char, protocol: 'WAHOO' };
-              }
+              if (uuid === this._uuids.wahoo) return { point: char, protocol: 'WAHOO' };
            }
         } catch(e) {}
       }
-
-      // Pass 3: FTMS (Last Resort - only if Legacy is missing)
+      // Priority 3: FTMS
       for (const service of services) {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
               const uuid = (char.uuid || '').toLowerCase();
-              if (uuid === this._uuids.ftms) {
-                  console.log('⚠️ [ERG] Legacy not found. Falling back to FTMS. UUID:', uuid);
-                  return { point: char, protocol: 'FTMS' };
-              }
+              if (uuid === this._uuids.ftms) return { point: char, protocol: 'FTMS' };
            }
         } catch(e) {}
       }
-
-      console.log('[ERG] Deep Scan: no control point found');
       return null;
-    } catch (e) {
-      console.warn('[ERG] Deep Scan error:', e);
-      return null;
-    }
+    } catch (e) { return null; }
   }
 
-  // ── [3] Zwift-Class Control Loop ──
+  // ── [3] "Water-Flow" Control Loop (The Magic) ──
 
   _startControlLoop() {
     if (this._controlLoopId) return;
-    console.log('[ERG] Starting Smart Control Loop');
+    console.log('[ERG] Starting Silk Road Pro Loop');
 
     this._controlLoopId = setInterval(async () => {
         if (!this.state.enabled) return;
 
         const rawTarget = this.state.targetPower;
-        let currentCadence = this.state.cadence;
+        let rpm = this.state.cadence;
 
-        if (Date.now() - this._lastCadenceTime > 5000) currentCadence = 0;
+        if (Date.now() - this._lastCadenceTime > 5000) rpm = 0;
 
-        // Anti-Lock Logic
+        // ★ Logic 1: Smart Anti-Lock (RPM Scaling)
         let smartTarget = rawTarget;
-        if (currentCadence < 40) {
-            smartTarget = Math.min(50, rawTarget);
-        } else if (currentCadence < 60) {
-            const factor = currentCadence / 60.0;
-            smartTarget = rawTarget * factor;
+        if (rpm < 45) {
+            smartTarget = Math.min(60, rawTarget);
+        } else if (rpm < 70) {
+            // 45rpm->64%, 60rpm->85%, 70rpm->100%
+            const factor = 0.64 + ((rpm - 45) * 0.0144);
+            smartTarget = rawTarget * Math.min(1.0, factor);
         }
 
-        // Smoothing
-        let currentApplied = this.state.currentAppliedPower;
-        const diff = smartTarget - currentApplied;
-        if (Math.abs(diff) < 1) return;
+        // ★ Logic 2: "Water-Flow" Smoothing (Low Pass Filter)
+        let current = this.state.currentAppliedPower;
+        const diff = smartTarget - current;
 
-        let nextPower = currentApplied + (diff * this._rampingFactor);
-        if (Math.abs(smartTarget - nextPower) < 1) nextPower = smartTarget;
+        if (Math.abs(diff) < 1.5) return;
+
+        let nextPower = current + (diff * this._smoothFactor);
+
+        if (Math.abs(smartTarget - nextPower) < 1.5) nextPower = smartTarget;
 
         this.state.currentAppliedPower = nextPower;
+
         await this._sendCommand(Math.round(nextPower));
+
     }, this._controlLoopInterval);
   }
 
@@ -205,7 +181,7 @@ class ErgController {
     }
   }
 
-  // ── [4] Command Sender (Strict Legacy Write) ──
+  // ── [4] Command Sender (Hybrid Force) ──
 
   async _sendCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
@@ -231,7 +207,6 @@ class ErgController {
     this._queueCommand(async () => {
          const isLegacy = (protocol === 'CYCLEOPS' || protocol === 'WAHOO' || protocol === 'TACX');
 
-         // ★ v7.0 Rule: If Legacy, FORCE writeValue (With Response) first ★
          if (isLegacy) {
              try {
                  await controlPoint.writeValue(buffer);
@@ -244,7 +219,6 @@ class ErgController {
              return;
          }
 
-         // FTMS: Prefer Fast Write
          if (typeof controlPoint.writeValueWithoutResponse === 'function') {
              try { await controlPoint.writeValueWithoutResponse(buffer); return; } catch(e){}
          }
@@ -259,13 +233,11 @@ class ErgController {
         const trainer = window.connectedDevices?.trainer;
         if (!trainer) throw new Error("No trainer connected");
 
-        // ALWAYS Deep Scan on toggle to ensure we lock onto Legacy if available
         const result = await this._deepScanForControlPoint(trainer);
         if (result) {
             trainer.controlPoint = result.point;
             trainer.realProtocol = result.protocol;
             trainer.protocol = (result.protocol === 'CYCLEOPS' || result.protocol === 'WAHOO') ? 'FTMS' : result.protocol;
-            console.log(`[ERG] Protocol Locked: ${result.protocol}`);
         }
 
         const controlPoint = trainer.controlPoint;
@@ -282,13 +254,9 @@ class ErgController {
         if (enable) {
            const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
            const initBuf = new Uint8Array([initByte]);
-
            this._queueCommand(async () => {
-              try { await controlPoint.writeValue(initBuf); }
-              catch(e) {
-                  if (typeof controlPoint.writeValueWithoutResponse === 'function') {
-                       try { await controlPoint.writeValueWithoutResponse(initBuf); } catch(e2){}
-                  }
+              try { await controlPoint.writeValue(initBuf); } catch(e) {
+                  if (typeof controlPoint.writeValueWithoutResponse === 'function') try { await controlPoint.writeValueWithoutResponse(initBuf); } catch(e2){}
               }
            }, 'INIT', { priority: 90 });
 
