@@ -21,6 +21,16 @@ const UUIDS = {
   HR_SERVICE:   '0000180d-0000-1000-8000-00805f9b34fb'
 };
 
+// Comprehensive list for iOS/Bluefy: Legacy services must be in optionalServices at connection time.
+// Required for ErgController (v11.0) to discover CycleOps/Wahoo/FTMS control points on iPhone.
+const COMPREHENSIVE_ERG_OPTIONAL_SERVICES = [
+  '347b0001-7635-408b-8918-8ff3949ce592', // CycleOps - CRITICAL
+  'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Wahoo
+  '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e', // Tacx
+  '00001826-0000-1000-8000-00805f9b34fb', // FTMS
+  '00001818-0000-1000-8000-00805f9b34fb'  // Cycling Power (CPS)
+];
+
 // Global State
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
@@ -59,12 +69,15 @@ async function connectTrainer() {
       { namePrefix: "Wahoo" }, { namePrefix: "KICKR" }, { namePrefix: "Tacx" }
     ];
 
-    // 2. Comprehensive Optional Services (Critical for Bluefy)
+    // 2. Comprehensive Optional Services (Critical for iOS/Bluefy - Legacy visibility)
     const optionalServices = [
       UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE,
       UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE,
-      "device_information", "battery_service"
+      'device_information', 'battery_service'
     ];
+    COMPREHENSIVE_ERG_OPTIONAL_SERVICES.forEach(function (uuid) {
+      if (optionalServices.indexOf(uuid) === -1) optionalServices.push(uuid);
+    });
 
     let device;
     try {

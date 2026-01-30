@@ -569,6 +569,15 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
   } // if 문 닫기
 }
 
+// iOS/Bluefy: Legacy ERG services must be in optionalServices at connection (ErgController v11.0).
+var ERG_OPTIONAL_SERVICES = [
+  '347b0001-7635-408b-8918-8ff3949ce592',
+  'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+  '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e',
+  '00001826-0000-1000-8000-00805f9b34fb',
+  '00001818-0000-1000-8000-00805f9b34fb'
+];
+
 /**
  * Bluetooth 디바이스 페어링 함수
  */
@@ -579,7 +588,11 @@ async function pairBluetoothDevice(deviceType, inputId) {
     
     // 디바이스 타입에 따라 다른 서비스 필터 사용
     if (deviceType === 'trainer') {
-      // 스마트 트레이너 연결
+      // 스마트 트레이너 연결 (ERG optionalServices 병합: iOS/Bluefy Legacy 지원)
+      var trainerOptional = ["fitness_machine", "cycling_power", "device_information"];
+      ERG_OPTIONAL_SERVICES.forEach(function (uuid) {
+        if (trainerOptional.indexOf(uuid) === -1) trainerOptional.push(uuid);
+      });
       try {
         device = await navigator.bluetooth.requestDevice({
           filters: [
@@ -589,12 +602,12 @@ async function pairBluetoothDevice(deviceType, inputId) {
             { namePrefix: "Wahoo" },
             { namePrefix: "Tacx" },
           ],
-          optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+          optionalServices: trainerOptional,
         });
       } catch (filterError) {
         device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
-          optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+          optionalServices: trainerOptional,
         });
       }
       deviceName = device.name || '';
