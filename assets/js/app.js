@@ -4207,7 +4207,8 @@ function renderUserInfo() {
     const u = window.currentUser;
     if (!u) {
       box.textContent = "사용자 미선택";
-      // 사용자 패널 네온 제거(선택)
+      var gradeIconEl = document.getElementById("trainingScreenGradeIcon");
+      if (gradeIconEl) gradeIconEl.innerHTML = "";
       if (typeof updateUserPanelNeonByWkg === "function") updateUserPanelNeonByWkg(0);
       return;
     }
@@ -4221,21 +4222,20 @@ function renderUserInfo() {
     const ftpDisp = Number.isFinite(ftp) ? String(ftp) : "-";
     const wkgDisp = Number.isFinite(wkgNum) ? wkgNum.toFixed(2) : "-";
 
-    // 훈련 목표에 따른 이미지 선택
+    // 훈련 목표(등급)에 따른 아이콘
     const challenge = String(u.challenge || 'Fitness').trim();
-    let challengeImage = 'yellow.png'; // 기본값: Fitness
-    if (challenge === 'GranFondo') {
-      challengeImage = 'green.png';
-    } else if (challenge === 'Racing') {
-      challengeImage = 'blue.png';
-    } else if (challenge === 'Elite') {
-      challengeImage = 'orenge.png';
-    } else if (challenge === 'PRO') {
-      challengeImage = 'red.png';
-    }
+    let challengeImage = 'yellow.png';
+    if (challenge === 'GranFondo') challengeImage = 'green.png';
+    else if (challenge === 'Racing') challengeImage = 'blue.png';
+    else if (challenge === 'Elite') challengeImage = 'orenge.png';
+    else if (challenge === 'PRO') challengeImage = 'red.png';
 
-    // 이미지와 텍스트를 함께 표시 (사용자 이름에 훈련 참가 화면으로 이동하는 클릭 이벤트 추가)
-    box.innerHTML = `<img src="assets/img/${challengeImage}" alt="" class="training-user-challenge-icon"> <span class="training-user-name-clickable" style="cursor: pointer; text-decoration: underline;" onclick="if (typeof showScreen === 'function') { showScreen('groupRoomScreen'); if (typeof selectRole === 'function') { setTimeout(() => selectRole('participant'), 200); } }" title="훈련 참가 화면으로 이동">${cleanName}</span> · FTP ${ftpDisp}W · ${wkgDisp} W/kg`;
+    // 훈련등급 아이콘과 사용자 정보를 나란히 한 줄로 표시
+    const gradeIconEl = document.getElementById('trainingScreenGradeIcon');
+    if (gradeIconEl) {
+      gradeIconEl.innerHTML = '<img src="assets/img/' + challengeImage + '" alt="" class="training-user-challenge-icon">';
+    }
+    box.innerHTML = '<span class="training-user-name-clickable" style="cursor: pointer; text-decoration: underline;" onclick="if (typeof showScreen === \'function\') { showScreen(\'groupRoomScreen\'); if (typeof selectRole === \'function\') { setTimeout(function(){ selectRole(\'participant\'); }, 200); } }" title="훈련 참가 화면으로 이동">' + cleanName + '</span> · FTP ' + ftpDisp + 'W · ' + wkgDisp + ' W/kg';
 
     // ★ 사용자 판넬 네온은 "한 번만" 적용 (동적 갱신 안 함)
     if (typeof updateUserPanelNeonByWkg === "function") {
