@@ -1845,24 +1845,16 @@
 
   <!-- 2) 프로필 선택 화면 -->
   <div id="profileScreen" class="screen">
-    <div class="header">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <button
-          class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all"
-          onclick="showScreen('basecampScreen')"
-          style="padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;"
-          onmouseover="this.style.backgroundColor='#f3f4f6'"
-          onmouseout="this.style.backgroundColor='transparent'"
-          aria-label="뒤로 가기"
-        >
-          <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-          </svg>
-        </button>
-        <h1 style="margin: 0; flex: 1;"><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
-      </div>
-      <p class="subtitle">훈련할 사용자를 선택하세요</p>
+    <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
+      <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+      </button>
+      <h1 style="margin: 0; flex: 1; text-align: center;"><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
+      <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
+    <p class="subtitle" style="text-align: center;">훈련할 사용자를 선택하세요</p>
     
     <div class="card mb-15">
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -2262,20 +2254,6 @@
         </div>
       </div>
 
-      <!-- Privacy Policy 모달 -->
-      <div id="privacyPolicyModal" class="modal hidden" style="z-index: 10001;">
-        <div class="modal-overlay" onclick="closePrivacyPolicyModal()"></div>
-        <div class="modal-content" style="max-width: 800px; max-height: 90vh; padding: 0; display: flex; flex-direction: column;">
-          <div class="modal-header" style="margin-bottom: 0; padding: 20px; border-bottom: 1px solid #eee;">
-            <h3 style="font-size: 1.3em; color: #333; margin: 0;">Privacy Policy</h3>
-            <button class="modal-close" onclick="closePrivacyPolicyModal()" aria-label="닫기" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #999; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;">&times;</button>
-          </div>
-          <div class="modal-body" id="privacyPolicyContent" style="padding: 24px; overflow-y: auto; flex: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333;">
-            <div style="text-align: center; color: #999; margin-bottom: 20px;">로딩 중...</div>
-          </div>
-        </div>
-      </div>
-
       <div id="addUserForm" class="card hidden" style="max-width: 100%; padding: 20px; box-sizing: border-box; margin: 0 auto;">
         <h3 class="mb-20" style="font-size: 1.3em; margin-bottom: 20px; color: #333;">새 사용자 등록</h3>
         
@@ -2422,7 +2400,19 @@
     
   </div>
 
-
+  <!-- Privacy Policy 모달 (화면 밖 배치 - 훈련일지/프로필 등 어디서든 팝업 표시) -->
+  <div id="privacyPolicyModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 11000; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);">
+    <div class="modal-overlay" onclick="closePrivacyPolicyModal()" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+    <div class="modal-content" style="position: relative; z-index: 1; max-width: 800px; max-height: 90vh; padding: 0; display: flex; flex-direction: column; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); overflow: hidden; width: 90%;">
+      <div class="modal-header" style="margin-bottom: 0; padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 1.3em; color: #333; margin: 0;">Privacy Policy</h3>
+        <button class="modal-close" onclick="closePrivacyPolicyModal()" aria-label="닫기" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #999; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;">&times;</button>
+      </div>
+      <div class="modal-body" id="privacyPolicyContent" style="padding: 24px; overflow-y: auto; flex: 1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="text-align: center; color: #999; margin-bottom: 20px;">로딩 중...</div>
+      </div>
+    </div>
+  </div>
 
   
   <!-- 3) 워크아웃 선택 화면 -->
@@ -3833,11 +3823,15 @@
   <!-- 8) 훈련일지 화면 -->
   <div id="trainingJournalScreen" class="screen">
     <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
-      <button type="button" onclick="showScreen('myCareerScreen');" aria-label="Manage Your Career로 이동" style="width: 2.5em; flex-shrink: 0; background: none; border: none; padding: 8px; cursor: pointer; font-size: 1.5em; line-height: 1; color: inherit;">&lt;</button>
+      <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="showScreen('myCareerScreen');" aria-label="Manage Your Career로 이동" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+      </button>
       <h1 style="margin: 0; flex: 1; text-align: center;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련일지</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
-    <p class="subtitle" style="margin-top: 0;">나의 훈련 이력을 확인하세요</p>
+    <p class="subtitle" style="margin-top: 0; text-align: center;">나의 훈련 이력을 확인하세요</p>
     
     <!-- 월간 훈련 이력 미니 달력 -->
     <div class="card">
@@ -3876,13 +3870,13 @@
     </div>
     
     <!-- 하단 Strava 연결 -->
-    <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom));">
-      <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 12px;">
+    <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); text-align: center;">
+      <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0;">
         <button class="btn btn-exit-inline profile-strava-button" id="btnStravaTrainingJournal" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화" style="min-width: 200px; padding: 0; background: transparent; cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;">
           <img src="assets/img/btn_strava.png" alt="Connect with Strava" style="height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block;" />
         </button>
       </div>
-      <p style="text-align: center; font-size: 12px; color: #6b7280; margin: 0; padding: 0;">
+      <p style="text-align: center; font-size: 12px; color: #6b7280; margin: 12px 0 0 0; padding: 0;">
         By connecting, you agree to our <a href="#" onclick="event.preventDefault(); openPrivacyPolicyModal(); return false;" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Privacy Policy</a>
       </p>
     </div>
