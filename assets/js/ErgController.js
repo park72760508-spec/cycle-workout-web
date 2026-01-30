@@ -1,9 +1,10 @@
 /* ==========================================================
-   ErgController.js (v12.0 "The Investigator" - Final Answer)
+   ErgController.js (v12.1 "The Final Polish" - Complete & Robust)
    - Phase 1: Explicit Pinpoint Scan (Fast)
    - Phase 2: Drill-Down Scan (Reliable - finds hidden services)
    - Phase 3: Skeleton Key (Heuristic - finds ANY writable char)
-   - Diagnostics: Tells user EXACTLY why connection failed
+   - Phase 4: CPS Fallback (Last Resort - prevents "Not Found" error)
+   - Features: Silk Road Pro Smoothing, Anti-Lock, Universal Write
 ========================================================== */
 
 class ErgController {
@@ -45,7 +46,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v12.0 (The Investigator) Initialized');
+    console.log('[ErgController] v12.1 (Final Polish) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -98,9 +99,9 @@ class ErgController {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Investigator Scan (v12.0)...');
+      console.log('[ERG] Starting Investigator Scan (v12.1)...');
 
-      // Targets EXCLUDING CPS (We don't want to trap into CPS early)
+      // Targets EXCLUDING CPS (Phase 1-3 priority)
       const targets = [
           { name: 'CycleOps', svc: this._uuids.cycleopsSvc, char: this._uuids.cycleopsChar, proto: 'CYCLEOPS' },
           { name: 'Wahoo',    svc: this._uuids.wahooSvc,    char: this._uuids.wahooChar,    proto: 'WAHOO' },
@@ -116,16 +117,16 @@ class ErgController {
               for (const c of chars) {
                   const uuid = c.uuid.toLowerCase();
                   if (uuid === t.char || uuid.startsWith(t.char.substring(0,8))) {
-                      console.log('🎯 [ERG] Phase 1 Success: ' + t.name);
+                      console.log(`🎯 [ERG] Phase 1 Success: ${t.name}`);
                       return { point: c, protocol: t.proto };
                   }
               }
           } catch(e) {
               // 🚨 DIAGNOSTICS
               if (e.name === 'SecurityError') {
-                  const msg = '🚫 권한 부족: ' + t.name + ' (앱 재실행 필요)';
+                  const msg = `🚫 권한 부족: ${t.name} (앱 재실행 필요)`;
                   if (typeof showToast === 'function') showToast(msg);
-                  console.error('🚨 SecurityError: ' + t.name + ' blocked. Check bluetooth.js!');
+                  console.error(`🚨 SecurityError: ${t.name} blocked. Check bluetooth.js!`);
               }
           }
       }
@@ -145,11 +146,11 @@ class ErgController {
                       for (const c of chars) {
                           const cUuid = (c.uuid || '').toLowerCase();
                           if (cUuid === t.char || cUuid.startsWith(t.char.substring(0,8))) {
-                              console.log('🎯 [ERG] Phase 2 Success: ' + t.name);
+                              console.log(`🎯 [ERG] Phase 2 Success: ${t.name}`);
                               return { point: c, protocol: t.proto };
                           }
                           if (c.properties && (c.properties.write || c.properties.writeWithoutResponse)) {
-                              console.log('🎯 [ERG] Phase 2 Heuristic: ' + t.name);
+                              console.log(`🎯 [ERG] Phase 2 Heuristic: ${t.name}`);
                               return { point: c, protocol: t.proto };
                           }
                       }
@@ -168,7 +169,7 @@ class ErgController {
                   if (c.properties.write || c.properties.writeWithoutResponse) {
                       const uuid = (c.uuid || '').toLowerCase();
                       if (uuid.indexOf('2a66') !== -1) continue; // Skip CPS Control Point
-                      console.log('🎯 [ERG] Phase 3 Success: Unknown Writable ' + uuid);
+                      console.log(`🎯 [ERG] Phase 3 Success: Unknown Writable ${uuid}`);
                       let proto = 'UNKNOWN_WRITABLE';
                       if (uuid.indexOf('347b') !== -1) proto = 'CYCLEOPS';
                       else if (uuid.indexOf('a026') !== -1) proto = 'WAHOO';
@@ -179,8 +180,17 @@ class ErgController {
           } catch(e){}
       }
 
-      console.error('[ERG] All scans failed.');
-      if (typeof showToast === 'function') showToast('⚠️ ERG 제어권 찾기 실패');
+      // ★ Phase 4: CPS Fallback (Last Resort)
+      console.warn('⚠️ [ERG] All scans failed. Attempting CPS Fallback...');
+      try {
+          const svc = await server.getPrimaryService(this._uuids.cpsSvc);
+          const char = await svc.getCharacteristic(this._uuids.cpsChar);
+          console.log('🎯 [ERG] Phase 4 Success: CPS Fallback');
+          return { point: char, protocol: 'CPS_CONTROL' };
+      } catch(e) {}
+
+      console.error('[ERG] All scans (including CPS) failed.');
+      if (typeof showToast === 'function') showToast('⚠️ ERG 제어권 찾기 실패 (Not Found)');
       return null;
 
     } catch (e) { 
@@ -283,7 +293,7 @@ class ErgController {
         if (result) {
             trainer.controlPoint = result.point;
             trainer.realProtocol = result.protocol;
-            trainer.protocol = (result.protocol === 'CYCLEOPS' || result.protocol === 'WAHOO' || result.protocol === 'TACX') ? 'FTMS' : result.protocol;
+            trainer.protocol = (result.protocol === 'CYCLEOPS' || result.protocol === 'WAHOO' || result.protocol === 'TACX') ? 'FTMS' : result.protocol; // CPS_CONTROL stays as-is
         }
 
         const controlPoint = trainer.controlPoint;
@@ -295,7 +305,7 @@ class ErgController {
         this.state.connectionStatus = 'connected';
         this._notifySubscribers('enabled', enable);
 
-        if (typeof showToast === 'function') showToast('ERG ' + (enable ? 'ON' : 'OFF') + ' [' + protocol + ']');
+        if (typeof showToast === 'function') showToast(`ERG ${enable ? 'ON' : 'OFF'} [${protocol}]`);
 
         if (enable) {
            const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
@@ -315,6 +325,7 @@ class ErgController {
         }
         return true;
     } catch (e) {
+        if (typeof showToast === 'function') showToast(`⚠️ ERG 실패: ${e.message}`);
         console.error("[ERG] Toggle Error:", e);
         throw e;
     }
