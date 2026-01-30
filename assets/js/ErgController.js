@@ -1,9 +1,9 @@
 /* ==========================================================
-   ErgController.js (v8.1 Mobile Commander - iOS Fix)
-   - Solves iOS "Silent Failure" via Pinpoint Scanning
-   - Solves iOS "Queue Deadlock" via Write Timeouts
-   - "Silk Road Pro" Smoothing & Anti-Lock Logic included
-   - The Definitive Mobile Fix
+   ErgController.js (v9.0 "The Standard" - Global Benchmark Edition)
+   - Hybrid Scan: Combines Pinpoint (Fast) & Brute Force (Reliable) scanning
+   - Solves "Control Point Not Found" by iterating ALL services if needed
+   - Universal Write: Auto-switches between WithoutResponse/WithResponse
+   - Includes "Silk Road Pro" Smoothing & Smart Anti-Lock
 ========================================================== */
 
 class ErgController {
@@ -21,7 +21,7 @@ class ErgController {
     this._subscribers = [];
 
     // ⚙️ Pro Tuning Parameters
-    this._smoothFactor = 0.12;  // Physics smoothing
+    this._smoothFactor = 0.12; 
     this._controlLoopInterval = 250; 
     this._controlLoopId = null;
     this._lastCadenceTime = 0;
@@ -30,17 +30,18 @@ class ErgController {
     this._isProcessingQueue = false;
     this._maxQueueSize = 20;
 
-    // UUIDs (Explicit List)
+    // UUIDs
     this._uuids = {
-      cycleops: '347b0012-7635-408b-8918-8ff3949ce592', // Char
-      cycleopsSvc: '347b0001-7635-408b-8918-8ff3949ce592', // Service
-      wahoo:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Char & Svc
-      ftms:     '00002ad9-0000-1000-8000-00805f9b34fb', // Char
-      ftmsSvc:  '00001826-0000-1000-8000-00805f9b34fb'  // Service
+      cycleopsSvc: '347b0001-7635-408b-8918-8ff3949ce592',
+      cycleopsChar:'347b0012-7635-408b-8918-8ff3949ce592',
+      wahooSvc:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+      wahooChar:   'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+      ftmsSvc:     '00001826-0000-1000-8000-00805f9b34fb',
+      ftmsChar:    '00002ad9-0000-1000-8000-00805f9b34fb'
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v8.1 (Mobile Commander) Initialized');
+    console.log('[ErgController] v9.0 (The Standard) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -86,45 +87,74 @@ class ErgController {
     });
   }
 
-  // ── [2] Pinpoint Deep Scan (Mobile Optimized) ──
+  // ── [2] Hybrid Deep Scan (The Ultimate Fix) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Pinpoint Deep Scan (v8.1)...');
+      console.log('[ERG] Starting Hybrid Scan (v9.0)...');
 
-      // ★ Strategy: Explicitly ask for specific services (Singular).
-      // This bypasses the Android/iOS issue where getPrimaryServices() (Plural) returns empty.
-
-      // 1. Try CycleOps (Highest Priority)
+      // ★ Phase 1: Pinpoint Scan (Fast, Direct)
       try {
           const svc = await server.getPrimaryService(this._uuids.cycleopsSvc);
-          const char = await svc.getCharacteristic(this._uuids.cycleops);
-          console.log('🎯 [ERG] Found CycleOps Legacy via Pinpoint Scan');
+          const char = await svc.getCharacteristic(this._uuids.cycleopsChar);
+          console.log('🎯 [ERG] Phase 1 Success: CycleOps Legacy');
           return { point: char, protocol: 'CYCLEOPS' };
       } catch(e) {}
 
-      // 2. Try Wahoo
       try {
-          const svc = await server.getPrimaryService(this._uuids.wahoo);
-          const char = await svc.getCharacteristic(this._uuids.wahoo);
-          console.log('🎯 [ERG] Found Wahoo Legacy via Pinpoint Scan');
+          const svc = await server.getPrimaryService(this._uuids.wahooSvc);
+          const char = await svc.getCharacteristic(this._uuids.wahooChar);
+          console.log('🎯 [ERG] Phase 1 Success: Wahoo Legacy');
           return { point: char, protocol: 'WAHOO' };
       } catch(e) {}
 
-      // 3. Try FTMS
+      // ★ Phase 2: Brute Force "Get All" (Reliable Fallback)
+      // This fixes "Control Point Not Found" on mobile when direct access fails
+      console.log('[ERG] Phase 1 failed. Trying Phase 2 (Scan All)...');
+      
+      let allServices = [];
+      try { allServices = await server.getPrimaryServices(); } catch(e) { console.warn('[ERG] Get All Services failed', e); }
+
+      for (const service of allServices) {
+          const sUuid = service.uuid.toLowerCase();
+          
+          // Check CycleOps Service Match
+          if (sUuid === this._uuids.cycleopsSvc || sUuid.startsWith('347b')) {
+              try {
+                  const chars = await service.getCharacteristics();
+                  for(const c of chars) {
+                      if(c.uuid.toLowerCase().startsWith('347b0012')) {
+                           console.log('🎯 [ERG] Phase 2 Success: CycleOps Found in List');
+                           return { point: c, protocol: 'CYCLEOPS' };
+                      }
+                  }
+              } catch(e){}
+          }
+          
+          // Check Wahoo Service Match
+          if (sUuid === this._uuids.wahooSvc) {
+              try {
+                  const c = await service.getCharacteristic(this._uuids.wahooChar);
+                  console.log('🎯 [ERG] Phase 2 Success: Wahoo Found in List');
+                  return { point: c, protocol: 'WAHOO' };
+              } catch(e){}
+          }
+      }
+
+      // ★ Phase 3: FTMS (Last Resort)
       try {
           const svc = await server.getPrimaryService(this._uuids.ftmsSvc);
-          const char = await svc.getCharacteristic(this._uuids.ftms);
-          console.log('🎯 [ERG] Found FTMS via Pinpoint Scan');
+          const char = await svc.getCharacteristic(this._uuids.ftmsChar);
+          console.log('🎯 [ERG] Fallback Success: FTMS');
           return { point: char, protocol: 'FTMS' };
       } catch(e) {}
 
       return null;
     } catch (e) { 
-        console.warn('[ERG] Scan Critical Fail:', e);
+        console.error('[ERG] Hybrid Scan Critical Error:', e);
         return null; 
     }
   }
@@ -174,7 +204,7 @@ class ErgController {
     }
   }
 
-  // ── [4] Command Sender (Timeout Guarded) ──
+  // ── [4] Command Sender (Universal Write) ──
 
   async _sendCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
@@ -198,50 +228,32 @@ class ErgController {
     }
 
     this._queueCommand(async () => {
-         const isLegacy = (protocol === 'CYCLEOPS' || protocol === 'WAHOO' || protocol === 'TACX');
-
-         // Helper: Race with Timeout to prevent iOS blocking
-         const writeWithTimeout = async (char, buf, method) => {
-             const timeout = new Promise((_, reject) => 
-                 setTimeout(() => reject(new Error("Write Timeout")), 300)
-             );
-             
-             let writePromise;
-             if (method === 'response') {
-                 writePromise = char.writeValue(buf);
+         // Helper: Timeout Wrapper to prevent Deadlock
+         const tryWrite = async (method) => {
+             const timeout = new Promise((_, r) => setTimeout(() => r(new Error("Timeout")), 350));
+             let p;
+             if (method === 'fast') {
+                 if (typeof controlPoint.writeValueWithoutResponse !== 'function') throw new Error("No fast write");
+                 p = controlPoint.writeValueWithoutResponse(buffer);
              } else {
-                 if (typeof char.writeValueWithoutResponse !== 'function') throw new Error("No method");
-                 writePromise = char.writeValueWithoutResponse(buf);
+                 p = controlPoint.writeValue(buffer);
              }
-             
-             try {
-                 return await Promise.race([writePromise, timeout]);
-             } catch (err) {
-                 if (err?.message === 'Write Timeout') console.warn('[ERG] Write timeout (queue continues)');
-                 throw err;
-             }
+             return Promise.race([p, timeout]);
          };
 
-         // ★ Strategy:
-         // Legacy: Must try 'With Response' first. If it hangs, swallow error and move on.
-         // FTMS: Prefer 'Without Response'.
-
-         if (isLegacy) {
-             try {
-                 await writeWithTimeout(controlPoint, buffer, 'response');
-                 return;
-             } catch (e) {
-                 // Windows Fallback: Try Without Response immediately
-                 try { await writeWithTimeout(controlPoint, buffer, 'no-response'); } catch(e2){}
-             }
-             return;
-         }
-
-         // FTMS
+         // ★ Universal Write Strategy: Try Fast -> Fail? -> Try Reliable
+         // This covers both iOS (often likes Reliable for Legacy) and Windows (likes Fast)
+         // without complex conditional logic.
+         
          try {
-             await writeWithTimeout(controlPoint, buffer, 'no-response');
+             await tryWrite('fast');
+             return;
          } catch (e) {
-             try { await writeWithTimeout(controlPoint, buffer, 'response'); } catch(e2){}
+             if (e?.message === 'Timeout') console.warn('[ERG] Write timeout (queue continues)');
+             // If Fast write fails (NotSupported or Error), try Reliable
+             try { await tryWrite('reliable'); } catch(e2) {
+                 if (e2?.message === 'Timeout') console.warn('[ERG] Write timeout (queue continues)');
+             }
          }
 
     }, 'SET_POWER', { priority: 50 });
@@ -254,7 +266,7 @@ class ErgController {
         const trainer = window.connectedDevices?.trainer;
         if (!trainer) throw new Error("No trainer connected");
 
-        // Force a Pinpoint Scan to ensure we have a valid, fresh handle
+        // Force a Hybrid Scan to ensure we have a valid handle
         const result = await this._deepScanForControlPoint(trainer);
         if (result) {
             trainer.controlPoint = result.point;
@@ -276,10 +288,14 @@ class ErgController {
         if (enable) {
            const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
            const initBuf = new Uint8Array([initByte]);
-           // Send Init with Timeout protection
+           
            this._queueCommand(async () => {
-               try { await controlPoint.writeValue(initBuf); } catch(e) {
-                   if(typeof controlPoint.writeValueWithoutResponse === 'function') try{await controlPoint.writeValueWithoutResponse(initBuf)}catch(_){}
+               // Universal Write for Init
+               try { 
+                   if(typeof controlPoint.writeValueWithoutResponse === 'function') await controlPoint.writeValueWithoutResponse(initBuf);
+                   else await controlPoint.writeValue(initBuf);
+               } catch(e) {
+                   try { await controlPoint.writeValue(initBuf); } catch(e2){}
                }
            }, 'INIT', { priority: 90 });
 
