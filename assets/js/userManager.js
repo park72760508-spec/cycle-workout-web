@@ -1934,7 +1934,7 @@ async function loadUsers() {
     });
     
     if (typeof showToast === 'function') {
-      showToast(`${visibleUsers.length}명의 사용자를 불러왔습니다.`);
+      showToast('사용자 정보를 불러왔습니다.');
     }
   } catch (error) {
     console.error('사용자 목록 로드 실패:', error);
