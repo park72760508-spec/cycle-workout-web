@@ -4774,6 +4774,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!Array.isArray(list) || list.length === 0) {
       box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
       box.onclick = null; // 이전 위임 핸들러 제거
+      // grade=1(관리자)인 경우 프로필 선택 화면 부제목에 "현재 가입자 수 : 0 명" 표시
+      const profileSubtitleEmpty = document.getElementById("profileScreenSubtitle");
+      if (profileSubtitleEmpty) {
+        const currentUser = window.currentUser || JSON.parse(localStorage.getItem("currentUser") || "null");
+        const grade = currentUser?.grade;
+        if (grade === "1" || grade === 1) {
+          profileSubtitleEmpty.textContent = "현재 가입자 수 : 0 명";
+          profileSubtitleEmpty.style.display = "";
+        } else {
+          profileSubtitleEmpty.textContent = "";
+          profileSubtitleEmpty.style.display = "none";
+        }
+      }
       return;
     }
 
@@ -4806,6 +4819,20 @@ document.addEventListener("DOMContentLoaded", () => {
         window.selectProfile(user.id);
       }
     };
+
+    // grade=1(관리자)인 경우 프로필 선택 화면 부제목에 "현재 가입자 수 : N 명" 표시
+    const profileSubtitle = document.getElementById("profileScreenSubtitle");
+    if (profileSubtitle) {
+      const currentUser = window.currentUser || JSON.parse(localStorage.getItem("currentUser") || "null");
+      const grade = currentUser?.grade;
+      if (grade === "1" || grade === 1) {
+        profileSubtitle.textContent = "현재 가입자 수 : " + list.length + " 명";
+        profileSubtitle.style.display = "";
+      } else {
+        profileSubtitle.textContent = "";
+        profileSubtitle.style.display = "none";
+      }
+    }
   }
 
   // 블루투스 연결 버튼들
