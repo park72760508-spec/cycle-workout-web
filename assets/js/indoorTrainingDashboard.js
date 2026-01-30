@@ -6530,6 +6530,9 @@ async function selectWorkoutForTraining(workoutId) {
                     })
                     .catch(error => {
                         console.error('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 실패:', error);
+                        if (error && (error.message || '').indexOf('PERMISSION_DENIED') !== -1) {
+                            console.warn('[Indoor Training] Realtime Database 규칙 필요: database.rules.json 내용을 Firebase 콘솔 → Realtime Database → 규칙에 붙여넣고 게시하세요.');
+                        }
                     });
                 
                 // workoutId 저장 (개인훈련 대시보드 훈련 종료 시 사용)
@@ -6540,6 +6543,9 @@ async function selectWorkoutForTraining(workoutId) {
                         })
                         .catch(error => {
                             console.error('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
+                            if (error && (error.message || '').indexOf('PERMISSION_DENIED') !== -1) {
+                                console.warn('[Indoor Training] Realtime Database 규칙 필요: database.rules.json 내용을 Firebase 콘솔 → Realtime Database → 규칙에 붙여넣고 게시하세요.');
+                            }
                         });
                 } else {
                     console.warn('[Indoor Training] 워크아웃 ID가 없어 workoutId를 저장할 수 없습니다.');

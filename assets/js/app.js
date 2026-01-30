@@ -12194,6 +12194,9 @@ async function selectWorkoutForTrainingReady(workout) {
       }
     } catch (dbError) {
       console.error('[Training Ready] Realtime Database 저장 실패:', dbError);
+      if (dbError && (dbError.message || '').indexOf('PERMISSION_DENIED') !== -1) {
+        console.warn('[Training Ready] Realtime Database 규칙을 설정해 주세요. 프로젝트의 database.rules.json 또는 REALTIME_DATABASE_RULES.txt 내용을 Firebase 콘솔 → Realtime Database → 규칙에 붙여넣고 게시하세요.');
+      }
       // DB 저장 실패해도 계속 진행 (localStorage는 이미 저장됨)
     }
     
