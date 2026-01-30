@@ -1,9 +1,9 @@
 /* ==========================================================
-   ErgController.js (v4.6 Force WithoutResponse)
-   - Solves persistent timeouts on Bluefy/iOS
-   - REMOVED property checks for writeValueWithoutResponse
-   - Forces "Fire-and-Forget" writes to prevent waiting for ACKs
-   - Deep Scan & Legacy features retained
+   ErgController.js (v4.7 Hybrid Smart Engine)
+   - Universal Fix: Works on Windows (Strict) AND iOS/Bluefy (Loose)
+   - Hybrid Write: Respects GATT properties (PC), Forces mode (Mobile)
+   - Protocol Feedback: Shows Toast message for active protocol
+   - Legacy & Deep Scan features included
 ========================================================== */
 
 class ErgController {
@@ -49,7 +49,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v4.6 (Force WithoutResponse) Initialized');
+    console.log('[ErgController] v4.7 (Hybrid Smart Engine) Initialized');
   }
 
   // ── [1] Internal Helpers ──
@@ -145,23 +145,41 @@ class ErgController {
     } catch (e) { return null; }
   }
 
-  // ── [3] Smart Write (v4.6 Forced Mode) ──
+  // ── [3] Hybrid Smart Write (v4.7 The Universal Fix) ──
 
   async _safeWrite(characteristic, buffer) {
     if (!characteristic) throw new Error("No characteristic");
 
-    // ★ v4.6 Change: IGNORE properties. blindly try WithoutResponse first.
-    // This fixes Bluefy where .properties might be undefined or missing.
-    if (typeof characteristic.writeValueWithoutResponse === 'function') {
-        try {
-            await characteristic.writeValueWithoutResponse(buffer);
-            return; // Success! Fire and forget.
-        } catch (e) {
-            console.warn("[ERG] Forced writeValueWithoutResponse failed, trying fallback...", e);
+    const props = characteristic.properties;
+
+    // Mode A: Strict Mode (Windows / Android)
+    // If properties are defined, we MUST follow them to avoid "NotSupportedError"
+    if (props) {
+        // Prefer WithoutResponse (Fast) if supported
+        if (props.writeWithoutResponse) {
+            try {
+                await characteristic.writeValueWithoutResponse(buffer);
+                return;
+            } catch (e) { console.warn("[ERG] writeWithoutResponse failed, checking alternatives...", e); }
+        }
+        
+        // Use WithResponse (Reliable) if supported
+        if (props.write) {
+            await characteristic.writeValue(buffer);
+            return;
         }
     }
 
-    // Fallback: Standard Write (Wait for Ack)
+    // Mode B: Force Mode (iOS Bluefy / Fallback)
+    // If properties are undefined (Bluefy) OR Strict Mode failed but we want to try anyway
+    try {
+        if (typeof characteristic.writeValueWithoutResponse === 'function') {
+            await characteristic.writeValueWithoutResponse(buffer);
+            return;
+        }
+    } catch (e) { console.warn("[ERG] Force writeWithoutResponse failed", e); }
+
+    // Final Attempt
     await characteristic.writeValue(buffer);
   }
 
@@ -190,11 +208,14 @@ class ErgController {
     this.state.enabled = enable;
     this.state.connectionStatus = 'connected';
     this._notifySubscribers('enabled', enable);
+    
+    // Feedback
+    if (typeof showToast === 'function') showToast(`ERG ${enable ? 'ON' : 'OFF'} [${protocol}]`);
 
     if (enable) {
        if (protocol === 'FTMS') {
            await this._queueCommand(async () => {
-               await this._safeWrite(controlPoint, new Uint8Array([0x00])); 
+               await this._safeWrite(controlPoint, new Uint8Array([0x00])); // Request Control
            }, 'REQUEST_CONTROL', { priority: 90 });
        } else if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
            try {
@@ -236,6 +257,7 @@ class ErgController {
         view.setUint8(0, 0x05); 
         view.setInt16(1, targetWatts, true);
     } else {
+        // Legacy (CycleOps/Wahoo use 0x42)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x42); 
@@ -245,6 +267,10 @@ class ErgController {
     await this._queueCommand(async () => {
         await this._safeWrite(controlPoint, buffer);
         console.log(`[ERG] Sent ${targetWatts}W via ${protocol}`);
+        if(Math.random() > 0.9 && typeof showToast === 'function') {
+             // Occasionally show toast to verify protocol to user
+             showToast(`Set ${targetWatts}W (${protocol})`);
+        }
     }, 'SET_TARGET_POWER', { priority: 50 });
   }
 
