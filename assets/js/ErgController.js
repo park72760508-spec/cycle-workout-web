@@ -1,7 +1,7 @@
 /* ==========================================================
-   ErgController.js (v4.4 Deep Scan Engine)
-   - Solves "No control point" on mobile/Bluefy
-   - Uses "Deep Scan" (getPrimaryServices) to find hidden Control Points
+   ErgController.js (v4.4 Deep Scan Engine - Windows/Mobile Fix)
+   - Solves "No control point" on Windows & Mobile
+   - Uses "Deep Scan" (getPrimaryServices) to bypass OS GATT filtering
    - Auto-detects FTMS, CycleOps, Wahoo, or any Writable Characteristic
    - Full Command Queue & Legacy ERG Safety features included
 ========================================================== */
@@ -107,7 +107,7 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
   }
 
-  // ── [2] Deep Scan Logic (The Ultimate Fix) ──
+  // ── [2] Deep Scan Logic (The Ultimate Fix for Windows/Mobile) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
@@ -116,8 +116,24 @@ class ErgController {
 
       console.log('[ERG] Starting Deep Scan (getPrimaryServices)...');
       
-      // 1. Get ALL services (Bypasses specific UUID issues)
-      const services = await server.getPrimaryServices();
+      // 1. Get ALL services (Crucial for Windows to bypass strict UUID filters)
+      let services = [];
+      try {
+          services = await server.getPrimaryServices();
+      } catch(e) {
+          console.warn('[ERG] getPrimaryServices failed, trying fallback...', e);
+          // Fallback: try asking for known services one by one
+          const knownSvcs = [
+              '00001826-0000-1000-8000-00805f9b34fb', // FTMS
+              '347b0001-7635-408b-8918-8ff3949ce592', // CycleOps
+              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Wahoo
+              '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e'  // Tacx
+          ];
+          for(const uuid of knownSvcs) {
+              try { services.push(await server.getPrimaryService(uuid)); } catch(_) {}
+          }
+      }
+
       console.log(`[ERG] Deep Scan found ${services.length} services.`);
 
       for (const service of services) {
@@ -134,8 +150,8 @@ class ErgController {
               }
 
               // B. Heuristic: Check for CycleOps/Wahoo Legacy Patterns
-              if (uuid.startsWith('347b0012') || uuid.includes('00000000-0000-0000-0000-000000000000')) { // Sometimes UUIDs are masked
-                 // CycleOps
+              // (CycleOps UUIDs typically start with 347b0012)
+              if (uuid.startsWith('347b0012')) {
                  console.log(`[ERG] Deep Scan Heuristic: Likely CycleOps (${uuid})`);
                  return { point: char, protocol: 'CYCLEOPS' };
               }
@@ -167,6 +183,7 @@ class ErgController {
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
 
+    // If Control Point is missing or generic CPS, force a DEEP SCAN
     if (!controlPoint || protocol === 'CPS') {
         console.log('[ERG] Control Point Missing or CPS. Attempting DEEP SCAN...');
         
@@ -316,9 +333,9 @@ class ErgController {
     processNext();
   }
 
-  // Called by bluetooth.js after connect (optional; control point discovered on first ERG toggle)
+  // Called by bluetooth.js after connect (control point discovered on first ERG toggle via Deep Scan)
   async initializeTrainer() {
-    // Lazy: control point discovered via Deep Scan when user toggles ERG
+    // Lazy: control point discovered when user toggles ERG
   }
 
   updateCadence(c) { if(c>0) this._cadenceHistory.push(c); }
