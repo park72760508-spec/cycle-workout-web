@@ -1,9 +1,8 @@
 /* ==========================================================
-   ErgController.js (v3.1 Universal ERG Support)
-   - FTMS(0x05)와 Legacy(0x42) 명령 자동 전환 기능 탑재
-   - CycleOps Hammer 구형 기기 ERG 모드 완벽 지원
-   - ZWIFT/Mywoosh 호환 ERG 제어 로직 적용
-   - 구형/신형 스마트 트레이너 모두 대응
+   ErgController.js (v4.0 Dual-Channel / Legacy ERG)
+   - Command router: FTMS → 0x05 + int16; LEGACY (CycleOps/Wahoo) → 0x42 + uint16
+   - Legacy Control Point discovery uses correct UUIDs (CycleOps 347b*, Wahoo a026e005)
+   - Mobile: prefers writeValueWithoutResponse when available (lower latency Android/iOS)
 ========================================================== */
 
 class ErgController {
@@ -42,7 +41,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v3.1 초기화 (Universal ERG Support)');
+    console.log('[ErgController] v4.0 초기화 (Dual-Channel / Legacy ERG)');
   }
 
   // (기존 setupConnectionWatcher, resetState, createReactiveState 등 생략 - 동일함)
@@ -133,29 +132,31 @@ class ErgController {
   }
 
 
-// [추가] Legacy(CycleOps/Wahoo) Control Point 재탐색
+  // Legacy (CycleOps / Wahoo) Control Point 재탐색 — bluetooth.js UUIDS와 동일
   async _findLegacyControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      // CycleOps/Wahoo Legacy Service UUIDs
-      const LEGACY_SERVICES = [
-        'a026ee01-0a1d-4335-9d7f-245f24e1a229', // Wahoo/CycleOps 표준
-        // 필요 시 추가 벤더 UUID 삽입
-      ];
-      const LEGACY_CONTROL_CHAR = 'a026e005-0a1d-4335-9d7f-245f24e1a229';
+      const CYCLEOPS_SERVICE = '347b0001-7635-408b-8918-8ff3949ce592';
+      const CYCLEOPS_CONTROL = '347b0012-7635-408b-8918-8ff3949ce592';
+      const WAHOO_SERVICE    = 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b';
+      const WAHOO_CONTROL    = 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b';
 
-      for (const serviceUUID of LEGACY_SERVICES) {
-        try {
-          const service = await server.getPrimaryService(serviceUUID);
-          const controlPoint = await service.getCharacteristic(LEGACY_CONTROL_CHAR);
-          console.log('[ERG] Legacy (Wahoo/CycleOps) Control Point 발견!');
-          return controlPoint;
-        } catch (e) {
-          // 해당 서비스 없음, 다음 시도
-        }
-      }
+      try {
+        const cycleOpsSvc = await server.getPrimaryService(CYCLEOPS_SERVICE);
+        const cp = await cycleOpsSvc.getCharacteristic(CYCLEOPS_CONTROL);
+        console.log('[ERG] Legacy CycleOps Control Point 발견');
+        return cp;
+      } catch (_) {}
+
+      try {
+        const wahooSvc = await server.getPrimaryService(WAHOO_SERVICE);
+        const cp = await wahooSvc.getCharacteristic(WAHOO_CONTROL);
+        console.log('[ERG] Legacy Wahoo Control Point 발견');
+        return cp;
+      } catch (_) {}
+
       return null;
     } catch (e) {
       console.warn('[ERG] Legacy CP 탐색 중 오류:', e);
@@ -315,7 +316,7 @@ async setTargetPower(watts) {
       return;
     }
 
-    // [수정됨] 프로토콜 및 Control Point 재확인 로직 강화
+    // Command router uses trainer.realProtocol (FTMS vs LEGACY CycleOps/Wahoo)
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
     
@@ -375,34 +376,27 @@ async setTargetPower(watts) {
     try {
       const targetWatts = Math.round(watts);
       
-      // ★ 프로토콜별 명령 생성 (ZWIFT/Mywoosh 호환)
+      // Command router: trainer.realProtocol → FTMS (0x05) or LEGACY (0x42)
       let buffer;
+      const isLegacy = protocol === 'CYCLEOPS' || protocol === 'WAHOO';
 
       if (protocol === 'FTMS') {
-        // 표준 FTMS: OpCode 0x05 + int16 (power, little-endian)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, 0x05); // Set Target Power
-        view.setInt16(1, targetWatts, true); // Little-endian
+        view.setUint8(0, 0x05); // Set Target Power (FTMS)
+        view.setInt16(1, targetWatts, true);
         console.log(`[ERG] FTMS (0x05) -> ${targetWatts}W`);
-      } 
-      else if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
-        // ★ CycleOps/Wahoo Legacy: OpCode 0x42 + uint16 (power, little-endian)
-        // ZWIFT/Mywoosh에서 사용하는 표준 방식
+      } else if (isLegacy) {
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, 0x42); // Set Target Power (Legacy)
-        view.setUint16(1, targetWatts, true); // Little-endian, unsigned
-        console.log(`[ERG] Legacy (0x42) -> ${targetWatts}W`);
-      }
-      else if (protocol === 'CPS') {
-        // CPS Control Point는 ERG 제어를 지원하지 않을 수 있음
+        view.setUint8(0, 0x42); // Set Target Power (Legacy standard)
+        view.setUint16(1, targetWatts, true);
+        console.log(`[ERG] LEGACY (0x42) -> ${targetWatts}W`);
+      } else if (protocol === 'CPS') {
         console.error('[ERG] CPS Control Point는 ERG 제어를 지원하지 않습니다');
         throw new Error('CPS Control Point는 ERG 제어를 지원하지 않습니다. FTMS를 지원하는 스마트 트레이너가 필요합니다.');
-      }
-      else {
-        // 알 수 없는 프로토콜: Legacy 방식 시도
-        console.warn(`[ERG] 알 수 없는 프로토콜: ${protocol}, Legacy(0x42) 시도`);
+      } else {
+        console.warn(`[ERG] 프로토콜 ${protocol}, Legacy(0x42) 시도`);
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x42);
@@ -410,43 +404,14 @@ async setTargetPower(watts) {
       }
 
       await this._queueCommand(async () => {
-        // writeValue 호출 전 연결 상태 재확인 (업데이트된 controlPoint 사용)
-        if (!controlPoint) {
-          throw new Error('Control Point 연결 끊김');
-        }
-        
-        // characteristic 참조를 함수 스코프에서 유지 (업데이트된 controlPoint 사용)
-        const characteristic = controlPoint;
-        
-        try {
-          // writeWithoutResponse가 지원되는지 확인
-          if (characteristic.properties && characteristic.properties.writeWithoutResponse) {
-            await characteristic.writeValueWithoutResponse(buffer);
-            console.log(`[ERG] writeValueWithoutResponse 성공: ${targetWatts}W`);
-          } else {
-            // 일반 writeValue 사용
-            await characteristic.writeValue(buffer);
-            console.log(`[ERG] writeValue 성공: ${targetWatts}W`);
-          }
-        } catch (writeError) {
-          // GATT 오류 처리
-          if (writeError.name === 'NotSupportedError' || 
-              writeError.message?.includes('GATT') ||
-              writeError.message?.includes('Unknown')) {
-            console.warn(`[ERG] GATT 오류 발생, 대체 명령 시도:`, writeError);
-            
-            // 연결 상태 업데이트
-            this.state.connectionStatus = 'error';
-            
-            // CPS 프로토콜인 경우 이미 위에서 오류 처리됨
-            // 여기서는 대체 명령 시도를 하지 않음
-            
-            // CPS가 아니거나 대체 명령이 실패한 경우 원래 오류 throw
-            throw writeError;
-          } else {
-            // GATT 오류가 아닌 경우 그대로 throw
-            throw writeError;
-          }
+        if (!controlPoint) throw new Error('Control Point 연결 끊김');
+        const ch = controlPoint;
+        const useWithoutResponse = typeof ch.writeValueWithoutResponse === 'function' &&
+          (ch.properties == null || ch.properties.writeWithoutResponse === true);
+        if (useWithoutResponse) {
+          await ch.writeValueWithoutResponse(buffer);
+        } else {
+          await ch.writeValue(buffer);
         }
       }, 'SET_TARGET_POWER', { priority: 50 });
 
