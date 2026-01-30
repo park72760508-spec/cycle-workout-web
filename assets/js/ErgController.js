@@ -1,8 +1,9 @@
 /* ==========================================================
-   ErgController.js (v4.5 Bluefy "No-Response" Fix)
-   - Solves "Target set -> Failed" timeout issue on iOS
-   - Aggressively uses writeValueWithoutResponse (Fire-and-Forget)
-   - Retains Deep Scan & Legacy Support
+   ErgController.js (v4.6 Force WithoutResponse)
+   - Solves persistent timeouts on Bluefy/iOS
+   - REMOVED property checks for writeValueWithoutResponse
+   - Forces "Fire-and-Forget" writes to prevent waiting for ACKs
+   - Deep Scan & Legacy features retained
 ========================================================== */
 
 class ErgController {
@@ -22,9 +23,9 @@ class ErgController {
     this._commandQueue = [];
     this._isProcessingQueue = false;
     this._lastCommandTime = 0;
-    this._minCommandInterval = 150; // Faster for WithoutResponse
+    this._minCommandInterval = 150; 
     this._maxQueueSize = 50;
-    this._commandTimeout = 3000; // Shorter timeout
+    this._commandTimeout = 3000;
     this._subscribers = [];
     this._cadenceHistory = [];
     this._powerHistory = [];
@@ -33,7 +34,6 @@ class ErgController {
     this._powerUpdateDebounce = 300;
     this._cpsErgWarningShown = false;
 
-    // Known Control Point UUIDs
     this._knownControlPoints = {
       '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS',
       '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS',
@@ -49,7 +49,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v4.5 (Bluefy Optimized) Initialized');
+    console.log('[ErgController] v4.6 (Force WithoutResponse) Initialized');
   }
 
   // ── [1] Internal Helpers ──
@@ -118,7 +118,6 @@ class ErgController {
       try {
           services = await server.getPrimaryServices();
       } catch(e) {
-          // Fallback
           const knownSvcs = [
               '00001826-0000-1000-8000-00805f9b34fb', 
               '347b0001-7635-408b-8918-8ff3949ce592', 
@@ -136,9 +135,7 @@ class ErgController {
            for (const char of chars) {
               const uuid = char.uuid.toLowerCase();
               if (this._knownControlPoints[uuid]) {
-                 const proto = this._knownControlPoints[uuid];
-                 console.log(`[ERG] Match: ${proto} (${uuid})`);
-                 return { point: char, protocol: proto };
+                 return { point: char, protocol: this._knownControlPoints[uuid] };
               }
               if (uuid.startsWith('347b0012')) return { point: char, protocol: 'CYCLEOPS' };
            }
@@ -148,23 +145,23 @@ class ErgController {
     } catch (e) { return null; }
   }
 
-  // ── [3] Smart Write (The Fix) ──
+  // ── [3] Smart Write (v4.6 Forced Mode) ──
 
   async _safeWrite(characteristic, buffer) {
     if (!characteristic) throw new Error("No characteristic");
 
-    // Strategy 1: Explicit "Without Response" (Fastest, No Timeout)
-    if (characteristic.properties && characteristic.properties.writeWithoutResponse) {
+    // ★ v4.6 Change: IGNORE properties. blindly try WithoutResponse first.
+    // This fixes Bluefy where .properties might be undefined or missing.
+    if (typeof characteristic.writeValueWithoutResponse === 'function') {
         try {
             await characteristic.writeValueWithoutResponse(buffer);
-            return; // Success
+            return; // Success! Fire and forget.
         } catch (e) {
-            console.warn("[ERG] writeValueWithoutResponse failed, trying fallback...", e);
+            console.warn("[ERG] Forced writeValueWithoutResponse failed, trying fallback...", e);
         }
     }
 
-    // Strategy 2: Standard Write (Wait for Ack)
-    // Only used if Strategy 1 fails or isn't supported
+    // Fallback: Standard Write (Wait for Ack)
     await characteristic.writeValue(buffer);
   }
 
@@ -177,7 +174,6 @@ class ErgController {
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
 
-    // Auto-Repair Connection
     if (!controlPoint || protocol === 'CPS') {
         const result = await this._deepScanForControlPoint(trainer);
         if (result) {
