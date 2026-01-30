@@ -1,8 +1,9 @@
 /* ==========================================================
-   ErgController.js (v5.1 Promise Fix & Silk Road Engine)
-   - Fixes "undefined reading catch" error in app.js
-   - Ensures toggleErgMode ALWAYS returns a Promise
-   - Retains "Silk Road" Smooth Ramping & Legacy Priority
+   ErgController.js (v6.0 Zwift-Class Anti-Lock Engine)
+   - "Spiral of Death" Protection: Prevents lock-up at low RPM
+   - Startup Assist: Easy resistance (<50W) when starting from stop
+   - RPM-Aware Scaling: Scales power based on cadence (Zwift Logic)
+   - Retains iOS/Windows compatibility fixes (Legacy Priority)
 ========================================================== */
 
 class ErgController {
@@ -11,6 +12,7 @@ class ErgController {
       enabled: false,
       targetPower: 0,
       currentAppliedPower: 0,
+      cadence: 0,
       currentPower: 0,
       connectionStatus: 'disconnected'
     };
@@ -19,9 +21,10 @@ class ErgController {
     this._subscribers = [];
 
     // Engine Config
-    this._rampingFactor = 0.15;
+    this._rampingFactor = 0.10; // Even smoother (0.10)
     this._controlLoopInterval = 250;
     this._controlLoopId = null;
+    this._lastCadenceTime = 0;
 
     this._commandQueue = [];
     this._isProcessingQueue = false;
@@ -41,7 +44,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v5.1 (Promise Fix) Initialized');
+    console.log('[ErgController] v6.0 (Anti-Lock Engine) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -69,6 +72,7 @@ class ErgController {
     this.state.enabled = false;
     this.state.targetPower = 0;
     this.state.currentAppliedPower = 0;
+    this.state.cadence = 0;
     this._stopControlLoop();
   }
 
@@ -86,14 +90,14 @@ class ErgController {
     });
   }
 
-  // ── [2] Deep Scan (Robust) ──
+  // ── [2] Deep Scan ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan (v5.1)...');
+      console.log('[ERG] Starting Deep Scan (v6.0)...');
       let services = [];
       try { services = await server.getPrimaryServices(); }
       catch(e) {
@@ -127,23 +131,43 @@ class ErgController {
     } catch (e) { return null; }
   }
 
-  // ── [3] Silk Road Control Loop ──
+  // ── [3] Zwift-Class Control Loop (Smart RPM) ──
 
   _startControlLoop() {
     if (this._controlLoopId) return;
-    console.log('[ERG] Starting Smooth Control Loop');
+    console.log('[ERG] Starting Smart Control Loop');
 
     this._controlLoopId = setInterval(async () => {
         if (!this.state.enabled) return;
 
-        const target = this.state.targetPower;
-        let current = this.state.currentAppliedPower;
+        const rawTarget = this.state.targetPower;
+        let currentCadence = this.state.cadence;
 
-        const diff = target - current;
+        // Safety: If cadence data is stale (>5sec), assume 0 RPM
+        if (Date.now() - this._lastCadenceTime > 5000) currentCadence = 0;
+
+        // ★ [CORE LOGIC] Zwift-Style Anti-Lock ★
+        let smartTarget = rawTarget;
+
+        if (currentCadence < 40) {
+            // Startup Mode: Very easy to start spinning
+            smartTarget = Math.min(50, rawTarget);
+        } else if (currentCadence < 60) {
+            // Anti-Stall Mode: Linearly scale power (e.g. 50rpm = 83% load)
+            const factor = currentCadence / 60.0;
+            smartTarget = rawTarget * factor;
+        }
+        // Else (>= 60 RPM): Full Target applied
+
+        // Smoothing (Low Pass Filter)
+        let currentApplied = this.state.currentAppliedPower;
+        const diff = smartTarget - currentApplied;
+
         if (Math.abs(diff) < 1) return;
 
-        let nextPower = current + (diff * this._rampingFactor);
-        if (Math.abs(target - nextPower) < 1) nextPower = target;
+        let nextPower = currentApplied + (diff * this._rampingFactor);
+
+        if (Math.abs(smartTarget - nextPower) < 1) nextPower = smartTarget;
 
         this.state.currentAppliedPower = nextPower;
 
@@ -182,14 +206,23 @@ class ErgController {
     }
 
     this._queueCommand(async () => {
+         const isLegacy = (protocol === 'CYCLEOPS' || protocol === 'WAHOO' || protocol === 'TACX');
+
+         if (isLegacy) {
+             try { await controlPoint.writeValue(buffer); } catch (e) {
+                 console.warn('[ERG] Legacy Write warning (ignored):', e);
+             }
+             return;
+         }
+
          if (typeof controlPoint.writeValueWithoutResponse === 'function') {
              try { await controlPoint.writeValueWithoutResponse(buffer); return; } catch(e){}
          }
-         await controlPoint.writeValue(buffer);
+         try { await controlPoint.writeValue(buffer); } catch(e){}
     }, 'SET_POWER', { priority: 50 });
   }
 
-  // ── [5] Public API (Strict Async) ──
+  // ── [5] Public API ──
 
   async toggleErgMode(enable) {
     try {
@@ -219,13 +252,18 @@ class ErgController {
         if (typeof showToast === 'function') showToast(`ERG ${enable ? 'ON' : 'OFF'} [${protocol}]`);
 
         if (enable) {
+           const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
+           const initBuf = new Uint8Array([initByte]);
+
            this._queueCommand(async () => {
-               const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
-               if (typeof controlPoint.writeValueWithoutResponse === 'function') {
-                   try { await controlPoint.writeValueWithoutResponse(new Uint8Array([initByte])); } catch(e){}
-               } else {
-                   await controlPoint.writeValue(new Uint8Array([initByte]));
-               }
+              if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
+                  try { await controlPoint.writeValue(initBuf); } catch(e){}
+              } else {
+                  if (typeof controlPoint.writeValueWithoutResponse === 'function') {
+                       try { await controlPoint.writeValueWithoutResponse(initBuf); return; } catch(e){}
+                  }
+                  await controlPoint.writeValue(initBuf);
+              }
            }, 'INIT', { priority: 90 });
 
            this.state.currentAppliedPower = 0;
@@ -234,7 +272,6 @@ class ErgController {
            this._stopControlLoop();
            this._sendCommand(0);
         }
-
         return true;
     } catch (e) {
         console.error("[ERG] Toggle Error:", e);
@@ -248,7 +285,24 @@ class ErgController {
     return Promise.resolve();
   }
 
-  // ── [6] Queue System ──
+  // ── [Data Helpers] ──
+
+  updateCadence(c) {
+      if (c > 0) {
+          this.state.cadence = c;
+          this._lastCadenceTime = Date.now();
+      }
+  }
+
+  updatePower(p) { if (p != null && !isNaN(p)) this.state.currentPower = p; }
+  updateHeartRate(h) {}
+
+  updateConnectionStatus(s) {
+    this.state.connectionStatus = s;
+    if (s === 'disconnected') this._resetState();
+  }
+
+  // ── [Queue System] ──
 
   async _queueCommand(commandFn, commandType, options = {}) {
     if (this._commandQueue.length >= this._maxQueueSize) this._commandQueue.shift();
@@ -259,10 +313,9 @@ class ErgController {
   async _processQueue() {
     if (this._isProcessingQueue || this._commandQueue.length === 0) return;
     this._isProcessingQueue = true;
-
     while (this._commandQueue.length > 0) {
         const cmd = this._commandQueue.shift();
-        try { await cmd.commandFn(); } catch(e) { console.warn('[ERG] Write fail:', e); }
+        try { await cmd.commandFn(); } catch(e) {}
         await new Promise(r => setTimeout(r, 50));
     }
     this._isProcessingQueue = false;
@@ -283,10 +336,6 @@ class ErgController {
 
   async initializeTrainer() {}
 
-  updateCadence(c) {}
-  updatePower(p) { if (p != null && !isNaN(p)) this.state.currentPower = p; }
-  updateHeartRate(h) {}
-  updateConnectionStatus(s) { this.state.connectionStatus = s; if (s === 'disconnected') this._resetState(); }
   getState() { return {...this.state}; }
 }
 
