@@ -12225,35 +12225,38 @@ async function selectWorkoutForTrainingReady(workout) {
       console.warn('[Training Ready] 로컬 스토리지 저장 실패:', e);
     }
     
-    // Realtime Database에 users/{userId}/workout 경로에 저장 (개인훈련용)
-    try {
-      const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      const userId = currentUser?.id || currentUser?.uid;
-      
-      if (userId && typeof db !== 'undefined' && db) {
-        const userWorkoutRef = db.ref(`users/${userId}/workout`);
-        
-        // workoutId 저장
-        if (normalizedWorkout.id) {
-          await userWorkoutRef.child('workoutId').set(normalizedWorkout.id);
-          console.log('[Training Ready] workoutId saved to users/' + userId + '/workout/workoutId:', normalizedWorkout.id);
-        }
-        
-        // workoutPlan 저장 (segments 배열)
-        if (normalizedWorkout.segments && Array.isArray(normalizedWorkout.segments) && normalizedWorkout.segments.length > 0) {
-          await userWorkoutRef.child('workoutPlan').set(normalizedWorkout.segments);
-          console.log('[Training Ready] workoutPlan saved to users/' + userId + '/workout/workoutPlan:', normalizedWorkout.segments.length, 'segments');
-        }
-      } else {
+    // Realtime Database에 users/{userId}/workout 경로에 저장 (개인훈련용). 타임아웃으로 UI 블로킹 방지.
+    (function saveWorkoutToFirebaseWithTimeout() {
+      var DB_SAVE_TIMEOUT_MS = 8000;
+      var currentUser = window.currentUser || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+      var userId = currentUser && (currentUser.id || currentUser.uid);
+      if (!userId || typeof db === 'undefined' || !db) {
         console.warn('[Training Ready] 사용자 ID가 없거나 Realtime Database가 초기화되지 않아 users/{userId}/workout에 저장하지 않습니다.');
+        return;
       }
-    } catch (dbError) {
-      console.error('[Training Ready] Realtime Database 저장 실패:', dbError);
-      if (dbError && (dbError.message || '').indexOf('PERMISSION_DENIED') !== -1) {
-        console.warn('[Training Ready] Realtime Database 규칙을 설정해 주세요. 프로젝트의 database.rules.json 또는 REALTIME_DATABASE_RULES.txt 내용을 Firebase 콘솔 → Realtime Database → 규칙에 붙여넣고 게시하세요.');
+      var userWorkoutRef = db.ref('users/' + userId + '/workout');
+      var savePromise = Promise.resolve();
+      if (normalizedWorkout.id) {
+        savePromise = savePromise.then(function () { return userWorkoutRef.child('workoutId').set(normalizedWorkout.id); });
       }
-      // DB 저장 실패해도 계속 진행 (localStorage는 이미 저장됨)
-    }
+      if (normalizedWorkout.segments && Array.isArray(normalizedWorkout.segments) && normalizedWorkout.segments.length > 0) {
+        savePromise = savePromise.then(function () { return userWorkoutRef.child('workoutPlan').set(normalizedWorkout.segments); });
+      }
+      var timeoutPromise = new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('Firebase 저장 시간 초과')); }, DB_SAVE_TIMEOUT_MS);
+      });
+      Promise.race([savePromise, timeoutPromise])
+        .then(function () {
+          if (normalizedWorkout.id) console.log('[Training Ready] workoutId saved to users/' + userId + '/workout/workoutId:', normalizedWorkout.id);
+          if (normalizedWorkout.segments && normalizedWorkout.segments.length) console.log('[Training Ready] workoutPlan saved:', normalizedWorkout.segments.length, 'segments');
+        })
+        .catch(function (dbError) {
+          console.error('[Training Ready] Realtime Database 저장 실패:', dbError);
+          if (dbError && (dbError.message || '').indexOf('PERMISSION_DENIED') !== -1) {
+            console.warn('[Training Ready] Realtime Database 규칙을 설정해 주세요.');
+          }
+        });
+    })();
     
     // 훈련 준비 화면 업데이트
     updateTrainingReadyScreenWithWorkout(normalizedWorkout);
