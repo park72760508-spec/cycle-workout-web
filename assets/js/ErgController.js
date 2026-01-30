@@ -1,9 +1,8 @@
 /* ==========================================================
-   ErgController.js (v4.4 Deep Scan Engine - Windows/Mobile Fix)
-   - Solves "No control point" on Windows & Mobile
-   - Uses "Deep Scan" (getPrimaryServices) to bypass OS GATT filtering
-   - Auto-detects FTMS, CycleOps, Wahoo, or any Writable Characteristic
-   - Full Command Queue & Legacy ERG Safety features included
+   ErgController.js (v4.5 Bluefy "No-Response" Fix)
+   - Solves "Target set -> Failed" timeout issue on iOS
+   - Aggressively uses writeValueWithoutResponse (Fire-and-Forget)
+   - Retains Deep Scan & Legacy Support
 ========================================================== */
 
 class ErgController {
@@ -23,24 +22,24 @@ class ErgController {
     this._commandQueue = [];
     this._isProcessingQueue = false;
     this._lastCommandTime = 0;
-    this._minCommandInterval = 200;
+    this._minCommandInterval = 150; // Faster for WithoutResponse
     this._maxQueueSize = 50;
-    this._commandTimeout = 5000;
+    this._commandTimeout = 3000; // Shorter timeout
     this._subscribers = [];
     this._cadenceHistory = [];
     this._powerHistory = [];
     this._heartRateHistory = [];
     this._lastPowerUpdateTime = 0;
-    this._powerUpdateDebounce = 500;
+    this._powerUpdateDebounce = 300;
     this._cpsErgWarningShown = false;
 
-    // Known Control Point UUIDs (Lower case for matching)
+    // Known Control Point UUIDs
     this._knownControlPoints = {
       '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS',
       '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS',
       'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',
       '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',
-      '00002a66-0000-1000-8000-00805f9b34fb': 'CPS' // Experimental
+      '00002a66-0000-1000-8000-00805f9b34fb': 'CPS'
     };
 
     this._commandPriorities = {
@@ -50,7 +49,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v4.4 (Deep Scan Engine) Initialized');
+    console.log('[ErgController] v4.5 (Bluefy Optimized) Initialized');
   }
 
   // ── [1] Internal Helpers ──
@@ -107,137 +106,116 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
   }
 
-  // ── [2] Deep Scan Logic (The Ultimate Fix for Windows/Mobile) ──
+  // ── [2] Deep Scan Logic ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan (getPrimaryServices)...');
-      
-      // 1. Get ALL services (Crucial for Windows to bypass strict UUID filters)
+      console.log('[ERG] Starting Deep Scan...');
       let services = [];
       try {
           services = await server.getPrimaryServices();
       } catch(e) {
-          console.warn('[ERG] getPrimaryServices failed, trying fallback...', e);
-          // Fallback: try asking for known services one by one
+          // Fallback
           const knownSvcs = [
-              '00001826-0000-1000-8000-00805f9b34fb', // FTMS
-              '347b0001-7635-408b-8918-8ff3949ce592', // CycleOps
-              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Wahoo
-              '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e'  // Tacx
+              '00001826-0000-1000-8000-00805f9b34fb', 
+              '347b0001-7635-408b-8918-8ff3949ce592', 
+              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', 
+              '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e'
           ];
           for(const uuid of knownSvcs) {
               try { services.push(await server.getPrimaryService(uuid)); } catch(_) {}
           }
       }
 
-      console.log(`[ERG] Deep Scan found ${services.length} services.`);
-
       for (const service of services) {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
               const uuid = char.uuid.toLowerCase();
-              
-              // A. Check against Known Control Points
               if (this._knownControlPoints[uuid]) {
                  const proto = this._knownControlPoints[uuid];
-                 console.log(`[ERG] Deep Scan MATCH: Found ${proto} Control Point (${uuid})`);
+                 console.log(`[ERG] Match: ${proto} (${uuid})`);
                  return { point: char, protocol: proto };
               }
-
-              // B. Heuristic: Check for CycleOps/Wahoo Legacy Patterns
-              // (CycleOps UUIDs typically start with 347b0012)
-              if (uuid.startsWith('347b0012')) {
-                 console.log(`[ERG] Deep Scan Heuristic: Likely CycleOps (${uuid})`);
-                 return { point: char, protocol: 'CYCLEOPS' };
-              }
+              if (uuid.startsWith('347b0012')) return { point: char, protocol: 'CYCLEOPS' };
            }
-        } catch (e) {
-           console.warn(`[ERG] Failed to scan service ${service.uuid}:`, e);
-        }
+        } catch (e) {}
       }
-
-      console.warn('[ERG] Deep Scan found no matching known Control Points.');
       return null;
-
-    } catch (e) {
-      console.error('[ERG] Deep Scan Critical Error:', e);
-      return null;
-    }
+    } catch (e) { return null; }
   }
 
-  // ── [3] Core Logic: Toggle & Set Power ──
+  // ── [3] Smart Write (The Fix) ──
+
+  async _safeWrite(characteristic, buffer) {
+    if (!characteristic) throw new Error("No characteristic");
+
+    // Strategy 1: Explicit "Without Response" (Fastest, No Timeout)
+    if (characteristic.properties && characteristic.properties.writeWithoutResponse) {
+        try {
+            await characteristic.writeValueWithoutResponse(buffer);
+            return; // Success
+        } catch (e) {
+            console.warn("[ERG] writeValueWithoutResponse failed, trying fallback...", e);
+        }
+    }
+
+    // Strategy 2: Standard Write (Wait for Ack)
+    // Only used if Strategy 1 fails or isn't supported
+    await characteristic.writeValue(buffer);
+  }
+
+  // ── [4] Core Logic ──
 
   async toggleErgMode(enable) {
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer) {
-        alert("스마트 로라가 연결되지 않았습니다.");
-        throw new Error("No trainer connected");
-    }
+    if (!trainer) throw new Error("No trainer");
 
-    // Check existing or Re-Scan
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
 
-    // If Control Point is missing or generic CPS, force a DEEP SCAN
+    // Auto-Repair Connection
     if (!controlPoint || protocol === 'CPS') {
-        console.log('[ERG] Control Point Missing or CPS. Attempting DEEP SCAN...');
-        
         const result = await this._deepScanForControlPoint(trainer);
         if (result) {
             controlPoint = result.point;
             protocol = result.protocol;
-            
-            // Update Trainer Object
             trainer.controlPoint = controlPoint;
             trainer.realProtocol = protocol;
-            // Fake protocol for UI compatibility
-            trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol; 
-            
-            console.log(`✅ Deep Scan Success: Protocol updated to ${protocol}`);
+            trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol;
         }
     }
 
-    if (!controlPoint) {
-        alert("이 기기는 파워미터 모드만 지원하며, 저항 제어(ERG)를 할 수 없습니다. (Control Point Not Found)");
-        throw new Error("No control point found after Deep Scan");
-    }
+    if (!controlPoint) throw new Error("Control Point Not Found");
 
     this.state.enabled = enable;
     this.state.connectionStatus = 'connected';
     this._notifySubscribers('enabled', enable);
 
     if (enable) {
-       // Enable Logic
        if (protocol === 'FTMS') {
            await this._queueCommand(async () => {
-               await controlPoint.writeValue(new Uint8Array([0x00])); // Request Control
+               await this._safeWrite(controlPoint, new Uint8Array([0x00])); 
            }, 'REQUEST_CONTROL', { priority: 90 });
        } else if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
-           // Legacy Init
            try {
                await this._queueCommand(async () => {
-                   await controlPoint.writeValue(new Uint8Array([0x01])); 
+                   await this._safeWrite(controlPoint, new Uint8Array([0x01])); 
                }, 'RESET', { priority: 90 });
            } catch(e) {}
        }
-       
        if(this.state.targetPower > 0) this.setTargetPower(this.state.targetPower);
-
     } else {
-       // Disable Logic
        if (protocol === 'FTMS') {
            try { 
                await this._queueCommand(async () => {
-                    await controlPoint.writeValue(new Uint8Array([0x01])); // Reset
+                    await this._safeWrite(controlPoint, new Uint8Array([0x01])); 
                }, 'RESET', { priority: 100 });
            } catch(e){}
        } else {
-           // Legacy: Send 0W
            try { await this.setTargetPower(0); } catch(e) {}
        }
     }
@@ -248,7 +226,6 @@ class ErgController {
     
     const trainer = window.connectedDevices?.trainer;
     const controlPoint = trainer?.controlPoint;
-    
     if (!trainer || !controlPoint) return;
 
     const targetWatts = Math.max(0, Math.min(2000, Math.round(watts)));
@@ -263,7 +240,6 @@ class ErgController {
         view.setUint8(0, 0x05); 
         view.setInt16(1, targetWatts, true);
     } else {
-        // Legacy (CycleOps/Wahoo use 0x42)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x42); 
@@ -271,16 +247,12 @@ class ErgController {
     }
 
     await this._queueCommand(async () => {
-        if (controlPoint.properties && controlPoint.properties.writeWithoutResponse) {
-            await controlPoint.writeValueWithoutResponse(buffer);
-        } else {
-            await controlPoint.writeValue(buffer);
-        }
+        await this._safeWrite(controlPoint, buffer);
         console.log(`[ERG] Sent ${targetWatts}W via ${protocol}`);
     }, 'SET_TARGET_POWER', { priority: 50 });
   }
 
-  // ── [4] Queue System ──
+  // ── [5] Queue System ──
 
   async _queueCommand(commandFn, commandType, options = {}) {
     return new Promise((resolve, reject) => {
@@ -289,7 +261,7 @@ class ErgController {
       const command = {
         commandFn, commandType, resolve, reject,
         timestamp: Date.now(), priority,
-        retryCount: 0, maxRetries: 3
+        retryCount: 0, maxRetries: 2
       };
       const idx = this._commandQueue.findIndex(cmd => cmd.priority < priority);
       if (idx === -1) this._commandQueue.push(command);
@@ -322,7 +294,7 @@ class ErgController {
           setTimeout(() => {
             this._commandQueue.unshift(command);
             processNext();
-          }, 500); 
+          }, 300);
           return;
         } else {
           command.reject(error);
@@ -333,7 +305,7 @@ class ErgController {
     processNext();
   }
 
-  // Called by bluetooth.js after connect (control point discovered on first ERG toggle via Deep Scan)
+  // Called by bluetooth.js after connect (control point discovered on first ERG toggle)
   async initializeTrainer() {
     // Lazy: control point discovered when user toggles ERG
   }
