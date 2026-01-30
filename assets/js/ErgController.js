@@ -1,9 +1,8 @@
 /* ==========================================================
-   ErgController.js (v4.2 Final - Legacy Safety Restored)
-   - ZWIFT/MyWhoosh Command Logic (0x05 for FTMS, 0x42 for Legacy)
-   - Restored: Legacy ERG OFF logic (sends 0W to release resistance)
-   - Restored: Legacy Initialization logic
-   - Full Command Queue & State Management
+   ErgController.js (v4.3 Legacy Re-Discovery Restored)
+   - Restoration of "Lazy Discovery": If Control Point is missing at connection,
+     it attempts to find it again when ERG is toggled.
+   - Essential for CycleOps/Wahoo devices that connect as CPS first.
 ========================================================== */
 
 class ErgController {
@@ -32,8 +31,8 @@ class ErgController {
     this._heartRateHistory = [];
     this._lastPowerUpdateTime = 0;
     this._powerUpdateDebounce = 500;
-    
-    // Priority Map
+    this._cpsErgWarningShown = false;
+
     this._commandPriorities = {
       'RESET': 100,
       'REQUEST_CONTROL': 90,
@@ -41,10 +40,10 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v4.2 (Legacy Safety Restored) Initialized');
+    console.log('[ErgController] v4.3 (Re-Discovery Engine) Initialized');
   }
 
-  // ── [State & Connection Management] ──
+  // ── [1] Internal Helpers ──
 
   _setupConnectionWatcher() {
     let lastTrainerState = null;
@@ -98,34 +97,45 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
   }
 
-  // ── [Core Logic: Initialization & Commands] ──
+  // ── [2] Re-Discovery Logic (The Missing Link) ──
 
-  async initializeTrainer() {
-    const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) return;
-
-    console.log(`[ERG] Initializing Control for ${trainer.protocol}...`);
+  async _findFTMSControlPoint(trainer) {
     try {
-        if (trainer.protocol === 'FTMS') {
-             await this._queueCommand(async () => {
-                await trainer.controlPoint.writeValue(new Uint8Array([0x00])); // Request Control
-             }, 'REQUEST_CONTROL', { priority: 90 });
-            console.log('[ERG] FTMS Control Requested (0x00)');
-        } 
-        // [Restored] Legacy Initialization
-        else if (trainer.protocol === 'CYCLEOPS' || trainer.protocol === 'WAHOO') {
-             // Some legacy devices benefit from a reset command
-             try {
-                await this._queueCommand(async () => {
-                    await trainer.controlPoint.writeValue(new Uint8Array([0x01])); // Reset/Init
-                }, 'RESET', { priority: 90 });
-                console.log('[ERG] Legacy Device Initialized');
-             } catch(e) { console.warn('[ERG] Legacy Init ignored:', e); }
-        }
-    } catch (e) {
-        console.warn('[ERG] Initialize Warning:', e);
-    }
+      const server = trainer.server || (trainer.device && trainer.device.gatt);
+      if (!server || !server.connected) return null;
+      
+      // FTMS UUIDs
+      const service = await server.getPrimaryService('00001826-0000-1000-8000-00805f9b34fb');
+      return await service.getCharacteristic('00002ad9-0000-1000-8000-00805f9b34fb');
+    } catch (e) { return null; }
   }
+
+  async _findLegacyControlPoint(trainer) {
+    try {
+      const server = trainer.server || (trainer.device && trainer.device.gatt);
+      if (!server || !server.connected) return null;
+
+      // CycleOps UUIDs
+      try {
+        const svc = await server.getPrimaryService('347b0001-7635-408b-8918-8ff3949ce592');
+        const cp = await svc.getCharacteristic('347b0012-7635-408b-8918-8ff3949ce592');
+        console.log('[ERG] Legacy CycleOps Control Found via Re-scan');
+        return cp;
+      } catch (_) {}
+
+      // Wahoo UUIDs
+      try {
+        const svc = await server.getPrimaryService('a026e005-0a7d-4ab3-97fa-f1500f9feb8b');
+        const cp = await svc.getCharacteristic('a026e005-0a7d-4ab3-97fa-f1500f9feb8b');
+        console.log('[ERG] Legacy Wahoo Control Found via Re-scan');
+        return cp;
+      } catch (_) {}
+
+      return null;
+    } catch (e) { return null; }
+  }
+
+  // ── [3] Core Logic: Toggle & Set Power ──
 
   async toggleErgMode(enable) {
     const trainer = window.connectedDevices?.trainer;
@@ -133,79 +143,121 @@ class ErgController {
         alert("스마트 로라가 연결되지 않았습니다.");
         throw new Error("No trainer connected");
     }
-    if (!trainer.controlPoint) {
+
+    // ★ [CORE FIX] Lazy Discovery: If Control Point is missing, try to find it NOW.
+    let controlPoint = trainer.controlPoint;
+    let protocol = trainer.realProtocol || 'FTMS';
+
+    if (!controlPoint || protocol === 'CPS') {
+        console.log('[ERG] Control Point Missing/CPS. Attempting Re-Discovery...');
+        
+        // 1. Try FTMS
+        const ftmsCP = await this._findFTMSControlPoint(trainer);
+        if (ftmsCP) {
+            controlPoint = ftmsCP;
+            protocol = 'FTMS';
+            console.log('✅ Re-Discovery: Found FTMS');
+        } 
+        // 2. Try Legacy
+        else {
+            const legacyCP = await this._findLegacyControlPoint(trainer);
+            if (legacyCP) {
+                controlPoint = legacyCP;
+                protocol = 'CYCLEOPS'; // Force Legacy Protocol
+                console.log('✅ Re-Discovery: Found Legacy (CycleOps/Wahoo)');
+            }
+        }
+
+        // Update the trainer object if found
+        if (controlPoint) {
+            trainer.controlPoint = controlPoint;
+            trainer.realProtocol = protocol;
+            trainer.protocol = protocol;
+        }
+    }
+
+    // Now check again
+    if (!controlPoint) {
         alert("이 기기는 파워미터 모드만 지원하며, 저항 제어(ERG)를 할 수 없습니다.");
-        throw new Error("No control point");
+        throw new Error("No control point found after re-scan");
     }
 
     this.state.enabled = enable;
     this.state.connectionStatus = 'connected';
     this._notifySubscribers('enabled', enable);
 
-    console.log(`[ERG] ERG Mode ${enable ? 'ON' : 'OFF'} (${trainer.protocol})`);
-
     if (enable) {
-       // ERG ON: Re-send current target power if exists
+       // Enable Logic
+       if (protocol === 'FTMS') {
+           await this._queueCommand(async () => {
+               await controlPoint.writeValue(new Uint8Array([0x00])); // Request Control
+           }, 'REQUEST_CONTROL', { priority: 90 });
+       } else if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
+           // Legacy Init
+           try {
+               await this._queueCommand(async () => {
+                   await controlPoint.writeValue(new Uint8Array([0x01])); 
+               }, 'RESET', { priority: 90 });
+           } catch(e) {}
+       }
+       
        if(this.state.targetPower > 0) this.setTargetPower(this.state.targetPower);
+
     } else {
-       // ERG OFF: Logic depends on protocol
-       if (trainer.protocol === 'FTMS') {
+       // Disable Logic
+       if (protocol === 'FTMS') {
            try { 
                await this._queueCommand(async () => {
-                    await trainer.controlPoint.writeValue(new Uint8Array([0x01])); // Reset
+                    await controlPoint.writeValue(new Uint8Array([0x01])); // Reset
                }, 'RESET', { priority: 100 });
-               console.log('[ERG] FTMS Reset Sent');
            } catch(e){}
        } else {
-           // [Restored] Legacy: Send 0 Watts to release resistance
-           try {
-               await this.setTargetPower(0); 
-               console.log('[ERG] Legacy Resistance Released (0W)');
-           } catch(e) {}
+           // Legacy: Send 0W
+           try { await this.setTargetPower(0); } catch(e) {}
        }
     }
   }
 
   async setTargetPower(watts) {
-    // Note: If enabled is false, we still allow 0W calls (used for releasing resistance)
     if (!this.state.enabled && watts !== 0) return;
     
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) return;
+    // Re-check control point in case it was just found
+    const controlPoint = trainer?.controlPoint;
+    
+    if (!trainer || !controlPoint) return;
 
     const targetWatts = Math.max(0, Math.min(2000, Math.round(watts)));
     this.state.targetPower = targetWatts;
 
     let buffer;
-    const protocol = trainer.protocol; 
+    // Use realProtocol for router
+    const protocol = trainer.realProtocol || trainer.protocol || 'FTMS'; 
 
-    // ★ [CORE] Protocol Router
     if (protocol === 'FTMS') {
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x05); 
         view.setInt16(1, targetWatts, true);
     } else {
-        // Legacy (CycleOps, Wahoo, Tacx use 0x42)
+        // Legacy (CycleOps/Wahoo use 0x42)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x42); 
         view.setUint16(1, targetWatts, true); 
     }
 
-    // Queue system for command safety
     await this._queueCommand(async () => {
-        const char = trainer.controlPoint;
-        if (char.properties && char.properties.writeWithoutResponse) {
-            await char.writeValueWithoutResponse(buffer);
+        if (controlPoint.properties && controlPoint.properties.writeWithoutResponse) {
+            await controlPoint.writeValueWithoutResponse(buffer);
         } else {
-            await char.writeValue(buffer);
+            await controlPoint.writeValue(buffer);
         }
         console.log(`[ERG] Sent ${targetWatts}W via ${protocol}`);
     }, 'SET_TARGET_POWER', { priority: 50 });
   }
 
-  // ── [Queue System - PRESERVED] ──
+  // ── [4] Queue System ──
 
   async _queueCommand(commandFn, commandType, options = {}) {
     return new Promise((resolve, reject) => {
@@ -244,14 +296,12 @@ class ErgController {
       } catch (error) {
         if (command.retryCount < command.maxRetries) {
           command.retryCount++;
-          console.warn(`[ERG] 명령 재시도 ${command.retryCount}`, error.message);
           setTimeout(() => {
             this._commandQueue.unshift(command);
             processNext();
-          }, 300);
+          }, 500); // 500ms delay on retry
           return;
         } else {
-          console.error(`[ERG] 명령 실패:`, error);
           command.reject(error);
         }
       }
@@ -260,7 +310,11 @@ class ErgController {
     processNext();
   }
 
-  // ── [Data Collection Helpers] ──
+  // Called by bluetooth.js after connect (optional; control point discovered on first ERG toggle)
+  async initializeTrainer() {
+    // Lazy: control point discovered when user toggles ERG
+  }
+
   updateCadence(c) { if(c>0) this._cadenceHistory.push(c); }
   updatePower(p) { if(p>0) { this._powerHistory.push({value:p, timestamp:Date.now()}); this.state.currentPower = p; } }
   updateHeartRate(h) { if(h>0) this._heartRateHistory.push({value:h, timestamp:Date.now()}); }
