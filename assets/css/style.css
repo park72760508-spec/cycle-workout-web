@@ -5286,6 +5286,48 @@ button[aria-disabled="true"] {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* 개인 훈련 화면: 사용자 정보 + 연결 버튼 한 줄 (좌: 사용자, 우: 연결) */
+.enhanced-training-user-info-with-connect {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.enhanced-training-user-info-with-connect .enhanced-training-user-info-left {
+  flex: 1;
+  min-width: 0;
+}
+.enhanced-training-user-info-with-connect .enhanced-training-connect-wrap {
+  flex-shrink: 0;
+}
+
+/* 개인 훈련 화면: 시작 버튼 / 훈련 중 컨트롤 버튼 전환 */
+.training-screen-start-wrap,
+.training-screen-control-btns {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+#trainingScreen .enhanced-control-btn.start {
+  background: #00d4aa;
+  color: #000;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+#trainingScreen .enhanced-control-btn.start:hover {
+  background: #00f5c4;
+  transform: scale(1.1);
+}
+
 .enhanced-training-user-info #userInfo {
   font-size: 16px;
   font-weight: 600;
