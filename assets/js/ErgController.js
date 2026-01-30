@@ -1,9 +1,8 @@
 /* ==========================================================
-   ErgController.js (v4.7 Hybrid Smart Engine)
-   - Universal Fix: Works on Windows (Strict) AND iOS/Bluefy (Loose)
-   - Hybrid Write: Respects GATT properties (PC), Forces mode (Mobile)
-   - Protocol Feedback: Shows Toast message for active protocol
-   - Legacy & Deep Scan features included
+   ErgController.js (v4.8 Legacy Priority Edition)
+   - Fixes Windows `NotSupportedError` by forcing writeWithoutResponse
+   - Fixes "No Resistance" by prioritizing Legacy (CycleOps/Wahoo) over FTMS
+   - Deep Scan now prefers Legacy Control Points if available
 ========================================================== */
 
 class ErgController {
@@ -34,12 +33,12 @@ class ErgController {
     this._powerUpdateDebounce = 300;
     this._cpsErgWarningShown = false;
 
+    // UUID Mappings
     this._knownControlPoints = {
-      '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS',
-      '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS',
-      'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',
-      '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',
-      '00002a66-0000-1000-8000-00805f9b34fb': 'CPS'
+      '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS', // Priority 1
+      'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',    // Priority 2
+      '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',     // Priority 3
+      '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS'      // Priority 4 (Standard)
     };
 
     this._commandPriorities = {
@@ -49,7 +48,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v4.7 (Hybrid Smart Engine) Initialized');
+    console.log('[ErgController] v4.8 (Legacy Priority) Initialized');
   }
 
   // ── [1] Internal Helpers ──
@@ -106,80 +105,78 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
   }
 
-  // ── [2] Deep Scan Logic ──
+  // ── [2] Deep Scan Logic (Prioritize Legacy) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan...');
+      console.log('[ERG] Starting Deep Scan (Legacy Priority)...');
       let services = [];
       try {
           services = await server.getPrimaryServices();
       } catch(e) {
+          // Fallback list
           const knownSvcs = [
-              '00001826-0000-1000-8000-00805f9b34fb', 
-              '347b0001-7635-408b-8918-8ff3949ce592', 
-              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', 
-              '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e'
+              '347b0001-7635-408b-8918-8ff3949ce592', // CycleOps
+              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Wahoo
+              '00001826-0000-1000-8000-00805f9b34fb'  // FTMS
           ];
           for(const uuid of knownSvcs) {
               try { services.push(await server.getPrimaryService(uuid)); } catch(_) {}
           }
       }
 
+      let bestMatch = null;
+
       for (const service of services) {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
               const uuid = char.uuid.toLowerCase();
+              
               if (this._knownControlPoints[uuid]) {
-                 return { point: char, protocol: this._knownControlPoints[uuid] };
+                 const proto = this._knownControlPoints[uuid];
+                 // If we find CycleOps/Wahoo, return immediately (Best Match)
+                 if (proto === 'CYCLEOPS' || proto === 'WAHOO') {
+                     console.log(`[ERG] Deep Scan: FOUND LEGACY (${proto}) - Stopping Scan`);
+                     return { point: char, protocol: proto };
+                 }
+                 // If FTMS, store it but keep looking for Legacy
+                 if (proto === 'FTMS' && !bestMatch) {
+                     bestMatch = { point: char, protocol: proto };
+                 }
               }
+              // Heuristic Check
               if (uuid.startsWith('347b0012')) return { point: char, protocol: 'CYCLEOPS' };
            }
         } catch (e) {}
       }
-      return null;
+      
+      if (bestMatch) console.log(`[ERG] Deep Scan: Falling back to ${bestMatch.protocol}`);
+      return bestMatch;
+
     } catch (e) { return null; }
   }
 
-  // ── [3] Hybrid Smart Write (v4.7 The Universal Fix) ──
+  // ── [3] Forced Smart Write (v4.8 - No Property Check) ──
 
   async _safeWrite(characteristic, buffer) {
     if (!characteristic) throw new Error("No characteristic");
 
-    const props = characteristic.properties;
-
-    // Mode A: Strict Mode (Windows / Android)
-    // If properties are defined, we MUST follow them to avoid "NotSupportedError"
-    if (props) {
-        // Prefer WithoutResponse (Fast) if supported
-        if (props.writeWithoutResponse) {
-            try {
-                await characteristic.writeValueWithoutResponse(buffer);
-                return;
-            } catch (e) { console.warn("[ERG] writeWithoutResponse failed, checking alternatives...", e); }
-        }
-        
-        // Use WithResponse (Reliable) if supported
-        if (props.write) {
-            await characteristic.writeValue(buffer);
-            return;
-        }
-    }
-
-    // Mode B: Force Mode (iOS Bluefy / Fallback)
-    // If properties are undefined (Bluefy) OR Strict Mode failed but we want to try anyway
+    // ★ v4.8: Force WithoutResponse FIRST. 
+    // Do NOT check properties on Windows/Bluefy as they lie or block us.
     try {
         if (typeof characteristic.writeValueWithoutResponse === 'function') {
             await characteristic.writeValueWithoutResponse(buffer);
-            return;
+            return; 
         }
-    } catch (e) { console.warn("[ERG] Force writeWithoutResponse failed", e); }
+    } catch (e) { 
+        // Silent fail, fall through to withResponse
+    }
 
-    // Final Attempt
+    // Fallback
     await characteristic.writeValue(buffer);
   }
 
@@ -192,7 +189,9 @@ class ErgController {
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
 
-    if (!controlPoint || protocol === 'CPS') {
+    // Auto-Repair Connection
+    if (!controlPoint || protocol === 'CPS' || protocol === 'FTMS') {
+        // Even if we have FTMS, try Deep Scan to see if Legacy is better
         const result = await this._deepScanForControlPoint(trainer);
         if (result) {
             controlPoint = result.point;
@@ -200,6 +199,7 @@ class ErgController {
             trainer.controlPoint = controlPoint;
             trainer.realProtocol = protocol;
             trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol;
+            console.log(`[ERG] Switched to ${protocol} for better control.`);
         }
     }
 
@@ -208,14 +208,14 @@ class ErgController {
     this.state.enabled = enable;
     this.state.connectionStatus = 'connected';
     this._notifySubscribers('enabled', enable);
-    
+
     // Feedback
     if (typeof showToast === 'function') showToast(`ERG ${enable ? 'ON' : 'OFF'} [${protocol}]`);
 
     if (enable) {
        if (protocol === 'FTMS') {
            await this._queueCommand(async () => {
-               await this._safeWrite(controlPoint, new Uint8Array([0x00])); // Request Control
+               await this._safeWrite(controlPoint, new Uint8Array([0x00])); 
            }, 'REQUEST_CONTROL', { priority: 90 });
        } else if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
            try {
@@ -257,7 +257,6 @@ class ErgController {
         view.setUint8(0, 0x05); 
         view.setInt16(1, targetWatts, true);
     } else {
-        // Legacy (CycleOps/Wahoo use 0x42)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x42); 
@@ -267,10 +266,6 @@ class ErgController {
     await this._queueCommand(async () => {
         await this._safeWrite(controlPoint, buffer);
         console.log(`[ERG] Sent ${targetWatts}W via ${protocol}`);
-        if(Math.random() > 0.9 && typeof showToast === 'function') {
-             // Occasionally show toast to verify protocol to user
-             showToast(`Set ${targetWatts}W (${protocol})`);
-        }
     }, 'SET_TARGET_POWER', { priority: 50 });
   }
 
