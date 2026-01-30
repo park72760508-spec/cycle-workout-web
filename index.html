@@ -1851,10 +1851,10 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
         </svg>
       </button>
-      <h1 style="margin: 0; flex: 1; text-align: center;"><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/add-user3.gif" alt="" class="profile-select-icon"> 프로필 선택</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
-    <p class="subtitle" style="text-align: center;">훈련할 사용자를 선택하세요</p>
+    <p id="profileScreenSubtitle" class="subtitle" style="text-align: center; margin: 0; display: none;"></p>
     
     <div class="card mb-15">
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -2400,10 +2400,10 @@
     
   </div>
 
-  <!-- Privacy Policy 모달 (화면 밖 배치 - 훈련일지/프로필 등 어디서든 팝업 표시) -->
-  <div id="privacyPolicyModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 11000; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);">
-    <div class="modal-overlay" onclick="closePrivacyPolicyModal()" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
-    <div class="modal-content" style="position: relative; z-index: 1; max-width: 800px; max-height: 90vh; padding: 0; display: flex; flex-direction: column; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); overflow: hidden; width: 90%;">
+  <!-- Privacy Policy 모달 (화면 밖 배치 - 훈련일지/프로필 등 어디서든 팝업 표시, 팝업창은 오버레이 위에 표시) -->
+  <div id="privacyPolicyModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 11000;">
+    <div class="modal-overlay" onclick="closePrivacyPolicyModal()" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); z-index: 1;"></div>
+    <div class="modal-content" style="position: relative; z-index: 2; max-width: 800px; max-height: 90vh; padding: 0; display: flex; flex-direction: column; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); overflow: hidden; width: 90%;">
       <div class="modal-header" style="margin-bottom: 0; padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
         <h3 style="font-size: 1.3em; color: #333; margin: 0;">Privacy Policy</h3>
         <button class="modal-close" onclick="closePrivacyPolicyModal()" aria-label="닫기" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #999; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;">&times;</button>
@@ -3828,7 +3828,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
         </svg>
       </button>
-      <h1 style="margin: 0; flex: 1; text-align: center;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련일지</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련일지</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
     <p class="subtitle" style="margin-top: 0; text-align: center;">나의 훈련 이력을 확인하세요</p>
