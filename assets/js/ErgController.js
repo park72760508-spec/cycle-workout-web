@@ -1,8 +1,8 @@
 /* ==========================================================
-   ErgController.js (v10.0 "Total Inspection" - The Final Answer)
-   - Drill-Down Scan: Iterates ALL services & ALL chars to find "Write" access
-   - Heuristic Discovery: Finds Control Point even if UUID is slightly different
-   - Universal Write: Auto-negotiates WriteWithResponse vs WithoutResponse
+   ErgController.js (v11.0 "Explicit Permission" - Fixes CPS Trap)
+   - Solves "ERG ON [CPS_CONTROL]" issue (Fake Control Point)
+   - Requires `bluetooth.js` to include CycleOps/Wahoo UUIDs in optionalServices
+   - Explicitly hunts for CycleOps/Wahoo before settling for FTMS
    - Includes "Silk Road Pro" Smoothing & Anti-Lock
 ========================================================== */
 
@@ -20,7 +20,7 @@ class ErgController {
 
     this._subscribers = [];
 
-    // ⚙️ Pro Tuning Parameters
+    // ⚙️ Pro Tuning
     this._smoothFactor = 0.12; 
     this._controlLoopInterval = 250; 
     this._controlLoopId = null;
@@ -30,7 +30,7 @@ class ErgController {
     this._isProcessingQueue = false;
     this._maxQueueSize = 20;
 
-    // UUID Definitions (Normalized)
+    // UUIDs
     this._uuids = {
       cycleopsSvc: '347b0001-7635-408b-8918-8ff3949ce592',
       cycleopsChar:'347b0012-7635-408b-8918-8ff3949ce592',
@@ -39,13 +39,11 @@ class ErgController {
       tacxSvc:     '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e',
       tacxChar:    '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e',
       ftmsSvc:     '00001826-0000-1000-8000-00805f9b34fb',
-      ftmsChar:    '00002ad9-0000-1000-8000-00805f9b34fb',
-      cpsSvc:      '00001818-0000-1000-8000-00805f9b34fb',
-      cpsChar:     '00002a66-0000-1000-8000-00805f9b34fb' // Cycling Power Control Point
+      ftmsChar:    '00002ad9-0000-1000-8000-00805f9b34fb'
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v10.0 (Total Inspection) Initialized');
+    console.log('[ErgController] v11.0 (Explicit Permission) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -91,58 +89,49 @@ class ErgController {
     });
   }
 
-  // ── [2] Total Inspection Scan (The "Find Anything" Logic) ──
+  // ── [2] Explicit Deep Scan (Avoids CPS Trap) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Total Inspection (v10.0)...');
+      console.log('[ERG] Starting Explicit Scan (v11.0)...');
 
-      // The prioritized list of services to "Break Into"
-      const targetServices = [
-          { uuid: this._uuids.cycleopsSvc, proto: 'CYCLEOPS' },
-          { uuid: this._uuids.wahooSvc,    proto: 'WAHOO' },
-          { uuid: this._uuids.tacxSvc,     proto: 'TACX' },
-          { uuid: this._uuids.ftmsSvc,     proto: 'FTMS' },
-          { uuid: this._uuids.cpsSvc,      proto: 'CPS_CONTROL' }
+      // Priority List: CycleOps > Wahoo > FTMS.
+      // We purposefully EXCLUDE CPS from this primary search to avoid the "fake control" trap.
+      const targets = [
+          { name: 'CycleOps', svc: this._uuids.cycleopsSvc, char: this._uuids.cycleopsChar, proto: 'CYCLEOPS' },
+          { name: 'Wahoo',    svc: this._uuids.wahooSvc,    char: this._uuids.wahooChar,    proto: 'WAHOO' },
+          { name: 'Tacx',     svc: this._uuids.tacxSvc,     char: this._uuids.tacxChar,     proto: 'TACX' },
+          { name: 'FTMS',     svc: this._uuids.ftmsSvc,     char: this._uuids.ftmsChar,     proto: 'FTMS' }
       ];
 
-      for (const target of targetServices) {
+      for (const t of targets) {
           try {
-              // 1. Force open the Service
-              const service = await server.getPrimaryService(target.uuid);
-              if (!service) continue;
-
-              // 2. Get ALL Characteristics (Don't guess, get them all)
+              // Explicit Request triggers iOS Permission Check
+              const service = await server.getPrimaryService(t.svc);
               const chars = await service.getCharacteristics();
-
-              // 3. Scan characteristics
-              for (const char of chars) {
-                  const cUuid = char.uuid.toLowerCase();
-                  const props = char.properties;
-
-                  // A. Exact Match?
-                  if (cUuid === this._uuids.cycleopsChar || cUuid.startsWith('347b0012')) return { point: char, protocol: 'CYCLEOPS' };
-                  if (cUuid === this._uuids.wahooChar) return { point: char, protocol: 'WAHOO' };
-                  if (cUuid === this._uuids.tacxChar) return { point: char, protocol: 'TACX' };
-                  if (cUuid === this._uuids.ftmsChar) return { point: char, protocol: 'FTMS' };
-                  if (cUuid === this._uuids.cpsChar)  return { point: char, protocol: 'CPS_CONTROL' };
-
-                  // B. Heuristic Match? (If it's writable, it's likely the control point)
-                  // This is the "Skeleton Key" for unknown UUID variations
-                  if (props && (props.write || props.writeWithoutResponse)) {
-                      console.log(`[ERG] Heuristic Match: Found writable char ${cUuid} in ${target.proto}`);
-                      return { point: char, protocol: target.proto };
+              
+              for (const c of chars) {
+                  const uuid = c.uuid.toLowerCase();
+                  if (uuid === t.char || uuid.startsWith(t.char.substring(0,8))) {
+                      console.log(`🎯 [ERG] Found ${t.name} Control Point!`);
+                      return { point: c, protocol: t.proto };
+                  }
+                  // Heuristic fallback within the CORRECT service
+                  if (c.properties.write || c.properties.writeWithoutResponse) {
+                      return { point: c, protocol: t.proto };
                   }
               }
           } catch(e) {
-              // Service not found or access denied, try next
+              if (e.name === 'SecurityError') {
+                  console.error(`🚨 [ERG] Permission Denied for ${t.name}. Add ${t.svc} to bluetooth.js optionalServices!`);
+              }
           }
       }
-
-      console.warn('[ERG] Total Inspection found no Control Points.');
+      
+      console.warn('[ERG] No Legacy/FTMS Control Points found.');
       return null;
     } catch (e) { 
         console.error('[ERG] Scan Critical Error:', e);
@@ -161,14 +150,12 @@ class ErgController {
 
         const rawTarget = this.state.targetPower;
         let rpm = this.state.cadence;
-
         if (Date.now() - this._lastCadenceTime > 5000) rpm = 0;
 
-        // Anti-Lock Logic
+        // Anti-Lock
         let smartTarget = rawTarget;
-        if (rpm < 45) {
-            smartTarget = Math.min(60, rawTarget);
-        } else if (rpm < 70) {
+        if (rpm < 45) smartTarget = Math.min(60, rawTarget);
+        else if (rpm < 70) {
             const factor = 0.64 + ((rpm - 45) * 0.0144);
             smartTarget = rawTarget * Math.min(1.0, factor);
         }
@@ -182,9 +169,7 @@ class ErgController {
         if (Math.abs(smartTarget - nextPower) < 1.5) nextPower = smartTarget;
 
         this.state.currentAppliedPower = nextPower;
-
         await this._sendCommand(Math.round(nextPower));
-
     }, this._controlLoopInterval);
   }
 
@@ -212,7 +197,6 @@ class ErgController {
         view.setUint8(0, 0x05);
         view.setInt16(1, safeWatts, true);
     } else {
-        // Legacy (CycleOps/Wahoo/Tacx/CPS)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
         view.setUint8(0, 0x42);
@@ -220,7 +204,6 @@ class ErgController {
     }
 
     this._queueCommand(async () => {
-         // Helper: Timeout Wrapper
          const tryWrite = async (method) => {
              const timeout = new Promise((_, r) => setTimeout(() => r(new Error("Timeout")), 350));
              let p;
@@ -233,11 +216,7 @@ class ErgController {
              return Promise.race([p, timeout]);
          };
 
-         // ★ Universal Write Strategy
-         try {
-             await tryWrite('fast');
-             return;
-         } catch (e) {
+         try { await tryWrite('fast'); return; } catch (e) {
              try { await tryWrite('reliable'); } catch(e2) {}
          }
     }, 'SET_POWER', { priority: 50 });
@@ -250,12 +229,12 @@ class ErgController {
         const trainer = window.connectedDevices?.trainer;
         if (!trainer) throw new Error("No trainer connected");
 
-        // Force a Total Inspection Scan
+        // Force explicit scan
         const result = await this._deepScanForControlPoint(trainer);
         if (result) {
             trainer.controlPoint = result.point;
             trainer.realProtocol = result.protocol;
-            trainer.protocol = (result.protocol === 'CYCLEOPS' || result.protocol === 'WAHOO' || result.protocol === 'TACX') ? 'FTMS' : result.protocol;
+            trainer.protocol = (result.protocol === 'CYCLEOPS' || result.protocol === 'WAHOO') ? 'FTMS' : result.protocol;
         }
 
         const controlPoint = trainer.controlPoint;
@@ -272,14 +251,11 @@ class ErgController {
         if (enable) {
            const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
            const initBuf = new Uint8Array([initByte]);
-           
            this._queueCommand(async () => {
                try { 
                    if(typeof controlPoint.writeValueWithoutResponse === 'function') await controlPoint.writeValueWithoutResponse(initBuf);
                    else await controlPoint.writeValue(initBuf);
-               } catch(e) {
-                   try { await controlPoint.writeValue(initBuf); } catch(e2){}
-               }
+               } catch(e) { try { await controlPoint.writeValue(initBuf); } catch(e2){} }
            }, 'INIT', { priority: 90 });
 
            this.state.currentAppliedPower = 0;
@@ -301,13 +277,11 @@ class ErgController {
     return Promise.resolve();
   }
 
-  // ── [Helpers] ──
   updateCadence(c) { if (c > 0) { this.state.cadence = c; this._lastCadenceTime = Date.now(); } }
   updatePower(p) { if (p != null && !isNaN(p)) this.state.currentPower = p; }
   updateHeartRate(h) {}
   updateConnectionStatus(s) { this.state.connectionStatus = s; if (s === 'disconnected') this._resetState(); }
 
-  // ── [Queue System] ──
   async _queueCommand(commandFn, commandType, options = {}) {
     if (this._commandQueue.length >= this._maxQueueSize) this._commandQueue.shift();
     this._commandQueue.push({ commandFn, timestamp: Date.now() });
@@ -326,10 +300,7 @@ class ErgController {
   subscribe(cb) {
     if (typeof cb !== 'function') return () => {};
     this._subscribers.push(cb);
-    return () => {
-        const i = this._subscribers.indexOf(cb);
-        if (i > -1) this._subscribers.splice(i, 1);
-    };
+    return () => { const i = this._subscribers.indexOf(cb); if (i > -1) this._subscribers.splice(i, 1); };
   }
   _notifySubscribers(k, v) { this._subscribers.forEach(cb => { try{ cb(this.state, k, v); }catch(_){} }); }
   async initializeTrainer() {}
