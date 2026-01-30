@@ -1,8 +1,9 @@
 /* ==========================================================
-   ErgController.js (v4.3 Legacy Re-Discovery Restored)
-   - Restoration of "Lazy Discovery": If Control Point is missing at connection,
-     it attempts to find it again when ERG is toggled.
-   - Essential for CycleOps/Wahoo devices that connect as CPS first.
+   ErgController.js (v4.4 Deep Scan Engine)
+   - Solves "No control point" on mobile/Bluefy
+   - Uses "Deep Scan" (getPrimaryServices) to find hidden Control Points
+   - Auto-detects FTMS, CycleOps, Wahoo, or any Writable Characteristic
+   - Full Command Queue & Legacy ERG Safety features included
 ========================================================== */
 
 class ErgController {
@@ -33,6 +34,15 @@ class ErgController {
     this._powerUpdateDebounce = 500;
     this._cpsErgWarningShown = false;
 
+    // Known Control Point UUIDs (Lower case for matching)
+    this._knownControlPoints = {
+      '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS',
+      '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS',
+      'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',
+      '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',
+      '00002a66-0000-1000-8000-00805f9b34fb': 'CPS' // Experimental
+    };
+
     this._commandPriorities = {
       'RESET': 100,
       'REQUEST_CONTROL': 90,
@@ -40,7 +50,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v4.3 (Re-Discovery Engine) Initialized');
+    console.log('[ErgController] v4.4 (Deep Scan Engine) Initialized');
   }
 
   // ── [1] Internal Helpers ──
@@ -97,42 +107,51 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
   }
 
-  // ── [2] Re-Discovery Logic (The Missing Link) ──
+  // ── [2] Deep Scan Logic (The Ultimate Fix) ──
 
-  async _findFTMSControlPoint(trainer) {
+  async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
+
+      console.log('[ERG] Starting Deep Scan (getPrimaryServices)...');
       
-      // FTMS UUIDs
-      const service = await server.getPrimaryService('00001826-0000-1000-8000-00805f9b34fb');
-      return await service.getCharacteristic('00002ad9-0000-1000-8000-00805f9b34fb');
-    } catch (e) { return null; }
-  }
+      // 1. Get ALL services (Bypasses specific UUID issues)
+      const services = await server.getPrimaryServices();
+      console.log(`[ERG] Deep Scan found ${services.length} services.`);
 
-  async _findLegacyControlPoint(trainer) {
-    try {
-      const server = trainer.server || (trainer.device && trainer.device.gatt);
-      if (!server || !server.connected) return null;
+      for (const service of services) {
+        try {
+           const chars = await service.getCharacteristics();
+           for (const char of chars) {
+              const uuid = char.uuid.toLowerCase();
+              
+              // A. Check against Known Control Points
+              if (this._knownControlPoints[uuid]) {
+                 const proto = this._knownControlPoints[uuid];
+                 console.log(`[ERG] Deep Scan MATCH: Found ${proto} Control Point (${uuid})`);
+                 return { point: char, protocol: proto };
+              }
 
-      // CycleOps UUIDs
-      try {
-        const svc = await server.getPrimaryService('347b0001-7635-408b-8918-8ff3949ce592');
-        const cp = await svc.getCharacteristic('347b0012-7635-408b-8918-8ff3949ce592');
-        console.log('[ERG] Legacy CycleOps Control Found via Re-scan');
-        return cp;
-      } catch (_) {}
+              // B. Heuristic: Check for CycleOps/Wahoo Legacy Patterns
+              if (uuid.startsWith('347b0012') || uuid.includes('00000000-0000-0000-0000-000000000000')) { // Sometimes UUIDs are masked
+                 // CycleOps
+                 console.log(`[ERG] Deep Scan Heuristic: Likely CycleOps (${uuid})`);
+                 return { point: char, protocol: 'CYCLEOPS' };
+              }
+           }
+        } catch (e) {
+           console.warn(`[ERG] Failed to scan service ${service.uuid}:`, e);
+        }
+      }
 
-      // Wahoo UUIDs
-      try {
-        const svc = await server.getPrimaryService('a026e005-0a7d-4ab3-97fa-f1500f9feb8b');
-        const cp = await svc.getCharacteristic('a026e005-0a7d-4ab3-97fa-f1500f9feb8b');
-        console.log('[ERG] Legacy Wahoo Control Found via Re-scan');
-        return cp;
-      } catch (_) {}
-
+      console.warn('[ERG] Deep Scan found no matching known Control Points.');
       return null;
-    } catch (e) { return null; }
+
+    } catch (e) {
+      console.error('[ERG] Deep Scan Critical Error:', e);
+      return null;
+    }
   }
 
   // ── [3] Core Logic: Toggle & Set Power ──
@@ -144,42 +163,31 @@ class ErgController {
         throw new Error("No trainer connected");
     }
 
-    // ★ [CORE FIX] Lazy Discovery: If Control Point is missing, try to find it NOW.
+    // Check existing or Re-Scan
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
 
     if (!controlPoint || protocol === 'CPS') {
-        console.log('[ERG] Control Point Missing/CPS. Attempting Re-Discovery...');
+        console.log('[ERG] Control Point Missing or CPS. Attempting DEEP SCAN...');
         
-        // 1. Try FTMS
-        const ftmsCP = await this._findFTMSControlPoint(trainer);
-        if (ftmsCP) {
-            controlPoint = ftmsCP;
-            protocol = 'FTMS';
-            console.log('✅ Re-Discovery: Found FTMS');
-        } 
-        // 2. Try Legacy
-        else {
-            const legacyCP = await this._findLegacyControlPoint(trainer);
-            if (legacyCP) {
-                controlPoint = legacyCP;
-                protocol = 'CYCLEOPS'; // Force Legacy Protocol
-                console.log('✅ Re-Discovery: Found Legacy (CycleOps/Wahoo)');
-            }
-        }
-
-        // Update the trainer object if found
-        if (controlPoint) {
+        const result = await this._deepScanForControlPoint(trainer);
+        if (result) {
+            controlPoint = result.point;
+            protocol = result.protocol;
+            
+            // Update Trainer Object
             trainer.controlPoint = controlPoint;
             trainer.realProtocol = protocol;
-            trainer.protocol = protocol;
+            // Fake protocol for UI compatibility
+            trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol; 
+            
+            console.log(`✅ Deep Scan Success: Protocol updated to ${protocol}`);
         }
     }
 
-    // Now check again
     if (!controlPoint) {
-        alert("이 기기는 파워미터 모드만 지원하며, 저항 제어(ERG)를 할 수 없습니다.");
-        throw new Error("No control point found after re-scan");
+        alert("이 기기는 파워미터 모드만 지원하며, 저항 제어(ERG)를 할 수 없습니다. (Control Point Not Found)");
+        throw new Error("No control point found after Deep Scan");
     }
 
     this.state.enabled = enable;
@@ -222,7 +230,6 @@ class ErgController {
     if (!this.state.enabled && watts !== 0) return;
     
     const trainer = window.connectedDevices?.trainer;
-    // Re-check control point in case it was just found
     const controlPoint = trainer?.controlPoint;
     
     if (!trainer || !controlPoint) return;
@@ -231,8 +238,7 @@ class ErgController {
     this.state.targetPower = targetWatts;
 
     let buffer;
-    // Use realProtocol for router
-    const protocol = trainer.realProtocol || trainer.protocol || 'FTMS'; 
+    const protocol = trainer.realProtocol || 'FTMS'; 
 
     if (protocol === 'FTMS') {
         buffer = new ArrayBuffer(3);
@@ -299,7 +305,7 @@ class ErgController {
           setTimeout(() => {
             this._commandQueue.unshift(command);
             processNext();
-          }, 500); // 500ms delay on retry
+          }, 500); 
           return;
         } else {
           command.reject(error);
@@ -312,7 +318,7 @@ class ErgController {
 
   // Called by bluetooth.js after connect (optional; control point discovered on first ERG toggle)
   async initializeTrainer() {
-    // Lazy: control point discovered when user toggles ERG
+    // Lazy: control point discovered via Deep Scan when user toggles ERG
   }
 
   updateCadence(c) { if(c>0) this._cadenceHistory.push(c); }
