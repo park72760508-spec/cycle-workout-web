@@ -1,10 +1,9 @@
 /* ==========================================================
-   ErgController.js (v12.1 "The Final Polish" - Complete & Robust)
-   - Phase 1: Explicit Pinpoint Scan (Fast)
-   - Phase 2: Drill-Down Scan (Reliable - finds hidden services)
-   - Phase 3: Skeleton Key (Heuristic - finds ANY writable char)
-   - Phase 4: CPS Fallback (Last Resort - prevents "Not Found" error)
-   - Features: Silk Road Pro Smoothing, Anti-Lock, Universal Write
+   ErgController.js (v13.0 "Wahoo Breaker" - iOS Write Fix)
+   - FORCE Reliable Write (WithResponse) for Legacy Protocols (Wahoo/CycleOps)
+     -> Solves "Connected but No Resistance" on iOS
+   - Aggressive Double-Init to wake up trainer
+   - Includes Silk Road Pro, Anti-Lock, and Investigator Scan
 ========================================================== */
 
 class ErgController {
@@ -46,7 +45,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v12.1 (Final Polish) Initialized');
+    console.log('[ErgController] v13.0 (Wahoo Breaker) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -99,7 +98,7 @@ class ErgController {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Investigator Scan (v12.1)...');
+      console.log('[ERG] Starting Investigator Scan (v13.0)...');
 
       // Targets EXCLUDING CPS (Phase 1-3 priority)
       const targets = [
@@ -240,7 +239,7 @@ class ErgController {
     }
   }
 
-  // ── [4] Command Sender (Universal Write) ──
+  // ── [4] Command Sender (Wahoo Breaker: Legacy = With Response first) ──
 
   async _sendCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
@@ -265,7 +264,7 @@ class ErgController {
 
     this._queueCommand(async () => {
          const tryWrite = async (method) => {
-             const timeout = new Promise((_, r) => setTimeout(() => r(new Error("Timeout")), 350));
+             const timeout = new Promise((_, r) => setTimeout(() => r(new Error("Timeout")), 400));
              let p;
              if (method === 'fast') {
                  if (typeof controlPoint.writeValueWithoutResponse !== 'function') throw new Error("No fast write");
@@ -276,8 +275,18 @@ class ErgController {
              return Promise.race([p, timeout]);
          };
 
+         const isLegacy = (protocol === 'WAHOO' || protocol === 'CYCLEOPS' || protocol === 'TACX');
+         if (isLegacy) {
+             try {
+                 await tryWrite('reliable');
+                 return;
+             } catch (e) {
+                 try { await tryWrite('fast'); } catch (e2) {}
+             }
+             return;
+         }
          try { await tryWrite('fast'); return; } catch (e) {
-             try { await tryWrite('reliable'); } catch(e2) {}
+             try { await tryWrite('reliable'); } catch (e2) {}
          }
     }, 'SET_POWER', { priority: 50 });
   }
@@ -311,10 +320,9 @@ class ErgController {
            const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
            const initBuf = new Uint8Array([initByte]);
            this._queueCommand(async () => {
-               try { 
-                   if (typeof controlPoint.writeValueWithoutResponse === 'function') await controlPoint.writeValueWithoutResponse(initBuf);
-                   else await controlPoint.writeValue(initBuf);
-               } catch(e) { try { await controlPoint.writeValue(initBuf); } catch(e2){} }
+               try { await controlPoint.writeValue(initBuf); } catch (e) {}
+               await new Promise(r => setTimeout(r, 200));
+               try { await controlPoint.writeValue(initBuf); } catch (e) {}
            }, 'INIT', { priority: 90 });
 
            this.state.currentAppliedPower = 0;
