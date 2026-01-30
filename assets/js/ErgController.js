@@ -1,18 +1,17 @@
 /* ==========================================================
-   ErgController.js (v5.0 Silk Road Engine)
-   - "Best-in-Class" Smooth Control Logic (Accelerator Effect)
-   - Eliminates "Brick Wall" resistance using Low-Pass Filter Ramping
-   - Unified Protocol Strategy: Forces Legacy (CycleOps) on all platforms if available
-   - Robust UUID Matching (Case-Insensitive) for iOS/Bluefy
+   ErgController.js (v5.1 Promise Fix & Silk Road Engine)
+   - Fixes "undefined reading catch" error in app.js
+   - Ensures toggleErgMode ALWAYS returns a Promise
+   - Retains "Silk Road" Smooth Ramping & Legacy Priority
 ========================================================== */
 
 class ErgController {
   constructor() {
     this._state = {
       enabled: false,
-      targetPower: 0,      // The user's goal (e.g., 200W)
-      currentAppliedPower: 0, // What we are actually sending (e.g., 150W... 160W...)
-      currentPower: 0,     // Live sensor power (from bluetooth.js)
+      targetPower: 0,
+      currentAppliedPower: 0,
+      currentPower: 0,
       connectionStatus: 'disconnected'
     };
     this.state = this._createReactiveState(this._state);
@@ -20,20 +19,19 @@ class ErgController {
     this._subscribers = [];
 
     // Engine Config
-    this._rampingFactor = 0.15; // 0.1(Slow) ~ 0.3(Fast). 0.15 is "Silky Smooth"
-    this._controlLoopInterval = 250; // Update resistance 4 times a second
+    this._rampingFactor = 0.15;
+    this._controlLoopInterval = 250;
     this._controlLoopId = null;
 
     this._commandQueue = [];
     this._isProcessingQueue = false;
-    this._maxQueueSize = 20; // Reduced for real-time responsiveness
+    this._maxQueueSize = 20;
 
-    // Known Control Points (Normalized Lowercase)
     this._knownControlPoints = {
-      '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS', // Priority 1
-      'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',    // Priority 2
-      '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',     // Priority 3
-      '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS'      // Priority 4
+      '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS',
+      'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',
+      '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',
+      '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS'
     };
 
     this._commandPriorities = {
@@ -43,7 +41,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v5.0 (Silk Road Engine) Initialized');
+    console.log('[ErgController] v5.1 (Promise Fix) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -88,14 +86,14 @@ class ErgController {
     });
   }
 
-  // ── [2] Deep Scan (Robust & Case-Insensitive) ──
+  // ── [2] Deep Scan (Robust) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan (Robust)...');
+      console.log('[ERG] Starting Deep Scan (v5.1)...');
       let services = [];
       try { services = await server.getPrimaryServices(); }
       catch(e) {
@@ -109,21 +107,18 @@ class ErgController {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
-              const uuid = (char.uuid || '').toLowerCase(); // Always normalize (iOS)
+              const uuid = (char.uuid || '').toLowerCase();
               if (!uuid) continue;
 
               if (this._knownControlPoints[uuid]) {
                  const proto = this._knownControlPoints[uuid];
-                 // Force Legacy Priority (PC Success Formula)
                  if (proto === 'CYCLEOPS' || proto === 'WAHOO') {
-                     console.log(`[ERG] Deep Scan: FOUND LEGACY (${proto})!`);
                      return { point: char, protocol: proto };
                  }
                  if (proto === 'FTMS' && !bestMatch) {
                      bestMatch = { point: char, protocol: proto };
                  }
               }
-              // Heuristic for CycleOps (Starts with 347b)
               if (uuid.startsWith('347b')) return { point: char, protocol: 'CYCLEOPS' };
            }
         } catch (e) {}
@@ -132,7 +127,7 @@ class ErgController {
     } catch (e) { return null; }
   }
 
-  // ── [3] The "Silk Road" Control Loop (Smooth Ramping) ──
+  // ── [3] Silk Road Control Loop ──
 
   _startControlLoop() {
     if (this._controlLoopId) return;
@@ -144,23 +139,15 @@ class ErgController {
         const target = this.state.targetPower;
         let current = this.state.currentAppliedPower;
 
-        // Accelerator Logic: Smoothly interpolate towards target
         const diff = target - current;
-
-        // Deadband: Stop updating if we are super close (saves battery/bandwidth)
         if (Math.abs(diff) < 1) return;
 
-        // Apply Ramping (Low-Pass Filter)
         let nextPower = current + (diff * this._rampingFactor);
-
-        // Clamp to target if very close
         if (Math.abs(target - nextPower) < 1) nextPower = target;
 
         this.state.currentAppliedPower = nextPower;
 
-        // Send command
         await this._sendCommand(Math.round(nextPower));
-
     }, this._controlLoopInterval);
   }
 
@@ -202,61 +189,63 @@ class ErgController {
     }, 'SET_POWER', { priority: 50 });
   }
 
-  // ── [5] Public API ──
+  // ── [5] Public API (Strict Async) ──
 
   async toggleErgMode(enable) {
-    const trainer = window.connectedDevices?.trainer;
-    if (!trainer) throw new Error("No trainer");
+    try {
+        const trainer = window.connectedDevices?.trainer;
+        if (!trainer) throw new Error("No trainer connected");
 
-    let controlPoint = trainer.controlPoint;
-    let protocol = trainer.realProtocol || 'FTMS';
+        let controlPoint = trainer.controlPoint;
+        let protocol = trainer.realProtocol || 'FTMS';
 
-    // Auto-Repair / Deep Scan (always prefer Legacy if available)
-    if (!controlPoint || protocol === 'CPS' || protocol === 'FTMS') {
-        const result = await this._deepScanForControlPoint(trainer);
-        if (result) {
-            controlPoint = result.point;
-            protocol = result.protocol;
-            trainer.controlPoint = controlPoint;
-            trainer.realProtocol = protocol;
-            trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol;
-            console.log(`[ERG] Protocol Optimized: ${protocol}`);
+        if (!controlPoint || protocol === 'CPS' || protocol === 'FTMS') {
+            const result = await this._deepScanForControlPoint(trainer);
+            if (result) {
+                controlPoint = result.point;
+                protocol = result.protocol;
+                trainer.controlPoint = controlPoint;
+                trainer.realProtocol = protocol;
+                trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol;
+            }
         }
-    }
 
-    if (!controlPoint) throw new Error("Control Point Not Found");
+        if (!controlPoint) throw new Error("Control Point Not Found");
 
-    this.state.enabled = enable;
-    this.state.connectionStatus = 'connected';
-    this._notifySubscribers('enabled', enable);
+        this.state.enabled = enable;
+        this.state.connectionStatus = 'connected';
+        this._notifySubscribers('enabled', enable);
 
-    if (typeof showToast === 'function') showToast(`ERG ${enable ? 'ON' : 'OFF'} [${protocol}]`);
+        if (typeof showToast === 'function') showToast(`ERG ${enable ? 'ON' : 'OFF'} [${protocol}]`);
 
-    if (enable) {
-       this._queueCommand(async () => {
-           const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
-           if (typeof controlPoint.writeValueWithoutResponse === 'function') {
-               try { await controlPoint.writeValueWithoutResponse(new Uint8Array([initByte])); } catch(e){}
-           } else {
-               await controlPoint.writeValue(new Uint8Array([initByte]));
-           }
-       }, 'INIT', { priority: 90 });
+        if (enable) {
+           this._queueCommand(async () => {
+               const initByte = (protocol === 'FTMS') ? 0x00 : 0x01;
+               if (typeof controlPoint.writeValueWithoutResponse === 'function') {
+                   try { await controlPoint.writeValueWithoutResponse(new Uint8Array([initByte])); } catch(e){}
+               } else {
+                   await controlPoint.writeValue(new Uint8Array([initByte]));
+               }
+           }, 'INIT', { priority: 90 });
 
-       this.state.currentAppliedPower = 0;
-       this._startControlLoop();
+           this.state.currentAppliedPower = 0;
+           this._startControlLoop();
+        } else {
+           this._stopControlLoop();
+           this._sendCommand(0);
+        }
 
-       if(this.state.targetPower > 0) {
-           console.log('[ERG] Target set, ramping will begin.');
-       }
-    } else {
-       this._stopControlLoop();
-       this._sendCommand(0);
+        return true;
+    } catch (e) {
+        console.error("[ERG] Toggle Error:", e);
+        throw e;
     }
   }
 
-  setTargetPower(watts) {
-    if (!this.state.enabled) return;
+  async setTargetPower(watts) {
+    if (!this.state.enabled) return Promise.resolve();
     this.state.targetPower = Math.max(0, Math.min(2000, Math.round(watts)));
+    return Promise.resolve();
   }
 
   // ── [6] Queue System ──
@@ -280,7 +269,7 @@ class ErgController {
   }
 
   subscribe(cb) {
-    if (typeof cb !== 'function') return;
+    if (typeof cb !== 'function') return () => {};
     this._subscribers.push(cb);
     return () => {
       const i = this._subscribers.indexOf(cb);
@@ -292,9 +281,7 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, k, v); }catch(_){} });
   }
 
-  async initializeTrainer() {
-    // Lazy: control point discovered when user toggles ERG
-  }
+  async initializeTrainer() {}
 
   updateCadence(c) {}
   updatePower(p) { if (p != null && !isNaN(p)) this.state.currentPower = p; }
