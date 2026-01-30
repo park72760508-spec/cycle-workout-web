@@ -4203,11 +4203,11 @@ function renderUserInfo() {
   try {
     const box = document.getElementById("userInfo");
     if (!box) return;
+    const gradeIconEl = document.getElementById("trainingScreenGradeIcon");
 
     const u = window.currentUser;
     if (!u) {
       box.textContent = "사용자 미선택";
-      var gradeIconEl = document.getElementById("trainingScreenGradeIcon");
       if (gradeIconEl) gradeIconEl.innerHTML = "";
       if (typeof updateUserPanelNeonByWkg === "function") updateUserPanelNeonByWkg(0);
       return;
@@ -4231,7 +4231,6 @@ function renderUserInfo() {
     else if (challenge === 'PRO') challengeImage = 'red.png';
 
     // 훈련등급 아이콘과 사용자 정보를 나란히 한 줄로 표시
-    const gradeIconEl = document.getElementById('trainingScreenGradeIcon');
     if (gradeIconEl) {
       gradeIconEl.innerHTML = '<img src="assets/img/' + challengeImage + '" alt="" class="training-user-challenge-icon">';
     }
