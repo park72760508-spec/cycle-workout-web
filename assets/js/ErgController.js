@@ -1,8 +1,8 @@
 /* ==========================================================
-   ErgController.js (v6.1 Universal Fallback Engine)
-   - Solves Windows `NotSupportedError` by falling back to WithoutResponse
-   - Solves iOS "Silent Failure" by prioritizing WithResponse for Legacy
-   - "Smart Fallback": If one write method fails, instantly tries the other
+   ErgController.js (v7.0 Legacy Hunter Edition)
+   - Solves iOS "No Resistance" by AGGRESSIVELY prioritizing Legacy Protocols
+   - If CycleOps/Wahoo is found, FTMS is IGNORED (Prevents connecting to dead channels)
+   - Forces `writeValue` (WithResponse) for Legacy on iOS to ensure delivery
    - Includes Zwift-Class Anti-Lock & Soft Start
 ========================================================== */
 
@@ -30,11 +30,12 @@ class ErgController {
     this._isProcessingQueue = false;
     this._maxQueueSize = 20;
 
-    this._knownControlPoints = {
-      '347b0012-7635-408b-8918-8ff3949ce592': 'CYCLEOPS',
-      'a026e005-0a7d-4ab3-97fa-f1500f9feb8b': 'WAHOO',
-      '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e': 'TACX',
-      '00002ad9-0000-1000-8000-00805f9b34fb': 'FTMS'
+    // UUIDs (Normalized lowercase)
+    this._uuids = {
+      cycleops: '347b0012-7635-408b-8918-8ff3949ce592',
+      wahoo:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+      tacx:     '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e',
+      ftms:     '00002ad9-0000-1000-8000-00805f9b34fb'
     };
 
     this._commandPriorities = {
@@ -44,7 +45,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v6.1 (Universal Fallback) Initialized');
+    console.log('[ErgController] v7.0 (Legacy Hunter) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -90,45 +91,75 @@ class ErgController {
     });
   }
 
-  // ── [2] Deep Scan ──
+  // ── [2] Deep Scan (LEGACY HUNTER) ──
 
   async _deepScanForControlPoint(trainer) {
     try {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan (v6.1)...');
+      console.log('[ERG] Starting Deep Scan (v7.0 Legacy Hunter)...');
       let services = [];
       try { services = await server.getPrimaryServices(); }
       catch(e) {
-          const knownSvcs = ['347b0001-7635-408b-8918-8ff3949ce592', '00001826-0000-1000-8000-00805f9b34fb'];
+          const knownSvcs = [
+              '347b0001-7635-408b-8918-8ff3949ce592', // CycleOps Service
+              'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', // Wahoo Service
+              '00001826-0000-1000-8000-00805f9b34fb'  // FTMS Service
+          ];
           for(const u of knownSvcs) try { services.push(await server.getPrimaryService(u)); } catch(_){}
       }
 
-      let bestMatch = null;
+      console.log(`[ERG] Deep Scan: found ${services.length} services`);
 
+      // Pass 1: Look for CycleOps (Highest Priority)
       for (const service of services) {
         try {
            const chars = await service.getCharacteristics();
            for (const char of chars) {
               const uuid = (char.uuid || '').toLowerCase();
-              if (!uuid) continue;
-
-              if (this._knownControlPoints[uuid]) {
-                 const proto = this._knownControlPoints[uuid];
-                 if (proto === 'CYCLEOPS' || proto === 'WAHOO') {
-                     return { point: char, protocol: proto };
-                 }
-                 if (proto === 'FTMS' && !bestMatch) {
-                     bestMatch = { point: char, protocol: proto };
-                 }
+              if (uuid === this._uuids.cycleops || uuid.startsWith('347b0012')) {
+                  console.log('🎯 [ERG] FOUND CYCLEOPS LEGACY! Locking on. UUID:', uuid);
+                  return { point: char, protocol: 'CYCLEOPS' };
               }
-              if (uuid.startsWith('347b')) return { point: char, protocol: 'CYCLEOPS' };
            }
-        } catch (e) {}
+        } catch(e) {}
       }
-      return bestMatch;
-    } catch (e) { return null; }
+
+      // Pass 2: Look for Wahoo (High Priority)
+      for (const service of services) {
+        try {
+           const chars = await service.getCharacteristics();
+           for (const char of chars) {
+              const uuid = (char.uuid || '').toLowerCase();
+              if (uuid === this._uuids.wahoo) {
+                  console.log('🎯 [ERG] FOUND WAHOO LEGACY! Locking on. UUID:', uuid);
+                  return { point: char, protocol: 'WAHOO' };
+              }
+           }
+        } catch(e) {}
+      }
+
+      // Pass 3: FTMS (Last Resort - only if Legacy is missing)
+      for (const service of services) {
+        try {
+           const chars = await service.getCharacteristics();
+           for (const char of chars) {
+              const uuid = (char.uuid || '').toLowerCase();
+              if (uuid === this._uuids.ftms) {
+                  console.log('⚠️ [ERG] Legacy not found. Falling back to FTMS. UUID:', uuid);
+                  return { point: char, protocol: 'FTMS' };
+              }
+           }
+        } catch(e) {}
+      }
+
+      console.log('[ERG] Deep Scan: no control point found');
+      return null;
+    } catch (e) {
+      console.warn('[ERG] Deep Scan error:', e);
+      return null;
+    }
   }
 
   // ── [3] Zwift-Class Control Loop ──
@@ -145,7 +176,7 @@ class ErgController {
 
         if (Date.now() - this._lastCadenceTime > 5000) currentCadence = 0;
 
-        // Zwift-Style Anti-Lock
+        // Anti-Lock Logic
         let smartTarget = rawTarget;
         if (currentCadence < 40) {
             smartTarget = Math.min(50, rawTarget);
@@ -174,7 +205,7 @@ class ErgController {
     }
   }
 
-  // ── [4] Command Sender (UNIVERSAL FALLBACK) ──
+  // ── [4] Command Sender (Strict Legacy Write) ──
 
   async _sendCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
@@ -200,15 +231,12 @@ class ErgController {
     this._queueCommand(async () => {
          const isLegacy = (protocol === 'CYCLEOPS' || protocol === 'WAHOO' || protocol === 'TACX');
 
-         // ★ Strategy: Try Priority Method -> If Fail, Try Fallback Method ★
-
-         // 1. For Legacy, prefer writeValue (Best for iOS)
+         // ★ v7.0 Rule: If Legacy, FORCE writeValue (With Response) first ★
          if (isLegacy) {
              try {
                  await controlPoint.writeValue(buffer);
                  return;
              } catch (e) {
-                 // Windows often fails here (NotSupportedError). Fallback to WithoutResponse.
                  if (typeof controlPoint.writeValueWithoutResponse === 'function') {
                      try { await controlPoint.writeValueWithoutResponse(buffer); return; } catch(e2){}
                  }
@@ -216,7 +244,7 @@ class ErgController {
              return;
          }
 
-         // 2. For FTMS, prefer writeValueWithoutResponse (Best for Speed)
+         // FTMS: Prefer Fast Write
          if (typeof controlPoint.writeValueWithoutResponse === 'function') {
              try { await controlPoint.writeValueWithoutResponse(buffer); return; } catch(e){}
          }
@@ -231,19 +259,17 @@ class ErgController {
         const trainer = window.connectedDevices?.trainer;
         if (!trainer) throw new Error("No trainer connected");
 
-        let controlPoint = trainer.controlPoint;
-        let protocol = trainer.realProtocol || 'FTMS';
-
-        if (!controlPoint || protocol === 'CPS' || protocol === 'FTMS') {
-            const result = await this._deepScanForControlPoint(trainer);
-            if (result) {
-                controlPoint = result.point;
-                protocol = result.protocol;
-                trainer.controlPoint = controlPoint;
-                trainer.realProtocol = protocol;
-                trainer.protocol = (protocol === 'CYCLEOPS' || protocol === 'WAHOO') ? 'FTMS' : protocol;
-            }
+        // ALWAYS Deep Scan on toggle to ensure we lock onto Legacy if available
+        const result = await this._deepScanForControlPoint(trainer);
+        if (result) {
+            trainer.controlPoint = result.point;
+            trainer.realProtocol = result.protocol;
+            trainer.protocol = (result.protocol === 'CYCLEOPS' || result.protocol === 'WAHOO') ? 'FTMS' : result.protocol;
+            console.log(`[ERG] Protocol Locked: ${result.protocol}`);
         }
+
+        const controlPoint = trainer.controlPoint;
+        const protocol = trainer.realProtocol || 'FTMS';
 
         if (!controlPoint) throw new Error("Control Point Not Found");
 
