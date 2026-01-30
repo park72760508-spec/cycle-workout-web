@@ -2952,12 +2952,12 @@
 <div class="enhanced-training-user-info enhanced-training-user-info-with-connect" id="userPanel">
   <div id="userInfo" class="enhanced-training-user-info-left"></div>
   <div class="enhanced-training-connect-wrap" style="position: relative;">
-    <button id="trainingScreenBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleTrainingScreenBluetoothDropdown()">
+    <button id="trainingScreenBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleBluetoothDropdown('trainingScreen')">
       <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
       <span>연결</span>
     </button>
     <div id="trainingScreenBluetoothDropdown" class="mobile-bluetooth-dropdown">
-      <div id="trainingScreenBluetoothTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectTrainingScreenBluetoothDevice('trainer')">
+      <div id="trainingScreenBluetoothTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('trainer')">
         <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
         <span>스마트 트레이너</span>
         <span class="status" id="trainingScreenTrainerStatus">미연결</span>
@@ -2977,12 +2977,12 @@
           <button id="trainingScreenBluetoothErgSetBtn" style="padding: 4px 12px; background: #00d4aa; border: none; border-radius: 4px; color: #000; font-size: 12px; font-weight: bold; cursor: pointer;">설정</button>
         </div>
       </div>
-      <div id="trainingScreenBluetoothHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectTrainingScreenBluetoothDevice('heartRate')">
+      <div id="trainingScreenBluetoothHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('heartRate')">
         <img src="assets/img/bpm_i.png" alt="심박계">
         <span>심박계</span>
         <span class="status" id="trainingScreenHeartRateStatus">미연결</span>
       </div>
-      <div id="trainingScreenBluetoothPMItem" class="mobile-bluetooth-dropdown-item" onclick="connectTrainingScreenBluetoothDevice('powerMeter')">
+      <div id="trainingScreenBluetoothPMItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('powerMeter')">
         <img src="assets/img/power_i.png" alt="파워미터">
         <span>파워미터</span>
         <span class="status" id="trainingScreenPowerMeterStatus">미연결</span>
