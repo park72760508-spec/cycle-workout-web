@@ -1,9 +1,9 @@
 /* ==========================================================
-   ErgController.js (v6.0 Zwift-Class Anti-Lock Engine)
-   - "Spiral of Death" Protection: Prevents lock-up at low RPM
-   - Startup Assist: Easy resistance (<50W) when starting from stop
-   - RPM-Aware Scaling: Scales power based on cadence (Zwift Logic)
-   - Retains iOS/Windows compatibility fixes (Legacy Priority)
+   ErgController.js (v6.1 Universal Fallback Engine)
+   - Solves Windows `NotSupportedError` by falling back to WithoutResponse
+   - Solves iOS "Silent Failure" by prioritizing WithResponse for Legacy
+   - "Smart Fallback": If one write method fails, instantly tries the other
+   - Includes Zwift-Class Anti-Lock & Soft Start
 ========================================================== */
 
 class ErgController {
@@ -21,7 +21,7 @@ class ErgController {
     this._subscribers = [];
 
     // Engine Config
-    this._rampingFactor = 0.10; // Even smoother (0.10)
+    this._rampingFactor = 0.10;
     this._controlLoopInterval = 250;
     this._controlLoopId = null;
     this._lastCadenceTime = 0;
@@ -44,7 +44,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v6.0 (Anti-Lock Engine) Initialized');
+    console.log('[ErgController] v6.1 (Universal Fallback) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -97,7 +97,7 @@ class ErgController {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Deep Scan (v6.0)...');
+      console.log('[ERG] Starting Deep Scan (v6.1)...');
       let services = [];
       try { services = await server.getPrimaryServices(); }
       catch(e) {
@@ -131,7 +131,7 @@ class ErgController {
     } catch (e) { return null; }
   }
 
-  // ── [3] Zwift-Class Control Loop (Smart RPM) ──
+  // ── [3] Zwift-Class Control Loop ──
 
   _startControlLoop() {
     if (this._controlLoopId) return;
@@ -143,34 +143,26 @@ class ErgController {
         const rawTarget = this.state.targetPower;
         let currentCadence = this.state.cadence;
 
-        // Safety: If cadence data is stale (>5sec), assume 0 RPM
         if (Date.now() - this._lastCadenceTime > 5000) currentCadence = 0;
 
-        // ★ [CORE LOGIC] Zwift-Style Anti-Lock ★
+        // Zwift-Style Anti-Lock
         let smartTarget = rawTarget;
-
         if (currentCadence < 40) {
-            // Startup Mode: Very easy to start spinning
             smartTarget = Math.min(50, rawTarget);
         } else if (currentCadence < 60) {
-            // Anti-Stall Mode: Linearly scale power (e.g. 50rpm = 83% load)
             const factor = currentCadence / 60.0;
             smartTarget = rawTarget * factor;
         }
-        // Else (>= 60 RPM): Full Target applied
 
-        // Smoothing (Low Pass Filter)
+        // Smoothing
         let currentApplied = this.state.currentAppliedPower;
         const diff = smartTarget - currentApplied;
-
         if (Math.abs(diff) < 1) return;
 
         let nextPower = currentApplied + (diff * this._rampingFactor);
-
         if (Math.abs(smartTarget - nextPower) < 1) nextPower = smartTarget;
 
         this.state.currentAppliedPower = nextPower;
-
         await this._sendCommand(Math.round(nextPower));
     }, this._controlLoopInterval);
   }
@@ -182,7 +174,7 @@ class ErgController {
     }
   }
 
-  // ── [4] Command Sender ──
+  // ── [4] Command Sender (UNIVERSAL FALLBACK) ──
 
   async _sendCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
@@ -208,13 +200,23 @@ class ErgController {
     this._queueCommand(async () => {
          const isLegacy = (protocol === 'CYCLEOPS' || protocol === 'WAHOO' || protocol === 'TACX');
 
+         // ★ Strategy: Try Priority Method -> If Fail, Try Fallback Method ★
+
+         // 1. For Legacy, prefer writeValue (Best for iOS)
          if (isLegacy) {
-             try { await controlPoint.writeValue(buffer); } catch (e) {
-                 console.warn('[ERG] Legacy Write warning (ignored):', e);
+             try {
+                 await controlPoint.writeValue(buffer);
+                 return;
+             } catch (e) {
+                 // Windows often fails here (NotSupportedError). Fallback to WithoutResponse.
+                 if (typeof controlPoint.writeValueWithoutResponse === 'function') {
+                     try { await controlPoint.writeValueWithoutResponse(buffer); return; } catch(e2){}
+                 }
              }
              return;
          }
 
+         // 2. For FTMS, prefer writeValueWithoutResponse (Best for Speed)
          if (typeof controlPoint.writeValueWithoutResponse === 'function') {
              try { await controlPoint.writeValueWithoutResponse(buffer); return; } catch(e){}
          }
@@ -256,13 +258,11 @@ class ErgController {
            const initBuf = new Uint8Array([initByte]);
 
            this._queueCommand(async () => {
-              if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
-                  try { await controlPoint.writeValue(initBuf); } catch(e){}
-              } else {
+              try { await controlPoint.writeValue(initBuf); }
+              catch(e) {
                   if (typeof controlPoint.writeValueWithoutResponse === 'function') {
-                       try { await controlPoint.writeValueWithoutResponse(initBuf); return; } catch(e){}
+                       try { await controlPoint.writeValueWithoutResponse(initBuf); } catch(e2){}
                   }
-                  await controlPoint.writeValue(initBuf);
               }
            }, 'INIT', { priority: 90 });
 
