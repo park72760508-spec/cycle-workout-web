@@ -4374,7 +4374,14 @@
             logsByDate[dateKey].push(log);
           }
         });
-        
+        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+        Object.keys(logsByDate).forEach(dateKey => {
+          const arr = logsByDate[dateKey];
+          const hasStelvio = arr.some(log => log.source !== 'strava');
+          if (hasStelvio) {
+            logsByDate[dateKey] = arr.filter(log => log.source !== 'strava');
+          }
+        });
         return logsByDate;
       } catch (error) {
         console.error('[MiniCalendar] 훈련 로그 가져오기 실패:', error);
@@ -4870,6 +4877,14 @@
             });
           }
         });
+        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+        Object.keys(logsByDate).forEach(dateKey => {
+          const arr = logsByDate[dateKey];
+          const hasStelvio = arr.some(log => log.source !== 'strava');
+          if (hasStelvio) {
+            logsByDate[dateKey] = arr.filter(log => log.source !== 'strava');
+          }
+        });
         
         // 디버깅: 날짜 키 생성 결과 확인
         console.log('[MiniCalendarJournal] 날짜별 그룹화 결과:', {
@@ -5098,11 +5113,13 @@
           .then(function(monthLogs) {
             if (monthLogs && monthLogs.length > 0) {
               var minSec = 600;
+              var touchedDateKeys = {};
               monthLogs.forEach(function(log) {
                 var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
                 if (sec < minSec) return;
                 var dateKey = getDateKeyJournal(log.date);
                 if (dateKey) {
+                  touchedDateKeys[dateKey] = true;
                   if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
                     miniCalendarStateJournal.trainingLogs[dateKey] = [];
                   }
@@ -5110,6 +5127,15 @@
                   if (!exists) {
                     miniCalendarStateJournal.trainingLogs[dateKey].push(log);
                   }
+                }
+              });
+              // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+              Object.keys(touchedDateKeys).forEach(function(dateKey) {
+                var arr = miniCalendarStateJournal.trainingLogs[dateKey];
+                if (!arr || arr.length === 0) return;
+                var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
+                if (hasStelvio) {
+                  miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
                 }
               });
             }
