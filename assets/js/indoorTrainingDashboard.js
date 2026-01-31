@@ -6465,14 +6465,16 @@ async function selectWorkoutForTraining(workoutId) {
         window.currentWorkout = loadedWorkout;
         
         // Firebase에 workoutPlan 및 workoutId 저장 (개인 대시보드용: users/{userId}/workout 경로)
-        // 주의: 훈련 준비 화면에서 이미 users/{userId}/workout에 저장하므로 여기서는 저장하지 않음
-        // 단, indoorTrainingDashboard에서 직접 워크아웃을 선택한 경우에만 저장
+        // Realtime Database 규칙은 auth.uid 기준이므로, Firebase Auth UID를 우선 사용해야 PERMISSION_DENIED 방지
         if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
-            // 현재 사용자 ID 가져오기
+            const authUser = (typeof window.auth !== 'undefined' && window.auth.currentUser) ? window.auth.currentUser : null;
             const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-            const userId = currentUser?.id || currentUser?.uid;
+            const userId = (authUser && authUser.uid) || currentUser?.uid || currentUser?.id;
             
             if (userId) {
+                if (!authUser && typeof console !== 'undefined' && console.warn) {
+                    console.warn('[Indoor Training] Firebase Auth 로그인 없음. Realtime Database 저장 시 PERMISSION_DENIED가 나올 수 있습니다. 이메일/구글 로그인 후 다시 시도하세요.');
+                }
                 const userWorkoutRef = db.ref(`users/${userId}/workout`);
                 
                 // workoutPlan 저장 (세그먼트 배열)

@@ -12225,13 +12225,18 @@ async function selectWorkoutForTrainingReady(workout) {
     }
     
     // Realtime Database에 users/{userId}/workout 경로에 저장 (개인훈련용). 타임아웃으로 UI 블로킹 방지.
+    // 규칙이 auth.uid 기준이므로 Firebase Auth UID를 우선 사용해야 PERMISSION_DENIED 방지
     (function saveWorkoutToFirebaseWithTimeout() {
       var DB_SAVE_TIMEOUT_MS = 8000;
+      var authUser = (typeof window.auth !== 'undefined' && window.auth.currentUser) ? window.auth.currentUser : null;
       var currentUser = window.currentUser || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
-      var userId = currentUser && (currentUser.id || currentUser.uid);
+      var userId = (authUser && authUser.uid) || (currentUser && (currentUser.uid || currentUser.id));
       if (!userId || typeof db === 'undefined' || !db) {
         console.warn('[Training Ready] 사용자 ID가 없거나 Realtime Database가 초기화되지 않아 users/{userId}/workout에 저장하지 않습니다.');
         return;
+      }
+      if (!authUser && typeof console !== 'undefined' && console.warn) {
+        console.warn('[Training Ready] Firebase Auth 로그인 없음. Realtime Database 저장 시 PERMISSION_DENIED가 나올 수 있습니다. 이메일/구글 로그인 후 다시 시도하세요.');
       }
       var userWorkoutRef = db.ref('users/' + userId + '/workout');
       var savePromise = Promise.resolve();
