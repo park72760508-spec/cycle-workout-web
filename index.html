@@ -4355,7 +4355,7 @@
 
       try {
         // getUserTrainingLogs 함수 사용 (최대 100개 가져오기)
-        const logs = await window.getUserTrainingLogs(userId, { limit: 100 });
+        const logs = await window.getUserTrainingLogs(userId, { limit: 200 });
         
         console.log(`[MiniCalendar] ${logs.length}개의 훈련 로그를 가져왔습니다.`);
         
@@ -4825,7 +4825,7 @@
         }
 
         console.log('[MiniCalendarJournal] getUserTrainingLogs 호출 시작...');
-        const logs = await window.getUserTrainingLogs(userId, { limit: 100 });
+        const logs = await window.getUserTrainingLogs(userId, { limit: 200 });
         
         console.log(`[MiniCalendarJournal] ✅ ${logs.length}개의 훈련 로그를 가져왔습니다.`);
         
