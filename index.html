@@ -3905,17 +3905,19 @@
           <!-- 달력 날짜들이 여기에 동적으로 생성됩니다 -->
         </div>
       </div>
-      <!-- POWERED BY STRAVA (이전달/다음달 네비 이미지와 비슷한 높이 16px) -->
+      <!-- POWERED BY STRAVA (클릭 시 Strava 동기화 모달/연동 동일 기능) -->
       <div style="text-align: center; margin-top: 10px; padding-top: 6px;">
-        <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 16px; width: auto; display: inline-block;" />
+        <button type="button" style="background: none; border: none; padding: 0; cursor: pointer; display: inline-block; line-height: 0;" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화">
+          <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 16px; width: auto; display: inline-block;" />
+        </button>
       </div>
     </div>
     
     <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
     <div id="monthly-analysis-dashboard-root" class="card monthly-analysis-dashboard-wrapper" style="margin-top: 16px;"></div>
     
-    <!-- 하단 Strava 연결 -->
-    <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); text-align: center;">
+    <!-- 하단 Strava 연결 (상단 실선 없음) -->
+    <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); text-align: center; border-top: none;">
       <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0;">
         <button class="btn btn-exit-inline profile-strava-button" id="btnStravaTrainingJournal" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화" style="min-width: 200px; padding: 0; background: transparent; cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;">
           <img src="assets/img/btn_strava.png" alt="Connect with Strava" style="height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block;" />
