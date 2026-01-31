@@ -1872,25 +1872,11 @@
     </div>
     <p id="profileScreenSubtitle" class="subtitle" style="text-align: center; margin: 0; display: none;"></p>
     
-    <div class="card mb-15">
-      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button class="btn btn-exit-inline profile-action-button" onclick="if(typeof openSettingsModal==='function'){openSettingsModal();}else{alert('환경설정 기능을 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px;">
-          <img src="assets/img/ai.gif" alt="STELVIO AI" style="height: 28px; width: auto; object-fit: contain; flex-shrink: 0;" />
-          <span>AI 자동 페어링</span>
-        </button>
-        <button class="btn btn-exit-inline profile-action-button profile-strava-button" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; padding: 0; background: transparent; cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;">
-          <img src="assets/img/btn_strava.png" alt="Strava 연결" style="height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block;" />
-        </button>
-      </div>
-      <p style="text-align: center; font-size: 12px; color: #6b7280; margin: 12px 0 0 0; padding: 0;">
-        By connecting, you agree to our <a href="#" onclick="event.preventDefault(); openPrivacyPolicyModal(); return false;" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Privacy Policy</a>
-      </p>
-    </div>
     
-    <!-- 월간 훈련 이력 미니 달력 -->
-    <div class="challenge-legend-container">
-      <div class="challenge-legend-card">
-        <div class="mini-calendar-container">
+    <div class="challenge-legend-container" style="padding-bottom: 8px;">
+      <!-- 미니 달력 블럭 제거 (JS는 훈련일지 등에서 사용하므로 유지) -->
+      <div id="profileMiniCalendarPlaceholder" style="display: none;">
+        <div class="mini-calendar-container" style="display: none;">
           <!-- 달력 헤더 -->
           <div class="mini-calendar-header">
             <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigate('prev')" aria-label="이전 달">
@@ -1928,7 +1914,6 @@
         <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
       </div>
     </div>
-
 
       <!-- 신규 사용자 추가 카드 비활성화 -->
       <div class="card hidden" id="cardAddUser" aria-hidden="true">
@@ -2406,13 +2391,6 @@
       </div>
     
 
-    
-  <!-- ✅ Strava 이미지 (하단) -->
-  <div class="profile-exit-container" style="text-align: center; padding-top: 20px; padding-bottom: 10px;">
-    <a href="https://www.strava.com" target="_blank" rel="noopener noreferrer" style="display: inline-block; text-decoration: none; transition: opacity 0.2s ease;">
-      <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: block; margin: 0 auto;" />
-    </a>
-  </div>
     
   </div>
 
@@ -4012,6 +3990,9 @@
         </div>
         
         <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
+        <div style="text-align: center; margin-top: 12px;">
+          <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: inline-block;" />
+        </div>
       </div>
       <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
         <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">오늘 기록</button>
