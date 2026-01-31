@@ -3086,6 +3086,18 @@ async function loadWorkouts(categoryId) {
           .map(w => ({ id: w.id, title: w.title, status: w.status }))
       });
     }
+
+    // 카테고리 필터 적용 전 전체 목록 (카테고리 개수 표시용)
+    const allWorkoutsForCount = filteredWorkouts;
+
+    // 카테고리 필터 (categoryId: 'all' | 'z1' | 'z2' | 'z3' | 'z4' | 'z5')
+    if (categoryId && categoryId !== 'all') {
+      filteredWorkouts = filteredWorkouts.filter(w => {
+        const dominantZone = getWorkoutDominantZone(w);
+        return dominantZone === categoryId;
+      });
+      console.log('📂 카테고리 필터 적용:', { categoryId, count: filteredWorkouts.length });
+    }
     
     if (filteredWorkouts.length === 0) {
       workoutList.innerHTML = `
@@ -3120,7 +3132,7 @@ async function loadWorkouts(categoryId) {
     window.workoutRoomCodeMap = workoutRoomCodeMap;
     
     if (typeof renderWorkoutCategories === 'function') {
-      renderWorkoutCategories(filteredWorkouts);
+      renderWorkoutCategories(allWorkoutsForCount);
     }
     window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다.`);
     
@@ -3147,6 +3159,37 @@ async function loadWorkouts(categoryId) {
       </div>
     `;
   }
+}
+
+/**
+ * 워크아웃의 주된 Zone 계산 (세그먼트 시간 가중)
+ * @returns {string} 'z1'|'z2'|'z3'|'z4'|'z5'|null
+ */
+function getWorkoutDominantZone(workout) {
+  if (!workout || !workout.segments || !Array.isArray(workout.segments)) return null;
+  const zoneTime = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let total = 0;
+  workout.segments.forEach(seg => {
+    const duration = seg.duration_sec || seg.duration || 0;
+    if (duration <= 0) return;
+    const zone = getSegmentZoneFromFtpPercent(seg);
+    if (zone >= 1 && zone <= 5) {
+      zoneTime[zone] = (zoneTime[zone] || 0) + duration;
+    } else {
+      zoneTime[1] = (zoneTime[1] || 0) + duration;
+    }
+    total += duration;
+  });
+  if (total <= 0) return null;
+  let maxZone = 1;
+  let maxTime = zoneTime[1] || 0;
+  for (let z = 2; z <= 5; z++) {
+    if ((zoneTime[z] || 0) > maxTime) {
+      maxTime = zoneTime[z];
+      maxZone = z;
+    }
+  }
+  return 'z' + maxZone;
 }
 
 /**
@@ -3204,7 +3247,7 @@ function renderWorkoutCard(workout, workoutRoomStatusMap = {}, workoutRoomCodeMa
       <div class="workout-card__cta">
         ${hasWaitingRoom ? `<button class="btn btn-sm workout-card__join-btn" data-room-code="${escapeHtml(roomCode)}" title="그룹훈련 참가">👥 참가</button>` : ''}
         ${isAdmin ? `<button class="btn btn-sm workout-card__create-room-btn" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="그룹훈련방 생성">🔗 방 만들기</button>` : ''}
-        <button class="btn btn-primary btn-sm workout-card__select-btn" onclick="selectWorkout(${workout.id})">선택</button>
+        <button class="btn btn-primary btn-sm workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
       </div>
     </div>
   `;
@@ -5514,6 +5557,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
 // 전역 노출
 window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
+window.getWorkoutDominantZone = getWorkoutDominantZone;
 
 // ==========================================================
 // 전역 함수로 내보내기
