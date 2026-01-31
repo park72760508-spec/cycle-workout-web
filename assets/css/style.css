@@ -3428,14 +3428,8 @@ button[aria-disabled="true"] {
   width: 100%;
 }
 
-/* ========== Manage Your Career & 워크아웃 화면 모바일 반응형 (768px 이하) ========== */
+/* ========== 워크아웃 화면 모바일 반응형 (768px 이하) ========== */
 @media (max-width: 768px) {
-  /* Manage Your Career: 그리드 1열 (세로 스택) */
-  #myCareerScreen .connection-device-section .grid-2,
-  #myCareerScreen .grid-2.mb-15 {
-    grid-template-columns: 1fr !important;
-  }
-
   /* 워크아웃 화면: Sticky Header (리스트 뷰 시) */
   #workoutScreen .workout-screen-header.workout-screen-header--list-view {
     position: sticky;
