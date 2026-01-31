@@ -7814,10 +7814,14 @@ async function loadTrainingJournalCalendar(direction) {
           console.warn('훈련일지: date 범위 쿼리 실패, limit only 시도:', idxErr);
           snapshot = await logsRef.limit(100).get();
         }
+        // 훈련 시간 10분 미만은 달력 표시에서 제외
+        const MIN_DURATION_SEC = 600;
         snapshot.docs.forEach(doc => {
           const d = doc.data();
           const dateStr = d.date;
           if (!dateStr || dateStr < startDateStr || dateStr > endDateStr) return;
+          const sec = Number(d.duration_sec ?? d.time ?? d.duration ?? 0);
+          if (sec < MIN_DURATION_SEC) return;
           if (!resultsByDate[dateStr]) resultsByDate[dateStr] = [];
           resultsByDate[dateStr].push({ id: doc.id, ...d });
         });
