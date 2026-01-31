@@ -3119,6 +3119,9 @@ async function loadWorkouts(categoryId) {
     window.workoutRoomStatusMap = workoutRoomStatusMap;
     window.workoutRoomCodeMap = workoutRoomCodeMap;
     
+    if (typeof renderWorkoutCategories === 'function') {
+      renderWorkoutCategories(filteredWorkouts);
+    }
     window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다.`);
     
     // 그룹방 상태는 백그라운드에서 비동기로 로드 (블로킹 없음)
@@ -3147,15 +3150,72 @@ async function loadWorkouts(categoryId) {
 }
 
 /**
- * 워크아웃 테이블 렌더링 함수
+ * 워크아웃 TSS 추정 (NP 근사 기반)
  */
-function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCodeMap = {}, grade = '2') {
+function estimateWorkoutTSS(workout) {
+  if (!workout || !workout.segments || !Array.isArray(workout.segments)) return 0;
+  let T = 0;
+  let sumI4t = 0;
+  workout.segments.forEach(seg => {
+    const t = Number(seg.duration_sec) || 0;
+    let I1 = (Number(seg.target_value) || 0) / 100;
+    if (seg.ramp && seg.ramp_to_value != null) {
+      const I2 = (Number(seg.ramp_to_value) || I1 * 100) / 100;
+      sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
+    } else {
+      sumI4t += Math.pow(I1, 4) * t;
+    }
+    T += t;
+  });
+  if (T <= 0) return 0;
+  const IF = Math.pow(sumI4t / T, 0.25);
+  return Math.round((T / 3600) * (IF * IF) * 100);
+}
+
+/**
+ * WorkoutCard 컴포넌트 렌더 (단일 카드 HTML)
+ */
+function renderWorkoutCard(workout, workoutRoomStatusMap = {}, workoutRoomCodeMap = {}, grade = '2') {
+  if (!workout || typeof workout !== 'object' || !workout.id) return '';
+  const safeTitle = escapeHtml(String(workout.title || '제목 없음'));
+  const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+  const tss = estimateWorkoutTSS(workout);
+  const segments = workout.segments || [];
+  const graphId = 'workout-card-graph-' + workout.id;
+  const isAdmin = (grade === '1' || grade === '3');
+  const hasWaitingRoom = workoutRoomStatusMap[workout.id] === 'available';
+  const roomCode = workoutRoomCodeMap[workout.id] || '';
+  return `
+    <div class="workout-card" data-workout-id="${workout.id}">
+      <div class="workout-card__header">
+        <h3 class="workout-card__title">${safeTitle}</h3>
+        ${isAdmin ? `
+          <div class="workout-card__actions">
+            <button class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">✏️</button>
+            <button class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">🗑️</button>
+          </div>
+        ` : ''}
+      </div>
+      <div class="workout-card__graph" id="${graphId}"></div>
+      <div class="workout-card__footer">
+        <span class="workout-card__meta"><span class="workout-card__meta-icon">⏱</span> ${totalMinutes}분</span>
+        <span class="workout-card__meta"><span class="workout-card__meta-icon">📊</span> TSS ${tss}</span>
+      </div>
+      <div class="workout-card__cta">
+        ${hasWaitingRoom ? `<button class="btn btn-sm workout-card__join-btn" data-room-code="${escapeHtml(roomCode)}" title="그룹훈련 참가">👥 참가</button>` : ''}
+        ${isAdmin ? `<button class="btn btn-sm workout-card__create-room-btn" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="그룹훈련방 생성">🔗 방 만들기</button>` : ''}
+        <button class="btn btn-primary btn-sm workout-card__select-btn" onclick="selectWorkout(${workout.id})">선택</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * WorkoutCard 그리드 렌더링 (workoutList에 카드 표시)
+ */
+function renderWorkoutCards(workouts, workoutRoomStatusMap = {}, workoutRoomCodeMap = {}, grade = '2') {
   const workoutList = safeGetElement('workoutList');
-  if (!workoutList) {
-    console.warn('workoutList 요소를 찾을 수 없습니다.');
-    return;
-  }
-  
+  if (!workoutList) return;
   if (!workouts || workouts.length === 0) {
     workoutList.innerHTML = `
       <div class="empty-state">
@@ -3163,103 +3223,40 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
         <div class="empty-state-title">등록된 워크아웃이 없습니다</div>
         <div class="empty-state-description">새로운 워크아웃을 만들어 훈련을 시작해보세요.</div>
         <div class="empty-state-action">
-          <button class="btn btn-primary" onclick="showAddWorkoutForm(true)">
-            ➕ 첫 번째 워크아웃 만들기
-          </button>
+          <button class="btn btn-primary" onclick="showAddWorkoutForm(true)">➕ 첫 번째 워크아웃 만들기</button>
         </div>
       </div>
     `;
     return;
   }
-  
-  // 테이블 헤더 생성
-  const tableHeader = `
-    <table class="workout-table">
-      <thead>
-        <tr>
-          <th style="width: 50px;">순번</th>
-          <th style="width: 200px;">제목</th>
-          <th style="width: 120px;">그룹훈련</th>
-          <th style="width: 80px;">시간</th>
-          <th style="width: 80px;">상태</th>
-          <th>설명</th>
-          <th style="width: 120px;">게시일</th>
-          <th style="width: 220px;">작업</th>
-        </tr>
-      </thead>
-      <tbody>
+  workoutList.innerHTML = `
+    <div class="workout-cards-grid">
+      ${workouts.map(w => renderWorkoutCard(w, workoutRoomStatusMap, workoutRoomCodeMap, grade)).join('')}
+    </div>
   `;
-  
-  // 테이블 행 생성
-  const tableRows = workouts.map((workout, index) => {
-      if (!workout || typeof workout !== 'object' || !workout.id) {
-        return '';
-      }
-      
-      const safeTitle = String(workout.title || '제목 없음');
-      const safeDescription = String(workout.description || '');
-      
-      const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
-      // status 처리: '보이기'인 경우만 공개로 간주, 그 외의 모든 경우(null, undefined, 빈 문자열, '숨기기', 기타 값)는 비공개로 표시
-      const workoutStatus = String(workout.status || '').trim();
-      // status가 '보이기'가 아니면 모두 비공개로 표시
-      const isPublic = workoutStatus === '보이기';
-      const statusBadge = isPublic ? 
-        '<span class="status-badge visible">공개</span>' : 
-        '<span class="status-badge hidden private">비공개</span>';
-      
-      // 그룹 훈련방 개설 상태 확인 (waiting 상태)
-      const hasWaitingRoom = workoutRoomStatusMap[workout.id] === 'available';
-      const roomCode = workoutRoomCodeMap[workout.id] || '';
-      const groupRoomImage = hasWaitingRoom 
-        ? `<span class="group-room-open-icon clickable" data-room-code="${escapeHtml(roomCode)}" title="그룹 훈련방 개설됨 (클릭하여 참가)"><img src="assets/img/network (1).png" alt="그룹 훈련방 개설" style="width: 24px; height: 24px; vertical-align: middle;"></span>` 
-        : '';
-      
-      const publishDate = workout.publish_date ? new Date(workout.publish_date).toLocaleDateString() : '-';
-      
-      const rowNumber = index + 1;
-      const isAdmin = (grade === '1' || grade === '3');
-      
-      return `
-        <tr class="workout-row" data-workout-id="${workout.id}">
-          <td class="text-center">${rowNumber}</td>
-          <td>
-            <div class="workout-title-cell">
-              ${escapeHtml(safeTitle)}
-            </div>
-          </td>
-          <td class="text-center">${groupRoomImage}</td>
-          <td class="text-center">${totalMinutes}분</td>
-          <td class="text-center">${statusBadge}</td>
-          <td class="workout-description-cell">${escapeHtml(safeDescription)}</td>
-          <td class="text-center">${publishDate}</td>
-          <td class="workout-actions-cell">
-            <div class="workout-actions-wrapper">
-              <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
-              <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
-              <button class="btn btn-primary btn-sm" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
-              ${isAdmin ? `<button class="btn btn-image btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성"><img src="assets/img/network (2).png" alt="그룹훈련방 생성" style="width: 20px; height: 20px; vertical-align: middle;"></button>` : ''}
-            </div>
-          </td>
-        </tr>
-      `;
-    }).filter(Boolean).join('');
-    
-    const tableFooter = `
-        </tbody>
-      </table>
-    `;
-    
-    workoutList.innerHTML = tableHeader + tableRows + tableFooter;
+  workouts.forEach(workout => {
+    const graphEl = document.getElementById('workout-card-graph-' + workout.id);
+    if (graphEl && workout.segments && workout.segments.length > 0 && typeof renderSegmentedWorkoutGraph === 'function') {
+      renderSegmentedWorkoutGraph(graphEl, workout.segments, { maxHeight: 100 });
+    } else if (graphEl && (!workout.segments || workout.segments.length === 0)) {
+      graphEl.innerHTML = '<div class="segmented-workout-graph-empty">세그먼트 없음</div>';
+    }
+  });
+  applyWorkoutPermissions?.();
+  checkExpiryAndWarn?.();
+}
 
-    // [권한 적용: 등급별 버튼 처리 - 이미 넣으셨다면 유지]
-    applyWorkoutPermissions?.();
-    
-    // [만료일 점검: grade=2 만료 시 알림]
-    checkExpiryAndWarn();  // ← 이 한 줄을 추가
-
-    // 이벤트 리스너 연결
-    attachTableEventListeners();
+/**
+ * 워크아웃 테이블 렌더링 함수 (WorkoutCard 그리드 뷰)
+ */
+function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCodeMap = {}, grade = '2') {
+  const workoutList = safeGetElement('workoutList');
+  if (!workoutList) {
+    console.warn('workoutList 요소를 찾을 수 없습니다.');
+    return;
+  }
+  renderWorkoutCards(workouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
+  attachTableEventListeners();
 }
 
 /**
@@ -3348,7 +3345,32 @@ function searchWorkouts() {
  * 테이블 이벤트 리스너 연결 (재사용 함수)
  */
 function attachTableEventListeners() {
-  // 그룹훈련 버튼에 이벤트 리스너 추가
+  // WorkoutCard: 그룹훈련 참가 버튼
+  document.querySelectorAll('.workout-card__join-btn').forEach(btn => {
+    const roomCode = btn.dataset.roomCode;
+    if (roomCode) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof joinRoomByCode === 'function') joinRoomByCode(roomCode);
+      });
+    }
+  });
+  // WorkoutCard: 그룹훈련방 생성 버튼
+  document.querySelectorAll('.workout-card__create-room-btn').forEach(btn => {
+    const workoutId = btn.dataset.workoutId;
+    const workoutTitle = btn.dataset.workoutTitle;
+    if (workoutId && workoutTitle) {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (typeof window.createGroupRoomFromWorkout === 'function') {
+          await window.createGroupRoomFromWorkout(workoutId, workoutTitle);
+        } else if (typeof createGroupRoomFromWorkout === 'function') {
+          await createGroupRoomFromWorkout(workoutId, workoutTitle);
+        }
+      });
+    }
+  });
+  // 그룹훈련 버튼에 이벤트 리스너 추가 (레거시 테이블 뷰용)
   document.querySelectorAll('[id^="createGroupRoomBtn-"]').forEach(btn => {
     const workoutId = btn.dataset.workoutId;
     const workoutTitle = btn.dataset.workoutTitle;
