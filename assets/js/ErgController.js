@@ -1,8 +1,8 @@
 /* ==========================================================
-   ErgController.js (v13.1 "FTMS Priority" - The Firmware Fix)
-   - Priority: FTMS (Standard) -> CycleOps -> Wahoo
-   - Designed for Updated Firmware (v31.065+)
-   - Includes Silk Road Pro Smoothing & Anti-Lock
+   ErgController.js (v13.2 "Absolute Priority" - Logic Perfected)
+   - Fixes Phase 2 Priority Bug: Iterates Targets FIRST, then Services
+   - Guarantees FTMS connection even if device lists Legacy services first
+   - Includes Silk Road Pro, Anti-Lock, Wahoo Breaker, Diagnostics
 ========================================================== */
 
 class ErgController {
@@ -44,7 +44,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v13.1 (FTMS Priority) Initialized');
+    console.log('[ErgController] v13.2 (Absolute Priority) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -97,9 +97,9 @@ class ErgController {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Scan v13.1 (FTMS Priority)...');
+      console.log('[ERG] Starting Scan v13.2 (Absolute Priority)...');
 
-      // ★ FTMS First! If firmware update worked, this catches FTMS immediately.
+      // PRIORITY: FTMS -> CycleOps -> Wahoo -> Tacx
       const targets = [
           { name: 'FTMS',     svc: this._uuids.ftmsSvc,     char: this._uuids.ftmsChar,     proto: 'FTMS' },
           { name: 'CycleOps', svc: this._uuids.cycleopsSvc, char: this._uuids.cycleopsChar, proto: 'CYCLEOPS' },
@@ -127,15 +127,14 @@ class ErgController {
           }
       }
 
-      // ★ Phase 2: Drill-Down Scan (Get ALL services)
-      console.log('[ERG] Phase 1 failed. Starting Phase 2 (Drill-Down)...');
+      // Phase 2: Drill-Down (Strict Priority – Targets OUTER, Services INNER)
+      console.log('[ERG] Phase 1 failed. Starting Phase 2 (Strict)...');
       let allServices = [];
-      try { allServices = await server.getPrimaryServices(); } 
-      catch(e) { console.warn('[ERG] Phase 2 failed to get services', e); }
+      try { allServices = await server.getPrimaryServices(); } catch(e){}
 
-      for (const service of allServices) {
-          const sUuid = (service.uuid || '').toLowerCase();
-          for (const t of targets) {
+      for (const t of targets) {
+          for (const service of allServices) {
+              const sUuid = (service.uuid || '').toLowerCase();
               if (sUuid === t.svc || sUuid.startsWith(t.svc.substring(0,8))) {
                   try {
                       const chars = await service.getCharacteristics();
@@ -155,8 +154,8 @@ class ErgController {
           }
       }
 
-      // ★ Phase 3: Skeleton Key (Find ANY writable char)
-      console.log('[ERG] Phase 2 failed. Starting Phase 3 (Skeleton Key)...');
+      // Phase 3: Skeleton Key (Last Resort)
+      console.log('[ERG] Phase 2 failed. Starting Phase 3...');
       for (const service of allServices) {
           try {
               const chars = await service.getCharacteristics();
