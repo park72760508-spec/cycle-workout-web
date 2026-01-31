@@ -5431,6 +5431,7 @@
         const chartScatterRef = useRef(null);
         const chartScatterInstance = useRef(null);
         const [mounted, setMounted] = useState(false);
+        const [activeInfoId, setActiveInfoId] = useState(null);
 
         const logs = Array.isArray(monthlyLogs) ? monthlyLogs : [];
         const year = currentMonth ? currentMonth.getFullYear() : new Date().getFullYear();
@@ -5734,8 +5735,26 @@
                     </div>
                   </div>
                   {/* Row 2: EF Trend */}
-                  <div className="mb-4">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">EF (Efficiency Factor) Trend</h4>
+                  <div className="mb-4 relative">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <h4 className="text-sm font-semibold text-gray-700">EF (Efficiency Factor) Trend</h4>
+                      <button
+                        type="button"
+                        className="inline-flex text-slate-400 hover:text-slate-600 transition-colors cursor-help focus:outline-none focus:ring-2 focus:ring-slate-300 rounded-full p-0.5"
+                        aria-label="EF 설명 보기"
+                        onMouseEnter={function() { setActiveInfoId('ef'); }}
+                        onMouseLeave={function() { setActiveInfoId(null); }}
+                        onClick={function() { setActiveInfoId(function(v) { return v === 'ef' ? null : 'ef'; }); }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                      </button>
+                    </div>
+                    {activeInfoId === 'ef' && (
+                      <div className="absolute left-0 top-8 z-50 mt-1 max-w-sm rounded-lg border border-white/10 bg-black/75 backdrop-blur-md px-3 py-2.5 text-sm text-gray-200 shadow-xl" role="tooltip">
+                        <div className="font-semibold text-white mb-1">내 엔진은 얼마나 커졌을까? (Aerobic Engine)</div>
+                        <p className="whitespace-pre-line">그래프가 우상향하고 있나요? 축하합니다! 🎉{'\n'}같은 심박수(노력)로 더 높은 파워(속도)를 낼 수 있게 몸이 성장했다는 가장 확실한 증거입니다.</p>
+                      </div>
+                    )}
                     <div className="h-[180px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
                       <canvas ref={chartEfRef}></canvas>
                     </div>
@@ -5748,8 +5767,26 @@
                         <canvas ref={chartWeeklyTssRef}></canvas>
                       </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Ride Style (VI Distribution)</h4>
+                    <div className="relative">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <h4 className="text-sm font-semibold text-gray-700">Ride Style (VI Distribution)</h4>
+                        <button
+                          type="button"
+                          className="inline-flex text-slate-400 hover:text-slate-600 transition-colors cursor-help focus:outline-none focus:ring-2 focus:ring-slate-300 rounded-full p-0.5"
+                          aria-label="주행 성향 설명 보기"
+                          onMouseEnter={function() { setActiveInfoId('vi'); }}
+                          onMouseLeave={function() { setActiveInfoId(null); }}
+                          onClick={function() { setActiveInfoId(function(v) { return v === 'vi' ? null : 'vi'; }); }}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        </button>
+                      </div>
+                      {activeInfoId === 'vi' && (
+                        <div className="absolute left-0 top-8 z-50 mt-1 max-w-sm rounded-lg border border-white/10 bg-black/75 backdrop-blur-md px-3 py-2.5 text-sm text-gray-200 shadow-xl" role="tooltip">
+                          <div className="font-semibold text-white mb-1">이번 달 나의 주행 스타일 (Pacing Style)</div>
+                          <p className="whitespace-pre-line">VI 수치로 내 라이딩 성격을 알 수 있어요.{'\n'}• <strong>낮음 (1.0~1.05):</strong> 기계처럼 일정하게 탄 &apos;항속 주행&apos; (유산소/TT){'\n'}• <strong>높음 (1.2 이상):</strong> 인터벌이나 오르막이 많았던 &apos;다이나믹 주행&apos;</p>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-500 mb-1">Low VI = steady pacing (endurance). High VI = interval/hilly.</p>
                       <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
                         <canvas ref={chartViRef}></canvas>
@@ -5757,8 +5794,26 @@
                     </div>
                   </div>
                   {/* Row 4: Power vs Cadence Scatter */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Power vs Cadence (Bubble size = TSS)</h4>
+                  <div className="relative">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <h4 className="text-sm font-semibold text-gray-700">Power vs Cadence (Bubble size = TSS)</h4>
+                      <button
+                        type="button"
+                        className="inline-flex text-slate-400 hover:text-slate-600 transition-colors cursor-help focus:outline-none focus:ring-2 focus:ring-slate-300 rounded-full p-0.5"
+                        aria-label="파워/캐던스 설명 보기"
+                        onMouseEnter={function() { setActiveInfoId('power'); }}
+                        onMouseLeave={function() { setActiveInfoId(null); }}
+                        onClick={function() { setActiveInfoId(function(v) { return v === 'power' ? null : 'power'; }); }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                      </button>
+                    </div>
+                    {activeInfoId === 'power' && (
+                      <div className="absolute left-0 top-8 z-50 mt-1 max-w-sm rounded-lg border border-white/10 bg-black/75 backdrop-blur-md px-3 py-2.5 text-sm text-gray-200 shadow-xl" role="tooltip">
+                        <div className="font-semibold text-white mb-1">힘으로 탈까? 회전으로 탈까?</div>
+                        <p className="whitespace-pre-line">나의 페달링 습관을 보여주는 지도입니다.{'\n'}• <strong>왼쪽:</strong> 기어를 무겁게 꾹꾹 밟는 타입 (Torque형){'\n'}• <strong>오른쪽:</strong> 가볍게 빨리 돌리는 타입 (RPM형){'\n'}(원이 클수록 그날 훈련이 힘들었다는 뜻입니다! 💪)</p>
+                      </div>
+                    )}
                     <p className="text-xs text-gray-500 mb-1">Grinder: Low RPM, High Power. Spinner: High RPM. Target cadence: 90 rpm.</p>
                     <div className="h-[240px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
                       <canvas ref={chartScatterRef}></canvas>
