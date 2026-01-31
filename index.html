@@ -1845,7 +1845,7 @@
                 <span>훈련 일지</span>
               </button>
               <!-- 2줄: 워크아웃, 사용자 정보 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof loadWorkouts === 'function') { setTimeout(() => loadWorkouts(), 200); } }">
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); }">
                 <span>워크아웃</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }">
@@ -2415,23 +2415,43 @@
 
   
   <!-- 3) 워크아웃 선택 화면 -->
-  <div id="workoutScreen" class="screen">
-    <div class="header">
-      <h1>📋 워크아웃 선택</h1>
-      <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
+  <div id="workoutScreen" class="screen workout-screen-dark">
+    <div class="header workout-screen-header">
+      <button type="button" class="workout-screen-back-btn" id="workoutScreenBackBtn" onclick="workoutViewShowCategory()" aria-label="카테고리로" style="display:none;">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="workout-screen-header-content">
+        <h1>📋 워크아웃 선택</h1>
+        <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
+      </div>
     </div>
-  
-  <div class="card" style="display:flex; gap:8px; align-items:center;">
-    <input id="qWorkout" type="search" placeholder="제목 또는 시간(분)으로 검색" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:8px;">
-    <button class="btn btn-default-style" id="btnSearchWorkout">검색</button>
-    <!-- <button class="btn btn-secondary" onclick="loadWorkouts()" title="목록 새로고침">🔄</button> -->
-    <button class="btn btn-success btn-default-style" id="btnOpenBuilder">+ 새 워크아웃</button>
-    <button class="btn btn-primary btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련 스케줄</button>
-    <button class="btn btn-danger btn-default-style" onclick="showScreen('basecampScreen')">나가기</button>
-  </div>
-  
-    <div id="workoutList" class="workout-list">
-      <div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>
+
+    <!-- 메인 컨테이너: 상태 A(카테고리) / 상태 B(워크아웃 리스트) 전환 -->
+    <div id="workoutViewContainer" class="workout-view-container">
+      <!-- 상태 A: 카테고리 목록 보기 (초기 화면) -->
+      <div id="workoutCategoryView" class="workout-category-view" data-view="category">
+        <div id="workoutCategoryGrid" class="workout-category-grid">
+          <!-- 카테고리 카드들이 JS로 동적 생성됩니다 -->
+        </div>
+      </div>
+
+      <!-- 상태 B: 선택된 카테고리의 워크아웃 리스트 보기 -->
+      <div id="workoutListView" class="workout-list-view" data-view="list" style="display:none;">
+        <div class="workout-list-toolbar card">
+          <input id="qWorkout" type="search" placeholder="제목 또는 시간(분)으로 검색" class="workout-search-input">
+          <button class="btn btn-default-style" id="btnSearchWorkout">검색</button>
+          <button class="btn btn-success btn-default-style" id="btnOpenBuilder">+ 새 워크아웃</button>
+          <button class="btn btn-primary btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련 스케줄</button>
+        </div>
+        <div id="workoutList" class="workout-list">
+          <div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 하단 고정 버튼 -->
+    <div class="workout-screen-footer">
+      <button class="btn btn-danger btn-default-style" onclick="showScreen('basecampScreen')">나가기</button>
     </div>
   </div>
 
@@ -4212,6 +4232,67 @@
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutManager.js"></script>
   <script src="assets/js/userManager.js"></script>
+
+  <!-- 워크아웃 화면 상태 관리: 카테고리(상태A) / 워크아웃 리스트(상태B) 전환 -->
+  <script>
+    (function() {
+      var workoutViewState = { mode: 'category', selectedCategory: null };
+      var WORKOUT_CATEGORIES = [
+        { id: 'all', label: '전체', icon: '📋', color: 'var(--zone-2)' },
+        { id: 'z1', label: 'Active Recovery', icon: '🔄', color: 'var(--zone-1)' },
+        { id: 'z2', label: 'Endurance', icon: '🏃', color: 'var(--zone-2)' },
+        { id: 'z3', label: 'Tempo', icon: '⚡', color: 'var(--zone-3)' },
+        { id: 'z4', label: 'Threshold', icon: '🔥', color: 'var(--zone-4)' },
+        { id: 'z5', label: 'VO2max', icon: '💪', color: 'var(--zone-5)' }
+      ];
+
+      function workoutViewShowCategory() {
+        workoutViewState.mode = 'category';
+        workoutViewState.selectedCategory = null;
+        var catView = document.getElementById('workoutCategoryView');
+        var listView = document.getElementById('workoutListView');
+        var backBtn = document.getElementById('workoutScreenBackBtn');
+        if (catView) { catView.style.display = 'block'; catView.removeAttribute('data-hidden'); }
+        if (listView) { listView.style.display = 'none'; listView.setAttribute('data-hidden', 'true'); }
+        if (backBtn) backBtn.style.display = 'none';
+      }
+
+      function workoutViewShowList(categoryId) {
+        workoutViewState.mode = 'list';
+        workoutViewState.selectedCategory = categoryId;
+        var catView = document.getElementById('workoutCategoryView');
+        var listView = document.getElementById('workoutListView');
+        var backBtn = document.getElementById('workoutScreenBackBtn');
+        if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
+        if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
+        if (backBtn) backBtn.style.display = 'flex';
+        if (typeof loadWorkouts === 'function') setTimeout(function() { loadWorkouts(categoryId); }, 100);
+      }
+
+      function renderWorkoutCategories() {
+        var grid = document.getElementById('workoutCategoryGrid');
+        if (!grid) return;
+        grid.innerHTML = WORKOUT_CATEGORIES.map(function(c) {
+          return '<div class="workout-category-card" data-category="' + (c.id || '') + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')" style="border-left: 4px solid ' + (c.color || 'var(--zone-2)') + '">' +
+            '<span class="category-icon">' + (c.icon || '📋') + '</span>' +
+            '<div class="category-label">' + (c.label || '') + '</div>' +
+            '<div class="category-count">-</div>' +
+            '</div>';
+        }).join('');
+      }
+
+      function workoutViewInit() {
+        workoutViewShowCategory();
+        renderWorkoutCategories();
+      }
+
+      window.workoutViewState = workoutViewState;
+      window.workoutViewShowCategory = workoutViewShowCategory;
+      window.workoutViewShowList = workoutViewShowList;
+      window.renderWorkoutCategories = renderWorkoutCategories;
+      window.workoutViewInit = workoutViewInit;
+    })();
+  </script>
   
   <!-- 훈련 결과 저장 서비스 (Firebase Firestore v9) - 다른 JS 파일들 로드 후 -->
   <script type="module">
