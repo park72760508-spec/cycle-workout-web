@@ -3191,8 +3191,8 @@ if (!window.showScreen) {
       // 2) 대상 화면만 표시
       const el = safeGetElement(id);
       if (el) {
-        // 모바일 대시보드 화면은 flex로 표시
-        if (id === 'mobileDashboardScreen') {
+        // flex 레이아웃이 필요한 화면
+        if (id === 'mobileDashboardScreen' || id === 'workoutScreen') {
           el.style.display = "flex";
         } else {
           el.style.display = "block";
@@ -3260,8 +3260,12 @@ if (!window.showScreen) {
       }
       
       // 3) 화면별 특별 처리
-      if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
-        setTimeout(() => loadWorkouts(), 100);
+      if (id === 'workoutScreen') {
+        if (typeof workoutViewInit === 'function') {
+          setTimeout(() => workoutViewInit(), 100);
+        } else if (typeof loadWorkouts === 'function') {
+          setTimeout(() => loadWorkouts(), 100);
+        }
       }
 
        //프로필 선택 화면: "새 사용자 추가" 메뉴 제거(간단)

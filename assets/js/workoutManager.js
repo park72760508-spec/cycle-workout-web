@@ -2863,7 +2863,7 @@ async function apiDeleteWorkout(id) {
 // 워크아웃 목록 및 선택 관리
 // ==========================================================
 
-async function loadWorkouts() {
+async function loadWorkouts(categoryId) {
   const workoutList = safeGetElement('workoutList');
   if (!workoutList) {
     console.warn('workoutList 요소를 찾을 수 없습니다.');
