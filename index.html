@@ -3931,6 +3931,9 @@
       </div>
     </div>
     
+    <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
+    <div id="monthly-analysis-dashboard-root" class="card monthly-analysis-dashboard-wrapper" style="margin-top: 16px;"></div>
+    
     <!-- 하단 Strava 연결 -->
     <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); text-align: center;">
       <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0;">
@@ -5149,23 +5152,28 @@
               });
             }
             renderMiniCalendarJournal();
+            if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           })
           .catch(function(err) {
             console.warn('[MiniCalendarJournal] 해당 월 로그 조회 실패:', err);
             renderMiniCalendarJournal();
+            if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           });
       } else if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && uid) {
         fetchTrainingLogsForCalendarJournal(uid)
           .then(function(logs) {
             miniCalendarStateJournal.trainingLogs = logs;
             renderMiniCalendarJournal();
+            if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           })
           .catch(function(error) {
             console.error('[MiniCalendarJournal] 네비게이션 중 로그 가져오기 실패:', error);
             renderMiniCalendarJournal();
+            if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           });
       } else {
         renderMiniCalendarJournal();
+        if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
       }
     }
 
@@ -5322,14 +5330,298 @@
       // 달력 렌더링
       await renderMiniCalendarJournal();
       
+      // Monthly Training Analysis Dashboard 갱신 (현재 월 + 해당 월 로그 전달)
+      if (typeof window.buildMonthlyLogsForDashboard === 'function' && typeof window.renderMonthlyAnalysisDashboard === 'function') {
+        var y = miniCalendarStateJournal.currentYear;
+        var m = miniCalendarStateJournal.currentMonth;
+        var monthlyLogs = window.buildMonthlyLogsForDashboard(y, m + 1, miniCalendarStateJournal.trainingLogs);
+        var currentMonthDate = new Date(y, m, 1);
+        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs);
+      }
+      
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
+    }
+
+    function updateMonthlyAnalysisDashboardFromJournal() {
+      if (typeof window.buildMonthlyLogsForDashboard !== 'function' || typeof window.renderMonthlyAnalysisDashboard !== 'function') return;
+      var y = miniCalendarStateJournal.currentYear;
+      var m = miniCalendarStateJournal.currentMonth;
+      var monthlyLogs = window.buildMonthlyLogsForDashboard(y, m + 1, miniCalendarStateJournal.trainingLogs);
+      var currentMonthDate = new Date(y, m, 1);
+      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs);
     }
 
     // 전역 함수로 노출
     window.miniCalendarNavigateJournal = miniCalendarNavigateJournal;
     window.initMiniCalendarJournal = initMiniCalendarJournal;
+    window.updateMonthlyAnalysisDashboardFromJournal = updateMonthlyAnalysisDashboardFromJournal;
     
     console.log('✅ 훈련일지 화면용 미니 달력 스크립트 로드 완료');
+  </script>
+  
+  <!-- ========== Monthly Training Analysis Dashboard (React) ========== -->
+  <script type="text/babel">
+    (function() {
+      const { useState, useEffect, useRef } = React;
+      const ChartLib = typeof Chart !== 'undefined' ? Chart : null;
+
+      /**
+       * Parse duration to minutes.
+       * Supports: "60분 21초", "60분", "90" (seconds), or number (seconds).
+       */
+      function parseDurationToMinutes(duration) {
+        if (duration == null) return 0;
+        if (typeof duration === 'number') return duration >= 0 && duration < 400 ? duration / 60 : duration;
+        const s = String(duration).trim();
+        const matchMin = s.match(/(\d+)\s*분/);
+        const matchSec = s.match(/(\d+)\s*초/);
+        const min = matchMin ? parseInt(matchMin[1], 10) : 0;
+        const sec = matchSec ? parseInt(matchSec[1], 10) : 0;
+        return min + sec / 60;
+      }
+
+      function formatDuration(minutes) {
+        if (minutes < 60) return Math.round(minutes) + '분';
+        const h = Math.floor(minutes / 60);
+        const m = Math.round(minutes % 60);
+        return m > 0 ? h + '시간 ' + m + '분' : h + '시간';
+      }
+
+      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs }) {
+        const chartTssRef = useRef(null);
+        const chartTssInstance = useRef(null);
+        const chartDistanceRef = useRef(null);
+        const chartDistanceInstance = useRef(null);
+        const [mounted, setMounted] = useState(false);
+
+        const logs = Array.isArray(monthlyLogs) ? monthlyLogs : [];
+        const year = currentMonth ? currentMonth.getFullYear() : new Date().getFullYear();
+        const month = currentMonth ? currentMonth.getMonth() + 1 : new Date().getMonth() + 1;
+
+        const stats = React.useMemo(function() {
+          let totalTSS = 0, totalDistance = 0, totalMinutes = 0, sumIF = 0, ifCount = 0, rides = 0;
+          logs.forEach(function(log) {
+            const durMin = parseDurationToMinutes(log.duration);
+            totalTSS += Number(log.TSS) || 0;
+            totalDistance += Number(log.distance) || 0;
+            totalMinutes += durMin;
+            if (log.IF != null && log.IF > 0) { sumIF += Number(log.IF); ifCount++; }
+            rides++;
+          });
+          return {
+            totalTSS: Math.round(totalTSS),
+            totalDistance: totalDistance.toFixed(1),
+            totalMinutes,
+            avgIF: ifCount > 0 ? (sumIF / ifCount).toFixed(2) : '–',
+            rides
+          };
+        }, [logs]);
+
+        const chartDataByDate = React.useMemo(function() {
+          const byDate = {};
+          logs.forEach(function(log) {
+            const d = log.date || '';
+            if (!byDate[d]) byDate[d] = { date: d, TSS: 0, distance: 0 };
+            byDate[d].TSS += Number(log.TSS) || 0;
+            byDate[d].distance += Number(log.distance) || 0;
+          });
+          return Object.values(byDate).sort(function(a, b) { return a.date.localeCompare(b.date); });
+        }, [logs]);
+
+        useEffect(function() {
+          setMounted(true);
+        }, []);
+
+        useEffect(function() {
+          if (!ChartLib || !chartTssRef.current || chartDataByDate.length === 0) return;
+          const ctx = chartTssRef.current.getContext('2d');
+          if (chartTssInstance.current) chartTssInstance.current.destroy();
+          chartTssInstance.current = new ChartLib(ctx, {
+            type: 'bar',
+            data: {
+              labels: chartDataByDate.map(function(d) { return d.date.slice(5); }),
+              datasets: [{
+                label: 'TSS',
+                data: chartDataByDate.map(function(d) { return d.TSS; }),
+                backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                borderColor: '#22c55e',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+                y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } }
+              }
+            }
+          });
+          return function() {
+            if (chartTssInstance.current) {
+              chartTssInstance.current.destroy();
+              chartTssInstance.current = null;
+            }
+          };
+        }, [chartDataByDate]);
+
+        useEffect(function() {
+          if (!ChartLib || !chartDistanceRef.current || chartDataByDate.length === 0) return;
+          const ctx = chartDistanceRef.current.getContext('2d');
+          if (chartDistanceInstance.current) chartDistanceInstance.current.destroy();
+          chartDistanceInstance.current = new ChartLib(ctx, {
+            type: 'bar',
+            data: {
+              labels: chartDataByDate.map(function(d) { return d.date.slice(5); }),
+              datasets: [{
+                label: '거리 (km)',
+                data: chartDataByDate.map(function(d) { return d.distance.toFixed(1); }),
+                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                borderColor: '#3b82f6',
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+                y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } }
+              }
+            }
+          });
+          return function() {
+            if (chartDistanceInstance.current) {
+              chartDistanceInstance.current.destroy();
+              chartDistanceInstance.current = null;
+            }
+          };
+        }, [chartDataByDate]);
+
+        const monthLabel = year + '년 ' + month + '월';
+        const isEmpty = logs.length === 0;
+
+        return (
+          <div
+            className="monthly-analysis-dashboard bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm"
+            style={{
+              opacity: mounted ? 1 : 0,
+              transform: mounted ? 'translateY(0)' : 'translateY(8px)',
+              transition: 'opacity 0.35s ease-out, transform 0.35s ease-out'
+            }}
+          >
+            <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+              <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                <span aria-hidden="true">📊</span>
+                월간 훈련 분석 · {monthLabel}
+              </h3>
+            </div>
+            <div className="p-4">
+              {isEmpty ? (
+                <div className="py-8 text-center text-gray-500 text-sm">
+                  이 달에 훈련 기록이 없습니다. 달력에서 다른 달을 선택해 보세요.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                      <div className="text-xs font-medium text-emerald-700 mb-0.5">총 TSS</div>
+                      <div className="text-xl font-bold text-emerald-800">{stats.totalTSS}</div>
+                    </div>
+                    <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                      <div className="text-xs font-medium text-blue-700 mb-0.5">총 거리</div>
+                      <div className="text-xl font-bold text-blue-800">{stats.totalDistance} km</div>
+                    </div>
+                    <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                      <div className="text-xs font-medium text-amber-700 mb-0.5">총 시간</div>
+                      <div className="text-xl font-bold text-amber-800">{formatDuration(stats.totalMinutes)}</div>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                      <div className="text-xs font-medium text-gray-700 mb-0.5">라이드 / 평균 IF</div>
+                      <div className="text-xl font-bold text-gray-800">{stats.rides}회 · {stats.avgIF}</div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">일별 TSS</h4>
+                      <div className="h-[180px]">
+                        <canvas ref={chartTssRef}></canvas>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">일별 거리 (km)</h4>
+                      <div className="h-[180px]">
+                        <canvas ref={chartDistanceRef}></canvas>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs) {
+        const root = document.getElementById('monthly-analysis-dashboard-root');
+        if (!root || typeof ReactDOM === 'undefined' || typeof React === 'undefined') return;
+        const dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
+        const el = React.createElement(MonthlyTrainingAnalysisDashboard, {
+          key: dateObj.getTime(),
+          currentMonth: dateObj,
+          monthlyLogs: monthlyLogs || []
+        });
+        if (ReactDOM.createRoot) {
+          if (!root._monthlyDashboardRoot) root._monthlyDashboardRoot = ReactDOM.createRoot(root);
+          root._monthlyDashboardRoot.render(el);
+        } else {
+          ReactDOM.render(el, root);
+        }
+      }
+
+      /**
+       * Build monthlyLogs (RideLog[]) for the given year/month from trainingLogs by date.
+       * trainingLogs: { "2026-01-13": [ log, ... ], ... }
+       * RideLog: { date, distance, duration, IF, TSS, kJ, avgCadence, avgHeartRate, avgPower, NP }
+       */
+      function buildMonthlyLogsForDashboard(year, month, trainingLogsByDate) {
+        if (!trainingLogsByDate || typeof trainingLogsByDate !== 'object') return [];
+        const pad = function(n) { return String(n).padStart(2, '0'); };
+        const prefix = year + '-' + pad(month) + '-';
+        const monthlyLogs = [];
+        Object.keys(trainingLogsByDate).forEach(function(dateKey) {
+          if (dateKey.indexOf(prefix) !== 0) return;
+          const arr = trainingLogsByDate[dateKey];
+          if (!Array.isArray(arr)) return;
+          arr.forEach(function(log) {
+            const sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+            const min = Math.floor(sec / 60);
+            const s = sec % 60;
+            const durationStr = min + '분 ' + s + '초';
+            monthlyLogs.push({
+              date: dateKey,
+              distance: log.distance_km != null ? Number(log.distance_km) : 0,
+              duration: durationStr,
+              IF: log.if != null ? Number(log.if) : null,
+              TSS: log.tss != null ? Number(log.tss) : 0,
+              kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
+              avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
+              avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
+              avgPower: log.avg_watts != null ? Number(log.avg_watts) : 0,
+              NP: log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0)
+            });
+          });
+        });
+        monthlyLogs.sort(function(a, b) { return a.date.localeCompare(b.date); });
+        return monthlyLogs;
+      }
+
+      window.buildMonthlyLogsForDashboard = buildMonthlyLogsForDashboard;
+      window.MonthlyTrainingAnalysisDashboard = MonthlyTrainingAnalysisDashboard;
+      window.renderMonthlyAnalysisDashboard = renderMonthlyAnalysisDashboard;
+    })();
   </script>
   
   <!-- 전화번호 기반 로그인 핸들러 -->
