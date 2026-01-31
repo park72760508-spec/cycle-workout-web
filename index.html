@@ -4269,14 +4269,19 @@
         if (typeof loadWorkouts === 'function') setTimeout(function() { loadWorkouts(categoryId); }, 100);
       }
 
-      function renderWorkoutCategories() {
+      function renderWorkoutCategories(workouts) {
         var grid = document.getElementById('workoutCategoryGrid');
         if (!grid) return;
+        var totalCount = (workouts && Array.isArray(workouts)) ? workouts.length : 0;
         grid.innerHTML = WORKOUT_CATEGORIES.map(function(c) {
-          return '<div class="workout-category-card" data-category="' + (c.id || '') + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')" style="border-left: 4px solid ' + (c.color || 'var(--zone-2)') + '">' +
+          var zoneAttr = c.id === 'all' ? 'all' : c.id.replace('z', '');
+          var count = c.id === 'all' ? totalCount : '-';
+          if (count === 0 && c.id === 'all') count = '-';
+          else if (count > 0 && c.id === 'all') count = count + '개';
+          return '<div class="workout-category-card" data-category="' + (c.id || '') + '" data-zone="' + zoneAttr + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')">' +
             '<span class="category-icon">' + (c.icon || '📋') + '</span>' +
             '<div class="category-label">' + (c.label || '') + '</div>' +
-            '<div class="category-count">-</div>' +
+            '<div class="category-count">' + count + '</div>' +
             '</div>';
         }).join('');
       }
