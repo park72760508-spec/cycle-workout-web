@@ -4222,7 +4222,7 @@
   
   <!-- 훈련 결과 저장 서비스 (Firebase Firestore v9) - 다른 JS 파일들 로드 후 -->
   <script type="module">
-    import { saveTrainingSession, getUserTrainingLogs } from './assets/js/trainingResultService.js';
+    import { saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange } from './assets/js/trainingResultService.js';
     
     // 전역 함수로 노출
     window.saveTrainingSession = async (userId, trainingData) => {
@@ -4232,6 +4232,11 @@
     // 사용자 훈련 로그 조회 함수 노출
     window.getUserTrainingLogs = async (userId, options) => {
       return await getUserTrainingLogs(userId, options, window.firestoreV9);
+    };
+    
+    // 특정 연·월 훈련 로그 조회 (훈련일지 달력 월별 표시용)
+    window.getTrainingLogsByDateRange = async (userId, year, month) => {
+      return await getTrainingLogsByDateRange(userId, year, month, window.firestoreV9);
     };
     
     console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
@@ -5059,6 +5064,7 @@
 
     /**
      * 훈련일지 화면용 달력 월 이동
+     * 이동한 월의 로그를 해당 월 범위로 조회해 병합하여 과거/미래 월도 표시되도록 함
      */
     function miniCalendarNavigateJournal(direction) {
       console.log('[MiniCalendarJournal] 달력 네비게이션:', direction);
@@ -5077,15 +5083,41 @@
         }
       }
       
-      // 훈련 로그가 없으면 다시 가져오기 시도
-      if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && miniCalendarStateJournal.currentUserId) {
-        console.log('[MiniCalendarJournal] 훈련 로그가 없어서 다시 가져오기 시도...');
-        fetchTrainingLogsForCalendarJournal(miniCalendarStateJournal.currentUserId)
-          .then(logs => {
+      var uid = miniCalendarStateJournal.currentUserId;
+      var y = miniCalendarStateJournal.currentYear;
+      var m = miniCalendarStateJournal.currentMonth;
+      
+      // 해당 월 로그를 월별 조회로 가져와 기존 trainingLogs에 병합
+      if (uid && typeof window.getTrainingLogsByDateRange === 'function') {
+        window.getTrainingLogsByDateRange(uid, y, m)
+          .then(function(monthLogs) {
+            if (monthLogs && monthLogs.length > 0) {
+              monthLogs.forEach(function(log) {
+                var dateKey = getDateKeyJournal(log.date);
+                if (dateKey) {
+                  if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
+                    miniCalendarStateJournal.trainingLogs[dateKey] = [];
+                  }
+                  var exists = miniCalendarStateJournal.trainingLogs[dateKey].some(function(l) { return l.id === log.id; });
+                  if (!exists) {
+                    miniCalendarStateJournal.trainingLogs[dateKey].push(log);
+                  }
+                }
+              });
+            }
+            renderMiniCalendarJournal();
+          })
+          .catch(function(err) {
+            console.warn('[MiniCalendarJournal] 해당 월 로그 조회 실패:', err);
+            renderMiniCalendarJournal();
+          });
+      } else if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && uid) {
+        fetchTrainingLogsForCalendarJournal(uid)
+          .then(function(logs) {
             miniCalendarStateJournal.trainingLogs = logs;
             renderMiniCalendarJournal();
           })
-          .catch(error => {
+          .catch(function(error) {
             console.error('[MiniCalendarJournal] 네비게이션 중 로그 가져오기 실패:', error);
             renderMiniCalendarJournal();
           });
