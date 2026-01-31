@@ -1817,12 +1817,17 @@
     <div class="connection-main-container">
       <div class="connection-form-container">
         <div class="connection-form-card basecamp-card">
-          <div class="connection-header basecamp-header">
-            <!-- 제목 이미지 배경으로 처리 -->
+          <div class="connection-header basecamp-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+            <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="showScreen('basecampScreen')" aria-label="베이스캠프로 이동" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+              <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7 7 7-7"></path>
+              </svg>
+            </button>
+            <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0; text-align: center;">Manage Your Career</h3>
+            <span style="width: 2.5em; flex-shrink: 0;"></span>
           </div>
 
           <div class="connection-device-section basecamp-device-section">
-            <h3 class="mb-15 basecamp-status-bar">Manage Your Career</h3>
             <div class="grid-2 mb-15" style="gap: 3.75px;">
               <!-- 1줄: 훈련 스케줄, 훈련 일지 -->
               <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('scheduleListScreen'); if (typeof loadTrainingSchedules === 'function') { setTimeout(() => loadTrainingSchedules(), 200); } }">
@@ -1845,14 +1850,6 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-career-logo" id="btnCareerLogo" onclick="openSettingsModal()">
               </button>
             </div>
-          </div>
-
-          <!-- 뒤로 가기 버튼 -->
-          <div class="connection-exit-container">
-            <button class="btn btn-exit-inline enhanced-back-button" id="btnBackFromMyCareer" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
-              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-              <span>뒤로 가기</span>
-            </button>
           </div>
         </div>
       </div>
