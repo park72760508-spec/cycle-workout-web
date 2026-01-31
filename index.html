@@ -1845,7 +1845,7 @@
                 <span>훈련 일지</span>
               </button>
               <!-- 2줄: 워크아웃, 사용자 정보 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); }">
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }">
                 <span>워크아웃</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }">
@@ -4327,10 +4327,18 @@
       }
 
       function workoutViewInit() {
-        workoutViewShowCategory();
-        renderWorkoutCategories(window.workouts);
-        if (typeof loadWorkouts === 'function') {
-          setTimeout(function() { loadWorkouts('all'); }, 200);
+        try {
+          workoutViewShowCategory();
+          renderWorkoutCategories(window.workouts);
+          if (typeof loadWorkouts === 'function') {
+            setTimeout(function() { loadWorkouts('all'); }, 250);
+          }
+        } catch (e) {
+          console.warn('workoutViewInit error:', e);
+          var grid = document.getElementById('workoutCategoryGrid');
+          if (grid && grid.innerHTML === '') {
+            renderWorkoutCategories();
+          }
         }
       }
 
