@@ -11677,15 +11677,15 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     <div class="workout-recommendation-container">
       <div class="result-stats" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px;">
         <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 4px;">선정 카테고리</div>
+          <div class="result-stat-label" style="font-size: 0.77em; color: #aaa; margin-bottom: 4px;">선정 카테고리</div>
           <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${selectedCategory}</div>
         </div>
         <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 4px;">추천 개수</div>
+          <div class="result-stat-label" style="font-size: 0.77em; color: #aaa; margin-bottom: 4px;">추천 개수</div>
           <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${recommendations.length}개</div>
         </div>
         <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 4px;">날짜</div>
+          <div class="result-stat-label" style="font-size: 0.77em; color: #aaa; margin-bottom: 4px;">날짜</div>
           <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${date}</div>
         </div>
       </div>
@@ -11714,14 +11714,12 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     html += `
       <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
         <div style="display: flex; flex-direction: column; gap: 12px;">
-          <div style="display: flex; align-items: flex-start; gap: 12px;">
-            <div class="recommendation-rank" style="font-size: 2em; flex-shrink: 0; line-height: 1;">${rankBadge}</div>
-            <div class="recommendation-content" style="flex: 1; min-width: 0;">
-              <h4 class="workout-title" style="color: #00d4aa; font-size: 0.77em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4); word-break: break-word;">${workout.title || '워크아웃'}</h4>
-              <div class="workout-meta" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 0.595em; color: #aaa;">
-                <span class="workout-category" style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 4px 10px; border-radius: 12px;">${workout.author || '카테고리 없음'}</span>
-                <span class="workout-duration" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">${totalMinutes}분</span>
-              </div>
+          <div class="recommendation-headline" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span class="recommendation-rank" style="font-size: 1.4em; flex-shrink: 0; line-height: 1;">${rankBadge}</span>
+            <h4 class="workout-title" style="color: #00d4aa; font-size: 0.77em; font-weight: bold; margin: 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4); word-break: break-word; flex: 1; min-width: 0;">${workout.title || '워크아웃'}</h4>
+            <div class="workout-meta" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 0.595em; color: #aaa;">
+              <span class="workout-category" style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 4px 10px; border-radius: 12px;">${workout.author || '카테고리 없음'}</span>
+              <span class="workout-duration" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">${totalMinutes}분</span>
             </div>
           </div>
           <div class="recommendation-reason-wrapper" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
