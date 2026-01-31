@@ -2416,13 +2416,14 @@
   
   <!-- 3) 워크아웃 선택 화면 -->
   <div id="workoutScreen" class="screen workout-screen-dark">
-    <div class="header workout-screen-header">
+    <div class="header workout-screen-header" id="workoutScreenHeader">
       <button type="button" class="workout-screen-back-btn" id="workoutScreenBackBtn" onclick="workoutViewShowCategory()" aria-label="카테고리로" style="display:none;">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <svg class="workout-screen-back-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <span class="workout-screen-back-text">뒤로가기</span>
       </button>
       <div class="workout-screen-header-content">
-        <h1>📋 워크아웃 선택</h1>
-        <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
+        <h1 id="workoutScreenTitle">📋 워크아웃 선택</h1>
+        <p class="subtitle workout-screen-subtitle" id="workoutScreenSubtitle">오늘의 훈련 프로그램을 선택하세요</p>
       </div>
     </div>
 
@@ -4246,15 +4247,26 @@
         { id: 'z5', label: 'VO2max', icon: '💪', color: 'var(--zone-5)' }
       ];
 
+      function getCategoryLabel(categoryId) {
+        var c = WORKOUT_CATEGORIES.find(function(x) { return x.id === categoryId; });
+        return c ? c.label : (categoryId === 'all' ? '전체' : categoryId);
+      }
+
       function workoutViewShowCategory() {
         workoutViewState.mode = 'category';
         workoutViewState.selectedCategory = null;
         var catView = document.getElementById('workoutCategoryView');
         var listView = document.getElementById('workoutListView');
         var backBtn = document.getElementById('workoutScreenBackBtn');
+        var titleEl = document.getElementById('workoutScreenTitle');
+        var subtitleEl = document.getElementById('workoutScreenSubtitle');
+        var headerEl = document.getElementById('workoutScreenHeader');
         if (catView) { catView.style.display = 'block'; catView.removeAttribute('data-hidden'); }
         if (listView) { listView.style.display = 'none'; listView.setAttribute('data-hidden', 'true'); }
         if (backBtn) backBtn.style.display = 'none';
+        if (titleEl) { titleEl.textContent = '📋 워크아웃 선택'; }
+        if (subtitleEl) { subtitleEl.textContent = '오늘의 훈련 프로그램을 선택하세요'; subtitleEl.style.display = ''; }
+        if (headerEl) headerEl.classList.remove('workout-screen-header--list-view');
       }
 
       function workoutViewShowList(categoryId) {
@@ -4266,6 +4278,12 @@
         if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
         if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
         if (backBtn) backBtn.style.display = 'flex';
+        var titleEl = document.getElementById('workoutScreenTitle');
+        var subtitleEl = document.getElementById('workoutScreenSubtitle');
+        var headerEl = document.getElementById('workoutScreenHeader');
+        if (titleEl) { titleEl.textContent = getCategoryLabel(categoryId); }
+        if (subtitleEl) { subtitleEl.style.display = 'none'; }
+        if (headerEl) headerEl.classList.add('workout-screen-header--list-view');
         var grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
         var useCache = window.workouts && Array.isArray(window.workouts) && typeof renderWorkoutTable === 'function';
         var filtered = [];
