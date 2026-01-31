@@ -8081,15 +8081,26 @@ Output Format (JSON Only):
               });
             }
 
-            var last7 = logs.slice(0, 7).reverse();
-            var chartData = last7.map(function(log) {
-              var logDate = new Date(log.date);
+            // 훈련 트렌드(최근 7일): Strava 로그만 사용, 로그 있는 날만 표시, 날짜별 1개 포인트(중복 제거)
+            var stravaOnly = logs.filter(function(l) { return l.source === 'strava'; });
+            var byDate = {};
+            stravaOnly.forEach(function(log) {
+              var d = log.date ? String(log.date).split('T')[0] : '';
+              if (!d) return;
+              if (!byDate[d]) byDate[d] = { tss: 0 };
+              byDate[d].tss += Number(log.tss) || 0;
+            });
+            var sortedDates = Object.keys(byDate).sort(function(a, b) { return b.localeCompare(a); });
+            var last7Dates = sortedDates.slice(0, 7).reverse();
+            var chartData = last7Dates.map(function(dateStr) {
+              var logDate = new Date(dateStr);
               var month = logDate.getMonth() + 1;
               var day = logDate.getDate();
+              var tss = byDate[dateStr].tss;
               return {
                 date: month + '.' + day,
-                fitness: Number(log.tss) || 0,
-                fatigue: (Number(log.tss) || 0) * 0.7
+                fitness: tss,
+                fatigue: tss * 0.7
               };
             });
             if (isMounted) setFitnessData(chartData);
