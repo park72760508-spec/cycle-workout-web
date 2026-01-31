@@ -5272,9 +5272,46 @@
       
       console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
       
-      // 훈련 로그 가져오기
+      // 훈련 로그 가져오기 (최근 200건 + 현재 표시 월 로그 병합 → 오늘 훈련이 초기 로딩 시에도 표시되도록)
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 호출 전...');
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+      
+      // 현재 표시 월(오늘 포함) 로그를 별도로 조회해 병합 (로딩 시 오늘 훈련이 달력에 바로 표시되도록)
+      var cy = miniCalendarStateJournal.currentYear;
+      var cm = miniCalendarStateJournal.currentMonth;
+      if (typeof window.getTrainingLogsByDateRange === 'function') {
+        try {
+          var monthLogs = await window.getTrainingLogsByDateRange(userId, cy, cm);
+          if (monthLogs && monthLogs.length > 0) {
+            var minSec = 600;
+            monthLogs.forEach(function(log) {
+              var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+              if (sec < minSec) return;
+              var dateKey = getDateKeyJournal(log.date);
+              if (dateKey) {
+                if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
+                  miniCalendarStateJournal.trainingLogs[dateKey] = [];
+                }
+                var exists = miniCalendarStateJournal.trainingLogs[dateKey].some(function(l) { return l.id === log.id; });
+                if (!exists) {
+                  miniCalendarStateJournal.trainingLogs[dateKey].push(log);
+                }
+              }
+            });
+            // 같은 날 Strava/Stelvio 정리
+            Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
+              var arr = miniCalendarStateJournal.trainingLogs[dateKey];
+              if (!arr || arr.length === 0) return;
+              var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
+              if (hasStelvio) {
+                miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('[MiniCalendarJournal] 현재 월 로그 병합 실패(무시):', e);
+        }
+      }
       
       console.log('[MiniCalendarJournal] 훈련 로그 로드 완료:', {
         dateCount: Object.keys(miniCalendarStateJournal.trainingLogs).length,
