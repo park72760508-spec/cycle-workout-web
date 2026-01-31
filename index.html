@@ -3324,18 +3324,18 @@
 
 
     
-    <!-- 통계 푸터 -->
-    <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 15px 0; border-top: 1px solid #333;">
+    <!-- 통계 푸터 (CADENCE, LAP AVG, HEART RATE - 상하 여백 1/2) -->
+    <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 7.5px 0; border-top: 1px solid #333;">
       <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
-        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">CADENCE</div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">CADENCE</div>
         <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="mobile-ui-cadence">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">rpm</span></div>
       </div>
       <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
-        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">LAP AVG</div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">LAP AVG</div>
         <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="mobile-ui-lap-power">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">w</span></div>
       </div>
       <div class="mobile-stat-box" style="text-align: center;">
-        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">HEART RATE</div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">HEART RATE</div>
         <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="mobile-ui-hr">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">bpm</span></div>
       </div>
     </div>
@@ -4011,7 +4011,7 @@
         <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
       </div>
       <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
-        <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">오늘 기록으로</button>
+        <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">오늘 기록</button>
         <button onclick="confirmStravaSync()" style="padding: 12px 24px; background: #fc4c02; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; transition: all 0.2s;">동기화 시작</button>
       </div>
     </div>
