@@ -8081,22 +8081,17 @@ Output Format (JSON Only):
               });
             }
 
-            // 훈련 트렌드(최근 7일): 오늘 포함 최근 7일 구간 내 Strava 로그만, 로그 있는 날만 표시, 날짜별 1개 포인트
-            var today = new Date();
-            var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-            var cutoff = new Date(today);
-            cutoff.setDate(cutoff.getDate() - 6);
-            var cutoffStr = cutoff.getFullYear() + '-' + String(cutoff.getMonth() + 1).padStart(2, '0') + '-' + String(cutoff.getDate()).padStart(2, '0');
+            // 훈련 트렌드(최근 7일): Strava 로그만, 로그 있는 날 중 최근 7개 일(오늘 포함)만 표시, 날짜별 1개 포인트
             var stravaOnly = logs.filter(function(l) { return l.source === 'strava'; });
             var byDate = {};
             stravaOnly.forEach(function(log) {
               var d = log.date ? String(log.date).split('T')[0] : '';
-              if (!d || d < cutoffStr || d > todayStr) return;
+              if (!d) return;
               if (!byDate[d]) byDate[d] = { tss: 0 };
               byDate[d].tss += Number(log.tss) || 0;
             });
-            var sortedDates = Object.keys(byDate).sort(function(a, b) { return a.localeCompare(b); });
-            var last7Dates = sortedDates;
+            var sortedDates = Object.keys(byDate).sort(function(a, b) { return b.localeCompare(a); });
+            var last7Dates = sortedDates.slice(0, 7).reverse();
             var chartData = last7Dates.map(function(dateStr) {
               var logDate = new Date(dateStr);
               var month = logDate.getMonth() + 1;
