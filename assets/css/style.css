@@ -3364,17 +3364,23 @@ button[aria-disabled="true"] {
 }
 
 .workout-screen-back-btn {
-  width: 40px;
-  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   background: transparent;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   color: var(--text-primary);
   transition: background 0.2s;
+}
+
+.workout-screen-back-btn .workout-screen-back-text {
+  display: none;
 }
 
 .workout-screen-back-btn:hover {
@@ -3420,6 +3426,134 @@ button[aria-disabled="true"] {
 .workout-list { 
   overflow-x: auto;
   width: 100%;
+}
+
+/* ========== Manage Your Career & 워크아웃 화면 모바일 반응형 (768px 이하) ========== */
+@media (max-width: 768px) {
+  /* Manage Your Career: 그리드 1열 (세로 스택) */
+  #myCareerScreen .connection-device-section .grid-2,
+  #myCareerScreen .grid-2.mb-15 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 워크아웃 화면: Sticky Header (리스트 뷰 시) */
+  #workoutScreen .workout-screen-header.workout-screen-header--list-view {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-main);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px 16px;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  /* 카테고리 그리드: 1열 */
+  .workout-category-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+    padding: 8px 0;
+  }
+
+  /* CategoryCard 모바일: 고정 높이, 축소 패딩, 터치 영역 확보 */
+  .workout-category-card {
+    min-height: 110px;
+    height: 110px;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .workout-category-card .category-icon {
+    font-size: 24px;
+    margin-bottom: 6px;
+  }
+
+  .workout-category-card .category-label {
+    font-size: 13px;
+  }
+
+  .workout-category-card .category-count {
+    font-size: 11px;
+  }
+
+  /* WorkoutCard 그리드: 1열 */
+  .workout-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+    padding: 4px 0;
+  }
+
+  /* WorkoutCard 모바일: 그래프 가변 너비 */
+  .workout-card__graph {
+    padding: 10px 10px;
+    min-height: 90px;
+  }
+
+  .workout-card__graph .segmented-workout-graph {
+    height: 90px;
+    min-height: 70px;
+  }
+
+  /* SegmentedWorkoutGraph: 모바일에서 막대 최소 너비 완화 (가변 유지) */
+  .segmented-workout-graph__bar {
+    min-width: 3px;
+  }
+
+  /* 스크롤 부드럽게 */
+  .workout-view-container {
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px 12px;
+  }
+
+  /* 툴바 모바일 */
+  .workout-list-toolbar {
+    padding: 10px;
+    flex-wrap: wrap;
+  }
+
+  .workout-search-input {
+    min-width: 100%;
+  }
+
+  /* 헤더 콘텐츠 모바일 */
+  .workout-screen-header-content {
+    min-width: 0;
+  }
+
+  .workout-screen-header .workout-screen-header-content h1 {
+    font-size: 1rem;
+  }
+
+  /* Sticky Header 시 뒤로가기 텍스트 표시 */
+  .workout-screen-header--list-view .workout-screen-back-btn .workout-screen-back-text {
+    display: inline;
+    font-size: 14px;
+  }
+
+  .workout-screen-header--list-view .workout-screen-back-btn {
+    padding-left: 4px;
+  }
+
+  .workout-screen-footer {
+    padding: 12px 16px;
+  }
+}
+
+/* 매우 좁은 화면 (360px~390px) */
+@media (max-width: 400px) {
+  .workout-category-card {
+    min-height: 100px;
+    height: 100px;
+    padding: 10px 8px;
+  }
+
+  .workout-card__graph .segmented-workout-graph {
+    height: 80px;
+    min-height: 60px;
+  }
 }
 
 /* 워크아웃 테이블 스타일 */
