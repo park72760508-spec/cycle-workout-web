@@ -12235,8 +12235,8 @@ async function selectWorkoutForTrainingReady(workout) {
         console.warn('[Training Ready] 사용자 ID가 없거나 Realtime Database가 초기화되지 않아 users/{userId}/workout에 저장하지 않습니다.');
         return;
       }
-      if (!authUser && typeof console !== 'undefined' && console.warn) {
-        console.warn('[Training Ready] Firebase Auth 로그인 없음. Realtime Database 저장 시 PERMISSION_DENIED가 나올 수 있습니다. 이메일/구글 로그인 후 다시 시도하세요.');
+      if (!authUser && typeof console !== 'undefined' && console.info) {
+        console.info('[Training Ready] Firebase Auth 미로그인: 워크아웃은 로컬에 저장됩니다. DB 동기화를 원하면 이메일/구글 로그인 후 이용하세요.');
       }
       var userWorkoutRef = db.ref('users/' + userId + '/workout');
       var savePromise = Promise.resolve();

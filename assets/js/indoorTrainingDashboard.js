@@ -6472,8 +6472,8 @@ async function selectWorkoutForTraining(workoutId) {
             const userId = (authUser && authUser.uid) || currentUser?.uid || currentUser?.id;
             
             if (userId) {
-                if (!authUser && typeof console !== 'undefined' && console.warn) {
-                    console.warn('[Indoor Training] Firebase Auth 로그인 없음. Realtime Database 저장 시 PERMISSION_DENIED가 나올 수 있습니다. 이메일/구글 로그인 후 다시 시도하세요.');
+                if (!authUser && typeof console !== 'undefined' && console.info) {
+                    console.info('[Indoor Training] Firebase Auth 미로그인 상태: 워크아웃은 로컬에 저장됩니다. Realtime Database 동기화를 원하면 이메일/구글 로그인 후 이용하세요.');
                 }
                 const userWorkoutRef = db.ref(`users/${userId}/workout`);
                 
