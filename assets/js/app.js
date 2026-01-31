@@ -7825,6 +7825,14 @@ async function loadTrainingJournalCalendar(direction) {
           if (!resultsByDate[dateStr]) resultsByDate[dateStr] = [];
           resultsByDate[dateStr].push({ id: doc.id, ...d });
         });
+        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+        Object.keys(resultsByDate).forEach(dateStr => {
+          const arr = resultsByDate[dateStr];
+          const hasStelvio = arr.some(item => item.source !== 'strava');
+          if (hasStelvio) {
+            resultsByDate[dateStr] = arr.filter(item => item.source !== 'strava');
+          }
+        });
       }
     } catch (error) {
       console.error('훈련일지 Firebase logs 조회 실패:', error);
