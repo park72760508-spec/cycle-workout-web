@@ -88,7 +88,25 @@
       '&state=' + encodeURIComponent(state) +
       '&approval_prompt=force';
 
-    window.location.href = url;
+    // Strava 로그인/승인 화면을 오버레이 팝업으로 띄움
+    var w = 500, h = 650;
+    var left = (window.screen.width - w) / 2;
+    var top = (window.screen.height - h) / 2;
+    var popup = window.open(url, 'strava_authorize', 'width=' + w + ',height=' + h + ',left=' + Math.max(0, left) + ',top=' + Math.max(0, top) + ',scrollbars=yes,resizable=yes');
+    if (popup) {
+      popup.focus();
+      var checkClosed = setInterval(function () {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          if (typeof window.onStravaPopupClosed === 'function') {
+            window.onStravaPopupClosed();
+          }
+        }
+      }, 500);
+    } else {
+      // 팝업 차단 시 기존처럼 현재 창에서 이동
+      window.location.href = url;
+    }
   }
 
   /**
