@@ -16,6 +16,7 @@ import {
   runTransaction,
   Timestamp,
   query,
+  where,
   orderBy,
   limit,
   startAfter,
@@ -458,9 +459,78 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
 }
 
 /**
+ * 특정 연·월의 훈련 로그 조회 (훈련일지 달력 월별 표시용)
+ * date 필드가 Firestore Timestamp 또는 문자열 "YYYY-MM-DD" 모두 지원
+ *
+ * @param {string} userId - 사용자 UID
+ * @param {number} year - 연도 (예: 2025)
+ * @param {number} month - 월 (0-11, 1월=0)
+ * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택)
+ * @returns {Promise<Array>} 해당 월의 훈련 로그 배열
+ */
+export async function getTrainingLogsByDateRange(userId, year, month, firestoreInstance = null) {
+  if (!userId) {
+    throw new Error('userId는 필수입니다.');
+  }
+
+  const db = firestoreInstance || window.firestoreV9;
+  if (!db) {
+    throw new Error('Firestore 인스턴스가 없습니다.');
+  }
+
+  const startDate = new Date(year, month, 1);
+  const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+  const startStr = startDate.toISOString().slice(0, 10); // YYYY-MM-DD
+  const endStr = endDate.toISOString().slice(0, 10);
+
+  const userLogsRef = collection(db, 'users', userId, 'logs');
+  const seen = new Set();
+  const logs = [];
+
+  try {
+    // 1) date가 Timestamp로 저장된 문서 조회
+    const startTs = Timestamp.fromDate(startDate);
+    const endTs = Timestamp.fromDate(endDate);
+    const qTimestamp = query(
+      userLogsRef,
+      where('date', '>=', startTs),
+      where('date', '<=', endTs)
+    );
+    const snapTs = await getDocs(qTimestamp);
+    snapTs.forEach((docSnap) => {
+      seen.add(docSnap.id);
+      logs.push({ id: docSnap.id, ...docSnap.data() });
+    });
+  } catch (e) {
+    console.warn('[getTrainingLogsByDateRange] Timestamp 범위 쿼리 실패 (무시):', e.message);
+  }
+
+  try {
+    // 2) date가 문자열 "YYYY-MM-DD"로 저장된 문서 조회
+    const qStr = query(
+      userLogsRef,
+      where('date', '>=', startStr),
+      where('date', '<=', endStr)
+    );
+    const snapStr = await getDocs(qStr);
+    snapStr.forEach((docSnap) => {
+      if (seen.has(docSnap.id)) return;
+      seen.add(docSnap.id);
+      logs.push({ id: docSnap.id, ...docSnap.data() });
+    });
+  } catch (e) {
+    console.warn('[getTrainingLogsByDateRange] 문자열 date 범위 쿼리 실패 (무시):', e.message);
+  }
+
+  console.log(`[getTrainingLogsByDateRange] ${year}년 ${month + 1}월: ${logs.length}건 (userId: ${userId})`);
+  return logs;
+}
+
+/**
  * TSS 계산 함수를 전역으로 노출 (디버깅/테스트용)
  */
 if (typeof window !== 'undefined') {
   window.calculateTSS = calculateTSS;
   window.getUserTrainingLogs = getUserTrainingLogs;
+  window.getTrainingLogsByDateRange = getTrainingLogsByDateRange;
 }
