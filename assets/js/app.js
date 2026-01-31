@@ -7790,11 +7790,11 @@ async function loadTrainingJournalCalendar(direction) {
       return;
     }
     
-    // 해당 월의 시작일과 종료일 계산
+    // 해당 월의 시작일과 종료일 계산 (로컬 날짜 사용 - UTC 변환 시 달 경계에서 오늘 누락 방지)
     const startDate = new Date(trainingJournalCurrentYear, trainingJournalCurrentMonth, 1);
     const endDate = new Date(trainingJournalCurrentYear, trainingJournalCurrentMonth + 1, 0);
-    const startDateStr = startDate.toISOString().split('T')[0];
-    const endDateStr = endDate.toISOString().split('T')[0];
+    const startDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-01`;
+    const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
     
     // Firebase users/{userId}/logs 조회 (날짜별 훈련 유무만 사용)
     const resultsByDate = {};
