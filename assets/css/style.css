@@ -17,6 +17,26 @@
      - 그룹세그먼트 상태 전환 시에도 왼쪽 경계선 유지 (하단 PATCH 참고)
      - 중복/구규칙은 가능한 한 하단으로 모음
 ========================================================== */
+
+/* ========== 디자인 시스템: Zone & 다크 테마 변수 ========== */
+:root {
+  /* Zone별 색상 (세그먼트 그래프, 카드 등 전역 사용) */
+  --zone-1: #9E9E9E;  /* Z1 Active Recovery */
+  --zone-2: #3498DB;  /* Z2 Endurance */
+  --zone-3: #2ECC71;  /* Z3 Tempo */
+  --zone-4: #F1C40F;  /* Z4 Threshold */
+  --zone-5: #E67E22;  /* Z5 VO2max */
+  --zone-6: #E74C3C;  /* Z6 */
+  --zone-7: #9B59B6;  /* Z7 */
+  /* 다크 모드 배경 (워크아웃 화면 등) */
+  --bg-main: #1a1d21;
+  --bg-card: #252a30;
+  /* 다크 모드 텍스트 */
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-muted: #5f6368;
+}
+
 /* ========== BASE / RESET (공통) ========== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -3034,6 +3054,183 @@ button[aria-disabled="true"] {
 
 
 /* ========== 3) 워크아웃 선택 화면 (#workoutScreen) ========== */
+
+/* 워크아웃 화면 다크 테마 (디자인 시스템 변수 사용) */
+.workout-screen-dark {
+  background: var(--bg-main);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.workout-screen-dark .header h1,
+.workout-screen-dark .subtitle {
+  color: var(--text-primary);
+}
+
+.workout-screen-dark .subtitle {
+  color: var(--text-secondary);
+}
+
+/* 메인 컨테이너: 상태 A/B 전환 */
+.workout-view-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+/* 상태 A: 카테고리 뷰 */
+.workout-category-view {
+  display: block;
+}
+
+.workout-category-view[data-hidden="true"] {
+  display: none !important;
+}
+
+.workout-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.workout-category-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.workout-category-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-2px);
+}
+
+.workout-category-card .category-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.workout-category-card .category-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.workout-category-card .category-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* 상태 B: 워크아웃 리스트 뷰 */
+.workout-list-view {
+  display: block;
+}
+
+.workout-list-view[data-hidden="true"] {
+  display: none !important;
+}
+
+.workout-list-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.workout-search-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: var(--bg-main);
+  color: var(--text-primary);
+}
+
+.workout-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* 헤더 */
+.workout-screen-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.workout-screen-header-content {
+  flex: 1;
+  text-align: center;
+}
+
+.workout-screen-back-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background 0.2s;
+}
+
+.workout-screen-back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 하단 푸터 */
+.workout-screen-footer {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+/* 워크아웃 화면 내 테이블 다크 테마 보정 */
+.workout-screen-dark .workout-table {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.workout-screen-dark .workout-table thead {
+  background: linear-gradient(135deg, var(--zone-2) 0%, #2562c8 100%);
+}
+
+.workout-screen-dark .workout-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.workout-screen-dark .workout-table td {
+  color: var(--text-secondary);
+}
+
+.workout-screen-dark .workout-title-cell {
+  color: var(--text-primary);
+}
+
+.workout-screen-dark .loading-container,
+.workout-screen-dark .loading-spinner,
+.workout-screen-dark .empty-state,
+.workout-screen-dark .error-state {
+  color: var(--text-secondary);
+}
+
 .workout-list { 
   overflow-x: auto;
   width: 100%;
