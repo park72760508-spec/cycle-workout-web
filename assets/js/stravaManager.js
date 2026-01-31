@@ -407,38 +407,11 @@ async function fetchAndProcessStravaData(options = {}) {
         options.onProgress(0, activities.length);
       }
 
-      // 해당 사용자의 stelvio 훈련 로그 조회 (날짜별 체크용)
+      // 해당 사용자의 스텔비오(앱) 훈련 로그 날짜 조회 (users/{userId}/logs 기준, TSS 중복 적립 방지)
       let stelvioLogDates = new Set();
       try {
-        if (typeof window.getTrainingResultsFromFirebase === 'function') {
-          const trainingResults = await window.getTrainingResultsFromFirebase(userId);
-          if (trainingResults.success && trainingResults.items) {
-            trainingResults.items.forEach(result => {
-              // started_at 또는 completed_at에서 날짜 추출
-              const startedAt = result.started_at || '';
-              const completedAt = result.completed_at || '';
-              
-              if (startedAt) {
-                try {
-                  const date = new Date(startedAt);
-                  const dateStr = date.toISOString().split('T')[0];
-                  stelvioLogDates.add(dateStr);
-                } catch (e) {
-                  // 날짜 파싱 실패 시 무시
-                }
-              }
-              
-              if (completedAt) {
-                try {
-                  const date = new Date(completedAt);
-                  const dateStr = date.toISOString().split('T')[0];
-                  stelvioLogDates.add(dateStr);
-                } catch (e) {
-                  // 날짜 파싱 실패 시 무시
-                }
-              }
-            });
-          }
+        if (typeof window.getStelvioLogDatesFromUserLogs === 'function') {
+          stelvioLogDates = await window.getStelvioLogDatesFromUserLogs(userId);
           console.log(`[fetchAndProcessStravaData] 사용자 ${userId}의 stelvio 로그 날짜 ${stelvioLogDates.size}개 발견`);
         }
       } catch (logError) {

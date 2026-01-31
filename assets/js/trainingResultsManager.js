@@ -28,42 +28,12 @@ function getTrainingLogCollection() {
 
 /**
  * 훈련 결과 저장 (Firebase Firestore)
- * Google Sheets 구조와 동일한 필드:
- * ['id', 'user_id', 'workout_id', 'started_at', 'completed_at', 'avg_power', 'max_power', 'avg_hr', 'max_hr', 'total_energy', 'tss', 'notes']
+ * [users/{userId}/logs 중심 전환] 새 훈련은 saveTrainingSession()으로만 users/{userId}/logs에 저장됨.
+ * training_results에는 더 이상 저장하지 않음. 호환성 유지용 no-op.
  */
 async function saveTrainingResultToFirebase(data) {
-  try {
-    const collection = getTrainingResultsCollection();
-    
-    // ID 생성 (문서 ID로 사용)
-    const id = data.id || `tr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Google Sheets 구조와 동일한 필드로 변환
-    const trainingResult = {
-      id: id,
-      user_id: data.user_id || data.userId || '',
-      workout_id: data.workout_id || data.workoutId || '',
-      started_at: data.started_at || data.startTime || '',
-      completed_at: data.completed_at || data.endTime || '',
-      avg_power: Number(data.avg_power || data.avgPower || 0),
-      max_power: Number(data.max_power || data.maxPower || 0),
-      avg_hr: Number(data.avg_hr || data.avgHR || data.avgHr || 0),
-      max_hr: Number(data.max_hr || data.maxHR || data.maxHr || 0),
-      total_energy: Number(data.total_energy || data.totalEnergy || data.calories || 0),
-      tss: Number(data.tss || 0),
-      notes: String(data.notes || ''),
-      created_at: data.created_at || new Date().toISOString()
-    };
-    
-    // Firestore에 저장 (id를 문서 ID로 사용)
-    await collection.doc(id).set(trainingResult);
-    
-    console.log('[saveTrainingResultToFirebase] ✅ 저장 완료:', id);
-    return { success: true, id: id };
-  } catch (error) {
-    console.error('[saveTrainingResultToFirebase] ❌ 저장 실패:', error);
-    throw error;
-  }
+  console.log('[saveTrainingResultToFirebase] users/{userId}/logs 중심 적용으로 training_results 저장 생략 (no-op)');
+  return { success: true, id: data?.id || 'noop' };
 }
 
 /**
@@ -158,52 +128,89 @@ async function saveScheduleResultToFirebase(data) {
 
 /**
  * 훈련 결과 조회 (Firebase Firestore)
+ * [users/{userId}/logs 중심] users/{userId}/logs 서브컬렉션에서 조회 후
+ * 기존 training_results 스키마 형태로 매핑하여 반환 (호환성 유지).
  */
 async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
   try {
-    const collection = getTrainingResultsCollection();
-    let query = collection;
-    
-    // 사용자 필터
-    if (userId) {
-      query = query.where('user_id', '==', userId);
+    if (!window.firestore) {
+      console.warn('[getTrainingResultsFromFirebase] Firestore가 초기화되지 않았습니다.');
+      return { success: false, error: 'Firestore not initialized', items: [] };
     }
-    
-    // 날짜 필터 (started_at 필드 기준)
-    // Firestore는 복합 쿼리 인덱스가 필요할 수 있으므로, 필터링은 클라이언트에서도 수행
-    if (startDate || endDate) {
-      // 날짜 필터가 있는 경우 started_at 기준 정렬 필요
-      query = query.orderBy('started_at', 'desc');
-    } else {
-      // 날짜 필터가 없으면 기본 정렬
-      query = query.orderBy('started_at', 'desc');
+    if (!userId) {
+      console.warn('[getTrainingResultsFromFirebase] userId가 없습니다.');
+      return { success: true, items: [] };
     }
-    
-    const querySnapshot = await query.get();
-    let results = querySnapshot.docs.map(doc => doc.data());
-    
-    // 클라이언트 측 날짜 필터링 (Firestore 쿼리 제한 보완)
-    if (startDate) {
-      results = results.filter(r => {
-        const startedAt = r.started_at || '';
-        return startedAt >= startDate;
+
+    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+    const querySnapshot = await userLogsRef.orderBy('date', 'desc').get();
+
+    const items = [];
+    querySnapshot.docs.forEach(docSnap => {
+      const log = docSnap.data();
+      let dateStr = '';
+      if (log.date) {
+        if (typeof log.date === 'string') dateStr = log.date;
+        else if (log.date.toDate) dateStr = log.date.toDate().toISOString().split('T')[0];
+        else if (log.date instanceof Date) dateStr = log.date.toISOString().split('T')[0];
+      }
+      if (!dateStr) return;
+
+      if (startDate && dateStr < startDate) return;
+      if (endDate && dateStr > endDate) return;
+
+      // 기존 training_results 스키마 형태로 매핑 (호환성)
+      items.push({
+        id: docSnap.id,
+        user_id: userId,
+        started_at: dateStr,
+        completed_at: dateStr,
+        avg_power: log.avg_watts != null ? Number(log.avg_watts) : null,
+        np: log.weighted_watts != null ? Number(log.weighted_watts) : null,
+        tss: log.tss != null ? Number(log.tss) : 0,
+        duration_min: log.duration_sec != null ? Math.round(Number(log.duration_sec) / 60) : null,
+        hr_avg: log.avg_hr != null ? Number(log.avg_hr) : null,
+        notes: log.title || ''
       });
-    }
-    if (endDate) {
-      results = results.filter(r => {
-        const startedAt = r.started_at || '';
-        return startedAt <= endDate;
-      });
-    }
-    
-    return { success: true, items: results };
+    });
+
+    return { success: true, items };
   } catch (error) {
     console.error('[getTrainingResultsFromFirebase] ❌ 조회 실패:', error);
-    // 인덱스 오류인 경우 안내 메시지 추가
     if (error.message && error.message.includes('index')) {
       console.warn('[getTrainingResultsFromFirebase] ⚠️ Firestore 인덱스가 필요할 수 있습니다. Firebase 콘솔에서 인덱스를 생성하세요.');
     }
     return { success: false, error: error.message, items: [] };
+  }
+}
+
+/**
+ * 스텔비오(앱) 훈련이 기록된 날짜 목록 조회 (users/{userId}/logs 기준)
+ * Strava 동기화 시 같은 날 스텔비오 로그가 있으면 TSS 중복 적립 방지용.
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<Set<string>>} 'YYYY-MM-DD' 형식 날짜 Set
+ */
+async function getStelvioLogDatesFromUserLogs(userId) {
+  try {
+    if (!window.firestore || !userId) return new Set();
+    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+    const snapshot = await userLogsRef.get();
+    const dates = new Set();
+    snapshot.docs.forEach(docSnap => {
+      const log = docSnap.data();
+      if (log.source === 'strava') return;
+      let dateStr = '';
+      if (log.date) {
+        if (typeof log.date === 'string') dateStr = log.date;
+        else if (log.date.toDate) dateStr = log.date.toDate().toISOString().split('T')[0];
+        else if (log.date instanceof Date) dateStr = log.date.toISOString().split('T')[0];
+      }
+      if (dateStr) dates.add(dateStr);
+    });
+    return dates;
+  } catch (error) {
+    console.warn('[getStelvioLogDatesFromUserLogs] 조회 실패:', error);
+    return new Set();
   }
 }
 
@@ -511,6 +518,7 @@ async function markStravaActivityTssApplied(userId, activityId) {
 window.saveTrainingResultToFirebase = saveTrainingResultToFirebase;
 window.saveScheduleResultToFirebase = saveScheduleResultToFirebase;
 window.getTrainingResultsFromFirebase = getTrainingResultsFromFirebase;
+window.getStelvioLogDatesFromUserLogs = getStelvioLogDatesFromUserLogs;
 window.saveStravaActivityToFirebase = saveStravaActivityToFirebase;
 window.getExistingStravaActivityIds = getExistingStravaActivityIds;
 window.getUnappliedStravaActivities = getUnappliedStravaActivities;

@@ -361,14 +361,17 @@ async function saveTrainingResult(extra = {}) {
          // 스케줄 결과 저장 실패해도 계속 진행
        }
 
-     // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase Firestore v9 버전
-     // 조건: userId와 duration이 있으면 실행 (np가 0이어도 저장은 시도)
-     console.log('[saveTrainingResult] 🔍 3-2 섹션 진입 확인:', {
-       currentUserId: !!currentUserId,
-       totalSeconds: totalSeconds,
-       np: np,
-       tss: tss
-     });
+    // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase Firestore v9 버전 (users/{userId}/logs 저장)
+    // 조건: userId와 duration이 있으면 실행 (np가 0이어도 저장은 시도)
+    console.log('[saveTrainingResult] 🔍 3-2 섹션 진입 확인:', {
+      currentUserId: !!currentUserId,
+      totalSeconds: totalSeconds,
+      np: np,
+      tss: tss
+    });
+
+    let saveSessionSuccess = false;
+    let firebaseError = null;
      
      if (currentUserId && totalSeconds > 0) {
       try {
@@ -448,6 +451,7 @@ async function saveTrainingResult(extra = {}) {
           console.log('[saveTrainingResult] 📥 saveTrainingSession 응답:', saveResult);
           
           if (saveResult && saveResult.success) {
+            saveSessionSuccess = true;
             console.log('[saveTrainingResult] ✅ 훈련 결과 저장 및 포인트 적립 성공:', saveResult);
             
             // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
@@ -494,6 +498,7 @@ async function saveTrainingResult(extra = {}) {
           }
         }
        } catch (saveError) {
+         firebaseError = saveError;
          console.error('[saveTrainingResult] ❌ 훈련 결과 저장 중 오류:', saveError);
          console.error('[saveTrainingResult] 오류 상세:', {
            message: saveError.message,
@@ -511,34 +516,8 @@ async function saveTrainingResult(extra = {}) {
        });
      }
 
-     // 2-2. Firebase Firestore 저장 시도 (TSS 계산 후 실행)
-     let firebaseSuccess = false;
-     let firebaseError = null;
-     try {
-       // Firebase로 저장
-       if (typeof window.saveTrainingResultToFirebase === 'function') {
-         const result = await window.saveTrainingResultToFirebase({
-           user_id: currentUserId,
-           workout_id: trainingResult.workoutId || window.currentWorkout?.id || '',
-           startTime: trainingResult.startTime,
-           endTime: trainingResult.endTime,
-           avgPower: stats.avgPower,
-           maxPower: stats.maxPower,
-           avgHR: stats.avgHR,
-           maxHR: stats.maxHR,
-           totalEnergy: stats.totalEnergy,
-           tss: tss,
-           notes: trainingResult.notes || ''
-         });
-         firebaseSuccess = true;
-         console.log('[saveTrainingResult] ✅ Firebase 저장 성공:', result.id);
-       } else {
-         console.warn('[saveTrainingResult] ⚠️ saveTrainingResultToFirebase 함수가 없습니다.');
-       }
-     } catch (error) {
-       console.error('[saveTrainingResult] ❌ Firebase 저장 실패:', error);
-       firebaseError = error;
-     }
+     // 2-2. Firebase 성공 여부: users/{userId}/logs 저장(saveTrainingSession) 기준 (training_results 미사용)
+     const firebaseSuccess = saveSessionSuccess;
 
      // 4. 결과 처리 및 반환
      if (firebaseSuccess) {
