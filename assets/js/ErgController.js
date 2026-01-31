@@ -1,9 +1,8 @@
 /* ==========================================================
    ErgController.js (v13.1 "FTMS Priority" - The Firmware Fix)
-   - Priority Change: Scans FTMS FIRST. If Firmware Update worked, this solves everything.
-   - Fallback: Falls back to CycleOps/Wahoo if FTMS is missing.
-   - Wahoo Breaker: Forces Reliable Write if fallback occurs.
-   - Includes Silk Road Pro & Investigator Diagnostics.
+   - Priority: FTMS (Standard) -> CycleOps -> Wahoo
+   - Designed for Updated Firmware (v31.065+)
+   - Includes Silk Road Pro Smoothing & Anti-Lock
 ========================================================== */
 
 class ErgController {
@@ -123,9 +122,7 @@ class ErgController {
           } catch(e) {
               // 🚨 DIAGNOSTICS
               if (e.name === 'SecurityError') {
-                  const msg = `🚫 권한 부족: ${t.name} (앱 재실행 필요)`;
-                  if (typeof showToast === 'function') showToast(msg);
-                  console.error(`🚨 SecurityError: ${t.name} blocked. Check bluetooth.js!`);
+                  if (typeof showToast === 'function') showToast(`🚫 권한 부족: ${t.name}`);
               }
           }
       }
@@ -179,8 +176,7 @@ class ErgController {
           } catch(e){}
       }
 
-      // ★ Phase 4: CPS Fallback (Last Resort)
-      console.warn('⚠️ [ERG] All scans failed. Attempting CPS Fallback...');
+      // Phase 4: CPS Fallback
       try {
           const svc = await server.getPrimaryService(this._uuids.cpsSvc);
           const char = await svc.getCharacteristic(this._uuids.cpsChar);
@@ -188,8 +184,7 @@ class ErgController {
           return { point: char, protocol: 'CPS_CONTROL' };
       } catch(e) {}
 
-      console.error('[ERG] All scans (including CPS) failed.');
-      if (typeof showToast === 'function') showToast('⚠️ ERG 제어권 찾기 실패 (Not Found)');
+      if (typeof showToast === 'function') showToast('⚠️ ERG 제어권 찾기 실패');
       return null;
 
     } catch (e) { 
@@ -239,7 +234,7 @@ class ErgController {
     }
   }
 
-  // ── [4] Command Sender (Wahoo Breaker: Legacy = With Response first) ──
+  // ── [4] Command Sender (FTMS Optimized) ──
 
   async _sendCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
@@ -275,16 +270,6 @@ class ErgController {
              return Promise.race([p, timeout]);
          };
 
-         const isLegacy = (protocol === 'WAHOO' || protocol === 'CYCLEOPS' || protocol === 'TACX');
-         if (isLegacy) {
-             try {
-                 await tryWrite('reliable');
-                 return;
-             } catch (e) {
-                 try { await tryWrite('fast'); } catch (e2) {}
-             }
-             return;
-         }
          try { await tryWrite('fast'); return; } catch (e) {
              try { await tryWrite('reliable'); } catch (e2) {}
          }
