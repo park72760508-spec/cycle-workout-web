@@ -5415,6 +5415,85 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================================================
+// SegmentedWorkoutGraph - 세그먼트 막대 그래프 컴포넌트
+// 워크아웃 데이터를 MyWhoosh 스타일 막대 그래프로 시각화
+// ==========================================================
+
+/** FTP% → Zone 1~7 매핑 (Zone 7이 가장 높음) */
+const ZONE_FTP_BOUNDS = [
+  { min: 0, max: 55, zone: 1 },   // Zone 1: Active Recovery
+  { min: 56, max: 75, zone: 2 },  // Zone 2: Endurance
+  { min: 76, max: 90, zone: 3 },  // Zone 3: Tempo
+  { min: 91, max: 105, zone: 4 }, // Zone 4: Threshold
+  { min: 106, max: 120, zone: 5 },// Zone 5: VO2max
+  { min: 121, max: 150, zone: 6 },// Zone 6
+  { min: 151, max: 300, zone: 7 } // Zone 7
+];
+
+function getSegmentZoneFromFtpPercent(seg) {
+  if (!seg) return 1;
+  const segType = (seg.segment_type || '').toLowerCase();
+  if (segType === 'rest' || segType === 'recovery') return 1;
+  if (segType === 'warmup' || segType === 'cooldown') {
+    const pct = getSegmentFtpPercentForPreview(seg);
+    return pct < 56 ? 1 : (pct < 76 ? 2 : 3);
+  }
+  const ftpPercent = getSegmentFtpPercentForPreview(seg);
+  for (let i = ZONE_FTP_BOUNDS.length - 1; i >= 0; i--) {
+    if (ftpPercent >= ZONE_FTP_BOUNDS[i].min && ftpPercent <= ZONE_FTP_BOUNDS[i].max) {
+      return ZONE_FTP_BOUNDS[i].zone;
+    }
+  }
+  return ftpPercent < 56 ? 1 : 7;
+}
+
+/**
+ * SegmentedWorkoutGraph 렌더
+ * @param {HTMLElement|string} container - 컨테이너 요소 또는 ID
+ * @param {Array} segments - 세그먼트 배열 [{duration_sec, target_type, target_value, segment_type}]
+ * @param {Object} options - { maxHeight: 120, ftp: 200, classPrefix: 'swg' }
+ */
+function renderSegmentedWorkoutGraph(container, segments, options) {
+  const el = typeof container === 'string' ? document.getElementById(container) : container;
+  if (!el) return;
+  if (!segments || !Array.isArray(segments) || segments.length === 0) {
+    el.innerHTML = '<div class="segmented-workout-graph-empty">세그먼트가 없습니다</div>';
+    return;
+  }
+  const opts = options || {};
+  const maxHeight = opts.maxHeight || 120;
+  const totalSeconds = segments.reduce((s, seg) => s + (seg.duration_sec || seg.duration || 0), 0);
+  if (totalSeconds <= 0) {
+    el.innerHTML = '<div class="segmented-workout-graph-empty">유효한 세그먼트가 없습니다</div>';
+    return;
+  }
+  const prefix = opts.classPrefix || 'swg';
+  const bars = segments.map(seg => {
+    const duration = seg.duration_sec || seg.duration || 0;
+    if (duration <= 0) return null;
+    const zone = getSegmentZoneFromFtpPercent(seg);
+    const flexGrow = duration;
+    const heightPercent = Math.max(15, (zone / 7) * 100);
+    return { duration, zone, flexGrow, heightPercent };
+  }).filter(Boolean);
+  el.innerHTML = `
+    <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프">
+      <div class="segmented-workout-graph__bars">
+        ${bars.map(b => `
+          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}"
+               style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;"
+               title="Zone ${b.zone} · ${Math.round(b.duration)}초"></div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 전역 노출
+window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
+window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
+
+// ==========================================================
 // 전역 함수로 내보내기
 // ==========================================================
 
