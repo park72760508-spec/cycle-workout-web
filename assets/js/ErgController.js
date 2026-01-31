@@ -1,9 +1,9 @@
 /* ==========================================================
-   ErgController.js (v13.0 "Wahoo Breaker" - iOS Write Fix)
-   - FORCE Reliable Write (WithResponse) for Legacy Protocols (Wahoo/CycleOps)
-     -> Solves "Connected but No Resistance" on iOS
-   - Aggressive Double-Init to wake up trainer
-   - Includes Silk Road Pro, Anti-Lock, and Investigator Scan
+   ErgController.js (v13.1 "FTMS Priority" - The Firmware Fix)
+   - Priority Change: Scans FTMS FIRST. If Firmware Update worked, this solves everything.
+   - Fallback: Falls back to CycleOps/Wahoo if FTMS is missing.
+   - Wahoo Breaker: Forces Reliable Write if fallback occurs.
+   - Includes Silk Road Pro & Investigator Diagnostics.
 ========================================================== */
 
 class ErgController {
@@ -45,7 +45,7 @@ class ErgController {
     };
 
     this._setupConnectionWatcher();
-    console.log('[ErgController] v13.0 (Wahoo Breaker) Initialized');
+    console.log('[ErgController] v13.1 (FTMS Priority) Initialized');
   }
 
   // ── [1] State & Watchers ──
@@ -98,14 +98,14 @@ class ErgController {
       const server = trainer.server || (trainer.device && trainer.device.gatt);
       if (!server || !server.connected) return null;
 
-      console.log('[ERG] Starting Investigator Scan (v13.0)...');
+      console.log('[ERG] Starting Scan v13.1 (FTMS Priority)...');
 
-      // Targets EXCLUDING CPS (Phase 1-3 priority)
+      // ★ FTMS First! If firmware update worked, this catches FTMS immediately.
       const targets = [
+          { name: 'FTMS',     svc: this._uuids.ftmsSvc,     char: this._uuids.ftmsChar,     proto: 'FTMS' },
           { name: 'CycleOps', svc: this._uuids.cycleopsSvc, char: this._uuids.cycleopsChar, proto: 'CYCLEOPS' },
           { name: 'Wahoo',    svc: this._uuids.wahooSvc,    char: this._uuids.wahooChar,    proto: 'WAHOO' },
-          { name: 'Tacx',     svc: this._uuids.tacxSvc,     char: this._uuids.tacxChar,     proto: 'TACX' },
-          { name: 'FTMS',     svc: this._uuids.ftmsSvc,     char: this._uuids.ftmsChar,     proto: 'FTMS' }
+          { name: 'Tacx',     svc: this._uuids.tacxSvc,     char: this._uuids.tacxChar,     proto: 'TACX' }
       ];
 
       // ★ Phase 1: Explicit Scan (Fastest)
