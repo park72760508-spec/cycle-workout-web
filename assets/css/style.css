@@ -3110,6 +3110,166 @@ button[aria-disabled="true"] {
 .segmented-workout-graph__bar--zone-6 { background: var(--zone-6); }
 .segmented-workout-graph__bar--zone-7 { background: var(--zone-7); }
 
+/* ========== WorkoutCard 컴포넌트 ========== */
+.workout-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.workout-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.workout-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.workout-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+
+.workout-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workout-card__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.workout-card__action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.workout-card__action-btn:hover {
+  opacity: 1;
+}
+
+.workout-card__graph {
+  padding: 12px 14px;
+  min-height: 100px;
+  flex: 1;
+}
+
+.workout-card__graph .segmented-workout-graph {
+  height: 100px;
+  min-height: 80px;
+}
+
+.workout-card__footer {
+  display: flex;
+  gap: 16px;
+  padding: 8px 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.workout-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workout-card__meta-icon {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.workout-card__cta {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.workout-card__cta .btn {
+  flex: 1;
+}
+
+.workout-card__select-btn {
+  flex: 1;
+}
+
+/* ========== CategoryCard 컴포넌트 ========== */
+.workout-category-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.workout-category-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  opacity: 0.6;
+}
+
+.workout-category-card[data-zone="1"]::before { background: var(--zone-1); }
+.workout-category-card[data-zone="2"]::before { background: var(--zone-2); }
+.workout-category-card[data-zone="3"]::before { background: var(--zone-3); }
+.workout-category-card[data-zone="4"]::before { background: var(--zone-4); }
+.workout-category-card[data-zone="5"]::before { background: var(--zone-5); }
+.workout-category-card[data-zone="all"]::before { background: var(--zone-2); }
+
+.workout-category-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-2px);
+}
+
+.workout-category-card .category-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.workout-category-card .category-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.workout-category-card .category-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 /* ========== 3) 워크아웃 선택 화면 (#workoutScreen) ========== */
 
 /* 워크아웃 화면 다크 테마 (디자인 시스템 변수 사용) */
@@ -3153,37 +3313,6 @@ button[aria-disabled="true"] {
   padding: 8px 0;
 }
 
-.workout-category-card {
-  background: var(--bg-card);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
-  color: var(--text-primary);
-}
-
-.workout-category-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateY(-2px);
-}
-
-.workout-category-card .category-icon {
-  font-size: 28px;
-  margin-bottom: 8px;
-}
-
-.workout-category-card .category-label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.workout-category-card .category-count {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
 
 /* 상태 B: 워크아웃 리스트 뷰 */
 .workout-list-view {
