@@ -1678,7 +1678,9 @@
               </div>
               <div id="authBarRight" style="display: none; align-items: center; justify-content: center; gap: 8px; width: 100%;">
                 <span id="authBarWelcome" style="font-size: 14px; font-weight: 600; color: #0369a1;"></span>
-                <button type="button" id="btnAuthLogout" onclick="if(typeof handleLogout === 'function') handleLogout();" style="padding: 6px 12px; font-size: 13px; color: #dc2626; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; cursor: pointer;">로그아웃</button>
+                <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
+                  <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                </button>
               </div>
             </div>
           </div>
