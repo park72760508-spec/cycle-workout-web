@@ -1924,6 +1924,23 @@ button[aria-disabled="true"] {
   box-shadow: 0 2px 8px rgba(252, 76, 2, 0.4) !important;
 }
 
+/* 환경 설정 모달 - Connect with Strava 버튼 (프로필 선택 화면과 동일한 이미지·효과) */
+#settingsModal .profile-strava-button {
+  background: #fc4c02;
+  color: #fff;
+  border: 2px solid rgba(252, 76, 2, 0.4) !important;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.3) !important;
+}
+#settingsModal .profile-strava-button:hover {
+  opacity: 0.9;
+  border-color: rgba(252, 76, 2, 0.6) !important;
+  box-shadow: 0 2px 8px rgba(252, 76, 2, 0.4) !important;
+}
+
 /* Strava 동기화 버튼 - Strava 연결 버튼과 동일한 스타일 */
 /* 캘린더 관련 버튼 이미지 스타일 - 기기선택 화면과 동일한 패턴 */
 .btn-icon-image {
