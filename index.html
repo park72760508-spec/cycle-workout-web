@@ -5439,7 +5439,12 @@
           chartTssInstance.current = new ChartLib(ctx, {
             type: 'bar',
             data: {
-              labels: chartDataByDate.map(function(d) { return d.date.slice(5); }),
+              labels: chartDataByDate.map(function(d) {
+                var parts = d.date.split('-');
+                var m = parseInt(parts[1], 10);
+                var day = parseInt(parts[2], 10);
+                return m + '/' + day;
+              }),
               datasets: [{
                 label: 'TSS',
                 data: chartDataByDate.map(function(d) { return d.TSS; }),
@@ -5473,7 +5478,12 @@
           chartDistanceInstance.current = new ChartLib(ctx, {
             type: 'bar',
             data: {
-              labels: chartDataByDate.map(function(d) { return d.date.slice(5); }),
+              labels: chartDataByDate.map(function(d) {
+                var parts = d.date.split('-');
+                var m = parseInt(parts[1], 10);
+                var day = parseInt(parts[2], 10);
+                return m + '/' + day;
+              }),
               datasets: [{
                 label: '거리 (km)',
                 data: chartDataByDate.map(function(d) { return d.distance.toFixed(1); }),
