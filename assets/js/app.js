@@ -12040,6 +12040,16 @@ function loadGeminiApiKeyToSettings() {
   }
 }
 
+function resetApiKeyFromSettings() {
+  const apiKeyInput = document.getElementById('settingsGeminiApiKey');
+  if (!apiKeyInput) return;
+  apiKeyInput.disabled = false;
+  apiKeyInput.removeAttribute('readonly');
+  localStorage.removeItem('geminiApiKeyDisabled');
+  apiKeyInput.value = '';
+  apiKeyInput.focus();
+}
+
 function testGeminiApiKeyFromSettings() {
   const apiKeyInput = document.getElementById('settingsGeminiApiKey');
   if (!apiKeyInput) return;
@@ -12136,6 +12146,7 @@ function saveGeminiApiKeyFromSettings() {
 
 window.openSettingsModal = openSettingsModal;
 window.closeSettingsModal = closeSettingsModal;
+window.resetApiKeyFromSettings = resetApiKeyFromSettings;
 window.testGeminiApiKeyFromSettings = testGeminiApiKeyFromSettings;
 window.saveGeminiApiKeyFromSettings = saveGeminiApiKeyFromSettings;
 window.exportAnalysisReport = exportAnalysisReport;
