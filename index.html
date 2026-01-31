@@ -3923,18 +3923,6 @@
     
     <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
     <div id="monthly-analysis-dashboard-root" class="card monthly-analysis-dashboard-wrapper" style="margin-top: 16px;"></div>
-    
-    <!-- 하단 Strava 연결 (상단 실선 없음) -->
-    <div class="connection-exit-container" style="margin-top: 20px; padding-top: 20px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); text-align: center; border-top: none;">
-      <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0;">
-        <button class="btn btn-exit-inline profile-strava-button" id="btnStravaTrainingJournal" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화" style="min-width: 200px; padding: 0; background: transparent; cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;">
-          <img src="assets/img/btn_strava.png" alt="Connect with Strava" style="height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block;" />
-        </button>
-      </div>
-      <p style="text-align: center; font-size: 12px; color: #6b7280; margin: 12px 0 0 0; padding: 0;">
-        By connecting, you agree to our <a href="#" onclick="event.preventDefault(); openPrivacyPolicyModal(); return false;" style="color: #6b7280; text-decoration: underline; cursor: pointer;">Privacy Policy</a>
-      </p>
-    </div>
   </div>
 
   <!-- Strava 동기화 날짜 선택 모달 -->
