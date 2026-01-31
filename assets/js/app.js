@@ -3261,10 +3261,11 @@ if (!window.showScreen) {
       
       // 3) 화면별 특별 처리
       if (id === 'workoutScreen') {
-        if (typeof workoutViewInit === 'function') {
-          setTimeout(() => workoutViewInit(), 100);
+        const initFn = window.workoutViewInit || (typeof workoutViewInit === 'function' ? workoutViewInit : null);
+        if (initFn) {
+          setTimeout(() => { try { initFn(); } catch (e) { console.warn('workoutViewInit error:', e); if (typeof loadWorkouts === 'function') loadWorkouts('all'); } }, 150);
         } else if (typeof loadWorkouts === 'function') {
-          setTimeout(() => loadWorkouts(), 100);
+          setTimeout(() => loadWorkouts('all'), 150);
         }
       }
 
