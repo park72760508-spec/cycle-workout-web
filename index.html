@@ -1655,6 +1655,17 @@
           </div>
 
           <div class="connection-device-section basecamp-device-section">
+            <!-- 전화번호 로그인 상태 바 (Realtime DB 동기화용) -->
+            <div id="authBar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+              <div id="authBarLeft" style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
+                <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
+              </div>
+              <div id="authBarRight" style="display: none; align-items: center; gap: 8px;">
+                <span id="authBarWelcome" style="font-size: 14px; font-weight: 600; color: #0369a1;"></span>
+                <button type="button" id="btnAuthLogout" onclick="if(typeof handleLogout === 'function') handleLogout();" style="padding: 6px 12px; font-size: 13px; color: #dc2626; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; cursor: pointer;">로그아웃</button>
+              </div>
+            </div>
             <h3 class="mb-15 basecamp-status-bar">Choose Your Path</h3>
             <div class="grid-2 mb-15" style="gap: 3.75px;">
               <button class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
@@ -5255,27 +5266,18 @@
       showAuthStatus('로그인 중...', 'info');
       
       try {
-        // Firebase v9 Modular SDK 사용
-        if (!window.authV9 || !window.phoneToEmail) {
+        // Realtime Database 규칙이 기본 앱 auth를 사용하므로 window.auth(기본 앱)로 로그인
+        const auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        if (!auth || !window.phoneToEmail) {
           throw new Error('Firebase 인증 모듈이 로드되지 않았습니다.');
         }
         
         const email = window.phoneToEmail(phone);
-        // 전화번호를 "010-1234-5678" 형식으로 변환 (userManager.js의 formatPhoneForDB 사용)
         const formattedPhone = (window.formatPhoneForDB || window.formatPhoneNumber || ((p) => p))(phone);
-        console.log(`🔐 로그인 시도:`, {
-          email: email,
-          phone: phone,
-          formattedPhone: formattedPhone
-        });
+        console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
         
-        // 로그인 시도
         try {
-            const userCredential = await window.signInWithEmailAndPasswordV9(
-              window.authV9, 
-              email, 
-              password
-            );
+            const userCredential = await auth.signInWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
             console.log('✅ 로그인 성공:', user.uid);
@@ -5339,11 +5341,8 @@
             throw loginError;
           }
         
-        // 로그인/회원가입 성공 후 처리
-        // [Auth Guard] 인증 상태가 완전히 복원된 후에만 Firestore 쿼리 실행
-        var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        // 로그인 성공 후 처리
         if (auth) {
-          // onAuthStateChanged를 사용하여 인증이 완료된 후에만 실행
           var unsubscribe = auth.onAuthStateChanged(function(user) {
             if (user) {
               console.log('[Auth Guard] User authenticated, loading users:', user.uid);
@@ -5423,8 +5422,11 @@
             basecampScreen.style.opacity = '1';
             basecampScreen.style.visibility = 'visible';
             console.log('✅ basecampScreen 직접 표시 완료');
-            
-            // 강제로 스크롤을 맨 위로
+            if (typeof updateAuthBarUI === 'function') {
+              var a = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+              if (a && a.currentUser) updateAuthBarUI(a.currentUser);
+              else updateAuthBarUI(null);
+            }
             window.scrollTo(0, 0);
           }
           
@@ -5438,13 +5440,16 @@
                 const isBasecampVisible = basecampScreen.classList.contains('active') || 
                                          window.getComputedStyle(basecampScreen).display !== 'none';
                 if (!isBasecampVisible) {
-                  // showScreen이 작동하지 않으면 조용히 직접 전환 (경고 제거)
                   directScreenSwitch();
                 } else {
                   console.log('✅ showScreen으로 화면 전환 성공');
-                  // 추가 확인: opacity와 visibility도 설정
                   basecampScreen.style.opacity = '1';
                   basecampScreen.style.visibility = 'visible';
+                }
+                if (typeof updateAuthBarUI === 'function') {
+                  var a = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+                  if (a && a.currentUser) updateAuthBarUI(a.currentUser);
+                  else updateAuthBarUI(null);
                 }
               }, 100);
             } catch (err) {
@@ -5505,6 +5510,76 @@
     // switchToSignUpMode 함수 제거 (더 이상 사용하지 않음)
     
     // resetToLoginMode 함수 제거 (더 이상 사용하지 않음)
+    
+    /**
+     * 로그인 버튼 클릭: 전화번호 로그인 화면(authScreen) 표시
+     */
+    function handleLogin() {
+      const authScreen = document.getElementById('authScreen');
+      if (!authScreen) return;
+      document.querySelectorAll('.screen').forEach(function(screen) {
+        if (screen.id !== 'authScreen' && screen.id !== 'splashScreen') {
+          screen.classList.remove('active');
+          screen.style.display = 'none';
+        }
+      });
+      authScreen.classList.add('active');
+      authScreen.style.display = 'block';
+      authScreen.style.visibility = 'visible';
+      authScreen.style.opacity = '1';
+      window.scrollTo(0, 0);
+    }
+    
+    /**
+     * 로그아웃: Firebase Auth signOut 후 UI 갱신
+     */
+    function handleLogout() {
+      const auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      if (auth) {
+        auth.signOut().then(function() {
+          window.currentUser = null;
+          try { localStorage.removeItem('currentUser'); } catch (e) {}
+          if (typeof updateAuthBarUI === 'function') updateAuthBarUI(null);
+          if (typeof showToast === 'function') showToast('로그아웃되었습니다.');
+        }).catch(function(e) { console.error('로그아웃 오류:', e); });
+      }
+    }
+    
+    /**
+     * auth 바 UI 갱신: 로그인 시 Welcome + 로그아웃, 비로그인 시 로그인 버튼 + 안내
+     */
+    function updateAuthBarUI(user) {
+      const left = document.getElementById('authBarLeft');
+      const right = document.getElementById('authBarRight');
+      const welcome = document.getElementById('authBarWelcome');
+      const warning = document.getElementById('authBarWarning');
+      if (!left || !right) return;
+      if (user && user.email) {
+        var phone = user.email.replace(/@stelvio\.ai$/, '').replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+        left.style.display = 'none';
+        right.style.display = 'flex';
+        if (welcome) welcome.textContent = 'Welcome ' + phone;
+        if (warning) warning.style.display = 'none';
+      } else {
+        left.style.display = 'flex';
+        right.style.display = 'none';
+        if (welcome) welcome.textContent = '';
+        if (warning) { warning.style.display = 'inline'; warning.textContent = '로그인 시 워크아웃이 Realtime DB에 저장됩니다.'; }
+      }
+    }
+    
+    window.handleLogin = handleLogin;
+    window.handleLogout = handleLogout;
+    window.updateAuthBarUI = updateAuthBarUI;
+    
+    (function initAuthBar() {
+      var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      if (!auth) return;
+      auth.onAuthStateChanged(function(user) {
+        if (typeof updateAuthBarUI === 'function') updateAuthBarUI(user);
+      });
+      if (auth.currentUser && typeof updateAuthBarUI === 'function') updateAuthBarUI(auth.currentUser);
+    })();
     
     /**
      * 사용자 등록 버튼 클릭 핸들러
