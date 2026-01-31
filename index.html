@@ -1655,17 +1655,6 @@
           </div>
 
           <div class="connection-device-section basecamp-device-section">
-            <!-- 전화번호 로그인 상태 바 (Realtime DB 동기화용) -->
-            <div id="authBar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-              <div id="authBarLeft" style="display: flex; align-items: center; gap: 8px;">
-                <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
-                <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
-              </div>
-              <div id="authBarRight" style="display: none; align-items: center; gap: 8px;">
-                <span id="authBarWelcome" style="font-size: 14px; font-weight: 600; color: #0369a1;"></span>
-                <button type="button" id="btnAuthLogout" onclick="if(typeof handleLogout === 'function') handleLogout();" style="padding: 6px 12px; font-size: 13px; color: #dc2626; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; cursor: pointer;">로그아웃</button>
-              </div>
-            </div>
             <h3 class="mb-15 basecamp-status-bar">Choose Your Path</h3>
             <div class="grid-2 mb-15" style="gap: 3.75px;">
               <button class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
@@ -1680,6 +1669,17 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampManual" onclick="showScreen('userManualScreen')">
                 <span>사용자 메뉴얼</span>
               </button>
+            </div>
+            <!-- 전화번호 로그인 상태 바 (버튼 4개 하단, 내용 중앙 정렬) -->
+            <div id="authBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+              <div id="authBarLeft" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
+                <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
+                <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
+              </div>
+              <div id="authBarRight" style="display: none; align-items: center; justify-content: center; gap: 8px; width: 100%;">
+                <span id="authBarWelcome" style="font-size: 14px; font-weight: 600; color: #0369a1;"></span>
+                <button type="button" id="btnAuthLogout" onclick="if(typeof handleLogout === 'function') handleLogout();" style="padding: 6px 12px; font-size: 13px; color: #dc2626; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; cursor: pointer;">로그아웃</button>
+              </div>
             </div>
           </div>
 
