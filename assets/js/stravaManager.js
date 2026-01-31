@@ -403,6 +403,10 @@ async function fetchAndProcessStravaData(options = {}) {
       processed += 1;
       const activities = actResult.activities || [];
 
+      if (options.onProgress && typeof options.onProgress === 'function') {
+        options.onProgress(0, activities.length);
+      }
+
       // 해당 사용자의 stelvio 훈련 로그 조회 (날짜별 체크용)
       let stelvioLogDates = new Set();
       try {
@@ -456,9 +460,16 @@ async function fetchAndProcessStravaData(options = {}) {
       }
 
       // 각 활동 처리
+      let activityIndex = 0;
       for (const act of activities) {
         const actId = String(act.id);
-        if (existingIds.has(actId)) continue;
+        if (existingIds.has(actId)) {
+          activityIndex++;
+          if (options.onProgress && typeof options.onProgress === 'function') {
+            options.onProgress(activityIndex, activities.length);
+          }
+          continue;
+        }
 
         const startDate = act.start_date || act.start_date_local || '';
         let dateStr = '';
@@ -659,6 +670,10 @@ async function fetchAndProcessStravaData(options = {}) {
           console.error(`[fetchAndProcessStravaData] ❌ saveStravaActivityToFirebase 함수가 정의되지 않았습니다.`);
           errors.push(`saveStravaActivityToFirebase 함수가 없습니다.`);
         }
+        activityIndex++;
+        if (options.onProgress && typeof options.onProgress === 'function') {
+          options.onProgress(activityIndex, activities.length);
+        }
       }
 
       newActivitiesTotal += newCount;
@@ -828,21 +843,36 @@ async function exchangeStravaCode(code, userId) {
 async function syncStravaData(startDate = null, endDate = null) {
   const btn = document.getElementById('btnSyncStrava');
   const originalText = btn ? btn.textContent : '🔄 스트라바 동기화';
-  
+  const progressOverlay = document.getElementById('stravaSyncProgressOverlay');
+  const progressText = document.getElementById('stravaSyncProgressText');
+
+  function showProgress(current, total) {
+    if (progressText) {
+      progressText.textContent = total >= 0 ? `${current} / ${total}` : '준비 중...';
+    }
+    if (progressOverlay) {
+      progressOverlay.classList.remove('hidden');
+      progressOverlay.style.display = 'flex';
+    }
+  }
+  function hideProgress() {
+    if (progressOverlay) {
+      progressOverlay.classList.add('hidden');
+      progressOverlay.style.display = 'none';
+    }
+  }
+
   try {
     // 버튼 비활성화 및 로딩 상태
     if (btn) {
       btn.disabled = true;
       btn.textContent = '⏳ 동기화 중...';
     }
-    
-    // 토스트 메시지 표시
-    if (typeof window.showToast === 'function') {
-      window.showToast('스트라바 활동 데이터를 가져오는 중...', 'info');
-    }
-    
+
+    showProgress(0, -1);
+
     console.log('[syncStravaData] 🚀 스트라바 동기화 시작');
-    
+
     // 날짜를 Unix timestamp로 변환
     const options = {};
     if (startDate) {
@@ -856,7 +886,10 @@ async function syncStravaData(startDate = null, endDate = null) {
       options.before = Math.floor(endOfDay.getTime() / 1000);
       console.log('[syncStravaData] 종료일:', endDate.toISOString(), '→ before:', options.before);
     }
-    
+    options.onProgress = function (current, total) {
+      showProgress(current, total);
+    };
+
     // 동기화 실행
     const result = await fetchAndProcessStravaData(options);
     
@@ -914,6 +947,12 @@ async function syncStravaData(startDate = null, endDate = null) {
       error: error.message || 'Unknown error'
     };
   } finally {
+    // 진행 오버레이 숨기기
+    const progressOverlay = document.getElementById('stravaSyncProgressOverlay');
+    if (progressOverlay) {
+      progressOverlay.classList.add('hidden');
+      progressOverlay.style.display = 'none';
+    }
     // 버튼 복원
     if (btn) {
       btn.disabled = false;
@@ -1058,6 +1097,17 @@ function clearStravaSyncMonthRange() {
 }
 
 /**
+ * 오늘 날짜만 동기화 (기간을 오늘로 설정 후 동기화 실행)
+ */
+function startStravaSyncToday() {
+  const today = new Date();
+  const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+  closeStravaSyncModal();
+  syncStravaData(startDate, endDate);
+}
+
+/**
  * Strava 동기화 확인 및 실행
  */
 async function confirmStravaSync() {
@@ -1132,4 +1182,5 @@ window.openStravaSyncModal = openStravaSyncModal;
 window.closeStravaSyncModal = closeStravaSyncModal;
 window.setStravaSyncMonthRange = setStravaSyncMonthRange;
 window.clearStravaSyncMonthRange = clearStravaSyncMonthRange;
+window.startStravaSyncToday = startStravaSyncToday;
 window.confirmStravaSync = confirmStravaSync;
