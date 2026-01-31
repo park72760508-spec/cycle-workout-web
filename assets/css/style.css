@@ -9646,106 +9646,157 @@ button[aria-disabled="true"] {
   color: #c62828;
 }
 
-/* AI 추천 결과 화면 모바일 최적화 */
+/* AI 추천 결과 화면 모바일 최적화: 휴대폰 시인성·크기 최적화 (폰트 비율 축소 대신 레이아웃·최소 크기 적용) */
 @media (max-width: 768px) {
   #workoutRecommendationModal .ai-workout-recommendation-content {
-    width: 95% !important;
-    max-width: 95% !important;
-    padding: 16px !important;
+    width: calc(100vw - 24px) !important;
+    max-width: none !important;
+    max-height: 88vh !important;
+    padding: 16px 14px !important;
+    box-sizing: border-box;
+    font-size: 16px; /* 휴대폰에서 em 기반 텍스트의 기준을 읽기 좋은 크기로 */
   }
-  
-  .workout-recommendation-container {
-    padding: 12px !important;
+
+  #workoutRecommendationModal .result-title {
+    font-size: 1.25rem !important;   /* 20px 수준, 시인성 확보 */
+    margin-bottom: 8px !important;
   }
-  
-  .result-stats {
+
+  #workoutRecommendationModal .workout-recommendation-container {
+    padding: 0 !important;
+  }
+
+  #workoutRecommendationModal .result-stats {
     display: flex !important;
-    flex-direction: column !important;
-    gap: 12px !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
   }
-  
-  .result-stat-item {
+
+  #workoutRecommendationModal .result-stat-item {
+    flex: 1 1 0 !important;
+    min-width: calc(50% - 8px) !important;
     background: rgba(0, 212, 170, 0.1) !important;
     border-radius: 8px !important;
-    padding: 12px !important;
+    padding: 12px 10px !important;
     text-align: center !important;
   }
-  
-  .recommendation-item {
+
+  #workoutRecommendationModal .result-stat-label {
+    font-size: 13px !important;
+    color: #aaa !important;
+    margin-bottom: 4px !important;
+  }
+
+  #workoutRecommendationModal .result-stat-value {
+    font-size: 15px !important;
+    font-weight: bold !important;
+    color: #00d4aa !important;
+  }
+
+  #workoutRecommendationModal .category-info {
+    padding: 14px !important;
+    margin-bottom: 16px !important;
+  }
+
+  #workoutRecommendationModal .category-reason,
+  #workoutRecommendationModal .category-info .category-reason {
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    word-break: break-word !important;
+    white-space: pre-wrap !important;
+    color: #fff !important;
+  }
+
+  #workoutRecommendationModal .recommendation-item {
     flex-direction: column !important;
     align-items: stretch !important;
     padding: 16px !important;
     gap: 12px !important;
+    margin-bottom: 14px !important;
   }
-  
-  .recommendation-rank {
-    text-align: center !important;
-    font-size: 1.8em !important;
-  }
-  
-  .recommendation-content {
-    width: 100% !important;
-  }
-  
-  .workout-title {
-    font-size: 0.77em !important; /* 1.1em * 0.7 = 0.77em */
-    word-break: break-word !important;
-    line-height: 1.4 !important;
-  }
-  
-  .workout-meta {
+
+  #workoutRecommendationModal .recommendation-item .recommendation-headline {
     flex-direction: column !important;
-    gap: 6px !important;
     align-items: flex-start !important;
-    font-size: 0.595em !important; /* 0.85em * 0.7 = 0.595em */
+    gap: 8px !important;
   }
-  
-  .recommendation-reason-wrapper {
-    width: 100% !important;
+
+  #workoutRecommendationModal .recommendation-item .recommendation-rank {
+    font-size: 1.5rem !important;
+    line-height: 1 !important;
+  }
+
+  #workoutRecommendationModal .recommendation-item .workout-title,
+  #workoutRecommendationModal .recommendation-item h4.workout-title {
+    font-size: 15px !important;
+    line-height: 1.4 !important;
+    word-break: break-word !important;
+  }
+
+  #workoutRecommendationModal .recommendation-item .workout-meta {
+    font-size: 13px !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  #workoutRecommendationModal .recommendation-reason-wrapper {
     padding: 12px !important;
   }
-  
-  .recommendation-reason {
-    font-size: 0.665em !important; /* 0.95em * 0.7 = 0.665em */
-    line-height: 1.7 !important;
-    word-break: break-word !important;
-    white-space: pre-wrap !important;
-  }
-  
-  .workout-description {
-    font-size: 0.63em !important; /* 0.9em * 0.7 = 0.63em */
+
+  #workoutRecommendationModal .recommendation-reason {
+    font-size: 14px !important;
     line-height: 1.6 !important;
     word-break: break-word !important;
-  }
-  
-  .category-reason {
-    font-size: 0.63em !important; /* 0.9em * 0.7 = 0.63em */
-    line-height: 1.7 !important;
-    word-break: break-word !important;
     white-space: pre-wrap !important;
   }
-  
-  .recommendation-action {
-    width: 100% !important;
-    margin-top: 8px !important;
+
+  #workoutRecommendationModal .workout-description {
+    font-size: 13px !important;
+    line-height: 1.6 !important;
   }
-  
-  .recommendation-action .result-close-btn {
+
+  #workoutRecommendationModal .recommendation-action {
     width: 100% !important;
-    max-width: 100% !important;
+    margin-top: 4px !important;
+  }
+
+  #workoutRecommendationModal .recommendation-action .result-close-btn,
+  #workoutRecommendationModal .recommendation-action button {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 48px !important;
     padding: 14px 20px !important;
-    font-size: 1em !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
   }
-  
-  .category-info {
-    padding: 14px !important;
+}
+
+/* 작은 휴대폰(480px 이하) 추가 보정 */
+@media (max-width: 480px) {
+  #workoutRecommendationModal .ai-workout-recommendation-content {
+    width: calc(100vw - 16px) !important;
+    max-height: 90vh !important;
+    padding: 14px 12px !important;
   }
-  
-  .category-reason {
-    font-size: 0.95em !important;
-    line-height: 1.7 !important;
-    word-break: break-word !important;
-    white-space: pre-wrap !important;
+
+  #workoutRecommendationModal .result-title {
+    font-size: 1.15rem !important;
+  }
+
+  #workoutRecommendationModal .result-stat-item {
+    min-width: 100% !important;
+  }
+
+  #workoutRecommendationModal .recommendation-item .workout-title,
+  #workoutRecommendationModal .recommendation-item h4.workout-title {
+    font-size: 14px !important;
+  }
+
+  #workoutRecommendationModal .recommendation-reason,
+  #workoutRecommendationModal .category-reason {
+    font-size: 13px !important;
   }
 }
 
@@ -11500,12 +11551,14 @@ button[aria-disabled="true"] {
   box-shadow: 0 0 10px rgba(0, 212, 170, 0.8);
 }
 
-/* 모바일 반응형 */
+/* 모바일 반응형: 휴대폰에서 모달 크기·시인성 최적화 */
 @media (max-width: 480px) {
   #workoutRecommendationModal .ai-workout-recommendation-content {
-    padding: 12px 16px;
-    max-width: 95%;
-    max-height: 95vh;
+    width: calc(100vw - 16px);
+    max-width: none;
+    padding: 14px 12px;
+    max-height: 90vh;
+    box-sizing: border-box;
   }
 
   #workoutRecommendationModal .result-header {
@@ -11513,17 +11566,22 @@ button[aria-disabled="true"] {
   }
 
   #workoutRecommendationModal .result-title {
-    font-size: 1.3em;
-    margin-bottom: 2px;
+    font-size: 1.15rem;
+    margin-bottom: 6px;
   }
 
   #workoutRecommendationModal .ai-loading-container {
-    padding: 30px 15px;
-    min-height: 300px;
+    padding: 32px 16px;
+    min-height: 280px;
+  }
+
+  #workoutRecommendationModal .ai-loading-text,
+  #workoutRecommendationModal .loading-text {
+    font-size: 15px;
   }
 
   #workoutRecommendationModal .result-background-logo {
-    max-width: 200px;
+    max-width: 180px;
   }
 }
 
