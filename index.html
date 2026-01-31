@@ -5367,17 +5367,19 @@
 
       /**
        * Parse duration to minutes.
-       * Supports: "60분 21초", "60분", "90" (seconds), or number (seconds).
+       * Supports: "60분 21초", "2시간 5분", "1시간", "60분", seconds (number), or number as minutes.
        */
       function parseDurationToMinutes(duration) {
         if (duration == null) return 0;
         if (typeof duration === 'number') return duration >= 0 && duration < 400 ? duration / 60 : duration;
         const s = String(duration).trim();
+        const matchH = s.match(/(\d+)\s*시간/);
         const matchMin = s.match(/(\d+)\s*분/);
         const matchSec = s.match(/(\d+)\s*초/);
+        const h = matchH ? parseInt(matchH[1], 10) : 0;
         const min = matchMin ? parseInt(matchMin[1], 10) : 0;
         const sec = matchSec ? parseInt(matchSec[1], 10) : 0;
-        return min + sec / 60;
+        return h * 60 + min + sec / 60;
       }
 
       function formatDuration(minutes) {
@@ -5387,67 +5389,195 @@
         return m > 0 ? h + '시간 ' + m + '분' : h + '시간';
       }
 
+      /** Format as "HHh MMm" for summary. */
+      function formatDurationHHMM(minutes) {
+        const h = Math.floor(minutes / 60);
+        const m = Math.round(minutes % 60);
+        if (h === 0) return m + 'm';
+        return m > 0 ? h + 'h ' + m + 'm' : h + 'h';
+      }
+
+      /** VI = NP / avgPower. Returns null if avgPower <= 0. */
+      function calcVI(normPower, avgPower) {
+        const np = Number(normPower);
+        const avg = Number(avgPower);
+        if (!avg || avg <= 0) return null;
+        return np && np > 0 ? np / avg : 1;
+      }
+
+      /** EF = NP / avgHR. Returns null if avgHR <= 0. */
+      function calcEF(normPower, avgHeartRate) {
+        const np = Number(normPower);
+        const hr = Number(avgHeartRate);
+        if (!hr || hr <= 0) return null;
+        return np && np > 0 ? np / hr : null;
+      }
+
+      /** Classify ride style by VI: Steady/TT (<1.05), Punchy/Interval (>1.2), else Normal. */
+      function getVIStyle(vi) {
+        if (vi == null) return 'Unknown';
+        if (vi < 1.05) return 'Steady/TT';
+        if (vi > 1.2) return 'Punchy/Interval';
+        return 'Normal';
+      }
+
       function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs }) {
-        const chartTssRef = useRef(null);
-        const chartTssInstance = useRef(null);
-        const chartDistanceRef = useRef(null);
-        const chartDistanceInstance = useRef(null);
+        const chartEfRef = useRef(null);
+        const chartEfInstance = useRef(null);
+        const chartWeeklyTssRef = useRef(null);
+        const chartWeeklyTssInstance = useRef(null);
+        const chartViRef = useRef(null);
+        const chartViInstance = useRef(null);
+        const chartScatterRef = useRef(null);
+        const chartScatterInstance = useRef(null);
         const [mounted, setMounted] = useState(false);
 
         const logs = Array.isArray(monthlyLogs) ? monthlyLogs : [];
         const year = currentMonth ? currentMonth.getFullYear() : new Date().getFullYear();
-        const month = currentMonth ? currentMonth.getMonth() + 1 : new Date().getMonth() + 1;
+        const monthNum = currentMonth ? currentMonth.getMonth() + 1 : new Date().getMonth() + 1;
+
+        /** Enrich each log with VI, EF, style. NP can be log.NP or log.normPower. */
+        const enrichedLogs = React.useMemo(function() {
+          return logs.map(function(log) {
+            const np = Number(log.NP ?? log.normPower ?? 0);
+            const avgP = Number(log.avgPower ?? 0);
+            const avgHR = Number(log.avgHeartRate ?? log.avg_hr ?? 0);
+            const vi = calcVI(np, avgP);
+            const ef = calcEF(np, avgHR);
+            return Object.assign({}, log, { vi: vi, ef: ef, style: getVIStyle(vi) });
+          });
+        }, [logs]);
 
         const stats = React.useMemo(function() {
-          let totalTSS = 0, totalDistance = 0, totalMinutes = 0, sumIF = 0, ifCount = 0, rides = 0;
-          logs.forEach(function(log) {
+          let totalTSS = 0, totalDistance = 0, totalMinutes = 0, sumEF = 0, efCount = 0, sumVI = 0, viCount = 0, rides = 0;
+          enrichedLogs.forEach(function(log) {
             const durMin = parseDurationToMinutes(log.duration);
             totalTSS += Number(log.TSS) || 0;
             totalDistance += Number(log.distance) || 0;
             totalMinutes += durMin;
-            if (log.IF != null && log.IF > 0) { sumIF += Number(log.IF); ifCount++; }
+            if (log.ef != null) { sumEF += log.ef; efCount++; }
+            if (log.vi != null) { sumVI += log.vi; viCount++; }
             rides++;
           });
           return {
             totalTSS: Math.round(totalTSS),
             totalDistance: totalDistance.toFixed(1),
             totalMinutes,
-            avgIF: ifCount > 0 ? (sumIF / ifCount).toFixed(2) : '–',
+            totalDurationFormatted: formatDurationHHMM(totalMinutes),
+            avgEF: efCount > 0 ? (sumEF / efCount).toFixed(2) : '–',
+            avgVI: viCount > 0 ? (sumVI / viCount).toFixed(2) : '–',
             rides
           };
-        }, [logs]);
+        }, [enrichedLogs]);
 
         const chartDataByDate = React.useMemo(function() {
           const byDate = {};
-          logs.forEach(function(log) {
+          enrichedLogs.forEach(function(log) {
             const d = log.date || '';
-            if (!byDate[d]) byDate[d] = { date: d, TSS: 0, distance: 0 };
+            if (!byDate[d]) byDate[d] = { date: d, TSS: 0, distance: 0, sumEF: 0, efCount: 0 };
             byDate[d].TSS += Number(log.TSS) || 0;
             byDate[d].distance += Number(log.distance) || 0;
+            if (log.ef != null) { byDate[d].sumEF += log.ef; byDate[d].efCount++; }
           });
-          return Object.values(byDate).sort(function(a, b) { return a.date.localeCompare(b.date); });
-        }, [logs]);
+          return Object.values(byDate).sort(function(a, b) { return a.date.localeCompare(b.date); }).map(function(d) {
+            return { date: d.date, TSS: d.TSS, distance: d.distance, avgEF: d.efCount > 0 ? d.sumEF / d.efCount : null };
+          });
+        }, [enrichedLogs]);
+
+        const weeklyTSSData = React.useMemo(function() {
+          const byWeek = {};
+          enrichedLogs.forEach(function(log) {
+            const d = log.date || '';
+            if (d.length < 10) return;
+            const day = parseInt(d.slice(8, 10), 10);
+            const week = Math.ceil(day / 7);
+            const key = 'W' + week;
+            if (!byWeek[key]) byWeek[key] = { week: key, label: week + '주', TSS: 0 };
+            byWeek[key].TSS += Number(log.TSS) || 0;
+          });
+          return Object.values(byWeek).sort(function(a, b) { return a.week.localeCompare(b.week); });
+        }, [enrichedLogs]);
+
+        const viDistribution = React.useMemo(function() {
+          var steady = 0, normal = 0, punchy = 0;
+          enrichedLogs.forEach(function(log) {
+            var s = log.style || getVIStyle(log.vi);
+            if (s === 'Steady/TT') steady++;
+            else if (s === 'Punchy/Interval') punchy++;
+            else normal++;
+          });
+          return { steady: steady, normal: normal, punchy: punchy };
+        }, [enrichedLogs]);
+
+        const scatterData = React.useMemo(function() {
+          var maxTSS = 0;
+          enrichedLogs.forEach(function(log) { maxTSS = Math.max(maxTSS, Number(log.TSS) || 0); });
+          var range = Math.max(maxTSS, 1);
+          return enrichedLogs.map(function(log) {
+            var tss = Number(log.TSS) || 0;
+            var r = Math.max(4, (tss / range) * 20);
+            return {
+              x: Number(log.avgCadence ?? 0) || 0,
+              y: Number(log.avgPower ?? 0) || 0,
+              r: r,
+              date: log.date,
+              tss: tss
+            };
+          }).filter(function(p) { return p.x > 0 || p.y > 0; });
+        }, [enrichedLogs]);
 
         useEffect(function() {
           setMounted(true);
         }, []);
 
+        function dateLabel(d) {
+          var parts = (d.date || '').split('-');
+          if (parts.length < 3) return d.date;
+          return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
+        }
+
         useEffect(function() {
-          if (!ChartLib || !chartTssRef.current || chartDataByDate.length === 0) return;
-          const ctx = chartTssRef.current.getContext('2d');
-          if (chartTssInstance.current) chartTssInstance.current.destroy();
-          chartTssInstance.current = new ChartLib(ctx, {
+          if (!ChartLib || !chartEfRef.current || chartDataByDate.length === 0) return;
+          var ctx = chartEfRef.current.getContext('2d');
+          if (chartEfInstance.current) chartEfInstance.current.destroy();
+          chartEfInstance.current = new ChartLib(ctx, {
+            type: 'line',
+            data: {
+              labels: chartDataByDate.map(dateLabel),
+              datasets: [{
+                label: 'EF',
+                data: chartDataByDate.map(function(d) { return d.avgEF != null ? d.avgEF : null; }),
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return 'EF: ' + (ctx.raw != null ? Number(ctx.raw).toFixed(2) : '–'); } } } },
+              scales: {
+                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+                y: { beginAtZero: false, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } }
+              }
+            }
+          });
+          return function() { if (chartEfInstance.current) { chartEfInstance.current.destroy(); chartEfInstance.current = null; } };
+        }, [chartDataByDate]);
+
+        useEffect(function() {
+          if (!ChartLib || !chartWeeklyTssRef.current || weeklyTSSData.length === 0) return;
+          var ctx = chartWeeklyTssRef.current.getContext('2d');
+          if (chartWeeklyTssInstance.current) chartWeeklyTssInstance.current.destroy();
+          chartWeeklyTssInstance.current = new ChartLib(ctx, {
             type: 'bar',
             data: {
-              labels: chartDataByDate.map(function(d) {
-                var parts = d.date.split('-');
-                var m = parseInt(parts[1], 10);
-                var day = parseInt(parts[2], 10);
-                return m + '/' + day;
-              }),
+              labels: weeklyTSSData.map(function(d) { return d.label; }),
               datasets: [{
                 label: 'TSS',
-                data: chartDataByDate.map(function(d) { return d.TSS; }),
+                data: weeklyTSSData.map(function(d) { return d.TSS; }),
                 backgroundColor: 'rgba(34, 197, 94, 0.6)',
                 borderColor: '#22c55e',
                 borderWidth: 1
@@ -5458,36 +5588,65 @@
               maintainAspectRatio: false,
               plugins: { legend: { display: false } },
               scales: {
-                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } },
                 y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } }
               }
             }
           });
-          return function() {
-            if (chartTssInstance.current) {
-              chartTssInstance.current.destroy();
-              chartTssInstance.current = null;
-            }
-          };
-        }, [chartDataByDate]);
+          return function() { if (chartWeeklyTssInstance.current) { chartWeeklyTssInstance.current.destroy(); chartWeeklyTssInstance.current = null; } };
+        }, [weeklyTSSData]);
 
         useEffect(function() {
-          if (!ChartLib || !chartDistanceRef.current || chartDataByDate.length === 0) return;
-          const ctx = chartDistanceRef.current.getContext('2d');
-          if (chartDistanceInstance.current) chartDistanceInstance.current.destroy();
-          chartDistanceInstance.current = new ChartLib(ctx, {
+          if (!ChartLib || !chartViRef.current) return;
+          var ctx = chartViRef.current.getContext('2d');
+          if (chartViInstance.current) chartViInstance.current.destroy();
+          chartViInstance.current = new ChartLib(ctx, {
             type: 'bar',
             data: {
-              labels: chartDataByDate.map(function(d) {
-                var parts = d.date.split('-');
-                var m = parseInt(parts[1], 10);
-                var day = parseInt(parts[2], 10);
-                return m + '/' + day;
-              }),
+              labels: ['Steady/TT (VI<1.05)', 'Normal', 'Punchy/Interval (VI>1.2)'],
               datasets: [{
-                label: '거리 (km)',
-                data: chartDataByDate.map(function(d) { return d.distance.toFixed(1); }),
-                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                label: 'Rides',
+                data: [viDistribution.steady, viDistribution.normal, viDistribution.punchy],
+                backgroundColor: ['rgba(59, 130, 246, 0.7)', 'rgba(148, 163, 184, 0.7)', 'rgba(239, 68, 68, 0.7)'],
+                borderColor: ['#3b82f6', '#94a3b8', '#ef4444'],
+                borderWidth: 1
+              }]
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    afterLabel: function() {
+                      return 'Low VI = steady pacing (endurance). High VI = interval/hilly.';
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } },
+                y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+              }
+            }
+          });
+          return function() { if (chartViInstance.current) { chartViInstance.current.destroy(); chartViInstance.current = null; } };
+        }, [viDistribution.steady, viDistribution.normal, viDistribution.punchy]);
+
+        useEffect(function() {
+          if (!ChartLib || !chartScatterRef.current || scatterData.length === 0) return;
+          var ctx = chartScatterRef.current.getContext('2d');
+          if (chartScatterInstance.current) chartScatterInstance.current.destroy();
+          var maxX = Math.max.apply(null, scatterData.map(function(p) { return p.x; }).concat(90));
+          chartScatterInstance.current = new ChartLib(ctx, {
+            type: 'bubble',
+            data: {
+              datasets: [{
+                label: 'Rides',
+                data: scatterData.map(function(p) { return { x: p.x, y: p.y, r: p.r }; }),
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
                 borderColor: '#3b82f6',
                 borderWidth: 1
               }]
@@ -5495,22 +5654,38 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: { legend: { display: false } },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: function(ctx) {
+                      var r = ctx.raw;
+                      return r ? 'Cadence: ' + r.x + ' rpm, Power: ' + r.y + ' W (bubble size = TSS)' : '';
+                    }
+                  }
+                }
+              },
               scales: {
-                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
-                y: { beginAtZero: true, grid: { color: '#f3f4f6' }, ticks: { font: { size: 10 } } }
+                x: {
+                  title: { display: true, text: 'Avg Cadence (rpm) · 90 rpm = target', font: { size: 10 } },
+                  min: 0,
+                  max: Math.max(110, maxX + 10),
+                  grid: { color: '#f3f4f6' },
+                  ticks: { font: { size: 10 } }
+                },
+                y: {
+                  title: { display: true, text: 'Avg Power (W)', font: { size: 10 } },
+                  beginAtZero: true,
+                  grid: { color: '#f3f4f6' },
+                  ticks: { font: { size: 10 } }
+                }
               }
             }
           });
-          return function() {
-            if (chartDistanceInstance.current) {
-              chartDistanceInstance.current.destroy();
-              chartDistanceInstance.current = null;
-            }
-          };
-        }, [chartDataByDate]);
+          return function() { if (chartScatterInstance.current) { chartScatterInstance.current.destroy(); chartScatterInstance.current = null; } };
+        }, [scatterData]);
 
-        const monthLabel = year + '년 ' + month + '월';
+        const monthLabel = year + '년 ' + monthNum + '월';
         const isEmpty = logs.length === 0;
 
         return (
@@ -5535,7 +5710,8 @@
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  {/* Row 1: Summary Cards (Bento) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
                     <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
                       <div className="text-xs font-medium text-emerald-700 mb-0.5">총 TSS</div>
                       <div className="text-xl font-bold text-emerald-800">{stats.totalTSS}</div>
@@ -5546,25 +5722,46 @@
                     </div>
                     <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
                       <div className="text-xs font-medium text-amber-700 mb-0.5">총 시간</div>
-                      <div className="text-xl font-bold text-amber-800">{formatDuration(stats.totalMinutes)}</div>
+                      <div className="text-xl font-bold text-amber-800">{stats.totalDurationFormatted}</div>
                     </div>
-                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                      <div className="text-xs font-medium text-gray-700 mb-0.5">라이드 / 평균 IF</div>
-                      <div className="text-xl font-bold text-gray-800">{stats.rides}회 · {stats.avgIF}</div>
+                    <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
+                      <div className="text-xs font-medium text-violet-700 mb-0.5">평균 EF</div>
+                      <div className="text-xl font-bold text-violet-800">{stats.avgEF}</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                      <div className="text-xs font-medium text-slate-700 mb-0.5">평균 VI</div>
+                      <div className="text-xl font-bold text-slate-800">{stats.avgVI}</div>
                     </div>
                   </div>
-                  <div className="space-y-4">
+                  {/* Row 2: EF Trend */}
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">EF (Efficiency Factor) Trend</h4>
+                    <div className="h-[180px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
+                      <canvas ref={chartEfRef}></canvas>
+                    </div>
+                  </div>
+                  {/* Row 3: Weekly TSS + VI Distribution (Bento 2 cols) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">일별 TSS</h4>
-                      <div className="h-[180px]">
-                        <canvas ref={chartTssRef}></canvas>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Weekly TSS Load</h4>
+                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
+                        <canvas ref={chartWeeklyTssRef}></canvas>
                       </div>
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">일별 거리 (km)</h4>
-                      <div className="h-[180px]">
-                        <canvas ref={chartDistanceRef}></canvas>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Ride Style (VI Distribution)</h4>
+                      <p className="text-xs text-gray-500 mb-1">Low VI = steady pacing (endurance). High VI = interval/hilly.</p>
+                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
+                        <canvas ref={chartViRef}></canvas>
                       </div>
+                    </div>
+                  </div>
+                  {/* Row 4: Power vs Cadence Scatter */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Power vs Cadence (Bubble size = TSS)</h4>
+                    <p className="text-xs text-gray-500 mb-1">Grinder: Low RPM, High Power. Spinner: High RPM. Target cadence: 90 rpm.</p>
+                    <div className="h-[240px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
+                      <canvas ref={chartScatterRef}></canvas>
                     </div>
                   </div>
                 </>
@@ -5610,6 +5807,7 @@
             const min = Math.floor(sec / 60);
             const s = sec % 60;
             const durationStr = min + '분 ' + s + '초';
+            var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
             monthlyLogs.push({
               date: dateKey,
               distance: log.distance_km != null ? Number(log.distance_km) : 0,
@@ -5620,7 +5818,8 @@
               avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
               avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
               avgPower: log.avg_watts != null ? Number(log.avg_watts) : 0,
-              NP: log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0)
+              NP: np,
+              normPower: np
             });
           });
         });
