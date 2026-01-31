@@ -776,7 +776,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* Manage Your Career 화면 하단 여백 조정 */
 #myCareerScreen .connection-form-card {
-  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
+  padding-bottom: 8px !important; /* 하단 여백 최소화 */
 }
 
 #myCareerScreen .connection-device-section {
@@ -789,8 +789,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* Manage Your Career 화면 하단 버튼 영역 안전거리 확보 */
 #myCareerScreen .connection-exit-container {
+  display: none !important; /* 뒤로 가기 버튼·실선 제거 (헤더 좌측 < 버튼으로 대체) */
   margin-top: 0 !important;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: none !important;
   
   /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
   padding-top: 20px !important;
