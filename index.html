@@ -4360,8 +4360,12 @@
         console.log(`[MiniCalendar] ${logs.length}개의 훈련 로그를 가져왔습니다.`);
         
         // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
+        // 훈련 시간 10분 미만은 달력 표시에서 제외
+        const MIN_DURATION_SEC = 600;
         const logsByDate = {};
         logs.forEach(log => {
+          const sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+          if (sec < MIN_DURATION_SEC) return;
           const dateKey = getDateKey(log.date);
           if (dateKey) {
             if (!logsByDate[dateKey]) {
@@ -4843,11 +4847,12 @@
         })));
         
         // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
-        // 프로필 선택 화면의 fetchTrainingLogsForCalendar와 동일한 로직
+        // 훈련 시간 10분 미만은 달력 표시에서 제외
+        const MIN_DURATION_SEC_JOURNAL = 600;
         const logsByDate = {};
         logs.forEach(log => {
-          // getDateKeyJournal 함수가 Firestore Timestamp를 자동으로 처리하므로
-          // log.date를 그대로 전달
+          const sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+          if (sec < MIN_DURATION_SEC_JOURNAL) return;
           const dateKey = getDateKeyJournal(log.date);
           if (dateKey) {
             if (!logsByDate[dateKey]) {
@@ -5092,7 +5097,10 @@
         window.getTrainingLogsByDateRange(uid, y, m)
           .then(function(monthLogs) {
             if (monthLogs && monthLogs.length > 0) {
+              var minSec = 600;
               monthLogs.forEach(function(log) {
+                var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+                if (sec < minSec) return;
                 var dateKey = getDateKeyJournal(log.date);
                 if (dateKey) {
                   if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
