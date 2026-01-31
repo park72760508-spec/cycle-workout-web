@@ -11824,43 +11824,9 @@ async function selectRecommendedWorkout(workoutId, date) {
     const workout = result.item;
     console.log('Retrieved workout:', workout);
     
-    // 진행 상태 업데이트 - 워크아웃 준비 중
-    if (button) {
-      button.classList.remove('selecting-preparing');
-      button.classList.add('selecting-loading');
-      button.innerHTML = `
-        <span class="select-progress-spinner"></span>
-        <span class="select-progress-text">워크아웃 준비 중...</span>
-      `;
-    }
-    
-    // 워크아웃 데이터 정규화 (selectWorkout과 동일한 방식)
-    // workoutManager.js의 normalizeWorkoutData와 동일한 로직 적용
-    const normalizedWorkout = {
-      id: workout.id,
-      title: String(workout.title || '제목 없음'),
-      description: String(workout.description || ''),
-      author: String(workout.author || '미상'),
-      status: String(workout.status || '보이기'),
-      total_seconds: Number(workout.total_seconds) || 0,
-      publish_date: workout.publish_date || null,
-      segments: Array.isArray(workout.segments) ? workout.segments : []
-    };
-    
-    // 전역 워크아웃 데이터 설정 (selectWorkout과 동일한 방식)
-    window.currentWorkout = normalizedWorkout;
-    
-    // localStorage에 저장
-    try {
-      localStorage.setItem('currentWorkout', JSON.stringify(normalizedWorkout));
-      console.log('Workout saved to localStorage');
-    } catch (e) {
-      console.warn('로컬 스토리지 저장 실패:', e);
-    }
-    
     // 진행 상태 업데이트 - 완료 중
     if (button) {
-      button.classList.remove('selecting-loading');
+      button.classList.remove('selecting-preparing');
       button.classList.add('selecting-completing');
       button.innerHTML = `
         <span class="select-progress-spinner"></span>
@@ -11871,39 +11837,48 @@ async function selectRecommendedWorkout(workoutId, date) {
     // 모달 닫기
     closeWorkoutRecommendationModal();
     
-    // 훈련 준비 화면으로 이동 (selectWorkout과 동일한 방식)
-    if (typeof showScreen === 'function') {
-      // 현재 활성화된 화면을 히스토리에 추가
-      if (!window.screenHistory) {
-        window.screenHistory = [];
+    // 사용자가 해당 워크아웃을 클릭한 것과 동일한 로직 적용: 훈련 준비 화면 워크아웃 선택 경로 사용
+    // → currentWorkout 설정, localStorage/Firebase 저장, updateTrainingReadyScreenWithWorkout 호출로
+    //    올바른 블럭에 그래프 표시 및 Select Dashboard 버튼 활성화
+    if (typeof selectWorkoutForTrainingReady === 'function') {
+      await selectWorkoutForTrainingReady(workout, { skipToast: true });
+    } else {
+      // 폴백: 기존 방식 유지
+      const normalizedWorkout = {
+        id: workout.id,
+        title: String(workout.title || '제목 없음'),
+        description: String(workout.description || ''),
+        author: String(workout.author || '미상'),
+        status: String(workout.status || '보이기'),
+        total_seconds: Number(workout.total_seconds) || 0,
+        publish_date: workout.publish_date || null,
+        segments: Array.isArray(workout.segments) ? workout.segments : []
+      };
+      window.currentWorkout = normalizedWorkout;
+      try { localStorage.setItem('currentWorkout', JSON.stringify(normalizedWorkout)); } catch (e) {}
+      if (typeof updateTrainingReadyScreenWithWorkout === 'function') {
+        updateTrainingReadyScreenWithWorkout(normalizedWorkout);
       }
-      
+    }
+    
+    // 훈련 준비 화면으로 이동
+    if (typeof showScreen === 'function') {
+      if (!window.screenHistory) window.screenHistory = [];
       const currentActive = document.querySelector(".screen.active") || 
                             Array.from(document.querySelectorAll(".screen")).find(s => 
                               s.style.display === "block" || window.getComputedStyle(s).display === "block"
                             );
-      
       if (currentActive && currentActive.id && currentActive.id !== 'trainingReadyScreen') {
         const lastHistory = window.screenHistory.length > 0 ? window.screenHistory[window.screenHistory.length - 1] : null;
         if (lastHistory !== currentActive.id) {
           window.screenHistory.push(currentActive.id);
-          if (window.screenHistory.length > 10) {
-            window.screenHistory.shift();
-          }
+          if (window.screenHistory.length > 10) window.screenHistory.shift();
         }
       }
-      
       showScreen('trainingReadyScreen', false);
     }
     
-    // 워크아웃 미리보기 업데이트 (있는 경우)
-    if (typeof updateWorkoutPreview === 'function') {
-      setTimeout(() => {
-        updateWorkoutPreview();
-      }, 100);
-    }
-    
-    showToast(`${normalizedWorkout.title || '워크아웃'}이 선택되었습니다. 훈련을 시작하세요!`, 'success');
+    showToast(`${(workout && workout.title) || '워크아웃'}이 선택되었습니다. 훈련을 시작하세요!`, 'success');
     
   } catch (error) {
     console.error('워크아웃 선택 오류:', error);
@@ -12196,9 +12171,11 @@ async function openWorkoutSelectionForTrainingReady() {
 /**
  * 훈련 준비 화면에서 워크아웃 선택 시 호출되는 함수
  * workout 객체를 직접 받아서 처리
+ * options: { skipToast: true } — AI 추천 등에서 호출 시 토스트 중복 방지
  */
-async function selectWorkoutForTrainingReady(workout) {
+async function selectWorkoutForTrainingReady(workout, options) {
   try {
+    const skipToast = options && options.skipToast === true;
     if (!workout) {
       console.error('[Training Ready] workout 데이터가 없습니다.');
       if (typeof showToast === 'function') {
@@ -12286,7 +12263,7 @@ async function selectWorkoutForTrainingReady(workout) {
     // 훈련 준비 화면 업데이트
     updateTrainingReadyScreenWithWorkout(normalizedWorkout);
     
-    if (typeof showToast === 'function') {
+    if (!skipToast && typeof showToast === 'function') {
       showToast(`"${normalizedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
     }
     
