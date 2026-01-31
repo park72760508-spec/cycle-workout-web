@@ -166,6 +166,9 @@
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+@keyframes stravaSyncSpin {
+  to { transform: rotate(360deg); }
+}
 
 /* 점 애니메이션 */
 .dots-loader {
@@ -4008,10 +4011,16 @@
         <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
       </div>
       <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
-        <button onclick="closeStravaSyncModal()" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">취소</button>
+        <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">오늘 기록으로</button>
         <button onclick="confirmStravaSync()" style="padding: 12px 24px; background: #fc4c02; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; transition: all 0.2s;">동기화 시작</button>
       </div>
     </div>
+  </div>
+
+  <!-- Strava 동기화 진행 오버레이 (큰 녹색 스피너 + 진행 수/총 수) -->
+  <div id="stravaSyncProgressOverlay" class="strava-sync-progress-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10001; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); flex-direction: column;">
+    <div class="strava-sync-spinner" style="width: 64px; height: 64px; border: 4px solid rgba(34, 197, 94, 0.3); border-top-color: #22c55e; border-radius: 50%; animation: stravaSyncSpin 0.9s linear infinite;"></div>
+    <p id="stravaSyncProgressText" style="margin-top: 16px; font-size: 1.1em; font-weight: 600; color: #fff;">0 / 0</p>
   </div>
 
   <!-- 카운트다운 오버레이 -->
