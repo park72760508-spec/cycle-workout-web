@@ -312,10 +312,14 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
             z7_neuromuscular: 0
           };
       
+      // date 필드: "YYYY-MM-DD" 형식 문자열 (훈련일지 달력 등 조회용)
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
       const trainingLogData = {
         // 기본 정보
         userId: userId, // 쿼리 편의성을 위해 유지
-        date: Timestamp.now(),
+        date: dateStr,
         earned_points: earnedPoints,
         workout_id: trainingData.workout_id || null,
         title: trainingData.title || null,
