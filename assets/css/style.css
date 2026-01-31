@@ -422,6 +422,31 @@ h1,h2,h3,h4 { font-weight: 600; }
   -webkit-overflow-scrolling: touch;
 }
 
+/* Live Training Session 일괄 퇴실 버튼과 동일한 스타일 (Choose Your Path 로그아웃 등 공통) */
+.bluetooth-session-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.bluetooth-session-exit-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  opacity: 0.8;
+}
+.bluetooth-session-exit-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 0.7;
+}
+
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
 #basecampScreen .btn-device.basecamp-btn,
 .basecamp-btn {
