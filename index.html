@@ -4266,29 +4266,54 @@
         if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
         if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
         if (backBtn) backBtn.style.display = 'flex';
-        if (typeof loadWorkouts === 'function') setTimeout(function() { loadWorkouts(categoryId); }, 100);
+        var grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+        var useCache = window.workouts && Array.isArray(window.workouts) && typeof renderWorkoutTable === 'function';
+        var filtered = [];
+        if (useCache && categoryId === 'all') {
+          filtered = window.workouts;
+        } else if (useCache && categoryId) {
+          filtered = window.workouts.filter(function(w) {
+            return typeof getWorkoutDominantZone === 'function' && getWorkoutDominantZone(w) === categoryId;
+          });
+        }
+        if (useCache && (categoryId === 'all' ? filtered.length > 0 : true)) {
+          renderWorkoutTable(filtered, window.workoutRoomStatusMap || {}, window.workoutRoomCodeMap || {}, grade);
+          if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
+        } else if (typeof loadWorkouts === 'function') {
+          setTimeout(function() { loadWorkouts(categoryId); }, 100);
+        }
+      }
+
+      function getCategoryWorkoutCount(workouts, categoryId) {
+        if (!workouts || !Array.isArray(workouts)) return 0;
+        if (categoryId === 'all') return workouts.length;
+        return workouts.filter(function(w) {
+          if (typeof getWorkoutDominantZone !== 'function') return false;
+          return getWorkoutDominantZone(w) === categoryId;
+        }).length;
       }
 
       function renderWorkoutCategories(workouts) {
         var grid = document.getElementById('workoutCategoryGrid');
         if (!grid) return;
-        var totalCount = (workouts && Array.isArray(workouts)) ? workouts.length : 0;
         grid.innerHTML = WORKOUT_CATEGORIES.map(function(c) {
           var zoneAttr = c.id === 'all' ? 'all' : c.id.replace('z', '');
-          var count = c.id === 'all' ? totalCount : '-';
-          if (count === 0 && c.id === 'all') count = '-';
-          else if (count > 0 && c.id === 'all') count = count + '개';
+          var count = getCategoryWorkoutCount(workouts, c.id);
+          var countText = count > 0 ? count + '개' : '-';
           return '<div class="workout-category-card" data-category="' + (c.id || '') + '" data-zone="' + zoneAttr + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')">' +
             '<span class="category-icon">' + (c.icon || '📋') + '</span>' +
             '<div class="category-label">' + (c.label || '') + '</div>' +
-            '<div class="category-count">' + count + '</div>' +
+            '<div class="category-count">' + countText + '</div>' +
             '</div>';
         }).join('');
       }
 
       function workoutViewInit() {
         workoutViewShowCategory();
-        renderWorkoutCategories();
+        renderWorkoutCategories(window.workouts);
+        if (typeof loadWorkouts === 'function') {
+          setTimeout(function() { loadWorkouts('all'); }, 200);
+        }
       }
 
       window.workoutViewState = workoutViewState;
