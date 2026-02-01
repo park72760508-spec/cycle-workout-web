@@ -4240,11 +4240,13 @@
       var workoutViewState = { mode: 'category', selectedCategory: null };
       var WORKOUT_CATEGORIES = [
         { id: 'all', label: '전체', icon: '📋', color: 'var(--zone-2)' },
-        { id: 'z1', label: 'Active Recovery', icon: '🔄', color: 'var(--zone-1)' },
-        { id: 'z2', label: 'Endurance', icon: '🏃', color: 'var(--zone-2)' },
-        { id: 'z3', label: 'Tempo', icon: '⚡', color: 'var(--zone-3)' },
-        { id: 'z4', label: 'Threshold', icon: '🔥', color: 'var(--zone-4)' },
-        { id: 'z5', label: 'VO2max', icon: '💪', color: 'var(--zone-5)' }
+        { id: 'Active Recovery', label: 'Active Recovery', icon: '🔄', color: 'var(--zone-1)' },
+        { id: 'Endurance', label: 'Endurance', icon: '🏃', color: 'var(--zone-2)' },
+        { id: 'Sweet Spot', label: 'Sweet Spot', icon: '⭐', color: 'var(--zone-3)' },
+        { id: 'Tempo', label: 'Tempo', icon: '⚡', color: 'var(--zone-3)' },
+        { id: 'Threshold', label: 'Threshold', icon: '🔥', color: 'var(--zone-4)' },
+        { id: 'VO2 Max', label: 'VO2 Max', icon: '💪', color: 'var(--zone-5)' },
+        { id: '기타', label: '기타', icon: '📌', color: 'var(--zone-1)' }
       ];
 
       function getCategoryLabel(categoryId) {
@@ -4291,7 +4293,7 @@
           filtered = window.workouts;
         } else if (useCache && categoryId) {
           filtered = window.workouts.filter(function(w) {
-            return typeof getWorkoutDominantZone === 'function' && getWorkoutDominantZone(w) === categoryId;
+            return typeof getWorkoutCategoryId === 'function' && getWorkoutCategoryId(w) === categoryId;
           });
         }
         if (useCache && (categoryId === 'all' ? filtered.length > 0 : true)) {
@@ -4306,8 +4308,8 @@
         if (!workouts || !Array.isArray(workouts)) return 0;
         if (categoryId === 'all') return workouts.length;
         return workouts.filter(function(w) {
-          if (typeof getWorkoutDominantZone !== 'function') return false;
-          return getWorkoutDominantZone(w) === categoryId;
+          if (typeof getWorkoutCategoryId !== 'function') return false;
+          return getWorkoutCategoryId(w) === categoryId;
         }).length;
       }
 
@@ -4315,7 +4317,7 @@
         var grid = document.getElementById('workoutCategoryGrid');
         if (!grid) return;
         grid.innerHTML = WORKOUT_CATEGORIES.map(function(c) {
-          var zoneAttr = c.id === 'all' ? 'all' : c.id.replace('z', '');
+          var zoneAttr = c.id === 'all' ? 'all' : (c.id === 'Active Recovery' ? '1' : c.id === 'Endurance' ? '2' : c.id === 'Sweet Spot' || c.id === 'Tempo' ? '3' : c.id === 'Threshold' ? '4' : c.id === 'VO2 Max' ? '5' : '1');
           var count = getCategoryWorkoutCount(workouts, c.id);
           var countText = count > 0 ? count + '개' : '-';
           return '<div class="workout-category-card" data-category="' + (c.id || '') + '" data-zone="' + zoneAttr + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')">' +
