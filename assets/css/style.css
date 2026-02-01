@@ -3529,6 +3529,81 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* 워크아웃 작성 화면 헤더 (뒤로 가기 | 제목 | 저장) */
+.workout-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--bg-main, #fff);
+}
+.workout-builder-back-btn {
+  position: absolute;
+  left: 8px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+  color: var(--text-primary, #333);
+  transition: background 0.2s;
+}
+.workout-builder-back-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.workout-builder-header-content {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.workout-builder-title {
+  margin: 0;
+  font-size: 1.8em;
+  font-weight: bold;
+  color: var(--text-primary, #333);
+}
+.workout-builder-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.9em;
+  color: var(--text-secondary, #666);
+}
+.workout-builder-save-btn {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+  color: var(--text-primary, #333);
+  transition: background 0.2s;
+}
+.workout-builder-save-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.workout-builder-save-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
 /* 하단 푸터 (워크아웃 선택 화면에서는 미사용 - 나가기 버튼/실선 삭제됨) */
 
 /* 워크아웃 화면 내 테이블 다크 테마 보정 */
