@@ -4295,7 +4295,7 @@
           });
         }
         if (useCache && (categoryId === 'all' ? filtered.length > 0 : true)) {
-          renderWorkoutTable(filtered, window.workoutRoomStatusMap || {}, window.workoutRoomCodeMap || {}, grade);
+          renderWorkoutTable(filtered, {}, {}, grade);
           if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
         } else if (typeof loadWorkouts === 'function') {
           setTimeout(function() { loadWorkouts(categoryId); }, 100);
