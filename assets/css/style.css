@@ -3109,7 +3109,30 @@ button[aria-disabled="true"] {
 .segmented-workout-graph__bar--zone-5 { background: var(--zone-5); }
 .segmented-workout-graph__bar--zone-6 { background: var(--zone-6); }
 .segmented-workout-graph__bar--zone-7 { background: var(--zone-7); }
-.segmented-workout-graph__bar--cadence { background: #e53935; opacity: 0.95; }
+/* cadence_rpm: 막대 없음(파워 0), RPM 90=FTP 100% 기준 빨강 실선 + RPM 값 */
+.segmented-workout-graph__bar--cadence {
+  background: transparent !important;
+  position: relative;
+  min-height: 12px;
+}
+.segmented-workout-graph__cadence-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--cadence-line-bottom, 0);
+  height: 2px;
+  background: #e53935;
+}
+.segmented-workout-graph__cadence-value {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--cadence-line-bottom, 0) + 4px);
+  font-size: 10px;
+  font-weight: 600;
+  color: #e53935;
+  white-space: nowrap;
+}
 
 /* ========== WorkoutCard 컴포넌트 ========== */
 .workout-cards-grid {
@@ -3397,7 +3420,7 @@ button[aria-disabled="true"] {
 }
 
 .workout-search-btn {
-  color: #fff;
+  color: #fff !important;
   flex-shrink: 0;
 }
 
