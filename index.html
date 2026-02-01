@@ -2651,9 +2651,17 @@
   <!-- 4) 워크아웃 작성/수정 화면 -->
   <!-- 워크아웃 작성/수정 화면에서 이 ID들이 있어야 합니다 -->
   <div id="workoutBuilderScreen" class="screen">
-    <div class="header">
-      <h1>✏️ 워크아웃 작성</h1>
-      <p class="subtitle">세그먼트를 추가/수정하고 저장하세요</p>
+    <div class="header workout-builder-header">
+      <button type="button" class="workout-builder-back-btn" id="workoutBuilderBackBtn" onclick="if (typeof showScreen === 'function') showScreen('workoutScreen');" aria-label="워크아웃 화면으로">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="workout-builder-header-content">
+        <h1 class="workout-builder-title">워크아웃 작성</h1>
+        <p class="subtitle workout-builder-subtitle">세그먼트를 추가/수정하고 저장하세요</p>
+      </div>
+      <button type="button" class="workout-builder-save-btn" id="btnSaveWorkout" aria-label="저장" title="저장">
+        <img src="assets/img/save.png" alt="저장" class="workout-builder-save-icon" />
+      </button>
     </div>
   
     <div class="card">
@@ -2715,7 +2723,7 @@
   <!-- 세그먼트 목록 -->
   <div id="wbSegments" class="segments-list">
     <div class="segments-empty" id="segmentsEmpty">
-      <div class="empty-icon">📝</div>
+      <div class="empty-icon"></div>
       <p>아직 세그먼트가 없습니다</p>
       <p class="muted">아래 버튼을 클릭하여 첫 번째 세그먼트를 추가하세요</p>
     </div>
@@ -2724,7 +2732,6 @@
   <!-- 세그먼트 추가 버튼 -->
   <div class="segment-actions">
     <button class="btn btn-primary btn-default-style" id="btnAddSegment">
-      <span class="btn-icon">➕</span>
       세그먼트 추가
     </button>
     <div class="quick-add-buttons">
@@ -2859,13 +2866,6 @@
     </div>
   </div>
 </div>
-    
-    <div class="builder-actions">
-      <div class="btn-row">
-        <button class="btn btn-success btn-default-style btn-with-icon" id="btnSaveWorkout"><img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
-        <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnCancelBuilder"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
-      </div>
-    </div>
   </div>
 
   
