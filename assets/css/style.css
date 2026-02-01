@@ -3242,6 +3242,14 @@ button[aria-disabled="true"] {
   opacity: 0.9;
 }
 
+.workout-card__meta-icon-img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  opacity: 0.9;
+  vertical-align: middle;
+}
+
 .workout-card__category {
   margin-left: auto;
   font-size: 12px;
