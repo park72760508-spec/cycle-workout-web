@@ -214,10 +214,18 @@ function jsonpRequest(url, params = {}) {
       Object.keys(params).forEach(key => {
         if (params[key] !== null && params[key] !== undefined) {
           const value = String(params[key]);
-          // segments 데이터는 Base64로 인코딩하여 안전하게 전송
+          // segments 데이터는 Base64로 인코딩하여 안전하게 전송 (URIError 방지)
           if (key === 'segments') {
             try {
-              const base64Data = btoa(unescape(encodeURIComponent(value)));
+              let base64Data;
+              if (typeof TextEncoder !== 'undefined') {
+                const bytes = new TextEncoder().encode(value);
+                let binary = '';
+                bytes.forEach(b => { binary += String.fromCharCode(b); });
+                base64Data = btoa(binary);
+              } else {
+                base64Data = btoa(unescape(encodeURIComponent(value)));
+              }
               urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(base64Data)}`);
             } catch (e) {
               console.warn('Base64 인코딩 실패, 일반 인코딩 사용:', e);
