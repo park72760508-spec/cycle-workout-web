@@ -2431,6 +2431,20 @@ async function apiGetWorkout(id) {
 }
 
 /**
+ * WorkoutSegments 시트에서 workout id로 세그먼트 목록 조회
+ */
+async function apiGetWorkoutSegments(workoutId) {
+  if (!workoutId || !window.GAS_URL) return [];
+  try {
+    const result = await jsonpRequest(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
+    return (result && result.success && Array.isArray(result.segments)) ? result.segments : [];
+  } catch (error) {
+    console.warn('apiGetWorkoutSegments 실패:', workoutId, error);
+    return [];
+  }
+}
+
+/**
  * 워크아웃 ID로 그룹방 조회
  */
 async function getRoomsByWorkoutId(workoutId) {
@@ -2460,97 +2474,11 @@ async function getRoomsByWorkoutId(workoutId) {
   }
 }
 
-/**
- * 워크아웃별 그룹방 상태를 백그라운드에서 비동기로 로드 (점진적 UI 업데이트)
- */
-async function loadWorkoutRoomStatusesAsync(workouts, workoutRoomStatusMap, workoutRoomCodeMap, grade) {
-  if (!workouts || workouts.length === 0) return;
-  
-  // 배치 크기 증가 (성능 최적화)
-  const BATCH_SIZE = 15; // 한 번에 처리할 워크아웃 수 증가
-  const batches = [];
-  for (let i = 0; i < workouts.length; i += BATCH_SIZE) {
-    batches.push(workouts.slice(i, i + BATCH_SIZE));
-  }
-  
-  console.log(`그룹방 상태 로딩 시작: ${workouts.length}개 워크아웃, ${batches.length}개 배치`);
-  
-  // 배치별로 병렬 처리 (지연 시간 최소화)
-  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-    const batch = batches[batchIndex];
-    
-    // 배치 내에서 병렬 처리
-    await Promise.all(batch.map(async (workout) => {
-      try {
-        const rooms = await getRoomsByWorkoutId(workout.id);
-        
-        if (rooms && rooms.length > 0) {
-          workoutRoomStatusMap[workout.id] = 'available';
-          const firstRoom = rooms[0];
-          const roomCode = firstRoom.code || firstRoom.Code || firstRoom.roomCode;
-          if (roomCode) {
-            workoutRoomCodeMap[workout.id] = roomCode;
-          }
-        } else {
-          workoutRoomStatusMap[workout.id] = 'none';
-        }
-        
-        // 점진적 UI 업데이트 (각 워크아웃마다 즉시 반영)
-        updateWorkoutRowRoomStatus(workout.id, workoutRoomStatusMap[workout.id], workoutRoomCodeMap[workout.id], grade);
-        
-      } catch (error) {
-        workoutRoomStatusMap[workout.id] = 'none';
-        updateWorkoutRowRoomStatus(workout.id, 'none', null, grade);
-      }
-    }));
-    
-    // 배치 간 최소 지연 (JSONP 콜백 정리 시간만 확보)
-    if (batchIndex < batches.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 50)); // 100ms → 50ms로 감소
-    }
-  }
-  
-  console.log('그룹방 상태 로딩 완료');
-  
-  // 전역 변수 업데이트
-  window.workoutRoomStatusMap = workoutRoomStatusMap;
-  window.workoutRoomCodeMap = workoutRoomCodeMap;
-}
+// loadWorkoutRoomStatusesAsync 제거됨 (그룹훈련 정보 미사용)
 
-/**
- * 특정 워크아웃 행의 그룹방 상태만 업데이트 (점진적 UI 업데이트)
- */
+// 레거시: updateWorkoutRowRoomStatus 대체용 빈 함수 (호환성)
 function updateWorkoutRowRoomStatus(workoutId, status, roomCode, grade) {
-  const workoutList = safeGetElement('workoutList');
-  if (!workoutList) return;
-  
-  // 해당 워크아웃 행 찾기
-  const row = workoutList.querySelector(`tr[data-workout-id="${workoutId}"]`);
-  if (!row) return;
-  
-  // 그룹훈련 셀 찾기 (3번째 열)
-  const groupCell = row.querySelector('td:nth-child(3)');
-  if (!groupCell) return;
-  
-  // 상태에 따라 아이콘 업데이트 (기존 renderWorkoutTable 구조와 동일하게)
-  if (status === 'available' && roomCode) {
-    // 그룹방이 있으면 클릭 가능한 아이콘 표시
-    const escapedRoomCode = escapeHtml(roomCode);
-    groupCell.innerHTML = `
-      <span class="group-room-open-icon clickable" data-room-code="${escapedRoomCode}" title="그룹 훈련방 개설됨 (클릭하여 참가)">
-        <img src="assets/img/network (1).png" alt="그룹 훈련방 개설" style="width: 24px; height: 24px; vertical-align: middle;">
-      </span>
-    `;
-    
-    // 클릭 이벤트 리스너 재연결 (새로 추가된 요소에 대해)
-    const iconElement = groupCell.querySelector('.group-room-open-icon.clickable');
-    if (iconElement && typeof attachTableEventListeners === 'function') {
-      // 기존 이벤트 리스너가 자동으로 처리하도록 (전역 이벤트 위임 사용)
-    }
-  } else {
-    // 그룹방 없음 (빈 문자열)
-    groupCell.innerHTML = '';
-  }
+  // 그룹훈련 정보 미사용 - no-op
 }
 
 /**
@@ -3115,29 +3043,25 @@ async function loadWorkouts(categoryId) {
       return;
     }
 
-    const workoutRoomStatusMap = {}; // 초기값: 모두 'none'
-    const workoutRoomCodeMap = {};
-    
-    // 모든 워크아웃에 대해 기본값 설정
-    filteredWorkouts.forEach(workout => {
-      workoutRoomStatusMap[workout.id] = 'none';
+    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (listWorkouts는 segments 미포함)
+    const segmentPromises = filteredWorkouts.map(async (workout) => {
+      if (!workout.segments || !Array.isArray(workout.segments) || workout.segments.length === 0) {
+        const segments = await apiGetWorkoutSegments(workout.id);
+        workout.segments = segments;
+      }
+      return workout;
     });
-    
-    // 먼저 테이블 렌더링 (빠른 사용자 경험)
-    renderWorkoutTable(filteredWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
-    
+    await Promise.all(segmentPromises);
+
     // 전역 변수에 저장 (검색 기능에서 사용)
     window.workouts = filteredWorkouts;
-    window.workoutRoomStatusMap = workoutRoomStatusMap;
-    window.workoutRoomCodeMap = workoutRoomCodeMap;
-    
+
+    renderWorkoutTable(filteredWorkouts, {}, {}, grade);
+
     if (typeof renderWorkoutCategories === 'function') {
       renderWorkoutCategories(allWorkoutsForCount);
     }
     window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다.`);
-    
-    // 그룹방 상태는 백그라운드에서 비동기로 로드 (블로킹 없음)
-    loadWorkoutRoomStatusesAsync(filteredWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
     
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
@@ -3220,16 +3144,13 @@ function estimateWorkoutTSS(workout) {
 /**
  * WorkoutCard 컴포넌트 렌더 (단일 카드 HTML)
  */
-function renderWorkoutCard(workout, workoutRoomStatusMap = {}, workoutRoomCodeMap = {}, grade = '2') {
+function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grade = '2') {
   if (!workout || typeof workout !== 'object' || !workout.id) return '';
   const safeTitle = escapeHtml(String(workout.title || '제목 없음'));
   const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
   const tss = estimateWorkoutTSS(workout);
-  const segments = workout.segments || [];
   const graphId = 'workout-card-graph-' + workout.id;
   const isAdmin = (grade === '1' || grade === '3');
-  const hasWaitingRoom = workoutRoomStatusMap[workout.id] === 'available';
-  const roomCode = workoutRoomCodeMap[workout.id] || '';
   return `
     <div class="workout-card" data-workout-id="${workout.id}">
       <div class="workout-card__header">
@@ -3247,7 +3168,6 @@ function renderWorkoutCard(workout, workoutRoomStatusMap = {}, workoutRoomCodeMa
         <span class="workout-card__meta"><span class="workout-card__meta-icon">📊</span> TSS ${tss}</span>
       </div>
       <div class="workout-card__cta">
-        ${hasWaitingRoom ? `<button class="btn btn-sm workout-card__join-btn" data-room-code="${escapeHtml(roomCode)}" title="그룹훈련 참가">👥 참가</button>` : ''}
         <button class="btn btn-primary btn-sm workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
       </div>
     </div>
@@ -3321,8 +3241,8 @@ function searchWorkouts() {
       const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
       renderWorkoutTable(
         window.workouts,
-        window.workoutRoomStatusMap || {},
-        window.workoutRoomCodeMap || {},
+        {},
+        {},
         grade
       );
       attachTableEventListeners();
@@ -3389,17 +3309,7 @@ function searchWorkouts() {
  * 테이블 이벤트 리스너 연결 (재사용 함수)
  */
 function attachTableEventListeners() {
-  // WorkoutCard: 그룹훈련 참가 버튼
-  document.querySelectorAll('.workout-card__join-btn').forEach(btn => {
-    const roomCode = btn.dataset.roomCode;
-    if (roomCode) {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (typeof joinRoomByCode === 'function') joinRoomByCode(roomCode);
-      });
-    }
-  });
-  // 그룹훈련 버튼에 이벤트 리스너 추가 (레거시 테이블 뷰용)
+  // 그룹훈련 버튼 (레거시 테이블 뷰용 - 사용 안 함)
   document.querySelectorAll('[id^="createGroupRoomBtn-"]').forEach(btn => {
     const workoutId = btn.dataset.workoutId;
     const workoutTitle = btn.dataset.workoutTitle;
