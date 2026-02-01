@@ -5562,7 +5562,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     if (targetType === 'cadence_rpm') {
       isCadence = true;
       cadenceRpm = getRpmFromSegment(seg);
-      cadenceLineBottom = cadenceRpm > 0 ? Math.min(100, (cadenceRpm / RPM_BASELINE) * 100) : 0;
+      cadenceLineBottom = 50;
       heightPercent = 100;
     } else if (targetType === 'dual') {
       isDual = true;
