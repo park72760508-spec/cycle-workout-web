@@ -2429,6 +2429,11 @@
 
     <!-- 메인 컨테이너: 상태 A(카테고리) / 상태 B(워크아웃 리스트) 전환 -->
     <div id="workoutViewContainer" class="workout-view-container">
+      <!-- 로딩 오버레이 (워크아웃/세그먼트 로드 시 표시) -->
+      <div id="workoutLoadingOverlay" class="workout-loading-overlay" style="display:none;">
+        <div class="workout-loading-spinner"></div>
+        <div id="workoutLoadingProgress" class="workout-loading-progress">0/0 갱신중.....</div>
+      </div>
       <!-- 상태 A: 카테고리 목록 보기 (초기 화면) -->
       <div id="workoutCategoryView" class="workout-category-view" data-view="category">
         <div id="workoutCategoryGrid" class="workout-category-grid">
