@@ -1837,16 +1837,16 @@
 
           <div class="connection-device-section basecamp-device-section">
             <div class="grid-2 mb-15" style="gap: 3.75px;">
-              <!-- 1줄: 훈련 스케줄, 훈련 일지 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('scheduleListScreen'); if (typeof loadTrainingSchedules === 'function') { setTimeout(() => loadTrainingSchedules(), 200); } }">
-                <span>훈련 스케줄</span>
+              <!-- 1줄: 워크아웃, 훈련 일지 -->
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }">
+                <span>워크아웃</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }">
                 <span>훈련 일지</span>
               </button>
-              <!-- 2줄: 워크아웃, 사용자 정보 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }">
-                <span>워크아웃</span>
+              <!-- 2줄: 훈련 스케줄, 사용자 정보 -->
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('scheduleListScreen'); if (typeof loadTrainingSchedules === 'function') { setTimeout(() => loadTrainingSchedules(), 200); } }">
+                <span>훈련 스케줄</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }">
                 <span>사용자 정보</span>
