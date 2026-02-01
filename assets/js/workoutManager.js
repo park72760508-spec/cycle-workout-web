@@ -3226,10 +3226,10 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
           </button>
           ${isAdmin ? `
             <button class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">
-              <img src="assets/img/edit2.png" alt="수정" style="width: 20px; height: 20px; object-fit: contain;" />
+              <img src="assets/img/edit2.png" alt="수정" />
             </button>
             <button class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">
-              <img src="assets/img/delete2.png" alt="삭제" style="width: 20px; height: 20px; object-fit: contain;" />
+              <img src="assets/img/delete2.png" alt="삭제" />
             </button>
           ` : ''}
         </div>
