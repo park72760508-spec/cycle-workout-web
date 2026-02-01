@@ -3212,6 +3212,16 @@ if (!window.showScreen) {
           });
         }
         
+        // 모바일 대시보드에서 다른 화면으로 이동 시 body 스크롤 복원
+        if (id !== 'mobileDashboardScreen') {
+          document.body.style.overflow = '';
+          document.body.style.position = '';
+          document.body.style.width = '';
+          document.body.style.height = '';
+          document.documentElement.style.overflow = '';
+          console.log('✅ Body scroll restored for screen:', id);
+        }
+        
       // 연결 화면이 표시될 때 버튼 이미지 업데이트 및 ANT+ 버튼 활성화 상태 확인
       if (id === "connectionScreen") {
         if (typeof updateDeviceButtonImages === "function") {
@@ -16254,4 +16264,213 @@ window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
 // 모바일 대시보드 초기화는 startMobileDashboard 함수 내부에서 직접 처리됨
 // (위의 startMobileDashboard 함수 내부에 이미 추가됨)
 // Data Proxy (REQUEST_LOGS, REQUEST_STATUS) → initDashboardLogsProxy에서 처리
+
+/* ==========================================================
+   화면 꺼짐 방지 (Wake Lock API)
+   iOS (Bluefy) / Android (Google App) 환경 지원
+========================================================== */
+
+// Wake Lock 상태 관리
+window.wakeLock = {
+  wakeLockInstance: null,
+  isActive: false,
+  
+  // 기기 감지
+  isIOS: function() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  },
+  
+  isAndroid: function() {
+    return /android/i.test(navigator.userAgent);
+  },
+  
+  // Wake Lock 활성화
+  request: async function() {
+    try {
+      // Wake Lock API 지원 확인
+      if ('wakeLock' in navigator) {
+        this.wakeLockInstance = await navigator.wakeLock.request('screen');
+        this.isActive = true;
+        console.log('✅ Wake Lock activated (Native API)');
+        
+        // Wake Lock 해제 이벤트 리스너
+        this.wakeLockInstance.addEventListener('release', () => {
+          console.log('⚠️ Wake Lock released');
+          this.isActive = false;
+        });
+        
+        return true;
+      }
+      
+      // iOS (Bluefy) 환경: NoSleep.js 방식 (비디오 재생)
+      if (this.isIOS()) {
+        console.log('📱 iOS detected - using NoSleep.js fallback');
+        await this.enableNoSleep();
+        return true;
+      }
+      
+      // Android (Google App) 환경: 백업 방법
+      if (this.isAndroid()) {
+        console.log('🤖 Android detected - using visibility API fallback');
+        this.enableVisibilityFallback();
+        return true;
+      }
+      
+      console.warn('⚠️ Wake Lock not supported on this device');
+      return false;
+      
+    } catch (err) {
+      console.error('❌ Wake Lock request failed:', err);
+      
+      // Fallback: NoSleep.js 방식 시도
+      if (this.isIOS() || this.isAndroid()) {
+        try {
+          await this.enableNoSleep();
+          return true;
+        } catch (fallbackErr) {
+          console.error('❌ NoSleep.js fallback failed:', fallbackErr);
+        }
+      }
+      
+      return false;
+    }
+  },
+  
+  // Wake Lock 해제
+  release: async function() {
+    try {
+      if (this.wakeLockInstance) {
+        await this.wakeLockInstance.release();
+        this.wakeLockInstance = null;
+        this.isActive = false;
+        console.log('✅ Wake Lock released (Native API)');
+      }
+      
+      // NoSleep 비디오 정리
+      if (this.noSleepVideo) {
+        this.noSleepVideo.pause();
+        this.noSleepVideo.remove();
+        this.noSleepVideo = null;
+        console.log('✅ NoSleep video removed');
+      }
+      
+      // Visibility fallback 정리
+      if (this.visibilityHandler) {
+        document.removeEventListener('visibilitychange', this.visibilityHandler);
+        this.visibilityHandler = null;
+        console.log('✅ Visibility handler removed');
+      }
+      
+      this.isActive = false;
+      return true;
+      
+    } catch (err) {
+      console.error('❌ Wake Lock release failed:', err);
+      return false;
+    }
+  },
+  
+  // NoSleep.js 방식 (iOS/Android 폴백)
+  noSleepVideo: null,
+  enableNoSleep: async function() {
+    if (this.noSleepVideo) {
+      return; // 이미 활성화됨
+    }
+    
+    // 무음 비디오 생성 (1x1 픽셀, 투명, 무한 루프)
+    const video = document.createElement('video');
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.style.position = 'fixed';
+    video.style.top = '-1px';
+    video.style.left = '-1px';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0';
+    video.style.pointerEvents = 'none';
+    video.loop = true;
+    
+    // 무음 WebM 비디오 데이터 (1초, 무음, 1x1 픽셀)
+    video.src = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwH/////////FUmpZpkq17GDD0JATYCGQ2hyb21lV0GGQ2hyb21lFlSua7+uvdeBAXPFh4EBY3Jvbm9zBAAAACCsAQAA//////////EqAQAAAbJFh0EEQoWBAhhTgGcB//////////9UaZpZpktq17NDi4EASqxsJ0gCAVEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0gCAVEA//////////YEQqxsJ0hGU4BnAf//////////VGmaWaZLatezQ4eBQoKDaWQgAf//////////BWmaWaZLatezQ4dBT8+BFUmpZpkq17EBI4ODQ4ODA4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4PDgQKB4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4OPAgSBA===';
+    
+    document.body.appendChild(video);
+    
+    try {
+      await video.play();
+      this.noSleepVideo = video;
+      this.isActive = true;
+      console.log('✅ NoSleep video activated');
+    } catch (err) {
+      console.error('❌ NoSleep video play failed:', err);
+      video.remove();
+      throw err;
+    }
+  },
+  
+  // Visibility API 폴백 (Android 웹뷰 환경)
+  visibilityHandler: null,
+  enableVisibilityFallback: function() {
+    if (this.visibilityHandler) {
+      return; // 이미 활성화됨
+    }
+    
+    // 페이지가 백그라운드로 가면 자동으로 Wake Lock 재요청
+    this.visibilityHandler = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔄 Page visible - re-requesting Wake Lock');
+        if ('wakeLock' in navigator) {
+          try {
+            this.wakeLockInstance = await navigator.wakeLock.request('screen');
+            console.log('✅ Wake Lock re-acquired');
+          } catch (err) {
+            console.warn('⚠️ Wake Lock re-request failed:', err);
+          }
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+    this.isActive = true;
+    console.log('✅ Visibility fallback enabled');
+  }
+};
+
+// 모바일 대시보드 시작 시 Wake Lock 활성화
+const originalStartMobileDashboard = window.startMobileDashboard;
+if (originalStartMobileDashboard) {
+  window.startMobileDashboard = async function() {
+    // 원래 함수 호출
+    const result = originalStartMobileDashboard.apply(this, arguments);
+    
+    // Wake Lock 활성화
+    setTimeout(async () => {
+      const activated = await window.wakeLock.request();
+      if (activated) {
+        console.log('✅ Wake Lock activated for mobile dashboard');
+      } else {
+        console.warn('⚠️ Wake Lock activation failed for mobile dashboard');
+      }
+    }, 500);
+    
+    return result;
+  };
+}
+
+// cleanupMobileDashboard에서 Wake Lock 해제
+const originalCleanupMobileDashboard = window.cleanupMobileDashboard;
+if (originalCleanupMobileDashboard) {
+  window.cleanupMobileDashboard = async function() {
+    // Wake Lock 해제
+    await window.wakeLock.release();
+    console.log('✅ Wake Lock released for mobile dashboard cleanup');
+    
+    // 원래 함수 호출
+    return originalCleanupMobileDashboard.apply(this, arguments);
+  };
+}
+
+// 전역으로 노출
+window.wakeLock = window.wakeLock;
 
