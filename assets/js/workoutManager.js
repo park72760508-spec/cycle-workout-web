@@ -3237,7 +3237,7 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
       <div class="workout-card__graph" id="${graphId}"></div>
       <div class="workout-card__footer">
         <span class="workout-card__meta"><span class="workout-card__meta-icon">⏱</span> ${totalMinutes}분</span>
-        <span class="workout-card__meta"><span class="workout-card__meta-icon">📊</span> TSS ${tss}</span>
+        <span class="workout-card__meta"><img src="assets/img/tss.png" alt="TSS" class="workout-card__meta-icon-img" /> TSS ${tss}</span>
         ${categoryLabel ? `<span class="workout-card__category">${escapeHtml(categoryLabel)}</span>` : ''}
       </div>
     </div>
@@ -5615,25 +5615,22 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, isDual, cadenceRpm, cadenceLineBottom };
   }).filter(Boolean);
   
-  // RPM 값 표시 여부 결정 (겹침 방지)
-  // 각 세그먼트의 상대적 너비 비율 계산 (flex-grow 기반)
+  // RPM 값 표시 여부: rpm 바 너비 vs rpm 숫자폭 기준
+  // 1) rpm 바 길이 > rpm 값 숫자폭 → 표시
+  // 2) 작은 rpm 바 여러 개인 경우: (rpm 바 길이 + rpm 바 사이 폭/2) > rpm 값 숫자폭 → 표시
   const totalFlexGrow = bars.reduce((sum, b) => sum + b.flexGrow, 0);
-  const MIN_WIDTH_PERCENT = 5; // 최소 5% 너비 이상인 세그먼트만 RPM 표시
-  let lastShownRpmIndex = -1;
-  const MIN_GAP_BETWEEN_RPMS = 2; // RPM 표시 사이에 최소 2개 세그먼트 간격
+  const RPM_TEXT_WIDTH_PERCENT = 8;   // rpm 숫자폭에 해당하는 그래프 대비 % (2~3자리, 10px 폰트 기준)
+  const HALF_GAP_PERCENT = 0.5;        // rpm 바 사이 폭의 절반 (%)
   
-  bars.forEach((bar, index) => {
-    const widthPercent = (bar.flexGrow / totalFlexGrow) * 100;
+  bars.forEach((bar) => {
+    const widthPercent = totalFlexGrow > 0 ? (bar.flexGrow / totalFlexGrow) * 100 : 0;
     const hasCadence = bar.isCadence || (bar.isDual && bar.cadenceRpm > 0);
     
     if (hasCadence) {
-      // 세그먼트가 충분히 넓고, 이전 RPM 표시와 충분한 거리가 있는 경우만 표시
-      const hasEnoughGap = (lastShownRpmIndex === -1) || (index - lastShownRpmIndex >= MIN_GAP_BETWEEN_RPMS);
-      bar.showRpmValue = widthPercent >= MIN_WIDTH_PERCENT && hasEnoughGap;
-      
-      if (bar.showRpmValue) {
-        lastShownRpmIndex = index;
-      }
+      // 조건1: 바 길이 >= 숫자폭 → 표시
+      // 조건2: (바 길이 + 바 사이 폭/2) >= 숫자폭 → 표시 (effectiveWidth = widthPercent + HALF_GAP_PERCENT)
+      const effectiveWidth = widthPercent + HALF_GAP_PERCENT;
+      bar.showRpmValue = effectiveWidth >= RPM_TEXT_WIDTH_PERCENT;
     } else {
       bar.showRpmValue = false;
     }
