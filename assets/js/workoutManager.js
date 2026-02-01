@@ -5541,24 +5541,36 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     const zone = getSegmentZoneFromFtpPercent(seg);
     const flexGrow = duration;
     let heightPercent;
+    let isCadence = false;
+    let cadenceRpm = 0;
+    let cadenceLineBottom = 0;
     if (targetType === 'cadence_rpm') {
-      heightPercent = 8;
+      isCadence = true;
+      cadenceRpm = getSegmentRpmForPreview(seg) || 0;
+      cadenceLineBottom = cadenceRpm > 0 ? Math.min(100, (cadenceRpm / 90) * 100) : 0;
+      heightPercent = 100;
     } else {
       const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
       const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
       heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
     }
-    const cadenceClass = targetType === 'cadence_rpm' ? ' segmented-workout-graph__bar--cadence' : '';
-    return { duration, zone, flexGrow, heightPercent, cadenceClass };
+    const cadenceClass = isCadence ? ' segmented-workout-graph__bar--cadence' : '';
+    return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, cadenceRpm, cadenceLineBottom };
   }).filter(Boolean);
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프">
       <div class="segmented-workout-graph__bars">
-        ${bars.map(b => `
-          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}${b.cadenceClass}"
-               style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;"
-               title="Zone ${b.zone} · ${Math.round(b.duration)}초"></div>
-        `).join('')}
+        ${bars.map(b => {
+          if (b.isCadence) {
+            return `
+          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--cadence" style="flex: ${b.flexGrow} 1 0; --bar-height: 100%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
+            <div class="segmented-workout-graph__cadence-line"></div>
+            ${b.cadenceRpm > 0 ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
+          </div>`;
+          }
+          return `
+          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;" title="Zone ${b.zone} · ${Math.round(b.duration)}초"></div>`;
+        }).join('')}
       </div>
     </div>
   `;
