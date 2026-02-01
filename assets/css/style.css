@@ -3114,6 +3114,11 @@ button[aria-disabled="true"] {
   background: transparent !important;
   position: relative;
   min-height: 12px;
+  height: 100% !important;
+}
+/* dual: FTP 막대 + RPM 빨강 실선 오버레이 */
+.segmented-workout-graph__bar--dual {
+  position: relative;
 }
 .segmented-workout-graph__cadence-line {
   position: absolute;
@@ -3122,16 +3127,18 @@ button[aria-disabled="true"] {
   bottom: var(--cadence-line-bottom, 0);
   height: 2px;
   background: #e53935;
+  z-index: 2;
 }
 .segmented-workout-graph__cadence-value {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--cadence-line-bottom, 0) + 4px);
+  bottom: min(calc(var(--cadence-line-bottom, 0) + 4px), 92%);
   font-size: 10px;
   font-weight: 600;
   color: #e53935;
   white-space: nowrap;
+  z-index: 3;
 }
 
 /* ========== WorkoutCard 컴포넌트 ========== */
