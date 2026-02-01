@@ -5604,7 +5604,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     } else if (targetType === 'dual') {
       isDual = true;
       cadenceRpm = getRpmFromSegment(seg);
-      cadenceLineBottom = cadenceRpm > 0 ? Math.min(100, (cadenceRpm / RPM_BASELINE) * 100) : 0;
+      cadenceLineBottom = 100; /* dual: RPM 바를 FTP 막대 상단 끝에 맞춤 */
       const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
       const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
       heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
@@ -5652,8 +5652,8 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
           if (b.isDual && b.cadenceRpm > 0) {
             return `
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone} segmented-workout-graph__bar--dual" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="Zone ${b.zone} · RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
-            <div class="segmented-workout-graph__cadence-line"></div>
-            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
+            <div class="segmented-workout-graph__cadence-line segmented-workout-graph__cadence-line--dual"></div>
+            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value segmented-workout-graph__cadence-value--dual">${b.cadenceRpm}</span>` : ''}
           </div>`;
           }
           return `
