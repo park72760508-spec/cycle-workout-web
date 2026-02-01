@@ -4329,20 +4329,15 @@
         if (!grid) return;
         var cats = WORKOUT_CATEGORIES;
         var byId = function(id) { return cats.find(function(x) { return x.id === id; }); };
-        var row1 = [byId('all')];
-        var row2 = [byId('Active Recovery'), byId('Endurance')];
-        var row3 = [byId('Sweet Spot'), byId('Tempo')];
-        var row4 = [byId('Threshold'), byId('VO2 Max')];
-        var row5 = [byId('기타')];
+        var catsOrdered = [byId('all'), byId('Active Recovery'), byId('Endurance'), byId('Sweet Spot'), byId('Tempo'), byId('Threshold'), byId('VO2 Max'), byId('기타')].filter(Boolean);
         var renderRow = function(arr) {
           return (arr || []).filter(Boolean).map(function(c) { return renderCategoryCard(c, workouts); }).join('');
         };
-        grid.innerHTML =
-          '<div class="workout-category-row workout-category-row--single">' + renderRow(row1) + '</div>' +
-          '<div class="workout-category-row">' + renderRow(row2) + '</div>' +
-          '<div class="workout-category-row">' + renderRow(row3) + '</div>' +
-          '<div class="workout-category-row">' + renderRow(row4) + '</div>' +
-          '<div class="workout-category-row workout-category-row--single">' + renderRow(row5) + '</div>';
+        var rows = [];
+        for (var i = 0; i < catsOrdered.length; i += 2) {
+          rows.push('<div class="workout-category-row">' + renderRow(catsOrdered.slice(i, i + 2)) + '</div>');
+        }
+        grid.innerHTML = rows.join('');
       }
 
       function workoutViewInit() {
