@@ -3615,23 +3615,34 @@ button[aria-disabled="true"] {
   object-fit: contain;
 }
 
-/* 워크아웃 작성 화면 - 휴대폰에서 게시날짜 입력 상자를 카테고리 선택과 동일 너비로 */
+/* 워크아웃 작성 화면 - 휴대폰에서 게시날짜 텍스트박스 넓이 = 카테고리 선택목록 상자 넓이
+   현재 넓이: 둘 다 자신의 form-group(그리드 1fr 컬럼) 너비의 100%.
+   form-row가 grid 1fr 1fr 이므로 1열(카테고리)과 2행 1열(게시날짜)의 컬럼 너비가 동일 → 두 상자 넓이 동일. */
 @media (max-width: 768px) {
+  #workoutBuilderScreen .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
   #workoutBuilderScreen .form-row .form-group {
     min-width: 0;
+    width: 100%;
   }
-  #workoutBuilderScreen .form-row .form-group select,
+  /* 카테고리 선택목록(#wbAuthor): 넓이 100%, 상자 = 컬럼 너비 */
+  #workoutBuilderScreen #wbAuthor,
+  #workoutBuilderScreen .form-row .form-group select {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  /* 게시날짜 텍스트박스(#wbPublishDate): 카테고리와 동일 넓이(100%) */
+  #workoutBuilderScreen #wbPublishDate,
   #workoutBuilderScreen .form-row .form-group input[type="date"] {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-  #workoutBuilderScreen #wbPublishDate {
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
   }
 }
 
