@@ -3095,8 +3095,7 @@ async function loadWorkouts(categoryId) {
 
     // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
     const isAndroid = /android/i.test(navigator.userAgent);
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const SEGMENT_BATCH_SIZE = isAndroid ? 10 : (isIOS ? 20 : 20);  // Android 10, iOS/PC 20
+    const SEGMENT_BATCH_SIZE = 20;  // 모든 플랫폼 20
     const SEGMENT_BATCH_DELAY = isAndroid ? 250 : 100;
     const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
     const totalToFetch = workoutsNeedingSegments.length;
