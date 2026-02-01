@@ -3333,11 +3333,24 @@ button[aria-disabled="true"] {
 }
 
 .workout-category-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 8px 0;
   min-height: 120px;
+}
+
+.workout-category-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.workout-category-row--single {
+  grid-template-columns: 1fr;
+  max-width: 280px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 
@@ -3414,12 +3427,7 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* 하단 푸터 */
-.workout-screen-footer {
-  padding: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
+/* 하단 푸터 (워크아웃 선택 화면에서는 미사용 - 나가기 버튼/실선 삭제됨) */
 
 /* 워크아웃 화면 내 테이블 다크 테마 보정 */
 .workout-screen-dark .workout-table {
@@ -3498,11 +3506,13 @@ button[aria-disabled="true"] {
     backdrop-filter: blur(8px);
   }
 
-  /* 카테고리 그리드: 1열 */
-  .workout-category-grid {
+  /* 카테고리 그리드: 모바일에서 행별 1열 */
+  .workout-category-row {
     grid-template-columns: 1fr !important;
-    gap: 10px;
-    padding: 8px 0;
+  }
+
+  .workout-category-row--single {
+    max-width: none;
   }
 
   /* CategoryCard 모바일: 고정 높이, 축소 패딩, 터치 영역 확보 */
@@ -3585,10 +3595,6 @@ button[aria-disabled="true"] {
 
   .workout-screen-header--list-view .workout-screen-back-btn {
     padding-left: 4px;
-  }
-
-  .workout-screen-footer {
-    padding: 12px 16px;
   }
 }
 
