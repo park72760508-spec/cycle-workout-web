@@ -158,18 +158,15 @@ function initializeWorkoutManager() {
   }
 }
 
-// 개선된 JSONP 요청 함수 (60초 타임아웃)
+// 개선된 JSONP 요청 함수 (60초 타임아웃) - groupTrainingManager의 jsonpRequest와 분리
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
     if (!url || typeof url !== 'string') {
       reject(new Error('유효하지 않은 URL입니다.'));
       return;
     }
-    
-    // 고유한 콜백 이름 생성 (타임스탬프 + 랜덤)
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000);
-    const callbackName = 'jsonp_callback_' + timestamp + '_' + random;
+    // 고유 콜백명 (워크아웃매니저 전용 접두사로 다른 스크립트와 충돌 방지)
+    const callbackName = 'wm_jsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
     const script = document.createElement('script');
     let isResolved = false;
     
@@ -261,6 +258,8 @@ function jsonpRequest(url, params = {}) {
     }
   });
 }
+// workoutManager 전용 참조 (groupTrainingManager 로드 시 jsonpRequest 덮어쓰기 방지)
+var wmJsonpRequest = jsonpRequest;
 
 // 재시도 로직이 포함된 JSONP 요청 함수
 async function jsonpRequestWithRetry(url, params = {}, maxRetries = MAX_RETRIES) {
@@ -2436,7 +2435,7 @@ async function apiGetWorkout(id) {
 async function apiGetWorkoutSegments(workoutId) {
   if (!workoutId || !window.GAS_URL) return [];
   try {
-    const result = await jsonpRequest(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
+    const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
     return (result && result.success && Array.isArray(result.segments)) ? result.segments : [];
   } catch (error) {
     console.warn('apiGetWorkoutSegments 실패:', workoutId, error);
@@ -3043,15 +3042,19 @@ async function loadWorkouts(categoryId) {
       return;
     }
 
-    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (listWorkouts는 segments 미포함)
-    const segmentPromises = filteredWorkouts.map(async (workout) => {
-      if (!workout.segments || !Array.isArray(workout.segments) || workout.segments.length === 0) {
+    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (배치 처리: 동시 요청 5개로 제한)
+    const SEGMENT_BATCH_SIZE = 5;
+    const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
+    for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
+      const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
+      await Promise.all(batch.map(async (workout) => {
         const segments = await apiGetWorkoutSegments(workout.id);
         workout.segments = segments;
+      }));
+      if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
+        await new Promise(r => setTimeout(r, 100));
       }
-      return workout;
-    });
-    await Promise.all(segmentPromises);
+    }
 
     // 전역 변수에 저장 (검색 기능에서 사용)
     window.workouts = filteredWorkouts;
