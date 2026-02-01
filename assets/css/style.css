@@ -3398,6 +3398,26 @@ button[aria-disabled="true"] {
 .workout-screen-header-content {
   flex: 1;
   text-align: center;
+  min-width: 0;
+}
+
+.workout-screen-new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.workout-screen-new-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .workout-screen-back-btn {
@@ -3414,10 +3434,6 @@ button[aria-disabled="true"] {
   cursor: pointer;
   color: var(--text-primary);
   transition: background 0.2s;
-}
-
-.workout-screen-back-btn .workout-screen-back-text {
-  display: none;
 }
 
 .workout-screen-back-btn:hover {
@@ -3575,12 +3591,6 @@ button[aria-disabled="true"] {
 
   .workout-screen-header .workout-screen-header-content h1 {
     font-size: 1rem;
-  }
-
-  /* Sticky Header 시 뒤로가기 텍스트 표시 */
-  .workout-screen-header--list-view .workout-screen-back-btn .workout-screen-back-text {
-    display: inline;
-    font-size: 14px;
   }
 
   .workout-screen-header--list-view .workout-screen-back-btn {
