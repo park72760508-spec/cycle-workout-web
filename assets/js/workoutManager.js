@@ -3517,48 +3517,45 @@ async function selectWorkout(workoutId) {
     }
     
     console.log('Retrieved workout:', workout);
-    
-    window.currentWorkout = workout;
-    
-    try {
-      localStorage.setItem('currentWorkout', JSON.stringify(workout));
-    } catch (e) {
-      console.warn('로컬 스토리지 저장 실패:', e);
+
+    // AI 추천 워크아웃 선택과 동일한 로직 사용 (selectWorkoutForTrainingReady)
+    if (typeof selectWorkoutForTrainingReady === 'function') {
+      await selectWorkoutForTrainingReady(workout, { skipToast: true });
+    } else {
+      window.currentWorkout = workout;
+      try {
+        localStorage.setItem('currentWorkout', JSON.stringify(workout));
+      } catch (e) {
+        console.warn('로컬 스토리지 저장 실패:', e);
+      }
+      if (typeof updateTrainingReadyScreenWithWorkout === 'function') {
+        updateTrainingReadyScreenWithWorkout(workout);
+      }
     }
 
     window.showToast(`${workout.title || '워크아웃'}이 선택되었습니다.`);
     
     // 현재 활성화된 화면을 히스토리에 추가 (훈련 준비 화면으로 이동하기 전)
-    // startScheduleTraining에서 이미 추가했을 수 있으므로, 중복 체크
     if (!window.screenHistory) {
       window.screenHistory = [];
     }
     
-    // 현재 활성화된 화면 찾기
     const currentActive = document.querySelector(".screen.active") || 
                           Array.from(document.querySelectorAll(".screen")).find(s => 
                             s.style.display === "block" || window.getComputedStyle(s).display === "block"
                           );
     
     if (currentActive && currentActive.id && currentActive.id !== 'trainingReadyScreen') {
-      // 마지막 히스토리와 다를 때만 추가 (중복 방지)
       const lastHistory = window.screenHistory.length > 0 ? window.screenHistory[window.screenHistory.length - 1] : null;
       if (lastHistory !== currentActive.id) {
         window.screenHistory.push(currentActive.id);
-        console.log(`[selectWorkout] Added to history: ${currentActive.id}, History:`, window.screenHistory);
-        // 히스토리 크기 제한
         if (window.screenHistory.length > 10) {
           window.screenHistory.shift();
         }
       }
     }
     
-    // skipHistory를 false로 설정하여 showScreen 내부에서도 히스토리 체크 (이중 방지)
     window.showScreen('trainingReadyScreen', false);
-    
-    if (typeof updateWorkoutPreview === 'function') {
-      updateWorkoutPreview();
-    }
     
   } catch (error) {
     console.error('워크아웃 선택 실패:', error);
