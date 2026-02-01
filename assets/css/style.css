@@ -3109,6 +3109,7 @@ button[aria-disabled="true"] {
 .segmented-workout-graph__bar--zone-5 { background: var(--zone-5); }
 .segmented-workout-graph__bar--zone-6 { background: var(--zone-6); }
 .segmented-workout-graph__bar--zone-7 { background: var(--zone-7); }
+.segmented-workout-graph__bar--cadence { opacity: 0.85; }
 
 /* ========== WorkoutCard 컴포넌트 ========== */
 .workout-cards-grid {
