@@ -3445,6 +3445,15 @@ button[aria-disabled="true"] {
 .workout-search-btn {
   color: #fff !important;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+.workout-search-btn-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .workout-search-input::placeholder {
