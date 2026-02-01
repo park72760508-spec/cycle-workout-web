@@ -3222,11 +3222,15 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
         <h3 class="workout-card__title">${safeTitle}</h3>
         <div class="workout-card__actions">
           <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})" title="선택" aria-label="선택">
-            <img src="assets/img/check.png" alt="선택" class="workout-card__select-icon" />
+            <img src="assets/img/check2.png" alt="선택" class="workout-card__select-icon" />
           </button>
           ${isAdmin ? `
-            <button class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">✏️</button>
-            <button class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">🗑️</button>
+            <button class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">
+              <img src="assets/img/edit2.png" alt="수정" style="width: 20px; height: 20px; object-fit: contain;" />
+            </button>
+            <button class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">
+              <img src="assets/img/delete2.png" alt="삭제" style="width: 20px; height: 20px; object-fit: contain;" />
+            </button>
           ` : ''}
         </div>
       </div>
