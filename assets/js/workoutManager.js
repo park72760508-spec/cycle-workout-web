@@ -5542,6 +5542,13 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     return;
   }
   const prefix = opts.classPrefix || 'swg';
+  const RPM_BASELINE = 90;
+  function getRpmFromSegment(seg) {
+    const r = getSegmentRpmForPreview(seg);
+    if (r > 0) return r;
+    if (seg.target_type === 'cadence_rpm') return Number(seg.target_value) || 0;
+    return 0;
+  }
   const bars = segments.map(seg => {
     const duration = seg.duration_sec || seg.duration || 0;
     if (duration <= 0) return null;
@@ -5550,20 +5557,28 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     const flexGrow = duration;
     let heightPercent;
     let isCadence = false;
+    let isDual = false;
     let cadenceRpm = 0;
     let cadenceLineBottom = 0;
     if (targetType === 'cadence_rpm') {
       isCadence = true;
-      cadenceRpm = getSegmentRpmForPreview(seg) || 0;
-      cadenceLineBottom = cadenceRpm > 0 ? Math.min(100, (cadenceRpm / 90) * 100) : 0;
+      cadenceRpm = getRpmFromSegment(seg);
+      cadenceLineBottom = cadenceRpm > 0 ? Math.min(100, (cadenceRpm / RPM_BASELINE) * 100) : 0;
       heightPercent = 100;
+    } else if (targetType === 'dual') {
+      isDual = true;
+      cadenceRpm = getRpmFromSegment(seg);
+      cadenceLineBottom = cadenceRpm > 0 ? Math.min(100, (cadenceRpm / RPM_BASELINE) * 100) : 0;
+      const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
+      const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
+      heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
     } else {
       const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
       const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
       heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
     }
     const cadenceClass = isCadence ? ' segmented-workout-graph__bar--cadence' : '';
-    return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, cadenceRpm, cadenceLineBottom };
+    return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, isDual, cadenceRpm, cadenceLineBottom };
   }).filter(Boolean);
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프">
@@ -5574,6 +5589,13 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--cadence" style="flex: ${b.flexGrow} 1 0; --bar-height: 100%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
             <div class="segmented-workout-graph__cadence-line"></div>
             ${b.cadenceRpm > 0 ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
+          </div>`;
+          }
+          if (b.isDual && b.cadenceRpm > 0) {
+            return `
+          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone} segmented-workout-graph__bar--dual" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="Zone ${b.zone} · RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
+            <div class="segmented-workout-graph__cadence-line"></div>
+            <span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>
           </div>`;
           }
           return `
