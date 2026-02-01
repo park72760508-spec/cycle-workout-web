@@ -2446,10 +2446,10 @@
       <!-- 상태 B: 선택된 카테고리의 워크아웃 리스트 보기 -->
       <div id="workoutListView" class="workout-list-view" data-view="list" style="display:none;">
         <div class="workout-list-toolbar card">
-          <input id="qWorkout" type="search" placeholder="제목 또는 시간(분)으로 검색" class="workout-search-input">
-          <button class="btn btn-default-style" id="btnSearchWorkout">검색</button>
-          <button class="btn btn-success btn-default-style" id="btnOpenBuilder">+ 새 워크아웃</button>
-          <button class="btn btn-primary btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련 스케줄</button>
+          <div class="workout-search-row">
+            <input id="qWorkout" type="search" placeholder="제목 또는 시간(분)으로 검색" class="workout-search-input">
+            <button class="btn btn-default-style workout-search-btn" id="btnSearchWorkout">검색</button>
+          </div>
         </div>
         <div id="workoutList" class="workout-list">
           <div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>
