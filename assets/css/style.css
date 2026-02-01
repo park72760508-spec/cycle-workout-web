@@ -3215,7 +3215,24 @@ button[aria-disabled="true"] {
 }
 
 .workout-card__select-btn {
-  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+.workout-card__select-btn:hover {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.08);
+}
+.workout-card__select-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 /* ========== CategoryCard 컴포넌트 ========== */
