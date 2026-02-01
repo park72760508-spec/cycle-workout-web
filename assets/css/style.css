@@ -3364,7 +3364,7 @@ button[aria-disabled="true"] {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   padding: 12px;
   margin-bottom: 12px;
   background: var(--bg-card);
@@ -3372,14 +3372,27 @@ button[aria-disabled="true"] {
   border-radius: 8px;
 }
 
+.workout-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
 .workout-search-input {
   flex: 1;
-  min-width: 120px;
+  min-width: 0;
   padding: 8px 12px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   background: var(--bg-main);
   color: var(--text-primary);
+}
+
+.workout-search-btn {
+  color: #fff;
+  flex-shrink: 0;
 }
 
 .workout-search-input::placeholder {
@@ -3577,11 +3590,10 @@ button[aria-disabled="true"] {
   /* 툴바 모바일 */
   .workout-list-toolbar {
     padding: 10px;
-    flex-wrap: wrap;
   }
 
-  .workout-search-input {
-    min-width: 100%;
+  .workout-search-row {
+    width: 100%;
   }
 
   /* 헤더 콘텐츠 모바일 */
