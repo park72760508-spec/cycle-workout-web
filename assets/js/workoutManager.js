@@ -4018,11 +4018,12 @@ async function editWorkout(workoutId) {
     // UI 수정 모드로 변경
     const saveBtn = safeGetElement('btnSaveWorkout');
     if (saveBtn) {
-      saveBtn.textContent = '수정 완료';
+      saveBtn.title = '수정 완료';
+      saveBtn.setAttribute('aria-label', '수정 완료');
       saveBtn.onclick = performWorkoutUpdate;
     }
     
-    const formTitle = document.querySelector('#workoutBuilderScreen .header h1');
+    const formTitle = document.querySelector('#workoutBuilderScreen .workout-builder-title');
     if (formTitle) {
       formTitle.textContent = '워크아웃 수정';
     }
@@ -4227,13 +4228,14 @@ function resetWorkoutFormMode() {
   
   const saveBtn = safeGetElement('btnSaveWorkout');
   if (saveBtn) {
-    saveBtn.textContent = '💾 저장';
+    saveBtn.title = '저장';
+    saveBtn.setAttribute('aria-label', '저장');
     saveBtn.onclick = saveWorkout;
   }
   
-  const formTitle = document.querySelector('#workoutBuilderScreen .header h1');
+  const formTitle = document.querySelector('#workoutBuilderScreen .workout-builder-title');
   if (formTitle) {
-    formTitle.textContent = '✏️ 워크아웃 작성';
+    formTitle.textContent = '워크아웃 작성';
   }
   
   console.log('Workout form mode reset to add mode');
