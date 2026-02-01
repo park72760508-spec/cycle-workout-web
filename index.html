@@ -2455,10 +2455,6 @@
       </div>
     </div>
 
-    <!-- 하단 고정 버튼 -->
-    <div class="workout-screen-footer">
-      <button class="btn btn-danger btn-default-style" onclick="showScreen('basecampScreen')">나가기</button>
-    </div>
   </div>
 
   <!-- ========== 훈련 스케줄 관련 화면들 ========== -->
@@ -4318,19 +4314,35 @@
         }).length;
       }
 
+      function renderCategoryCard(c, workouts) {
+        var zoneAttr = c.id === 'all' ? 'all' : (c.id === 'Active Recovery' ? '1' : c.id === 'Endurance' ? '2' : c.id === 'Sweet Spot' || c.id === 'Tempo' ? '3' : c.id === 'Threshold' ? '4' : c.id === 'VO2 Max' ? '5' : '1');
+        var count = getCategoryWorkoutCount(workouts, c.id);
+        var countText = count > 0 ? count + '개' : '-';
+        return '<div class="workout-category-card" data-category="' + (c.id || '') + '" data-zone="' + zoneAttr + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')">' +
+          '<span class="category-icon">' + (c.icon || '📋') + '</span>' +
+          '<div class="category-label">' + (c.label || '') + '</div>' +
+          '<div class="category-count">' + countText + '</div>' +
+          '</div>';
+      }
       function renderWorkoutCategories(workouts) {
         var grid = document.getElementById('workoutCategoryGrid');
         if (!grid) return;
-        grid.innerHTML = WORKOUT_CATEGORIES.map(function(c) {
-          var zoneAttr = c.id === 'all' ? 'all' : (c.id === 'Active Recovery' ? '1' : c.id === 'Endurance' ? '2' : c.id === 'Sweet Spot' || c.id === 'Tempo' ? '3' : c.id === 'Threshold' ? '4' : c.id === 'VO2 Max' ? '5' : '1');
-          var count = getCategoryWorkoutCount(workouts, c.id);
-          var countText = count > 0 ? count + '개' : '-';
-          return '<div class="workout-category-card" data-category="' + (c.id || '') + '" data-zone="' + zoneAttr + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')">' +
-            '<span class="category-icon">' + (c.icon || '📋') + '</span>' +
-            '<div class="category-label">' + (c.label || '') + '</div>' +
-            '<div class="category-count">' + countText + '</div>' +
-            '</div>';
-        }).join('');
+        var cats = WORKOUT_CATEGORIES;
+        var byId = function(id) { return cats.find(function(x) { return x.id === id; }); };
+        var row1 = [byId('all')];
+        var row2 = [byId('Active Recovery'), byId('Endurance')];
+        var row3 = [byId('Sweet Spot'), byId('Tempo')];
+        var row4 = [byId('Threshold'), byId('VO2 Max')];
+        var row5 = [byId('기타')];
+        var renderRow = function(arr) {
+          return (arr || []).filter(Boolean).map(function(c) { return renderCategoryCard(c, workouts); }).join('');
+        };
+        grid.innerHTML =
+          '<div class="workout-category-row workout-category-row--single">' + renderRow(row1) + '</div>' +
+          '<div class="workout-category-row">' + renderRow(row2) + '</div>' +
+          '<div class="workout-category-row">' + renderRow(row3) + '</div>' +
+          '<div class="workout-category-row">' + renderRow(row4) + '</div>' +
+          '<div class="workout-category-row workout-category-row--single">' + renderRow(row5) + '</div>';
       }
 
       function workoutViewInit() {
