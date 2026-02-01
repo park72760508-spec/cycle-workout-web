@@ -3320,6 +3320,7 @@ button[aria-disabled="true"] {
   overflow-y: auto;
   padding: 0 16px 16px;
   min-height: 200px;
+  position: relative;
 }
 
 /* 상태 A: 카테고리 뷰 */
@@ -3452,6 +3453,35 @@ button[aria-disabled="true"] {
 .workout-list { 
   overflow-x: auto;
   width: 100%;
+}
+
+/* 워크아웃 로딩 오버레이 - 큰 녹색 스피너 + 진행률 */
+.workout-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 29, 33, 0.9);
+  z-index: 50;
+  animation: fadeIn 0.3s ease;
+}
+
+.workout-loading-spinner {
+  width: 72px;
+  height: 72px;
+  border: 6px solid rgba(46, 204, 113, 0.25);
+  border-top-color: #2ecc71;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 20px;
+}
+
+.workout-loading-progress {
+  font-size: 15px;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
 }
 
 /* ========== 워크아웃 화면 모바일 반응형 (768px 이하) ========== */
