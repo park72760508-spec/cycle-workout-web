@@ -3129,6 +3129,10 @@ button[aria-disabled="true"] {
   background: #e53935;
   z-index: 2;
 }
+/* dual: RPM 라인을 FTP 막대 상단(bottom:100%)에 맞춤 */
+.segmented-workout-graph__cadence-line--dual {
+  bottom: 100%;
+}
 .segmented-workout-graph__cadence-value {
   position: absolute;
   left: 50%;
@@ -3139,6 +3143,13 @@ button[aria-disabled="true"] {
   color: #e53935;
   white-space: nowrap;
   z-index: 3;
+}
+/* dual: RPM 값을 RPM 바(라인) 위쪽에 표기 */
+.segmented-workout-graph__cadence-value--dual {
+  bottom: auto;
+  top: 0;
+  transform: translate(-50%, -100%);
+  margin-top: -2px;
 }
 
 /* ========== WorkoutCard 컴포넌트 ========== */
