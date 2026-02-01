@@ -2441,9 +2441,19 @@ async function apiGetWorkout(id) {
  */
 async function apiGetWorkoutSegments(workoutId) {
   if (!workoutId || !window.GAS_URL) return [];
-  try {
+  const doFetch = async () => {
     const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
-    return (result && result.success && Array.isArray(result.segments)) ? result.segments : [];
+    if (!result || !result.success) return [];
+    const segs = result.segments || result.items || (Array.isArray(result) ? result : []);
+    return Array.isArray(segs) ? segs : [];
+  };
+  try {
+    let segs = await doFetch();
+    if (segs.length === 0 && /android/i.test(navigator.userAgent)) {
+      await new Promise(r => setTimeout(r, 150));
+      segs = await doFetch();
+    }
+    return segs;
   } catch (error) {
     console.warn('apiGetWorkoutSegments 실패:', workoutId, error);
     return [];
@@ -2823,9 +2833,9 @@ async function loadWorkouts(categoryId) {
 
   try {
     showLoading(0, 0);
-    
-    const result = await apiGetWorkouts();
-    
+
+    let result = await apiGetWorkouts();
+
     if (!result || !result.success) {
       hideLoading();
       const errorMsg = result?.error || '알 수 없는 오류';
@@ -2840,7 +2850,24 @@ async function loadWorkouts(categoryId) {
       return;
     }
 
-    const rawWorkouts = result.items || [];
+    let rawWorkouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
+    if (!Array.isArray(rawWorkouts)) rawWorkouts = [];
+
+    if (rawWorkouts.length <= 5 && (categoryId === 'all' || !categoryId)) {
+      try {
+        const retryResult = await apiGetWorkouts();
+        if (retryResult && retryResult.success) {
+          const retryItems = retryResult.items || retryResult.data || retryResult.workouts || (Array.isArray(retryResult) ? retryResult : []);
+          if (Array.isArray(retryItems) && retryItems.length > rawWorkouts.length) {
+            rawWorkouts = retryItems;
+            console.log('워크아웃 목록 재요청으로 더 많은 데이터 수신:', rawWorkouts.length, '개');
+          }
+        }
+      } catch (retryErr) {
+        console.warn('워크아웃 목록 재요청 실패:', retryErr);
+      }
+    }
+
     const totalWorkouts = rawWorkouts.length;
     showLoading(totalWorkouts, 0);
     console.log('Raw workouts received:', totalWorkouts, '개');
@@ -3067,7 +3094,10 @@ async function loadWorkouts(categoryId) {
     }
 
     // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
-    const SEGMENT_BATCH_SIZE = 20;
+    const isAndroid = /android/i.test(navigator.userAgent);
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const SEGMENT_BATCH_SIZE = isAndroid ? 10 : (isIOS ? 20 : 20);  // Android 10, iOS/PC 20
+    const SEGMENT_BATCH_DELAY = isAndroid ? 250 : 100;
     const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
     const totalToFetch = workoutsNeedingSegments.length;
     showLoading(totalToFetch, 0);
@@ -3080,7 +3110,7 @@ async function loadWorkouts(categoryId) {
       const loadedCount = Math.min(i + batch.length, totalToFetch);
       showLoading(totalToFetch, loadedCount);
       if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, SEGMENT_BATCH_DELAY));
       }
     }
 
