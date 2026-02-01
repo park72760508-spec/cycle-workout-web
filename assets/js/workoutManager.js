@@ -3043,16 +3043,6 @@ async function loadWorkouts(categoryId) {
       return;
     }
 
-    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (listWorkouts는 segments 미포함)
-    const segmentPromises = filteredWorkouts.map(async (workout) => {
-      if (!workout.segments || !Array.isArray(workout.segments) || workout.segments.length === 0) {
-        const segments = await apiGetWorkoutSegments(workout.id);
-        workout.segments = segments;
-      }
-      return workout;
-    });
-    await Promise.all(segmentPromises);
-
     // 전역 변수에 저장 (검색 기능에서 사용)
     window.workouts = filteredWorkouts;
 
