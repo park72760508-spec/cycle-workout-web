@@ -3042,8 +3042,8 @@ async function loadWorkouts(categoryId) {
       return;
     }
 
-    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (배치 처리: 동시 요청 10개로 제한)
-    const SEGMENT_BATCH_SIZE = 10;
+    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (배치 처리: 동시 요청 20개로 제한)
+    const SEGMENT_BATCH_SIZE = 20;
     const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
     for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
       const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
@@ -3147,6 +3147,14 @@ function estimateWorkoutTSS(workout) {
 /**
  * WorkoutCard 컴포넌트 렌더 (단일 카드 HTML)
  */
+const ZONE_CATEGORY_LABELS = {
+  z1: 'Active Recovery',
+  z2: 'Endurance',
+  z3: 'Tempo',
+  z4: 'Threshold',
+  z5: 'VO2 Max'
+};
+
 function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grade = '2') {
   if (!workout || typeof workout !== 'object' || !workout.id) return '';
   const safeTitle = escapeHtml(String(workout.title || '제목 없음'));
@@ -3154,6 +3162,8 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   const tss = estimateWorkoutTSS(workout);
   const graphId = 'workout-card-graph-' + workout.id;
   const isAdmin = (grade === '1' || grade === '3');
+  const dominantZone = typeof getWorkoutDominantZone === 'function' ? getWorkoutDominantZone(workout) : null;
+  const categoryLabel = dominantZone ? (ZONE_CATEGORY_LABELS[dominantZone] || '') : '';
   return `
     <div class="workout-card" data-workout-id="${workout.id}">
       <div class="workout-card__header">
@@ -3172,6 +3182,7 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
       <div class="workout-card__footer">
         <span class="workout-card__meta"><span class="workout-card__meta-icon">⏱</span> ${totalMinutes}분</span>
         <span class="workout-card__meta"><span class="workout-card__meta-icon">📊</span> TSS ${tss}</span>
+        ${categoryLabel ? `<span class="workout-card__category">${escapeHtml(categoryLabel)}</span>` : ''}
       </div>
     </div>
   `;
