@@ -2173,7 +2173,7 @@ function getSegmentRpmForPreview(seg) {
       }
       return 0;
     } else {
-      // 숫자로 저장된 경우 (예: 85100 → 85/100)
+      // 숫자로 저장된 경우
       const numValue = Number(targetValue);
       if (numValue > 1000 && numValue < 1000000) {
         const str = String(numValue);
@@ -2186,11 +2186,10 @@ function getSegmentRpmForPreview(seg) {
           }
         }
       }
-      console.warn('[getSegmentRpmForPreview] dual 타입에서 RPM 값 추출 실패 (숫자 형식):', {
-        targetValue,
-        numValue,
-        type: typeof targetValue
-      });
+      // 단일 숫자 (50~200): RPM으로 해석 (cadence 일반 범위)
+      if (!isNaN(numValue) && numValue >= 50 && numValue <= 200) {
+        return numValue;
+      }
       return 0;
     }
   }
