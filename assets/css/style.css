@@ -3409,18 +3409,24 @@ button[aria-disabled="true"] {
 .workout-screen-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   position: relative;
   flex-shrink: 0;
+  padding: 0 48px;
 }
 
 .workout-screen-header-content {
   flex: 1;
   text-align: center;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .workout-screen-new-btn {
+  position: absolute;
+  right: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3440,6 +3446,8 @@ button[aria-disabled="true"] {
 }
 
 .workout-screen-back-btn {
+  position: absolute;
+  left: 8px;
   min-width: 40px;
   min-height: 40px;
   padding: 8px 12px;
