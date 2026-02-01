@@ -4357,11 +4357,12 @@
       function workoutViewInit() {
         try {
           workoutViewShowCategory();
-          if (window.workouts && Array.isArray(window.workouts) && window.workouts.length > 0) {
+          var useCache = window.workouts && Array.isArray(window.workouts) && window.workouts.length > 5;
+          if (useCache) {
             renderWorkoutCategories(window.workouts);
             return;
           }
-          renderWorkoutCategories(window.workouts);
+          renderWorkoutCategories(window.workouts || []);
           if (typeof loadWorkouts === 'function') {
             setTimeout(function() { loadWorkouts('all'); }, 250);
           }
@@ -4370,6 +4371,9 @@
           var grid = document.getElementById('workoutCategoryGrid');
           if (grid && grid.innerHTML === '') {
             renderWorkoutCategories();
+          }
+          if (typeof loadWorkouts === 'function') {
+            setTimeout(function() { loadWorkouts('all'); }, 250);
           }
         }
       }
