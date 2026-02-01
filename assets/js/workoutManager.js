@@ -5369,11 +5369,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeWorkoutManager();
   initializeSegmentManager();
   
-  const btnOpenBuilder = safeGetElement('btnOpenBuilder');
-  if (btnOpenBuilder) {
-    btnOpenBuilder.addEventListener('click', () => showAddWorkoutForm(true));
-  }
-  
+  // btnOpenBuilder: 검색 블록에서 제거됨, 새 워크아웃은 헤더 workoutScreenNewBtn으로 대체
   const btnCancel = safeGetElement('btnCancelBuilder');
   if (btnCancel) {
     btnCancel.addEventListener('click', resetWorkoutFormMode);
@@ -5463,12 +5459,58 @@ function getSegmentZoneFromFtpPercent(seg) {
   const targetType = seg.target_type || 'ftp_pct';
   if (targetType === 'cadence_rpm') return 1;
   const ftpPercent = getSegmentFtpPercentForZone(seg);
+  return getZoneFromFtpPercentValue(ftpPercent);
+}
+
+/**
+ * FTP% 수치 → Zone 1~7 (훈련 준비 화면과 동일한 ZONE_FTP_BOUNDS 사용)
+ * 막대 높이 계산용으로 사용 (ftp_pctz는 상한 기준 높이 적용)
+ */
+function getZoneFromFtpPercentValue(ftpPercent) {
+  if (ftpPercent == null || isNaN(ftpPercent)) return 1;
+  const pct = Number(ftpPercent);
   for (let i = ZONE_FTP_BOUNDS.length - 1; i >= 0; i--) {
-    if (ftpPercent >= ZONE_FTP_BOUNDS[i].min && ftpPercent <= ZONE_FTP_BOUNDS[i].max) {
+    if (pct >= ZONE_FTP_BOUNDS[i].min && pct <= ZONE_FTP_BOUNDS[i].max) {
       return ZONE_FTP_BOUNDS[i].zone;
     }
   }
-  return ftpPercent < 56 ? 1 : 7;
+  return pct < 56 ? 1 : 7;
+}
+
+/**
+ * 막대 높이 계산용 FTP% (훈련 준비 화면 로직 반영)
+ * ftp_pctz: 상한값 사용(막대는 상한까지 표시), dual/ftp_pct: 기존과 동일, cadence_rpm: 0
+ */
+function getSegmentFtpPercentForBarHeight(seg) {
+  if (!seg) return 0;
+  const targetType = seg.target_type || 'ftp_pct';
+  if (targetType === 'ftp_pct') {
+    return Number(seg.target_value) || 100;
+  }
+  if (targetType === 'dual') {
+    const tv = seg.target_value;
+    if (typeof tv === 'string' && tv.includes('/')) {
+      const p = tv.split('/').map(s => s.trim());
+      return Number(p[0]) || 100;
+    }
+    if (Array.isArray(tv) && tv.length > 0) return Number(tv[0]) || 100;
+    return 100;
+  }
+  if (targetType === 'cadence_rpm') return 0;
+  if (targetType === 'ftp_pctz') {
+    const tv = seg.target_value;
+    let maxPercent = 75;
+    if (typeof tv === 'string') {
+      const parts = (tv.includes('/') ? tv.split('/') : tv.split(',')).map(s => s.trim());
+      maxPercent = parts.length >= 2 ? (Number(parts[1]) || 75) : (Number(parts[0]) || 75);
+    } else if (Array.isArray(tv) && tv.length >= 2) {
+      maxPercent = Number(tv[1]) || 75;
+    } else if (Array.isArray(tv) && tv.length === 1) {
+      maxPercent = Number(tv[0]) || 75;
+    }
+    return maxPercent;
+  }
+  return getSegmentFtpPercentForZone(seg);
 }
 
 /**
@@ -5502,7 +5544,9 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     if (targetType === 'cadence_rpm') {
       heightPercent = 8;
     } else {
-      heightPercent = Math.max(15, (zone / 7) * 100);
+      const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
+      const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
+      heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
     }
     const cadenceClass = targetType === 'cadence_rpm' ? ' segmented-workout-graph__bar--cadence' : '';
     return { duration, zone, flexGrow, heightPercent, cadenceClass };
