@@ -3144,7 +3144,7 @@ button[aria-disabled="true"] {
 .workout-card__title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #f0f2f5;
   margin: 0;
   flex: 1;
   min-width: 0;
