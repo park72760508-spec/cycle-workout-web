@@ -3114,7 +3114,7 @@ button[aria-disabled="true"] {
 /* ========== WorkoutCard 컴포넌트 ========== */
 .workout-cards-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
   gap: 16px;
   padding: 4px 0;
 }
@@ -3347,10 +3347,7 @@ button[aria-disabled="true"] {
 }
 
 .workout-category-row--single {
-  grid-template-columns: 1fr;
-  max-width: 280px;
-  margin: 0 auto;
-  width: 100%;
+  grid-template-columns: repeat(2, 1fr);
 }
 
 
@@ -3506,14 +3503,7 @@ button[aria-disabled="true"] {
     backdrop-filter: blur(8px);
   }
 
-  /* 카테고리 그리드: 모바일에서 행별 1열 */
-  .workout-category-row {
-    grid-template-columns: 1fr !important;
-  }
-
-  .workout-category-row--single {
-    max-width: none;
-  }
+  /* 카테고리 그리드: 모바일에서도 1줄에 2개씩 유지 */
 
   /* CategoryCard 모바일: 고정 높이, 축소 패딩, 터치 영역 확보 */
   .workout-category-card {
@@ -3541,7 +3531,7 @@ button[aria-disabled="true"] {
 
   /* WorkoutCard 그리드: 1열 */
   .workout-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 12px;
     padding: 4px 0;
   }
