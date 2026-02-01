@@ -3225,21 +3225,27 @@ button[aria-disabled="true"] {
 
 .workout-card__footer {
   display: flex;
+  align-items: center;
   gap: 16px;
   padding: 8px 14px;
   color: var(--text-secondary);
   font-size: 13px;
+  flex-wrap: nowrap;
 }
 
 .workout-card__meta {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .workout-card__meta-icon {
   font-size: 12px;
   opacity: 0.9;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 
 .workout-card__meta-icon-img {
@@ -3247,7 +3253,8 @@ button[aria-disabled="true"] {
   height: 14px;
   object-fit: contain;
   opacity: 0.9;
-  vertical-align: middle;
+  display: block;
+  flex-shrink: 0;
 }
 
 .workout-card__category {
