@@ -3017,15 +3017,29 @@ async function loadWorkouts(categoryId) {
     // 카테고리 필터 적용 전 전체 목록 (카테고리 개수 표시용)
     const allWorkoutsForCount = filteredWorkouts;
 
-    // 카테고리 필터 (categoryId: 'all' | 'z1' | 'z2' | 'z3' | 'z4' | 'z5')
+    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (카테고리 분류 및 그래프용, 전체 목록에 대해 선행 처리)
+    const SEGMENT_BATCH_SIZE = 20;
+    const workoutsNeedingSegments = allWorkoutsForCount.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
+    for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
+      const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
+      await Promise.all(batch.map(async (workout) => {
+        const segments = await apiGetWorkoutSegments(workout.id);
+        workout.segments = segments;
+      }));
+      if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+
+    // 카테고리 필터 (categoryId: 'all' | 'Active Recovery' | 'Endurance' | 'Sweet Spot' | 'Tempo' | 'Threshold' | 'VO2 Max' | '기타')
     if (categoryId && categoryId !== 'all') {
-      filteredWorkouts = filteredWorkouts.filter(w => {
-        const dominantZone = getWorkoutDominantZone(w);
-        return dominantZone === categoryId;
+      filteredWorkouts = allWorkoutsForCount.filter(w => {
+        const cat = getWorkoutCategoryId(w);
+        return cat === categoryId;
       });
       console.log('📂 카테고리 필터 적용:', { categoryId, count: filteredWorkouts.length });
     }
-    
+
     if (filteredWorkouts.length === 0) {
       workoutList.innerHTML = `
         <div class="empty-state">
@@ -3039,21 +3053,8 @@ async function loadWorkouts(categoryId) {
           </div>
         </div>
       `;
+      if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(allWorkoutsForCount);
       return;
-    }
-
-    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (배치 처리: 동시 요청 20개로 제한)
-    const SEGMENT_BATCH_SIZE = 20;
-    const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
-    for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
-      const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
-      await Promise.all(batch.map(async (workout) => {
-        const segments = await apiGetWorkoutSegments(workout.id);
-        workout.segments = segments;
-      }));
-      if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
-        await new Promise(r => setTimeout(r, 100));
-      }
     }
 
     // 전역 변수에 저장 (검색 기능에서 사용)
@@ -3089,34 +3090,56 @@ async function loadWorkouts(categoryId) {
 }
 
 /**
- * 워크아웃의 주된 Zone 계산 (세그먼트 시간 가중)
- * @returns {string} 'z1'|'z2'|'z3'|'z4'|'z5'|null
+ * FTP%를 카테고리로 매핑
+ * @param {number} ftpPercent - FTP 백분율
+ * @returns {string} 카테고리 id
  */
-function getWorkoutDominantZone(workout) {
-  if (!workout || !workout.segments || !Array.isArray(workout.segments)) return null;
-  const zoneTime = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+function ftpPercentToCategoryId(ftpPercent) {
+  if (ftpPercent <= 55) return 'Active Recovery';
+  if (ftpPercent <= 75) return 'Endurance';
+  if (ftpPercent <= 87) return 'Tempo';
+  if (ftpPercent <= 93) return 'Sweet Spot';
+  if (ftpPercent <= 105) return 'Threshold';
+  if (ftpPercent <= 300) return 'VO2 Max';
+  return '기타';
+}
+
+/**
+ * 워크아웃의 카테고리 계산 (세그먼트 시간 가중, 카테고리 명칭 키 반환)
+ * @returns {string} 'Active Recovery'|'Endurance'|'Sweet Spot'|'Tempo'|'Threshold'|'VO2 Max'|'기타'|null
+ */
+function getWorkoutCategoryId(workout) {
+  if (!workout || !workout.segments || !Array.isArray(workout.segments) || workout.segments.length === 0) return '기타';
+  const categoryTime = {};
   let total = 0;
   workout.segments.forEach(seg => {
     const duration = seg.duration_sec || seg.duration || 0;
     if (duration <= 0) return;
-    const zone = getSegmentZoneFromFtpPercent(seg);
-    if (zone >= 1 && zone <= 5) {
-      zoneTime[zone] = (zoneTime[zone] || 0) + duration;
-    } else {
-      zoneTime[1] = (zoneTime[1] || 0) + duration;
-    }
+    const ftpPercent = getSegmentFtpPercentForZone(seg);
+    const cat = ftpPercentToCategoryId(ftpPercent);
+    categoryTime[cat] = (categoryTime[cat] || 0) + duration;
     total += duration;
   });
-  if (total <= 0) return null;
-  let maxZone = 1;
-  let maxTime = zoneTime[1] || 0;
-  for (let z = 2; z <= 5; z++) {
-    if ((zoneTime[z] || 0) > maxTime) {
-      maxTime = zoneTime[z];
-      maxZone = z;
+  if (total <= 0) return '기타';
+  let maxCat = '기타';
+  let maxTime = 0;
+  Object.keys(categoryTime).forEach(cat => {
+    if (categoryTime[cat] > maxTime) {
+      maxTime = categoryTime[cat];
+      maxCat = cat;
     }
-  }
-  return 'z' + maxZone;
+  });
+  return maxCat;
+}
+
+/**
+ * 워크아웃의 주된 Zone 계산 (세그먼트 시간 가중, 하위 호환)
+ * @returns {string} 'z1'|'z2'|'z3'|'z4'|'z5'|null
+ */
+function getWorkoutDominantZone(workout) {
+  const catId = getWorkoutCategoryId(workout);
+  const catToZone = { 'Active Recovery': 'z1', 'Endurance': 'z2', 'Tempo': 'z3', 'Sweet Spot': 'z3', 'Threshold': 'z4', 'VO2 Max': 'z5', '기타': null };
+  return catToZone[catId] || null;
 }
 
 /**
@@ -3147,14 +3170,6 @@ function estimateWorkoutTSS(workout) {
 /**
  * WorkoutCard 컴포넌트 렌더 (단일 카드 HTML)
  */
-const ZONE_CATEGORY_LABELS = {
-  z1: 'Active Recovery',
-  z2: 'Endurance',
-  z3: 'Tempo',
-  z4: 'Threshold',
-  z5: 'VO2 Max'
-};
-
 function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grade = '2') {
   if (!workout || typeof workout !== 'object' || !workout.id) return '';
   const safeTitle = escapeHtml(String(workout.title || '제목 없음'));
@@ -3162,8 +3177,7 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   const tss = estimateWorkoutTSS(workout);
   const graphId = 'workout-card-graph-' + workout.id;
   const isAdmin = (grade === '1' || grade === '3');
-  const dominantZone = typeof getWorkoutDominantZone === 'function' ? getWorkoutDominantZone(workout) : null;
-  const categoryLabel = dominantZone ? (ZONE_CATEGORY_LABELS[dominantZone] || '') : '';
+  const categoryLabel = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(workout) : '';
   return `
     <div class="workout-card" data-workout-id="${workout.id}">
       <div class="workout-card__header">
@@ -5511,6 +5525,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
 window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
+window.getWorkoutCategoryId = getWorkoutCategoryId;
 
 // ==========================================================
 // 전역 함수로 내보내기
