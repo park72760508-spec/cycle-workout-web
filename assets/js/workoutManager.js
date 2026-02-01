@@ -3042,8 +3042,8 @@ async function loadWorkouts(categoryId) {
       return;
     }
 
-    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (배치 처리: 동시 요청 5개로 제한)
-    const SEGMENT_BATCH_SIZE = 5;
+    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (배치 처리: 동시 요청 10개로 제한)
+    const SEGMENT_BATCH_SIZE = 10;
     const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
     for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
       const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
