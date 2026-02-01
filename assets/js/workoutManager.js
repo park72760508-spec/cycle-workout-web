@@ -3145,20 +3145,20 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
     <div class="workout-card" data-workout-id="${workout.id}">
       <div class="workout-card__header">
         <h3 class="workout-card__title">${safeTitle}</h3>
-        ${isAdmin ? `
-          <div class="workout-card__actions">
+        <div class="workout-card__actions">
+          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})" title="선택" aria-label="선택">
+            <img src="assets/img/check.png" alt="선택" class="workout-card__select-icon" />
+          </button>
+          ${isAdmin ? `
             <button class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">✏️</button>
             <button class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">🗑️</button>
-          </div>
-        ` : ''}
+          ` : ''}
+        </div>
       </div>
       <div class="workout-card__graph" id="${graphId}"></div>
       <div class="workout-card__footer">
         <span class="workout-card__meta"><span class="workout-card__meta-icon">⏱</span> ${totalMinutes}분</span>
         <span class="workout-card__meta"><span class="workout-card__meta-icon">📊</span> TSS ${tss}</span>
-      </div>
-      <div class="workout-card__cta">
-        <button class="btn btn-primary btn-sm workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
       </div>
     </div>
   `;
