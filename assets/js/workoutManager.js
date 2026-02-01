@@ -3029,34 +3029,16 @@ async function loadWorkouts(categoryId) {
       });
     }
 
-    // 카테고리 필터 적용 전 전체 목록 (카테고리 개수 표시용)
+    // 카테고리 필터 적용 전 전체 목록 (카테고리 개수 표시용, author 기준)
     const allWorkoutsForCount = filteredWorkouts;
 
-    // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (카테고리 분류 및 그래프용, 전체 목록에 대해 선행 처리)
-    const SEGMENT_BATCH_SIZE = 20;
-    const workoutsNeedingSegments = allWorkoutsForCount.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
-    const totalToFetch = workoutsNeedingSegments.length;
-    showLoading(totalWorkouts, 0);
-    for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
-      const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
-      await Promise.all(batch.map(async (workout) => {
-        const segments = await apiGetWorkoutSegments(workout.id);
-        workout.segments = segments;
-      }));
-      const loadedCount = Math.min(i + batch.length, totalToFetch);
-      showLoading(totalWorkouts, loadedCount);
-      if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
-        await new Promise(r => setTimeout(r, 100));
-      }
-    }
-
-    // 카테고리 필터 (categoryId: 'all' | 'Active Recovery' | 'Endurance' | 'Sweet Spot' | 'Tempo' | 'Threshold' | 'VO2 Max' | '기타')
+    // 카테고리 필터 (구글 시트 author 필드 기준)
     if (categoryId && categoryId !== 'all') {
       filteredWorkouts = allWorkoutsForCount.filter(w => {
         const cat = getWorkoutCategoryId(w);
         return cat === categoryId;
       });
-      console.log('📂 카테고리 필터 적용:', { categoryId, count: filteredWorkouts.length });
+      console.log('📂 카테고리 필터 적용 (author 기준):', { categoryId, count: filteredWorkouts.length });
     }
 
     if (filteredWorkouts.length === 0) {
@@ -3075,6 +3057,24 @@ async function loadWorkouts(categoryId) {
       `;
       if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(allWorkoutsForCount);
       return;
+    }
+
+    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
+    const SEGMENT_BATCH_SIZE = 20;
+    const workoutsNeedingSegments = filteredWorkouts.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
+    const totalToFetch = workoutsNeedingSegments.length;
+    showLoading(totalToFetch, 0);
+    for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
+      const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
+      await Promise.all(batch.map(async (workout) => {
+        const segments = await apiGetWorkoutSegments(workout.id);
+        workout.segments = segments;
+      }));
+      const loadedCount = Math.min(i + batch.length, totalToFetch);
+      showLoading(totalToFetch, loadedCount);
+      if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
+        await new Promise(r => setTimeout(r, 100));
+      }
     }
 
     // 전역 변수에 저장 (검색 기능에서 사용)
@@ -3111,47 +3111,27 @@ async function loadWorkouts(categoryId) {
   }
 }
 
-/**
- * FTP%를 카테고리로 매핑
- * @param {number} ftpPercent - FTP 백분율
- * @returns {string} 카테고리 id
- */
-function ftpPercentToCategoryId(ftpPercent) {
-  if (ftpPercent <= 55) return 'Active Recovery';
-  if (ftpPercent <= 75) return 'Endurance';
-  if (ftpPercent <= 87) return 'Tempo';
-  if (ftpPercent <= 93) return 'Sweet Spot';
-  if (ftpPercent <= 105) return 'Threshold';
-  if (ftpPercent <= 300) return 'VO2 Max';
-  return '기타';
-}
+/** 구글 시트 Workouts.author 필드 → 카테고리 매핑 (대소문자 무시) */
+var AUTHOR_CATEGORY_MAP = [
+  'Active Recovery', 'Endurance', 'Sweet Spot', 'Tempo', 'Threshold', 'VO2 Max'
+];
 
 /**
- * 워크아웃의 카테고리 계산 (세그먼트 시간 가중, 카테고리 명칭 키 반환)
- * @returns {string} 'Active Recovery'|'Endurance'|'Sweet Spot'|'Tempo'|'Threshold'|'VO2 Max'|'기타'|null
+ * 워크아웃의 카테고리 계산 (구글 시트 Workouts.author 필드 기준)
+ * @param {Object} workout - workout 객체 (author 필드 포함)
+ * @returns {string} 'Active Recovery'|'Endurance'|'Sweet Spot'|'Tempo'|'Threshold'|'VO2 Max'|'기타'
  */
 function getWorkoutCategoryId(workout) {
-  if (!workout || !workout.segments || !Array.isArray(workout.segments) || workout.segments.length === 0) return '기타';
-  const categoryTime = {};
-  let total = 0;
-  workout.segments.forEach(seg => {
-    const duration = seg.duration_sec || seg.duration || 0;
-    if (duration <= 0) return;
-    const ftpPercent = getSegmentFtpPercentForZone(seg);
-    const cat = ftpPercentToCategoryId(ftpPercent);
-    categoryTime[cat] = (categoryTime[cat] || 0) + duration;
-    total += duration;
-  });
-  if (total <= 0) return '기타';
-  let maxCat = '기타';
-  let maxTime = 0;
-  Object.keys(categoryTime).forEach(cat => {
-    if (categoryTime[cat] > maxTime) {
-      maxTime = categoryTime[cat];
-      maxCat = cat;
+  if (!workout) return '기타';
+  const authorVal = String(workout.author || '').trim();
+  if (!authorVal) return '기타';
+  const authorLower = authorVal.toLowerCase();
+  for (let i = 0; i < AUTHOR_CATEGORY_MAP.length; i++) {
+    if (authorLower === AUTHOR_CATEGORY_MAP[i].toLowerCase()) {
+      return AUTHOR_CATEGORY_MAP[i];
     }
-  });
-  return maxCat;
+  }
+  return '기타';
 }
 
 /**
