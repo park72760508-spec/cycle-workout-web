@@ -2419,12 +2419,14 @@
     <div class="header workout-screen-header" id="workoutScreenHeader">
       <button type="button" class="workout-screen-back-btn" id="workoutScreenBackBtn" onclick="workoutViewShowCategory()" aria-label="카테고리로" style="display:none;">
         <svg class="workout-screen-back-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        <span class="workout-screen-back-text">뒤로가기</span>
       </button>
       <div class="workout-screen-header-content">
         <h1 id="workoutScreenTitle">📋 워크아웃 선택</h1>
         <p class="subtitle workout-screen-subtitle" id="workoutScreenSubtitle">오늘의 훈련 프로그램을 선택하세요</p>
       </div>
+      <button type="button" class="workout-screen-new-btn" id="workoutScreenNewBtn" onclick="if (typeof showAddWorkoutForm === 'function') showAddWorkoutForm(true);" aria-label="새 워크아웃" style="display:none;">
+        <img src="assets/img/write.png" alt="새 워크아웃" class="workout-screen-new-icon" style="width: 24px; height: 24px; object-fit: contain;" />
+      </button>
     </div>
 
     <!-- 메인 컨테이너: 상태 A(카테고리) / 상태 B(워크아웃 리스트) 전환 -->
@@ -4267,6 +4269,8 @@
         if (catView) { catView.style.display = 'block'; catView.removeAttribute('data-hidden'); }
         if (listView) { listView.style.display = 'none'; listView.setAttribute('data-hidden', 'true'); }
         if (backBtn) backBtn.style.display = 'none';
+        var newBtn = document.getElementById('workoutScreenNewBtn');
+        if (newBtn) newBtn.style.display = 'none';
         if (titleEl) { titleEl.textContent = '📋 워크아웃 선택'; }
         if (subtitleEl) { subtitleEl.textContent = '오늘의 훈련 프로그램을 선택하세요'; subtitleEl.style.display = ''; }
         if (headerEl) headerEl.classList.remove('workout-screen-header--list-view');
@@ -4281,6 +4285,8 @@
         if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
         if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
         if (backBtn) backBtn.style.display = 'flex';
+        var newBtn = document.getElementById('workoutScreenNewBtn');
+        if (newBtn) newBtn.style.display = 'flex';
         var titleEl = document.getElementById('workoutScreenTitle');
         var subtitleEl = document.getElementById('workoutScreenSubtitle');
         var headerEl = document.getElementById('workoutScreenHeader');
@@ -4343,6 +4349,10 @@
       function workoutViewInit() {
         try {
           workoutViewShowCategory();
+          if (window.workouts && Array.isArray(window.workouts) && window.workouts.length > 0) {
+            renderWorkoutCategories(window.workouts);
+            return;
+          }
           renderWorkoutCategories(window.workouts);
           if (typeof loadWorkouts === 'function') {
             setTimeout(function() { loadWorkouts('all'); }, 250);
