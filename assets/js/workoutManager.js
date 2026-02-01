@@ -5394,15 +5394,51 @@ const ZONE_FTP_BOUNDS = [
   { min: 151, max: 300, zone: 7 } // Zone 7
 ];
 
+/**
+ * Zone/색상 결정용 FTP% 추출 (훈련 준비 화면 drawSegmentGraph와 동일)
+ * ftp_pctz: 하한값 사용, dual: FTP% 부분, cadence_rpm: 0
+ */
+function getSegmentFtpPercentForZone(seg) {
+  if (!seg) return 0;
+  const targetType = seg.target_type || 'ftp_pct';
+  if (targetType === 'ftp_pct') {
+    return Number(seg.target_value) || 100;
+  }
+  if (targetType === 'dual') {
+    const tv = seg.target_value;
+    if (typeof tv === 'string' && tv.includes('/')) {
+      const p = tv.split('/').map(s => s.trim());
+      return Number(p[0]) || 100;
+    }
+    if (Array.isArray(tv) && tv.length > 0) return Number(tv[0]) || 100;
+    return 100;
+  }
+  if (targetType === 'cadence_rpm') return 0;
+  if (targetType === 'ftp_pctz') {
+    const tv = seg.target_value;
+    let minPercent = 60;
+    if (typeof tv === 'string') {
+      const parts = (tv.includes('/') ? tv.split('/') : tv.split(',')).map(s => s.trim());
+      minPercent = Number(parts[0]) || 60;
+    } else if (Array.isArray(tv) && tv.length > 0) {
+      minPercent = Number(tv[0]) || 60;
+    }
+    return minPercent;
+  }
+  return getSegmentFtpPercentForPreview(seg);
+}
+
 function getSegmentZoneFromFtpPercent(seg) {
   if (!seg) return 1;
   const segType = (seg.segment_type || '').toLowerCase();
   if (segType === 'rest' || segType === 'recovery') return 1;
   if (segType === 'warmup' || segType === 'cooldown') {
-    const pct = getSegmentFtpPercentForPreview(seg);
+    const pct = getSegmentFtpPercentForZone(seg);
     return pct < 56 ? 1 : (pct < 76 ? 2 : 3);
   }
-  const ftpPercent = getSegmentFtpPercentForPreview(seg);
+  const targetType = seg.target_type || 'ftp_pct';
+  if (targetType === 'cadence_rpm') return 1;
+  const ftpPercent = getSegmentFtpPercentForZone(seg);
   for (let i = ZONE_FTP_BOUNDS.length - 1; i >= 0; i--) {
     if (ftpPercent >= ZONE_FTP_BOUNDS[i].min && ftpPercent <= ZONE_FTP_BOUNDS[i].max) {
       return ZONE_FTP_BOUNDS[i].zone;
@@ -5435,16 +5471,23 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
   const bars = segments.map(seg => {
     const duration = seg.duration_sec || seg.duration || 0;
     if (duration <= 0) return null;
+    const targetType = seg.target_type || 'ftp_pct';
     const zone = getSegmentZoneFromFtpPercent(seg);
     const flexGrow = duration;
-    const heightPercent = Math.max(15, (zone / 7) * 100);
-    return { duration, zone, flexGrow, heightPercent };
+    let heightPercent;
+    if (targetType === 'cadence_rpm') {
+      heightPercent = 8;
+    } else {
+      heightPercent = Math.max(15, (zone / 7) * 100);
+    }
+    const cadenceClass = targetType === 'cadence_rpm' ? ' segmented-workout-graph__bar--cadence' : '';
+    return { duration, zone, flexGrow, heightPercent, cadenceClass };
   }).filter(Boolean);
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프">
       <div class="segmented-workout-graph__bars">
         ${bars.map(b => `
-          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}"
+          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}${b.cadenceClass}"
                style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;"
                title="Zone ${b.zone} · ${Math.round(b.duration)}초"></div>
         `).join('')}
