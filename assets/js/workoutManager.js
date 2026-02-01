@@ -3193,7 +3193,7 @@ function getWorkoutDominantZone(workout) {
 }
 
 /**
- * 워크아웃 TSS 추정 (NP 근사 기반)
+ * 워크아웃 TSS 추정 (NP 근사 기반) - ftp_pct, ftp_pctz, dual 등 target_type 지원
  */
 function estimateWorkoutTSS(workout) {
   if (!workout || !workout.segments || !Array.isArray(workout.segments)) return 0;
@@ -3201,9 +3201,11 @@ function estimateWorkoutTSS(workout) {
   let sumI4t = 0;
   workout.segments.forEach(seg => {
     const t = Number(seg.duration_sec) || 0;
-    let I1 = (Number(seg.target_value) || 0) / 100;
+    if (t <= 0) return;
+    const ftpPercent = getSegmentFtpPercentForPreview(seg);
+    let I1 = ftpPercent / 100;
     if (seg.ramp && seg.ramp_to_value != null) {
-      const I2 = (Number(seg.ramp_to_value) || I1 * 100) / 100;
+      const I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
       sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
     } else {
       sumI4t += Math.pow(I1, 4) * t;
@@ -3246,7 +3248,6 @@ function renderWorkoutCard(workout, workoutRoomStatusMap = {}, workoutRoomCodeMa
       </div>
       <div class="workout-card__cta">
         ${hasWaitingRoom ? `<button class="btn btn-sm workout-card__join-btn" data-room-code="${escapeHtml(roomCode)}" title="그룹훈련 참가">👥 참가</button>` : ''}
-        ${isAdmin ? `<button class="btn btn-sm workout-card__create-room-btn" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="그룹훈련방 생성">🔗 방 만들기</button>` : ''}
         <button class="btn btn-primary btn-sm workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
       </div>
     </div>
@@ -3395,21 +3396,6 @@ function attachTableEventListeners() {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (typeof joinRoomByCode === 'function') joinRoomByCode(roomCode);
-      });
-    }
-  });
-  // WorkoutCard: 그룹훈련방 생성 버튼
-  document.querySelectorAll('.workout-card__create-room-btn').forEach(btn => {
-    const workoutId = btn.dataset.workoutId;
-    const workoutTitle = btn.dataset.workoutTitle;
-    if (workoutId && workoutTitle) {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (typeof window.createGroupRoomFromWorkout === 'function') {
-          await window.createGroupRoomFromWorkout(workoutId, workoutTitle);
-        } else if (typeof createGroupRoomFromWorkout === 'function') {
-          await createGroupRoomFromWorkout(workoutId, workoutTitle);
-        }
       });
     }
   });
