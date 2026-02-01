@@ -2792,22 +2792,35 @@ async function apiDeleteWorkout(id) {
 
 async function loadWorkouts(categoryId) {
   const workoutList = safeGetElement('workoutList');
+  const loadingOverlay = document.getElementById('workoutLoadingOverlay');
+  const loadingProgress = document.getElementById('workoutLoadingProgress');
+
   if (!workoutList) {
     console.warn('workoutList 요소를 찾을 수 없습니다.');
     return;
   }
 
+  function showLoading(total, loaded) {
+    if (loadingOverlay) {
+      loadingOverlay.style.display = 'flex';
+    }
+    if (loadingProgress) {
+      loadingProgress.textContent = (loaded || 0) + '/' + (total || 0) + ' 갱신중.....';
+    }
+  }
+  function hideLoading() {
+    if (loadingOverlay) {
+      loadingOverlay.style.display = 'none';
+    }
+  }
+
   try {
-    workoutList.innerHTML = `
-      <div class="loading-container">
-        <div class="spinner"></div>
-        <div style="color: #666; font-size: 14px;">워크아웃 목록을 불러오는 중...</div>
-      </div>
-    `;
+    showLoading(0, 0);
     
     const result = await apiGetWorkouts();
     
     if (!result || !result.success) {
+      hideLoading();
       const errorMsg = result?.error || '알 수 없는 오류';
       workoutList.innerHTML = `
         <div class="error-state">
@@ -2821,7 +2834,9 @@ async function loadWorkouts(categoryId) {
     }
 
     const rawWorkouts = result.items || [];
-    console.log('Raw workouts received:', rawWorkouts.length, '개');
+    const totalWorkouts = rawWorkouts.length;
+    showLoading(totalWorkouts, 0);
+    console.log('Raw workouts received:', totalWorkouts, '개');
     
     // 원본 데이터의 status 확인 (디버깅용)
     const rawStatusCount = {
@@ -3020,12 +3035,16 @@ async function loadWorkouts(categoryId) {
     // WorkoutSegments에서 각 워크아웃의 세그먼트 조회 (카테고리 분류 및 그래프용, 전체 목록에 대해 선행 처리)
     const SEGMENT_BATCH_SIZE = 20;
     const workoutsNeedingSegments = allWorkoutsForCount.filter(w => !w.segments || !Array.isArray(w.segments) || w.segments.length === 0);
+    const totalToFetch = workoutsNeedingSegments.length;
+    showLoading(totalWorkouts, 0);
     for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
       const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
       await Promise.all(batch.map(async (workout) => {
         const segments = await apiGetWorkoutSegments(workout.id);
         workout.segments = segments;
       }));
+      const loadedCount = Math.min(i + batch.length, totalToFetch);
+      showLoading(totalWorkouts, loadedCount);
       if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length) {
         await new Promise(r => setTimeout(r, 100));
       }
@@ -3041,6 +3060,7 @@ async function loadWorkouts(categoryId) {
     }
 
     if (filteredWorkouts.length === 0) {
+      hideLoading();
       workoutList.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">📋</div>
@@ -3066,7 +3086,8 @@ async function loadWorkouts(categoryId) {
       renderWorkoutCategories(allWorkoutsForCount);
     }
     window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다.`);
-    
+    hideLoading();
+
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
     
@@ -3075,6 +3096,7 @@ async function loadWorkouts(categoryId) {
       errorMessage = error.message;
     }
     
+    hideLoading();
     workoutList.innerHTML = `
       <div class="error-state">
         <div class="error-state-icon">🌐</div>
