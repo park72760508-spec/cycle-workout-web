@@ -5577,6 +5577,8 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     if (seg.target_type === 'cadence_rpm') return Number(seg.target_value) || 0;
     return 0;
   }
+  
+  // 세그먼트 데이터 생성
   const bars = segments.map(seg => {
     const duration = seg.duration_sec || seg.duration || 0;
     if (duration <= 0) return null;
@@ -5608,6 +5610,31 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     const cadenceClass = isCadence ? ' segmented-workout-graph__bar--cadence' : '';
     return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, isDual, cadenceRpm, cadenceLineBottom };
   }).filter(Boolean);
+  
+  // RPM 값 표시 여부 결정 (겹침 방지)
+  // 각 세그먼트의 상대적 너비 비율 계산 (flex-grow 기반)
+  const totalFlexGrow = bars.reduce((sum, b) => sum + b.flexGrow, 0);
+  const MIN_WIDTH_PERCENT = 5; // 최소 5% 너비 이상인 세그먼트만 RPM 표시
+  let lastShownRpmIndex = -1;
+  const MIN_GAP_BETWEEN_RPMS = 2; // RPM 표시 사이에 최소 2개 세그먼트 간격
+  
+  bars.forEach((bar, index) => {
+    const widthPercent = (bar.flexGrow / totalFlexGrow) * 100;
+    const hasCadence = bar.isCadence || (bar.isDual && bar.cadenceRpm > 0);
+    
+    if (hasCadence) {
+      // 세그먼트가 충분히 넓고, 이전 RPM 표시와 충분한 거리가 있는 경우만 표시
+      const hasEnoughGap = (lastShownRpmIndex === -1) || (index - lastShownRpmIndex >= MIN_GAP_BETWEEN_RPMS);
+      bar.showRpmValue = widthPercent >= MIN_WIDTH_PERCENT && hasEnoughGap;
+      
+      if (bar.showRpmValue) {
+        lastShownRpmIndex = index;
+      }
+    } else {
+      bar.showRpmValue = false;
+    }
+  });
+  
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프">
       <div class="segmented-workout-graph__bars">
@@ -5616,14 +5643,14 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
             return `
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--cadence" style="flex: ${b.flexGrow} 1 0; --bar-height: 100%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
             <div class="segmented-workout-graph__cadence-line"></div>
-            ${b.cadenceRpm > 0 ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
+            ${(b.cadenceRpm > 0 && b.showRpmValue) ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
           </div>`;
           }
           if (b.isDual && b.cadenceRpm > 0) {
             return `
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone} segmented-workout-graph__bar--dual" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="Zone ${b.zone} · RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
             <div class="segmented-workout-graph__cadence-line"></div>
-            <span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>
+            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
           </div>`;
           }
           return `
