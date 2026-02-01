@@ -3604,6 +3604,26 @@ button[aria-disabled="true"] {
   object-fit: contain;
 }
 
+/* 워크아웃 작성 화면 - 휴대폰에서 게시날짜 입력 상자를 카테고리 선택과 동일 너비로 */
+@media (max-width: 768px) {
+  #workoutBuilderScreen .form-row .form-group {
+    min-width: 0;
+  }
+  #workoutBuilderScreen .form-row .form-group select,
+  #workoutBuilderScreen .form-row .form-group input[type="date"] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  #workoutBuilderScreen #wbPublishDate {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
 /* 하단 푸터 (워크아웃 선택 화면에서는 미사용 - 나가기 버튼/실선 삭제됨) */
 
 /* 워크아웃 화면 내 테이블 다크 테마 보정 */
