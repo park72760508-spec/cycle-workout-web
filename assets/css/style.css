@@ -3166,7 +3166,7 @@ button[aria-disabled="true"] {
 
 .workout-card__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 12px 14px 0;
@@ -3191,6 +3191,9 @@ button[aria-disabled="true"] {
 }
 
 .workout-card__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -3198,6 +3201,11 @@ button[aria-disabled="true"] {
   font-size: 14px;
   opacity: 0.7;
   transition: opacity 0.2s;
+}
+.workout-card__action-btn img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
 }
 
 .workout-card__action-btn:hover {
@@ -3267,8 +3275,8 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.08);
 }
 .workout-card__select-icon {
-  width: 24px;
-  height: 24px;
+  width: 15px;
+  height: 15px;
   object-fit: contain;
 }
 
