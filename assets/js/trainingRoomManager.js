@@ -71,20 +71,19 @@ function isMobileDeviceForTrainingRooms() {
 
 /**
  * Galaxy Tab 등 태블릿/느린 기기 감지 (v9 모듈·IndexedDB 지연 대비)
- * - 우선: 터치 가능 + 넓은 화면 → "Desktop Site" 요청 시에도 Galaxy Tab 식별
- * - Samsung/Android 키워드 유지 (UA에 Mobile이 없어도 터치+화면으로 보완)
+ * Desktop Site 모드에서 UA가 PC로 바뀌어도 터치+화면으로 엄격히 태블릿 판별.
  */
 function isTabletOrSlowDeviceForAuth() {
   if (typeof window === 'undefined' || !navigator) return false;
-  const ua = (navigator.userAgent || '').toLowerCase();
   const touchCapable = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
-  const wideScreen = typeof screen !== 'undefined' && screen.width >= 600;
+  const wideScreen = typeof window.screen !== 'undefined' && window.screen.width >= 600;
 
-  // Prioritize screen + touch: catches Galaxy Tab even with "Desktop Site" (UA may lack Android/Mobile)
+  // Strict: touch + wide screen => Tablet/Slow Device regardless of User-Agent (Galaxy Tab Desktop Mode)
   if (touchCapable && wideScreen) {
     return true;
   }
 
+  const ua = (navigator.userAgent || '').toLowerCase();
   const isSamsung = ua.indexOf('samsung') !== -1;
   const isAndroidTablet = ua.indexOf('android') !== -1 && (ua.indexOf('mobile') === -1 || ua.indexOf('sm-t') !== -1);
   const isGalaxyTab = isSamsung && (ua.indexOf('sm-t') !== -1 || ua.indexOf('tablet') !== -1 || wideScreen);
@@ -194,6 +193,8 @@ async function waitForAuthReady(maxWaitMs = 3000) {
   const isMobile = isMobileDeviceForTrainingRooms();
   const v9PollMs = isTablet ? 6000 : (isMobile ? 4000 : 2000); // Tablets: at least 6000ms for Galaxy Tab fallback
   const effectiveMaxWaitMs = isTablet ? Math.max(maxWaitMs, 6000) : maxWaitMs; // Ensure tablets get sufficiently long wait
+
+  console.log('[Auth Debug] Device Type Check: isTablet=' + isTablet + ', waitTime=' + v9PollMs + 'ms');
 
   // 모바일/태블릿: authV9가 없으면 type="module" 로드 대기 (Galaxy Tab에서 v9 늦게 로드되면 compat만 대기해 권한 오류 발생)
   if ((isMobile || isTablet) && !window.authV9) {
@@ -563,15 +564,16 @@ async function loadTrainingRooms() {
     try {
       rooms = await fetchRooms();
     } catch (firstErr) {
+      const errMsg = String(firstErr.message || '').toLowerCase();
       const isPerm = (firstErr.code === 'permission-denied') ||
-        (String(firstErr.message || '').toLowerCase().includes('permission')) ||
+        errMsg.includes('permission') ||
+        errMsg.includes('privilege') ||
         (String(firstErr.message || '').includes('권한'));
       if (isPerm && !retried) {
         retried = true;
-        const retryAuthMs = isTablet ? 6000 : 5000;
-        console.warn('[Training Room] 권한 오류 후 1회 재시도 (Auth 지연 대응, 대기', retryAuthMs, 'ms):', firstErr.message);
+        console.warn('[Training Room] 권한 오류 후 1회 재시도 (Auth 토큰 복원 대기):', firstErr.message);
         await new Promise(r => setTimeout(r, 2000));
-        await waitForAuthReady(retryAuthMs);
+        await waitForAuthReady(5000);
         rooms = await fetchRooms();
       } else {
         throw firstErr;
