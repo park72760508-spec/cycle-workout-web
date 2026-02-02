@@ -70,20 +70,25 @@ function isMobileDeviceForTrainingRooms() {
 }
 
 /**
- * Galaxy Tab 등 태블릿/느린 기기 감지 (11인치 등, Desktop Site 시 UA 무시)
- * 화면 크기·터치만으로 판별해 Auth 대기 시간을 길게 적용.
+ * Galaxy Tab 등 태블릿/느린 기기 감지 (Tab S8 Ultra 등 고해상도 포함, Desktop Site 시 UA 무시)
+ * 화면 크기·터치·플랫폼으로 판별해 Auth 대기 및 Long Polling 적용.
  */
 function isTabletOrSlowDeviceForAuth() {
   if (typeof window === 'undefined' || !navigator) return false;
   const innerWidth = typeof window.innerWidth === 'number' ? window.innerWidth : 0;
   const touchCapable = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
+  const platform = String(navigator.platform || '').toLowerCase();
 
+  // Fallback: Desktop Mode에서 Linux arm / Android 플랫폼이면 태블릿으로 간주
+  if (platform.includes('linux arm') || platform.includes('android')) {
+    return true;
+  }
   // ~11-inch tablets: innerWidth typically <= 1280 (Desktop Site)
   if (innerWidth > 0 && innerWidth <= 1280) {
     return true;
   }
-  // Touch + medium-wide viewport (e.g. 1366) => treat as tablet/slow device
-  if (touchCapable && innerWidth > 0 && innerWidth <= 1366) {
+  // Touch + high-res viewport (up to 2560 for Tab S8 Ultra etc.) => treat as tablet/slow device
+  if (touchCapable && innerWidth > 0 && innerWidth <= 2560) {
     return true;
   }
   return false;
@@ -297,7 +302,7 @@ async function waitForFirestore(maxWaitMs = null) {
     if (isTablet && firestoreDb && typeof firestoreDb.settings === 'function') {
       try {
         firestoreDb.settings({ experimentalForceLongPolling: true, merge: true });
-        console.log('[Training Room] Galaxy Tab detected: Forcing Long Polling for stability.');
+        console.log('[Firestore] Force Long Polling applied for High-Res Tablet.');
       } catch (e) {
         console.warn('[Training Room] Force long polling failed:', e?.message);
       }
@@ -678,6 +683,16 @@ async function loadTrainingRooms() {
         msg.includes('privilege') ||
         String(err.message || '').includes('권한');
     };
+
+    // Tablet specific: Force refresh token BEFORE the first fetch attempt
+    if (isTablet && currentUser) {
+      console.log('[Training Room] Tablet detected: Pre-flight token refresh...');
+      try {
+        await currentUser.getIdToken(true);
+      } catch (e) {
+        console.warn('[Training Room] Pre-flight refresh failed', e);
+      }
+    }
 
     let lastErr = null;
     try {
