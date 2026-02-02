@@ -70,6 +70,21 @@ function isMobileDeviceForTrainingRooms() {
 }
 
 /**
+ * Galaxy Tab 등 태블릿/느린 기기 감지 (v9 모듈·IndexedDB 지연 대비)
+ * - Samsung 탭: User-Agent에 Samsung, Android 포함 또는 SM-T 시리즈
+ * - iPad 등 태블릿도 화면 크기로 포함
+ */
+function isTabletOrSlowDeviceForAuth() {
+  if (typeof window === 'undefined' || !navigator) return false;
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const isSamsung = ua.indexOf('samsung') !== -1;
+  const isAndroidTablet = ua.indexOf('android') !== -1 && (ua.indexOf('mobile') === -1 || ua.indexOf('sm-t') !== -1);
+  const isGalaxyTab = isSamsung && (ua.indexOf('sm-t') !== -1 || ua.indexOf('tablet') !== -1 || (screen && screen.width >= 600));
+  const isTabletLike = (screen && screen.width >= 600) && (ua.indexOf('mobile') === -1 || ua.indexOf('ipad') !== -1);
+  return !!(isGalaxyTab || (isSamsung && isAndroidTablet) || isTabletLike);
+}
+
+/**
  * 네트워크 상태 감지 (Live Training Rooms용 - 공통 함수 사용)
  */
 function getNetworkInfoForTrainingRooms() {
@@ -136,12 +151,47 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
 }
 
 /**
+ * Firestore v9 사용 시 authV9가 로드될 때까지 폴링 (Galaxy Tab 등 type="module" 지연 대비)
+ * @param {number} maxWaitMs - 최대 대기 시간
+ * @returns {Promise<boolean>} authV9 사용 가능 여부
+ */
+function pollForAuthV9(maxWaitMs) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const interval = 200;
+    const t = setInterval(() => {
+      if (window.authV9) {
+        clearInterval(t);
+        console.log('[Auth Ready] authV9 로드 확인 (경과:', Date.now() - start, 'ms)');
+        resolve(true);
+        return;
+      }
+      if (Date.now() - start >= maxWaitMs) {
+        clearInterval(t);
+        console.warn('[Auth Ready] authV9 대기 타임아웃, compat auth 사용');
+        resolve(false);
+      }
+    }, interval);
+  });
+}
+
+/**
  * Firebase Auth 상태가 확정될 때까지 대기 (onAuthStateChanged 사용)
- * 로그인 상태든 비로그인 상태든 Auth 상태가 결정될 때까지 기다립니다.
+ * Firestore v9(firestoreV9) 사용 시 authV9와 동일 앱이므로 authV9 우선 대기 (Galaxy Tab 권한 오류 방지).
  * @param {number} maxWaitMs - 최대 대기 시간 (밀리초), 기본값: 3000ms
  * @returns {Promise<void>}
  */
 async function waitForAuthReady(maxWaitMs = 3000) {
+  const isTablet = isTabletOrSlowDeviceForAuth();
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const v9PollMs = isTablet ? 6000 : (isMobile ? 4000 : 2000); // Galaxy Tab: v9 모듈·IndexedDB 지연 여유
+
+  // 모바일/태블릿: authV9가 없으면 type="module" 로드 대기 (Galaxy Tab에서 v9 늦게 로드되면 compat만 대기해 권한 오류 발생)
+  if ((isMobile || isTablet) && !window.authV9) {
+    console.log('[Auth Ready] authV9 로드 대기 (최대', v9PollMs, 'ms, 태블릿:', isTablet, ')');
+    await pollForAuthV9(v9PollMs);
+  }
+
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     let unsubscribe = null;
@@ -149,7 +199,6 @@ async function waitForAuthReady(maxWaitMs = 3000) {
     
     console.log('[Auth Ready] Firebase Auth 상태 확정 대기 시작 (최대', maxWaitMs, 'ms)');
     
-    // 타임아웃 설정
     timeoutId = setTimeout(() => {
       if (unsubscribe) {
         unsubscribe();
@@ -157,15 +206,20 @@ async function waitForAuthReady(maxWaitMs = 3000) {
       }
       const elapsed = Date.now() - startTime;
       console.warn('[Auth Ready] ⚠️ 타임아웃 발생 (', elapsed, 'ms 경과) - 비로그인 상태로 간주하고 진행');
-      resolve(); // 타임아웃 시 비로그인 상태로 간주하고 진행
+      resolve();
     }, maxWaitMs);
     
     try {
-      // Firebase Auth 인스턴스 가져오기
+      // Firestore v9 사용 시 authV9 우선 (동일 앱 → Firestore 권한과 일치). Galaxy Tab에서 compat만 대기하면 권한 오류 발생.
       let auth = null;
-      if (window.firebase && typeof window.firebase.auth === 'function') {
+      if (window.firestoreV9 && window.authV9) {
+        auth = window.authV9;
+        console.log('[Auth Ready] authV9 사용 (Firestore v9와 동일 앱)');
+      }
+      if (!auth && window.firebase && typeof window.firebase.auth === 'function') {
         auth = window.firebase.auth();
-      } else if (window.auth) {
+      }
+      if (!auth && window.auth) {
         auth = window.auth;
       }
       
@@ -176,54 +230,25 @@ async function waitForAuthReady(maxWaitMs = 3000) {
         return;
       }
       
-      // onAuthStateChanged로 Auth 상태가 확정될 때까지 대기
       unsubscribe = auth.onAuthStateChanged((user) => {
         const elapsed = Date.now() - startTime;
         console.log('[Auth Ready] ✅ Firebase Auth 상태 확정 완료 (', elapsed, 'ms, 로그인:', !!user, ')');
         
-        // 정리
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
-        }
-        
-        // Auth 상태가 확정되었으므로 resolve
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
         resolve();
       }, (error) => {
         const elapsed = Date.now() - startTime;
         console.error('[Auth Ready] ❌ Firebase Auth 상태 확인 오류 (', elapsed, 'ms):', error);
         
-        // 정리
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
-        }
-        
-        // 오류 발생 시에도 계속 진행 (비로그인 상태로 간주)
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
         resolve();
       });
     } catch (error) {
       console.error('[Auth Ready] ❌ Firebase Auth 초기화 오류:', error);
-      
-      // 정리
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = null;
-      }
-      
-      // 오류 발생 시에도 계속 진행
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
       resolve();
     }
   });
@@ -466,14 +491,15 @@ async function loadTrainingRooms() {
   `;
 
   const isMobile = isMobileDeviceForTrainingRooms();
-  const authWaitMs = isMobile ? 6000 : 4000; // Galaxy Tab 등 모바일: Auth 복원 지연 대비
+  const isTablet = isTabletOrSlowDeviceForAuth();
+  const authWaitMs = isTablet ? 10000 : (isMobile ? 6000 : 4000); // Galaxy Tab: IndexedDB·Auth 복원 지연 대비
 
   try {
     // Firestore 규칙: training_rooms는 request.auth != null 필요 → Auth 준비 후 쿼리 (권한 오류 방지)
     await waitForAuthReady(authWaitMs);
 
     // trainingResultService.js 패턴: Firestore 인스턴스 직접 가져오기 (단순화)
-    // v9 우선, 없으면 v8 사용
+    // v9 우선, 없으면 v8 사용 (v9 사용 시 authV9와 동일 앱이어야 권한 통과)
     let db = null;
     let useV9 = false;
     
@@ -533,9 +559,10 @@ async function loadTrainingRooms() {
         (String(firstErr.message || '').includes('권한'));
       if (isPerm && isMobile && !retried) {
         retried = true;
-        console.warn('[Training Room] 권한 오류 후 1회 재시도 (Auth 지연 대응):', firstErr.message);
+        const retryAuthMs = isTablet ? 6000 : 3000;
+        console.warn('[Training Room] 권한 오류 후 1회 재시도 (Auth 지연 대응, 대기', retryAuthMs, 'ms):', firstErr.message);
         await new Promise(r => setTimeout(r, 2000));
-        await waitForAuthReady(3000);
+        await waitForAuthReady(retryAuthMs);
         rooms = await fetchRooms();
       } else {
         throw firstErr;
