@@ -6261,335 +6261,106 @@ function createDefaultTracks(count = 10) {
   return tracks;
 }
 
+/** Fast-fail timeout for initial Bluetooth player list fetch (no long mobile timeouts). */
+const BLUETOOTH_PLAYER_LIST_FAST_FAIL_MS = 3000;
+
+/** Safe Realtime DB reference (survives page suspension). */
+function getBluetoothPlayerListDb() {
+  if (typeof db !== 'undefined' && db != null) return db;
+  if (typeof window !== 'undefined' && window.db != null) return window.db;
+  if (typeof firebase !== 'undefined' && firebase.database && typeof firebase.database === 'function') {
+    return firebase.database();
+  }
+  return null;
+}
+
 /**
- * Bluetooth Player List 렌더링 (트랙 수 고정: 항상 10개)
- * 개선: 타임아웃, 재시도, 에러 핸들링 강화, 모바일 최적화, 점진적 로딩
+ * Fetch track data from Firebase (single shot, no retry). Used for fast-fail race and background re-fetch.
+ * @param {object} db - Realtime Database instance (from getBluetoothPlayerListDb())
+ * @param {string} roomId - Session/room ID
+ * @returns {Promise<{tracks: Array, maxTrackNumber: number, roomId: string}>}
  */
-async function renderBluetoothPlayerList() {
-  const playerListContent = document.getElementById('bluetoothPlayerListContent');
-  if (!playerListContent) {
-    console.error('[Bluetooth Player List] playerListContent 요소를 찾을 수 없습니다.');
-    return;
-  }
-
-  // 모바일 환경 감지
-  const isMobile = isMobileDevice();
-  const networkInfo = getNetworkInfo();
-  
-  // 로딩 표시 (모바일 최적화 메시지)
-  const loadingMessage = isMobile 
-    ? '트랙 정보를 불러오는 중... (모바일 최적화 모드)'
-    : '트랙 정보를 불러오는 중...';
-  
-  playerListContent.innerHTML = `
-    <div style="text-align: center; padding: 40px;">
-      <div class="spinner" style="margin: 0 auto 20px;"></div>
-      <p style="color: #666;">${loadingMessage}</p>
-      ${networkInfo && (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') 
-        ? '<p style="color: #f59e0b; font-size: 12px; margin-top: 8px;">느린 네트워크 감지: 로딩 시간이 다소 걸릴 수 있습니다</p>'
-        : ''}
-    </div>
-  `;
-  
-  // 점진적 로딩: 먼저 기본 트랙을 표시하고 데이터를 점진적으로 업데이트
-  const showProgressiveLoading = isMobile && networkInfo && 
-    (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g' || networkInfo.rtt > 500);
-  
-  if (showProgressiveLoading) {
-    console.log('[Bluetooth Player List] 점진적 로딩 모드 활성화');
-    // 기본 트랙을 먼저 표시하여 사용자 경험 개선
-    const defaultTracks = createDefaultTracks(10);
-    const initialHtml = defaultTracks.map(track => `
-      <div class="player-track-item" data-track-number="${track.trackNumber}">
-        <div class="player-track-number-fixed">
-          <div class="player-track-number-header">트랙${track.trackNumber}</div>
-        </div>
-        <div class="player-track-content">
-          <div class="player-track-user-section">
-            <div class="player-track-name no-user">로딩 중...</div>
-          </div>
-          <div class="player-track-action">
-            <button class="btn btn-secondary btn-default-style" disabled>로딩 중</button>
-          </div>
-        </div>
-      </div>
-    `).join('');
-    playerListContent.innerHTML = initialHtml;
-  }
-
-  // 성능 측정 시작
-  const performanceStart = performance.now();
-  
-  // 전체 함수를 try-catch로 감싸서 모든 에러 처리 (스피너가 항상 제거되도록 보장)
-  let tracks = [];
-  let roomId = null;
+async function fetchBluetoothTrackData(db, roomId) {
+  const sessionId = roomId;
+  const devicesRef = db.ref(`sessions/${sessionId}/devices`);
+  const usersRef = db.ref(`sessions/${sessionId}/users`);
+  const [devicesSnapshot, usersSnapshot] = await Promise.all([
+    devicesRef.once('value'),
+    usersRef.once('value')
+  ]);
+  const devicesData = devicesSnapshot.val() || {};
+  const usersData = usersSnapshot.val() || {};
   let maxTrackNumber = 10;
-  let currentUser = null;
+  if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
+    maxTrackNumber = devicesData.track;
+  } else {
+    const existingTrackNumbers = [];
+    if (devicesData) {
+      Object.keys(devicesData).forEach(key => {
+        const trackNum = parseInt(key, 10);
+        if (!isNaN(trackNum) && trackNum > 0 && trackNum <= 50) existingTrackNumbers.push(trackNum);
+      });
+    }
+    if (usersData) {
+      Object.keys(usersData).forEach(key => {
+        const trackNum = parseInt(key, 10);
+        if (!isNaN(trackNum) && trackNum > 0 && trackNum <= 50 && !existingTrackNumbers.includes(trackNum)) {
+          existingTrackNumbers.push(trackNum);
+        }
+      });
+    }
+    if (existingTrackNumbers.length > 0) maxTrackNumber = Math.max(...existingTrackNumbers);
+  }
+  const trackDevicesData = {};
+  if (devicesData) {
+    Object.keys(devicesData).forEach(key => {
+      const trackNum = parseInt(key, 10);
+      if (!isNaN(trackNum) && trackNum > 0) trackDevicesData[trackNum] = devicesData[key];
+    });
+  }
+  const tracks = [];
+  for (let i = 1; i <= maxTrackNumber; i++) {
+    const userData = usersData[i];
+    const deviceData = trackDevicesData[i] || null;
+    tracks.push({
+      trackNumber: i,
+      userId: userData?.userId || null,
+      userName: userData?.userName || null,
+      weight: userData?.weight || null,
+      ftp: userData?.ftp || null,
+      gear: deviceData?.gear || null,
+      brake: deviceData?.brake || null,
+      smartTrainerId: deviceData?.smartTrainerId || null,
+      powerMeterId: deviceData?.powerMeterId || null,
+      heartRateId: deviceData?.heartRateId || null
+    });
+  }
+  return { tracks, maxTrackNumber, roomId };
+}
+
+/**
+ * Render track list HTML into container. Uses currentUser/userGrade from window/localStorage.
+ * @param {HTMLElement} container - playerListContent
+ * @param {{tracks: Array, maxTrackNumber: number, roomId: string|null}} data
+ */
+function renderBluetoothPlayerListToContainer(container, data) {
+  const { tracks, maxTrackNumber, roomId } = data;
+  if (!container) return;
   let currentUserId = null;
   let userGrade = '2';
   let isAdmin = false;
   let hasMyTrack = false;
-  
-  // 캐싱: 최근 로드한 데이터를 메모리에 저장 (5초간 유효)
-  const CACHE_KEY = 'bluetoothPlayerListCache';
-  const CACHE_DURATION = 5000; // 5초
-  const now = Date.now();
-  
   try {
-    // Training Room id 가져오기 (먼저 roomId 확인)
-    try {
-      if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
-        roomId = currentSelectedTrainingRoom.id;
-      } else if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
-        roomId = String(window.currentTrainingRoomId);
-      } else if (typeof localStorage !== 'undefined') {
-        const storedRoomId = localStorage.getItem('currentTrainingRoomId');
-        if (storedRoomId) {
-          roomId = storedRoomId;
-        }
-      }
-    } catch (e) {
-      console.warn('[Bluetooth Player List] roomId 가져오기 실패:', e);
-    }
-    
-    // 캐시 확인 (같은 roomId인 경우)
-    let useCache = false;
-    if (typeof sessionStorage !== 'undefined' && roomId) {
-      try {
-        const cachedData = sessionStorage.getItem(CACHE_KEY);
-        if (cachedData) {
-          const parsed = JSON.parse(cachedData);
-          const cacheAge = now - parsed.timestamp;
-          
-          // 캐시가 유효하고 같은 roomId인 경우 사용
-          if (cacheAge < CACHE_DURATION && parsed.roomId === String(roomId) && parsed.tracks && parsed.tracks.length > 0) {
-            console.log('[Bluetooth Player List] ✅ 캐시된 데이터 사용 (', Math.round(cacheAge), 'ms 전)');
-            tracks = parsed.tracks;
-            maxTrackNumber = parsed.maxTrackNumber || 10;
-            useCache = true;
-            
-            // 캐시된 데이터로 즉시 렌더링 (성능 개선)
-            const cacheLoadTime = performance.now() - performanceStart;
-            console.log('[Bluetooth Player List] 📊 캐시 로딩 시간:', Math.round(cacheLoadTime), 'ms');
-          } else {
-            console.log('[Bluetooth Player List] 캐시 만료 또는 roomId 불일치, 새로 로드');
-          }
-        }
-      } catch (cacheError) {
-        console.warn('[Bluetooth Player List] 캐시 읽기 오류:', cacheError);
-      }
-    }
-    
-    // 캐시를 사용하지 않는 경우에만 Firebase에서 로드
-    if (!useCache) {
-      // 트랙 정보 가져오기 및 최대 트랙 수 계산 (Live Training Session 전용)
-      
-      // Firebase 연결 확인
-      const isFirebaseAvailable = typeof db !== 'undefined' && db !== null;
-      
-      if (roomId && isFirebaseAvailable) {
-      try {
-      const sessionId = roomId;
-      
-      // Firebase devices DB와 users DB에서 데이터 가져오기 (병렬 처리 + 타임아웃 + 재시도)
-      const devicesRef = db.ref(`sessions/${sessionId}/devices`);
-      const usersRef = db.ref(`sessions/${sessionId}/users`);
-      
-      // 모바일 최적화: 타임아웃 및 재시도 조정
-      const isMobile = isMobileDevice();
-      const networkInfo = getNetworkInfo();
-      
-      // 기본 타임아웃: PC 10초, 모바일 20초
-      let baseTimeout = isMobile ? 20000 : 10000;
-      
-      // 네트워크 상태에 따른 추가 조정
-      if (networkInfo) {
-        if (networkInfo.effectiveType === 'slow-2g' || networkInfo.effectiveType === '2g') {
-          baseTimeout = 30000; // 매우 느린 네트워크는 30초
-        } else if (networkInfo.effectiveType === '3g') {
-          baseTimeout = isMobile ? 25000 : 15000; // 3G는 중간값
-        }
-      }
-      
-      // 재시도 횟수: PC 3회, 모바일 4회
-      const maxRetries = isMobile ? 4 : 3;
-      const initialDelay = isMobile ? 800 : 1000; // 모바일은 약간 빠른 재시도
-      
-      console.log('[Bluetooth Player List] 로딩 설정:', {
-        isMobile,
-        networkType: networkInfo?.effectiveType || 'unknown',
-        timeout: baseTimeout,
-        maxRetries,
-        initialDelay
-      });
-      
-      // 타임아웃 및 재시도 적용
-      const [devicesSnapshot, usersSnapshot] = await withRetry(
-        () => withTimeout(
-          Promise.all([
-            devicesRef.once('value'),
-            usersRef.once('value')
-          ]),
-          baseTimeout, // 동적 타임아웃
-          'Firebase 데이터 로드 시간 초과'
-        ),
-        maxRetries, // 동적 재시도 횟수
-        initialDelay // 동적 초기 지연
-      );
-      
-      const devicesData = devicesSnapshot.val() || {};
-      const usersData = usersSnapshot.val() || {};
-      
-      // devicesData에서 track 값 확인 (최상위 레벨)
-      if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
-        maxTrackNumber = devicesData.track;
-        console.log('[Bluetooth Player List] Firebase devices에서 트랙 개수 가져옴:', maxTrackNumber);
-      } else {
-        // track 값이 없으면 실제 존재하는 트랙 번호를 확인하여 최대값 사용
-        const existingTrackNumbers = [];
-        if (devicesData) {
-          Object.keys(devicesData).forEach(key => {
-            const trackNum = parseInt(key, 10);
-            if (!isNaN(trackNum) && trackNum > 0 && trackNum <= 50) { // 최대 50개까지 확인
-              existingTrackNumbers.push(trackNum);
-            }
-          });
-        }
-        
-        // users 데이터에서도 트랙 번호 확인
-        if (usersData) {
-          Object.keys(usersData).forEach(key => {
-            const trackNum = parseInt(key, 10);
-            if (!isNaN(trackNum) && trackNum > 0 && trackNum <= 50) {
-              if (!existingTrackNumbers.includes(trackNum)) {
-                existingTrackNumbers.push(trackNum);
-              }
-            }
-          });
-        }
-        
-        if (existingTrackNumbers.length > 0) {
-          maxTrackNumber = Math.max(...existingTrackNumbers);
-          console.log('[Bluetooth Player List] devices/track 값이 없어 실제 존재하는 트랙 번호로 계산:', maxTrackNumber, '(존재하는 트랙:', existingTrackNumbers.sort((a, b) => a - b).join(', '), ')');
-        } else {
-          // 트랙 번호도 없으면 디폴트 10개 할당
-          maxTrackNumber = 10;
-          console.log('[Bluetooth Player List] Firebase devices에 track 값이 없고 실제 트랙도 없어 디폴트 10개 할당');
-        }
-      }
-      
-      // 트랙별 device 정보 가져오기 (트랙 번호별로 저장된 경우)
-      const trackDevicesData = {};
-      if (devicesData) {
-        // devicesData가 객체이고 각 키가 트랙 번호인 경우
-        Object.keys(devicesData).forEach(key => {
-          const trackNum = parseInt(key, 10);
-          if (!isNaN(trackNum) && trackNum > 0) {
-            trackDevicesData[trackNum] = devicesData[key];
-          }
-        });
-      }
-      
-      // 트랙 초기화
-      for (let i = 1; i <= maxTrackNumber; i++) {
-        const userData = usersData[i];
-        const deviceData = trackDevicesData[i] || null;
-        
-        tracks.push({
-          trackNumber: i,
-          userId: userData?.userId || null,
-          userName: userData?.userName || null,
-          weight: userData?.weight || null,
-          ftp: userData?.ftp || null,
-          gear: deviceData?.gear || null,
-          brake: deviceData?.brake || null,
-          smartTrainerId: deviceData?.smartTrainerId || null,
-          powerMeterId: deviceData?.powerMeterId || null,
-          heartRateId: deviceData?.heartRateId || null
-        });
-      }
-      
-      // 성능 측정: Firebase 로드 완료
-      const firebaseLoadTime = performance.now() - performanceStart;
-      console.log('[Bluetooth Player List] 📊 Firebase 로드 시간:', Math.round(firebaseLoadTime), 'ms');
-      
-      // 캐시 저장 (성공적으로 로드한 경우)
-      if (typeof sessionStorage !== 'undefined' && tracks.length > 0) {
-        try {
-          const cacheData = {
-            tracks: tracks,
-            maxTrackNumber: maxTrackNumber,
-            roomId: roomId,
-            timestamp: now
-          };
-          sessionStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-          console.log('[Bluetooth Player List] ✅ 데이터 캐시 저장 완료');
-        } catch (cacheError) {
-          console.warn('[Bluetooth Player List] 캐시 저장 오류:', cacheError);
-        }
-      }
-    } catch (error) {
-      console.error('[Bluetooth Player List] ❌ 트랙 정보 로드 오류:', error);
-      console.error('[Bluetooth Player List] 오류 상세:', {
-        message: error.message,
-        stack: error.stack,
-        roomId: roomId,
-        isFirebaseAvailable: isFirebaseAvailable
-      });
-        // 오류 발생 시 기본 10개 트랙 생성 (사용자는 계속 사용 가능)
-        maxTrackNumber = 10;
-        const defaultTracks = createDefaultTracks(10);
-        tracks.push(...defaultTracks);
-      }
-    } else {
-      // roomId가 없거나 Firebase가 사용 불가능한 경우 기본 10개 트랙 생성
-      if (!roomId) {
-        console.warn('[Bluetooth Player List] ⚠️ roomId가 없어 기본 트랙으로 표시합니다.');
-      }
-      const isFirebaseAvailable = typeof db !== 'undefined' && db !== null;
-      if (!isFirebaseAvailable) {
-        console.warn('[Bluetooth Player List] ⚠️ Firebase가 사용 불가능하여 기본 트랙으로 표시합니다.');
-      }
-      const defaultTracks = createDefaultTracks(10);
-      tracks.push(...defaultTracks);
-    }
-    } // 캐시 사용하지 않는 경우의 Firebase 로드 블록 종료
-
-    // tracks 배열이 비어있으면 기본 트랙 생성 (안전장치)
-    if (tracks.length === 0) {
-      console.warn('[Bluetooth Player List] ⚠️ tracks 배열이 비어있어 기본 10개 트랙을 생성합니다.');
-      const defaultTracks = createDefaultTracks(10);
-      tracks.push(...defaultTracks);
-    }
-
-    // roomId를 컨테이너에 data attribute로 저장
-    if (playerListContent && roomId) {
-      playerListContent.setAttribute('data-room-id', String(roomId));
-    }
-
-    // 현재 사용자 정보 확인 (권한 체크용)
-    try {
-      currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      if (currentUser && currentUser.id != null) {
-        currentUserId = String(currentUser.id);
-      }
-      userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
-      isAdmin = userGrade === '1' || userGrade === 1;
-    } catch (e) {
-      console.error('[Bluetooth Player List] 현재 사용자 정보 확인 오류:', e);
-    }
-
-    // grade=2 사용자가 본인 계정으로 참가된 트랙이 있는지 확인
-    if (!isAdmin && currentUserId) {
-      hasMyTrack = tracks.some(track => {
-        const trackUserId = track.userId ? String(track.userId) : null;
-        return trackUserId && trackUserId === currentUserId;
-      });
-    }
-
-    // 트랙 목록 렌더링 (try-catch로 감싸서 에러 발생 시에도 스피너 제거)
-    try {
-      const tracksHtml = tracks.map(track => {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (currentUser && currentUser.id != null) currentUserId = String(currentUser.id);
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+    isAdmin = userGrade === '1' || userGrade === 1;
+  } catch (e) {}
+  if (!isAdmin && currentUserId) {
+    hasMyTrack = tracks.some(t => (t.userId ? String(t.userId) : null) === currentUserId);
+  }
+  if (roomId) container.setAttribute('data-room-id', String(roomId));
+  const tracksHtml = tracks.map(track => {
     const hasUser = !!track.userName;
     const trackUserId = track.userId ? String(track.userId) : null;
     let canModify = false;
@@ -6724,123 +6495,135 @@ async function renderBluetoothPlayerList() {
         </div>
       </div>
     `;
-    }).join('');
-    
-    // 렌더링 성공 시 HTML 업데이트
-    // 점진적 로딩 모드에서는 부드러운 전환을 위해 requestAnimationFrame 사용
-    if (showProgressiveLoading) {
-      // 모바일에서 부드러운 전환을 위해 약간의 지연 후 업데이트
-      requestAnimationFrame(() => {
-        playerListContent.innerHTML = tracksHtml;
-        console.log('[Bluetooth Player List] ✅ 트랙 정보 렌더링 완료 (점진적 로딩):', tracks.length, '개 트랙');
-      });
-    } else {
-      playerListContent.innerHTML = tracksHtml;
-      console.log('[Bluetooth Player List] ✅ 트랙 정보 렌더링 완료:', tracks.length, '개 트랙');
+  }).join('');
+  container.innerHTML = tracksHtml;
+  const btnClearAllTracks = document.getElementById('btnClearAllBluetoothTracks');
+  if (btnClearAllTracks) {
+    if (isAdmin || userGrade === '3' || userGrade === 3) btnClearAllTracks.style.display = 'inline-flex';
+    else btnClearAllTracks.style.display = 'none';
+  }
+}
+
+/** Render default 10 empty tracks only (spinner removal fallback). */
+function renderBluetoothPlayerListDefaultOnly(container, roomId) {
+  if (!container) return;
+  const defaultTracks = createDefaultTracks(10);
+  const html = defaultTracks.map(track => `
+    <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
+      <div class="player-track-number-fixed">
+        <div class="player-track-number-header">트랙${track.trackNumber}</div>
+      </div>
+      <div class="player-track-content">
+        <div class="player-track-user-section">
+          <div class="player-track-name no-user">사용자 없음</div>
+        </div>
+        <div class="player-track-action">
+          <button class="btn btn-secondary btn-default-style" disabled>신청</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  container.innerHTML = html;
+  if (roomId) container.setAttribute('data-room-id', String(roomId));
+}
+
+/**
+ * Bluetooth Player List 렌더링 — Fast Fail & Optimistic Rendering.
+ * Max 3s blocking; on timeout/error render default 10 tracks; optional background re-fetch; hardened cleanup.
+ */
+async function renderBluetoothPlayerList() {
+  const playerListContent = document.getElementById('bluetoothPlayerListContent');
+  if (!playerListContent) {
+    console.error('[Bluetooth Player List] playerListContent 요소를 찾을 수 없습니다.');
+    return;
+  }
+
+  playerListContent.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 20px;"></div>
+      <p style="color: #666;">트랙 정보를 불러오는 중...</p>
+    </div>
+  `;
+
+  const CACHE_KEY = 'bluetoothPlayerListCache';
+  const CACHE_DURATION = 5000;
+  const now = Date.now();
+  let roomId = null;
+  try {
+    if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) roomId = currentSelectedTrainingRoom.id;
+    else if (typeof window !== 'undefined' && window.currentTrainingRoomId) roomId = String(window.currentTrainingRoomId);
+    else if (typeof localStorage !== 'undefined') {
+      const stored = localStorage.getItem('currentTrainingRoomId');
+      if (stored) roomId = stored;
     }
-    
-    // 일괄 퇴실 버튼 표시 여부
-    const btnClearAllTracks = document.getElementById('btnClearAllBluetoothTracks');
-    if (btnClearAllTracks) {
-      if (isAdmin || userGrade === '3' || userGrade === 3) {
-        btnClearAllTracks.style.display = 'inline-flex';
-      } else {
-        btnClearAllTracks.style.display = 'none';
-      }
-    }
-    
-    // 성능 로그 (모바일에서만)
-    if (isMobile) {
-      const loadTime = performance.now();
-      console.log('[Bluetooth Player List] 📱 모바일 로딩 완료 시간:', Math.round(loadTime), 'ms');
-    }
-    } catch (renderError) {
-      console.error('[Bluetooth Player List] ❌ 렌더링 오류:', renderError);
-      // 렌더링 실패 시에도 기본 트랙으로 표시
-      try {
-        // tracks 배열이 비어있으면 기본 트랙 생성
-        if (tracks.length === 0) {
-          const defaultTracks = createDefaultTracks(10);
-          tracks.push(...defaultTracks);
-        }
-        
-        const fallbackHtml = tracks.map(track => `
-          <div class="player-track-item" data-track-number="${track.trackNumber}">
-            <div class="player-track-number-fixed">
-              <div class="player-track-number-header">트랙${track.trackNumber}</div>
-            </div>
-            <div class="player-track-content">
-              <div class="player-track-user-section">
-                <div class="player-track-name ${track.userName ? 'has-user' : 'no-user'}">
-                  ${track.userName ? escapeHtml(track.userName) : '사용자 없음'}
-                </div>
-              </div>
-              <div class="player-track-action">
-                <button class="btn btn-secondary btn-default-style" disabled>신청</button>
-              </div>
-            </div>
-          </div>
-        `).join('');
-        playerListContent.innerHTML = fallbackHtml;
-        console.log('[Bluetooth Player List] ✅ 기본 트랙으로 표시 완료 (렌더링 오류 복구)');
-      } catch (fallbackError) {
-        console.error('[Bluetooth Player List] ❌ 기본 트랙 표시도 실패:', fallbackError);
-        // 최후의 수단: 에러 메시지 표시
-        playerListContent.innerHTML = `
-          <div style="text-align: center; padding: 40px; color: #dc2626;">
-            <p style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">트랙 정보를 불러올 수 없습니다</p>
-            <p style="font-size: 14px; color: #666; margin-bottom: 20px;">네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.</p>
-            <button onclick="if(typeof renderBluetoothPlayerList==='function'){renderBluetoothPlayerList();}" 
-                    style="padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-              다시 시도
-            </button>
-          </div>
-        `;
-      }
-    }
-    } catch (globalError) {
-    // 전체 함수에서 발생한 모든 에러 처리
-    console.error('[Bluetooth Player List] ❌ 치명적 오류:', globalError);
-    console.error('[Bluetooth Player List] 오류 상세:', {
-      message: globalError.message,
-      stack: globalError.stack
-    });
-    
-    // 최후의 수단: 기본 트랙으로 표시
+  } catch (e) {}
+
+  let data = null;
+  const db = getBluetoothPlayerListDb();
+
+  if (roomId && typeof sessionStorage !== 'undefined') {
     try {
-      const defaultTracks = createDefaultTracks(10);
-      const fallbackHtml = defaultTracks.map(track => `
-        <div class="player-track-item" data-track-number="${track.trackNumber}">
-          <div class="player-track-number-fixed">
-            <div class="player-track-number-header">트랙${track.trackNumber}</div>
-          </div>
-          <div class="player-track-content">
-            <div class="player-track-user-section">
-              <div class="player-track-name no-user">사용자 없음</div>
-            </div>
-            <div class="player-track-action">
-              <button class="btn btn-secondary btn-default-style" disabled>신청</button>
-            </div>
-          </div>
-        </div>
-      `).join('');
-      
-      playerListContent.innerHTML = fallbackHtml;
-      console.log('[Bluetooth Player List] ✅ 기본 트랙으로 표시 완료 (에러 복구)');
-    } catch (fallbackError) {
-      console.error('[Bluetooth Player List] ❌ 기본 트랙 표시도 실패:', fallbackError);
-      // 최후의 수단: 에러 메시지 표시
-      playerListContent.innerHTML = `
-        <div style="text-align: center; padding: 40px; color: #dc2626;">
-          <p style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">트랙 정보를 불러올 수 없습니다</p>
-          <p style="font-size: 14px; color: #666; margin-bottom: 20px;">네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.</p>
-          <button onclick="if(typeof renderBluetoothPlayerList==='function'){renderBluetoothPlayerList();}" 
-                  style="padding: 12px 24px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-            다시 시도
-          </button>
-        </div>
-      `;
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (now - parsed.timestamp < CACHE_DURATION && parsed.roomId === String(roomId) && parsed.tracks && parsed.tracks.length > 0) {
+          data = { tracks: parsed.tracks, maxTrackNumber: parsed.maxTrackNumber || 10, roomId };
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!data && db && roomId) {
+    const timeoutPromise = new Promise((_, rej) =>
+      setTimeout(() => rej(new Error('Fast fail timeout (3s)')), BLUETOOTH_PLAYER_LIST_FAST_FAIL_MS)
+    );
+    try {
+      data = await Promise.race([fetchBluetoothTrackData(db, roomId), timeoutPromise]);
+    } catch (err) {
+      console.warn('[Bluetooth Player List] Fast fail (timeout or error), rendering default 10 tracks:', err?.message);
     }
+  }
+
+  let usedFallback = false;
+  if (!data) {
+    data = { tracks: createDefaultTracks(10), maxTrackNumber: 10, roomId };
+    usedFallback = true;
+  }
+
+  let rendered = false;
+  try {
+    renderBluetoothPlayerListToContainer(playerListContent, data);
+    rendered = true;
+    if (data.tracks.length > 0 && roomId && typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: data.tracks, maxTrackNumber: data.maxTrackNumber, roomId, timestamp: now }));
+      } catch (e) {}
+    }
+  } catch (renderErr) {
+    console.error('[Bluetooth Player List] Render error:', renderErr);
+  } finally {
+    if (!rendered && playerListContent) {
+      renderBluetoothPlayerListDefaultOnly(playerListContent, roomId || null);
+    }
+  }
+
+  if (usedFallback && roomId) {
+    setTimeout(async () => {
+      try {
+        const container = document.getElementById('bluetoothPlayerListContent');
+        const backgroundDb = getBluetoothPlayerListDb();
+        if (!container || !backgroundDb) return;
+        const fresh = await fetchBluetoothTrackData(backgroundDb, roomId);
+        if (fresh && fresh.tracks && fresh.tracks.length > 0) {
+          renderBluetoothPlayerListToContainer(container, fresh);
+          if (typeof sessionStorage !== 'undefined') {
+            try {
+              sessionStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: fresh.tracks, maxTrackNumber: fresh.maxTrackNumber, roomId: fresh.roomId, timestamp: Date.now() }));
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }, 0);
   }
 }
 
