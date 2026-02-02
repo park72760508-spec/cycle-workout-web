@@ -526,13 +526,9 @@ function getCurrentUserForTrainingRooms() {
 }
 
 /**
- * 로그인 만료 UI에서 "로그인 상태 점검 및 재시도" 클릭 시: 토스트 후 새로고침으로 IndexedDB 세션 복구 시도
- * (반복 실패 시 index.html 등 로그인 페이지로 이동하는 로직을 앱에서 추가할 수 있음)
- */
-/**
- * 로그인 만료 UI에서 "로그인 상태 점검 및 재시도" 클릭 시:
- * - 사용자 있음: 소프트 새로고침
- * - 사용자 없음: confirm 후 로그인 화면(index.html)으로 강제 이동 (Galaxy Tab 등 저장소 차단 시 무한 루프 방지)
+ * 로그인 복구 및 재시도 / 로그인 상태 점검 및 재시도
+ * - 사용자 있음: 강제 토큰 갱신(getIdToken(true)) 후 새로고침 (Stale Token 대응)
+ * - 사용자 없음: confirm 후 로그인 화면(index.html)으로 이동
  */
 async function checkLoginAndRetry() {
   const btn = document.getElementById('checkLoginAndRetryBtn') || document.querySelector('#trainingRoomList button');
@@ -544,6 +540,9 @@ async function checkLoginAndRetry() {
   const user = getCurrentUserForTrainingRooms();
 
   if (user) {
+    try {
+      if (typeof user.getIdToken === 'function') await user.getIdToken(true).catch(() => null);
+    } catch (e) {}
     if (typeof window.showToast === 'function') {
       window.showToast('로그인 정보가 확인되었습니다. 페이지를 새로고침합니다.');
     } else {
@@ -592,18 +591,26 @@ async function loadTrainingRooms() {
 
     const currentUser = getCurrentUserForTrainingRooms();
     if (!currentUser) {
-      console.warn('[Training Room] Session not available after wait (no currentUser). Showing session-expired UI.');
+      console.warn('[Training Room] Gatekeeper: no currentUser after wait. Showing auth-wait UI.');
       listContainer.innerHTML = '';
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-          <p style="color: #dc3545; font-weight: bold; margin-bottom: 10px;">보안을 위해 로그인이 만료되었습니다.</p>
-          <p style="color: #666; font-size: 13px; margin-bottom: 20px;">갤럭시 탭 등 일부 기기에서는 장시간 미사용 시 로그인이 해제될 수 있습니다.</p>
+          <p style="color: #666; font-size: 15px; margin-bottom: 16px;">보안 인증을 대기 중입니다...</p>
           <button type="button" id="checkLoginAndRetryBtn" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
                   style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-            로그인 상태 점검 및 재시도
+            로그인 복구 및 재시도
           </button>
         </div>
       `;
+      const auth = getAuthForTrainingRooms();
+      if (auth && typeof auth.onAuthStateChanged === 'function') {
+        const unsub = auth.onAuthStateChanged((user) => {
+          if (user && typeof loadTrainingRooms === 'function') {
+            unsub();
+            loadTrainingRooms();
+          }
+        });
+      }
       return;
     }
 
@@ -663,37 +670,26 @@ async function loadTrainingRooms() {
         String(err.message || '').includes('권한');
     };
 
-    const forceTokenRefresh = async () => {
-      const a = getAuthForTrainingRooms();
-      const user = a ? a.currentUser : null;
-      if (user && typeof user.getIdToken === 'function') {
-        await user.getIdToken(true);
-      }
-    };
-
     let lastErr = null;
     try {
       rooms = await fetchRooms();
     } catch (firstErr) {
       lastErr = firstErr;
       if (isPermissionError(firstErr)) {
-        for (let retry = 0; retry < 2; retry++) {
-          console.warn('[Training Room] Permission error detected on Tab. Retrying...', retry + 1, '/2');
-          try {
-            await forceTokenRefresh();
-          } catch (tokenErr) {
-            console.warn('[Training Room] Token refresh failed:', tokenErr);
+        console.warn('[Training Room] Permission denied on Tab. Attempting Force Token Refresh...');
+        try {
+          if (currentUser && typeof currentUser.getIdToken === 'function') {
+            await currentUser.getIdToken(true);
           }
-          await new Promise(r => setTimeout(r, 1000));
-          await waitForAuthReady(5000);
-          try {
-            rooms = await fetchRooms();
-            lastErr = null;
-            break;
-          } catch (retryErr) {
-            lastErr = retryErr;
-            if (retry === 1) break;
-          }
+        } catch (tokenErr) {
+          console.warn('[Training Room] Force token refresh failed:', tokenErr);
+        }
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          rooms = await fetchRooms();
+          lastErr = null;
+        } catch (retryErr) {
+          lastErr = retryErr;
         }
       }
       if (lastErr) throw lastErr;
@@ -748,8 +744,8 @@ async function loadTrainingRooms() {
         <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
           ${isPermErr ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' : '네트워크 연결을 확인하고 다시 시도해주세요.'}
         </p>
-        <button onclick="if(typeof window.trainingRoomRetryWithReauth==='function'){window.trainingRoomRetryWithReauth();}" 
-                style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+        <button type="button" id="checkLoginAndRetryBtn" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
+                style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
           로그인 상태 점검 및 재시도
         </button>
       </div>
