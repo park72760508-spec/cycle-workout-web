@@ -181,12 +181,41 @@ function pollForAuthV9(maxWaitMs) {
 }
 
 /**
+ * Auth 로컬 영속성 강제 (Galaxy Tab Desktop Mode 등 저장소 이슈 완화)
+ * setPersistence(LOCAL) 실패 시 무시 (제한된 환경).
+ */
+async function enforceAuthPersistence() {
+  try {
+    if (window.firebase && typeof window.firebase.auth === 'function') {
+      const auth = window.firebase.auth();
+      if (auth && typeof auth.setPersistence === 'function' && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
+        await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+        console.log('[Auth Ready] setPersistence(LOCAL) applied (compat)');
+      }
+    }
+  } catch (e) {
+    console.warn('[Auth Ready] setPersistence(LOCAL) failed (compat):', e?.message);
+  }
+  try {
+    if (window.authV9) {
+      const { setPersistence, browserLocalPersistence } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+      await setPersistence(window.authV9, browserLocalPersistence);
+      console.log('[Auth Ready] setPersistence(LOCAL) applied (v9)');
+    }
+  } catch (e) {
+    console.warn('[Auth Ready] setPersistence(LOCAL) failed (v9):', e?.message);
+  }
+}
+
+/**
  * Firebase Auth 상태가 확정될 때까지 대기 (onAuthStateChanged 사용)
- * Firestore v9(firestoreV9) 사용 시 authV9와 동일 앱이므로 authV9 우선 대기 (Galaxy Tab 권한 오류 방지).
+ * 진입 시 setPersistence(LOCAL) 적용 후 대기.
  * @param {number} maxWaitMs - 최대 대기 시간 (밀리초), 기본값: 3000ms
  * @returns {Promise<void>}
  */
 async function waitForAuthReady(maxWaitMs = 3000) {
+  await enforceAuthPersistence();
+
   const isTablet = isTabletOrSlowDeviceForAuth();
   const isMobile = isMobileDeviceForTrainingRooms();
   const TABLET_WAIT_MS = 8000;
@@ -486,6 +515,17 @@ function getAuthForTrainingRooms() {
 }
 
 /**
+ * Dual Auth Check: authV9와 compat auth 모두 확인 (Galaxy Tab에서 한쪽만 초기화된 경우 대비)
+ */
+function getCurrentUserForTrainingRooms() {
+  const fromV9 = window.authV9 && window.authV9.currentUser;
+  if (fromV9) return fromV9;
+  const compatAuth = (window.firebase && typeof window.firebase.auth === 'function') ? window.firebase.auth() : (window.auth || null);
+  if (compatAuth && compatAuth.currentUser) return compatAuth.currentUser;
+  return null;
+}
+
+/**
  * Training Room 목록 로드 — Active Defense: currentUser null이면 쿼리하지 않음, 권한 오류 시 토큰 강제 갱신
  */
 async function loadTrainingRooms() {
@@ -503,12 +543,23 @@ async function loadTrainingRooms() {
     </div>
   `;
 
-  const isMobile = isMobileDeviceForTrainingRooms();
-  const isTablet = isTabletOrSlowDeviceForAuth();
-  const authWaitMs = isTablet ? 10000 : (isMobile ? 6000 : 4000);
-
   try {
-    await waitForAuthReady(authWaitMs);
+    await waitForAuthReady(5000);
+
+    const currentUser = getCurrentUserForTrainingRooms();
+    if (!currentUser) {
+      console.warn('[Training Room] Session not available after wait (no currentUser). Stopping spinner.');
+      listContainer.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+          <p style="color: #666; font-size: 15px; margin-bottom: 16px;">로그인 정보가 확인되지 않습니다. 다시 로그인해주세요.</p>
+          <button type="button" onclick="window.location.href='index.html'" 
+                  style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
+            로그인 화면으로 이동
+          </button>
+        </div>
+      `;
+      return;
+    }
 
     let db = null;
     let useV9 = false;
@@ -525,28 +576,6 @@ async function loadTrainingRooms() {
     
     if (!db) {
       throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firestoreV9 또는 window.firebase.firestore()를 확인하세요.');
-    }
-    
-    const auth = getAuthForTrainingRooms();
-    const currentUser = auth ? auth.currentUser : null;
-
-    if (!currentUser) {
-      console.warn('[Training Room] Auth not ready, waiting for trigger...');
-      listContainer.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-          <div class="spinner" style="margin: 0 auto 20px;"></div>
-          <p style="color: #666;">연결 중...</p>
-        </div>
-      `;
-      if (auth && typeof auth.onAuthStateChanged === 'function') {
-        const unsub = auth.onAuthStateChanged((user) => {
-          if (user) {
-            unsub();
-            if (typeof loadTrainingRooms === 'function') loadTrainingRooms();
-          }
-        });
-      }
-      return;
     }
 
     console.log('[Training Room] Firestore 인스턴스 확보, useV9:', useV9);
