@@ -231,62 +231,50 @@ async function waitForAuthReady(maxWaitMs = 3000) {
 
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
-    let unsubscribe = null;
+    const unsubs = [];
     let timeoutId = null;
+    const done = () => {
+      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+      unsubs.forEach(fn => { try { fn(); } catch (e) {} });
+      unsubs.length = 0;
+      resolve();
+    };
     
     console.log('[Auth Ready] Firebase Auth 상태 확정 대기 시작 (최대', effectiveMaxWaitMs, 'ms)');
     
     timeoutId = setTimeout(() => {
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = null;
-      }
       const elapsed = Date.now() - startTime;
       console.warn('[Auth Ready] ⚠️ 타임아웃 발생 (', elapsed, 'ms 경과) - 비로그인 상태로 간주하고 진행');
-      resolve();
+      done();
     }, effectiveMaxWaitMs);
     
     try {
-      // Firestore v9 사용 시 authV9 우선 (동일 앱 → Firestore 권한과 일치). Galaxy Tab에서 compat만 대기하면 권한 오류 발생.
-      let auth = null;
-      if (window.firestoreV9 && window.authV9) {
-        auth = window.authV9;
-        console.log('[Auth Ready] authV9 사용 (Firestore v9와 동일 앱)');
-      }
-      if (!auth && window.firebase && typeof window.firebase.auth === 'function') {
-        auth = window.firebase.auth();
-      }
-      if (!auth && window.auth) {
-        auth = window.auth;
-      }
+      // Universal user detection: subscribe to BOTH authV9 and firebase.auth() (Galaxy Tab may init one but not the other)
+      const auths = [];
+      if (window.authV9) auths.push(window.authV9);
+      if (window.firebase && typeof window.firebase.auth === 'function') auths.push(window.firebase.auth());
+      if (window.auth && !auths.includes(window.auth)) auths.push(window.auth);
       
-      if (!auth) {
+      if (auths.length === 0) {
         console.warn('[Auth Ready] ⚠️ Firebase Auth 인스턴스를 찾을 수 없습니다 - 계속 진행');
-        clearTimeout(timeoutId);
-        resolve();
+        done();
         return;
       }
       
-      unsubscribe = auth.onAuthStateChanged((user) => {
-        const elapsed = Date.now() - startTime;
-        console.log('[Auth Ready] ✅ Firebase Auth 상태 확정 완료 (', elapsed, 'ms, 로그인:', !!user, ')');
-        
-        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-        resolve();
-      }, (error) => {
-        const elapsed = Date.now() - startTime;
-        console.error('[Auth Ready] ❌ Firebase Auth 상태 확인 오류 (', elapsed, 'ms):', error);
-        
-        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-        resolve();
+      auths.forEach((auth, i) => {
+        const unsub = auth.onAuthStateChanged((user) => {
+          const elapsed = Date.now() - startTime;
+          console.log('[Auth Ready] ✅ Firebase Auth 상태 확정 완료 (', elapsed, 'ms, 소스:', i, ', 로그인:', !!user, ')');
+          done();
+        }, (error) => {
+          console.error('[Auth Ready] ❌ Firebase Auth 상태 확인 오류 (소스:', i, '):', error);
+          done();
+        });
+        if (typeof unsub === 'function') unsubs.push(unsub);
       });
     } catch (error) {
       console.error('[Auth Ready] ❌ Firebase Auth 초기화 오류:', error);
-      if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
-      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-      resolve();
+      done();
     }
   });
 }
@@ -537,45 +525,45 @@ function getCurrentUserForTrainingRooms() {
 }
 
 /**
- * 로그인 복구 및 재시도 / 로그인 상태 점검 및 재시도
- * - 사용자 있음: 강제 토큰 갱신(getIdToken(true)) 후 새로고침 (Stale Token 대응)
- * - 사용자 없음: confirm 후 로그인 화면(index.html)으로 이동
+ * 로그인 복구 및 재시도 (Session Recovery)
+ * Galaxy Tab 등에서 LocalStorage/IndexedDB가 막혀 reload만으로 복구되지 않을 때,
+ * 토큰 갱신 성공 시 reload, 사용자 없음 시 confirm 후 세션 초기화하고 index.html로 강제 이동.
  */
 async function checkLoginAndRetry() {
   const btn = document.getElementById('checkLoginAndRetryBtn') || document.querySelector('#trainingRoomList button');
+  function reEnableButton() {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = '로그인 상태 점검 및 재시도';
+    }
+  }
+
   if (btn) {
     btn.disabled = true;
     btn.innerText = '상태 확인 중...';
   }
 
   const user = getCurrentUserForTrainingRooms();
-
-  if (user) {
-    try {
-      if (typeof user.getIdToken === 'function') await user.getIdToken(true).catch(() => null);
-    } catch (e) {}
-    if (typeof window.showToast === 'function') {
-      window.showToast('로그인 정보가 확인되었습니다. 페이지를 새로고침합니다.');
-    } else {
-      alert('로그인 정보가 확인되었습니다. 페이지를 새로고침합니다.');
+  try {
+    if (user && typeof user.getIdToken === 'function') {
+      await user.getIdToken(true);
+      window.location.reload();
+      return;
     }
-    window.location.reload();
-  } else {
-    const goLogin = confirm(
-      '태블릿 브라우저 보안 정책으로 인해 로그인 정보가 유지되지 않았습니다.\n\n로그인 화면으로 이동하여 다시 접속하시겠습니까?'
-    );
-    if (goLogin) {
-      try {
-        if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-      } catch (e) {}
-      window.location.href = 'index.html';
-    } else {
-      if (btn) {
-        btn.disabled = false;
-        btn.innerText = '로그인 상태 점검 및 재시도';
-      }
-    }
+  } catch (e) {
+    console.warn('[Training Room] Token refresh failed:', e?.message);
   }
+
+  // 사용자 없음 또는 토큰 갱신 실패 → 세션 손상 가능성. 재로그인 유도
+  var message = '보안 세션이 만료되었거나 이 기기에서 저장이 제한되어 있습니다. 다시 로그인하시겠습니까?';
+  if (!window.confirm(message)) {
+    reEnableButton();
+    return;
+  }
+  try {
+    sessionStorage.clear();
+  } catch (ignored) {}
+  window.location.href = 'index.html';
 }
 window.checkLoginAndRetry = checkLoginAndRetry;
 
