@@ -3207,6 +3207,7 @@ function estimateWorkoutTSS(workout) {
 
 /**
  * WorkoutCard 컴포넌트 렌더 (단일 카드 HTML)
+ * 카드 블럭 클릭 시 선택·훈련준비 로딩, 선택된 카드는 훈련명 앞에 체크 표시
  */
 function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grade = '2') {
   if (!workout || typeof workout !== 'object' || !workout.id) return '';
@@ -3216,19 +3217,22 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   const graphId = 'workout-card-graph-' + workout.id;
   const isAdmin = (grade === '1' || grade === '3');
   const categoryLabel = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(workout) : '';
+  const isSelected = window.currentWorkout && String(window.currentWorkout.id) === String(workout.id);
+  const selectedCheck = isSelected ? '<img src="assets/img/check2.png" alt="선택됨" class="workout-card__title-check" />' : '';
+  const selectedClass = isSelected ? ' workout-card--selected' : '';
   return `
-    <div class="workout-card" data-workout-id="${workout.id}">
+    <div class="workout-card workout-card--clickable${selectedClass}" data-workout-id="${workout.id}" onclick="handleWorkoutCardClick(event, ${workout.id})" role="button" tabindex="0" aria-label="워크아웃 선택: ${safeTitle}">
       <div class="workout-card__header">
-        <h3 class="workout-card__title">${safeTitle}</h3>
+        <h3 class="workout-card__title">${selectedCheck}<span class="workout-card__title-text">${safeTitle}</span></h3>
         <div class="workout-card__actions">
-          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})" title="선택" aria-label="선택">
+          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${workout.id})" title="선택" aria-label="선택">
             <img src="assets/img/check2.png" alt="선택" class="workout-card__select-icon" />
           </button>
           ${isAdmin ? `
-            <button class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">
+            <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">
               <img src="assets/img/edit2.png" alt="수정" />
             </button>
-            <button class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">
+            <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); deleteWorkout(${workout.id})" title="삭제">
               <img src="assets/img/delete2.png" alt="삭제" />
             </button>
           ` : ''}
@@ -3523,6 +3527,17 @@ function checkExpiryAndWarn() {
 }
 
 
+
+/**
+ * 카드 블럭 클릭 시 호출 (선택 버튼이 아닌 카드 영역 클릭)
+ * event.stopPropagation은 내부 버튼에서 처리하므로 여기서는 선택만 실행
+ */
+function handleWorkoutCardClick(event, workoutId) {
+  if (event && event.target && event.target.closest && (event.target.closest('button') || event.target.closest('a'))) {
+    return;
+  }
+  if (workoutId) selectWorkout(workoutId);
+}
 
 async function selectWorkout(workoutId) {
   if (!workoutId) {
@@ -5677,6 +5692,7 @@ window.getWorkoutCategoryId = getWorkoutCategoryId;
 // 워크아웃 관리
 window.loadWorkouts = loadWorkouts;
 window.searchWorkouts = searchWorkouts;
+window.handleWorkoutCardClick = handleWorkoutCardClick;
 window.selectWorkout = selectWorkout;
 window.editWorkout = editWorkout;
 window.deleteWorkout = deleteWorkout;
