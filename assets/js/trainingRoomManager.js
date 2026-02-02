@@ -526,6 +526,20 @@ function getCurrentUserForTrainingRooms() {
 }
 
 /**
+ * 로그인 만료 UI에서 "로그인 상태 점검 및 재시도" 클릭 시: 토스트 후 새로고침으로 IndexedDB 세션 복구 시도
+ * (반복 실패 시 index.html 등 로그인 페이지로 이동하는 로직을 앱에서 추가할 수 있음)
+ */
+function checkLoginAndRetry() {
+  if (typeof window.showToast === 'function') {
+    window.showToast('로그인 상태를 확인 중입니다...');
+  } else {
+    alert('로그인 상태를 확인 중입니다...');
+  }
+  window.location.reload();
+}
+window.checkLoginAndRetry = checkLoginAndRetry;
+
+/**
  * Training Room 목록 로드 — Active Defense: currentUser null이면 쿼리하지 않음, 권한 오류 시 토큰 강제 갱신
  */
 async function loadTrainingRooms() {
@@ -548,13 +562,15 @@ async function loadTrainingRooms() {
 
     const currentUser = getCurrentUserForTrainingRooms();
     if (!currentUser) {
-      console.warn('[Training Room] Session not available after wait (no currentUser). Stopping spinner.');
+      console.warn('[Training Room] Session not available after wait (no currentUser). Showing session-expired UI.');
+      listContainer.innerHTML = '';
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-          <p style="color: #666; font-size: 15px; margin-bottom: 16px;">로그인 정보가 확인되지 않습니다. 다시 로그인해주세요.</p>
-          <button type="button" onclick="window.location.href='index.html'" 
-                  style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-            로그인 화면으로 이동
+          <p style="color: #dc3545; font-weight: bold; margin-bottom: 10px;">보안을 위해 로그인이 만료되었습니다.</p>
+          <p style="color: #666; font-size: 13px; margin-bottom: 20px;">갤럭시 탭 등 일부 기기에서는 장시간 미사용 시 로그인이 해제될 수 있습니다.</p>
+          <button type="button" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
+                  style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            로그인 상태 점검 및 재시도
           </button>
         </div>
       `;
