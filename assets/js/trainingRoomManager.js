@@ -465,7 +465,13 @@ async function loadTrainingRooms() {
     </div>
   `;
 
+  const isMobile = isMobileDeviceForTrainingRooms();
+  const authWaitMs = isMobile ? 6000 : 4000; // Galaxy Tab 등 모바일: Auth 복원 지연 대비
+
   try {
+    // Firestore 규칙: training_rooms는 request.auth != null 필요 → Auth 준비 후 쿼리 (권한 오류 방지)
+    await waitForAuthReady(authWaitMs);
+
     // trainingResultService.js 패턴: Firestore 인스턴스 직접 가져오기 (단순화)
     // v9 우선, 없으면 v8 사용
     let db = null;
@@ -491,33 +497,49 @@ async function loadTrainingRooms() {
     // trainingResultService.js 패턴: 단순한 쿼리 실행
     // training_rooms 컬렉션 전체 조회 후 client-side filtering (인덱스 이슈 방지)
     let rooms = [];
-    
-    if (useV9) {
-      // Firebase v9 Modular SDK (trainingResultService.js와 동일한 패턴)
-      const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      const roomsRef = collection(db, TRAINING_ROOMS_COLLECTION);
-      const querySnapshot = await getDocs(roomsRef);
-      
-      rooms = querySnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          title: doc.data().title || doc.data().name,
-          _sourceCollection: 'training_rooms'
-        }))
-        .filter(room => room.status !== 'inactive'); // Client-side filtering
-    } else {
-      // Firebase v8 호환 모드
-      const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
-      
-      rooms = querySnapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          title: doc.data().title || doc.data().name,
-          _sourceCollection: 'training_rooms'
-        }))
-        .filter(room => room.status !== 'inactive'); // Client-side filtering
+    let retried = false;
+
+    const fetchRooms = async () => {
+      if (useV9) {
+        const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        const roomsRef = collection(db, TRAINING_ROOMS_COLLECTION);
+        const querySnapshot = await getDocs(roomsRef);
+        return querySnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            title: doc.data().title || doc.data().name,
+            _sourceCollection: 'training_rooms'
+          }))
+          .filter(room => room.status !== 'inactive');
+      } else {
+        const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
+        return querySnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            title: doc.data().title || doc.data().name,
+            _sourceCollection: 'training_rooms'
+          }))
+          .filter(room => room.status !== 'inactive');
+      }
+    };
+
+    try {
+      rooms = await fetchRooms();
+    } catch (firstErr) {
+      const isPerm = (firstErr.code === 'permission-denied') ||
+        (String(firstErr.message || '').toLowerCase().includes('permission')) ||
+        (String(firstErr.message || '').includes('권한'));
+      if (isPerm && isMobile && !retried) {
+        retried = true;
+        console.warn('[Training Room] 권한 오류 후 1회 재시도 (Auth 지연 대응):', firstErr.message);
+        await new Promise(r => setTimeout(r, 2000));
+        await waitForAuthReady(3000);
+        rooms = await fetchRooms();
+      } else {
+        throw firstErr;
+      }
     }
     
     console.log('[Training Room] ✅', rooms.length, '개 Room 로드 완료');
