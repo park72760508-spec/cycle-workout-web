@@ -3175,6 +3175,32 @@ button[aria-disabled="true"] {
   transform: translateY(-2px);
 }
 
+.workout-card--clickable {
+  cursor: pointer;
+}
+
+.workout-card--selected {
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.3);
+}
+
+.workout-card__title-check {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.workout-card__title-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workout-card__header {
   display: flex;
   align-items: center;
@@ -3184,15 +3210,15 @@ button[aria-disabled="true"] {
 }
 
 .workout-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--zone-1);
   margin: 0;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workout-card__actions {
