@@ -70,25 +70,23 @@ function isMobileDeviceForTrainingRooms() {
 }
 
 /**
- * Galaxy Tab 등 태블릿/느린 기기 감지 (v9 모듈·IndexedDB 지연 대비)
- * Desktop Site 모드에서 UA가 PC로 바뀌어도 터치+화면으로 엄격히 태블릿 판별.
+ * Galaxy Tab 등 태블릿/느린 기기 감지 (11인치 등, Desktop Site 시 UA 무시)
+ * 화면 크기·터치만으로 판별해 Auth 대기 시간을 길게 적용.
  */
 function isTabletOrSlowDeviceForAuth() {
   if (typeof window === 'undefined' || !navigator) return false;
+  const innerWidth = typeof window.innerWidth === 'number' ? window.innerWidth : 0;
   const touchCapable = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
-  const wideScreen = typeof window.screen !== 'undefined' && window.screen.width >= 600;
 
-  // Strict: touch + wide screen => Tablet/Slow Device regardless of User-Agent (Galaxy Tab Desktop Mode)
-  if (touchCapable && wideScreen) {
+  // ~11-inch tablets: innerWidth typically <= 1280 (Desktop Site)
+  if (innerWidth > 0 && innerWidth <= 1280) {
     return true;
   }
-
-  const ua = (navigator.userAgent || '').toLowerCase();
-  const isSamsung = ua.indexOf('samsung') !== -1;
-  const isAndroidTablet = ua.indexOf('android') !== -1 && (ua.indexOf('mobile') === -1 || ua.indexOf('sm-t') !== -1);
-  const isGalaxyTab = isSamsung && (ua.indexOf('sm-t') !== -1 || ua.indexOf('tablet') !== -1 || wideScreen);
-  const isTabletLike = wideScreen && (ua.indexOf('mobile') === -1 || ua.indexOf('ipad') !== -1);
-  return !!(isGalaxyTab || (isSamsung && isAndroidTablet) || isTabletLike);
+  // Touch + medium-wide viewport (e.g. 1366) => treat as tablet/slow device
+  if (touchCapable && innerWidth > 0 && innerWidth <= 1366) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -191,12 +189,12 @@ function pollForAuthV9(maxWaitMs) {
 async function waitForAuthReady(maxWaitMs = 3000) {
   const isTablet = isTabletOrSlowDeviceForAuth();
   const isMobile = isMobileDeviceForTrainingRooms();
-  const v9PollMs = isTablet ? 6000 : (isMobile ? 4000 : 2000); // Tablets: at least 6000ms for Galaxy Tab fallback
-  const effectiveMaxWaitMs = isTablet ? Math.max(maxWaitMs, 6000) : maxWaitMs; // Ensure tablets get sufficiently long wait
+  const TABLET_WAIT_MS = 8000;
+  const v9PollMs = isTablet ? TABLET_WAIT_MS : (isMobile ? 4000 : 2000);
+  const effectiveMaxWaitMs = isTablet ? TABLET_WAIT_MS : maxWaitMs;
 
   console.log('[Auth Debug] Device Type Check: isTablet=' + isTablet + ', waitTime=' + v9PollMs + 'ms');
 
-  // 모바일/태블릿: authV9가 없으면 type="module" 로드 대기 (Galaxy Tab에서 v9 늦게 로드되면 compat만 대기해 권한 오류 발생)
   if ((isMobile || isTablet) && !window.authV9) {
     console.log('[Auth Ready] authV9 로드 대기 (최대', v9PollMs, 'ms, 태블릿:', isTablet, ')');
     await pollForAuthV9(v9PollMs);
@@ -533,7 +531,6 @@ async function loadTrainingRooms() {
     // trainingResultService.js 패턴: 단순한 쿼리 실행
     // training_rooms 컬렉션 전체 조회 후 client-side filtering (인덱스 이슈 방지)
     let rooms = [];
-    let retried = false;
 
     const fetchRooms = async () => {
       if (useV9) {
@@ -561,23 +558,37 @@ async function loadTrainingRooms() {
       }
     };
 
+    const isPermissionError = (err) => {
+      if (!err) return false;
+      const code = err.code || '';
+      const msg = String(err.message || '').toLowerCase();
+      return code === 'permission-denied' ||
+        msg.includes('permission') ||
+        msg.includes('privilege') ||
+        String(err.message || '').includes('권한');
+    };
+
+    let lastErr = null;
     try {
       rooms = await fetchRooms();
     } catch (firstErr) {
-      const errMsg = String(firstErr.message || '').toLowerCase();
-      const isPerm = (firstErr.code === 'permission-denied') ||
-        errMsg.includes('permission') ||
-        errMsg.includes('privilege') ||
-        (String(firstErr.message || '').includes('권한'));
-      if (isPerm && !retried) {
-        retried = true;
-        console.warn('[Training Room] 권한 오류 후 1회 재시도 (Auth 토큰 복원 대기):', firstErr.message);
-        await new Promise(r => setTimeout(r, 2000));
-        await waitForAuthReady(5000);
-        rooms = await fetchRooms();
-      } else {
-        throw firstErr;
+      lastErr = firstErr;
+      if (isPermissionError(firstErr)) {
+        for (let retry = 0; retry < 2; retry++) {
+          console.warn('[Training Room] Permission error detected on Tab. Retrying...', retry + 1, '/2');
+          await new Promise(r => setTimeout(r, 1500));
+          await waitForAuthReady(5000);
+          try {
+            rooms = await fetchRooms();
+            lastErr = null;
+            break;
+          } catch (retryErr) {
+            lastErr = retryErr;
+            if (retry === 1) break;
+          }
+        }
       }
+      if (lastErr) throw lastErr;
     }
     
     console.log('[Training Room] ✅', rooms.length, '개 Room 로드 완료');
