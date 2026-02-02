@@ -529,13 +529,43 @@ function getCurrentUserForTrainingRooms() {
  * 로그인 만료 UI에서 "로그인 상태 점검 및 재시도" 클릭 시: 토스트 후 새로고침으로 IndexedDB 세션 복구 시도
  * (반복 실패 시 index.html 등 로그인 페이지로 이동하는 로직을 앱에서 추가할 수 있음)
  */
-function checkLoginAndRetry() {
-  if (typeof window.showToast === 'function') {
-    window.showToast('로그인 상태를 확인 중입니다...');
-  } else {
-    alert('로그인 상태를 확인 중입니다...');
+/**
+ * 로그인 만료 UI에서 "로그인 상태 점검 및 재시도" 클릭 시:
+ * - 사용자 있음: 소프트 새로고침
+ * - 사용자 없음: confirm 후 로그인 화면(index.html)으로 강제 이동 (Galaxy Tab 등 저장소 차단 시 무한 루프 방지)
+ */
+async function checkLoginAndRetry() {
+  const btn = document.getElementById('checkLoginAndRetryBtn') || document.querySelector('#trainingRoomList button');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = '상태 확인 중...';
   }
-  window.location.reload();
+
+  const user = getCurrentUserForTrainingRooms();
+
+  if (user) {
+    if (typeof window.showToast === 'function') {
+      window.showToast('로그인 정보가 확인되었습니다. 페이지를 새로고침합니다.');
+    } else {
+      alert('로그인 정보가 확인되었습니다. 페이지를 새로고침합니다.');
+    }
+    window.location.reload();
+  } else {
+    const goLogin = confirm(
+      '태블릿 브라우저 보안 정책으로 인해 로그인 정보가 유지되지 않았습니다.\n\n로그인 화면으로 이동하여 다시 접속하시겠습니까?'
+    );
+    if (goLogin) {
+      try {
+        if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+      } catch (e) {}
+      window.location.href = 'index.html';
+    } else {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '로그인 상태 점검 및 재시도';
+      }
+    }
+  }
 }
 window.checkLoginAndRetry = checkLoginAndRetry;
 
@@ -568,7 +598,7 @@ async function loadTrainingRooms() {
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
           <p style="color: #dc3545; font-weight: bold; margin-bottom: 10px;">보안을 위해 로그인이 만료되었습니다.</p>
           <p style="color: #666; font-size: 13px; margin-bottom: 20px;">갤럭시 탭 등 일부 기기에서는 장시간 미사용 시 로그인이 해제될 수 있습니다.</p>
-          <button type="button" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
+          <button type="button" id="checkLoginAndRetryBtn" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
                   style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
             로그인 상태 점검 및 재시도
           </button>
