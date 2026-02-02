@@ -476,11 +476,17 @@ async function getUsersListWithCache() {
 }
 
 /**
- * Training Room 목록 로드
- * trainingResultService.js의 안정적인 패턴을 적용하여 단순화함
- * - 복잡한 폴링/타임아웃 제거
- * - Firebase SDK 기본 기능에 충실
- * - Client-side filtering으로 인덱스 이슈 방지
+ * Firestore와 동일 앱의 Auth 인스턴스 반환 (v9 사용 시 authV9)
+ */
+function getAuthForTrainingRooms() {
+  if (window.firestoreV9 && window.authV9) return window.authV9;
+  if (window.firebase && typeof window.firebase.auth === 'function') return window.firebase.auth();
+  if (window.auth) return window.auth;
+  return null;
+}
+
+/**
+ * Training Room 목록 로드 — Active Defense: currentUser null이면 쿼리하지 않음, 권한 오류 시 토큰 강제 갱신
  */
 async function loadTrainingRooms() {
   const listContainer = document.getElementById('trainingRoomList');
@@ -490,7 +496,6 @@ async function loadTrainingRooms() {
     return;
   }
   
-  // 로딩 UI 표시
   listContainer.innerHTML = `
     <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
       <div class="spinner" style="margin: 0 auto 20px;"></div>
@@ -500,17 +505,13 @@ async function loadTrainingRooms() {
 
   const isMobile = isMobileDeviceForTrainingRooms();
   const isTablet = isTabletOrSlowDeviceForAuth();
-  const authWaitMs = isTablet ? 10000 : (isMobile ? 6000 : 4000); // Galaxy Tab: IndexedDB·Auth 복원 지연 대비
+  const authWaitMs = isTablet ? 10000 : (isMobile ? 6000 : 4000);
 
   try {
-    // Firestore 규칙: training_rooms는 request.auth != null 필요 → Auth 준비 후 쿼리 (권한 오류 방지)
     await waitForAuthReady(authWaitMs);
 
-    // trainingResultService.js 패턴: Firestore 인스턴스 직접 가져오기 (단순화)
-    // v9 우선, 없으면 v8 사용 (v9 사용 시 authV9와 동일 앱이어야 권한 통과)
     let db = null;
     let useV9 = false;
-    
     if (window.firestoreV9) {
       db = window.firestoreV9;
       useV9 = true;
@@ -526,10 +527,29 @@ async function loadTrainingRooms() {
       throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firestoreV9 또는 window.firebase.firestore()를 확인하세요.');
     }
     
+    const auth = getAuthForTrainingRooms();
+    const currentUser = auth ? auth.currentUser : null;
+
+    if (!currentUser) {
+      console.warn('[Training Room] Auth not ready, waiting for trigger...');
+      listContainer.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+          <div class="spinner" style="margin: 0 auto 20px;"></div>
+          <p style="color: #666;">연결 중...</p>
+        </div>
+      `;
+      if (auth && typeof auth.onAuthStateChanged === 'function') {
+        const unsub = auth.onAuthStateChanged((user) => {
+          if (user) {
+            unsub();
+            if (typeof loadTrainingRooms === 'function') loadTrainingRooms();
+          }
+        });
+      }
+      return;
+    }
+
     console.log('[Training Room] Firestore 인스턴스 확보, useV9:', useV9);
-    
-    // trainingResultService.js 패턴: 단순한 쿼리 실행
-    // training_rooms 컬렉션 전체 조회 후 client-side filtering (인덱스 이슈 방지)
     let rooms = [];
 
     const fetchRooms = async () => {
@@ -568,6 +588,14 @@ async function loadTrainingRooms() {
         String(err.message || '').includes('권한');
     };
 
+    const forceTokenRefresh = async () => {
+      const a = getAuthForTrainingRooms();
+      const user = a ? a.currentUser : null;
+      if (user && typeof user.getIdToken === 'function') {
+        await user.getIdToken(true);
+      }
+    };
+
     let lastErr = null;
     try {
       rooms = await fetchRooms();
@@ -576,7 +604,12 @@ async function loadTrainingRooms() {
       if (isPermissionError(firstErr)) {
         for (let retry = 0; retry < 2; retry++) {
           console.warn('[Training Room] Permission error detected on Tab. Retrying...', retry + 1, '/2');
-          await new Promise(r => setTimeout(r, 1500));
+          try {
+            await forceTokenRefresh();
+          } catch (tokenErr) {
+            console.warn('[Training Room] Token refresh failed:', tokenErr);
+          }
+          await new Promise(r => setTimeout(r, 1000));
           await waitForAuthReady(5000);
           try {
             rooms = await fetchRooms();
@@ -593,38 +626,25 @@ async function loadTrainingRooms() {
     
     console.log('[Training Room] ✅', rooms.length, '개 Room 로드 완료');
     
-    // 사용자 목록 로드 (실패해도 계속 진행)
     let usersList = [];
     try {
       usersList = await getUsersListWithCache();
       console.log('[Training Room] ✅ 사용자 목록:', usersList.length, '명');
     } catch (userError) {
       console.warn('[Training Room] ⚠️ 사용자 목록 로드 실패 (계속 진행):', userError);
-      // 폴백: 전역 변수 확인
-      if (Array.isArray(window.users) && window.users.length > 0) {
-        usersList = window.users;
-      } else if (Array.isArray(window.userProfiles) && window.userProfiles.length > 0) {
-        usersList = window.userProfiles;
-      }
+      if (Array.isArray(window.users) && window.users.length > 0) usersList = window.users;
+      else if (Array.isArray(window.userProfiles) && window.userProfiles.length > 0) usersList = window.userProfiles;
     }
     
-    // 데이터 저장 및 렌더링
     trainingRoomList = rooms;
-    
-    // 캐시 저장
     if (typeof sessionStorage !== 'undefined') {
       try {
-        sessionStorage.setItem('trainingRoomsListCache', JSON.stringify({
-          rooms: rooms,
-          users: usersList,
-          timestamp: Date.now()
-        }));
+        sessionStorage.setItem('trainingRoomsListCache', JSON.stringify({ rooms: rooms, users: usersList, timestamp: Date.now() }));
       } catch (cacheError) {
         console.warn('[Training Room] 캐시 저장 실패:', cacheError);
       }
     }
     
-    // 렌더링 (db와 useV9 전달)
     if (rooms.length === 0) {
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -639,35 +659,56 @@ async function loadTrainingRooms() {
     
   } catch (error) {
     console.error('[Training Room] ❌ 목록 로드 오류:', error);
-    console.error('[Training Room] 오류 상세:', {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+    console.error('[Training Room] 오류 상세:', { message: error.message, code: error.code, stack: error.stack });
     
-    // 에러 UI 표시 (trainingResultService.js 패턴: 단순한 에러 처리)
     const errorCode = error.code || 'unknown';
     const errorMessage = error.message || '알 수 없는 오류';
-    const isPermissionError = errorCode === 'permission-denied' || 
-                               errorMessage.toLowerCase().includes('permission') ||
-                               errorMessage.toLowerCase().includes('권한');
+    const isPermErr = errorCode === 'permission-denied' ||
+      String(errorMessage).toLowerCase().includes('permission') ||
+      String(errorMessage).toLowerCase().includes('권한');
     
     listContainer.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
         <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
         <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
-          ${isPermissionError 
-            ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' 
-            : '네트워크 연결을 확인하고 다시 시도해주세요.'}
+          ${isPermErr ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' : '네트워크 연결을 확인하고 다시 시도해주세요.'}
         </p>
-        <button onclick="if(typeof loadTrainingRooms==='function'){loadTrainingRooms();}" 
+        <button onclick="if(typeof window.trainingRoomRetryWithReauth==='function'){window.trainingRoomRetryWithReauth();}" 
                 style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-          다시 시도
+          로그인 상태 점검 및 재시도
         </button>
       </div>
     `;
   }
 }
+
+/**
+ * 에러 화면에서 "로그인 상태 점검 및 재시도" 클릭 시: 토큰 강제 갱신 후 loadTrainingRooms, 실패 시 새로고침
+ */
+async function trainingRoomRetryWithReauth() {
+  const listContainer = document.getElementById('trainingRoomList');
+  if (listContainer) {
+    listContainer.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+        <div class="spinner" style="margin: 0 auto 20px;"></div>
+        <p style="color: #666;">로그인 상태 확인 중...</p>
+      </div>
+    `;
+  }
+  try {
+    const auth = getAuthForTrainingRooms();
+    const user = auth ? auth.currentUser : null;
+    if (user && typeof user.getIdToken === 'function') {
+      await user.getIdToken(true);
+    }
+    await new Promise(r => setTimeout(r, 1000));
+    if (typeof loadTrainingRooms === 'function') await loadTrainingRooms();
+  } catch (e) {
+    console.warn('[Training Room] Retry with reauth failed, reloading:', e);
+    window.location.reload();
+  }
+}
+window.trainingRoomRetryWithReauth = trainingRoomRetryWithReauth;
 
 /**
  * Training Room 목록 렌더링
