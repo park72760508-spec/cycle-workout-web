@@ -303,12 +303,20 @@ async function waitForFirestore(maxWaitMs = null) {
   const pollInterval = 200; // 200ms마다 확인
   const startTime = Date.now();
   let attempt = 0;
+  const isTablet = isTabletOrSlowDeviceForAuth();
+  
+  const applyLongPollingIfTablet = (firestoreDb) => {
+    if (isTablet && firestoreDb && typeof firestoreDb.settings === 'function') {
+      try {
+        firestoreDb.settings({ experimentalForceLongPolling: true, merge: true });
+        console.log('[Training Room] Galaxy Tab detected: Forcing Long Polling for stability.');
+      } catch (e) {
+        console.warn('[Training Room] Force long polling failed:', e?.message);
+      }
+    }
+  };
   
   console.log('[Mobile Debug] waitForFirestore 시작 - 최대 대기:', timeout, 'ms, 모바일:', isMobile);
-  
-  // 모바일 환경에서는 Firebase Auth가 준비될 때까지 먼저 대기 (권한 오류 방지)
-  // 주의: waitForAuthReady는 waitForFirestore 내부에서 호출하지 않음
-  // loadTrainingRooms에서 직접 호출하도록 변경
   
   while (Date.now() - startTime < timeout) {
     attempt++;
@@ -320,6 +328,7 @@ async function waitForFirestore(maxWaitMs = null) {
       try {
         firestoreDb = window.firebase.firestore();
         useV9 = false;
+        applyLongPollingIfTablet(firestoreDb);
         console.log('[Mobile Debug] ✅ Firestore 인스턴스 확보 성공 (v8, 시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
         return { db: firestoreDb, useV9: false };
       } catch (e) {
@@ -327,10 +336,11 @@ async function waitForFirestore(maxWaitMs = null) {
       }
     }
     
-    // 2순위: Firebase v9 Modular SDK
+    // 2순위: Firebase v9 Modular SDK (v9 인스턴스는 .settings 없을 수 있음)
     if (!firestoreDb && window.firestoreV9) {
       firestoreDb = window.firestoreV9;
       useV9 = true;
+      applyLongPollingIfTablet(firestoreDb);
       console.log('[Mobile Debug] ✅ Firestore 인스턴스 확보 성공 (v9, 시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
       return { db: firestoreDb, useV9: true };
     }
@@ -339,6 +349,7 @@ async function waitForFirestore(maxWaitMs = null) {
     if (!firestoreDb && window.firestore) {
       firestoreDb = window.firestore;
       useV9 = false;
+      applyLongPollingIfTablet(firestoreDb);
       console.log('[Mobile Debug] ✅ Firestore 인스턴스 확보 성공 (window.firestore, 시도:', attempt, ', 경과:', Date.now() - startTime, 'ms)');
       return { db: firestoreDb, useV9: false };
     }
@@ -629,6 +640,16 @@ async function loadTrainingRooms() {
     
     if (!db) {
       throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firestoreV9 또는 window.firebase.firestore()를 확인하세요.');
+    }
+
+    const isTablet = isTabletOrSlowDeviceForAuth();
+    if (isTablet && db && typeof db.settings === 'function') {
+      try {
+        db.settings({ experimentalForceLongPolling: true, merge: true });
+        console.log('[Training Room] Galaxy Tab detected: Forcing Long Polling for stability.');
+      } catch (settingsErr) {
+        console.warn('[Training Room] Force long polling failed:', settingsErr?.message);
+      }
     }
 
     console.log('[Training Room] Firestore 인스턴스 확보, useV9:', useV9);
