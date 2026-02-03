@@ -2557,6 +2557,21 @@ button[aria-disabled="true"] {
   border-color: rgba(64, 224, 208, 0.6);
 }
 
+/* 훈련일지 화면 전용: 오늘 날짜 = 폰트 크기에 맞춘 주황색 투명 원 */
+#trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today::after {
+  display: none;
+}
+#trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today .day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  min-height: 1.6em;
+  border-radius: 50%;
+  background: rgba(249, 115, 22, 0.35);
+  box-sizing: border-box;
+}
+
 /* 미니 달력의 날짜 숫자 - 명시적으로 폰트 사이즈 지정 (다른 .day-number 스타일 오버라이드) */
 .mini-calendar-day .day-number {
   position: relative;
