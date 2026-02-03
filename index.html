@@ -5093,8 +5093,15 @@
       if (jStep) jStep('7-1. fetchTrainingLogsForCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId);
       if (typeof window !== 'undefined') window.__journalLoadFailed = false;
-      
+
+      if (window.__journalFetchInProgress) {
+        if (jStep) jStep('7-1. 이미 fetch 진행 중 (중복 호출 무시)', true);
+        return {};
+      }
+      window.__journalFetchInProgress = true;
+
       if (!userId) {
+        window.__journalFetchInProgress = false;
         if (jStep) jStep('7-1. 오류: userId 없음', true);
         return {};
       }
@@ -5102,7 +5109,10 @@
       try {
         var isTabletForPoll = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
         var pollMaxMs = isTabletForPoll ? 10000 : 5000;
-        if (typeof window.getUserTrainingLogs !== 'function') {
+        var alreadyHaveModule = typeof window.getUserTrainingLogs === 'function';
+        var alreadyHaveFirestore = !!window.firestoreV9;
+
+        if (!alreadyHaveModule) {
           if (jStep) jStep('7-2. getUserTrainingLogs 모듈 대기 중... (최대 ' + (pollMaxMs/1000) + '초)', false);
           var pollStart = Date.now();
           while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - pollStart) < pollMaxMs) {
@@ -5110,7 +5120,7 @@
           }
         }
         if (typeof window.getUserTrainingLogs === 'function') {
-          if (jStep) jStep('7-2. getUserTrainingLogs 모듈 있음', false);
+          if (jStep) jStep(alreadyHaveModule ? '7-2. getUserTrainingLogs 모듈 있음 (스킵)' : '7-2. getUserTrainingLogs 모듈 있음', false);
         }
 
         if (!window.firestoreV9 && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
@@ -5127,7 +5137,7 @@
           }
         }
         if (window.firestoreV9) {
-          if (jStep) jStep('7-3. firestoreV9 준비됨', false);
+          if (jStep) jStep(alreadyHaveFirestore ? '7-3. firestoreV9 준비됨 (스킵)' : '7-3. firestoreV9 준비됨', false);
         } else {
           if (jStep) jStep('7-3. firestoreV9 없음 (타임아웃)', true);
         }
@@ -5205,7 +5215,11 @@
                   logs = await window.getUserTrainingLogs(userId, { limit: 200 });
                   if (jStep) jStep('7-5. 2차 재시도 후 완료', false);
                 } catch (e) {
-                  if (jStep) jStep('7-5. 2차 재시도 실패: ' + (e && e.message ? e.message : ''), true);
+                  if (jStep) jStep('7-5. 2차 재시도 실패 (재시도 종료): ' + (e && e.message ? e.message : ''), true);
+                  if (typeof window !== 'undefined' && isPermissionErrorJournal(e)) {
+                    window.__journalLoadFailed = true;
+                    window.__journalLoadErrorMsg = '권한 오류(permission-denied). 로그인 확인 또는 재로그인 후 재시도.';
+                  }
                   throw e;
                 }
               } else {
@@ -5275,6 +5289,8 @@
           window.__journalLoadErrorMsg = (error && error.message) ? String(error.message).slice(0, 120) : '훈련 로드 실패';
         }
         return {};
+      } finally {
+        window.__journalFetchInProgress = false;
       }
     }
 
@@ -5649,11 +5665,13 @@
       }
       
       if (jStep) jStep('7. fetchTrainingLogsForCalendarJournal 호출...', false);
+      window.__journalEmptyRetryDone = false;
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
       if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
         if (jStep) jStep('7. 훈련 로드 완료 (날짜 ' + Object.keys(miniCalendarStateJournal.trainingLogs).length + '개)', false);
-      } else if (isTabletInit && !window.__journalLoadFailed) {
-        if (jStep) jStep('7. 1차 로드 빈 결과 → 2초 후 재시도', false);
+      } else if (isTabletInit && !window.__journalLoadFailed && !window.__journalEmptyRetryDone) {
+        window.__journalEmptyRetryDone = true;
+        if (jStep) jStep('7. 1차 로드 빈 결과 → 1회만 2초 후 재시도', false);
         await new Promise(function(r) { setTimeout(r, 2000); });
         var cu = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
         if (cu && typeof cu.getIdToken === 'function') {
@@ -5663,7 +5681,7 @@
         if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
           if (jStep) jStep('7. 재시도 후 훈련 로드 완료', false);
         } else {
-          if (jStep) jStep('7. 재시도 후에도 빈 결과', true);
+          if (jStep) jStep('7. 재시도 후에도 빈 결과 (재시도 1회로 종료)', true);
         }
       } else if (window.__journalLoadFailed) {
         if (jStep) jStep('7. 훈련 로드 실패 (상세: 재시도 영역 참고)', true);
