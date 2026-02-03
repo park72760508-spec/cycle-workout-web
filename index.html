@@ -54,7 +54,7 @@
       reauthenticateWithCredential,
       EmailAuthProvider
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
-    import { getFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+    import { getFirestore, initializeFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     
     const firebaseConfig = {
       apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -65,12 +65,28 @@
       appId: "1:752285835508:web:0662a24874209ebb483ea1"
     };
     
+    function isSamsungOrTabletForFirestore() {
+      if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
+      const ua = String(navigator.userAgent).toLowerCase();
+      const plat = String(navigator.platform || '').toLowerCase();
+      if (/samsung|sm-t\d|sm-p\d|galaxy.*tab/i.test(ua)) return true;
+      if (plat.includes('linux arm') || plat.includes('android')) return true;
+      const w = typeof window !== 'undefined' && window.innerWidth;
+      if (w && w <= 2560 && (navigator.maxTouchPoints || 0) > 0) return true;
+      return false;
+    }
+    
     let authV9;
     let firestoreV9;
     try {
       const appV9 = initializeApp(firebaseConfig, 'authV9');
       authV9 = getAuth(appV9);
-      firestoreV9 = getFirestore(appV9);
+      if (isSamsungOrTabletForFirestore()) {
+        firestoreV9 = initializeFirestore(appV9, { experimentalForceLongPolling: true });
+        console.log('✅ Firebase v9 Firestore 초기화 (Long Polling 적용, 삼성/태블릿)');
+      } else {
+        firestoreV9 = getFirestore(appV9);
+      }
       window.authV9 = authV9;
       window.firestoreV9 = firestoreV9;
       console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증·Firestore)');
@@ -5076,13 +5092,13 @@
             return buildLogsByDateFromLogs(logsInline);
           } catch (inlineErr) {
             console.error('[MiniCalendarJournal] 인라인 폴백 쿼리 실패:', inlineErr);
-            if (typeof window !== 'undefined') window.__journalLoadFailed = true;
+            if (typeof window !== 'undefined') { window.__journalLoadFailed = true; window.__journalLoadErrorMsg = '인라인 쿼리 실패'; }
             return {};
           }
         }
         if (typeof window.getUserTrainingLogs !== 'function') {
           console.error('[MiniCalendarJournal] window.getUserTrainingLogs 없고 firestoreV9도 없음.');
-          if (typeof window !== 'undefined') window.__journalLoadFailed = true;
+          if (typeof window !== 'undefined') { window.__journalLoadFailed = true; window.__journalLoadErrorMsg = 'Firestore/모듈 미로드'; }
           return {};
         }
 
@@ -5192,7 +5208,10 @@
           errorName: error.name,
           errorCode: error.code
         });
-        if (typeof window !== 'undefined') window.__journalLoadFailed = true;
+        if (typeof window !== 'undefined') {
+          window.__journalLoadFailed = true;
+          window.__journalLoadErrorMsg = (error && error.message) ? String(error.message).slice(0, 120) : '훈련 로드 실패';
+        }
         return {};
       }
     }
@@ -5554,7 +5573,8 @@
       console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
       
       // 삼성 태블릿: 첫 Firestore 쿼리 전 Pre-flight 토큰 갱신 (Live Training Rooms 동일)
-      if (typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth()) {
+      var isTabletInit = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+      if (isTabletInit) {
         var journalUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
         if (journalUser && typeof journalUser.getIdToken === 'function') {
           try {
@@ -5564,11 +5584,21 @@
             console.warn('[MiniCalendarJournal] Pre-flight token refresh failed', e);
           }
         }
+        await new Promise(function(r) { setTimeout(r, 800); });
       }
       
       // 훈련 로그 가져오기 (최근 200건 + 현재 표시 월 로그 병합 → 오늘 훈련이 초기 로딩 시에도 표시되도록)
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 호출 전...');
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+      if (isTabletInit && Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && !window.__journalLoadFailed) {
+        console.warn('[MiniCalendarJournal] Tablet: 1차 로드 빈 결과 → 2초 후 1회 재시도');
+        await new Promise(function(r) { setTimeout(r, 2000); });
+        var cu = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        if (cu && typeof cu.getIdToken === 'function') {
+          try { await cu.getIdToken(true); } catch (e) {}
+        }
+        miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+      }
       
       // 현재 표시 월(오늘 포함) 로그를 별도로 조회해 병합 (로딩 시 오늘 훈련이 달력에 바로 표시되도록)
       var cy = miniCalendarStateJournal.currentYear;
@@ -5635,7 +5665,10 @@
       var journalRetryBtnEl = document.getElementById('journalRetryBtn');
       if (journalRetryBtnEl) journalRetryBtnEl.disabled = false;
       var journalRetryP = document.querySelector('#journalRetryArea p');
-      if (journalRetryP) journalRetryP.textContent = '훈련 로드를 불러오지 못했습니다.';
+      if (journalRetryP) {
+        var errMsg = (window.__journalLoadErrorMsg && String(window.__journalLoadErrorMsg).trim()) ? window.__journalLoadErrorMsg : '훈련 로드를 불러오지 못했습니다.';
+        journalRetryP.textContent = errMsg;
+      }
       
       // Monthly Training Analysis Dashboard 갱신 (현재 월 + 해당 월 로그 전달)
       if (typeof window.buildMonthlyLogsForDashboard === 'function' && typeof window.renderMonthlyAnalysisDashboard === 'function') {
