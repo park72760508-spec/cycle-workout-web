@@ -6071,7 +6071,12 @@ function initializeCurrentScreen(screenId) {
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
-      
+      // 삼성 태블릿 등: 단계별 진행 확인을 위해 로드 시작 시 진행 박스 즉시 표시
+      try {
+        if (typeof window.showJournalLoadStatusBox === 'function') window.showJournalLoadStatusBox();
+        if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('훈련일지 준비 중...', false);
+      } catch (e) {}
+
       const checkAndInit = (retryCount = 0) => {
         if (typeof window.initMiniCalendarJournal === 'function') {
           const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
@@ -6080,22 +6085,33 @@ function initializeCurrentScreen(screenId) {
           
           if (userId) {
             (async function runJournalInit() {
+              var jStep = window.setJournalLoadStatus;
+              var jShow = window.showJournalLoadStatusBox;
+              var jClear = window.clearJournalLoadStatus;
+              if (jShow) jShow();
+              if (jClear) jClear();
+              if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
               const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
               var journalUserId = userId;
               try {
+                if (jStep) jStep('1. Auth 대기 중... (최대 ' + (isTablet ? 12 : 5) + '초)', false);
                 if (typeof window.waitForAuthReady === 'function') {
                   await window.waitForAuthReady(isTablet ? 12000 : 5000);
                 }
-                // 훈련일지는 firestoreV9만 사용 → v9 전용 대기(Long Polling) 적용 (삼성 태블릿)
+                if (jStep) jStep('1. Auth 대기 완료', false);
+                if (jStep) jStep('2. Firestore V9 대기 중... (최대 ' + (isTablet ? 18 : 6) + '초)', false);
                 if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
                   await window.ensureFirestoreV9ReadyForJournal(isTablet ? 18000 : 6000);
                 }
-                // Firestore v9 권한은 authV9.currentUser 기준 → authV9 사용자 대기 후 uid 사용 (삼성 태블릿)
+                if (jStep) jStep('2. Firestore V9 대기 완료', false);
                 if (isTablet && typeof window.waitForAuthV9UserForJournal === 'function') {
+                  if (jStep) jStep('3. authV9 사용자 대기 중... (최대 8초)', false);
                   var authV9Result = await window.waitForAuthV9UserForJournal(8000);
                   if (authV9Result && authV9Result.uid) {
                     journalUserId = authV9Result.uid;
-                    console.log('[Journal] authV9 uid 사용:', journalUserId);
+                    if (jStep) jStep('3. authV9 사용자 확인 (uid 사용)', false);
+                  } else {
+                    if (jStep) jStep('3. authV9 사용자 대기 타임아웃 (기존 userId 사용)', true);
                   }
                 }
                 var liveUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
@@ -6103,22 +6119,24 @@ function initializeCurrentScreen(screenId) {
                   var uid = liveUser.uid != null ? liveUser.uid : liveUser.id;
                   if (uid) journalUserId = uid;
                 }
-                // Live Training Rooms 스타일: getUserTrainingLogs 모듈 로드 대기 (삼성 태블릿 type="module" 지연)
+                if (jStep) jStep('4. getUserTrainingLogs 모듈 대기 중...', false);
                 var modulePollMs = isTablet ? 6000 : 2000;
                 var moduleStart = Date.now();
                 while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - moduleStart) < modulePollMs) {
                   await new Promise(function(r) { setTimeout(r, 200); });
                 }
                 if (typeof window.getUserTrainingLogs === 'function') {
-                  console.log('[Journal] getUserTrainingLogs 모듈 로드 확인 (경과:', Date.now() - moduleStart, 'ms)');
+                  if (jStep) jStep('4. getUserTrainingLogs 모듈 로드 완료', false);
                 } else {
-                  console.warn('[Journal] getUserTrainingLogs 미로드 → 진입 후 인라인 Firestore v9 폴백 사용 예정');
+                  if (jStep) jStep('4. getUserTrainingLogs 미로드 → 인라인 폴백 예정', true);
                 }
               } catch (e) {
+                if (jStep) jStep('오류 (진입 단계): ' + (e && e.message ? e.message : String(e)), true);
                 console.warn('[Journal] Auth/Firestore wait failed', e);
               }
               var initDelay = isTablet ? 500 : 100;
               setTimeout(function() {
+                if (jStep) jStep('5. initMiniCalendarJournal 호출 (지연 ' + initDelay + 'ms)', false);
                 console.log('initMiniCalendarJournal 호출 시도 - userId:', journalUserId);
                 window.initMiniCalendarJournal(journalUserId);
               }, initDelay);
