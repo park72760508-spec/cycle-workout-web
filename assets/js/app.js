@@ -6103,6 +6103,17 @@ function initializeCurrentScreen(screenId) {
                   var uid = liveUser.uid != null ? liveUser.uid : liveUser.id;
                   if (uid) journalUserId = uid;
                 }
+                // Live Training Rooms 스타일: getUserTrainingLogs 모듈 로드 대기 (삼성 태블릿 type="module" 지연)
+                var modulePollMs = isTablet ? 6000 : 2000;
+                var moduleStart = Date.now();
+                while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - moduleStart) < modulePollMs) {
+                  await new Promise(function(r) { setTimeout(r, 200); });
+                }
+                if (typeof window.getUserTrainingLogs === 'function') {
+                  console.log('[Journal] getUserTrainingLogs 모듈 로드 확인 (경과:', Date.now() - moduleStart, 'ms)');
+                } else {
+                  console.warn('[Journal] getUserTrainingLogs 미로드 → 진입 후 인라인 Firestore v9 폴백 사용 예정');
+                }
               } catch (e) {
                 console.warn('[Journal] Auth/Firestore wait failed', e);
               }
