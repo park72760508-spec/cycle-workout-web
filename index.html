@@ -3938,6 +3938,12 @@
     </div>
     <p class="subtitle" style="margin-top: 0; text-align: center;">나의 훈련 이력을 확인하세요</p>
     
+    <!-- 삼성 태블릿: 훈련일지 로드 단계별 진행 메시지 (문제 진단용, 실패 시 어디서 멈췄는지 확인) -->
+    <div id="journalLoadStatusBox" style="display: none; margin-bottom: 12px; padding: 12px; background: #1e293b; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); max-height: 280px; overflow-y: auto;">
+      <div style="font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">훈련일지 로드 진행 (단계별) — 실패 시 아래 단계로 문제 위치 확인 · URL에 ?journalDebug=1 붙이면 완료 후에도 로그 유지</div>
+      <div id="journalLoadStatusLog" style="font-size: 12px; color: #e2e8f0; line-height: 1.6; font-family: monospace;"></div>
+    </div>
+    
     <!-- 월간 훈련 이력 미니 달력 -->
     <div class="card">
       <div class="mini-calendar-container">
@@ -3971,10 +3977,11 @@
         <div class="mini-calendar-grid" id="miniCalendarGridJournal">
           <!-- 달력 날짜들이 여기에 동적으로 생성됩니다 -->
         </div>
-        <!-- 삼성 태블릿 등: 로드 실패 시 수동 재시도 -->
+        <!-- 삼성 태블릿 등: 로드 실패 시 수동 재시도 (실패 단계·오류 메시지 표시) -->
         <div id="journalRetryArea" style="display: none; margin-top: 12px; text-align: center;">
-          <p style="color: #666; font-size: 14px; margin-bottom: 8px;">훈련 로드를 불러오지 못했습니다.</p>
-          <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){var p=document.querySelector('#journalRetryArea p');if(p)p.textContent='다시 로드 중...';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
+          <p id="journalRetryMsg" style="color: #666; font-size: 14px; margin-bottom: 4px;">훈련 로드를 불러오지 못했습니다.</p>
+          <p id="journalRetryStep" style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;"></p>
+          <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
         </div>
       </div>
       <!-- POWERED BY STRAVA (클릭 시 Strava 동기화 모달/연동 동일 기능) -->
@@ -4897,6 +4904,52 @@
       currentUserId: null
     };
 
+    /** 삼성 태블릿: 훈련일지 로드 단계별 진행 메시지 (문제 진단용) */
+    function setJournalLoadStatus(msg, isError) {
+      var box = document.getElementById('journalLoadStatusBox');
+      var log = document.getElementById('journalLoadStatusLog');
+      if (!log) return;
+      if (!box) return;
+      if (msg === null || msg === '') {
+        log.innerHTML = '';
+        return;
+      }
+      if (typeof window !== 'undefined') window.__journalLoadLastStep = msg;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('journalLoadLastStep', msg);
+          if (isError) {
+            localStorage.setItem('journalLoadLastError', msg);
+            localStorage.setItem('journalLoadLastErrorTime', String(Date.now()));
+          }
+        }
+      } catch (e) {}
+      var line = document.createElement('div');
+      line.className = 'journal-load-step';
+      line.style.color = isError ? '#f87171' : '#e2e8f0';
+      line.style.marginBottom = '2px';
+      line.textContent = '[' + new Date().toLocaleTimeString('ko-KR') + '] ' + msg;
+      log.appendChild(line);
+      log.parentElement.scrollTop = log.parentElement.scrollHeight;
+      if (typeof console !== 'undefined' && console.log) console.log('[Journal Step]', msg);
+    }
+    function clearJournalLoadStatus() {
+      var log = document.getElementById('journalLoadStatusLog');
+      if (log) log.innerHTML = '';
+    }
+    function showJournalLoadStatusBox() {
+      var box = document.getElementById('journalLoadStatusBox');
+      if (box) box.style.display = 'block';
+    }
+    function hideJournalLoadStatusBox() {
+      var box = document.getElementById('journalLoadStatusBox');
+      if (box) box.style.display = 'none';
+    }
+    window.setJournalLoadStatus = setJournalLoadStatus;
+    window.clearJournalLoadStatus = clearJournalLoadStatus;
+    window.showJournalLoadStatusBox = showJournalLoadStatusBox;
+    window.hideJournalLoadStatusBox = hideJournalLoadStatusBox;
+
     /**
      * 날짜 문자열 파싱 (훈련일지 화면용)
      */
@@ -5051,47 +5104,58 @@
     }
 
     async function fetchTrainingLogsForCalendarJournal(userId) {
+      var jStep = window.setJournalLoadStatus;
+      if (jStep) jStep('7-1. fetchTrainingLogsForCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId);
       if (typeof window !== 'undefined') window.__journalLoadFailed = false;
       
       if (!userId) {
-        console.warn('[MiniCalendarJournal] userId가 없습니다.');
+        if (jStep) jStep('7-1. 오류: userId 없음', true);
         return {};
       }
 
       try {
-        // 삼성 태블릿: type="module" 로드 지연 시 getUserTrainingLogs 미로드 → 최대 10초 폴링
         var isTabletForPoll = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
         var pollMaxMs = isTabletForPoll ? 10000 : 5000;
         if (typeof window.getUserTrainingLogs !== 'function') {
+          if (jStep) jStep('7-2. getUserTrainingLogs 모듈 대기 중... (최대 ' + (pollMaxMs/1000) + '초)', false);
           var pollStart = Date.now();
           while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - pollStart) < pollMaxMs) {
             await new Promise(function(r) { setTimeout(r, 200); });
           }
         }
+        if (typeof window.getUserTrainingLogs === 'function') {
+          if (jStep) jStep('7-2. getUserTrainingLogs 모듈 있음', false);
+        }
 
-        // 삼성 태블릿: firestoreV9가 아직 없으면 전용 대기 (훈련일지는 firestoreV9만 사용)
         if (!window.firestoreV9 && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+          if (jStep) jStep('7-3. firestoreV9 대기 중... (ensureFirestoreV9ReadyForJournal)', false);
           var waitMs = isTabletForPoll ? 12000 : 5000;
           await window.ensureFirestoreV9ReadyForJournal(waitMs);
         }
         if (!window.firestoreV9) {
+          if (jStep) jStep('7-3. firestoreV9 추가 폴링 8초...', false);
           var pollStart2 = Date.now();
           var pollMax2 = 8000;
           while (!window.firestoreV9 && (Date.now() - pollStart2) < pollMax2) {
             await new Promise(function(r) { setTimeout(r, 200); });
           }
         }
+        if (window.firestoreV9) {
+          if (jStep) jStep('7-3. firestoreV9 준비됨', false);
+        } else {
+          if (jStep) jStep('7-3. firestoreV9 없음 (타임아웃)', true);
+        }
 
-        // 모듈 미로드 시 인라인 Firestore v9 쿼리 폴백 (Live Training Rooms처럼 직접 쿼리)
         var useInlineFallback = (typeof window.getUserTrainingLogs !== 'function') && window.firestoreV9;
         if (useInlineFallback) {
-          console.log('[MiniCalendarJournal] getUserTrainingLogs 미로드 → 인라인 Firestore v9 쿼리 폴백 사용');
+          if (jStep) jStep('7-4. 인라인 Firestore v9 쿼리 폴백 시도...', false);
           try {
             var logsInline = await fetchJournalLogsInline(window.firestoreV9, userId, 200);
+            if (jStep) jStep('7-4. 인라인 폴백 쿼리 완료 (로그 ' + (logsInline && logsInline.length) + '건)', false);
             return buildLogsByDateFromLogs(logsInline);
           } catch (inlineErr) {
-            console.error('[MiniCalendarJournal] 인라인 폴백 쿼리 실패:', inlineErr);
+            if (jStep) jStep('7-4. 인라인 폴백 실패: ' + (inlineErr && inlineErr.message ? inlineErr.message : ''), true);
             if (typeof window !== 'undefined') { window.__journalLoadFailed = true; window.__journalLoadErrorMsg = '인라인 쿼리 실패'; }
             return {};
           }
@@ -5117,17 +5181,21 @@
           var m = String(err.message);
           return m.indexOf('Firestore') !== -1 && (m.indexOf('없습니다') !== -1 || m.indexOf('찾을 수 없습니다') !== -1);
         }
+        if (jStep) jStep('7-5. getUserTrainingLogs 호출 중...', false);
         console.log('[MiniCalendarJournal] getUserTrainingLogs 호출 시작...');
         try {
           logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+          if (jStep) jStep('7-5. getUserTrainingLogs 완료 (로그 ' + (logs && logs.length) + '건)', false);
         } catch (firstErr) {
           if (isFirestoreNotReadyError(firstErr) && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
-            console.warn('[MiniCalendarJournal] Firestore 미준비. ensureFirestoreV9ReadyForJournal 후 재시도...');
+            if (jStep) jStep('7-5. Firestore 미준비 → ensureFirestoreV9ReadyForJournal 후 재시도...', false);
             await window.ensureFirestoreV9ReadyForJournal(isTabletJournal ? 8000 : 4000);
             try {
               logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+              if (jStep) jStep('7-5. 재시도 후 getUserTrainingLogs 완료', false);
             } catch (e) { throw e; }
           } else if (isPermissionErrorJournal(firstErr)) {
+            if (jStep) jStep('7-5. permission-denied → 1차 재시도 (토큰 갱신, 1초 대기)', false);
             console.warn('[MiniCalendarJournal] Permission denied. 1st retry: token refresh...');
             try {
               if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
@@ -5137,8 +5205,10 @@
             await new Promise(function(r) { setTimeout(r, 1000); });
             try {
               logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+              if (jStep) jStep('7-5. 1차 재시도 후 완료', false);
             } catch (retryErr) {
               if (isTabletJournal && isPermissionErrorJournal(retryErr)) {
+                if (jStep) jStep('7-5. 1차 재시도 실패 → 태블릿 2차 재시도 (2초 대기)', false);
                 console.warn('[MiniCalendarJournal] Tablet: 2nd retry after 2s + token refresh...');
                 try {
                   if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
@@ -5148,12 +5218,18 @@
                 await new Promise(function(r) { setTimeout(r, 2000); });
                 try {
                   logs = await window.getUserTrainingLogs(userId, { limit: 200 });
-                } catch (e) { throw e; }
+                  if (jStep) jStep('7-5. 2차 재시도 후 완료', false);
+                } catch (e) {
+                  if (jStep) jStep('7-5. 2차 재시도 실패: ' + (e && e.message ? e.message : ''), true);
+                  throw e;
+                }
               } else {
+                if (jStep) jStep('7-5. 1차 재시도 실패: ' + (retryErr && retryErr.message ? retryErr.message : ''), true);
                 throw retryErr;
               }
             }
           } else {
+            if (jStep) jStep('7-5. getUserTrainingLogs 오류: ' + (firstErr && firstErr.message ? firstErr.message : ''), true);
             throw firstErr;
           }
         }
@@ -5190,15 +5266,16 @@
         
         return logsByDate;
       } catch (error) {
+        if (jStep) jStep('7-X. fetchTrainingLogsForCalendarJournal 예외: ' + (error && error.message ? error.message : ''), true);
         console.error('[MiniCalendarJournal] ❌ 훈련 로그 가져오기 실패:', error);
-        // Live Training Rooms 스타일: 모듈 실패 시 인라인 Firestore v9 쿼리 1회 폴백
         if (window.firestoreV9 && typeof fetchJournalLogsInline === 'function') {
           try {
-            console.log('[MiniCalendarJournal] 모듈 실패 → 인라인 Firestore v9 쿼리 폴백 시도');
+            if (jStep) jStep('7-X. 인라인 Firestore v9 폴백 1회 시도...', false);
             var fallbackLogs = await fetchJournalLogsInline(window.firestoreV9, userId, 200);
+            if (jStep) jStep('7-X. 인라인 폴백 성공', false);
             return buildLogsByDateFromLogs(fallbackLogs);
           } catch (fallbackErr) {
-            console.warn('[MiniCalendarJournal] 인라인 폴백도 실패:', fallbackErr);
+            if (jStep) jStep('7-X. 인라인 폴백 실패: ' + (fallbackErr && fallbackErr.message ? fallbackErr.message : ''), true);
           }
         }
         console.error('[MiniCalendarJournal] 오류 상세:', {
@@ -5550,6 +5627,9 @@
      * 훈련일지 화면 진입 시 달력 초기화
      */
     async function initMiniCalendarJournal(userId) {
+      var jStep = window.setJournalLoadStatus;
+      var jHide = window.hideJournalLoadStatusBox;
+      if (jStep) jStep('6. initMiniCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
       // Firestore v9 권한은 authV9.currentUser 기준 → authV9 uid 우선 사용 (삼성 태블릿 대응)
       var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
@@ -5557,47 +5637,51 @@
         var uid = authV9User.uid != null ? authV9User.uid : authV9User.id;
         if (uid) userId = uid;
       }
+      if (jStep) jStep('6. userId 적용: ' + (userId ? (userId + '').slice(0, 12) + '...' : '없음'), false);
       console.log('[MiniCalendarJournal] userId:', userId, '(authV9 우선 적용)');
-      console.log('[MiniCalendarJournal] userId 타입:', typeof userId);
       
       if (!userId) {
+        if (jStep) jStep('6. 오류: userId 없음', true);
         console.warn('[MiniCalendarJournal] ⚠️ userId가 없습니다.');
-        console.warn('[MiniCalendarJournal] window.currentUser:', window.currentUser);
-        console.warn('[MiniCalendarJournal] localStorage currentUser:', localStorage.getItem('currentUser'));
         return;
       }
       
-      // 현재 사용자 ID 저장
       miniCalendarStateJournal.currentUserId = userId;
       
-      console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
-      
-      // 삼성 태블릿: 첫 Firestore 쿼리 전 Pre-flight 토큰 갱신 (Live Training Rooms 동일)
       var isTabletInit = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
       if (isTabletInit) {
+        if (jStep) jStep('6. Pre-flight 토큰 갱신 중...', false);
         var journalUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
         if (journalUser && typeof journalUser.getIdToken === 'function') {
           try {
             await journalUser.getIdToken(true);
-            console.log('[MiniCalendarJournal] Tablet: Pre-flight token refresh done.');
+            if (jStep) jStep('6. 토큰 갱신 완료. 800ms 대기...', false);
           } catch (e) {
-            console.warn('[MiniCalendarJournal] Pre-flight token refresh failed', e);
+            if (jStep) jStep('6. 토큰 갱신 실패: ' + (e && e.message ? e.message : ''), true);
           }
         }
         await new Promise(function(r) { setTimeout(r, 800); });
       }
       
-      // 훈련 로그 가져오기 (최근 200건 + 현재 표시 월 로그 병합 → 오늘 훈련이 초기 로딩 시에도 표시되도록)
-      console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 호출 전...');
+      if (jStep) jStep('7. fetchTrainingLogsForCalendarJournal 호출...', false);
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
-      if (isTabletInit && Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && !window.__journalLoadFailed) {
-        console.warn('[MiniCalendarJournal] Tablet: 1차 로드 빈 결과 → 2초 후 1회 재시도');
+      if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
+        if (jStep) jStep('7. 훈련 로드 완료 (날짜 ' + Object.keys(miniCalendarStateJournal.trainingLogs).length + '개)', false);
+      } else if (isTabletInit && !window.__journalLoadFailed) {
+        if (jStep) jStep('7. 1차 로드 빈 결과 → 2초 후 재시도', false);
         await new Promise(function(r) { setTimeout(r, 2000); });
         var cu = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
         if (cu && typeof cu.getIdToken === 'function') {
           try { await cu.getIdToken(true); } catch (e) {}
         }
         miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+        if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
+          if (jStep) jStep('7. 재시도 후 훈련 로드 완료', false);
+        } else {
+          if (jStep) jStep('7. 재시도 후에도 빈 결과', true);
+        }
+      } else if (window.__journalLoadFailed) {
+        if (jStep) jStep('7. 훈련 로드 실패 (상세: 재시도 영역 참고)', true);
       }
       
       // 현재 표시 월(오늘 포함) 로그를 별도로 조회해 병합 (로딩 시 오늘 훈련이 달력에 바로 표시되도록)
@@ -5664,10 +5748,24 @@
       if (journalRetryEl) journalRetryEl.style.display = (window.__journalLoadFailed === true) ? 'block' : 'none';
       var journalRetryBtnEl = document.getElementById('journalRetryBtn');
       if (journalRetryBtnEl) journalRetryBtnEl.disabled = false;
-      var journalRetryP = document.querySelector('#journalRetryArea p');
-      if (journalRetryP) {
+      var journalRetryMsgEl = document.getElementById('journalRetryMsg');
+      if (journalRetryMsgEl) {
         var errMsg = (window.__journalLoadErrorMsg && String(window.__journalLoadErrorMsg).trim()) ? window.__journalLoadErrorMsg : '훈련 로드를 불러오지 못했습니다.';
-        journalRetryP.textContent = errMsg;
+        journalRetryMsgEl.textContent = errMsg;
+      }
+      var journalRetryStepEl = document.getElementById('journalRetryStep');
+      if (journalRetryStepEl) {
+        var lastStep = (window.__journalLoadLastStep || (typeof localStorage !== 'undefined' && localStorage.getItem('journalLoadLastStep')) || '').trim();
+        journalRetryStepEl.textContent = lastStep ? '실패 단계: ' + lastStep : '';
+      }
+      
+      // 성공 시 2초 후 단계 로그 박스 숨김, 실패 시 유지 (문제 진단용)
+      if (!window.__journalLoadFailed && jStep) jStep('8. 달력 렌더링 완료', false);
+      if (window.__journalLoadFailed) {
+        if (jStep) jStep('8. 실패 상태 유지 — 재시도 버튼 또는 위 단계 확인', true);
+      } else if (typeof window.hideJournalLoadStatusBox === 'function') {
+        var keepDebug = typeof location !== 'undefined' && location.search && location.search.indexOf('journalDebug=1') !== -1;
+        if (!keepDebug) setTimeout(function() { window.hideJournalLoadStatusBox(); }, 2000);
       }
       
       // Monthly Training Analysis Dashboard 갱신 (현재 월 + 해당 월 로그 전달)
