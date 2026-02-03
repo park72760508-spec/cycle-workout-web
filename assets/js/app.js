@@ -6070,10 +6070,15 @@ function initializeCurrentScreen(screenId) {
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
-      // 삼성 태블릿 등: 단계별 진행 확인을 위해 로드 시작 시 진행 박스 즉시 표시
+      // 삼성 태블릿 등: 단계별 진행 확인을 위해 로드 시작 시 (0) 즉시 표시
       try {
         if (typeof window.showJournalLoadStatusBox === 'function') window.showJournalLoadStatusBox();
-        if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('훈련일지 준비 중...', false);
+        if (typeof window.setJournalLoadStatus === 'function') {
+          window.setJournalLoadStatus('0. 훈련일지 준비 중...', false);
+        } else {
+          var inline = document.getElementById('journalLoadStepInline');
+          if (inline) inline.textContent = '(0) 준비 중';
+        }
       } catch (e) {}
 
       const checkAndInit = (retryCount = 0) => {
@@ -6089,11 +6094,11 @@ function initializeCurrentScreen(screenId) {
               var jClear = window.clearJournalLoadStatus;
               if (jShow) jShow();
               if (jClear) jClear();
+              if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
               if (typeof window !== 'undefined') {
                 window.__journalFetchCallCount = 0;
                 window.__journalInitInProgress = false;
               }
-              if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
               const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
               var journalUserId = userId;
               try {
@@ -6152,6 +6157,17 @@ function initializeCurrentScreen(screenId) {
             console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
             console.warn('currentUser:', currentUser);
             console.warn('localStorage currentUser:', localStorage.getItem('currentUser'));
+            if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('0. 오류: 사용자 ID 없음', true);
+            try {
+              window.__journalLoadFailed = true;
+              window.__journalLoadErrorMsg = '로그인 상태를 확인해 주세요. 다시 로그인 후 훈련일지를 열어 주세요.';
+              var area = document.getElementById('journalRetryArea');
+              var msgEl = document.getElementById('journalRetryMsg');
+              var stepEl = document.getElementById('journalRetryStep');
+              if (area) area.style.display = 'block';
+              if (msgEl) msgEl.textContent = window.__journalLoadErrorMsg;
+              if (stepEl) stepEl.textContent = '실패 단계: 0. 오류: 사용자 ID 없음';
+            } catch (e) {}
           }
         } else if (retryCount < 20) {
           console.log(`initMiniCalendarJournal 대기 중... (${retryCount + 1}/20)`);
@@ -6160,6 +6176,15 @@ function initializeCurrentScreen(screenId) {
           console.error('❌ initMiniCalendarJournal function not available after 2 seconds');
           console.error('window.initMiniCalendarJournal:', window.initMiniCalendarJournal);
           console.error('사용 가능한 window 함수들:', Object.keys(window).filter(k => k.includes('Calendar')));
+          if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('0. 오류: 초기화 함수 미로드', true);
+          try {
+            window.__journalLoadFailed = true;
+            window.__journalLoadErrorMsg = '훈련일지 초기화를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.';
+            var area = document.getElementById('journalRetryArea');
+            var msgEl = document.getElementById('journalRetryMsg');
+            if (area) area.style.display = 'block';
+            if (msgEl) msgEl.textContent = window.__journalLoadErrorMsg;
+          } catch (e) {}
         }
       };
       
