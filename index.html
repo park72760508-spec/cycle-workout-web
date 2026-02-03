@@ -5010,7 +5010,6 @@
       }
 
       try {
-        // getUserTrainingLogs 함수 사용 (최대 100개 가져오기)
         if (typeof window.getUserTrainingLogs !== 'function') {
           console.error('[MiniCalendarJournal] window.getUserTrainingLogs 함수를 찾을 수 없습니다.');
           console.error('[MiniCalendarJournal] window 객체 확인:', {
@@ -5020,9 +5019,51 @@
           return {};
         }
 
+        function isPermissionErrorJournal(err) {
+          if (!err) return false;
+          var code = err.code || '';
+          var msg = String(err.message || '').toLowerCase();
+          return code === 'permission-denied' || msg.indexOf('permission') !== -1 || msg.indexOf('권한') !== -1;
+        }
+
+        var isTabletJournal = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+        var currentUserJournal = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        var logs = [];
         console.log('[MiniCalendarJournal] getUserTrainingLogs 호출 시작...');
-        const logs = await window.getUserTrainingLogs(userId, { limit: 200 });
-        
+        try {
+          logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+        } catch (firstErr) {
+          if (isPermissionErrorJournal(firstErr)) {
+            console.warn('[MiniCalendarJournal] Permission denied. 1st retry: token refresh...');
+            try {
+              if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
+                await currentUserJournal.getIdToken(true);
+              }
+            } catch (tokenErr) { console.warn('[MiniCalendarJournal] Token refresh failed', tokenErr); }
+            await new Promise(function(r) { setTimeout(r, 1000); });
+            try {
+              logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+            } catch (retryErr) {
+              if (isTabletJournal && isPermissionErrorJournal(retryErr)) {
+                console.warn('[MiniCalendarJournal] Tablet: 2nd retry after 2s + token refresh...');
+                try {
+                  if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
+                    await currentUserJournal.getIdToken(true);
+                  }
+                } catch (tokenErr2) { console.warn('[MiniCalendarJournal] 2nd token refresh failed', tokenErr2); }
+                await new Promise(function(r) { setTimeout(r, 2000); });
+                try {
+                  logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+                } catch (e) { throw e; }
+              } else {
+                throw retryErr;
+              }
+            }
+          } else {
+            throw firstErr;
+          }
+        }
+
         console.log(`[MiniCalendarJournal] ✅ ${logs.length}개의 훈련 로그를 가져왔습니다.`);
         
         if (logs.length === 0) {
@@ -5452,6 +5493,19 @@
       miniCalendarStateJournal.currentUserId = userId;
       
       console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
+      
+      // 삼성 태블릿: 첫 Firestore 쿼리 전 Pre-flight 토큰 갱신 (Live Training Rooms 동일)
+      if (typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth()) {
+        var journalUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        if (journalUser && typeof journalUser.getIdToken === 'function') {
+          try {
+            await journalUser.getIdToken(true);
+            console.log('[MiniCalendarJournal] Tablet: Pre-flight token refresh done.');
+          } catch (e) {
+            console.warn('[MiniCalendarJournal] Pre-flight token refresh failed', e);
+          }
+        }
+      }
       
       // 훈련 로그 가져오기 (최근 200건 + 현재 표시 월 로그 병합 → 오늘 훈련이 초기 로딩 시에도 표시되도록)
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 호출 전...');
