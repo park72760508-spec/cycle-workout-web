@@ -3981,7 +3981,7 @@
           <p id="journalRetryMsg" style="color: #991b1b; font-size: 14px; margin-bottom: 4px;">훈련 로드를 불러오지 못했습니다.</p>
           <p id="journalRetryStep" style="color: #b91c1c; font-size: 13px; font-weight: 600; margin-bottom: 8px;"></p>
           <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
-            <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
+            <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){window.__journalInitInProgress=false;window.__journalFetchCallCount=0;window.__journalEmptyRetryDone=false;var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
             <button type="button" id="journalReloginBtn" onclick="try{ sessionStorage.clear(); if(typeof localStorage!=='undefined'){ localStorage.removeItem('firebase:authUser:authV9'); localStorage.removeItem('firebase:host:authV9'); } if(typeof showScreen==='function') showScreen('authScreen'); }catch(e){ alert('재로그인 화면으로 이동 실패'); }" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">다시 로그인 후 시도</button>
           </div>
         </div>
@@ -5647,6 +5647,12 @@
         return;
       }
       window.__journalInitInProgress = true;
+      var initTimeout = setTimeout(function() {
+        if (window.__journalInitInProgress) {
+          window.__journalInitInProgress = false;
+          console.warn('[Journal] init 진행 플래그 60초 타임아웃 해제 (표시 상태에서 로드 안 될 때 재시도 가능)');
+        }
+      }, 60000);
       if (jStep) jStep('6. initMiniCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
       // Firestore v9 권한은 authV9.currentUser 기준 → authV9 uid 우선 사용 (삼성 태블릿 대응)
@@ -5765,9 +5771,14 @@
       // 달력 렌더링
       await renderMiniCalendarJournal();
       
-      // 로드 실패 시 재시도 영역 표시 (삼성 태블릿 등)
+      // 로드 실패 시 재시도 영역 표시 (삼성 태블릿 등) — 재시도 가능하도록 플래그 해제
       var journalRetryEl = document.getElementById('journalRetryArea');
       if (journalRetryEl) journalRetryEl.style.display = (window.__journalLoadFailed === true) ? 'block' : 'none';
+      if (window.__journalLoadFailed === true) {
+        window.__journalInitInProgress = false;
+        window.__journalFetchCallCount = 0;
+        window.__journalEmptyRetryDone = false;
+      }
       var journalRetryBtnEl = document.getElementById('journalRetryBtn');
       if (journalRetryBtnEl) journalRetryBtnEl.disabled = false;
       var journalRetryMsgEl = document.getElementById('journalRetryMsg');
@@ -5801,6 +5812,7 @@
       
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
       } finally {
+        if (typeof initTimeout !== 'undefined') clearTimeout(initTimeout);
         window.__journalInitInProgress = false;
       }
     }
