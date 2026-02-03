@@ -5003,9 +5003,37 @@
     }
 
     /**
-     * Firebase에서 훈련 로그 가져오기 (훈련일지 화면용)
-     * 프로필 선택 화면의 fetchTrainingLogsForCalendar와 동일한 로직 적용
+     * Live Training Rooms 스타일 폴백: 모듈(getUserTrainingLogs) 없이 firestoreV9로 직접 쿼리 (삼성 태블릿 등)
      */
+    async function fetchJournalLogsInline(db, uid, limitVal) {
+      var mod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var ref = mod.collection(db, 'users', uid, 'logs');
+      var q = mod.query(ref, mod.orderBy('date', 'desc'), mod.limit(limitVal || 200));
+      var snap = await mod.getDocs(q);
+      return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+    }
+
+    /** 로그 배열 → 날짜별 그룹 객체 (인라인 폴백·메인 경로 공통) */
+    function buildLogsByDateFromLogs(logs) {
+      var MIN_DURATION_SEC_JOURNAL = 600;
+      var logsByDate = {};
+      (logs || []).forEach(function(log) {
+        var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+        if (sec < MIN_DURATION_SEC_JOURNAL) return;
+        var dateKey = getDateKeyJournal(log.date);
+        if (dateKey) {
+          if (!logsByDate[dateKey]) logsByDate[dateKey] = [];
+          logsByDate[dateKey].push(log);
+        }
+      });
+      Object.keys(logsByDate).forEach(function(dateKey) {
+        var arr = logsByDate[dateKey];
+        var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
+        if (hasStelvio) logsByDate[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+      });
+      return logsByDate;
+    }
+
     async function fetchTrainingLogsForCalendarJournal(userId) {
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId);
       if (typeof window !== 'undefined') window.__journalLoadFailed = false;
@@ -5016,34 +5044,46 @@
       }
 
       try {
-        // 삼성 태블릿: type="module" 로드 지연 시 getUserTrainingLogs 미로드 → 최대 5초 폴링
+        // 삼성 태블릿: type="module" 로드 지연 시 getUserTrainingLogs 미로드 → 최대 10초 폴링
+        var isTabletForPoll = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+        var pollMaxMs = isTabletForPoll ? 10000 : 5000;
         if (typeof window.getUserTrainingLogs !== 'function') {
           var pollStart = Date.now();
-          var pollMax = 5000;
-          while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - pollStart) < pollMax) {
+          while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - pollStart) < pollMaxMs) {
             await new Promise(function(r) { setTimeout(r, 200); });
           }
-        }
-        if (typeof window.getUserTrainingLogs !== 'function') {
-          console.error('[MiniCalendarJournal] window.getUserTrainingLogs 함수를 찾을 수 없습니다.');
-          if (typeof window !== 'undefined') window.__journalLoadFailed = true;
-          return {};
         }
 
         // 삼성 태블릿: firestoreV9가 아직 없으면 전용 대기 (훈련일지는 firestoreV9만 사용)
         if (!window.firestoreV9 && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
-          var waitMs = (typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth()) ? 10000 : 5000;
+          var waitMs = isTabletForPoll ? 12000 : 5000;
           await window.ensureFirestoreV9ReadyForJournal(waitMs);
         }
         if (!window.firestoreV9) {
-          var pollStart = Date.now();
-          var pollMax = 6000;
-          while (!window.firestoreV9 && (Date.now() - pollStart) < pollMax) {
+          var pollStart2 = Date.now();
+          var pollMax2 = 8000;
+          while (!window.firestoreV9 && (Date.now() - pollStart2) < pollMax2) {
             await new Promise(function(r) { setTimeout(r, 200); });
           }
-          if (!window.firestoreV9) {
-            console.warn('[MiniCalendarJournal] firestoreV9 대기 타임아웃. 로드 실패 가능.');
+        }
+
+        // 모듈 미로드 시 인라인 Firestore v9 쿼리 폴백 (Live Training Rooms처럼 직접 쿼리)
+        var useInlineFallback = (typeof window.getUserTrainingLogs !== 'function') && window.firestoreV9;
+        if (useInlineFallback) {
+          console.log('[MiniCalendarJournal] getUserTrainingLogs 미로드 → 인라인 Firestore v9 쿼리 폴백 사용');
+          try {
+            var logsInline = await fetchJournalLogsInline(window.firestoreV9, userId, 200);
+            return buildLogsByDateFromLogs(logsInline);
+          } catch (inlineErr) {
+            console.error('[MiniCalendarJournal] 인라인 폴백 쿼리 실패:', inlineErr);
+            if (typeof window !== 'undefined') window.__journalLoadFailed = true;
+            return {};
           }
+        }
+        if (typeof window.getUserTrainingLogs !== 'function') {
+          console.error('[MiniCalendarJournal] window.getUserTrainingLogs 없고 firestoreV9도 없음.');
+          if (typeof window !== 'undefined') window.__journalLoadFailed = true;
+          return {};
         }
 
         function isPermissionErrorJournal(err) {
@@ -5109,48 +5149,12 @@
           return {};
         }
         
-        console.log('[MiniCalendarJournal] 로그 샘플:', logs.slice(0, 3).map(log => ({
-          id: log.id,
-          date: log.date,
-          dateType: typeof log.date,
-          hasToDate: log.date && typeof log.date.toDate === 'function',
-          title: log.title || '제목 없음'
-        })));
+        console.log('[MiniCalendarJournal] 로그 샘플:', logs.slice(0, 3).map(function(log) {
+          return { id: log.id, date: log.date, dateType: typeof log.date, hasToDate: log.date && typeof log.date.toDate === 'function', title: log.title || '제목 없음' };
+        }));
         
-        // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
-        // 훈련 시간 10분 미만은 달력 표시에서 제외
-        const MIN_DURATION_SEC_JOURNAL = 600;
-        const logsByDate = {};
-        logs.forEach(log => {
-          const sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
-          if (sec < MIN_DURATION_SEC_JOURNAL) return;
-          const dateKey = getDateKeyJournal(log.date);
-          if (dateKey) {
-            if (!logsByDate[dateKey]) {
-              logsByDate[dateKey] = [];
-            }
-            logsByDate[dateKey].push(log);
-            console.log(`[MiniCalendarJournal] 로그 날짜 매핑: ${dateKey} - ${log.title || log.id || '제목 없음'}`);
-          } else {
-            console.warn('[MiniCalendarJournal] 날짜 키를 생성할 수 없음:', {
-              date: log.date,
-              dateType: typeof log.date,
-              hasToDate: log.date && typeof log.date.toDate === 'function',
-              logId: log.id,
-              logSample: JSON.stringify(log).substring(0, 200)
-            });
-          }
-        });
-        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
-        Object.keys(logsByDate).forEach(dateKey => {
-          const arr = logsByDate[dateKey];
-          const hasStelvio = arr.some(log => log.source !== 'strava');
-          if (hasStelvio) {
-            logsByDate[dateKey] = arr.filter(log => log.source !== 'strava');
-          }
-        });
+        var logsByDate = buildLogsByDateFromLogs(logs);
         
-        // 디버깅: 날짜 키 생성 결과 확인
         console.log('[MiniCalendarJournal] 날짜별 그룹화 결과:', {
           totalDates: Object.keys(logsByDate).length,
           dateKeys: Object.keys(logsByDate).sort().slice(0, 10),
@@ -5171,6 +5175,16 @@
         return logsByDate;
       } catch (error) {
         console.error('[MiniCalendarJournal] ❌ 훈련 로그 가져오기 실패:', error);
+        // Live Training Rooms 스타일: 모듈 실패 시 인라인 Firestore v9 쿼리 1회 폴백
+        if (window.firestoreV9 && typeof fetchJournalLogsInline === 'function') {
+          try {
+            console.log('[MiniCalendarJournal] 모듈 실패 → 인라인 Firestore v9 쿼리 폴백 시도');
+            var fallbackLogs = await fetchJournalLogsInline(window.firestoreV9, userId, 200);
+            return buildLogsByDateFromLogs(fallbackLogs);
+          } catch (fallbackErr) {
+            console.warn('[MiniCalendarJournal] 인라인 폴백도 실패:', fallbackErr);
+          }
+        }
         console.error('[MiniCalendarJournal] 오류 상세:', {
           message: error.message,
           stack: error.stack,
