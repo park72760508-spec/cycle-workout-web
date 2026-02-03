@@ -5639,6 +5639,11 @@
     async function initMiniCalendarJournal(userId) {
       var jStep = window.setJournalLoadStatus;
       var jHide = window.hideJournalLoadStatusBox;
+      if (window.__journalInitInProgress) {
+        if (jStep) jStep('6. 이미 초기화 진행 중 (중복 무시)', true);
+        return;
+      }
+      window.__journalInitInProgress = true;
       if (jStep) jStep('6. initMiniCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
       // Firestore v9 권한은 authV9.currentUser 기준 → authV9 uid 우선 사용 (삼성 태블릿 대응)
@@ -5653,9 +5658,11 @@
       if (!userId) {
         if (jStep) jStep('6. 오류: userId 없음', true);
         console.warn('[MiniCalendarJournal] ⚠️ userId가 없습니다.');
+        window.__journalInitInProgress = false;
         return;
       }
-      
+
+      try {
       miniCalendarStateJournal.currentUserId = userId;
       
       var isTabletInit = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
@@ -5790,6 +5797,9 @@
       }
       
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
+      } finally {
+        window.__journalInitInProgress = false;
+      }
     }
 
     function updateMonthlyAnalysisDashboardFromJournal() {
@@ -10144,40 +10154,7 @@ Output Format (JSON Only):
           }, 300);
         }
         
-        // Training Journal Screen인 경우 미니 달력 초기화
-        if (screenId === 'trainingJournalScreen') {
-          console.log('[showScreen] 훈련일지 화면 전환 - 미니 달력 초기화 시작');
-          setTimeout(function() {
-            var currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-            var userId = currentUser?.id;
-            
-            console.log('[showScreen] 훈련일지 초기화 - userId:', userId, 'hasInitFunction:', typeof window.initMiniCalendarJournal === 'function');
-            
-            if (userId && typeof window.initMiniCalendarJournal === 'function') {
-              console.log('[showScreen] initMiniCalendarJournal 호출');
-              window.initMiniCalendarJournal(userId);
-            } else if (!userId) {
-              console.warn('[showScreen] 훈련일지: 사용자 ID를 찾을 수 없습니다.');
-            } else {
-              console.warn('[showScreen] initMiniCalendarJournal 함수를 찾을 수 없습니다.');
-              // 함수가 로드될 때까지 재시도
-              var retryCount = 0;
-              var maxRetries = 20;
-              var checkAndInit = function() {
-                if (typeof window.initMiniCalendarJournal === 'function') {
-                  console.log('[showScreen] initMiniCalendarJournal 재시도 성공');
-                  window.initMiniCalendarJournal(userId);
-                } else if (retryCount < maxRetries) {
-                  retryCount++;
-                  setTimeout(checkAndInit, 100);
-                } else {
-                  console.error('[showScreen] initMiniCalendarJournal 함수를 찾을 수 없습니다 (최대 재시도 횟수 초과)');
-                }
-              };
-              setTimeout(checkAndInit, 100);
-            }
-          }, 200);
-        }
+        // Training Journal: app.js initializeCurrentScreen에서만 init (중복 호출 방지로 여기서는 호출하지 않음)
         
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
