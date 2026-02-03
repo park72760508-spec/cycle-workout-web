@@ -5859,7 +5859,9 @@
           return function() { if (chartScatterInstance.current) { chartScatterInstance.current.destroy(); chartScatterInstance.current = null; } };
         }, [scatterData]);
 
-        const monthLabel = year + '년 ' + monthNum + '월';
+        const isCurrentMonth = (year === new Date().getFullYear() && monthNum === new Date().getMonth() + 1);
+        const monthLabel = isCurrentMonth ? '오늘 기준 1개월간' : (year + '년 ' + monthNum + '월');
+        const titleText = '월간 훈련 분석 : ' + monthLabel;
         const isEmpty = logs.length === 0;
 
         return (
@@ -5874,7 +5876,7 @@
             <div className="px-4 pt-4 pb-2 border-b border-gray-100">
               <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
                 <span aria-hidden="true">📊</span>
-                월간 훈련 분석 · {monthLabel}
+                {titleText}
               </h3>
             </div>
             <div className="p-4">
@@ -6018,16 +6020,31 @@
 
       /**
        * Build monthlyLogs (RideLog[]) for the given year/month from trainingLogs by date.
+       * - 오늘 날짜 달력(현재 연·월): 오늘 기준 -30일 ~ 오늘까지로 분석 기간 (월간 분석 = 오늘 기준 1개월간).
+       * - 이전 달: 해당 월 1일 ~ 말일 기존 로직 유지.
        * trainingLogs: { "2026-01-13": [ log, ... ], ... }
        * RideLog: { date, distance, duration, IF, TSS, kJ, avgCadence, avgHeartRate, avgPower, NP }
        */
       function buildMonthlyLogsForDashboard(year, month, trainingLogsByDate) {
         if (!trainingLogsByDate || typeof trainingLogsByDate !== 'object') return [];
         const pad = function(n) { return String(n).padStart(2, '0'); };
-        const prefix = year + '-' + pad(month) + '-';
+        const now = new Date();
+        const isCurrentMonth = (year === now.getFullYear() && month === now.getMonth() + 1);
+        var startStr, endStr;
+        if (isCurrentMonth) {
+          var endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          var startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - 30);
+          startStr = startDate.getFullYear() + '-' + pad(startDate.getMonth() + 1) + '-' + pad(startDate.getDate());
+          endStr = endDate.getFullYear() + '-' + pad(endDate.getMonth() + 1) + '-' + pad(endDate.getDate());
+        } else {
+          startStr = year + '-' + pad(month) + '-01';
+          var lastDay = new Date(year, month, 0).getDate();
+          endStr = year + '-' + pad(month) + '-' + pad(lastDay);
+        }
         const monthlyLogs = [];
         Object.keys(trainingLogsByDate).forEach(function(dateKey) {
-          if (dateKey.indexOf(prefix) !== 0) return;
+          if (dateKey < startStr || dateKey > endStr) return;
           const arr = trainingLogsByDate[dateKey];
           if (!Array.isArray(arr)) return;
           arr.forEach(function(log) {
