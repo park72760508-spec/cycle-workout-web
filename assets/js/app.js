@@ -6089,6 +6089,7 @@ function initializeCurrentScreen(screenId) {
               var jClear = window.clearJournalLoadStatus;
               if (jShow) jShow();
               if (jClear) jClear();
+              if (typeof window !== 'undefined') window.__journalFetchCallCount = 0;
               if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
               const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
               var journalUserId = userId;
