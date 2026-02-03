@@ -54,7 +54,7 @@
       reauthenticateWithCredential,
       EmailAuthProvider
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
-    import { getFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+    import { getFirestore, initializeFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     
     const firebaseConfig = {
       apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -65,12 +65,28 @@
       appId: "1:752285835508:web:0662a24874209ebb483ea1"
     };
     
+    function isSamsungOrTabletForFirestore() {
+      if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
+      const ua = String(navigator.userAgent).toLowerCase();
+      const plat = String(navigator.platform || '').toLowerCase();
+      if (/samsung|sm-t\d|sm-p\d|galaxy.*tab/i.test(ua)) return true;
+      if (plat.includes('linux arm') || plat.includes('android')) return true;
+      const w = typeof window !== 'undefined' && window.innerWidth;
+      if (w && w <= 2560 && (navigator.maxTouchPoints || 0) > 0) return true;
+      return false;
+    }
+    
     let authV9;
     let firestoreV9;
     try {
       const appV9 = initializeApp(firebaseConfig, 'authV9');
       authV9 = getAuth(appV9);
-      firestoreV9 = getFirestore(appV9);
+      if (isSamsungOrTabletForFirestore()) {
+        firestoreV9 = initializeFirestore(appV9, { experimentalForceLongPolling: true });
+        console.log('✅ Firebase v9 Firestore 초기화 (Long Polling 적용, 삼성/태블릿)');
+      } else {
+        firestoreV9 = getFirestore(appV9);
+      }
       window.authV9 = authV9;
       window.firestoreV9 = firestoreV9;
       console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증·Firestore)');
@@ -2742,6 +2758,9 @@
       <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="showRepeatModal()"><img src="assets/img/reload.png" alt="반복" class="btn-icon-image" style="width: 18px; height: 18px; margin-right: 6px; vertical-align: middle;" /> 반복</button>
     </div>
   </div>
+  <div class="builder-actions" style="margin-top: 12px;">
+    <button type="button" class="btn btn-secondary btn-default-style btn-with-icon" id="btnCancelBuilder" aria-label="취소" title="취소"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
+  </div>
 </div>
 
 <!-- 세그먼트 편집 모달 -->
@@ -3920,7 +3939,9 @@
       <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련일지</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
-    <p class="subtitle" style="margin-top: 0; text-align: center;">나의 훈련 이력을 확인하세요</p>
+    <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+      <span>나의 훈련 이력을 확인하세요</span>
+    </p>
     
     <!-- 월간 훈련 이력 미니 달력 -->
     <div class="card">
@@ -3954,6 +3975,16 @@
         <!-- 달력 그리드 -->
         <div class="mini-calendar-grid" id="miniCalendarGridJournal">
           <!-- 달력 날짜들이 여기에 동적으로 생성됩니다 -->
+        </div>
+        <!-- 삼성 태블릿 등: 로드 실패 시 수동 재시도 (실패 단계·오류 메시지 표시) -->
+        <div id="journalRetryArea" style="display: none; margin-top: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; text-align: center;">
+          <p style="font-size: 11px; color: #b91c1c; margin-bottom: 6px; font-weight: 600;">▼ 실패 단계는 아래 "실패 단계:" 줄에서 확인하세요</p>
+          <p id="journalRetryMsg" style="color: #991b1b; font-size: 14px; margin-bottom: 4px;">훈련 로드를 불러오지 못했습니다.</p>
+          <p id="journalRetryStep" style="color: #b91c1c; font-size: 13px; font-weight: 600; margin-bottom: 8px;"></p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+            <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){window.__journalInitInProgress=false;window.__journalFetchCallCount=0;window.__journalEmptyRetryDone=false;var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
+            <button type="button" id="journalReloginBtn" onclick="try{ sessionStorage.clear(); if(typeof localStorage!=='undefined'){ localStorage.removeItem('firebase:authUser:authV9'); localStorage.removeItem('firebase:host:authV9'); } if(typeof showScreen==='function') showScreen('authScreen'); }catch(e){ alert('재로그인 화면으로 이동 실패'); }" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">다시 로그인 후 시도</button>
+          </div>
         </div>
       </div>
       <!-- POWERED BY STRAVA (클릭 시 Strava 동기화 모달/연동 동일 기능) -->
@@ -4876,6 +4907,31 @@
       currentUserId: null
     };
 
+    /** 훈련일지 로드 단계 — 콘솔 로그만 (화면 표시 없음) */
+    function setJournalLoadStatus(msg, isError) {
+      if (msg === null || msg === '') return;
+      if (typeof window !== 'undefined') window.__journalLoadLastStep = msg;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('journalLoadLastStep', msg);
+          if (isError) {
+            localStorage.setItem('journalLoadLastError', msg);
+            localStorage.setItem('journalLoadLastErrorTime', String(Date.now()));
+          }
+        }
+      } catch (e) {}
+      if (typeof console !== 'undefined' && console.log) console.log('[Journal Step]', msg);
+    }
+    function clearJournalLoadStatus() {
+      if (typeof window !== 'undefined') window.__journalStepList = [];
+    }
+    function showJournalLoadStatusBox() {}
+    function hideJournalLoadStatusBox() {}
+    window.setJournalLoadStatus = setJournalLoadStatus;
+    window.clearJournalLoadStatus = clearJournalLoadStatus;
+    window.showJournalLoadStatusBox = showJournalLoadStatusBox;
+    window.hideJournalLoadStatusBox = hideJournalLoadStatusBox;
+
     /**
      * 날짜 문자열 파싱 (훈련일지 화면용)
      */
@@ -4998,31 +5054,191 @@
     }
 
     /**
-     * Firebase에서 훈련 로그 가져오기 (훈련일지 화면용)
-     * 프로필 선택 화면의 fetchTrainingLogsForCalendar와 동일한 로직 적용
+     * Live Training Rooms 스타일 폴백: 모듈(getUserTrainingLogs) 없이 firestoreV9로 직접 쿼리 (삼성 태블릿 등)
      */
+    async function fetchJournalLogsInline(db, uid, limitVal) {
+      var mod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var ref = mod.collection(db, 'users', uid, 'logs');
+      var q = mod.query(ref, mod.orderBy('date', 'desc'), mod.limit(limitVal || 200));
+      var snap = await mod.getDocs(q);
+      return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+    }
+
+    /** 로그 배열 → 날짜별 그룹 객체 (인라인 폴백·메인 경로 공통) */
+    function buildLogsByDateFromLogs(logs) {
+      var MIN_DURATION_SEC_JOURNAL = 600;
+      var logsByDate = {};
+      (logs || []).forEach(function(log) {
+        var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+        if (sec < MIN_DURATION_SEC_JOURNAL) return;
+        var dateKey = getDateKeyJournal(log.date);
+        if (dateKey) {
+          if (!logsByDate[dateKey]) logsByDate[dateKey] = [];
+          logsByDate[dateKey].push(log);
+        }
+      });
+      Object.keys(logsByDate).forEach(function(dateKey) {
+        var arr = logsByDate[dateKey];
+        var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
+        if (hasStelvio) logsByDate[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+      });
+      return logsByDate;
+    }
+
     async function fetchTrainingLogsForCalendarJournal(userId) {
+      var jStep = window.setJournalLoadStatus;
+      if (jStep) jStep('7-1. fetchTrainingLogsForCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId);
-      
+      if (typeof window !== 'undefined') window.__journalLoadFailed = false;
+
+      if (window.__journalFetchInProgress) {
+        if (jStep) jStep('7-1. 이미 fetch 진행 중 (중복 호출 무시)', true);
+        return {};
+      }
+      window.__journalFetchCallCount = (window.__journalFetchCallCount || 0) + 1;
+      if (window.__journalFetchCallCount > 2) {
+        if (jStep) jStep('7-1. fetch 호출 2회 초과 (반복 방지)', true);
+        if (typeof window !== 'undefined') {
+          window.__journalLoadFailed = true;
+          window.__journalLoadErrorMsg = '로드 재시도 횟수 초과. 화면을 나갔다가 다시 훈련일지를 열어주세요.';
+        }
+        return {};
+      }
+      window.__journalFetchInProgress = true;
+
       if (!userId) {
-        console.warn('[MiniCalendarJournal] userId가 없습니다.');
+        window.__journalFetchInProgress = false;
+        if (jStep) jStep('7-1. 오류: userId 없음', true);
         return {};
       }
 
       try {
-        // getUserTrainingLogs 함수 사용 (최대 100개 가져오기)
+        var isTabletForPoll = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+        var pollMaxMs = isTabletForPoll ? 10000 : 5000;
+        var alreadyHaveModule = typeof window.getUserTrainingLogs === 'function';
+        var alreadyHaveFirestore = !!window.firestoreV9;
+
+        if (!alreadyHaveModule) {
+          if (jStep) jStep('7-2. getUserTrainingLogs 모듈 대기 중... (최대 ' + (pollMaxMs/1000) + '초)', false);
+          var pollStart = Date.now();
+          while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - pollStart) < pollMaxMs) {
+            await new Promise(function(r) { setTimeout(r, 200); });
+          }
+        }
+        if (typeof window.getUserTrainingLogs === 'function') {
+          if (jStep) jStep(alreadyHaveModule ? '7-2. getUserTrainingLogs 모듈 있음 (스킵)' : '7-2. getUserTrainingLogs 모듈 있음', false);
+        }
+
+        if (!window.firestoreV9 && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+          if (jStep) jStep('7-3. firestoreV9 대기 중... (ensureFirestoreV9ReadyForJournal)', false);
+          var waitMs = isTabletForPoll ? 12000 : 5000;
+          await window.ensureFirestoreV9ReadyForJournal(waitMs);
+        }
+        if (!window.firestoreV9) {
+          if (jStep) jStep('7-3. firestoreV9 추가 폴링 8초...', false);
+          var pollStart2 = Date.now();
+          var pollMax2 = 8000;
+          while (!window.firestoreV9 && (Date.now() - pollStart2) < pollMax2) {
+            await new Promise(function(r) { setTimeout(r, 200); });
+          }
+        }
+        if (window.firestoreV9) {
+          if (jStep) jStep(alreadyHaveFirestore ? '7-3. firestoreV9 준비됨 (스킵)' : '7-3. firestoreV9 준비됨', false);
+        } else {
+          if (jStep) jStep('7-3. firestoreV9 없음 (타임아웃)', true);
+        }
+
+        var useInlineFallback = (typeof window.getUserTrainingLogs !== 'function') && window.firestoreV9;
+        if (useInlineFallback) {
+          if (jStep) jStep('7-4. 인라인 Firestore v9 쿼리 폴백 시도...', false);
+          try {
+            var logsInline = await fetchJournalLogsInline(window.firestoreV9, userId, 200);
+            if (jStep) jStep('7-4. 인라인 폴백 쿼리 완료 (로그 ' + (logsInline && logsInline.length) + '건)', false);
+            return buildLogsByDateFromLogs(logsInline);
+          } catch (inlineErr) {
+            if (jStep) jStep('7-4. 인라인 폴백 실패: ' + (inlineErr && inlineErr.message ? inlineErr.message : ''), true);
+            if (typeof window !== 'undefined') { window.__journalLoadFailed = true; window.__journalLoadErrorMsg = '인라인 쿼리 실패'; }
+            return {};
+          }
+        }
         if (typeof window.getUserTrainingLogs !== 'function') {
-          console.error('[MiniCalendarJournal] window.getUserTrainingLogs 함수를 찾을 수 없습니다.');
-          console.error('[MiniCalendarJournal] window 객체 확인:', {
-            hasGetUserTrainingLogs: typeof window.getUserTrainingLogs,
-            hasFirestoreV9: !!window.firestoreV9
-          });
+          console.error('[MiniCalendarJournal] window.getUserTrainingLogs 없고 firestoreV9도 없음.');
+          if (typeof window !== 'undefined') { window.__journalLoadFailed = true; window.__journalLoadErrorMsg = 'Firestore/모듈 미로드'; }
           return {};
         }
 
+        function isPermissionErrorJournal(err) {
+          if (!err) return false;
+          var code = err.code || '';
+          var msg = String(err.message || '').toLowerCase();
+          return code === 'permission-denied' || msg.indexOf('permission') !== -1 || msg.indexOf('권한') !== -1;
+        }
+
+        var isTabletJournal = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+        var currentUserJournal = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        var logs = [];
+        function isFirestoreNotReadyError(err) {
+          if (!err || !err.message) return false;
+          var m = String(err.message);
+          return m.indexOf('Firestore') !== -1 && (m.indexOf('없습니다') !== -1 || m.indexOf('찾을 수 없습니다') !== -1);
+        }
+        if (jStep) jStep('7-5. getUserTrainingLogs 호출 중...', false);
         console.log('[MiniCalendarJournal] getUserTrainingLogs 호출 시작...');
-        const logs = await window.getUserTrainingLogs(userId, { limit: 200 });
-        
+        try {
+          logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+          if (jStep) jStep('7-5. getUserTrainingLogs 완료 (로그 ' + (logs && logs.length) + '건)', false);
+        } catch (firstErr) {
+          if (isFirestoreNotReadyError(firstErr) && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+            if (jStep) jStep('7-5. Firestore 미준비 → ensureFirestoreV9ReadyForJournal 후 재시도...', false);
+            await window.ensureFirestoreV9ReadyForJournal(isTabletJournal ? 8000 : 4000);
+            try {
+              logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+              if (jStep) jStep('7-5. 재시도 후 getUserTrainingLogs 완료', false);
+            } catch (e) { throw e; }
+          } else if (isPermissionErrorJournal(firstErr)) {
+            if (jStep) jStep('7-5. permission-denied → 1차 재시도 (토큰 갱신, 1초 대기)', false);
+            console.warn('[MiniCalendarJournal] Permission denied. 1st retry: token refresh...');
+            try {
+              if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
+                await currentUserJournal.getIdToken(true);
+              }
+            } catch (tokenErr) { console.warn('[MiniCalendarJournal] Token refresh failed', tokenErr); }
+            await new Promise(function(r) { setTimeout(r, 1000); });
+            try {
+              logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+              if (jStep) jStep('7-5. 1차 재시도 후 완료', false);
+            } catch (retryErr) {
+              if (isTabletJournal && isPermissionErrorJournal(retryErr)) {
+                if (jStep) jStep('7-5. 1차 재시도 실패 → 태블릿 2차 재시도 (2초 대기)', false);
+                console.warn('[MiniCalendarJournal] Tablet: 2nd retry after 2s + token refresh...');
+                try {
+                  if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
+                    await currentUserJournal.getIdToken(true);
+                  }
+                } catch (tokenErr2) { console.warn('[MiniCalendarJournal] 2nd token refresh failed', tokenErr2); }
+                await new Promise(function(r) { setTimeout(r, 2000); });
+                try {
+                  logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+                  if (jStep) jStep('7-5. 2차 재시도 후 완료', false);
+                } catch (e) {
+                  if (jStep) jStep('7-5. 2차 재시도 실패 (재시도 종료): ' + (e && e.message ? e.message : ''), true);
+                  if (typeof window !== 'undefined' && isPermissionErrorJournal(e)) {
+                    window.__journalLoadFailed = true;
+                    window.__journalLoadErrorMsg = '권한 오류(permission-denied). 로그인 확인 또는 재로그인 후 재시도.';
+                  }
+                  throw e;
+                }
+              } else {
+                if (jStep) jStep('7-5. 1차 재시도 실패: ' + (retryErr && retryErr.message ? retryErr.message : ''), true);
+                throw retryErr;
+              }
+            }
+          } else {
+            if (jStep) jStep('7-5. getUserTrainingLogs 오류: ' + (firstErr && firstErr.message ? firstErr.message : ''), true);
+            throw firstErr;
+          }
+        }
+
         console.log(`[MiniCalendarJournal] ✅ ${logs.length}개의 훈련 로그를 가져왔습니다.`);
         
         if (logs.length === 0) {
@@ -5030,48 +5246,12 @@
           return {};
         }
         
-        console.log('[MiniCalendarJournal] 로그 샘플:', logs.slice(0, 3).map(log => ({
-          id: log.id,
-          date: log.date,
-          dateType: typeof log.date,
-          hasToDate: log.date && typeof log.date.toDate === 'function',
-          title: log.title || '제목 없음'
-        })));
+        console.log('[MiniCalendarJournal] 로그 샘플:', logs.slice(0, 3).map(function(log) {
+          return { id: log.id, date: log.date, dateType: typeof log.date, hasToDate: log.date && typeof log.date.toDate === 'function', title: log.title || '제목 없음' };
+        }));
         
-        // 날짜별로 그룹화 (같은 날 여러 훈련이 있을 수 있음)
-        // 훈련 시간 10분 미만은 달력 표시에서 제외
-        const MIN_DURATION_SEC_JOURNAL = 600;
-        const logsByDate = {};
-        logs.forEach(log => {
-          const sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
-          if (sec < MIN_DURATION_SEC_JOURNAL) return;
-          const dateKey = getDateKeyJournal(log.date);
-          if (dateKey) {
-            if (!logsByDate[dateKey]) {
-              logsByDate[dateKey] = [];
-            }
-            logsByDate[dateKey].push(log);
-            console.log(`[MiniCalendarJournal] 로그 날짜 매핑: ${dateKey} - ${log.title || log.id || '제목 없음'}`);
-          } else {
-            console.warn('[MiniCalendarJournal] 날짜 키를 생성할 수 없음:', {
-              date: log.date,
-              dateType: typeof log.date,
-              hasToDate: log.date && typeof log.date.toDate === 'function',
-              logId: log.id,
-              logSample: JSON.stringify(log).substring(0, 200)
-            });
-          }
-        });
-        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
-        Object.keys(logsByDate).forEach(dateKey => {
-          const arr = logsByDate[dateKey];
-          const hasStelvio = arr.some(log => log.source !== 'strava');
-          if (hasStelvio) {
-            logsByDate[dateKey] = arr.filter(log => log.source !== 'strava');
-          }
-        });
+        var logsByDate = buildLogsByDateFromLogs(logs);
         
-        // 디버깅: 날짜 키 생성 결과 확인
         console.log('[MiniCalendarJournal] 날짜별 그룹화 결과:', {
           totalDates: Object.keys(logsByDate).length,
           dateKeys: Object.keys(logsByDate).sort().slice(0, 10),
@@ -5091,7 +5271,18 @@
         
         return logsByDate;
       } catch (error) {
+        if (jStep) jStep('7-X. fetchTrainingLogsForCalendarJournal 예외: ' + (error && error.message ? error.message : ''), true);
         console.error('[MiniCalendarJournal] ❌ 훈련 로그 가져오기 실패:', error);
+        if (window.firestoreV9 && typeof fetchJournalLogsInline === 'function') {
+          try {
+            if (jStep) jStep('7-X. 인라인 Firestore v9 폴백 1회 시도...', false);
+            var fallbackLogs = await fetchJournalLogsInline(window.firestoreV9, userId, 200);
+            if (jStep) jStep('7-X. 인라인 폴백 성공', false);
+            return buildLogsByDateFromLogs(fallbackLogs);
+          } catch (fallbackErr) {
+            if (jStep) jStep('7-X. 인라인 폴백 실패: ' + (fallbackErr && fallbackErr.message ? fallbackErr.message : ''), true);
+          }
+        }
         console.error('[MiniCalendarJournal] 오류 상세:', {
           message: error.message,
           stack: error.stack,
@@ -5099,7 +5290,13 @@
           errorName: error.name,
           errorCode: error.code
         });
+        if (typeof window !== 'undefined') {
+          window.__journalLoadFailed = true;
+          window.__journalLoadErrorMsg = (error && error.message) ? String(error.message).slice(0, 120) : '훈련 로드 실패';
+        }
         return {};
+      } finally {
+        window.__journalFetchInProgress = false;
       }
     }
 
@@ -5437,25 +5634,77 @@
      * 훈련일지 화면 진입 시 달력 초기화
      */
     async function initMiniCalendarJournal(userId) {
-      console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
-      console.log('[MiniCalendarJournal] userId:', userId);
-      console.log('[MiniCalendarJournal] userId 타입:', typeof userId);
-      
-      if (!userId) {
-        console.warn('[MiniCalendarJournal] ⚠️ userId가 없습니다.');
-        console.warn('[MiniCalendarJournal] window.currentUser:', window.currentUser);
-        console.warn('[MiniCalendarJournal] localStorage currentUser:', localStorage.getItem('currentUser'));
+      var jStep = window.setJournalLoadStatus;
+      var jHide = window.hideJournalLoadStatusBox;
+      if (window.__journalInitInProgress) {
+        if (jStep) jStep('6. 이미 초기화 진행 중 (중복 무시)', true);
         return;
       }
+      window.__journalInitInProgress = true;
+      var initTimeout = setTimeout(function() {
+        if (window.__journalInitInProgress) {
+          window.__journalInitInProgress = false;
+          console.warn('[Journal] init 진행 플래그 60초 타임아웃 해제 (표시 상태에서 로드 안 될 때 재시도 가능)');
+        }
+      }, 60000);
+      if (jStep) jStep('6. initMiniCalendarJournal 시작', false);
+      console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
+      // Firestore v9 권한은 authV9.currentUser 기준 → authV9 uid 우선 사용 (삼성 태블릿 대응)
+      var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+      if (authV9User) {
+        var uid = authV9User.uid != null ? authV9User.uid : authV9User.id;
+        if (uid) userId = uid;
+      }
+      if (jStep) jStep('6. userId 적용: ' + (userId ? (userId + '').slice(0, 12) + '...' : '없음'), false);
+      console.log('[MiniCalendarJournal] userId:', userId, '(authV9 우선 적용)');
       
-      // 현재 사용자 ID 저장
+      if (!userId) {
+        if (jStep) jStep('6. 오류: userId 없음', true);
+        console.warn('[MiniCalendarJournal] ⚠️ userId가 없습니다.');
+        window.__journalInitInProgress = false;
+        return;
+      }
+
+      try {
       miniCalendarStateJournal.currentUserId = userId;
       
-      console.log('[MiniCalendarJournal] 초기화 시작 - userId:', userId);
+      var isTabletInit = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+      if (isTabletInit) {
+        if (jStep) jStep('6. Pre-flight 토큰 갱신 중...', false);
+        var journalUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        if (journalUser && typeof journalUser.getIdToken === 'function') {
+          try {
+            await journalUser.getIdToken(true);
+            if (jStep) jStep('6. 토큰 갱신 완료. 800ms 대기...', false);
+          } catch (e) {
+            if (jStep) jStep('6. 토큰 갱신 실패: ' + (e && e.message ? e.message : ''), true);
+          }
+        }
+        await new Promise(function(r) { setTimeout(r, 800); });
+      }
       
-      // 훈련 로그 가져오기 (최근 200건 + 현재 표시 월 로그 병합 → 오늘 훈련이 초기 로딩 시에도 표시되도록)
-      console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 호출 전...');
+      if (jStep) jStep('7. fetchTrainingLogsForCalendarJournal 호출...', false);
+      window.__journalEmptyRetryDone = false;
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+      if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
+        if (jStep) jStep('7. 훈련 로드 완료 (날짜 ' + Object.keys(miniCalendarStateJournal.trainingLogs).length + '개)', false);
+      } else if (isTabletInit && !window.__journalLoadFailed && !window.__journalEmptyRetryDone) {
+        window.__journalEmptyRetryDone = true;
+        if (jStep) jStep('7. 1차 로드 빈 결과 → 1회만 2초 후 재시도', false);
+        await new Promise(function(r) { setTimeout(r, 2000); });
+        var cu = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        if (cu && typeof cu.getIdToken === 'function') {
+          try { await cu.getIdToken(true); } catch (e) {}
+        }
+        miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
+        if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
+          if (jStep) jStep('7. 재시도 후 훈련 로드 완료', false);
+        } else {
+          if (jStep) jStep('7. 재시도 후에도 빈 결과 (재시도 1회로 종료)', true);
+        }
+      } else if (window.__journalLoadFailed) {
+        if (jStep) jStep('7. 훈련 로드 실패 (상세: 재시도 영역 참고)', true);
+      }
       
       // 현재 표시 월(오늘 포함) 로그를 별도로 조회해 병합 (로딩 시 오늘 훈련이 달력에 바로 표시되도록)
       var cy = miniCalendarStateJournal.currentYear;
@@ -5516,6 +5765,36 @@
       // 달력 렌더링
       await renderMiniCalendarJournal();
       
+      // 로드 실패 시 재시도 영역 표시 (삼성 태블릿 등) — 재시도 가능하도록 플래그 해제
+      var journalRetryEl = document.getElementById('journalRetryArea');
+      if (journalRetryEl) journalRetryEl.style.display = (window.__journalLoadFailed === true) ? 'block' : 'none';
+      if (window.__journalLoadFailed === true) {
+        window.__journalInitInProgress = false;
+        window.__journalFetchCallCount = 0;
+        window.__journalEmptyRetryDone = false;
+      }
+      var journalRetryBtnEl = document.getElementById('journalRetryBtn');
+      if (journalRetryBtnEl) journalRetryBtnEl.disabled = false;
+      var journalRetryMsgEl = document.getElementById('journalRetryMsg');
+      if (journalRetryMsgEl) {
+        var errMsg = (window.__journalLoadErrorMsg && String(window.__journalLoadErrorMsg).trim()) ? window.__journalLoadErrorMsg : '훈련 로드를 불러오지 못했습니다.';
+        journalRetryMsgEl.textContent = errMsg;
+      }
+      var journalRetryStepEl = document.getElementById('journalRetryStep');
+      if (journalRetryStepEl) {
+        var lastStep = (window.__journalLoadLastStep || (typeof localStorage !== 'undefined' && localStorage.getItem('journalLoadLastStep')) || '').trim();
+        journalRetryStepEl.textContent = lastStep ? '실패 단계: ' + lastStep : '';
+      }
+      
+      // 성공 시 2초 후 단계 로그 박스 숨김, 실패 시 유지 (문제 진단용)
+      if (!window.__journalLoadFailed && jStep) jStep('8. 달력 렌더링 완료', false);
+      if (window.__journalLoadFailed) {
+        if (jStep) jStep('8. 실패 상태 유지 — 재시도 버튼 또는 위 단계 확인', true);
+      } else if (typeof window.hideJournalLoadStatusBox === 'function') {
+        var keepDebug = typeof location !== 'undefined' && location.search && location.search.indexOf('journalDebug=1') !== -1;
+        if (!keepDebug) setTimeout(function() { window.hideJournalLoadStatusBox(); }, 2000);
+      }
+      
       // Monthly Training Analysis Dashboard 갱신 (현재 월 + 해당 월 로그 전달)
       if (typeof window.buildMonthlyLogsForDashboard === 'function' && typeof window.renderMonthlyAnalysisDashboard === 'function') {
         var y = miniCalendarStateJournal.currentYear;
@@ -5526,6 +5805,10 @@
       }
       
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
+      } finally {
+        if (typeof initTimeout !== 'undefined') clearTimeout(initTimeout);
+        window.__journalInitInProgress = false;
+      }
     }
 
     function updateMonthlyAnalysisDashboardFromJournal() {
@@ -9880,40 +10163,7 @@ Output Format (JSON Only):
           }, 300);
         }
         
-        // Training Journal Screen인 경우 미니 달력 초기화
-        if (screenId === 'trainingJournalScreen') {
-          console.log('[showScreen] 훈련일지 화면 전환 - 미니 달력 초기화 시작');
-          setTimeout(function() {
-            var currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-            var userId = currentUser?.id;
-            
-            console.log('[showScreen] 훈련일지 초기화 - userId:', userId, 'hasInitFunction:', typeof window.initMiniCalendarJournal === 'function');
-            
-            if (userId && typeof window.initMiniCalendarJournal === 'function') {
-              console.log('[showScreen] initMiniCalendarJournal 호출');
-              window.initMiniCalendarJournal(userId);
-            } else if (!userId) {
-              console.warn('[showScreen] 훈련일지: 사용자 ID를 찾을 수 없습니다.');
-            } else {
-              console.warn('[showScreen] initMiniCalendarJournal 함수를 찾을 수 없습니다.');
-              // 함수가 로드될 때까지 재시도
-              var retryCount = 0;
-              var maxRetries = 20;
-              var checkAndInit = function() {
-                if (typeof window.initMiniCalendarJournal === 'function') {
-                  console.log('[showScreen] initMiniCalendarJournal 재시도 성공');
-                  window.initMiniCalendarJournal(userId);
-                } else if (retryCount < maxRetries) {
-                  retryCount++;
-                  setTimeout(checkAndInit, 100);
-                } else {
-                  console.error('[showScreen] initMiniCalendarJournal 함수를 찾을 수 없습니다 (최대 재시도 횟수 초과)');
-                }
-              };
-              setTimeout(checkAndInit, 100);
-            }
-          }, 200);
-        }
+        // Training Journal: app.js initializeCurrentScreen에서만 init (중복 호출 방지로 여기서는 호출하지 않음)
         
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
@@ -10025,5 +10275,7 @@ Output Format (JSON Only):
       </div>
     </div>
   </div>
+
+  <!-- [임시] 훈련일지 로드 단계 표시 — body 직계로 두어 항상 표시 가능. 검증 완료 후 이 블록 전체 삭제 -->
 </body>
 </html>
