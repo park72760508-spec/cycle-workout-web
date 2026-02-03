@@ -11019,11 +11019,14 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     const avgDuration = totalSessions > 0 ? Math.round(historySummary.reduce((sum, h) => sum + h.duration, 0) / totalSessions) : 0;
     const avgPower = totalSessions > 0 ? Math.round(historySummary.reduce((sum, h) => sum + h.avgPower, 0) / totalSessions) : 0;
     
-    // 최근 7일 이력 (단기 패턴)
+    // 최근 7일 이력 (단기 패턴) — 오늘 포함: 날짜 문자열로 [오늘-6일, 오늘] 구간 포함
+    const todayStr = today.toISOString ? today.toISOString().split('T')[0] : (today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'));
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
     const last7Days = historySummary.filter(h => {
-      const hDate = new Date(h.date);
-      const daysDiff = (today - hDate) / (1000 * 60 * 60 * 24);
-      return daysDiff <= 7;
+      const d = (h.date || '').split('T')[0];
+      return d && d >= sevenDaysAgoStr && d <= todayStr;
     });
     const last7DaysTSS = last7Days.reduce((sum, h) => sum + h.tss, 0);
     const last7DaysSessions = last7Days.length;
