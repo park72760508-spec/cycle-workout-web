@@ -3555,6 +3555,11 @@ async function selectWorkout(workoutId) {
     selectButton.classList.add('loading');
   }
   
+  var workoutLoadingOverlay = document.getElementById('workoutLoadingOverlay');
+  var workoutLoadingProgress = document.getElementById('workoutLoadingProgress');
+  if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'flex'; }
+  if (workoutLoadingProgress) { workoutLoadingProgress.textContent = 'Workout Loading ....'; }
+  
   try {
     console.log('Selecting workout with ID:', workoutId);
     const result = await apiGetWorkout(workoutId);
@@ -3616,6 +3621,7 @@ async function selectWorkout(workoutId) {
     console.error('워크아웃 선택 실패:', error);
     window.showToast('워크아웃 선택 중 오류가 발생했습니다.');
   } finally {
+    if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'none'; }
     if (selectButton && originalButtonText) {
       selectButton.textContent = originalButtonText;
       selectButton.disabled = false;
