@@ -6081,21 +6081,35 @@ function initializeCurrentScreen(screenId) {
           if (userId) {
             (async function runJournalInit() {
               const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
+              var journalUserId = userId;
               try {
                 if (typeof window.waitForAuthReady === 'function') {
                   await window.waitForAuthReady(isTablet ? 12000 : 5000);
                 }
                 // 훈련일지는 firestoreV9만 사용 → v9 전용 대기(Long Polling) 적용 (삼성 태블릿)
                 if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
-                  await window.ensureFirestoreV9ReadyForJournal(isTablet ? 12000 : 5000);
+                  await window.ensureFirestoreV9ReadyForJournal(isTablet ? 18000 : 6000);
+                }
+                // Firestore v9 권한은 authV9.currentUser 기준 → authV9 사용자 대기 후 uid 사용 (삼성 태블릿)
+                if (isTablet && typeof window.waitForAuthV9UserForJournal === 'function') {
+                  var authV9Result = await window.waitForAuthV9UserForJournal(8000);
+                  if (authV9Result && authV9Result.uid) {
+                    journalUserId = authV9Result.uid;
+                    console.log('[Journal] authV9 uid 사용:', journalUserId);
+                  }
+                }
+                var liveUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+                if (liveUser) {
+                  var uid = liveUser.uid != null ? liveUser.uid : liveUser.id;
+                  if (uid) journalUserId = uid;
                 }
               } catch (e) {
                 console.warn('[Journal] Auth/Firestore wait failed', e);
               }
-              var initDelay = isTablet ? 400 : 100;
-              setTimeout(() => {
-                console.log('initMiniCalendarJournal 호출 시도 - userId:', userId);
-                window.initMiniCalendarJournal(userId);
+              var initDelay = isTablet ? 500 : 100;
+              setTimeout(function() {
+                console.log('initMiniCalendarJournal 호출 시도 - userId:', journalUserId);
+                window.initMiniCalendarJournal(journalUserId);
               }, initDelay);
             })();
           } else {

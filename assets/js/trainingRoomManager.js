@@ -404,6 +404,32 @@ async function ensureFirestoreV9ReadyForJournal(maxWaitMs = 12000) {
 }
 
 /**
+ * 훈련일지 전용: Firestore v9가 사용하는 Auth 사용자(authV9.currentUser)가 준비될 때까지 대기
+ * 삼성 태블릿에서 IndexedDB 복원이 늦으면 request.auth가 null이 되어 권한 오류 발생 → 이 사용자 대기 필수
+ * @param {number} maxWaitMs - 최대 대기 시간 (밀리초)
+ * @returns {Promise<{uid: string}|null>} 사용자 객체의 uid 또는 null
+ */
+async function waitForAuthV9UserForJournal(maxWaitMs = 8000) {
+  const pollInterval = 200;
+  const startTime = Date.now();
+  const isTablet = isTabletOrSlowDeviceForAuth();
+  console.log('[Journal] waitForAuthV9UserForJournal 시작 - 최대', maxWaitMs, 'ms, 태블릿:', isTablet);
+  while (Date.now() - startTime < maxWaitMs) {
+    const user = getCurrentUserForTrainingRooms();
+    if (user) {
+      const uid = (typeof user.uid !== 'undefined' ? user.uid : user.id) || null;
+      if (uid) {
+        console.log('[Journal] authV9 사용자 준비 완료 (경과:', Date.now() - startTime, 'ms, uid:', uid, ')');
+        return { uid: uid };
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+  console.warn('[Journal] authV9 사용자 대기 타임아웃 (', maxWaitMs, 'ms).');
+  return null;
+}
+
+/**
  * 재시도 로직이 있는 함수 실행 (모바일 최적화 적용)
  */
 async function withRetryForTrainingRooms(fn, maxRetries = 2, delayMs = 500) {
@@ -6326,6 +6352,7 @@ window.toggleDeviceConnectionMode = toggleDeviceConnectionMode;
   window.waitForAuthReady = waitForAuthReady;
   window.waitForFirestore = waitForFirestore;
   window.ensureFirestoreV9ReadyForJournal = ensureFirestoreV9ReadyForJournal;
+  window.waitForAuthV9UserForJournal = waitForAuthV9UserForJournal;
   window.isTabletOrSlowDeviceForAuth = isTabletOrSlowDeviceForAuth;
   window.getCurrentUserForTrainingRooms = getCurrentUserForTrainingRooms;
   window.getAuthForTrainingRooms = getAuthForTrainingRooms;
