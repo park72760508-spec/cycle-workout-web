@@ -70,15 +70,20 @@ function isMobileDeviceForTrainingRooms() {
 }
 
 /**
- * Galaxy Tab 등 태블릿/느린 기기 감지 (Tab S8 Ultra 등 고해상도 포함, Desktop Site 시 UA 무시)
- * 화면 크기·터치·플랫폼으로 판별해 Auth 대기 및 Long Polling 적용.
+ * Galaxy Tab 등 태블릿/느린 기기 감지 (삼성·Tab S8 Ultra 등, Desktop Site 시 UA 무시)
+ * 삼성 UA 우선 → 화면 크기·터치·플랫폼으로 판별해 Auth 대기 및 Long Polling 적용.
  */
 function isTabletOrSlowDeviceForAuth() {
   if (typeof window === 'undefined' || !navigator) return false;
+  const ua = String(navigator.userAgent || '').toLowerCase();
+  const platform = String(navigator.platform || '').toLowerCase();
   const innerWidth = typeof window.innerWidth === 'number' ? window.innerWidth : 0;
   const touchCapable = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
-  const platform = String(navigator.platform || '').toLowerCase();
 
+  // 삼성 태블릿/기기: UA에 Samsung 또는 SM-T(Samsung Tablet) 포함 시 무조건 태블릿 처리
+  if (/samsung|sm-t\d|sm-p\d|galaxy.*tab/i.test(ua)) {
+    return true;
+  }
   // Fallback: Desktop Mode에서 Linux arm / Android 플랫폼이면 태블릿으로 간주
   if (platform.includes('linux arm') || platform.includes('android')) {
     return true;
@@ -223,9 +228,9 @@ async function waitForAuthReady(maxWaitMs = 3000) {
 
   const isTablet = isTabletOrSlowDeviceForAuth();
   const isMobile = isMobileDeviceForTrainingRooms();
-  const TABLET_WAIT_MS = 8000;
-  const v9PollMs = isTablet ? TABLET_WAIT_MS : (isMobile ? 4000 : 2000);
-  const effectiveMaxWaitMs = isTablet ? TABLET_WAIT_MS : maxWaitMs;
+  const TABLET_WAIT_MS = 12000;
+  const v9PollMs = isTablet ? TABLET_WAIT_MS : (isMobile ? 5000 : 2000);
+  const effectiveMaxWaitMs = isTablet ? Math.max(TABLET_WAIT_MS, maxWaitMs) : maxWaitMs;
 
   console.log('[Auth Debug] Device Type Check: isTablet=' + isTablet + ', waitTime=' + v9PollMs + 'ms');
 
@@ -590,8 +595,10 @@ async function loadTrainingRooms() {
     </div>
   `;
 
+  const isTablet = isTabletOrSlowDeviceForAuth();
+  const authWaitMs = isTablet ? 12000 : 5000;
   try {
-    await waitForAuthReady(5000);
+    await waitForAuthReady(authWaitMs);
 
     const currentUser = getCurrentUserForTrainingRooms();
     if (!currentUser) {
@@ -635,11 +642,22 @@ async function loadTrainingRooms() {
       throw new Error('Firestore 인스턴스를 찾을 수 없습니다. window.firestoreV9 또는 window.firebase.firestore()를 확인하세요.');
     }
 
-    const isTablet = isTabletOrSlowDeviceForAuth();
+    if (isTablet && typeof waitForFirestore === 'function') {
+      try {
+        const { db: tabletDb, useV9: tabletV9 } = await waitForFirestore(12000);
+        if (tabletDb) {
+          db = tabletDb;
+          useV9 = tabletV9;
+          console.log('[Training Room] Tablet: Using Firestore from waitForFirestore (Long Polling applied).');
+        }
+      } catch (e) {
+        console.warn('[Training Room] waitForFirestore on tablet failed, using window instance:', e?.message);
+      }
+    }
     if (isTablet && db && typeof db.settings === 'function') {
       try {
         db.settings({ experimentalForceLongPolling: true, merge: true });
-        console.log('[Training Room] Galaxy Tab detected: Forcing Long Polling for stability.');
+        console.log('[Training Room] Galaxy Tab: Forcing Long Polling for stability.');
       } catch (settingsErr) {
         console.warn('[Training Room] Force long polling failed:', settingsErr?.message);
       }
@@ -700,7 +718,7 @@ async function loadTrainingRooms() {
     } catch (firstErr) {
       lastErr = firstErr;
       if (isPermissionError(firstErr)) {
-        console.warn('[Training Room] Permission denied on Tab. Attempting Force Token Refresh...');
+        console.warn('[Training Room] Permission denied. 1st retry: Force Token Refresh...');
         try {
           if (currentUser && typeof currentUser.getIdToken === 'function') {
             await currentUser.getIdToken(true);
@@ -714,6 +732,24 @@ async function loadTrainingRooms() {
           lastErr = null;
         } catch (retryErr) {
           lastErr = retryErr;
+          // Tablet only: 2nd retry after 2s + token refresh (Galaxy Tab auth/DB sync delay)
+          if (isTablet && isPermissionError(retryErr)) {
+            console.warn('[Training Room] Tablet: 2nd retry after 2s + token refresh...');
+            try {
+              if (currentUser && typeof currentUser.getIdToken === 'function') {
+                await currentUser.getIdToken(true);
+              }
+            } catch (tokenErr2) {
+              console.warn('[Training Room] 2nd token refresh failed:', tokenErr2);
+            }
+            await new Promise(r => setTimeout(r, 2000));
+            try {
+              rooms = await fetchRooms();
+              lastErr = null;
+            } catch (secondRetryErr) {
+              lastErr = secondRetryErr;
+            }
+          }
         }
       }
       if (lastErr) throw lastErr;
