@@ -4921,7 +4921,11 @@
       } catch (e) {}
       var stepList = window.__journalStepList || (window.__journalStepList = []);
       var m = String(msg).match(/^(\d+(?:-\d+)?)\./);
-      if (m) stepList.push(m[1]);
+      if (m) {
+        stepList.push(m[1]);
+      } else if (stepList.length === 0) {
+        stepList.push('0');
+      }
       var inline = document.getElementById('journalLoadStepInline');
       if (inline) inline.textContent = stepList.length ? '(' + stepList.join(', ') + ')' : '(-)';
       if (typeof console !== 'undefined' && console.log) console.log('[Journal Step]', msg);
