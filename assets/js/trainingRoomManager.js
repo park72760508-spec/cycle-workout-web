@@ -304,13 +304,16 @@ async function waitForFirestore(maxWaitMs = null) {
   const isTablet = isTabletOrSlowDeviceForAuth();
   
   const applyLongPollingIfTablet = (firestoreDb) => {
-    if (isTablet && firestoreDb && typeof firestoreDb.settings === 'function') {
-      try {
-        firestoreDb.settings({ experimentalForceLongPolling: true, merge: true });
-        console.log('[Firestore] Force Long Polling applied for High-Res Tablet.');
-      } catch (e) {
-        console.warn('[Training Room] Force long polling failed:', e?.message);
+    if (!isTablet || !firestoreDb || typeof firestoreDb.settings !== 'function') return;
+    try {
+      firestoreDb.settings({ experimentalForceLongPolling: true, merge: true });
+      console.log('[Firestore] Force Long Polling applied for High-Res Tablet.');
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (msg.indexOf('already been started') !== -1 || msg.indexOf('settings can no longer be changed') !== -1) {
+        return;
       }
+      console.warn('[Training Room] Force long polling failed:', msg);
     }
   };
   
@@ -715,7 +718,12 @@ async function loadTrainingRooms() {
         db.settings({ experimentalForceLongPolling: true, merge: true });
         console.log('[Training Room] Galaxy Tab: Forcing Long Polling for stability.');
       } catch (settingsErr) {
-        console.warn('[Training Room] Force long polling failed:', settingsErr?.message);
+        const msg = settingsErr?.message || String(settingsErr);
+        if (msg.indexOf('already been started') !== -1 || msg.indexOf('settings can no longer be changed') !== -1) {
+          // 이미 다른 화면(훈련일지 등)에서 Firestore 사용으로 설정 변경 불가 → 무시
+        } else {
+          console.warn('[Training Room] Force long polling failed:', msg);
+        }
       }
     }
 
