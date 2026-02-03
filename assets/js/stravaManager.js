@@ -915,16 +915,6 @@ async function syncStravaData(startDate = null, endDate = null) {
     } else {
       alert(message);
     }
-
-    // 훈련일지 달력 새로고침 (동기화된 로그 반영)
-    if (result.success && typeof window.loadTrainingJournalCalendar === 'function') {
-      try {
-        window.loadTrainingJournalCalendar();
-        console.log('[syncStravaData] 훈련일지 달력 새로고침 완료');
-      } catch (refreshErr) {
-        console.warn('[syncStravaData] 훈련일지 달력 새로고침 실패:', refreshErr);
-      }
-    }
     
     return result;
   } catch (error) {
