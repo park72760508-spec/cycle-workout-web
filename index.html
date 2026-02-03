@@ -3938,18 +3938,6 @@
     </div>
     <p class="subtitle" style="margin-top: 0; text-align: center;">나의 훈련 이력을 확인하세요</p>
     
-    <!-- [임시] 훈련일지 로드 단계 표시 — 화면 하단 고정. 검증 완료 후 이 블록 전체 삭제 가능 -->
-    <div id="journalLoadStatusBox" class="journal-load-status-box journal-load-status-box-temp" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 9998; margin: 0; padding: 12px; background: #1e3a5f; border: 2px solid #2563eb; border-radius: 12px 12px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.25); max-height: 38vh; overflow-y: auto;">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
-        <div style="font-size: 13px; font-weight: 700; color: #fff;">
-          📍 [임시] 단계 표시 (화면 하단): 0 → 1 → 2 → … → 7-5 → 8 — 검증 후 삭제 예정
-        </div>
-        <button type="button" id="journalLoadStatusBoxClose" onclick="if(typeof window.hideJournalLoadStatusBox==='function')window.hideJournalLoadStatusBox();" style="flex-shrink: 0; padding: 6px 12px; font-size: 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer;">접기</button>
-      </div>
-      <div style="font-size: 11px; color: #93c5fd; margin-bottom: 6px;">실패 시 마지막 단계가 문제 위치. ?journalDebug=1 이면 완료 후에도 로그 유지</div>
-      <div id="journalLoadStatusLog" style="font-size: 12px; color: #e2e8f0; line-height: 1.6; font-family: monospace;"></div>
-    </div>
-    
     <!-- 월간 훈련 이력 미니 달력 -->
     <div class="card">
       <div class="mini-calendar-container">
@@ -10294,6 +10282,18 @@ Output Format (JSON Only):
         </a>
       </div>
     </div>
+  </div>
+
+  <!-- [임시] 훈련일지 로드 단계 표시 — body 직계로 두어 항상 표시 가능. 검증 완료 후 이 블록 전체 삭제 -->
+  <div id="journalLoadStatusBox" class="journal-load-status-box journal-load-status-box-temp" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999; margin: 0; padding: 14px; background: #1e3a5f; border: 3px solid #2563eb; border-radius: 12px 12px 0 0; box-shadow: 0 -6px 20px rgba(0,0,0,0.35); max-height: 40vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+      <div style="font-size: 14px; font-weight: 700; color: #fff;">
+        📍 [임시] 단계 표시 (화면 하단): 0 → 1 → 2 → … → 7-5 → 8 — 검증 후 삭제 예정
+      </div>
+      <button type="button" id="journalLoadStatusBoxClose" onclick="if(typeof window.hideJournalLoadStatusBox==='function')window.hideJournalLoadStatusBox();" style="flex-shrink: 0; padding: 8px 14px; font-size: 13px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer;">접기</button>
+    </div>
+    <div style="font-size: 11px; color: #93c5fd; margin-bottom: 6px;">실패 시 마지막 단계가 문제 위치. ?journalDebug=1 이면 완료 후에도 로그 유지</div>
+    <div id="journalLoadStatusLog" style="font-size: 12px; color: #e2e8f0; line-height: 1.6; font-family: monospace;"></div>
   </div>
 </body>
 </html>
