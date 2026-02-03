@@ -364,6 +364,18 @@ async function fetchAndProcessStravaData(options = {}) {
       // 클라이언트 측에서 null과 빈 문자열 필터링
       if (!refreshToken || refreshToken === null || refreshToken === '' || !userId) continue;
 
+      // 1년 초과 로그 삭제 (STRAVA/Stelvio 로그 저장 기준 최대 1년, DB 공간 활용)
+      try {
+        if (typeof window.deleteLogsOlderThanOneYear === 'function') {
+          const pruneResult = await window.deleteLogsOlderThanOneYear(userId);
+          if (pruneResult.deleted > 0) {
+            console.log('[fetchAndProcessStravaData] 사용자', userId, '1년 초과 로그', pruneResult.deleted, '건 삭제');
+          }
+        }
+      } catch (pruneError) {
+        console.warn('[fetchAndProcessStravaData] 1년 초과 로그 삭제 실패(무시하고 계속):', pruneError);
+      }
+
       // 가입일 확인 (YYYY-MM-DD 형식으로 변환)
       let userCreatedDate = '';
       if (createdAt) {
@@ -903,6 +915,16 @@ async function syncStravaData(startDate = null, endDate = null) {
     } else {
       alert(message);
     }
+
+    // 훈련일지 달력 새로고침 (동기화된 로그 반영)
+    if (result.success && typeof window.loadTrainingJournalCalendar === 'function') {
+      try {
+        window.loadTrainingJournalCalendar();
+        console.log('[syncStravaData] 훈련일지 달력 새로고침 완료');
+      } catch (refreshErr) {
+        console.warn('[syncStravaData] 훈련일지 달력 새로고침 실패:', refreshErr);
+      }
+    }
     
     return result;
   } catch (error) {
@@ -1070,12 +1092,16 @@ function clearStravaSyncMonthRange() {
 }
 
 /**
- * 오늘 날짜만 동기화 (기간을 오늘로 설정 후 동기화 실행)
+ * 오늘 기록: 오늘 날짜 1일분 Strava 로그만 동기화
+ * (로컬 기준 오늘 00:00:00 ~ 23:59:59)
  */
 function startStravaSyncToday() {
-  const today = new Date();
-  const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const startDate = new Date(y, m, d, 0, 0, 0, 0);   // 오늘 00:00:00
+  const endDate = new Date(y, m, d, 23, 59, 59, 999); // 오늘 23:59:59
   closeStravaSyncModal();
   syncStravaData(startDate, endDate);
 }
