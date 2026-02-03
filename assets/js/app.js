@@ -6066,25 +6066,10 @@ function initializeCurrentScreen(screenId) {
       break;
       
       case 'trainingJournalScreen':
-      // 훈련일지 화면: 삼성 태블릿 대응 Auth·Firestore 대기 후 미니 달력 로드 (Live Training Rooms 동일 로직)
+      // 훈련일지 화면: Auth·Firestore 대기 후 미니 달력 로드 (단계는 콘솔 로그만)
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
-      // 삼성 태블릿 등: 단계별 진행 확인을 위해 로드 시작 시 (0) 즉시 표시 (절대 (-)에서 멈추지 않도록)
-      try {
-        if (typeof window !== 'undefined') window.__journalStepList = [];
-        if (typeof window.showJournalLoadStatusBox === 'function') window.showJournalLoadStatusBox();
-        if (typeof window.setJournalLoadStatus === 'function') {
-          window.setJournalLoadStatus('0. 훈련일지 준비 중...', false);
-        } else {
-          var inline = document.getElementById('journalLoadStepInline');
-          if (inline) inline.textContent = '(0) 준비 중';
-        }
-      } catch (e) {}
-      try {
-        var _inline = document.getElementById('journalLoadStepInline');
-        if (_inline && (_inline.textContent === '' || _inline.textContent === '(-)')) _inline.textContent = '(0) 준비 중';
-      } catch (e2) {}
 
       const checkAndInit = (retryCount = 0) => {
         if (typeof window.initMiniCalendarJournal === 'function') {
@@ -6096,8 +6081,9 @@ function initializeCurrentScreen(screenId) {
             (async function runJournalInit() {
               var jStep = window.setJournalLoadStatus;
               var jShow = window.showJournalLoadStatusBox;
+              var jClear = window.clearJournalLoadStatus;
               if (jShow) jShow();
-              // jClear 제거: 초기 (0)을 지우면 setJournalLoadStatus 미로드/예외 시 (-)에서 멈춤 → 모든 기기에서 로딩 안 됨
+              if (jClear) jClear();
               if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
               if (typeof window !== 'undefined') {
                 window.__journalFetchCallCount = 0;
