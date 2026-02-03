@@ -3936,7 +3936,11 @@
       <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련일지</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
-    <p class="subtitle" style="margin-top: 0; text-align: center;">나의 훈련 이력을 확인하세요</p>
+    <!-- [임시] 오류 해결 후 삭제: 단계 표시는 우측 (0, 1, 2, …) -->
+    <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+      <span>나의 훈련 이력을 확인하세요</span>
+      <span id="journalLoadStepInline" style="font-size: 12px; color: #64748b; font-weight: 500;">(-)</span>
+    </p>
     
     <!-- 월간 훈련 이력 미니 달력 -->
     <div class="card">
@@ -3973,7 +3977,7 @@
         </div>
         <!-- 삼성 태블릿 등: 로드 실패 시 수동 재시도 (실패 단계·오류 메시지 표시) -->
         <div id="journalRetryArea" style="display: none; margin-top: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; text-align: center;">
-          <p style="font-size: 11px; color: #b91c1c; margin-bottom: 6px; font-weight: 600;">▼ 실패 단계는 아래 "실패 단계:" 줄과 화면 하단 고정 박스에서 확인하세요</p>
+          <p style="font-size: 11px; color: #b91c1c; margin-bottom: 6px; font-weight: 600;">▼ 실패 단계는 아래 "실패 단계:" 줄과 상단 "나의 훈련 이력을 확인하세요" 우측 (0,1,2,…) 에서 확인하세요</p>
           <p id="journalRetryMsg" style="color: #991b1b; font-size: 14px; margin-bottom: 4px;">훈련 로드를 불러오지 못했습니다.</p>
           <p id="journalRetryStep" style="color: #b91c1c; font-size: 13px; font-weight: 600; margin-bottom: 8px;"></p>
           <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
@@ -4899,16 +4903,9 @@
       currentUserId: null
     };
 
-    /** 삼성 태블릿: 훈련일지 로드 단계별 진행 메시지 (문제 진단용) */
+    /** [임시] 훈련일지 로드 단계 — 화면에 직접 표기 (나의 훈련 이력을 확인하세요 우측). 오류 해결 후 삭제 */
     function setJournalLoadStatus(msg, isError) {
-      var box = document.getElementById('journalLoadStatusBox');
-      var log = document.getElementById('journalLoadStatusLog');
-      if (!log) return;
-      if (!box) return;
-      if (msg === null || msg === '') {
-        log.innerHTML = '';
-        return;
-      }
+      if (msg === null || msg === '') return;
       if (typeof window !== 'undefined') window.__journalLoadLastStep = msg;
       try {
         if (typeof localStorage !== 'undefined') {
@@ -4919,38 +4916,20 @@
           }
         }
       } catch (e) {}
-      var line = document.createElement('div');
-      line.className = 'journal-load-step';
-      line.style.color = isError ? '#f87171' : '#e2e8f0';
-      line.style.marginBottom = '2px';
-      line.textContent = '[' + new Date().toLocaleTimeString('ko-KR') + '] ' + msg;
-      log.appendChild(line);
-      log.parentElement.scrollTop = log.parentElement.scrollHeight;
+      var stepList = window.__journalStepList || (window.__journalStepList = []);
+      var m = String(msg).match(/^(\d+(?:-\d+)?)\./);
+      if (m) stepList.push(m[1]);
+      var inline = document.getElementById('journalLoadStepInline');
+      if (inline) inline.textContent = stepList.length ? '(' + stepList.join(', ') + ')' : '(-)';
       if (typeof console !== 'undefined' && console.log) console.log('[Journal Step]', msg);
     }
     function clearJournalLoadStatus() {
-      var log = document.getElementById('journalLoadStatusLog');
-      if (log) log.innerHTML = '';
+      if (typeof window !== 'undefined') window.__journalStepList = [];
+      var inline = document.getElementById('journalLoadStepInline');
+      if (inline) inline.textContent = '(-)';
     }
-    function showJournalLoadStatusBox() {
-      var box = document.getElementById('journalLoadStatusBox');
-      var screenEl = document.getElementById('trainingJournalScreen');
-      if (box) {
-        box.style.display = 'block';
-        box.style.position = 'fixed';
-        box.style.bottom = '0';
-        box.style.left = '0';
-        box.style.right = '0';
-        box.style.zIndex = '9998';
-      }
-      if (screenEl) screenEl.style.paddingBottom = '220px';
-    }
-    function hideJournalLoadStatusBox() {
-      var box = document.getElementById('journalLoadStatusBox');
-      var screenEl = document.getElementById('trainingJournalScreen');
-      if (box) box.style.display = 'none';
-      if (screenEl) screenEl.style.paddingBottom = '';
-    }
+    function showJournalLoadStatusBox() {}
+    function hideJournalLoadStatusBox() {}
     window.setJournalLoadStatus = setJournalLoadStatus;
     window.clearJournalLoadStatus = clearJournalLoadStatus;
     window.showJournalLoadStatusBox = showJournalLoadStatusBox;
@@ -10285,15 +10264,5 @@ Output Format (JSON Only):
   </div>
 
   <!-- [임시] 훈련일지 로드 단계 표시 — body 직계로 두어 항상 표시 가능. 검증 완료 후 이 블록 전체 삭제 -->
-  <div id="journalLoadStatusBox" class="journal-load-status-box journal-load-status-box-temp" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999; margin: 0; padding: 14px; background: #1e3a5f; border: 3px solid #2563eb; border-radius: 12px 12px 0 0; box-shadow: 0 -6px 20px rgba(0,0,0,0.35); max-height: 40vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
-      <div style="font-size: 14px; font-weight: 700; color: #fff;">
-        📍 [임시] 단계 표시 (화면 하단): 0 → 1 → 2 → … → 7-5 → 8 — 검증 후 삭제 예정
-      </div>
-      <button type="button" id="journalLoadStatusBoxClose" onclick="if(typeof window.hideJournalLoadStatusBox==='function')window.hideJournalLoadStatusBox();" style="flex-shrink: 0; padding: 8px 14px; font-size: 13px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer;">접기</button>
-    </div>
-    <div style="font-size: 11px; color: #93c5fd; margin-bottom: 6px;">실패 시 마지막 단계가 문제 위치. ?journalDebug=1 이면 완료 후에도 로그 유지</div>
-    <div id="journalLoadStatusLog" style="font-size: 12px; color: #e2e8f0; line-height: 1.6; font-family: monospace;"></div>
-  </div>
 </body>
 </html>
