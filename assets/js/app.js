@@ -6085,20 +6085,18 @@ function initializeCurrentScreen(screenId) {
                 if (typeof window.waitForAuthReady === 'function') {
                   await window.waitForAuthReady(isTablet ? 12000 : 5000);
                 }
-                if (isTablet && typeof window.waitForFirestore === 'function') {
-                  try {
-                    await window.waitForFirestore(12000);
-                  } catch (e) {
-                    console.warn('[Journal] waitForFirestore failed', e);
-                  }
+                // 훈련일지는 firestoreV9만 사용 → v9 전용 대기(Long Polling) 적용 (삼성 태블릿)
+                if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+                  await window.ensureFirestoreV9ReadyForJournal(isTablet ? 12000 : 5000);
                 }
               } catch (e) {
                 console.warn('[Journal] Auth/Firestore wait failed', e);
               }
+              var initDelay = isTablet ? 400 : 100;
               setTimeout(() => {
                 console.log('initMiniCalendarJournal 호출 시도 - userId:', userId);
                 window.initMiniCalendarJournal(userId);
-              }, 100);
+              }, initDelay);
             })();
           } else {
             console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');

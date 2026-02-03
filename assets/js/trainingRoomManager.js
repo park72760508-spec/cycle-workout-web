@@ -374,6 +374,36 @@ async function waitForFirestore(maxWaitMs = null) {
 }
 
 /**
+ * 훈련일지 전용: window.firestoreV9가 준비될 때까지 대기 (삼성 태블릿 대응)
+ * 훈련일지는 getUserTrainingLogs/getTrainingLogsByDateRange에서 firestoreV9만 사용하므로,
+ * waitForFirestore(v8 우선) 대신 firestoreV9 전용 대기가 필요함.
+ * @param {number} maxWaitMs - 최대 대기 시간 (밀리초)
+ * @returns {Promise<void>}
+ */
+async function ensureFirestoreV9ReadyForJournal(maxWaitMs = 12000) {
+  const pollInterval = 200;
+  const startTime = Date.now();
+  const isTablet = isTabletOrSlowDeviceForAuth();
+  console.log('[Journal] ensureFirestoreV9ReadyForJournal 시작 - 최대', maxWaitMs, 'ms, 태블릿:', isTablet);
+  while (Date.now() - startTime < maxWaitMs) {
+    if (window.firestoreV9) {
+      if (isTablet && window.firestoreV9 && typeof window.firestoreV9.settings === 'function') {
+        try {
+          window.firestoreV9.settings({ experimentalForceLongPolling: true, merge: true });
+          console.log('[Journal] Firestore V9 Long Polling 적용 (태블릿).');
+        } catch (e) {
+          console.warn('[Journal] Firestore V9 long polling 실패:', e?.message);
+        }
+      }
+      console.log('[Journal] firestoreV9 준비 완료 (경과:', Date.now() - startTime, 'ms)');
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+  }
+  console.warn('[Journal] firestoreV9 대기 타임아웃 (', maxWaitMs, 'ms). 훈련일지 로드 시 오류 가능.');
+}
+
+/**
  * 재시도 로직이 있는 함수 실행 (모바일 최적화 적용)
  */
 async function withRetryForTrainingRooms(fn, maxRetries = 2, delayMs = 500) {
@@ -6295,6 +6325,7 @@ window.toggleDeviceConnectionMode = toggleDeviceConnectionMode;
   // 훈련일지·기타 화면용 Auth/Firestore 대기 (삼성 태블릿 대응)
   window.waitForAuthReady = waitForAuthReady;
   window.waitForFirestore = waitForFirestore;
+  window.ensureFirestoreV9ReadyForJournal = ensureFirestoreV9ReadyForJournal;
   window.isTabletOrSlowDeviceForAuth = isTabletOrSlowDeviceForAuth;
   window.getCurrentUserForTrainingRooms = getCurrentUserForTrainingRooms;
   window.getAuthForTrainingRooms = getAuthForTrainingRooms;
