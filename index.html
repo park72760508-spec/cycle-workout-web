@@ -5460,37 +5460,50 @@
       // 현재 표시 월(오늘 포함) 로그를 별도로 조회해 병합 (로딩 시 오늘 훈련이 달력에 바로 표시되도록)
       var cy = miniCalendarStateJournal.currentYear;
       var cm = miniCalendarStateJournal.currentMonth;
+      var now = new Date();
+      var isDisplayingCurrentMonth = (cy === now.getFullYear() && cm === now.getMonth());
+
+      function mergeMonthLogsIntoTrainingLogs(monthLogs) {
+        if (!monthLogs || monthLogs.length === 0) return;
+        var minSec = 600;
+        monthLogs.forEach(function(log) {
+          var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+          if (sec < minSec) return;
+          var dateKey = getDateKeyJournal(log.date);
+          if (dateKey) {
+            if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
+              miniCalendarStateJournal.trainingLogs[dateKey] = [];
+            }
+            var exists = miniCalendarStateJournal.trainingLogs[dateKey].some(function(l) { return l.id === log.id; });
+            if (!exists) {
+              miniCalendarStateJournal.trainingLogs[dateKey].push(log);
+            }
+          }
+        });
+        // 같은 날 Strava/Stelvio 정리
+        Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
+          var arr = miniCalendarStateJournal.trainingLogs[dateKey];
+          if (!arr || arr.length === 0) return;
+          var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
+          if (hasStelvio) {
+            miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+          }
+        });
+      }
+
       if (typeof window.getTrainingLogsByDateRange === 'function') {
         try {
           var monthLogs = await window.getTrainingLogsByDateRange(userId, cy, cm);
-          if (monthLogs && monthLogs.length > 0) {
-            var minSec = 600;
-            monthLogs.forEach(function(log) {
-              var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
-              if (sec < minSec) return;
-              var dateKey = getDateKeyJournal(log.date);
-              if (dateKey) {
-                if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
-                  miniCalendarStateJournal.trainingLogs[dateKey] = [];
-                }
-                var exists = miniCalendarStateJournal.trainingLogs[dateKey].some(function(l) { return l.id === log.id; });
-                if (!exists) {
-                  miniCalendarStateJournal.trainingLogs[dateKey].push(log);
-                }
-              }
-            });
-            // 같은 날 Strava/Stelvio 정리
-            Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
-              var arr = miniCalendarStateJournal.trainingLogs[dateKey];
-              if (!arr || arr.length === 0) return;
-              var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
-              if (hasStelvio) {
-                miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
-              }
-            });
+          mergeMonthLogsIntoTrainingLogs(monthLogs);
+          // 오늘 기준 1개월간 분석에 전월 말일 포함: 표시 월이 현재 월일 때 전월 로그도 병합 (초기 로드 시 전월 마지막 날 훈련 누락 방지)
+          if (isDisplayingCurrentMonth) {
+            var prevYear = cm === 0 ? cy - 1 : cy;
+            var prevMonth = cm === 0 ? 11 : cm - 1;
+            var prevMonthLogs = await window.getTrainingLogsByDateRange(userId, prevYear, prevMonth);
+            mergeMonthLogsIntoTrainingLogs(prevMonthLogs);
           }
         } catch (e) {
-          console.warn('[MiniCalendarJournal] 현재 월 로그 병합 실패(무시):', e);
+          console.warn('[MiniCalendarJournal] 현재/전월 로그 병합 실패(무시):', e);
         }
       }
       
