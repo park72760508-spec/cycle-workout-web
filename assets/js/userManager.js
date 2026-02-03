@@ -3073,8 +3073,8 @@ window.changeUserPassword = changeUserPassword;
 
 /**
  * 관리자 비밀번호 초기화 (관리자 전용)
- * 주의: Firebase 클라이언트 SDK에서는 다른 사용자의 비밀번호를 직접 변경할 수 없습니다.
- * 이 함수는 사용자에게 안내 메시지를 표시하고, 실제 초기화는 Firebase Admin SDK가 필요합니다.
+ * Firebase Callable Function(adminResetUserPassword)을 호출하여 대상 사용자 비밀번호를 실제로 변경합니다.
+ * Cloud Function이 배포되어 있어야 동작하며, 호출자는 Firestore users/{uid}.grade === 1 이어야 합니다.
  */
 async function adminResetUserPassword() {
   const tempPasswordEl = document.getElementById('adminTempPassword');
@@ -3114,25 +3114,51 @@ async function adminResetUserPassword() {
     resetBtn.textContent = '처리 중...';
     showAdminPasswordStatus('비밀번호를 초기화하고 있습니다...', 'info');
     
-    // Firebase 클라이언트 SDK에서는 다른 사용자의 비밀번호를 직접 변경할 수 없습니다.
-    // 따라서 사용자에게 안내 메시지를 표시합니다.
-    // 실제 구현을 위해서는 Firebase Admin SDK를 사용하는 백엔드 서버가 필요합니다.
+    // Callable Function 호출 (Firebase Admin SDK로 대상 사용자 비밀번호 변경)
+    const functionsV9 = window.functionsV9;
+    const httpsCallableV9 = window.httpsCallableV9;
+    const currentUser = (window.authV9 && window.authV9.currentUser) ? window.authV9.currentUser : null;
     
-    showAdminPasswordStatus(
-      '⚠️ Firebase 클라이언트 SDK에서는 다른 사용자의 비밀번호를 직접 변경할 수 없습니다.\n\n' +
-      '임시 비밀번호: ' + tempPassword + '\n\n' +
-      '이 비밀번호를 사용자에게 직접 전달해주세요. 사용자는 로그인 후 본인 비밀번호 변경 섹션에서 비밀번호를 변경할 수 있습니다.\n\n' +
-      '실제 자동 초기화 기능을 사용하려면 Firebase Admin SDK를 사용하는 백엔드 서버가 필요합니다.',
-      'info'
-    );
-    
-    // 입력 필드는 유지 (관리자가 확인할 수 있도록)
-    // tempPasswordEl.value = '';
-    // tempPasswordConfirmEl.value = '';
+    if (functionsV9 && httpsCallableV9 && currentUser) {
+      const adminResetPasswordCallable = httpsCallableV9(functionsV9, 'adminResetUserPassword');
+      const result = await adminResetPasswordCallable({
+        targetUserId: currentEditUserId,
+        newPassword: tempPassword
+      });
+      
+      const data = result && result.data ? result.data : null;
+      if (data && data.success === true) {
+        showAdminPasswordStatus('✅ 비밀번호가 초기화되었습니다. 해당 사용자는 새 비밀번호로 로그인할 수 있습니다.', 'success');
+        tempPasswordEl.value = '';
+        tempPasswordConfirmEl.value = '';
+        setTimeout(function () {
+          if (passwordStatusEl) passwordStatusEl.style.display = 'none';
+        }, 5000);
+      } else {
+        const errMsg = (data && data.error) ? data.error : '비밀번호 초기화에 실패했습니다.';
+        showAdminPasswordStatus(errMsg, 'error');
+      }
+    } else {
+      // Callable 미배포 또는 비로그인: 안내 메시지
+      if (!currentUser) {
+        showAdminPasswordStatus('비밀번호 초기화를 하려면 관리자 계정으로 로그인한 뒤 다시 시도해주세요.', 'error');
+      } else if (!functionsV9 || !httpsCallableV9) {
+        showAdminPasswordStatus(
+          '⚠️ 비밀번호 자동 초기화를 사용하려면 Firebase Cloud Function(adminResetUserPassword)을 배포해야 합니다.\n\n' +
+          '임시 비밀번호: ' + tempPassword + '\n\n' +
+          '이 비밀번호를 사용자에게 직접 전달해주세요. 사용자는 로그인 후 본인 비밀번호 변경 섹션에서 비밀번호를 변경할 수 있습니다.\n\n' +
+          'Cloud Function 배포 방법은 docs/ADMIN_PASSWORD_RESET_FUNCTION.md를 참고하세요.',
+          'info'
+        );
+      }
+    }
     
   } catch (error) {
     console.error('관리자 비밀번호 초기화 실패:', error);
-    showAdminPasswordStatus('비밀번호 초기화 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+    let errMsg = '비밀번호 초기화 중 오류가 발생했습니다.';
+    if (error && error.message) errMsg = error.message;
+    if (error && error.details) errMsg = (error.details.message || errMsg) + (error.details.details ? ' ' + JSON.stringify(error.details.details) : '');
+    showAdminPasswordStatus(errMsg, 'error');
   } finally {
     resetBtn.disabled = false;
     resetBtn.textContent = '비밀번호 초기화';
