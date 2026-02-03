@@ -8791,13 +8791,13 @@ Output Format (JSON Only):
               }
               logsSnapshot.docs.forEach(function(doc) {
                 var d = doc.data();
-                if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                if (d.date && d.date >= dateStr) {
                   raw.push({ id: doc.id, ...d });
                 }
               });
             } else {
               raw = raw.filter(function(d) {
-                return (d.source === 'strava' || !d.source) && d.date && d.date >= dateStr;
+                return d.date && d.date >= dateStr;
               });
             }
 
@@ -8840,12 +8840,15 @@ Output Format (JSON Only):
               });
             }
 
-            // 훈련 트렌드(최근 7일): Strava 로그만, 로그 있는 날 중 최근 7개 일(오늘 포함)만 표시, 날짜별 1개 포인트
-            var stravaOnly = logs.filter(function(l) { return l.source === 'strava'; });
+            // 훈련 트렌드(최근 7일): 전체 로그(Strava·Stelvio 등) 사용, 로그 있는 날 중 최근 7개 일(오늘 포함)만 표시, 날짜별 1개 포인트
+            var todayStr = new Date().toISOString().split('T')[0];
+            var sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+            var sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
             var byDate = {};
-            stravaOnly.forEach(function(log) {
+            logs.forEach(function(log) {
               var d = log.date ? String(log.date).split('T')[0] : '';
-              if (!d) return;
+              if (!d || d < sevenDaysAgoStr || d > todayStr) return;
               if (!byDate[d]) byDate[d] = { tss: 0 };
               byDate[d].tss += Number(log.tss) || 0;
             });
