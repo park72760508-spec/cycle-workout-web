@@ -6089,7 +6089,10 @@ function initializeCurrentScreen(screenId) {
               var jClear = window.clearJournalLoadStatus;
               if (jShow) jShow();
               if (jClear) jClear();
-              if (typeof window !== 'undefined') window.__journalFetchCallCount = 0;
+              if (typeof window !== 'undefined') {
+                window.__journalFetchCallCount = 0;
+                window.__journalInitInProgress = false;
+              }
               if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
               const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
               var journalUserId = userId;
@@ -6105,8 +6108,8 @@ function initializeCurrentScreen(screenId) {
                 }
                 if (jStep) jStep('2. Firestore V9 대기 완료', false);
                 if (isTablet && typeof window.waitForAuthV9UserForJournal === 'function') {
-                  if (jStep) jStep('3. authV9 사용자 대기 중... (최대 8초)', false);
-                  var authV9Result = await window.waitForAuthV9UserForJournal(8000);
+                  if (jStep) jStep('3. authV9 사용자 대기 중... (최대 15초, 삼성 태블릿)', false);
+                  var authV9Result = await window.waitForAuthV9UserForJournal(15000);
                   if (authV9Result && authV9Result.uid) {
                     journalUserId = authV9Result.uid;
                     if (jStep) jStep('3. authV9 사용자 확인 (uid 사용)', false);
@@ -6129,6 +6132,10 @@ function initializeCurrentScreen(screenId) {
                   if (jStep) jStep('4. getUserTrainingLogs 모듈 로드 완료', false);
                 } else {
                   if (jStep) jStep('4. getUserTrainingLogs 미로드 → 인라인 폴백 예정', true);
+                }
+                if (isTablet) {
+                  if (jStep) jStep('4-2. 태블릿: 쿼리 전 2초 대기 (인증 안정화)', false);
+                  await new Promise(function(r) { setTimeout(r, 2000); });
                 }
               } catch (e) {
                 if (jStep) jStep('오류 (진입 단계): ' + (e && e.message ? e.message : String(e)), true);
