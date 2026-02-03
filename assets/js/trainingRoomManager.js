@@ -6292,6 +6292,12 @@ window.toggleDeviceConnectionMode = toggleDeviceConnectionMode;
   window.checkFirebaseRawData = checkFirebaseRawData;
   // 입장 버튼 클릭 핸들러
   window.handlePlayerEnterClick = handlePlayerEnterClick;
+  // 훈련일지·기타 화면용 Auth/Firestore 대기 (삼성 태블릿 대응)
+  window.waitForAuthReady = waitForAuthReady;
+  window.waitForFirestore = waitForFirestore;
+  window.isTabletOrSlowDeviceForAuth = isTabletOrSlowDeviceForAuth;
+  window.getCurrentUserForTrainingRooms = getCurrentUserForTrainingRooms;
+  window.getAuthForTrainingRooms = getAuthForTrainingRooms;
 }
 
 /**
