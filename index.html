@@ -5019,6 +5019,22 @@
           return {};
         }
 
+        // 삼성 태블릿: firestoreV9가 아직 없으면 전용 대기 (훈련일지는 firestoreV9만 사용)
+        if (!window.firestoreV9 && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+          var waitMs = (typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth()) ? 10000 : 5000;
+          await window.ensureFirestoreV9ReadyForJournal(waitMs);
+        }
+        if (!window.firestoreV9) {
+          var pollStart = Date.now();
+          var pollMax = 6000;
+          while (!window.firestoreV9 && (Date.now() - pollStart) < pollMax) {
+            await new Promise(function(r) { setTimeout(r, 200); });
+          }
+          if (!window.firestoreV9) {
+            console.warn('[MiniCalendarJournal] firestoreV9 대기 타임아웃. 로드 실패 가능.');
+          }
+        }
+
         function isPermissionErrorJournal(err) {
           if (!err) return false;
           var code = err.code || '';
@@ -5029,11 +5045,22 @@
         var isTabletJournal = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
         var currentUserJournal = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
         var logs = [];
+        function isFirestoreNotReadyError(err) {
+          if (!err || !err.message) return false;
+          var m = String(err.message);
+          return m.indexOf('Firestore') !== -1 && (m.indexOf('없습니다') !== -1 || m.indexOf('찾을 수 없습니다') !== -1);
+        }
         console.log('[MiniCalendarJournal] getUserTrainingLogs 호출 시작...');
         try {
           logs = await window.getUserTrainingLogs(userId, { limit: 200 });
         } catch (firstErr) {
-          if (isPermissionErrorJournal(firstErr)) {
+          if (isFirestoreNotReadyError(firstErr) && typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
+            console.warn('[MiniCalendarJournal] Firestore 미준비. ensureFirestoreV9ReadyForJournal 후 재시도...');
+            await window.ensureFirestoreV9ReadyForJournal(isTabletJournal ? 8000 : 4000);
+            try {
+              logs = await window.getUserTrainingLogs(userId, { limit: 200 });
+            } catch (e) { throw e; }
+          } else if (isPermissionErrorJournal(firstErr)) {
             console.warn('[MiniCalendarJournal] Permission denied. 1st retry: token refresh...');
             try {
               if (currentUserJournal && typeof currentUserJournal.getIdToken === 'function') {
