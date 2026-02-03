@@ -6002,12 +6002,6 @@ window.showScreen = function(screenId) {
     screen.style.visibility = 'hidden';
     }
   });
-  // [임시] 훈련일지 단계 박스: 다른 화면으로 나갈 때 숨김 (body 직계 요소라 여기서 처리)
-  var journalBox = document.getElementById('journalLoadStatusBox');
-  if (journalBox) journalBox.style.display = 'none';
-  var tjs = document.getElementById('trainingJournalScreen');
-  if (tjs) tjs.style.paddingBottom = '';
-
   // 선택된 화면만 표시
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
@@ -6015,21 +6009,6 @@ window.showScreen = function(screenId) {
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
     targetScreen.style.visibility = 'visible';
-
-    // [임시] 훈련일지 진입 시 단계 박스 반드시 표시 (삼성 태블릿 등에서 함수 의존 없이 직접 표시)
-    if (screenId === 'trainingJournalScreen') {
-      var jbox = document.getElementById('journalLoadStatusBox');
-      if (jbox) {
-        jbox.style.display = 'block';
-        jbox.style.position = 'fixed';
-        jbox.style.bottom = '0';
-        jbox.style.left = '0';
-        jbox.style.right = '0';
-        jbox.style.zIndex = '99999';
-      }
-      var journalScreenEl = document.getElementById('trainingJournalScreen');
-      if (journalScreenEl) journalScreenEl.style.paddingBottom = '220px';
-    }
 
     initializeCurrentScreen(screenId);
   }
