@@ -3980,7 +3980,10 @@
           <p style="font-size: 11px; color: #b91c1c; margin-bottom: 6px; font-weight: 600;">▼ 실패 단계는 아래 "실패 단계:" 줄과 상단 "나의 훈련 이력을 확인하세요" 우측 (0,1,2,…) 에서 확인하세요</p>
           <p id="journalRetryMsg" style="color: #991b1b; font-size: 14px; margin-bottom: 4px;">훈련 로드를 불러오지 못했습니다.</p>
           <p id="journalRetryStep" style="color: #b91c1c; font-size: 13px; font-weight: 600; margin-bottom: 8px;"></p>
-          <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+            <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
+            <button type="button" id="journalReloginBtn" onclick="try{ sessionStorage.clear(); if(typeof localStorage!=='undefined'){ localStorage.removeItem('firebase:authUser:authV9'); localStorage.removeItem('firebase:host:authV9'); } if(typeof showScreen==='function') showScreen('authScreen'); }catch(e){ alert('재로그인 화면으로 이동 실패'); }" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">다시 로그인 후 시도</button>
+          </div>
         </div>
       </div>
       <!-- POWERED BY STRAVA (클릭 시 Strava 동기화 모달/연동 동일 기능) -->
