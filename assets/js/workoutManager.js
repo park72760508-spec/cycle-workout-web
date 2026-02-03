@@ -3113,8 +3113,9 @@ async function loadWorkouts(categoryId) {
       }
     }
 
-    // 전역 변수에 저장 (검색 기능에서 사용)
+    // 전역 변수에 저장 (검색·신규 추가 시 기존 목록 유지용)
     window.workouts = filteredWorkouts;
+    window.workoutsFull = allWorkoutsForCount;
 
     renderWorkoutTable(filteredWorkouts, {}, {}, grade);
 
@@ -3144,6 +3145,104 @@ async function loadWorkouts(categoryId) {
         <button class="retry-button" onclick="loadWorkouts()">다시 시도</button>
       </div>
     `;
+  }
+}
+
+/**
+ * 신규 저장된 워크아웃만 목록에 추가 (전체 재로딩 없이)
+ * - 기존 window.workouts / window.workoutsFull 이 있으면 새 항목만 fetch 후 추가·재렌더
+ * - 없으면 loadWorkouts()로 폴백
+ */
+async function appendNewWorkoutToList(workoutId) {
+  if (!workoutId) return;
+  let grade = '2';
+  try {
+    if (typeof getViewerGrade === 'function') {
+      grade = String(getViewerGrade());
+    } else {
+      const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+      if (viewer && viewer.grade != null) grade = String(viewer.grade);
+      else if (authUser && authUser.grade != null) grade = String(authUser.grade);
+    }
+  } catch (e) {
+    grade = '2';
+  }
+  const isAdmin = (grade === '1' || grade === '3');
+
+  try {
+    const getResult = await apiGetWorkout(workoutId);
+    if (!getResult || !getResult.success || !getResult.item) {
+      if (window.workoutsFull && window.workoutsFull.length > 0) {
+        window.showToast('저장된 워크아웃을 목록에 반영하지 못했습니다. 목록을 새로고침합니다.');
+        loadWorkouts(window.workoutViewState && window.workoutViewState.selectedCategory ? window.workoutViewState.selectedCategory : 'all');
+      } else {
+        loadWorkouts('all');
+      }
+      return;
+    }
+    const raw = getResult.item;
+    if (!validateWorkoutData(raw)) {
+      loadWorkouts(window.workoutViewState && window.workoutViewState.selectedCategory ? window.workoutViewState.selectedCategory : 'all');
+      return;
+    }
+    const segments = await apiGetWorkoutSegments(workoutId);
+    raw.segments = Array.isArray(segments) ? segments : [];
+    const newWorkout = normalizeWorkoutData(raw);
+
+    const statusStr = String(newWorkout.status || '').trim();
+    const isPublic = statusStr === '보이기';
+    if (!isAdmin && !isPublic) {
+      if (!window.workoutsFull || window.workoutsFull.length === 0) {
+        loadWorkouts('all');
+        return;
+      }
+      if (window.workoutsFull.some(function(w) { return w.id === newWorkout.id; })) return;
+      window.workoutsFull = window.workoutsFull.slice();
+      window.workoutsFull.push(newWorkout);
+      if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(window.workoutsFull);
+      return;
+    }
+
+    if (!window.workoutsFull || !Array.isArray(window.workoutsFull)) {
+      loadWorkouts('all');
+      return;
+    }
+    if (window.workoutsFull.some(function(w) { return w.id === newWorkout.id; })) {
+      if (window.workouts && window.workouts.length > 0 && typeof renderWorkoutTable === 'function') {
+        renderWorkoutTable(window.workouts, {}, {}, grade);
+        if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
+      }
+      return;
+    }
+    window.workoutsFull = window.workoutsFull.slice();
+    window.workoutsFull.push(newWorkout);
+
+    const selectedCategory = (window.workoutViewState && window.workoutViewState.selectedCategory) ? window.workoutViewState.selectedCategory : 'all';
+    const newCat = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(newWorkout) : '';
+    const matchesCategory = selectedCategory === 'all' || newCat === selectedCategory;
+
+    if (window.workouts && Array.isArray(window.workouts)) {
+      if (matchesCategory && !window.workouts.some(function(w) { return w.id === newWorkout.id; })) {
+        window.workouts = window.workouts.slice();
+        window.workouts.push(newWorkout);
+      }
+      if (typeof renderWorkoutTable === 'function') {
+        renderWorkoutTable(window.workouts, {}, {}, grade);
+        if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
+      }
+    } else if (matchesCategory) {
+      window.workouts = [newWorkout];
+      if (typeof renderWorkoutTable === 'function') {
+        renderWorkoutTable(window.workouts, {}, {}, grade);
+        if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
+      }
+    }
+
+    if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(window.workoutsFull);
+  } catch (e) {
+    console.warn('appendNewWorkoutToList 실패, 전체 로딩으로 폴백:', e);
+    loadWorkouts(window.workoutViewState && window.workoutViewState.selectedCategory ? window.workoutViewState.selectedCategory : 'all');
   }
 }
 
@@ -3906,9 +4005,11 @@ async function saveWorkout() {
       
       window.showScreen('workoutScreen');
       
-      setTimeout(() => {
-        loadWorkouts();
-      }, 500);
+      if (typeof appendNewWorkoutToList === 'function') {
+        setTimeout(function() { appendNewWorkoutToList(result.workoutId); }, 100);
+      } else {
+        setTimeout(function() { loadWorkouts(window.workoutViewState && window.workoutViewState.selectedCategory ? window.workoutViewState.selectedCategory : 'all'); }, 500);
+      }
       
     } else {
       throw new Error(result?.error || '알 수 없는 오류가 발생했습니다.');
