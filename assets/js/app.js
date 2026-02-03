@@ -6002,6 +6002,7 @@ window.showScreen = function(screenId) {
     screen.style.visibility = 'hidden';
     }
   });
+  
   // 선택된 화면만 표시
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
@@ -6009,7 +6010,7 @@ window.showScreen = function(screenId) {
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
     targetScreen.style.visibility = 'visible';
-
+    
     initializeCurrentScreen(screenId);
   }
 };
@@ -6066,11 +6067,12 @@ function initializeCurrentScreen(screenId) {
       break;
       
       case 'trainingJournalScreen':
-      // 훈련일지 화면: Auth·Firestore 대기 후 미니 달력 로드 (단계는 콘솔 로그만)
+      // 훈련일지 화면: 미니 달력 자동 로드
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
-
+      
+      // 함수가 로드될 때까지 대기 (최대 2초)
       const checkAndInit = (retryCount = 0) => {
         if (typeof window.initMiniCalendarJournal === 'function') {
           const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
@@ -6078,103 +6080,24 @@ function initializeCurrentScreen(screenId) {
           console.log('현재 사용자 정보:', { userId, hasCurrentUser: !!currentUser, userName: currentUser?.name });
           
           if (userId) {
-            (async function runJournalInit() {
-              var jStep = window.setJournalLoadStatus;
-              var jShow = window.showJournalLoadStatusBox;
-              var jClear = window.clearJournalLoadStatus;
-              if (jShow) jShow();
-              if (jClear) jClear();
-              if (jStep) jStep('0. 훈련일지 로드 시작 (userId: ' + (userId || '').slice(0, 8) + '...)', false);
-              if (typeof window !== 'undefined') {
-                window.__journalFetchCallCount = 0;
-                window.__journalInitInProgress = false;
-              }
-              const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
-              var journalUserId = userId;
-              try {
-                if (jStep) jStep('1. Auth 대기 중... (최대 ' + (isTablet ? 12 : 5) + '초)', false);
-                if (typeof window.waitForAuthReady === 'function') {
-                  await window.waitForAuthReady(isTablet ? 12000 : 5000);
-                }
-                if (jStep) jStep('1. Auth 대기 완료', false);
-                if (jStep) jStep('2. Firestore V9 대기 중... (최대 ' + (isTablet ? 18 : 6) + '초)', false);
-                if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
-                  await window.ensureFirestoreV9ReadyForJournal(isTablet ? 18000 : 6000);
-                }
-                if (jStep) jStep('2. Firestore V9 대기 완료', false);
-                if (isTablet && typeof window.waitForAuthV9UserForJournal === 'function') {
-                  if (jStep) jStep('3. authV9 사용자 대기 중... (최대 15초, 삼성 태블릿)', false);
-                  var authV9Result = await window.waitForAuthV9UserForJournal(15000);
-                  if (authV9Result && authV9Result.uid) {
-                    journalUserId = authV9Result.uid;
-                    if (jStep) jStep('3. authV9 사용자 확인 (uid 사용)', false);
-                  } else {
-                    if (jStep) jStep('3. authV9 사용자 대기 타임아웃 (기존 userId 사용)', true);
-                  }
-                }
-                var liveUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
-                if (liveUser) {
-                  var uid = liveUser.uid != null ? liveUser.uid : liveUser.id;
-                  if (uid) journalUserId = uid;
-                }
-                if (jStep) jStep('4. getUserTrainingLogs 모듈 대기 중...', false);
-                var modulePollMs = isTablet ? 6000 : 2000;
-                var moduleStart = Date.now();
-                while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - moduleStart) < modulePollMs) {
-                  await new Promise(function(r) { setTimeout(r, 200); });
-                }
-                if (typeof window.getUserTrainingLogs === 'function') {
-                  if (jStep) jStep('4. getUserTrainingLogs 모듈 로드 완료', false);
-                } else {
-                  if (jStep) jStep('4. getUserTrainingLogs 미로드 → 인라인 폴백 예정', true);
-                }
-                if (isTablet) {
-                  if (jStep) jStep('4-2. 태블릿: 쿼리 전 2초 대기 (인증 안정화)', false);
-                  await new Promise(function(r) { setTimeout(r, 2000); });
-                }
-              } catch (e) {
-                if (jStep) jStep('오류 (진입 단계): ' + (e && e.message ? e.message : String(e)), true);
-                console.warn('[Journal] Auth/Firestore wait failed', e);
-              }
-              var initDelay = isTablet ? 500 : 100;
-              setTimeout(function() {
-                if (jStep) jStep('5. initMiniCalendarJournal 호출 (지연 ' + initDelay + 'ms)', false);
-                console.log('initMiniCalendarJournal 호출 시도 - userId:', journalUserId);
-                window.initMiniCalendarJournal(journalUserId);
-              }, initDelay);
-            })();
+            // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 초기화
+            setTimeout(() => {
+              console.log('initMiniCalendarJournal 호출 시도 - userId:', userId);
+              window.initMiniCalendarJournal(userId);
+            }, 100);
           } else {
             console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
             console.warn('currentUser:', currentUser);
             console.warn('localStorage currentUser:', localStorage.getItem('currentUser'));
-            if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('0. 오류: 사용자 ID 없음', true);
-            try {
-              window.__journalLoadFailed = true;
-              window.__journalLoadErrorMsg = '로그인 상태를 확인해 주세요. 다시 로그인 후 훈련일지를 열어 주세요.';
-              var area = document.getElementById('journalRetryArea');
-              var msgEl = document.getElementById('journalRetryMsg');
-              var stepEl = document.getElementById('journalRetryStep');
-              if (area) area.style.display = 'block';
-              if (msgEl) msgEl.textContent = window.__journalLoadErrorMsg;
-              if (stepEl) stepEl.textContent = '실패 단계: 0. 오류: 사용자 ID 없음';
-            } catch (e) {}
           }
         } else if (retryCount < 20) {
+          // 함수가 아직 로드되지 않았으면 100ms 후 재시도
           console.log(`initMiniCalendarJournal 대기 중... (${retryCount + 1}/20)`);
           setTimeout(() => checkAndInit(retryCount + 1), 100);
         } else {
           console.error('❌ initMiniCalendarJournal function not available after 2 seconds');
           console.error('window.initMiniCalendarJournal:', window.initMiniCalendarJournal);
           console.error('사용 가능한 window 함수들:', Object.keys(window).filter(k => k.includes('Calendar')));
-          if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('0. 오류: 초기화 함수 미로드', true);
-          try {
-            window.__journalLoadFailed = true;
-            window.__journalLoadErrorMsg = '훈련일지 초기화를 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.';
-            var area = document.getElementById('journalRetryArea');
-            var msgEl = document.getElementById('journalRetryMsg');
-            if (area) area.style.display = 'block';
-            if (msgEl) msgEl.textContent = window.__journalLoadErrorMsg;
-          } catch (e) {}
         }
       };
       
