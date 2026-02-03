@@ -3723,16 +3723,16 @@ button[aria-disabled="true"] {
   width: 100%;
 }
 
-/* 워크아웃 로딩 오버레이 - 큰 녹색 스피너 + 진행률 (카드 선택 시 등) */
+/* 워크아웃 로딩 오버레이 - 보이는 화면(뷰포트) 중앙 고정, 스크롤과 무관 */
 .workout-loading-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background: rgba(26, 29, 33, 0.92);
-  z-index: 50;
+  z-index: 9999;
   animation: fadeIn 0.2s ease;
   min-height: 200px;
 }
