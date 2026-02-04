@@ -7635,32 +7635,56 @@
      */
     function handleLogout() {
       const auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      const authV9 = window.authV9 || null;
+      
+      // 🔒 보안: authV9와 auth 모두 로그아웃 (authV9가 이전 사용자 상태를 유지하는 것을 방지)
+      var signOutPromises = [];
+      
       if (auth) {
-        auth.signOut().then(function() {
-          window.currentUser = null;
-          try { localStorage.removeItem('currentUser'); } catch (e) {}
-          
-          // 🔒 보안: 훈련일지 상태 초기화 (다른 사용자 데이터 노출 방지)
-          if (typeof window !== 'undefined' && window.miniCalendarStateJournal) {
-            console.log('[Logout] 훈련일지 상태 초기화');
-            window.miniCalendarStateJournal.trainingLogs = {};
-            window.miniCalendarStateJournal.currentUserId = null;
-            window.miniCalendarStateJournal.currentYear = new Date().getFullYear();
-            window.miniCalendarStateJournal.currentMonth = new Date().getMonth();
-          }
-          // 진행 중인 작업도 초기화
-          if (typeof window !== 'undefined') {
-            window.__journalInitInProgress = false;
-            window.__journalFetchInProgress = false;
-            window.__journalFetchCallCount = 0;
-            window.__journalEmptyRetryDone = false;
-            window.__journalLoadFailed = false;
-          }
-          
-          if (typeof updateAuthBarUI === 'function') updateAuthBarUI(null);
-          if (typeof showToast === 'function') showToast('로그아웃되었습니다.');
-        }).catch(function(e) { console.error('로그아웃 오류:', e); });
+        signOutPromises.push(auth.signOut().catch(function(e) { 
+          console.warn('[Logout] auth.signOut 실패:', e); 
+        }));
       }
+      
+      if (authV9 && typeof authV9.signOut === 'function') {
+        signOutPromises.push(authV9.signOut().catch(function(e) { 
+          console.warn('[Logout] authV9.signOut 실패:', e); 
+        }));
+      }
+      
+      Promise.all(signOutPromises).then(function() {
+        window.currentUser = null;
+        try { localStorage.removeItem('currentUser'); } catch (e) {}
+        try { localStorage.removeItem('authUser'); } catch (e) {}
+        
+        // 🔒 보안: 훈련일지 상태 초기화 (다른 사용자 데이터 노출 방지)
+        if (typeof window !== 'undefined' && window.miniCalendarStateJournal) {
+          console.log('[Logout] 훈련일지 상태 초기화');
+          window.miniCalendarStateJournal.trainingLogs = {};
+          window.miniCalendarStateJournal.currentUserId = null;
+          window.miniCalendarStateJournal.currentYear = new Date().getFullYear();
+          window.miniCalendarStateJournal.currentMonth = new Date().getMonth();
+        }
+        // 진행 중인 작업도 초기화
+        if (typeof window !== 'undefined') {
+          window.__journalInitInProgress = false;
+          window.__journalFetchInProgress = false;
+          window.__journalFetchCallCount = 0;
+          window.__journalEmptyRetryDone = false;
+          window.__journalLoadFailed = false;
+        }
+        
+        console.log('[Logout] ✅ 모든 인증 상태 로그아웃 완료');
+        if (typeof updateAuthBarUI === 'function') updateAuthBarUI(null);
+        if (typeof showToast === 'function') showToast('로그아웃되었습니다.');
+      }).catch(function(e) { 
+        console.error('[Logout] 로그아웃 오류:', e); 
+        // 오류가 발생해도 UI는 업데이트
+        window.currentUser = null;
+        try { localStorage.removeItem('currentUser'); } catch (e) {}
+        if (typeof updateAuthBarUI === 'function') updateAuthBarUI(null);
+        if (typeof showToast === 'function') showToast('로그아웃되었습니다.');
+      });
     }
     
     /**
