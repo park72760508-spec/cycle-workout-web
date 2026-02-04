@@ -13,11 +13,11 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+// CORS 설정: Firebase Functions v2 onCall은 기본적으로 모든 origin 허용
+// 특정 origin만 허용하려면 배열로 지정 (문자열 또는 정규식)
 const CORS_ORIGINS = [
   "https://stelvio.ai.kr",
   "https://www.stelvio.ai.kr",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
 ];
 
 exports.adminResetUserPassword = onCall(
@@ -98,7 +98,7 @@ exports.adminResetUserPassword = onCall(
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
  */
 exports.exchangeStravaCode = onCall(
-  { cors: CORS_ORIGINS },
+  { cors: true },
   async (request) => {
     try {
       const data = request.data || {};
@@ -126,10 +126,23 @@ exports.exchangeStravaCode = onCall(
       const redirectUri = appConfig.strava_redirect_uri || "";
       const clientSecret = STRAVA_CLIENT_SECRET.value();
 
+      console.log("[exchangeStravaCode] 설정 확인:", {
+        hasClientId: !!clientId,
+        hasRedirectUri: !!redirectUri,
+        hasClientSecret: !!clientSecret,
+        clientIdLength: clientId.length,
+        redirectUriLength: redirectUri.length,
+        clientSecretLength: clientSecret ? clientSecret.length : 0
+      });
+
       if (!clientId || !clientSecret || !redirectUri) {
+        const missing = [];
+        if (!clientId) missing.push("strava_client_id");
+        if (!clientSecret) missing.push("STRAVA_CLIENT_SECRET");
+        if (!redirectUri) missing.push("strava_redirect_uri");
         throw new HttpsError(
           "failed-precondition",
-          "Strava 설정이 불완전합니다. appConfig/strava와 STRAVA_CLIENT_SECRET을 확인하세요."
+          `Strava 설정이 불완전합니다. 누락된 항목: ${missing.join(", ")}`
         );
       }
 
@@ -194,7 +207,7 @@ exports.exchangeStravaCode = onCall(
  * 클라이언트는 userId만 전달; 리프레시 토큰은 서버가 Firestore에서 읽음.
  */
 exports.refreshStravaToken = onCall(
-  { cors: CORS_ORIGINS },
+  { cors: true },
   async (request) => {
     try {
       const data = request.data || {};
