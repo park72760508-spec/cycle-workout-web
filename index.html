@@ -13,8 +13,9 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <!-- 👆 여기까지 추가 -->
-  <!-- API 키·시크릿: config.local.js 에서 로드 (Git 제외). 없으면 아래 기본값 사용 -->
+  <!-- API 키·시크릿: config.local.js (index.html과 같은 폴더에 두세요). 없으면 placeholder 사용 -->
   <script src="config.local.js"></script>
+  <script>try { window.__CONFIG_LOADED__ = !!(window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.apiKey && window.__FIREBASE_CONFIG__.apiKey !== 'YOUR_FIREBASE_API_KEY'); } catch (e) { window.__CONFIG_LOADED__ = false; }</script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
@@ -5226,7 +5227,12 @@
         }
         if (typeof window.getUserTrainingLogs !== 'function') {
           console.error('[MiniCalendarJournal] window.getUserTrainingLogs 없고 firestoreV9도 없음.');
-          if (typeof window !== 'undefined') { window.__journalLoadFailed = true; window.__journalLoadErrorMsg = 'Firestore/모듈 미로드'; }
+          if (typeof window !== 'undefined') {
+            window.__journalLoadFailed = true;
+            window.__journalLoadErrorMsg = !window.firestoreV9 && window.__CONFIG_LOADED__ === false
+              ? 'Firestore 미로드. index.html과 같은 폴더에 config.local.js 가 있는지 확인하세요.'
+              : 'Firestore/모듈 미로드. 페이지 새로고침 후 다시 시도하세요.';
+          }
           return {};
         }
 
