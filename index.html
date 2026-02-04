@@ -3949,7 +3949,7 @@
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
     <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-      <span>나의 훈련 이력을 확인하세요 ( )</span>
+      <span>나의 훈련 이력을 확인하세요 <span id="journalSubtitleCount" aria-live="polite">( )</span></span>
     </p>
     
     <!-- 월간 훈련 이력 미니 달력 -->
@@ -4946,10 +4946,16 @@
     }
     function showJournalLoadStatusBox() {}
     function hideJournalLoadStatusBox() {}
+    /** 훈련일지 상단 문구 괄호 안 상태 표시: (로딩 중...), (N일), (이력 없음), (로드 실패) */
+    function updateJournalSubtitle(text) {
+      var el = document.getElementById('journalSubtitleCount');
+      if (el) el.textContent = text || '( )';
+    }
     window.setJournalLoadStatus = setJournalLoadStatus;
     window.clearJournalLoadStatus = clearJournalLoadStatus;
     window.showJournalLoadStatusBox = showJournalLoadStatusBox;
     window.hideJournalLoadStatusBox = hideJournalLoadStatusBox;
+    window.updateJournalSubtitle = updateJournalSubtitle;
 
     /**
      * 날짜 문자열 파싱 (훈련일지 화면용)
@@ -5699,6 +5705,7 @@
     async function initMiniCalendarJournal(userId) {
       var jStep = window.setJournalLoadStatus;
       var jHide = window.hideJournalLoadStatusBox;
+      if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle('(로딩 중...)');
       if (window.__journalInitInProgress) {
         if (jStep) jStep('6. 이미 초기화 진행 중 (중복 무시)', true);
         return;
@@ -5847,6 +5854,15 @@
       if (journalRetryStepEl) {
         var lastStep = (window.__journalLoadLastStep || (typeof localStorage !== 'undefined' && localStorage.getItem('journalLoadLastStep')) || '').trim();
         journalRetryStepEl.textContent = lastStep ? '실패 단계: ' + lastStep : '';
+      }
+      // 상단 문구 괄호 안 상태 갱신: 로드 실패 / 훈련한 날 수(일) / 이력 없음
+      if (typeof window.updateJournalSubtitle === 'function') {
+        if (window.__journalLoadFailed === true) {
+          window.updateJournalSubtitle('(로드 실패)');
+        } else {
+          var dateCount = Object.keys(miniCalendarStateJournal.trainingLogs || {}).length;
+          window.updateJournalSubtitle(dateCount > 0 ? '(' + dateCount + '일)' : '(이력 없음)');
+        }
       }
       
       // 성공 시 2초 후 단계 로그 박스 숨김, 실패 시 유지 (문제 진단용)
