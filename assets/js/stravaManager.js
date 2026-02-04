@@ -22,19 +22,27 @@ async function refreshStravaTokenForUser(userId, refreshToken) {
   }
 
   // Cloud Function으로 토큰 갱신 (서버에서만 Client Secret 사용)
+  // onRequest로 변경되어 fetch로 호출
   const functionsV9 = typeof window !== 'undefined' && window.functionsV9;
-  const httpsCallableV9 = typeof window !== 'undefined' && window.httpsCallableV9;
-  if (functionsV9 && httpsCallableV9) {
+  if (functionsV9) {
     try {
-      const fn = httpsCallableV9(functionsV9, 'refreshStravaToken');
-      const res = await fn({ userId });
-      if (res.data && res.data.success) {
-        return { success: true, accessToken: res.data.accessToken };
+      // Functions URL 구성 (onRequest는 직접 HTTP 엔드포인트)
+      const url = `https://us-central1-stelvio-ai.cloudfunctions.net/refreshStravaToken`;
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, accessToken: data.accessToken };
       }
-      return { success: false, error: (res.data && res.data.error) || '토큰 갱신 실패' };
+      return { success: false, error: data.error || '토큰 갱신 실패' };
     } catch (err) {
-      const msg = (err && err.message) || (err.details && err.details.message) || String(err);
-      return { success: false, error: msg };
+      console.error('[refreshStravaTokenForUser] Cloud Function 오류:', err);
+      return { success: false, error: err.message || '알 수 없는 오류' };
     }
   }
 
@@ -743,26 +751,33 @@ async function exchangeStravaCode(code, userId) {
   }
 
   // Cloud Function으로 토큰 교환 (서버에서만 Client Secret 사용)
+  // onRequest로 변경되어 fetch로 호출
   const functionsV9 = typeof window !== 'undefined' && window.functionsV9;
-  const httpsCallableV9 = typeof window !== 'undefined' && window.httpsCallableV9;
-  if (functionsV9 && httpsCallableV9) {
+  if (functionsV9) {
     try {
-      const fn = httpsCallableV9(functionsV9, 'exchangeStravaCode');
-      const res = await fn({ code, userId });
-      if (res.data && res.data.success) {
+      // Functions URL 구성 (onRequest는 직접 HTTP 엔드포인트)
+      const functionUrl = functionsV9._delegate?._url || 
+                          `https://us-central1-${functionsV9.app?.options?.projectId || 'stelvio-ai'}.cloudfunctions.net/exchangeStravaCode`;
+      const url = typeof functionUrl === 'string' ? functionUrl : 
+                  `https://us-central1-stelvio-ai.cloudfunctions.net/exchangeStravaCode`;
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, userId })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
         return { success: true };
       }
-      return { success: false, error: (res.data && res.data.error) || '토큰 교환 실패' };
+      return { success: false, error: data.error || '토큰 교환 실패' };
     } catch (err) {
-      // 상세 오류 정보 로깅
       console.error('[exchangeStravaCode] Cloud Function 오류:', {
         message: err.message,
-        code: err.code,
-        details: err.details,
         fullError: err
       });
-      const msg = (err && err.message) || (err.details && err.details.message) || (err.code || '알 수 없는 오류');
-      return { success: false, error: msg };
+      return { success: false, error: err.message || '알 수 없는 오류' };
     }
   }
 
