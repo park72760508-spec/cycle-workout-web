@@ -5952,11 +5952,21 @@
       var isDisplayingCurrentMonth = (cy === now.getFullYear() && cm === now.getMonth());
 
       function mergeMonthLogsIntoTrainingLogs(monthLogs) {
-        if (!monthLogs || monthLogs.length === 0) return;
+        if (!monthLogs || monthLogs.length === 0) {
+          console.log('[MiniCalendarJournal] mergeMonthLogsIntoTrainingLogs: 빈 로그 배열');
+          return;
+        }
         var minSec = 600;
+        var mergedCount = 0;
+        var skippedCount = 0;
+        var dateKeyFailCount = 0;
+        
         monthLogs.forEach(function(log) {
           var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
-          if (sec < minSec) return;
+          if (sec < minSec) {
+            skippedCount++;
+            return;
+          }
           var dateKey = getDateKeyJournal(log.date);
           if (dateKey) {
             if (!miniCalendarStateJournal.trainingLogs[dateKey]) {
@@ -5965,43 +5975,86 @@
             var exists = miniCalendarStateJournal.trainingLogs[dateKey].some(function(l) { return l.id === log.id; });
             if (!exists) {
               miniCalendarStateJournal.trainingLogs[dateKey].push(log);
+              mergedCount++;
             }
+          } else {
+            dateKeyFailCount++;
+            console.warn('[MiniCalendarJournal] mergeMonthLogsIntoTrainingLogs: 날짜 키 변환 실패:', {
+              logId: log.id,
+              date: log.date,
+              dateType: typeof log.date,
+              hasToDate: log.date && typeof log.date.toDate === 'function'
+            });
           }
         });
+        
+        console.log('[MiniCalendarJournal] mergeMonthLogsIntoTrainingLogs 완료:', {
+          total: monthLogs.length,
+          merged: mergedCount,
+          skipped: skippedCount,
+          dateKeyFail: dateKeyFailCount,
+          totalDatesAfter: Object.keys(miniCalendarStateJournal.trainingLogs).length
+        });
+        
         // 같은 날 Strava/Stelvio 정리
         Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
           var arr = miniCalendarStateJournal.trainingLogs[dateKey];
           if (!arr || arr.length === 0) return;
           var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
           if (hasStelvio) {
+            var beforeCount = arr.length;
             miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+            var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
+            if (beforeCount !== afterCount) {
+              console.log('[MiniCalendarJournal] Strava 로그 필터링 (병합 중):', {
+                dateKey: dateKey,
+                before: beforeCount,
+                after: afterCount
+              });
+            }
           }
         });
       }
 
       if (typeof window.getTrainingLogsByDateRange === 'function') {
         try {
+          console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 조회 시작:', { year: cy, month: cm + 1 });
           var monthLogs = await window.getTrainingLogsByDateRange(userId, cy, cm);
+          console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 조회 완료:', {
+            count: monthLogs ? monthLogs.length : 0,
+            beforeMerge: Object.keys(miniCalendarStateJournal.trainingLogs).length
+          });
           mergeMonthLogsIntoTrainingLogs(monthLogs);
+          console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 병합 완료:', {
+            afterMerge: Object.keys(miniCalendarStateJournal.trainingLogs).length
+          });
+          
           // 오늘 기준 1개월간 분석에 전월 말일 포함: 표시 월이 현재 월일 때 전월 로그도 병합 (초기 로드 시 전월 마지막 날 훈련 누락 방지)
           if (isDisplayingCurrentMonth) {
             var prevYear = cm === 0 ? cy - 1 : cy;
             var prevMonth = cm === 0 ? 11 : cm - 1;
+            console.log('[MiniCalendarJournal] 초기 로딩: 전월 로그 조회 시작:', { year: prevYear, month: prevMonth + 1 });
             var prevMonthLogs = await window.getTrainingLogsByDateRange(userId, prevYear, prevMonth);
+            console.log('[MiniCalendarJournal] 초기 로딩: 전월 로그 조회 완료:', {
+              count: prevMonthLogs ? prevMonthLogs.length : 0
+            });
             mergeMonthLogsIntoTrainingLogs(prevMonthLogs);
           }
         } catch (e) {
           console.warn('[MiniCalendarJournal] 현재/전월 로그 병합 실패(무시):', e);
         }
+      } else {
+        console.warn('[MiniCalendarJournal] getTrainingLogsByDateRange 함수가 없습니다. 현재 월 로그를 가져올 수 없습니다.');
       }
       
       console.log('[MiniCalendarJournal] 훈련 로그 로드 완료:', {
         dateCount: Object.keys(miniCalendarStateJournal.trainingLogs).length,
         dateKeys: Object.keys(miniCalendarStateJournal.trainingLogs).sort().slice(0, 10),
-        totalLogs: Object.values(miniCalendarStateJournal.trainingLogs).reduce((sum, logs) => sum + logs.length, 0)
+        totalLogs: Object.values(miniCalendarStateJournal.trainingLogs).reduce((sum, logs) => sum + logs.length, 0),
+        currentMonth: cy + '-' + (cm + 1)
       });
       
-      // 달력 렌더링
+      // 달력 렌더링 (병합된 로그 반영)
       await renderMiniCalendarJournal();
       
       // 로드 실패 시 재시도 영역 표시 (삼성 태블릿 등) — 재시도 가능하도록 플래그 해제
