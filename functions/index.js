@@ -201,7 +201,18 @@ exports.exchangeStravaCode = onRequest(
 
       const tokenData = await tokenRes.json().catch(() => ({}));
       if (!tokenRes.ok) {
-        const msg = tokenData.message || tokenData.error || `Strava ${tokenRes.status}`;
+        console.error("[exchangeStravaCode] Strava API 오류:", {
+          status: tokenRes.status,
+          statusText: tokenRes.statusText,
+          response: tokenData,
+          requestBody: {
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            code: code.substring(0, 10) + "...", // 코드 일부만 로그
+            grant_type: "authorization_code"
+          }
+        });
+        const msg = tokenData.message || tokenData.error || tokenData.error_description || `Strava ${tokenRes.status}`;
         throw new HttpsError("internal", "Strava 토큰 교환 실패: " + msg);
       }
 
