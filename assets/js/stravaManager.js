@@ -14,17 +14,38 @@ function getUsersCollection() {
 
 /**
  * 스트라바 토큰 갱신 (Firebase Firestore)
- * Code.gs의 refreshStravaTokenForUser를 Firebase로 마이그레이션
+ * Cloud Function이 있으면 서버에서 갱신(Client Secret 비노출), 없으면 기존 클라이언트 방식 폴백
  */
 async function refreshStravaTokenForUser(userId, refreshToken) {
-  if (!refreshToken || !userId) {
-    return { success: false, error: 'userId와 refresh_token이 필요합니다.' };
+  if (!userId) {
+    return { success: false, error: 'userId가 필요합니다.' };
   }
 
+  // Cloud Function으로 토큰 갱신 (서버에서만 Client Secret 사용)
+  const functionsV9 = typeof window !== 'undefined' && window.functionsV9;
+  const httpsCallableV9 = typeof window !== 'undefined' && window.httpsCallableV9;
+  if (functionsV9 && httpsCallableV9) {
+    try {
+      const fn = httpsCallableV9(functionsV9, 'refreshStravaToken');
+      const res = await fn({ userId });
+      if (res.data && res.data.success) {
+        return { success: true, accessToken: res.data.accessToken };
+      }
+      return { success: false, error: (res.data && res.data.error) || '토큰 갱신 실패' };
+    } catch (err) {
+      const msg = (err && err.message) || (err.details && err.details.message) || String(err);
+      return { success: false, error: msg };
+    }
+  }
+
+  // 폴백: 클라이언트에서 직접 Strava API 호출 (config.local.js 필요)
+  if (!refreshToken) {
+    return { success: false, error: 'userId와 refresh_token이 필요합니다.' };
+  }
   const STRAVA_CLIENT_ID = (typeof window !== 'undefined' && window.STRAVA_CLIENT_ID) || '';
   const STRAVA_CLIENT_SECRET = (typeof window !== 'undefined' && window.STRAVA_CLIENT_SECRET) || '';
   if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
-    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js를 설정하세요.');
+    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js 또는 Firestore appConfig/strava를 설정하세요.');
     return { success: false, error: 'Strava 설정이 없습니다. config.local.js를 설정하세요.' };
   }
   const tokenUrl = 'https://www.strava.com/api/v3/oauth/token';
@@ -714,18 +735,36 @@ async function fetchAndProcessStravaData(options = {}) {
 
 /**
  * 스트라바 인증 코드를 액세스/리프레시 토큰으로 교환하고, Firebase에 저장
- * Code.gs의 exchangeStravaCode를 Firebase로 마이그레이션
+ * Cloud Function이 있으면 서버에서 교환(Client Secret 비노출), 없으면 기존 클라이언트 방식 폴백
  */
 async function exchangeStravaCode(code, userId) {
   if (!code || !userId) {
     return { success: false, error: 'code와 user_id가 필요합니다.' };
   }
 
+  // Cloud Function으로 토큰 교환 (서버에서만 Client Secret 사용)
+  const functionsV9 = typeof window !== 'undefined' && window.functionsV9;
+  const httpsCallableV9 = typeof window !== 'undefined' && window.httpsCallableV9;
+  if (functionsV9 && httpsCallableV9) {
+    try {
+      const fn = httpsCallableV9(functionsV9, 'exchangeStravaCode');
+      const res = await fn({ code, userId });
+      if (res.data && res.data.success) {
+        return { success: true };
+      }
+      return { success: false, error: (res.data && res.data.error) || '토큰 교환 실패' };
+    } catch (err) {
+      const msg = (err && err.message) || (err.details && err.details.message) || String(err);
+      return { success: false, error: msg };
+    }
+  }
+
+  // 폴백: 클라이언트에서 직접 Strava API 호출 (config.local.js 필요)
   const STRAVA_CLIENT_ID = (typeof window !== 'undefined' && window.STRAVA_CLIENT_ID) || '';
   const STRAVA_CLIENT_SECRET = (typeof window !== 'undefined' && window.STRAVA_CLIENT_SECRET) || '';
   const STRAVA_REDIRECT_URI = (typeof window !== 'undefined' && (window.STRAVA_REDIRECT_URI || window.CONFIG?.STRAVA_REDIRECT_URI)) || 'https://example.com/callback.html';
   if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
-    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js를 설정하세요.');
+    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js 또는 Firestore appConfig/strava + Cloud Function을 설정하세요.');
     return { success: false, error: 'Strava 설정이 없습니다. config.local.js를 설정하세요.' };
   }
 
