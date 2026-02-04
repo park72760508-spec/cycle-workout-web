@@ -6077,11 +6077,20 @@ function initializeCurrentScreen(screenId) {
       break;
       
       case 'trainingJournalScreen':
-      // 훈련일지 화면: Auth·Firestore 대기 후 미니 달력 로드 (단계는 콘솔 로그만)
+      // 훈련일지 화면: 이전 실패 상태 초기화 후 미니 달력 로드
+      if (typeof window !== 'undefined') {
+        window.__journalInitInProgress = false;
+        window.__journalFetchInProgress = false;
+        window.__journalFetchCallCount = 0;
+      }
       (function setJournalSubtitle(t) {
         if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle(t);
         else { var el = document.getElementById('journalSubtitleCount'); if (el) el.textContent = t || '( )'; }
       })('(로딩 중...)');
+      var journalGrid = document.getElementById('miniCalendarGridJournal');
+      if (journalGrid) {
+        journalGrid.innerHTML = '<div style="padding:24px;text-align:center;color:#64748b;font-size:14px;">훈련일지 로딩 중...</div>';
+      }
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
@@ -6199,8 +6208,11 @@ function initializeCurrentScreen(screenId) {
           } catch (e) {}
         }
       };
-      
+
       checkAndInit();
+      setTimeout(function () {
+        if (typeof window.initMiniCalendarJournal !== 'function') checkAndInit(0);
+      }, 250);
       break;
 
     case 'performanceDashboardScreen': {
