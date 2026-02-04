@@ -3,10 +3,11 @@
  * Strava 토큰 교환/갱신 Callable (v2) - Client Secret은 서버에서만 사용
  */
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
+const { defineString } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
-const STRAVA_CLIENT_SECRET = defineSecret("STRAVA_CLIENT_SECRET");
+// 환경 변수에서 STRAVA_CLIENT_SECRET 읽기 (Blaze 플랜 불필요)
+const STRAVA_CLIENT_SECRET = defineString("STRAVA_CLIENT_SECRET");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -97,7 +98,7 @@ exports.adminResetUserPassword = onCall(
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
  */
 exports.exchangeStravaCode = onCall(
-  { cors: CORS_ORIGINS, secrets: [STRAVA_CLIENT_SECRET] },
+  { cors: CORS_ORIGINS },
   async (request) => {
     try {
       const data = request.data || {};
@@ -193,7 +194,7 @@ exports.exchangeStravaCode = onCall(
  * 클라이언트는 userId만 전달; 리프레시 토큰은 서버가 Firestore에서 읽음.
  */
 exports.refreshStravaToken = onCall(
-  { cors: CORS_ORIGINS, secrets: [STRAVA_CLIENT_SECRET] },
+  { cors: CORS_ORIGINS },
   async (request) => {
     try {
       const data = request.data || {};
