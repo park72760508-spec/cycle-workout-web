@@ -5983,15 +5983,33 @@
       var jShow = window.showJournalLoadStatusBox;
       
       // 🔒 보안: 현재 로그인한 사용자 확인 (가장 먼저 실행)
+      // 우선순위: window.currentUser > localStorage > authV9
       var currentUser = window.currentUser || (function() {
         try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
       })();
       var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+      
+      // 🔒 보안: window.currentUser를 우선 사용 (authV9는 이전 사용자 상태를 유지할 수 있음)
       var actualCurrentUserId = null;
-      if (authV9User) {
-        actualCurrentUserId = authV9User.uid != null ? authV9User.uid : authV9User.id;
-      } else if (currentUser) {
+      if (currentUser) {
         actualCurrentUserId = currentUser.id != null ? currentUser.id : currentUser.uid;
+      } else if (authV9User) {
+        actualCurrentUserId = authV9User.uid != null ? authV9User.uid : authV9User.id;
+      }
+      
+      // 🔒 보안: authV9와 window.currentUser 불일치 감지 및 경고
+      if (currentUser && authV9User) {
+        var currentUserId = currentUser.id != null ? currentUser.id : currentUser.uid;
+        var authV9UserId = authV9User.uid != null ? authV9User.uid : authV9User.id;
+        if (currentUserId !== authV9UserId) {
+          console.warn('[MiniCalendarJournal] ⚠️ 사용자 불일치 감지! window.currentUser를 우선 사용:', {
+            windowCurrentUserId: currentUserId,
+            authV9UserId: authV9UserId,
+            userName: currentUser.name || '알 수 없음'
+          });
+          // window.currentUser를 우선 사용
+          actualCurrentUserId = currentUserId;
+        }
       }
       
       // 전달받은 userId가 없으면 현재 로그인한 사용자로 설정
@@ -6062,8 +6080,29 @@
       if (jStep) jStep('6. initMiniCalendarJournal 시작', false);
       console.log('[MiniCalendarJournal] ========== initMiniCalendarJournal 호출 ==========');
       
-      // 🔒 보안: 최종 userId 확인 (authV9 우선)
-      if (authV9User) {
+      // 🔒 보안: 최종 userId 확인 (window.currentUser 우선, authV9는 보조)
+      // window.currentUser가 있으면 우선 사용 (authV9는 이전 사용자 상태를 유지할 수 있음)
+      if (currentUser) {
+        var currentUserId = currentUser.id != null ? currentUser.id : currentUser.uid;
+        if (currentUserId && currentUserId !== userId) {
+          console.warn('[MiniCalendarJournal] ⚠️ userId 불일치 감지! window.currentUser로 교정:', {
+            previousUserId: userId,
+            correctedUserId: currentUserId,
+            userName: currentUser.name || '알 수 없음'
+          });
+          // userId가 변경되었는지 다시 확인
+          if (miniCalendarStateJournal.currentUserId && miniCalendarStateJournal.currentUserId !== currentUserId) {
+            console.warn('[MiniCalendarJournal] ⚠️ 저장된 userId 불일치! 데이터 초기화:', {
+              storedUserId: miniCalendarStateJournal.currentUserId,
+              correctedUserId: currentUserId
+            });
+            miniCalendarStateJournal.trainingLogs = {};
+            miniCalendarStateJournal.currentUserId = null;
+          }
+          userId = currentUserId;
+        }
+      } else if (authV9User) {
+        // window.currentUser가 없을 때만 authV9 사용
         var uid = authV9User.uid != null ? authV9User.uid : authV9User.id;
         if (uid) {
           // userId가 변경되었는지 다시 확인
