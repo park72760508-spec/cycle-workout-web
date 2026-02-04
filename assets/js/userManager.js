@@ -794,11 +794,7 @@ function initAuthStateListener() {
             }
           }
           
-          // callback.html에서는 화면 전환 및 모달 표시 건너뛰기
-          const isCallbackPage = typeof window !== 'undefined' && 
-            (window.location.pathname.includes('callback.html') || 
-             window.location.href.includes('callback.html'));
-          
+          // callback.html에서는 화면 전환 및 모달 표시 건너뛰기 (위에서 이미 선언된 isCallbackPage 사용)
           if (!isCallbackPage) {
             // 로그인 성공 후에만 모달 표시 (페이지 로드 시에는 표시하지 않음)
             // isLoginJustCompleted 플래그가 true일 때만 모달 표시
