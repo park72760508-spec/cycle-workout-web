@@ -7,8 +7,8 @@
 (function (global) {
   'use strict';
 
-  /** Strava Client ID (앱 등록 시 발급) */
-  var STRAVA_CLIENT_ID = '197363';
+  /** Strava Client ID (config.local.js 또는 window.STRAVA_CLIENT_ID 로 설정, Git 제외) */
+  var STRAVA_CLIENT_ID = (typeof window !== 'undefined' && window.STRAVA_CLIENT_ID) || '';
 
   /**
    * 인증 후 돌아올 콜백 URL.
@@ -71,6 +71,13 @@
       console.warn('[Strava] connectStrava: userId가 없습니다.');
       if (typeof window.showToast === 'function') {
         window.showToast('먼저 사용자를 선택해 주세요.');
+      }
+      return;
+    }
+    if (!STRAVA_CLIENT_ID) {
+      console.warn('[Strava] connectStrava: STRAVA_CLIENT_ID가 없습니다. config.local.js를 설정하세요.');
+      if (typeof window.showToast === 'function') {
+        window.showToast('Strava 설정이 없습니다. config.local.js를 설정하세요.');
       }
       return;
     }

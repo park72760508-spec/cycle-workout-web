@@ -21,10 +21,13 @@ async function refreshStravaTokenForUser(userId, refreshToken) {
     return { success: false, error: 'userId와 refresh_token이 필요합니다.' };
   }
 
-  const STRAVA_CLIENT_ID = '197363';
-  const STRAVA_CLIENT_SECRET = '6cd67a28f1c516c0f004f1c7f97f4d74be187d85';
+  const STRAVA_CLIENT_ID = (typeof window !== 'undefined' && window.STRAVA_CLIENT_ID) || '';
+  const STRAVA_CLIENT_SECRET = (typeof window !== 'undefined' && window.STRAVA_CLIENT_SECRET) || '';
+  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
+    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js를 설정하세요.');
+    return { success: false, error: 'Strava 설정이 없습니다. config.local.js를 설정하세요.' };
+  }
   const tokenUrl = 'https://www.strava.com/api/v3/oauth/token';
-  
   const payload = new URLSearchParams({
     client_id: STRAVA_CLIENT_ID,
     client_secret: STRAVA_CLIENT_SECRET,
@@ -718,10 +721,14 @@ async function exchangeStravaCode(code, userId) {
     return { success: false, error: 'code와 user_id가 필요합니다.' };
   }
 
-  const STRAVA_CLIENT_ID = '197363';
-  const STRAVA_CLIENT_SECRET = '6cd67a28f1c516c0f004f1c7f97f4d74be187d85';
-  const STRAVA_REDIRECT_URI = window.STRAVA_REDIRECT_URI || window.CONFIG?.STRAVA_REDIRECT_URI || 'https://stelvio.ai.kr/callback.html';
-  
+  const STRAVA_CLIENT_ID = (typeof window !== 'undefined' && window.STRAVA_CLIENT_ID) || '';
+  const STRAVA_CLIENT_SECRET = (typeof window !== 'undefined' && window.STRAVA_CLIENT_SECRET) || '';
+  const STRAVA_REDIRECT_URI = (typeof window !== 'undefined' && (window.STRAVA_REDIRECT_URI || window.CONFIG?.STRAVA_REDIRECT_URI)) || 'https://example.com/callback.html';
+  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
+    console.warn('[Strava] STRAVA_CLIENT_ID 또는 STRAVA_CLIENT_SECRET이 없습니다. config.local.js를 설정하세요.');
+    return { success: false, error: 'Strava 설정이 없습니다. config.local.js를 설정하세요.' };
+  }
+
   const tokenUrl = 'https://www.strava.com/api/v3/oauth/token';
   const payload = new URLSearchParams({
     client_id: STRAVA_CLIENT_ID,
@@ -914,6 +921,16 @@ async function syncStravaData(startDate = null, endDate = null) {
       window.showToast(message, result.success ? 'success' : 'error');
     } else {
       alert(message);
+    }
+
+    // 훈련일지 달력 새로고침 (동기화된 로그 반영)
+    if (result.success && typeof window.loadTrainingJournalCalendar === 'function') {
+      try {
+        window.loadTrainingJournalCalendar();
+        console.log('[syncStravaData] 훈련일지 달력 새로고침 완료');
+      } catch (refreshErr) {
+        console.warn('[syncStravaData] 훈련일지 달력 새로고침 실패:', refreshErr);
+      }
     }
     
     return result;
