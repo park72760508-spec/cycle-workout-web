@@ -3991,7 +3991,7 @@
           <p id="journalRetryMsg" style="color: #991b1b; font-size: 14px; margin-bottom: 4px;">훈련 로드를 불러오지 못했습니다.</p>
           <p id="journalRetryStep" style="color: #b91c1c; font-size: 13px; font-weight: 600; margin-bottom: 8px;"></p>
           <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
-            <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'&&miniCalendarStateJournal.currentUserId){window.__journalInitInProgress=false;window.__journalFetchCallCount=0;window.__journalEmptyRetryDone=false;var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(miniCalendarStateJournal.currentUserId);}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
+            <button type="button" id="journalRetryBtn" onclick="if(typeof window.initMiniCalendarJournal==='function'){var uid=miniCalendarStateJournal.currentUserId;if(!uid&&typeof window.getCurrentUserForTrainingRooms==='function'){var u=window.getCurrentUserForTrainingRooms();if(u)uid=u.uid!=null?u.uid:u.id;}if(!uid){var cu=window.currentUser||(function(){try{return JSON.parse(localStorage.getItem('currentUser')||'null');}catch(e){return null;}})();uid=cu&&(cu.id!=null?cu.id:cu.uid);}if(uid){window.__journalInitInProgress=false;window.__journalFetchCallCount=0;window.__journalEmptyRetryDone=false;var p=document.getElementById('journalRetryMsg');if(p)p.textContent='다시 로드 중...';var sp=document.getElementById('journalRetryStep');if(sp)sp.textContent='';this.disabled=true;window.initMiniCalendarJournal(uid);}else{alert('로그인 상태를 확인해 주세요.');}}" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">훈련 로드 다시 시도</button>
             <button type="button" id="journalReloginBtn" onclick="try{ sessionStorage.clear(); if(typeof localStorage!=='undefined'){ localStorage.removeItem('firebase:authUser:authV9'); localStorage.removeItem('firebase:host:authV9'); } if(typeof showScreen==='function') showScreen('authScreen'); }catch(e){ alert('재로그인 화면으로 이동 실패'); }" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">다시 로그인 후 시도</button>
           </div>
         </div>
@@ -5076,11 +5076,16 @@
      * Live Training Rooms 스타일 폴백: 모듈(getUserTrainingLogs) 없이 firestoreV9로 직접 쿼리 (삼성 태블릿 등)
      */
     async function fetchJournalLogsInline(db, uid, limitVal) {
-      var mod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      var ref = mod.collection(db, 'users', uid, 'logs');
-      var q = mod.query(ref, mod.orderBy('date', 'desc'), mod.limit(limitVal || 200));
-      var snap = await mod.getDocs(q);
-      return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+      try {
+        var mod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        var ref = mod.collection(db, 'users', uid, 'logs');
+        var q = mod.query(ref, mod.orderBy('date', 'desc'), mod.limit(limitVal || 200));
+        var snap = await mod.getDocs(q);
+        return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+      } catch (e) {
+        console.error('[Journal] fetchJournalLogsInline 실패:', e && e.message, e);
+        throw e;
+      }
     }
 
     /** 로그 배열 → 날짜별 그룹 객체 (인라인 폴백·메인 경로 공통) */
@@ -5138,6 +5143,7 @@
         var alreadyHaveModule = typeof window.getUserTrainingLogs === 'function';
         var alreadyHaveFirestore = !!window.firestoreV9;
 
+        pollMaxMs = isTabletForPoll ? 12000 : 8000;
         if (!alreadyHaveModule) {
           if (jStep) jStep('7-2. getUserTrainingLogs 모듈 대기 중... (최대 ' + (pollMaxMs/1000) + '초)', false);
           var pollStart = Date.now();
