@@ -3,11 +3,11 @@
  * Strava 토큰 교환/갱신 Callable (v2) - Client Secret은 서버에서만 사용
  */
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { defineString } = require("firebase-functions/params");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
-// 환경 변수에서 STRAVA_CLIENT_SECRET 읽기 (Blaze 플랜 불필요)
-const STRAVA_CLIENT_SECRET = defineString("STRAVA_CLIENT_SECRET");
+// Secret Manager에서 STRAVA_CLIENT_SECRET 읽기
+const STRAVA_CLIENT_SECRET = defineSecret("STRAVA_CLIENT_SECRET");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -99,7 +99,7 @@ exports.adminResetUserPassword = onCall(
  * onRequest로 변경하여 CORS 수동 처리
  */
 exports.exchangeStravaCode = onRequest(
-  { cors: CORS_ORIGINS },
+  { cors: CORS_ORIGINS, secrets: [STRAVA_CLIENT_SECRET] },
   async (req, res) => {
     // OPTIONS preflight 요청 처리 (Firebase Functions v2의 cors 옵션과 함께 사용)
     if (req.method === "OPTIONS") {
@@ -232,7 +232,7 @@ exports.exchangeStravaCode = onRequest(
  * onRequest로 변경하여 CORS 수동 처리
  */
 exports.refreshStravaToken = onRequest(
-  { cors: CORS_ORIGINS },
+  { cors: CORS_ORIGINS, secrets: [STRAVA_CLIENT_SECRET] },
   async (req, res) => {
     // OPTIONS preflight 요청 처리 (Firebase Functions v2의 cors 옵션과 함께 사용)
     if (req.method === "OPTIONS") {
