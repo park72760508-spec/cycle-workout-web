@@ -6433,17 +6433,21 @@
             // 5주: 현재일 포함 주 (일요일~현재일)
             weekRanges.push({ start: currentWeekStartForWeekly, end: currentWeekEndForWeekly, weekNum: 5 });
           } else {
-            // 다른 달: 해당 월의 1일부터 말일까지를 5주로 나눔
+            // 다른 달: 해당 월의 1일부터 말일까지를 실제 주 수로 나눔
             const monthStart = new Date(year, monthNum - 1, 1);
             const monthEnd = new Date(year, monthNum, 0); // 해당 월의 마지막 날
             
             // 해당 월의 총 일수
             const totalDays = monthEnd.getDate();
             
-            // 5주로 나누기 (각 주의 일수 계산)
-            const daysPerWeek = totalDays / 5;
+            // 실제 주 수 계산 (최대 5주, 최소 4주)
+            // 28일 = 4주, 29-31일 = 5주
+            const actualWeeks = Math.min(5, Math.max(4, Math.ceil(totalDays / 7)));
             
-            for (let weekNum = 1; weekNum <= 5; weekNum++) {
+            // 각 주의 일수 계산
+            const daysPerWeek = totalDays / actualWeeks;
+            
+            for (let weekNum = 1; weekNum <= actualWeeks; weekNum++) {
               // 각 주의 시작일과 종료일 계산
               const weekStartDay = Math.ceil((weekNum - 1) * daysPerWeek) + 1;
               const weekEndDay = Math.floor(weekNum * daysPerWeek);
@@ -6593,9 +6597,10 @@
             byWeek[key].TSS += Number(log.TSS) || 0;
           });
           
-          // 1주부터 5주까지 순차 정렬
+          // 1주부터 실제 주 수까지 순차 정렬
           const sorted = [];
-          for (let i = 1; i <= 5; i++) {
+          const maxWeek = Math.max(...weekRanges.map(function(r) { return r.weekNum; }), 0);
+          for (let i = 1; i <= maxWeek; i++) {
             const key = 'W' + i;
             if (byWeek[key]) {
               sorted.push(byWeek[key]);
