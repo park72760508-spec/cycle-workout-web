@@ -5012,6 +5012,18 @@
       
       // 문자열인 경우 파싱
       if (typeof dateValue === 'string') {
+        // "YYYY-MM-DD" 형식 파싱 (가장 일반적인 형식)
+        const ymdMatch = dateValue.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (ymdMatch) {
+          const year = parseInt(ymdMatch[1], 10);
+          const month = parseInt(ymdMatch[2], 10) - 1; // 0-based
+          const day = parseInt(ymdMatch[3], 10);
+          const parsedDate = new Date(year, month, day);
+          if (!isNaN(parsedDate.getTime())) {
+            return parsedDate;
+          }
+        }
+        
         // "2026년 1월 27일 PM 5시 39분 9초 UTC+9" 형식 파싱
         const match = dateValue.match(/(\d{4})년\s+(\d{1,2})월\s+(\d{1,2})일/);
         if (match) {
@@ -5602,14 +5614,34 @@
       
       // 해당 월 로그를 월별 조회로 가져와 기존 trainingLogs에 병합
       if (uid && typeof window.getTrainingLogsByDateRange === 'function') {
+        console.log('[MiniCalendarJournal] 월별 로그 조회 시작:', { userId: uid, year: y, month: m + 1 });
         window.getTrainingLogsByDateRange(uid, y, m)
           .then(function(monthLogs) {
+            console.log('[MiniCalendarJournal] 월별 로그 조회 완료:', {
+              count: monthLogs ? monthLogs.length : 0,
+              sampleDates: monthLogs && monthLogs.length > 0 ? monthLogs.slice(0, 3).map(function(log) {
+                return {
+                  id: log.id,
+                  date: log.date,
+                  dateType: typeof log.date,
+                  hasToDate: log.date && typeof log.date.toDate === 'function',
+                  title: log.title || '제목 없음'
+                };
+              }) : []
+            });
+            
             if (monthLogs && monthLogs.length > 0) {
               var minSec = 600;
               var touchedDateKeys = {};
+              var processedCount = 0;
+              var skippedCount = 0;
+              
               monthLogs.forEach(function(log) {
                 var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
-                if (sec < minSec) return;
+                if (sec < minSec) {
+                  skippedCount++;
+                  return;
+                }
                 var dateKey = getDateKeyJournal(log.date);
                 if (dateKey) {
                   touchedDateKeys[dateKey] = true;
@@ -5619,24 +5651,59 @@
                   var exists = miniCalendarStateJournal.trainingLogs[dateKey].some(function(l) { return l.id === log.id; });
                   if (!exists) {
                     miniCalendarStateJournal.trainingLogs[dateKey].push(log);
+                    processedCount++;
                   }
+                } else {
+                  console.warn('[MiniCalendarJournal] 날짜 키 변환 실패:', {
+                    logId: log.id,
+                    date: log.date,
+                    dateType: typeof log.date
+                  });
+                  skippedCount++;
                 }
               });
+              
+              console.log('[MiniCalendarJournal] 로그 처리 완료:', {
+                total: monthLogs.length,
+                processed: processedCount,
+                skipped: skippedCount,
+                dateKeys: Object.keys(touchedDateKeys).length
+              });
+              
               // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
               Object.keys(touchedDateKeys).forEach(function(dateKey) {
                 var arr = miniCalendarStateJournal.trainingLogs[dateKey];
                 if (!arr || arr.length === 0) return;
                 var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
                 if (hasStelvio) {
+                  var beforeCount = arr.length;
                   miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+                  var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
+                  if (beforeCount !== afterCount) {
+                    console.log('[MiniCalendarJournal] Strava 로그 필터링:', {
+                      dateKey: dateKey,
+                      before: beforeCount,
+                      after: afterCount
+                    });
+                  }
                 }
               });
+            } else {
+              console.log('[MiniCalendarJournal] 해당 월에 로그가 없습니다.');
             }
+            
             renderMiniCalendarJournal();
             if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           })
           .catch(function(err) {
-            console.warn('[MiniCalendarJournal] 해당 월 로그 조회 실패:', err);
+            console.error('[MiniCalendarJournal] 해당 월 로그 조회 실패:', {
+              error: err,
+              message: err.message,
+              stack: err.stack,
+              userId: uid,
+              year: y,
+              month: m + 1
+            });
             renderMiniCalendarJournal();
             if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           });
