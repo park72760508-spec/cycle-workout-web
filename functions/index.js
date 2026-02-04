@@ -101,8 +101,26 @@ exports.adminResetUserPassword = onCall(
 exports.exchangeStravaCode = onRequest(
   { cors: CORS_ORIGINS },
   async (req, res) => {
-    // Firebase Functions v2의 cors 옵션이 자동으로 CORS 헤더를 처리하므로
-    // 수동 헤더 설정은 제거 (충돌 방지)
+    // OPTIONS preflight 요청 처리 (Firebase Functions v2의 cors 옵션과 함께 사용)
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.set("Access-Control-Max-Age", "3600");
+      res.status(204).send("");
+      return;
+    }
+
+    // CORS 헤더 설정 (실제 요청에 대해)
+    const origin = req.headers.origin;
+    if (origin && CORS_ORIGINS.some(allowed => 
+      typeof allowed === 'string' ? origin === allowed : allowed.test(origin)
+    )) {
+      res.set("Access-Control-Allow-Origin", origin);
+    } else if (CORS_ORIGINS.length === 0) {
+      res.set("Access-Control-Allow-Origin", "*");
+    }
+    res.set("Access-Control-Allow-Credentials", "true");
 
     try {
       const data = req.method === "POST" ? req.body : {};
@@ -216,8 +234,26 @@ exports.exchangeStravaCode = onRequest(
 exports.refreshStravaToken = onRequest(
   { cors: CORS_ORIGINS },
   async (req, res) => {
-    // Firebase Functions v2의 cors 옵션이 자동으로 CORS 헤더를 처리하므로
-    // 수동 헤더 설정은 제거 (충돌 방지)
+    // OPTIONS preflight 요청 처리 (Firebase Functions v2의 cors 옵션과 함께 사용)
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.set("Access-Control-Max-Age", "3600");
+      res.status(204).send("");
+      return;
+    }
+
+    // CORS 헤더 설정 (실제 요청에 대해)
+    const origin = req.headers.origin;
+    if (origin && CORS_ORIGINS.some(allowed => 
+      typeof allowed === 'string' ? origin === allowed : allowed.test(origin)
+    )) {
+      res.set("Access-Control-Allow-Origin", origin);
+    } else if (CORS_ORIGINS.length === 0) {
+      res.set("Access-Control-Allow-Origin", "*");
+    }
+    res.set("Access-Control-Allow-Credentials", "true");
 
     try {
       const data = req.method === "POST" ? req.body : {};
