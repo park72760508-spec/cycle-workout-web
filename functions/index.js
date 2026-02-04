@@ -177,17 +177,29 @@ exports.exchangeStravaCode = onRequest(
         clientSecret = STRAVA_CLIENT_SECRET_VALUE;
       }
 
+      // Secret 값 검증 (앞부분만 로그)
+      const expectedSecretPrefix = "6cd67a28f1"; // 실제 Secret의 앞 10자
+      const actualSecretPrefix = clientSecret ? clientSecret.substring(0, 10) : "";
+      const secretMatches = actualSecretPrefix === expectedSecretPrefix;
+      
       console.log("[exchangeStravaCode] 설정 확인:", {
         hasClientId: !!clientId,
         hasRedirectUri: !!redirectUri,
         hasClientSecret: !!clientSecret,
-        clientId: clientId, // 실제 값 확인
-        redirectUri: redirectUri, // 실제 값 확인
+        clientId: clientId,
+        redirectUri: redirectUri,
         clientIdLength: clientId.length,
         redirectUriLength: redirectUri.length,
         clientSecretLength: clientSecret ? clientSecret.length : 0,
-        codeLength: code ? code.length : 0
+        clientSecretPrefix: actualSecretPrefix + "...", // Secret 일부만 로그
+        secretMatches: secretMatches, // Secret 값이 올바른지 확인
+        codeLength: code ? code.length : 0,
+        codePrefix: code ? code.substring(0, 10) + "..." : "없음"
       });
+      
+      if (!secretMatches && clientSecret) {
+        console.warn("[exchangeStravaCode] ⚠️ Secret 값이 예상과 다릅니다. Secret Manager 값을 확인하세요.");
+      }
 
       if (!clientId || !clientSecret || !redirectUri) {
         const missing = [];
