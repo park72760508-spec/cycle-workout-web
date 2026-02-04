@@ -754,7 +754,14 @@ async function exchangeStravaCode(code, userId) {
       }
       return { success: false, error: (res.data && res.data.error) || '토큰 교환 실패' };
     } catch (err) {
-      const msg = (err && err.message) || (err.details && err.details.message) || String(err);
+      // 상세 오류 정보 로깅
+      console.error('[exchangeStravaCode] Cloud Function 오류:', {
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        fullError: err
+      });
+      const msg = (err && err.message) || (err.details && err.details.message) || (err.code || '알 수 없는 오류');
       return { success: false, error: msg };
     }
   }
