@@ -90,6 +90,7 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-functions.js"></script>
   <script>
     const firebaseConfig = window.__FIREBASE_CONFIG__ || {
       apiKey: "YOUR_FIREBASE_API_KEY",
@@ -106,7 +107,12 @@
     }
     window.firestore = firebase.firestore();
     window.auth = firebase.auth();
-    console.log('[callback.html] ✅ Firebase 초기화 완료 (Firestore + Auth)');
+    // Cloud Function 호출용 (stravaManager.js에서 exchangeStravaCode 시 서버 토큰 교환 사용)
+    try {
+      window.functionsV9 = firebase.app().functions();
+      window.httpsCallableV9 = function (ref, name) { return ref.httpsCallable(name); };
+    } catch (e) { console.warn('[callback.html] Functions 미설정:', e.message); }
+    console.log('[callback.html] ✅ Firebase 초기화 완료 (Firestore + Auth + Functions)');
     
     // phoneToEmail 함수 정의 (index.html과 동일)
     function phoneToEmail(phoneNumber) {

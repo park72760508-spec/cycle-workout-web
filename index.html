@@ -106,6 +106,32 @@
       console.error('❌ Firebase v9 초기화 실패:', error);
     }
     
+    // Strava 설정을 Firestore appConfig/strava에서 로드 (수동 config.local.js 대체)
+    window.loadStravaConfigFromFirestore = async function () {
+      if (!firestoreV9) return;
+      try {
+        const appConfigRef = doc(firestoreV9, 'appConfig', 'strava');
+        const snap = await getDoc(appConfigRef);
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.strava_client_id) {
+            window.STRAVA_CLIENT_ID = d.strava_client_id;
+          }
+          if (d.strava_redirect_uri) {
+            if (typeof window.CONFIG === 'undefined') window.CONFIG = {};
+            window.CONFIG.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
+            window.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
+          }
+          console.log('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
+        }
+      } catch (e) {
+        console.warn('[Strava] appConfig/strava 로드 실패, config.local.js 사용:', e.message);
+      }
+    };
+    if (typeof firestoreV9 !== 'undefined') {
+      window.loadStravaConfigFromFirestore().catch(function () {});
+    }
+    
     // 전화번호를 @stelvio.ai 도메인을 붙인 가짜 이메일로 변환
     function phoneToEmail(phoneNumber) {
       const cleaned = phoneNumber.replace(/\D/g, '');
