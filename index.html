@@ -55,6 +55,7 @@
       EmailAuthProvider
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
     import { getFirestore, initializeFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js';
     
     const firebaseConfig = {
       apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -89,6 +90,14 @@
       }
       window.authV9 = authV9;
       window.firestoreV9 = firestoreV9;
+      try {
+        const functionsV9 = getFunctions(appV9);
+        window.functionsV9 = functionsV9;
+        window.httpsCallableV9 = httpsCallable;
+        console.log('✅ Firebase v9 Functions 클라이언트 초기화 완료');
+      } catch (functionsErr) {
+        console.warn('Firebase Functions 클라이언트 미로드 (관리자 비밀번호 초기화는 Cloud Function 배포 후 사용):', functionsErr);
+      }
       console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증·Firestore)');
     } catch (error) {
       console.error('❌ Firebase v9 초기화 실패:', error);
@@ -4438,24 +4447,34 @@
   
   <!-- 훈련 결과 저장 서비스 (Firebase Firestore v9) - 다른 JS 파일들 로드 후 -->
   <script type="module">
-    import { saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange } from './assets/js/trainingResultService.js';
-    
-    // 전역 함수로 노출
-    window.saveTrainingSession = async (userId, trainingData) => {
-      return await saveTrainingSession(userId, trainingData, window.firestoreV9);
-    };
-    
-    // 사용자 훈련 로그 조회 함수 노출
-    window.getUserTrainingLogs = async (userId, options) => {
-      return await getUserTrainingLogs(userId, options, window.firestoreV9);
-    };
-    
-    // 특정 연·월 훈련 로그 조회 (훈련일지 달력 월별 표시용)
-    window.getTrainingLogsByDateRange = async (userId, year, month) => {
-      return await getTrainingLogsByDateRange(userId, year, month, window.firestoreV9);
-    };
-    
-    console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
+    (async function() {
+      let saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange;
+      try {
+        ({ saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange } = await import('./assets/js/trainingResultService.js'));
+      } catch (e1) {
+        try {
+          ({ saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange } = await import('./trainingResultService.js'));
+          console.log('✅ 훈련 결과 저장 서비스 로드 (루트 경로)');
+        } catch (e2) {
+          console.error('❌ trainingResultService.js 로드 실패:', e1.message || e1, e2.message || e2);
+          return;
+        }
+      }
+      if (!saveTrainingSession || !getUserTrainingLogs || !getTrainingLogsByDateRange) {
+        console.error('❌ trainingResultService에서 필요한 함수를 불러오지 못했습니다.');
+        return;
+      }
+      window.saveTrainingSession = async (userId, trainingData) => {
+        return await saveTrainingSession(userId, trainingData, window.firestoreV9);
+      };
+      window.getUserTrainingLogs = async (userId, options) => {
+        return await getUserTrainingLogs(userId, options, window.firestoreV9);
+      };
+      window.getTrainingLogsByDateRange = async (userId, year, month) => {
+        return await getTrainingLogsByDateRange(userId, year, month, window.firestoreV9);
+      };
+      console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
+    })();
   </script>
   
   <!-- ========== 월간 훈련 이력 미니 달력 JavaScript ========== -->
@@ -5096,12 +5115,13 @@
         return {};
       }
       window.__journalFetchCallCount = (window.__journalFetchCallCount || 0) + 1;
-      if (window.__journalFetchCallCount > 2) {
-        if (jStep) jStep('7-1. fetch 호출 2회 초과 (반복 방지)', true);
+      if (window.__journalFetchCallCount > 4) {
+        if (jStep) jStep('7-1. fetch 호출 4회 초과 (반복 방지). 화면을 나갔다가 다시 훈련일지를 열어주세요.', true);
         if (typeof window !== 'undefined') {
           window.__journalLoadFailed = true;
           window.__journalLoadErrorMsg = '로드 재시도 횟수 초과. 화면을 나갔다가 다시 훈련일지를 열어주세요.';
         }
+        console.warn('[MiniCalendarJournal] fetch 호출 횟수 초과:', window.__journalFetchCallCount);
         return {};
       }
       window.__journalFetchInProgress = true;
@@ -5271,8 +5291,16 @@
         
         return logsByDate;
       } catch (error) {
-        if (jStep) jStep('7-X. fetchTrainingLogsForCalendarJournal 예외: ' + (error && error.message ? error.message : ''), true);
-        console.error('[MiniCalendarJournal] ❌ 훈련 로그 가져오기 실패:', error);
+        var errMsg = error && error.message ? error.message : String(error);
+        if (jStep) jStep('7-X. fetchTrainingLogsForCalendarJournal 예외: ' + errMsg.slice(0, 80), true);
+        console.error('[MiniCalendarJournal] ❌ 훈련 로그 가져오기 실패:', {
+          message: errMsg,
+          code: error && error.code,
+          name: error && error.name,
+          userId: userId,
+          hasGetUserTrainingLogs: typeof window.getUserTrainingLogs === 'function',
+          hasFirestoreV9: !!window.firestoreV9
+        });
         if (window.firestoreV9 && typeof fetchJournalLogsInline === 'function') {
           try {
             if (jStep) jStep('7-X. 인라인 Firestore v9 폴백 1회 시도...', false);
@@ -5292,7 +5320,15 @@
         });
         if (typeof window !== 'undefined') {
           window.__journalLoadFailed = true;
-          window.__journalLoadErrorMsg = (error && error.message) ? String(error.message).slice(0, 120) : '훈련 로드 실패';
+          var userMsg = (error && error.message) ? String(error.message).slice(0, 120) : '훈련 로드 실패';
+          if (error && (error.code === 'permission-denied' || (error.message && error.message.indexOf('permission') !== -1))) {
+            userMsg = '권한 오류. 로그인 상태를 확인한 뒤 다시 시도하거나, 화면을 나갔다가 훈련일지를 다시 열어주세요.';
+          } else if (error && error.message && (error.message.indexOf('Firestore') !== -1 && error.message.indexOf('없습니다') !== -1)) {
+            userMsg = 'Firestore 준비 지연. 잠시 후 "훈련 로드 다시 시도"를 누르거나, 화면을 나갔다가 훈련일지를 다시 열어주세요.';
+          } else if (error && error.message && error.message.indexOf('getUserTrainingLogs') !== -1) {
+            userMsg = '훈련 로그 모듈 로드 실패. 페이지를 새로고침한 뒤 다시 시도해 주세요.';
+          }
+          window.__journalLoadErrorMsg = userMsg;
         }
         return {};
       } finally {
