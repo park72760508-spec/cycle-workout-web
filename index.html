@@ -4510,7 +4510,11 @@
       window.getTrainingLogsByDateRange = async (userId, year, month) => {
         return await getTrainingLogsByDateRange(userId, year, month, window.firestoreV9);
       };
-      console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
+      console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)', {
+        hasSaveTrainingSession: typeof window.saveTrainingSession === 'function',
+        hasGetUserTrainingLogs: typeof window.getUserTrainingLogs === 'function',
+        hasGetTrainingLogsByDateRange: typeof window.getTrainingLogsByDateRange === 'function'
+      });
     })();
   </script>
   
@@ -5612,6 +5616,15 @@
       var y = miniCalendarStateJournal.currentYear;
       var m = miniCalendarStateJournal.currentMonth;
       
+      console.log('[MiniCalendarJournal] 네비게이션 상태 확인:', {
+        uid: uid,
+        hasUid: !!uid,
+        year: y,
+        month: m + 1,
+        hasGetTrainingLogsByDateRange: typeof window.getTrainingLogsByDateRange === 'function',
+        getTrainingLogsByDateRangeType: typeof window.getTrainingLogsByDateRange
+      });
+      
       // 해당 월 로그를 월별 조회로 가져와 기존 trainingLogs에 병합
       if (uid && typeof window.getTrainingLogsByDateRange === 'function') {
         console.log('[MiniCalendarJournal] 월별 로그 조회 시작:', { userId: uid, year: y, month: m + 1 });
@@ -5707,21 +5720,34 @@
             renderMiniCalendarJournal();
             if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
           });
-      } else if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && uid) {
-        fetchTrainingLogsForCalendarJournal(uid)
-          .then(function(logs) {
-            miniCalendarStateJournal.trainingLogs = logs;
-            renderMiniCalendarJournal();
-            if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
-          })
-          .catch(function(error) {
-            console.error('[MiniCalendarJournal] 네비게이션 중 로그 가져오기 실패:', error);
-            renderMiniCalendarJournal();
-            if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
-          });
       } else {
-        renderMiniCalendarJournal();
-        if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
+        // getTrainingLogsByDateRange가 없거나 uid가 없는 경우
+        console.warn('[MiniCalendarJournal] 월별 조회 불가 - 폴백 처리:', {
+          hasUid: !!uid,
+          uid: uid,
+          hasGetTrainingLogsByDateRange: typeof window.getTrainingLogsByDateRange === 'function',
+          trainingLogsCount: Object.keys(miniCalendarStateJournal.trainingLogs).length
+        });
+        
+        if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && uid) {
+          // 기존 로그가 없으면 전체 로그를 가져옴
+          console.log('[MiniCalendarJournal] 전체 로그 조회 시도 (폴백)');
+          fetchTrainingLogsForCalendarJournal(uid)
+            .then(function(logs) {
+              miniCalendarStateJournal.trainingLogs = logs;
+              renderMiniCalendarJournal();
+              if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
+            })
+            .catch(function(error) {
+              console.error('[MiniCalendarJournal] 네비게이션 중 로그 가져오기 실패:', error);
+              renderMiniCalendarJournal();
+              if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
+            });
+        } else {
+          // 기존 로그가 있으면 그대로 렌더링
+          renderMiniCalendarJournal();
+          if (typeof window.updateMonthlyAnalysisDashboardFromJournal === 'function') window.updateMonthlyAnalysisDashboardFromJournal();
+        }
       }
     }
 
