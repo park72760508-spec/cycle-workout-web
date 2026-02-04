@@ -755,11 +755,9 @@ async function exchangeStravaCode(code, userId) {
   const functionsV9 = typeof window !== 'undefined' && window.functionsV9;
   if (functionsV9) {
     try {
-      // Functions URL 구성 (onRequest는 직접 HTTP 엔드포인트)
-      const functionUrl = functionsV9._delegate?._url || 
-                          `https://us-central1-${functionsV9.app?.options?.projectId || 'stelvio-ai'}.cloudfunctions.net/exchangeStravaCode`;
-      const url = typeof functionUrl === 'string' ? functionUrl : 
-                  `https://us-central1-stelvio-ai.cloudfunctions.net/exchangeStravaCode`;
+      // Functions URL (onRequest는 직접 HTTP 엔드포인트)
+      const url = 'https://us-central1-stelvio-ai.cloudfunctions.net/exchangeStravaCode';
+      console.log('[exchangeStravaCode] Functions 호출 시작:', url);
       
       const res = await fetch(url, {
         method: 'POST',
@@ -767,17 +765,32 @@ async function exchangeStravaCode(code, userId) {
         body: JSON.stringify({ code, userId })
       });
       
-      const data = await res.json();
-      if (res.ok && data.success) {
+      console.log('[exchangeStravaCode] 응답 상태:', res.status, res.statusText);
+      
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '응답 읽기 실패');
+        console.error('[exchangeStravaCode] HTTP 오류:', res.status, errorText);
+        return { success: false, error: `HTTP ${res.status}: ${errorText}` };
+      }
+      
+      const data = await res.json().catch(err => {
+        console.error('[exchangeStravaCode] JSON 파싱 실패:', err);
+        return { success: false, error: '응답 파싱 실패' };
+      });
+      
+      if (data.success) {
+        console.log('[exchangeStravaCode] ✅ 성공');
         return { success: true };
       }
       return { success: false, error: data.error || '토큰 교환 실패' };
     } catch (err) {
       console.error('[exchangeStravaCode] Cloud Function 오류:', {
         message: err.message,
+        name: err.name,
+        stack: err.stack,
         fullError: err
       });
-      return { success: false, error: err.message || '알 수 없는 오류' };
+      return { success: false, error: err.message || '네트워크 오류: ' + String(err) };
     }
   }
 
