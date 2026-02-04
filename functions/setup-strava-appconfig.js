@@ -1,18 +1,14 @@
 /**
  * Firestore appConfig/strava 문서를 한 번에 생성·갱신하는 스크립트
- * 사용: cd functions && STRAVA_CLIENT_ID=xxx STRAVA_REDIRECT_URI=https://... node setup-strava-appconfig.js
+ * 사용: cd functions && node setup-strava-appconfig.js
+ * (환경 변수로 덮어쓰기 가능: STRAVA_CLIENT_ID, STRAVA_REDIRECT_URI)
  * 인증: GOOGLE_APPLICATION_CREDENTIALS 또는 gcloud auth application-default login
  */
 const admin = require("firebase-admin");
 
-const clientId = process.env.STRAVA_CLIENT_ID || "";
-const redirectUri = process.env.STRAVA_REDIRECT_URI || "";
-
-if (!clientId || !redirectUri) {
-  console.error("환경 변수가 필요합니다.");
-  console.error("예: STRAVA_CLIENT_ID=197363 STRAVA_REDIRECT_URI=https://stelvio.ai.kr/callback.html node setup-strava-appconfig.js");
-  process.exit(1);
-}
+// 적용된 기본값 (환경 변수로 덮어쓰기 가능)
+const clientId = process.env.STRAVA_CLIENT_ID || "197363";
+const redirectUri = process.env.STRAVA_REDIRECT_URI || "https://stelvio.ai.kr/callback.html";
 
 if (!admin.apps.length) {
   admin.initializeApp();
