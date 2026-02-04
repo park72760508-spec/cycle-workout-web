@@ -5612,7 +5612,41 @@
         }
       }
       
+      // currentUserId가 없으면 다시 가져오기
       var uid = miniCalendarStateJournal.currentUserId;
+      if (!uid) {
+        // authV9에서 userId 가져오기
+        var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+        if (authV9User) {
+          uid = authV9User.uid != null ? authV9User.uid : authV9User.id;
+          if (uid) {
+            miniCalendarStateJournal.currentUserId = uid;
+            console.log('[MiniCalendarJournal] currentUserId 복구:', uid);
+          }
+        }
+        // 여전히 없으면 window.currentUser에서 가져오기
+        if (!uid && window.currentUser) {
+          uid = window.currentUser.id || window.currentUser.uid;
+          if (uid) {
+            miniCalendarStateJournal.currentUserId = uid;
+            console.log('[MiniCalendarJournal] currentUserId 복구 (window.currentUser):', uid);
+          }
+        }
+        // localStorage에서도 시도
+        if (!uid) {
+          try {
+            var storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            if (storedUser && (storedUser.id || storedUser.uid)) {
+              uid = storedUser.id || storedUser.uid;
+              miniCalendarStateJournal.currentUserId = uid;
+              console.log('[MiniCalendarJournal] currentUserId 복구 (localStorage):', uid);
+            }
+          } catch (e) {
+            console.warn('[MiniCalendarJournal] localStorage에서 userId 가져오기 실패:', e);
+          }
+        }
+      }
+      
       var y = miniCalendarStateJournal.currentYear;
       var m = miniCalendarStateJournal.currentMonth;
       
