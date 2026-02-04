@@ -6166,8 +6166,49 @@
         var y = miniCalendarStateJournal.currentYear;
         var m = miniCalendarStateJournal.currentMonth;
         var monthlyLogs = window.buildMonthlyLogsForDashboard(y, m + 1, miniCalendarStateJournal.trainingLogs);
+        // Weekly TSS 계산용: 모든 로그를 변환 (현재일 기준 주간 범위에 포함되는 로그 포함)
+        var allLogs = window.buildMonthlyLogsForDashboard ? (function() {
+          // 모든 날짜의 로그를 포함하도록 큰 범위로 변환
+          var now = new Date();
+          var currentYear = now.getFullYear();
+          var currentMonth = now.getMonth() + 1;
+          // 현재일 기준 과거 35일 + 미래 7일 범위로 변환
+          var endDate = new Date(currentYear, currentMonth - 1, now.getDate());
+          var startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - 35);
+          var pad = function(n) { return String(n).padStart(2, '0'); };
+          var startStr = startDate.getFullYear() + '-' + pad(startDate.getMonth() + 1) + '-' + pad(startDate.getDate());
+          var endStr = endDate.getFullYear() + '-' + pad(endDate.getMonth() + 1) + '-' + pad(endDate.getDate());
+          var allMonthlyLogs = [];
+          Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
+            if (dateKey < startStr || dateKey > endStr) return;
+            var arr = miniCalendarStateJournal.trainingLogs[dateKey];
+            if (!Array.isArray(arr)) return;
+            arr.forEach(function(log) {
+              var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+              var min = Math.floor(sec / 60);
+              var s = sec % 60;
+              var durationStr = min + '분 ' + s + '초';
+              var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
+              allMonthlyLogs.push({
+                date: dateKey,
+                distance: log.distance_km != null ? Number(log.distance_km) : 0,
+                duration: durationStr,
+                IF: log.if != null ? Number(log.if) : null,
+                TSS: log.tss != null ? Number(log.tss) : 0,
+                kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
+                avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
+                avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
+                avgPower: log.avg_watts != null ? Number(log.avg_watts) : 0,
+                NP: np,
+                normPower: np
+              });
+            });
+          });
+          return allMonthlyLogs.sort(function(a, b) { return a.date.localeCompare(b.date); });
+        })() : monthlyLogs;
         var currentMonthDate = new Date(y, m, 1);
-        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs);
+        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs);
       }
       
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
@@ -6182,8 +6223,47 @@
       var y = miniCalendarStateJournal.currentYear;
       var m = miniCalendarStateJournal.currentMonth;
       var monthlyLogs = window.buildMonthlyLogsForDashboard(y, m + 1, miniCalendarStateJournal.trainingLogs);
+      // Weekly TSS 계산용: 모든 로그를 변환 (현재일 기준 주간 범위에 포함되는 로그 포함)
+      var allLogs = (function() {
+        var now = new Date();
+        var currentYear = now.getFullYear();
+        var currentMonth = now.getMonth() + 1;
+        var endDate = new Date(currentYear, currentMonth - 1, now.getDate());
+        var startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - 35);
+        var pad = function(n) { return String(n).padStart(2, '0'); };
+        var startStr = startDate.getFullYear() + '-' + pad(startDate.getMonth() + 1) + '-' + pad(startDate.getDate());
+        var endStr = endDate.getFullYear() + '-' + pad(endDate.getMonth() + 1) + '-' + pad(endDate.getDate());
+        var allMonthlyLogs = [];
+        Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
+          if (dateKey < startStr || dateKey > endStr) return;
+          var arr = miniCalendarStateJournal.trainingLogs[dateKey];
+          if (!Array.isArray(arr)) return;
+          arr.forEach(function(log) {
+            var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+            var min = Math.floor(sec / 60);
+            var s = sec % 60;
+            var durationStr = min + '분 ' + s + '초';
+            var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
+            allMonthlyLogs.push({
+              date: dateKey,
+              distance: log.distance_km != null ? Number(log.distance_km) : 0,
+              duration: durationStr,
+              IF: log.if != null ? Number(log.if) : null,
+              TSS: log.tss != null ? Number(log.tss) : 0,
+              kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
+              avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
+              avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
+              avgPower: log.avg_watts != null ? Number(log.avg_watts) : 0,
+              NP: np,
+              normPower: np
+            });
+          });
+        });
+        return allMonthlyLogs.sort(function(a, b) { return a.date.localeCompare(b.date); });
+      })();
       var currentMonthDate = new Date(y, m, 1);
-      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs);
+      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs);
     }
 
     // 전역 함수로 노출
@@ -6256,7 +6336,7 @@
         return 'Normal';
       }
 
-      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs }) {
+      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs, allTrainingLogs }) {
         const chartEfRef = useRef(null);
         const chartEfInstance = useRef(null);
         const chartWeeklyTssRef = useRef(null);
@@ -6269,6 +6349,8 @@
         const [activeInfoId, setActiveInfoId] = useState(null);
 
         const logs = Array.isArray(monthlyLogs) ? monthlyLogs : [];
+        // Weekly TSS 계산용: 현재일 기준 주간 범위에 포함되는 모든 로그 사용
+        const allLogs = Array.isArray(allTrainingLogs) ? allTrainingLogs : logs;
         const year = currentMonth ? currentMonth.getFullYear() : new Date().getFullYear();
         const monthNum = currentMonth ? currentMonth.getMonth() + 1 : new Date().getMonth() + 1;
 
@@ -6321,13 +6403,59 @@
         }, [enrichedLogs]);
 
         const weeklyTSSData = React.useMemo(function() {
-          const byWeek = {};
-          const now = new Date();
-          const currentYear = now.getFullYear();
-          const currentMonth = now.getMonth() + 1;
+          const nowForWeekly = new Date();
+          const todayForWeekly = new Date(nowForWeekly.getFullYear(), nowForWeekly.getMonth(), nowForWeekly.getDate());
+          const currentYear = nowForWeekly.getFullYear();
+          const currentMonth = nowForWeekly.getMonth() + 1;
           const isCurrentMonth = (year === currentYear && monthNum === currentMonth);
           
-          // 주 계산 함수: 해당 월의 첫 날부터 주를 계산 (1일~7일: 1주, 8일~14일: 2주, ...)
+          let weekRanges = [];
+          
+          if (isCurrentMonth) {
+            // 현재 달: 현재일 기준 주간 범위
+            // 현재일이 속한 주의 시작일(일요일) 계산
+            const dayOfWeekForWeekly = todayForWeekly.getDay(); // 0(일) ~ 6(토)
+            const currentWeekStartForWeekly = new Date(todayForWeekly);
+            currentWeekStartForWeekly.setDate(todayForWeekly.getDate() - dayOfWeekForWeekly); // 일요일로 이동
+            
+            // 현재일이 포함된 주의 종료일은 현재일까지 (5주)
+            const currentWeekEndForWeekly = new Date(todayForWeekly);
+            
+            // 1주~4주: 과거 4주 (각 주는 일요일~토요일)
+            for (let i = 4; i >= 1; i--) {
+              const weekStartDate = new Date(currentWeekStartForWeekly);
+              weekStartDate.setDate(currentWeekStartForWeekly.getDate() - (i * 7)); // 과거로 이동
+              const weekEndDate = new Date(weekStartDate);
+              weekEndDate.setDate(weekStartDate.getDate() + 6); // 토요일
+              weekRanges.push({ start: weekStartDate, end: weekEndDate, weekNum: 5 - i });
+            }
+            
+            // 5주: 현재일 포함 주 (일요일~현재일)
+            weekRanges.push({ start: currentWeekStartForWeekly, end: currentWeekEndForWeekly, weekNum: 5 });
+          } else {
+            // 다른 달: 해당 월의 1일부터 말일까지를 5주로 나눔
+            const monthStart = new Date(year, monthNum - 1, 1);
+            const monthEnd = new Date(year, monthNum, 0); // 해당 월의 마지막 날
+            
+            // 해당 월의 총 일수
+            const totalDays = monthEnd.getDate();
+            
+            // 5주로 나누기 (각 주의 일수 계산)
+            const daysPerWeek = totalDays / 5;
+            
+            for (let weekNum = 1; weekNum <= 5; weekNum++) {
+              // 각 주의 시작일과 종료일 계산
+              const weekStartDay = Math.ceil((weekNum - 1) * daysPerWeek) + 1;
+              const weekEndDay = Math.floor(weekNum * daysPerWeek);
+              
+              const weekStartDate = new Date(year, monthNum - 1, weekStartDay);
+              const weekEndDate = new Date(year, monthNum - 1, Math.min(weekEndDay, totalDays));
+              
+              weekRanges.push({ start: weekStartDate, end: weekEndDate, weekNum: weekNum });
+            }
+          }
+          
+          // 주 범위 계산 함수
           function getWeekNumber(dateStr) {
             if (dateStr.length < 10) return null;
             const dateParts = dateStr.split('-');
@@ -6335,15 +6463,97 @@
             const logYear = parseInt(dateParts[0], 10);
             const logMonth = parseInt(dateParts[1], 10);
             const logDay = parseInt(dateParts[2], 10);
+            const logDate = new Date(logYear, logMonth - 1, logDay);
             
-            // 해당 날짜가 속한 주 계산 (1일~7일: 1주, 8일~14일: 2주, 15일~21일: 3주, 22일~28일: 4주, 29일~: 5주)
-            const weekNumber = Math.ceil(logDay / 7);
+            // 각 주 범위에 속하는지 확인
+            for (let weekIdx = 0; weekIdx < weekRanges.length; weekIdx++) {
+              const range = weekRanges[weekIdx];
+              // 날짜 비교를 위해 시간 부분 제거
+              const logDateOnly = new Date(logDate.getFullYear(), logDate.getMonth(), logDate.getDate());
+              const startOnly = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate());
+              const endOnly = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate());
+              
+              if (logDateOnly >= startOnly && logDateOnly <= endOnly) {
+                return range.weekNum; // 1주, 2주, 3주, 4주, 5주
+              }
+            }
             
-            // 1~5주 범위로 제한
-            return Math.max(1, Math.min(5, weekNumber));
+            return null; // 5주 범위 밖
           }
           
-          enrichedLogs.forEach(function(log) {
+          // 주별 TSS 합산: 현재 달이면 현재일 기준 주간 범위, 다른 달이면 해당 월의 로그만 사용
+          const logsForWeeklyTSS = (function() {
+            if (isCurrentMonth) {
+              // 현재 달: 현재일 기준 주간 범위에 포함되는 모든 로그 사용
+              const nowForFilter = new Date();
+              const todayForFilter = new Date(nowForFilter.getFullYear(), nowForFilter.getMonth(), nowForFilter.getDate());
+              const dayOfWeekForFilter = todayForFilter.getDay();
+              const currentWeekStartForFilter = new Date(todayForFilter);
+              currentWeekStartForFilter.setDate(todayForFilter.getDate() - dayOfWeekForFilter);
+              const currentWeekEndForFilter = new Date(todayForFilter);
+              
+              // 5주간의 주 범위 계산 (Weekly TSS용)
+              const weekRangesForTSS = [];
+              for (let i = 4; i >= 1; i--) {
+                const weekStartDate = new Date(currentWeekStartForFilter);
+                weekStartDate.setDate(currentWeekStartForFilter.getDate() - (i * 7));
+                const weekEndDate = new Date(weekStartDate);
+                weekEndDate.setDate(weekStartDate.getDate() + 6);
+                weekRangesForTSS.push({ start: weekStartDate, end: weekEndDate, weekNum: 5 - i });
+              }
+              weekRangesForTSS.push({ start: currentWeekStartForFilter, end: currentWeekEndForFilter, weekNum: 5 });
+              
+              // allLogs에서 현재일 기준 주간 범위에 포함되는 로그만 필터링
+              return allLogs.filter(function(log) {
+                const d = log.date || '';
+                if (d.length < 10) return false;
+                const dateParts = d.split('-');
+                if (dateParts.length < 3) return false;
+                const logYear = parseInt(dateParts[0], 10);
+                const logMonth = parseInt(dateParts[1], 10);
+                const logDay = parseInt(dateParts[2], 10);
+                const logDate = new Date(logYear, logMonth - 1, logDay);
+                
+                // 5주 범위 내에 있는지 확인
+                for (let i = 0; i < weekRangesForTSS.length; i++) {
+                  const range = weekRangesForTSS[i];
+                  const logDateOnly = new Date(logDate.getFullYear(), logDate.getMonth(), logDate.getDate());
+                  const startOnly = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate());
+                  const endOnly = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate());
+                  if (logDateOnly >= startOnly && logDateOnly <= endOnly) {
+                    return true;
+                  }
+                }
+                return false;
+              });
+            } else {
+              // 다른 달: 해당 월의 로그만 사용
+              return logs.filter(function(log) {
+                const d = log.date || '';
+                if (d.length < 10) return false;
+                const dateParts = d.split('-');
+                if (dateParts.length < 3) return false;
+                const logYear = parseInt(dateParts[0], 10);
+                const logMonth = parseInt(dateParts[1], 10);
+                // 해당 월의 로그만 필터링
+                return logYear === year && logMonth === monthNum;
+              });
+            }
+          })();
+          
+          // 필터링된 로그를 enrichedLogs 형식으로 변환
+          const enrichedLogsForWeeklyTSS = logsForWeeklyTSS.map(function(log) {
+            const np = Number(log.NP ?? log.normPower ?? 0);
+            const avgP = Number(log.avgPower ?? 0);
+            const avgHR = Number(log.avgHeartRate ?? log.avg_hr ?? 0);
+            const vi = calcVI(np, avgP);
+            const ef = calcEF(np, avgHR);
+            return Object.assign({}, log, { vi: vi, ef: ef, style: getVIStyle(vi) });
+          });
+          
+          // 주별 TSS 합산
+          const byWeek = {};
+          enrichedLogsForWeeklyTSS.forEach(function(log) {
             const d = log.date || '';
             if (d.length < 10) return;
             const week = getWeekNumber(d);
@@ -6351,28 +6561,76 @@
             
             const key = 'W' + week;
             if (!byWeek[key]) {
+              // 해당 주 번호의 범위 찾기
+              const range = weekRanges.find(function(r) { return r.weekNum === week; });
+              if (!range) return;
+              
+              // 라벨 형식: 날짜 범위 (YYYY-MM-DD ~ MM-DD 또는 YYYY-MM-DD)
+              const startYear = range.start.getFullYear();
+              const startMonth = String(range.start.getMonth() + 1).padStart(2, '0');
+              const startDay = String(range.start.getDate()).padStart(2, '0');
+              const endMonth = String(range.end.getMonth() + 1).padStart(2, '0');
+              const endDay = String(range.end.getDate()).padStart(2, '0');
+              
+              // 같은 달이면 MM-DD ~ MM-DD, 다른 달이면 YYYY-MM-DD ~ MM-DD
+              let dateRange;
+              if (range.start.getMonth() === range.end.getMonth() && range.start.getFullYear() === range.end.getFullYear()) {
+                dateRange = startMonth + '-' + startDay + ' ~ ' + endMonth + '-' + endDay;
+              } else {
+                dateRange = startYear + '-' + startMonth + '-' + startDay + ' ~ ' + endMonth + '-' + endDay;
+              }
+              
               byWeek[key] = { 
                 week: week, 
                 weekKey: key,
                 label: week + '주', 
+                startDate: range.start,
+                endDate: range.end,
+                dateRange: dateRange,
                 TSS: 0 
               };
             }
             byWeek[key].TSS += Number(log.TSS) || 0;
           });
           
-          // 현재 달인 경우 역순 정렬 (5주 → 1주), 다른 달인 경우 순차 정렬 (1주 → 5주)
-          const sorted = Object.values(byWeek);
-          if (isCurrentMonth) {
-            // 현재 달: 역순 (5주, 4주, 3주, 2주, 1주)
-            sorted.sort(function(a, b) { return b.week - a.week; });
-          } else {
-            // 다른 달: 순차 (1주, 2주, 3주, 4주, 5주)
-            sorted.sort(function(a, b) { return a.week - b.week; });
+          // 1주부터 5주까지 순차 정렬
+          const sorted = [];
+          for (let i = 1; i <= 5; i++) {
+            const key = 'W' + i;
+            if (byWeek[key]) {
+              sorted.push(byWeek[key]);
+            } else {
+              // 데이터가 없는 주도 표시 (TSS 0)
+              const range = weekRanges.find(function(r) { return r.weekNum === i; });
+              if (!range) continue;
+              
+              const startYear = range.start.getFullYear();
+              const startMonth = String(range.start.getMonth() + 1).padStart(2, '0');
+              const startDay = String(range.start.getDate()).padStart(2, '0');
+              const endMonth = String(range.end.getMonth() + 1).padStart(2, '0');
+              const endDay = String(range.end.getDate()).padStart(2, '0');
+              
+              let dateRange;
+              if (range.start.getMonth() === range.end.getMonth() && range.start.getFullYear() === range.end.getFullYear()) {
+                dateRange = startMonth + '-' + startDay + ' ~ ' + endMonth + '-' + endDay;
+              } else {
+                dateRange = startYear + '-' + startMonth + '-' + startDay + ' ~ ' + endMonth + '-' + endDay;
+              }
+              
+              sorted.push({
+                week: i,
+                weekKey: key,
+                label: i + '주',
+                startDate: range.start,
+                endDate: range.end,
+                dateRange: dateRange,
+                TSS: 0
+              });
+            }
           }
           
           return sorted;
-        }, [enrichedLogs, year, monthNum]);
+        }, [allLogs]);
 
         const viDistribution = React.useMemo(function() {
           var steady = 0, normal = 0, punchy = 0;
@@ -6703,14 +6961,19 @@
         );
       }
 
-      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs) {
+      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs, allTrainingLogs) {
         const root = document.getElementById('monthly-analysis-dashboard-root');
         if (!root || typeof ReactDOM === 'undefined' || typeof React === 'undefined') return;
         const dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
+        
+        // allTrainingLogs가 없으면 monthlyLogs를 사용
+        const allLogs = allTrainingLogs || monthlyLogs || [];
+        
         const el = React.createElement(MonthlyTrainingAnalysisDashboard, {
           key: dateObj.getTime(),
           currentMonth: dateObj,
-          monthlyLogs: monthlyLogs || []
+          monthlyLogs: monthlyLogs || [],
+          allTrainingLogs: allLogs
         });
         if (ReactDOM.createRoot) {
           if (!root._monthlyDashboardRoot) root._monthlyDashboardRoot = ReactDOM.createRoot(root);
