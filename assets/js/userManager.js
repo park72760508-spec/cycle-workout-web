@@ -233,6 +233,14 @@ let isLoginJustCompleted = false;
 
 // 베이스캠프 화면으로 전환하는 헬퍼 함수
 function switchToBasecampScreen() {
+  // callback.html에서는 basecampScreen이 없으므로 조용히 종료
+  const isCallbackPage = typeof window !== 'undefined' && 
+    (window.location.pathname.includes('callback.html') || 
+     window.location.href.includes('callback.html'));
+  if (isCallbackPage) {
+    return; // callback.html에서는 화면 전환 불필요
+  }
+  
   console.log('🔄 베이스캠프 화면으로 전환 시작');
   
   const basecampScreen = document.getElementById('basecampScreen');
@@ -764,61 +772,75 @@ function initAuthStateListener() {
           console.log('✅ 인증 상태 복원 완료:', userData.name);
           
           // 사용자 목록 동기화 (로그인 후)
-          if (typeof syncUsersFromDB === 'function') {
-            try {
-              await syncUsersFromDB();
-            } catch (syncError) {
-              console.warn('⚠️ 사용자 목록 동기화 실패 (무시):', syncError.message);
+          // callback.html에서는 사용자 목록 로드 및 화면 전환 건너뛰기
+          const isCallbackPage = typeof window !== 'undefined' && 
+            (window.location.pathname.includes('callback.html') || 
+             window.location.href.includes('callback.html'));
+          
+          if (!isCallbackPage) {
+            if (typeof syncUsersFromDB === 'function') {
+              try {
+                await syncUsersFromDB();
+              } catch (syncError) {
+                console.warn('⚠️ 사용자 목록 동기화 실패 (무시):', syncError.message);
+              }
             }
-          }
-          if (typeof loadUsers === 'function') {
-            try {
-              await loadUsers();
-            } catch (loadError) {
-              console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
+            if (typeof loadUsers === 'function') {
+              try {
+                await loadUsers();
+              } catch (loadError) {
+                console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
+              }
             }
           }
           
-          // 로그인 성공 후에만 모달 표시 (페이지 로드 시에는 표시하지 않음)
-          // isLoginJustCompleted 플래그가 true일 때만 모달 표시
-          if (isLoginJustCompleted) {
-            const hasContact = userData.contact && userData.contact.trim() !== '';
-            const hasFTP = userData.ftp && userData.ftp > 0;
-            const hasWeight = userData.weight && userData.weight > 0;
-            const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
-            
-            const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
-            
-            if (needsInfo) {
-              // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
-              setTimeout(() => {
-                showCompleteUserInfoModal(userData);
-              }, 500);
+          // callback.html에서는 화면 전환 및 모달 표시 건너뛰기
+          const isCallbackPage = typeof window !== 'undefined' && 
+            (window.location.pathname.includes('callback.html') || 
+             window.location.href.includes('callback.html'));
+          
+          if (!isCallbackPage) {
+            // 로그인 성공 후에만 모달 표시 (페이지 로드 시에는 표시하지 않음)
+            // isLoginJustCompleted 플래그가 true일 때만 모달 표시
+            if (isLoginJustCompleted) {
+              const hasContact = userData.contact && userData.contact.trim() !== '';
+              const hasFTP = userData.ftp && userData.ftp > 0;
+              const hasWeight = userData.weight && userData.weight > 0;
+              const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+              
+              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+              
+              if (needsInfo) {
+                // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
+                setTimeout(() => {
+                  showCompleteUserInfoModal(userData);
+                }, 500);
+              } else {
+                // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+                setTimeout(() => {
+                  switchToBasecampScreen();
+                }, 300);
+              }
+              
+              // 플래그 리셋 (한 번만 실행되도록)
+              isLoginJustCompleted = false;
             } else {
-              // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
-              setTimeout(() => {
-                switchToBasecampScreen();
-              }, 300);
+              // 페이지 로드 시 인증 상태 복원인 경우: 화면만 전환 (모달 표시하지 않음)
+              const hasContact = userData.contact && userData.contact.trim() !== '';
+              const hasFTP = userData.ftp && userData.ftp > 0;
+              const hasWeight = userData.weight && userData.weight > 0;
+              const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+              
+              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+              
+              if (!needsInfo) {
+                // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+                setTimeout(() => {
+                  switchToBasecampScreen();
+                }, 300);
+              }
+              // needsInfo가 true여도 페이지 로드 시에는 모달을 표시하지 않음
             }
-            
-            // 플래그 리셋 (한 번만 실행되도록)
-            isLoginJustCompleted = false;
-          } else {
-            // 페이지 로드 시 인증 상태 복원인 경우: 화면만 전환 (모달 표시하지 않음)
-            const hasContact = userData.contact && userData.contact.trim() !== '';
-            const hasFTP = userData.ftp && userData.ftp > 0;
-            const hasWeight = userData.weight && userData.weight > 0;
-            const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
-            
-            const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
-            
-            if (!needsInfo) {
-              // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
-              setTimeout(() => {
-                switchToBasecampScreen();
-              }, 300);
-            }
-            // needsInfo가 true여도 페이지 로드 시에는 모달을 표시하지 않음
           }
         } else {
           // users/{uid} 문서가 없는 경우
@@ -1666,10 +1688,14 @@ if (typeof window !== 'undefined') {
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) {
-    if (window === window.top) {
+    // callback.html이나 iframe에서는 userList가 없을 수 있음 (정상)
+    const isCallbackPage = typeof window !== 'undefined' && 
+      (window.location.pathname.includes('callback.html') || 
+       window.location.href.includes('callback.html'));
+    if (window === window.top && !isCallbackPage) {
       console.warn('[loadUsers] userList 요소를 찾을 수 없습니다. 함수를 종료합니다.');
     }
-    return; // iframe(대시보드 등)에서는 userList 없음 → 로그 생략 후 종료
+    return; // callback.html 또는 iframe(대시보드 등)에서는 userList 없음 → 로그 생략 후 종료
   }
 
   try {
