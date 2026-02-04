@@ -6084,8 +6084,13 @@ function initializeCurrentScreen(screenId) {
 
       const checkAndInit = (retryCount = 0) => {
         if (typeof window.initMiniCalendarJournal === 'function') {
-          const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-          const userId = currentUser?.id;
+          const currentUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+          // Firebase Auth 사용자는 .uid만 가질 수 있음 → .id || .uid 사용. 없으면 authV9/compat currentUser에서 조회
+          let userId = (currentUser && (currentUser.id != null ? currentUser.id : currentUser.uid)) || null;
+          if (!userId && typeof window.getCurrentUserForTrainingRooms === 'function') {
+            var liveAuth = window.getCurrentUserForTrainingRooms();
+            if (liveAuth) userId = liveAuth.uid != null ? liveAuth.uid : liveAuth.id;
+          }
           console.log('현재 사용자 정보:', { userId, hasCurrentUser: !!currentUser, userName: currentUser?.name });
           
           if (userId) {
@@ -6129,7 +6134,7 @@ function initializeCurrentScreen(screenId) {
                   if (uid) journalUserId = uid;
                 }
                 if (jStep) jStep('4. getUserTrainingLogs 모듈 대기 중...', false);
-                var modulePollMs = isTablet ? 6000 : 2000;
+                var modulePollMs = isTablet ? 10000 : 6000;
                 var moduleStart = Date.now();
                 while (typeof window.getUserTrainingLogs !== 'function' && (Date.now() - moduleStart) < modulePollMs) {
                   await new Promise(function(r) { setTimeout(r, 200); });
