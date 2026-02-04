@@ -6078,6 +6078,7 @@ function initializeCurrentScreen(screenId) {
       
       case 'trainingJournalScreen':
       // 훈련일지 화면: Auth·Firestore 대기 후 미니 달력 로드 (단계는 콘솔 로그만)
+      if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle('(로딩 중...)');
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
@@ -6163,6 +6164,7 @@ function initializeCurrentScreen(screenId) {
             console.warn('훈련일지: 사용자 ID를 찾을 수 없습니다.');
             console.warn('currentUser:', currentUser);
             console.warn('localStorage currentUser:', localStorage.getItem('currentUser'));
+            if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle('(로그인 필요)');
             if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('0. 오류: 사용자 ID 없음', true);
             try {
               window.__journalLoadFailed = true;
@@ -6182,6 +6184,7 @@ function initializeCurrentScreen(screenId) {
           console.error('❌ initMiniCalendarJournal function not available after 2 seconds');
           console.error('window.initMiniCalendarJournal:', window.initMiniCalendarJournal);
           console.error('사용 가능한 window 함수들:', Object.keys(window).filter(k => k.includes('Calendar')));
+          if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle('(초기화 실패)');
           if (typeof window.setJournalLoadStatus === 'function') window.setJournalLoadStatus('0. 오류: 초기화 함수 미로드', true);
           try {
             window.__journalLoadFailed = true;
