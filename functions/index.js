@@ -162,15 +162,31 @@ exports.exchangeStravaCode = onRequest(
       const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
       const redirectUri = appConfig.strava_redirect_uri || "";
-      const clientSecret = STRAVA_CLIENT_SECRET ? STRAVA_CLIENT_SECRET.value() : STRAVA_CLIENT_SECRET_VALUE;
+      
+      // Secret에서 값을 가져오되, 없거나 빈 값이면 하드코딩된 값 사용
+      let clientSecret;
+      if (STRAVA_CLIENT_SECRET) {
+        try {
+          const secretValue = STRAVA_CLIENT_SECRET.value();
+          clientSecret = secretValue && secretValue.trim() ? secretValue : STRAVA_CLIENT_SECRET_VALUE;
+        } catch (e) {
+          console.warn("[exchangeStravaCode] Secret 값 읽기 실패, 하드코딩된 값 사용:", e.message);
+          clientSecret = STRAVA_CLIENT_SECRET_VALUE;
+        }
+      } else {
+        clientSecret = STRAVA_CLIENT_SECRET_VALUE;
+      }
 
       console.log("[exchangeStravaCode] 설정 확인:", {
         hasClientId: !!clientId,
         hasRedirectUri: !!redirectUri,
         hasClientSecret: !!clientSecret,
+        clientId: clientId, // 실제 값 확인
+        redirectUri: redirectUri, // 실제 값 확인
         clientIdLength: clientId.length,
         redirectUriLength: redirectUri.length,
-        clientSecretLength: clientSecret ? clientSecret.length : 0
+        clientSecretLength: clientSecret ? clientSecret.length : 0,
+        codeLength: code ? code.length : 0
       });
 
       if (!clientId || !clientSecret || !redirectUri) {
@@ -324,7 +340,20 @@ exports.refreshStravaToken = onRequest(
 
       const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
-      const clientSecret = STRAVA_CLIENT_SECRET ? STRAVA_CLIENT_SECRET.value() : STRAVA_CLIENT_SECRET_VALUE;
+      
+      // Secret에서 값을 가져오되, 없거나 빈 값이면 하드코딩된 값 사용
+      let clientSecret;
+      if (STRAVA_CLIENT_SECRET) {
+        try {
+          const secretValue = STRAVA_CLIENT_SECRET.value();
+          clientSecret = secretValue && secretValue.trim() ? secretValue : STRAVA_CLIENT_SECRET_VALUE;
+        } catch (e) {
+          console.warn("[refreshStravaToken] Secret 값 읽기 실패, 하드코딩된 값 사용:", e.message);
+          clientSecret = STRAVA_CLIENT_SECRET_VALUE;
+        }
+      } else {
+        clientSecret = STRAVA_CLIENT_SECRET_VALUE;
+      }
 
       if (!clientId || !clientSecret) {
         throw new HttpsError(
