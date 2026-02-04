@@ -12,3 +12,7 @@ secrets.js
 
 # 로컬 설정
 *.local.js
+
+# Node.js 의존성 (npm install로 재생성 가능)
+node_modules/
+functions/node_modules/
