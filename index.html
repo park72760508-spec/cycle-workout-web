@@ -10495,7 +10495,41 @@ Output Format (JSON Only):
           }, 300);
         }
         
-        // Training Journal: app.js initializeCurrentScreen에서만 init (중복 호출 방지로 여기서는 호출하지 않음)
+        // Training Journal: initializeCurrentScreen 호출 보장
+        if (screenId === 'trainingJournalScreen') {
+          console.log('[showScreen] trainingJournalScreen 감지 - initializeCurrentScreen 호출 시도');
+          setTimeout(function() {
+            if (typeof initializeCurrentScreen === 'function') {
+              console.log('[showScreen] ✅ initializeCurrentScreen 함수 발견 - 호출');
+              try {
+                initializeCurrentScreen(screenId);
+                console.log('[showScreen] ✅ initializeCurrentScreen 호출 완료');
+              } catch (initError) {
+                console.error('[showScreen] ❌ initializeCurrentScreen 호출 실패:', initError);
+              }
+            } else {
+              console.warn('[showScreen] ⚠️ initializeCurrentScreen 함수가 없습니다. app.js가 로드되었는지 확인하세요.');
+              // 함수가 로드될 때까지 대기 (최대 2초)
+              var retryCount = 0;
+              var maxRetries = 20;
+              var checkInterval = setInterval(function() {
+                retryCount++;
+                if (typeof initializeCurrentScreen === 'function') {
+                  clearInterval(checkInterval);
+                  console.log('[showScreen] ✅ initializeCurrentScreen 함수 로드됨 - 호출 (재시도 ' + retryCount + '회)');
+                  try {
+                    initializeCurrentScreen(screenId);
+                  } catch (initError) {
+                    console.error('[showScreen] ❌ initializeCurrentScreen 호출 실패:', initError);
+                  }
+                } else if (retryCount >= maxRetries) {
+                  clearInterval(checkInterval);
+                  console.error('[showScreen] ❌ initializeCurrentScreen 함수를 찾을 수 없습니다 (재시도 ' + retryCount + '회 실패)');
+                }
+              }, 100);
+            }
+          }, 100);
+        }
         
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
