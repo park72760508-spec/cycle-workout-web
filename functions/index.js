@@ -167,7 +167,16 @@ exports.exchangeStravaCode = onRequest(
       let clientSecret;
       if (STRAVA_CLIENT_SECRET) {
         try {
-          const secretValue = STRAVA_CLIENT_SECRET.value();
+          let secretValue = STRAVA_CLIENT_SECRET.value();
+          // Secret 값에서 따옴표 제거 (JSON 파싱 오류 방지)
+          if (secretValue && typeof secretValue === 'string') {
+            secretValue = secretValue.trim();
+            // 앞뒤 따옴표 제거
+            if ((secretValue.startsWith('"') && secretValue.endsWith('"')) ||
+                (secretValue.startsWith("'") && secretValue.endsWith("'"))) {
+              secretValue = secretValue.slice(1, -1);
+            }
+          }
           clientSecret = secretValue && secretValue.trim() ? secretValue : STRAVA_CLIENT_SECRET_VALUE;
         } catch (e) {
           console.warn("[exchangeStravaCode] Secret 값 읽기 실패, 하드코딩된 값 사용:", e.message);
@@ -373,7 +382,16 @@ exports.refreshStravaToken = onRequest(
       let clientSecret;
       if (STRAVA_CLIENT_SECRET) {
         try {
-          const secretValue = STRAVA_CLIENT_SECRET.value();
+          let secretValue = STRAVA_CLIENT_SECRET.value();
+          // Secret 값에서 따옴표 제거 (JSON 파싱 오류 방지)
+          if (secretValue && typeof secretValue === 'string') {
+            secretValue = secretValue.trim();
+            // 앞뒤 따옴표 제거
+            if ((secretValue.startsWith('"') && secretValue.endsWith('"')) ||
+                (secretValue.startsWith("'") && secretValue.endsWith("'"))) {
+              secretValue = secretValue.slice(1, -1);
+            }
+          }
           clientSecret = secretValue && secretValue.trim() ? secretValue : STRAVA_CLIENT_SECRET_VALUE;
         } catch (e) {
           console.warn("[refreshStravaToken] Secret 값 읽기 실패, 하드코딩된 값 사용:", e.message);
