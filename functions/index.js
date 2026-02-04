@@ -7,7 +7,17 @@ const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
 // Secret Manager에서 STRAVA_CLIENT_SECRET 읽기
-const STRAVA_CLIENT_SECRET = defineSecret("STRAVA_CLIENT_SECRET");
+// 임시: Secret 설정 문제로 인해 하드코딩된 값 사용 (보안상 권장하지 않음, 나중에 Secret으로 변경 필요)
+const STRAVA_CLIENT_SECRET_VALUE = "6cd67a28f1c516c0f004f1c7f97f4d74be187d85";
+
+// Secret 사용 시도 (실패하면 하드코딩된 값 사용)
+let STRAVA_CLIENT_SECRET;
+try {
+  STRAVA_CLIENT_SECRET = defineSecret("STRAVA_CLIENT_SECRET");
+} catch (e) {
+  console.warn("[Functions] Secret 정의 실패, 하드코딩된 값 사용:", e.message);
+  STRAVA_CLIENT_SECRET = null; // Secret 없음
+}
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -98,8 +108,14 @@ exports.adminResetUserPassword = onCall(
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
  * onRequest로 변경하여 CORS 수동 처리
  */
+// Secret이 있으면 secrets 배열에 포함, 없으면 Secret 없이 배포
+const exchangeStravaCodeConfig = { cors: CORS_ORIGINS };
+if (STRAVA_CLIENT_SECRET) {
+  exchangeStravaCodeConfig.secrets = [STRAVA_CLIENT_SECRET];
+}
+
 exports.exchangeStravaCode = onRequest(
-  { cors: CORS_ORIGINS, secrets: [STRAVA_CLIENT_SECRET] },
+  exchangeStravaCodeConfig,
   async (req, res) => {
     // OPTIONS preflight 요청 처리 (Firebase Functions v2의 cors 옵션과 함께 사용)
     if (req.method === "OPTIONS") {
@@ -146,7 +162,7 @@ exports.exchangeStravaCode = onRequest(
       const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
       const redirectUri = appConfig.strava_redirect_uri || "";
-      const clientSecret = STRAVA_CLIENT_SECRET.value();
+      const clientSecret = STRAVA_CLIENT_SECRET ? STRAVA_CLIENT_SECRET.value() : STRAVA_CLIENT_SECRET_VALUE;
 
       console.log("[exchangeStravaCode] 설정 확인:", {
         hasClientId: !!clientId,
@@ -231,8 +247,14 @@ exports.exchangeStravaCode = onRequest(
  * 클라이언트는 userId만 전달; 리프레시 토큰은 서버가 Firestore에서 읽음.
  * onRequest로 변경하여 CORS 수동 처리
  */
+// refreshStravaToken도 동일한 설정 사용
+const refreshStravaTokenConfig = { cors: CORS_ORIGINS };
+if (STRAVA_CLIENT_SECRET) {
+  refreshStravaTokenConfig.secrets = [STRAVA_CLIENT_SECRET];
+}
+
 exports.refreshStravaToken = onRequest(
-  { cors: CORS_ORIGINS, secrets: [STRAVA_CLIENT_SECRET] },
+  refreshStravaTokenConfig,
   async (req, res) => {
     // OPTIONS preflight 요청 처리 (Firebase Functions v2의 cors 옵션과 함께 사용)
     if (req.method === "OPTIONS") {
@@ -291,7 +313,7 @@ exports.refreshStravaToken = onRequest(
 
       const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
-      const clientSecret = STRAVA_CLIENT_SECRET.value();
+      const clientSecret = STRAVA_CLIENT_SECRET ? STRAVA_CLIENT_SECRET.value() : STRAVA_CLIENT_SECRET_VALUE;
 
       if (!clientId || !clientSecret) {
         throw new HttpsError(
