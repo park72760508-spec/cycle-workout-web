@@ -6087,6 +6087,7 @@ function initializeCurrentScreen(screenId) {
       (function setJournalSubtitle(t) {
         if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle(t);
         else { var el = document.getElementById('journalSubtitleCount'); if (el) el.textContent = t || '( )'; }
+      })('( )');
       // 로딩 중 문구 제거 (오버레이 스피너로 대체)
       var journalGrid = document.getElementById('miniCalendarGridJournal');
       if (journalGrid) {
