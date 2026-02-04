@@ -6087,10 +6087,10 @@ function initializeCurrentScreen(screenId) {
       (function setJournalSubtitle(t) {
         if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle(t);
         else { var el = document.getElementById('journalSubtitleCount'); if (el) el.textContent = t || '( )'; }
-      })('(로딩 중...)');
+      // 로딩 중 문구 제거 (오버레이 스피너로 대체)
       var journalGrid = document.getElementById('miniCalendarGridJournal');
       if (journalGrid) {
-        journalGrid.innerHTML = '<div style="padding:24px;text-align:center;color:#64748b;font-size:14px;">훈련일지 로딩 중...</div>';
+        journalGrid.innerHTML = ''; // 로딩 메시지 제거
       }
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
