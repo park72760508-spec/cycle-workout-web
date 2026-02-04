@@ -4990,6 +4990,8 @@
       trainingLogs: {}, // 현재 사용자의 훈련 로그 (날짜별 그룹화)
       currentUserId: null
     };
+    // 🔒 보안: window에 노출하여 로그아웃 시 초기화 가능하도록 함
+    window.miniCalendarStateJournal = miniCalendarStateJournal;
 
     /** 훈련일지 로드 단계 — 콘솔 로그만 (화면 표시 없음) */
     function setJournalLoadStatus(msg, isError) {
@@ -5474,6 +5476,29 @@
         return;
       }
 
+      // 🔒 보안: 현재 로그인한 사용자와 일치하는지 확인
+      var currentUser = window.currentUser || (function() {
+        try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
+      })();
+      var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+      var currentUserId = null;
+      if (authV9User) {
+        currentUserId = authV9User.uid != null ? authV9User.uid : authV9User.id;
+      } else if (currentUser) {
+        currentUserId = currentUser.id != null ? currentUser.id : currentUser.uid;
+      }
+      
+      // 저장된 userId와 현재 로그인한 userId가 다르면 데이터 초기화
+      if (currentUserId && miniCalendarStateJournal.currentUserId && miniCalendarStateJournal.currentUserId !== currentUserId) {
+        console.warn('[MiniCalendarJournal] ⚠️ 사용자 불일치 감지! 데이터 초기화:', {
+          storedUserId: miniCalendarStateJournal.currentUserId,
+          currentUserId: currentUserId
+        });
+        miniCalendarStateJournal.trainingLogs = {};
+        miniCalendarStateJournal.currentUserId = null;
+        // 달력만 렌더링하고 데이터는 표시하지 않음
+      }
+
       const { currentYear, currentMonth } = miniCalendarStateJournal;
       
       // 월/년 표시 업데이트
@@ -5632,6 +5657,28 @@
     function miniCalendarNavigateJournal(direction) {
       console.log('[MiniCalendarJournal] 달력 네비게이션:', direction);
       
+      // 🔒 보안: 현재 로그인한 사용자와 일치하는지 확인
+      var currentUser = window.currentUser || (function() {
+        try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
+      })();
+      var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
+      var currentUserId = null;
+      if (authV9User) {
+        currentUserId = authV9User.uid != null ? authV9User.uid : authV9User.id;
+      } else if (currentUser) {
+        currentUserId = currentUser.id != null ? currentUser.id : currentUser.uid;
+      }
+      
+      // 저장된 userId와 현재 로그인한 userId가 다르면 데이터 초기화
+      if (currentUserId && miniCalendarStateJournal.currentUserId && miniCalendarStateJournal.currentUserId !== currentUserId) {
+        console.warn('[MiniCalendarJournal] ⚠️ 네비게이션 중 사용자 불일치 감지! 데이터 초기화:', {
+          storedUserId: miniCalendarStateJournal.currentUserId,
+          currentUserId: currentUserId
+        });
+        miniCalendarStateJournal.trainingLogs = {};
+        miniCalendarStateJournal.currentUserId = null;
+      }
+      
       if (direction === 'prev') {
         miniCalendarStateJournal.currentMonth--;
         if (miniCalendarStateJournal.currentMonth < 0) {
@@ -5647,7 +5694,7 @@
       }
       
       // currentUserId가 없으면 다시 가져오기
-      var uid = miniCalendarStateJournal.currentUserId;
+      var uid = miniCalendarStateJournal.currentUserId || currentUserId;
       if (!uid) {
         // authV9에서 userId 가져오기
         var authV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
@@ -5915,6 +5962,24 @@
       var jStep = window.setJournalLoadStatus;
       var jHide = window.hideJournalLoadStatusBox;
       var jShow = window.showJournalLoadStatusBox;
+      
+      // 🔒 보안: userId 변경 감지 및 이전 사용자 데이터 초기화
+      if (userId && miniCalendarStateJournal.currentUserId && miniCalendarStateJournal.currentUserId !== userId) {
+        console.warn('[MiniCalendarJournal] ⚠️ 사용자 변경 감지! 이전 사용자 데이터 초기화:', {
+          previousUserId: miniCalendarStateJournal.currentUserId,
+          newUserId: userId
+        });
+        // 이전 사용자의 모든 데이터 초기화
+        miniCalendarStateJournal.trainingLogs = {};
+        miniCalendarStateJournal.currentUserId = null;
+        // 진행 중인 작업도 초기화
+        window.__journalInitInProgress = false;
+        window.__journalFetchInProgress = false;
+        window.__journalFetchCallCount = 0;
+        window.__journalEmptyRetryDone = false;
+        window.__journalLoadFailed = false;
+      }
+      
       // 로딩 중 문구 제거 (오버레이 스피너로 대체)
       if (typeof jShow === 'function') jShow(); // 오버레이 스피너 표시
       if (window.__journalInitInProgress) {
@@ -5939,15 +6004,21 @@
       if (jStep) jStep('6. userId 적용: ' + (userId ? (userId + '').slice(0, 12) + '...' : '없음'), false);
       console.log('[MiniCalendarJournal] userId:', userId, '(authV9 우선 적용)');
       
+      // 🔒 보안: userId가 없거나 이전 사용자와 다르면 초기화
       if (!userId) {
         if (jStep) jStep('6. 오류: userId 없음', true);
         console.warn('[MiniCalendarJournal] ⚠️ userId가 없습니다.');
+        // userId가 없으면 기존 데이터도 초기화
+        miniCalendarStateJournal.trainingLogs = {};
+        miniCalendarStateJournal.currentUserId = null;
         window.__journalInitInProgress = false;
         return;
       }
 
       try {
+      // 🔒 보안: 현재 사용자 ID 저장 (이전 사용자와 다르면 이미 위에서 초기화됨)
       miniCalendarStateJournal.currentUserId = userId;
+      console.log('[MiniCalendarJournal] ✅ 사용자 ID 저장 완료:', userId);
       
       var isTabletInit = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
       if (isTabletInit) {
@@ -7388,6 +7459,24 @@
         auth.signOut().then(function() {
           window.currentUser = null;
           try { localStorage.removeItem('currentUser'); } catch (e) {}
+          
+          // 🔒 보안: 훈련일지 상태 초기화 (다른 사용자 데이터 노출 방지)
+          if (typeof window !== 'undefined' && window.miniCalendarStateJournal) {
+            console.log('[Logout] 훈련일지 상태 초기화');
+            window.miniCalendarStateJournal.trainingLogs = {};
+            window.miniCalendarStateJournal.currentUserId = null;
+            window.miniCalendarStateJournal.currentYear = new Date().getFullYear();
+            window.miniCalendarStateJournal.currentMonth = new Date().getMonth();
+          }
+          // 진행 중인 작업도 초기화
+          if (typeof window !== 'undefined') {
+            window.__journalInitInProgress = false;
+            window.__journalFetchInProgress = false;
+            window.__journalFetchCallCount = 0;
+            window.__journalEmptyRetryDone = false;
+            window.__journalLoadFailed = false;
+          }
+          
           if (typeof updateAuthBarUI === 'function') updateAuthBarUI(null);
           if (typeof showToast === 'function') showToast('로그아웃되었습니다.');
         }).catch(function(e) { console.error('로그아웃 오류:', e); });
