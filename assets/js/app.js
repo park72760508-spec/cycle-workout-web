@@ -6078,6 +6078,7 @@ function initializeCurrentScreen(screenId) {
       
       case 'trainingJournalScreen':
       // 훈련일지 화면: 이전 실패 상태 초기화 후 미니 달력 로드
+      console.log('[Journal Init] ========== trainingJournalScreen 케이스 진입 ==========');
       if (typeof window !== 'undefined') {
         window.__journalInitInProgress = false;
         window.__journalFetchInProgress = false;
@@ -6094,9 +6095,12 @@ function initializeCurrentScreen(screenId) {
       console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
+      console.log('getTrainingLogsByDateRange 함수 확인:', typeof window.getTrainingLogsByDateRange);
 
       const checkAndInit = (retryCount = 0) => {
+        console.log(`[Journal Init] checkAndInit 호출 (retryCount: ${retryCount})`);
         if (typeof window.initMiniCalendarJournal === 'function') {
+          console.log('[Journal Init] ✅ initMiniCalendarJournal 함수 발견');
           const currentUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
           // Firebase Auth 사용자는 .uid만 가질 수 있음 → .id || .uid 사용. 없으면 authV9/compat currentUser에서 조회
           let userId = (currentUser && (currentUser.id != null ? currentUser.id : currentUser.uid)) || null;
@@ -6168,8 +6172,15 @@ function initializeCurrentScreen(screenId) {
               var initDelay = isTablet ? 500 : 100;
               setTimeout(function() {
                 if (jStep) jStep('5. initMiniCalendarJournal 호출 (지연 ' + initDelay + 'ms)', false);
-                console.log('initMiniCalendarJournal 호출 시도 - userId:', journalUserId);
-                window.initMiniCalendarJournal(journalUserId);
+                console.log('[Journal Init] initMiniCalendarJournal 호출 시도 - userId:', journalUserId);
+                console.log('[Journal Init] getTrainingLogsByDateRange 함수 확인:', typeof window.getTrainingLogsByDateRange);
+                try {
+                  window.initMiniCalendarJournal(journalUserId);
+                  console.log('[Journal Init] ✅ initMiniCalendarJournal 호출 완료');
+                } catch (initError) {
+                  console.error('[Journal Init] ❌ initMiniCalendarJournal 호출 실패:', initError);
+                  if (jStep) jStep('5. 오류: ' + (initError.message || String(initError)), true);
+                }
               }, initDelay);
             })();
           } else {
@@ -6190,10 +6201,10 @@ function initializeCurrentScreen(screenId) {
             } catch (e) {}
           }
         } else if (retryCount < 20) {
-          console.log(`initMiniCalendarJournal 대기 중... (${retryCount + 1}/20)`);
+          console.log(`[Journal Init] initMiniCalendarJournal 대기 중... (${retryCount + 1}/20)`);
           setTimeout(() => checkAndInit(retryCount + 1), 100);
         } else {
-          console.error('❌ initMiniCalendarJournal function not available after 2 seconds');
+          console.error('[Journal Init] ❌ initMiniCalendarJournal function not available after 2 seconds');
           console.error('window.initMiniCalendarJournal:', window.initMiniCalendarJournal);
           console.error('사용 가능한 window 함수들:', Object.keys(window).filter(k => k.includes('Calendar')));
           (function(t){ if(typeof window.updateJournalSubtitle==='function') window.updateJournalSubtitle(t); else { var e=document.getElementById('journalSubtitleCount'); if(e) e.textContent=t||'( )'; } })('(초기화 실패)');
