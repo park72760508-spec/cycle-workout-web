@@ -1,0 +1,14 @@
+# API 키·시크릿 (GitHub 업로드 제외)
+config.local.js
+assets/js/config.local.js
+**/config.local.js
+
+# 환경/비밀
+.env
+.env.local
+.env.*.local
+secrets.js
+**/secrets.js
+
+# 로컬 설정
+*.local.js
