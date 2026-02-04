@@ -2,7 +2,7 @@
  * 관리자 비밀번호 초기화 Callable Function (v2)
  * Strava 토큰 교환/갱신 Callable (v2) - Client Secret은 서버에서만 사용
  */
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineString } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -96,11 +96,24 @@ exports.adminResetUserPassword = onCall(
 /**
  * Strava 인증 코드를 액세스/리프레시 토큰으로 교환하고 users/{userId}에 저장.
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
+ * onRequest로 변경하여 CORS 수동 처리
  */
-exports.exchangeStravaCode = onCall(
-  async (request) => {
+exports.exchangeStravaCode = onRequest(
+  { cors: true },
+  async (req, res) => {
+    // CORS 헤더 설정
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    // OPTIONS preflight 요청 처리
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
     try {
-      const data = request.data || {};
+      const data = req.method === "POST" ? req.body : {};
       const code = typeof data.code === "string" ? data.code.trim() : "";
       const userId = data.userId != null ? String(data.userId).trim() : "";
 
@@ -189,14 +202,16 @@ exports.exchangeStravaCode = onCall(
         strava_expires_at: expiresAt,
       });
 
-      return { success: true };
+      res.status(200).json({ success: true });
     } catch (err) {
-      if (err instanceof HttpsError) throw err;
       console.error("[exchangeStravaCode]", err);
-      throw new HttpsError(
-        "internal",
-        err.message || "Strava 토큰 교환 중 오류가 발생했습니다."
-      );
+      const statusCode = err.code === "invalid-argument" ? 400 : 
+                         err.code === "not-found" ? 404 :
+                         err.code === "failed-precondition" ? 412 : 500;
+      res.status(statusCode).json({
+        success: false,
+        error: err.message || "Strava 토큰 교환 중 오류가 발생했습니다."
+      });
     }
   }
 );
@@ -204,11 +219,24 @@ exports.exchangeStravaCode = onCall(
 /**
  * Strava 리프레시 토큰으로 액세스 토큰 갱신 후 users/{userId} 업데이트.
  * 클라이언트는 userId만 전달; 리프레시 토큰은 서버가 Firestore에서 읽음.
+ * onRequest로 변경하여 CORS 수동 처리
  */
-exports.refreshStravaToken = onCall(
-  async (request) => {
+exports.refreshStravaToken = onRequest(
+  { cors: true },
+  async (req, res) => {
+    // CORS 헤더 설정
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    // OPTIONS preflight 요청 처리
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
     try {
-      const data = request.data || {};
+      const data = req.method === "POST" ? req.body : {};
       const userId = data.userId != null ? String(data.userId).trim() : "";
 
       if (!userId) {
@@ -289,14 +317,16 @@ exports.refreshStravaToken = onCall(
         strava_expires_at: expiresAt,
       });
 
-      return { success: true, accessToken };
+      res.status(200).json({ success: true, accessToken });
     } catch (err) {
-      if (err instanceof HttpsError) throw err;
       console.error("[refreshStravaToken]", err);
-      throw new HttpsError(
-        "internal",
-        err.message || "Strava 토큰 갱신 중 오류가 발생했습니다."
-      );
+      const statusCode = err.code === "invalid-argument" ? 400 : 
+                         err.code === "not-found" ? 404 :
+                         err.code === "failed-precondition" ? 412 : 500;
+      res.status(statusCode).json({
+        success: false,
+        error: err.message || "Strava 토큰 갱신 중 오류가 발생했습니다."
+      });
     }
   }
 );
