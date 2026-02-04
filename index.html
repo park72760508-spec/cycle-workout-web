@@ -5950,6 +5950,14 @@
       var cm = miniCalendarStateJournal.currentMonth;
       var now = new Date();
       var isDisplayingCurrentMonth = (cy === now.getFullYear() && cm === now.getMonth());
+      
+      console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 정보:', {
+        year: cy,
+        month: cm + 1,
+        isDisplayingCurrentMonth: isDisplayingCurrentMonth,
+        hasGetTrainingLogsByDateRange: typeof window.getTrainingLogsByDateRange === 'function',
+        currentUserId: miniCalendarStateJournal.currentUserId
+      });
 
       function mergeMonthLogsIntoTrainingLogs(monthLogs) {
         if (!monthLogs || monthLogs.length === 0) {
@@ -6016,13 +6024,36 @@
         });
       }
 
+      // getTrainingLogsByDateRange 함수가 로드될 때까지 최대 3초 대기
+      var maxWaitTime = 3000;
+      var checkInterval = 100;
+      var waitedTime = 0;
+      
+      while (typeof window.getTrainingLogsByDateRange !== 'function' && waitedTime < maxWaitTime) {
+        await new Promise(function(resolve) { setTimeout(resolve, checkInterval); });
+        waitedTime += checkInterval;
+      }
+      
       if (typeof window.getTrainingLogsByDateRange === 'function') {
         try {
-          console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 조회 시작:', { year: cy, month: cm + 1 });
+          console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 조회 시작:', { 
+            year: cy, 
+            month: cm + 1,
+            userId: userId,
+            waitedTime: waitedTime + 'ms'
+          });
           var monthLogs = await window.getTrainingLogsByDateRange(userId, cy, cm);
           console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 조회 완료:', {
             count: monthLogs ? monthLogs.length : 0,
-            beforeMerge: Object.keys(miniCalendarStateJournal.trainingLogs).length
+            beforeMerge: Object.keys(miniCalendarStateJournal.trainingLogs).length,
+            sampleDates: monthLogs && monthLogs.length > 0 ? monthLogs.slice(0, 3).map(function(log) {
+              return {
+                id: log.id,
+                date: log.date,
+                dateType: typeof log.date,
+                title: log.title || '제목 없음'
+              };
+            }) : []
           });
           mergeMonthLogsIntoTrainingLogs(monthLogs);
           console.log('[MiniCalendarJournal] 초기 로딩: 현재 월 로그 병합 완료:', {
@@ -6041,10 +6072,10 @@
             mergeMonthLogsIntoTrainingLogs(prevMonthLogs);
           }
         } catch (e) {
-          console.warn('[MiniCalendarJournal] 현재/전월 로그 병합 실패(무시):', e);
+          console.error('[MiniCalendarJournal] 현재/전월 로그 병합 실패:', e);
         }
       } else {
-        console.warn('[MiniCalendarJournal] getTrainingLogsByDateRange 함수가 없습니다. 현재 월 로그를 가져올 수 없습니다.');
+        console.warn('[MiniCalendarJournal] getTrainingLogsByDateRange 함수가 로드되지 않았습니다 (대기 시간: ' + waitedTime + 'ms). 현재 월 로그를 가져올 수 없습니다.');
       }
       
       console.log('[MiniCalendarJournal] 훈련 로그 로드 완료:', {
