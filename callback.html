@@ -75,11 +75,13 @@
     </div>
   </div>
 
-  <!-- GAS URL / Strava 콜백 URL (배포 시 동일하게 맞출 것) -->
+  <!-- API 키·시크릿: config.local.js 에서 로드 (Git 제외) -->
+  <script src="config.local.js"></script>
+  <!-- GAS URL / Strava 콜백 URL (실제 값은 config.local.js) -->
   <script>
-    window.CONFIG = {
-      GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec",
-      STRAVA_REDIRECT_URI: "https://stelvio.ai.kr/callback.html"
+    window.CONFIG = window.CONFIG || {
+      GAS_WEB_APP_URL: "https://example.com/exec",
+      STRAVA_REDIRECT_URI: "https://example.com/callback.html"
     };
     window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
     window.STRAVA_REDIRECT_URI = window.CONFIG.STRAVA_REDIRECT_URI;
@@ -89,14 +91,13 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
   <script>
-    // Firebase 설정 (index.html과 동일)
-    const firebaseConfig = {
-      apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
-      authDomain: "stelvio-ai.firebaseapp.com",
-      projectId: "stelvio-ai",
-      storageBucket: "stelvio-ai.firebasestorage.app",
-      messagingSenderId: "752285835508",
-      appId: "1:752285835508:web:0662a2a874209ebb483ea1"
+    const firebaseConfig = window.__FIREBASE_CONFIG__ || {
+      apiKey: "YOUR_FIREBASE_API_KEY",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project",
+      storageBucket: "your-project.firebasestorage.app",
+      messagingSenderId: "000000000000",
+      appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
     };
     
     // Firebase 초기화
