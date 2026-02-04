@@ -4047,10 +4047,21 @@
         </div>
       </div>
       <!-- POWERED BY STRAVA (클릭 시 Strava 동기화 모달/연동 동일 기능) -->
-      <div style="text-align: center; margin-top: 10px; padding-top: 6px;">
-        <button type="button" style="background: none; border: none; padding: 0; cursor: pointer; display: inline-block; line-height: 0;" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화">
-          <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 16px; width: auto; display: inline-block;" />
-        </button>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 6px; gap: 8px;">
+        <!-- 왼쪽 화살표 (왼쪽 정렬) -->
+        <div style="flex: 1; display: flex; justify-content: flex-start;">
+          <img src="assets/img/left-arrow.gif" alt="" style="height: 16px; width: auto; display: block;" />
+        </div>
+        <!-- Powered by Strava 이미지 (중앙) -->
+        <div style="flex: 0 0 auto; display: flex; justify-content: center;">
+          <button type="button" style="background: none; border: none; padding: 0; cursor: pointer; display: inline-block; line-height: 0;" onclick="if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" aria-label="Strava 동기화" title="Strava 동기화">
+            <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 16px; width: auto; display: inline-block;" />
+          </button>
+        </div>
+        <!-- 오른쪽 화살표 (오른쪽 정렬) -->
+        <div style="flex: 1; display: flex; justify-content: flex-end;">
+          <img src="assets/img/right-arrow.gif" alt="" style="height: 16px; width: auto; display: block;" />
+        </div>
       </div>
     </div>
     
