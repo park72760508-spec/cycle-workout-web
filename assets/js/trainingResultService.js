@@ -482,10 +482,21 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
     throw new Error('Firestore 인스턴스가 없습니다.');
   }
 
-  const startDate = new Date(year, month, 1);
+  // 해당 월의 첫 날 00:00:00과 마지막 날 23:59:59
+  const startDate = new Date(year, month, 1, 0, 0, 0, 0);
   const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
-  const startStr = startDate.toISOString().slice(0, 10); // YYYY-MM-DD
-  const endStr = endDate.toISOString().slice(0, 10);
+  
+  // 문자열 형식: YYYY-MM-DD (로컬 시간 기준)
+  const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+
+  console.log(`[getTrainingLogsByDateRange] 조회 시작: ${year}년 ${month + 1}월`, {
+    userId,
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    startStr,
+    endStr
+  });
 
   const userLogsRef = collection(db, 'users', userId, 'logs');
   const seen = new Set();
@@ -501,12 +512,14 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
       where('date', '<=', endTs)
     );
     const snapTs = await getDocs(qTimestamp);
+    console.log(`[getTrainingLogsByDateRange] Timestamp 쿼리 결과: ${snapTs.size}건`);
     snapTs.forEach((docSnap) => {
       seen.add(docSnap.id);
-      logs.push({ id: docSnap.id, ...docSnap.data() });
+      const data = docSnap.data();
+      logs.push({ id: docSnap.id, ...data });
     });
   } catch (e) {
-    console.warn('[getTrainingLogsByDateRange] Timestamp 범위 쿼리 실패 (무시):', e.message);
+    console.warn('[getTrainingLogsByDateRange] Timestamp 범위 쿼리 실패 (무시):', e.message, e.code);
   }
 
   try {
@@ -517,16 +530,27 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
       where('date', '<=', endStr)
     );
     const snapStr = await getDocs(qStr);
+    console.log(`[getTrainingLogsByDateRange] 문자열 쿼리 결과: ${snapStr.size}건`);
     snapStr.forEach((docSnap) => {
       if (seen.has(docSnap.id)) return;
       seen.add(docSnap.id);
-      logs.push({ id: docSnap.id, ...docSnap.data() });
+      const data = docSnap.data();
+      logs.push({ id: docSnap.id, ...data });
     });
   } catch (e) {
-    console.warn('[getTrainingLogsByDateRange] 문자열 date 범위 쿼리 실패 (무시):', e.message);
+    console.warn('[getTrainingLogsByDateRange] 문자열 date 범위 쿼리 실패 (무시):', e.message, e.code);
   }
 
-  console.log(`[getTrainingLogsByDateRange] ${year}년 ${month + 1}월: ${logs.length}건 (userId: ${userId})`);
+  console.log(`[getTrainingLogsByDateRange] ${year}년 ${month + 1}월: 총 ${logs.length}건 조회 완료 (userId: ${userId})`, {
+    sampleDates: logs.slice(0, 5).map(log => ({
+      id: log.id,
+      date: log.date,
+      dateType: typeof log.date,
+      hasToDate: log.date && typeof log.date.toDate === 'function',
+      title: log.title || '제목 없음'
+    }))
+  });
+  
   return logs;
 }
 
