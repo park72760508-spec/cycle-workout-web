@@ -98,7 +98,6 @@ exports.adminResetUserPassword = onCall(
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
  */
 exports.exchangeStravaCode = onCall(
-  { cors: true },
   async (request) => {
     try {
       const data = request.data || {};
@@ -207,7 +206,6 @@ exports.exchangeStravaCode = onCall(
  * 클라이언트는 userId만 전달; 리프레시 토큰은 서버가 Firestore에서 읽음.
  */
 exports.refreshStravaToken = onCall(
-  { cors: true },
   async (request) => {
     try {
       const data = request.data || {};
