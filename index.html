@@ -3951,6 +3951,15 @@
     <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
       <span>나의 훈련 이력을 확인하세요 <span id="journalSubtitleCount" aria-live="polite">( )</span></span>
     </p>
+    <script>
+      (function() {
+        function updateJournalSubtitle(text) {
+          var el = document.getElementById('journalSubtitleCount');
+          if (el) el.textContent = text || '( )';
+        }
+        window.updateJournalSubtitle = updateJournalSubtitle;
+      })();
+    </script>
     
     <!-- 월간 훈련 이력 미니 달력 -->
     <div class="card">
