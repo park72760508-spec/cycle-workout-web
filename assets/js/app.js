@@ -6105,11 +6105,29 @@ function initializeCurrentScreen(screenId) {
           const currentUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
           // Firebase Auth 사용자는 .uid만 가질 수 있음 → .id || .uid 사용. 없으면 authV9/compat currentUser에서 조회
           let userId = (currentUser && (currentUser.id != null ? currentUser.id : currentUser.uid)) || null;
-          if (!userId && typeof window.getCurrentUserForTrainingRooms === 'function') {
-            var liveAuth = window.getCurrentUserForTrainingRooms();
-            if (liveAuth) userId = liveAuth.uid != null ? liveAuth.uid : liveAuth.id;
+          // 🔒 보안: window.currentUser를 우선 사용 (authV9는 이전 사용자 상태를 유지할 수 있음)
+          var primaryUserId = null;
+          if (currentUser && (currentUser.id || currentUser.uid)) {
+            primaryUserId = currentUser.id || currentUser.uid;
           }
-          console.log('현재 사용자 정보:', { userId, hasCurrentUser: !!currentUser, userName: currentUser?.name });
+          
+          if (!userId) {
+            // window.currentUser 우선 사용
+            if (primaryUserId) {
+              userId = primaryUserId;
+            } else if (typeof window.getCurrentUserForTrainingRooms === 'function') {
+              var liveAuth = window.getCurrentUserForTrainingRooms();
+              if (liveAuth) userId = liveAuth.uid != null ? liveAuth.uid : liveAuth.id;
+            }
+          }
+          
+          console.log('현재 사용자 정보:', { 
+            userId, 
+            primaryUserId,
+            hasCurrentUser: !!currentUser, 
+            userName: currentUser?.name,
+            currentUserId: currentUser?.id || currentUser?.uid
+          });
           
           if (userId) {
             (async function runJournalInit() {
@@ -6124,7 +6142,8 @@ function initializeCurrentScreen(screenId) {
                 window.__journalInitInProgress = false;
               }
               const isTablet = typeof window.isTabletOrSlowDeviceForAuth === 'function' && window.isTabletOrSlowDeviceForAuth();
-              var journalUserId = userId;
+              // 🔒 보안: window.currentUser를 우선 사용
+              var journalUserId = primaryUserId || userId;
               try {
                 if (jStep) jStep('1. Auth 대기 중... (최대 ' + (isTablet ? 12 : 5) + '초)', false);
                 if (typeof window.waitForAuthReady === 'function') {
@@ -6136,20 +6155,47 @@ function initializeCurrentScreen(screenId) {
                   await window.ensureFirestoreV9ReadyForJournal(isTablet ? 18000 : 6000);
                 }
                 if (jStep) jStep('2. Firestore V9 대기 완료', false);
+                
+                // 🔒 보안: authV9와 window.currentUser 비교
+                var authV9UserId = null;
                 if (isTablet && typeof window.waitForAuthV9UserForJournal === 'function') {
                   if (jStep) jStep('3. authV9 사용자 대기 중... (최대 15초, 삼성 태블릿)', false);
                   var authV9Result = await window.waitForAuthV9UserForJournal(15000);
                   if (authV9Result && authV9Result.uid) {
-                    journalUserId = authV9Result.uid;
-                    if (jStep) jStep('3. authV9 사용자 확인 (uid 사용)', false);
+                    authV9UserId = authV9Result.uid;
+                    // 🔒 보안: window.currentUser와 불일치 시 window.currentUser 우선 사용
+                    if (primaryUserId && primaryUserId !== authV9UserId) {
+                      console.warn('[Journal Init] ⚠️ 사용자 불일치 감지! window.currentUser를 우선 사용:', {
+                        windowCurrentUserId: primaryUserId,
+                        authV9UserId: authV9UserId,
+                        userName: currentUser?.name || '알 수 없음'
+                      });
+                      journalUserId = primaryUserId;
+                      if (jStep) jStep('3. authV9 불일치 - window.currentUser 사용', false);
+                    } else {
+                      journalUserId = authV9UserId;
+                      if (jStep) jStep('3. authV9 사용자 확인 (uid 사용)', false);
+                    }
                   } else {
                     if (jStep) jStep('3. authV9 사용자 대기 타임아웃 (기존 userId 사용)', true);
                   }
                 }
+                
+                // 🔒 보안: getCurrentUserForTrainingRooms도 확인하되, window.currentUser와 불일치 시 무시
                 var liveUser = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
                 if (liveUser) {
                   var uid = liveUser.uid != null ? liveUser.uid : liveUser.id;
-                  if (uid) journalUserId = uid;
+                  if (uid) {
+                    // window.currentUser와 불일치 시 무시
+                    if (primaryUserId && primaryUserId !== uid) {
+                      console.warn('[Journal Init] ⚠️ getCurrentUserForTrainingRooms 불일치! window.currentUser 우선 사용:', {
+                        windowCurrentUserId: primaryUserId,
+                        getCurrentUserForTrainingRoomsUserId: uid
+                      });
+                    } else if (!primaryUserId) {
+                      journalUserId = uid;
+                    }
+                  }
                 }
                 if (jStep) jStep('4. getUserTrainingLogs 모듈 대기 중...', false);
                 var modulePollMs = isTablet ? 10000 : 6000;
