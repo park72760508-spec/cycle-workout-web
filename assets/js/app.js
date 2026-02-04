@@ -5994,6 +5994,16 @@ window.showScreen = function(screenId) {
     screenId = 'authScreen';
   }
   
+  // 훈련일지 화면을 나갈 때 fetch 카운트/플래그 초기화 (다음에 훈련일지 열 때 로딩 재시도 가능)
+  var currentActive = document.querySelector('.screen.active');
+  if (currentActive && currentActive.id === 'trainingJournalScreen' && screenId !== 'trainingJournalScreen') {
+    if (typeof window !== 'undefined') {
+      window.__journalFetchCallCount = 0;
+      window.__journalFetchInProgress = false;
+    }
+    console.log('[훈련일지] 화면 이탈 - fetch 카운트/플래그 초기화');
+  }
+  
   // 모든 화면 숨기기 (스플래시 화면 제외)
   document.querySelectorAll('.screen').forEach(screen => {
     if (screen.id !== 'splashScreen') {
@@ -7890,43 +7900,61 @@ async function loadTrainingJournalCalendar(direction) {
     const endDateStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
     
     // Firebase users/{userId}/logs 조회 (날짜별 훈련 유무만 사용)
+    // 1) getTrainingLogsByDateRange(firestoreV9) 우선 사용, 2) 없으면 v8 firestore 사용
     const resultsByDate = {};
+    const MIN_DURATION_SEC = 600;
     try {
-      const fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : (window.firestore || null);
-      if (!fs) {
-        console.warn('훈련일지: Firestore를 사용할 수 없습니다.');
-      } else {
-        const logsRef = fs.collection('users').doc(userId).collection('logs');
-        let snapshot;
-        try {
-          snapshot = await logsRef
-            .where('date', '>=', startDateStr)
-            .where('date', '<=', endDateStr)
-            .get();
-        } catch (idxErr) {
-          console.warn('훈련일지: date 범위 쿼리 실패, limit only 시도:', idxErr);
-          snapshot = await logsRef.limit(100).get();
-        }
-        // 훈련 시간 10분 미만은 달력 표시에서 제외
-        const MIN_DURATION_SEC = 600;
-        snapshot.docs.forEach(doc => {
-          const d = doc.data();
-          const dateStr = d.date;
+      if (typeof window.getTrainingLogsByDateRange === 'function') {
+        const monthLogs = await window.getTrainingLogsByDateRange(userId, trainingJournalCurrentYear, trainingJournalCurrentMonth);
+        monthLogs.forEach(function(log) {
+          let dateStr = log.date;
+          if (dateStr && typeof dateStr.toDate === 'function') {
+            var d = dateStr.toDate();
+            dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          } else if (dateStr && typeof dateStr !== 'string') {
+            dateStr = (log.date && log.date.toISOString) ? log.date.toISOString().slice(0, 10) : null;
+          }
           if (!dateStr || dateStr < startDateStr || dateStr > endDateStr) return;
-          const sec = Number(d.duration_sec ?? d.time ?? d.duration ?? 0);
+          var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
           if (sec < MIN_DURATION_SEC) return;
           if (!resultsByDate[dateStr]) resultsByDate[dateStr] = [];
-          resultsByDate[dateStr].push({ id: doc.id, ...d });
+          resultsByDate[dateStr].push(log);
         });
-        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
-        Object.keys(resultsByDate).forEach(dateStr => {
-          const arr = resultsByDate[dateStr];
-          const hasStelvio = arr.some(item => item.source !== 'strava');
-          if (hasStelvio) {
-            resultsByDate[dateStr] = arr.filter(item => item.source !== 'strava');
+      } else {
+        const fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : (window.firestore || null);
+        if (!fs) {
+          console.warn('훈련일지: Firestore를 사용할 수 없습니다. getTrainingLogsByDateRange와 firestore(v8) 모두 없음.');
+        } else {
+          const logsRef = fs.collection('users').doc(userId).collection('logs');
+          let snapshot;
+          try {
+            snapshot = await logsRef
+              .where('date', '>=', startDateStr)
+              .where('date', '<=', endDateStr)
+              .get();
+          } catch (idxErr) {
+            console.warn('훈련일지: date 범위 쿼리 실패, limit only 시도:', idxErr);
+            snapshot = await logsRef.limit(100).get();
           }
-        });
+          snapshot.docs.forEach(function(doc) {
+            const d = doc.data();
+            const dateStr = d.date;
+            if (!dateStr || dateStr < startDateStr || dateStr > endDateStr) return;
+            const sec = Number(d.duration_sec ?? d.time ?? d.duration ?? 0);
+            if (sec < MIN_DURATION_SEC) return;
+            if (!resultsByDate[dateStr]) resultsByDate[dateStr] = [];
+            resultsByDate[dateStr].push({ id: doc.id, ...d });
+          });
+        }
       }
+      // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+      Object.keys(resultsByDate).forEach(function(dateStr) {
+        const arr = resultsByDate[dateStr];
+        const hasStelvio = arr.some(function(item) { return item.source !== 'strava'; });
+        if (hasStelvio) {
+          resultsByDate[dateStr] = arr.filter(function(item) { return item.source !== 'strava'; });
+        }
+      });
     } catch (error) {
       console.error('훈련일지 Firebase logs 조회 실패:', error);
     }
