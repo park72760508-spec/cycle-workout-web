@@ -99,18 +99,10 @@ exports.adminResetUserPassword = onCall(
  * onRequest로 변경하여 CORS 수동 처리
  */
 exports.exchangeStravaCode = onRequest(
-  { cors: true },
+  { cors: CORS_ORIGINS },
   async (req, res) => {
-    // CORS 헤더 설정
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-    // OPTIONS preflight 요청 처리
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
+    // Firebase Functions v2의 cors 옵션이 자동으로 CORS 헤더를 처리하므로
+    // 수동 헤더 설정은 제거 (충돌 방지)
 
     try {
       const data = req.method === "POST" ? req.body : {};
@@ -222,18 +214,10 @@ exports.exchangeStravaCode = onRequest(
  * onRequest로 변경하여 CORS 수동 처리
  */
 exports.refreshStravaToken = onRequest(
-  { cors: true },
+  { cors: CORS_ORIGINS },
   async (req, res) => {
-    // CORS 헤더 설정
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-    // OPTIONS preflight 요청 처리
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
+    // Firebase Functions v2의 cors 옵션이 자동으로 CORS 헤더를 처리하므로
+    // 수동 헤더 설정은 제거 (충돌 방지)
 
     try {
       const data = req.method === "POST" ? req.body : {};
