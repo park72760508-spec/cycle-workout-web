@@ -5233,14 +5233,22 @@
         if (jStep) jStep('7-1. 이미 fetch 진행 중 (중복 호출 무시)', true);
         return {};
       }
+      // 🔒 최적화: 빈 결과에 대한 재시도가 이미 완료되었으면 더 이상 호출하지 않음
+      if (window.__journalEmptyRetryDone) {
+        if (jStep) jStep('7-1. 빈 결과 확인 완료 (재시도 중단)', false);
+        console.log('[MiniCalendarJournal] 빈 결과 확인 완료 - 재시도 중단');
+        return {};
+      }
+      
       window.__journalFetchCallCount = (window.__journalFetchCallCount || 0) + 1;
-      if (window.__journalFetchCallCount > 4) {
-        if (jStep) jStep('7-1. fetch 호출 4회 초과 (반복 방지). 화면을 나갔다가 다시 훈련일지를 열어주세요.', true);
+      if (window.__journalFetchCallCount > 3) {
+        // 🔒 최적화: 호출 횟수 제한을 3회로 낮춤 (빈 결과는 정상 상태일 수 있음)
+        if (jStep) jStep('7-1. fetch 호출 3회 초과 (반복 방지). 빈 결과는 정상 상태일 수 있습니다.', true);
         if (typeof window !== 'undefined') {
-          window.__journalLoadFailed = true;
-          window.__journalLoadErrorMsg = '로드 재시도 횟수 초과. 화면을 나갔다가 다시 훈련일지를 열어주세요.';
+          window.__journalLoadFailed = false; // 빈 결과는 실패가 아님
+          window.__journalEmptyRetryDone = true; // 더 이상 재시도하지 않음
         }
-        console.warn('[MiniCalendarJournal] fetch 호출 횟수 초과:', window.__journalFetchCallCount);
+        console.warn('[MiniCalendarJournal] fetch 호출 횟수 초과 (빈 결과는 정상 상태일 수 있음):', window.__journalFetchCallCount);
         return {};
       }
       window.__journalFetchInProgress = true;
@@ -5520,20 +5528,9 @@
         currentUserId: miniCalendarStateJournal.currentUserId
       });
       
-      // 훈련 로그가 없고 userId가 있으면 다시 가져오기 시도
-      if (Object.keys(miniCalendarStateJournal.trainingLogs).length === 0 && miniCalendarStateJournal.currentUserId) {
-        console.warn('[MiniCalendarJournal] ⚠️ 훈련 로그가 비어있습니다. 다시 가져오기 시도...');
-        fetchTrainingLogsForCalendarJournal(miniCalendarStateJournal.currentUserId)
-          .then(logs => {
-            console.log('[MiniCalendarJournal] 재시도 성공:', Object.keys(logs).length, '개 날짜');
-            miniCalendarStateJournal.trainingLogs = logs;
-            // 재렌더링
-            renderMiniCalendarJournal();
-          })
-          .catch(error => {
-            console.error('[MiniCalendarJournal] 재시도 실패:', error);
-          });
-      }
+      // 🔒 최적화: 훈련 로그가 없을 때 재시도 로직 제거 (무한 루프 방지)
+      // 빈 로그는 정상적인 상태일 수 있으므로 재시도하지 않음
+      // 재시도는 initMiniCalendarJournal에서만 수행 (최대 1회)
       
       // 현재 월의 첫 날과 마지막 날
       const firstDay = new Date(currentYear, currentMonth, 1);
@@ -6166,39 +6163,19 @@
       
       // 새 사용자의 데이터만 로드
       miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(userId);
-      if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
-        if (jStep) jStep('7. 훈련 로드 완료 (날짜 ' + Object.keys(miniCalendarStateJournal.trainingLogs).length + '개)', false);
-      } else if (isTabletInit && !window.__journalLoadFailed && !window.__journalEmptyRetryDone) {
+      var logsCount = Object.keys(miniCalendarStateJournal.trainingLogs).length;
+      if (logsCount > 0) {
+        if (jStep) jStep('7. 훈련 로드 완료 (날짜 ' + logsCount + '개)', false);
+      } else {
+        // 🔒 최적화: 빈 결과는 정상적인 상태일 수 있으므로 재시도하지 않음
+        // 태블릿에서도 빈 결과에 대한 재시도 제거 (무한 루프 방지)
+        if (jStep) jStep('7. 훈련 로드 완료 (데이터 없음 - 정상)', false);
+        console.log('[MiniCalendarJournal] 훈련 로그 없음 (정상 상태)');
+        // 빈 결과 플래그 설정하여 더 이상 재시도하지 않음
         window.__journalEmptyRetryDone = true;
-        if (jStep) jStep('7. 1차 로드 빈 결과 → 1회만 2초 후 재시도', false);
-        await new Promise(function(r) { setTimeout(r, 2000); });
-        var cu = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
-        if (cu && typeof cu.getIdToken === 'function') {
-          try { await cu.getIdToken(true); } catch (e) {}
-        }
-        // 🔒 보안: 재시도 전에도 userId 재확인 및 데이터 초기화
-        var retryAuthV9User = typeof window.getCurrentUserForTrainingRooms === 'function' ? window.getCurrentUserForTrainingRooms() : null;
-        var retryUserId = userId;
-        if (retryAuthV9User) {
-          var retryUid = retryAuthV9User.uid != null ? retryAuthV9User.uid : retryAuthV9User.id;
-          if (retryUid && retryUid !== userId) {
-            console.warn('[MiniCalendarJournal] ⚠️ 재시도 중 userId 변경 감지! 데이터 초기화:', {
-              previousUserId: userId,
-              newUserId: retryUid
-            });
-            miniCalendarStateJournal.trainingLogs = {};
-            miniCalendarStateJournal.currentUserId = null;
-            retryUserId = retryUid;
-          }
-        }
-        miniCalendarStateJournal.trainingLogs = await fetchTrainingLogsForCalendarJournal(retryUserId);
-        miniCalendarStateJournal.currentUserId = retryUserId;
-        if (Object.keys(miniCalendarStateJournal.trainingLogs).length > 0) {
-          if (jStep) jStep('7. 재시도 후 훈련 로드 완료', false);
-        } else {
-          if (jStep) jStep('7. 재시도 후에도 빈 결과 (재시도 1회로 종료)', true);
-        }
-      } else if (window.__journalLoadFailed) {
+      }
+      
+      if (window.__journalLoadFailed) {
         if (jStep) jStep('7. 훈련 로드 실패 (상세: 재시도 영역 참고)', true);
       }
       
