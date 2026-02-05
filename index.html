@@ -4624,6 +4624,12 @@
         // 진행 중 플래그 설정
         window.__aiRecommendationInProgress = true;
         
+        // 🔒 모달이 이미 열려있을 수 있으므로 초기화
+        var modal = document.getElementById('workoutRecommendationModal');
+        if (modal) {
+          modal.style.display = 'flex';
+        }
+        
         // Gemini API 키 확인
         var apiKey = null;
         try {
@@ -4892,6 +4898,12 @@
             
             if (analysis && (analysis.recommended_workout || (analysis.recommended_workouts && analysis.recommended_workouts.length > 0))) {
               // 추천 워크아웃 표시 (3개 추천 지원)
+              // 🔒 모달이 닫혀있을 수 있으므로 다시 표시
+              var modal = document.getElementById('workoutRecommendationModal');
+              if (modal) {
+                modal.style.display = 'flex';
+              }
+              
               if (content) {
                 var coachComment = analysis.coach_comment || 'AI가 분석한 최적의 훈련을 추천합니다.';
                 var conditionScore = analysis.condition_score || 50;
@@ -5009,10 +5021,12 @@
                     }
                   });
                 }, 200);
-                
-                // 🔒 AI 추천 성공 시 플래그 해제 (재실행 가능하도록)
-                window.__aiRecommendationInProgress = false;
+              } else {
+                console.warn('[AI Recommendation] content 요소를 찾을 수 없습니다.');
               }
+              
+              // 🔒 AI 추천 성공 시 플래그 해제 (재실행 가능하도록)
+              window.__aiRecommendationInProgress = false;
             } else {
               throw new Error('AI 분석 결과에 추천 워크아웃이 없습니다.');
             }
