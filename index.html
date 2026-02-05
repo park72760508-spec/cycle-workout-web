@@ -9473,7 +9473,12 @@ Output Format (JSON Only):
             scales: {
               x: {
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280' }
+                ticks: { 
+                  font: { size: 11 }, 
+                  color: '#6b7280',
+                  maxRotation: 0,
+                  minRotation: 0
+                }
               },
               y: {
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
@@ -9518,7 +9523,7 @@ Output Format (JSON Only):
       
       if (!data || data.length === 0) {
         return (
-          <DashboardCard title="훈련 트렌드 (최근 7일)">
+          <DashboardCard title="훈련 트렌드 (최근 1개월)">
             <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
               데이터가 없습니다
             </div>
@@ -9527,7 +9532,7 @@ Output Format (JSON Only):
       }
       
       return (
-        <DashboardCard title="훈련 트렌드 (최근 7일)">
+        <DashboardCard title="훈련 트렌드 (최근 1개월)">
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
@@ -10103,31 +10108,55 @@ Output Format (JSON Only):
               });
             }
 
-            // 훈련 트렌드(최근 7일): 전체 로그(Strava·Stelvio 등) 사용, 로그 있는 날 중 최근 7개 일(오늘 포함)만 표시, 날짜별 1개 포인트
-            var todayStr = new Date().toISOString().split('T')[0];
-            var sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-            var sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+            // 훈련 트렌드(최근 1개월): 오늘 포함 30일 전까지 조회, X축은 7일 단위로 표시
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            var thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            
+            // 날짜 범위 문자열 생성
+            var todayStr = today.toISOString().split('T')[0];
+            var thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+            
+            // 30일간의 날짜별 TSS 합산
             var byDate = {};
             logs.forEach(function(log) {
               var d = log.date ? String(log.date).split('T')[0] : '';
-              if (!d || d < sevenDaysAgoStr || d > todayStr) return;
+              if (!d || d < thirtyDaysAgoStr || d > todayStr) return;
               if (!byDate[d]) byDate[d] = { tss: 0 };
               byDate[d].tss += Number(log.tss) || 0;
             });
-            var sortedDates = Object.keys(byDate).sort(function(a, b) { return b.localeCompare(a); });
-            var last7Dates = sortedDates.slice(0, 7).reverse();
-            var chartData = last7Dates.map(function(dateStr) {
+            
+            // X축 날짜 생성: -30일, -23일, -16일, -9일, -2일, 현재일 (7일 단위)
+            var xAxisDates = [];
+            for (var i = 30; i >= 0; i -= 7) {
+              var date = new Date(today);
+              date.setDate(today.getDate() - i);
+              xAxisDates.push(date.toISOString().split('T')[0]);
+            }
+            // 마지막에 현재일 추가 (이미 포함되어 있을 수 있지만 확실히)
+            if (xAxisDates[xAxisDates.length - 1] !== todayStr) {
+              xAxisDates.push(todayStr);
+            }
+            
+            // 각 X축 날짜에 대한 데이터 생성 (해당 날짜의 TSS 사용, 없으면 0)
+            var chartData = xAxisDates.map(function(dateStr) {
               var logDate = new Date(dateStr);
               var month = logDate.getMonth() + 1;
               var day = logDate.getDate();
-              var tss = byDate[dateStr].tss;
+              var tss = byDate[dateStr] ? byDate[dateStr].tss : 0;
+              
+              // 날짜 라벨: -30일, -23일, ... 현재일 형식
+              var daysDiff = Math.floor((today - logDate) / (1000 * 60 * 60 * 24));
+              var dateLabel = daysDiff === 0 ? '오늘' : '-' + daysDiff + '일';
+              
               return {
-                date: month + '.' + day,
+                date: dateLabel,
                 fitness: tss,
                 fatigue: tss * 0.7
               };
             });
+            
             if (isMounted) setFitnessData(chartData);
 
             if (isMounted) {
@@ -10761,7 +10790,7 @@ Output Format (JSON Only):
             </div>
             
             {logsLoading ? (
-              <DashboardCard title="훈련 트렌드 (최근 7일)">
+              <DashboardCard title="훈련 트렌드 (최근 1개월)">
                 <div className="h-[200px] flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
@@ -10770,7 +10799,7 @@ Output Format (JSON Only):
                 </div>
               </DashboardCard>
             ) : logsLoadError ? (
-              <DashboardCard title="훈련 트렌드 (최근 7일)">
+              <DashboardCard title="훈련 트렌드 (최근 1개월)">
                 <div className="h-[200px] flex items-center justify-center">
                   <div className="text-center">
                     <div className="text-sm text-red-600 mb-2">{logsLoadError}</div>
