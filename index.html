@@ -4758,11 +4758,15 @@
         var content = document.getElementById('workoutRecommendationContent');
         if (modal) {
           modal.style.display = 'flex';
-          // 🔒 모달이 표시되면 플래그 해제 (다시 클릭 가능하도록)
-          window.__aiRecommendationInProgress = false;
+          modal.classList.remove('hidden');
+          console.log('[AI Recommendation] 모달 표시:', modal.style.display);
+        } else {
+          console.error('[AI Recommendation] 모달 요소를 찾을 수 없습니다.');
         }
         if (content) {
           content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div></div>';
+        } else {
+          console.error('[AI Recommendation] content 요소를 찾을 수 없습니다.');
         }
         
         try {
@@ -4900,8 +4904,14 @@
               // 추천 워크아웃 표시 (3개 추천 지원)
               // 🔒 모달이 닫혀있을 수 있으므로 다시 표시
               var modal = document.getElementById('workoutRecommendationModal');
+              var content = document.getElementById('workoutRecommendationContent');
+              
               if (modal) {
                 modal.style.display = 'flex';
+                modal.classList.remove('hidden');
+                console.log('[AI Recommendation] AI 분석 완료 후 모달 표시:', modal.style.display);
+              } else {
+                console.error('[AI Recommendation] AI 분석 완료 후 모달 요소를 찾을 수 없습니다.');
               }
               
               if (content) {
@@ -5021,6 +5031,17 @@
                     }
                   });
                 }, 200);
+                
+                // 🔒 모달이 표시되었는지 확인
+                if (modal) {
+                  setTimeout(function() {
+                    if (modal.style.display !== 'flex') {
+                      console.warn('[AI Recommendation] 모달이 표시되지 않음, 강제 표시');
+                      modal.style.display = 'flex';
+                      modal.classList.remove('hidden');
+                    }
+                  }, 100);
+                }
               } else {
                 console.warn('[AI Recommendation] content 요소를 찾을 수 없습니다.');
               }
@@ -5037,6 +5058,16 @@
           console.error('[AI Recommendation] 오류:', error);
           // 🔒 오류 발생 시 플래그 해제
           window.__aiRecommendationInProgress = false;
+          
+          // 모달과 content 다시 가져오기
+          var modal = document.getElementById('workoutRecommendationModal');
+          var content = document.getElementById('workoutRecommendationContent');
+          
+          if (modal) {
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+          }
+          
           if (content) {
             content.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #374151;">AI 분석 실패</div><div style="font-size: 14px; color: #6b7280;">' + (error.message || '알 수 없는 오류가 발생했습니다.') + '<br>잠시 후 다시 시도해주세요.</div><div style="margin-top: 20px;"><button onclick="closeWorkoutRecommendationModal(); window.__aiRecommendationInProgress = false;" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">닫기</button></div></div>';
           }
