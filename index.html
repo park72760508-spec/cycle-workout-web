@@ -6659,26 +6659,48 @@
           let weekRanges = [];
           
           if (isCurrentMonth) {
-            // 현재 달: 현재일 기준 주간 범위
-            // 현재일이 속한 주의 시작일(일요일) 계산
-            const dayOfWeekForWeekly = todayForWeekly.getDay(); // 0(일) ~ 6(토)
-            const currentWeekStartForWeekly = new Date(todayForWeekly);
-            currentWeekStartForWeekly.setDate(todayForWeekly.getDate() - dayOfWeekForWeekly); // 일요일로 이동
+            // 현재 달: 오늘 기준 34일 전부터 현재일까지를 5주로 나눔
+            // 1주: 34일전 ~ 28일전 (7일)
+            // 2주: 27일전 ~ 21일전 (7일)
+            // 3주: 20일전 ~ 14일전 (7일)
+            // 4주: 13일전 ~ 7일전 (7일)
+            // 5주: 6일전 ~ 현재일 (7일)
             
-            // 현재일이 포함된 주의 종료일은 현재일까지 (5주)
-            const currentWeekEndForWeekly = new Date(todayForWeekly);
+            const today = new Date(todayForWeekly);
             
-            // 1주~4주: 과거 4주 (각 주는 일요일~토요일)
-            for (let i = 4; i >= 1; i--) {
-              const weekStartDate = new Date(currentWeekStartForWeekly);
-              weekStartDate.setDate(currentWeekStartForWeekly.getDate() - (i * 7)); // 과거로 이동
-              const weekEndDate = new Date(weekStartDate);
-              weekEndDate.setDate(weekStartDate.getDate() + 6); // 토요일
-              weekRanges.push({ start: weekStartDate, end: weekEndDate, weekNum: 5 - i });
-            }
+            // 1주: 34일전 ~ 28일전
+            const week1Start = new Date(today);
+            week1Start.setDate(today.getDate() - 34);
+            const week1End = new Date(today);
+            week1End.setDate(today.getDate() - 28);
+            weekRanges.push({ start: week1Start, end: week1End, weekNum: 1 });
             
-            // 5주: 현재일 포함 주 (일요일~현재일)
-            weekRanges.push({ start: currentWeekStartForWeekly, end: currentWeekEndForWeekly, weekNum: 5 });
+            // 2주: 27일전 ~ 21일전
+            const week2Start = new Date(today);
+            week2Start.setDate(today.getDate() - 27);
+            const week2End = new Date(today);
+            week2End.setDate(today.getDate() - 21);
+            weekRanges.push({ start: week2Start, end: week2End, weekNum: 2 });
+            
+            // 3주: 20일전 ~ 14일전
+            const week3Start = new Date(today);
+            week3Start.setDate(today.getDate() - 20);
+            const week3End = new Date(today);
+            week3End.setDate(today.getDate() - 14);
+            weekRanges.push({ start: week3Start, end: week3End, weekNum: 3 });
+            
+            // 4주: 13일전 ~ 7일전
+            const week4Start = new Date(today);
+            week4Start.setDate(today.getDate() - 13);
+            const week4End = new Date(today);
+            week4End.setDate(today.getDate() - 7);
+            weekRanges.push({ start: week4Start, end: week4End, weekNum: 4 });
+            
+            // 5주: 6일전 ~ 현재일
+            const week5Start = new Date(today);
+            week5Start.setDate(today.getDate() - 6);
+            const week5End = new Date(today);
+            weekRanges.push({ start: week5Start, end: week5End, weekNum: 5 });
           } else {
             // 다른 달: 해당 월의 1일부터 말일까지를 주 단위로 나눔
             // 1주: 1~7일, 2주: 8~14일, 3주: 15~21일, 4주: 22~28일, 5주: 29~31일
@@ -6733,29 +6755,15 @@
             return null; // 5주 범위 밖
           }
           
-          // 주별 TSS 합산: 현재 달이면 현재일 기준 주간 범위, 다른 달이면 해당 월의 로그만 사용
+          // 주별 TSS 합산: 현재 달이면 오늘 기준 34일 전부터 현재일까지, 다른 달이면 해당 월의 로그만 사용
           const logsForWeeklyTSS = (function() {
             if (isCurrentMonth) {
-              // 현재 달: 현재일 기준 주간 범위에 포함되는 모든 로그 사용
-              const nowForFilter = new Date();
-              const todayForFilter = new Date(nowForFilter.getFullYear(), nowForFilter.getMonth(), nowForFilter.getDate());
-              const dayOfWeekForFilter = todayForFilter.getDay();
-              const currentWeekStartForFilter = new Date(todayForFilter);
-              currentWeekStartForFilter.setDate(todayForFilter.getDate() - dayOfWeekForFilter);
-              const currentWeekEndForFilter = new Date(todayForFilter);
+              // 현재 달: 오늘 기준 34일 전부터 현재일까지의 로그 사용
+              const todayForFilter = new Date(todayForWeekly);
+              const startDateForFilter = new Date(todayForFilter);
+              startDateForFilter.setDate(todayForFilter.getDate() - 34);
               
-              // 5주간의 주 범위 계산 (Weekly TSS용)
-              const weekRangesForTSS = [];
-              for (let i = 4; i >= 1; i--) {
-                const weekStartDate = new Date(currentWeekStartForFilter);
-                weekStartDate.setDate(currentWeekStartForFilter.getDate() - (i * 7));
-                const weekEndDate = new Date(weekStartDate);
-                weekEndDate.setDate(weekStartDate.getDate() + 6);
-                weekRangesForTSS.push({ start: weekStartDate, end: weekEndDate, weekNum: 5 - i });
-              }
-              weekRangesForTSS.push({ start: currentWeekStartForFilter, end: currentWeekEndForFilter, weekNum: 5 });
-              
-              // allLogs에서 현재일 기준 주간 범위에 포함되는 로그만 필터링
+              // allLogs에서 34일 전부터 현재일까지의 로그만 필터링
               return allLogs.filter(function(log) {
                 const d = log.date || '';
                 if (d.length < 10) return false;
@@ -6766,17 +6774,12 @@
                 const logDay = parseInt(dateParts[2], 10);
                 const logDate = new Date(logYear, logMonth - 1, logDay);
                 
-                // 5주 범위 내에 있는지 확인
-                for (let i = 0; i < weekRangesForTSS.length; i++) {
-                  const range = weekRangesForTSS[i];
-                  const logDateOnly = new Date(logDate.getFullYear(), logDate.getMonth(), logDate.getDate());
-                  const startOnly = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate());
-                  const endOnly = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate());
-                  if (logDateOnly >= startOnly && logDateOnly <= endOnly) {
-                    return true;
-                  }
-                }
-                return false;
+                const logDateOnly = new Date(logDate.getFullYear(), logDate.getMonth(), logDate.getDate());
+                const startOnly = new Date(startDateForFilter.getFullYear(), startDateForFilter.getMonth(), startDateForFilter.getDate());
+                const endOnly = new Date(todayForFilter.getFullYear(), todayForFilter.getMonth(), todayForFilter.getDate());
+                
+                // 34일 전부터 현재일까지의 범위 내에 있는지 확인
+                return logDateOnly >= startOnly && logDateOnly <= endOnly;
               });
             } else {
               // 다른 달: 해당 월의 로그만 사용
