@@ -4531,14 +4531,109 @@
         try {
           apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
           if (!apiKey || !String(apiKey).trim()) {
-            if (typeof showToast === 'function') {
-              showToast('⚠️ Gemini API 키가 없습니다. 환경 설정에서 키를 입력해주세요.', 'warning');
+            // API 키가 없으면 팝업 오버레이로 환경설정 모달 표시
+            console.log('[AI Recommendation] API 키 없음 - 환경설정 모달 표시');
+            
+            // 환경설정 모달 열기
+            var settingsModal = document.getElementById('settingsModal');
+            if (settingsModal) {
+              settingsModal.style.display = 'flex';
+              settingsModal.classList.remove('hidden');
+              
+              // API 키 입력 필드에 포커스
+              setTimeout(function() {
+                var apiKeyInput = document.getElementById('settingsGeminiApiKey');
+                if (apiKeyInput) {
+                  apiKeyInput.focus();
+                  // 스크롤하여 입력 필드가 보이도록
+                  apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }, 300);
+              
+              // 모달이 닫힐 때 API 키 확인 이벤트 리스너 추가 (한 번만)
+              if (!settingsModal.hasAttribute('data-ai-listener-added')) {
+                settingsModal.setAttribute('data-ai-listener-added', 'true');
+                
+                // API 키 저장 후 자동으로 AI 추천 재시도하는 함수
+                var checkApiKeyAndRetry = function() {
+                  setTimeout(function() {
+                    var savedKey = localStorage.getItem('geminiApiKey');
+                    if (savedKey && String(savedKey).trim()) {
+                      console.log('[AI Recommendation] API 키 저장됨 - AI 추천 재시도');
+                      // 모달이 열려있으면 닫기
+                      if (settingsModal && settingsModal.style.display === 'flex') {
+                        if (typeof closeSettingsModal === 'function') {
+                          closeSettingsModal();
+                        } else {
+                          settingsModal.style.display = 'none';
+                          settingsModal.classList.add('hidden');
+                        }
+                      }
+                      // AI 추천 다시 실행
+                      setTimeout(function() {
+                        handleAIRecommendationClick();
+                      }, 300);
+                    }
+                  }, 500);
+                };
+                
+                // API 키 저장 이벤트 감지 (커스텀 이벤트)
+                var apiKeyChangeHandler = function(e) {
+                  if (e && e.detail && e.detail.hasKey) {
+                    checkApiKeyAndRetry();
+                  }
+                };
+                window.addEventListener('stelvio-gemini-apikey-changed', apiKeyChangeHandler);
+                
+                // 모달 닫기 버튼 클릭 시에도 확인
+                var closeButtons = settingsModal.querySelectorAll('.modal-close, .settings-modal-back');
+                closeButtons.forEach(function(btn) {
+                  btn.addEventListener('click', function() {
+                    setTimeout(checkApiKeyAndRetry, 300);
+                  });
+                });
+                
+                // 모달 배경 클릭 시에도 확인
+                settingsModal.addEventListener('click', function(e) {
+                  if (e.target === settingsModal) {
+                    setTimeout(checkApiKeyAndRetry, 300);
+                  }
+                });
+                
+                // 주기적으로 API 키 확인 (폴백, 2초마다 최대 30초)
+                var pollCount = 0;
+                var maxPolls = 15; // 30초 (2초 * 15)
+                var pollInterval = setInterval(function() {
+                  pollCount++;
+                  var savedKey = localStorage.getItem('geminiApiKey');
+                  if (savedKey && String(savedKey).trim()) {
+                    clearInterval(pollInterval);
+                    checkApiKeyAndRetry();
+                  } else if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                  }
+                }, 2000);
+              }
+              
+              // 사용자에게 안내 메시지 표시
+              if (typeof showToast === 'function') {
+                showToast('⚠️ Gemini API 키가 필요합니다. 환경 설정에서 키를 입력해주세요.', 'warning');
+              }
             } else {
-              alert('⚠️ Gemini API 키가 없습니다. 환경 설정에서 키를 입력해주세요.');
-            }
-            // 설정 화면으로 이동
-            if (typeof showScreen === 'function') {
-              showScreen('settingsScreen');
+              // 모달이 없으면 함수 호출 시도
+              if (typeof openSettingsModal === 'function') {
+                openSettingsModal();
+                if (typeof showToast === 'function') {
+                  showToast('⚠️ Gemini API 키가 필요합니다. 환경 설정에서 키를 입력해주세요.', 'warning');
+                }
+              } else {
+                // 함수도 없으면 화면 전환
+                if (typeof showScreen === 'function') {
+                  showScreen('settingsScreen');
+                } else {
+                  alert('⚠️ Gemini API 키가 없습니다. 환경 설정에서 키를 입력해주세요.');
+                }
+              }
             }
             return;
           }
