@@ -4511,6 +4511,82 @@
         }
       }
 
+      // 워크아웃 세그먼트 템플릿 생성 함수
+      function createWorkoutSegmentsFromType(workoutType, userFTP) {
+        var ftp = userFTP || 200;
+        var segments = [];
+        
+        // 워크아웃 타입에 따라 세그먼트 생성
+        if (workoutType.indexOf('Active Recovery (Z1)') !== -1 || workoutType.indexOf('Z1') !== -1) {
+          // Active Recovery: 워밍업 + 저강도 + 쿨다운
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Recovery', segment_type: 'rest', duration_sec: 1800, target_type: 'ftp_pct', target_value: 40 },
+            { label: 'Recovery', segment_type: 'rest', duration_sec: 1800, target_type: 'ftp_pct', target_value: 40 },
+            { label: 'Recovery', segment_type: 'rest', duration_sec: 1800, target_type: 'ftp_pct', target_value: 40 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        } else if (workoutType.indexOf('Endurance (Z2)') !== -1 || workoutType.indexOf('Z2') !== -1) {
+          // Endurance: 워밍업 + 지속적인 저강도 + 쿨다운
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
+            { label: 'Endurance', segment_type: 'tempo', duration_sec: 1800, target_type: 'ftp_pct', target_value: 65 },
+            { label: 'Endurance', segment_type: 'tempo', duration_sec: 1800, target_type: 'ftp_pct', target_value: 65 },
+            { label: 'Endurance', segment_type: 'tempo', duration_sec: 1800, target_type: 'ftp_pct', target_value: 65 },
+            { label: 'Endurance', segment_type: 'tempo', duration_sec: 1800, target_type: 'ftp_pct', target_value: 65 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        } else if (workoutType.indexOf('Tempo (Z3)') !== -1 || workoutType.indexOf('Z3') !== -1) {
+          // Tempo: 워밍업 + 중강도 인터벌 + 쿨다운
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
+            { label: 'Tempo', segment_type: 'tempo', duration_sec: 1200, target_type: 'ftp_pct', target_value: 85 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 300, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Tempo', segment_type: 'tempo', duration_sec: 1200, target_type: 'ftp_pct', target_value: 85 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 300, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Tempo', segment_type: 'tempo', duration_sec: 1200, target_type: 'ftp_pct', target_value: 85 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        } else if (workoutType.indexOf('Threshold Intervals (Z4)') !== -1 || workoutType.indexOf('Z4') !== -1) {
+          // Threshold: 워밍업 + 고강도 인터벌 + 쿨다운
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
+            { label: 'Threshold', segment_type: 'threshold', duration_sec: 600, target_type: 'ftp_pct', target_value: 100 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 300, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Threshold', segment_type: 'threshold', duration_sec: 600, target_type: 'ftp_pct', target_value: 100 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 300, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Threshold', segment_type: 'threshold', duration_sec: 600, target_type: 'ftp_pct', target_value: 100 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 300, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Threshold', segment_type: 'threshold', duration_sec: 600, target_type: 'ftp_pct', target_value: 100 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        } else if (workoutType.indexOf('VO2max Intervals (Z5)') !== -1 || workoutType.indexOf('Z5') !== -1) {
+          // VO2max: 워밍업 + 초고강도 인터벌 + 쿨다운
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 60 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Rest', segment_type: 'rest', duration_sec: 180, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'VO2max', segment_type: 'vo2max', duration_sec: 180, target_type: 'ftp_pct', target_value: 120 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        } else {
+          // 기본값: Active Recovery
+          segments = [
+            { label: 'Warmup', segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 },
+            { label: 'Recovery', segment_type: 'rest', duration_sec: 1800, target_type: 'ftp_pct', target_value: 40 },
+            { label: 'Cooldown', segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: 50 }
+          ];
+        }
+        
+        return segments;
+      }
+      
       // AI 분석 카테고리 클릭 핸들러
       async function handleAIRecommendationClick() {
         console.log('[AI Recommendation] AI 분석 워크아웃 추천 시작');
@@ -4786,25 +4862,84 @@
             var analysis = await window.callGeminiCoach(userProfile, cleanLogs);
             console.log('[AI Recommendation] AI 분석 완료:', analysis);
             
-            if (analysis && analysis.recommended_workout) {
-              // 추천 워크아웃 표시
+            if (analysis && (analysis.recommended_workout || (analysis.recommended_workouts && analysis.recommended_workouts.length > 0))) {
+              // 추천 워크아웃 표시 (3개 추천 지원)
               if (content) {
-                var recommendedWorkout = analysis.recommended_workout || 'Active Recovery (Z1)';
                 var coachComment = analysis.coach_comment || 'AI가 분석한 최적의 훈련을 추천합니다.';
                 var conditionScore = analysis.condition_score || 50;
                 var trainingStatus = analysis.training_status || 'Building Base';
+                var recommendedWorkouts = analysis.recommended_workouts || [];
                 
-                content.innerHTML = '<div style="padding: 20px;">' +
+                // 기존 단일 추천이 있으면 배열로 변환
+                if (recommendedWorkouts.length === 0 && analysis.recommended_workout) {
+                  recommendedWorkouts = [
+                    { rank: 1, workout_type: analysis.recommended_workout, description: 'AI가 추천한 최적의 훈련입니다.' }
+                  ];
+                }
+                
+                // 3개 미만이면 기본값으로 채우기
+                while (recommendedWorkouts.length < 3) {
+                  var defaultTypes = ['Active Recovery (Z1)', 'Endurance (Z2)', 'Tempo (Z3)'];
+                  var defaultDescs = [
+                    '가벼운 회복 훈련으로 근육 회복과 컨디션 조절',
+                    '기초 체력 향상을 위한 저강도 지구력 훈련',
+                    '유산소 능력 향상을 위한 중강도 훈련'
+                  ];
+                  var idx = recommendedWorkouts.length;
+                  recommendedWorkouts.push({
+                    rank: idx + 1,
+                    workout_type: defaultTypes[idx] || defaultTypes[0],
+                    description: defaultDescs[idx] || defaultDescs[0]
+                  });
+                }
+                
+                // 사용자 FTP 가져오기
+                var userFTP = currentUser.ftp || 200;
+                
+                // 워크아웃 카드 HTML 생성
+                var workoutCardsHtml = '';
+                recommendedWorkouts.forEach(function(workout, idx) {
+                  var workoutType = workout.workout_type || 'Active Recovery (Z1)';
+                  var description = workout.description || 'AI가 추천한 최적의 훈련입니다.';
+                  var rank = workout.rank || (idx + 1);
+                  
+                  // 세그먼트 생성
+                  var segments = createWorkoutSegmentsFromType(workoutType, userFTP);
+                  var canvasId = 'aiWorkoutGraph_' + idx;
+                  
+                  // 총 시간 계산
+                  var totalSeconds = segments.reduce(function(sum, seg) { return sum + (seg.duration_sec || 0); }, 0);
+                  var totalMinutes = Math.round(totalSeconds / 60);
+                  
+                  workoutCardsHtml += '<div style="background: white; border: 2px solid ' + (rank === 1 ? '#3b82f6' : rank === 2 ? '#10b981' : '#f59e0b') + '; border-radius: 12px; padding: 16px; margin-bottom: 16px; cursor: pointer; transition: all 0.2s;" ' +
+                    'onclick="selectAIRecommendedWorkout(' + idx + ', \'' + workoutType.replace(/'/g, "\\'") + '\', ' + JSON.stringify(segments).replace(/"/g, '&quot;') + ')" ' +
+                    'onmouseover="this.style.transform=\'translateY(-2px)\'; this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.1)\';" ' +
+                    'onmouseout="this.style.transform=\'\'; this.style.boxShadow=\'\';">' +
+                    '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
+                    '<div style="display: flex; align-items: center; gap: 8px;">' +
+                    '<div style="width: 32px; height: 32px; border-radius: 50%; background: ' + (rank === 1 ? '#3b82f6' : rank === 2 ? '#10b981' : '#f59e0b') + '; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px;">' + rank + '</div>' +
+                    '<div style="font-size: 18px; font-weight: 700; color: #111827;">' + workoutType + '</div>' +
+                    '</div>' +
+                    '<div style="font-size: 12px; color: #6b7280;">약 ' + totalMinutes + '분</div>' +
+                    '</div>' +
+                    '<div style="font-size: 14px; color: #6b7280; margin-bottom: 12px; line-height: 1.5;">' + description + '</div>' +
+                    '<div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 12px; position: relative;">' +
+                    '<canvas id="' + canvasId + '" width="600" height="150" style="width: 100%; height: 150px; max-width: 100%; display: block;"></canvas>' +
+                    '</div>' +
+                    '<div style="text-align: center;">' +
+                    '<button style="width: 100%; padding: 10px; background: ' + (rank === 1 ? '#3b82f6' : rank === 2 ? '#10b981' : '#f59e0b') + '; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;" ' +
+                    'onclick="event.stopPropagation(); selectAIRecommendedWorkout(' + idx + ', \'' + workoutType.replace(/'/g, "\\'") + '\', ' + JSON.stringify(segments).replace(/"/g, '&quot;') + ');">이 워크아웃 선택</button>' +
+                    '</div>' +
+                    '</div>';
+                });
+                
+                content.innerHTML = '<div style="padding: 20px; max-height: 80vh; overflow-y: auto;">' +
                   '<div style="text-align: center; margin-bottom: 24px;">' +
                   '<div style="font-size: 32px; margin-bottom: 12px;">🤖</div>' +
                   '<div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #111827;">AI 워크아웃 추천</div>' +
                   '<div style="font-size: 14px; color: #6b7280; line-height: 1.6;">' + coachComment + '</div>' +
                   '</div>' +
-                  '<div style="background: #f3f4f6; border-radius: 12px; padding: 16px; margin-bottom: 16px;">' +
-                  '<div style="font-size: 14px; color: #374151; margin-bottom: 8px;">추천 워크아웃</div>' +
-                  '<div style="font-size: 20px; font-weight: 700; color: #111827;">' + recommendedWorkout + '</div>' +
-                  '</div>' +
-                  '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">' +
+                  '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">' +
                   '<div style="background: #f3f4f6; border-radius: 8px; padding: 12px; text-align: center;">' +
                   '<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">컨디션 점수</div>' +
                   '<div style="font-size: 24px; font-weight: 700; color: #111827;">' + conditionScore + '</div>' +
@@ -4814,8 +4949,52 @@
                   '<div style="font-size: 14px; font-weight: 600; color: #111827;">' + trainingStatus + '</div>' +
                   '</div>' +
                   '</div>' +
-                  '<button onclick="generateAIWorkoutFromRecommendation(\'' + recommendedWorkout.replace(/'/g, "\\'") + '\')" style="width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;">이 워크아웃으로 훈련 시작</button>' +
+                  '<div style="margin-bottom: 16px;">' +
+                  '<div style="font-size: 16px; font-weight: 600; color: #111827; margin-bottom: 12px;">추천 워크아웃 (1~3순위)</div>' +
+                  workoutCardsHtml +
+                  '</div>' +
                   '</div>';
+                
+                // 각 워크아웃 그래프 그리기
+                setTimeout(function() {
+                  recommendedWorkouts.forEach(function(workout, idx) {
+                    var canvasId = 'aiWorkoutGraph_' + idx;
+                    var canvas = document.getElementById(canvasId);
+                    if (!canvas) {
+                      console.warn('[AI Recommendation] Canvas를 찾을 수 없습니다:', canvasId);
+                      return;
+                    }
+                    
+                    var segments = createWorkoutSegmentsFromType(workout.workout_type, userFTP);
+                    
+                    // Canvas 크기 설정
+                    var container = canvas.parentElement;
+                    if (container) {
+                      var containerWidth = container.clientWidth || 600;
+                      canvas.width = containerWidth;
+                      canvas.height = 150;
+                      canvas.style.width = '100%';
+                      canvas.style.height = '150px';
+                    }
+                    
+                    // 그래프 그리기
+                    if (typeof drawSegmentGraph === 'function') {
+                      try {
+                        drawSegmentGraph(segments, -1, canvasId);
+                      } catch (e) {
+                        console.error('[AI Recommendation] 그래프 그리기 실패:', e);
+                      }
+                    } else if (typeof window.drawSegmentGraph === 'function') {
+                      try {
+                        window.drawSegmentGraph(segments, -1, canvasId);
+                      } catch (e) {
+                        console.error('[AI Recommendation] 그래프 그리기 실패:', e);
+                      }
+                    } else {
+                      console.warn('[AI Recommendation] drawSegmentGraph 함수를 찾을 수 없습니다.');
+                    }
+                  });
+                }, 200);
               }
             } else {
               throw new Error('AI 분석 결과에 추천 워크아웃이 없습니다.');
@@ -4831,67 +5010,146 @@
         }
       }
       
-      // AI 추천 워크아웃 생성 함수
-      function generateAIWorkoutFromRecommendation(recommendedWorkout) {
-        console.log('[AI Recommendation] 워크아웃 생성 시작:', recommendedWorkout);
+      // AI 추천 워크아웃 선택 함수
+      function selectAIRecommendedWorkout(index, workoutType, segmentsJson) {
+        console.log('[AI Recommendation] 워크아웃 선택:', { index: index, workoutType: workoutType, segmentsJson: segmentsJson });
         
-        // 추천 워크아웃을 기반으로 워크아웃 생성
-        // 여기서는 추천 워크아웃 이름으로 기존 워크아웃을 검색하거나, 새로운 워크아웃을 생성할 수 있습니다.
-        // 현재는 추천 워크아웃 이름으로 워크아웃을 검색하여 선택하는 방식으로 구현
-        
-        // 모달 닫기
-        var modal = document.getElementById('workoutRecommendationModal');
-        if (modal) {
-          modal.style.display = 'none';
-        }
-        
-        // 워크아웃 검색 및 선택
-        if (typeof loadWorkouts === 'function') {
-          // 추천 워크아웃 이름으로 워크아웃 검색
-          loadWorkouts('all').then(function() {
-            var workouts = window.workouts || [];
-            var matchedWorkout = workouts.find(function(w) {
-              var title = (w.title || '').toLowerCase();
-              var recommended = (recommendedWorkout || '').toLowerCase();
-              return title.indexOf(recommended) !== -1 || recommended.indexOf(title) !== -1;
-            });
-            
-            if (matchedWorkout) {
-              // 매칭된 워크아웃 선택
-              if (typeof selectWorkout === 'function') {
-                selectWorkout(matchedWorkout);
-              } else if (typeof window.selectWorkout === 'function') {
-                window.selectWorkout(matchedWorkout);
-              } else {
-                // 워크아웃 선택 함수가 없으면 훈련 준비 화면으로 이동
-                window.currentWorkout = matchedWorkout;
-                if (typeof showScreen === 'function') {
-                  showScreen('trainingReadyScreen');
-                }
-              }
-              
-              if (typeof showToast === 'function') {
-                showToast('AI 추천 워크아웃이 선택되었습니다.', 'success');
-              }
-            } else {
-              // 매칭된 워크아웃이 없으면 사용자에게 알림
-              if (typeof showToast === 'function') {
-                showToast('추천 워크아웃과 일치하는 워크아웃을 찾을 수 없습니다. 워크아웃 목록에서 직접 선택해주세요.', 'info');
-              }
-              // 워크아웃 화면으로 이동
-              if (typeof showScreen === 'function') {
-                showScreen('workoutScreen');
-              }
-            }
-          });
-        } else {
-          if (typeof showToast === 'function') {
-            showToast('워크아웃을 불러올 수 없습니다. 워크아웃 화면에서 직접 선택해주세요.', 'warning');
+        try {
+          // 세그먼트 파싱
+          var segments = typeof segmentsJson === 'string' ? JSON.parse(segmentsJson.replace(/&quot;/g, '"')) : segmentsJson;
+          
+          if (!segments || !Array.isArray(segments) || segments.length === 0) {
+            throw new Error('세그먼트 데이터가 유효하지 않습니다.');
           }
+          
+          // 사용자 FTP 가져오기
+          var currentUser = window.currentUser || null;
+          var userFTP = currentUser ? (currentUser.ftp || 200) : 200;
+          
+          // 워크아웃 객체 생성
+          var workout = {
+            id: 'ai-recommended-' + Date.now() + '-' + index,
+            title: workoutType,
+            description: 'AI가 추천한 워크아웃',
+            segments: segments,
+            total_seconds: segments.reduce(function(sum, seg) { return sum + (seg.duration_sec || 0); }, 0),
+            author: 'AI',
+            created_at: new Date().toISOString()
+          };
+          
+          // 모달 닫기
+          var modal = document.getElementById('workoutRecommendationModal');
+          if (modal) {
+            modal.style.display = 'none';
+          }
+          
+          // 워크아웃 선택 및 훈련 준비 화면으로 이동
+          window.currentWorkout = workout;
+          
+          // 훈련 준비 화면으로 이동
           if (typeof showScreen === 'function') {
-            showScreen('workoutScreen');
+            showScreen('trainingReadyScreen');
+          }
+          
+          // 워크아웃 정보 업데이트 (약간의 지연 후)
+          setTimeout(function() {
+            // 워크아웃 이름 표시
+            var previewWorkoutName = document.getElementById('previewWorkoutName');
+            if (previewWorkoutName) {
+              previewWorkoutName.textContent = workoutType;
+            }
+            
+            // 총 시간 계산 및 표시
+            var totalSeconds = workout.total_seconds || 0;
+            var totalMinutes = Math.round(totalSeconds / 60);
+            var previewDuration = document.getElementById('previewDuration');
+            if (previewDuration) {
+              previewDuration.textContent = totalMinutes + '분';
+            }
+            
+            // 평균 강도 계산 및 표시
+            var totalIntensity = 0;
+            var intensityCount = 0;
+            segments.forEach(function(seg) {
+              if (seg.target_type === 'ftp_pct' && seg.target_value) {
+                totalIntensity += Number(seg.target_value) || 0;
+                intensityCount++;
+              }
+            });
+            var avgIntensity = intensityCount > 0 ? Math.round(totalIntensity / intensityCount) : 0;
+            var previewIntensity = document.getElementById('previewIntensity');
+            if (previewIntensity) {
+              previewIntensity.textContent = avgIntensity + '%';
+            }
+            
+            // 예상 TSS 계산 및 표시
+            var expectedTSS = Math.round((totalMinutes / 60) * avgIntensity * 0.01);
+            var previewExpectedIntensity = document.getElementById('previewExpectedIntensity');
+            if (previewExpectedIntensity) {
+              previewExpectedIntensity.textContent = expectedTSS;
+            }
+            
+            // 세그먼트 그래프 그리기
+            var segmentPreview = document.getElementById('segmentPreview');
+            var segmentPreviewPlaceholder = document.getElementById('segmentPreviewPlaceholder');
+            if (segmentPreviewPlaceholder) {
+              segmentPreviewPlaceholder.style.display = 'none';
+            }
+            
+            // 기존 캔버스 제거 및 새로 생성
+            var existingCanvas = segmentPreview.querySelector('canvas');
+            if (existingCanvas) {
+              existingCanvas.remove();
+            }
+            
+            var canvas = document.createElement('canvas');
+            canvas.id = 'segmentPreviewGraph';
+            canvas.style.width = '100%';
+            canvas.style.height = '180px';
+            segmentPreview.appendChild(canvas);
+            
+            // 그래프 그리기
+            if (typeof drawSegmentGraph === 'function') {
+              setTimeout(function() {
+                drawSegmentGraph(segments, -1, 'segmentPreviewGraph');
+              }, 100);
+            } else if (typeof window.drawSegmentGraph === 'function') {
+              setTimeout(function() {
+                window.drawSegmentGraph(segments, -1, 'segmentPreviewGraph');
+              }, 100);
+            }
+            
+            // 훈련 시작 버튼 활성화
+            var btnStartTraining = document.getElementById('btnStartTraining');
+            var btnMobileDashboard = document.getElementById('btnMobileDashboard');
+            if (btnStartTraining) {
+              btnStartTraining.disabled = false;
+            }
+            if (btnMobileDashboard) {
+              btnMobileDashboard.disabled = false;
+            }
+            
+            if (typeof showToast === 'function') {
+              showToast('AI 추천 워크아웃이 선택되었습니다.', 'success');
+            }
+          }, 300);
+        } catch (error) {
+          console.error('[AI Recommendation] 워크아웃 선택 오류:', error);
+          if (typeof showToast === 'function') {
+            showToast('워크아웃 선택 중 오류가 발생했습니다.', 'error');
           }
         }
+      }
+      
+      // 하위 호환성을 위한 기존 함수 유지
+      function generateAIWorkoutFromRecommendation(recommendedWorkout) {
+        console.log('[AI Recommendation] 워크아웃 생성 시작 (하위 호환성):', recommendedWorkout);
+        
+        var currentUser = window.currentUser || null;
+        var userFTP = currentUser ? (currentUser.ftp || 200) : 200;
+        var segments = createWorkoutSegmentsFromType(recommendedWorkout, userFTP);
+        
+        selectAIRecommendedWorkout(0, recommendedWorkout, segments);
       }
       
       window.workoutViewState = workoutViewState;
@@ -4901,6 +5159,8 @@
       window.workoutViewInit = workoutViewInit;
       window.handleAIRecommendationClick = handleAIRecommendationClick;
       window.generateAIWorkoutFromRecommendation = generateAIWorkoutFromRecommendation;
+      window.selectAIRecommendedWorkout = selectAIRecommendedWorkout;
+      window.createWorkoutSegmentsFromType = createWorkoutSegmentsFromType;
       
       // 모달 닫기 함수
       function closeWorkoutRecommendationModal() {
@@ -9582,10 +9842,33 @@ Task Requirements:
 2. **Training Status:** 현재 상태를 한 단어로 정의 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
 3. **Coach Comment:** 사용자 이름({{userName}})을 부르며, 최근 훈련 성과(FTP, TSS 등)를 언급한 한국어(경어체) 조언 한 문장.
 4. **VO2max Estimate:** 파워 기반 추정 VO2max 정수.
-5. **Recommended Workout:** 오늘 추천 훈련. 아래 **정확히 하나**만 사용. 동일 입력이면 **항상 같은 값**.
+5. **Recommended Workouts:** 오늘 추천 훈련을 **3개** 추천 (1순위, 2순위, 3순위). 각 워크아웃은 다음 형식을 따라야 합니다:
    - 허용값: "Active Recovery (Z1)" | "Endurance (Z2)" | "Tempo (Z3)" | "Threshold Intervals (Z4)" | "VO2max Intervals (Z5)"
+   - 각 워크아웃에 대한 간략한 설명 (30자 이내, 한국어)
 Output Format (JSON Only):
-{ "condition_score": 85, "training_status": "Ready to Race", "vo2max_estimate": 54, "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.", "recommended_workout": "Active Recovery (Z1)" }`;
+{ 
+  "condition_score": 85, 
+  "training_status": "Ready to Race", 
+  "vo2max_estimate": 54, 
+  "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.", 
+  "recommended_workouts": [
+    {
+      "rank": 1,
+      "workout_type": "Active Recovery (Z1)",
+      "description": "가벼운 회복 훈련으로 근육 회복과 컨디션 조절"
+    },
+    {
+      "rank": 2,
+      "workout_type": "Endurance (Z2)",
+      "description": "기초 체력 향상을 위한 저강도 지구력 훈련"
+    },
+    {
+      "rank": 3,
+      "workout_type": "Tempo (Z3)",
+      "description": "유산소 능력 향상을 위한 중강도 훈련"
+    }
+  ]
+}`;
     
     function isMobile() {
       var ua = navigator.userAgent || '';
@@ -9730,6 +10013,8 @@ Output Format (JSON Only):
           }
           var result = JSON.parse(text);
           var allowed = ['Active Recovery (Z1)', 'Endurance (Z2)', 'Tempo (Z3)', 'Threshold Intervals (Z4)', 'VO2max Intervals (Z5)'];
+          
+          // 기존 단일 추천 워크아웃 처리 (하위 호환성)
           var rw = (result.recommended_workout && String(result.recommended_workout).trim()) || '';
           var recommended_workout = 'Active Recovery (Z1)';
           if (allowed.indexOf(rw) !== -1) {
@@ -9741,6 +10026,55 @@ Output Format (JSON Only):
             else if (rw.indexOf('(Z2)') !== -1 || rw.indexOf('Z2') !== -1) recommended_workout = allowed[1];
             else if (rw.indexOf('(Z1)') !== -1 || rw.indexOf('Z1') !== -1 || rw.toLowerCase().indexOf('recovery') !== -1) recommended_workout = allowed[0];
           }
+          
+          // 3개 워크아웃 추천 처리
+          var recommended_workouts = [];
+          if (result.recommended_workouts && Array.isArray(result.recommended_workouts) && result.recommended_workouts.length > 0) {
+            result.recommended_workouts.forEach(function(w, idx) {
+              var workoutType = (w.workout_type && String(w.workout_type).trim()) || '';
+              var normalizedType = 'Active Recovery (Z1)';
+              
+              if (allowed.indexOf(workoutType) !== -1) {
+                normalizedType = workoutType;
+              } else {
+                if (workoutType.indexOf('(Z5)') !== -1 || workoutType.indexOf('Z5') !== -1) normalizedType = allowed[4];
+                else if (workoutType.indexOf('(Z4)') !== -1 || workoutType.indexOf('Z4') !== -1) normalizedType = allowed[3];
+                else if (workoutType.indexOf('(Z3)') !== -1 || workoutType.indexOf('Z3') !== -1) normalizedType = allowed[2];
+                else if (workoutType.indexOf('(Z2)') !== -1 || workoutType.indexOf('Z2') !== -1) normalizedType = allowed[1];
+                else if (workoutType.indexOf('(Z1)') !== -1 || workoutType.indexOf('Z1') !== -1 || workoutType.toLowerCase().indexOf('recovery') !== -1) normalizedType = allowed[0];
+              }
+              
+              recommended_workouts.push({
+                rank: w.rank || (idx + 1),
+                workout_type: normalizedType,
+                description: (w.description && String(w.description).trim()) || 'AI가 추천한 최적의 훈련입니다.'
+              });
+            });
+            
+            // 3개 미만이면 기본값으로 채우기
+            while (recommended_workouts.length < 3) {
+              var defaultTypes = [allowed[0], allowed[1], allowed[2]];
+              var defaultDescs = [
+                '가벼운 회복 훈련으로 근육 회복과 컨디션 조절',
+                '기초 체력 향상을 위한 저강도 지구력 훈련',
+                '유산소 능력 향상을 위한 중강도 훈련'
+              ];
+              var idx = recommended_workouts.length;
+              recommended_workouts.push({
+                rank: idx + 1,
+                workout_type: defaultTypes[idx] || allowed[0],
+                description: defaultDescs[idx] || 'AI가 추천한 최적의 훈련입니다.'
+              });
+            }
+          } else {
+            // 기존 단일 추천을 3개로 변환
+            recommended_workouts = [
+              { rank: 1, workout_type: recommended_workout, description: 'AI가 추천한 최적의 훈련입니다.' },
+              { rank: 2, workout_type: allowed[1], description: '기초 체력 향상을 위한 저강도 지구력 훈련' },
+              { rank: 3, workout_type: allowed[2], description: '유산소 능력 향상을 위한 중강도 훈련' }
+            ];
+          }
+          
           var rawScore = (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50;
           var condition_score = Math.round(rawScore / 5) * 5;
           if (condition_score > 100) condition_score = 100;
@@ -9750,7 +10084,8 @@ Output Format (JSON Only):
             training_status: result.training_status || 'Building Base',
             vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
             coach_comment: result.coach_comment || ((userProfile && userProfile.name) || '사용자') + '님, 오늘도 화이팅하세요!',
-            recommended_workout: recommended_workout
+            recommended_workout: recommended_workout, // 하위 호환성 유지
+            recommended_workouts: recommended_workouts // 새로운 3개 추천
           };
         } catch (e) {
           lastErr = e;
