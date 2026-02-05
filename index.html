@@ -4363,6 +4363,7 @@
       var workoutViewState = { mode: 'category', selectedCategory: null };
       var WORKOUT_CATEGORIES = [
         { id: 'all', label: '전체', icon: '📋', color: 'var(--zone-2)' },
+        { id: 'ai-recommendation', label: 'AI분석 워크아웃 추천', icon: 'assets/img/ai.gif', color: '#ef4444', isAI: true },
         { id: 'Active Recovery', label: 'Active Recovery', icon: '🔄', color: 'var(--zone-1)' },
         { id: 'Endurance', label: 'Endurance', icon: '🏃', color: 'var(--zone-2)' },
         { id: 'Sweet Spot', label: 'Sweet Spot', icon: '⭐', color: 'var(--zone-3)' },
@@ -4449,6 +4450,18 @@
       }
 
       function renderCategoryCard(c, workouts) {
+        // AI 분석 카테고리는 특별 처리
+        if (c.id === 'ai-recommendation') {
+          var iconHtml = c.icon && c.icon.indexOf('.gif') !== -1 
+            ? '<img src="' + c.icon + '" alt="AI" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain;">'
+            : '<span class="category-icon">' + (c.icon || '🤖') + '</span>';
+          return '<div class="workout-category-card workout-category-card-ai" data-category="' + (c.id || '') + '" data-zone="ai" onclick="handleAIRecommendationClick()">' +
+            iconHtml +
+            '<div class="category-label">' + (c.label || '') + '</div>' +
+            '<div class="category-count">30일간의 훈련 Log 분석</div>' +
+            '</div>';
+        }
+        
         var zoneAttr = c.id === 'all' ? 'all' : (c.id === 'Active Recovery' ? '1' : c.id === 'Endurance' ? '2' : c.id === 'Sweet Spot' || c.id === 'Tempo' ? '3' : c.id === 'Threshold' ? '4' : c.id === 'VO2 Max' ? '5' : '1');
         var count = getCategoryWorkoutCount(workouts, c.id);
         var countText = count > 0 ? count + '개' : '-';
@@ -4463,7 +4476,7 @@
         if (!grid) return;
         var cats = WORKOUT_CATEGORIES;
         var byId = function(id) { return cats.find(function(x) { return x.id === id; }); };
-        var catsOrdered = [byId('all'), byId('Active Recovery'), byId('Endurance'), byId('Sweet Spot'), byId('Tempo'), byId('Threshold'), byId('VO2 Max'), byId('기타')].filter(Boolean);
+        var catsOrdered = [byId('all'), byId('ai-recommendation'), byId('Active Recovery'), byId('Endurance'), byId('Sweet Spot'), byId('Tempo'), byId('Threshold'), byId('VO2 Max'), byId('기타')].filter(Boolean);
         var renderRow = function(arr) {
           return (arr || []).filter(Boolean).map(function(c) { return renderCategoryCard(c, workouts); }).join('');
         };
@@ -4498,11 +4511,310 @@
         }
       }
 
+      // AI 분석 카테고리 클릭 핸들러
+      async function handleAIRecommendationClick() {
+        console.log('[AI Recommendation] AI 분석 워크아웃 추천 시작');
+        
+        // 현재 사용자 확인
+        var currentUser = window.currentUser || null;
+        if (!currentUser || !currentUser.id) {
+          if (typeof showToast === 'function') {
+            showToast('사용자 정보가 없습니다. 먼저 로그인해주세요.', 'error');
+          } else {
+            alert('사용자 정보가 없습니다. 먼저 로그인해주세요.');
+          }
+          return;
+        }
+        
+        // Gemini API 키 확인
+        var apiKey = null;
+        try {
+          apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+          if (!apiKey || !String(apiKey).trim()) {
+            if (typeof showToast === 'function') {
+              showToast('⚠️ Gemini API 키가 없습니다. 환경 설정에서 키를 입력해주세요.', 'warning');
+            } else {
+              alert('⚠️ Gemini API 키가 없습니다. 환경 설정에서 키를 입력해주세요.');
+            }
+            // 설정 화면으로 이동
+            if (typeof showScreen === 'function') {
+              showScreen('settingsScreen');
+            }
+            return;
+          }
+        } catch (e) {
+          console.error('[AI Recommendation] localStorage 접근 실패:', e);
+          if (typeof showToast === 'function') {
+            showToast('설정 저장소 접근 오류가 발생했습니다.', 'error');
+          }
+          return;
+        }
+        
+        // AI 추천 모달 표시
+        var modal = document.getElementById('workoutRecommendationModal');
+        var content = document.getElementById('workoutRecommendationContent');
+        if (modal) {
+          modal.style.display = 'flex';
+        }
+        if (content) {
+          content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div></div>';
+        }
+        
+        try {
+          // 최근 30일간의 훈련 로그 가져오기
+          var logs = [];
+          if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
+            try {
+              console.log('[AI Recommendation] getUserTrainingLogs 호출 시작 (userId:', currentUser.id + ')');
+              var fetched = await window.getUserTrainingLogs(currentUser.id, { limit: 200 });
+              logs = Array.isArray(fetched) ? fetched : [];
+              console.log('[AI Recommendation] getUserTrainingLogs 완료:', logs.length, '개 로그 조회');
+            } catch (e) {
+              console.warn('[AI Recommendation] getUserTrainingLogs failed, falling back to v8:', e);
+              logs = [];
+            }
+          }
+          
+          // 폴백: Firestore v8 compat
+          if (logs.length === 0) {
+            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            if (firestore) {
+              var userLogsRef = firestore.collection('users').doc(currentUser.id).collection('logs');
+              var logsSnapshot;
+              try {
+                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
+              } catch (indexErr) {
+                console.warn('[AI Recommendation] orderBy failed, using limit only:', indexErr);
+                logsSnapshot = await userLogsRef.limit(200).get();
+              }
+              logsSnapshot.docs.forEach(function(doc) {
+                logs.push({ id: doc.id, ...doc.data() });
+              });
+            }
+          }
+          
+          // 날짜 파싱 헬퍼 함수
+          function parseDateForAI(date) {
+            if (!date) return null;
+            var d = null;
+            if (date.toDate && typeof date.toDate === 'function') {
+              d = date.toDate();
+            } else if (date instanceof Date) {
+              d = date;
+            } else if (typeof date === 'string') {
+              var dateStr = date.split('T')[0];
+              if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                d = new Date(dateStr + 'T00:00:00');
+              } else {
+                d = new Date(date);
+              }
+            } else {
+              return null;
+            }
+            if (!d || isNaN(d.getTime())) return null;
+            var year = d.getFullYear();
+            var month = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return year + '-' + month + '-' + day;
+          }
+          
+          // 30일 전 날짜 계산
+          var today = new Date();
+          today.setHours(0, 0, 0, 0);
+          var thirtyDaysAgo = new Date(today);
+          thirtyDaysAgo.setDate(today.getDate() - 30);
+          var thirtyDaysAgoStr = thirtyDaysAgo.getFullYear() + '-' + 
+            String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(thirtyDaysAgo.getDate()).padStart(2, '0');
+          var todayStr = today.getFullYear() + '-' + 
+            String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(today.getDate()).padStart(2, '0');
+          
+          // 30일치만 필터링
+          var logsToSend = logs.filter(function(log) {
+            var dateStr = parseDateForAI(log.date);
+            if (!dateStr) return false;
+            return dateStr >= thirtyDaysAgoStr && dateStr <= todayStr;
+          }).sort(function(a, b) { 
+            return (parseDateForAI(a.date) || '').localeCompare(parseDateForAI(b.date) || ''); 
+          });
+          
+          console.log('[AI Recommendation] 30일치 필터링 완료:', {
+            totalLogs: logs.length,
+            filteredLogs: logsToSend.length,
+            dateRange: thirtyDaysAgoStr + ' ~ ' + todayStr
+          });
+          
+          if (logsToSend.length === 0) {
+            if (content) {
+              content.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">📊</div><div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #374151;">훈련 데이터가 없습니다</div><div style="font-size: 14px; color: #6b7280;">지난 30일간의 훈련 기록이 없습니다.<br>훈련을 기록한 후 다시 시도해주세요.</div></div>';
+            }
+            return;
+          }
+          
+          // 데이터 정제 (sanitizeLogs 함수 사용)
+          var cleanLogs = [];
+          if (typeof window.sanitizeLogs === 'function') {
+            cleanLogs = window.sanitizeLogs(logsToSend);
+          } else {
+            // 인라인 sanitizeLogs 구현
+            cleanLogs = logsToSend.map(function(log) {
+              return {
+                date: log.date,
+                title: log.title,
+                duration_min: Math.round((log.duration_sec || 0) / 60),
+                distance_km: log.distance_km,
+                tss: log.tss,
+                if: log.if,
+                avg_watts: log.avg_watts,
+                weighted_watts: log.weighted_watts,
+                avg_hr: log.avg_hr,
+                max_hr: log.max_hr,
+                avg_cadence: log.avg_cadence,
+                rpe: log.rpe
+              };
+            });
+          }
+          
+          // 사용자 프로필 준비
+          var userProfile = {
+            id: currentUser.id,
+            name: currentUser.name || '사용자',
+            ftp: currentUser.ftp || 200,
+            weight: currentUser.weight || 70,
+            challenge: currentUser.challenge || 'Fitness'
+          };
+          
+          // AI 분석 호출
+          if (typeof window.callGeminiCoach === 'function') {
+            console.log('[AI Recommendation] callGeminiCoach 호출 시작');
+            var analysis = await window.callGeminiCoach(userProfile, cleanLogs);
+            console.log('[AI Recommendation] AI 분석 완료:', analysis);
+            
+            if (analysis && analysis.recommended_workout) {
+              // 추천 워크아웃 표시
+              if (content) {
+                var recommendedWorkout = analysis.recommended_workout || 'Active Recovery (Z1)';
+                var coachComment = analysis.coach_comment || 'AI가 분석한 최적의 훈련을 추천합니다.';
+                var conditionScore = analysis.condition_score || 50;
+                var trainingStatus = analysis.training_status || 'Building Base';
+                
+                content.innerHTML = '<div style="padding: 20px;">' +
+                  '<div style="text-align: center; margin-bottom: 24px;">' +
+                  '<div style="font-size: 32px; margin-bottom: 12px;">🤖</div>' +
+                  '<div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #111827;">AI 워크아웃 추천</div>' +
+                  '<div style="font-size: 14px; color: #6b7280; line-height: 1.6;">' + coachComment + '</div>' +
+                  '</div>' +
+                  '<div style="background: #f3f4f6; border-radius: 12px; padding: 16px; margin-bottom: 16px;">' +
+                  '<div style="font-size: 14px; color: #374151; margin-bottom: 8px;">추천 워크아웃</div>' +
+                  '<div style="font-size: 20px; font-weight: 700; color: #111827;">' + recommendedWorkout + '</div>' +
+                  '</div>' +
+                  '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">' +
+                  '<div style="background: #f3f4f6; border-radius: 8px; padding: 12px; text-align: center;">' +
+                  '<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">컨디션 점수</div>' +
+                  '<div style="font-size: 24px; font-weight: 700; color: #111827;">' + conditionScore + '</div>' +
+                  '</div>' +
+                  '<div style="background: #f3f4f6; border-radius: 8px; padding: 12px; text-align: center;">' +
+                  '<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">훈련 상태</div>' +
+                  '<div style="font-size: 14px; font-weight: 600; color: #111827;">' + trainingStatus + '</div>' +
+                  '</div>' +
+                  '</div>' +
+                  '<button onclick="generateAIWorkoutFromRecommendation(\'' + recommendedWorkout.replace(/'/g, "\\'") + '\')" style="width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;">이 워크아웃으로 훈련 시작</button>' +
+                  '</div>';
+              }
+            } else {
+              throw new Error('AI 분석 결과에 추천 워크아웃이 없습니다.');
+            }
+          } else {
+            throw new Error('callGeminiCoach 함수를 찾을 수 없습니다.');
+          }
+        } catch (error) {
+          console.error('[AI Recommendation] 오류:', error);
+          if (content) {
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #374151;">AI 분석 실패</div><div style="font-size: 14px; color: #6b7280;">' + (error.message || '알 수 없는 오류가 발생했습니다.') + '<br>잠시 후 다시 시도해주세요.</div></div>';
+          }
+        }
+      }
+      
+      // AI 추천 워크아웃 생성 함수
+      function generateAIWorkoutFromRecommendation(recommendedWorkout) {
+        console.log('[AI Recommendation] 워크아웃 생성 시작:', recommendedWorkout);
+        
+        // 추천 워크아웃을 기반으로 워크아웃 생성
+        // 여기서는 추천 워크아웃 이름으로 기존 워크아웃을 검색하거나, 새로운 워크아웃을 생성할 수 있습니다.
+        // 현재는 추천 워크아웃 이름으로 워크아웃을 검색하여 선택하는 방식으로 구현
+        
+        // 모달 닫기
+        var modal = document.getElementById('workoutRecommendationModal');
+        if (modal) {
+          modal.style.display = 'none';
+        }
+        
+        // 워크아웃 검색 및 선택
+        if (typeof loadWorkouts === 'function') {
+          // 추천 워크아웃 이름으로 워크아웃 검색
+          loadWorkouts('all').then(function() {
+            var workouts = window.workouts || [];
+            var matchedWorkout = workouts.find(function(w) {
+              var title = (w.title || '').toLowerCase();
+              var recommended = (recommendedWorkout || '').toLowerCase();
+              return title.indexOf(recommended) !== -1 || recommended.indexOf(title) !== -1;
+            });
+            
+            if (matchedWorkout) {
+              // 매칭된 워크아웃 선택
+              if (typeof selectWorkout === 'function') {
+                selectWorkout(matchedWorkout);
+              } else if (typeof window.selectWorkout === 'function') {
+                window.selectWorkout(matchedWorkout);
+              } else {
+                // 워크아웃 선택 함수가 없으면 훈련 준비 화면으로 이동
+                window.currentWorkout = matchedWorkout;
+                if (typeof showScreen === 'function') {
+                  showScreen('trainingReadyScreen');
+                }
+              }
+              
+              if (typeof showToast === 'function') {
+                showToast('AI 추천 워크아웃이 선택되었습니다.', 'success');
+              }
+            } else {
+              // 매칭된 워크아웃이 없으면 사용자에게 알림
+              if (typeof showToast === 'function') {
+                showToast('추천 워크아웃과 일치하는 워크아웃을 찾을 수 없습니다. 워크아웃 목록에서 직접 선택해주세요.', 'info');
+              }
+              // 워크아웃 화면으로 이동
+              if (typeof showScreen === 'function') {
+                showScreen('workoutScreen');
+              }
+            }
+          });
+        } else {
+          if (typeof showToast === 'function') {
+            showToast('워크아웃을 불러올 수 없습니다. 워크아웃 화면에서 직접 선택해주세요.', 'warning');
+          }
+          if (typeof showScreen === 'function') {
+            showScreen('workoutScreen');
+          }
+        }
+      }
+      
       window.workoutViewState = workoutViewState;
       window.workoutViewShowCategory = workoutViewShowCategory;
       window.workoutViewShowList = workoutViewShowList;
       window.renderWorkoutCategories = renderWorkoutCategories;
       window.workoutViewInit = workoutViewInit;
+      window.handleAIRecommendationClick = handleAIRecommendationClick;
+      window.generateAIWorkoutFromRecommendation = generateAIWorkoutFromRecommendation;
+      
+      // 모달 닫기 함수
+      function closeWorkoutRecommendationModal() {
+        var modal = document.getElementById('workoutRecommendationModal');
+        if (modal) {
+          modal.style.display = 'none';
+        }
+      }
+      window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
     })();
   </script>
   
@@ -9666,6 +9978,9 @@ Output Format (JSON Only):
         };
       });
     }
+    
+    // 전역으로 노출 (AI 추천 워크아웃에서 사용)
+    window.sanitizeLogs = sanitizeLogs;
     
     // ===== PerformanceDashboard Component (Direct Firebase Access - No Iframe) =====
     function PerformanceDashboard() {
