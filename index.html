@@ -10028,21 +10028,22 @@ Output Format (JSON Only):
           setLogsLoadError(null);
 
           try {
-            var thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-
+            // 🔒 독립적인 대시보드 데이터 로딩: 훈련일지 로직 참고하되 독립적으로 구동
             var raw = [];
-            // 1) authV9(전화번호 로그인) 사용 시 권한 오류 방지: getUserTrainingLogs(firestoreV9) 우선 사용
+            
+            // 1) getUserTrainingLogs 사용 (훈련일지와 동일한 방식, limit 200으로 증가)
             if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
               try {
-                var fetched = await window.getUserTrainingLogs(userProfile.id, { limit: 50 });
+                console.log('[Dashboard] getUserTrainingLogs 호출 시작 (userId:', userProfile.id + ')');
+                var fetched = await window.getUserTrainingLogs(userProfile.id, { limit: 200 });
                 raw = Array.isArray(fetched) ? fetched : [];
+                console.log('[Dashboard] getUserTrainingLogs 완료:', raw.length, '개 로그 조회');
               } catch (e) {
                 console.warn('[Dashboard] getUserTrainingLogs failed, falling back to v8:', e);
                 raw = [];
               }
             }
+            
             // 2) 폴백: Firestore v8 compat
             if (raw.length === 0) {
               var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
@@ -10052,43 +10053,92 @@ Output Format (JSON Only):
               var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
               var logsSnapshot;
               try {
-                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
               } catch (indexErr) {
                 console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
-                logsSnapshot = await userLogsRef.limit(100).get();
+                logsSnapshot = await userLogsRef.limit(200).get();
               }
               logsSnapshot.docs.forEach(function(doc) {
-                var d = doc.data();
-                if (d.date && d.date >= dateStr) {
-                  raw.push({ id: doc.id, ...d });
-                }
-              });
-            } else {
-              raw = raw.filter(function(d) {
-                return d.date && d.date >= dateStr;
+                raw.push({ id: doc.id, ...doc.data() });
               });
             }
 
-            raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-            var logs = raw.slice(0, 30);
+            // 🔒 날짜 파싱 헬퍼 함수 (훈련일지의 getDateKeyJournal 로직 참고, 독립적으로 구현)
+            function parseDateForDashboard(date) {
+              if (!date) return null;
+              var d = null;
+              
+              // Firestore Timestamp 처리
+              if (date.toDate && typeof date.toDate === 'function') {
+                d = date.toDate();
+              } else if (date instanceof Date) {
+                d = date;
+              } else if (typeof date === 'string') {
+                // 문자열 날짜 파싱 (YYYY-MM-DD 형식 또는 ISO 형식)
+                var dateStr = date.split('T')[0]; // ISO 형식에서 날짜 부분만 추출
+                if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                  d = new Date(dateStr + 'T00:00:00');
+                } else {
+                  d = new Date(date);
+                }
+              } else {
+                return null;
+              }
+              
+              if (!d || isNaN(d.getTime())) return null;
+              
+              var year = d.getFullYear();
+              var month = String(d.getMonth() + 1).padStart(2, '0');
+              var day = String(d.getDate()).padStart(2, '0');
+              return year + '-' + month + '-' + day;
+            }
+
+            // 30일 전 날짜 계산
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            var thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 30);
+            var thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+            // 날짜 파싱 및 필터링 (30일 전부터 현재일까지)
+            var logs = raw.filter(function(log) {
+              var dateStr = parseDateForDashboard(log.date);
+              if (!dateStr) return false;
+              return dateStr >= thirtyDaysAgoStr && dateStr <= today.toISOString().split('T')[0];
+            });
+
+            // 날짜순 정렬 (최신순)
+            logs.sort(function(a, b) {
+              var dateA = parseDateForDashboard(a.date);
+              var dateB = parseDateForDashboard(b.date);
+              return (dateB || '').localeCompare(dateA || '');
+            });
+
+            console.log('[Dashboard] 필터링 완료:', {
+              totalFetched: raw.length,
+              filtered: logs.length,
+              dateRange: thirtyDaysAgoStr + ' ~ ' + today.toISOString().split('T')[0]
+            });
 
             if (isMounted) {
               setRecentLogs(logs);
               setLogsLoaded(true);
             }
 
-            // Calculate weekly TSS
-            var today = new Date();
-            var dayOfWeek = today.getDay();
+            // Calculate weekly TSS (날짜 파싱 함수 사용)
+            var todayForWeekly = new Date();
+            todayForWeekly.setHours(0, 0, 0, 0);
+            var dayOfWeek = todayForWeekly.getDay();
             var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-            var monday = new Date(today);
-            monday.setDate(today.getDate() + mondayOffset);
+            var monday = new Date(todayForWeekly);
+            monday.setDate(todayForWeekly.getDate() + mondayOffset);
             monday.setHours(0, 0, 0, 0);
             var mondayStr = monday.toISOString().split('T')[0];
 
             var weeklyTss = 0;
             logs.forEach(function(log) {
-              if (log.date && log.date >= mondayStr) {
+              var dateStr = parseDateForDashboard(log.date);
+              if (dateStr && dateStr >= mondayStr) {
                 weeklyTss += (Number(log.tss) || 0);
               }
             });
@@ -10109,29 +10159,35 @@ Output Format (JSON Only):
             }
 
             // 훈련 트렌드(최근 1개월): 오늘 포함 30일 전까지 조회, X축은 7일 단위로 표시
-            var today = new Date();
-            today.setHours(0, 0, 0, 0);
-            var thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(today.getDate() - 30);
+            var todayForChart = new Date();
+            todayForChart.setHours(0, 0, 0, 0);
+            var thirtyDaysAgoForChart = new Date(todayForChart);
+            thirtyDaysAgoForChart.setDate(todayForChart.getDate() - 30);
             
             // 날짜 범위 문자열 생성
-            var todayStr = today.toISOString().split('T')[0];
-            var thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+            var todayStr = todayForChart.toISOString().split('T')[0];
+            var thirtyDaysAgoStr = thirtyDaysAgoForChart.toISOString().split('T')[0];
             
-            // 30일간의 날짜별 TSS 합산
+            // 🔒 날짜별 TSS 합산 (날짜 파싱 함수 사용)
             var byDate = {};
             logs.forEach(function(log) {
-              var d = log.date ? String(log.date).split('T')[0] : '';
-              if (!d || d < thirtyDaysAgoStr || d > todayStr) return;
-              if (!byDate[d]) byDate[d] = { tss: 0 };
-              byDate[d].tss += Number(log.tss) || 0;
+              var dateStr = parseDateForDashboard(log.date);
+              if (!dateStr || dateStr < thirtyDaysAgoStr || dateStr > todayStr) return;
+              if (!byDate[dateStr]) byDate[dateStr] = { tss: 0 };
+              byDate[dateStr].tss += Number(log.tss) || 0;
+            });
+            
+            console.log('[Dashboard] 날짜별 TSS 합산 완료:', {
+              dateKeys: Object.keys(byDate).sort(),
+              totalDates: Object.keys(byDate).length,
+              sampleTSS: Object.keys(byDate).slice(0, 5).map(function(k) { return k + ': ' + byDate[k].tss; })
             });
             
             // X축 날짜 생성: -30일, -23일, -16일, -9일, -2일, 현재일 (7일 단위)
             var xAxisDates = [];
             for (var i = 30; i >= 0; i -= 7) {
-              var date = new Date(today);
-              date.setDate(today.getDate() - i);
+              var date = new Date(todayForChart);
+              date.setDate(todayForChart.getDate() - i);
               xAxisDates.push(date.toISOString().split('T')[0]);
             }
             // 마지막에 현재일 추가 (이미 포함되어 있을 수 있지만 확실히)
@@ -10139,15 +10195,18 @@ Output Format (JSON Only):
               xAxisDates.push(todayStr);
             }
             
+            console.log('[Dashboard] X축 날짜 생성:', {
+              xAxisDates: xAxisDates,
+              byDateKeys: Object.keys(byDate).sort()
+            });
+            
             // 각 X축 날짜에 대한 데이터 생성 (해당 날짜의 TSS 사용, 없으면 0)
             var chartData = xAxisDates.map(function(dateStr) {
               var logDate = new Date(dateStr);
-              var month = logDate.getMonth() + 1;
-              var day = logDate.getDate();
               var tss = byDate[dateStr] ? byDate[dateStr].tss : 0;
               
               // 날짜 라벨: -30일, -23일, ... 현재일 형식
-              var daysDiff = Math.floor((today - logDate) / (1000 * 60 * 60 * 24));
+              var daysDiff = Math.floor((todayForChart - logDate) / (1000 * 60 * 60 * 24));
               var dateLabel = daysDiff === 0 ? '오늘' : '-' + daysDiff + '일';
               
               return {
@@ -10155,6 +10214,12 @@ Output Format (JSON Only):
                 fitness: tss,
                 fatigue: tss * 0.7
               };
+            });
+            
+            console.log('[Dashboard] 차트 데이터 생성 완료:', {
+              chartDataLength: chartData.length,
+              chartData: chartData,
+              totalTSS: chartData.reduce(function(sum, d) { return sum + d.fitness; }, 0)
             });
             
             if (isMounted) setFitnessData(chartData);
