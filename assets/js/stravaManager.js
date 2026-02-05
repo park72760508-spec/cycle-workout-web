@@ -360,28 +360,103 @@ async function fetchAndProcessStravaData(options = {}) {
   const totalTssByUser = {};
 
   try {
-    // Firebase에서 strava_refresh_token이 있는 사용자 조회
-    // Firestore 제한: 하나의 쿼리에 != 필터를 하나만 사용 가능
-    // 따라서 != '' 하나만 사용하고, 클라이언트 측에서 null 체크
-    const usersCollection = getUsersCollection();
-    const usersSnapshot = await usersCollection
-      .where('strava_refresh_token', '!=', '')
-      .get();
-
-    if (usersSnapshot.empty) {
-      return { 
-        success: true, 
-        processed: 0, 
-        newActivities: 0, 
-        totalTssByUser: {}, 
-        errors: ['Strava refresh_token이 있는 사용자가 없습니다.'] 
+    // 현재 로그인한 사용자 확인
+    const currentAuthUser = window.firebase?.auth()?.currentUser || window.auth?.currentUser;
+    const currentUserId = currentAuthUser?.uid || window.currentUser?.id;
+    
+    if (!currentUserId) {
+      return {
+        success: false,
+        error: '로그인한 사용자가 없습니다.',
+        processed: 0,
+        newActivities: 0,
+        totalTssByUser: {}
       };
     }
 
+    // 사용자 등급 확인 (관리자인지 확인)
+    let isAdmin = false;
+    try {
+      const viewerGrade = typeof getViewerGrade === 'function' ? getViewerGrade() : '2';
+      isAdmin = viewerGrade === '1';
+    } catch (e) {
+      console.warn('[fetchAndProcessStravaData] 사용자 등급 확인 실패:', e);
+    }
+
+    let usersToProcess = [];
+
+    if (isAdmin) {
+      // 관리자인 경우: 모든 사용자 조회
+      console.log('[fetchAndProcessStravaData] 관리자 모드: 모든 사용자 처리');
+      const usersCollection = getUsersCollection();
+      const usersSnapshot = await usersCollection
+        .where('strava_refresh_token', '!=', '')
+        .get();
+
+      if (usersSnapshot.empty) {
+        return { 
+          success: true, 
+          processed: 0, 
+          newActivities: 0, 
+          totalTssByUser: {}, 
+          errors: ['Strava refresh_token이 있는 사용자가 없습니다.'] 
+        };
+      }
+
+      usersToProcess = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        data: doc.data()
+      }));
+    } else {
+      // 일반 사용자인 경우: 자신만 처리
+      console.log('[fetchAndProcessStravaData] 일반 사용자 모드: 자신만 처리');
+      try {
+        const usersCollection = getUsersCollection();
+        const userDoc = await usersCollection.doc(currentUserId).get();
+        
+        if (!userDoc.exists) {
+          return {
+            success: false,
+            error: '사용자 정보를 찾을 수 없습니다.',
+            processed: 0,
+            newActivities: 0,
+            totalTssByUser: {}
+          };
+        }
+
+        const userData = userDoc.data();
+        const refreshToken = userData.strava_refresh_token;
+        
+        if (!refreshToken || refreshToken === '' || refreshToken === null) {
+          return {
+            success: false,
+            error: 'Strava 연결이 되어 있지 않습니다.',
+            processed: 0,
+            newActivities: 0,
+            totalTssByUser: {}
+          };
+        }
+
+        usersToProcess = [{
+          id: currentUserId,
+          data: userData
+        }];
+      } catch (userError) {
+        console.error('[fetchAndProcessStravaData] 사용자 정보 조회 실패:', userError);
+        return {
+          success: false,
+          error: `사용자 정보 조회 실패: ${userError.message}`,
+          processed: 0,
+          newActivities: 0,
+          totalTssByUser: {}
+        };
+      }
+    }
+
     // 각 사용자별로 처리
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      const userId = userDoc.id;
+    for (const userInfo of usersToProcess) {
+      const userData = userInfo.data;
+      const userId = userInfo.id;
       
       // 각 사용자별로 기존 활동 ID 목록 조회 (권한 오류 방지)
       let existingIds = new Set();
