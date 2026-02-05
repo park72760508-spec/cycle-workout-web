@@ -9545,7 +9545,7 @@ Output Format (JSON Only):
               onKeyDown={function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFitness(); } }}
             >
               <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0 bg-blue-500 mt-0.5" style={{ backgroundColor: fitnessVisible ? '#3b82f6' : '#9ca3af' }}></span>
-              <span><strong className="text-gray-700">Fitness (체력)</strong>: 지난 6주간 꾸준히 쌓아올린 기초 체력 (높을수록 좋음) · 클릭 시 표시/숨김</span>
+              <span><strong className="text-gray-700">Fitness (체력)</strong>: 42일 반감기로 계산된 장기 체력 (지난 6주간의 훈련 누적, 높을수록 좋음) · 클릭 시 표시/숨김</span>
             </div>
             <div
               className={"flex items-start gap-2 cursor-pointer select-none rounded p-1 -m-1 hover:bg-gray-100 active:opacity-80 " + (fatigueVisible ? "" : "opacity-50")}
@@ -9555,7 +9555,7 @@ Output Format (JSON Only):
               onKeyDown={function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFatigue(); } }}
             >
               <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0 bg-red-500 mt-0.5" style={{ backgroundColor: fatigueVisible ? '#ef4444' : '#9ca3af' }}></span>
-              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 최근 7일간의 훈련으로 쌓인 단기 피로 (높으면 휴식 필요) · 클릭 시 표시/숨김</span>
+              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 7일 반감기로 계산된 단기 피로 (최근 7일간의 훈련 누적, 높으면 휴식 필요) · 클릭 시 표시/숨김</span>
             </div>
           </div>
         </DashboardCard>
@@ -10101,15 +10101,23 @@ Output Format (JSON Only):
             var thirtyDaysAgoStr = thirtyDaysAgo.getFullYear() + '-' + 
               String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + 
               String(thirtyDaysAgo.getDate()).padStart(2, '0');
+            
+            // 🔒 Fitness/Fatigue 계산을 위해 60일 전까지 데이터 필요 (Fitness 반감기 42일)
+            var sixtyDaysAgo = new Date(today);
+            sixtyDaysAgo.setDate(today.getDate() - 60);
+            var sixtyDaysAgoStr = sixtyDaysAgo.getFullYear() + '-' + 
+              String(sixtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + 
+              String(sixtyDaysAgo.getDate()).padStart(2, '0');
 
-            // 날짜 파싱 및 필터링 (30일 전부터 현재일까지)
+            // 날짜 파싱 및 필터링 (60일 전부터 현재일까지 - Fitness/Fatigue 계산용)
             var todayFormattedForFilter = today.getFullYear() + '-' + 
               String(today.getMonth() + 1).padStart(2, '0') + '-' + 
               String(today.getDate()).padStart(2, '0');
             var logs = raw.filter(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr) return false;
-              return dateStr >= thirtyDaysAgoStr && dateStr <= todayFormattedForFilter;
+              // Fitness/Fatigue 계산을 위해 60일 전부터 데이터 포함
+              return dateStr >= sixtyDaysAgoStr && dateStr <= todayFormattedForFilter;
             });
 
             // 날짜순 정렬 (최신순)
@@ -10178,10 +10186,11 @@ Output Format (JSON Only):
               String(thirtyDaysAgoForChart.getDate()).padStart(2, '0');
             
             // 🔒 날짜별 TSS 합산 (날짜 파싱 함수 사용)
+            // Fitness/Fatigue 계산을 위해 60일 전부터 모든 데이터 포함
             var byDate = {};
             logs.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
-              if (!dateStr || dateStr < thirtyDaysAgoStr || dateStr > todayStr) return;
+              if (!dateStr || dateStr < sixtyDaysAgoStr || dateStr > todayStr) return;
               if (!byDate[dateStr]) byDate[dateStr] = { tss: 0 };
               var tssValue = Number(log.tss) || 0;
               byDate[dateStr].tss += tssValue;
