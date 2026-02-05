@@ -10093,18 +10093,23 @@ Output Format (JSON Only):
               return year + '-' + month + '-' + day;
             }
 
-            // 30일 전 날짜 계산
+            // 30일 전 날짜 계산 (parseDateForDashboard와 동일한 형식 사용)
             var today = new Date();
             today.setHours(0, 0, 0, 0);
             var thirtyDaysAgo = new Date(today);
             thirtyDaysAgo.setDate(today.getDate() - 30);
-            var thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+            var thirtyDaysAgoStr = thirtyDaysAgo.getFullYear() + '-' + 
+              String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + 
+              String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
             // 날짜 파싱 및 필터링 (30일 전부터 현재일까지)
+            var todayFormattedForFilter = today.getFullYear() + '-' + 
+              String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+              String(today.getDate()).padStart(2, '0');
             var logs = raw.filter(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr) return false;
-              return dateStr >= thirtyDaysAgoStr && dateStr <= today.toISOString().split('T')[0];
+              return dateStr >= thirtyDaysAgoStr && dateStr <= todayFormattedForFilter;
             });
 
             // 날짜순 정렬 (최신순)
@@ -10164,9 +10169,13 @@ Output Format (JSON Only):
             var thirtyDaysAgoForChart = new Date(todayForChart);
             thirtyDaysAgoForChart.setDate(todayForChart.getDate() - 30);
             
-            // 날짜 범위 문자열 생성
-            var todayStr = todayForChart.toISOString().split('T')[0];
-            var thirtyDaysAgoStr = thirtyDaysAgoForChart.toISOString().split('T')[0];
+            // 날짜 범위 문자열 생성 (parseDateForDashboard와 동일한 형식 사용)
+            var todayStr = todayForChart.getFullYear() + '-' + 
+              String(todayForChart.getMonth() + 1).padStart(2, '0') + '-' + 
+              String(todayForChart.getDate()).padStart(2, '0');
+            var thirtyDaysAgoStr = thirtyDaysAgoForChart.getFullYear() + '-' + 
+              String(thirtyDaysAgoForChart.getMonth() + 1).padStart(2, '0') + '-' + 
+              String(thirtyDaysAgoForChart.getDate()).padStart(2, '0');
             
             // 🔒 날짜별 TSS 합산 (날짜 파싱 함수 사용)
             var byDate = {};
@@ -10174,52 +10183,127 @@ Output Format (JSON Only):
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr || dateStr < thirtyDaysAgoStr || dateStr > todayStr) return;
               if (!byDate[dateStr]) byDate[dateStr] = { tss: 0 };
-              byDate[dateStr].tss += Number(log.tss) || 0;
+              var tssValue = Number(log.tss) || 0;
+              byDate[dateStr].tss += tssValue;
             });
             
             console.log('[Dashboard] 날짜별 TSS 합산 완료:', {
               dateKeys: Object.keys(byDate).sort(),
               totalDates: Object.keys(byDate).length,
-              sampleTSS: Object.keys(byDate).slice(0, 5).map(function(k) { return k + ': ' + byDate[k].tss; })
+              sampleTSS: Object.keys(byDate).slice(0, 10).map(function(k) { 
+                return k + ': ' + byDate[k].tss + ' (로그 수: ' + (logs.filter(function(log) {
+                  var d = parseDateForDashboard(log.date);
+                  return d === k;
+                }).length) + ')';
+              }),
+              totalTSS: Object.values(byDate).reduce(function(sum, d) { return sum + d.tss; }, 0)
             });
             
             // X축 날짜 생성: -30일, -23일, -16일, -9일, -2일, 현재일 (7일 단위)
+            // parseDateForDashboard와 동일한 형식으로 날짜 생성 (YYYY-MM-DD)
             var xAxisDates = [];
             for (var i = 30; i >= 0; i -= 7) {
               var date = new Date(todayForChart);
               date.setDate(todayForChart.getDate() - i);
-              xAxisDates.push(date.toISOString().split('T')[0]);
+              date.setHours(0, 0, 0, 0);
+              // parseDateForDashboard와 동일한 형식으로 생성
+              var year = date.getFullYear();
+              var month = String(date.getMonth() + 1).padStart(2, '0');
+              var day = String(date.getDate()).padStart(2, '0');
+              var dateStr = year + '-' + month + '-' + day;
+              xAxisDates.push(dateStr);
             }
-            // 마지막에 현재일 추가 (이미 포함되어 있을 수 있지만 확실히)
-            if (xAxisDates[xAxisDates.length - 1] !== todayStr) {
-              xAxisDates.push(todayStr);
+            // 마지막에 현재일 추가 (parseDateForDashboard 형식으로)
+            var todayFormatted = todayForChart.getFullYear() + '-' + 
+              String(todayForChart.getMonth() + 1).padStart(2, '0') + '-' + 
+              String(todayForChart.getDate()).padStart(2, '0');
+            if (xAxisDates[xAxisDates.length - 1] !== todayFormatted) {
+              xAxisDates.push(todayFormatted);
             }
             
             console.log('[Dashboard] X축 날짜 생성:', {
               xAxisDates: xAxisDates,
-              byDateKeys: Object.keys(byDate).sort()
+              byDateKeys: Object.keys(byDate).sort(),
+              todayFormatted: todayFormatted,
+              byDateSample: Object.keys(byDate).slice(0, 10).map(function(k) {
+                return { key: k, tss: byDate[k].tss };
+              })
             });
             
-            // 각 X축 날짜에 대한 데이터 생성 (해당 날짜의 TSS 사용, 없으면 0)
+            // 🔒 Fitness/Fatigue 계산 함수 (지수 이동 평균 기반)
+            // Fitness (CTL): 42일 반감기로 장기 체력 계산
+            // Fatigue (ATL): 7일 반감기로 단기 피로도 계산
+            function calculateFitnessFatigue(targetDateStr, allLogsByDate, todayDate) {
+              var targetDate = new Date(targetDateStr + 'T00:00:00');
+              var fitnessDecay = Math.pow(0.5, 1 / 42); // 42일 반감기
+              var fatigueDecay = Math.pow(0.5, 1 / 7);   // 7일 반감기
+              
+              var fitness = 0;
+              var fatigue = 0;
+              
+              // targetDate 이전의 모든 날짜를 역순으로 순회
+              var sortedDates = Object.keys(allLogsByDate).sort().filter(function(d) {
+                return d <= targetDateStr;
+              });
+              
+              // 각 날짜의 TSS를 사용하여 Fitness와 Fatigue 계산
+              for (var i = sortedDates.length - 1; i >= 0; i--) {
+                var logDateStr = sortedDates[i];
+                var logDate = new Date(logDateStr + 'T00:00:00');
+                var daysAgo = Math.floor((targetDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
+                
+                if (daysAgo < 0) continue;
+                
+                var dailyTss = allLogsByDate[logDateStr].tss || 0;
+                
+                // Fitness: 42일 반감기로 누적
+                var fitnessWeight = Math.pow(fitnessDecay, daysAgo);
+                fitness += dailyTss * fitnessWeight;
+                
+                // Fatigue: 7일 반감기로 누적 (최근 7일만 의미 있음)
+                if (daysAgo <= 7) {
+                  var fatigueWeight = Math.pow(fatigueDecay, daysAgo);
+                  fatigue += dailyTss * fatigueWeight;
+                }
+              }
+              
+              return {
+                fitness: Math.round(fitness * 10) / 10, // 소수점 첫째자리까지
+                fatigue: Math.round(fatigue * 10) / 10
+              };
+            }
+            
+            // 각 X축 날짜에 대한 Fitness/Fatigue 계산
             var chartData = xAxisDates.map(function(dateStr) {
-              var logDate = new Date(dateStr);
-              var tss = byDate[dateStr] ? byDate[dateStr].tss : 0;
+              // 해당 날짜까지의 Fitness와 Fatigue 계산
+              var result = calculateFitnessFatigue(dateStr, byDate, todayForChart);
               
               // 날짜 라벨: -30일, -23일, ... 현재일 형식
-              var daysDiff = Math.floor((todayForChart - logDate) / (1000 * 60 * 60 * 24));
+              var logDate = new Date(dateStr + 'T00:00:00');
+              var daysDiff = Math.floor((todayForChart.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
               var dateLabel = daysDiff === 0 ? '오늘' : '-' + daysDiff + '일';
+              
+              if (result.fitness > 0 || result.fatigue > 0) {
+                console.log('[Dashboard] 차트 데이터 생성:', {
+                  dateStr: dateStr,
+                  fitness: result.fitness,
+                  fatigue: result.fatigue,
+                  dateLabel: dateLabel
+                });
+              }
               
               return {
                 date: dateLabel,
-                fitness: tss,
-                fatigue: tss * 0.7
+                fitness: result.fitness,
+                fatigue: result.fatigue
               };
             });
             
             console.log('[Dashboard] 차트 데이터 생성 완료:', {
               chartDataLength: chartData.length,
               chartData: chartData,
-              totalTSS: chartData.reduce(function(sum, d) { return sum + d.fitness; }, 0)
+              totalTSS: chartData.reduce(function(sum, d) { return sum + d.fitness; }, 0),
+              byDateTotalTSS: Object.values(byDate).reduce(function(sum, d) { return sum + d.tss; }, 0)
             });
             
             if (isMounted) setFitnessData(chartData);
