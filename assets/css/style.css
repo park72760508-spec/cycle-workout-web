@@ -3377,6 +3377,8 @@ button[aria-disabled="true"] {
 .workout-category-card[data-zone="4"]::before { background: var(--zone-4); }
 .workout-category-card[data-zone="5"]::before { background: var(--zone-5); }
 .workout-category-card[data-zone="all"]::before { background: var(--zone-2); }
+.workout-category-card[data-zone="ai"]::before { background: #ef4444; opacity: 1; }
+.workout-category-card-ai::before { background: #ef4444 !important; opacity: 1 !important; }
 
 .workout-category-card:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -3386,6 +3388,14 @@ button[aria-disabled="true"] {
 .workout-category-card .category-icon {
   font-size: 28px;
   margin-bottom: 8px;
+}
+
+.workout-category-card .category-icon-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  margin-bottom: 8px;
+  display: inline-block;
 }
 
 .workout-category-card .category-label {
