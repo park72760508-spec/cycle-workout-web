@@ -7362,10 +7362,30 @@
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
         
         try {
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            // 🔒 보안: auth와 authV9 모두 로그인 (authV9가 이전 사용자 상태를 유지하는 것을 방지)
+            const authV9 = window.authV9 || null;
+            var userCredential = null;
+            var authV9Credential = null;
+            
+            // window.auth로 로그인 (v8 Compat)
+            userCredential = await auth.signInWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
-            console.log('✅ 로그인 성공:', user.uid);
+            console.log('✅ 로그인 성공 (auth):', user.uid);
+            
+            // 🔒 보안: authV9도 함께 로그인 (동기화)
+            if (authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
+              try {
+                authV9Credential = await window.signInWithEmailAndPasswordV9(authV9, email, password);
+                console.log('✅ 로그인 성공 (authV9):', authV9Credential.user.uid);
+              } catch (authV9Error) {
+                console.warn('[Login] authV9 로그인 실패 (무시하고 계속 진행):', authV9Error);
+                // authV9 로그인 실패해도 계속 진행 (auth는 성공했으므로)
+              }
+            } else {
+              console.warn('[Login] authV9 또는 signInWithEmailAndPasswordV9 함수를 찾을 수 없습니다.');
+            }
+            
             showAuthStatus('✅ 로그인 성공!', 'success');
             
             // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱)
@@ -7385,7 +7405,8 @@
                 if (typeof window !== 'undefined' && window.miniCalendarStateJournal) {
                   console.log('[Login] 로그인 성공 - 훈련일지 상태 초기화:', {
                     userId: userData.id,
-                    previousUserId: window.miniCalendarStateJournal.currentUserId
+                    previousUserId: window.miniCalendarStateJournal.currentUserId,
+                    authV9Synced: !!authV9Credential
                   });
                   window.miniCalendarStateJournal.trainingLogs = {};
                   window.miniCalendarStateJournal.currentUserId = null;
