@@ -4402,6 +4402,12 @@
       }
 
       function workoutViewShowList(categoryId) {
+        // 🔒 AI 추천 워크아웃 선택 중이면 재로딩 방지
+        if (window.__aiWorkoutSelectionInProgress) {
+          console.log('[Workout View] AI 추천 워크아웃 선택 중 - 목록 표시 스킵');
+          return;
+        }
+        
         workoutViewState.mode = 'list';
         workoutViewState.selectedCategory = categoryId;
         var catView = document.getElementById('workoutCategoryView');
@@ -4489,6 +4495,12 @@
 
       function workoutViewInit() {
         try {
+          // 🔒 AI 추천 워크아웃 선택 중이면 재로딩 방지
+          if (window.__aiWorkoutSelectionInProgress) {
+            console.log('[Workout View] AI 추천 워크아웃 선택 중 - 재로딩 스킵');
+            return;
+          }
+          
           workoutViewShowCategory();
           var useCache = window.workouts && Array.isArray(window.workouts) && window.workouts.length > 5;
           if (useCache) {
@@ -4505,7 +4517,8 @@
           if (grid && grid.innerHTML === '') {
             renderWorkoutCategories();
           }
-          if (typeof loadWorkouts === 'function') {
+          // 🔒 AI 추천 워크아웃 선택 중이면 재로딩 방지
+          if (!window.__aiWorkoutSelectionInProgress && typeof loadWorkouts === 'function') {
             setTimeout(function() { loadWorkouts('all'); }, 250);
           }
         }
@@ -5015,6 +5028,9 @@
         console.log('[AI Recommendation] 워크아웃 선택:', { index: index, workoutType: workoutType, segmentsJson: segmentsJson });
         
         try {
+          // 🔒 워크아웃 목록 재로딩 방지 플래그 설정
+          window.__aiWorkoutSelectionInProgress = true;
+          
           // 세그먼트 파싱
           var segments = typeof segmentsJson === 'string' ? JSON.parse(segmentsJson.replace(/&quot;/g, '"')) : segmentsJson;
           
@@ -5046,7 +5062,7 @@
           // 워크아웃 선택 및 훈련 준비 화면으로 이동
           window.currentWorkout = workout;
           
-          // 훈련 준비 화면으로 이동
+          // 훈련 준비 화면으로 이동 (워크아웃 화면을 거치지 않음)
           if (typeof showScreen === 'function') {
             showScreen('trainingReadyScreen');
           }
@@ -5132,9 +5148,16 @@
             if (typeof showToast === 'function') {
               showToast('AI 추천 워크아웃이 선택되었습니다.', 'success');
             }
+            
+            // 🔒 워크아웃 목록 재로딩 방지 플래그 해제 (약간의 지연 후)
+            setTimeout(function() {
+              window.__aiWorkoutSelectionInProgress = false;
+            }, 1000);
           }, 300);
         } catch (error) {
           console.error('[AI Recommendation] 워크아웃 선택 오류:', error);
+          // 오류 발생 시에도 플래그 해제
+          window.__aiWorkoutSelectionInProgress = false;
           if (typeof showToast === 'function') {
             showToast('워크아웃 선택 중 오류가 발생했습니다.', 'error');
           }
@@ -5168,6 +5191,15 @@
         if (modal) {
           modal.style.display = 'none';
         }
+        // 🔒 모달 닫을 때 플래그 해제 (워크아웃 선택하지 않고 닫은 경우)
+        // 워크아웃 선택 시에는 selectAIRecommendedWorkout에서 플래그를 관리하므로
+        // 여기서는 선택하지 않고 닫은 경우에만 해제
+        setTimeout(function() {
+          // 워크아웃이 선택되지 않았고 플래그가 아직 설정되어 있으면 해제
+          if (window.__aiWorkoutSelectionInProgress && !window.currentWorkout) {
+            window.__aiWorkoutSelectionInProgress = false;
+          }
+        }, 500);
       }
       window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
     })();
