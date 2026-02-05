@@ -976,10 +976,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 .basecamp-btn-career-logo img {
-  width: 70% !important;
+  width: 105% !important;
   height: auto !important;
   object-fit: contain !important;
-  max-height: 60px !important;
+  max-height: 90px !important;
 }
 
 .basecamp-btn-career-logo span {
