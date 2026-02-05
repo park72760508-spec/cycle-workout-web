@@ -10436,8 +10436,59 @@ Output Format (JSON Only):
           }
           
           // PC/모바일 모두 30일치 전송 (통일). 동일 입력·동일 점수 위해 날짜 오름차순으로 고정
-          var logsToSend = logs.slice().sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+          // 🔒 30일 전 날짜 계산 (AI 분석용)
+          var todayForAI = new Date();
+          todayForAI.setHours(0, 0, 0, 0);
+          var thirtyDaysAgoForAI = new Date(todayForAI);
+          thirtyDaysAgoForAI.setDate(todayForAI.getDate() - 30);
+          var thirtyDaysAgoStrForAI = thirtyDaysAgoForAI.getFullYear() + '-' + 
+            String(thirtyDaysAgoForAI.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(thirtyDaysAgoForAI.getDate()).padStart(2, '0');
+          var todayStrForAI = todayForAI.getFullYear() + '-' + 
+            String(todayForAI.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(todayForAI.getDate()).padStart(2, '0');
+          
+          // 🔒 날짜 파싱 헬퍼 함수 (loadRecentLogs와 동일)
+          function parseDateForAI(date) {
+            if (!date) return null;
+            var d = null;
+            if (date.toDate && typeof date.toDate === 'function') {
+              d = date.toDate();
+            } else if (date instanceof Date) {
+              d = date;
+            } else if (typeof date === 'string') {
+              var dateStr = date.split('T')[0];
+              if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                d = new Date(dateStr + 'T00:00:00');
+              } else {
+                d = new Date(date);
+              }
+            } else {
+              return null;
+            }
+            if (!d || isNaN(d.getTime())) return null;
+            var year = d.getFullYear();
+            var month = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return year + '-' + month + '-' + day;
+          }
+          
+          // 🔒 30일치만 필터링 (날짜 오름차순 정렬)
+          var logsToSend = logs.filter(function(log) {
+            var dateStr = parseDateForAI(log.date);
+            if (!dateStr) return false;
+            return dateStr >= thirtyDaysAgoStrForAI && dateStr <= todayStrForAI;
+          }).sort(function(a, b) { 
+            return (parseDateForAI(a.date) || '').localeCompare(parseDateForAI(b.date) || ''); 
+          });
           var logScope = '30d';
+          
+          console.log('[AI] 30일치 필터링 완료:', {
+            totalLogs: logs.length,
+            filteredLogs: logsToSend.length,
+            dateRange: thirtyDaysAgoStrForAI + ' ~ ' + todayStrForAI,
+            sampleDates: logsToSend.slice(0, 5).map(function(l) { return parseDateForAI(l.date); })
+          });
           
           // [Mobile Bulletproof] 1. API 키 체크 (localStorage 접근 실패 대비)
           var apiKey = null;
