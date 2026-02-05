@@ -378,17 +378,35 @@ async function fetchAndProcessStravaData(options = {}) {
       };
     }
 
-    // 기존 활동 ID 목록 조회
-    console.log('[fetchAndProcessStravaData] 기존 활동 ID 조회 시작...');
-    const existingIds = await (typeof window.getExistingStravaActivityIds === 'function' 
-      ? window.getExistingStravaActivityIds() 
-      : Promise.resolve(new Set()));
-    console.log(`[fetchAndProcessStravaData] 기존 활동 ID ${existingIds.size}개 발견`);
-
     // 각 사용자별로 처리
     for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
       const userId = userDoc.id;
+      
+      // 각 사용자별로 기존 활동 ID 목록 조회 (권한 오류 방지)
+      let existingIds = new Set();
+      try {
+        if (typeof window.getExistingStravaActivityIds === 'function') {
+          // 현재 사용자의 로그만 조회하도록 수정된 함수 사용
+          const userLogsRef = window.firestore?.collection('users').doc(userId).collection('logs');
+          if (userLogsRef) {
+            const logsSnapshot = await userLogsRef
+              .where('source', '==', 'strava')
+              .get();
+            logsSnapshot.docs.forEach(doc => {
+              const data = doc.data();
+              if (data.activity_id) {
+                existingIds.add(String(data.activity_id));
+              }
+            });
+            console.log(`[fetchAndProcessStravaData] 사용자 ${userId}의 기존 활동 ID ${existingIds.size}개 발견`);
+          }
+        }
+      } catch (existingIdsError) {
+        console.warn(`[fetchAndProcessStravaData] 사용자 ${userId}의 기존 활동 ID 조회 실패:`, existingIdsError);
+        // 조회 실패해도 계속 진행 (빈 Set 사용)
+        existingIds = new Set();
+      }
       const refreshToken = userData.strava_refresh_token;
       const ftp = Number(userData.ftp) || 0;
       const createdAt = userData.created_at || '';
