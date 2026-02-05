@@ -1416,7 +1416,7 @@ async function apiDeleteUser(id) {
       return { success: false, error: '사용자 ID가 필요합니다.' };
     }
     
-    // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+    // 1. Firestore에서 사용자 문서 삭제
     if (window.firestoreV9) {
       const { deleteDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
       const usersRef = collection(window.firestoreV9, 'users');
@@ -1429,6 +1429,62 @@ async function apiDeleteUser(id) {
       await getUsersCollection().doc(id).delete();
       
       console.log('✅ 사용자 삭제 완료 (firestore v8):', id);
+    }
+    
+    // 2. Firebase Authentication에서 사용자 삭제
+    try {
+      // 현재 로그인한 사용자가 본인을 삭제하는 경우
+      const currentAuthUser = window.auth?.currentUser;
+      const currentAuthV9User = window.authV9?.currentUser;
+      const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) || 
+                           (currentAuthV9User && currentAuthV9User.uid === id);
+      
+      if (isOwnAccount) {
+        // 본인 계정 삭제: auth.currentUser.delete() 또는 authV9.deleteUser() 사용
+        if (currentAuthUser && currentAuthUser.uid === id) {
+          await currentAuthUser.delete();
+          console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v8):', id);
+        }
+        
+        // authV9도 확인하여 삭제
+        if (currentAuthV9User && currentAuthV9User.uid === id && window.authV9) {
+          try {
+            const { deleteUser: deleteUserV9 } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+            await deleteUserV9(currentAuthV9User);
+            console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v9):', id);
+          } catch (v9Error) {
+            console.warn('⚠️ Firebase Authentication v9 삭제 실패 (무시):', v9Error);
+            // v8에서 이미 삭제했으므로 계속 진행
+          }
+        }
+      } else {
+        // 다른 사용자 삭제: Admin SDK가 필요하지만 클라이언트에서는 불가능
+        // 대신 Cloud Function을 호출하거나, 관리자가 삭제하는 경우에만 처리
+        // 여기서는 Firestore 삭제만 수행하고, Authentication 삭제는 백엔드에서 처리하도록 함
+        console.warn('⚠️ 다른 사용자 삭제: Firebase Authentication 삭제는 백엔드에서 처리해야 합니다:', id);
+        
+        // 관리자 권한이 있는 경우에만 시도 (하지만 클라이언트에서는 불가능)
+        // Cloud Function 호출이 필요함
+        if (typeof window.deleteAuthUser === 'function') {
+          try {
+            await window.deleteAuthUser(id);
+            console.log('✅ Firebase Authentication에서 사용자 삭제 완료 (Cloud Function):', id);
+          } catch (authError) {
+            console.warn('⚠️ Firebase Authentication 삭제 실패 (Cloud Function):', authError);
+            // Firestore 삭제는 성공했으므로 계속 진행
+          }
+        }
+      }
+    } catch (authError) {
+      console.error('❌ Firebase Authentication 삭제 실패:', authError);
+      // Firestore 삭제는 성공했으므로 경고만 표시하고 계속 진행
+      // 재가입 시 문제가 발생할 수 있으므로 사용자에게 알림
+      if (authError.code === 'auth/requires-recent-login') {
+        return { 
+          success: false, 
+          error: '보안을 위해 최근에 로그인한 후 다시 시도해주세요.' 
+        };
+      }
     }
     
     return { success: true };
@@ -1804,10 +1860,11 @@ async function loadUsers() {
       if (viewerGrade === '1') {
         // 관리자: 모든 사용자 삭제 가능
         return true;
-      } else {
-        // 일반 사용자(grade=2,3): 삭제 권한 없음
-        return false;
+      } else if (viewerGrade === '2' || viewerGrade === '3') {
+        // 일반 사용자: 본인 계정만 삭제 가능
+        return viewerId && String(u.id) === viewerId;
       }
+      return false;
     };
 
     userList.innerHTML = visibleUsers.map(user => {
@@ -2836,6 +2893,7 @@ async function deleteUser(userId) {
   try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(_) {}
   
   const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+  const viewerId = mergedViewer?.id || mergedViewer?.uid || null;
   const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
   const viewerGrade = isTempAdmin
     ? '1'
@@ -2843,21 +2901,55 @@ async function deleteUser(userId) {
         ? String(getViewerGrade())
         : String(mergedViewer?.grade ?? '2'));
   
-  // 관리자(grade=1)만 삭제 가능
-  if (viewerGrade !== '1') {
-    showToast('삭제 권한이 없습니다. 관리자만 사용자를 삭제할 수 있습니다.', 'warning');
+  // 권한 체크: 관리자 또는 본인 계정만 삭제 가능
+  const isAdmin = viewerGrade === '1';
+  const isOwnAccount = viewerId && String(userId) === String(viewerId);
+  
+  if (!isAdmin && !isOwnAccount) {
+    showToast('삭제 권한이 없습니다. 본인 계정만 삭제할 수 있습니다.', 'warning');
     return;
   }
   
-  if (!confirm('정말로 이 사용자를 삭제하시겠습니까?\n삭제된 사용자의 훈련 기록도 함께 삭제됩니다.')) {
+  // 본인 계정 삭제 시 경고 메시지
+  const confirmMessage = isOwnAccount
+    ? '정말로 본인 계정을 삭제하시겠습니까?\n삭제된 계정의 훈련 기록도 함께 삭제되며, 재가입 시에도 기존 계정으로 인식될 수 있습니다.\n계정을 삭제하면 로그아웃됩니다.'
+    : '정말로 이 사용자를 삭제하시겠습니까?\n삭제된 사용자의 훈련 기록도 함께 삭제됩니다.';
+  
+  if (!confirm(confirmMessage)) {
     return;
   }
 
   try {
+    // 본인 계정 삭제 시 최근 로그인 확인
+    if (isOwnAccount && window.auth?.currentUser) {
+      try {
+        // 최근 로그인 확인을 위해 토큰 갱신 시도
+        await window.auth.currentUser.getIdToken(true);
+      } catch (tokenError) {
+        console.warn('토큰 갱신 실패:', tokenError);
+        // 계속 진행 (일부 경우에는 문제없이 삭제 가능)
+      }
+    }
+    
     const result = await apiDeleteUser(userId);
     
     if (result.success) {
       showToast('사용자가 삭제되었습니다.');
+      
+      // 본인 계정 삭제 시 로그아웃 처리
+      if (isOwnAccount) {
+        // 로그아웃 처리
+        if (typeof window.handleLogout === 'function') {
+          await window.handleLogout();
+        } else if (window.auth) {
+          await window.auth.signOut();
+        }
+        // 프로필 선택 화면으로 이동
+        if (typeof showScreen === 'function') {
+          showScreen('profileScreen');
+        }
+      }
+      
       loadUsers();
     } else {
       showToast('사용자 삭제 실패: ' + result.error);
@@ -2865,7 +2957,13 @@ async function deleteUser(userId) {
     
   } catch (error) {
     console.error('사용자 삭제 실패:', error);
-    showToast('사용자 삭제 중 오류가 발생했습니다.');
+    
+    // 최근 로그인 필요 오류 처리
+    if (error.code === 'auth/requires-recent-login') {
+      showToast('보안을 위해 최근에 로그인한 후 다시 시도해주세요.', 'warning');
+    } else {
+      showToast('사용자 삭제 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
+    }
   }
 }
 
