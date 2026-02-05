@@ -5143,6 +5143,29 @@
               if (seg.target_type === 'ftp_pct' && seg.target_value) {
                 totalIntensity += Number(seg.target_value) || 0;
                 intensityCount++;
+              } else if (seg.target_type === 'ftp_pctz' && seg.target_value) {
+                // ftp_pctz 타입: "60/75" 형식에서 평균값 사용
+                var targetValue = String(seg.target_value);
+                if (targetValue.includes('/')) {
+                  var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                  var avg = parts.length > 0 ? parts.reduce(function(sum, p) { return sum + p; }, 0) / parts.length : 0;
+                  totalIntensity += avg;
+                  intensityCount++;
+                } else {
+                  totalIntensity += Number(seg.target_value) || 0;
+                  intensityCount++;
+                }
+              } else if (seg.target_type === 'dual' && seg.target_value) {
+                // dual 타입: "100/120" 형식에서 첫 번째 값(FTP%) 사용
+                var targetValue = String(seg.target_value);
+                if (targetValue.includes('/')) {
+                  var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                  totalIntensity += parts[0] || 0;
+                  intensityCount++;
+                } else {
+                  totalIntensity += Number(seg.target_value) || 0;
+                  intensityCount++;
+                }
               }
             });
             var avgIntensity = intensityCount > 0 ? Math.round(totalIntensity / intensityCount) : 0;
@@ -5151,8 +5174,84 @@
               previewIntensity.textContent = avgIntensity + '%';
             }
             
-            // 예상 TSS 계산 및 표시
-            var expectedTSS = Math.round((totalMinutes / 60) * avgIntensity * 0.01);
+            // 예상 TSS 계산 및 표시 (estimateWorkoutTSS 함수 사용)
+            var expectedTSS = 0;
+            if (typeof window.estimateWorkoutTSS === 'function') {
+              expectedTSS = window.estimateWorkoutTSS(workout);
+              console.log('[AI Recommendation] 예상 TSS 계산 (estimateWorkoutTSS):', {
+                totalSeconds: totalSeconds,
+                totalMinutes: totalMinutes,
+                segments: segments.length,
+                expectedTSS: expectedTSS,
+                workout: workout
+              });
+            } else {
+              // 폴백: TSS 계산 (각 세그먼트의 TSS 합산)
+              // estimateWorkoutTSS와 동일한 로직 사용
+              var T = 0;
+              var sumI4t = 0; // I^4 * t의 합
+              
+              // getSegmentFtpPercentForPreview 함수 사용 (있는 경우)
+              var getFtpPercent = function(seg) {
+                if (typeof window.getSegmentFtpPercentForPreview === 'function') {
+                  return window.getSegmentFtpPercentForPreview(seg);
+                }
+                // 수동 추출
+                if (seg.target_type === 'ftp_pct' && seg.target_value) {
+                  return Number(seg.target_value) || 0;
+                } else if (seg.target_type === 'ftp_pctz' && seg.target_value) {
+                  var targetValue = String(seg.target_value);
+                  if (targetValue.includes('/')) {
+                    var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                    return parts.length > 0 ? parts.reduce(function(sum, p) { return sum + p; }, 0) / parts.length : 0;
+                  }
+                  return Number(seg.target_value) || 0;
+                } else if (seg.target_type === 'dual' && seg.target_value) {
+                  var targetValue = String(seg.target_value);
+                  if (targetValue.includes('/')) {
+                    var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                    return parts[0] || 0;
+                  }
+                  return Number(seg.target_value) || 0;
+                }
+                return 0;
+              };
+              
+              segments.forEach(function(seg) {
+                var t = Number(seg.duration_sec) || 0;
+                if (t <= 0) return;
+                
+                var ftpPercent = getFtpPercent(seg);
+                if (ftpPercent > 0) {
+                  var I1 = ftpPercent / 100; // Intensity Factor
+                  // Ramp 처리
+                  if (seg.ramp && seg.ramp_to_value != null) {
+                    var I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
+                    sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
+                  } else {
+                    sumI4t += Math.pow(I1, 4) * t;
+                  }
+                  T += t;
+                }
+              });
+              
+              if (T > 0) {
+                // IF = (sum(I^4 * t) / T)^0.25
+                var IF = Math.pow(sumI4t / T, 0.25);
+                // TSS = (T / 3600) × (IF^2) × 100
+                expectedTSS = Math.round((T / 3600) * (IF * IF) * 100);
+              }
+              
+              console.log('[AI Recommendation] 예상 TSS 계산 (폴백):', {
+                totalSeconds: totalSeconds,
+                totalMinutes: totalMinutes,
+                segments: segments.length,
+                sumI4t: sumI4t,
+                totalDuration: T,
+                expectedTSS: expectedTSS
+              });
+            }
+            
             var previewExpectedIntensity = document.getElementById('previewExpectedIntensity');
             if (previewExpectedIntensity) {
               previewExpectedIntensity.textContent = expectedTSS;
