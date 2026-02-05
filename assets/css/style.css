@@ -193,6 +193,10 @@
 }
 html, body { 
   height: 100%; 
+  /* Pull-to-refresh 방지 (모든 화면, 스크롤은 유지) */
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 body {
   font-family: "Pretendard", "Noto Sans KR", sans-serif;
@@ -220,6 +224,10 @@ h1,h2,h3,h4 { font-weight: 600; }
   min-height: 100vh;
   padding: 20px;
   transition: opacity 0.3s ease;
+  /* Pull-to-refresh 방지 (모든 화면, 스크롤은 유지) */
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .screen.active { display: block; }
 
@@ -957,17 +965,32 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 .basecamp-btn-career-logo {
-  background-image: url('https://stelvio.ai.kr/assets/img/STELVIO AI.png') !important;
+  background-image: none !important;
   background-color: transparent !important;
-  background-size: cover !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 12px !important;
+}
+
+.basecamp-btn-career-logo img {
+  width: 70% !important;
+  height: auto !important;
+  object-fit: contain !important;
+  max-height: 60px !important;
 }
 
 .basecamp-btn-career-logo span {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  font-size: 12px !important;
+  color: #374151 !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
@@ -2153,6 +2176,10 @@ button[aria-disabled="true"] {
   justify-content: center;
   z-index: 100000 !important; /* 워크아웃 선택 모달(z-index: 99999)보다 위에 표시 */
   animation: fadeIn 0.3s ease;
+  /* Pull-to-refresh 방지 (오버레이, 스크롤은 유지) */
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 워크아웃 비밀번호 모달이 워크아웃 선택 모달 위에 표시되도록 */
@@ -5146,6 +5173,10 @@ button[aria-disabled="true"] {
   align-items: center;
   justify-content: center;
   z-index: 99999;
+  /* Pull-to-refresh 방지 (모달, 스크롤은 유지) */
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal.hidden {
@@ -5161,6 +5192,10 @@ button[aria-disabled="true"] {
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
   z-index: 100000;
+  /* Pull-to-refresh 방지 (모달 콘텐츠, 스크롤은 유지) */
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-header {
@@ -11776,6 +11811,10 @@ button[aria-disabled="true"] {
   justify-content: center;
   z-index: 10000;
   backdrop-filter: blur(4px);
+  /* Pull-to-refresh 방지 (오버레이, 스크롤은 유지) */
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 #rpeConditionModal .modal-content,
