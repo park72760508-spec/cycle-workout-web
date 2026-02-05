@@ -5791,6 +5791,8 @@ window.renderSegmentedWorkoutGraph = renderSegmentedWorkoutGraph;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
+window.estimateWorkoutTSS = estimateWorkoutTSS;
+window.getSegmentFtpPercentForPreview = getSegmentFtpPercentForPreview;
 
 // ==========================================================
 // 전역 함수로 내보내기
