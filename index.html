@@ -9467,7 +9467,38 @@ Output Format (JSON Only):
                 cornerRadius: 8,
                 padding: 12,
                 titleFont: { size: 13, weight: 'bold' },
-                bodyFont: { size: 12 }
+                bodyFont: { size: 12 },
+                callbacks: {
+                  title: function(context) {
+                    if (context && context.length > 0 && context[0].label) {
+                      return context[0].label;
+                    }
+                    return '';
+                  },
+                  label: function(context) {
+                    var label = context.dataset.label || '';
+                    var value = context.parsed.y;
+                    if (value == null || isNaN(value)) {
+                      return label + ': 데이터 없음';
+                    }
+                    var formattedValue = Number(value).toFixed(1);
+                    if (label === 'Fitness') {
+                      return 'Fitness (체력): ' + formattedValue + ' · 42일 반감기로 계산된 장기 체력';
+                    } else if (label === 'Fatigue') {
+                      return 'Fatigue (피로도): ' + formattedValue + ' · 7일 반감기로 계산된 단기 피로';
+                    }
+                    return label + ': ' + formattedValue;
+                  },
+                  afterBody: function(context) {
+                    if (context && context.length > 0) {
+                      var dateLabel = context[0].label || '';
+                      if (dateLabel === '오늘') {
+                        return '※ 오늘 기준으로 계산된 값입니다';
+                      }
+                    }
+                    return '';
+                  }
+                }
               }
             },
             scales: {
