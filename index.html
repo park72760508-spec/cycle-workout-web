@@ -4940,7 +4940,7 @@
                   var totalMinutes = Math.round(totalSeconds / 60);
                   
                   workoutCardsHtml += '<div style="background: white; border: 2px solid ' + (rank === 1 ? '#3b82f6' : rank === 2 ? '#10b981' : '#f59e0b') + '; border-radius: 12px; padding: 16px; margin-bottom: 16px; cursor: pointer; transition: all 0.2s;" ' +
-                    'onclick="selectAIRecommendedWorkout(' + idx + ', \'' + workoutType.replace(/'/g, "\\'") + '\', ' + JSON.stringify(segments).replace(/"/g, '&quot;') + ')" ' +
+                    'onclick="selectAIRecommendedWorkout(' + idx + ', \'' + workoutType.replace(/'/g, "\\'") + '\', ' + JSON.stringify(segments).replace(/"/g, '&quot;') + '); window.__aiRecommendationInProgress = false;" ' +
                     'onmouseover="this.style.transform=\'translateY(-2px)\'; this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.1)\';" ' +
                     'onmouseout="this.style.transform=\'\'; this.style.boxShadow=\'\';">' +
                     '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
@@ -4953,10 +4953,6 @@
                     '<div style="font-size: 14px; color: #6b7280; margin-bottom: 12px; line-height: 1.5;">' + description + '</div>' +
                     '<div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 12px; position: relative;">' +
                     '<div id="' + graphContainerId + '" style="width: 100%; min-height: 100px;"></div>' +
-                    '</div>' +
-                    '<div style="text-align: center;">' +
-                    '<button style="width: 100%; padding: 10px; background: ' + (rank === 1 ? '#3b82f6' : rank === 2 ? '#10b981' : '#f59e0b') + '; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s;" ' +
-                    'onclick="event.stopPropagation(); selectAIRecommendedWorkout(' + idx + ', \'' + workoutType.replace(/'/g, "\\'") + '\', ' + JSON.stringify(segments).replace(/"/g, '&quot;') + ');">이 워크아웃 선택</button>' +
                     '</div>' +
                     '</div>';
                 });
@@ -5013,6 +5009,9 @@
                     }
                   });
                 }, 200);
+                
+                // 🔒 AI 추천 성공 시 플래그 해제 (재실행 가능하도록)
+                window.__aiRecommendationInProgress = false;
               }
             } else {
               throw new Error('AI 분석 결과에 추천 워크아웃이 없습니다.');
@@ -5025,11 +5024,8 @@
           // 🔒 오류 발생 시 플래그 해제
           window.__aiRecommendationInProgress = false;
           if (content) {
-            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #374151;">AI 분석 실패</div><div style="font-size: 14px; color: #6b7280;">' + (error.message || '알 수 없는 오류가 발생했습니다.') + '<br>잠시 후 다시 시도해주세요.</div></div>';
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="font-size: 48px; margin-bottom: 16px;">⚠️</div><div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #374151;">AI 분석 실패</div><div style="font-size: 14px; color: #6b7280;">' + (error.message || '알 수 없는 오류가 발생했습니다.') + '<br>잠시 후 다시 시도해주세요.</div><div style="margin-top: 20px;"><button onclick="closeWorkoutRecommendationModal(); window.__aiRecommendationInProgress = false;" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">닫기</button></div></div>';
           }
-        } finally {
-          // 🔒 완료 시 플래그 해제 (성공/실패 모두)
-          window.__aiRecommendationInProgress = false;
         }
       }
       
@@ -5040,6 +5036,8 @@
         try {
           // 🔒 워크아웃 목록 재로딩 방지 플래그 설정
           window.__aiWorkoutSelectionInProgress = true;
+          // 🔒 AI 추천 재실행 플래그 해제 (워크아웃 선택 시)
+          window.__aiRecommendationInProgress = false;
           
           // 세그먼트 파싱
           var segments = typeof segmentsJson === 'string' ? JSON.parse(segmentsJson.replace(/&quot;/g, '"')) : segmentsJson;
@@ -5201,16 +5199,10 @@
         if (modal) {
           modal.style.display = 'none';
         }
-        // 🔒 모달 닫을 때 플래그 즉시 해제 (다시 클릭 가능하도록)
-        // 워크아웃 선택 시에는 selectAIRecommendedWorkout에서 플래그를 관리하므로
-        // 여기서는 선택하지 않고 닫은 경우에만 해제
-        setTimeout(function() {
-          // 워크아웃이 선택되지 않았고 플래그가 아직 설정되어 있으면 해제
-          if (window.__aiWorkoutSelectionInProgress && !window.currentWorkout) {
-            window.__aiWorkoutSelectionInProgress = false;
-            console.log('[AI Recommendation] 모달 닫기 - 플래그 해제 완료');
-          }
-        }, 100);
+        // 🔒 모달 닫을 때 모든 플래그 즉시 해제 (재실행 가능하도록)
+        window.__aiRecommendationInProgress = false;
+        window.__aiWorkoutSelectionInProgress = false;
+        console.log('[AI Recommendation] 모달 닫기 - 모든 플래그 해제 완료');
       }
       window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
     })();
