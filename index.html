@@ -10018,14 +10018,41 @@ Context: 사용자의 프로필({{userProfile}})과 최근 30일간의 훈련 �
 - recentLogs: Firestore users/{userId}/logs 서브컬렉션 (최근 30일, source='strava' 또는 source 없음)
   * 로그 필드: activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source 등
   * 최대 30개, 날짜 오름차순 정렬
+
+[워크아웃 존(Zone) 설명]
+- Z1 (Active Recovery): FTP의 50% 이하, 회복 및 활성 회복용
+- Z2 (Endurance): FTP의 56-75%, 기초 체력 및 지구력 향상
+- Z3 (Tempo): FTP의 76-90%, 유산소 능력 향상
+- Z4 (Threshold): FTP의 91-105%, 라크테이트 임계값 훈련
+- Z5 (VO2max): FTP의 106% 이상, 최대 산소 섭취량 향상
+
 Task Requirements:
 1. **Condition Score (0~100):** TSB·최근 운동 강도 기반. **반드시 5 단위로만 부여** (60, 65, 70, 75, 80, 85, 90 등). 동일한 로그·프로필이면 **항상 동일한 점수**가 나와야 하며, PC/모바일 차이는 없어야 합니다.
-2. **Training Status:** 현재 상태를 한 단어로 정의 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
+
+2. **Training Status:** 현재 상태를 한 단어로 정의 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking", "Overreaching").
+
 3. **Coach Comment:** 사용자 이름({{userName}})을 부르며, 최근 훈련 성과(FTP, TSS 등)를 언급한 한국어(경어체) 조언 한 문장.
+
 4. **VO2max Estimate:** 파워 기반 추정 VO2max 정수.
-5. **Recommended Workouts:** 오늘 추천 훈련을 **3개** 추천 (1순위, 2순위, 3순위). 각 워크아웃은 다음 형식을 따라야 합니다:
+
+5. **Recommended Workouts (중요):** 오늘 추천 훈련을 **3개** 추천 (1순위, 2순위, 3순위). 
+   **워크아웃 추천 원칙:**
+   - **Training Status와 Condition Score를 기반으로 적절한 워크아웃 카테고리를 선정**해야 합니다.
+   - **같은 카테고리 내에서 다양성을 제공하거나, 연속적인 강도 구간을 추천**해야 합니다.
+   - **상반된 워크아웃(예: Z1과 Z5를 동시에 추천)은 피해야 합니다.**
+   
+   **추천 가이드라인:**
+   - "Recovery Needed" 또는 Condition Score < 60: Z1 위주 (Z1, Z1, Z2 또는 Z1, Z2, Z2)
+   - "Building Base" 또는 Condition Score 60-75: Z2-Z3 위주 (Z2, Z2, Z3 또는 Z2, Z3, Z3)
+   - "Ready to Race" 또는 Condition Score 75-85: Z3-Z4 위주 (Z3, Z3, Z4 또는 Z3, Z4, Z4)
+   - "Peaking" 또는 Condition Score > 85: Z4-Z5 위주 (Z4, Z4, Z5 또는 Z4, Z5, Z5)
+   - "Overreaching": 반드시 Z1 위주 (Z1, Z1, Z1 또는 Z1, Z1, Z2)
+   
+   **각 워크아웃 형식:**
    - 허용값: "Active Recovery (Z1)" | "Endurance (Z2)" | "Tempo (Z3)" | "Threshold Intervals (Z4)" | "VO2max Intervals (Z5)"
    - 각 워크아웃에 대한 간략한 설명 (30자 이내, 한국어)
+   - 설명에는 해당 워크아웃이 왜 추천되는지 명확히 기술 (예: "최근 고강도 훈련 후 회복을 위한 가벼운 라이딩")
+
 Output Format (JSON Only):
 { 
   "condition_score": 85, 
@@ -10035,18 +10062,18 @@ Output Format (JSON Only):
   "recommended_workouts": [
     {
       "rank": 1,
-      "workout_type": "Active Recovery (Z1)",
-      "description": "가벼운 회복 훈련으로 근육 회복과 컨디션 조절"
+      "workout_type": "Tempo (Z3)",
+      "description": "현재 컨디션에 최적화된 유산소 능력 향상 훈련"
     },
     {
       "rank": 2,
-      "workout_type": "Endurance (Z2)",
-      "description": "기초 체력 향상을 위한 저강도 지구력 훈련"
+      "workout_type": "Threshold Intervals (Z4)",
+      "description": "레이스 준비를 위한 라크테이트 임계값 훈련"
     },
     {
       "rank": 3,
       "workout_type": "Tempo (Z3)",
-      "description": "유산소 능력 향상을 위한 중강도 훈련"
+      "description": "지속 가능한 강도로 유산소 능력 강화"
     }
   ]
 }`;
