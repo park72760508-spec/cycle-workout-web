@@ -2536,7 +2536,31 @@ async function apiGetWorkouts(forceRefresh = false) {
     if (result && result.success) {
       const workouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
       if (Array.isArray(workouts) && workouts.length > 0) {
-        setWorkoutCache(workouts);
+        // 기존 캐시에서 세그먼트가 있는 워크아웃은 세그먼트 유지
+        try {
+          const existingCache = getWorkoutCache();
+          if (existingCache && existingCache.workouts && Array.isArray(existingCache.workouts)) {
+            // 기존 캐시의 세그먼트를 새 워크아웃에 병합
+            const workoutsWithSegments = workouts.map(workout => {
+              const cachedWorkout = existingCache.workouts.find(w => String(w.id) === String(workout.id));
+              if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
+                return {
+                  ...workout,
+                  segments: cachedWorkout.segments  // 기존 캐시된 세그먼트 유지
+                };
+              }
+              return workout;  // 세그먼트 없이 저장 (나중에 로드 시 추가됨)
+            });
+            setWorkoutCache(workoutsWithSegments);
+            console.log('[Workout Cache] 워크아웃 목록 캐시 저장 완료 (기존 세그먼트 유지)');
+          } else {
+            setWorkoutCache(workouts);
+            console.log('[Workout Cache] 워크아웃 목록 캐시 저장 완료');
+          }
+        } catch (mergeError) {
+          console.warn('[Workout Cache] 세그먼트 병합 실패, 기본 저장:', mergeError);
+          setWorkoutCache(workouts);
+        }
       }
     }
     
@@ -2576,23 +2600,86 @@ async function apiGetWorkout(id) {
 /**
  * WorkoutSegments 시트에서 workout id로 세그먼트 목록 조회
  */
-async function apiGetWorkoutSegments(workoutId) {
-  if (!workoutId || !window.GAS_URL) return [];
+async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
+  if (!workoutId) return [];
+  
+  // 캐시에서 세그먼트 확인 (워크아웃 캐시에 세그먼트가 포함되어 있을 수 있음)
+  if (!forceRefresh) {
+    try {
+      const cache = getWorkoutCache();
+      if (cache && cache.workouts && Array.isArray(cache.workouts)) {
+        const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workoutId));
+        if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
+          console.log('[Segment Cache] 캐시에서 세그먼트 로드:', workoutId, cachedWorkout.segments.length, '개');
+          return cachedWorkout.segments;
+        }
+      }
+    } catch (cacheError) {
+      console.warn('[Segment Cache] 캐시 확인 실패:', cacheError);
+    }
+  }
+  
+  // 캐시에 없거나 강제 새로고침인 경우 서버에서 가져오기
+  if (!window.GAS_URL) {
+    console.warn('[Segment Cache] GAS_URL이 없어 세그먼트를 가져올 수 없습니다.');
+    return [];
+  }
+  
   const doFetch = async () => {
     const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
     if (!result || !result.success) return [];
     const segs = result.segments || result.items || (Array.isArray(result) ? result : []);
     return Array.isArray(segs) ? segs : [];
   };
+  
   try {
     let segs = await doFetch();
     if (segs.length === 0 && /android/i.test(navigator.userAgent)) {
       await new Promise(r => setTimeout(r, 150));
       segs = await doFetch();
     }
+    
+    // 세그먼트를 가져온 후 워크아웃 캐시에 업데이트
+    if (segs.length > 0) {
+      try {
+        const cache = getWorkoutCache();
+        if (cache && cache.workouts && Array.isArray(cache.workouts)) {
+          const workoutIndex = cache.workouts.findIndex(w => String(w.id) === String(workoutId));
+          if (workoutIndex !== -1) {
+            // 캐시된 워크아웃에 세그먼트 추가
+            cache.workouts[workoutIndex] = {
+              ...cache.workouts[workoutIndex],
+              segments: segs
+            };
+            setWorkoutCache(cache.workouts);
+            console.log('[Segment Cache] 세그먼트 캐시 업데이트:', workoutId, segs.length, '개');
+          }
+        }
+      } catch (updateError) {
+        console.warn('[Segment Cache] 캐시 업데이트 실패:', updateError);
+      }
+    }
+    
     return segs;
   } catch (error) {
     console.warn('apiGetWorkoutSegments 실패:', workoutId, error);
+    
+    // 오류 발생 시 캐시에서 다시 시도
+    if (!forceRefresh) {
+      try {
+        const cache = getWorkoutCache();
+        if (cache && cache.workouts && Array.isArray(cache.workouts)) {
+          const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workoutId));
+          if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
+            console.log('[Segment Cache] 오류 발생 - 캐시에서 세그먼트 사용:', workoutId, cachedWorkout.segments.length, '개');
+            return cachedWorkout.segments;
+          }
+        }
+      } catch (cacheError) {
+        // 캐시 확인도 실패하면 빈 배열 반환
+      }
+    }
+    
     return [];
   }
 }
@@ -2995,11 +3082,19 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     
     const result = await apiGetWorkouts(forceRefresh);
     
+    // 캐시 모드 확인 및 로그
+    const isFromCache = result && result.fromCache;
+    console.log('[loadWorkouts] 데이터 소스 확인:', {
+      fromCache: isFromCache,
+      forceRefresh: forceRefresh,
+      itemsCount: result && result.items ? result.items.length : 0
+    });
+    
     // 캐시에서 로드된 경우 로딩 표시 업데이트
-    if (result && result.fromCache && result.items) {
+    if (isFromCache && result.items) {
       const cacheCount = Array.isArray(result.items) ? result.items.length : 0;
       showLoading(cacheCount, cacheCount);
-      console.log('[loadWorkouts] 캐시에서 로드됨:', cacheCount, '개');
+      console.log('[loadWorkouts] ✅ 캐시에서 워크아웃 목록 로드됨:', cacheCount, '개');
     }
 
     if (!result || !result.success) {
@@ -3036,8 +3131,16 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     }
 
     const totalWorkouts = rawWorkouts.length;
-    showLoading(totalWorkouts, 0);
-    console.log('Raw workouts received:', totalWorkouts, '개');
+    const isFromCache = result && result.fromCache;
+    
+    // 로딩 표시: 캐시 모드인지 서버 모드인지 명확히 표시
+    if (isFromCache) {
+      console.log('[loadWorkouts] ✅ 캐시 모드: 워크아웃 목록 로드됨:', totalWorkouts, '개');
+      showLoading(totalWorkouts, totalWorkouts);  // 캐시 모드: 즉시 완료 표시
+    } else {
+      console.log('[loadWorkouts] 🌐 서버 모드: 워크아웃 목록 로드 중:', totalWorkouts, '개');
+      showLoading(totalWorkouts, 0);
+    }
     
     // 원본 데이터의 status 확인 (디버깅용)
     const rawStatusCount = {
@@ -3262,13 +3365,14 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
 
     // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
     const isAndroid = /android/i.test(navigator.userAgent);
-    const isFromCache = result && result.fromCache;
+    // result 객체가 이 스코프에서 접근 가능한지 확인 (위에서 이미 정의됨)
+    const isFromCacheForSegments = result && result.fromCache;
+    console.log('[loadWorkouts] 세그먼트 조회 모드:', {
+      isFromCache: isFromCacheForSegments,
+      filteredWorkoutsCount: filteredWorkouts.length
+    });
     
-    // 캐시에서 로드할 때는 세그먼트가 이미 포함되어 있는지 확인
-    // 캐시 모드: 세그먼트가 있으면 조회 건너뛰기, 없으면 빠르게 처리
-    // 서버 모드: 기존 배치 처리 유지
-    
-    // 세그먼트가 없는 워크아웃만 필터링 (캐시에서 세그먼트가 포함된 경우 제외)
+    // 세그먼트가 없는 워크아웃만 필터링
     let workoutsNeedingSegments = filteredWorkouts.filter(w => {
       // 세그먼트가 없거나 빈 배열인 경우만 포함
       if (!w.segments || !Array.isArray(w.segments) || w.segments.length === 0) {
@@ -3279,47 +3383,50 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     
     const totalToFetch = workoutsNeedingSegments.length;
     
-    // 캐시 모드에서 세그먼트가 필요한 워크아웃이 없으면 세그먼트 조회 건너뛰기
-    if (isFromCache && totalToFetch === 0) {
-      console.log('[loadWorkouts] 캐시에서 세그먼트 포함된 워크아웃 로드 - 세그먼트 조회 건너뛰기');
-    }
-    
-    // 배치 처리 설정
-    const SEGMENT_BATCH_SIZE = isFromCache ? 100 : 20;  // 캐시 모드: 100개씩, 서버 모드: 20개씩
-    const SEGMENT_BATCH_DELAY = isFromCache ? 0 : (isAndroid ? 250 : 100);  // 캐시 모드: 지연 없음, 서버 모드: 기존 지연
-    
-    if (totalToFetch > 0) {
+    // 캐시 모드에서 세그먼트가 필요한 워크아웃이 없으면 세그먼트 조회 완전히 건너뛰기
+    if (isFromCacheForSegments && totalToFetch === 0) {
+      console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트가 이미 포함되어 있음 - 세그먼트 조회 건너뛰기');
+    } else if (isFromCacheForSegments && totalToFetch > 0) {
+      // 캐시 모드이지만 세그먼트가 필요한 경우: 빠른 배치 처리 (100개씩, 지연 없음)
+      console.log('[loadWorkouts] ⚡ 캐시 모드: 세그먼트 빠른 로딩 시작 (', totalToFetch, '개, 배치 크기: 100개, 지연: 없음)');
       showLoading(totalToFetch, 0);
       
-      // 캐시 모드일 때는 가능한 한 빠르게 처리 (배치 크기 증가, 지연 최소화)
-      if (isFromCache) {
-        // 캐시 모드: 모든 세그먼트를 한 번에 또는 큰 배치로 처리
-        const largeBatchSize = Math.min(100, totalToFetch);  // 최대 100개씩
-        for (let i = 0; i < workoutsNeedingSegments.length; i += largeBatchSize) {
-          const batch = workoutsNeedingSegments.slice(i, i + largeBatchSize);
-          await Promise.all(batch.map(async (workout) => {
-            const segments = await apiGetWorkoutSegments(workout.id);
-            workout.segments = segments;
-          }));
-          const loadedCount = Math.min(i + batch.length, totalToFetch);
-          showLoading(totalToFetch, loadedCount);
-          // 캐시 모드에서는 지연 없음 (다음 배치가 있으면 즉시 처리)
-        }
-      } else {
-        // 서버 모드: 기존 배치 처리 유지
-        for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
-          const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
-          await Promise.all(batch.map(async (workout) => {
-            const segments = await apiGetWorkoutSegments(workout.id);
-            workout.segments = segments;
-          }));
-          const loadedCount = Math.min(i + batch.length, totalToFetch);
-          showLoading(totalToFetch, loadedCount);
-          if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length && SEGMENT_BATCH_DELAY > 0) {
-            await new Promise(r => setTimeout(r, SEGMENT_BATCH_DELAY));
-          }
+      // 캐시 모드: 모든 세그먼트를 큰 배치로 빠르게 처리 (지연 없음)
+      const largeBatchSize = 100;  // 캐시 모드에서는 100개씩
+      for (let i = 0; i < workoutsNeedingSegments.length; i += largeBatchSize) {
+        const batch = workoutsNeedingSegments.slice(i, i + largeBatchSize);
+        console.log('[loadWorkouts] 캐시 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + largeBatchSize, totalToFetch), '/', totalToFetch);
+        await Promise.all(batch.map(async (workout) => {
+          const segments = await apiGetWorkoutSegments(workout.id);
+          workout.segments = segments;
+        }));
+        const loadedCount = Math.min(i + batch.length, totalToFetch);
+        showLoading(totalToFetch, loadedCount);
+        // 캐시 모드에서는 지연 없음 (즉시 다음 배치 처리)
+      }
+      console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
+    } else if (!isFromCacheForSegments && totalToFetch > 0) {
+      // 서버 모드: 기존 배치 처리 유지 (20개씩, 지연 있음)
+      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치 크기: 20개, 지연: ', (isAndroid ? 250 : 100), 'ms)');
+      showLoading(totalToFetch, 0);
+      
+      const SEGMENT_BATCH_SIZE = 20;  // 서버 모드: 20개씩
+      const SEGMENT_BATCH_DELAY = isAndroid ? 250 : 100;  // 서버 모드: 지연 있음
+      
+      for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
+        const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
+        console.log('[loadWorkouts] 서버 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + SEGMENT_BATCH_SIZE, totalToFetch), '/', totalToFetch);
+        await Promise.all(batch.map(async (workout) => {
+          const segments = await apiGetWorkoutSegments(workout.id);
+          workout.segments = segments;
+        }));
+        const loadedCount = Math.min(i + batch.length, totalToFetch);
+        showLoading(totalToFetch, loadedCount);
+        if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length && SEGMENT_BATCH_DELAY > 0) {
+          await new Promise(r => setTimeout(r, SEGMENT_BATCH_DELAY));
         }
       }
+      console.log('[loadWorkouts] ✅ 서버 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
     }
 
     // 전역 변수에 저장 (검색·신규 추가 시 기존 목록 유지용)
@@ -3327,25 +3434,40 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     window.workoutsFull = allWorkoutsForCount;
 
     // 세그먼트를 가져온 후 캐시 업데이트 (다음 로드 시 세그먼트 조회 건너뛰기)
-    if (isFromCache && totalToFetch > 0) {
+    // 캐시 모드든 서버 모드든 세그먼트를 가져온 경우 캐시 업데이트
+    if (totalToFetch > 0) {
       try {
-        // 세그먼트가 포함된 워크아웃으로 캐시 업데이트
         const cache = getWorkoutCache();
-        if (cache && cache.workouts) {
+        if (cache && cache.workouts && Array.isArray(cache.workouts)) {
           // 세그먼트가 추가된 워크아웃으로 캐시 업데이트
           const updatedWorkouts = cache.workouts.map(cachedWorkout => {
-            const updatedWorkout = filteredWorkouts.find(w => w.id === cachedWorkout.id);
+            const updatedWorkout = filteredWorkouts.find(w => String(w.id) === String(cachedWorkout.id));
             if (updatedWorkout && updatedWorkout.segments && Array.isArray(updatedWorkout.segments) && updatedWorkout.segments.length > 0) {
-              return updatedWorkout;  // 세그먼트가 포함된 워크아웃으로 교체
+              // 세그먼트가 포함된 워크아웃으로 교체
+              return {
+                ...updatedWorkout,
+                segments: updatedWorkout.segments  // 세그먼트 포함
+              };
+            }
+            // 세그먼트가 없는 경우 기존 워크아웃 유지 (또는 캐시된 세그먼트가 있으면 유지)
+            if (cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
+              return cachedWorkout;  // 기존 캐시된 세그먼트 유지
             }
             return cachedWorkout;  // 기존 워크아웃 유지
           });
           setWorkoutCache(updatedWorkouts);
-          console.log('[Workout Cache] 세그먼트 포함하여 캐시 업데이트 완료');
+          console.log('[Workout Cache] 세그먼트 포함하여 캐시 업데이트 완료 (', totalToFetch, '개 워크아웃의 세그먼트 추가됨)');
+        } else {
+          // 캐시가 없으면 현재 워크아웃 목록을 세그먼트 포함하여 캐시 저장
+          setWorkoutCache(filteredWorkouts);
+          console.log('[Workout Cache] 워크아웃 목록 및 세그먼트 캐시 저장 완료');
         }
       } catch (cacheUpdateError) {
         console.warn('[Workout Cache] 세그먼트 캐시 업데이트 실패:', cacheUpdateError);
       }
+    } else if (isFromCacheForSegments) {
+      // 세그먼트가 이미 모두 포함되어 있는 경우에도 캐시 확인
+      console.log('[Workout Cache] 모든 워크아웃에 세그먼트가 이미 포함되어 있음');
     }
 
     renderWorkoutTable(filteredWorkouts, {}, {}, grade);
