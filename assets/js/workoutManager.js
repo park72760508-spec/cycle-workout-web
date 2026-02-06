@@ -2411,14 +2411,151 @@ function getSegmentTypeClass(segmentType) {
 // API 함수들
 // ==========================================================
 
-async function apiGetWorkouts() {
+// 워크아웃 캐시 키
+const WORKOUT_CACHE_KEY = 'stelvio_workouts_cache';
+const WORKOUT_CACHE_TIMESTAMP_KEY = 'stelvio_workouts_cache_timestamp';
+const WORKOUT_CACHE_COUNT_KEY = 'stelvio_workouts_cache_count';
+
+/**
+ * 워크아웃 캐시에서 데이터 가져오기
+ */
+function getWorkoutCache() {
   try {
-    // 모든 워크아웃 조회 (필터링은 프론트엔드에서 처리)
-    return await jsonpRequest(window.GAS_URL, { 
+    const cached = localStorage.getItem(WORKOUT_CACHE_KEY);
+    const timestamp = localStorage.getItem(WORKOUT_CACHE_TIMESTAMP_KEY);
+    const count = parseInt(localStorage.getItem(WORKOUT_CACHE_COUNT_KEY) || '0', 10);
+    
+    if (cached && timestamp) {
+      return {
+        workouts: JSON.parse(cached),
+        timestamp: parseInt(timestamp, 10),
+        count: count
+      };
+    }
+  } catch (e) {
+    console.warn('워크아웃 캐시 읽기 실패:', e);
+  }
+  return null;
+}
+
+/**
+ * 워크아웃 캐시에 데이터 저장
+ */
+function setWorkoutCache(workouts) {
+  try {
+    const timestamp = Date.now();
+    const count = Array.isArray(workouts) ? workouts.length : 0;
+    localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(workouts));
+    localStorage.setItem(WORKOUT_CACHE_TIMESTAMP_KEY, String(timestamp));
+    localStorage.setItem(WORKOUT_CACHE_COUNT_KEY, String(count));
+    console.log('[Workout Cache] 캐시 저장 완료:', count, '개 워크아웃');
+  } catch (e) {
+    console.warn('워크아웃 캐시 저장 실패:', e);
+  }
+}
+
+/**
+ * 워크아웃 캐시 삭제
+ */
+function clearWorkoutCache() {
+  try {
+    localStorage.removeItem(WORKOUT_CACHE_KEY);
+    localStorage.removeItem(WORKOUT_CACHE_TIMESTAMP_KEY);
+    localStorage.removeItem(WORKOUT_CACHE_COUNT_KEY);
+    console.log('[Workout Cache] 캐시 삭제 완료');
+  } catch (e) {
+    console.warn('워크아웃 캐시 삭제 실패:', e);
+  }
+}
+
+async function apiGetWorkouts(forceRefresh = false) {
+  try {
+    // 강제 새로고침이 아니고 캐시가 있으면 먼저 서버의 목록 수만 확인
+    if (!forceRefresh) {
+      const cache = getWorkoutCache();
+      if (cache && cache.workouts && cache.workouts.length > 0) {
+        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개');
+        
+        // 서버에서 목록 수만 확인 (간단한 요청)
+        // 실제로는 전체 목록을 가져와서 비교하는 것이 더 정확하지만,
+        // API가 목록 수만 반환하는 기능이 없으므로 전체 목록을 가져와서 비교
+        // 다만, 캐시된 데이터를 먼저 반환하고 백그라운드에서 업데이트하는 방식 사용
+        try {
+          const serverResult = await jsonpRequest(window.GAS_URL, { 
+            action: 'listWorkouts'
+          });
+          
+          if (serverResult && serverResult.success) {
+            const serverWorkouts = serverResult.items || serverResult.data || serverResult.workouts || (Array.isArray(serverResult) ? serverResult : []);
+            const serverCount = Array.isArray(serverWorkouts) ? serverWorkouts.length : 0;
+            
+            // 서버의 목록 수가 캐시와 같으면 캐시 반환
+            if (serverCount === cache.count) {
+              console.log('[Workout Cache] 목록 수 동일 - 캐시 사용:', serverCount, '개');
+              return {
+                success: true,
+                items: cache.workouts,
+                fromCache: true
+              };
+            } else {
+              // 목록 수가 다르면 서버 데이터 사용 및 캐시 업데이트
+              console.log('[Workout Cache] 목록 수 변경 감지 - 서버 데이터 사용:', {
+                cached: cache.count,
+                server: serverCount
+              });
+              
+              // 서버 데이터 캐시에 저장
+              if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
+                setWorkoutCache(serverWorkouts);
+              }
+              
+              return {
+                success: true,
+                items: serverWorkouts,
+                fromCache: false
+              };
+            }
+          }
+        } catch (checkError) {
+          console.warn('[Workout Cache] 서버 확인 실패, 캐시 사용:', checkError);
+          // 서버 확인 실패 시 캐시 반환
+          return {
+            success: true,
+            items: cache.workouts,
+            fromCache: true
+          };
+        }
+      }
+    }
+    
+    // 캐시가 없거나 강제 새로고침인 경우 서버에서 가져오기
+    const result = await jsonpRequest(window.GAS_URL, { 
       action: 'listWorkouts'
     });
+    
+    if (result && result.success) {
+      const workouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
+      if (Array.isArray(workouts) && workouts.length > 0) {
+        setWorkoutCache(workouts);
+      }
+    }
+    
+    return result;
   } catch (error) {
     console.error('apiGetWorkouts 실패:', error);
+    
+    // 오류 발생 시 캐시가 있으면 캐시 반환
+    const cache = getWorkoutCache();
+    if (cache && cache.workouts && cache.workouts.length > 0) {
+      console.log('[Workout Cache] 오류 발생 - 캐시 사용:', cache.count, '개');
+      return {
+        success: true,
+        items: cache.workouts,
+        fromCache: true,
+        error: error.message
+      };
+    }
+    
     return { success: false, error: error.message };
   }
 }
@@ -2584,6 +2721,9 @@ async function apiCreateWorkoutWithSegments(workoutData) {
       }
       
       console.log(`모든 세그먼트 추가 완료: ${addResult.addedCount}/${segments.length}`);
+      // 워크아웃 생성 성공 시 캐시 무효화
+      clearWorkoutCache();
+      console.log('[apiCreateWorkoutWithSegments] 워크아웃 생성 완료 - 캐시 무효화');
       return {
         success: true,
         workoutId: workoutId,
@@ -2593,6 +2733,9 @@ async function apiCreateWorkoutWithSegments(workoutData) {
     }
     
     console.log('세그먼트 없는 워크아웃 생성 완료');
+    // 워크아웃 생성 성공 시 캐시 무효화
+    clearWorkoutCache();
+    console.log('[apiCreateWorkoutWithSegments] 워크아웃 생성 완료 - 캐시 무효화');
     return {
       success: true,
       workoutId: workoutId,
@@ -2783,7 +2926,13 @@ async function apiUpdateWorkout(id, workoutData) {
   };
   
   try {
-    return await jsonpRequest(window.GAS_URL, params);
+    const result = await jsonpRequest(window.GAS_URL, params);
+    // 성공 시 캐시 무효화
+    if (result && result.success) {
+      clearWorkoutCache();
+      console.log('[apiUpdateWorkout] 워크아웃 수정 완료 - 캐시 무효화');
+    }
+    return result;
   } catch (error) {
     console.error('apiUpdateWorkout 실패:', error);
     return { success: false, error: error.message };
@@ -2796,7 +2945,13 @@ async function apiDeleteWorkout(id) {
   }
   
   try {
-    return await jsonpRequest(window.GAS_URL, { action: 'deleteWorkout', id: String(id) });
+    const result = await jsonpRequest(window.GAS_URL, { action: 'deleteWorkout', id: String(id) });
+    // 성공 시 캐시 무효화
+    if (result && result.success) {
+      clearWorkoutCache();
+      console.log('[apiDeleteWorkout] 워크아웃 삭제 완료 - 캐시 무효화');
+    }
+    return result;
   } catch (error) {
     console.error('apiDeleteWorkout 실패:', error);
     return { success: false, error: error.message };
@@ -2807,7 +2962,7 @@ async function apiDeleteWorkout(id) {
 // 워크아웃 목록 및 선택 관리
 // ==========================================================
 
-async function loadWorkouts(categoryId) {
+async function loadWorkouts(categoryId, forceRefresh = false) {
   const workoutList = safeGetElement('workoutList');
   const loadingOverlay = document.getElementById('workoutLoadingOverlay');
   const loadingProgress = document.getElementById('workoutLoadingProgress');
@@ -2822,7 +2977,8 @@ async function loadWorkouts(categoryId) {
       loadingOverlay.style.display = 'flex';
     }
     if (loadingProgress) {
-      loadingProgress.textContent = (loaded || 0) + '/' + (total || 0) + ' 갱신중.....';
+      const source = forceRefresh ? '서버' : (loaded === 0 ? '캐시' : '서버');
+      loadingProgress.textContent = (loaded || 0) + '/' + (total || 0) + ' ' + (source === '캐시' ? '캐시에서 로딩중...' : '갱신중.....');
     }
   }
   function hideLoading() {
@@ -2832,9 +2988,19 @@ async function loadWorkouts(categoryId) {
   }
 
   try {
+    // apiGetWorkouts가 캐시 로직을 포함하고 있으므로, 여기서는 단순히 호출만 함
+    // forceRefresh가 false이면 캐시를 먼저 확인하고, 목록 수가 같으면 캐시 반환
+    // forceRefresh가 true이면 항상 서버에서 새로 가져옴
     showLoading(0, 0);
-
-    let result = await apiGetWorkouts();
+    
+    const result = await apiGetWorkouts(forceRefresh);
+    
+    // 캐시에서 로드된 경우 로딩 표시 업데이트
+    if (result && result.fromCache && result.items) {
+      const cacheCount = Array.isArray(result.items) ? result.items.length : 0;
+      showLoading(cacheCount, cacheCount);
+      console.log('[loadWorkouts] 캐시에서 로드됨:', cacheCount, '개');
+    }
 
     if (!result || !result.success) {
       hideLoading();
@@ -2853,9 +3019,10 @@ async function loadWorkouts(categoryId) {
     let rawWorkouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
     if (!Array.isArray(rawWorkouts)) rawWorkouts = [];
 
-    if (rawWorkouts.length <= 5 && (categoryId === 'all' || !categoryId)) {
+    // 캐시가 아닌 경우에만 재시도 로직 실행
+    if (!result.fromCache && rawWorkouts.length <= 5 && (categoryId === 'all' || !categoryId)) {
       try {
-        const retryResult = await apiGetWorkouts();
+        const retryResult = await apiGetWorkouts(forceRefresh);
         if (retryResult && retryResult.success) {
           const retryItems = retryResult.items || retryResult.data || retryResult.workouts || (Array.isArray(retryResult) ? retryResult : []);
           if (Array.isArray(retryItems) && retryItems.length > rawWorkouts.length) {
@@ -3122,7 +3289,8 @@ async function loadWorkouts(categoryId) {
     if (typeof renderWorkoutCategories === 'function') {
       renderWorkoutCategories(allWorkoutsForCount);
     }
-    window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다.`);
+    const sourceText = result.fromCache ? ' (캐시)' : '';
+    window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다${sourceText}.`);
     hideLoading();
 
   } catch (error) {
@@ -5800,6 +5968,9 @@ window.getSegmentFtpPercentForPreview = getSegmentFtpPercentForPreview;
 
 // 워크아웃 관리
 window.loadWorkouts = loadWorkouts;
+window.clearWorkoutCache = clearWorkoutCache;
+window.getWorkoutCache = getWorkoutCache;
+window.setWorkoutCache = setWorkoutCache;
 window.searchWorkouts = searchWorkouts;
 window.handleWorkoutCardClick = handleWorkoutCardClick;
 window.selectWorkout = selectWorkout;
