@@ -4933,7 +4933,15 @@
               }
               
               if (content) {
-                var coachComment = analysis.coach_comment || 'AI가 분석한 최적의 훈련을 추천합니다.';
+                // 총괄 레포트 간소화 (20자 내외)
+                var originalCoachComment = analysis.coach_comment || 'AI가 분석한 최적의 훈련을 추천합니다.';
+                var coachComment = originalCoachComment.length > 20 ? originalCoachComment.substring(0, 18) + '..' : originalCoachComment;
+                
+                // 훈련 log 반영 여부 확인
+                var logCount = cleanLogs.length;
+                var logInfo = logCount > 0 ? ' (로그 ' + logCount + '개 반영)' : ' (로그 없음)';
+                coachComment = coachComment + logInfo;
+                
                 var conditionScore = analysis.condition_score || 50;
                 var trainingStatus = analysis.training_status || 'Building Base';
                 var recommendedWorkouts = analysis.recommended_workouts || [];
@@ -4941,7 +4949,7 @@
                 // 기존 단일 추천이 있으면 배열로 변환
                 if (recommendedWorkouts.length === 0 && analysis.recommended_workout) {
                   recommendedWorkouts = [
-                    { rank: 1, workout_type: analysis.recommended_workout, description: 'AI가 추천한 최적의 훈련입니다.' }
+                    { rank: 1, workout_type: analysis.recommended_workout, description: 'AI 추천 훈련' }
                   ];
                 }
                 
@@ -4949,9 +4957,9 @@
                 while (recommendedWorkouts.length < 3) {
                   var defaultTypes = ['Active Recovery (Z1)', 'Endurance (Z2)', 'Tempo (Z3)'];
                   var defaultDescs = [
-                    '가벼운 회복 훈련으로 근육 회복과 컨디션 조절',
-                    '기초 체력 향상을 위한 저강도 지구력 훈련',
-                    '유산소 능력 향상을 위한 중강도 훈련'
+                    '회복 훈련',
+                    '지구력 훈련',
+                    '중강도 훈련'
                   ];
                   var idx = recommendedWorkouts.length;
                   recommendedWorkouts.push({
@@ -4968,7 +4976,9 @@
                 var workoutCardsHtml = '';
                 recommendedWorkouts.forEach(function(workout, idx) {
                   var workoutType = workout.workout_type || 'Active Recovery (Z1)';
-                  var description = workout.description || 'AI가 추천한 최적의 훈련입니다.';
+                  // 각 워크아웃 레포트 간소화 (20자 내외)
+                  var originalDescription = workout.description || workout.reason || 'AI 추천 훈련';
+                  var description = originalDescription.length > 20 ? originalDescription.substring(0, 18) + '..' : originalDescription;
                   var rank = workout.rank || (idx + 1);
                   
                   // 세그먼트 생성
@@ -10430,10 +10440,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 else if (workoutType.indexOf('(Z1)') !== -1 || workoutType.indexOf('Z1') !== -1 || workoutType.toLowerCase().indexOf('recovery') !== -1) normalizedType = allowed[0];
               }
               
+              // description 간소화 (20자 내외)
+              var originalDesc = (w.description && String(w.description).trim()) || (w.reason && String(w.reason).trim()) || 'AI 추천 훈련';
+              var shortDesc = originalDesc.length > 20 ? originalDesc.substring(0, 18) + '..' : originalDesc;
+              
               recommended_workouts.push({
                 rank: w.rank || (idx + 1),
                 workout_type: normalizedType,
-                description: (w.description && String(w.description).trim()) || 'AI가 추천한 최적의 훈련입니다.'
+                description: shortDesc
               });
             });
             
@@ -10445,37 +10459,37 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (trainingStatus === 'Recovery Needed' || trainingStatus === 'Overreaching' || conditionScore < 60) {
                 fallbackTypes = [allowed[0], allowed[0], allowed[1]]; // Z1, Z1, Z2
                 fallbackDescs = [
-                  '가벼운 회복 훈련으로 근육 회복과 컨디션 조절',
-                  '활성 회복을 통한 피로 회복',
-                  '기초 체력 향상을 위한 저강도 지구력 훈련'
+                  '회복 훈련',
+                  '활성 회복',
+                  '지구력 훈련'
                 ];
               } else if (trainingStatus === 'Building Base' || (conditionScore >= 60 && conditionScore < 75)) {
                 fallbackTypes = [allowed[1], allowed[1], allowed[2]]; // Z2, Z2, Z3
-                fallbackDescs = [
-                  '기초 체력 향상을 위한 저강도 지구력 훈련',
-                  '지구력 강화를 위한 중저강도 훈련',
-                  '유산소 능력 향상을 위한 중강도 훈련'
-                ];
+              fallbackDescs = [
+                '지구력 훈련',
+                '중저강도 훈련',
+                '중강도 훈련'
+              ];
               } else if (trainingStatus === 'Ready to Race' || (conditionScore >= 75 && conditionScore < 85)) {
                 fallbackTypes = [allowed[2], allowed[2], allowed[3]]; // Z3, Z3, Z4
                 fallbackDescs = [
-                  '유산소 능력 향상을 위한 중강도 훈련',
-                  '레이스 준비를 위한 지속 가능한 강도 훈련',
-                  '라크테이트 임계값 훈련으로 경쟁력 강화'
+                  '중강도 훈련',
+                  '레이스 준비 훈련',
+                  '임계값 훈련'
                 ];
               } else if (trainingStatus === 'Peaking' || conditionScore >= 85) {
                 fallbackTypes = [allowed[3], allowed[3], allowed[4]]; // Z4, Z4, Z5
                 fallbackDescs = [
-                  '라크테이트 임계값 훈련으로 경쟁력 강화',
-                  '고강도 인터벌 훈련으로 최고 성능 달성',
-                  '최대 산소 섭취량 향상을 위한 고강도 훈련'
+                  '임계값 훈련',
+                  '고강도 인터벌',
+                  '고강도 훈련'
                 ];
               } else {
                 fallbackTypes = [allowed[1], allowed[2], allowed[2]]; // 기본값
                 fallbackDescs = [
-                  '기초 체력 향상을 위한 저강도 지구력 훈련',
-                  '유산소 능력 향상을 위한 중강도 훈련',
-                  '지속 가능한 강도로 유산소 능력 강화'
+                  '지구력 훈련',
+                  '중강도 훈련',
+                  '유산소 훈련'
                 ];
               }
               
@@ -10483,7 +10497,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               recommended_workouts.push({
                 rank: idx + 1,
                 workout_type: fallbackTypes[idx] || defaultWorkout,
-                description: fallbackDescs[idx] || 'AI가 추천한 최적의 훈련입니다.'
+                description: fallbackDescs[idx] || 'AI 추천 훈련'
               });
             }
           } else {
@@ -10493,19 +10507,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             if (trainingStatus === 'Recovery Needed' || trainingStatus === 'Overreaching' || conditionScore < 60) {
               fallbackTypes = [recommended_workout, allowed[0], allowed[1]];
-              fallbackDescs = ['AI가 추천한 최적의 훈련입니다.', '가벼운 회복 훈련으로 근육 회복', '기초 체력 향상을 위한 저강도 훈련'];
+              fallbackDescs = ['AI 추천 훈련', '회복 훈련', '지구력 훈련'];
             } else if (trainingStatus === 'Building Base' || (conditionScore >= 60 && conditionScore < 75)) {
               fallbackTypes = [recommended_workout, allowed[1], allowed[2]];
-              fallbackDescs = ['AI가 추천한 최적의 훈련입니다.', '기초 체력 향상을 위한 저강도 지구력 훈련', '유산소 능력 향상을 위한 중강도 훈련'];
+              fallbackDescs = ['AI 추천 훈련', '지구력 훈련', '중강도 훈련'];
             } else if (trainingStatus === 'Ready to Race' || (conditionScore >= 75 && conditionScore < 85)) {
               fallbackTypes = [recommended_workout, allowed[2], allowed[3]];
-              fallbackDescs = ['AI가 추천한 최적의 훈련입니다.', '유산소 능력 향상을 위한 중강도 훈련', '라크테이트 임계값 훈련으로 경쟁력 강화'];
+              fallbackDescs = ['AI 추천 훈련', '중강도 훈련', '임계값 훈련'];
             } else if (trainingStatus === 'Peaking' || conditionScore >= 85) {
               fallbackTypes = [recommended_workout, allowed[3], allowed[4]];
-              fallbackDescs = ['AI가 추천한 최적의 훈련입니다.', '라크테이트 임계값 훈련으로 경쟁력 강화', '최대 산소 섭취량 향상을 위한 고강도 훈련'];
+              fallbackDescs = ['AI 추천 훈련', '임계값 훈련', '고강도 훈련'];
             } else {
               fallbackTypes = [recommended_workout, allowed[1], allowed[2]];
-              fallbackDescs = ['AI가 추천한 최적의 훈련입니다.', '기초 체력 향상을 위한 저강도 지구력 훈련', '유산소 능력 향상을 위한 중강도 훈련'];
+              fallbackDescs = ['AI 추천 훈련', '지구력 훈련', '중강도 훈련'];
             }
             
             recommended_workouts = [
@@ -10523,7 +10537,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             condition_score: condition_score,
             training_status: result.training_status || 'Building Base',
             vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
-            coach_comment: result.coach_comment || ((userProfile && userProfile.name) || '사용자') + '님, 오늘도 화이팅하세요!',
+            coach_comment: (function() {
+              var original = result.coach_comment || ((userProfile && userProfile.name) || '사용자') + '님, 오늘도 화이팅하세요!';
+              return original.length > 20 ? original.substring(0, 18) + '..' : original;
+            })(),
             recommended_workout: recommended_workout, // 하위 호환성 유지
             recommended_workouts: recommended_workouts // 새로운 3개 추천
           };
@@ -10584,21 +10601,21 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var fallbackWorkouts = [];
       if (fallbackStatus === 'Recovery Needed') {
         fallbackWorkouts = [
-          { rank: 1, workout_type: 'Active Recovery (Z1)', description: '가벼운 회복 훈련으로 근육 회복과 컨디션 조절' },
-          { rank: 2, workout_type: 'Active Recovery (Z1)', description: '활성 회복을 통한 피로 회복' },
-          { rank: 3, workout_type: 'Endurance (Z2)', description: '기초 체력 향상을 위한 저강도 지구력 훈련' }
+          { rank: 1, workout_type: 'Active Recovery (Z1)', description: '회복 훈련' },
+          { rank: 2, workout_type: 'Active Recovery (Z1)', description: '활성 회복' },
+          { rank: 3, workout_type: 'Endurance (Z2)', description: '지구력 훈련' }
         ];
       } else if (fallbackStatus === 'Building Base') {
         fallbackWorkouts = [
-          { rank: 1, workout_type: 'Endurance (Z2)', description: '기초 체력 향상을 위한 저강도 지구력 훈련' },
-          { rank: 2, workout_type: 'Endurance (Z2)', description: '지구력 강화를 위한 중저강도 훈련' },
-          { rank: 3, workout_type: 'Tempo (Z3)', description: '유산소 능력 향상을 위한 중강도 훈련' }
+          { rank: 1, workout_type: 'Endurance (Z2)', description: '지구력 훈련' },
+          { rank: 2, workout_type: 'Endurance (Z2)', description: '중저강도 훈련' },
+          { rank: 3, workout_type: 'Tempo (Z3)', description: '중강도 훈련' }
         ];
       } else {
         fallbackWorkouts = [
-          { rank: 1, workout_type: 'Tempo (Z3)', description: '유산소 능력 향상을 위한 중강도 훈련' },
-          { rank: 2, workout_type: 'Tempo (Z3)', description: '레이스 준비를 위한 지속 가능한 강도 훈련' },
-          { rank: 3, workout_type: 'Threshold Intervals (Z4)', description: '라크테이트 임계값 훈련으로 경쟁력 강화' }
+          { rank: 1, workout_type: 'Tempo (Z3)', description: '중강도 훈련' },
+          { rank: 2, workout_type: 'Tempo (Z3)', description: '레이스 준비 훈련' },
+          { rank: 3, workout_type: 'Threshold Intervals (Z4)', description: '임계값 훈련' }
         ];
       }
       
@@ -10606,7 +10623,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         condition_score: fallbackScore,
         training_status: fallbackStatus,
         vo2max_estimate: 40,
-        coach_comment: ((userProfileData && userProfileData.name) || '사용자') + '님, 데이터 분석 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        coach_comment: '분석 오류 발생',
         recommended_workout: fallbackWorkout,
         recommended_workouts: fallbackWorkouts,
         error_reason: errDisplay || errMsg
