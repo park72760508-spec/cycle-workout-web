@@ -2520,10 +2520,6 @@ button[aria-disabled="true"] {
 .mini-calendar-day.has-training {
   cursor: pointer;
   font-weight: 600;
-  /* 보유포인트(point-remaining) 디자인 적용 */
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  color: #059669;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -2532,35 +2528,94 @@ button[aria-disabled="true"] {
 .mini-calendar-day.has-training:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  background: rgba(16, 185, 129, 0.25);
 }
 
 .mini-calendar-day.has-training .day-number {
   position: relative;
   z-index: 1;
+}
+
+/* INDOOR/OUTDOOR가 없는 경우 기본 스타일 (하위 호환성) */
+.mini-calendar-day.has-training:not(.has-indoor):not(.has-outdoor) {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.mini-calendar-day.has-training:not(.has-indoor):not(.has-outdoor) .day-number {
+  color: #059669;
   filter: drop-shadow(0 1px 2px rgba(16, 185, 129, 0.3));
 }
 
-/* 일요일이면서 훈련이 있는 경우 */
-.mini-calendar-day.sunday.has-training {
-  color: #dc2626;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.mini-calendar-day.has-training:not(.has-indoor):not(.has-outdoor):hover {
+  background: rgba(16, 185, 129, 0.25);
 }
 
-.mini-calendar-day.sunday.has-training .day-number {
+/* INDOOR 훈련 (거리 없음) - 녹색 박스 */
+.mini-calendar-day.has-indoor {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.mini-calendar-day.has-indoor:hover {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+/* INDOOR 평일 - 녹색 날짜 */
+.mini-calendar-day.has-indoor.indoor-weekday .day-number {
+  color: #059669;
+  filter: drop-shadow(0 1px 2px rgba(16, 185, 129, 0.3));
+}
+
+/* INDOOR 일요일/공휴일 - 빨강색 날짜 */
+.mini-calendar-day.has-indoor.indoor-holiday .day-number,
+.mini-calendar-day.sunday.has-indoor .day-number,
+.mini-calendar-day.holiday.has-indoor .day-number {
+  color: #dc2626;
   filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.3));
 }
 
-/* 공휴일이면서 훈련이 있는 경우 */
-.mini-calendar-day.holiday.has-training {
-  color: #f97316;
+/* OUTDOOR 훈련 (거리 > 0) - 주황색 박스 */
+.mini-calendar-day.has-outdoor {
   background: rgba(249, 115, 22, 0.15);
   border: 1px solid rgba(249, 115, 22, 0.3);
 }
 
-.mini-calendar-day.holiday.has-training .day-number {
+.mini-calendar-day.has-outdoor:hover {
+  background: rgba(249, 115, 22, 0.25);
+}
+
+/* OUTDOOR 평일 - 주황색 날짜 */
+.mini-calendar-day.has-outdoor.outdoor-weekday .day-number {
+  color: #f97316;
   filter: drop-shadow(0 1px 2px rgba(249, 115, 22, 0.3));
+}
+
+/* OUTDOOR 일요일/공휴일 - 빨강색 날짜 */
+.mini-calendar-day.has-outdoor.outdoor-holiday .day-number,
+.mini-calendar-day.sunday.has-outdoor .day-number,
+.mini-calendar-day.holiday.has-outdoor .day-number {
+  color: #dc2626;
+  filter: drop-shadow(0 1px 2px rgba(239, 68, 68, 0.3));
+}
+
+/* INDOOR와 OUTDOOR가 모두 있는 경우 (OUTDOOR 우선) */
+.mini-calendar-day.has-indoor.has-outdoor {
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.mini-calendar-day.has-indoor.has-outdoor:hover {
+  background: rgba(249, 115, 22, 0.25);
+}
+
+.mini-calendar-day.has-indoor.has-outdoor.outdoor-weekday .day-number {
+  color: #f97316;
+}
+
+.mini-calendar-day.has-indoor.has-outdoor.outdoor-holiday .day-number,
+.mini-calendar-day.sunday.has-indoor.has-outdoor .day-number,
+.mini-calendar-day.holiday.has-indoor.has-outdoor .day-number {
+  color: #dc2626;
 }
 
 .mini-calendar-day.today {
