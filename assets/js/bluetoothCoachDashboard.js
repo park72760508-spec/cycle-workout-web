@@ -23,7 +23,8 @@ window.bluetoothCoachState = {
   maxTrackCount: 10, // 기본 최대 트랙 수
   countdownTriggered: [], // 세그먼트별 카운트다운 트리거 상태
   _countdownFired: {}, // 세그먼트별 발화 기록
-  _prevRemainMs: {} // 세그먼트별 이전 남은 ms
+  _prevRemainMs: {}, // 세그먼트별 이전 남은 ms
+  gaugeAnimationFrameId: null // 게이지 애니메이션 루프 ID (중복 실행 방지용)
 };
 
 // 파워계 데이터 구조 (Indoor Training과 동일)
@@ -290,6 +291,14 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
     console.warn('[Bluetooth Coach] updateBluetoothCoachTrainingButtons 함수가 없습니다.');
   }
   
+  // 속도계 바늘 애니메이션 루프 시작 (파워값에 따라 바늘이 움직이도록)
+  if (typeof startGaugeAnimationLoop === 'function') {
+    startGaugeAnimationLoop();
+    console.log('✅ [Bluetooth Coach] 속도계 바늘 애니메이션 루프 시작됨');
+  } else {
+    console.warn('[Bluetooth Coach] startGaugeAnimationLoop 함수가 없습니다.');
+  }
+  
   // 2. 화면 리사이즈 대응: 대시보드가 켜진 상태에서 화면 회전 시 UI 안정성 확보
   if (!window.bluetoothCoachResizeHandler) {
     window.bluetoothCoachResizeHandler = function() {
@@ -464,7 +473,7 @@ function createPowerMeterElement(powerMeter) {
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(270)"/>
+                transform="rotate(-90)"/>
         </g>
         
         <text x="100" y="188" 
@@ -643,6 +652,12 @@ function generateBluetoothCoachPowerMeterLabels(powerMeterId) {
  */
 function initializeNeedles() {
   window.bluetoothCoachState.powerMeters.forEach(pm => {
+    // 바늘을 초기 위치(-90도, 0W, 왼쪽 끝)로 설정
+    const needleEl = document.getElementById(`needle-${pm.id}`);
+    if (needleEl) {
+      needleEl.style.transition = 'none';
+      needleEl.setAttribute('transform', 'rotate(-90)');
+    }
     updatePowerMeterNeedle(pm.id, 0);
   });
 }
@@ -654,21 +669,30 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === powerMeterId);
   if (!powerMeter) return;
   
+  // currentPower 업데이트 (바늘 애니메이션 루프에서 사용)
+  powerMeter.currentPower = Math.max(0, Number(power) || 0);
+  
   const textEl = document.getElementById(`current-power-value-${powerMeterId}`);
   if (textEl) {
-    textEl.textContent = Math.round(power);
+    textEl.textContent = Math.round(powerMeter.currentPower);
   }
   
-  powerMeter.previousPower = power;
+  powerMeter.previousPower = powerMeter.currentPower;
 }
 
 /**
  * 게이지 애니메이션 루프 (Indoor Training과 동일)
  */
 function startGaugeAnimationLoop() {
+  // 이미 실행 중이면 중복 실행 방지
+  if (window.bluetoothCoachState.gaugeAnimationFrameId !== null) {
+    console.log('[Bluetooth Coach] 게이지 애니메이션 루프가 이미 실행 중입니다.');
+    return;
+  }
+  
   const loop = () => {
     if (!window.bluetoothCoachState || !window.bluetoothCoachState.powerMeters) {
-      requestAnimationFrame(loop);
+      window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
       return;
     }
 
@@ -700,9 +724,9 @@ function startGaugeAnimationLoop() {
       updateBluetoothCoachPowerMeterTrail(pm.id, pm.displayPower, angle, pm);
     });
 
-    requestAnimationFrame(loop);
+    window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
   };
-  requestAnimationFrame(loop);
+  window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
 }
 
 /**
