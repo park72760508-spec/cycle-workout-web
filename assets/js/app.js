@@ -12975,6 +12975,9 @@ async function startMobileDashboard() {
     // 타이머 업데이트 시작
     startMobileDashboardTimer();
     
+    // Firebase status 구독 시작 (랩 카운트다운 동기화용)
+    setupMobileDashboardFirebaseStatusSubscription();
+    
     // 블루투스 연결 상태 초기 업데이트 (모바일 대시보드 전용)
     setTimeout(() => {
       updateMobileBluetoothConnectionStatus();
@@ -13094,6 +13097,16 @@ function teardownMobileDashboardPullToRefreshPrevention() {
   }
   if (refs.documentTouchMoveHandler) document.removeEventListener('touchmove', refs.documentTouchMoveHandler, { capture: true });
   if (refs.beforeUnloadHandler) window.removeEventListener('beforeunload', refs.beforeUnloadHandler);
+  
+  // Firebase status 구독 해제
+  if (window.mobileDashboardFirebaseStatusUnsubscribe) {
+    if (typeof window.mobileDashboardFirebaseStatusUnsubscribe === 'function') {
+      window.mobileDashboardFirebaseStatusUnsubscribe();
+    }
+    window.mobileDashboardFirebaseStatusUnsubscribe = null;
+    window.mobileDashboardFirebaseLapCountdown = undefined;
+    console.log('[Mobile Dashboard] Firebase status 구독 해제 완료');
+  }
 
   window.__mobileDashboardP2RHandlers = null;
   console.log('[Mobile Dashboard] Pull-to-refresh 방지 해제 (스크롤 복원)');
@@ -13611,6 +13624,110 @@ function startMobileDashboardTimer() {
     clearInterval(window.mobileDashboardTimerInterval);
     window.mobileDashboardTimerInterval = null;
   }
+}
+
+/**
+ * 모바일 대시보드 Firebase status 구독 설정 (랩 카운트다운 동기화용)
+ */
+function setupMobileDashboardFirebaseStatusSubscription() {
+  // SESSION_ID 가져오기 (블루투스 코치와 동일한 방식)
+  function getMobileDashboardSessionId() {
+    if (typeof window !== 'undefined' && window.SESSION_ID) {
+      return window.SESSION_ID;
+    }
+    if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
+      const roomId = String(window.currentTrainingRoomId);
+      window.SESSION_ID = roomId;
+      return roomId;
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('currentTrainingRoomId');
+        if (stored) {
+          window.SESSION_ID = String(stored);
+          return window.SESSION_ID;
+        }
+      } catch (e) {
+        console.warn('[Mobile Dashboard] localStorage 접근 실패:', e);
+      }
+    }
+    return null;
+  }
+  
+  const sessionId = getMobileDashboardSessionId();
+  if (!sessionId) {
+    console.warn('[Mobile Dashboard] SESSION_ID가 없어 Firebase status 구독을 시작할 수 없습니다.');
+    return;
+  }
+  
+  // db 객체 확인 및 초기화 시도
+  let dbInstance = db;
+  if (typeof dbInstance === 'undefined') {
+    if (typeof window.db !== 'undefined') {
+      dbInstance = window.db;
+    } else if (typeof firebase !== 'undefined' && firebase.database) {
+      try {
+        dbInstance = firebase.database();
+        window.db = dbInstance;
+        console.log('[Mobile Dashboard] Firebase db 객체를 동적으로 초기화했습니다.');
+      } catch (e) {
+        console.warn('[Mobile Dashboard] Firebase db 초기화 실패:', e);
+        return;
+      }
+    } else {
+      console.warn('[Mobile Dashboard] Firebase가 초기화되지 않았습니다.');
+      return;
+    }
+  }
+  
+  // 기존 구독 해제
+  if (window.mobileDashboardFirebaseStatusUnsubscribe) {
+    if (typeof window.mobileDashboardFirebaseStatusUnsubscribe === 'function') {
+      window.mobileDashboardFirebaseStatusUnsubscribe();
+    }
+    window.mobileDashboardFirebaseStatusUnsubscribe = null;
+  }
+  
+  // Firebase status 구독 (랩 카운트다운 동기화)
+  const statusRef = dbInstance.ref(`sessions/${sessionId}/status`);
+  const statusUnsubscribe = statusRef.on('value', (snapshot) => {
+    try {
+      if (!snapshot) return;
+      const status = snapshot.val();
+      if (status) {
+        // 랩 카운트다운 값 동기화 (코치 화면과 동일한 값 사용)
+        if (status.lapCountdown !== undefined && status.lapCountdown !== null) {
+          window.mobileDashboardFirebaseLapCountdown = status.lapCountdown;
+          console.log('[Mobile Dashboard] Firebase 랩 카운트다운 동기화:', status.lapCountdown, '초');
+        }
+        
+        // 경과 시간도 동기화 (이미 동기화되고 있다고 했지만, 확실히 하기 위해)
+        if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
+          const mts = window.mobileTrainingState || {};
+          if (mts.elapsedSec !== status.elapsedTime) {
+            // 경과 시간이 다르면 동기화 (중간에 들어온 경우)
+            mts.elapsedSec = status.elapsedTime;
+            console.log('[Mobile Dashboard] Firebase 경과 시간 동기화:', status.elapsedTime, '초');
+          }
+        }
+        
+        // 세그먼트 인덱스 동기화
+        if (status.segmentIndex !== undefined && status.segmentIndex !== null) {
+          const mts = window.mobileTrainingState || {};
+          if (mts.segIndex !== status.segmentIndex) {
+            mts.segIndex = status.segmentIndex;
+            mts.segmentPowerHistory = []; // 세그먼트 변경 시 파워 히스토리 초기화
+            console.log('[Mobile Dashboard] Firebase 세그먼트 인덱스 동기화:', status.segmentIndex);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Mobile Dashboard] Firebase status 구독 오류:', e);
+    }
+  });
+  
+  window.mobileDashboardFirebaseStatusUnsubscribe = statusUnsubscribe;
+  console.log('[Mobile Dashboard] Firebase status 구독 시작 완료 (랩 카운트다운 동기화)');
 }
 
 // 모바일 대시보드 속도계 관련 변수
@@ -15232,8 +15349,13 @@ function startMobileTrainingTimerLoop() {
     // (세그먼트 전환 전까지는 현재 세그먼트 내에서만 증가)
     mts.segElapsedSec = Math.min(calculatedSegElapsed, segDur);
     
-    // 랩 카운트다운 계산 (세그먼트 남은 시간)
-    const segRemaining = segDur - mts.segElapsedSec;
+    // 랩 카운트다운 계산 (Firebase에서 받은 값 우선 사용, 없으면 로컬 계산)
+    // Firebase에서 동기화된 랩 카운트다운 값이 있으면 사용
+    let segRemaining = segDur - mts.segElapsedSec;
+    if (window.mobileDashboardFirebaseLapCountdown !== undefined && window.mobileDashboardFirebaseLapCountdown !== null) {
+      // Firebase에서 받은 랩 카운트다운 값 사용 (코치 화면과 동기화)
+      segRemaining = Math.max(0, Math.floor(window.mobileDashboardFirebaseLapCountdown));
+    }
     
     // UI 업데이트
     // 1. 경과 시간 표시
@@ -15245,7 +15367,7 @@ function startMobileTrainingTimerLoop() {
       timerEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
     
-    // 2. 랩 카운트다운 표시
+    // 2. 랩 카운트다운 표시 (Firebase 값 우선 사용)
     const lapTimeEl = safeGetElement('mobile-ui-lap-time');
     if (lapTimeEl && segRemaining >= 0) {
       const lapMinutes = Math.floor(segRemaining / 60);
