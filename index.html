@@ -10011,12 +10011,14 @@
   <!-- ========== Bluetooth Training Coach 대시보드 화면 ========== -->
   <div id="bluetoothTrainingCoachScreen" class="screen">
     <div class="dashboard-header">
-      <h1 class="race-title-animated" style="flex: 1; text-align: center; position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
+      <h1 class="race-title-animated" style="flex: 1; display: flex; align-items: center; justify-content: space-between; position: relative;">
+        <!-- 좌측: Live Training Room -->
+        <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
           <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
           <span class="race-title-text">Live Training Room</span>
         </div>
-        <span id="bluetoothCoachCurrentSegmentInfo" style="font-size: 14px; font-weight: 500; color: #ffffff; white-space: nowrap; text-align: center;"></span>
+        <!-- 중앙: 현재 세그먼트 정보 -->
+        <span id="bluetoothCoachCurrentSegmentInfo" style="position: absolute; left: 50%; transform: translateX(-50%); font-weight: 500; color: #ffffff; white-space: nowrap; text-align: center;"></span>
       </h1>
       <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
         <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutBluetoothCoach" onclick="openWorkoutSelectionModalForBluetoothCoach()" title="워크아웃 선택">
