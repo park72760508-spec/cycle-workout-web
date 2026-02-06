@@ -1386,21 +1386,41 @@ async function apiDeleteUser(id) {
       
       if (isOwnAccount) {
         // 본인 계정 삭제: auth.currentUser.delete() 또는 authV9.deleteUser() 사용
-        console.log('🔐 본인 계정 삭제: Firebase Authentication에서 삭제 시도:', id);
+        console.log('🔐 본인 계정 삭제: Firebase Authentication에서 삭제 시작:', id);
         
         let v8Deleted = false;
         let v9Deleted = false;
+        let lastError = null;
         
         // v8 Compat 삭제
         if (currentAuthUser && currentAuthUser.uid === id) {
           try {
-            // 최근 로그인 확인을 위해 토큰 갱신 시도
+            // 최근 로그인 확인을 위해 토큰 갱신 시도 (강제 갱신)
+            console.log('[Auth Delete] v8 토큰 갱신 시도...');
             await currentAuthUser.getIdToken(true);
+            console.log('[Auth Delete] v8 삭제 시도...');
             await currentAuthUser.delete();
             v8Deleted = true;
             console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v8):', id);
+            
+            // 삭제 후 확인
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const authUserAfter = window.auth?.currentUser;
+            if (authUserAfter && authUserAfter.uid === id) {
+              console.warn('⚠️ v8 삭제 후에도 계정이 존재합니다. 재시도...');
+              // 재시도
+              try {
+                await currentAuthUser.getIdToken(true);
+                await currentAuthUser.delete();
+                console.log('✅ Firebase Authentication v8 재삭제 완료');
+              } catch (retryError) {
+                console.error('❌ Firebase Authentication v8 재삭제 실패:', retryError);
+                throw retryError;
+              }
+            }
           } catch (v8Error) {
-            console.warn('⚠️ Firebase Authentication v8 삭제 실패:', v8Error);
+            lastError = v8Error;
+            console.error('❌ Firebase Authentication v8 삭제 실패:', v8Error);
             if (v8Error.code === 'auth/requires-recent-login') {
               throw new Error('보안을 위해 최근에 로그인한 후 다시 시도해주세요.');
             }
@@ -1412,17 +1432,41 @@ async function apiDeleteUser(id) {
         if (currentAuthV9User && currentAuthV9User.uid === id && window.authV9) {
           try {
             const { deleteUser: deleteUserV9, getIdToken } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-            // 최근 로그인 확인을 위해 토큰 갱신 시도
+            // 최근 로그인 확인을 위해 토큰 갱신 시도 (강제 갱신)
+            console.log('[Auth Delete] v9 토큰 갱신 시도...');
             await getIdToken(currentAuthV9User, true);
+            console.log('[Auth Delete] v9 삭제 시도...');
             await deleteUserV9(currentAuthV9User);
             v9Deleted = true;
             console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v9):', id);
+            
+            // 삭제 후 확인
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const authV9UserAfter = window.authV9?.currentUser;
+            if (authV9UserAfter && authV9UserAfter.uid === id) {
+              console.warn('⚠️ v9 삭제 후에도 계정이 존재합니다. 재시도...');
+              // 재시도
+              try {
+                await getIdToken(currentAuthV9User, true);
+                await deleteUserV9(currentAuthV9User);
+                console.log('✅ Firebase Authentication v9 재삭제 완료');
+              } catch (retryError) {
+                console.error('❌ Firebase Authentication v9 재삭제 실패:', retryError);
+                if (!v8Deleted) {
+                  throw retryError;
+                }
+              }
+            }
           } catch (v9Error) {
-            console.warn('⚠️ Firebase Authentication v9 삭제 실패:', v9Error);
+            lastError = v9Error;
+            console.error('❌ Firebase Authentication v9 삭제 실패:', v9Error);
             if (v9Error.code === 'auth/requires-recent-login') {
               if (!v8Deleted) {
                 throw new Error('보안을 위해 최근에 로그인한 후 다시 시도해주세요.');
               }
+            } else if (!v8Deleted) {
+              // v8도 실패하고 v9도 실패한 경우
+              throw v9Error;
             }
             // v8에서 이미 삭제했으면 계속 진행
           }
@@ -1430,86 +1474,136 @@ async function apiDeleteUser(id) {
         
         // 둘 다 실패한 경우에만 오류 발생
         if (!v8Deleted && !v9Deleted) {
-          throw new Error('Firebase Authentication 삭제에 실패했습니다. 최근에 로그인한 후 다시 시도해주세요.');
-        }
-      } else {
-        // 다른 사용자 삭제: Firebase REST API를 사용하여 삭제 시도
-        // 참고: Firebase Admin SDK가 필요하지만, 클라이언트에서는 직접 호출 불가
-        // 대신 사용자 재인증을 통해 삭제하거나, 백엔드 API를 통해 처리해야 함
-        console.log('🔐 다른 사용자 삭제: Firebase Authentication 삭제 시도 (제한적):', id);
-        
-        // 방법 1: 백엔드 API 호출 시도 (GAS URL을 통해)
-        let authDeleted = false;
-        if (window.GAS_URL) {
-          try {
-            const deleteAuthUrl = window.GAS_URL + '?action=deleteAuthUser&userId=' + encodeURIComponent(id);
-            const response = await fetch(deleteAuthUrl, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            });
-            
-            if (response.ok) {
-              const result = await response.json();
-              if (result.success) {
-                console.log('✅ Firebase Authentication에서 사용자 삭제 완료 (백엔드 API):', id);
-                authDeleted = true;
-              } else {
-                console.warn('⚠️ Firebase Authentication 삭제 실패 (백엔드 API):', result.error || '알 수 없는 오류');
-              }
-            } else {
-              console.warn('⚠️ Firebase Authentication 삭제 API 호출 실패:', response.status, response.statusText);
-            }
-          } catch (apiError) {
-            console.warn('⚠️ Firebase Authentication 삭제 API 호출 중 오류:', apiError);
-          }
-        }
-        
-        // 방법 2: Firebase Admin REST API 직접 호출 시도
-        // 참고: Firebase Admin REST API를 사용하려면 서비스 계정 토큰이 필요하지만,
-        // 클라이언트에서는 보안상 노출할 수 없으므로 Cloud Function을 통해 처리해야 합니다.
-        // 여기서는 사용자에게 명확한 안내를 제공합니다.
-        if (!authDeleted) {
-          console.warn('⚠️ 다른 사용자의 Firebase Authentication 삭제는 Firebase Admin SDK가 필요합니다.');
-          console.warn('⚠️ Firestore에서는 삭제되었지만, Authentication은 Cloud Function을 통해 삭제해야 합니다.');
-          console.warn('⚠️ 재가입 시 기존 계정으로 인식될 수 있으므로, Firebase Console에서 수동 삭제하거나 Cloud Function을 설정하세요.');
+          const errorMsg = lastError?.message || 'Firebase Authentication 삭제에 실패했습니다.';
+          const errorCode = lastError?.code || '알 수 없음';
+          console.error('❌ Firebase Authentication 삭제 완전 실패:', { errorMsg, errorCode, userId: id });
           
-          // 사용자에게 알림 표시 (선택적)
-          if (typeof showToast === 'function') {
-            showToast('Firestore에서 삭제되었습니다. Firebase Authentication 삭제는 Cloud Function이 필요합니다.', 'warning');
+          if (lastError?.code === 'auth/requires-recent-login') {
+            throw new Error('보안을 위해 최근에 로그인한 후 다시 시도해주세요.');
+          }
+          // 명확한 에러 메시지와 함께 throw
+          throw new Error('Firebase Authentication 삭제 실패: ' + errorMsg + ' (코드: ' + errorCode + ')');
+        }
+        
+        // 삭제 성공 확인 (최종 확인)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const finalAuthUser = window.auth?.currentUser;
+        const finalAuthV9User = window.authV9?.currentUser;
+        const stillExists = (finalAuthUser && finalAuthUser.uid === id) || 
+                            (finalAuthV9User && finalAuthV9User.uid === id);
+        
+        if (stillExists) {
+          console.error('❌ Firebase Authentication 삭제 최종 확인 실패: 계정이 여전히 존재합니다.');
+          throw new Error('Firebase Authentication 삭제가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.');
+        }
+        
+        console.log('✅ Firebase Authentication 삭제 완료 확인:', { v8Deleted, v9Deleted, userId: id });
+      } else {
+        // 관리자가 다른 사용자 삭제: Firebase Cloud Functions를 통해 처리
+        console.log('🔐 관리자 삭제: Firebase Cloud Functions를 통해 Firebase Authentication 삭제 시도:', id);
+        
+        try {
+          // Firebase Cloud Functions 호출
+          if (window.functionsV9 && window.httpsCallableV9) {
+            const deleteAuthUser = window.httpsCallableV9(window.functionsV9, 'deleteAuthUser');
+            const result = await deleteAuthUser({ targetUserId: id });
+            
+            if (result.data && result.data.success) {
+              console.log('✅ Firebase Authentication에서 사용자 삭제 완료 (Cloud Functions):', id);
+            } else {
+              console.warn('⚠️ Firebase Authentication 삭제 실패 (Cloud Functions):', result.data?.error || '알 수 없는 오류');
+              console.warn('⚠️ Firestore에서는 삭제되었지만, Firebase Authentication 삭제는 실패했습니다.');
+            }
+          } else {
+            console.warn('⚠️ Firebase Cloud Functions가 초기화되지 않았습니다.');
+            console.warn('⚠️ Firestore에서는 삭제되었지만, Firebase Authentication 삭제는 Cloud Function 배포 후 사용 가능합니다.');
+            console.warn('⚠️ Cloud Function 배포: firebase deploy --only functions:deleteAuthUser');
+          }
+        } catch (cfError) {
+          console.error('❌ Firebase Cloud Functions 호출 실패:', cfError);
+          // Cloud Function 오류는 상세 정보 제공
+          if (cfError.code === 'permission-denied') {
+            console.warn('⚠️ 권한이 없습니다. 관리자(grade=1)만 다른 사용자를 삭제할 수 있습니다.');
+          } else if (cfError.code === 'not-found') {
+            console.warn('⚠️ 사용자가 이미 Firebase Authentication에서 삭제되었거나 존재하지 않습니다.');
+          } else {
+            console.warn('⚠️ Firestore에서는 삭제되었지만, Firebase Authentication 삭제는 실패했습니다.');
+            console.warn('⚠️ Cloud Function 배포 확인: firebase deploy --only functions:deleteAuthUser');
           }
         }
       }
     } catch (authError) {
       console.error('❌ Firebase Authentication 삭제 실패:', authError);
       
-      // 재가입 시 문제가 발생할 수 있으므로 사용자에게 알림
-      if (authError.code === 'auth/requires-recent-login' || authError.message && authError.message.indexOf('최근에 로그인') !== -1) {
-        return { 
-          success: false, 
-          error: '보안을 위해 최근에 로그인한 후 다시 시도해주세요.' 
-        };
-      }
-      
-      // 본인 계정 삭제 실패 시에는 전체 실패로 처리
+      // 본인 계정 삭제 시 Authentication 삭제 실패는 전체 삭제 실패로 처리
       const currentAuthUser = window.auth?.currentUser;
       const currentAuthV9User = window.authV9?.currentUser;
       const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) || 
                            (currentAuthV9User && currentAuthV9User.uid === id);
       
       if (isOwnAccount) {
-        return { 
-          success: false, 
+        // 본인 계정 삭제 시 Authentication 삭제 실패는 전체 실패로 처리
+        if (authError.code === 'auth/requires-recent-login' || (authError.message && authError.message.indexOf('최근에 로그인') !== -1)) {
+          return { 
+            success: false, 
+            error: '보안을 위해 최근에 로그인한 후 다시 시도해주세요. Firestore 삭제는 취소되었습니다.' 
+          };
+        }
+        // 다른 에러도 전체 실패로 처리
+        return {
+          success: false,
           error: 'Firebase Authentication 삭제에 실패했습니다: ' + (authError.message || authError.code || '알 수 없는 오류')
         };
       }
       
+      // 본인 계정 삭제 시 Authentication 삭제 실패는 전체 실패로 처리
+      const currentAuthUser = window.auth?.currentUser;
+      const currentAuthV9User = window.authV9?.currentUser;
+      const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) || 
+                           (currentAuthV9User && currentAuthV9User.uid === id);
+      
+      if (isOwnAccount) {
+        // 본인 계정 삭제 시 Authentication 삭제 실패는 전체 실패로 처리
+        console.error('❌ 본인 계정 삭제 시 Firebase Authentication 삭제 실패:', authError);
+        return { 
+          success: false, 
+          error: 'Firebase Authentication 삭제에 실패했습니다: ' + (authError.message || authError.code || '알 수 없는 오류') + '. 최근에 로그인한 후 다시 시도해주세요.'
+        };
+      }
+      
       // 다른 사용자 삭제 실패 시에는 Firestore 삭제는 성공했으므로 경고만 표시하고 계속 진행
-      console.warn('⚠️ Firebase Authentication 삭제 실패했지만, Firestore 삭제는 성공했습니다.');
+      console.warn('⚠️ 다른 사용자 삭제: Firebase Authentication 삭제는 실패했지만 Firestore 삭제는 성공했습니다.');
+      console.warn('⚠️ Firebase Authentication 삭제는 Firebase Admin SDK가 필요합니다.');
     }
     
-    return { success: true };
+    // 본인 계정 삭제 시 최종 확인
+    const currentAuthUser = window.auth?.currentUser;
+    const currentAuthV9User = window.authV9?.currentUser;
+    const isOwnAccount = (currentAuthUser && currentAuthUser.uid === id) || 
+                         (currentAuthV9User && currentAuthV9User.uid === id);
+    
+    if (isOwnAccount) {
+      // 삭제 완료 대기
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // 최종 확인
+      const finalAuthUser = window.auth?.currentUser;
+      const finalAuthV9User = window.authV9?.currentUser;
+      const stillExists = (finalAuthUser && finalAuthUser.uid === id) || 
+                          (finalAuthV9User && finalAuthV9User.uid === id);
+      
+      if (stillExists) {
+        console.error('❌ Firebase Authentication 삭제 최종 확인 실패: 계정이 여전히 존재합니다.');
+        return {
+          success: false,
+          error: 'Firebase Authentication 삭제가 완료되지 않았습니다. 잠시 후 다시 시도해주세요.'
+        };
+      }
+      
+      console.log('✅ Firebase Authentication 삭제 최종 확인 완료');
+    }
+    
+    return { success: true, authDeleted: isOwnAccount };
   } catch (error) {
     console.error('❌ 사용자 삭제 실패:', error);
     return { success: false, error: error.message };
@@ -2973,25 +3067,72 @@ async function deleteUser(userId) {
     const result = await apiDeleteUser(userId);
     
     if (result.success) {
-      showToast('사용자가 삭제되었습니다.');
-      
-      // 본인 계정 삭제 시 로그아웃 처리
+      // 본인 계정 삭제 시 Firebase Authentication 삭제 확인
       if (isOwnAccount) {
-        // 로그아웃 처리
-        if (typeof window.handleLogout === 'function') {
-          await window.handleLogout();
-        } else if (window.auth) {
-          await window.auth.signOut();
+        // 삭제 후 잠시 대기하여 Authentication 상태 확인
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Authentication 삭제 확인
+        const currentAuthUserAfter = window.auth?.currentUser;
+        const currentAuthV9UserAfter = window.authV9?.currentUser;
+        const stillLoggedIn = (currentAuthUserAfter && currentAuthUserAfter.uid === userId) || 
+                               (currentAuthV9UserAfter && currentAuthV9UserAfter.uid === userId);
+        
+        if (stillLoggedIn) {
+          console.error('❌ Firebase Authentication 삭제가 완료되지 않았습니다.');
+          showToast('Firebase Authentication 삭제에 실패했습니다. 최근에 로그인한 후 다시 시도해주세요.', 'error');
+          return; // 삭제 실패로 처리하여 로그아웃하지 않음
+        } else {
+          console.log('✅ Firebase Authentication 삭제 확인 완료');
+          showToast('사용자 계정이 완전히 삭제되었습니다.');
         }
-        // 프로필 선택 화면으로 이동
-        if (typeof showScreen === 'function') {
-          showScreen('profileScreen');
+      } else {
+        // 관리자가 다른 사용자 삭제 시
+        showToast('사용자가 삭제되었습니다. (Firestore)', 'success');
+        console.warn('⚠️ 관리자 삭제: Firebase Authentication 삭제는 Firebase Admin SDK가 필요합니다.');
+        console.warn('⚠️ 재가입 시 기존 계정으로 인식될 수 있으므로, Firebase Console에서 수동 삭제하거나 Cloud Function을 설정하세요.');
+      }
+      
+      // 본인 계정 삭제 시 로그아웃 처리 (Authentication이 삭제된 경우에만)
+      if (isOwnAccount) {
+        // Authentication 삭제가 성공한 경우에만 로그아웃
+        const currentAuthUserAfter = window.auth?.currentUser;
+        const currentAuthV9UserAfter = window.authV9?.currentUser;
+        const stillLoggedIn = (currentAuthUserAfter && currentAuthUserAfter.uid === userId) || 
+                               (currentAuthV9UserAfter && currentAuthV9UserAfter.uid === userId);
+        
+        if (!stillLoggedIn) {
+          // Authentication 삭제 성공 - 로그아웃 처리
+          try {
+            // 로그아웃 처리
+            if (typeof window.handleLogout === 'function') {
+              await window.handleLogout();
+            } else {
+              if (window.auth?.currentUser) {
+                await window.auth.signOut();
+              }
+              if (window.authV9?.currentUser) {
+                const { signOut } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+                await signOut(window.authV9);
+              }
+            }
+            // 프로필 선택 화면으로 이동
+            if (typeof showScreen === 'function') {
+              showScreen('profileScreen');
+            }
+          } catch (logoutError) {
+            console.error('로그아웃 실패:', logoutError);
+            // 프로필 선택 화면으로 이동
+            if (typeof showScreen === 'function') {
+              showScreen('profileScreen');
+            }
+          }
         }
       }
       
       loadUsers();
     } else {
-      showToast('사용자 삭제 실패: ' + result.error);
+      showToast('사용자 삭제 실패: ' + result.error, 'error');
     }
     
   } catch (error) {
