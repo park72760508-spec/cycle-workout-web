@@ -3291,6 +3291,13 @@
     </div>
   </div>
   
+  <!-- Powered by Strava 이미지 (중앙 배치) -->
+  <div style="display: flex; justify-content: center; align-items: center; margin-top: 10px; padding: 8px 0;">
+    <button type="button" style="background: none; border: none; padding: 0; cursor: pointer; display: inline-block; line-height: 0;" onclick="(function(){try{var user=window.currentUser||(function(){try{return JSON.parse(localStorage.getItem('currentUser')||'null');}catch(e){return null;}})();var isStravaConnected=user&&(user.strava_refresh_token||user.strava_access_token);if(isStravaConnected){if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else{var modal=document.getElementById('stravaSyncModal');if(modal){modal.style.display='flex';modal.classList.remove('hidden');}else if(typeof showScreen==='function'){showScreen('stravaSyncScreen');}else{alert('Strava 동기화 화면을 열 수 없습니다.');}}}else{if(typeof openSettingsModal==='function'){openSettingsModal();}else{var settingsModal=document.getElementById('settingsModal');if(settingsModal){settingsModal.style.display='block';settingsModal.classList.remove('hidden');}else{alert('환경설정 모달을 열 수 없습니다.');}}}}catch(e){console.error('Strava 클릭 오류:',e);alert('오류가 발생했습니다: '+e.message);}})();" aria-label="Strava 동기화" title="Strava 동기화">
+      <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 16px; width: auto; display: block; margin: 0 auto;" />
+    </button>
+  </div>
+  
 </div>
 
   <!-- ========== 모바일 대시보드 화면 ========== -->
