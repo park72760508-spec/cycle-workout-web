@@ -957,65 +957,10 @@ async function apiGetUsers() {
     // userData에 grade 정보가 있으면 먼저 확인 (Firestore 조회 전에 빠른 체크)
     const userGradeFromData = userData?.grade ? String(userData.grade) : null;
     
-    // 관리자인 경우 localStorage의 grade 정보로 먼저 전체 목록 조회 시도 (로그인 직후)
-    // 단, currentUser가 있을 때만 시도 (Firestore 보안 규칙이 request.auth.uid를 요구)
-    // currentUser가 없으면 Firestore 문서 조회 후 다시 시도
-    // 주의: getUsersCollection()은 window.firestore(v8 Compat)를 사용하므로,
-    // window.authV9로 로그인한 경우 인증 상태가 동기화되지 않을 수 있음
-    // 관리자인 경우 localStorage의 grade 정보로 먼저 전체 목록 조회 시도
-    // 단, currentUser가 있을 때만 시도 (Firestore 보안 규칙이 request.auth.uid를 요구)
-    // 주의: window.firestore(v8 Compat)는 window.auth와 연결되고,
-    // window.firestoreV9(v9 Modular)는 window.authV9와 연결됨
-    // 로그인은 authV9로 했으므로 firestoreV9를 사용해야 함
-    if (userGradeFromData === '1' && currentUser) {
-      console.log('[apiGetUsers] 🔑 localStorage에서 관리자 권한 확인 - 전체 사용자 목록 조회 시작 (currentUser 있음)');
-      try {
-        // firestoreV9 사용 (authV9와 동일한 앱 인스턴스)
-        if (window.firestoreV9) {
-          const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-          const usersRef = collection(window.firestoreV9, 'users');
-          const usersSnapshot = await getDocs(usersRef);
-          const users = [];
-          
-          usersSnapshot.forEach(doc => {
-            users.push({
-              id: doc.id,
-              ...doc.data()
-            });
-          });
-          
-          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestoreV9, localStorage 권한):', { 
-            totalUsers: users.length,
-            userIds: users.map(u => u.id) 
-          });
-          
-          return { success: true, items: users };
-        } else {
-          // v8 Compat 사용
-          const usersSnapshot = await getUsersCollection().get();
-          const users = [];
-          
-          usersSnapshot.forEach(doc => {
-            users.push({
-              id: doc.id,
-              ...doc.data()
-            });
-          });
-          
-          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestore v8, localStorage 권한):', { 
-            totalUsers: users.length,
-            userIds: users.map(u => u.id) 
-          });
-          
-          return { success: true, items: users };
-        }
-      } catch (listError) {
-        console.error('[apiGetUsers] ❌ localStorage 권한으로 전체 목록 조회 실패:', listError);
-        // 실패해도 계속 진행하여 Firestore 문서 조회 시도
-      }
-    } else if (userGradeFromData === '1' && !currentUser) {
-      console.log('[apiGetUsers] ⏳ 관리자 권한 확인되었지만 currentUser가 없어 Firestore 문서 조회 후 다시 시도');
-    }
+    // localStorage의 grade 값만으로는 Firestore 권한을 확인할 수 없습니다.
+    // Firestore 보안 규칙은 Firebase Authentication의 실제 인증 상태를 기반으로 하므로,
+    // 실제 Firestore 문서를 조회한 후 grade를 확인하여 관리자인 경우에만 전체 목록을 조회합니다.
+    // 이렇게 하면 권한 오류를 방지할 수 있습니다.
     
     // 현재 사용자의 문서를 먼저 조회하여 권한 확인
     let currentUserDoc;
@@ -1860,11 +1805,10 @@ async function loadUsers() {
       if (viewerGrade === '1') {
         // 관리자: 모든 사용자 삭제 가능
         return true;
-      } else if (viewerGrade === '2' || viewerGrade === '3') {
-        // 일반 사용자: 본인 계정만 삭제 가능
-        return viewerId && String(u.id) === viewerId;
+      } else {
+        // 일반 사용자(grade=2,3): 삭제 버튼 비활성화
+        return false;
       }
-      return false;
     };
 
     userList.innerHTML = visibleUsers.map(user => {
