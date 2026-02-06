@@ -4409,7 +4409,7 @@
       function workoutViewShowList(categoryId) {
         // 🔒 AI 추천 워크아웃 선택 중이면 재로딩 방지
         if (window.__aiWorkoutSelectionInProgress) {
-          console.log('[Workout View] AI 추천 워크아웃 선택 중 - 목록 표시 스킵');
+          console.log('[AI] 선택중 - 스킵');
           return;
         }
         
@@ -4502,7 +4502,7 @@
         try {
           // 🔒 AI 추천 워크아웃 선택 중이면 재로딩 방지
           if (window.__aiWorkoutSelectionInProgress) {
-            console.log('[Workout View] AI 추천 워크아웃 선택 중 - 재로딩 스킵');
+            console.log('[AI] 선택중 - 재로딩 스킵');
             return;
           }
           
@@ -4611,7 +4611,7 @@
         
         // 🔒 이미 진행 중이면 중복 실행 방지
         if (window.__aiRecommendationInProgress) {
-          console.log('[AI Recommendation] 이미 진행 중 - 중복 실행 방지');
+          console.log('[AI] 진행중');
           return;
         }
         
@@ -4641,7 +4641,7 @@
           apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
           if (!apiKey || !String(apiKey).trim()) {
             // API 키가 없으면 팝업 오버레이로 환경설정 모달 표시
-            console.log('[AI Recommendation] API 키 없음 - 환경설정 모달 표시');
+            console.log('[AI] API키 없음');
             
             // 환경설정 모달 열기
             var settingsModal = document.getElementById('settingsModal');
@@ -4668,7 +4668,7 @@
                   setTimeout(function() {
                     var savedKey = localStorage.getItem('geminiApiKey');
                     if (savedKey && String(savedKey).trim()) {
-                      console.log('[AI Recommendation] API 키 저장됨 - AI 추천 재시도');
+                      console.log('[AI] API키 저장됨');
                       // 모달이 열려있으면 닫기
                       if (settingsModal && settingsModal.style.display === 'flex') {
                         if (typeof closeSettingsModal === 'function') {
@@ -4749,7 +4749,7 @@
             return;
           }
         } catch (e) {
-          console.error('[AI Recommendation] localStorage 접근 실패:', e);
+          console.error('[AI] 저장소 접근 실패');
           // 🔒 에러 발생 시 플래그 해제
           window.__aiRecommendationInProgress = false;
           if (typeof showToast === 'function') {
@@ -4764,14 +4764,14 @@
         if (modal) {
           modal.style.display = 'flex';
           modal.classList.remove('hidden');
-          console.log('[AI Recommendation] 모달 표시:', modal.style.display);
+          console.log('[AI] 모달 표시');
         } else {
-          console.error('[AI Recommendation] 모달 요소를 찾을 수 없습니다.');
+          console.error('[AI] 모달 없음');
         }
         if (content) {
           content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div></div>';
         } else {
-          console.error('[AI Recommendation] content 요소를 찾을 수 없습니다.');
+          console.error('[AI] 컨텐츠 없음');
         }
         
         try {
@@ -4779,12 +4779,12 @@
           var logs = [];
           if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
             try {
-              console.log('[AI Recommendation] getUserTrainingLogs 호출 시작 (userId:', currentUser.id + ')');
+              console.log('[AI] 로그 조회 시작');
               var fetched = await window.getUserTrainingLogs(currentUser.id, { limit: 200 });
               logs = Array.isArray(fetched) ? fetched : [];
-              console.log('[AI Recommendation] getUserTrainingLogs 완료:', logs.length, '개 로그 조회');
+              console.log('[AI] 로그 조회 완료:', logs.length + '개');
             } catch (e) {
-              console.warn('[AI Recommendation] getUserTrainingLogs failed, falling back to v8:', e);
+              console.warn('[AI] v9 실패, v8 시도');
               logs = [];
             }
           }
@@ -4799,11 +4799,11 @@
                 try {
                   logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
                 } catch (indexErr) {
-                  console.warn('[AI Recommendation] orderBy failed, using limit only:', indexErr);
+                  console.warn('[AI] 정렬 실패, limit만 사용');
                   try {
                     logsSnapshot = await userLogsRef.limit(200).get();
                   } catch (limitErr) {
-                    console.error('[AI Recommendation] Firestore query failed:', limitErr);
+                    console.error('[AI] 쿼리 실패');
                     // 쿼리 실패 시 빈 배열 유지
                     logsSnapshot = { docs: [] };
                   }
@@ -4813,12 +4813,12 @@
                     try {
                       logs.push({ id: doc.id, ...doc.data() });
                     } catch (docErr) {
-                      console.warn('[AI Recommendation] Document parse error:', docErr);
+                      console.warn('[AI] 문서 파싱 오류');
                     }
                   });
                 }
               } catch (firestoreErr) {
-                console.error('[AI Recommendation] Firestore access error:', firestoreErr);
+                console.error('[AI] Firestore 접근 오류');
                 // 오류 발생 시 빈 배열 유지하여 계속 진행
               }
             }
@@ -4870,11 +4870,7 @@
             return (parseDateForAI(a.date) || '').localeCompare(parseDateForAI(b.date) || ''); 
           });
           
-          console.log('[AI Recommendation] 30일치 필터링 완료:', {
-            totalLogs: logs.length,
-            filteredLogs: logsToSend.length,
-            dateRange: thirtyDaysAgoStr + ' ~ ' + todayStr
-          });
+          console.log('[AI] 필터링 완료:', logsToSend.length + '/' + logs.length);
           
           if (logsToSend.length === 0) {
             if (content) {
@@ -4918,9 +4914,9 @@
           
           // AI 분석 호출
           if (typeof window.callGeminiCoach === 'function') {
-            console.log('[AI Recommendation] callGeminiCoach 호출 시작');
+            console.log('[AI] 분석 시작');
             var analysis = await window.callGeminiCoach(userProfile, cleanLogs);
-            console.log('[AI Recommendation] AI 분석 완료:', analysis);
+            console.log('[AI] 분석 완료');
             
             if (analysis && (analysis.recommended_workout || (analysis.recommended_workouts && analysis.recommended_workouts.length > 0))) {
               // 추천 워크아웃 표시 (3개 추천 지원)
@@ -4931,9 +4927,9 @@
               if (modal) {
                 modal.style.display = 'flex';
                 modal.classList.remove('hidden');
-                console.log('[AI Recommendation] AI 분석 완료 후 모달 표시:', modal.style.display);
+                console.log('[AI] 모달 표시');
               } else {
-                console.error('[AI Recommendation] AI 분석 완료 후 모달 요소를 찾을 수 없습니다.');
+                console.error('[AI] 모달 없음');
               }
               
               if (content) {
@@ -5029,7 +5025,7 @@
                     var graphContainerId = 'aiWorkoutGraphContainer_' + idx;
                     var graphContainer = document.getElementById(graphContainerId);
                     if (!graphContainer) {
-                      console.warn('[AI Recommendation] 그래프 컨테이너를 찾을 수 없습니다:', graphContainerId);
+                      console.warn('[AI] 그래프 컨테이너 없음');
                       return;
                     }
                     
@@ -5049,7 +5045,7 @@
                         console.error('[AI Recommendation] 그래프 그리기 실패:', e);
                       }
                     } else {
-                      console.warn('[AI Recommendation] renderSegmentedWorkoutGraph 함수를 찾을 수 없습니다.');
+                      console.warn('[AI] 그래프 함수 없음');
                     }
                   });
                 }, 200);
@@ -5058,14 +5054,14 @@
                 if (modal) {
                   setTimeout(function() {
                     if (modal.style.display !== 'flex') {
-                      console.warn('[AI Recommendation] 모달이 표시되지 않음, 강제 표시');
+                      console.warn('[AI] 모달 강제 표시');
                       modal.style.display = 'flex';
                       modal.classList.remove('hidden');
                     }
                   }, 100);
                 }
               } else {
-                console.warn('[AI Recommendation] content 요소를 찾을 수 없습니다.');
+                console.warn('[AI] 컨텐츠 없음');
               }
               
               // 🔒 AI 추천 성공 시 플래그 해제 (재실행 가능하도록)
@@ -5077,7 +5073,7 @@
             throw new Error('callGeminiCoach 함수를 찾을 수 없습니다.');
           }
         } catch (error) {
-          console.error('[AI Recommendation] 오류:', error);
+          console.error('[AI] 오류:', error.message);
           // 🔒 오류 발생 시 플래그 해제
           window.__aiRecommendationInProgress = false;
           
@@ -5098,7 +5094,7 @@
       
       // AI 추천 워크아웃 선택 함수
       function selectAIRecommendedWorkout(index, workoutType, segmentsJson) {
-        console.log('[AI Recommendation] 워크아웃 선택:', { index: index, workoutType: workoutType, segmentsJson: segmentsJson });
+        console.log('[AI] 워크아웃 선택:', workoutType);
         
         try {
           // 🔒 워크아웃 목록 재로딩 방지 플래그 설정
@@ -5200,13 +5196,7 @@
             var expectedTSS = 0;
             if (typeof window.estimateWorkoutTSS === 'function') {
               expectedTSS = window.estimateWorkoutTSS(workout);
-              console.log('[AI Recommendation] 예상 TSS 계산 (estimateWorkoutTSS):', {
-                totalSeconds: totalSeconds,
-                totalMinutes: totalMinutes,
-                segments: segments.length,
-                expectedTSS: expectedTSS,
-                workout: workout
-              });
+              console.log('[AI] TSS 계산:', totalSeconds + '초');
             } else {
               // 폴백: TSS 계산 (각 세그먼트의 TSS 합산)
               // estimateWorkoutTSS와 동일한 로직 사용
@@ -5264,14 +5254,7 @@
                 expectedTSS = Math.round((T / 3600) * (IF * IF) * 100);
               }
               
-              console.log('[AI Recommendation] 예상 TSS 계산 (폴백):', {
-                totalSeconds: totalSeconds,
-                totalMinutes: totalMinutes,
-                segments: segments.length,
-                sumI4t: sumI4t,
-                totalDuration: T,
-                expectedTSS: expectedTSS
-              });
+              console.log('[AI] TSS 계산(폴백):', totalSeconds + '초');
             }
             
             var previewExpectedIntensity = document.getElementById('previewExpectedIntensity');
@@ -5329,7 +5312,7 @@
             }, 1000);
           }, 300);
         } catch (error) {
-          console.error('[AI Recommendation] 워크아웃 선택 오류:', error);
+          console.error('[AI] 선택 오류');
           // 오류 발생 시에도 플래그 해제
           window.__aiWorkoutSelectionInProgress = false;
           if (typeof showToast === 'function') {
@@ -5340,7 +5323,7 @@
       
       // 하위 호환성을 위한 기존 함수 유지
       function generateAIWorkoutFromRecommendation(recommendedWorkout) {
-        console.log('[AI Recommendation] 워크아웃 생성 시작 (하위 호환성):', recommendedWorkout);
+        console.log('[AI] 워크아웃 생성');
         
         var currentUser = window.currentUser || null;
         var userFTP = currentUser ? (currentUser.ftp || 200) : 200;
@@ -5368,7 +5351,7 @@
         // 🔒 모달 닫을 때 모든 플래그 즉시 해제 (재실행 가능하도록)
         window.__aiRecommendationInProgress = false;
         window.__aiWorkoutSelectionInProgress = false;
-        console.log('[AI Recommendation] 모달 닫기 - 모든 플래그 해제 완료');
+        console.log('[AI] 모달 닫기');
       }
       window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
     })();
@@ -11315,12 +11298,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             // 1) getUserTrainingLogs 사용 (훈련일지와 동일한 방식, limit 200으로 증가)
             if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
               try {
-                console.log('[Dashboard] getUserTrainingLogs 호출 시작 (userId:', userProfile.id + ')');
+                console.log('[AI] 로그 조회 시작');
                 var fetched = await window.getUserTrainingLogs(userProfile.id, { limit: 200 });
                 raw = Array.isArray(fetched) ? fetched : [];
-                console.log('[Dashboard] getUserTrainingLogs 완료:', raw.length, '개 로그 조회');
+                console.log('[AI] 로그 조회 완료:', raw.length + '개');
               } catch (e) {
-                console.warn('[Dashboard] getUserTrainingLogs failed, falling back to v8:', e);
+                console.warn('[AI] v9 실패, v8 시도');
                 raw = [];
               }
             }
@@ -11329,9 +11312,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (raw.length === 0) {
               var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
               if (!firestore) {
-                console.warn('[Dashboard] Firestore not available, skipping Firestore query');
+                console.warn('[AI] Firestore 없음');
               } else if (!userProfile || !userProfile.id) {
-                console.warn('[Dashboard] userProfile.id is missing, skipping Firestore query');
+                console.warn('[AI] userId 없음');
               } else {
                 try {
                   var userLogsRef = firestore.collection('users').doc(String(userProfile.id)).collection('logs');
@@ -11339,11 +11322,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   try {
                     logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
                   } catch (indexErr) {
-                    console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+                    console.warn('[AI] 정렬 실패, limit만 사용');
                     try {
                       logsSnapshot = await userLogsRef.limit(200).get();
                     } catch (limitErr) {
-                      console.error('[Dashboard] Firestore query failed:', limitErr);
+                      console.error('[AI] 쿼리 실패');
                       // 쿼리 실패 시 빈 배열 유지
                       logsSnapshot = { docs: [] };
                     }
@@ -11353,12 +11336,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       try {
                         raw.push({ id: doc.id, ...doc.data() });
                       } catch (docErr) {
-                        console.warn('[Dashboard] Document parse error:', docErr);
-                      }
-                    });
-                  }
-                } catch (firestoreErr) {
-                  console.error('[Dashboard] Firestore access error:', firestoreErr);
+                      console.warn('[AI] 문서 파싱 오류');
+                    }
+                  });
+                }
+              } catch (firestoreErr) {
+                console.error('[AI] Firestore 접근 오류');
                   // 오류 발생 시 빈 배열 유지하여 계속 진행
                 }
               }
