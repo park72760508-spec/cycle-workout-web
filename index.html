@@ -6401,8 +6401,42 @@
         
         let className = 'other-month';
         if (hasTraining) {
-          className += ' has-training';
-          console.log(`[MiniCalendarJournal] ✅ 이전 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+          // 훈련 타입 구분: INDOOR (거리 없음), OUTDOOR (거리 > 0)
+          let hasIndoor = false;
+          let hasOutdoor = false;
+          
+          logsForDate.forEach(log => {
+            const distance = log.distance_km != null ? Number(log.distance_km) : 0;
+            if (distance > 0) {
+              hasOutdoor = true;
+            } else {
+              hasIndoor = true;
+            }
+          });
+          
+          // 날짜 구분: 평일, 일요일/공휴일
+          const dayOfWeek = date.getDay();
+          const isSundayOrHoliday = dayOfWeek === 0 || isHolidayJournal(currentYear, currentMonth - 1, day);
+          
+          if (hasIndoor) {
+            className += ' has-training has-indoor';
+            if (isSundayOrHoliday) {
+              className += ' indoor-holiday';
+            } else {
+              className += ' indoor-weekday';
+            }
+          }
+          
+          if (hasOutdoor) {
+            className += ' has-training has-outdoor';
+            if (isSundayOrHoliday) {
+              className += ' outdoor-holiday';
+            } else {
+              className += ' outdoor-weekday';
+            }
+          }
+          
+          console.log(`[MiniCalendarJournal] ✅ 이전 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개 (INDOOR: ${hasIndoor}, OUTDOOR: ${hasOutdoor})`);
         }
         
         const dayEl = createCalendarDayJournal(day, className, dateKey);
@@ -6436,9 +6470,43 @@
         // 훈련 기록이 있는지 확인
         const logsForDate = miniCalendarStateJournal.trainingLogs[dateKey];
         const hasTraining = logsForDate && logsForDate.length > 0;
+        
         if (hasTraining) {
-          className += ' has-training';
-          console.log(`[MiniCalendarJournal] ✅ 현재 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+          // 훈련 타입 구분: INDOOR (거리 없음), OUTDOOR (거리 > 0)
+          let hasIndoor = false;
+          let hasOutdoor = false;
+          
+          logsForDate.forEach(log => {
+            const distance = log.distance_km != null ? Number(log.distance_km) : 0;
+            if (distance > 0) {
+              hasOutdoor = true;
+            } else {
+              hasIndoor = true;
+            }
+          });
+          
+          // 날짜 구분: 평일, 일요일/공휴일
+          const isSundayOrHoliday = dayOfWeek === 0 || isHolidayJournal(currentYear, currentMonth, day);
+          
+          if (hasIndoor) {
+            className += ' has-training has-indoor';
+            if (isSundayOrHoliday) {
+              className += ' indoor-holiday';
+            } else {
+              className += ' indoor-weekday';
+            }
+          }
+          
+          if (hasOutdoor) {
+            className += ' has-training has-outdoor';
+            if (isSundayOrHoliday) {
+              className += ' outdoor-holiday';
+            } else {
+              className += ' outdoor-weekday';
+            }
+          }
+          
+          console.log(`[MiniCalendarJournal] ✅ 현재 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개 (INDOOR: ${hasIndoor}, OUTDOOR: ${hasOutdoor})`);
         } else {
           // 디버깅: 훈련 기록이 없는 경우에도 날짜 키 확인
           if (window.DEBUG_MODE) {
@@ -6465,8 +6533,42 @@
         
         let className = 'other-month';
         if (hasTraining) {
-          className += ' has-training';
-          console.log(`[MiniCalendarJournal] ✅ 다음 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개`);
+          // 훈련 타입 구분: INDOOR (거리 없음), OUTDOOR (거리 > 0)
+          let hasIndoor = false;
+          let hasOutdoor = false;
+          
+          logsForDate.forEach(log => {
+            const distance = log.distance_km != null ? Number(log.distance_km) : 0;
+            if (distance > 0) {
+              hasOutdoor = true;
+            } else {
+              hasIndoor = true;
+            }
+          });
+          
+          // 날짜 구분: 평일, 일요일/공휴일
+          const dayOfWeek = date.getDay();
+          const isSundayOrHoliday = dayOfWeek === 0 || isHolidayJournal(currentYear, currentMonth + 1, day);
+          
+          if (hasIndoor) {
+            className += ' has-training has-indoor';
+            if (isSundayOrHoliday) {
+              className += ' indoor-holiday';
+            } else {
+              className += ' indoor-weekday';
+            }
+          }
+          
+          if (hasOutdoor) {
+            className += ' has-training has-outdoor';
+            if (isSundayOrHoliday) {
+              className += ' outdoor-holiday';
+            } else {
+              className += ' outdoor-weekday';
+            }
+          }
+          
+          console.log(`[MiniCalendarJournal] ✅ 다음 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개 (INDOOR: ${hasIndoor}, OUTDOOR: ${hasOutdoor})`);
         }
         
         const dayEl = createCalendarDayJournal(day, className, dateKey);
