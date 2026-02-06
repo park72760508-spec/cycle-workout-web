@@ -1672,31 +1672,78 @@ function updateCurrentSegmentInfo() {
     return;
   }
   
-  // 세그먼트 이름 가져오기
-  const segmentName = currentSegment.label || currentSegment.segment_type || '세그먼트';
+  // 세그먼트 label 가져오기
+  const segmentLabel = currentSegment.label || currentSegment.segment_type || '세그먼트';
   
-  // 세그먼트 duration 계산 (segDurationSec 함수 사용)
+  // 세그먼트 duration 계산 (분 단위)
   let durationSec = 0;
   if (typeof currentSegment.duration_sec === 'number') {
     durationSec = Math.max(0, Math.floor(currentSegment.duration_sec));
   } else if (typeof currentSegment.duration === 'number') {
     durationSec = Math.max(0, Math.floor(currentSegment.duration));
   }
+  const durationMinutes = Math.floor(durationSec / 60);
+  const durationText = durationMinutes > 0 ? `(${durationMinutes}분)` : '';
   
-  // duration을 분 단위로 변환하여 표시
-  let durationText = '';
-  if (durationSec > 0) {
-    const minutes = Math.floor(durationSec / 60);
-    if (minutes > 0) {
-      durationText = `(${minutes}분)`;
+  // target_type과 target_value에 따라 표시 형식 결정
+  const targetType = currentSegment.target_type || 'ftp_pct';
+  const targetValue = currentSegment.target_value || currentSegment.target || '100';
+  
+  let segmentInfoText = '';
+  
+  if (targetType === 'ftp_pct') {
+    // ftp_pct: label "FTP" target_value % (10분)
+    // 예: "Main FTP 80% (10분)"
+    const ftpPercent = typeof targetValue === 'number' ? targetValue : 
+                       (typeof targetValue === 'string' ? parseFloat(targetValue.replace('%', '').trim()) : 100);
+    segmentInfoText = `${segmentLabel} FTP ${Math.round(ftpPercent)}% ${durationText}`;
+  } else if (targetType === 'cadence_rpm') {
+    // cadence_rpm: label "RPM " target_value (10분)
+    // 예: "Main RPM 95 (10분)"
+    const rpm = typeof targetValue === 'number' ? targetValue : 
+                (typeof targetValue === 'string' ? parseFloat(targetValue.trim()) : 0);
+    segmentInfoText = `${segmentLabel} RPM ${Math.round(rpm)} ${durationText}`;
+  } else if (targetType === 'dual') {
+    // dual: label "FTP" target_value1 %, "RPM" target_value2 (10분)
+    // 예: "Main FTP 80%, RPM 95 (10분)"
+    // dual target_value: "target_value1/target_value2" 형식으로 구분
+    let ftpPercent = 100;
+    let rpm = 0;
+    
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      // "100/120" 형식 (target_value1/target_value2)
+      const parts = targetValue.split('/').map(s => s.trim());
+      ftpPercent = parseFloat(parts[0].replace('%', '').trim()) || 100;
+      rpm = parseFloat(parts[1].trim()) || 0;
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      // 배열 형식 [100, 120]
+      ftpPercent = parseFloat(targetValue[0]) || 100;
+      rpm = parseFloat(targetValue[1]) || 0;
     } else {
-      durationText = `(${durationSec}초)`;
+      // 단일 값인 경우 (기본값)
+      ftpPercent = parseFloat(targetValue) || 100;
     }
+    
+    segmentInfoText = `${segmentLabel} FTP ${Math.round(ftpPercent)}%, RPM ${Math.round(rpm)} ${durationText}`;
+  } else {
+    // 기본 형식: "세그먼트 이름 (10분)"
+    segmentInfoText = `${segmentLabel} ${durationText}`;
   }
   
-  // 표시 형식: "세그먼트 이름 (1분)"
-  segmentInfoEl.textContent = `${segmentName} ${durationText}`;
+  // 폰트 사이즈 설정 (제목 폰트 사이즈의 70% = 36px * 0.7 = 25.2px)
+  segmentInfoEl.style.fontSize = '25.2px';
+  segmentInfoText = segmentInfoText.trim();
+  segmentInfoEl.textContent = segmentInfoText;
   segmentInfoEl.style.display = 'block';
+  
+  // 디버깅 로그
+  console.log('[Bluetooth Coach] 세그먼트 정보 업데이트:', {
+    label: segmentLabel,
+    targetType: targetType,
+    targetValue: targetValue,
+    durationText: durationText,
+    result: segmentInfoText
+  });
 }
 
 /**
