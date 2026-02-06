@@ -8245,12 +8245,6 @@ async function handleAIWorkoutRecommendation(event, date) {
     
     // 사용자 정보 검증 및 로깅
     console.log('[AI] 사용자 확인:', currentUser.id);
-      name: currentUser.name,
-      ftp: currentUser.ftp,
-      weight: currentUser.weight,
-      challenge: currentUser.challenge,
-      grade: currentUser.grade
-    });
     
     // challenge 값 확인 및 경고
     const challenge = String(currentUser.challenge || 'Fitness').trim();
@@ -11030,12 +11024,6 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     
     // 사용자 정보 로깅 (디버깅용)
     console.log('[AI] 사용자:', user.id);
-      name: user.name,
-      ftp,
-      weight,
-      challenge,
-      wkg: weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'
-    });
     
     // 2. 오늘의 몸상태 확인 (localStorage에서)
     const todayCondition = localStorage.getItem(`bodyCondition_${date}`) || '보통';
