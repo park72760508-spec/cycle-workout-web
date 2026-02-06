@@ -8244,8 +8244,7 @@ async function handleAIWorkoutRecommendation(event, date) {
     }
     
     // 사용자 정보 검증 및 로깅
-    console.log('[AI 추천] 사용자 정보 확인:', {
-      id: currentUser.id,
+    console.log('[AI] 사용자 확인:', currentUser.id);
       name: currentUser.name,
       ftp: currentUser.ftp,
       weight: currentUser.weight,
@@ -8256,7 +8255,7 @@ async function handleAIWorkoutRecommendation(event, date) {
     // challenge 값 확인 및 경고
     const challenge = String(currentUser.challenge || 'Fitness').trim();
     if (!challenge || challenge === 'Fitness') {
-      console.warn('[AI 추천] 운동 목적(challenge)이 설정되지 않았거나 기본값입니다:', challenge);
+      console.warn('[AI] 목적 미설정');
     }
     
     // 추천 모달 표시
@@ -11030,8 +11029,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     }
     
     // 사용자 정보 로깅 (디버깅용)
-    console.log('[AI 추천] 사용자 정보:', {
-      id: user.id,
+    console.log('[AI] 사용자:', user.id);
       name: user.name,
       ftp,
       weight,
@@ -11137,7 +11135,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
         // 운동 목적에 맞는 워크아웃 필터링 (선택적 - 너무 제한적이면 전체 사용)
         // challenge 값이 제대로 설정된 경우에만 필터링 적용
         if (challenge && challenge !== 'Fitness' && challenge !== '') {
-          console.log(`[AI 추천] 운동 목적(${challenge})에 맞는 워크아웃 필터링 적용`);
+          console.log('[AI] 목적 필터링:', challenge);
           // 카테고리 기반 필터링은 AI가 처리하므로 여기서는 전체 워크아웃 사용
           // 다만 challenge 정보를 프롬프트에 강조하여 AI가 적절히 선택하도록 함
         }
@@ -12129,7 +12127,7 @@ async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
     showWorkoutRecommendationModal();
     await analyzeAndRecommendWorkouts(date, user, apiKey, options);
   } catch (e) {
-    console.error('[Dashboard] AI 추천 훈련 오류:', e);
+    console.error('[AI] 오류:', e.message);
     if (typeof showToast === 'function') showToast('AI 추천 중 오류가 발생했습니다.', 'error');
   }
 }
