@@ -5287,9 +5287,7 @@ window.backToWorkoutSelection = backToWorkoutSelection;
 // 그룹화 기능 통합
 window.initializeGroupedTimeline = function() {
   // workoutManager.js의 그룹화 함수들을 app.js에서 사용할 수 있도록 연결
-  if (typeof window.detectAndGroupSegments !== 'function') {
-    console.warn('detectAndGroupSegments function not found in workoutManager.js');
-  }
+  // 함수가 아직 로드되지 않았을 수 있으므로 경고는 출력하지 않음 (이미 호출부에서 안전하게 처리됨)
   
   // 타임라인 생성 시 그룹화 적용
   if (typeof buildSegmentBar === 'function') {

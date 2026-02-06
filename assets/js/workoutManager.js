@@ -3300,7 +3300,7 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     }
 
     const totalWorkouts = rawWorkouts.length;
-    const isFromCache = result && result.fromCache;
+    // isFromCache는 이미 위에서 선언되었으므로 재사용
     
     // 로딩 표시: 캐시 모드인지 서버 모드인지 명확히 표시
     if (isFromCache) {
