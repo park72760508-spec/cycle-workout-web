@@ -1499,38 +1499,10 @@ async function apiDeleteUser(id) {
         
         console.log('✅ Firebase Authentication 삭제 완료 확인:', { v8Deleted, v9Deleted, userId: id });
       } else {
-        // 관리자가 다른 사용자 삭제: Firebase Cloud Functions를 통해 처리
-        console.log('🔐 관리자 삭제: Firebase Cloud Functions를 통해 Firebase Authentication 삭제 시도:', id);
-        
-        try {
-          // Firebase Cloud Functions 호출
-          if (window.functionsV9 && window.httpsCallableV9) {
-            const deleteAuthUser = window.httpsCallableV9(window.functionsV9, 'deleteAuthUser');
-            const result = await deleteAuthUser({ targetUserId: id });
-            
-            if (result.data && result.data.success) {
-              console.log('✅ Firebase Authentication에서 사용자 삭제 완료 (Cloud Functions):', id);
-            } else {
-              console.warn('⚠️ Firebase Authentication 삭제 실패 (Cloud Functions):', result.data?.error || '알 수 없는 오류');
-              console.warn('⚠️ Firestore에서는 삭제되었지만, Firebase Authentication 삭제는 실패했습니다.');
-            }
-          } else {
-            console.warn('⚠️ Firebase Cloud Functions가 초기화되지 않았습니다.');
-            console.warn('⚠️ Firestore에서는 삭제되었지만, Firebase Authentication 삭제는 Cloud Function 배포 후 사용 가능합니다.');
-            console.warn('⚠️ Cloud Function 배포: firebase deploy --only functions:deleteAuthUser');
-          }
-        } catch (cfError) {
-          console.error('❌ Firebase Cloud Functions 호출 실패:', cfError);
-          // Cloud Function 오류는 상세 정보 제공
-          if (cfError.code === 'permission-denied') {
-            console.warn('⚠️ 권한이 없습니다. 관리자(grade=1)만 다른 사용자를 삭제할 수 있습니다.');
-          } else if (cfError.code === 'not-found') {
-            console.warn('⚠️ 사용자가 이미 Firebase Authentication에서 삭제되었거나 존재하지 않습니다.');
-          } else {
-            console.warn('⚠️ Firestore에서는 삭제되었지만, Firebase Authentication 삭제는 실패했습니다.');
-            console.warn('⚠️ Cloud Function 배포 확인: firebase deploy --only functions:deleteAuthUser');
-          }
-        }
+        // 관리자가 다른 사용자 삭제: Firestore에서만 삭제 (Firebase Authentication은 유지)
+        // 참고: Firebase Authentication은 유지하여 추후 재가입 여부 판단에 사용 예정
+        console.log('🔐 관리자 삭제: Firestore에서만 삭제 (Firebase Authentication 유지):', id);
+        console.log('ℹ️ Firebase Authentication은 유지되어 추후 재가입 여부 판단에 사용됩니다.');
       }
     } catch (authError) {
       console.error('❌ Firebase Authentication 삭제 실패:', authError);
