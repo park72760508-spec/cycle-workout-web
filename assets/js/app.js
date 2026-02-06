@@ -13690,6 +13690,55 @@ function setupMobileDashboardFirebaseStatusSubscription() {
   
   // Firebase status 구독 (랩 카운트다운 동기화)
   const statusRef = dbInstance.ref(`sessions/${sessionId}/status`);
+  
+  // 초기 상태 동기화 (중간 입실 시 현재 상태를 즉시 반영)
+  statusRef.once('value').then((snapshot) => {
+    try {
+      if (!snapshot) return;
+      const status = snapshot.val();
+      if (status && status.state === 'running') {
+        // 훈련이 진행 중이면 즉시 동기화
+        const mts = window.mobileTrainingState || {};
+        const w = window.currentWorkout;
+        
+        if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
+          mts.elapsedSec = status.elapsedTime;
+        }
+        
+        if (status.segmentIndex !== undefined && status.segmentIndex !== null) {
+          mts.segIndex = status.segmentIndex;
+          mts.segmentPowerHistory = [];
+        }
+        
+        if (status.lapCountdown !== undefined && status.lapCountdown !== null && w && w.segments) {
+          window.mobileDashboardFirebaseLapCountdown = status.lapCountdown;
+          const currentSeg = w.segments[status.segmentIndex || 0];
+          if (currentSeg) {
+            let segDur = 0;
+            if (typeof currentSeg.duration_sec === 'number') {
+              segDur = Math.max(0, Math.floor(currentSeg.duration_sec));
+            } else if (typeof currentSeg.duration === 'number') {
+              segDur = Math.max(0, Math.floor(currentSeg.duration));
+            }
+            if (segDur > 0 && status.lapCountdown >= 0) {
+              mts.segElapsedSec = Math.max(0, segDur - status.lapCountdown);
+            }
+          }
+        }
+        
+        console.log('[Mobile Dashboard] 초기 상태 동기화 완료 (중간 입실):', {
+          elapsedTime: status.elapsedTime,
+          segmentIndex: status.segmentIndex,
+          lapCountdown: status.lapCountdown
+        });
+      }
+    } catch (e) {
+      console.warn('[Mobile Dashboard] 초기 상태 동기화 오류:', e);
+    }
+  }).catch((e) => {
+    console.warn('[Mobile Dashboard] 초기 상태 읽기 실패:', e);
+  });
+  
   const statusUnsubscribe = statusRef.on('value', (snapshot) => {
     try {
       if (!snapshot) return;
@@ -13699,25 +13748,72 @@ function setupMobileDashboardFirebaseStatusSubscription() {
         if (status.lapCountdown !== undefined && status.lapCountdown !== null) {
           window.mobileDashboardFirebaseLapCountdown = status.lapCountdown;
           console.log('[Mobile Dashboard] Firebase 랩 카운트다운 동기화:', status.lapCountdown, '초');
+          
+          // 랩 카운트다운을 기반으로 세그먼트 경과 시간도 동기화
+          const mts = window.mobileTrainingState || {};
+          const w = window.currentWorkout;
+          if (w && w.segments && status.segmentIndex !== undefined) {
+            const currentSegIndex = status.segmentIndex || 0;
+            const currentSeg = w.segments[currentSegIndex];
+            if (currentSeg) {
+              // 세그먼트 duration 계산
+              let segDur = 0;
+              if (typeof currentSeg.duration_sec === 'number') {
+                segDur = Math.max(0, Math.floor(currentSeg.duration_sec));
+              } else if (typeof currentSeg.duration === 'number') {
+                segDur = Math.max(0, Math.floor(currentSeg.duration));
+              }
+              
+              // 랩 카운트다운(남은 시간)을 기반으로 세그먼트 경과 시간 역산
+              if (segDur > 0 && status.lapCountdown >= 0) {
+                const segElapsedSec = Math.max(0, segDur - status.lapCountdown);
+                mts.segElapsedSec = segElapsedSec;
+                console.log('[Mobile Dashboard] 세그먼트 경과 시간 동기화 (랩 카운트다운 기반):', segElapsedSec, '초 (세그먼트:', currentSegIndex, ', duration:', segDur, ', 남은 시간:', status.lapCountdown, ')');
+              }
+            }
+          }
         }
         
         // 경과 시간도 동기화 (이미 동기화되고 있다고 했지만, 확실히 하기 위해)
         if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
           const mts = window.mobileTrainingState || {};
-          if (mts.elapsedSec !== status.elapsedTime) {
-            // 경과 시간이 다르면 동기화 (중간에 들어온 경우)
+          const prevElapsedSec = mts.elapsedSec || 0;
+          if (Math.abs(prevElapsedSec - status.elapsedTime) > 1) {
+            // 경과 시간이 1초 이상 차이나면 동기화 (중간에 들어온 경우)
             mts.elapsedSec = status.elapsedTime;
-            console.log('[Mobile Dashboard] Firebase 경과 시간 동기화:', status.elapsedTime, '초');
+            console.log('[Mobile Dashboard] Firebase 경과 시간 동기화:', status.elapsedTime, '초 (이전:', prevElapsedSec, '초)');
           }
         }
         
         // 세그먼트 인덱스 동기화
         if (status.segmentIndex !== undefined && status.segmentIndex !== null) {
           const mts = window.mobileTrainingState || {};
+          const prevSegIndex = mts.segIndex || 0;
           if (mts.segIndex !== status.segmentIndex) {
             mts.segIndex = status.segmentIndex;
             mts.segmentPowerHistory = []; // 세그먼트 변경 시 파워 히스토리 초기화
-            console.log('[Mobile Dashboard] Firebase 세그먼트 인덱스 동기화:', status.segmentIndex);
+            
+            // 세그먼트가 변경되었으면 세그먼트 경과 시간도 재계산
+            if (status.lapCountdown !== undefined && status.lapCountdown !== null) {
+              const w = window.currentWorkout;
+              if (w && w.segments) {
+                const currentSeg = w.segments[status.segmentIndex];
+                if (currentSeg) {
+                  let segDur = 0;
+                  if (typeof currentSeg.duration_sec === 'number') {
+                    segDur = Math.max(0, Math.floor(currentSeg.duration_sec));
+                  } else if (typeof currentSeg.duration === 'number') {
+                    segDur = Math.max(0, Math.floor(currentSeg.duration));
+                  }
+                  
+                  if (segDur > 0 && status.lapCountdown >= 0) {
+                    mts.segElapsedSec = Math.max(0, segDur - status.lapCountdown);
+                  }
+                }
+              }
+            }
+            
+            console.log('[Mobile Dashboard] Firebase 세그먼트 인덱스 동기화:', status.segmentIndex, '(이전:', prevSegIndex, ')');
           }
         }
       }
@@ -15323,16 +15419,6 @@ function startMobileTrainingTimerLoop() {
       mts.elapsedSec = newElapsedSec;
     }
     
-    // 현재 세그 경과초 계산 (모바일 전용 - 직접 계산)
-    // 이전 세그먼트들의 누적 시간 계산
-    let cumStart = 0;
-    for (let i = 0; i < mts.segIndex; i++) {
-      const seg = w.segments[i];
-      if (seg) {
-        cumStart += segDurationSec(seg);
-      }
-    }
-    
     // 세그먼트 정보
     const currentSegIndex = mts.segIndex;
     const currentSeg = w.segments[currentSegIndex];
@@ -15342,19 +15428,36 @@ function startMobileTrainingTimerLoop() {
     }
     const segDur = segDurationSec(currentSeg);
     
-    // 세그먼트 경과 시간 계산 (전체 경과 시간 - 이전 세그먼트들의 누적 시간)
-    const calculatedSegElapsed = Math.max(0, mts.elapsedSec - cumStart);
-    
-    // 세그먼트 경과 시간이 세그먼트 지속 시간을 초과하지 않도록 제한
-    // (세그먼트 전환 전까지는 현재 세그먼트 내에서만 증가)
-    mts.segElapsedSec = Math.min(calculatedSegElapsed, segDur);
-    
-    // 랩 카운트다운 계산 (Firebase에서 받은 값 우선 사용, 없으면 로컬 계산)
-    // Firebase에서 동기화된 랩 카운트다운 값이 있으면 사용
-    let segRemaining = segDur - mts.segElapsedSec;
+    // Firebase에서 받은 랩 카운트다운 값이 있으면 우선 사용 (코치 화면과 동기화)
     if (window.mobileDashboardFirebaseLapCountdown !== undefined && window.mobileDashboardFirebaseLapCountdown !== null) {
       // Firebase에서 받은 랩 카운트다운 값 사용 (코치 화면과 동기화)
-      segRemaining = Math.max(0, Math.floor(window.mobileDashboardFirebaseLapCountdown));
+      const firebaseLapCountdown = Math.max(0, Math.floor(window.mobileDashboardFirebaseLapCountdown));
+      
+      // 랩 카운트다운을 기반으로 세그먼트 경과 시간 역산
+      const segElapsedSec = Math.max(0, segDur - firebaseLapCountdown);
+      mts.segElapsedSec = Math.min(segElapsedSec, segDur);
+      
+      // 랩 카운트다운 값 사용
+      var segRemaining = firebaseLapCountdown;
+    } else {
+      // Firebase 값이 없으면 로컬 계산 (폴백)
+      // 이전 세그먼트들의 누적 시간 계산
+      let cumStart = 0;
+      for (let i = 0; i < mts.segIndex; i++) {
+        const seg = w.segments[i];
+        if (seg) {
+          cumStart += segDurationSec(seg);
+        }
+      }
+      
+      // 세그먼트 경과 시간 계산 (전체 경과 시간 - 이전 세그먼트들의 누적 시간)
+      const calculatedSegElapsed = Math.max(0, mts.elapsedSec - cumStart);
+      
+      // 세그먼트 경과 시간이 세그먼트 지속 시간을 초과하지 않도록 제한
+      mts.segElapsedSec = Math.min(calculatedSegElapsed, segDur);
+      
+      // 랩 카운트다운 계산 (세그먼트 남은 시간)
+      var segRemaining = segDur - mts.segElapsedSec;
     }
     
     // UI 업데이트
