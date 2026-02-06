@@ -1553,7 +1553,11 @@ function updateTrainingStatus(status) {
     window.bluetoothCoachState.trainingState = firebaseState;
   }
   
+  const prevSegmentIndex = window.bluetoothCoachState.currentSegmentIndex || 0;
   window.bluetoothCoachState.currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : 0;
+  
+  // 세그먼트 인덱스가 변경되었거나 경과시간이 업데이트되면 세그먼트 정보도 업데이트
+  const segmentIndexChanged = prevSegmentIndex !== window.bluetoothCoachState.currentSegmentIndex;
   
   // 경과시간 업데이트 (워크아웃이 있을 때만)
   if (status.elapsedTime !== undefined && hasWorkout) {
@@ -1563,6 +1567,9 @@ function updateTrainingStatus(status) {
     // 워크아웃이 없으면 경과시간 초기화
     window.bluetoothCoachState.totalElapsedTime = 0;
     updateScoreboard();
+  } else if (segmentIndexChanged) {
+    // 세그먼트 인덱스만 변경된 경우에도 세그먼트 정보 업데이트
+    updateCurrentSegmentInfo();
   }
   
   // 랩카운트다운 업데이트 (워크아웃이 있을 때만)
@@ -1636,6 +1643,60 @@ function updateScoreboard() {
     const seconds = Math.floor(elapsed % 60);
     elapsedEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
+  
+  // 현재 세그먼트 정보 업데이트
+  updateCurrentSegmentInfo();
+}
+
+/**
+ * 현재 세그먼트 정보 업데이트 (제목 라인 중앙에 표시)
+ */
+function updateCurrentSegmentInfo() {
+  const segmentInfoEl = document.getElementById('bluetoothCoachCurrentSegmentInfo');
+  if (!segmentInfoEl) return;
+  
+  const currentWorkout = window.bluetoothCoachState.currentWorkout;
+  const currentSegmentIndex = window.bluetoothCoachState.currentSegmentIndex || 0;
+  
+  // 워크아웃이 없거나 세그먼트가 없으면 숨김
+  if (!currentWorkout || !currentWorkout.segments || currentWorkout.segments.length === 0) {
+    segmentInfoEl.textContent = '';
+    segmentInfoEl.style.display = 'none';
+    return;
+  }
+  
+  const currentSegment = currentWorkout.segments[currentSegmentIndex];
+  if (!currentSegment) {
+    segmentInfoEl.textContent = '';
+    segmentInfoEl.style.display = 'none';
+    return;
+  }
+  
+  // 세그먼트 이름 가져오기
+  const segmentName = currentSegment.label || currentSegment.segment_type || '세그먼트';
+  
+  // 세그먼트 duration 계산 (segDurationSec 함수 사용)
+  let durationSec = 0;
+  if (typeof currentSegment.duration_sec === 'number') {
+    durationSec = Math.max(0, Math.floor(currentSegment.duration_sec));
+  } else if (typeof currentSegment.duration === 'number') {
+    durationSec = Math.max(0, Math.floor(currentSegment.duration));
+  }
+  
+  // duration을 분 단위로 변환하여 표시
+  let durationText = '';
+  if (durationSec > 0) {
+    const minutes = Math.floor(durationSec / 60);
+    if (minutes > 0) {
+      durationText = `(${minutes}분)`;
+    } else {
+      durationText = `(${durationSec}초)`;
+    }
+  }
+  
+  // 표시 형식: "세그먼트 이름 (1분)"
+  segmentInfoEl.textContent = `${segmentName} ${durationText}`;
+  segmentInfoEl.style.display = 'block';
 }
 
 /**
@@ -2174,6 +2235,9 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
     if (elapsedTimeEl) {
       elapsedTimeEl.textContent = '00:00:00';
     }
+    
+    // 세그먼트 정보 업데이트 (워크아웃 선택 시 첫 번째 세그먼트 표시)
+    updateCurrentSegmentInfo();
     const lapCountdownEl = document.getElementById('bluetoothCoachLapCountdown');
     if (lapCountdownEl) {
       lapCountdownEl.textContent = '00:00';
@@ -2574,6 +2638,9 @@ function startBluetoothCoachTraining() {
   // 버튼 상태 업데이트
   updateBluetoothCoachTrainingButtons();
   
+  // 세그먼트 정보 업데이트 (훈련 시작 시 첫 번째 세그먼트 표시)
+  updateCurrentSegmentInfo();
+  
   // 우측 세그먼트 그래프 업데이트 (Indoor Training과 동일)
   // currentWorkout이 있는지 확인하고, segments도 확인
   if (window.bluetoothCoachState.currentWorkout && 
@@ -2730,6 +2797,9 @@ function skipCurrentBluetoothCoachSegmentTraining() {
   
   // 카운트다운 상태 초기화 (다음 세그먼트를 위해)
   window.bluetoothCoachState.segmentCountdownActive = false;
+  
+  // 세그먼트 정보 업데이트
+  updateCurrentSegmentInfo();
   const nextKey = String(window.bluetoothCoachState.currentSegmentIndex);
   if (window.bluetoothCoachState._countdownFired[nextKey]) {
     delete window.bluetoothCoachState._countdownFired[nextKey];
@@ -2951,6 +3021,9 @@ function startBluetoothCoachTrainingTimer() {
           
           // 카운트다운 상태 초기화 (다음 세그먼트를 위해)
           window.bluetoothCoachState.segmentCountdownActive = false;
+          
+          // 세그먼트 정보 업데이트
+          updateCurrentSegmentInfo();
           const nextKey = String(window.bluetoothCoachState.currentSegmentIndex);
           if (window.bluetoothCoachState._countdownFired[nextKey]) {
             delete window.bluetoothCoachState._countdownFired[nextKey];
@@ -3229,6 +3302,9 @@ function stopBluetoothCoachSegmentCountdown() {
  * 랩 카운트다운 업데이트 (Indoor Training의 updateLapTime 참고)
  */
 function updateBluetoothCoachLapTime() {
+  // 현재 세그먼트 정보 업데이트 (세그먼트 변경 시에도 반영)
+  updateCurrentSegmentInfo();
+  
   if (!window.bluetoothCoachState.currentWorkout || !window.bluetoothCoachState.currentWorkout.segments) {
     // 워크아웃이 없으면 랩카운트다운을 00:00으로 표시
     const countdownEl = document.getElementById('bluetoothCoachLapCountdown');
