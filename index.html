@@ -4056,15 +4056,15 @@
         </div>
       </div>
       <!-- POWERED BY STRAVA (클릭 시 Strava 동기화 모달/연동 동일 기능) -->
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 6px; gap: 8px;">
+      <div style="display: flex; align-items: center; justify-content: center; margin-top: 10px; padding-top: 6px; gap: 8px; position: relative;">
         <!-- 중앙: Powered by Strava 이미지 (중앙 정렬) -->
-        <div style="flex: 0 0 auto; display: flex; justify-content: center;">
+        <div style="display: flex; justify-content: center; align-items: center;">
           <button type="button" style="background: none; border: none; padding: 0; cursor: pointer; display: inline-block; line-height: 0;" onclick="(function(){try{var user=window.currentUser||(function(){try{return JSON.parse(localStorage.getItem('currentUser')||'null');}catch(e){return null;}})();var isStravaConnected=user&&(user.strava_refresh_token||user.strava_access_token);if(isStravaConnected){if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else{var modal=document.getElementById('stravaSyncModal');if(modal){modal.style.display='flex';modal.classList.remove('hidden');}else if(typeof showScreen==='function'){showScreen('stravaSyncScreen');}else{alert('Strava 동기화 화면을 열 수 없습니다.');}}}else{if(typeof openSettingsModal==='function'){openSettingsModal();}else{var settingsModal=document.getElementById('settingsModal');if(settingsModal){settingsModal.style.display='block';settingsModal.classList.remove('hidden');}else{alert('환경설정 모달을 열 수 없습니다.');}}}}catch(e){console.error('Strava 클릭 오류:',e);alert('오류가 발생했습니다: '+e.message);}})();" aria-label="Strava 동기화" title="Strava 동기화">
             <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 16px; width: auto; display: inline-block;" />
           </button>
         </div>
-        <!-- 오른쪽: left-arrow.gif (왼쪽 정렬) -->
-        <div style="flex: 1; display: flex; justify-content: flex-start;">
+        <!-- 오른쪽: left-arrow.gif (Powered by Strava 이미지 오른쪽 옆) -->
+        <div style="position: absolute; right: 0; display: flex; align-items: center;">
           <img src="assets/img/left-arrow.gif" alt="" style="height: 21px; width: auto; display: block;" />
         </div>
       </div>
