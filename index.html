@@ -10187,7 +10187,14 @@ Task Requirements:
 
 2. **Training Status:** 현재 상태를 정확히 분석하여 다음 중 하나를 선택: "Recovery Needed", "Building Base", "Ready to Race", "Peaking", "Overreaching"
 
-3. **Coach Comment:** 사용자 이름({{userName}})을 부르며, 최근 훈련 성과를 구체적으로 언급한 한국어(경어체) 조언. **반드시 30~40자 내외로 충실하고 구체적으로 작성**하여 사용자가 시사점을 얻을 수 있도록 해야 합니다. (예: "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요." 또는 "박지성님, 최근 훈련에서 꾸준히 파워를 유지하고 계시네요. 오늘은 중강도 훈련으로 지구력을 강화하시기 바랍니다.")
+3. **Coach Comment (매우 중요):** 사용자 이름({{userName}})을 부르며, 최근 훈련 성과를 구체적으로 분석하여 한국어(경어체)로 조언합니다. 
+   - **반드시 30~40자 이상으로 작성**해야 하며, 최소 30자는 넘어야 합니다.
+   - 최근 훈련의 구체적인 성과(예: TSS 달성률, 파워 유지, 훈련 빈도 등)를 명시적으로 언급해야 합니다.
+   - 단순히 "꾸준히" 같은 추상적 표현은 피하고, 구체적인 수치나 상황을 포함해야 합니다.
+   - 사용자가 시사점을 얻을 수 있도록 훈련 데이터를 분석한 결과를 반영해야 합니다.
+   - 예시 (좋은 예): "박지성님, 최근 7일간 평균 TSS가 450으로 목표 대비 90% 달성하셨네요. 오늘은 가벼운 리커버리로 컨디션을 조절하시기 바랍니다." (약 45자)
+   - 예시 (좋은 예): "지성님, 이번 주 파워 유지율이 85%로 우수합니다. 오늘은 중강도 훈련으로 지구력을 강화하시면 좋겠습니다." (약 40자)
+   - 예시 (나쁜 예 - 피해야 할 것): "박지성님, 최근 훈련에서 꾸준히 .." (너무 짧고 구체적이지 않음)
 
 4. **VO2max Estimate:** 파워 기반 추정 VO2max 정수 (20-100 범위).
 
@@ -10201,7 +10208,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   "condition_score": 85, 
   "training_status": "Ready to Race", 
   "vo2max_estimate": 54, 
-  "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.", 
+  "coach_comment": "박지성님, 최근 7일간 평균 TSS가 450으로 목표 대비 90% 달성하셨네요. 오늘은 가벼운 리커버리로 컨디션을 조절하시기 바랍니다.", 
   "recommended_workouts": [
     {
       "rank": 1,
@@ -10542,7 +10549,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
             coach_comment: (function() {
               var original = result.coach_comment || 'AI 추천';
-              // 대시보드 표시용: 30~40자 내외로 충실하게 표시 (제한 완화)
+              // 대시보드 표시용: 30~40자 내외로 충실하게 표시
+              // 너무 짧은 경우(20자 미만) 기본 메시지로 대체
+              if (original.length < 20) {
+                console.warn('[AI] coach_comment가 너무 짧습니다:', original);
+                return (currentUser && currentUser.name || '사용자') + '님, 최근 훈련 데이터를 분석한 결과를 바탕으로 오늘의 훈련을 추천드립니다.';
+              }
               // 50자 초과 시에만 48자로 자르고 ".." 추가 (기본적으로 충실한 내용 유지)
               return original.length > 50 ? original.substring(0, 48) + '..' : original;
             })(),
