@@ -4792,18 +4792,35 @@
           // 폴백: Firestore v8 compat
           if (logs.length === 0) {
             var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
-            if (firestore) {
-              var userLogsRef = firestore.collection('users').doc(currentUser.id).collection('logs');
-              var logsSnapshot;
+            if (firestore && currentUser && currentUser.id) {
               try {
-                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
-              } catch (indexErr) {
-                console.warn('[AI Recommendation] orderBy failed, using limit only:', indexErr);
-                logsSnapshot = await userLogsRef.limit(200).get();
+                var userLogsRef = firestore.collection('users').doc(String(currentUser.id)).collection('logs');
+                var logsSnapshot;
+                try {
+                  logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
+                } catch (indexErr) {
+                  console.warn('[AI Recommendation] orderBy failed, using limit only:', indexErr);
+                  try {
+                    logsSnapshot = await userLogsRef.limit(200).get();
+                  } catch (limitErr) {
+                    console.error('[AI Recommendation] Firestore query failed:', limitErr);
+                    // 쿼리 실패 시 빈 배열 유지
+                    logsSnapshot = { docs: [] };
+                  }
+                }
+                if (logsSnapshot && logsSnapshot.docs) {
+                  logsSnapshot.docs.forEach(function(doc) {
+                    try {
+                      logs.push({ id: doc.id, ...doc.data() });
+                    } catch (docErr) {
+                      console.warn('[AI Recommendation] Document parse error:', docErr);
+                    }
+                  });
+                }
+              } catch (firestoreErr) {
+                console.error('[AI Recommendation] Firestore access error:', firestoreErr);
+                // 오류 발생 시 빈 배열 유지하여 계속 진행
               }
-              logsSnapshot.docs.forEach(function(doc) {
-                logs.push({ id: doc.id, ...doc.data() });
-              });
             }
           }
           
@@ -11312,19 +11329,39 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (raw.length === 0) {
               var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
               if (!firestore) {
-                throw new Error('Firestore not available');
+                console.warn('[Dashboard] Firestore not available, skipping Firestore query');
+              } else if (!userProfile || !userProfile.id) {
+                console.warn('[Dashboard] userProfile.id is missing, skipping Firestore query');
+              } else {
+                try {
+                  var userLogsRef = firestore.collection('users').doc(String(userProfile.id)).collection('logs');
+                  var logsSnapshot;
+                  try {
+                    logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
+                  } catch (indexErr) {
+                    console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+                    try {
+                      logsSnapshot = await userLogsRef.limit(200).get();
+                    } catch (limitErr) {
+                      console.error('[Dashboard] Firestore query failed:', limitErr);
+                      // 쿼리 실패 시 빈 배열 유지
+                      logsSnapshot = { docs: [] };
+                    }
+                  }
+                  if (logsSnapshot && logsSnapshot.docs) {
+                    logsSnapshot.docs.forEach(function(doc) {
+                      try {
+                        raw.push({ id: doc.id, ...doc.data() });
+                      } catch (docErr) {
+                        console.warn('[Dashboard] Document parse error:', docErr);
+                      }
+                    });
+                  }
+                } catch (firestoreErr) {
+                  console.error('[Dashboard] Firestore access error:', firestoreErr);
+                  // 오류 발생 시 빈 배열 유지하여 계속 진행
+                }
               }
-              var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
-              var logsSnapshot;
-              try {
-                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(200).get();
-              } catch (indexErr) {
-                console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
-                logsSnapshot = await userLogsRef.limit(200).get();
-              }
-              logsSnapshot.docs.forEach(function(doc) {
-                raw.push({ id: doc.id, ...doc.data() });
-              });
             }
 
             // 🔒 날짜 파싱 헬퍼 함수 (훈련일지의 getDateKeyJournal 로직 참고, 독립적으로 구현)
