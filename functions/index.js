@@ -55,8 +55,8 @@ function setCorsHeaders(req, res) {
   res.set("Access-Control-Max-Age", "3600");
 }
 
-// 관리자 비밀번호 초기화: onRequest로 CORS preflight(OPTIONS) 수동 처리
-exports.adminResetUserPassword = onRequest(
+// 관리자 비밀번호 초기화: onRequest로 CORS preflight(OPTIONS) 수동 처리 (새 이름으로 배포, 기존 callable과 구분)
+exports.adminResetUserPasswordHttp = onRequest(
   { cors: false },
   async (req, res) => {
     setCorsHeaders(req, res);
