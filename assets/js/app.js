@@ -16277,23 +16277,32 @@ if (typeof window.updateTimeUI === 'function') {
   };
 }
 
-// ========== 블루투스 연결 기능 (모바일 대시보드 + 개인 훈련 화면 공통) ==========
-// context: 'mobile' | 'trainingScreen' — 어느 쪽 드롭다운을 토글할지 지정
+// ========== 블루투스 연결 기능 (모바일 대시보드 + 개인 훈련 화면 + 블루투스 개인훈련 대시보드 공통) ==========
+// context: 'mobile' | 'trainingScreen' | 'bluetoothCoach' — 어느 쪽 드롭다운을 토글할지 지정
 function toggleBluetoothDropdown(context) {
   var mobileDropdown = document.getElementById('mobileBluetoothDropdown');
   var trainingDropdown = document.getElementById('trainingScreenBluetoothDropdown');
-  var dropdown = context === 'trainingScreen' ? trainingDropdown : mobileDropdown;
-  var button = context === 'trainingScreen' ? document.getElementById('trainingScreenBluetoothConnectBtn') : document.getElementById('mobileBluetoothConnectBtn');
+  var coachDropdown = document.getElementById('bluetoothCoachBluetoothDropdown');
+  var dropdown = context === 'trainingScreen' ? trainingDropdown
+    : context === 'bluetoothCoach' ? coachDropdown
+    : mobileDropdown;
+  var button = context === 'trainingScreen' ? document.getElementById('trainingScreenBluetoothConnectBtn')
+    : context === 'bluetoothCoach' ? document.getElementById('bluetoothCoachConnectBtn')
+    : document.getElementById('mobileBluetoothConnectBtn');
   if (!dropdown || !button) return;
-  if (context === 'trainingScreen' && mobileDropdown) mobileDropdown.classList.remove('show');
-  if (context === 'mobile' && trainingDropdown) trainingDropdown.classList.remove('show');
+  if (context !== 'mobile' && mobileDropdown) mobileDropdown.classList.remove('show');
+  if (context !== 'trainingScreen' && trainingDropdown) trainingDropdown.classList.remove('show');
+  if (context !== 'bluetoothCoach' && coachDropdown) coachDropdown.classList.remove('show');
   
   const isOpening = !dropdown.classList.contains('show');
   dropdown.classList.toggle('show');
   
-  // 드롭다운 열 때 저장된 기기 목록 업데이트 (모바일 대시보드만)
+  // 드롭다운 열 때 저장된 기기 목록 업데이트 (모바일 대시보드 / 블루투스 개인훈련 대시보드)
   if (isOpening && context === 'mobile') {
     updateMobileBluetoothDropdownWithSavedDevices();
+  }
+  if (isOpening && context === 'bluetoothCoach') {
+    updateBluetoothCoachDropdownWithSavedDevices();
   }
   
   if (dropdown.classList.contains('show')) {
@@ -16310,13 +16319,18 @@ function closeBluetoothDropdownOnOutsideClick(event) {
   var mobileBtn = document.getElementById('mobileBluetoothConnectBtn');
   var trainingDropdown = document.getElementById('trainingScreenBluetoothDropdown');
   var trainingBtn = document.getElementById('trainingScreenBluetoothConnectBtn');
+  var coachDropdown = document.getElementById('bluetoothCoachBluetoothDropdown');
+  var coachBtn = document.getElementById('bluetoothCoachConnectBtn');
   var insideAny = (mobileDropdown && mobileDropdown.contains(event.target)) ||
     (mobileBtn && mobileBtn.contains(event.target)) ||
     (trainingDropdown && trainingDropdown.contains(event.target)) ||
-    (trainingBtn && trainingBtn.contains(event.target));
+    (trainingBtn && trainingBtn.contains(event.target)) ||
+    (coachDropdown && coachDropdown.contains(event.target)) ||
+    (coachBtn && coachBtn.contains(event.target));
   if (!insideAny) {
     if (mobileDropdown) mobileDropdown.classList.remove('show');
     if (trainingDropdown) trainingDropdown.classList.remove('show');
+    if (coachDropdown) coachDropdown.classList.remove('show');
     document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
   }
 }
@@ -16808,6 +16822,87 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
   });
 }
 
+// 블루투스 개인훈련 대시보드(Live Training Room) 드롭다운에 저장된 기기 목록 표시 (모바일 대시보드와 동일 로직)
+function updateBluetoothCoachDropdownWithSavedDevices() {
+  const dropdown = document.getElementById('bluetoothCoachBluetoothDropdown');
+  if (!dropdown) return;
+  
+  const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' 
+    ? getSavedDevicesByType 
+    : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
+  
+  if (!getSavedDevicesByTypeFn) {
+    console.warn('[Bluetooth Coach] getSavedDevicesByType 함수를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+  const deviceTypeLabels = {
+    trainer: '스마트 트레이너',
+    heartRate: '심박계',
+    powerMeter: '파워미터'
+  };
+  
+  deviceTypes.forEach(deviceType => {
+    const savedDevices = getSavedDevicesByTypeFn(deviceType);
+    if (savedDevices.length === 0) return;
+    
+    let itemId = '';
+    switch(deviceType) {
+      case 'trainer':
+        itemId = 'bluetoothCoachTrainerItem';
+        break;
+      case 'heartRate':
+        itemId = 'bluetoothCoachHRItem';
+        break;
+      case 'powerMeter':
+        itemId = 'bluetoothCoachPMItem';
+        break;
+    }
+    
+    const mainItem = document.getElementById(itemId);
+    if (!mainItem) return;
+    
+    const savedListId = `bluetoothCoachSaved${deviceType.charAt(0).toUpperCase() + deviceType.slice(1)}List`;
+    
+    const existingList = document.getElementById(savedListId);
+    if (existingList) existingList.remove();
+    
+    const savedListContainer = document.createElement('div');
+    savedListContainer.id = savedListId;
+    savedListContainer.style.cssText = 'border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 8px; margin-top: 8px;';
+    
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px; margin-bottom: 4px;';
+    header.textContent = `⭐ 저장된 ${deviceTypeLabels[deviceType]}`;
+    savedListContainer.appendChild(header);
+    
+    savedDevices.forEach(saved => {
+      const savedItem = document.createElement('div');
+      savedItem.className = 'mobile-bluetooth-dropdown-item';
+      savedItem.style.cssText = 'padding: 8px 12px; font-size: 13px; cursor: pointer;';
+      savedItem.onclick = (e) => {
+        e.stopPropagation();
+        connectMobileBluetoothDevice(deviceType, saved.deviceId);
+      };
+      
+      const nickname = document.createElement('span');
+      nickname.textContent = saved.nickname || saved.name || '알 수 없는 기기';
+      nickname.style.cssText = 'color: #fff;';
+      
+      const deviceName = document.createElement('span');
+      deviceName.textContent = ` (${saved.name})`;
+      deviceName.style.cssText = 'color: #888; font-size: 11px;';
+      
+      savedItem.appendChild(nickname);
+      savedItem.appendChild(deviceName);
+      savedListContainer.appendChild(savedItem);
+    });
+    
+    mainItem.parentNode.insertBefore(savedListContainer, mainItem.nextSibling);
+  });
+}
+
 function updateMobileBluetoothConnectionStatus() {
   var hrItem = document.getElementById('mobileBluetoothHRItem');
   var hrStatus = document.getElementById('mobileHeartRateStatus');
@@ -16817,8 +16912,9 @@ function updateMobileBluetoothConnectionStatus() {
   var pmStatus = document.getElementById('mobilePowerMeterStatus');
   var connectBtn = document.getElementById('mobileBluetoothConnectBtn');
   
-  // 저장된 기기 목록 업데이트
+  // 저장된 기기 목록 업데이트 (모바일 + 블루투스 Coach 드롭다운)
   updateMobileBluetoothDropdownWithSavedDevices();
+  updateBluetoothCoachDropdownWithSavedDevices();
 
   function setStatus(item, statusEl, connected) {
     if (item) item.classList.toggle('connected', !!connected);
@@ -16879,6 +16975,36 @@ function updateMobileBluetoothConnectionStatus() {
     if (!anyTs) tsConnectBtn.classList.remove('erg-mode-active');
   }
 
+  // 블루투스 개인훈련 대시보드(Live Training Room) 연결 버튼/드롭다운 UI 동기화
+  var bcHrItem = document.getElementById('bluetoothCoachHRItem');
+  var bcHrStatus = document.getElementById('bluetoothCoachHeartRateStatus');
+  var bcTrainerItem = document.getElementById('bluetoothCoachTrainerItem');
+  var bcTrainerStatus = document.getElementById('bluetoothCoachTrainerStatus');
+  var bcPmItem = document.getElementById('bluetoothCoachPMItem');
+  var bcPmStatus = document.getElementById('bluetoothCoachPowerMeterStatus');
+  var bcConnectBtn = document.getElementById('bluetoothCoachConnectBtn');
+  var bcErgMenu = document.getElementById('bluetoothCoachErgMenu');
+  var bcErgStatus = document.getElementById('bluetoothCoachErgStatus');
+  var bcErgToggle = document.getElementById('bluetoothCoachErgToggle');
+  var bcErgTarget = document.getElementById('bluetoothCoachErgTargetPower');
+  setStatus(bcHrItem, bcHrStatus, hasHr);
+  setStatus(bcTrainerItem, bcTrainerStatus, hasTrainer);
+  setStatus(bcPmItem, bcPmStatus, hasPm);
+  if (bcErgMenu) bcErgMenu.style.display = hasTrainer ? 'block' : 'none';
+  if (hasTrainer && window.ergController) {
+    if (bcErgToggle) bcErgToggle.checked = window.ergController.state.enabled;
+    if (bcErgStatus) {
+      bcErgStatus.textContent = window.ergController.state.enabled ? 'ON' : 'OFF';
+      bcErgStatus.style.color = window.ergController.state.enabled ? '#00d4aa' : '#888';
+    }
+    if (bcErgTarget) bcErgTarget.value = Math.round(window.ergController.state.targetPower || 0);
+  }
+  if (bcConnectBtn) {
+    var anyBc = hasHr || hasTrainer || hasPm;
+    bcConnectBtn.classList.toggle('has-connection', !!anyBc);
+    if (!anyBc) bcConnectBtn.classList.remove('erg-mode-active');
+  }
+
   var anyConnected = hasHr || hasTrainer || hasPm;
   if (window.isSensorConnected !== anyConnected) {
     window.isSensorConnected = anyConnected;
@@ -16911,6 +17037,11 @@ function updateMobileConnectionButtonColor() {
   if (tsBtn) {
     if (addErg) tsBtn.classList.add('erg-mode-active');
     else tsBtn.classList.remove('erg-mode-active');
+  }
+  var bcBtn = document.getElementById('bluetoothCoachConnectBtn');
+  if (bcBtn) {
+    if (addErg) bcBtn.classList.add('erg-mode-active');
+    else bcBtn.classList.remove('erg-mode-active');
   }
 }
 
@@ -16973,6 +17104,10 @@ function initMobileErgController() {
       var tsErgStatus = document.getElementById('trainingScreenBluetoothErgStatus');
       if (tsErgToggle) tsErgToggle.checked = value;
       if (tsErgStatus) { tsErgStatus.textContent = value ? 'ON' : 'OFF'; tsErgStatus.style.color = value ? '#00d4aa' : '#888'; }
+      var bcErgToggle = document.getElementById('bluetoothCoachErgToggle');
+      var bcErgStatus = document.getElementById('bluetoothCoachErgStatus');
+      if (bcErgToggle) bcErgToggle.checked = value;
+      if (bcErgStatus) { bcErgStatus.textContent = value ? 'ON' : 'OFF'; bcErgStatus.style.color = value ? '#00d4aa' : '#888'; }
       console.log('[Mobile Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
       updateMobileConnectionButtonColor();
       updateMobileBluetoothConnectionStatus();
@@ -16982,6 +17117,8 @@ function initMobileErgController() {
       if (targetPowerInput) targetPowerInput.value = Math.round(value);
       var tsTargetInput = document.getElementById('trainingScreenBluetoothErgTargetPower');
       if (tsTargetInput) tsTargetInput.value = Math.round(value);
+      var bcTargetInput = document.getElementById('bluetoothCoachErgTargetPower');
+      if (bcTargetInput) bcTargetInput.value = Math.round(value);
       if (window.liveData) window.liveData.targetPower = value;
       console.log('[Mobile Dashboard] 목표 파워 변경:', value, 'W');
     }
@@ -17105,6 +17242,43 @@ function initMobileErgController() {
     });
     newTsErgTargetPowerInput.addEventListener('keypress', function (e) {
       if (e.key === 'Enter') newTsErgSetBtn.click();
+    });
+  }
+
+  // 블루투스 개인훈련 대시보드(Live Training Room) ERG 토글/설정 버튼 (동일 ergController)
+  var bcErgToggle = document.getElementById('bluetoothCoachErgToggle');
+  var bcErgSetBtn = document.getElementById('bluetoothCoachErgSetBtn');
+  var bcErgTargetPowerInput = document.getElementById('bluetoothCoachErgTargetPower');
+  if (bcErgToggle) {
+    var newBcErgToggle = bcErgToggle.cloneNode(true);
+    bcErgToggle.parentNode.replaceChild(newBcErgToggle, bcErgToggle);
+    newBcErgToggle.addEventListener('change', async function (e) {
+      try {
+        await window.ergController.toggleErgMode(e.target.checked);
+      } catch (err) {
+        if (typeof showToast === 'function') showToast(err.message || '스마트로라 연결을 확인해주세요.');
+        e.target.checked = !e.target.checked;
+      }
+    });
+  }
+  if (bcErgSetBtn && bcErgTargetPowerInput) {
+    var newBcErgSetBtn = bcErgSetBtn.cloneNode(true);
+    var newBcErgTargetPowerInput = bcErgTargetPowerInput.cloneNode(true);
+    bcErgSetBtn.parentNode.replaceChild(newBcErgSetBtn, bcErgSetBtn);
+    bcErgTargetPowerInput.parentNode.replaceChild(newBcErgTargetPowerInput, bcErgTargetPowerInput);
+    newBcErgSetBtn.addEventListener('click', function () {
+      var targetPower = Number(newBcErgTargetPowerInput.value) || 0;
+      if (targetPower > 0) {
+        window.ergController.setTargetPower(targetPower).catch(function (err) {
+          if (typeof showToast === 'function') showToast('목표 파워 설정에 실패했습니다.');
+        });
+        if (typeof showToast === 'function') showToast('목표 파워 ' + targetPower + 'W로 설정되었습니다.');
+      } else {
+        if (typeof showToast === 'function') showToast('유효한 목표 파워를 입력해주세요.');
+      }
+    });
+    newBcErgTargetPowerInput.addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') newBcErgSetBtn.click();
     });
   }
 
