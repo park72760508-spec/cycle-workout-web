@@ -87,30 +87,54 @@ function getSavedDevicesByType(deviceType) {
 // 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
   console.log('[showNicknameModal] 닉네임 입력 모달 표시 시작:', deviceName);
+  console.log('[showNicknameModal] callback 타입:', typeof callback);
+  
+  if (!callback || typeof callback !== 'function') {
+    console.error('[showNicknameModal] callback이 함수가 아닙니다:', callback);
+    return false;
+  }
   
   try {
+    console.log('[showNicknameModal] prompt() 호출 전');
     const nickname = prompt(
       `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
       deviceName || ''
     );
     
-    console.log('[showNicknameModal] 사용자 입력:', nickname);
+    console.log('[showNicknameModal] prompt() 호출 후, 사용자 입력:', nickname);
     
     if (nickname !== null && nickname.trim()) {
       const trimmedNickname = nickname.trim();
       console.log('[showNicknameModal] 닉네임 저장:', trimmedNickname);
-      callback(trimmedNickname);
+      // 콜백을 즉시 호출
+      try {
+        callback(trimmedNickname);
+        console.log('[showNicknameModal] 콜백 실행 완료');
+      } catch (callbackError) {
+        console.error('[showNicknameModal] 콜백 실행 오류:', callbackError);
+      }
       return true;
     } else {
       console.log('[showNicknameModal] 닉네임 입력 취소 또는 빈 값');
       // 취소하거나 빈 값이면 기본 이름으로 저장
-      callback(deviceName || '알 수 없는 기기');
+      try {
+        callback(deviceName || '알 수 없는 기기');
+        console.log('[showNicknameModal] 기본 이름으로 콜백 실행 완료');
+      } catch (callbackError) {
+        console.error('[showNicknameModal] 기본 이름 콜백 실행 오류:', callbackError);
+      }
       return false;
     }
   } catch (error) {
     console.error('[showNicknameModal] 오류 발생:', error);
+    console.error('[showNicknameModal] 오류 스택:', error.stack);
     // 오류 발생 시 기본 이름으로 저장
-    callback(deviceName || '알 수 없는 기기');
+    try {
+      callback(deviceName || '알 수 없는 기기');
+      console.log('[showNicknameModal] 오류 후 기본 이름으로 콜백 실행 완료');
+    } catch (callbackError) {
+      console.error('[showNicknameModal] 오류 후 콜백 실행 오류:', callbackError);
+    }
     return false;
   }
 }
@@ -728,31 +752,80 @@ async function connectHeartRate() {
     
     // 3. 새 기기 저장 (닉네임 설정)
     const deviceName = device.name || '알 수 없는 기기';
-    const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'heartRate');
+    const allSavedDevices = loadSavedDevices();
+    console.log('[connectHeartRate] 전체 저장된 기기 목록:', allSavedDevices);
+    console.log('[connectHeartRate] 현재 기기 ID:', device.id);
     
-    console.log('[connectHeartRate] 기기 저장 확인:', { deviceId: device.id, deviceName, saved: !!saved });
+    const saved = allSavedDevices.find(d => {
+      const match = d.deviceId === device.id && d.deviceType === 'heartRate';
+      if (match) {
+        console.log('[connectHeartRate] 저장된 기기 매칭 성공:', d);
+      }
+      return match;
+    });
+    
+    console.log('[connectHeartRate] 기기 저장 확인:', { 
+      deviceId: device.id, 
+      deviceName, 
+      saved: !!saved,
+      savedDevicesCount: allSavedDevices.length,
+      heartRateDevicesCount: allSavedDevices.filter(d => d.deviceType === 'heartRate').length
+    });
     
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       console.log('[connectHeartRate] 새 기기 감지, 닉네임 입력 모달 표시');
-      const nicknameModalFn = typeof showNicknameModal === 'function' ? showNicknameModal : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
+      console.log('[connectHeartRate] showNicknameModal 함수 확인:', {
+        local: typeof showNicknameModal,
+        window: typeof window.showNicknameModal
+      });
+      
+      // showNicknameModal 함수 찾기 (로컬 스코프 우선, 없으면 전역)
+      const nicknameModalFn = typeof showNicknameModal === 'function' 
+        ? showNicknameModal 
+        : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
+      
       if (nicknameModalFn) {
-        nicknameModalFn(deviceName, (nickname) => {
-          console.log('[connectHeartRate] 닉네임 입력 완료:', nickname);
-          saveDevice(device.id, deviceName, 'heartRate', nickname);
-          showToast(`✅ ${nickname} 저장 완료`);
-          // 저장 후 드롭다운 목록 업데이트
-          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
-            updateIndividualBluetoothDropdownWithSavedDevices();
-          }
-          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
-            updateMobileBluetoothDropdownWithSavedDevices();
-          }
-        });
+        console.log('[connectHeartRate] showNicknameModal 함수 호출 시작');
+        console.log('[connectHeartRate] nicknameModalFn:', nicknameModalFn);
+        console.log('[connectHeartRate] deviceName:', deviceName);
+        
+        // prompt()는 동기 함수이므로 즉시 호출 (connectTrainer와 동일한 방식)
+        try {
+          console.log('[connectHeartRate] showNicknameModal 직접 호출');
+          nicknameModalFn(deviceName, (nickname) => {
+            console.log('[connectHeartRate] 닉네임 입력 완료 콜백 실행:', nickname);
+            saveDevice(device.id, deviceName, 'heartRate', nickname);
+            showToast(`✅ ${nickname} 저장 완료`);
+            // 저장 후 드롭다운 목록 업데이트
+            setTimeout(() => {
+              if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+                updateIndividualBluetoothDropdownWithSavedDevices();
+              }
+              if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
+                updateMobileBluetoothDropdownWithSavedDevices();
+              }
+            }, 100);
+          });
+          console.log('[connectHeartRate] showNicknameModal 호출 완료');
+        } catch (modalError) {
+          console.error('[connectHeartRate] showNicknameModal 호출 오류:', modalError);
+          console.error('[connectHeartRate] 오류 스택:', modalError.stack);
+          // 오류 발생 시 기본 이름으로 저장
+          saveDevice(device.id, deviceName, 'heartRate', deviceName);
+          showToast(`✅ ${deviceName} 연결 성공 (기본 이름으로 저장됨)`);
+        }
       } else {
         console.error('[connectHeartRate] showNicknameModal 함수를 찾을 수 없습니다.');
+        console.error('[connectHeartRate] 사용 가능한 함수들:', {
+          showNicknameModal: typeof showNicknameModal,
+          windowShowNicknameModal: typeof window.showNicknameModal,
+          saveDevice: typeof saveDevice,
+          windowSaveDevice: typeof window.saveDevice
+        });
         // 폴백: 기본 이름으로 저장
         saveDevice(device.id, deviceName, 'heartRate', deviceName);
+        showToast(`✅ ${deviceName} 연결 성공 (기본 이름으로 저장됨)`);
       }
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
@@ -762,7 +835,11 @@ async function connectHeartRate() {
     
     updateDevicesList();
     showConnectionStatus(false);
-    showToast(`✅ ${deviceName} 연결 성공`);
+    
+    // 저장된 기기가 아닌 경우에만 기본 연결 성공 메시지 표시 (닉네임 모달에서 이미 표시됨)
+    if (saved) {
+      showToast(`✅ ${saved.nickname || deviceName} 연결 성공`);
+    }
   } catch (err) {
     showConnectionStatus(false);
     if (err.name !== 'NotFoundError' && err.name !== 'SecurityError') {
