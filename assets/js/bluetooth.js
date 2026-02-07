@@ -405,13 +405,13 @@ async function connectTrainer() {
       { namePrefix: "Wahoo" }, { namePrefix: "KICKR" }, { namePrefix: "Tacx" }
     ];
     
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가 (최대 3개까지만)
     if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      savedDevices.forEach(saved => {
-        if (saved.name) {
-          filters.push({ namePrefix: saved.name });
-        }
-      });
+      const nameFilters = savedDevices
+        .slice(0, 3) // 최대 3개까지만 필터 추가
+        .filter(saved => saved.name && saved.name.trim())
+        .map(saved => ({ namePrefix: saved.name }));
+      filters = filters.concat(nameFilters);
     }
 
     const optionalServices = [
@@ -423,12 +423,35 @@ async function connectTrainer() {
       if (optionalServices.indexOf(uuid) === -1) optionalServices.push(uuid);
     });
 
+    console.log('[connectTrainer] requestDevice 필터:', filters);
+
     let device;
     try {
-        device = await navigator.bluetooth.requestDevice({ filters, optionalServices });
+        device = await navigator.bluetooth.requestDevice({ 
+          filters: filters.length > 0 ? filters : undefined, 
+          optionalServices 
+        });
     } catch (e) {
-        showConnectionStatus(false);
-        return;
+        console.warn('[connectTrainer] 필터로 기기 검색 실패:', e);
+        // 사용자가 취소한 경우 (NotFoundError)는 재시도하지 않음
+        if (e.name === 'NotFoundError' || e.name === 'AbortError') {
+          showConnectionStatus(false);
+          return;
+        }
+        // 필터 실패 시 기본 필터로 재시도
+        try {
+          device = await navigator.bluetooth.requestDevice({ 
+            filters: [
+              { services: [UUIDS.FTMS_SERVICE] },
+              { services: [UUIDS.CPS_SERVICE] }
+            ],
+            optionalServices
+          });
+        } catch (e2) {
+          console.error('[connectTrainer] 기본 필터로도 기기 검색 실패:', e2);
+          showConnectionStatus(false);
+          return;
+        }
     }
 
     const server = await device.gatt.connect();
@@ -717,29 +740,48 @@ async function connectHeartRate() {
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
     // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
-    const filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
+    let filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
     
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가 (최대 3개까지만)
     if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      savedDevices.forEach(saved => {
-        if (saved.name) {
-          filters.push({ namePrefix: saved.name });
-        }
-      });
+      const nameFilters = savedDevices
+        .slice(0, 3) // 최대 3개까지만 필터 추가 (너무 많으면 문제 발생)
+        .filter(saved => saved.name && saved.name.trim())
+        .map(saved => ({ namePrefix: saved.name }));
+      filters = filters.concat(nameFilters);
     }
+    
+    console.log('[connectHeartRate] requestDevice 필터:', filters);
     
     let device;
     try {
         device = await navigator.bluetooth.requestDevice({
-            filters: filters,
+            filters: filters.length > 0 ? filters : undefined, // 필터가 없으면 undefined
             optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
     } catch(e) {
+        console.warn('[connectHeartRate] 필터로 기기 검색 실패, 기본 필터로 재시도:', e);
+        // 사용자가 취소한 경우 (NotFoundError)는 재시도하지 않음
+        if (e.name === 'NotFoundError' || e.name === 'AbortError') {
+          throw e; // 사용자 취소는 그대로 전파
+        }
         // 필터 실패 시 기본 필터로 재시도
-        device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [UUIDS.HR_SERVICE] }],
-            optionalServices: [UUIDS.HR_SERVICE]
-        });
+        try {
+          device = await navigator.bluetooth.requestDevice({
+              filters: [{ services: [UUIDS.HR_SERVICE] }],
+              optionalServices: [UUIDS.HR_SERVICE]
+          });
+        } catch(e2) {
+          // 두 번째 시도도 실패하면 에러 전파
+          console.error('[connectHeartRate] 기본 필터로도 기기 검색 실패:', e2);
+          throw e2;
+        }
+    }
+    
+    if (!device) {
+      console.warn('[connectHeartRate] 기기를 선택하지 않았습니다.');
+      showConnectionStatus(false);
+      return;
     }
     
     const server = await device.gatt.connect();
@@ -924,19 +966,42 @@ async function connectPowerMeter() {
     // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
     const filters = [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }];
     
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가 (최대 3개까지만)
     if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      savedDevices.forEach(saved => {
-        if (saved.name) {
-          filters.push({ namePrefix: saved.name });
-        }
-      });
+      const nameFilters = savedDevices
+        .slice(0, 3) // 최대 3개까지만 필터 추가
+        .filter(saved => saved.name && saved.name.trim())
+        .map(saved => ({ namePrefix: saved.name }));
+      filters = filters.concat(nameFilters);
     }
     
-    let device = await navigator.bluetooth.requestDevice({ 
-        filters: filters, 
-        optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE] 
-    });
+    console.log('[connectPowerMeter] requestDevice 필터:', filters);
+    
+    let device;
+    try {
+      device = await navigator.bluetooth.requestDevice({ 
+        filters: filters.length > 0 ? filters : undefined, 
+        optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, 'battery_service'] 
+      });
+    } catch(e) {
+      console.warn('[connectPowerMeter] 필터로 기기 검색 실패, 기본 필터로 재시도:', e);
+      // 사용자가 취소한 경우 (NotFoundError)는 재시도하지 않음
+      if (e.name === 'NotFoundError' || e.name === 'AbortError') {
+        showConnectionStatus(false);
+        return;
+      }
+      // 필터 실패 시 기본 필터로 재시도
+      try {
+        device = await navigator.bluetooth.requestDevice({ 
+          filters: [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }],
+          optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, 'battery_service']
+        });
+      } catch(e2) {
+        console.error('[connectPowerMeter] 기본 필터로도 기기 검색 실패:', e2);
+        showConnectionStatus(false);
+        return;
+      }
+    }
     const server = await device.gatt.connect();
     let service, characteristic;
     try {
