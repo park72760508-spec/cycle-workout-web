@@ -2936,7 +2936,12 @@ async function connectIndividualBluetoothDevice(deviceType, savedDeviceId) {
 // 저장된 기기 목록을 드롭다운에 동적으로 표시하는 함수 (개인훈련 대시보드 전용)
 function updateIndividualBluetoothDropdownWithSavedDevices() {
   const dropdown = document.getElementById('individualBluetoothDropdown');
-  if (!dropdown) return;
+  if (!dropdown) {
+    console.warn('[Individual Dashboard] 드롭다운을 찾을 수 없습니다.');
+    return;
+  }
+  
+  console.log('[Individual Dashboard] 저장된 기기 목록 업데이트 시작');
   
   // 저장된 기기 로드 함수가 있는지 확인
   const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' 
@@ -2958,13 +2963,17 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
   
   deviceTypes.forEach(deviceType => {
     const savedDevices = getSavedDevicesByTypeFn(deviceType);
+    console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 수:`, savedDevices.length);
+    
     if (savedDevices.length === 0) return;
     
     // 해당 메인 아이템 찾기
     let itemId = '';
+    let ergMenuId = null;
     switch(deviceType) {
       case 'trainer':
         itemId = 'individualBluetoothTrainerItem';
+        ergMenuId = 'individualBluetoothErgMenu';
         break;
       case 'heartRate':
         itemId = 'individualBluetoothHRItem';
@@ -2975,7 +2984,10 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
     }
     
     const mainItem = document.getElementById(itemId);
-    if (!mainItem) return;
+    if (!mainItem) {
+      console.warn(`[Individual Dashboard] ${itemId}를 찾을 수 없습니다.`);
+      return;
+    }
     
     // 저장된 기기 목록 컨테이너 ID
     const savedListId = `individualBluetoothSaved${deviceType.charAt(0).toUpperCase() + deviceType.slice(1)}List`;
@@ -3026,9 +3038,26 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
       savedListContainer.appendChild(savedItem);
     });
     
-    // 메인 아이템 다음에 삽입
-    mainItem.parentNode.insertBefore(savedListContainer, mainItem.nextSibling);
+    // 삽입 위치 결정: 트레이너의 경우 ERG 메뉴 다음에, 그 외는 메인 아이템 다음에
+    let insertBeforeElement = mainItem.nextSibling;
+    if (deviceType === 'trainer' && ergMenuId) {
+      const ergMenu = document.getElementById(ergMenuId);
+      if (ergMenu) {
+        // ERG 메뉴 다음에 삽입
+        insertBeforeElement = ergMenu.nextSibling;
+      }
+    }
+    
+    // 메인 아이템의 부모에 삽입
+    if (mainItem.parentNode) {
+      mainItem.parentNode.insertBefore(savedListContainer, insertBeforeElement);
+      console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 목록 추가 완료`);
+    } else {
+      console.error(`[Individual Dashboard] ${itemId}의 부모 노드를 찾을 수 없습니다.`);
+    }
   });
+  
+  console.log('[Individual Dashboard] 저장된 기기 목록 업데이트 완료');
 }
 
 // 블루투스 연결 상태 업데이트 함수 (개인훈련 대시보드 전용, 독립적 구동)
@@ -3044,69 +3073,94 @@ function updateIndividualBluetoothConnectionStatus() {
     // 드롭다운에 저장된 기기 목록 업데이트
     updateIndividualBluetoothDropdownWithSavedDevices();
     
-    // 심박계 상태
-    if (window.connectedDevices?.heartRate) {
-        if (hrItem) hrItem.classList.add('connected');
-        if (hrStatus) {
-            hrStatus.textContent = '연결됨';
-            hrStatus.style.color = '#00d4aa';
-        }
-    } else {
-        if (hrItem) hrItem.classList.remove('connected');
-        if (hrStatus) {
-            hrStatus.textContent = '미연결';
-            hrStatus.style.color = '#888';
+    // 상태 설정 헬퍼 함수
+    function setStatus(item, statusEl, connected) {
+        if (item) item.classList.toggle('connected', !!connected);
+        if (statusEl) {
+            statusEl.textContent = connected ? '연결됨' : '미연결';
+            statusEl.style.color = connected ? '#00d4aa' : '#888';
         }
     }
     
-    // 스마트 트레이너 상태
-    if (window.connectedDevices?.trainer) {
-        if (trainerItem) trainerItem.classList.add('connected');
-        if (trainerStatus) {
-            trainerStatus.textContent = '연결됨';
-            trainerStatus.style.color = '#00d4aa';
-        }
+    // 연결 상태 확인
+    const hasHr = !!window.connectedDevices?.heartRate;
+    const hasTrainer = !!window.connectedDevices?.trainer;
+    const hasPm = !!window.connectedDevices?.powerMeter;
+    
+    // 각 디바이스 상태 업데이트
+    setStatus(hrItem, hrStatus, hasHr);
+    setStatus(trainerItem, trainerStatus, hasTrainer);
+    setStatus(pmItem, pmStatus, hasPm);
+    
+    // ERG 메뉴 표시/숨김
+    const ergMenu = document.getElementById('individualBluetoothErgMenu');
+    if (ergMenu) {
+        ergMenu.style.display = hasTrainer ? 'block' : 'none';
+    }
+    
+    // ERG 컨트롤러 연결 상태 업데이트
+    if (window.ergController) {
+        window.ergController.updateConnectionStatus(hasTrainer ? 'connected' : 'disconnected');
+    }
+    
+    // ERG 메뉴 상태 업데이트 (트레이너 연결 시)
+    if (hasTrainer && window.ergController) {
+        const ergToggle = document.getElementById('individualBluetoothErgToggle');
+        const ergStatus = document.getElementById('individualBluetoothErgStatus');
+        const ergTarget = document.getElementById('individualBluetoothErgTargetPower');
         
-        // ERG 동작 메뉴 표시 (스마트 트레이너 연결 시)
-        const ergMenu = document.getElementById('individualBluetoothErgMenu');
-        if (ergMenu) {
-            ergMenu.style.display = 'block';
+        if (ergToggle) {
+            ergToggle.checked = window.ergController.state.enabled;
         }
-    } else {
-        if (trainerItem) trainerItem.classList.remove('connected');
-        if (trainerStatus) {
-            trainerStatus.textContent = '미연결';
-            trainerStatus.style.color = '#888';
+        if (ergStatus) {
+            ergStatus.textContent = window.ergController.state.enabled ? 'ON' : 'OFF';
+            ergStatus.style.color = window.ergController.state.enabled ? '#00d4aa' : '#888';
         }
-        
-        // ERG 동작 메뉴 숨김 (스마트 트레이너 미연결 시)
-        const ergMenu = document.getElementById('individualBluetoothErgMenu');
-        if (ergMenu) {
-            ergMenu.style.display = 'none';
+        if (ergTarget) {
+            ergTarget.value = Math.round(window.ergController.state.targetPower || 0);
         }
     }
     
-    // 파워미터 상태
-    if (window.connectedDevices?.powerMeter) {
-        if (pmItem) pmItem.classList.add('connected');
-        if (pmStatus) {
-            pmStatus.textContent = '연결됨';
-            pmStatus.style.color = '#00d4aa';
-        }
-    } else {
-        if (pmItem) pmItem.classList.remove('connected');
-        if (pmStatus) {
-            pmStatus.textContent = '미연결';
-            pmStatus.style.color = '#888';
-        }
-    }
-    
-    // 연결 버튼 상태 업데이트 (연결된 디바이스가 하나라도 있으면)
+    // 연결 버튼 상태 업데이트
     if (connectBtn) {
-        if (window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter) {
-            connectBtn.classList.add('has-connection');
+        const any = hasHr || hasTrainer || hasPm;
+        connectBtn.classList.toggle('has-connection', !!any);
+        if (!any) {
+            connectBtn.classList.remove('erg-mode-active');
+        }
+    }
+    
+    // 전역 센서 연결 상태 업데이트 및 이벤트 디스패치
+    const anyConnected = hasHr || hasTrainer || hasPm;
+    if (window.isSensorConnected !== anyConnected) {
+        window.isSensorConnected = anyConnected;
+        console.log('[Individual Dashboard] [BLE] Global Flag SET: isSensorConnected =', anyConnected);
+        try {
+            window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
+                detail: { connected: anyConnected } 
+            }));
+        } catch (e) {
+            console.warn('[Individual Dashboard] [BLE] dispatchEvent stelvio-sensor-update failed:', e);
+        }
+    }
+    
+    // 연결 버튼 색상 업데이트 (ERG 모드 활성화 시)
+    updateIndividualConnectionButtonColor();
+}
+
+// 연결 버튼 색상 업데이트 함수 (개인훈련 대시보드 전용)
+function updateIndividualConnectionButtonColor() {
+    const isTrainerConnected = !!window.connectedDevices?.trainer;
+    const isErgModeActive = (window.ergController && window.ergController.state.enabled) ||
+        (window.ergModeState && window.ergModeState.enabled);
+    const addErg = isTrainerConnected && isErgModeActive;
+    
+    const connectBtn = document.getElementById('individualBluetoothConnectBtn');
+    if (connectBtn) {
+        if (addErg) {
+            connectBtn.classList.add('erg-mode-active');
         } else {
-            connectBtn.classList.remove('has-connection');
+            connectBtn.classList.remove('erg-mode-active');
         }
     }
 }
@@ -3117,6 +3171,7 @@ window.connectIndividualBluetoothDevice = connectIndividualBluetoothDevice;
 window.connectIndividualBluetoothDeviceToSaved = connectIndividualBluetoothDeviceToSaved;
 window.updateIndividualBluetoothConnectionStatus = updateIndividualBluetoothConnectionStatus;
 window.updateIndividualBluetoothDropdownWithSavedDevices = updateIndividualBluetoothDropdownWithSavedDevices;
+window.updateIndividualConnectionButtonColor = updateIndividualConnectionButtonColor;
 
 // 페이지 로드 시 연결 상태 업데이트 및 주기적 업데이트
 document.addEventListener('DOMContentLoaded', () => {
