@@ -2920,16 +2920,28 @@ async function connectIndividualBluetoothDevice(deviceType, savedDeviceId) {
     
     try {
         console.log('[Individual] 블루투스 디바이스 연결 시도:', deviceType);
+        console.log('[Individual] 연결 함수 확인:', { 
+            connectFunction: typeof connectFunction, 
+            connectTrainer: typeof window.connectTrainer,
+            connectHeartRate: typeof window.connectHeartRate,
+            connectPowerMeter: typeof window.connectPowerMeter
+        });
+        
         await connectFunction();
+        
+        console.log('[Individual] 블루투스 디바이스 연결 완료:', deviceType);
         
         // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트 및 닉네임 저장 완료를 위해)
         // bluetooth.js의 연결 함수들이 showNicknameModal을 호출하므로, 사용자가 닉네임을 입력할 시간을 줌
+        // prompt()는 동기적으로 작동하므로, 연결 함수가 완료되면 닉네임 입력도 완료된 상태
         setTimeout(() => {
+            console.log('[Individual] 연결 상태 업데이트 시작');
             // 연결 상태 업데이트 (닉네임 저장 후 드롭다운 목록도 업데이트됨)
             updateIndividualBluetoothConnectionStatus();
-        }, 500); // 500ms 대기 후 업데이트 (닉네임 입력 대기 시간 포함)
+        }, 1000); // 1초 대기 후 업데이트 (닉네임 입력 및 저장 완료 대기)
     } catch (error) {
         console.error('[Individual] 블루투스 디바이스 연결 실패:', deviceType, error);
+        console.error('[Individual] 에러 상세:', error.stack);
         // 에러는 bluetooth.js의 showToast에서 표시됨
         // 연결 실패 시에도 상태 업데이트
         setTimeout(() => {
@@ -2969,6 +2981,9 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
   deviceTypes.forEach(deviceType => {
     const savedDevices = getSavedDevicesByTypeFn(deviceType);
     console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 수:`, savedDevices.length);
+    if (savedDevices.length > 0) {
+      console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 목록:`, savedDevices.map(d => ({ deviceId: d.deviceId, nickname: d.nickname, name: d.name })));
+    }
     
     if (savedDevices.length === 0) return;
     
@@ -3294,10 +3309,17 @@ window.initIndividualErgController = initIndividualErgController;
 
 // 페이지 로드 시 연결 상태 업데이트 및 주기적 업데이트
 document.addEventListener('DOMContentLoaded', () => {
-    // 초기 연결 상태 업데이트
+    console.log('[Individual Dashboard] DOMContentLoaded 이벤트 발생');
+    
+    // 초기 연결 상태 업데이트 (bluetooth.js 로드 대기)
     setTimeout(() => {
+        console.log('[Individual Dashboard] 초기 연결 상태 업데이트 시작');
+        // 저장된 기기 목록도 함께 업데이트
+        if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+            updateIndividualBluetoothDropdownWithSavedDevices();
+        }
         updateIndividualBluetoothConnectionStatus();
-    }, 500);
+    }, 1000); // bluetooth.js 로드 대기 시간 증가
     
     // 주기적으로 연결 상태 업데이트 (5초마다)
     setInterval(() => {
@@ -3307,5 +3329,5 @@ document.addEventListener('DOMContentLoaded', () => {
     // ErgController 초기화 (ErgController.js 로드 대기)
     setTimeout(() => {
         initIndividualErgController();
-    }, 500);
+    }, 1000);
 });

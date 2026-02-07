@@ -86,16 +86,33 @@ function getSavedDevicesByType(deviceType) {
 
 // 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
-  const nickname = prompt(
-    `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
-    deviceName || ''
-  );
+  console.log('[showNicknameModal] 닉네임 입력 모달 표시 시작:', deviceName);
   
-  if (nickname !== null && nickname.trim()) {
-    callback(nickname.trim());
-    return true;
+  try {
+    const nickname = prompt(
+      `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
+      deviceName || ''
+    );
+    
+    console.log('[showNicknameModal] 사용자 입력:', nickname);
+    
+    if (nickname !== null && nickname.trim()) {
+      const trimmedNickname = nickname.trim();
+      console.log('[showNicknameModal] 닉네임 저장:', trimmedNickname);
+      callback(trimmedNickname);
+      return true;
+    } else {
+      console.log('[showNicknameModal] 닉네임 입력 취소 또는 빈 값');
+      // 취소하거나 빈 값이면 기본 이름으로 저장
+      callback(deviceName || '알 수 없는 기기');
+      return false;
+    }
+  } catch (error) {
+    console.error('[showNicknameModal] 오류 발생:', error);
+    // 오류 발생 시 기본 이름으로 저장
+    callback(deviceName || '알 수 없는 기기');
+    return false;
   }
-  return false;
 }
 
 // 전역 노출 (app.js에서 사용)
@@ -461,14 +478,33 @@ async function connectTrainer() {
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'trainer');
     
+    console.log('[connectTrainer] 기기 저장 확인:', { deviceId: device.id, deviceName, saved: !!saved });
+    
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
-      showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'trainer', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
-      });
+      console.log('[connectTrainer] 새 기기 감지, 닉네임 입력 모달 표시');
+      const nicknameModalFn = typeof showNicknameModal === 'function' ? showNicknameModal : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
+      if (nicknameModalFn) {
+        nicknameModalFn(deviceName, (nickname) => {
+          console.log('[connectTrainer] 닉네임 입력 완료:', nickname);
+          saveDevice(device.id, deviceName, 'trainer', nickname);
+          showToast(`✅ ${nickname} 저장 완료`);
+          // 저장 후 드롭다운 목록 업데이트
+          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+            updateIndividualBluetoothDropdownWithSavedDevices();
+          }
+          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
+            updateMobileBluetoothDropdownWithSavedDevices();
+          }
+        });
+      } else {
+        console.error('[connectTrainer] showNicknameModal 함수를 찾을 수 없습니다.');
+        // 폴백: 기본 이름으로 저장
+        saveDevice(device.id, deviceName, 'trainer', deviceName);
+      }
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
+      console.log('[connectTrainer] 저장된 기기 감지, lastConnected 업데이트:', saved.nickname);
       saveDevice(device.id, deviceName, 'trainer', saved.nickname);
     }
     
@@ -694,14 +730,33 @@ async function connectHeartRate() {
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'heartRate');
     
+    console.log('[connectHeartRate] 기기 저장 확인:', { deviceId: device.id, deviceName, saved: !!saved });
+    
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
-      showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'heartRate', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
-      });
+      console.log('[connectHeartRate] 새 기기 감지, 닉네임 입력 모달 표시');
+      const nicknameModalFn = typeof showNicknameModal === 'function' ? showNicknameModal : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
+      if (nicknameModalFn) {
+        nicknameModalFn(deviceName, (nickname) => {
+          console.log('[connectHeartRate] 닉네임 입력 완료:', nickname);
+          saveDevice(device.id, deviceName, 'heartRate', nickname);
+          showToast(`✅ ${nickname} 저장 완료`);
+          // 저장 후 드롭다운 목록 업데이트
+          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+            updateIndividualBluetoothDropdownWithSavedDevices();
+          }
+          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
+            updateMobileBluetoothDropdownWithSavedDevices();
+          }
+        });
+      } else {
+        console.error('[connectHeartRate] showNicknameModal 함수를 찾을 수 없습니다.');
+        // 폴백: 기본 이름으로 저장
+        saveDevice(device.id, deviceName, 'heartRate', deviceName);
+      }
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
+      console.log('[connectHeartRate] 저장된 기기 감지, lastConnected 업데이트:', saved.nickname);
       saveDevice(device.id, deviceName, 'heartRate', saved.nickname);
     }
     
@@ -819,14 +874,33 @@ async function connectPowerMeter() {
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'powerMeter');
     
+    console.log('[connectPowerMeter] 기기 저장 확인:', { deviceId: device.id, deviceName, saved: !!saved });
+    
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
-      showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'powerMeter', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
-      });
+      console.log('[connectPowerMeter] 새 기기 감지, 닉네임 입력 모달 표시');
+      const nicknameModalFn = typeof showNicknameModal === 'function' ? showNicknameModal : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
+      if (nicknameModalFn) {
+        nicknameModalFn(deviceName, (nickname) => {
+          console.log('[connectPowerMeter] 닉네임 입력 완료:', nickname);
+          saveDevice(device.id, deviceName, 'powerMeter', nickname);
+          showToast(`✅ ${nickname} 저장 완료`);
+          // 저장 후 드롭다운 목록 업데이트
+          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+            updateIndividualBluetoothDropdownWithSavedDevices();
+          }
+          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
+            updateMobileBluetoothDropdownWithSavedDevices();
+          }
+        });
+      } else {
+        console.error('[connectPowerMeter] showNicknameModal 함수를 찾을 수 없습니다.');
+        // 폴백: 기본 이름으로 저장
+        saveDevice(device.id, deviceName, 'powerMeter', deviceName);
+      }
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
+      console.log('[connectPowerMeter] 저장된 기기 감지, lastConnected 업데이트:', saved.nickname);
       saveDevice(device.id, deviceName, 'powerMeter', saved.nickname);
     }
     
