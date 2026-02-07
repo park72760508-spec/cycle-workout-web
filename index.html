@@ -1987,8 +1987,8 @@
         </div>
       </div>
       
-      <!-- 관리자(grade=1) 전용: 사용자 검색 (이름/전화번호, 빈값이면 전체 검색) -->
-      <div id="profileSearchSection" class="profile-search-section" style="display: none; margin-bottom: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+      <!-- 관리자(grade=1) 전용: 사용자 검색 + 만료일 일괄 연장 (폭은 사용자 카드와 동일) -->
+      <div id="profileSearchSection" class="profile-search-section" style="display: none; margin-bottom: 12px; padding: 14px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; width: 100%; box-sizing: border-box;">
         <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end;">
           <div style="flex: 1; min-width: 100px;">
             <label for="profileSearchName" style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">이름</label>
@@ -2007,6 +2007,29 @@
           </button>
         </div>
         <p style="margin: 6px 0 0; font-size: 12px; color: #888;">이름·전화번호 없이 검색하면 전체 목록이 표시됩니다.</p>
+        <!-- 만료일 일괄 연장 -->
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #e9ecef; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+          <label for="profileBulkExpiryMonths" style="font-size: 12px; color: #666;">만료일 일괄 연장</label>
+          <select id="profileBulkExpiryMonths" style="padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-width: 100px;">
+            <option value="1">1개월</option>
+            <option value="2">2개월</option>
+            <option value="3">3개월</option>
+            <option value="4">4개월</option>
+            <option value="5">5개월</option>
+            <option value="6">6개월</option>
+            <option value="7">7개월</option>
+            <option value="8">8개월</option>
+            <option value="9">9개월</option>
+            <option value="10">10개월</option>
+            <option value="11">11개월</option>
+            <option value="12">12개월</option>
+          </select>
+          <button type="button" id="profileBulkExpiryBtn" onclick="typeof bulkExtendExpiry === 'function' && bulkExtendExpiry()"
+                  style="padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; background: #059669; color: #fff; border: none; cursor: pointer; white-space: nowrap;">
+            적용
+          </button>
+        </div>
+        <p id="profileSearchUserCount" style="margin: 10px 0 0; font-size: 13px; color: #666; font-weight: 500;">등록된 사용자: 0명</p>
       </div>
       
       <div id="userList" class="user-list-with-legend">
