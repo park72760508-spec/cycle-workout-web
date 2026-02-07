@@ -106,9 +106,10 @@ function showNicknameModal(deviceName, callback) {
 // 저장된 기기에 재연결 시도
 async function reconnectToSavedDevice(deviceId, deviceType) {
   try {
+    // getDevices() API 지원 여부 확인
     if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth)) {
-      console.warn('[reconnectToSavedDevice] getDevices API를 사용할 수 없습니다.');
-      return null;
+      console.warn('[reconnectToSavedDevice] getDevices API를 사용할 수 없습니다. (브라우저 미지원 또는 HTTPS 아님)');
+      return null; // null 반환 시 호출자가 새 기기 검색으로 폴백해야 함
     }
     
     console.log('[reconnectToSavedDevice] 페어링된 기기 목록 조회 중...', { deviceId, deviceType });
