@@ -106,10 +106,8 @@ function showNicknameModal(deviceName, callback) {
 // 저장된 기기에 재연결 시도
 async function reconnectToSavedDevice(deviceId, deviceType) {
   try {
-    // getDevices() API 지원 여부 확인
     if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth)) {
-      // 조용히 null 반환 (경고 로그 제거 - 사용자 경험 개선)
-      // 호출자가 새 기기 검색으로 자동 폴백함
+      console.warn('[reconnectToSavedDevice] getDevices API를 사용할 수 없습니다.');
       return null;
     }
     
