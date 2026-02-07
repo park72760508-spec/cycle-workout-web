@@ -84,6 +84,11 @@ function getSavedDevicesByType(deviceType) {
   return loadSavedDevices().filter(d => d.deviceType === deviceType);
 }
 
+// 전역 노출 (app.js에서 사용)
+window.getSavedDevicesByType = window.getSavedDevicesByType || getSavedDevicesByType;
+window.loadSavedDevices = window.loadSavedDevices || loadSavedDevices;
+window.saveDevice = window.saveDevice || saveDevice;
+
 // 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
   const nickname = prompt(
@@ -122,7 +127,14 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
     console.error('Failed to reconnect to saved device:', error);
     throw error;
   }
-} 
+}
+
+// 전역 노출 (app.js에서 사용)
+window.reconnectToSavedDevice = window.reconnectToSavedDevice || reconnectToSavedDevice;
+window.handleHeartRateData = window.handleHeartRateData || handleHeartRateData;
+window.handlePowerMeterData = window.handlePowerMeterData || handlePowerMeterData;
+window.handleTrainerData = window.handleTrainerData || handleTrainerData;
+window.handleDisconnect = window.handleDisconnect || handleDisconnect; 
 
 // UI Helpers (Preserved)
 window.showConnectionStatus = window.showConnectionStatus || function (show) {
