@@ -407,6 +407,17 @@ function createBluetoothCoachPowerMeterGrid() {
   } else {
     console.log('✅ [결과] 화면 전환 및 트랙 생성 로직이 정상 동작했습니다.');
   }
+  
+  // 그리드 생성 후 모든 바늘이 표시되도록 보장
+  setTimeout(() => {
+    if (typeof initializeNeedles === 'function') {
+      initializeNeedles();
+    }
+    // 각 트랙의 바늘이 표시되도록 개별 확인
+    window.bluetoothCoachState.powerMeters.forEach(pm => {
+      ensureNeedleVisible(pm.id);
+    });
+  }, 100);
 }
 
 /**
@@ -660,15 +671,38 @@ function generateBluetoothCoachPowerMeterLabels(powerMeterId) {
 }
 
 /**
+ * 바늘이 항상 표시되도록 보장하는 헬퍼 함수
+ */
+function ensureNeedleVisible(powerMeterId) {
+  const needleEl = document.getElementById(`needle-${powerMeterId}`);
+  if (needleEl) {
+    needleEl.style.display = '';
+    needleEl.style.visibility = 'visible';
+    needleEl.style.opacity = '1';
+    // stroke 속성도 확인 (바늘이 보이도록)
+    if (!needleEl.getAttribute('stroke') || needleEl.getAttribute('stroke') === 'none') {
+      needleEl.setAttribute('stroke', '#ff0000');
+    }
+    if (!needleEl.getAttribute('stroke-width') || needleEl.getAttribute('stroke-width') === '0') {
+      needleEl.setAttribute('stroke-width', '3');
+    }
+  }
+}
+
+/**
  * 파워계 바늘 초기화
  */
 function initializeNeedles() {
   window.bluetoothCoachState.powerMeters.forEach(pm => {
+    // 바늘이 항상 표시되도록 보장
+    ensureNeedleVisible(pm.id);
+    
     // 바늘을 초기 위치(-90도, 0W, 왼쪽 끝)로 설정
     const needleEl = document.getElementById(`needle-${pm.id}`);
     if (needleEl) {
       needleEl.style.transition = 'none';
-      needleEl.setAttribute('transform', 'rotate(-90)');
+      // 회전 중심점을 명시적으로 설정
+      needleEl.setAttribute('transform', 'rotate(-90 0 0)');
     }
     updatePowerMeterNeedle(pm.id, 0);
   });
@@ -745,9 +779,13 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   const ratio = Math.min(Math.max(powerMeter.currentPower / gaugeMaxPower, 0), 1);
   const angle = -90 + (ratio * 180); // -90도(왼쪽)에서 90도(오른쪽)까지
   
+  // 바늘이 항상 표시되도록 보장
+  ensureNeedleVisible(powerMeterId);
+  
   const needleEl = document.getElementById(`needle-${powerMeterId}`);
   if (needleEl) {
-    needleEl.setAttribute('transform', `rotate(${angle} 100 100)`);
+    // 회전 중심점을 명시적으로 설정 (SVG 좌표계 기준)
+    needleEl.setAttribute('transform', `rotate(${angle} 0 0)`);
   }
 }
 
@@ -785,10 +823,14 @@ function startGaugeAnimationLoop() {
       let ratio = Math.min(Math.max(pm.displayPower / maxPower, 0), 1);
       const angle = -90 + (ratio * 180);
 
+      // 바늘이 항상 표시되도록 보장
+      ensureNeedleVisible(pm.id);
+      
       const needleEl = document.getElementById(`needle-${pm.id}`);
       if (needleEl) {
         needleEl.style.transition = 'none';
-        needleEl.setAttribute('transform', `rotate(${angle})`);
+        // 회전 중심점을 명시적으로 설정 (SVG 좌표계 기준)
+        needleEl.setAttribute('transform', `rotate(${angle} 0 0)`);
       }
       
       // 바늘 궤적 업데이트 (Indoor Training과 동일한 방식)
@@ -1619,10 +1661,20 @@ function updateBluetoothCoachPowerMeterTicks(powerMeterId) {
   ticksEl.innerHTML = generateBluetoothCoachPowerMeterTicks(powerMeterId);
   labelsEl.innerHTML = generateBluetoothCoachPowerMeterLabels(powerMeterId);
   
+  // 바늘이 항상 표시되도록 보장
+  ensureNeedleVisible(powerMeterId);
+  
   // 바늘 위치 복원
   const needleEl = document.getElementById(`needle-${powerMeterId}`);
   if (needleEl && typeof updatePowerMeterNeedle === 'function') {
     updatePowerMeterNeedle(powerMeterId, powerMeter.currentPower || 0);
+  } else if (needleEl) {
+    // updatePowerMeterNeedle이 없을 경우 직접 업데이트
+    const gaugeMaxPower = powerMeter.userFTP ? powerMeter.userFTP * 1.5 : 300;
+    const currentPower = powerMeter.currentPower || 0;
+    const ratio = Math.min(Math.max(currentPower / gaugeMaxPower, 0), 1);
+    const angle = -90 + (ratio * 180);
+    needleEl.setAttribute('transform', `rotate(${angle} 0 0)`);
   }
 }
 
