@@ -16665,24 +16665,13 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   if (trainingDropdown) trainingDropdown.classList.remove('show');
   document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
   
-  console.log('[Mobile Dashboard] connectMobileBluetoothDevice ??:', { deviceType, savedDeviceId });
-  
-  // ??? ?? ID? ??? ?? ??? ??
+  // 저장된 기기 ID가 제공된 경우 재연결 시도
   if (savedDeviceId) {
-    console.log('[Mobile Dashboard] ??? ?? ??? ??:', { savedDeviceId, deviceType });
     await connectMobileBluetoothDeviceToSaved(savedDeviceId, deviceType);
     return;
   }
   
-  // ?? ??? ??? ??
-  console.log('[Mobile Dashboard] ?? ?? ??:', {
-    windowConnectTrainer: typeof window.connectTrainer,
-    windowConnectHeartRate: typeof window.connectHeartRate,
-    windowConnectPowerMeter: typeof window.connectPowerMeter,
-    navigatorBluetooth: !!navigator.bluetooth,
-    requestDevice: !!(navigator.bluetooth && 'requestDevice' in navigator.bluetooth)
-  });
-  
+  // 연결 함수가 있는지 확인
   let connectFunction;
   switch (deviceType) {
     case 'trainer':
@@ -16695,50 +16684,28 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
       connectFunction = window.connectPowerMeter;
       break;
     default:
-      console.error('[Mobile Dashboard] ? ? ?? ???? ??:', deviceType);
-      if (typeof showToast === 'function') {
-        showToast('? ? ?? ???? ?????.');
-      }
+      console.error('[Mobile Dashboard] 알 수 없는 디바이스 타입:', deviceType);
       return;
   }
   
   if (!connectFunction || typeof connectFunction !== 'function') {
-    console.error('[Mobile Dashboard] ?? ???? ?? ??? ?? ? ????:', deviceType);
-    console.error('[Mobile Dashboard] ?? ??? ???:', {
-      connectTrainer: typeof window.connectTrainer,
-      connectHeartRate: typeof window.connectHeartRate,
-      connectPowerMeter: typeof window.connectPowerMeter
-    });
-    if (typeof showToast === 'function') {
-      showToast('???? ?? ??? ???? ?????. ???? ?? ??????.');
-    } else {
-      alert('?? ???? ??? ???? ?????. ???? ?? ??????.');
-    }
+    console.error('[Mobile Dashboard] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
+    alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
     return;
   }
   
   try {
-    console.log('[Mobile Dashboard] ?? ???? ?? ??:', deviceType);
-    console.log('[Mobile Dashboard] connectFunction:', connectFunction);
+    console.log('[Mobile Dashboard] 블루투스 디바이스 연결 시도:', deviceType);
     await connectFunction();
-    console.log('[Mobile Dashboard] ?? ???? ?? ?? ?? ??');
     
-    // ?? ?? ? UI ???? (window.connectedDevices ????? ???)
+    // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
     setTimeout(() => {
-      // ???? ?? ????
+      // 연결 상태 업데이트
       updateMobileBluetoothConnectionStatus();
-    }, 200); // 200ms ?? ? ????
+    }, 200); // 200ms 대기 후 업데이트
   } catch (error) {
-    console.error('[Mobile Dashboard] ?? ???? ?? ??:', deviceType, error);
-    console.error('[Mobile Dashboard] ?? ??:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-    // ??? bluetooth.js? showToast?? ???
-    if (typeof showToast === 'function') {
-      showToast(`???? ?? ??: ${error.message || '? ? ?? ??'}`);
-    }
+    console.error('[Mobile Dashboard] 블루투스 디바이스 연결 실패:', deviceType, error);
+    // 에러는 bluetooth.js의 showToast에서 표시됨
   }
 }
 

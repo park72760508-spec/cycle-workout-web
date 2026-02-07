@@ -44,16 +44,10 @@ const STORAGE_KEY = 'stelvio_saved_devices';
 function loadSavedDevices() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    console.log('[loadSavedDevices] localStorage에서 읽은 데이터:', stored);
-    if (!stored) {
-      console.log('[loadSavedDevices] 저장된 기기가 없습니다.');
-      return [];
-    }
-    const parsed = JSON.parse(stored);
-    console.log('[loadSavedDevices] 파싱된 기기 목록:', parsed);
-    return parsed;
+    if (!stored) return [];
+    return JSON.parse(stored);
   } catch (error) {
-    console.error('[loadSavedDevices] 저장된 기기 로드 실패:', error);
+    console.error('Failed to load saved devices:', error);
     return [];
   }
 }
@@ -90,66 +84,24 @@ function getSavedDevicesByType(deviceType) {
   return loadSavedDevices().filter(d => d.deviceType === deviceType);
 }
 
-// 닉네임 입력 모달 표시
-function showNicknameModal(deviceName, callback) {
-  console.log('[showNicknameModal] 닉네임 입력 모달 표시 시작:', deviceName);
-  console.log('[showNicknameModal] callback 타입:', typeof callback);
-  
-  if (!callback || typeof callback !== 'function') {
-    console.error('[showNicknameModal] callback이 함수가 아닙니다:', callback);
-    return false;
-  }
-  
-  try {
-    console.log('[showNicknameModal] prompt() 호출 전');
-    const nickname = prompt(
-      `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
-      deviceName || ''
-    );
-    
-    console.log('[showNicknameModal] prompt() 호출 후, 사용자 입력:', nickname);
-    
-    if (nickname !== null && nickname.trim()) {
-      const trimmedNickname = nickname.trim();
-      console.log('[showNicknameModal] 닉네임 저장:', trimmedNickname);
-      // 콜백을 즉시 호출
-      try {
-        callback(trimmedNickname);
-        console.log('[showNicknameModal] 콜백 실행 완료');
-      } catch (callbackError) {
-        console.error('[showNicknameModal] 콜백 실행 오류:', callbackError);
-      }
-      return true;
-    } else {
-      console.log('[showNicknameModal] 닉네임 입력 취소 또는 빈 값');
-      // 취소하거나 빈 값이면 기본 이름으로 저장
-      try {
-        callback(deviceName || '알 수 없는 기기');
-        console.log('[showNicknameModal] 기본 이름으로 콜백 실행 완료');
-      } catch (callbackError) {
-        console.error('[showNicknameModal] 기본 이름 콜백 실행 오류:', callbackError);
-      }
-      return false;
-    }
-  } catch (error) {
-    console.error('[showNicknameModal] 오류 발생:', error);
-    console.error('[showNicknameModal] 오류 스택:', error.stack);
-    // 오류 발생 시 기본 이름으로 저장
-    try {
-      callback(deviceName || '알 수 없는 기기');
-      console.log('[showNicknameModal] 오류 후 기본 이름으로 콜백 실행 완료');
-    } catch (callbackError) {
-      console.error('[showNicknameModal] 오류 후 콜백 실행 오류:', callbackError);
-    }
-    return false;
-  }
-}
-
 // 전역 노출 (app.js에서 사용)
 window.getSavedDevicesByType = window.getSavedDevicesByType || getSavedDevicesByType;
 window.loadSavedDevices = window.loadSavedDevices || loadSavedDevices;
 window.saveDevice = window.saveDevice || saveDevice;
-window.showNicknameModal = window.showNicknameModal || showNicknameModal;
+
+// 닉네임 입력 모달 표시
+function showNicknameModal(deviceName, callback) {
+  const nickname = prompt(
+    `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
+    deviceName || ''
+  );
+  
+  if (nickname !== null && nickname.trim()) {
+    callback(nickname.trim());
+    return true;
+  }
+  return false;
+}
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
 async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName) {
@@ -283,9 +235,7 @@ window.updateDevicesList = function () {
 // ── [Connection Engine] ──
 
 async function connectTrainer() {
-  console.log('[connectTrainer] 함수 호출 시작');
   try {
-    console.log('[connectTrainer] showConnectionStatus 호출');
     showConnectionStatus(true);
     
     // 기존 트레이너 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
@@ -407,13 +357,13 @@ async function connectTrainer() {
       { namePrefix: "Wahoo" }, { namePrefix: "KICKR" }, { namePrefix: "Tacx" }
     ];
     
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가 (최대 3개까지만)
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
     if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      const nameFilters = savedDevices
-        .slice(0, 3) // 최대 3개까지만 필터 추가
-        .filter(saved => saved.name && saved.name.trim())
-        .map(saved => ({ namePrefix: saved.name }));
-      filters = filters.concat(nameFilters);
+      savedDevices.forEach(saved => {
+        if (saved.name) {
+          filters.push({ namePrefix: saved.name });
+        }
+      });
     }
 
     const optionalServices = [
@@ -425,35 +375,12 @@ async function connectTrainer() {
       if (optionalServices.indexOf(uuid) === -1) optionalServices.push(uuid);
     });
 
-    console.log('[connectTrainer] requestDevice 필터:', filters);
-
     let device;
     try {
-        device = await navigator.bluetooth.requestDevice({ 
-          filters: filters.length > 0 ? filters : undefined, 
-          optionalServices 
-        });
+        device = await navigator.bluetooth.requestDevice({ filters, optionalServices });
     } catch (e) {
-        console.warn('[connectTrainer] 필터로 기기 검색 실패:', e);
-        // 사용자가 취소한 경우 (NotFoundError)는 재시도하지 않음
-        if (e.name === 'NotFoundError' || e.name === 'AbortError') {
-          showConnectionStatus(false);
-          return;
-        }
-        // 필터 실패 시 기본 필터로 재시도
-        try {
-          device = await navigator.bluetooth.requestDevice({ 
-            filters: [
-              { services: [UUIDS.FTMS_SERVICE] },
-              { services: [UUIDS.CPS_SERVICE] }
-            ],
-            optionalServices
-          });
-        } catch (e2) {
-          console.error('[connectTrainer] 기본 필터로도 기기 검색 실패:', e2);
-          showConnectionStatus(false);
-          return;
-        }
+        showConnectionStatus(false);
+        return;
     }
 
     const server = await device.gatt.connect();
@@ -533,33 +460,14 @@ async function connectTrainer() {
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'trainer');
     
-    console.log('[connectTrainer] 기기 저장 확인:', { deviceId: device.id, deviceName, saved: !!saved });
-    
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
-      console.log('[connectTrainer] 새 기기 감지, 닉네임 입력 모달 표시');
-      const nicknameModalFn = typeof showNicknameModal === 'function' ? showNicknameModal : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
-      if (nicknameModalFn) {
-        nicknameModalFn(deviceName, (nickname) => {
-          console.log('[connectTrainer] 닉네임 입력 완료:', nickname);
-          saveDevice(device.id, deviceName, 'trainer', nickname);
-          showToast(`✅ ${nickname} 저장 완료`);
-          // 저장 후 드롭다운 목록 업데이트
-          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
-            updateIndividualBluetoothDropdownWithSavedDevices();
-          }
-          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
-            updateMobileBluetoothDropdownWithSavedDevices();
-          }
-        });
-      } else {
-        console.error('[connectTrainer] showNicknameModal 함수를 찾을 수 없습니다.');
-        // 폴백: 기본 이름으로 저장
-        saveDevice(device.id, deviceName, 'trainer', deviceName);
-      }
+      showNicknameModal(deviceName, (nickname) => {
+        saveDevice(device.id, deviceName, 'trainer', nickname);
+        showToast(`✅ ${nickname} 저장 완료`);
+      });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
-      console.log('[connectTrainer] 저장된 기기 감지, lastConnected 업데이트:', saved.nickname);
       saveDevice(device.id, deviceName, 'trainer', saved.nickname);
     }
     
@@ -669,9 +577,7 @@ function handlePowerMeterData(event) {
 
 // (Helper functions for HR/PM connection are kept standard)
 async function connectHeartRate() {
-  console.log('[connectHeartRate] 함수 호출 시작');
   try {
-    console.log('[connectHeartRate] showConnectionStatus 호출');
     showConnectionStatus(true);
     
     // 기존 심박계 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
@@ -743,74 +649,33 @@ async function connectHeartRate() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
-    // 심박계 서비스 필터 사용 (심박계 기기만 표시)
-    const filters = [
-      { services: ['heart_rate'] },
-      { services: [UUIDS.HR_SERVICE] },
-      { services: [0x180D] } // Heart Rate Service UUID (16-bit)
-    ];
+    // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
+    const filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
     
-    console.log('[connectHeartRate] requestDevice 호출 시작');
-    console.log('[connectHeartRate] 필터:', filters);
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
+      savedDevices.forEach(saved => {
+        if (saved.name) {
+          filters.push({ namePrefix: saved.name });
+        }
+      });
+    }
     
     let device;
     try {
-        // 심박계 서비스 필터를 사용하여 심박계 기기만 표시
         device = await navigator.bluetooth.requestDevice({
             filters: filters,
-            optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service', 'device_information']
+            optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
-        console.log('[connectHeartRate] requestDevice 성공:', device.name);
-        
-        if (!device) {
-          throw new Error('기기를 선택하지 않았습니다.');
-        }
     } catch(e) {
-        console.warn('[connectHeartRate] requestDevice 실패:', e.name, e.message);
-        // 사용자가 취소한 경우 조용히 종료
-        if (e.name === 'NotFoundError' || e.name === 'AbortError') {
-          console.log('[connectHeartRate] 사용자가 기기 선택을 취소했습니다.');
-          showConnectionStatus(false);
-          if (typeof showToast === 'function') {
-            showToast('기기 선택이 취소되었습니다.');
-          }
-          return; // 조용히 종료
-        }
-        // 필터로 기기를 찾지 못한 경우, 더 넓은 필터로 재시도
-        if (e.name === 'NotFoundError' && e.message && e.message.includes('No device')) {
-          console.log('[connectHeartRate] 필터로 기기를 찾지 못함, 더 넓은 필터로 재시도');
-          try {
-            // 더 넓은 필터: 서비스 필터만 사용
-            device = await navigator.bluetooth.requestDevice({
-              filters: [{ services: [UUIDS.HR_SERVICE] }],
-              optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
-            });
-            console.log('[connectHeartRate] 재시도 성공:', device.name);
-          } catch(e2) {
-            console.error('[connectHeartRate] 재시도도 실패:', e2);
-            showConnectionStatus(false);
-            if (typeof showToast === 'function') {
-              showToast('심박계 기기를 찾을 수 없습니다. 기기가 켜져 있고 범위 내에 있는지 확인하세요.');
-            }
-            return;
-          }
-        } else {
-          // 기타 에러는 전파
-          showConnectionStatus(false);
-          throw e;
-        }
+        // 필터 실패 시 기본 필터로 재시도
+        device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [UUIDS.HR_SERVICE] }],
+            optionalServices: [UUIDS.HR_SERVICE]
+        });
     }
-    
-    if (!device) {
-      console.warn('[connectHeartRate] 기기를 선택하지 않았습니다.');
-      showConnectionStatus(false);
-      return;
-    }
-    
-    console.log('[connectHeartRate] 선택된 기기:', device.name, device.id);
     
     const server = await device.gatt.connect();
-    console.log('[connectHeartRate] GATT 서버 연결 성공');
     let service;
     try { service = await server.getPrimaryService('heart_rate'); } 
     catch (e) { service = await server.getPrimaryService(UUIDS.HR_SERVICE); }
@@ -826,94 +691,22 @@ async function connectHeartRate() {
     
     // 3. 새 기기 저장 (닉네임 설정)
     const deviceName = device.name || '알 수 없는 기기';
-    const allSavedDevices = loadSavedDevices();
-    console.log('[connectHeartRate] 전체 저장된 기기 목록:', allSavedDevices);
-    console.log('[connectHeartRate] 현재 기기 ID:', device.id);
-    
-    const saved = allSavedDevices.find(d => {
-      const match = d.deviceId === device.id && d.deviceType === 'heartRate';
-      if (match) {
-        console.log('[connectHeartRate] 저장된 기기 매칭 성공:', d);
-      }
-      return match;
-    });
-    
-    console.log('[connectHeartRate] 기기 저장 확인:', { 
-      deviceId: device.id, 
-      deviceName, 
-      saved: !!saved,
-      savedDevicesCount: allSavedDevices.length,
-      heartRateDevicesCount: allSavedDevices.filter(d => d.deviceType === 'heartRate').length
-    });
+    const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'heartRate');
     
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
-      console.log('[connectHeartRate] 새 기기 감지, 닉네임 입력 모달 표시');
-      console.log('[connectHeartRate] showNicknameModal 함수 확인:', {
-        local: typeof showNicknameModal,
-        window: typeof window.showNicknameModal
+      showNicknameModal(deviceName, (nickname) => {
+        saveDevice(device.id, deviceName, 'heartRate', nickname);
+        showToast(`✅ ${nickname} 저장 완료`);
       });
-      
-      // showNicknameModal 함수 찾기 (로컬 스코프 우선, 없으면 전역)
-      const nicknameModalFn = typeof showNicknameModal === 'function' 
-        ? showNicknameModal 
-        : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
-      
-      if (nicknameModalFn) {
-        console.log('[connectHeartRate] showNicknameModal 함수 호출 시작');
-        console.log('[connectHeartRate] nicknameModalFn:', nicknameModalFn);
-        console.log('[connectHeartRate] deviceName:', deviceName);
-        
-        // prompt()는 동기 함수이므로 즉시 호출 (connectTrainer와 동일한 방식)
-        try {
-          console.log('[connectHeartRate] showNicknameModal 직접 호출');
-          nicknameModalFn(deviceName, (nickname) => {
-            console.log('[connectHeartRate] 닉네임 입력 완료 콜백 실행:', nickname);
-            saveDevice(device.id, deviceName, 'heartRate', nickname);
-            showToast(`✅ ${nickname} 저장 완료`);
-            // 저장 후 드롭다운 목록 업데이트
-            setTimeout(() => {
-              if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
-                updateIndividualBluetoothDropdownWithSavedDevices();
-              }
-              if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
-                updateMobileBluetoothDropdownWithSavedDevices();
-              }
-            }, 100);
-          });
-          console.log('[connectHeartRate] showNicknameModal 호출 완료');
-        } catch (modalError) {
-          console.error('[connectHeartRate] showNicknameModal 호출 오류:', modalError);
-          console.error('[connectHeartRate] 오류 스택:', modalError.stack);
-          // 오류 발생 시 기본 이름으로 저장
-          saveDevice(device.id, deviceName, 'heartRate', deviceName);
-          showToast(`✅ ${deviceName} 연결 성공 (기본 이름으로 저장됨)`);
-        }
-      } else {
-        console.error('[connectHeartRate] showNicknameModal 함수를 찾을 수 없습니다.');
-        console.error('[connectHeartRate] 사용 가능한 함수들:', {
-          showNicknameModal: typeof showNicknameModal,
-          windowShowNicknameModal: typeof window.showNicknameModal,
-          saveDevice: typeof saveDevice,
-          windowSaveDevice: typeof window.saveDevice
-        });
-        // 폴백: 기본 이름으로 저장
-        saveDevice(device.id, deviceName, 'heartRate', deviceName);
-        showToast(`✅ ${deviceName} 연결 성공 (기본 이름으로 저장됨)`);
-      }
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
-      console.log('[connectHeartRate] 저장된 기기 감지, lastConnected 업데이트:', saved.nickname);
       saveDevice(device.id, deviceName, 'heartRate', saved.nickname);
     }
     
     updateDevicesList();
     showConnectionStatus(false);
-    
-    // 저장된 기기가 아닌 경우에만 기본 연결 성공 메시지 표시 (닉네임 모달에서 이미 표시됨)
-    if (saved) {
-      showToast(`✅ ${saved.nickname || deviceName} 연결 성공`);
-    }
+    showToast(`✅ ${deviceName} 연결 성공`);
   } catch (err) {
     showConnectionStatus(false);
     if (err.name !== 'NotFoundError' && err.name !== 'SecurityError') {
@@ -923,15 +716,10 @@ async function connectHeartRate() {
 }
 
 async function connectPowerMeter() {
-  console.log('[connectPowerMeter] 함수 호출 시작');
   // 트레이너가 연결되어 있으면 확인 (트레이너와 파워미터는 별개)
-  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) {
-    console.log('[connectPowerMeter] 사용자가 취소함');
-    return;
-  }
+  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
   
   try {
-    console.log('[connectPowerMeter] showConnectionStatus 호출');
     showConnectionStatus(true);
     
     // 기존 파워미터 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
@@ -997,42 +785,19 @@ async function connectPowerMeter() {
     // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
     const filters = [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }];
     
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가 (최대 3개까지만)
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
     if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      const nameFilters = savedDevices
-        .slice(0, 3) // 최대 3개까지만 필터 추가
-        .filter(saved => saved.name && saved.name.trim())
-        .map(saved => ({ namePrefix: saved.name }));
-      filters = filters.concat(nameFilters);
-    }
-    
-    console.log('[connectPowerMeter] requestDevice 필터:', filters);
-    
-    let device;
-    try {
-      device = await navigator.bluetooth.requestDevice({ 
-        filters: filters.length > 0 ? filters : undefined, 
-        optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, 'battery_service'] 
+      savedDevices.forEach(saved => {
+        if (saved.name) {
+          filters.push({ namePrefix: saved.name });
+        }
       });
-    } catch(e) {
-      console.warn('[connectPowerMeter] 필터로 기기 검색 실패, 기본 필터로 재시도:', e);
-      // 사용자가 취소한 경우 (NotFoundError)는 재시도하지 않음
-      if (e.name === 'NotFoundError' || e.name === 'AbortError') {
-        showConnectionStatus(false);
-        return;
-      }
-      // 필터 실패 시 기본 필터로 재시도
-      try {
-        device = await navigator.bluetooth.requestDevice({ 
-          filters: [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }],
-          optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, 'battery_service']
-        });
-      } catch(e2) {
-        console.error('[connectPowerMeter] 기본 필터로도 기기 검색 실패:', e2);
-        showConnectionStatus(false);
-        return;
-      }
     }
+    
+    let device = await navigator.bluetooth.requestDevice({ 
+        filters: filters, 
+        optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE] 
+    });
     const server = await device.gatt.connect();
     let service, characteristic;
     try {
@@ -1053,33 +818,14 @@ async function connectPowerMeter() {
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'powerMeter');
     
-    console.log('[connectPowerMeter] 기기 저장 확인:', { deviceId: device.id, deviceName, saved: !!saved });
-    
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
-      console.log('[connectPowerMeter] 새 기기 감지, 닉네임 입력 모달 표시');
-      const nicknameModalFn = typeof showNicknameModal === 'function' ? showNicknameModal : (typeof window.showNicknameModal === 'function' ? window.showNicknameModal : null);
-      if (nicknameModalFn) {
-        nicknameModalFn(deviceName, (nickname) => {
-          console.log('[connectPowerMeter] 닉네임 입력 완료:', nickname);
-          saveDevice(device.id, deviceName, 'powerMeter', nickname);
-          showToast(`✅ ${nickname} 저장 완료`);
-          // 저장 후 드롭다운 목록 업데이트
-          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
-            updateIndividualBluetoothDropdownWithSavedDevices();
-          }
-          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
-            updateMobileBluetoothDropdownWithSavedDevices();
-          }
-        });
-      } else {
-        console.error('[connectPowerMeter] showNicknameModal 함수를 찾을 수 없습니다.');
-        // 폴백: 기본 이름으로 저장
-        saveDevice(device.id, deviceName, 'powerMeter', deviceName);
-      }
+      showNicknameModal(deviceName, (nickname) => {
+        saveDevice(device.id, deviceName, 'powerMeter', nickname);
+        showToast(`✅ ${nickname} 저장 완료`);
+      });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
-      console.log('[connectPowerMeter] 저장된 기기 감지, lastConnected 업데이트:', saved.nickname);
       saveDevice(device.id, deviceName, 'powerMeter', saved.nickname);
     }
     

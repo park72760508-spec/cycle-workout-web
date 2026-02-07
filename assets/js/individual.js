@@ -2527,8 +2527,6 @@ function toggleIndividualBluetoothDropdown() {
         dropdown.classList.toggle('show');
         // 드롭다운 외부 클릭 시 닫기
         if (dropdown.classList.contains('show')) {
-            // 드롭다운 열 때 저장된 기기 목록 업데이트
-            updateIndividualBluetoothDropdownWithSavedDevices();
             setTimeout(() => {
                 document.addEventListener('click', closeIndividualBluetoothDropdownOnOutsideClick);
             }, 0);
@@ -2548,351 +2546,13 @@ function closeIndividualBluetoothDropdownOnOutsideClick(event) {
     }
 }
 
-// 저장된 기기에 재연결하는 함수 (개인훈련 대시보드 전용)
-async function connectIndividualBluetoothDeviceToSaved(deviceId, deviceType) {
-  try {
-    // bluetooth.js의 reconnectToSavedDevice 함수 활용
-    const reconnectFn = typeof reconnectToSavedDevice === 'function' 
-      ? reconnectToSavedDevice 
-      : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
-    
-    if (!reconnectFn) {
-      throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인해주세요.');
-    }
-    
-    console.log('[Individual Dashboard] 저장된 기기 재연결 시도:', { deviceId, deviceType });
-    
-    let result;
-    try {
-      result = await reconnectFn(deviceId, deviceType);
-      
-      // getDevices() API가 사용 불가능하거나 기기를 찾지 못한 경우 null 반환
-      if (!result) {
-        console.warn('[Individual Dashboard] 저장된 기기 재연결 실패 (getDevices API 미지원 또는 기기 없음), 새 기기 검색으로 진행');
-        // 재연결 실패 시 일반 디바이스 함수로 폴백 (새 기기 검색)
-        const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-          : deviceType === 'heartRate' ? window.connectHeartRate 
-          : deviceType === 'powerMeter' ? window.connectPowerMeter 
-          : null;
-        
-        if (connectFunction && typeof connectFunction === 'function') {
-          if (typeof showToast === 'function') {
-            showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
-          }
-          await connectFunction();
-          setTimeout(() => {
-            updateIndividualBluetoothConnectionStatus();
-          }, 200);
-          return;
-        } else {
-          throw new Error('기기를 찾을 수 없고 새 기기 검색도 실패했습니다.');
-        }
-      }
-    } catch (reconnectError) {
-      console.warn('[Individual Dashboard] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', reconnectError);
-      // 재연결 실패 시 일반 디바이스 함수로 폴백 (새 기기 검색)
-      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-        : deviceType === 'heartRate' ? window.connectHeartRate 
-        : deviceType === 'powerMeter' ? window.connectPowerMeter 
-        : null;
-      
-      if (connectFunction && typeof connectFunction === 'function') {
-        if (typeof showToast === 'function') {
-          showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
-        }
-        await connectFunction();
-        setTimeout(() => {
-          updateIndividualBluetoothConnectionStatus();
-        }, 200);
-        return;
-      } else {
-        throw reconnectError; // 디바이스 함수가 없으면 원래 에러를 다시 던짐
-      }
-    }
-    
-    const { device, server } = result;
-    
-    // 디바이스 타입별 연결 처리
-    if (deviceType === 'heartRate') {
-      let service;
-      try { 
-        service = await server.getPrimaryService('heart_rate'); 
-      } catch (e) { 
-        service = await server.getPrimaryService('0000180d-0000-1000-8000-00805f9b34fb'); 
-      }
-      
-      let characteristic;
-      try { 
-        characteristic = await service.getCharacteristic('heart_rate_measurement'); 
-      } catch (e) { 
-        characteristic = await service.getCharacteristic(0x2A37); 
-      }
-      
-      await characteristic.startNotifications();
-      const hrHandler = typeof handleHeartRateData === 'function' ? handleHeartRateData : (typeof window.handleHeartRateData === 'function' ? window.handleHeartRateData : null);
-      if (hrHandler) {
-        characteristic.addEventListener("characteristicvaluechanged", hrHandler);
-      }
-      
-      window.connectedDevices.heartRate = { 
-        name: device.name || '알 수 없는 기기', 
-        device, 
-        server, 
-        characteristic 
-      };
-      
-      window.isSensorConnected = true;
-      try { 
-        window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
-          detail: { connected: true, deviceType: 'heartRate' } 
-        })); 
-      } catch (e) {}
-      
-      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
-      if (disconnectHandler) {
-        device.addEventListener("gattserverdisconnected", () => disconnectHandler('heartRate', device));
-      }
-      
-      // 저장된 기기 정보 업데이트
-      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'heartRate');
-      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
-        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
-        saveFn(deviceId, device.name || saved.name, 'heartRate', saved.nickname);
-      }
-      
-      if (typeof updateDevicesList === 'function') updateDevicesList();
-      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-      if (typeof showToast === 'function') {
-        showToast(`✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결 성공`);
-      }
-      
-    } else if (deviceType === 'trainer') {
-      // 스마트 트레이너 연결 처리 (bluetooth.js의 connectTrainer 로직과 동일)
-      const UUIDS = {
-        FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb',
-        FTMS_DATA: '00002ad2-0000-1000-8000-00805f9b34fb',
-        FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb',
-        CPS_SERVICE: '00001818-0000-1000-8000-00805f9b34fb',
-        CPS_DATA: '00002a63-0000-1000-8000-00805f9b34fb',
-        CYCLEOPS_SERVICE: '347b0001-7635-408b-8918-8ff3949ce592',
-        CYCLEOPS_CONTROL: '347b0012-7635-408b-8918-8ff3949ce592',
-        WAHOO_SERVICE: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
-        WAHOO_CONTROL: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
-      };
-      
-      const _safeGetService = async (uuid) => { 
-        try { return await server.getPrimaryService(uuid); } 
-        catch (e) { return null; } 
-      };
-      const _safeGetChar = async (svc, uuid) => { 
-        if(!svc) return null; 
-        try { return await svc.getCharacteristic(uuid); } 
-        catch (e) { return null; } 
-      };
-      
-      let dataChar = null;
-      let dataProtocol = 'UNKNOWN';
-      
-      if (!dataChar) {
-        const svc = await _safeGetService(UUIDS.FTMS_SERVICE);
-        dataChar = await _safeGetChar(svc, UUIDS.FTMS_DATA);
-        if(dataChar) dataProtocol = 'FTMS';
-      }
-      if (!dataChar) {
-        const svc = await _safeGetService(UUIDS.CPS_SERVICE);
-        dataChar = await _safeGetChar(svc, UUIDS.CPS_DATA);
-        if(dataChar) dataProtocol = 'CPS';
-      }
-      if (!dataChar) {
-        const svc = await _safeGetService(UUIDS.CYCLEOPS_SERVICE);
-        if (svc) {
-          try {
-            const chars = await svc.getCharacteristics();
-            if (chars.length > 0) { 
-              dataChar = chars[0]; 
-              dataProtocol = 'CYCLEOPS_LEGACY'; 
-            }
-          } catch(e) {}
-        }
-      }
-      
-      if (!dataChar) throw new Error("데이터 전송 서비스를 찾을 수 없습니다.");
-      
-      await dataChar.startNotifications();
-      const trainerHandler = typeof handleTrainerData === 'function' ? handleTrainerData : (typeof window.handleTrainerData === 'function' ? window.handleTrainerData : null);
-      const powerHandler = typeof handlePowerMeterData === 'function' ? handlePowerMeterData : (typeof window.handlePowerMeterData === 'function' ? window.handlePowerMeterData : null);
-      const parser = (dataProtocol === 'FTMS') ? (trainerHandler || (() => {})) : (powerHandler || (() => {})); 
-      if (parser) {
-        dataChar.addEventListener("characteristicvaluechanged", parser);
-      }
-      
-      let controlChar = null;
-      let controlProtocol = 'NONE';
-      
-      if (!controlChar) {
-        const svc = await _safeGetService(UUIDS.FTMS_SERVICE);
-        controlChar = await _safeGetChar(svc, UUIDS.FTMS_CONTROL);
-        if(controlChar) controlProtocol = 'FTMS';
-      }
-      if (!controlChar) {
-        const svc = await _safeGetService(UUIDS.CYCLEOPS_SERVICE);
-        controlChar = await _safeGetChar(svc, UUIDS.CYCLEOPS_CONTROL);
-        if(controlChar) controlProtocol = 'CYCLEOPS';
-      }
-      if (!controlChar) {
-        const svc = await _safeGetService(UUIDS.WAHOO_SERVICE);
-        controlChar = await _safeGetChar(svc, UUIDS.WAHOO_CONTROL);
-        if(controlChar) controlProtocol = 'WAHOO';
-      }
-      
-      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'trainer');
-      
-      window.connectedDevices.trainer = { 
-        name: device.name || saved?.name || '알 수 없는 기기', 
-        device, 
-        server, 
-        characteristic: dataChar, 
-        controlPoint: controlChar,
-        protocol: controlProtocol, 
-        dataProtocol: dataProtocol, 
-        realProtocol: controlProtocol
-      };
-      
-      window.isSensorConnected = true;
-      try { 
-        window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
-          detail: { connected: true, deviceType: 'trainer' } 
-        })); 
-      } catch (e) {}
-      
-      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
-      if (disconnectHandler) {
-        device.addEventListener("gattserverdisconnected", () => disconnectHandler('trainer', device));
-      }
-      
-      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
-        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
-        saveFn(deviceId, device.name || saved.name, 'trainer', saved.nickname);
-      }
-      
-      if (typeof updateDevicesList === 'function') updateDevicesList();
-      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-      
-      let statusMsg = `✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결됨 [${dataProtocol}]`;
-      if (controlChar) statusMsg += `\n⚡ ERG 모드 가능 [${controlProtocol}]`;
-      else statusMsg += `\n⚠️ 파워미터 모드 (제어 불가)`;
-      if (typeof showToast === 'function') showToast(statusMsg);
-      
-      if (window.ergController) setTimeout(() => window.ergController.initializeTrainer(), 500);
-      
-    } else if (deviceType === 'powerMeter') {
-      // 파워미터 연결 처리
-      const UUIDS = {
-        CPS_SERVICE: '00001818-0000-1000-8000-00805f9b34fb',
-        CPS_DATA: '00002a63-0000-1000-8000-00805f9b34fb',
-        CSC_SERVICE: '00001816-0000-1000-8000-00805f9b34fb',
-      };
-      
-      let service, characteristic;
-      try {
-        service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
-        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
-      } catch (e) {
-        service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
-        characteristic = await service.getCharacteristic(0x2A5B);
-      }
-      
-      await characteristic.startNotifications();
-      const powerHandler = typeof handlePowerMeterData === 'function' ? handlePowerMeterData : (typeof window.handlePowerMeterData === 'function' ? window.handlePowerMeterData : null);
-      if (powerHandler) {
-        characteristic.addEventListener("characteristicvaluechanged", powerHandler);
-      }
-      
-      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'powerMeter');
-      
-      window.connectedDevices.powerMeter = { 
-        name: device.name || saved?.name || '알 수 없는 기기', 
-        device, 
-        server, 
-        characteristic 
-      };
-      
-      window.isSensorConnected = true;
-      try { 
-        window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
-          detail: { connected: true, deviceType: 'powerMeter' } 
-        })); 
-      } catch (e) {}
-      
-      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
-      if (disconnectHandler) {
-        device.addEventListener("gattserverdisconnected", () => disconnectHandler('powerMeter', device));
-      }
-      
-      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
-        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
-        saveFn(deviceId, device.name || saved.name, 'powerMeter', saved.nickname);
-      }
-      
-      if (typeof updateDevicesList === 'function') updateDevicesList();
-      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-      if (typeof showToast === 'function') {
-        showToast(`✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결 성공`);
-      }
-    }
-    
-    // 연결 성공 후 상태 업데이트
-    setTimeout(() => {
-      updateIndividualBluetoothConnectionStatus();
-    }, 200);
-    
-  } catch (error) {
-    console.error('[Individual Dashboard] 저장된 기기 재연결 실패:', error);
-    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-    
-    // 재연결 실패 시 자동으로 새 기기 검색으로 폴백
-    const errorMessage = error.message || '알 수 없는 오류';
-    if (typeof showToast === 'function') {
-      showToast(`저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 범위 내에 있는지 확인해주세요.\n\n새 기기 검색을 진행합니다...`);
-    }
-    
-    // 자동으로 새 기기 검색으로 폴백
-    try {
-      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-        : deviceType === 'heartRate' ? window.connectHeartRate 
-        : deviceType === 'powerMeter' ? window.connectPowerMeter 
-        : null;
-      
-      if (connectFunction && typeof connectFunction === 'function') {
-        console.log('[Individual Dashboard] 새 기기 검색으로 폴백:', deviceType);
-        await connectFunction();
-        setTimeout(() => {
-          updateIndividualBluetoothConnectionStatus();
-        }, 200);
-        return;
-      }
-    } catch (fallbackError) {
-      console.error('[Individual Dashboard] 새 기기 검색 폴백 실패:', fallbackError);
-      if (typeof showToast === 'function') {
-        showToast('기기 연결에 실패했습니다: ' + (fallbackError.message || '알 수 없는 오류'));
-      }
-    }
-  }
-}
-
 // 블루투스 디바이스 연결 함수 (개인훈련 대시보드 전용, 독립적 구동)
-async function connectIndividualBluetoothDevice(deviceType, savedDeviceId) {
+async function connectIndividualBluetoothDevice(deviceType) {
     // 드롭다운 닫기
     const dropdown = document.getElementById('individualBluetoothDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeIndividualBluetoothDropdownOnOutsideClick);
-    }
-    
-    // 저장된 기기 ID가 제공된 경우 재연결 시도
-    if (savedDeviceId) {
-        await connectIndividualBluetoothDeviceToSaved(savedDeviceId, deviceType);
-        return;
     }
     
     // 연결 함수가 있는지 확인
@@ -2920,185 +2580,17 @@ async function connectIndividualBluetoothDevice(deviceType, savedDeviceId) {
     
     try {
         console.log('[Individual] 블루투스 디바이스 연결 시도:', deviceType);
-        console.log('[Individual] 연결 함수 확인:', { 
-            connectFunction: typeof connectFunction, 
-            connectTrainer: typeof window.connectTrainer,
-            connectHeartRate: typeof window.connectHeartRate,
-            connectPowerMeter: typeof window.connectPowerMeter
-        });
-        
         await connectFunction();
         
-        console.log('[Individual] 블루투스 디바이스 연결 완료:', deviceType);
-        
-        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트 및 닉네임 저장 완료를 위해)
-        // bluetooth.js의 연결 함수들이 showNicknameModal을 호출하므로, 사용자가 닉네임을 입력할 시간을 줌
-        // prompt()는 동기적으로 작동하므로, 연결 함수가 완료되면 닉네임 입력도 완료된 상태
+        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
         setTimeout(() => {
-            console.log('[Individual] 연결 상태 업데이트 시작');
-            // 연결 상태 업데이트 (닉네임 저장 후 드롭다운 목록도 업데이트됨)
+            // 연결 상태 업데이트
             updateIndividualBluetoothConnectionStatus();
-        }, 1000); // 1초 대기 후 업데이트 (닉네임 입력 및 저장 완료 대기)
+        }, 200); // 200ms 대기 후 업데이트
     } catch (error) {
         console.error('[Individual] 블루투스 디바이스 연결 실패:', deviceType, error);
-        console.error('[Individual] 에러 상세:', error.stack);
         // 에러는 bluetooth.js의 showToast에서 표시됨
-        // 연결 실패 시에도 상태 업데이트
-        setTimeout(() => {
-            updateIndividualBluetoothConnectionStatus();
-        }, 200);
     }
-}
-
-// 저장된 기기 목록을 드롭다운에 동적으로 표시하는 함수 (개인훈련 대시보드 전용)
-function updateIndividualBluetoothDropdownWithSavedDevices() {
-  const dropdown = document.getElementById('individualBluetoothDropdown');
-  if (!dropdown) {
-    console.warn('[Individual Dashboard] 드롭다운을 찾을 수 없습니다.');
-    return;
-  }
-  
-  console.log('[Individual Dashboard] 저장된 기기 목록 업데이트 시작');
-  
-  // 저장된 기기 로드 함수가 있는지 확인
-  const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' 
-    ? getSavedDevicesByType 
-    : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
-  
-  const loadSavedDevicesFn = typeof loadSavedDevices === 'function' 
-    ? loadSavedDevices 
-    : (typeof window.loadSavedDevices === 'function' ? window.loadSavedDevices : null);
-  
-  // 전체 저장된 기기 목록 확인 (디버깅용)
-  if (loadSavedDevicesFn) {
-    const allSavedDevices = loadSavedDevicesFn();
-    console.log('[Individual Dashboard] 전체 저장된 기기 목록:', allSavedDevices);
-    console.log('[Individual Dashboard] localStorage 직접 확인:', localStorage.getItem('stelvio_saved_devices'));
-  } else {
-    console.warn('[Individual Dashboard] loadSavedDevices 함수를 찾을 수 없습니다.');
-  }
-  
-  if (!getSavedDevicesByTypeFn) {
-    console.warn('[Individual Dashboard] getSavedDevicesByType 함수를 찾을 수 없습니다.');
-    console.warn('[Individual Dashboard] 사용 가능한 함수들:', {
-      getSavedDevicesByType: typeof getSavedDevicesByType,
-      windowGetSavedDevicesByType: typeof window.getSavedDevicesByType,
-      loadSavedDevices: typeof loadSavedDevices,
-      windowLoadSavedDevices: typeof window.loadSavedDevices
-    });
-    return;
-  }
-  
-  // 각 디바이스 타입별로 저장된 기기 목록 가져오기
-  const deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
-  const deviceTypeLabels = {
-    trainer: '스마트 트레이너',
-    heartRate: '심박계',
-    powerMeter: '파워미터'
-  };
-  
-  deviceTypes.forEach(deviceType => {
-    const savedDevices = getSavedDevicesByTypeFn(deviceType);
-    console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 수:`, savedDevices.length);
-    if (savedDevices.length > 0) {
-      console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 목록:`, savedDevices.map(d => ({ deviceId: d.deviceId, nickname: d.nickname, name: d.name })));
-    } else {
-      console.log(`[Individual Dashboard] ${deviceType} 저장된 기기가 없습니다.`);
-    }
-    
-    if (savedDevices.length === 0) return;
-    
-    // 해당 메인 아이템 찾기
-    let itemId = '';
-    let ergMenuId = null;
-    switch(deviceType) {
-      case 'trainer':
-        itemId = 'individualBluetoothTrainerItem';
-        ergMenuId = 'individualBluetoothErgMenu';
-        break;
-      case 'heartRate':
-        itemId = 'individualBluetoothHRItem';
-        break;
-      case 'powerMeter':
-        itemId = 'individualBluetoothPMItem';
-        break;
-    }
-    
-    const mainItem = document.getElementById(itemId);
-    if (!mainItem) {
-      console.warn(`[Individual Dashboard] ${itemId}를 찾을 수 없습니다.`);
-      return;
-    }
-    
-    // 저장된 기기 목록 컨테이너 ID
-    const savedListId = `individualBluetoothSaved${deviceType.charAt(0).toUpperCase() + deviceType.slice(1)}List`;
-    
-    // 기존 저장된 기기 목록 제거
-    const existingList = document.getElementById(savedListId);
-    if (existingList) {
-      existingList.remove();
-    }
-    
-    // 저장된 기기 목록 컨테이너 생성
-    const savedListContainer = document.createElement('div');
-    savedListContainer.id = savedListId;
-    savedListContainer.style.cssText = 'border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 8px; margin-top: 8px;';
-    
-    // 저장된 기기 목록 헤더
-    const header = document.createElement('div');
-    header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px; margin-bottom: 4px;';
-    header.textContent = `⭐ 저장된 ${deviceTypeLabels[deviceType]}`;
-    savedListContainer.appendChild(header);
-    
-    // 각 저장된 기기 항목 생성
-    savedDevices.forEach(saved => {
-      const savedItem = document.createElement('div');
-      savedItem.className = 'bluetooth-dropdown-item';
-      savedItem.style.cssText = 'padding: 8px 12px; font-size: 13px; cursor: pointer;';
-      savedItem.onclick = (e) => {
-        e.stopPropagation();
-        console.log('[Individual Dashboard] 저장된 기기 클릭:', { 
-          deviceType, 
-          deviceId: saved.deviceId, 
-          nickname: saved.nickname,
-          name: saved.name 
-        });
-        connectIndividualBluetoothDevice(deviceType, saved.deviceId);
-      };
-      
-      const nickname = document.createElement('span');
-      nickname.textContent = saved.nickname || saved.name || '알 수 없는 기기';
-      nickname.style.cssText = 'color: #fff;';
-      
-      const deviceName = document.createElement('span');
-      deviceName.textContent = ` (${saved.name})`;
-      deviceName.style.cssText = 'color: #888; font-size: 11px;';
-      
-      savedItem.appendChild(nickname);
-      savedItem.appendChild(deviceName);
-      savedListContainer.appendChild(savedItem);
-    });
-    
-    // 삽입 위치 결정: 트레이너의 경우 ERG 메뉴 다음에, 그 외는 메인 아이템 다음에
-    let insertBeforeElement = mainItem.nextSibling;
-    if (deviceType === 'trainer' && ergMenuId) {
-      const ergMenu = document.getElementById(ergMenuId);
-      if (ergMenu) {
-        // ERG 메뉴 다음에 삽입
-        insertBeforeElement = ergMenu.nextSibling;
-      }
-    }
-    
-    // 메인 아이템의 부모에 삽입
-    if (mainItem.parentNode) {
-      mainItem.parentNode.insertBefore(savedListContainer, insertBeforeElement);
-      console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 목록 추가 완료`);
-    } else {
-      console.error(`[Individual Dashboard] ${itemId}의 부모 노드를 찾을 수 없습니다.`);
-    }
-  });
-  
-  console.log('[Individual Dashboard] 저장된 기기 목록 업데이트 완료');
 }
 
 // 블루투스 연결 상태 업데이트 함수 (개인훈련 대시보드 전용, 독립적 구동)
@@ -3111,265 +2603,87 @@ function updateIndividualBluetoothConnectionStatus() {
     const pmStatus = document.getElementById('individualPowerMeterStatus');
     const connectBtn = document.getElementById('individualBluetoothConnectBtn');
     
-    // 드롭다운에 저장된 기기 목록 업데이트
-    updateIndividualBluetoothDropdownWithSavedDevices();
-    
-    // 상태 설정 헬퍼 함수
-    function setStatus(item, statusEl, connected) {
-        if (item) item.classList.toggle('connected', !!connected);
-        if (statusEl) {
-            statusEl.textContent = connected ? '연결됨' : '미연결';
-            statusEl.style.color = connected ? '#00d4aa' : '#888';
+    // 심박계 상태
+    if (window.connectedDevices?.heartRate) {
+        if (hrItem) hrItem.classList.add('connected');
+        if (hrStatus) {
+            hrStatus.textContent = '연결됨';
+            hrStatus.style.color = '#00d4aa';
+        }
+    } else {
+        if (hrItem) hrItem.classList.remove('connected');
+        if (hrStatus) {
+            hrStatus.textContent = '미연결';
+            hrStatus.style.color = '#888';
         }
     }
     
-    // 연결 상태 확인
-    const hasHr = !!window.connectedDevices?.heartRate;
-    const hasTrainer = !!window.connectedDevices?.trainer;
-    const hasPm = !!window.connectedDevices?.powerMeter;
-    
-    // 각 디바이스 상태 업데이트
-    setStatus(hrItem, hrStatus, hasHr);
-    setStatus(trainerItem, trainerStatus, hasTrainer);
-    setStatus(pmItem, pmStatus, hasPm);
-    
-    // ERG 메뉴 표시/숨김
-    const ergMenu = document.getElementById('individualBluetoothErgMenu');
-    if (ergMenu) {
-        ergMenu.style.display = hasTrainer ? 'block' : 'none';
-    }
-    
-    // ERG 컨트롤러 연결 상태 업데이트
-    if (window.ergController) {
-        window.ergController.updateConnectionStatus(hasTrainer ? 'connected' : 'disconnected');
-    }
-    
-    // ERG 메뉴 상태 업데이트 (트레이너 연결 시)
-    if (hasTrainer && window.ergController) {
-        const ergToggle = document.getElementById('individualBluetoothErgToggle');
-        const ergStatus = document.getElementById('individualBluetoothErgStatus');
-        const ergTarget = document.getElementById('individualBluetoothErgTargetPower');
+    // 스마트 트레이너 상태
+    if (window.connectedDevices?.trainer) {
+        if (trainerItem) trainerItem.classList.add('connected');
+        if (trainerStatus) {
+            trainerStatus.textContent = '연결됨';
+            trainerStatus.style.color = '#00d4aa';
+        }
         
-        if (ergToggle) {
-            ergToggle.checked = window.ergController.state.enabled;
+        // ERG 동작 메뉴 표시 (스마트 트레이너 연결 시)
+        const ergMenu = document.getElementById('individualBluetoothErgMenu');
+        if (ergMenu) {
+            ergMenu.style.display = 'block';
         }
-        if (ergStatus) {
-            ergStatus.textContent = window.ergController.state.enabled ? 'ON' : 'OFF';
-            ergStatus.style.color = window.ergController.state.enabled ? '#00d4aa' : '#888';
+    } else {
+        if (trainerItem) trainerItem.classList.remove('connected');
+        if (trainerStatus) {
+            trainerStatus.textContent = '미연결';
+            trainerStatus.style.color = '#888';
         }
-        if (ergTarget) {
-            ergTarget.value = Math.round(window.ergController.state.targetPower || 0);
+        
+        // ERG 동작 메뉴 숨김 (스마트 트레이너 미연결 시)
+        const ergMenu = document.getElementById('individualBluetoothErgMenu');
+        if (ergMenu) {
+            ergMenu.style.display = 'none';
         }
     }
     
-    // 연결 버튼 상태 업데이트
+    // 파워미터 상태
+    if (window.connectedDevices?.powerMeter) {
+        if (pmItem) pmItem.classList.add('connected');
+        if (pmStatus) {
+            pmStatus.textContent = '연결됨';
+            pmStatus.style.color = '#00d4aa';
+        }
+    } else {
+        if (pmItem) pmItem.classList.remove('connected');
+        if (pmStatus) {
+            pmStatus.textContent = '미연결';
+            pmStatus.style.color = '#888';
+        }
+    }
+    
+    // 연결 버튼 상태 업데이트 (연결된 디바이스가 하나라도 있으면)
     if (connectBtn) {
-        const any = hasHr || hasTrainer || hasPm;
-        connectBtn.classList.toggle('has-connection', !!any);
-        if (!any) {
-            connectBtn.classList.remove('erg-mode-active');
-        }
-    }
-    
-    // 전역 센서 연결 상태 업데이트 및 이벤트 디스패치
-    const anyConnected = hasHr || hasTrainer || hasPm;
-    if (window.isSensorConnected !== anyConnected) {
-        window.isSensorConnected = anyConnected;
-        console.log('[Individual Dashboard] [BLE] Global Flag SET: isSensorConnected =', anyConnected);
-        try {
-            window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
-                detail: { connected: anyConnected } 
-            }));
-        } catch (e) {
-            console.warn('[Individual Dashboard] [BLE] dispatchEvent stelvio-sensor-update failed:', e);
-        }
-    }
-    
-    // 연결 버튼 색상 업데이트 (ERG 모드 활성화 시)
-    updateIndividualConnectionButtonColor();
-}
-
-// 연결 버튼 색상 업데이트 함수 (개인훈련 대시보드 전용)
-function updateIndividualConnectionButtonColor() {
-    const isTrainerConnected = !!window.connectedDevices?.trainer;
-    const isErgModeActive = (window.ergController && window.ergController.state.enabled) ||
-        (window.ergModeState && window.ergModeState.enabled);
-    const addErg = isTrainerConnected && isErgModeActive;
-    
-    const connectBtn = document.getElementById('individualBluetoothConnectBtn');
-    if (connectBtn) {
-        if (addErg) {
-            connectBtn.classList.add('erg-mode-active');
+        if (window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter) {
+            connectBtn.classList.add('has-connection');
         } else {
-            connectBtn.classList.remove('erg-mode-active');
+            connectBtn.classList.remove('has-connection');
         }
     }
-}
-
-// ERG 컨트롤러 초기화 함수 (개인훈련 대시보드 전용)
-function initIndividualErgController() {
-    if (!window.ergController) {
-        console.warn('[Individual Dashboard] ErgController를 찾을 수 없습니다');
-        return;
-    }
-    
-    console.log('[Individual Dashboard] ErgController 초기화 시작');
-    
-    // ERG 상태 구독 (반응형 상태 관리)
-    window.ergController.subscribe((state, key, value) => {
-        if (key === 'enabled') {
-            const ergToggle = document.getElementById('individualBluetoothErgToggle');
-            const ergStatus = document.getElementById('individualBluetoothErgStatus');
-            if (ergToggle) ergToggle.checked = value;
-            if (ergStatus) {
-                ergStatus.textContent = value ? 'ON' : 'OFF';
-                ergStatus.style.color = value ? '#00d4aa' : '#888';
-            }
-            console.log('[Individual Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
-            updateIndividualConnectionButtonColor();
-            updateIndividualBluetoothConnectionStatus();
-        }
-        if (key === 'targetPower') {
-            const targetPowerInput = document.getElementById('individualBluetoothErgTargetPower');
-            if (targetPowerInput) targetPowerInput.value = Math.round(value);
-            if (window.liveData) window.liveData.targetPower = value;
-            console.log('[Individual Dashboard] 목표 파워 변경:', value, 'W');
-        }
-        if (key === 'fatigueLevel' && value > 70) {
-            // 피로도가 높을 때 사용자에게 알림
-            console.warn('[Individual Dashboard] 피로도 감지:', value);
-            if (typeof showToast === 'function') {
-                showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
-            }
-        }
-    });
-    
-    // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
-    let lastTargetPower = window.liveData?.targetPower || 0;
-    setInterval(() => {
-        const currentTargetPower = window.liveData?.targetPower || 0;
-        if (currentTargetPower !== lastTargetPower && window.ergController && window.ergController.state.enabled) {
-            console.log('[Individual Dashboard] 세그먼트 목표 파워 변경 감지:', currentTargetPower, 'W');
-            window.ergController.setTargetPower(currentTargetPower).catch(err => {
-                console.error('[Individual Dashboard] 목표 파워 자동 업데이트 실패:', err);
-            });
-            lastTargetPower = currentTargetPower;
-        }
-    }, 1000);
-    
-    // ERG 모드 토글 이벤트 리스너
-    const ergToggle = document.getElementById('individualBluetoothErgToggle');
-    if (ergToggle) {
-        // 기존 이벤트 리스너 제거 (중복 방지)
-        const newErgToggle = ergToggle.cloneNode(true);
-        ergToggle.parentNode.replaceChild(newErgToggle, ergToggle);
-        
-        newErgToggle.addEventListener('change', async (e) => {
-            try {
-                await window.ergController.toggleErgMode(e.target.checked);
-            } catch (err) {
-                console.error('[Individual Dashboard] ERG 모드 토글 오류:', err);
-                if (typeof showToast === 'function') {
-                    // ErgController에서 던진 구체적인 에러 메시지 표시
-                    const errorMessage = err.message || '스마트로라 연결을 확인해주세요.';
-                    showToast(errorMessage);
-                }
-                e.target.checked = !e.target.checked; // 실패 시 UI 원복
-            }
-        });
-    }
-    
-    // 목표 파워 설정 버튼 이벤트 리스너
-    const ergSetBtn = document.getElementById('individualBluetoothErgSetBtn');
-    const ergTargetPowerInput = document.getElementById('individualBluetoothErgTargetPower');
-    if (ergSetBtn && ergTargetPowerInput) {
-        // 기존 이벤트 리스너 제거 (중복 방지)
-        const newErgSetBtn = ergSetBtn.cloneNode(true);
-        const newErgTargetPowerInput = ergTargetPowerInput.cloneNode(true);
-        ergSetBtn.parentNode.replaceChild(newErgSetBtn, ergSetBtn);
-        ergTargetPowerInput.parentNode.replaceChild(newErgTargetPowerInput, ergTargetPowerInput);
-        
-        newErgSetBtn.addEventListener('click', () => {
-            const targetPower = Number(newErgTargetPowerInput.value) || 0;
-            if (targetPower > 0) {
-                window.ergController.setTargetPower(targetPower).catch(err => {
-                    console.error('[Individual Dashboard] 목표 파워 설정 실패:', err);
-                    if (typeof showToast === 'function') {
-                        showToast('목표 파워 설정에 실패했습니다.');
-                    }
-                });
-                if (typeof showToast === 'function') {
-                    showToast(`목표 파워 ${targetPower}W로 설정되었습니다.`);
-                }
-            } else {
-                if (typeof showToast === 'function') {
-                    showToast('유효한 목표 파워를 입력해주세요.');
-                }
-            }
-        });
-        
-        // Enter 키로도 설정 가능
-        newErgTargetPowerInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                newErgSetBtn.click();
-            }
-        });
-    }
-    
-    console.log('[Individual Dashboard] ErgController 초기화 완료');
 }
 
 // 전역 함수로 노출 (개인훈련 대시보드 전용)
 window.toggleIndividualBluetoothDropdown = toggleIndividualBluetoothDropdown;
 window.connectIndividualBluetoothDevice = connectIndividualBluetoothDevice;
-window.connectIndividualBluetoothDeviceToSaved = connectIndividualBluetoothDeviceToSaved;
 window.updateIndividualBluetoothConnectionStatus = updateIndividualBluetoothConnectionStatus;
-window.updateIndividualBluetoothDropdownWithSavedDevices = updateIndividualBluetoothDropdownWithSavedDevices;
-window.updateIndividualConnectionButtonColor = updateIndividualConnectionButtonColor;
-window.initIndividualErgController = initIndividualErgController;
 
 // 페이지 로드 시 연결 상태 업데이트 및 주기적 업데이트
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('[Individual Dashboard] DOMContentLoaded 이벤트 발생');
-    
-    // 초기 연결 상태 업데이트 (bluetooth.js 로드 대기)
+    // 초기 연결 상태 업데이트
     setTimeout(() => {
-        console.log('[Individual Dashboard] 초기 연결 상태 업데이트 시작');
-        console.log('[Individual Dashboard] bluetooth.js 함수 확인:', {
-            loadSavedDevices: typeof window.loadSavedDevices,
-            getSavedDevicesByType: typeof window.getSavedDevicesByType,
-            saveDevice: typeof window.saveDevice
-        });
-        
-        // localStorage 직접 확인 (디버깅용)
-        const stored = localStorage.getItem('stelvio_saved_devices');
-        console.log('[Individual Dashboard] localStorage 직접 확인:', stored);
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                console.log('[Individual Dashboard] 파싱된 저장된 기기 목록:', parsed);
-            } catch (e) {
-                console.error('[Individual Dashboard] localStorage 파싱 오류:', e);
-            }
-        }
-        
-        // 저장된 기기 목록도 함께 업데이트
-        if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
-            console.log('[Individual Dashboard] updateIndividualBluetoothDropdownWithSavedDevices 호출');
-            updateIndividualBluetoothDropdownWithSavedDevices();
-        } else {
-            console.error('[Individual Dashboard] updateIndividualBluetoothDropdownWithSavedDevices 함수를 찾을 수 없습니다.');
-        }
         updateIndividualBluetoothConnectionStatus();
-    }, 1000); // bluetooth.js 로드 대기 시간 증가
+    }, 500);
     
     // 주기적으로 연결 상태 업데이트 (5초마다)
     setInterval(() => {
         updateIndividualBluetoothConnectionStatus();
     }, 5000);
-    
-    // ErgController 초기화 (ErgController.js 로드 대기)
-    setTimeout(() => {
-        initIndividualErgController();
-    }, 1000);
 });
