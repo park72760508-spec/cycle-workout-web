@@ -743,43 +743,33 @@ async function connectHeartRate() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
-    // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
-    let filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
-    
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가 (최대 3개까지만)
-    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      const nameFilters = savedDevices
-        .slice(0, 3) // 최대 3개까지만 필터 추가 (너무 많으면 문제 발생)
-        .filter(saved => saved.name && saved.name.trim())
-        .map(saved => ({ namePrefix: saved.name }));
-      filters = filters.concat(nameFilters);
-    }
+    // 기본 서비스 필터만 사용 (namePrefix 필터는 제거 - 너무 제한적임)
+    const filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
     
     console.log('[connectHeartRate] requestDevice 필터:', filters);
+    console.log('[connectHeartRate] requestDevice 호출 시작');
     
     let device;
     try {
         device = await navigator.bluetooth.requestDevice({
-            filters: filters.length > 0 ? filters : undefined, // 필터가 없으면 undefined
+            filters: filters,
             optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
+        console.log('[connectHeartRate] requestDevice 성공:', device.name);
     } catch(e) {
-        console.warn('[connectHeartRate] 필터로 기기 검색 실패, 기본 필터로 재시도:', e);
-        // 사용자가 취소한 경우 (NotFoundError)는 재시도하지 않음
+        console.warn('[connectHeartRate] requestDevice 실패:', e.name, e.message);
+        // 사용자가 취소한 경우 조용히 종료
         if (e.name === 'NotFoundError' || e.name === 'AbortError') {
-          throw e; // 사용자 취소는 그대로 전파
+          console.log('[connectHeartRate] 사용자가 기기 선택을 취소했습니다.');
+          showConnectionStatus(false);
+          if (typeof showToast === 'function') {
+            showToast('기기 선택이 취소되었습니다.');
+          }
+          return; // 조용히 종료
         }
-        // 필터 실패 시 기본 필터로 재시도
-        try {
-          device = await navigator.bluetooth.requestDevice({
-              filters: [{ services: [UUIDS.HR_SERVICE] }],
-              optionalServices: [UUIDS.HR_SERVICE]
-          });
-        } catch(e2) {
-          // 두 번째 시도도 실패하면 에러 전파
-          console.error('[connectHeartRate] 기본 필터로도 기기 검색 실패:', e2);
-          throw e2;
-        }
+        // 기타 에러는 전파
+        showConnectionStatus(false);
+        throw e;
     }
     
     if (!device) {
