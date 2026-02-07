@@ -665,6 +665,13 @@ function startIndividualTrainingTimer() {
             const now = Date.now();
             individualLocalElapsedTime = Math.floor((now - individualTrainingStartTime) / 1000);
             
+            // 모바일 대시보드: 로컬 시간 기반 세그먼트 자동 전환
+            if (isMobileActive && window.currentWorkout && window.currentWorkout.segments) {
+                updateSegmentIndexByLocalTime(individualLocalElapsedTime);
+                // 모바일 대시보드 랩 카운트다운 업데이트
+                updateMobileLapTimeDisplay(individualLocalElapsedTime);
+            }
+            
             // Firebase status가 없거나 오래된 경우 로컬 시간으로 UI 업데이트
             const firebaseStatus = window.individualFirebaseStatus || null;
             if (!firebaseStatus || !firebaseStatus.elapsedTime) {
@@ -705,6 +712,149 @@ function updateIndividualTimerDisplay(elapsedSeconds) {
     
     // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
     window.lastElapsedTime = elapsedSeconds;
+}
+
+// [추가] 로컬 시간 기반 세그먼트 인덱스 자동 전환 (모바일 대시보드 전용)
+function updateSegmentIndexByLocalTime(elapsedSeconds) {
+    if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+        return;
+    }
+    
+    // 경과 시간 기반으로 현재 세그먼트 인덱스 계산
+    let accumulatedTime = 0;
+    let newSegmentIndex = -1;
+    
+    for (let i = 0; i < window.currentWorkout.segments.length; i++) {
+        const seg = window.currentWorkout.segments[i];
+        const segDuration = seg.duration_sec || seg.duration || 0;
+        const segmentEndTime = accumulatedTime + segDuration;
+        
+        if (elapsedSeconds >= accumulatedTime && elapsedSeconds < segmentEndTime) {
+            newSegmentIndex = i;
+            break;
+        }
+        
+        accumulatedTime = segmentEndTime;
+    }
+    
+    // 마지막 세그먼트를 넘어간 경우
+    if (newSegmentIndex === -1 && elapsedSeconds >= accumulatedTime) {
+        newSegmentIndex = window.currentWorkout.segments.length - 1;
+    }
+    
+    // 세그먼트 변경 감지 및 처리
+    if (newSegmentIndex !== currentSegmentIndex && newSegmentIndex >= 0) {
+        const oldIndex = currentSegmentIndex;
+        currentSegmentIndex = newSegmentIndex;
+        previousIndividualSegmentIndex = oldIndex; // 이전 인덱스 업데이트
+        
+        // 세그먼트 시작 시간 업데이트
+        individualSegmentStartTime = Date.now();
+        
+        console.log('[Individual] 로컬 시간 기반 세그먼트 전환:', oldIndex, '→', currentSegmentIndex, '(경과 시간:', elapsedSeconds, '초)');
+        
+        // 세그먼트 변경 시 UI 업데이트
+        updateTargetPower();
+        updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+        
+        // 세그먼트 정보 업데이트
+        const segmentInfoEl = document.getElementById('segment-info');
+        if (segmentInfoEl) {
+            const currentSegment = getCurrentSegment();
+            if (currentSegment) {
+                const segmentName = currentSegment.name || '';
+                const targetText = formatSegmentInfo(
+                    currentSegment.target_type,
+                    currentSegment.target_value
+                );
+                const segmentText = segmentName 
+                    ? `${segmentName}(${targetText})`
+                    : targetText;
+                segmentInfoEl.innerText = segmentText;
+            }
+        }
+        
+        // 랩 카운트다운 표시 (5초 카운트다운)
+        const seg = window.currentWorkout.segments[currentSegmentIndex];
+        if (seg) {
+            const segDuration = seg.duration_sec || seg.duration || 0;
+            // 세그먼트 시작 시 5초 카운트다운 표시
+            if (typeof showSegmentCountdown === 'function') {
+                showSegmentCountdown(5);
+                setTimeout(() => {
+                    if (typeof stopSegmentCountdown === 'function') {
+                        stopSegmentCountdown();
+                    }
+                }, 1000);
+            }
+        }
+    }
+}
+
+// [추가] 모바일 대시보드 전용 랩타임 디스플레이 업데이트 (로컬 시간 사용)
+function updateMobileLapTimeDisplay(elapsedSeconds) {
+    // 모바일 대시보드 화면 체크
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    const isMobileActive = mobileScreen && 
+        (mobileScreen.classList.contains('active') || 
+         window.getComputedStyle(mobileScreen).display !== 'none');
+    
+    if (!isMobileActive) {
+        return;
+    }
+    
+    // 세그먼트 남은 시간 계산
+    let countdownValue = null;
+    
+    if (window.currentWorkout && window.currentWorkout.segments && currentSegmentIndex >= 0) {
+        const seg = window.currentWorkout.segments[currentSegmentIndex];
+        
+        if (seg) {
+            const segDuration = seg.duration_sec || seg.duration || 0;
+            
+            // 로컬 세그먼트 경과 시간 계산
+            if (individualSegmentStartTime) {
+                const now = Date.now();
+                const segElapsed = Math.floor((now - individualSegmentStartTime) / 1000);
+                countdownValue = Math.max(0, segDuration - segElapsed);
+            } else {
+                // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
+                let prevSegmentsTime = 0;
+                for (let i = 0; i < currentSegmentIndex; i++) {
+                    const prevSeg = window.currentWorkout.segments[i];
+                    if (prevSeg) {
+                        prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
+                    }
+                }
+                const segElapsed = Math.max(0, elapsedSeconds - prevSegmentsTime);
+                countdownValue = Math.max(0, segDuration - segElapsed);
+            }
+        }
+    }
+    
+    // 모바일 대시보드 세그먼트 정보 업데이트 (랩 카운트다운 표시)
+    const mobileSegmentInfoEl = document.getElementById('mobile-segment-info');
+    if (mobileSegmentInfoEl) {
+        if (countdownValue !== null && countdownValue >= 0) {
+            const currentSegment = getCurrentSegment();
+            if (currentSegment) {
+                const segmentName = currentSegment.name || '';
+                const targetText = formatSegmentInfo(
+                    currentSegment.target_type,
+                    currentSegment.target_value
+                );
+                const timeText = formatTime(countdownValue);
+                const segmentText = segmentName 
+                    ? `${segmentName}(${targetText}) - ${timeText}`
+                    : `${targetText} - ${timeText}`;
+                mobileSegmentInfoEl.innerText = segmentText;
+            } else {
+                mobileSegmentInfoEl.innerText = countdownValue > 0 ? formatTime(countdownValue) : '준비 중';
+            }
+        } else {
+            mobileSegmentInfoEl.innerText = '준비 중';
+        }
+    }
 }
 
 // [추가] 개인훈련 대시보드 전용 랩타임 디스플레이 업데이트 (로컬 시간 사용)
