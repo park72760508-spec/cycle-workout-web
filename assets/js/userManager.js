@@ -2207,12 +2207,15 @@ async function editUser(userId) {
     
     const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
     const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+    // 권한 판단 시 로그인 사용자(authUser) 우선: 프로필 선택으로 currentUser가 다른 사용자로 바뀌어도 관리자(grade=1) 수정 가능
     const viewerGrade = isTempAdmin
       ? '1'
-      : (typeof getViewerGrade === 'function'
-          ? String(getViewerGrade())
-          : String(mergedViewer?.grade ?? '2'));
-    const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
+      : (authUser && authUser.grade != null)
+        ? String(authUser.grade)
+        : (typeof getViewerGrade === 'function'
+            ? String(getViewerGrade())
+            : String(mergedViewer?.grade ?? '2'));
+    const viewerId = (authUser && authUser.id != null) ? String(authUser.id) : ((mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null);
     
     // 권한 확인: 관리자(grade=1)만 모든 사용자 수정 가능, 일반 사용자(grade=2,3)는 본인만 수정 가능
     if (viewerGrade !== '1' && (!viewerId || String(userId) !== viewerId)) {
@@ -2429,12 +2432,15 @@ async function performUpdateFromModal() {
   
   const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
   const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+  // 권한 판단 시 로그인 사용자(authUser) 우선: 프로필 선택으로 currentUser가 다른 사용자로 바뀌어도 관리자(grade=1) 수정 버튼 동작
   const viewerGrade = isTempAdmin
     ? '1'
-    : (typeof getViewerGrade === 'function'
-        ? String(getViewerGrade())
-        : String(mergedViewer?.grade ?? '2'));
-  const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
+    : (authUser && authUser.grade != null)
+      ? String(authUser.grade)
+      : (typeof getViewerGrade === 'function'
+          ? String(getViewerGrade())
+          : String(mergedViewer?.grade ?? '2'));
+  const viewerId = (authUser && authUser.id != null) ? String(authUser.id) : ((mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null);
   
   // 권한 확인: 관리자(grade=1)만 모든 사용자 수정 가능, 일반 사용자(grade=2,3)는 본인만 수정 가능
   if (viewerGrade !== '1' && (!viewerId || String(currentEditUserId) !== viewerId)) {
