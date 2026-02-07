@@ -283,7 +283,9 @@ window.updateDevicesList = function () {
 // ── [Connection Engine] ──
 
 async function connectTrainer() {
+  console.log('[connectTrainer] 함수 호출 시작');
   try {
+    console.log('[connectTrainer] showConnectionStatus 호출');
     showConnectionStatus(true);
     
     // 기존 트레이너 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
@@ -667,7 +669,9 @@ function handlePowerMeterData(event) {
 
 // (Helper functions for HR/PM connection are kept standard)
 async function connectHeartRate() {
+  console.log('[connectHeartRate] 함수 호출 시작');
   try {
+    console.log('[connectHeartRate] showConnectionStatus 호출');
     showConnectionStatus(true);
     
     // 기존 심박계 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
@@ -897,10 +901,15 @@ async function connectHeartRate() {
 }
 
 async function connectPowerMeter() {
+  console.log('[connectPowerMeter] 함수 호출 시작');
   // 트레이너가 연결되어 있으면 확인 (트레이너와 파워미터는 별개)
-  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
+  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) {
+    console.log('[connectPowerMeter] 사용자가 취소함');
+    return;
+  }
   
   try {
+    console.log('[connectPowerMeter] showConnectionStatus 호출');
     showConnectionStatus(true);
     
     // 기존 파워미터 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
