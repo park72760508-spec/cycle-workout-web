@@ -3228,10 +3228,18 @@ async function adminResetUserPassword() {
     }
     
   } catch (error) {
-    console.error('관리자 비밀번호 초기화 실패:', error);
-    let errMsg = '비밀번호 초기화 중 오류가 발생했습니다.';
-    if (error && error.message) errMsg = error.message;
+    const errCode = (error && (error.code || error.details?.code)) || '';
+    const errMsgRaw = (error && (error.message || error.details?.message)) || '비밀번호 초기화 중 오류가 발생했습니다.';
+    console.error('[adminResetUserPassword] 실패 code=', errCode, 'message=', errMsgRaw, 'error=', error);
+    let errMsg = errMsgRaw;
     if (error && error.details) errMsg = (error.details.message || errMsg) + (error.details.details ? ' ' + JSON.stringify(error.details.details) : '');
+    // "Internal" 등 영문 코드가 그대로 노출되는 경우 한글 안내로 대체
+    if (/^internal$/i.test(String(errMsg).trim()) || (errCode === 'functions/internal' || errCode === 'internal')) {
+      errMsg = '비밀번호 변경 처리 중 일시적인 오류가 발생했습니다.\n\n'
+        + '• F12 > 콘솔에서 code/message를 확인해 보세요.\n'
+        + '• 앱을 https://stelvio.ai.kr 에서 열고 다시 시도해 보세요.\n'
+        + '• 그래도 실패하면 Firebase 콘솔 > Functions > 로그에서 서버 오류를 확인해 주세요.';
+    }
     showAdminPasswordStatus(errMsg, 'error');
   } finally {
     resetBtn.disabled = false;
