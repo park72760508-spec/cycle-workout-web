@@ -3146,7 +3146,7 @@ window.changeUserPassword = changeUserPassword;
 
 /**
  * 관리자 비밀번호 초기화 (관리자 전용)
- * Firebase Callable Function(adminResetUserPassword)을 호출하여 대상 사용자 비밀번호를 실제로 변경합니다.
+ * Firebase HTTPS Function(adminResetUserPasswordHttp)을 호출하여 대상 사용자 비밀번호를 실제로 변경합니다.
  * Cloud Function이 배포되어 있어야 동작하며, 호출자는 Firestore users/{uid}.grade === 1 이어야 합니다.
  */
 async function adminResetUserPassword() {
@@ -3193,7 +3193,7 @@ async function adminResetUserPassword() {
       showAdminPasswordStatus('비밀번호 초기화를 하려면 관리자 계정으로 로그인한 뒤 다시 시도해주세요.', 'error');
     } else {
       const projectId = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
-      const url = 'https://us-central1-' + projectId + '.cloudfunctions.net/adminResetUserPassword';
+      const url = 'https://us-central1-' + projectId + '.cloudfunctions.net/adminResetUserPasswordHttp';
       let idToken;
       try {
         idToken = await currentUser.getIdToken();
