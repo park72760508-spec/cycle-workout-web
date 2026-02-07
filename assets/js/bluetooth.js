@@ -103,6 +103,64 @@ function showNicknameModal(deviceName, callback) {
   return false;
 }
 
+// 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
+async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName) {
+  try {
+    if (!navigator.bluetooth || !('requestDevice' in navigator.bluetooth)) {
+      throw new Error('Bluetooth API를 사용할 수 없습니다.');
+    }
+    
+    // 저장된 기기 이름을 사용하여 필터 생성
+    const filters = [];
+    
+    if (deviceType === 'heartRate') {
+      filters.push({ services: ['heart_rate'] });
+      filters.push({ services: [UUIDS.HR_SERVICE] });
+      // 저장된 기기 이름이 있으면 namePrefix 필터 추가
+      if (savedDeviceName) {
+        filters.push({ namePrefix: savedDeviceName });
+      }
+    } else if (deviceType === 'trainer') {
+      filters.push({ services: [UUIDS.FTMS_SERVICE] });
+      filters.push({ services: [UUIDS.CPS_SERVICE] });
+      filters.push({ namePrefix: "CycleOps" });
+      filters.push({ namePrefix: "Hammer" });
+      filters.push({ namePrefix: "Saris" });
+      filters.push({ namePrefix: "Wahoo" });
+      filters.push({ namePrefix: "KICKR" });
+      filters.push({ namePrefix: "Tacx" });
+      // 저장된 기기 이름이 있으면 namePrefix 필터 추가
+      if (savedDeviceName) {
+        filters.push({ namePrefix: savedDeviceName });
+      }
+    } else if (deviceType === 'powerMeter') {
+      filters.push({ services: [UUIDS.CPS_SERVICE] });
+      filters.push({ services: [UUIDS.CSC_SERVICE] });
+      // 저장된 기기 이름이 있으면 namePrefix 필터 추가
+      if (savedDeviceName) {
+        filters.push({ namePrefix: savedDeviceName });
+      }
+    }
+    
+    const optionalServices = deviceType === 'heartRate' 
+      ? ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
+      : deviceType === 'trainer'
+      ? [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']
+      : [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
+    
+    // requestDevice 호출
+    const device = await navigator.bluetooth.requestDevice({ 
+      filters: filters.length > 0 ? filters : undefined,
+      optionalServices 
+    });
+    
+    return device;
+  } catch (error) {
+    console.error('[requestDeviceWithSavedInfo] 기기 요청 실패:', error);
+    throw error;
+  }
+}
+
 // 저장된 기기에 재연결 시도
 async function reconnectToSavedDevice(deviceId, deviceType) {
   try {
@@ -151,6 +209,7 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
 
 // 전역 노출 (app.js에서 사용)
 window.reconnectToSavedDevice = window.reconnectToSavedDevice || reconnectToSavedDevice;
+window.requestDeviceWithSavedInfo = window.requestDeviceWithSavedInfo || requestDeviceWithSavedInfo;
 window.handleHeartRateData = window.handleHeartRateData || handleHeartRateData;
 window.handlePowerMeterData = window.handlePowerMeterData || handlePowerMeterData;
 window.handleTrainerData = window.handleTrainerData || handleTrainerData;
@@ -276,6 +335,15 @@ async function connectTrainer() {
       { namePrefix: "CycleOps" }, { namePrefix: "Hammer" }, { namePrefix: "Saris" },
       { namePrefix: "Wahoo" }, { namePrefix: "KICKR" }, { namePrefix: "Tacx" }
     ];
+    
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
+      savedDevices.forEach(saved => {
+        if (saved.name) {
+          filters.push({ namePrefix: saved.name });
+        }
+      });
+    }
 
     const optionalServices = [
       UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE,
@@ -536,13 +604,26 @@ async function connectHeartRate() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
+    // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
+    const filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
+    
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
+      savedDevices.forEach(saved => {
+        if (saved.name) {
+          filters.push({ namePrefix: saved.name });
+        }
+      });
+    }
+    
     let device;
     try {
         device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: ['heart_rate'] }],
+            filters: filters,
             optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
     } catch(e) {
+        // 필터 실패 시 기본 필터로 재시도
         device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [UUIDS.HR_SERVICE] }],
             optionalServices: [UUIDS.HR_SERVICE]
@@ -634,8 +715,20 @@ async function connectPowerMeter() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
+    // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
+    const filters = [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }];
+    
+    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
+    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
+      savedDevices.forEach(saved => {
+        if (saved.name) {
+          filters.push({ namePrefix: saved.name });
+        }
+      });
+    }
+    
     let device = await navigator.bluetooth.requestDevice({ 
-        filters: [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }], 
+        filters: filters, 
         optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE] 
     });
     const server = await device.gatt.connect();
