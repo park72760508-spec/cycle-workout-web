@@ -60,6 +60,9 @@ if (typeof PowerMeterData === 'undefined') {
       this.lastTrailAngle = null;
       this.powerAverageBuffer = []; // 3초 평균 파워 계산용
       this.lastCadenceUpdateTime = 0; // 케이던스 마지막 업데이트 시간 (0 표시 오류 개선용)
+      this.lastPowerValue = null; // 네트워크 단절 감지용: 마지막 파워값
+      this.lastPowerChangeTime = null; // 네트워크 단절 감지용: 마지막 파워값 변경 시간
+      this.networkDisconnected = false; // 네트워크 단절 상태 플래그
     }
     
     /**
@@ -491,6 +494,15 @@ function createPowerMeterElement(powerMeter) {
               font-size="10" 
               font-weight="500">W</text>
         
+        <text x="100" y="145" 
+              text-anchor="start" 
+              dominant-baseline="baseline"
+              fill="#ffffff" 
+              font-size="13" 
+              font-weight="500"
+              id="ftp-percent-${powerMeter.id}"
+              style="display: none;"></text>
+        
       </svg>
     </div>
     <div class="speedometer-info disconnected">
@@ -669,15 +681,73 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === powerMeterId);
   if (!powerMeter) return;
   
-  // currentPower 업데이트 (바늘 애니메이션 루프에서 사용)
-  powerMeter.currentPower = Math.max(0, Number(power) || 0);
+  const now = Date.now();
+  const NETWORK_TIMEOUT_MS = 3000; // 3초 동안 같은 값이면 네트워크 단절로 판단
   
+  // 네트워크 단절 감지 로직
+  let currentPowerValue = Math.max(0, Number(power) || 0);
+  
+  // 파워값이 변경되었는지 확인
+  if (powerMeter.lastPowerValue === null || powerMeter.lastPowerValue !== currentPowerValue) {
+    // 파워값이 변경됨 - 네트워크 정상
+    powerMeter.lastPowerValue = currentPowerValue;
+    powerMeter.lastPowerChangeTime = now;
+    powerMeter.networkDisconnected = false;
+  } else if (powerMeter.lastPowerChangeTime !== null) {
+    // 파워값이 같은 상태로 유지됨
+    const timeSinceLastChange = now - powerMeter.lastPowerChangeTime;
+    if (timeSinceLastChange >= NETWORK_TIMEOUT_MS && currentPowerValue > 0) {
+      // 일정 시간 동안 같은 값이고 0이 아니면 네트워크 단절로 판단
+      powerMeter.networkDisconnected = true;
+      currentPowerValue = 0;
+    }
+  }
+  
+  // 네트워크 단절 시 파워값을 0으로 설정
+  if (powerMeter.networkDisconnected) {
+    powerMeter.currentPower = 0;
+  } else {
+    powerMeter.currentPower = currentPowerValue;
+  }
+  
+  // 파워값 표시 업데이트
   const textEl = document.getElementById(`current-power-value-${powerMeterId}`);
   if (textEl) {
     textEl.textContent = Math.round(powerMeter.currentPower);
   }
   
+  // FTP 대비 % 위첨자 표시
+  const ftpPercentEl = document.getElementById(`ftp-percent-${powerMeterId}`);
+  if (ftpPercentEl && powerMeter.userFTP && powerMeter.userFTP > 0) {
+    const ftpPercent = Math.round((powerMeter.currentPower / powerMeter.userFTP) * 100);
+    if (powerMeter.currentPower > 0) {
+      // 파워값의 실제 너비를 계산하여 우측에 배치
+      // 파워값 폰트 크기 43.2px의 30% = 13px (위첨자 크기)
+      const powerText = String(Math.round(powerMeter.currentPower));
+      // 대략적인 문자 너비 계산 (43.2px 폰트 기준)
+      const avgCharWidth = 43.2 * 0.6; // 대략적인 문자 너비
+      const powerTextWidth = powerText.length * avgCharWidth;
+      const startX = 100 + (powerTextWidth / 2) + 8; // 파워값 중앙에서 우측으로 8px
+      ftpPercentEl.setAttribute('x', startX);
+      ftpPercentEl.setAttribute('y', 145); // 파워값의 위쪽 라인 (y=188에서 위로, 폰트 크기 43.2의 약간 위)
+      ftpPercentEl.textContent = ftpPercent + '%';
+      ftpPercentEl.style.display = '';
+    } else {
+      ftpPercentEl.style.display = 'none';
+    }
+  }
+  
   powerMeter.previousPower = powerMeter.currentPower;
+  
+  // 속도계 바늘 업데이트 (네트워크 단절 시 0으로 설정)
+  const gaugeMaxPower = powerMeter.userFTP ? powerMeter.userFTP * 1.5 : 300;
+  const ratio = Math.min(Math.max(powerMeter.currentPower / gaugeMaxPower, 0), 1);
+  const angle = -90 + (ratio * 180); // -90도(왼쪽)에서 90도(오른쪽)까지
+  
+  const needleEl = document.getElementById(`needle-${powerMeterId}`);
+  if (needleEl) {
+    needleEl.setAttribute('transform', `rotate(${angle} 100 100)`);
+  }
 }
 
 /**
@@ -955,8 +1025,7 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   const segmentPower = userData.segmentPower || 0;
   const targetPower = userData.targetPower || 0;
   
-  // 파워계 데이터 업데이트
-  powerMeter.currentPower = power;
+  // 파워계 데이터 업데이트 (네트워크 단절 감지를 위해 updatePowerMeterNeedle 사용)
   powerMeter.heartRate = heartRate;
   powerMeter.cadence = cadence;
   powerMeter.averagePower = avgPower;
@@ -965,8 +1034,15 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   powerMeter.targetPower = targetPower;
   powerMeter.lastUpdateTime = userData.lastUpdate || Date.now();
   
+  // 파워값 업데이트 (네트워크 단절 감지 포함)
+  if (typeof updatePowerMeterNeedle === 'function') {
+    updatePowerMeterNeedle(trackId, power);
+  } else {
+    powerMeter.currentPower = power;
+  }
+  
   // 연결 상태 업데이트
-  powerMeter.connected = (power > 0 || heartRate > 0 || cadence > 0);
+  powerMeter.connected = (powerMeter.currentPower > 0 || heartRate > 0 || cadence > 0);
   
   // UI 업데이트
   updatePowerMeterUI(trackId);
@@ -995,6 +1071,25 @@ function updatePowerMeterUI(trackId) {
   if (currentPowerEl) {
     const avgPower = powerMeter.get3SecondAveragePower ? powerMeter.get3SecondAveragePower() : powerMeter.currentPower;
     currentPowerEl.textContent = Math.round(avgPower);
+  }
+  
+  // FTP 대비 % 위첨자 표시 (updatePowerMeterNeedle에서도 처리되지만 여기서도 업데이트)
+  const ftpPercentEl = document.getElementById(`ftp-percent-${trackId}`);
+  if (ftpPercentEl && powerMeter.userFTP && powerMeter.userFTP > 0) {
+    const currentPower = powerMeter.currentPower || 0;
+    const ftpPercent = Math.round((currentPower / powerMeter.userFTP) * 100);
+    if (currentPower > 0) {
+      const powerText = String(Math.round(currentPower));
+      const avgCharWidth = 43.2 * 0.6;
+      const powerTextWidth = powerText.length * avgCharWidth;
+      const startX = 100 + (powerTextWidth / 2) + 8;
+      ftpPercentEl.setAttribute('x', startX);
+      ftpPercentEl.setAttribute('y', 145);
+      ftpPercentEl.textContent = ftpPercent + '%';
+      ftpPercentEl.style.display = '';
+    } else {
+      ftpPercentEl.style.display = 'none';
+    }
   }
   
   // 세그먼트 파워
