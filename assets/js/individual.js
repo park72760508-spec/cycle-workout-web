@@ -3165,6 +3165,119 @@ function updateIndividualConnectionButtonColor() {
     }
 }
 
+// ERG 컨트롤러 초기화 함수 (개인훈련 대시보드 전용)
+function initIndividualErgController() {
+    if (!window.ergController) {
+        console.warn('[Individual Dashboard] ErgController를 찾을 수 없습니다');
+        return;
+    }
+    
+    console.log('[Individual Dashboard] ErgController 초기화 시작');
+    
+    // ERG 상태 구독 (반응형 상태 관리)
+    window.ergController.subscribe((state, key, value) => {
+        if (key === 'enabled') {
+            const ergToggle = document.getElementById('individualBluetoothErgToggle');
+            const ergStatus = document.getElementById('individualBluetoothErgStatus');
+            if (ergToggle) ergToggle.checked = value;
+            if (ergStatus) {
+                ergStatus.textContent = value ? 'ON' : 'OFF';
+                ergStatus.style.color = value ? '#00d4aa' : '#888';
+            }
+            console.log('[Individual Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
+            updateIndividualConnectionButtonColor();
+            updateIndividualBluetoothConnectionStatus();
+        }
+        if (key === 'targetPower') {
+            const targetPowerInput = document.getElementById('individualBluetoothErgTargetPower');
+            if (targetPowerInput) targetPowerInput.value = Math.round(value);
+            if (window.liveData) window.liveData.targetPower = value;
+            console.log('[Individual Dashboard] 목표 파워 변경:', value, 'W');
+        }
+        if (key === 'fatigueLevel' && value > 70) {
+            // 피로도가 높을 때 사용자에게 알림
+            console.warn('[Individual Dashboard] 피로도 감지:', value);
+            if (typeof showToast === 'function') {
+                showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
+            }
+        }
+    });
+    
+    // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
+    let lastTargetPower = window.liveData?.targetPower || 0;
+    setInterval(() => {
+        const currentTargetPower = window.liveData?.targetPower || 0;
+        if (currentTargetPower !== lastTargetPower && window.ergController && window.ergController.state.enabled) {
+            console.log('[Individual Dashboard] 세그먼트 목표 파워 변경 감지:', currentTargetPower, 'W');
+            window.ergController.setTargetPower(currentTargetPower).catch(err => {
+                console.error('[Individual Dashboard] 목표 파워 자동 업데이트 실패:', err);
+            });
+            lastTargetPower = currentTargetPower;
+        }
+    }, 1000);
+    
+    // ERG 모드 토글 이벤트 리스너
+    const ergToggle = document.getElementById('individualBluetoothErgToggle');
+    if (ergToggle) {
+        // 기존 이벤트 리스너 제거 (중복 방지)
+        const newErgToggle = ergToggle.cloneNode(true);
+        ergToggle.parentNode.replaceChild(newErgToggle, ergToggle);
+        
+        newErgToggle.addEventListener('change', async (e) => {
+            try {
+                await window.ergController.toggleErgMode(e.target.checked);
+            } catch (err) {
+                console.error('[Individual Dashboard] ERG 모드 토글 오류:', err);
+                if (typeof showToast === 'function') {
+                    // ErgController에서 던진 구체적인 에러 메시지 표시
+                    const errorMessage = err.message || '스마트로라 연결을 확인해주세요.';
+                    showToast(errorMessage);
+                }
+                e.target.checked = !e.target.checked; // 실패 시 UI 원복
+            }
+        });
+    }
+    
+    // 목표 파워 설정 버튼 이벤트 리스너
+    const ergSetBtn = document.getElementById('individualBluetoothErgSetBtn');
+    const ergTargetPowerInput = document.getElementById('individualBluetoothErgTargetPower');
+    if (ergSetBtn && ergTargetPowerInput) {
+        // 기존 이벤트 리스너 제거 (중복 방지)
+        const newErgSetBtn = ergSetBtn.cloneNode(true);
+        const newErgTargetPowerInput = ergTargetPowerInput.cloneNode(true);
+        ergSetBtn.parentNode.replaceChild(newErgSetBtn, ergSetBtn);
+        ergTargetPowerInput.parentNode.replaceChild(newErgTargetPowerInput, ergTargetPowerInput);
+        
+        newErgSetBtn.addEventListener('click', () => {
+            const targetPower = Number(newErgTargetPowerInput.value) || 0;
+            if (targetPower > 0) {
+                window.ergController.setTargetPower(targetPower).catch(err => {
+                    console.error('[Individual Dashboard] 목표 파워 설정 실패:', err);
+                    if (typeof showToast === 'function') {
+                        showToast('목표 파워 설정에 실패했습니다.');
+                    }
+                });
+                if (typeof showToast === 'function') {
+                    showToast(`목표 파워 ${targetPower}W로 설정되었습니다.`);
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('유효한 목표 파워를 입력해주세요.');
+                }
+            }
+        });
+        
+        // Enter 키로도 설정 가능
+        newErgTargetPowerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                newErgSetBtn.click();
+            }
+        });
+    }
+    
+    console.log('[Individual Dashboard] ErgController 초기화 완료');
+}
+
 // 전역 함수로 노출 (개인훈련 대시보드 전용)
 window.toggleIndividualBluetoothDropdown = toggleIndividualBluetoothDropdown;
 window.connectIndividualBluetoothDevice = connectIndividualBluetoothDevice;
@@ -3172,6 +3285,7 @@ window.connectIndividualBluetoothDeviceToSaved = connectIndividualBluetoothDevic
 window.updateIndividualBluetoothConnectionStatus = updateIndividualBluetoothConnectionStatus;
 window.updateIndividualBluetoothDropdownWithSavedDevices = updateIndividualBluetoothDropdownWithSavedDevices;
 window.updateIndividualConnectionButtonColor = updateIndividualConnectionButtonColor;
+window.initIndividualErgController = initIndividualErgController;
 
 // 페이지 로드 시 연결 상태 업데이트 및 주기적 업데이트
 document.addEventListener('DOMContentLoaded', () => {
@@ -3184,4 +3298,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         updateIndividualBluetoothConnectionStatus();
     }, 5000);
+    
+    // ErgController 초기화 (ErgController.js 로드 대기)
+    setTimeout(() => {
+        initIndividualErgController();
+    }, 500);
 });
