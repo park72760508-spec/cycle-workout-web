@@ -23,84 +23,186 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// CORS 설정: Firebase Functions v2 onCall은 기본적으로 모든 origin 허용
-// 특정 origin만 허용하려면 배열로 지정 (문자열 또는 정규식)
+// CORS 설정: Firebase Functions v2 onCall - 허용할 출처 (localhost는 개발/테스트용)
 const CORS_ORIGINS = [
   "https://stelvio.ai.kr",
   "https://www.stelvio.ai.kr",
+  "http://localhost",
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:8080",
+  "http://127.0.0.1",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5000",
+  "http://127.0.0.1:8080",
 ];
 
-exports.adminResetUserPassword = onCall(
-  { cors: CORS_ORIGINS },
-  async (request) => {
-    try {
-      // 인증 필수
-      if (!request.auth || !request.auth.uid) {
-        throw new HttpsError(
-          "unauthenticated",
-          "로그인한 후에만 비밀번호 초기화를 할 수 있습니다."
-        );
-      }
+// CORS 헤더 설정 헬퍼 (preflight 및 실제 응답에 사용)
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin || "";
+  const allowed = CORS_ORIGINS.some(
+    (o) => (typeof o === "string" ? origin === o : o.test(origin))
+  );
+  if (allowed && origin) {
+    res.set("Access-Control-Allow-Origin", origin);
+  } else if (CORS_ORIGINS.indexOf("*") !== -1) {
+    res.set("Access-Control-Allow-Origin", "*");
+  } else if (origin) {
+    res.set("Access-Control-Allow-Origin", origin);
+  }
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Max-Age", "3600");
+}
 
-      const callerUid = request.auth.uid;
-      const data = request.data || {};
-      const targetUserId = data.targetUserId ? String(data.targetUserId).trim() : null;
-      const newPassword = data.newPassword ? String(data.newPassword) : null;
+// 관리자 비밀번호 초기화: onRequest로 CORS preflight(OPTIONS) 수동 처리
+exports.adminResetUserPassword = onRequest(
+  { cors: false },
+  async (req, res) => {
+    setCorsHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).json({ error: { code: "method-not-allowed", message: "POST만 허용됩니다." } });
+      return;
+    }
+
+    const sendError = (code, message, status = 400) => {
+      res.status(status).json({ error: { code, message } });
+    };
+
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        sendError("unauthenticated", "로그인한 후에만 비밀번호 초기화를 할 수 있습니다.", 401);
+        return;
+      }
+      const idToken = authHeader.split("Bearer ")[1];
+      let decodedToken;
+      try {
+        decodedToken = await admin.auth().verifyIdToken(idToken);
+      } catch (e) {
+        sendError("unauthenticated", "로그인이 만료되었거나 유효하지 않습니다. 다시 로그인해 주세요.", 401);
+        return;
+      }
+      const callerUid = decodedToken.uid;
+
+      let body = {};
+      try {
+        body = typeof req.body === "object" && req.body !== null ? req.body : {};
+      } catch (e) {
+        sendError("invalid-argument", "요청 본문이 올바르지 않습니다.");
+        return;
+      }
+      const targetUserId = body.targetUserId ? String(body.targetUserId).trim() : null;
+      const newPassword = body.newPassword ? String(body.newPassword) : null;
 
       if (!targetUserId) {
-        throw new HttpsError(
-          "invalid-argument",
-          "대상 사용자 ID(targetUserId)가 필요합니다."
-        );
+        sendError("invalid-argument", "대상 사용자 ID(targetUserId)가 필요합니다.");
+        return;
       }
-
       if (!newPassword || newPassword.length < 6) {
-        throw new HttpsError(
-          "invalid-argument",
-          "새 비밀번호는 6자 이상이어야 합니다."
-        );
+        sendError("invalid-argument", "새 비밀번호는 6자 이상이어야 합니다.");
+        return;
       }
 
-      // Firestore에서 호출자 등급 확인 (관리자만 허용)
       const callerDoc = await admin.firestore().collection("users").doc(callerUid).get();
       if (!callerDoc.exists) {
-        throw new HttpsError(
-          "permission-denied",
-          "호출자 정보를 찾을 수 없습니다."
-        );
+        sendError("permission-denied", "호출자 정보를 찾을 수 없습니다.", 403);
+        return;
       }
-
       const grade = callerDoc.data().grade;
       const isAdmin = grade === 1 || grade === "1";
       if (!isAdmin) {
-        throw new HttpsError(
-          "permission-denied",
-          "관리자(grade=1)만 다른 사용자의 비밀번호를 초기화할 수 있습니다."
-        );
+        sendError("permission-denied", "관리자(grade=1)만 다른 사용자의 비밀번호를 초기화할 수 있습니다.", 403);
+        return;
       }
 
-      // Firebase Auth에서 대상 사용자 비밀번호 변경
-      await admin.auth().updateUser(targetUserId, { password: newPassword });
-      return { success: true, message: "비밀번호가 초기화되었습니다." };
+      const targetUserRef = admin.firestore().collection("users").doc(targetUserId);
+      const targetUserSnap = await targetUserRef.get();
+      if (!targetUserSnap.exists) {
+        sendError("not-found", "대상 사용자 정보를 찾을 수 없습니다. 사용자 목록에서 선택한 계정인지 확인해 주세요.", 404);
+        return;
+      }
+      const targetData = targetUserSnap.data() || {};
+      const authUid =
+        (targetData.uid && String(targetData.uid).trim()) ||
+        (targetData.id && String(targetData.id).trim()) ||
+        targetUserId;
+      if (!authUid || authUid.length > 128) {
+        sendError("invalid-argument", "대상 사용자 ID가 올바르지 않습니다.");
+        return;
+      }
+
+      let resolvedAuthUid = null;
+      try {
+        await admin.auth().getUser(authUid);
+        resolvedAuthUid = authUid;
+      } catch (getUserErr) {
+        const code = getUserErr.code || (getUserErr.errorInfo && getUserErr.errorInfo.code);
+        if (code === "auth/user-not-found") {
+          const email = targetData.email && String(targetData.email).trim();
+          if (email) {
+            try {
+              const userRecord = await admin.auth().getUserByEmail(email);
+              resolvedAuthUid = userRecord.uid;
+              console.log("[adminResetUserPassword] 이메일로 Auth UID 조회 성공:", { email, uid: resolvedAuthUid });
+            } catch (emailErr) {
+              console.error("[adminResetUserPassword] getUserByEmail 실패:", emailErr);
+              sendError("not-found", "해당 사용자는 Firebase 로그인 계정이 없습니다. 이메일/비밀번호로 가입한 사용자만 비밀번호 초기화가 가능합니다.", 404);
+              return;
+            }
+          } else {
+            sendError("not-found", "해당 사용자는 Firebase 로그인 계정이 없습니다. 이메일/비밀번호로 가입한 사용자만 비밀번호 초기화가 가능합니다.", 404);
+            return;
+          }
+        } else {
+          console.error("[adminResetUserPassword] getUser 실패:", getUserErr);
+          sendError("internal", "대상 사용자 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", 500);
+          return;
+        }
+      }
+
+      if (!resolvedAuthUid) {
+        sendError("not-found", "대상 사용자를 Firebase Auth에서 찾을 수 없습니다.", 404);
+        return;
+      }
+
+      console.log("[adminResetUserPassword] 비밀번호 변경 시도:", { targetUserId, resolvedAuthUid });
+      await admin.auth().updateUser(resolvedAuthUid, { password: newPassword });
+      console.log("[adminResetUserPassword] 비밀번호 변경 완료:", resolvedAuthUid);
+      res.status(200).json({ result: { success: true, message: "비밀번호가 초기화되었습니다." } });
     } catch (err) {
-      // 이미 HttpsError면 그대로 재throw (CORS 포함 응답 전달)
-      if (err instanceof HttpsError) {
-        throw err;
-      }
-      // Auth API 오류 변환
-      if (err.code === "auth/user-not-found") {
-        throw new HttpsError("not-found", "대상 사용자를 Firebase Auth에서 찾을 수 없습니다.");
-      }
-      if (err.code === "auth/weak-password") {
-        throw new HttpsError("invalid-argument", "비밀번호가 너무 약합니다. 6자 이상 입력해주세요.");
-      }
-      console.error("[adminResetUserPassword]", err);
+      const code = err.code || (err.errorInfo && err.errorInfo.code);
       const rawMessage = (err && err.message) ? String(err.message).trim() : "";
-      const isGenericEn = /^internal$/i.test(rawMessage) || rawMessage.length === 0;
-      const userMessage = isGenericEn
-        ? "비밀번호 변경 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
-        : (rawMessage || "비밀번호 변경 중 오류가 발생했습니다.");
-      throw new HttpsError("internal", userMessage);
+      console.error("[adminResetUserPassword] 오류 code=", code, "message=", rawMessage, "err=", err);
+
+      if (code === "auth/user-not-found") {
+        sendError("not-found", "대상 사용자를 Firebase Auth에서 찾을 수 없습니다.", 404);
+        return;
+      }
+      if (code === "auth/weak-password") {
+        sendError("invalid-argument", "비밀번호가 너무 약합니다. 6자 이상 입력해 주세요.");
+        return;
+      }
+      if (code === "auth/invalid-uid" || code === "auth/argument-error") {
+        sendError("invalid-argument", "대상 사용자 ID가 올바르지 않습니다. 사용자 목록에서 다시 선택해 주세요.");
+        return;
+      }
+      if (code === "auth/operation-not-allowed") {
+        sendError("failed-precondition", "비밀번호 변경이 허용되지 않은 로그인 방식입니다.", 412);
+        return;
+      }
+
+      const userMessage =
+        /^internal$/i.test(rawMessage) || !rawMessage
+          ? "비밀번호 변경 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+          : rawMessage;
+      sendError("internal", userMessage, 500);
     }
   }
 );
