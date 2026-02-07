@@ -743,19 +743,25 @@ async function connectHeartRate() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
-    // 필터 없이 optionalServices만 사용하여 모든 심박계 기기 검색
-    console.log('[connectHeartRate] requestDevice 호출 시작 (필터 없음, optionalServices만 사용)');
+    // 심박계 서비스 필터 사용 (심박계 기기만 표시)
+    const filters = [
+      { services: ['heart_rate'] },
+      { services: [UUIDS.HR_SERVICE] },
+      { services: [0x180D] } // Heart Rate Service UUID (16-bit)
+    ];
+    
+    console.log('[connectHeartRate] requestDevice 호출 시작');
+    console.log('[connectHeartRate] 필터:', filters);
     
     let device;
     try {
-        // 필터 없이 optionalServices만 사용하면 더 많은 기기가 검색됨
+        // 심박계 서비스 필터를 사용하여 심박계 기기만 표시
         device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true, // 모든 블루투스 기기 허용
-            optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
+            filters: filters,
+            optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service', 'device_information']
         });
         console.log('[connectHeartRate] requestDevice 성공:', device.name);
         
-        // 선택된 기기가 실제로 심박계 서비스를 가지고 있는지 확인
         if (!device) {
           throw new Error('기기를 선택하지 않았습니다.');
         }
@@ -770,9 +776,29 @@ async function connectHeartRate() {
           }
           return; // 조용히 종료
         }
-        // 기타 에러는 전파
-        showConnectionStatus(false);
-        throw e;
+        // 필터로 기기를 찾지 못한 경우, 더 넓은 필터로 재시도
+        if (e.name === 'NotFoundError' && e.message && e.message.includes('No device')) {
+          console.log('[connectHeartRate] 필터로 기기를 찾지 못함, 더 넓은 필터로 재시도');
+          try {
+            // 더 넓은 필터: 서비스 필터만 사용
+            device = await navigator.bluetooth.requestDevice({
+              filters: [{ services: [UUIDS.HR_SERVICE] }],
+              optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
+            });
+            console.log('[connectHeartRate] 재시도 성공:', device.name);
+          } catch(e2) {
+            console.error('[connectHeartRate] 재시도도 실패:', e2);
+            showConnectionStatus(false);
+            if (typeof showToast === 'function') {
+              showToast('심박계 기기를 찾을 수 없습니다. 기기가 켜져 있고 범위 내에 있는지 확인하세요.');
+            }
+            return;
+          }
+        } else {
+          // 기타 에러는 전파
+          showConnectionStatus(false);
+          throw e;
+        }
     }
     
     if (!device) {
