@@ -103,64 +103,6 @@ function showNicknameModal(deviceName, callback) {
   return false;
 }
 
-// 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
-async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName) {
-  try {
-    if (!navigator.bluetooth || !('requestDevice' in navigator.bluetooth)) {
-      throw new Error('Bluetooth API를 사용할 수 없습니다.');
-    }
-    
-    // 저장된 기기 이름을 사용하여 필터 생성
-    const filters = [];
-    
-    if (deviceType === 'heartRate') {
-      filters.push({ services: ['heart_rate'] });
-      filters.push({ services: [UUIDS.HR_SERVICE] });
-      // 저장된 기기 이름이 있으면 namePrefix 필터 추가
-      if (savedDeviceName) {
-        filters.push({ namePrefix: savedDeviceName });
-      }
-    } else if (deviceType === 'trainer') {
-      filters.push({ services: [UUIDS.FTMS_SERVICE] });
-      filters.push({ services: [UUIDS.CPS_SERVICE] });
-      filters.push({ namePrefix: "CycleOps" });
-      filters.push({ namePrefix: "Hammer" });
-      filters.push({ namePrefix: "Saris" });
-      filters.push({ namePrefix: "Wahoo" });
-      filters.push({ namePrefix: "KICKR" });
-      filters.push({ namePrefix: "Tacx" });
-      // 저장된 기기 이름이 있으면 namePrefix 필터 추가
-      if (savedDeviceName) {
-        filters.push({ namePrefix: savedDeviceName });
-      }
-    } else if (deviceType === 'powerMeter') {
-      filters.push({ services: [UUIDS.CPS_SERVICE] });
-      filters.push({ services: [UUIDS.CSC_SERVICE] });
-      // 저장된 기기 이름이 있으면 namePrefix 필터 추가
-      if (savedDeviceName) {
-        filters.push({ namePrefix: savedDeviceName });
-      }
-    }
-    
-    const optionalServices = deviceType === 'heartRate' 
-      ? ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
-      : deviceType === 'trainer'
-      ? [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']
-      : [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
-    
-    // requestDevice 호출
-    const device = await navigator.bluetooth.requestDevice({ 
-      filters: filters.length > 0 ? filters : undefined,
-      optionalServices 
-    });
-    
-    return device;
-  } catch (error) {
-    console.error('[requestDeviceWithSavedInfo] 기기 요청 실패:', error);
-    throw error;
-  }
-}
-
 // 저장된 기기에 재연결 시도
 async function reconnectToSavedDevice(deviceId, deviceType) {
   try {
@@ -209,7 +151,6 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
 
 // 전역 노출 (app.js에서 사용)
 window.reconnectToSavedDevice = window.reconnectToSavedDevice || reconnectToSavedDevice;
-window.requestDeviceWithSavedInfo = window.requestDeviceWithSavedInfo || requestDeviceWithSavedInfo;
 window.handleHeartRateData = window.handleHeartRateData || handleHeartRateData;
 window.handlePowerMeterData = window.handlePowerMeterData || handlePowerMeterData;
 window.handleTrainerData = window.handleTrainerData || handleTrainerData;
@@ -237,27 +178,6 @@ window.updateDevicesList = function () {
 async function connectTrainer() {
   try {
     showConnectionStatus(true);
-    
-    // 기존 트레이너 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
-    if (window.connectedDevices?.trainer) {
-      console.log('[connectTrainer] 기존 트레이너 연결 해제 중...', window.connectedDevices.trainer.name);
-      try {
-        const oldDevice = window.connectedDevices.trainer.device;
-        if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
-          await oldDevice.gatt.disconnect();
-        }
-        handleDisconnect('trainer', oldDevice);
-        // UI 업데이트를 위해 잠시 대기
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (disconnectError) {
-        console.warn('[connectTrainer] 기존 연결 해제 실패:', disconnectError);
-        // 강제로 연결 상태 해제
-        window.connectedDevices.trainer = null;
-        handleDisconnect('trainer', null);
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-    
     console.log('[connectTrainer] ZWIFT-Class Scan (Dual-Channel) Started...');
 
     // 1. 저장된 기기 확인 및 재연결 시도
@@ -356,15 +276,6 @@ async function connectTrainer() {
       { namePrefix: "CycleOps" }, { namePrefix: "Hammer" }, { namePrefix: "Saris" },
       { namePrefix: "Wahoo" }, { namePrefix: "KICKR" }, { namePrefix: "Tacx" }
     ];
-    
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
-    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      savedDevices.forEach(saved => {
-        if (saved.name) {
-          filters.push({ namePrefix: saved.name });
-        }
-      });
-    }
 
     const optionalServices = [
       UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE,
@@ -516,15 +427,11 @@ function handleTrainerData(e) {
   if (flags & 0x0040) { // Power
     const p = dv.getInt16(off, true); off += 2;
     if (!Number.isNaN(p)) {
-      // 파워미터가 연결되어 있으면 트레이너 파워 값 무시 (파워미터 우선)
-      if (!window.connectedDevices?.powerMeter) {
-        window.liveData.power = p;
-        // ★ 3-Second Power Buffer Logic (Preserved)
-        if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(p);
-        if(window.ergController) window.ergController.updatePower(p);
-        notifyChildWindows('power', p);
-      }
-      // 파워미터가 연결되어 있으면 트레이너 파워 값은 무시 (파워미터가 더 정확)
+      window.liveData.power = p;
+      // ★ 3-Second Power Buffer Logic (Preserved)
+      if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(p);
+      if(window.ergController) window.ergController.updatePower(p);
+      notifyChildWindows('power', p);
     }
   }
 }
@@ -580,26 +487,6 @@ async function connectHeartRate() {
   try {
     showConnectionStatus(true);
     
-    // 기존 심박계 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
-    if (window.connectedDevices?.heartRate) {
-      console.log('[connectHeartRate] 기존 심박계 연결 해제 중...', window.connectedDevices.heartRate.name);
-      try {
-        const oldDevice = window.connectedDevices.heartRate.device;
-        if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
-          await oldDevice.gatt.disconnect();
-        }
-        handleDisconnect('heartRate', oldDevice);
-        // UI 업데이트를 위해 잠시 대기
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (disconnectError) {
-        console.warn('[connectHeartRate] 기존 연결 해제 실패:', disconnectError);
-        // 강제로 연결 상태 해제
-        window.connectedDevices.heartRate = null;
-        handleDisconnect('heartRate', null);
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-    
     // 1. 저장된 기기 확인 및 재연결 시도
     const savedDevices = getSavedDevicesByType('heartRate');
     if (savedDevices.length > 0 && navigator.bluetooth && 'getDevices' in navigator.bluetooth) {
@@ -649,26 +536,13 @@ async function connectHeartRate() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
-    // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
-    const filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
-    
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
-    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      savedDevices.forEach(saved => {
-        if (saved.name) {
-          filters.push({ namePrefix: saved.name });
-        }
-      });
-    }
-    
     let device;
     try {
         device = await navigator.bluetooth.requestDevice({
-            filters: filters,
+            filters: [{ services: ['heart_rate'] }],
             optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
     } catch(e) {
-        // 필터 실패 시 기본 필터로 재시도
         device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [UUIDS.HR_SERVICE] }],
             optionalServices: [UUIDS.HR_SERVICE]
@@ -716,31 +590,9 @@ async function connectHeartRate() {
 }
 
 async function connectPowerMeter() {
-  // 트레이너가 연결되어 있으면 확인 (트레이너와 파워미터는 별개)
-  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
-  
+   if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
   try {
     showConnectionStatus(true);
-    
-    // 기존 파워미터 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
-    if (window.connectedDevices?.powerMeter) {
-      console.log('[connectPowerMeter] 기존 파워미터 연결 해제 중...', window.connectedDevices.powerMeter.name);
-      try {
-        const oldDevice = window.connectedDevices.powerMeter.device;
-        if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
-          await oldDevice.gatt.disconnect();
-        }
-        handleDisconnect('powerMeter', oldDevice);
-        // UI 업데이트를 위해 잠시 대기
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (disconnectError) {
-        console.warn('[connectPowerMeter] 기존 연결 해제 실패:', disconnectError);
-        // 강제로 연결 상태 해제
-        window.connectedDevices.powerMeter = null;
-        handleDisconnect('powerMeter', null);
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
     
     // 1. 저장된 기기 확인 및 재연결 시도
     const savedDevices = getSavedDevicesByType('powerMeter');
@@ -782,20 +634,8 @@ async function connectPowerMeter() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
-    // getDevices() API가 없을 때 저장된 기기 이름으로 필터 적용
-    const filters = [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }];
-    
-    // 저장된 기기가 있고 getDevices() API가 없으면 이름 필터 추가
-    if (savedDevices.length > 0 && (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))) {
-      savedDevices.forEach(saved => {
-        if (saved.name) {
-          filters.push({ namePrefix: saved.name });
-        }
-      });
-    }
-    
     let device = await navigator.bluetooth.requestDevice({ 
-        filters: filters, 
+        filters: [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }], 
         optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE] 
     });
     const server = await device.gatt.connect();
@@ -849,20 +689,13 @@ function handleHeartRateData(event) {
 }
 
 function handleDisconnect(type, device) {
-  // device가 null이거나 undefined인 경우 강제 해제 (기존 연결 해제 시)
-  if (device === null || device === undefined) {
+  if (window.connectedDevices[type]?.device === device) {
     window.connectedDevices[type] = null;
-  } else if (window.connectedDevices[type]?.device === device) {
-    window.connectedDevices[type] = null;
-  } else if (window.connectedDevices[type]) {
-    // device가 일치하지 않아도 기존 연결이 있으면 해제 (안전장치)
-    window.connectedDevices[type] = null;
+    if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
+    const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+    window.isSensorConnected = anyConnected;
+    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } })); } catch (e) {}
   }
-  
-  if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
-  const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
-  window.isSensorConnected = anyConnected;
-  try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } })); } catch (e) {}
   updateDevicesList();
 }
 
