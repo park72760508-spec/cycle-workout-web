@@ -774,7 +774,15 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   
   powerMeter.previousPower = powerMeter.currentPower;
   
-  // 속도계 바늘 업데이트 (네트워크 단절 시 0으로 설정)
+  // displayPower 업데이트 (애니메이션 루프에서 부드럽게 처리됨)
+  // 네트워크 단절 시 즉시 0으로 설정, 그 외에는 애니메이션 루프가 부드럽게 처리
+  if (powerMeter.networkDisconnected) {
+    // 네트워크 단절 시 즉시 0으로 설정
+    powerMeter.displayPower = 0;
+  }
+  // 정상 작동 시에는 애니메이션 루프가 displayPower를 부드럽게 업데이트함
+  
+  // 즉시 업데이트가 필요한 경우를 위한 폴백 (애니메이션 루프가 실행되지 않을 때)
   const gaugeMaxPower = powerMeter.userFTP ? powerMeter.userFTP * 1.5 : 300;
   const ratio = Math.min(Math.max(powerMeter.currentPower / gaugeMaxPower, 0), 1);
   const angle = -90 + (ratio * 180); // -90도(왼쪽)에서 90도(오른쪽)까지
@@ -784,8 +792,12 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   
   const needleEl = document.getElementById(`needle-${powerMeterId}`);
   if (needleEl) {
-    // 회전 중심점을 명시적으로 설정 (SVG 좌표계 기준)
-    needleEl.setAttribute('transform', `rotate(${angle} 0 0)`);
+    // 네트워크 단절 시 즉시 업데이트, 그 외에는 애니메이션 루프가 처리
+    if (powerMeter.networkDisconnected) {
+      needleEl.style.transition = 'none';
+      needleEl.setAttribute('transform', `rotate(${angle} 0 0)`);
+    }
+    // 정상 작동 시에는 애니메이션 루프가 부드럽게 업데이트함
   }
 }
 
@@ -799,11 +811,23 @@ function startGaugeAnimationLoop() {
     return;
   }
   
+  // 초기 프레임 타임 설정
+  if (!window.bluetoothCoachState.lastFrameTime) {
+    window.bluetoothCoachState.lastFrameTime = performance.now();
+  }
+  
   const loop = () => {
     if (!window.bluetoothCoachState || !window.bluetoothCoachState.powerMeters) {
       window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
       return;
     }
+
+    // 프레임 레이트 독립적인 애니메이션을 위한 델타 타임 계산
+    const now = performance.now();
+    const lastFrameTime = window.bluetoothCoachState.lastFrameTime || now;
+    const deltaTimeMs = now - lastFrameTime;
+    const deltaTime = Math.min(deltaTimeMs / 16.67, 2.5); // 최대 2.5배까지 제한 (프레임 드롭 대응)
+    window.bluetoothCoachState.lastFrameTime = now;
 
     window.bluetoothCoachState.powerMeters.forEach(pm => {
       if (!pm.connected) return;
@@ -811,16 +835,48 @@ function startGaugeAnimationLoop() {
       const target = pm.currentPower || 0;
       const current = pm.displayPower || 0;
       const diff = target - current;
+      const absDiff = Math.abs(diff);
 
-      if (Math.abs(diff) > 0.1) {
-        pm.displayPower = current + diff * 0.15;
+      // Garmin 스타일 부드러운 애니메이션: 적응형 지수적 감쇠 (Exponential Decay)
+      if (absDiff > 0.05) {
+        // 거리에 따른 적응형 보간 속도 (Garmin의 실제 알고리즘 기반)
+        // 큰 변화(>50W): 빠른 반응, 작은 변화(<10W): 부드러운 이동
+        let adaptiveRate;
+        if (absDiff > 50) {
+          // 큰 변화: 빠른 반응 (0.25-0.30)
+          adaptiveRate = 0.28;
+        } else if (absDiff > 20) {
+          // 중간 변화: 적당한 속도 (0.15-0.20)
+          adaptiveRate = 0.18;
+        } else {
+          // 작은 변화: 부드러운 이동 (0.08-0.12)
+          adaptiveRate = 0.10;
+        }
+        
+        // 지수적 감쇠 (exponential decay) 적용 - Garmin 스타일
+        // deltaTime을 고려하여 프레임 레이트 독립적으로 동작
+        // 60FPS 기준으로 정규화된 보간 계수 계산
+        const normalizedDelta = Math.min(deltaTime, 2.0);
+        const smoothFactor = 1 - Math.pow(1 - adaptiveRate, normalizedDelta);
+        
+        // 부드러운 보간 적용 (Lerp: Linear Interpolation with exponential decay)
+        pm.displayPower = current + diff * smoothFactor;
+        
+        // 매우 작은 차이는 즉시 목표값으로 설정 (떨림 방지 및 성능 최적화)
+        if (Math.abs(pm.displayPower - target) < 0.1) {
+          pm.displayPower = target;
+        }
       } else {
+        // 차이가 매우 작으면 목표값으로 고정 (떨림 방지)
         pm.displayPower = target;
       }
 
+      // FTP 기반 최대 파워 계산 (FTP × 2)
       const ftp = pm.userFTP || 200;
       const maxPower = ftp * 2;
       let ratio = Math.min(Math.max(pm.displayPower / maxPower, 0), 1);
+      
+      // 바늘 각도 계산: -90도(왼쪽) ~ 90도(오른쪽) - 위쪽 반원
       const angle = -90 + (ratio * 180);
 
       // 바늘이 항상 표시되도록 보장
@@ -828,7 +884,10 @@ function startGaugeAnimationLoop() {
       
       const needleEl = document.getElementById(`needle-${pm.id}`);
       if (needleEl) {
+        // CSS transition 대신 직접 transform 업데이트 (더 부드러운 애니메이션)
+        // Garmin은 하드웨어 가속을 위해 transform만 사용
         needleEl.style.transition = 'none';
+        needleEl.style.willChange = 'transform'; // 브라우저 최적화 힌트
         // 회전 중심점을 명시적으로 설정 (SVG 좌표계 기준)
         needleEl.setAttribute('transform', `rotate(${angle} 0 0)`);
       }
