@@ -44,10 +44,16 @@ const STORAGE_KEY = 'stelvio_saved_devices';
 function loadSavedDevices() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-    return JSON.parse(stored);
+    console.log('[loadSavedDevices] localStorage에서 읽은 데이터:', stored);
+    if (!stored) {
+      console.log('[loadSavedDevices] 저장된 기기가 없습니다.');
+      return [];
+    }
+    const parsed = JSON.parse(stored);
+    console.log('[loadSavedDevices] 파싱된 기기 목록:', parsed);
+    return parsed;
   } catch (error) {
-    console.error('Failed to load saved devices:', error);
+    console.error('[loadSavedDevices] 저장된 기기 로드 실패:', error);
     return [];
   }
 }

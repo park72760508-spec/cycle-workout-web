@@ -2965,8 +2965,27 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
     ? getSavedDevicesByType 
     : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
   
+  const loadSavedDevicesFn = typeof loadSavedDevices === 'function' 
+    ? loadSavedDevices 
+    : (typeof window.loadSavedDevices === 'function' ? window.loadSavedDevices : null);
+  
+  // 전체 저장된 기기 목록 확인 (디버깅용)
+  if (loadSavedDevicesFn) {
+    const allSavedDevices = loadSavedDevicesFn();
+    console.log('[Individual Dashboard] 전체 저장된 기기 목록:', allSavedDevices);
+    console.log('[Individual Dashboard] localStorage 직접 확인:', localStorage.getItem('stelvio_saved_devices'));
+  } else {
+    console.warn('[Individual Dashboard] loadSavedDevices 함수를 찾을 수 없습니다.');
+  }
+  
   if (!getSavedDevicesByTypeFn) {
     console.warn('[Individual Dashboard] getSavedDevicesByType 함수를 찾을 수 없습니다.');
+    console.warn('[Individual Dashboard] 사용 가능한 함수들:', {
+      getSavedDevicesByType: typeof getSavedDevicesByType,
+      windowGetSavedDevicesByType: typeof window.getSavedDevicesByType,
+      loadSavedDevices: typeof loadSavedDevices,
+      windowLoadSavedDevices: typeof window.loadSavedDevices
+    });
     return;
   }
   
@@ -2983,6 +3002,8 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
     console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 수:`, savedDevices.length);
     if (savedDevices.length > 0) {
       console.log(`[Individual Dashboard] ${deviceType} 저장된 기기 목록:`, savedDevices.map(d => ({ deviceId: d.deviceId, nickname: d.nickname, name: d.name })));
+    } else {
+      console.log(`[Individual Dashboard] ${deviceType} 저장된 기기가 없습니다.`);
     }
     
     if (savedDevices.length === 0) return;
@@ -3314,9 +3335,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // 초기 연결 상태 업데이트 (bluetooth.js 로드 대기)
     setTimeout(() => {
         console.log('[Individual Dashboard] 초기 연결 상태 업데이트 시작');
+        console.log('[Individual Dashboard] bluetooth.js 함수 확인:', {
+            loadSavedDevices: typeof window.loadSavedDevices,
+            getSavedDevicesByType: typeof window.getSavedDevicesByType,
+            saveDevice: typeof window.saveDevice
+        });
+        
+        // localStorage 직접 확인 (디버깅용)
+        const stored = localStorage.getItem('stelvio_saved_devices');
+        console.log('[Individual Dashboard] localStorage 직접 확인:', stored);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                console.log('[Individual Dashboard] 파싱된 저장된 기기 목록:', parsed);
+            } catch (e) {
+                console.error('[Individual Dashboard] localStorage 파싱 오류:', e);
+            }
+        }
+        
         // 저장된 기기 목록도 함께 업데이트
         if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+            console.log('[Individual Dashboard] updateIndividualBluetoothDropdownWithSavedDevices 호출');
             updateIndividualBluetoothDropdownWithSavedDevices();
+        } else {
+            console.error('[Individual Dashboard] updateIndividualBluetoothDropdownWithSavedDevices 함수를 찾을 수 없습니다.');
         }
         updateIndividualBluetoothConnectionStatus();
     }, 1000); // bluetooth.js 로드 대기 시간 증가
