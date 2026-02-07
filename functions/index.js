@@ -2,7 +2,7 @@
  * 관리자 비밀번호 초기화 Callable Function (v2)
  * Strava 토큰 교환/갱신 Callable (v2) - Client Secret은 서버에서만 사용
  */
-const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -399,13 +399,15 @@ exports.exchangeStravaCode = onRequest(
       res.status(200).json({ success: true });
     } catch (err) {
       console.error("[exchangeStravaCode]", err);
-      const statusCode = err.code === "invalid-argument" ? 400 : 
-                         err.code === "not-found" ? 404 :
-                         err.code === "failed-precondition" ? 412 : 500;
-      res.status(statusCode).json({
-        success: false,
-        error: err.message || "Strava 토큰 교환 중 오류가 발생했습니다."
-      });
+      if (!res.headersSent) {
+        const statusCode = (err && err.code === "invalid-argument") ? 400 :
+          (err && err.code === "not-found") ? 404 :
+          (err && err.code === "failed-precondition") ? 412 : 500;
+        res.status(statusCode).json({
+          success: false,
+          error: (err && err.message) || "Strava 토큰 교환 중 오류가 발생했습니다."
+        });
+      }
     }
   }
 );
@@ -552,13 +554,15 @@ exports.refreshStravaToken = onRequest(
       res.status(200).json({ success: true, accessToken });
     } catch (err) {
       console.error("[refreshStravaToken]", err);
-      const statusCode = err.code === "invalid-argument" ? 400 : 
-                         err.code === "not-found" ? 404 :
-                         err.code === "failed-precondition" ? 412 : 500;
-      res.status(statusCode).json({
-        success: false,
-        error: err.message || "Strava 토큰 갱신 중 오류가 발생했습니다."
-      });
+      if (!res.headersSent) {
+        const statusCode = (err && err.code === "invalid-argument") ? 400 :
+          (err && err.code === "not-found") ? 404 :
+          (err && err.code === "failed-precondition") ? 412 : 500;
+        res.status(statusCode).json({
+          success: false,
+          error: (err && err.message) || "Strava 토큰 갱신 중 오류가 발생했습니다."
+        });
+      }
     }
   }
 );
