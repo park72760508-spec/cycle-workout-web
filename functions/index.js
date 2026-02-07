@@ -95,10 +95,12 @@ exports.adminResetUserPassword = onCall(
         throw new HttpsError("invalid-argument", "비밀번호가 너무 약합니다. 6자 이상 입력해주세요.");
       }
       console.error("[adminResetUserPassword]", err);
-      throw new HttpsError(
-        "internal",
-        err.message || "비밀번호 변경 중 오류가 발생했습니다."
-      );
+      const rawMessage = (err && err.message) ? String(err.message).trim() : "";
+      const isGenericEn = /^internal$/i.test(rawMessage) || rawMessage.length === 0;
+      const userMessage = isGenericEn
+        ? "비밀번호 변경 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+        : (rawMessage || "비밀번호 변경 중 오류가 발생했습니다.");
+      throw new HttpsError("internal", userMessage);
     }
   }
 );
