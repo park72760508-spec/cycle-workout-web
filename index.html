@@ -4460,7 +4460,7 @@
         // AI 분석 카테고리는 특별 처리
         if (c.id === 'ai-recommendation') {
           var iconHtml = c.icon && c.icon.indexOf('.gif') !== -1 
-            ? '<img src="' + c.icon + '" alt="AI" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain;">'
+            ? '<img src="' + c.icon + '" alt="AI" class="category-icon-img" style="width: 42px; height: 42px; object-fit: contain;">'
             : '<span class="category-icon">' + (c.icon || '🤖') + '</span>';
           return '<div class="workout-category-card workout-category-card-ai" data-category="' + (c.id || '') + '" data-zone="ai" onclick="handleAIRecommendationClick()">' +
             iconHtml +
