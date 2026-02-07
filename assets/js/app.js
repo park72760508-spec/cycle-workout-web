@@ -15453,11 +15453,12 @@ function startMobileTrainingTimerLoop() {
       // 세그먼트 경과 시간 계산 (전체 경과 시간 - 이전 세그먼트들의 누적 시간)
       const calculatedSegElapsed = Math.max(0, mts.elapsedSec - cumStart);
       
-      // 세그먼트 경과 시간이 세그먼트 지속 시간을 초과하지 않도록 제한
-      mts.segElapsedSec = Math.min(calculatedSegElapsed, segDur);
+      // 세그먼트 경과 시간 저장 (전환 조건 확인을 위해 제한하지 않음)
+      // UI 표시용으로는 segDur로 제한하지만, 실제 값은 calculatedSegElapsed 사용
+      mts.segElapsedSec = calculatedSegElapsed;
       
-      // 랩 카운트다운 계산 (세그먼트 남은 시간)
-      var segRemaining = segDur - mts.segElapsedSec;
+      // 랩 카운트다운 계산 (세그먼트 남은 시간, 0 이하로 내려가지 않도록)
+      var segRemaining = Math.max(0, segDur - Math.min(calculatedSegElapsed, segDur));
     }
     
     // UI 업데이트
@@ -15472,11 +15473,19 @@ function startMobileTrainingTimerLoop() {
     
     // 2. 랩 카운트다운 표시 (Firebase 값 우선 사용)
     const lapTimeEl = safeGetElement('mobile-ui-lap-time');
-    if (lapTimeEl && segRemaining >= 0) {
-      const lapMinutes = Math.floor(segRemaining / 60);
-      const lapSeconds = Math.floor(segRemaining % 60);
-      lapTimeEl.textContent = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
-      lapTimeEl.setAttribute('fill', segRemaining <= 10 ? '#ff4444' : '#00d4aa');
+    if (lapTimeEl) {
+      // segRemaining이 유효한 값인지 확인 (null이 아니고 숫자이며 0 이상)
+      if (segRemaining !== null && segRemaining !== undefined && !isNaN(segRemaining) && segRemaining >= 0) {
+        const lapMinutes = Math.floor(segRemaining / 60);
+        const lapSeconds = Math.floor(segRemaining % 60);
+        lapTimeEl.textContent = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
+        lapTimeEl.setAttribute('fill', segRemaining <= 10 ? '#ff4444' : '#00d4aa');
+      } else {
+        // 유효하지 않은 값이면 기본값 표시
+        lapTimeEl.textContent = '00:00';
+        lapTimeEl.setAttribute('fill', '#00d4aa');
+        console.warn('[Mobile Dashboard] 랩 카운트다운 값이 유효하지 않음:', segRemaining);
+      }
     }
     
     // 3. 세그먼트 그래프 업데이트 (마스코트 위치)
@@ -15675,15 +15684,19 @@ function startMobileTrainingTimerLoop() {
     }
     
     // 세그먼트 전환 조건: 
-    // 1. 세그먼트 경과 시간이 세그먼트 지속 시간과 같거나 초과
+    // 1. 세그먼트 경과 시간이 세그먼트 지속 시간과 같거나 초과 (또는 전체 경과 시간이 세그먼트 종료 시각 초과)
     // 2. 아직 전환되지 않은 경우 (prevSegIndex === currentSegIndex)
     // 3. 마지막 세그먼트가 아닌 경우
-    // 4. 전체 경과 시간이 세그먼트 종료 시각을 초과한 경우 (이중 체크)
     const segEndAtSec = cumStart + segDur;
-    const shouldTransition = (mts.segElapsedSec >= segDur) && 
-                             (mts.elapsedSec >= segEndAtSec) && 
+    // 세그먼트 경과 시간이 segDur 이상이거나, 전체 경과 시간이 세그먼트 종료 시각을 초과한 경우 전환
+    const shouldTransition = ((mts.segElapsedSec >= segDur) || (mts.elapsedSec >= segEndAtSec)) && 
                              (prevSegIndex === currentSegIndex) && 
                              (currentSegIndex < w.segments.length - 1);
+    
+    // 디버깅 로그
+    if (mts.segElapsedSec >= segDur * 0.9) { // 세그먼트가 90% 이상 진행되었을 때만 로그
+      console.log(`[Mobile Dashboard] 세그먼트 전환 체크: segElapsedSec=${mts.segElapsedSec.toFixed(1)}, segDur=${segDur}, elapsedSec=${mts.elapsedSec}, segEndAtSec=${segEndAtSec}, prevSegIndex=${prevSegIndex}, currentSegIndex=${currentSegIndex}, shouldTransition=${shouldTransition}`);
+    }
     
     if (shouldTransition) {
       // 카운트다운 오버레이 닫기
@@ -15692,8 +15705,22 @@ function startMobileTrainingTimerLoop() {
       
       const nextSegIndex = currentSegIndex + 1;
       mts.segIndex = nextSegIndex;
-      // 세그먼트 전환 시 segElapsedSec는 다음 틱에서 자동으로 재계산됨 (0으로 명시적 리셋 불필요)
       mts._lastProcessedSegIndex = nextSegIndex;
+      
+      // 세그먼트 전환 직후 다음 세그먼트의 경과 시간 즉시 계산 (다음 틱까지 기다리지 않음)
+      // 이전 세그먼트들의 누적 시간 재계산
+      let nextCumStart = 0;
+      for (let i = 0; i < nextSegIndex; i++) {
+        const seg = w.segments[i];
+        if (seg) {
+          nextCumStart += segDurationSec(seg);
+        }
+      }
+      // 다음 세그먼트의 경과 시간 계산
+      const nextSegElapsed = Math.max(0, mts.elapsedSec - nextCumStart);
+      mts.segElapsedSec = nextSegElapsed;
+      
+      console.log(`[Mobile Dashboard] 세그먼트 전환 직후 경과 시간 업데이트: segIndex=${nextSegIndex}, elapsedSec=${mts.elapsedSec}, cumStart=${nextCumStart}, segElapsedSec=${nextSegElapsed.toFixed(1)}`);
       
       // 다음 세그먼트의 카운트다운 상태 초기화
       if (nextSegIndex < w.segments.length) {
