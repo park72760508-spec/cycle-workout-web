@@ -3188,20 +3188,36 @@ async function adminResetUserPassword() {
     resetBtn.textContent = '처리 중...';
     showAdminPasswordStatus('비밀번호를 초기화하고 있습니다...', 'info');
     
-    // Callable Function 호출 (Firebase Admin SDK로 대상 사용자 비밀번호 변경)
-    const functionsV9 = window.functionsV9;
-    const httpsCallableV9 = window.httpsCallableV9;
+    // onRequest 함수 호출 (CORS 수동 처리로 preflight 통과) — ID 토큰으로 인증
     const currentUser = (window.authV9 && window.authV9.currentUser) ? window.authV9.currentUser : null;
-    
-    if (functionsV9 && httpsCallableV9 && currentUser) {
-      const adminResetPasswordCallable = httpsCallableV9(functionsV9, 'adminResetUserPassword');
-      const result = await adminResetPasswordCallable({
-        targetUserId: currentEditUserId,
-        newPassword: tempPassword
+    if (!currentUser) {
+      showAdminPasswordStatus('비밀번호 초기화를 하려면 관리자 계정으로 로그인한 뒤 다시 시도해주세요.', 'error');
+    } else {
+      const projectId = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+      const url = 'https://us-central1-' + projectId + '.cloudfunctions.net/adminResetUserPassword';
+      let idToken;
+      try {
+        idToken = await currentUser.getIdToken();
+      } catch (tokenErr) {
+        console.error('[adminResetUserPassword] getIdToken 실패:', tokenErr);
+        showAdminPasswordStatus('로그인 정보를 가져오지 못했습니다. 다시 로그인한 뒤 시도해 주세요.', 'error');
+        return;
+      }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+        body: JSON.stringify({ targetUserId: currentEditUserId, newPassword: tempPassword })
       });
-      
-      const data = result && result.data ? result.data : null;
-      if (data && data.success === true) {
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {
+        showAdminPasswordStatus('응답을 읽는 중 오류가 발생했습니다.', 'error');
+        return;
+      }
+      const result = data && data.result ? data.result : null;
+      const error = data && data.error ? data.error : null;
+      if (res.ok && result && result.success === true) {
         showAdminPasswordStatus('✅ 비밀번호가 초기화되었습니다. 해당 사용자는 새 비밀번호로 로그인할 수 있습니다.', 'success');
         tempPasswordEl.value = '';
         tempPasswordConfirmEl.value = '';
@@ -3209,21 +3225,8 @@ async function adminResetUserPassword() {
           if (passwordStatusEl) passwordStatusEl.style.display = 'none';
         }, 5000);
       } else {
-        const errMsg = (data && data.error) ? data.error : '비밀번호 초기화에 실패했습니다.';
+        const errMsg = (error && error.message) ? error.message : '비밀번호 초기화에 실패했습니다.';
         showAdminPasswordStatus(errMsg, 'error');
-      }
-    } else {
-      // Callable 미배포 또는 비로그인: 안내 메시지
-      if (!currentUser) {
-        showAdminPasswordStatus('비밀번호 초기화를 하려면 관리자 계정으로 로그인한 뒤 다시 시도해주세요.', 'error');
-      } else if (!functionsV9 || !httpsCallableV9) {
-        showAdminPasswordStatus(
-          '⚠️ 비밀번호 자동 초기화를 사용하려면 Firebase Cloud Function(adminResetUserPassword)을 배포해야 합니다.\n\n' +
-          '임시 비밀번호: ' + tempPassword + '\n\n' +
-          '이 비밀번호를 사용자에게 직접 전달해주세요. 사용자는 로그인 후 본인 비밀번호 변경 섹션에서 비밀번호를 변경할 수 있습니다.\n\n' +
-          'Cloud Function 배포 방법은 docs/ADMIN_PASSWORD_RESET_FUNCTION.md를 참고하세요.',
-          'info'
-        );
       }
     }
     
