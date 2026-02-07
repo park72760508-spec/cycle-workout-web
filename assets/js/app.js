@@ -15665,6 +15665,15 @@ function startMobileTrainingTimerLoop() {
     // 세그먼트 경계 통과 → 다음 세그먼트로 전환
     const prevSegIndex = mts._lastProcessedSegIndex ?? currentSegIndex;
     
+    // 이전 세그먼트들의 누적 시간 계산 (세그먼트 종료 시각 계산용)
+    let cumStart = 0;
+    for (let i = 0; i < currentSegIndex; i++) {
+      const seg = w.segments[i];
+      if (seg) {
+        cumStart += segDurationSec(seg);
+      }
+    }
+    
     // 세그먼트 전환 조건: 
     // 1. 세그먼트 경과 시간이 세그먼트 지속 시간과 같거나 초과
     // 2. 아직 전환되지 않은 경우 (prevSegIndex === currentSegIndex)
