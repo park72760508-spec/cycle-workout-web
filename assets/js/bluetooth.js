@@ -84,11 +84,6 @@ function getSavedDevicesByType(deviceType) {
   return loadSavedDevices().filter(d => d.deviceType === deviceType);
 }
 
-// 전역 노출 (app.js에서 사용)
-window.getSavedDevicesByType = window.getSavedDevicesByType || getSavedDevicesByType;
-window.loadSavedDevices = window.loadSavedDevices || loadSavedDevices;
-window.saveDevice = window.saveDevice || saveDevice;
-
 // 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
   const nickname = prompt(
@@ -102,6 +97,12 @@ function showNicknameModal(deviceName, callback) {
   }
   return false;
 }
+
+// 전역 노출 (app.js에서 사용)
+window.getSavedDevicesByType = window.getSavedDevicesByType || getSavedDevicesByType;
+window.loadSavedDevices = window.loadSavedDevices || loadSavedDevices;
+window.saveDevice = window.saveDevice || saveDevice;
+window.showNicknameModal = window.showNicknameModal || showNicknameModal;
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
 async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName) {

@@ -2922,14 +2922,19 @@ async function connectIndividualBluetoothDevice(deviceType, savedDeviceId) {
         console.log('[Individual] 블루투스 디바이스 연결 시도:', deviceType);
         await connectFunction();
         
-        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
+        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트 및 닉네임 저장 완료를 위해)
+        // bluetooth.js의 연결 함수들이 showNicknameModal을 호출하므로, 사용자가 닉네임을 입력할 시간을 줌
         setTimeout(() => {
-            // 연결 상태 업데이트
+            // 연결 상태 업데이트 (닉네임 저장 후 드롭다운 목록도 업데이트됨)
             updateIndividualBluetoothConnectionStatus();
-        }, 200); // 200ms 대기 후 업데이트
+        }, 500); // 500ms 대기 후 업데이트 (닉네임 입력 대기 시간 포함)
     } catch (error) {
         console.error('[Individual] 블루투스 디바이스 연결 실패:', deviceType, error);
         // 에러는 bluetooth.js의 showToast에서 표시됨
+        // 연결 실패 시에도 상태 업데이트
+        setTimeout(() => {
+            updateIndividualBluetoothConnectionStatus();
+        }, 200);
     }
 }
 
