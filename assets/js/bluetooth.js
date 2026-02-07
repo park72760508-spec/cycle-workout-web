@@ -743,19 +743,22 @@ async function connectHeartRate() {
     }
     
     // 2. 저장된 기기가 없거나 재연결 실패 시 새 기기 찾기
-    // 기본 서비스 필터만 사용 (namePrefix 필터는 제거 - 너무 제한적임)
-    const filters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
-    
-    console.log('[connectHeartRate] requestDevice 필터:', filters);
-    console.log('[connectHeartRate] requestDevice 호출 시작');
+    // 필터 없이 optionalServices만 사용하여 모든 심박계 기기 검색
+    console.log('[connectHeartRate] requestDevice 호출 시작 (필터 없음, optionalServices만 사용)');
     
     let device;
     try {
+        // 필터 없이 optionalServices만 사용하면 더 많은 기기가 검색됨
         device = await navigator.bluetooth.requestDevice({
-            filters: filters,
+            acceptAllDevices: true, // 모든 블루투스 기기 허용
             optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
         console.log('[connectHeartRate] requestDevice 성공:', device.name);
+        
+        // 선택된 기기가 실제로 심박계 서비스를 가지고 있는지 확인
+        if (!device) {
+          throw new Error('기기를 선택하지 않았습니다.');
+        }
     } catch(e) {
         console.warn('[connectHeartRate] requestDevice 실패:', e.name, e.message);
         // 사용자가 취소한 경우 조용히 종료
@@ -778,7 +781,10 @@ async function connectHeartRate() {
       return;
     }
     
+    console.log('[connectHeartRate] 선택된 기기:', device.name, device.id);
+    
     const server = await device.gatt.connect();
+    console.log('[connectHeartRate] GATT 서버 연결 성공');
     let service;
     try { service = await server.getPrimaryService('heart_rate'); } 
     catch (e) { service = await server.getPrimaryService(UUIDS.HR_SERVICE); }
