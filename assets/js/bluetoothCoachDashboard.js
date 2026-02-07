@@ -494,11 +494,11 @@ function createPowerMeterElement(powerMeter) {
               font-size="10" 
               font-weight="500">W</text>
         
-        <text x="100" y="145" 
+        <text x="100" y="188" 
               text-anchor="start" 
-              dominant-baseline="baseline"
+              dominant-baseline="middle"
               fill="#ffffff" 
-              font-size="13" 
+              font-size="21.6" 
               font-weight="500"
               id="ftp-percent-${powerMeter.id}"
               style="display: none;"></text>
@@ -722,14 +722,15 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     const ftpPercent = Math.round((powerMeter.currentPower / powerMeter.userFTP) * 100);
     if (powerMeter.currentPower > 0) {
       // 파워값의 실제 너비를 계산하여 우측에 배치
-      // 파워값 폰트 크기 43.2px의 30% = 13px (위첨자 크기)
+      // 파워값 폰트 크기 43.2px의 50% = 21.6px (위첨자 크기)
       const powerText = String(Math.round(powerMeter.currentPower));
       // 대략적인 문자 너비 계산 (43.2px 폰트 기준)
       const avgCharWidth = 43.2 * 0.6; // 대략적인 문자 너비
       const powerTextWidth = powerText.length * avgCharWidth;
       const startX = 100 + (powerTextWidth / 2) + 8; // 파워값 중앙에서 우측으로 8px
       ftpPercentEl.setAttribute('x', startX);
-      ftpPercentEl.setAttribute('y', 145); // 파워값의 위쪽 라인 (y=188에서 위로, 폰트 크기 43.2의 약간 위)
+      ftpPercentEl.setAttribute('y', 188); // 파워값과 같은 높이 (수평 배치)
+      ftpPercentEl.setAttribute('font-size', '21.6'); // 폰트 크기 50% (43.2 * 0.5)
       ftpPercentEl.textContent = ftpPercent + '%';
       ftpPercentEl.style.display = '';
     } else {
@@ -1084,7 +1085,8 @@ function updatePowerMeterUI(trackId) {
       const powerTextWidth = powerText.length * avgCharWidth;
       const startX = 100 + (powerTextWidth / 2) + 8;
       ftpPercentEl.setAttribute('x', startX);
-      ftpPercentEl.setAttribute('y', 145);
+      ftpPercentEl.setAttribute('y', 188); // 파워값과 같은 높이 (수평 배치)
+      ftpPercentEl.setAttribute('font-size', '21.6'); // 폰트 크기 50% (43.2 * 0.5)
       ftpPercentEl.textContent = ftpPercent + '%';
       ftpPercentEl.style.display = '';
     } else {
