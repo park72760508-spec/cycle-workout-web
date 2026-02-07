@@ -237,6 +237,27 @@ window.updateDevicesList = function () {
 async function connectTrainer() {
   try {
     showConnectionStatus(true);
+    
+    // 기존 트레이너 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
+    if (window.connectedDevices?.trainer) {
+      console.log('[connectTrainer] 기존 트레이너 연결 해제 중...', window.connectedDevices.trainer.name);
+      try {
+        const oldDevice = window.connectedDevices.trainer.device;
+        if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
+          await oldDevice.gatt.disconnect();
+        }
+        handleDisconnect('trainer', oldDevice);
+        // UI 업데이트를 위해 잠시 대기
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (disconnectError) {
+        console.warn('[connectTrainer] 기존 연결 해제 실패:', disconnectError);
+        // 강제로 연결 상태 해제
+        window.connectedDevices.trainer = null;
+        handleDisconnect('trainer', null);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
     console.log('[connectTrainer] ZWIFT-Class Scan (Dual-Channel) Started...');
 
     // 1. 저장된 기기 확인 및 재연결 시도
@@ -495,11 +516,15 @@ function handleTrainerData(e) {
   if (flags & 0x0040) { // Power
     const p = dv.getInt16(off, true); off += 2;
     if (!Number.isNaN(p)) {
-      window.liveData.power = p;
-      // ★ 3-Second Power Buffer Logic (Preserved)
-      if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(p);
-      if(window.ergController) window.ergController.updatePower(p);
-      notifyChildWindows('power', p);
+      // 파워미터가 연결되어 있으면 트레이너 파워 값 무시 (파워미터 우선)
+      if (!window.connectedDevices?.powerMeter) {
+        window.liveData.power = p;
+        // ★ 3-Second Power Buffer Logic (Preserved)
+        if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(p);
+        if(window.ergController) window.ergController.updatePower(p);
+        notifyChildWindows('power', p);
+      }
+      // 파워미터가 연결되어 있으면 트레이너 파워 값은 무시 (파워미터가 더 정확)
     }
   }
 }
@@ -554,6 +579,26 @@ function handlePowerMeterData(event) {
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
+    
+    // 기존 심박계 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
+    if (window.connectedDevices?.heartRate) {
+      console.log('[connectHeartRate] 기존 심박계 연결 해제 중...', window.connectedDevices.heartRate.name);
+      try {
+        const oldDevice = window.connectedDevices.heartRate.device;
+        if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
+          await oldDevice.gatt.disconnect();
+        }
+        handleDisconnect('heartRate', oldDevice);
+        // UI 업데이트를 위해 잠시 대기
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (disconnectError) {
+        console.warn('[connectHeartRate] 기존 연결 해제 실패:', disconnectError);
+        // 강제로 연결 상태 해제
+        window.connectedDevices.heartRate = null;
+        handleDisconnect('heartRate', null);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
     
     // 1. 저장된 기기 확인 및 재연결 시도
     const savedDevices = getSavedDevicesByType('heartRate');
@@ -671,9 +716,31 @@ async function connectHeartRate() {
 }
 
 async function connectPowerMeter() {
-   if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
+  // 트레이너가 연결되어 있으면 확인 (트레이너와 파워미터는 별개)
+  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
+  
   try {
     showConnectionStatus(true);
+    
+    // 기존 파워미터 연결 해제 (나중에 연결한 기기가 이전 기기를 대체)
+    if (window.connectedDevices?.powerMeter) {
+      console.log('[connectPowerMeter] 기존 파워미터 연결 해제 중...', window.connectedDevices.powerMeter.name);
+      try {
+        const oldDevice = window.connectedDevices.powerMeter.device;
+        if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
+          await oldDevice.gatt.disconnect();
+        }
+        handleDisconnect('powerMeter', oldDevice);
+        // UI 업데이트를 위해 잠시 대기
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (disconnectError) {
+        console.warn('[connectPowerMeter] 기존 연결 해제 실패:', disconnectError);
+        // 강제로 연결 상태 해제
+        window.connectedDevices.powerMeter = null;
+        handleDisconnect('powerMeter', null);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
     
     // 1. 저장된 기기 확인 및 재연결 시도
     const savedDevices = getSavedDevicesByType('powerMeter');
@@ -782,13 +849,20 @@ function handleHeartRateData(event) {
 }
 
 function handleDisconnect(type, device) {
-  if (window.connectedDevices[type]?.device === device) {
+  // device가 null이거나 undefined인 경우 강제 해제 (기존 연결 해제 시)
+  if (device === null || device === undefined) {
     window.connectedDevices[type] = null;
-    if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
-    const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
-    window.isSensorConnected = anyConnected;
-    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } })); } catch (e) {}
+  } else if (window.connectedDevices[type]?.device === device) {
+    window.connectedDevices[type] = null;
+  } else if (window.connectedDevices[type]) {
+    // device가 일치하지 않아도 기존 연결이 있으면 해제 (안전장치)
+    window.connectedDevices[type] = null;
   }
+  
+  if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
+  const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+  window.isSensorConnected = anyConnected;
+  try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } })); } catch (e) {}
   updateDevicesList();
 }
 
