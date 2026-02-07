@@ -4363,15 +4363,15 @@
     (function() {
       var workoutViewState = { mode: 'category', selectedCategory: null };
       var WORKOUT_CATEGORIES = [
-        { id: 'all', label: '전체', icon: '📋', color: 'var(--zone-2)' },
+        { id: 'all', label: '전체', icon: 'assets/img/workout2.png', color: 'var(--zone-2)' },
         { id: 'ai-recommendation', label: 'AI분석 워크아웃 추천', icon: 'assets/img/ai2.gif', color: '#ef4444', isAI: true },
-        { id: 'Active Recovery', label: 'Active Recovery', icon: '🔄', color: 'var(--zone-1)' },
-        { id: 'Endurance', label: 'Endurance', icon: '🏃', color: 'var(--zone-2)' },
-        { id: 'Sweet Spot', label: 'Sweet Spot', icon: '⭐', color: 'var(--zone-3)' },
-        { id: 'Tempo', label: 'Tempo', icon: '⚡', color: 'var(--zone-3)' },
-        { id: 'Threshold', label: 'Threshold', icon: '🔥', color: 'var(--zone-4)' },
-        { id: 'VO2 Max', label: 'VO2 Max', icon: '💪', color: 'var(--zone-5)' },
-        { id: '기타', label: '기타', icon: '📌', color: 'var(--zone-1)' }
+        { id: 'Active Recovery', label: 'Active Recovery', icon: 'assets/img/active.png', color: 'var(--zone-1)' },
+        { id: 'Endurance', label: 'Endurance', icon: 'assets/img/endurance.png', color: 'var(--zone-2)' },
+        { id: 'Sweet Spot', label: 'Sweet Spot', icon: 'assets/img/sweetspot.png', color: 'var(--zone-3)' },
+        { id: 'Tempo', label: 'Tempo', icon: 'assets/img/tempo.png', color: 'var(--zone-3)' },
+        { id: 'Threshold', label: 'Threshold', icon: 'assets/img/threshold.png', color: 'var(--zone-4)' },
+        { id: 'VO2 Max', label: 'VO2 Max', icon: 'assets/img/vo2max.png', color: 'var(--zone-5)' },
+        { id: '기타', label: '기타', icon: 'assets/img/etc.png', color: 'var(--zone-1)' }
       ];
 
       function getCategoryLabel(categoryId) {
@@ -4472,8 +4472,12 @@
         var zoneAttr = c.id === 'all' ? 'all' : (c.id === 'Active Recovery' ? '1' : c.id === 'Endurance' ? '2' : c.id === 'Sweet Spot' || c.id === 'Tempo' ? '3' : c.id === 'Threshold' ? '4' : c.id === 'VO2 Max' ? '5' : '1');
         var count = getCategoryWorkoutCount(workouts, c.id);
         var countText = count > 0 ? count + '개' : '-';
+        // 이미지 경로인 경우 img 태그 사용, 그렇지 않으면 이모지 사용
+        var iconHtml = c.icon && (c.icon.indexOf('.png') !== -1 || c.icon.indexOf('.jpg') !== -1 || c.icon.indexOf('.gif') !== -1 || c.icon.indexOf('.svg') !== -1)
+          ? '<img src="' + c.icon + '" alt="' + (c.label || '') + '" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain;">'
+          : '<span class="category-icon">' + (c.icon || '📋') + '</span>';
         return '<div class="workout-category-card" data-category="' + (c.id || '') + '" data-zone="' + zoneAttr + '" onclick="workoutViewShowList(\'' + (c.id || '') + '\')">' +
-          '<span class="category-icon">' + (c.icon || '📋') + '</span>' +
+          iconHtml +
           '<div class="category-label">' + (c.label || '') + '</div>' +
           '<div class="category-count">' + countText + '</div>' +
           '</div>';
