@@ -1780,6 +1780,77 @@ function searchProfileUsers() {
 
 window.searchProfileUsers = searchProfileUsers;
 
+/**
+ * 날짜에 N개월 더한 YYYY-MM-DD 반환
+ * @param {string|Date|object} dateValue - 기존 만료일
+ * @param {number} months - 연장할 개월 수
+ * @returns {string} YYYY-MM-DD
+ */
+function addMonthsToExpiry(dateValue, months) {
+  let d;
+  if (!dateValue) {
+    d = new Date();
+  } else if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
+    d = new Date(dateValue.substring(0, 10));
+  } else if (dateValue && typeof dateValue === 'object' && dateValue.toDate) {
+    d = dateValue.toDate();
+  } else if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
+    d = new Date(dateValue.seconds * 1000);
+  } else {
+    d = new Date(dateValue);
+  }
+  if (isNaN(d.getTime())) d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().split('T')[0];
+}
+
+/**
+ * 관리자(grade=1) 전용: 모든 사용자 만료일 일괄 연장 (적용 전 확인 메시지)
+ */
+async function bulkExtendExpiry() {
+  const allUsers = window._profileScreenAllUsers;
+  const ctx = window._profileScreenContext;
+  if (!Array.isArray(allUsers) || !ctx || ctx.viewerGrade !== '1') {
+    if (typeof showToast === 'function') showToast('권한이 없거나 사용자 목록이 없습니다.', 'warning');
+    return;
+  }
+  const monthsEl = document.getElementById('profileBulkExpiryMonths');
+  const months = monthsEl ? parseInt(monthsEl.value, 10) : 1;
+  if (!months || months < 1 || months > 12) {
+    if (typeof showToast === 'function') showToast('1~12개월 중 선택해 주세요.', 'warning');
+    return;
+  }
+  const msg = '전체 ' + allUsers.length + '명 사용자의 만료일을 ' + months + '개월 연장합니다.\n진행할까요?';
+  if (!confirm(msg)) return;
+  const btn = document.getElementById('profileBulkExpiryBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '처리 중...';
+  }
+  let done = 0;
+  let fail = 0;
+  for (const user of allUsers) {
+    try {
+      const newExpiry = addMonthsToExpiry(user.expiry_date, months);
+      const res = await apiUpdateUser(user.id, { expiry_date: newExpiry });
+      if (res && res.success) done++; else fail++;
+    } catch (e) {
+      console.warn('[bulkExtendExpiry] 실패:', user.id, e);
+      fail++;
+    }
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '적용';
+  }
+  if (typeof showToast === 'function') {
+    showToast('만료일 연장 완료: ' + done + '명' + (fail ? ', 실패 ' + fail + '명' : ''));
+  }
+  if (typeof loadUsers === 'function') await loadUsers();
+}
+
+window.bulkExtendExpiry = bulkExtendExpiry;
+
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) {
@@ -1897,6 +1968,8 @@ async function loadUsers() {
         const contactInput = document.getElementById('profileSearchContact');
         if (nameInput) nameInput.value = '';
         if (contactInput) contactInput.value = '';
+        const countEl = document.getElementById('profileSearchUserCount');
+        if (countEl) countEl.textContent = '등록된 사용자: ' + visibleUsers.length + '명';
       } else {
         searchSection.style.display = 'none';
         window._profileScreenAllUsers = null;
