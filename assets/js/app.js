@@ -16343,6 +16343,29 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
     let result;
     try {
       result = await reconnectFn(deviceId, deviceType);
+      
+      // getDevices() API가 사용 불가능하거나 기기를 찾지 못한 경우 null 반환
+      if (!result) {
+        console.warn('[Mobile Dashboard] 저장된 기기 재연결 불가 (getDevices API 미지원 또는 기기 없음), 새 기기 검색으로 진행');
+        // 재연결 불가 시 기존 연결 함수로 폴백 (새 기기 검색)
+        const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
+          : deviceType === 'heartRate' ? window.connectHeartRate 
+          : deviceType === 'powerMeter' ? window.connectPowerMeter 
+          : null;
+        
+        if (connectFunction && typeof connectFunction === 'function') {
+          if (typeof showToast === 'function') {
+            showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
+          }
+          await connectFunction();
+          setTimeout(() => {
+            updateMobileBluetoothConnectionStatus();
+          }, 200);
+          return;
+        } else {
+          throw new Error('기기를 찾을 수 없고 새 기기 검색도 불가능합니다.');
+        }
+      }
     } catch (reconnectError) {
       console.warn('[Mobile Dashboard] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', reconnectError);
       // 재연결 실패 시 기존 연결 함수로 폴백 (새 기기 검색)
@@ -16363,10 +16386,6 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       } else {
         throw reconnectError; // 연결 함수가 없으면 원래 에러를 다시 던짐
       }
-    }
-    
-    if (!result) {
-      throw new Error('기기를 찾을 수 없습니다.');
     }
     
     const { device, server } = result;
