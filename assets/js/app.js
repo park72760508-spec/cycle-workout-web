@@ -16338,7 +16338,33 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인하세요.');
     }
     
-    const result = await reconnectFn(deviceId, deviceType);
+    console.log('[Mobile Dashboard] 저장된 기기 재연결 시도:', { deviceId, deviceType });
+    
+    let result;
+    try {
+      result = await reconnectFn(deviceId, deviceType);
+    } catch (reconnectError) {
+      console.warn('[Mobile Dashboard] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', reconnectError);
+      // 재연결 실패 시 기존 연결 함수로 폴백 (새 기기 검색)
+      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
+        : deviceType === 'heartRate' ? window.connectHeartRate 
+        : deviceType === 'powerMeter' ? window.connectPowerMeter 
+        : null;
+      
+      if (connectFunction && typeof connectFunction === 'function') {
+        if (typeof showToast === 'function') {
+          showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
+        }
+        await connectFunction();
+        setTimeout(() => {
+          updateMobileBluetoothConnectionStatus();
+        }, 200);
+        return;
+      } else {
+        throw reconnectError; // 연결 함수가 없으면 원래 에러를 다시 던짐
+      }
+    }
+    
     if (!result) {
       throw new Error('기기를 찾을 수 없습니다.');
     }
@@ -16582,10 +16608,33 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
   } catch (error) {
     console.error('[Mobile Dashboard] 저장된 기기 재연결 실패:', error);
     if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+    
+    // 재연결 실패 시 사용자에게 알리고 새 기기 검색 제안
+    const errorMessage = error.message || '알 수 없는 오류';
     if (typeof showToast === 'function') {
-      showToast('재연결 실패: ' + (error.message || '알 수 없는 오류'));
-    } else {
-      alert('재연결 실패: ' + (error.message || '알 수 없는 오류'));
+      showToast(`저장된 기기를 찾을 수 없습니다.\n기기가 켜져 있고 범위 내에 있는지 확인하세요.\n\n새 기기 검색을 시도합니다...`);
+    }
+    
+    // 자동으로 새 기기 검색으로 폴백
+    try {
+      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
+        : deviceType === 'heartRate' ? window.connectHeartRate 
+        : deviceType === 'powerMeter' ? window.connectPowerMeter 
+        : null;
+      
+      if (connectFunction && typeof connectFunction === 'function') {
+        console.log('[Mobile Dashboard] 새 기기 검색으로 폴백:', deviceType);
+        await connectFunction();
+        setTimeout(() => {
+          updateMobileBluetoothConnectionStatus();
+        }, 200);
+        return;
+      }
+    } catch (fallbackError) {
+      console.error('[Mobile Dashboard] 새 기기 검색도 실패:', fallbackError);
+      if (typeof showToast === 'function') {
+        showToast('기기 연결에 실패했습니다: ' + (fallbackError.message || '알 수 없는 오류'));
+      }
     }
   }
 }
@@ -16713,6 +16762,12 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
       savedItem.style.cssText = 'padding: 8px 12px; font-size: 13px; cursor: pointer;';
       savedItem.onclick = (e) => {
         e.stopPropagation();
+        console.log('[Mobile Dashboard] 저장된 기기 클릭:', { 
+          deviceType, 
+          deviceId: saved.deviceId, 
+          nickname: saved.nickname,
+          name: saved.name 
+        });
         connectMobileBluetoothDevice(deviceType, saved.deviceId);
       };
       

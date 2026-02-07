@@ -107,24 +107,42 @@ function showNicknameModal(deviceName, callback) {
 async function reconnectToSavedDevice(deviceId, deviceType) {
   try {
     if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth)) {
+      console.warn('[reconnectToSavedDevice] getDevices API를 사용할 수 없습니다.');
       return null;
     }
     
+    console.log('[reconnectToSavedDevice] 페어링된 기기 목록 조회 중...', { deviceId, deviceType });
     const pairedDevices = await navigator.bluetooth.getDevices();
+    console.log('[reconnectToSavedDevice] 페어링된 기기 수:', pairedDevices.length);
+    
+    if (pairedDevices.length > 0) {
+      console.log('[reconnectToSavedDevice] 페어링된 기기 ID 목록:', pairedDevices.map(d => d.id));
+    }
+    
     const device = pairedDevices.find(d => d.id === deviceId);
     
     if (!device) {
-      throw new Error('기기를 찾을 수 없습니다. 전원이 켜져 있나요?');
+      console.warn('[reconnectToSavedDevice] 기기를 찾을 수 없음:', { 
+        deviceId, 
+        deviceType, 
+        pairedCount: pairedDevices.length,
+        pairedIds: pairedDevices.map(d => d.id)
+      });
+      throw new Error('기기를 찾을 수 없습니다. 전원이 켜져 있고 범위 내에 있는지 확인하세요.');
     }
+    
+    console.log('[reconnectToSavedDevice] 기기 발견:', { name: device.name, id: device.id });
     
     if (!device.gatt) {
       throw new Error('GATT 서버를 사용할 수 없습니다.');
     }
     
+    console.log('[reconnectToSavedDevice] GATT 서버 연결 시도...');
     const server = await device.gatt.connect();
+    console.log('[reconnectToSavedDevice] 연결 성공');
     return { device, server };
   } catch (error) {
-    console.error('Failed to reconnect to saved device:', error);
+    console.error('[reconnectToSavedDevice] 재연결 실패:', error);
     throw error;
   }
 }
