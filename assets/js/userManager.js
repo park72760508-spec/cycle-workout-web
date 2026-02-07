@@ -1683,6 +1683,103 @@ if (typeof window !== 'undefined') {
 
 // ========== 사용자 목록 로드 및 렌더링 ==========
 
+/**
+ * 프로필 화면 사용자 카드 목록 렌더링 (loadUsers / searchProfileUsers 공용)
+ * @param {Array} usersToRender - 렌더할 사용자 배열
+ * @param {string} viewerGrade - 뷰어 등급
+ * @param {string|null} viewerId - 뷰어 ID
+ */
+function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
+  const userList = document.getElementById('userList');
+  if (!userList) return;
+  const canEditFor = (u) => {
+    if (viewerGrade === '1') return true;
+    if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
+    return false;
+  };
+  const canDeleteFor = (u) => (viewerGrade === '1');
+  const sorted = [...usersToRender].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+  userList.innerHTML = sorted.map(user => {
+    const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+    const expRaw = user.expiry_date;
+    let expiryText = '미설정';
+    let expiryClass = '';
+    if (expRaw) {
+      const expiryDate = new Date(expRaw);
+      const today = new Date();
+      expiryDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((expiryDate - today) / (24 * 60 * 60 * 1000));
+      expiryText = expiryDate.toLocaleDateString();
+      if (diffDays < 0) { expiryClass = 'is-expired'; } else if (diffDays === 0) { expiryClass = 'is-soon'; expiryText += ' (D-DAY)'; } else if (diffDays <= 7) { expiryClass = 'is-soon'; expiryText += ` (D-${diffDays})`; }
+    }
+    const canEdit = canEditFor(user);
+    const canDelete = canDeleteFor(user);
+    const deleteButtonDisabled = !canDelete ? 'disabled' : '';
+    const deleteButtonClass = !canDelete ? 'disabled' : '';
+    const challenge = String(user.challenge || 'Fitness').trim();
+    let challengeImage = 'yellow.png';
+    if (challenge === 'GranFondo') challengeImage = 'green.png'; else if (challenge === 'Racing') challengeImage = 'blue.png'; else if (challenge === 'Elite') challengeImage = 'orenge.png'; else if (challenge === 'PRO') challengeImage = 'red.png';
+    const accPoints = user.acc_points || 0;
+    const remPoints = user.rem_points || 0;
+    return `
+      <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
+        <div class="user-header">
+          <div class="user-name-wrapper">
+            <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
+            <div class="user-points">
+              <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
+              <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
+            </div>
+          </div>
+          <div class="user-actions" onclick="event.stopPropagation();">
+            <button class="btn-dashboard" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>
+            ${canEdit ? `<button class="btn-edit" onclick="editUser('${user.id}')" title="수정">✏️</button><button class="btn-delete ${deleteButtonClass}" onclick="deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}>🗑️</button>` : ''}
+          </div>
+        </div>
+        <div class="user-details">
+          <div class="user-stats"><span class="stat">FTP: ${user.ftp || '-'}W</span><span class="stat">체중: ${user.weight || '-'}kg</span><span class="stat">W/kg: ${wkg}</span></div>
+          <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * 관리자(grade=1) 전용: 프로필 화면 사용자 검색 (이름/전화번호, 빈값이면 전체 검색)
+ */
+function searchProfileUsers() {
+  const userList = document.getElementById('userList');
+  const allUsers = window._profileScreenAllUsers;
+  const ctx = window._profileScreenContext;
+  if (!userList || !Array.isArray(allUsers) || !ctx) {
+    if (typeof loadUsers === 'function') loadUsers();
+    return;
+  }
+  const nameInput = document.getElementById('profileSearchName');
+  const contactInput = document.getElementById('profileSearchContact');
+  const nameRaw = (nameInput && nameInput.value) ? String(nameInput.value).trim() : '';
+  const contactRaw = (contactInput && contactInput.value) ? String(contactInput.value).trim() : '';
+  const nameQuery = nameRaw.toLowerCase();
+  const contactDigits = (contactRaw || '').replace(/\D/g, '');
+  let filtered = allUsers;
+  if (nameQuery || contactDigits) {
+    filtered = allUsers.filter(u => {
+      const nameMatch = !nameQuery || (u.name && String(u.name).toLowerCase().includes(nameQuery));
+      const uContact = (u.contact || '').replace(/\D/g, '');
+      const contactMatch = !contactDigits || (uContact && uContact.includes(contactDigits));
+      return nameMatch && contactMatch;
+    });
+  }
+  renderProfileUserCards(filtered, ctx.viewerGrade, ctx.viewerId);
+  if (typeof showToast === 'function') {
+    showToast(nameQuery || contactDigits ? `검색 결과 ${filtered.length}명` : `전체 ${filtered.length}명`);
+  }
+}
+
+window.searchProfileUsers = searchProfileUsers;
+
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) {
@@ -1789,123 +1886,25 @@ async function loadUsers() {
 
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    // 수정 권한 체크 함수
-    const canEditFor = (u) => {
+    // 관리자(grade=1)일 때만 검색 섹션 표시 및 전체 목록 저장 (검색 시 사용)
+    const searchSection = document.getElementById('profileSearchSection');
+    if (searchSection) {
       if (viewerGrade === '1') {
-        // 관리자: 모든 사용자 수정 가능
-        return true;
-      } else if (viewerGrade === '2' || viewerGrade === '3') {
-        // 일반 사용자: 본인 계정만 수정 가능
-        return viewerId && String(u.id) === viewerId;
-      }
-      return false;
-    };
-    
-    // 삭제 권한 체크 함수
-    const canDeleteFor = (u) => {
-      if (viewerGrade === '1') {
-        // 관리자: 모든 사용자 삭제 가능
-        return true;
+        searchSection.style.display = 'block';
+        window._profileScreenAllUsers = visibleUsers.slice();
+        window._profileScreenContext = { viewerGrade, viewerId };
+        const nameInput = document.getElementById('profileSearchName');
+        const contactInput = document.getElementById('profileSearchContact');
+        if (nameInput) nameInput.value = '';
+        if (contactInput) contactInput.value = '';
       } else {
-        // 일반 사용자(grade=2,3): 삭제 버튼 비활성화
-        return false;
+        searchSection.style.display = 'none';
+        window._profileScreenAllUsers = null;
+        window._profileScreenContext = null;
       }
-    };
+    }
 
-    userList.innerHTML = visibleUsers.map(user => {
-      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
-
-      const expRaw = user.expiry_date;
-      let expiryText = '미설정';
-      let expiryClass = '';
-      let isExpired = false;
-      let shouldShowWarning = false;
-      let expiryDate = null;
-      
-      if (expRaw) {
-        expiryDate = new Date(expRaw);
-        const today = new Date();
-        expiryDate.setHours(0,0,0,0);
-        today.setHours(0,0,0,0);
-        const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
-        expiryText = expiryDate.toLocaleDateString();
-
-        if (diffDays < 0) {
-          expiryClass = 'is-expired';
-          isExpired = true;
-        } else if (diffDays === 0) {
-          expiryClass = 'is-soon';
-          expiryText += ' (D-DAY)';
-          shouldShowWarning = true;
-        } else if (diffDays <= 7) {
-          expiryClass = 'is-soon';
-          expiryText += ` (D-${diffDays})`;
-          shouldShowWarning = true;
-        } else if (diffDays <= 10) {
-          shouldShowWarning = true;
-        }
-      }
-
-      const canEdit = canEditFor(user);
-      const canDelete = canDeleteFor(user);
-      const deleteButtonDisabled = !canDelete ? 'disabled' : '';
-      const deleteButtonClass = !canDelete ? 'disabled' : '';
-
-      const challenge = String(user.challenge || 'Fitness').trim();
-      let challengeImage = 'yellow.png';
-      if (challenge === 'GranFondo') {
-        challengeImage = 'green.png';
-      } else if (challenge === 'Racing') {
-        challengeImage = 'blue.png';
-      } else if (challenge === 'Elite') {
-        challengeImage = 'orenge.png';
-      } else if (challenge === 'PRO') {
-        challengeImage = 'red.png';
-      }
-
-      // 포인트 정보 추출
-      const accPoints = user.acc_points || 0;
-      const remPoints = user.rem_points || 0;
-      
-      return `
-        <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
-          <div class="user-header">
-            <div class="user-name-wrapper">
-              <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
-              <div class="user-points">
-                <span class="point-badge point-accumulated" title="누적 포인트">
-                  <span class="point-icon">⭐</span>
-                  <span class="point-value">${formatPoints(accPoints)}</span>
-                </span>
-                <span class="point-badge point-remaining" title="보유 포인트">
-                  <span class="point-icon">💎</span>
-                  <span class="point-value">${formatPoints(remPoints)}</span>
-                </span>
-              </div>
-            </div>
-            <div class="user-actions" onclick="event.stopPropagation();">
-              <button class="btn-dashboard" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>
-              ${canEdit ? `
-                <button class="btn-edit"   onclick="editUser('${user.id}')"   title="수정">✏️</button>
-                <button class="btn-delete ${deleteButtonClass}" onclick="deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}>🗑️</button>
-              ` : ''}
-            </div>
-          </div>
-
-          <div class="user-details">
-            <div class="user-stats">
-              <span class="stat">FTP: ${user.ftp || '-'}W</span>
-              <span class="stat">체중: ${user.weight || '-'}kg</span>
-              <span class="stat">W/kg: ${wkg}</span>
-            </div>
-            <div class="user-meta">
-              <span class="contact">${user.contact || ''}</span>
-              <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
+    renderProfileUserCards(visibleUsers, viewerGrade, viewerId);
 
     const profileScreen = document.getElementById('profileScreen');
     const isProfileScreenActive = profileScreen && profileScreen.classList.contains('active');
