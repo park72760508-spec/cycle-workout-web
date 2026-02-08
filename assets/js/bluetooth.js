@@ -182,12 +182,11 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
 }
 
 // 저장된 기기에 재연결 시도
+// iOS/Bluefy: getDevices()가 비어있거나 ID 형식이 다르면 null 반환 → 호출자가 requestDevice 폴백 사용
 async function reconnectToSavedDevice(deviceId, deviceType) {
   try {
     // getDevices() API 지원 여부 확인
     if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth)) {
-      // 조용히 null 반환 (경고 로그 제거 - 사용자 경험 개선)
-      // 호출자가 새 기기 검색으로 자동 폴백함
       return null;
     }
     
@@ -199,22 +198,19 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
       console.log('[reconnectToSavedDevice] 페어링된 기기 ID 목록:', pairedDevices.map(d => d.id));
     }
     
-    const device = pairedDevices.find(d => d.id === deviceId);
+    // iOS/Bluefy: id가 문자열·숫자 혼용될 수 있으므로 String 비교
+    const deviceIdStr = String(deviceId);
+    const device = pairedDevices.find(function (d) { return String(d.id) === deviceIdStr; });
     
     if (!device) {
-      console.warn('[reconnectToSavedDevice] 기기를 찾을 수 없음:', { 
-        deviceId, 
-        deviceType, 
-        pairedCount: pairedDevices.length,
-        pairedIds: pairedDevices.map(d => d.id)
-      });
-      throw new Error('기기를 찾을 수 없습니다. 전원이 켜져 있고 범위 내에 있는지 확인하세요.');
+      console.warn('[reconnectToSavedDevice] 페어링 목록에 없음 → requestDevice 폴백 가능:', { deviceId: deviceIdStr, deviceType, pairedCount: pairedDevices.length });
+      return null;
     }
     
     console.log('[reconnectToSavedDevice] 기기 발견:', { name: device.name, id: device.id });
     
     if (!device.gatt) {
-      throw new Error('GATT 서버를 사용할 수 없습니다.');
+      return null;
     }
     
     console.log('[reconnectToSavedDevice] GATT 서버 연결 시도...');
@@ -222,20 +218,26 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
     console.log('[reconnectToSavedDevice] 연결 성공');
     return { device, server };
   } catch (error) {
-    console.error('[reconnectToSavedDevice] 재연결 실패:', error);
-    throw error;
+    console.warn('[reconnectToSavedDevice] 재연결 실패(폴백 시도):', error.message || error);
+    return null;
   }
 }
 
 // 저장된 기기 ID로 직접 연결 (Bluetooth Individual 등에서 특정 저장 기기 클릭 시 사용)
-// getDevices() 미지원 환경(Android Chrome 등)에서는 저장된 기기 이름으로 requestDevice() 호출 후 연결
+// getDevices() 미지원(Android) 또는 페어링 목록에 없음(iOS/Bluefy) 시 저장된 기기 이름으로 requestDevice() 호출 후 연결
 async function connectToSavedDeviceById(deviceId, deviceType) {
-  const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === deviceType);
+  const allSaved = typeof loadSavedDevices === 'function' ? loadSavedDevices() : [];
+  const saved = allSaved.find(function (d) { return String(d.deviceId) === String(deviceId) && String(d.deviceType) === String(deviceType); });
   if (!saved) {
     throw new Error('저장된 기기를 찾을 수 없습니다.');
   }
-  let result = await reconnectToSavedDevice(deviceId, deviceType);
-  // getDevices() 미지원(Android Chrome 등): 저장된 기기 이름으로 requestDevice() 후 연결 시도
+  let result = null;
+  try {
+    result = await reconnectToSavedDevice(deviceId, deviceType);
+  } catch (e) {
+    result = null;
+  }
+  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도
   if (!result && navigator.bluetooth && (saved.name || saved.nickname)) {
     const nameForFilter = saved.name || saved.nickname || '';
     if (nameForFilter) {
