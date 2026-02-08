@@ -108,9 +108,19 @@ Output Format (JSON Only):
     // JSON 파싱
     const result = JSON.parse(jsonText);
     
+    // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (있을 경우 우선 사용)
+    let conditionScore = result.condition_score || 50;
+    if (typeof window.computeConditionScore === 'function') {
+      const userForScore = { age: userProfile?.age, gender: userProfile?.gender, challenge: userProfile?.challenge, ftp: userProfile?.ftp, weight: userProfile?.weight };
+      const csResult = window.computeConditionScore(userForScore, recentLogs || []);
+      conditionScore = Math.max(50, Math.min(100, csResult.score));
+    } else {
+      conditionScore = Math.max(50, Math.min(100, Math.round(conditionScore)));
+    }
+    
     // 기본값 설정
     return {
-      condition_score: result.condition_score || 50,
+      condition_score: conditionScore,
       training_status: result.training_status || 'Building Base',
       vo2max_estimate: result.vo2max_estimate || 40,
       coach_comment: result.coach_comment || `${userName}님, 오늘도 화이팅하세요!`,

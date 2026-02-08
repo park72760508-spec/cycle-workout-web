@@ -11435,7 +11435,13 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
    - 형식적인 설명이 아닌, 실제로 훈련할 때 참고할 수 있는 구체적인 가이드를 제공하세요.
    - 사용자의 목적(${challenge})과 맞지 않는 워크아웃은 추천하지 마세요.
 
-5. **최종 확인 (필수)**:
+5. **컨디션 점수 (Condition Score) 평가 기준 (필수)**:
+   - **의미**: 최근 훈련 부하(TSS)·휴식·피로 누적을 반영한 "오늘의 몸 상태" 지표입니다. 100점은 이상적·극히 드문 경우에만 해당합니다.
+   - **반드시 5 단위로만 부여**: 55, 60, 65, 70, 75, 80, 85, 90, 95만 사용하세요. 100점은 **부여하지 마세요** (실질적 상한 95).
+   - **기준 (참고)**: 훈련 이력이 거의 없거나 회복 필요 → 55~65. 꾸준한 훈련·적당한 부하 → 70~80. 주간 TSS 달성·피로 없음 → 85~90. 레이스 직전 피크 등 매우 제한적 상황 → 90~95. 95 이상·100은 사용하지 마세요.
+   - **현실성**: 같은 훈련 데이터면 비슷한 점수가 나와야 하며, 과도하게 높은 점수(예: 100)는 피하세요.
+
+6. **최종 확인 (필수)**:
    - 추천 개수: 반드시 **정확히 3개**의 워크아웃을 제시하세요.
    - **추천 강도 순서**: 1번(약) → 2번(중) → 3번(강). 1번이 가장 가벼운 훈련, 3번이 가장 부하가 큰 훈련이어야 합니다.
    - **서로 다른 워크아웃**: 1번·2번·3번의 workoutId는 **각각 달라야 합니다**. 같은 workoutId를 두 번 사용하면 안 됩니다.
@@ -11443,7 +11449,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
 
 다음 JSON 형식으로 응답해주세요:
 {
-  "condition_score": 0~100 (컨디션 점수, 정수),
+  "condition_score": 55~95 (컨디션 점수, 반드시 5 단위 정수: 55,60,65,70,75,80,85,90,95. 100 사용 금지),
   "training_status": "Recovery Needed" | "Building Base" | "Ready to Race" | "Peaking" | "Overreaching",
   "vo2max_estimate": 20~100 (VO2max 추정값 ml/kg/min, 정수),
   "coach_comment": "사용자 훈련 상황을 반영한 한국어 코멘트 (2~3문장)",
@@ -11860,6 +11866,13 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
     recommendationData.recommendations = deduped.slice(0, 3);
     
+    // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (연령·성별·훈련목적·최근 30일 로그 반영)
+    if (typeof window.computeConditionScore === 'function') {
+      const userForScore = { age: user.age, gender: user.gender, challenge: challenge, ftp: Number(ftp) || 200, weight: Number(weight) || 70 };
+      const csResult = window.computeConditionScore(userForScore, recentHistory, date);
+      recommendationData.condition_score = csResult.score;
+    }
+    
     // 8. 추천 워크아웃 표시
     displayWorkoutRecommendations(recommendationData, workoutDetails, date);
     
@@ -11953,7 +11966,10 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   const selectedCategory = recommendationData.selectedCategory || '알 수 없음';
   const categoryReason = recommendationData.categoryReason || '';
   const recommendations = recommendationData.recommendations || [];
-  const conditionScore = typeof recommendationData.condition_score === 'number' ? Math.max(0, Math.min(100, recommendationData.condition_score)) : 50;
+  // 컨디션 점수: 공통 모듈(conditionScoreModule)에서 50~100 1점 단위로 산출된 값 사용, 없으면 50
+  const conditionScore = typeof recommendationData.condition_score === 'number'
+    ? Math.max(50, Math.min(100, Math.round(recommendationData.condition_score)))
+    : 50;
   const trainingStatus = (recommendationData.training_status && String(recommendationData.training_status).trim()) || 'Building Base';
   const vo2maxEstimate = typeof recommendationData.vo2max_estimate === 'number' ? Math.max(20, Math.min(100, recommendationData.vo2max_estimate)) : 45;
   const coachComment = (recommendationData.coach_comment && String(recommendationData.coach_comment).trim()) || categoryReason || 'AI 추천';
