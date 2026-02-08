@@ -85,10 +85,15 @@ function getSavedDevicesByType(deviceType) {
 }
 
 // 저장된 기기 삭제 (캐시/localStorage에서 제거)
+// deviceId·deviceType은 문자열/숫자 혼용 가능하므로 비교 시 String으로 통일
 function removeSavedDevice(deviceId, deviceType) {
   try {
     const saved = loadSavedDevices();
-    const filtered = saved.filter(d => !(d.deviceId === deviceId && d.deviceType === deviceType));
+    const idStr = String(deviceId);
+    const typeStr = String(deviceType);
+    const filtered = saved.filter(function (d) {
+      return String(d.deviceId) !== idStr || String(d.deviceType) !== typeStr;
+    });
     if (filtered.length === saved.length) return false;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
     return true;

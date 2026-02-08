@@ -3033,14 +3033,15 @@ function updateIndividualBluetoothDropdownWithSavedDevices() {
       deleteBtn.style.cssText = 'color: #f87171; font-size: 12px; flex-shrink: 0; cursor: pointer;';
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
-        const removeFn = typeof window.removeSavedDevice === 'function' ? window.removeSavedDevice : null;
-        if (removeFn && removeFn(saved.deviceId, deviceType)) {
-          if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
-            updateIndividualBluetoothDropdownWithSavedDevices();
-          }
-          if (typeof showToast === 'function') {
-            showToast('저장된 기기가 목록에서 삭제되었습니다.');
-          }
+        var removed = false;
+        if (typeof window.removeSavedDevice === 'function') {
+          removed = window.removeSavedDevice(saved.deviceId, deviceType);
+        }
+        if (removed && typeof showToast === 'function') {
+          showToast('저장된 기기가 목록에서 삭제되었습니다.');
+        }
+        if (typeof updateIndividualBluetoothDropdownWithSavedDevices === 'function') {
+          updateIndividualBluetoothDropdownWithSavedDevices();
         }
       };
       savedItem.appendChild(deleteBtn);
