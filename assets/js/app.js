@@ -15321,6 +15321,9 @@ function startMobileWorkout() {
   const btnImg = document.getElementById('imgMobileToggle');
   if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
 
+  // 시작 버튼 펄스: 훈련 시작 후에는 펄스 중지·숨김
+  if (typeof updateMobileStartPulse === 'function') updateMobileStartPulse();
+
   // 화면 꺼짐 방지 활성화 (워크아웃 시작 시)
   if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.request === 'function') {
     window.mobileDashboardWakeLockControl.isActive = true;
@@ -15915,11 +15918,16 @@ function setMobilePaused(isPaused) {
     btnImg.setAttribute('href', wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png');
   }
   
-  // 시작 버튼 펄스: 일시정지 시 중지, 재개 시 재생
+  // 시작 버튼 펄스: 일시정지 시 재생·표시, 재개 시 중지·숨김
   const pulseWrap = document.getElementById('mobileStartPulseWrap');
   if (pulseWrap) {
-    if (wantPause) pulseWrap.classList.remove('pulse-active');
-    else pulseWrap.classList.add('pulse-active');
+    if (wantPause) {
+      pulseWrap.classList.add('pulse-active');
+      pulseWrap.classList.remove('pulse-hidden');
+    } else {
+      pulseWrap.classList.remove('pulse-active');
+      pulseWrap.classList.add('pulse-hidden');
+    }
   }
   
   if (typeof showToast === "function") {
@@ -15930,15 +15938,21 @@ function setMobilePaused(isPaused) {
 }
 
 /**
- * 모바일 대시보드: 시작 버튼 펄스 표시 여부 (시작 전·재생 중 = 표시, 일시정지 = 숨김)
+ * 모바일 대시보드: 시작 버튼 펄스 표시 여부
+ * 시작 전 또는 일시정지 = 펄스 재생·표시 / 시작 후 재생 중 = 펄스 중지·숨김
  */
 function updateMobileStartPulse() {
   const pulseWrap = document.getElementById('mobileStartPulseWrap');
   if (!pulseWrap) return;
   const mts = window.mobileTrainingState;
-  const showPulse = !mts || !mts.timerId || mts.paused !== true;
-  if (showPulse) pulseWrap.classList.add('pulse-active');
-  else pulseWrap.classList.remove('pulse-active');
+  const showPulse = !mts || !mts.timerId || mts.paused === true;
+  if (showPulse) {
+    pulseWrap.classList.add('pulse-active');
+    pulseWrap.classList.remove('pulse-hidden');
+  } else {
+    pulseWrap.classList.remove('pulse-active');
+    pulseWrap.classList.add('pulse-hidden');
+  }
 }
 
 /**
