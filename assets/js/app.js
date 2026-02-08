@@ -12247,9 +12247,10 @@ async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
   }
 }
 
-// 전역 함수로 등록
+// 전역 함수로 등록 (워크아웃 화면 AI 추천 카드에서 index.html이 이 흐름을 사용하도록 노출)
 window.showWorkoutRecommendationModal = showWorkoutRecommendationModal;
 window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
+window.analyzeAndRecommendWorkouts = analyzeAndRecommendWorkouts;
 window.selectRecommendedWorkout = selectRecommendedWorkout;
 window.runDashboardAIWorkoutRecommendation = runDashboardAIWorkoutRecommendation;
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
