@@ -11035,41 +11035,97 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     };
     const conditionAdjustment = conditionMap[todayCondition] || 0.98;
     
-    // 3. 최근 운동 이력 조회 (최근 30일 - 1개월)
+    // 3. 최근 운동 이력 조회 (최근 30일) — Firebase users/{userId}/logs 우선, 없으면 GAS 폴백
     const today = new Date(date);
     const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 30); // 30일 전부터
+    startDate.setDate(startDate.getDate() - 30);
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = date;
     
     let recentHistory = [];
-    try {
-      const ensureBaseUrl = () => {
-        const base = window.GAS_URL;
-        if (!base) throw new Error('GAS_URL is not set');
-        return base;
-      };
-      
-      const baseUrl = ensureBaseUrl();
-      const params = new URLSearchParams({
-        action: 'getScheduleResultsByUser',
-        userId: user.id,
-        startDate: startDateStr,
-        endDate: endDateStr
-      });
-      const response = await fetch(`${baseUrl}?${params.toString()}`);
-      const result = await response.json();
-      
-      if (result?.success && Array.isArray(result.items)) {
-        // 최근 30일 이력을 모두 사용 (정확도 향상을 위해)
-        recentHistory = result.items.sort((a, b) => {
-          const dateA = new Date(a.completed_at || 0);
-          const dateB = new Date(b.completed_at || 0);
-          return dateB - dateA; // 최신순 정렬
-        });
+    // 3-1. Firebase DB users > user > logs 에서 최근 30일 로그 조회 (대시보드·훈련일지와 동일 소스)
+    if (user.id && typeof window.getTrainingLogsByDateRange === 'function') {
+      try {
+        var firebaseLogs = [];
+        var endYear = today.getFullYear();
+        var endMonth = today.getMonth();
+        var startYear = startDate.getFullYear();
+        var startMonth = startDate.getMonth();
+        var monthsToFetch = [];
+        var d = new Date(startYear, startMonth, 1);
+        var endD = new Date(endYear, endMonth, 1);
+        while (d <= endD) {
+          monthsToFetch.push({ year: d.getFullYear(), month: d.getMonth() });
+          d.setMonth(d.getMonth() + 1);
+        }
+        for (var i = 0; i < monthsToFetch.length; i++) {
+          var ym = monthsToFetch[i];
+          var monthLogs = await window.getTrainingLogsByDateRange(user.id, ym.year, ym.month);
+          monthLogs.forEach(function(log) {
+            var dateVal = log.date;
+            if (dateVal && typeof dateVal.toDate === 'function') {
+              dateVal = dateVal.toDate().toISOString().split('T')[0];
+            } else if (dateVal && typeof dateVal !== 'string') {
+              dateVal = (dateVal.toISOString && dateVal.toISOString()) ? dateVal.toISOString().split('T')[0] : String(dateVal).slice(0, 10);
+            }
+            if (!dateVal || dateVal < startDateStr || dateVal > endDateStr) return;
+            var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+            if (sec < 60) return;
+            firebaseLogs.push({
+              completed_at: dateVal + 'T12:00:00.000Z',
+              workout_name: log.title || log.workout_name || '훈련',
+              duration_min: Math.round(sec / 60),
+              avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
+              np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? log.avg_power ?? 0),
+              tss: Math.round(log.tss ?? 0),
+              hr_avg: Math.round(log.avg_hr ?? log.hr_avg ?? 0)
+            });
+          });
+        }
+        var seen = {};
+        recentHistory = firebaseLogs
+          .filter(function(h) {
+            var key = (h.completed_at || '') + '|' + (h.workout_name || '');
+            if (seen[key]) return false;
+            seen[key] = true;
+            return true;
+          })
+          .sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
+        if (recentHistory.length > 0) {
+          console.log('[AI 워크아웃 추천] Firebase users/logs 훈련 이력 사용:', recentHistory.length, '건');
+        }
+      } catch (err) {
+        console.warn('[AI 워크아웃 추천] Firebase 로그 조회 실패, GAS 폴백:', err);
       }
-    } catch (error) {
-      console.warn('최근 운동 이력 조회 실패:', error);
+    }
+    // 3-2. Firebase에 로그가 없을 때만 GAS getScheduleResultsByUser 사용
+    if (recentHistory.length === 0) {
+      try {
+        const ensureBaseUrl = () => {
+          const base = window.GAS_URL;
+          if (!base) throw new Error('GAS_URL is not set');
+          return base;
+        };
+        const baseUrl = ensureBaseUrl();
+        const params = new URLSearchParams({
+          action: 'getScheduleResultsByUser',
+          userId: user.id,
+          startDate: startDateStr,
+          endDate: endDateStr
+        });
+        const response = await fetch(`${baseUrl}?${params.toString()}`);
+        const result = await response.json();
+        if (result?.success && Array.isArray(result.items)) {
+          recentHistory = result.items.sort(function(a, b) {
+            const dateA = new Date(a.completed_at || 0);
+            const dateB = new Date(b.completed_at || 0);
+            return dateB - dateA;
+          });
+          console.log('[AI 워크아웃 추천] GAS getScheduleResultsByUser 훈련 이력 사용:', recentHistory.length, '건');
+        }
+      } catch (error) {
+        console.warn('최근 운동 이력 조회 실패:', error);
+      }
     }
     
     // 4. 워크아웃 목록 조회 (모든 카테고리)
