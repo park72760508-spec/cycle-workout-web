@@ -4980,13 +4980,15 @@
             });
           }
           
-          // 사용자 프로필 준비
+          // 사용자 프로필 준비 (컨디션 점수 모듈용 age, gender 포함)
           var userProfile = {
             id: currentUser.id,
             name: currentUser.name || '사용자',
             ftp: currentUser.ftp || 200,
             weight: currentUser.weight || 70,
-            challenge: currentUser.challenge || 'Fitness'
+            challenge: currentUser.challenge || 'Fitness',
+            age: currentUser.age,
+            gender: currentUser.gender
           };
           
           // AI 분석 호출
@@ -9424,6 +9426,8 @@
 <script src="assets/js/trainingRoomManager.js"></script>
 <!-- Bluetooth Training 모듈 -->
 <script src="assets/js/bluetoothTrainingManager.js"></script>
+<!-- AI 분석 공통: 컨디션 점수 모듈 (50~100, 1점 단위 객관 산출) -->
+<script src="assets/js/conditionScoreModule.js"></script>
 <script src="assets/js/app.js"></script>  
 
   
@@ -10660,10 +10664,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             ];
           }
           
-          var rawScore = (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50;
-          var condition_score = Math.round(rawScore / 5) * 5;
-          if (condition_score > 100) condition_score = 100;
-          if (condition_score < 0) condition_score = 0;
+          // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (있을 경우 우선 사용)
+          var condition_score = 50;
+          if (typeof window.computeConditionScore === 'function') {
+            var userForScore = { age: userProfile && userProfile.age, gender: userProfile && userProfile.gender, challenge: userProfile && userProfile.challenge, ftp: userProfile && userProfile.ftp, weight: userProfile && userProfile.weight };
+            var csResult = window.computeConditionScore(userForScore, recentLogs || []);
+            condition_score = Math.max(50, Math.min(100, csResult.score));
+          } else {
+            var rawScore = (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50;
+            condition_score = Math.max(50, Math.min(100, Math.round(rawScore)));
+          }
           return {
             condition_score: condition_score,
             training_status: result.training_status || 'Building Base',
