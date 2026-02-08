@@ -4839,8 +4839,20 @@
           console.error('[AI] 컨텐츠 없음');
         }
         
+        // 워크아웃 화면 AI 추천도 app.js 흐름 사용 (대시보드 블록·예상 TSS·1=약 2=중 3=강·서로 다른 3개 반영)
+        var todayStr = new Date().toISOString().split('T')[0];
+        if (typeof window.showWorkoutRecommendationModal === 'function' && typeof window.analyzeAndRecommendWorkouts === 'function') {
+          window.showWorkoutRecommendationModal();
+          window.analyzeAndRecommendWorkouts(todayStr, currentUser, apiKey).then(function() {
+            window.__aiRecommendationInProgress = false;
+          }).catch(function() {
+            window.__aiRecommendationInProgress = false;
+          });
+          return;
+        }
+        
         try {
-          // 최근 30일간의 훈련 로그 가져오기
+          // 최근 30일간의 훈련 로그 가져오기 (app.js 미사용 시 폴백)
           var logs = [];
           if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
             try {
