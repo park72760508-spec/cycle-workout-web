@@ -11972,7 +11972,9 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     : 50;
   const trainingStatus = (recommendationData.training_status && String(recommendationData.training_status).trim()) || 'Building Base';
   const vo2maxEstimate = typeof recommendationData.vo2max_estimate === 'number' ? Math.max(20, Math.min(100, recommendationData.vo2max_estimate)) : 45;
-  const coachComment = (recommendationData.coach_comment && String(recommendationData.coach_comment).trim()) || categoryReason || 'AI 추천';
+  const coachCommentRaw = (recommendationData.coach_comment && String(recommendationData.coach_comment).trim()) || categoryReason || 'AI 추천';
+  const userName = (window.currentUser && window.currentUser.name) ? String(window.currentUser.name).trim() : '사용자';
+  const coachComment = coachCommentRaw.replace(/사용자님/g, userName + '님');
   
   const ftp = Number(window.currentUser?.ftp || window.userFTP || 0) || 200;
   
@@ -11985,7 +11987,7 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     <div class="workout-recommendation-container">
       <div class="ai-recommend-dashboard-blocks" style="margin-bottom: 20px;">
         <div class="coach-comment-block" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-          <p style="color: #ffffff; font-size: 0.7em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${coachComment.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+          <p style="color: #ffffff; font-size: 0.63em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${coachComment.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
         </div>
         <div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
           <div class="stat-item" style="background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
@@ -12004,20 +12006,6 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
         <div id="aiRecommendCategoryBlock" class="ai-recommend-category-block" style="background: rgba(0, 212, 170, 0.15); border: 1px solid rgba(0, 212, 170, 0.4); border-radius: 8px; padding: 12px 16px; cursor: pointer; text-align: center; margin-bottom: 16px;" onclick="var el = document.getElementById('recommendations-list-anchor'); if(el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });" title="클릭 시 추천 워크아웃 목록으로 이동">
           <span style="font-size: 0.7em; color: #aaa;">AI 추천: </span><span style="font-size: 0.85em; font-weight: 700; color: #00d4aa;">${selectedCategory}</span>
           <div style="font-size: 0.55em; color: #888; margin-top: 4px;">클릭 시 추천 워크아웃으로 이동</div>
-        </div>
-      </div>
-      <div class="result-stats" style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 12px;">
-        <div class="result-stat-item" style="flex: 1; min-width: 80px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 8px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.65em; color: #aaa;">선정 카테고리</div>
-          <div class="result-stat-value" style="font-size: 0.65em; color: #00d4aa; font-weight: bold;">${selectedCategory}</div>
-        </div>
-        <div class="result-stat-item" style="flex: 1; min-width: 80px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 8px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.65em; color: #aaa;">추천 개수</div>
-          <div class="result-stat-value" style="font-size: 0.65em; color: #00d4aa; font-weight: bold;">${recommendations.length}개</div>
-        </div>
-        <div class="result-stat-item" style="flex: 1; min-width: 80px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 8px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.65em; color: #aaa;">날짜</div>
-          <div class="result-stat-value" style="font-size: 0.65em; color: #00d4aa; font-weight: bold;">${date}</div>
         </div>
       </div>
       <div class="category-info" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
