@@ -4370,7 +4370,7 @@ async function connectBluetoothDevice(deviceType, savedDeviceId) {
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
     }
 
-    // 저장된 기기 ID가 있으면 bluetooth.js connectToSavedDeviceById 사용
+    // 저장된 기기 클릭 시: 바로 재연결만 시도 (기기 검색 목록 화면으로 넘어가지 않음)
     if (savedDeviceId && typeof window.connectToSavedDeviceById === 'function') {
         try {
             const result = await window.connectToSavedDeviceById(savedDeviceId, deviceType);
@@ -4380,14 +4380,19 @@ async function connectBluetoothDevice(deviceType, savedDeviceId) {
                     updateFirebaseDevices();
                     if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
                 }, 300);
+            } else {
+                // getDevices() 미지원 등으로 재연결 불가 시
+                if (typeof showToast === 'function') {
+                    showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴(스마트 트레이너/심박계/파워미터)에서 새로 연결해주세요.');
+                }
             }
             return;
         } catch (err) {
-            console.warn('[BluetoothIndividual] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', err);
+            console.warn('[BluetoothIndividual] 저장된 기기 재연결 실패:', err);
             if (typeof showToast === 'function') {
-                showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
+                showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
             }
-            // 아래 connectFunction()으로 폴백
+            return; // 기기 검색 화면으로 넘기지 않음
         }
     }
 
