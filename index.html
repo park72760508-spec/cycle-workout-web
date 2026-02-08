@@ -10098,45 +10098,6 @@
       <!-- 중앙: 현재 세그먼트 정보 (dashboard-header 기준 중앙 배치) -->
       <span id="bluetoothCoachCurrentSegmentInfo" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 500; color: #ffffff; white-space: nowrap; text-align: center; pointer-events: none;"></span>
       <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
-        <!-- 연결 버튼 + 드롭다운 (모바일 개인훈련 대시보드와 동일 로직: 저장된 디바이스 목록 표시) -->
-        <div style="position: relative;">
-          <button id="bluetoothCoachConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleBluetoothDropdown('bluetoothCoach')">
-            <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
-            <span>연결</span>
-          </button>
-          <div id="bluetoothCoachBluetoothDropdown" class="mobile-bluetooth-dropdown">
-            <div id="bluetoothCoachTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('trainer')">
-              <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
-              <span>스마트 트레이너</span>
-              <span class="status" id="bluetoothCoachTrainerStatus">미연결</span>
-            </div>
-            <div id="bluetoothCoachErgMenu" class="mobile-bluetooth-erg-menu" style="display: none; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-              <div style="font-size: 12px; color: #888; margin-bottom: 8px;">ERG 동작</div>
-              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                  <input type="checkbox" id="bluetoothCoachErgToggle" style="width: 18px; height: 18px; cursor: pointer;">
-                  <span>ERG 모드</span>
-                </label>
-                <span id="bluetoothCoachErgStatus" style="font-size: 12px; color: #888;">OFF</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <label style="font-size: 12px; color: #888;">목표 파워 (W):</label>
-                <input type="number" id="bluetoothCoachErgTargetPower" min="0" max="1000" value="0" style="width: 80px; padding: 4px 8px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #fff; font-size: 14px;">
-                <button id="bluetoothCoachErgSetBtn" style="padding: 4px 12px; background: #00d4aa; border: none; border-radius: 4px; color: #000; font-size: 12px; font-weight: bold; cursor: pointer;">설정</button>
-              </div>
-            </div>
-            <div id="bluetoothCoachHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('heartRate')">
-              <img src="assets/img/bpm_i.png" alt="심박계">
-              <span>심박계</span>
-              <span class="status" id="bluetoothCoachHeartRateStatus">미연결</span>
-            </div>
-            <div id="bluetoothCoachPMItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('powerMeter')">
-              <img src="assets/img/power_i.png" alt="파워미터">
-              <span>파워미터</span>
-              <span class="status" id="bluetoothCoachPowerMeterStatus">미연결</span>
-            </div>
-          </div>
-        </div>
         <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutBluetoothCoach" onclick="openWorkoutSelectionModalForBluetoothCoach()" title="워크아웃 선택">
           <img src="assets/img/workout.png" alt="워크아웃 선택" style="width: 24px; height: 24px; object-fit: contain;">
         </button>
