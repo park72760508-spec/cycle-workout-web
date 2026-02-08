@@ -3347,14 +3347,19 @@
 
   <!-- ========== 모바일 대시보드 화면 ========== -->
   <style>
-    /* 모바일 개인훈련 대시보드: 시작 버튼 빨강 펄스 (시작 전·재생 중에만, 일시정지 시 중지) */
+    /* 모바일 개인훈련 대시보드: 시작 버튼 펄스 (세그먼트 마스코트와 동일 스타일, 사용자 이름 라벨 초록 #00d4aa) */
     #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring {
-      animation: mobile-start-pulse 1.2s ease-in-out infinite;
+      transform-box: fill-box;
       transform-origin: center;
+      animation: mobile-start-mascot-pulse 1.5s ease-out infinite;
     }
-    @keyframes mobile-start-pulse {
-      0%, 100% { transform: scale(1); opacity: 0.85; }
-      50% { transform: scale(1.4); opacity: 0.2; }
+    #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-hidden {
+      visibility: hidden;
+      pointer-events: none;
+    }
+    @keyframes mobile-start-mascot-pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(2); opacity: 0; }
     }
   </style>
   <div id="mobileDashboardScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Pretendard', sans-serif; margin: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh;">
@@ -3451,9 +3456,9 @@
               <image class="svg-btn-icon" x="52" y="213" width="16" height="16" href="assets/img/next0.png" />
             </g>
         
-            <!-- 시작 버튼 중심 빨강 펄스 (시작 전·재생 중: pulse-active, 일시정지 시 제거) -->
+            <!-- 시작 버튼(흰색 테두리) 중심 펄스: 사용자 이름 라벨 초록(#00d4aa), 마스코트와 동일 퍼지는 애니메이션 -->
             <g id="mobileStartPulseWrap" class="mobile-start-pulse-wrap pulse-active" transform="translate(100, 221)">
-              <circle class="mobile-start-pulse-ring" cx="0" cy="0" r="14" fill="none" stroke="#ff4444" stroke-width="2" />
+              <circle class="mobile-start-pulse-ring" cx="0" cy="0" r="14" fill="none" stroke="#00d4aa" stroke-width="2" />
             </g>
             <g class="svg-btn-group" onclick="handleMobileToggle()">
               <circle class="svg-neon-circle" cx="100" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
