@@ -12026,7 +12026,11 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     }
     
     const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
-    const rankBadge = ['🥇', '🥈', '🥉'][index] || `${rec.rank}위`;
+    const rankImages = ['assets/img/first.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+    const rankAlts = ['1위', '2위', '3위'];
+    const rankBadge = index < 3
+      ? `<img src="${rankImages[index]}" alt="${rankAlts[index]}" style="width: 1.4em; height: 1.4em; object-fit: contain; vertical-align: middle; flex-shrink: 0;">`
+      : `${rec.rank}위`;
     const expectedTSS = estimateWorkoutTSS(workout, ftp);
     const tssLabel = expectedTSS != null ? `<span class="workout-expected-tss" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">예상 TSS ${expectedTSS}</span>` : '';
     
@@ -12034,7 +12038,7 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
       <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
         <div style="display: flex; flex-direction: column; gap: 12px;">
           <div class="recommendation-headline" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-            <span class="recommendation-rank" style="font-size: 1.4em; flex-shrink: 0; line-height: 1;">${rankBadge}</span>
+            <span class="recommendation-rank" style="font-size: 1.4em; flex-shrink: 0; line-height: 1; display: inline-flex; align-items: center;">${rankBadge}</span>
             <h4 class="workout-title" style="color: #00d4aa; font-size: 0.77em; font-weight: bold; margin: 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4); word-break: break-word; flex: 1; min-width: 0;">${workout.title || '워크아웃'}</h4>
             <div class="workout-meta" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 0.595em; color: #aaa;">
               <span class="workout-category" style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 4px 10px; border-radius: 12px;">${workout.author || '카테고리 없음'}</span>
