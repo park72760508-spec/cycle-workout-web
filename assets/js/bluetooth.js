@@ -208,12 +208,29 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
 }
 
 // 저장된 기기 ID로 직접 연결 (Bluetooth Individual 등에서 특정 저장 기기 클릭 시 사용)
+// getDevices() 미지원 환경(Android Chrome 등)에서는 저장된 기기 이름으로 requestDevice() 호출 후 연결
 async function connectToSavedDeviceById(deviceId, deviceType) {
   const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === deviceType);
   if (!saved) {
     throw new Error('저장된 기기를 찾을 수 없습니다.');
   }
-  const result = await reconnectToSavedDevice(deviceId, deviceType);
+  let result = await reconnectToSavedDevice(deviceId, deviceType);
+  // getDevices() 미지원(Android Chrome 등): 저장된 기기 이름으로 requestDevice() 후 연결 시도
+  if (!result && navigator.bluetooth && (saved.name || saved.nickname)) {
+    const nameForFilter = saved.name || saved.nickname || '';
+    if (nameForFilter) {
+      try {
+        if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+        const device = await requestDeviceWithSavedInfo(deviceId, deviceType, nameForFilter);
+        const server = await device.gatt.connect();
+        result = { device, server };
+        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      } catch (reqErr) {
+        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+        throw reqErr;
+      }
+    }
+  }
   if (!result) return null;
   const { device, server } = result;
 

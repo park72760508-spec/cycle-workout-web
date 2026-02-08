@@ -16344,9 +16344,24 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
     try {
       result = await reconnectFn(deviceId, deviceType);
       
-      // getDevices() API 미지원 또는 기기 없음: 기기 검색 화면으로 넘기지 않고 토스트만
+      // getDevices() 미지원(Android Chrome 등): bluetooth.js connectToSavedDeviceById가 requestDevice 폴백 사용
       if (!result) {
-        console.warn('[Mobile Dashboard] 저장된 기기 재연결 불가 (getDevices API 미지원 또는 기기 없음)');
+        const connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null);
+        if (connectById) {
+          try {
+            const out = await connectById(deviceId, deviceType);
+            if (out) {
+              setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
+              return;
+            }
+          } catch (fallbackErr) {
+            console.warn('[Mobile Dashboard] 저장된 기기 requestDevice 폴백 실패:', fallbackErr);
+            if (typeof showToast === 'function') {
+              showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
+            }
+            return;
+          }
+        }
         if (typeof showToast === 'function') {
           showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴(스마트 트레이너/심박계/파워미터)에서 새로 연결해주세요.');
         }
@@ -16357,7 +16372,7 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       if (typeof showToast === 'function') {
         showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
       }
-      return; // 기기 검색 화면으로 넘기지 않음
+      return;
     }
     
     const { device, server } = result;
