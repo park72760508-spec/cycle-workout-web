@@ -11443,12 +11443,16 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
 
 다음 JSON 형식으로 응답해주세요:
 {
-  "selectedCategory": "선정된 카테고리",
+  "condition_score": 0~100 (컨디션 점수, 정수),
+  "training_status": "Recovery Needed" | "Building Base" | "Ready to Race" | "Peaking" | "Overreaching",
+  "vo2max_estimate": 20~100 (VO2max 추정값 ml/kg/min, 정수),
+  "coach_comment": "사용자 훈련 상황을 반영한 한국어 코멘트 (2~3문장)",
+  "selectedCategory": "선정된 카테고리 (예: Endurance (Z2))",
   "categoryReason": "카테고리 선정 이유",
   "recommendations": [
-    { "rank": 1, "workoutId": 숫자(1번=약한 강도, 사용 가능한 워크아웃 목록의 ID), "reason": "추천 이유" },
+    { "rank": 1, "workoutId": 숫자(1번=약한 강도), "reason": "추천 이유" },
     { "rank": 2, "workoutId": 숫자(2번=중간 강도, 1번과 다른 ID), "reason": "추천 이유" },
-    { "rank": 3, "workoutId": 숫자(3번=강한 강도, 1번·2번과 다른 ID), "reason": "추천 이유" }
+    { "rank": 3, "workoutId": 숫자(3번=강한 강도, 1·2번과 다른 ID), "reason": "추천 이유" }
   ]
 }
 중요: recommendations의 workoutId는 1·2·3번 각각 서로 달라야 합니다. rank 1=약, 2=중, 3=강 순서를 반드시 지키세요.
@@ -11942,17 +11946,20 @@ function estimateWorkoutTSS(workout, ftp) {
   return Math.round(tss);
 }
 
-// 추천 워크아웃 표시
+// 추천 워크아웃 표시 (대시보드와 동일: 점수, 훈련 상태, VO2max, 훈련 코멘트, AI 추천 블록 + 워크아웃 목록)
 function displayWorkoutRecommendations(recommendationData, workoutDetails, date) {
   const contentDiv = document.getElementById('workoutRecommendationContent');
   
   const selectedCategory = recommendationData.selectedCategory || '알 수 없음';
   const categoryReason = recommendationData.categoryReason || '';
   const recommendations = recommendationData.recommendations || [];
+  const conditionScore = typeof recommendationData.condition_score === 'number' ? Math.max(0, Math.min(100, recommendationData.condition_score)) : 50;
+  const trainingStatus = (recommendationData.training_status && String(recommendationData.training_status).trim()) || 'Building Base';
+  const vo2maxEstimate = typeof recommendationData.vo2max_estimate === 'number' ? Math.max(20, Math.min(100, recommendationData.vo2max_estimate)) : 45;
+  const coachComment = (recommendationData.coach_comment && String(recommendationData.coach_comment).trim()) || categoryReason || 'AI 추천';
   
   const ftp = Number(window.currentUser?.ftp || window.userFTP || 0) || 200;
   
-  // 워크아웃 ID로 상세 정보 매핑
   const workoutMap = {};
   workoutDetails.forEach(w => {
     workoutMap[w.id] = w;
@@ -11960,26 +11967,47 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   
   let html = `
     <div class="workout-recommendation-container">
-      <div class="result-stats" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px;">
-        <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.77em; color: #aaa; margin-bottom: 4px;">선정 카테고리</div>
-          <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${selectedCategory}</div>
+      <div class="ai-recommend-dashboard-blocks" style="margin-bottom: 20px;">
+        <div class="coach-comment-block" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <p style="color: #ffffff; font-size: 0.7em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${coachComment.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
         </div>
-        <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.77em; color: #aaa; margin-bottom: 4px;">추천 개수</div>
-          <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${recommendations.length}개</div>
+        <div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+          <div class="stat-item" style="background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 0.65em; color: #aaa; margin-bottom: 4px;">컨디션 점수</div>
+            <div style="font-size: 1.2em; font-weight: 700; color: #00d4aa;">${conditionScore}</div>
+          </div>
+          <div class="stat-item" style="background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 0.65em; color: #aaa; margin-bottom: 4px;">훈련 상태</div>
+            <div style="font-size: 0.75em; font-weight: 600; color: #00d4aa;">${trainingStatus}</div>
+          </div>
+          <div class="stat-item" style="background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 0.65em; color: #aaa; margin-bottom: 4px;">VO₂max 추정</div>
+            <div style="font-size: 0.75em; font-weight: 600; color: #00d4aa;">${vo2maxEstimate} ml/kg/min</div>
+          </div>
         </div>
-        <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
-          <div class="result-stat-label" style="font-size: 0.77em; color: #aaa; margin-bottom: 4px;">날짜</div>
-          <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${date}</div>
+        <div id="aiRecommendCategoryBlock" class="ai-recommend-category-block" style="background: rgba(0, 212, 170, 0.15); border: 1px solid rgba(0, 212, 170, 0.4); border-radius: 8px; padding: 12px 16px; cursor: pointer; text-align: center; margin-bottom: 16px;" onclick="var el = document.getElementById('recommendations-list-anchor'); if(el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });" title="클릭 시 추천 워크아웃 목록으로 이동">
+          <span style="font-size: 0.7em; color: #aaa;">AI 추천: </span><span style="font-size: 0.85em; font-weight: 700; color: #00d4aa;">${selectedCategory}</span>
+          <div style="font-size: 0.55em; color: #888; margin-top: 4px;">클릭 시 추천 워크아웃으로 이동</div>
         </div>
       </div>
-      
-      <div class="category-info" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+      <div class="result-stats" style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 12px;">
+        <div class="result-stat-item" style="flex: 1; min-width: 80px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 8px; text-align: center;">
+          <div class="result-stat-label" style="font-size: 0.65em; color: #aaa;">선정 카테고리</div>
+          <div class="result-stat-value" style="font-size: 0.65em; color: #00d4aa; font-weight: bold;">${selectedCategory}</div>
+        </div>
+        <div class="result-stat-item" style="flex: 1; min-width: 80px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 8px; text-align: center;">
+          <div class="result-stat-label" style="font-size: 0.65em; color: #aaa;">추천 개수</div>
+          <div class="result-stat-value" style="font-size: 0.65em; color: #00d4aa; font-weight: bold;">${recommendations.length}개</div>
+        </div>
+        <div class="result-stat-item" style="flex: 1; min-width: 80px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 8px; text-align: center;">
+          <div class="result-stat-label" style="font-size: 0.65em; color: #aaa;">날짜</div>
+          <div class="result-stat-value" style="font-size: 0.65em; color: #00d4aa; font-weight: bold;">${date}</div>
+        </div>
+      </div>
+      <div class="category-info" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
         <p class="category-reason" style="color: #ffffff; font-size: 0.63em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${categoryReason}</p>
       </div>
-      
-      <div class="recommendations-list">
+      <div id="recommendations-list-anchor" class="recommendations-list">
   `;
   
   recommendations.forEach((rec, index) => {
