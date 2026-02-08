@@ -16735,22 +16735,22 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
       existingList.remove();
     }
     
-    // 저장된 기기 목록 컨테이너 생성
+    // 저장된 기기 목록 컨테이너 (구분선은 디바이스+저장 목록 아래에, 글자는 디바이스 텍스트 시작 위치에 맞춤)
     const savedListContainer = document.createElement('div');
     savedListContainer.id = savedListId;
-    savedListContainer.style.cssText = 'border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 8px; margin-top: 8px;';
+    savedListContainer.style.cssText = 'padding-top: 4px; margin-top: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; margin-bottom: 8px;';
     
-    // 저장된 기기 목록 헤더
+    // 저장된 기기 목록 헤더 (디바이스 글자 시작 위치와 맞춤: 아이콘 24px + gap 10px = 34px)
     const header = document.createElement('div');
-    header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px; margin-bottom: 4px;';
+    header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px 4px 34px; margin-bottom: 4px; text-align: left;';
     header.textContent = `⭐ 저장된 ${deviceTypeLabels[deviceType]}`;
     savedListContainer.appendChild(header);
     
-    // 각 저장된 기기 항목 추가
+    // 각 저장된 기기 항목 추가 (같은 왼쪽 맞춤)
     savedDevices.forEach(saved => {
       const savedItem = document.createElement('div');
       savedItem.className = 'mobile-bluetooth-dropdown-item';
-      savedItem.style.cssText = 'padding: 8px 12px; font-size: 13px; cursor: pointer;';
+      savedItem.style.cssText = 'padding: 8px 12px 8px 34px; font-size: 13px; cursor: pointer; text-align: left;';
       savedItem.onclick = (e) => {
         e.stopPropagation();
         console.log('[Mobile Dashboard] 저장된 기기 클릭:', { 
