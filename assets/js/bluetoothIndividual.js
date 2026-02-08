@@ -4336,8 +4336,11 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
         savedDevices.forEach(saved => {
             const savedItem = document.createElement('div');
             savedItem.className = 'bluetooth-dropdown-item';
-            savedItem.style.cssText = 'padding: 8px 12px 8px 34px; font-size: 13px; cursor: pointer; text-align: left;';
-            savedItem.onclick = (e) => {
+            savedItem.style.cssText = 'padding: 8px 12px 8px 34px; font-size: 13px; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px;';
+
+            const labelWrap = document.createElement('span');
+            labelWrap.style.cssText = 'flex: 1; min-width: 0;';
+            labelWrap.onclick = (e) => {
                 e.stopPropagation();
                 connectBluetoothDevice(deviceType, saved.deviceId);
             };
@@ -4350,8 +4353,26 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
             deviceName.textContent = ' (' + (saved.name || '') + ')';
             deviceName.style.cssText = 'color: #888; font-size: 11px;';
 
-            savedItem.appendChild(nickname);
-            savedItem.appendChild(deviceName);
+            labelWrap.appendChild(nickname);
+            labelWrap.appendChild(deviceName);
+            savedItem.appendChild(labelWrap);
+
+            const deleteBtn = document.createElement('span');
+            deleteBtn.textContent = '삭제';
+            deleteBtn.style.cssText = 'color: #f87171; font-size: 12px; flex-shrink: 0; cursor: pointer;';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                const removeFn = typeof window.removeSavedDevice === 'function' ? window.removeSavedDevice : null;
+                if (removeFn && removeFn(saved.deviceId, deviceType)) {
+                    if (typeof updateBluetoothIndividualDropdownWithSavedDevices === 'function') {
+                        updateBluetoothIndividualDropdownWithSavedDevices();
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast('저장된 기기가 목록에서 삭제되었습니다.');
+                    }
+                }
+            };
+            savedItem.appendChild(deleteBtn);
             savedListContainer.appendChild(savedItem);
         });
 

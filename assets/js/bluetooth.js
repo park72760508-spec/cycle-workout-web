@@ -84,10 +84,25 @@ function getSavedDevicesByType(deviceType) {
   return loadSavedDevices().filter(d => d.deviceType === deviceType);
 }
 
+// 저장된 기기 삭제 (캐시/localStorage에서 제거)
+function removeSavedDevice(deviceId, deviceType) {
+  try {
+    const saved = loadSavedDevices();
+    const filtered = saved.filter(d => !(d.deviceId === deviceId && d.deviceType === deviceType));
+    if (filtered.length === saved.length) return false;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    return true;
+  } catch (error) {
+    console.error('Failed to remove saved device:', error);
+    return false;
+  }
+}
+
 // 전역 노출 (app.js에서 사용)
 window.getSavedDevicesByType = window.getSavedDevicesByType || getSavedDevicesByType;
 window.loadSavedDevices = window.loadSavedDevices || loadSavedDevices;
 window.saveDevice = window.saveDevice || saveDevice;
+window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
 
 // 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
