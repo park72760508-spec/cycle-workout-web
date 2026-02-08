@@ -15918,17 +15918,8 @@ function setMobilePaused(isPaused) {
     btnImg.setAttribute('href', wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png');
   }
   
-  // 시작 버튼 펄스: 일시정지 시 재생·표시, 재개 시 중지·숨김
-  const pulseWrap = document.getElementById('mobileStartPulseWrap');
-  if (pulseWrap) {
-    if (wantPause) {
-      pulseWrap.classList.add('pulse-active');
-      pulseWrap.classList.remove('pulse-hidden');
-    } else {
-      pulseWrap.classList.remove('pulse-active');
-      pulseWrap.classList.add('pulse-hidden');
-    }
-  }
+  // 시작 버튼 펄스: 트레이너/파워미터 연결 시에만, 일시정지=재생·표시 / 재개=중지·숨김 (updateMobileStartPulse에서 일괄 처리)
+  if (typeof updateMobileStartPulse === 'function') updateMobileStartPulse();
   
   if (typeof showToast === "function") {
     showToast(wantPause ? "일시정지됨" : "재개됨");
@@ -15939,11 +15930,19 @@ function setMobilePaused(isPaused) {
 
 /**
  * 모바일 대시보드: 시작 버튼 펄스 표시 여부
- * 시작 전 또는 일시정지 = 펄스 재생·표시 / 시작 후 재생 중 = 펄스 중지·숨김
+ * 조건: 연결 버튼에 스마트 트레이너 또는 파워미터가 연결된 경우에만 펄스 구동.
+ * - 시작 전 또는 일시정지 = 펄스 재생·표시 / 시작 후 재생 중 = 펄스 중지·숨김
+ * - 트레이너·파워미터 미연결 시 펄스 미동작(숨김)
  */
 function updateMobileStartPulse() {
   const pulseWrap = document.getElementById('mobileStartPulseWrap');
   if (!pulseWrap) return;
+  var hasTrainerOrPm = !!(window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+  if (!hasTrainerOrPm) {
+    pulseWrap.classList.remove('pulse-active');
+    pulseWrap.classList.add('pulse-hidden');
+    return;
+  }
   const mts = window.mobileTrainingState;
   const showPulse = !mts || !mts.timerId || mts.paused === true;
   if (showPulse) {
@@ -16914,6 +16913,9 @@ function updateMobileBluetoothConnectionStatus() {
   }
 
   updateMobileConnectionButtonColor();
+
+  // 연결 상태 변경 시 시작 버튼 펄스 갱신 (트레이너/파워미터 연결 시에만 펄스 구동)
+  if (typeof updateMobileStartPulse === 'function') updateMobileStartPulse();
 }
 
 /**
