@@ -12004,7 +12004,7 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
           </div>
         </div>
         <div id="aiRecommendCategoryBlock" class="ai-recommend-category-block" style="background: rgba(0, 212, 170, 0.15); border: 1px solid rgba(0, 212, 170, 0.4); border-radius: 8px; padding: 12px 16px; cursor: pointer; text-align: center; margin-bottom: 16px;" onclick="var el = document.getElementById('recommendations-list-anchor'); if(el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });" title="클릭 시 추천 워크아웃 목록으로 이동">
-          <span style="font-size: 0.7em; color: #aaa;">AI 추천: </span><span style="font-size: 0.85em; font-weight: 700; color: #00d4aa;">${selectedCategory}</span>
+          <span style="font-size: 1.5em; color: #aaa;">AI 추천: </span><span style="font-size: 1.5em; font-weight: 700; color: #00d4aa;">${selectedCategory}</span>
           <div style="font-size: 0.55em; color: #888; margin-top: 4px;">클릭 시 추천 워크아웃으로 이동</div>
         </div>
       </div>
