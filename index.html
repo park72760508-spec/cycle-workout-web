@@ -3346,6 +3346,17 @@
 </div>
 
   <!-- ========== 모바일 대시보드 화면 ========== -->
+  <style>
+    /* 모바일 개인훈련 대시보드: 시작 버튼 빨강 펄스 (시작 전·재생 중에만, 일시정지 시 중지) */
+    #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring {
+      animation: mobile-start-pulse 1.2s ease-in-out infinite;
+      transform-origin: center;
+    }
+    @keyframes mobile-start-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.85; }
+      50% { transform: scale(1.4); opacity: 0.2; }
+    }
+  </style>
   <div id="mobileDashboardScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Pretendard', sans-serif; margin: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh;">
     <!-- 헤더 (individual.html과 동일) -->
     <div class="mobile-dashboard-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background-color: #1e1e1e; border-bottom: 1px solid #333; position: relative; z-index: 10001;">
@@ -3440,6 +3451,10 @@
               <image class="svg-btn-icon" x="52" y="213" width="16" height="16" href="assets/img/next0.png" />
             </g>
         
+            <!-- 시작 버튼 중심 빨강 펄스 (시작 전·재생 중: pulse-active, 일시정지 시 제거) -->
+            <g id="mobileStartPulseWrap" class="mobile-start-pulse-wrap pulse-active" transform="translate(100, 221)">
+              <circle class="mobile-start-pulse-ring" cx="0" cy="0" r="14" fill="none" stroke="#ff4444" stroke-width="2" />
+            </g>
             <g class="svg-btn-group" onclick="handleMobileToggle()">
               <circle class="svg-neon-circle" cx="100" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
               <image id="imgMobileToggle" class="svg-btn-icon" x="92" y="213" width="16" height="16" href="assets/img/play0.png" />
