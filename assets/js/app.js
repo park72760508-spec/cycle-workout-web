@@ -12857,6 +12857,9 @@ async function startMobileDashboard() {
     // 속도계 초기화 (눈금, 레이블, 바늘 애니메이션) - FTP 값 반영
     initializeMobileGauge();
     
+    // 시작 버튼 펄스 상태 동기화 (시작 전·재생 중 = 표시, 일시정지 = 숨김)
+    if (typeof updateMobileStartPulse === 'function') updateMobileStartPulse();
+    
     // 워크아웃이 선택되어 있으면 세그먼트 그래프 그리기
     if (window.currentWorkout && window.currentWorkout.segments && window.currentWorkout.segments.length > 0) {
       const canvas = safeGetElement('mobileIndividualSegmentGraph');
@@ -15912,11 +15915,30 @@ function setMobilePaused(isPaused) {
     btnImg.setAttribute('href', wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png');
   }
   
+  // 시작 버튼 펄스: 일시정지 시 중지, 재개 시 재생
+  const pulseWrap = document.getElementById('mobileStartPulseWrap');
+  if (pulseWrap) {
+    if (wantPause) pulseWrap.classList.remove('pulse-active');
+    else pulseWrap.classList.add('pulse-active');
+  }
+  
   if (typeof showToast === "function") {
     showToast(wantPause ? "일시정지됨" : "재개됨");
   }
   
   console.log('[Mobile Dashboard] 일시정지 상태 변경:', wantPause ? '일시정지' : '재개');
+}
+
+/**
+ * 모바일 대시보드: 시작 버튼 펄스 표시 여부 (시작 전·재생 중 = 표시, 일시정지 = 숨김)
+ */
+function updateMobileStartPulse() {
+  const pulseWrap = document.getElementById('mobileStartPulseWrap');
+  if (!pulseWrap) return;
+  const mts = window.mobileTrainingState;
+  const showPulse = !mts || !mts.timerId || mts.paused !== true;
+  if (showPulse) pulseWrap.classList.add('pulse-active');
+  else pulseWrap.classList.remove('pulse-active');
 }
 
 /**
