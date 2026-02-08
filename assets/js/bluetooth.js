@@ -207,8 +207,119 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
   }
 }
 
+// 저장된 기기 ID로 직접 연결 (Bluetooth Individual 등에서 특정 저장 기기 클릭 시 사용)
+async function connectToSavedDeviceById(deviceId, deviceType) {
+  const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === deviceType);
+  if (!saved) {
+    throw new Error('저장된 기기를 찾을 수 없습니다.');
+  }
+  const result = await reconnectToSavedDevice(deviceId, deviceType);
+  if (!result) return null;
+  const { device, server } = result;
+
+  const _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
+  const _safeGetChar = async (svc, uuid) => { if (!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
+
+  if (deviceType === 'heartRate') {
+    let service;
+    try { service = await server.getPrimaryService('heart_rate'); } catch (e) { service = await server.getPrimaryService(UUIDS.HR_SERVICE); }
+    let characteristic;
+    try { characteristic = await service.getCharacteristic('heart_rate_measurement'); } catch (e) { characteristic = await service.getCharacteristic(0x2A37); }
+    await characteristic.startNotifications();
+    characteristic.addEventListener('characteristicvaluechanged', handleHeartRateData);
+    window.connectedDevices.heartRate = { name: device.name || saved.name, device, server, characteristic };
+    window.isSensorConnected = true;
+    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'heartRate' } })); } catch (e) {}
+    device.addEventListener('gattserverdisconnected', () => handleDisconnect('heartRate', device));
+    saveDevice(saved.deviceId, device.name || saved.name, 'heartRate', saved.nickname);
+    if (typeof updateDevicesList === 'function') updateDevicesList();
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+    if (typeof showToast === 'function') showToast('✅ ' + (saved.nickname || device.name || saved.name) + ' 연결 성공');
+    return { device, server };
+  }
+
+  if (deviceType === 'trainer') {
+    let dataChar = null, dataProtocol = 'UNKNOWN';
+    if (!dataChar) {
+      const svc = await _safeGetService(UUIDS.FTMS_SERVICE);
+      dataChar = await _safeGetChar(svc, UUIDS.FTMS_DATA);
+      if (dataChar) dataProtocol = 'FTMS';
+    }
+    if (!dataChar) {
+      const svc = await _safeGetService(UUIDS.CPS_SERVICE);
+      dataChar = await _safeGetChar(svc, UUIDS.CPS_DATA);
+      if (dataChar) dataProtocol = 'CPS';
+    }
+    if (!dataChar) {
+      const svc = await _safeGetService(UUIDS.CYCLEOPS_SERVICE);
+      if (svc) {
+        try {
+          const chars = await svc.getCharacteristics();
+          if (chars.length > 0) { dataChar = chars[0]; dataProtocol = 'CYCLEOPS_LEGACY'; }
+        } catch (e) {}
+      }
+    }
+    if (!dataChar) throw new Error('데이터 전송 서비스를 찾을 수 없습니다.');
+    await dataChar.startNotifications();
+    const parser = (dataProtocol === 'FTMS') ? handleTrainerData : handlePowerMeterData;
+    dataChar.addEventListener('characteristicvaluechanged', parser);
+    let controlChar = null, controlProtocol = 'NONE';
+    const svcFtms = await _safeGetService(UUIDS.FTMS_SERVICE);
+    controlChar = await _safeGetChar(svcFtms, UUIDS.FTMS_CONTROL);
+    if (controlChar) controlProtocol = 'FTMS';
+    if (!controlChar) {
+      const svcCy = await _safeGetService(UUIDS.CYCLEOPS_SERVICE);
+      controlChar = await _safeGetChar(svcCy, UUIDS.CYCLEOPS_CONTROL);
+      if (controlChar) controlProtocol = 'CYCLEOPS';
+    }
+    if (!controlChar) {
+      const svcWahoo = await _safeGetService(UUIDS.WAHOO_SERVICE);
+      controlChar = await _safeGetChar(svcWahoo, UUIDS.WAHOO_CONTROL);
+      if (controlChar) controlProtocol = 'WAHOO';
+    }
+    window.connectedDevices.trainer = {
+      name: device.name || saved.name, device, server, characteristic: dataChar, controlPoint: controlChar,
+      protocol: controlProtocol, dataProtocol: dataProtocol, realProtocol: controlProtocol
+    };
+    window.isSensorConnected = true;
+    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'trainer' } })); } catch (e) {}
+    device.addEventListener('gattserverdisconnected', () => handleDisconnect('trainer', device));
+    saveDevice(saved.deviceId, device.name || saved.name, 'trainer', saved.nickname);
+    if (typeof updateDevicesList === 'function') updateDevicesList();
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+    if (typeof showToast === 'function') showToast('✅ ' + (saved.nickname || device.name || saved.name) + ' 연결됨 [' + dataProtocol + ']');
+    if (window.ergController) setTimeout(() => window.ergController.initializeTrainer(), 500);
+    return { device, server };
+  }
+
+  if (deviceType === 'powerMeter') {
+    let service, characteristic;
+    try {
+      service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
+      characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
+    } catch (e) {
+      service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+      characteristic = await service.getCharacteristic(0x2A5B);
+    }
+    await characteristic.startNotifications();
+    characteristic.addEventListener('characteristicvaluechanged', handlePowerMeterData);
+    window.connectedDevices.powerMeter = { name: device.name || saved.name, device, server, characteristic };
+    window.isSensorConnected = true;
+    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'powerMeter' } })); } catch (e) {}
+    device.addEventListener('gattserverdisconnected', () => handleDisconnect('powerMeter', device));
+    saveDevice(saved.deviceId, device.name || saved.name, 'powerMeter', saved.nickname);
+    if (typeof updateDevicesList === 'function') updateDevicesList();
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+    if (typeof showToast === 'function') showToast('✅ ' + (saved.nickname || device.name || saved.name) + ' 연결 성공');
+    return { device, server };
+  }
+
+  return null;
+}
+
 // 전역 노출 (app.js에서 사용)
 window.reconnectToSavedDevice = window.reconnectToSavedDevice || reconnectToSavedDevice;
+window.connectToSavedDeviceById = window.connectToSavedDeviceById || connectToSavedDeviceById;
 window.requestDeviceWithSavedInfo = window.requestDeviceWithSavedInfo || requestDeviceWithSavedInfo;
 window.handleHeartRateData = window.handleHeartRateData || handleHeartRateData;
 window.handlePowerMeterData = window.handlePowerMeterData || handlePowerMeterData;

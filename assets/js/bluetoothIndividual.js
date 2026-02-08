@@ -4263,7 +4263,8 @@ function toggleBluetoothDropdown() {
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
         console.log('[BluetoothIndividual] 드롭다운 닫힘');
     } else {
-        // 드롭다운 열기
+        // 드롭다운 열기 + 저장된 기기 목록 갱신 (모바일 개인훈련 대시보드와 동일 로직)
+        updateBluetoothIndividualDropdownWithSavedDevices();
         dropdown.classList.add('show');
         // 드롭다운 외부 클릭 시 닫기
         setTimeout(() => {
@@ -4283,17 +4284,113 @@ function closeBluetoothDropdownOnOutsideClick(event) {
     }
 }
 
-// 블루투스 디바이스 연결 함수
-async function connectBluetoothDevice(deviceType) {
-    console.log('[BluetoothIndividual] connectBluetoothDevice 호출됨:', deviceType);
-    
+// Bluetooth 개인 훈련 대시보드 드롭다운에 저장된 기기 목록 표시 (모바일 개인훈련 대시보드와 동일 로직)
+function updateBluetoothIndividualDropdownWithSavedDevices() {
+    const dropdown = document.getElementById('bluetoothDropdown');
+    if (!dropdown) return;
+
+    const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function'
+        ? getSavedDevicesByType
+        : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
+
+    if (!getSavedDevicesByTypeFn) {
+        console.warn('[BluetoothIndividual] getSavedDevicesByType 함수를 찾을 수 없습니다.');
+        return;
+    }
+
+    const deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+    const deviceTypeLabels = {
+        trainer: '스마트 트레이너',
+        heartRate: '심박계',
+        powerMeter: '파워미터'
+    };
+
+    deviceTypes.forEach(deviceType => {
+        const savedDevices = getSavedDevicesByTypeFn(deviceType);
+        if (savedDevices.length === 0) return;
+
+        let itemId = '';
+        switch (deviceType) {
+            case 'trainer': itemId = 'bluetoothTrainerItem'; break;
+            case 'heartRate': itemId = 'bluetoothHRItem'; break;
+            case 'powerMeter': itemId = 'bluetoothPMItem'; break;
+        }
+
+        const mainItem = document.getElementById(itemId);
+        if (!mainItem) return;
+
+        const savedListId = 'bluetoothSaved' + deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + 'List';
+        const existingList = document.getElementById(savedListId);
+        if (existingList) existingList.remove();
+
+        const savedListContainer = document.createElement('div');
+        savedListContainer.id = savedListId;
+        savedListContainer.style.cssText = 'border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 8px; margin-top: 8px;';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px; margin-bottom: 4px;';
+        header.textContent = '⭐ 저장된 ' + deviceTypeLabels[deviceType];
+        savedListContainer.appendChild(header);
+
+        savedDevices.forEach(saved => {
+            const savedItem = document.createElement('div');
+            savedItem.className = 'bluetooth-dropdown-item';
+            savedItem.style.cssText = 'padding: 8px 12px; font-size: 13px; cursor: pointer;';
+            savedItem.onclick = (e) => {
+                e.stopPropagation();
+                connectBluetoothDevice(deviceType, saved.deviceId);
+            };
+
+            const nickname = document.createElement('span');
+            nickname.textContent = saved.nickname || saved.name || '알 수 없는 기기';
+            nickname.style.cssText = 'color: #fff;';
+
+            const deviceName = document.createElement('span');
+            deviceName.textContent = ' (' + (saved.name || '') + ')';
+            deviceName.style.cssText = 'color: #888; font-size: 11px;';
+
+            savedItem.appendChild(nickname);
+            savedItem.appendChild(deviceName);
+            savedListContainer.appendChild(savedItem);
+        });
+
+        mainItem.parentNode.insertBefore(savedListContainer, mainItem.nextSibling);
+    });
+}
+
+// 블루투스 디바이스 연결 함수 (deviceType, savedDeviceId 선택)
+// savedDeviceId가 있으면 해당 저장 기기로 재연결, 없으면 새 기기 검색
+async function connectBluetoothDevice(deviceType, savedDeviceId) {
+    console.log('[BluetoothIndividual] connectBluetoothDevice 호출됨:', deviceType, savedDeviceId || '(새 기기 검색)');
+
     // 드롭다운 닫기
     const dropdown = document.getElementById('bluetoothDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
     }
-    
+
+    // 저장된 기기 ID가 있으면 bluetooth.js connectToSavedDeviceById 사용
+    if (savedDeviceId && typeof window.connectToSavedDeviceById === 'function') {
+        try {
+            const result = await window.connectToSavedDeviceById(savedDeviceId, deviceType);
+            if (result) {
+                setTimeout(() => {
+                    updateBluetoothConnectionStatus();
+                    updateFirebaseDevices();
+                    if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+                }, 300);
+            }
+            return;
+        } catch (err) {
+            console.warn('[BluetoothIndividual] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', err);
+            if (typeof showToast === 'function') {
+                showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
+            }
+            // 아래 connectFunction()으로 폴백
+        }
+    }
+
     // 연결 함수가 있는지 확인
     let connectFunction;
     switch (deviceType) {
@@ -4315,13 +4412,9 @@ async function connectBluetoothDevice(deviceType) {
             }
             return;
     }
-    
+
     if (!connectFunction || typeof connectFunction !== 'function') {
         console.error('[BluetoothIndividual] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
-        console.error('[BluetoothIndividual] window.connectTrainer:', typeof window.connectTrainer);
-        console.error('[BluetoothIndividual] window.connectHeartRate:', typeof window.connectHeartRate);
-        console.error('[BluetoothIndividual] window.connectPowerMeter:', typeof window.connectPowerMeter);
-        
         if (typeof showToast === 'function') {
             showToast('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
         } else {
@@ -4329,30 +4422,21 @@ async function connectBluetoothDevice(deviceType) {
         }
         return;
     }
-    
+
     try {
         console.log('[BluetoothIndividual] 블루투스 디바이스 연결 시도:', deviceType);
         await connectFunction();
         console.log('[BluetoothIndividual] 블루투스 디바이스 연결 성공:', deviceType);
-        
-        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
+
         setTimeout(() => {
-            // 연결 상태 업데이트
             updateBluetoothConnectionStatus();
-            
-            // Firebase에 디바이스 정보 업데이트
             updateFirebaseDevices();
-            
-            // updateDevicesList 호출 (bluetooth.js에 있으면)
-            if (typeof window.updateDevicesList === 'function') {
-                window.updateDevicesList();
-            }
-        }, 500); // 500ms 대기 후 업데이트 (연결 완료 대기)
+            if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+        }, 500);
     } catch (error) {
         console.error('[BluetoothIndividual] 블루투스 디바이스 연결 실패:', deviceType, error);
-        // 에러는 bluetooth.js의 showToast에서 표시됨
         if (typeof showToast === 'function') {
-            showToast(`연결 실패: ${error.message || '알 수 없는 오류'}`);
+            showToast('연결 실패: ' + (error.message || '알 수 없는 오류'));
         }
     }
 }
