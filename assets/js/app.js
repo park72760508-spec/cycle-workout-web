@@ -16344,48 +16344,20 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
     try {
       result = await reconnectFn(deviceId, deviceType);
       
-      // getDevices() API가 사용 불가능하거나 기기를 찾지 못한 경우 null 반환
+      // getDevices() API 미지원 또는 기기 없음: 기기 검색 화면으로 넘기지 않고 토스트만
       if (!result) {
-        console.warn('[Mobile Dashboard] 저장된 기기 재연결 불가 (getDevices API 미지원 또는 기기 없음), 새 기기 검색으로 진행');
-        // 재연결 불가 시 기존 연결 함수로 폴백 (새 기기 검색)
-        const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-          : deviceType === 'heartRate' ? window.connectHeartRate 
-          : deviceType === 'powerMeter' ? window.connectPowerMeter 
-          : null;
-        
-        if (connectFunction && typeof connectFunction === 'function') {
-          if (typeof showToast === 'function') {
-            showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
-          }
-          await connectFunction();
-          setTimeout(() => {
-            updateMobileBluetoothConnectionStatus();
-          }, 200);
-          return;
-        } else {
-          throw new Error('기기를 찾을 수 없고 새 기기 검색도 불가능합니다.');
+        console.warn('[Mobile Dashboard] 저장된 기기 재연결 불가 (getDevices API 미지원 또는 기기 없음)');
+        if (typeof showToast === 'function') {
+          showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴(스마트 트레이너/심박계/파워미터)에서 새로 연결해주세요.');
         }
+        return;
       }
     } catch (reconnectError) {
-      console.warn('[Mobile Dashboard] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', reconnectError);
-      // 재연결 실패 시 기존 연결 함수로 폴백 (새 기기 검색)
-      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-        : deviceType === 'heartRate' ? window.connectHeartRate 
-        : deviceType === 'powerMeter' ? window.connectPowerMeter 
-        : null;
-      
-      if (connectFunction && typeof connectFunction === 'function') {
-        if (typeof showToast === 'function') {
-          showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
-        }
-        await connectFunction();
-        setTimeout(() => {
-          updateMobileBluetoothConnectionStatus();
-        }, 200);
-        return;
-      } else {
-        throw reconnectError; // 연결 함수가 없으면 원래 에러를 다시 던짐
+      console.warn('[Mobile Dashboard] 저장된 기기 재연결 실패:', reconnectError);
+      if (typeof showToast === 'function') {
+        showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
       }
+      return; // 기기 검색 화면으로 넘기지 않음
     }
     
     const { device, server } = result;
