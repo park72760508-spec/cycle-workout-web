@@ -11366,7 +11366,9 @@ ${challenge === 'PRO' ? `
      * 목적과 무관한 워크아웃은 절대 추천하지 마세요.
      * 예를 들어, Racing 목적 사용자에게 Fitness 목적의 저강도 훈련을 추천하면 안 됩니다.
      * 각 목적에 맞는 특화된 훈련을 추천해야 합니다.
-${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basisRaw}" 기반) 워크아웃 중에서 **목적(${challenge})·등급(${grade}) 가중**을 적용해 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.` : `   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.`}
+   - **추천 순서(강도 순)**: 1번 = 가장 약한 강도(가벼운 훈련), 2번 = 중간 강도, 3번 = 가장 강한 강도(부하가 큰 훈련). 반드시 이 순서로 제시하세요.
+   - **서로 다른 워크아웃**: 3개의 추천은 반드시 서로 다른 워크아웃이어야 합니다. 동일한 workoutId를 두 번 이상 추천하지 마세요. 1번·2번·3번 각각 다른 workoutId를 사용하세요.
+${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basisRaw}" 기반) 워크아웃 중에서 **목적(${challenge})·등급(${grade}) 가중**을 적용해, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.` : `   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 맞는, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.`}
    
    - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
      * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, **목적(${challenge}) 달성 관점**)
@@ -11382,24 +11384,12 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
   "selectedCategory": "선정된 카테고리",
   "categoryReason": "카테고리 선정 이유",
   "recommendations": [
-    {
-      "rank": 1,
-      "workoutId": 워크아웃 ID (숫자),
-      "reason": "추천 이유"
-    },
-    {
-      "rank": 2,
-      "workoutId": 워크아웃 ID (숫자),
-      "reason": "추천 이유"
-    },
-    {
-      "rank": 3,
-      "workoutId": 워크아웃 ID (숫자),
-      "reason": "추천 이유"
-    }
+    { "rank": 1, "workoutId": 워크아웃 ID (숫자, 1번은 가장 약한 강도), "reason": "추천 이유" },
+    { "rank": 2, "workoutId": 워크아웃 ID (숫자, 2번은 중간 강도, 1번과 반드시 다른 ID), "reason": "추천 이유" },
+    { "rank": 3, "workoutId": 워크아웃 ID (숫자, 3번은 가장 강한 강도, 1·2번과 반드시 다른 ID), "reason": "추천 이유" }
   ]
 }
-
+중요: recommendations의 workoutId는 1·2·3번 각각 서로 달라야 합니다. rank 1=약한 강도, 2=중간, 3=강한 강도 순서를 지키세요.
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
     // 7. Gemini API 호출
@@ -11790,6 +11780,20 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
       throw new Error('AI 응답에 필수 정보가 누락되었습니다.');
     }
     
+    // 추천 배열: workoutId 중복 제거(먼저 나온 rank 유지), rank 1·2·3 순 정렬
+    const rawRecs = recommendationData.recommendations;
+    const seenIds = new Set();
+    const deduped = [];
+    for (let i = 0; i < rawRecs.length; i++) {
+      const r = rawRecs[i];
+      const id = r.workoutId != null ? Number(r.workoutId) : null;
+      if (id == null || seenIds.has(id)) continue;
+      seenIds.add(id);
+      deduped.push({ rank: r.rank != null ? Number(r.rank) : i + 1, workoutId: id, reason: r.reason || '' });
+    }
+    deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    recommendationData.recommendations = deduped.slice(0, 3);
+    
     // 8. 추천 워크아웃 표시
     displayWorkoutRecommendations(recommendationData, workoutDetails, date);
     
@@ -11848,6 +11852,34 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
   }
 }
 
+/**
+ * 워크아웃 예상 TSS 추정 (세그먼트 강도·시간 기반)
+ * TSS = (duration_h) * (IF)^2 * 100, IF = 가중 평균 강도(FTP 대비)
+ */
+function estimateWorkoutTSS(workout, ftp) {
+  if (!workout || !ftp || ftp <= 0) return null;
+  const segs = workout.segments || [];
+  let totalSec = Number(workout.total_seconds) || Number(workout.totalSeconds) || 0;
+  if (totalSec <= 0 && segs.length > 0) {
+    totalSec = segs.reduce((sum, s) => sum + (segDurationSec(s) || 0), 0);
+  }
+  if (totalSec <= 0) return null;
+  var weightedIfSum = 0;
+  var totalWeight = 0;
+  for (var i = 0; i < segs.length; i++) {
+    var dur = segDurationSec(segs[i]) || 0;
+    if (dur <= 0) continue;
+    var pct = getSegmentFtpPercent(segs[i]) || 0;
+    var ifSeg = pct > 0 ? pct / 100 : 0.5;
+    weightedIfSum += dur * ifSeg;
+    totalWeight += dur;
+  }
+  var avgIF = totalWeight > 0 ? weightedIfSum / totalWeight : 0.65;
+  var hours = totalSec / 3600;
+  var tss = hours * (avgIF * avgIF) * 100;
+  return Math.round(tss);
+}
+
 // 추천 워크아웃 표시
 function displayWorkoutRecommendations(recommendationData, workoutDetails, date) {
   const contentDiv = document.getElementById('workoutRecommendationContent');
@@ -11855,6 +11887,8 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   const selectedCategory = recommendationData.selectedCategory || '알 수 없음';
   const categoryReason = recommendationData.categoryReason || '';
   const recommendations = recommendationData.recommendations || [];
+  
+  const ftp = Number(window.currentUser?.ftp || window.userFTP || 0) || 200;
   
   // 워크아웃 ID로 상세 정보 매핑
   const workoutMap = {};
@@ -11899,6 +11933,8 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     
     const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
     const rankBadge = ['🥇', '🥈', '🥉'][index] || `${rec.rank}위`;
+    const expectedTSS = estimateWorkoutTSS(workout, ftp);
+    const tssLabel = expectedTSS != null ? `<span class="workout-expected-tss" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">예상 TSS ${expectedTSS}</span>` : '';
     
     html += `
       <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
@@ -11909,6 +11945,7 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
             <div class="workout-meta" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 0.595em; color: #aaa;">
               <span class="workout-category" style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 4px 10px; border-radius: 12px;">${workout.author || '카테고리 없음'}</span>
               <span class="workout-duration" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">${totalMinutes}분</span>
+              ${tssLabel}
             </div>
           </div>
           <div class="recommendation-reason-wrapper" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
