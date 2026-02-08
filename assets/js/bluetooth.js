@@ -39,6 +39,8 @@ window._lastCrankData = {};
 
 // ========== Smart Pairing: 기기 저장 및 관리 ==========
 const STORAGE_KEY = 'stelvio_saved_devices';
+// 인도어 훈련장 등 다수 기기 환경: 브라우저 피커 목록 상한(참고용). 네이티브 requestDevice 피커는 브라우저가 제어.
+const MAX_BLUETOOTH_DEVICES_IN_LIST = 50;
 
 // 저장된 기기 로드
 function loadSavedDevices() {
@@ -108,7 +110,7 @@ window.getSavedDevicesByType = window.getSavedDevicesByType || getSavedDevicesBy
 window.loadSavedDevices = window.loadSavedDevices || loadSavedDevices;
 window.saveDevice = window.saveDevice || saveDevice;
 window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
-window.MAX_BLUETOOTH_DEVICES_IN_LIST = typeof MAX_BLUETOOTH_DEVICES_IN_LIST !== 'undefined' ? MAX_BLUETOOTH_DEVICES_IN_LIST : 50;
+window.MAX_BLUETOOTH_DEVICES_IN_LIST = MAX_BLUETOOTH_DEVICES_IN_LIST;
 
 // 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
@@ -123,9 +125,6 @@ function showNicknameModal(deviceName, callback) {
   }
   return false;
 }
-
-// 인도어 훈련장 등 다수 기기 환경: 브라우저 피커에 표시할 목록 상한(참고용). 네이티브 requestDevice 피커는 브라우저가 제어.
-const MAX_BLUETOOTH_DEVICES_IN_LIST = 50;
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
 // savedDeviceName이 있으면 "저장된 디바이스만" 보이도록 namePrefix+서비스 조합 필터 사용
