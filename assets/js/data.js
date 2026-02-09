@@ -137,7 +137,8 @@ function selectSampleWorkout(w) {
   document.getElementById("previewWorkoutName").textContent = w.name;
   document.getElementById("previewDuration").textContent = w.totalMinutes + "분";
   document.getElementById("previewIntensity").textContent = w.intensity + "%";
-  document.getElementById("previewTSS").textContent = w.tss;
+  var tssVal = w.tss;
+  document.getElementById("previewTSS").textContent = (tssVal != null && tssVal !== '') ? String(tssVal) : '0';
 
   const segDiv = document.getElementById("segmentPreview");
   segDiv.innerHTML = w.segments

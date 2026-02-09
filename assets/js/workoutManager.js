@@ -3803,6 +3803,18 @@ function getWorkoutDominantZone(workout) {
 }
 
 /**
+ * 세그먼트 지속시간(초) 추출 - duration_sec / duration 모두 지원 (API·캐시 필드명 통일)
+ */
+function getSegmentDurationSec(seg) {
+  if (!seg) return 0;
+  var sec = Number(seg.duration_sec);
+  if (sec > 0) return Math.floor(sec);
+  sec = Number(seg.duration);
+  if (sec > 0) return Math.floor(sec);
+  return 0;
+}
+
+/**
  * 워크아웃 TSS 추정 (NP 근사 기반) - ftp_pct, ftp_pctz, dual 등 target_type 지원
  */
 function estimateWorkoutTSS(workout) {
@@ -3810,7 +3822,7 @@ function estimateWorkoutTSS(workout) {
   let T = 0;
   let sumI4t = 0;
   workout.segments.forEach(seg => {
-    const t = Number(seg.duration_sec) || 0;
+    const t = getSegmentDurationSec(seg);
     if (t <= 0) return;
     const ftpPercent = getSegmentFtpPercentForPreview(seg);
     let I1 = ftpPercent / 100;
@@ -4912,47 +4924,47 @@ function updateWorkoutPreview() {
   
   if (workout.segments && Array.isArray(workout.segments) && workout.segments.length > 0) {
     let weightedSum = 0;
-    
     workout.segments.forEach(segment => {
-      const duration = Number(segment.duration_sec) || 0;
-      const intensity = Number(segment.target_value) || 0;
-      weightedSum += (duration * intensity);
+      const duration = getSegmentDurationSec(segment);
+      const intensity = typeof getSegmentFtpPercentForPreview === 'function'
+        ? getSegmentFtpPercentForPreview(segment)
+        : (Number(segment.target_value) || 0);
+      weightedSum += duration * intensity;
       totalDuration += duration;
     });
-    
     if (totalDuration > 0) {
       avgIntensity = Math.round(weightedSum / totalDuration);
     }
   }
-  
   if (intensityEl) intensityEl.textContent = `${avgIntensity}%`;
 
-   // === TSS (NP 근사 기반) ===
-   const T = totalDuration; // 총 지속시간(초)
-   let sumI4t = 0;
-   
-   (workout.segments || []).forEach(seg => {
-     const t = Number(seg.duration_sec) || 0;
-     let I1 = (Number(seg.target_value) || 0) / 100; // 시작 강도(비율)
-   
-     // 램프가 있으면 끝 강도 보정
-     if (seg.ramp && seg.ramp_to_value != null) {
-       const I2 = (Number(seg.ramp_to_value) || I1 * 100) / 100;
-       // 선형 램프 구간의 I^4 평균 근사: (I1^4 + I2^4)/2
-       const i4avg = (Math.pow(I1, 4) + Math.pow(I2, 4)) / 2;
-       sumI4t += i4avg * t;
-     } else {
-       sumI4t += Math.pow(I1, 4) * t;
-     }
-   });
-   
-   const IF = T > 0 ? Math.pow(sumI4t / T, 0.25) : 0;
-   const estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
-   
-   // 예상 TSS 표시 (예상 강도 위치에 TSS 값 표시)
-   if (expectedIntensityEl) expectedIntensityEl.textContent = String(estimatedTSS);
-   
-   if (tssEl) tssEl.textContent = String(estimatedTSS);
+  // === TSS (NP 근사 기반) - duration_sec/duration 통일, getSegmentFtpPercentForPreview 사용 ===
+  var T = totalDuration;
+  if (T <= 0 && workout.total_seconds) T = Number(workout.total_seconds) || 0;
+  if (T <= 0 && workout.totalSeconds) T = Number(workout.totalSeconds) || 0;
+  if (T <= 0 && (workout.segments || []).length > 0) {
+    (workout.segments || []).forEach(function (seg) { T += getSegmentDurationSec(seg); });
+  }
+  var sumI4t = 0;
+  (workout.segments || []).forEach(function (seg) {
+    var t = getSegmentDurationSec(seg);
+    if (t <= 0) return;
+    var ftpPercent = typeof getSegmentFtpPercentForPreview === 'function'
+      ? getSegmentFtpPercentForPreview(seg)
+      : (Number(seg.target_value) || 100);
+    var I1 = ftpPercent / 100;
+    if (seg.ramp && seg.ramp_to_value != null) {
+      var I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
+      sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
+    } else {
+      sumI4t += Math.pow(I1, 4) * t;
+    }
+  });
+  var IF = T > 0 && sumI4t > 0 ? Math.pow(sumI4t / T, 0.25) : 0.65;
+  var estimatedTSS = T > 0 ? Math.round((T / 3600) * (IF * IF) * 100) : 0;
+
+  if (expectedIntensityEl) expectedIntensityEl.textContent = String(estimatedTSS);
+  if (tssEl) tssEl.textContent = String(estimatedTSS);
 
 
   // 그룹화된 세그먼트 프리뷰 사용
