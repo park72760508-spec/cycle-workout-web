@@ -3815,28 +3815,32 @@ function getSegmentDurationSec(seg) {
 }
 
 /**
- * 워크아웃 TSS 추정 (NP 근사 기반) - ftp_pct, ftp_pctz, dual 등 target_type 지원
+ * 워크아웃 TSS 추정 — AI 워크아웃 추천과 동일 로직 (가중 평균 IF)
+ * TSS = (duration_h) * (IF)^2 * 100, IF = 세그먼트 구간별 지속시간 가중 평균 강도(FTP 대비)
+ * ftp_pct, ftp_pctz, dual 등 target_type 지원 (getSegmentFtpPercentForPreview 사용)
  */
 function estimateWorkoutTSS(workout) {
-  if (!workout || !workout.segments || !Array.isArray(workout.segments)) return 0;
-  let T = 0;
-  let sumI4t = 0;
-  workout.segments.forEach(seg => {
-    const t = getSegmentDurationSec(seg);
-    if (t <= 0) return;
-    const ftpPercent = getSegmentFtpPercentForPreview(seg);
-    let I1 = ftpPercent / 100;
-    if (seg.ramp && seg.ramp_to_value != null) {
-      const I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
-      sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
-    } else {
-      sumI4t += Math.pow(I1, 4) * t;
-    }
-    T += t;
-  });
-  if (T <= 0) return 0;
-  const IF = Math.pow(sumI4t / T, 0.25);
-  return Math.round((T / 3600) * (IF * IF) * 100);
+  if (!workout) return 0;
+  var segs = workout.segments || [];
+  var totalSec = Number(workout.total_seconds) || Number(workout.totalSeconds) || 0;
+  if (totalSec <= 0 && segs.length > 0) {
+    for (var i = 0; i < segs.length; i++) totalSec += getSegmentDurationSec(segs[i]);
+  }
+  if (totalSec <= 0) return 0;
+  var weightedIfSum = 0;
+  var totalWeight = 0;
+  for (var j = 0; j < segs.length; j++) {
+    var dur = getSegmentDurationSec(segs[j]);
+    if (dur <= 0) continue;
+    var pct = getSegmentFtpPercentForPreview(segs[j]) || 0;
+    var ifSeg = pct > 0 ? pct / 100 : 0.5;
+    weightedIfSum += dur * ifSeg;
+    totalWeight += dur;
+  }
+  var avgIF = totalWeight > 0 ? weightedIfSum / totalWeight : 0.65;
+  var hours = totalSec / 3600;
+  var tss = hours * (avgIF * avgIF) * 100;
+  return Math.round(tss);
 }
 
 /**
@@ -4938,30 +4942,8 @@ function updateWorkoutPreview() {
   }
   if (intensityEl) intensityEl.textContent = `${avgIntensity}%`;
 
-  // === TSS (NP 근사 기반) - duration_sec/duration 통일, getSegmentFtpPercentForPreview 사용 ===
-  var T = totalDuration;
-  if (T <= 0 && workout.total_seconds) T = Number(workout.total_seconds) || 0;
-  if (T <= 0 && workout.totalSeconds) T = Number(workout.totalSeconds) || 0;
-  if (T <= 0 && (workout.segments || []).length > 0) {
-    (workout.segments || []).forEach(function (seg) { T += getSegmentDurationSec(seg); });
-  }
-  var sumI4t = 0;
-  (workout.segments || []).forEach(function (seg) {
-    var t = getSegmentDurationSec(seg);
-    if (t <= 0) return;
-    var ftpPercent = typeof getSegmentFtpPercentForPreview === 'function'
-      ? getSegmentFtpPercentForPreview(seg)
-      : (Number(seg.target_value) || 100);
-    var I1 = ftpPercent / 100;
-    if (seg.ramp && seg.ramp_to_value != null) {
-      var I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
-      sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
-    } else {
-      sumI4t += Math.pow(I1, 4) * t;
-    }
-  });
-  var IF = T > 0 && sumI4t > 0 ? Math.pow(sumI4t / T, 0.25) : 0.65;
-  var estimatedTSS = T > 0 ? Math.round((T / 3600) * (IF * IF) * 100) : 0;
+  // === TSS — AI 워크아웃 추천과 동일한 예상 TSS 계산 로직 (가중 평균 IF) ===
+  var estimatedTSS = estimateWorkoutTSS(workout);
 
   if (expectedIntensityEl) expectedIntensityEl.textContent = String(estimatedTSS);
   if (tssEl) tssEl.textContent = String(estimatedTSS);
