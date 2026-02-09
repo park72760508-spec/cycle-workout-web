@@ -13368,12 +13368,14 @@ function initializeMobileDashboardWakeLock() {
       wakeLock: null,
       wakeLockVideo: null,
       videoWakeLockInterval: null,
+      wakeLockCheckInterval: null,
       isActive: false
     };
   }
   
   const wakeLockState = window.mobileDashboardWakeLock;
   const wakeLockSupported = 'wakeLock' in navigator;
+  const WAKE_LOCK_CHECK_MS = 10000;
   
   // iOS, 안드로이드 및 크롬 브라우저 감지
   function isIOS() {
@@ -13401,8 +13403,25 @@ function initializeMobileDashboardWakeLock() {
     return /Bluefy/i.test(ua);
   }
   
+  // 훈련 중 주기적으로 Wake Lock 상태 확인 후 해제됐으면 재요청 (통화/문자 복귀 등 대응)
+  function startWakeLockPeriodicCheck() {
+    if (wakeLockState.wakeLockCheckInterval) return;
+    wakeLockState.wakeLockCheckInterval = setInterval(async () => {
+      const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
+      if (!isTrainingRunning || !wakeLockState.isActive || document.visibilityState !== 'visible') return;
+      const needReacquire = !wakeLockState.wakeLock ||
+        (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended));
+      if (needReacquire) {
+        console.log('[Mobile Dashboard Wake Lock] 주기 체크: 화면 꺼짐 방지 재요청');
+        await requestWakeLock();
+      }
+    }, WAKE_LOCK_CHECK_MS);
+    console.log('[Mobile Dashboard Wake Lock] 주기적 재요청 체크 시작');
+  }
+
   // Wake Lock API 사용
   async function requestWakeLock() {
+    wakeLockState.isActive = true;
     // 모바일 크롬(iOS/안드로이드) 또는 Bluefy에서는 비디오 트릭을 우선 사용 (더 안정적)
     if (isMobileChrome() || (isIOS() && isBluefy())) {
       const deviceType = isIOS() ? 'iOS' : 'Android';
@@ -13411,6 +13430,7 @@ function initializeMobileDashboardWakeLock() {
       if (!wakeLockState.wakeLockVideo) {
         startVideoWakeLock();
       }
+      startWakeLockPeriodicCheck();
       return;
     }
     
@@ -13449,6 +13469,7 @@ function initializeMobileDashboardWakeLock() {
         startVideoWakeLock();
       }
     }
+    startWakeLockPeriodicCheck();
   }
   
   // 비디오 트릭 사용 (iOS Safari, Bluefy 및 구형 브라우저 대응)
@@ -13529,8 +13550,13 @@ function initializeMobileDashboardWakeLock() {
     }
   }
   
-  // 화면 잠금 해제
+  // 화면 잠금 해제 (훈련 종료·로그 저장 후에만 호출)
   function releaseWakeLock() {
+    if (wakeLockState.wakeLockCheckInterval) {
+      clearInterval(wakeLockState.wakeLockCheckInterval);
+      wakeLockState.wakeLockCheckInterval = null;
+      console.log('[Mobile Dashboard Wake Lock] 주기적 재요청 체크 중지');
+    }
     if (wakeLockState.wakeLock !== null) {
       wakeLockState.wakeLock.release().then(() => {
         wakeLockState.wakeLock = null;
@@ -15438,9 +15464,8 @@ function startMobileWorkout() {
   // 시작 버튼 펄스: 훈련 시작 후에는 펄스 중지·숨김
   if (typeof updateMobileStartPulse === 'function') updateMobileStartPulse();
 
-  // 화면 꺼짐 방지 활성화 (워크아웃 시작 시)
+  // 화면 꺼짐 방지 활성화 (워크아웃 시작 시) — 주기적 재요청 체크도 함께 시작
   if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.request === 'function') {
-    window.mobileDashboardWakeLockControl.isActive = true;
     // 사용자 상호작용 후 활성화 (브라우저 정책)
     setTimeout(() => {
       window.mobileDashboardWakeLockControl.request();
