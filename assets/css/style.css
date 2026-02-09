@@ -16341,13 +16341,6 @@ body.mobile-dashboard-active {
 /* 버튼 그룹 인터랙션 */
 .svg-btn-group {
   cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-/* 클릭 시 살짝 작아지는 효과 */
-.svg-btn-group:active {
-  transform: scale(0.95);
-  transform-origin: center; /* 중심축 기준 축소 */
 }
 
 /* 검은색 원 + 흰색 실선 + 네온 효과 */
@@ -16355,7 +16348,6 @@ body.mobile-dashboard-active {
   /* 네온 효과: 흰색 그림자를 번지게 하여 빛나는 느낌 연출 */
   filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8)) 
           drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
-  transition: all 0.3s ease;
 }
 
 /* 터치/호버 시 네온 효과 강해짐 */
@@ -16524,7 +16516,6 @@ body.mobile-dashboard-active {
   /* 흰색 버튼이므로 테두리 주변으로 은은한 빛 효과 */
   box-shadow: none; /* SVG 요소라 filter 사용 */
   filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
-  transition: all 0.3s ease;
   cursor: pointer;
 }
 
@@ -16536,10 +16527,6 @@ body.mobile-dashboard-active {
 
 .svg-btn-group {
   cursor: pointer;
-}
-.svg-btn-group:active {
-  transform: scale(0.95);
-  transform-origin: center;
 }
 
 .svg-btn-icon {
