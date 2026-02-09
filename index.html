@@ -1229,15 +1229,29 @@
     #trainingJournalScreen #monthly-analysis-dashboard-root > div {
       border-bottom: none !important;
     }
-    /* 훈련일지 달력: CONNECT WITH STRAVA 우측 범례 - 버튼 높이 안에 2줄, 작고 귀엽게 */
+    /* 훈련일지 달력: CONNECT WITH STRAVA 우측 범례 - 버튼과 수평 정렬, 문구 우측 정렬, 투명도 */
     #trainingJournalScreen .journal-legend {
       font-size: 10px;
       white-space: nowrap;
+      align-items: flex-end;
     }
-    #trainingJournalScreen .journal-legend span span {
+    #trainingJournalScreen .journal-legend .legend-row {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+    #trainingJournalScreen .journal-legend .legend-dot {
       width: 8px;
       height: 8px;
       border-radius: 3px;
+      flex-shrink: 0;
+    }
+    #trainingJournalScreen .journal-legend .legend-dot.outdoor {
+      background: rgba(249, 115, 22, 0.82);
+    }
+    #trainingJournalScreen .journal-legend .legend-dot.indoor {
+      background: rgba(34, 197, 94, 0.82);
     }
   </style>
 
@@ -4130,17 +4144,17 @@
           </div>
         </div>
       </div>
-      <!-- CONNECT WITH STRAVA 중앙 + 우측 범례 (Outdoor/Indoor, 버튼 높이 안에 2줄) -->
+      <!-- CONNECT WITH STRAVA 중앙 + 우측 범례 (버튼과 수평 정렬, 문구 우측 정렬, 주황/녹색 투명도) -->
       <div class="journal-strava-legend-row" style="display: flex; align-items: center; justify-content: center; margin-top: 10px; padding-top: 6px; min-height: 30px; position: relative;">
         <div style="display: flex; justify-content: center; align-items: center; flex: 1;">
           <button type="button" style="background: none; border: none; padding: 0; cursor: pointer; display: inline-block; line-height: 0;" onclick="(function(){try{var user=window.currentUser||(function(){try{return JSON.parse(localStorage.getItem('currentUser')||'null');}catch(e){return null;}})();var isStravaConnected=user&&(user.strava_refresh_token||user.strava_access_token);if(isStravaConnected){if(typeof openStravaSyncModal==='function'){openStravaSyncModal();}else{var modal=document.getElementById('stravaSyncModal');if(modal){modal.style.display='flex';modal.classList.remove('hidden');}else if(typeof showScreen==='function'){showScreen('stravaSyncScreen');}else{alert('Strava 동기화 화면을 열 수 없습니다.');}}}else{if(typeof openSettingsModal==='function'){openSettingsModal();}else{var settingsModal=document.getElementById('settingsModal');if(settingsModal){settingsModal.style.display='block';settingsModal.classList.remove('hidden');}else{alert('환경설정 모달을 열 수 없습니다.');}}}}catch(e){console.error('Strava 클릭 오류:',e);alert('오류가 발생했습니다: '+e.message);}})();" aria-label="Strava 동기화" title="Strava 동기화">
             <img src="assets/img/btn_strava.png" alt="Connect with Strava" style="height: 30px; width: auto; display: inline-block;" />
           </button>
         </div>
-        <!-- 우측 범례: 버튼 높이(30px) 안에 2줄, 작고 귀엽게 -->
-        <div class="journal-legend" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; align-items: flex-end; font-size: 10px; line-height: 1.2; color: #6b7280;">
-          <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 3px; background: #f97316; flex-shrink: 0;"></span>Outdoor</span>
-          <span style="display: inline-flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 8px; height: 8px; border-radius: 3px; background: #22c55e; flex-shrink: 0;"></span>Indoor</span>
+        <!-- 우측 범례: 주황/녹색 같은 열 정렬, 문구 우측 정렬, 버튼과 수평(위아래 중앙) -->
+        <div class="journal-legend" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; line-height: 1.2; color: #6b7280;">
+          <span class="legend-row"><span class="legend-dot outdoor"></span><span>Outdoor</span></span>
+          <span class="legend-row"><span class="legend-dot indoor"></span><span>Indoor</span></span>
         </div>
       </div>
     </div>
