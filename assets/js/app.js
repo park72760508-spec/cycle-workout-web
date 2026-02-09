@@ -11932,9 +11932,9 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
 }
 
 /**
- * 워크아웃 예상 TSS 추정 (세그먼트 강도·시간 기반)
- * TSS = (duration_h) * (IF)^2 * 100, IF = 가중 평균 강도(FTP 대비)
- * 표시 시 null 대신 0을 쓰기 위해 유효하지 않으면 0 반환
+ * 워크아웃 예상 TSS 추정 (세그먼트 강도·시간 기반) — 전체 목록·AI 추천과 동일 공식
+ * TSS = (duration_h) * (IF)^2 * 100, IF = 가중 평균 강도(FTP 대비). ftp는 사용하지 않음(IF 비율만 사용).
+ * 전체 목록은 window.estimateWorkoutTSS(workout) 사용 권장. 없을 때만 이 함수 사용.
  */
 function estimateWorkoutTSS(workout, ftp) {
   if (!workout) return 0;
@@ -11943,9 +11943,11 @@ function estimateWorkoutTSS(workout, ftp) {
   if (totalSec <= 0 && segs.length > 0) {
     totalSec = segs.reduce((sum, s) => sum + (segDurationSec(s) || 0), 0);
   }
+  if (totalSec <= 0 && (workout.totalMinutes != null || workout.total_minutes != null)) {
+    const min = Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
+    if (min > 0) totalSec = min * 60;
+  }
   if (totalSec <= 0) return 0;
-  const effectiveFtp = Number(ftp);
-  if (!effectiveFtp || effectiveFtp <= 0) return 0;
   var weightedIfSum = 0;
   var totalWeight = 0;
   for (var i = 0; i < segs.length; i++) {
@@ -12028,14 +12030,17 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
       return;
     }
     
-    const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+    const totalMinutes = Math.round((workout.total_seconds || workout.totalSeconds || 0) / 60) || Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
     const rankImages = ['assets/img/first.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
     const rankAlts = ['1위', '2위', '3위'];
     const rankBadge = index < 3
       ? `<img src="${rankImages[index]}" alt="${rankAlts[index]}" style="width: 1.4em; height: 1.4em; object-fit: contain; vertical-align: middle; flex-shrink: 0;">`
       : `${rec.rank}위`;
-    const expectedTSS = estimateWorkoutTSS(workout, ftp);
-    const tssLabel = (expectedTSS != null && expectedTSS !== '') ? `<span class="workout-expected-tss" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">예상 TSS ${Number(expectedTSS)}</span>` : '';
+    const expectedTSS = (typeof window.estimateWorkoutTSS === 'function')
+      ? window.estimateWorkoutTSS(workout)
+      : estimateWorkoutTSS(workout, ftp);
+    const tssNum = (expectedTSS != null && expectedTSS !== '' && !Number.isNaN(Number(expectedTSS))) ? Number(expectedTSS) : null;
+    const tssLabel = tssNum !== null ? `<span class="workout-expected-tss" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">예상 TSS ${tssNum}</span>` : '';
     
     html += `
       <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">

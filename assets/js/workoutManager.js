@@ -79,21 +79,29 @@ function normalizeWorkoutData(workout) {
   let status = '보이기';
   if (workout.status !== null && workout.status !== undefined && workout.status !== '') {
     const statusStr = String(workout.status).trim();
-    // 공백이 아닌 경우 원본 값 유지 (TrainingSchedules의 title 값 등도 그대로 유지)
-    if (statusStr !== '') {
-      status = statusStr;
-    }
+    if (statusStr !== '') status = statusStr;
   }
-  
+  // TSS 계산용: total_seconds 확보 (API/캐시 필드 + 세그먼트 합 + totalMinutes 폴백)
+  var segs = Array.isArray(workout.segments) ? workout.segments : [];
+  var totalSec = Number(workout.total_seconds) || Number(workout.totalSeconds) || 0;
+  if (totalSec <= 0 && segs.length > 0 && typeof getSegmentDurationSec === 'function') {
+    for (var i = 0; i < segs.length; i++) totalSec += getSegmentDurationSec(segs[i]);
+  }
+  if (totalSec <= 0 && (workout.totalMinutes != null || workout.total_minutes != null)) {
+    var min = Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
+    if (min > 0) totalSec = min * 60;
+  }
   return {
     id: workout.id,
     title: String(workout.title || '제목 없음'),
     description: String(workout.description || ''),
     author: String(workout.author || '미상'),
     status: status,
-    total_seconds: Number(workout.total_seconds) || 0,
+    total_seconds: totalSec,
+    totalSeconds: totalSec,
+    totalMinutes: totalSec > 0 ? Math.round(totalSec / 60) : (Number(workout.totalMinutes) || Number(workout.total_minutes) || 0),
     publish_date: workout.publish_date || null,
-    segments: Array.isArray(workout.segments) ? workout.segments : []
+    segments: segs
   };
 }
 
@@ -3635,9 +3643,17 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
         console.warn('[Workout Cache] 세그먼트 캐시 업데이트 실패:', cacheUpdateError);
       }
     } else if (isFromCacheForSegments) {
-      // 세그먼트가 이미 모두 포함되어 있는 경우에도 캐시 확인
       console.log('[Workout Cache] 모든 워크아웃에 세그먼트가 이미 포함되어 있음');
     }
+
+    // TSS 계산용: total_seconds 미설정 시 세그먼트 합으로 채우기 (전체 목록 표시 일관화)
+    filteredWorkouts.forEach(function (w) {
+      if ((!w.total_seconds || w.total_seconds <= 0) && w.segments && w.segments.length > 0 && typeof getSegmentDurationSec === 'function') {
+        w.total_seconds = w.segments.reduce(function (sum, s) { return sum + getSegmentDurationSec(s); }, 0);
+        w.totalSeconds = w.total_seconds;
+        w.totalMinutes = Math.round(w.total_seconds / 60);
+      }
+    });
 
     renderWorkoutTable(filteredWorkouts, {}, {}, grade);
 
@@ -3856,7 +3872,8 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   if (!workout || typeof workout !== 'object' || !workout.id) return '';
   const safeTitle = escapeHtml(String(workout.title || '제목 없음'));
   const totalMinutes = Math.round((workout.total_seconds || workout.totalSeconds || 0) / 60) || Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
-  const tss = estimateWorkoutTSS(workout);
+  const tssVal = estimateWorkoutTSS(workout);
+  const tss = (tssVal != null && tssVal !== '' && !Number.isNaN(Number(tssVal))) ? Number(tssVal) : 0;
   const graphId = 'workout-card-graph-' + workout.id;
   const isAdmin = (grade === '1' || grade === '3');
   const categoryLabel = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(workout) : '';
@@ -3884,7 +3901,7 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
       <div class="workout-card__graph" id="${graphId}"></div>
       <div class="workout-card__footer">
         <span class="workout-card__meta"><span class="workout-card__meta-icon">⏱</span> ${totalMinutes}분</span>
-        <span class="workout-card__meta"><img src="assets/img/tss.png" alt="TSS" class="workout-card__meta-icon-img" /> TSS ${tss}</span>
+        <span class="workout-card__meta"><img src="assets/img/tss.png" alt="TSS" class="workout-card__meta-icon-img" /> TSS ${String(tss)}</span>
         ${categoryLabel ? `<span class="workout-card__category">${escapeHtml(categoryLabel)}</span>` : ''}
       </div>
     </div>
