@@ -1090,7 +1090,9 @@
         let wakeLock = null;
         let wakeLockVideo = null;
         let videoWakeLockInterval = null;
+        let wakeLockCheckInterval = null;
         const wakeLockSupported = 'wakeLock' in navigator;
+        const WAKE_LOCK_CHECK_MS = 10000;
         
         // iOS, 안드로이드 및 크롬 브라우저 감지
         function isIOS() {
@@ -1129,6 +1131,7 @@
                 if (!wakeLockVideo) {
                     startVideoWakeLock();
                 }
+                if (window.currentTrainingState === 'running') startWakeLockPeriodicCheck();
                 return;
             }
             
@@ -1161,11 +1164,13 @@
                         startVideoWakeLock();
                     }
                 }
+                if (window.currentTrainingState === 'running') startWakeLockPeriodicCheck();
             } else {
                 // Wake Lock API 미지원 시 비디오 트릭 사용
                 if (!wakeLockVideo) {
                     startVideoWakeLock();
                 }
+                if (window.currentTrainingState === 'running') startWakeLockPeriodicCheck();
             }
         }
         
@@ -1247,8 +1252,27 @@
             }
         }
         
-        // 화면 잠금 해제
+        // 훈련 중 주기적으로 Wake Lock 상태 확인 후 해제됐으면 재요청 (통화/문자 복귀 등 대응)
+        function startWakeLockPeriodicCheck() {
+            if (wakeLockCheckInterval) return;
+            wakeLockCheckInterval = setInterval(async () => {
+                if (document.visibilityState !== 'visible' || window.currentTrainingState !== 'running') return;
+                const needReacquire = !wakeLock || (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended));
+                if (needReacquire) {
+                    console.log('[Screen Wake Lock] 주기 체크: 화면 꺼짐 방지 재요청');
+                    await requestWakeLock();
+                }
+            }, WAKE_LOCK_CHECK_MS);
+            console.log('[Screen Wake Lock] 주기적 재요청 체크 시작');
+        }
+
+        // 화면 잠금 해제 (훈련 종료·로그 저장 후에만 호출)
         function releaseWakeLock() {
+            if (wakeLockCheckInterval) {
+                clearInterval(wakeLockCheckInterval);
+                wakeLockCheckInterval = null;
+                console.log('[Screen Wake Lock] 주기적 재요청 체크 중지');
+            }
             if (wakeLock !== null) {
                 wakeLock.release().then(() => {
                     wakeLock = null;
