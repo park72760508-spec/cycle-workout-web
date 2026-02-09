@@ -133,11 +133,14 @@ function selectSampleWorkout(w) {
   window.currentWorkout = w;
   try { localStorage.setItem("currentWorkout", JSON.stringify(w)); } catch(e) {}
 
-  // 프리뷰 채우기
+  // 프리뷰 채우기 (캐시/목록에서 선택 시에도 예상 TSS 계산 로직 적용)
   document.getElementById("previewWorkoutName").textContent = w.name;
-  document.getElementById("previewDuration").textContent = w.totalMinutes + "분";
+  document.getElementById("previewDuration").textContent = (w.totalMinutes != null ? w.totalMinutes : Math.round((w.total_seconds || w.totalSeconds || 0) / 60)) + "분";
   document.getElementById("previewIntensity").textContent = w.intensity + "%";
   var tssVal = w.tss;
+  if ((tssVal == null || tssVal === '' || (typeof tssVal === 'number' && tssVal === 0)) && typeof window.estimateWorkoutTSS === 'function') {
+    tssVal = window.estimateWorkoutTSS(w);
+  }
   document.getElementById("previewTSS").textContent = (tssVal != null && tssVal !== '') ? String(tssVal) : '0';
 
   const segDiv = document.getElementById("segmentPreview");

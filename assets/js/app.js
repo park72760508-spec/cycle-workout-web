@@ -12634,8 +12634,8 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     }, 100);
   }
   
-  // 총 시간 계산 및 표시 (페이드인 애니메이션)
-  const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+  // 총 시간 계산 및 표시 (페이드인 애니메이션, 캐시용 totalMinutes 지원)
+  const totalMinutes = Math.round((workout.total_seconds || workout.totalSeconds || 0) / 60) || Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
   const durationEl = safeGetElement('previewDuration');
   if (durationEl) {
     durationEl.style.opacity = '0';
@@ -12683,31 +12683,10 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     }, 100);
   }
 
-  // 예상 TSS 계산 (NP 근사 기반) - segDurationSec로 duration_sec/duration 통일
-  let estimatedTSS = 0;
-  var T = totalDuration;
-  if (T <= 0 && workout.segments && workout.segments.length > 0) {
-    workout.segments.forEach(function (seg) { T += segDurationSec(seg) || 0; });
-  }
-  if (T > 0 && workout.segments && Array.isArray(workout.segments) && workout.segments.length > 0) {
-    let sumI4t = 0;
-    workout.segments.forEach(seg => {
-      const t = segDurationSec(seg) || 0;
-      if (t <= 0) return;
-      const ftpPercent = typeof getSegmentFtpPercent === 'function'
-        ? getSegmentFtpPercent(seg)
-        : (Number(seg.target_value) || 100);
-      let I1 = ftpPercent / 100;
-      if (seg.ramp && seg.ramp !== 'none' && seg.ramp_to_value != null) {
-        const I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
-        sumI4t += ((Math.pow(I1, 4) + Math.pow(I2, 4)) / 2) * t;
-      } else {
-        sumI4t += Math.pow(I1, 4) * t;
-      }
-    });
-    const IF = T > 0 && sumI4t > 0 ? Math.pow(sumI4t / T, 0.25) : 0.65;
-    estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
-  }
+  // 예상 TSS — AI 워크아웃 추천·세그먼트 그래프와 동일한 계산 로직 (가중 평균 IF)
+  let estimatedTSS = (typeof window.estimateWorkoutTSS === 'function')
+    ? window.estimateWorkoutTSS(workout)
+    : 0;
   
   // 예상 TSS 표시 (페이드인 애니메이션)
   const expectedIntensityEl = safeGetElement('previewExpectedIntensity');

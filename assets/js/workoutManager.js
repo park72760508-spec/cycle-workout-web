@@ -3818,6 +3818,7 @@ function getSegmentDurationSec(seg) {
  * 워크아웃 TSS 추정 — AI 워크아웃 추천과 동일 로직 (가중 평균 IF)
  * TSS = (duration_h) * (IF)^2 * 100, IF = 세그먼트 구간별 지속시간 가중 평균 강도(FTP 대비)
  * ftp_pct, ftp_pctz, dual 등 target_type 지원 (getSegmentFtpPercentForPreview 사용)
+ * 캐시/목록용: total_seconds, totalSeconds 없을 때 totalMinutes * 60 사용
  */
 function estimateWorkoutTSS(workout) {
   if (!workout) return 0;
@@ -3825,6 +3826,10 @@ function estimateWorkoutTSS(workout) {
   var totalSec = Number(workout.total_seconds) || Number(workout.totalSeconds) || 0;
   if (totalSec <= 0 && segs.length > 0) {
     for (var i = 0; i < segs.length; i++) totalSec += getSegmentDurationSec(segs[i]);
+  }
+  if (totalSec <= 0 && (workout.totalMinutes != null || workout.total_minutes != null)) {
+    var min = Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
+    if (min > 0) totalSec = min * 60;
   }
   if (totalSec <= 0) return 0;
   var weightedIfSum = 0;
@@ -3850,7 +3855,7 @@ function estimateWorkoutTSS(workout) {
 function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grade = '2') {
   if (!workout || typeof workout !== 'object' || !workout.id) return '';
   const safeTitle = escapeHtml(String(workout.title || '제목 없음'));
-  const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+  const totalMinutes = Math.round((workout.total_seconds || workout.totalSeconds || 0) / 60) || Number(workout.totalMinutes) || Number(workout.total_minutes) || 0;
   const tss = estimateWorkoutTSS(workout);
   const graphId = 'workout-card-graph-' + workout.id;
   const isAdmin = (grade === '1' || grade === '3');
