@@ -969,7 +969,18 @@ async function apiGetUsers() {
     try {
       // firestoreV9 사용 (authV9와 동일한 앱 인스턴스)
       if (window.firestoreV9) {
-        const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        let firestoreModule;
+        try {
+          firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        } catch (importErr) {
+          console.error('[apiGetUsers] Firebase Firestore CDN 로드 실패 (방화벽/네트워크 확인):', importErr);
+          throw new Error('Firebase 모듈을 불러올 수 없습니다. 회사 WiFi/방화벽에서 gstatic.com 차단 여부를 확인해주세요.');
+        }
+        if (!firestoreModule || typeof firestoreModule.getDoc !== 'function') {
+          console.error('[apiGetUsers] Firestore 모듈이 비정상입니다. CDN 응답 확인 필요.');
+          throw new Error('Firebase Firestore 모듈을 사용할 수 없습니다. 네트워크 환경을 확인해주세요.');
+        }
+        const { getDoc, doc, collection } = firestoreModule;
         const usersRef = collection(window.firestoreV9, 'users');
         const userDocRef = doc(usersRef, userIdToCheck);
         const userDocSnap = await getDoc(userDocRef);
@@ -1050,7 +1061,17 @@ async function apiGetUsers() {
       try {
         // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
         if (window.firestoreV9) {
-          const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+          let firestoreModule;
+          try {
+            firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+          } catch (importErr) {
+            console.error('[apiGetUsers] Firebase Firestore CDN 로드 실패:', importErr);
+            throw new Error('Firebase 모듈을 불러올 수 없습니다. 회사 WiFi/방화벽에서 gstatic.com 차단 여부를 확인해주세요.');
+          }
+          if (!firestoreModule || typeof firestoreModule.getDocs !== 'function') {
+            throw new Error('Firebase Firestore 모듈을 사용할 수 없습니다. 네트워크 환경을 확인해주세요.');
+          }
+          const { getDocs, collection } = firestoreModule;
           const usersRef = collection(window.firestoreV9, 'users');
           const usersSnapshot = await getDocs(usersRef);
           const users = [];
