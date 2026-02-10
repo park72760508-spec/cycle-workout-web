@@ -33,8 +33,9 @@
   }
 
   /**
-   * 컨디션 점수용 로그 중복 제거 (1번·2번 동일 규칙: date + workout_name 기준)
-   * @param {Array} logs - 원본 로그 배열 (completed_at|date, workout_name|title 등)
+   * 컨디션 점수용 로그 중복 제거 (1번·2번 동일 규칙)
+   * 동일 세션 = 같은 날짜 + 같은 시간 + 같은 TSS → workout_name이 달라도 1회로 카운트 (훈련일지와 일치)
+   * @param {Array} logs - 원본 로그 배열 (completed_at|date, duration_min|duration_sec, tss, workout_name|title 등)
    * @returns {Array} - 중복 제거된 로그 배열 (첫 번째 발생만 유지)
    */
   function dedupeLogsForConditionScore(logs) {
@@ -50,8 +51,9 @@
         if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
         dateStr = d2 && d2.toISOString ? d2.toISOString().split('T')[0] : String(d2 || '').split('T')[0];
       }
-      var name = (log.workout_name || log.title || '').trim();
-      var key = dateStr + '|' + name;
+      var durationMin = Number(log.duration_min) || Math.round(Number(log.duration_sec || log.duration || 0) / 60) || 0;
+      var tss = Math.round(Number(log.tss || 0));
+      var key = dateStr + '|' + durationMin + '|' + tss;
       if (seen[key]) return false;
       seen[key] = true;
       return true;
@@ -59,13 +61,13 @@
   }
 
   /**
-   * 최근 30일 로그만 필터(날짜 문자열 YYYY-MM-DD 기준)
+   * 최근 30일 로그만 필터(날짜 문자열 YYYY-MM-DD 기준, 정확히 30일: today-29 ~ today)
    */
   function filterLast30Days(logs, todayStr) {
     if (!todayStr || !logs.length) return logs;
     var d = new Date(todayStr + 'T12:00:00');
     var start = new Date(d);
-    start.setDate(start.getDate() - 30);
+    start.setDate(start.getDate() - 29);
     var startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
     return logs.filter(function (l) {
       var ds = l.dateStr || '';

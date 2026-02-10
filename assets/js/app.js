@@ -11035,10 +11035,10 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     };
     const conditionAdjustment = conditionMap[todayCondition] || 0.98;
     
-    // 3. 최근 운동 이력 조회 (최근 30일) — Firebase users/{userId}/logs 우선, 없으면 GAS 폴백
+    // 3. 최근 운동 이력 조회 (정확히 30일: today-29 ~ today) — Firebase users/{userId}/logs 우선, 없으면 GAS 폴백
     const today = new Date(date);
     const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 30);
+    startDate.setDate(startDate.getDate() - 29);
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = date;
     
@@ -11082,15 +11082,18 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
             });
           });
         }
-        var seen = {};
-        recentHistory = firebaseLogs
-          .filter(function(h) {
-            var key = (h.completed_at || '') + '|' + (h.workout_name || '');
+        recentHistory = firebaseLogs.sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
+        if (typeof window.dedupeLogsForConditionScore === 'function') {
+          recentHistory = window.dedupeLogsForConditionScore(recentHistory);
+        } else {
+          var seen = {};
+          recentHistory = recentHistory.filter(function(h) {
+            var key = (h.completed_at || '') + '|' + (h.duration_min || 0) + '|' + (h.tss || 0);
             if (seen[key]) return false;
             seen[key] = true;
             return true;
-          })
-          .sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
+          });
+        }
         if (recentHistory.length > 0) {
           console.log('[AI 워크아웃 추천] Firebase users/logs 훈련 이력 사용:', recentHistory.length, '건');
         }
@@ -11866,12 +11869,13 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
     recommendationData.recommendations = deduped.slice(0, 3);
     
-    // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (1번·2번 통일: 기준일 항상 오늘)
+    // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (1번·2번 통일: 강한 중복 제거 + 기준일 오늘)
     if (typeof window.computeConditionScore === 'function') {
       const userForScore = { age: user.age, gender: user.gender, challenge: challenge, ftp: Number(ftp) || 200, weight: Number(weight) || 70 };
+      const logsForScore = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(recentHistory) : recentHistory;
       const today = new Date();
       const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-      const csResult = window.computeConditionScore(userForScore, recentHistory, todayStr);
+      const csResult = window.computeConditionScore(userForScore, logsForScore, todayStr);
       recommendationData.condition_score = csResult.score;
     }
     
