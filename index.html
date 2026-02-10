@@ -4992,14 +4992,14 @@
             return;
           }
           
-          // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·30일 구간)
+          // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·정확히 30일: today-29~today)
           var cleanLogs = [];
           if (typeof window.getTrainingLogsByDateRange === 'function' && currentUser && currentUser.id) {
             try {
               var todayForFetch = new Date();
               todayForFetch.setHours(0, 0, 0, 0);
               var startForFetch = new Date(todayForFetch);
-              startForFetch.setDate(todayForFetch.getDate() - 30);
+              startForFetch.setDate(todayForFetch.getDate() - 29);
               var startStrForFetch = startForFetch.getFullYear() + '-' + String(startForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(startForFetch.getDate()).padStart(2, '0');
               var endStrForFetch = todayForFetch.getFullYear() + '-' + String(todayForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(todayForFetch.getDate()).padStart(2, '0');
               var monthsToFetch = [];
@@ -5034,13 +5034,17 @@
                   });
                 });
               }
-              var seenForCoach = {};
-              cleanLogs = firebaseLogsForCoach.filter(function(h) {
-                var key = (h.completed_at || '') + '|' + (h.workout_name || '');
-                if (seenForCoach[key]) return false;
-                seenForCoach[key] = true;
-                return true;
-              });
+              if (typeof window.dedupeLogsForConditionScore === 'function') {
+                cleanLogs = window.dedupeLogsForConditionScore(firebaseLogsForCoach);
+              } else {
+                var seenForCoach = {};
+                cleanLogs = firebaseLogsForCoach.filter(function(h) {
+                  var key = (h.completed_at || '') + '|' + (h.duration_min || 0) + '|' + (h.tss || 0);
+                  if (seenForCoach[key]) return false;
+                  seenForCoach[key] = true;
+                  return true;
+                });
+              }
             } catch (e) {
               console.warn('[AI] getTrainingLogsByDateRange 실패, 기존 로그 사용:', e);
             }
@@ -5065,6 +5069,9 @@
                   rpe: log.rpe
                 };
               });
+            }
+            if (typeof window.dedupeLogsForConditionScore === 'function' && cleanLogs.length > 0) {
+              cleanLogs = window.dedupeLogsForConditionScore(cleanLogs);
             }
           }
           
@@ -12030,7 +12037,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var todayForAI = new Date();
           todayForAI.setHours(0, 0, 0, 0);
           var thirtyDaysAgoForAI = new Date(todayForAI);
-          thirtyDaysAgoForAI.setDate(todayForAI.getDate() - 30);
+          thirtyDaysAgoForAI.setDate(todayForAI.getDate() - 29);
           var thirtyDaysAgoStrForAI = thirtyDaysAgoForAI.getFullYear() + '-' + 
             String(thirtyDaysAgoForAI.getMonth() + 1).padStart(2, '0') + '-' + 
             String(thirtyDaysAgoForAI.getDate()).padStart(2, '0');
@@ -12152,14 +12159,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             aiAnalysisInProgressRef.current = true;
             setAiLoading(true);
             
-            // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·30일 구간)
+            // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·정확히 30일: today-29~today)
             var cleanLogs = [];
             if (typeof window.getTrainingLogsByDateRange === 'function' && userProfile && userProfile.id) {
               try {
                 var todayForFetch = new Date();
                 todayForFetch.setHours(0, 0, 0, 0);
                 var startForFetch = new Date(todayForFetch);
-                startForFetch.setDate(todayForFetch.getDate() - 30);
+                startForFetch.setDate(todayForFetch.getDate() - 29);
                 var startStrForFetch = startForFetch.getFullYear() + '-' + String(startForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(startForFetch.getDate()).padStart(2, '0');
                 var endStrForFetch = todayForFetch.getFullYear() + '-' + String(todayForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(todayForFetch.getDate()).padStart(2, '0');
                 var monthsToFetch = [];
@@ -12194,13 +12201,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     });
                   });
                 }
-                var seenForCoach = {};
-                cleanLogs = firebaseLogsForCoach.filter(function(h) {
-                  var key = (h.completed_at || '') + '|' + (h.workout_name || '');
-                  if (seenForCoach[key]) return false;
-                  seenForCoach[key] = true;
-                  return true;
-                });
+                if (typeof window.dedupeLogsForConditionScore === 'function') {
+                  cleanLogs = window.dedupeLogsForConditionScore(firebaseLogsForCoach);
+                } else {
+                  var seenForCoach = {};
+                  cleanLogs = firebaseLogsForCoach.filter(function(h) {
+                    var key = (h.completed_at || '') + '|' + (h.duration_min || 0) + '|' + (h.tss || 0);
+                    if (seenForCoach[key]) return false;
+                    seenForCoach[key] = true;
+                    return true;
+                  });
+                }
                 if (cleanLogs.length > 0) {
                   console.log('[AI] 컨디션/대시보드 로그 소스 통일: getTrainingLogsByDateRange 30일', cleanLogs.length, '건');
                 }
@@ -12210,6 +12221,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
             if (cleanLogs.length === 0) {
               cleanLogs = sanitizeLogs(logsToSend);
+              if (typeof window.dedupeLogsForConditionScore === 'function') {
+                cleanLogs = window.dedupeLogsForConditionScore(cleanLogs);
+              }
             }
             var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
             console.log('[AI] Sending ' + cleanLogs.length + ' logs (Sanitized) to Gemini...', {
