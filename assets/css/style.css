@@ -12297,6 +12297,114 @@ button[aria-disabled="true"] {
   }
 }
 
+/* ========== 워크아웃 화면 선택 팝업 (훈련 준비 그래프 블록 클릭, 훈련 결과와 무관한 독립 팝업) ========== */
+#workoutScreenChoiceModal.training-result-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+#workoutScreenChoiceModal.training-result-modal[style*="display: none"] {
+  display: none !important;
+}
+
+#workoutScreenChoiceModal .training-result-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.1;
+}
+
+#workoutScreenChoiceModal .result-background-logo {
+  max-width: 400px;
+  max-height: 400px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.08;
+  filter: blur(1px);
+}
+
+#workoutScreenChoiceModal .training-result-content {
+  position: relative;
+  background: rgba(30, 30, 30, 0.95);
+  border: 2px solid #00d4aa;
+  border-radius: 12px;
+  padding: 16px 20px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+  animation: slideUp 0.4s ease-out;
+  backdrop-filter: blur(10px);
+}
+
+#workoutScreenChoiceModal .result-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+#workoutScreenChoiceModal .result-title {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #00d4aa;
+  margin: 0 0 4px 0;
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
+#workoutScreenChoiceModal .result-subtitle {
+  font-size: 0.9em;
+  color: #ffffff;
+  margin: 0;
+  opacity: 0.9;
+}
+
+#workoutScreenChoiceModal .workout-screen-choice-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+#workoutScreenChoiceModal .workout-screen-choice-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%);
+  border: none;
+  border-radius: 8px;
+  color: #000;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
+}
+
+#workoutScreenChoiceModal .workout-screen-choice-btn:hover {
+  background: linear-gradient(135deg, #00e8c2 0%, #00d4aa 100%);
+  transform: translateY(-2px);
+}
+
+#workoutScreenChoiceModal .workout-screen-choice-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
+}
+
 /* ========== AI 워크아웃 추천 모달 - 개인훈련 대시보드 결과 팝업 디자인 ========== */
 #workoutRecommendationModal.training-result-modal {
   position: fixed;
