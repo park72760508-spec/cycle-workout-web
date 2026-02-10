@@ -6412,6 +6412,41 @@ function initializeCurrentScreen(screenId) {
   }
 }
 
+// ========== 일별 1건(strava 우선) 폴백 — conditionScoreModule 미로드 시에도 훈련 횟수 정확도 보정 ==========
+// 일별 훈련 로그 중 복수개 존재 시 source: "strava" 로그 1개만 분석 대상 (워크아웃 추천·대시보드 공통)
+function oneLogPerDayPreferStravaFallback(logs) {
+  if (!logs || !logs.length) return [];
+  function getDateStr(log) {
+    var dateStr = '';
+    if (log.completed_at) {
+      var d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
+      dateStr = d && d.toISOString ? d.toISOString().split('T')[0] : String(log.completed_at).split('T')[0];
+    } else if (log.date) {
+      var d2 = log.date;
+      if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
+      dateStr = d2 && d2.toISOString ? d2.toISOString().split('T')[0] : String(d2 || '').split('T')[0];
+    }
+    return dateStr;
+  }
+  var byDate = {};
+  for (var i = 0; i < logs.length; i++) {
+    var log = logs[i];
+    var dateStr = getDateStr(log);
+    if (!dateStr) continue;
+    if (!byDate[dateStr]) byDate[dateStr] = [];
+    byDate[dateStr].push(log);
+  }
+  var result = [];
+  var dates = Object.keys(byDate).sort();
+  for (var j = 0; j < dates.length; j++) {
+    var arr = byDate[dates[j]];
+    var stravaLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() === 'strava'; });
+    var chosen = stravaLogs.length > 0 ? stravaLogs[0] : arr[0];
+    result.push(chosen);
+  }
+  return result;
+}
+
 // ========== Data Proxy Fallback: 대시보드(iframe) 로그 요청 처리 ==========
 (function initDashboardLogsProxy() {
   window.isSensorConnected = window.isSensorConnected || false;
@@ -6489,6 +6524,10 @@ function initializeCurrentScreen(screenId) {
         logs.push({ id: doc.id, ...d });
       });
       logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      // 일별 복수개 시 source: "strava" 1개만 전송 — 대시보드 훈련 횟수·컨디션 점수 정확도 보정
+      logs = (typeof window.oneLogPerDayPreferStrava === 'function')
+        ? window.oneLogPerDayPreferStrava(logs)
+        : oneLogPerDayPreferStravaFallback(logs);
       logs = logs.slice(0, 50);
 
       console.log('[MainApp] ' + logs.length + '개 로그 데이터 대시보드로 전송');
@@ -11083,9 +11122,10 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
             });
           });
         }
-        if (typeof window.oneLogPerDayPreferStrava === 'function') {
-          firebaseLogs = window.oneLogPerDayPreferStrava(firebaseLogs);
-        }
+        // 일별 복수개 시 source: "strava" 1개만 분석 — 훈련 횟수 17회→13회 등 오카운트 방지
+        firebaseLogs = (typeof window.oneLogPerDayPreferStrava === 'function')
+          ? window.oneLogPerDayPreferStrava(firebaseLogs)
+          : oneLogPerDayPreferStravaFallback(firebaseLogs);
         recentHistory = firebaseLogs.sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
         if (typeof window.dedupeLogsForConditionScore === 'function') {
           recentHistory = window.dedupeLogsForConditionScore(recentHistory);
@@ -11123,11 +11163,14 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
         const response = await fetch(`${baseUrl}?${params.toString()}`);
         const result = await response.json();
         if (result?.success && Array.isArray(result.items)) {
-          recentHistory = result.items.sort(function(a, b) {
+          var gasLogs = result.items.sort(function(a, b) {
             const dateA = new Date(a.completed_at || 0);
             const dateB = new Date(b.completed_at || 0);
             return dateB - dateA;
           });
+          recentHistory = (typeof window.oneLogPerDayPreferStrava === 'function')
+            ? window.oneLogPerDayPreferStrava(gasLogs)
+            : oneLogPerDayPreferStravaFallback(gasLogs);
           console.log('[AI 워크아웃 추천] GAS getScheduleResultsByUser 훈련 이력 사용:', recentHistory.length, '건');
         }
       } catch (error) {

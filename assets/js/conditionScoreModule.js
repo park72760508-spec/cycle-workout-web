@@ -144,6 +144,8 @@
   function computeConditionScore(user, recentLogs, todayStr) {
     user = user || {};
     recentLogs = recentLogs || [];
+    // 일별 복수개 시 source: "strava" 1개만 분석 대상 — 훈련 횟수·TSS 산출 정확도 보정
+    recentLogs = oneLogPerDayPreferStrava(recentLogs);
     var today = todayStr ? new Date(todayStr + 'T12:00:00') : new Date();
     todayStr = todayStr || (today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'));
 

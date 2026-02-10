@@ -10,12 +10,50 @@
  * @param {Array} recentLogs - 최근 30일간의 훈련 로그
  * @returns {Promise<Object>} AI 분석 결과 (condition_score, training_status, vo2max_estimate, coach_comment, recommended_workout)
  */
+// 일별 훈련 로그 중 복수개 시 source: "strava" 1개만 분석 대상 (conditionScoreModule 미로드 시 폴백)
+function oneLogPerDayPreferStravaForCoach(logs) {
+  if (!logs || !logs.length) return [];
+  function getDateStr(log) {
+    var dateStr = '';
+    if (log.completed_at) {
+      var d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
+      dateStr = d && d.toISOString ? d.toISOString().split('T')[0] : String(log.completed_at).split('T')[0];
+    } else if (log.date) {
+      var d2 = log.date;
+      if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
+      dateStr = d2 && d2.toISOString ? d2.toISOString().split('T')[0] : String(d2 || '').split('T')[0];
+    }
+    return dateStr;
+  }
+  var byDate = {};
+  for (var i = 0; i < logs.length; i++) {
+    var log = logs[i];
+    var dateStr = getDateStr(log);
+    if (!dateStr) continue;
+    if (!byDate[dateStr]) byDate[dateStr] = [];
+    byDate[dateStr].push(log);
+  }
+  var result = [];
+  var dates = Object.keys(byDate).sort();
+  for (var j = 0; j < dates.length; j++) {
+    var arr = byDate[dates[j]];
+    var stravaLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() === 'strava'; });
+    result.push(stravaLogs.length > 0 ? stravaLogs[0] : arr[0]);
+  }
+  return result;
+}
+
 async function callGeminiCoach(userProfile, recentLogs) {
   const apiKey = localStorage.getItem('geminiApiKey');
   
   if (!apiKey) {
     throw new Error('Gemini API 키가 설정되지 않았습니다. 환경 설정에서 API 키를 입력해주세요.');
   }
+
+  // 일별 복수개 시 source: "strava" 1개만 분석 — 훈련 횟수·컨디션 점수 정확도 보정 (워크아웃 추천·대시보드 동일 규칙)
+  recentLogs = (typeof window.oneLogPerDayPreferStrava === 'function')
+    ? window.oneLogPerDayPreferStrava(recentLogs)
+    : oneLogPerDayPreferStravaForCoach(recentLogs || []);
 
   // 시스템 프롬프트 가져오기
   const systemPrompt = window.GEMINI_COACH_SYSTEM_PROMPT || `
