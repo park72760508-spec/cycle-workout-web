@@ -12511,6 +12511,7 @@ function closeWorkoutScreenChoiceModal() {
 
 /**
  * 워크아웃 화면 타입 선택 (그래프 타잎 → workoutScreen, 리스트 타잎 → workoutSelectionModal)
+ * 그래프 타잎: workoutScreen 전환 후 workoutViewInit/loadWorkouts 호출로 워크아웃 목록 API 요청 보장
  * @param {'graph'|'list'} type - 'graph': 전체 화면(그래프), 'list': 모달(리스트)
  */
 function chooseWorkoutScreenType(type) {
@@ -12519,6 +12520,15 @@ function chooseWorkoutScreenType(type) {
     if (typeof showScreen === 'function') {
       showScreen('workoutScreen');
     }
+    // workoutScreen 진입 시와 동일하게 워크아웃 목록 API 요청 (워크아웃 목록 API 요청 시작 / listWorkouts JSONP)
+    setTimeout(function () {
+      var initFn = window.workoutViewInit || (typeof workoutViewInit === 'function' ? workoutViewInit : null);
+      if (initFn) {
+        try { initFn(); } catch (e) { console.warn('workoutViewInit error:', e); if (typeof loadWorkouts === 'function') loadWorkouts('all'); }
+      } else if (typeof loadWorkouts === 'function') {
+        loadWorkouts('all');
+      }
+    }, 150);
   } else if (type === 'list') {
     if (typeof openWorkoutSelectionModal === 'function') {
       window._trainingReadyWorkoutSelectionCallback = selectWorkoutForTrainingReady;
