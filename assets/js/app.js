@@ -11997,8 +11997,8 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   let html = `
     <div class="workout-recommendation-container">
       <div class="ai-recommend-dashboard-blocks" style="margin-bottom: 20px;">
-        <div class="coach-comment-block" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-          <p style="color: #ffffff; font-size: 0.63em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${coachComment.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+        <div class="coach-comment-block" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <p class="category-reason" style="color: #ffffff; font-size: 0.63em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${coachComment.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
         </div>
         <div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
           <div class="stat-item" style="background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
