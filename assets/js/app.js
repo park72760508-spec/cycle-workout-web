@@ -12488,25 +12488,60 @@ window.confirmAIRecommendation = confirmAIRecommendation;
 ========================================================== */
 
 /**
- * 훈련 준비 화면에서 워크아웃 선택 모달 열기
+ * 워크아웃 화면 선택 팝업 열기 (훈련 준비 그래프 블록 클릭 시, 훈련 결과와 무관한 독립 팝업)
  */
-async function openWorkoutSelectionForTrainingReady() {
-  try {
-    // Indoor Training 워크아웃 선택 모달 열기
+function openWorkoutScreenChoiceModal() {
+  var el = document.getElementById('workoutScreenChoiceModal');
+  if (el) {
+    el.style.display = 'flex';
+    el.classList.remove('hidden');
+  }
+}
+
+/**
+ * 워크아웃 화면 선택 팝업 닫기
+ */
+function closeWorkoutScreenChoiceModal() {
+  var el = document.getElementById('workoutScreenChoiceModal');
+  if (el) {
+    el.style.display = 'none';
+    el.classList.add('hidden');
+  }
+}
+
+/**
+ * 워크아웃 화면 타입 선택 (그래프 타잎 → workoutScreen, 리스트 타잎 → workoutSelectionModal)
+ * @param {'graph'|'list'} type - 'graph': 전체 화면(그래프), 'list': 모달(리스트)
+ */
+function chooseWorkoutScreenType(type) {
+  closeWorkoutScreenChoiceModal();
+  if (type === 'graph') {
+    if (typeof showScreen === 'function') {
+      showScreen('workoutScreen');
+    }
+  } else if (type === 'list') {
     if (typeof openWorkoutSelectionModal === 'function') {
-      // 모달이 열릴 때 선택 콜백 설정
       window._trainingReadyWorkoutSelectionCallback = selectWorkoutForTrainingReady;
-      await openWorkoutSelectionModal();
+      openWorkoutSelectionModal();
     } else {
       console.error('[Training Ready] openWorkoutSelectionModal 함수를 찾을 수 없습니다.');
       if (typeof showToast === 'function') {
         showToast('워크아웃 선택 기능을 사용할 수 없습니다', 'error');
       }
     }
+  }
+}
+
+/**
+ * 훈련 준비 화면에서 워크아웃 선택: 먼저 화면 타입 선택 팝업을 연다
+ */
+async function openWorkoutSelectionForTrainingReady() {
+  try {
+    openWorkoutScreenChoiceModal();
   } catch (error) {
-    console.error('[Training Ready] 워크아웃 선택 모달 열기 오류:', error);
+    console.error('[Training Ready] 워크아웃 화면 선택 팝업 열기 오류:', error);
     if (typeof showToast === 'function') {
-      showToast('워크아웃 선택 모달을 열 수 없습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+      showToast('워크아웃 화면 선택을 열 수 없습니다: ' + (error.message || '알 수 없는 오류'), 'error');
     }
   }
 }
@@ -12818,6 +12853,9 @@ function updateTrainingReadyScreenWithWorkout(workout) {
 }
 
 // 전역 함수로 등록
+window.openWorkoutScreenChoiceModal = openWorkoutScreenChoiceModal;
+window.closeWorkoutScreenChoiceModal = closeWorkoutScreenChoiceModal;
+window.chooseWorkoutScreenType = chooseWorkoutScreenType;
 window.openWorkoutSelectionForTrainingReady = openWorkoutSelectionForTrainingReady;
 window.selectWorkoutForTrainingReady = selectWorkoutForTrainingReady;
 window.updateTrainingReadyScreenWithWorkout = updateTrainingReadyScreenWithWorkout;
