@@ -4992,28 +4992,80 @@
             return;
           }
           
-          // 데이터 정제 (sanitizeLogs 함수 사용)
+          // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·30일 구간)
           var cleanLogs = [];
-          if (typeof window.sanitizeLogs === 'function') {
-            cleanLogs = window.sanitizeLogs(logsToSend);
-          } else {
-            // 인라인 sanitizeLogs 구현
-            cleanLogs = logsToSend.map(function(log) {
-              return {
-                date: log.date,
-                title: log.title,
-                duration_min: Math.round((log.duration_sec || 0) / 60),
-                distance_km: log.distance_km,
-                tss: log.tss,
-                if: log.if,
-                avg_watts: log.avg_watts,
-                weighted_watts: log.weighted_watts,
-                avg_hr: log.avg_hr,
-                max_hr: log.max_hr,
-                avg_cadence: log.avg_cadence,
-                rpe: log.rpe
-              };
-            });
+          if (typeof window.getTrainingLogsByDateRange === 'function' && currentUser && currentUser.id) {
+            try {
+              var todayForFetch = new Date();
+              todayForFetch.setHours(0, 0, 0, 0);
+              var startForFetch = new Date(todayForFetch);
+              startForFetch.setDate(todayForFetch.getDate() - 30);
+              var startStrForFetch = startForFetch.getFullYear() + '-' + String(startForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(startForFetch.getDate()).padStart(2, '0');
+              var endStrForFetch = todayForFetch.getFullYear() + '-' + String(todayForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(todayForFetch.getDate()).padStart(2, '0');
+              var monthsToFetch = [];
+              var dMonth = new Date(startForFetch.getFullYear(), startForFetch.getMonth(), 1);
+              var endDMonth = new Date(todayForFetch.getFullYear(), todayForFetch.getMonth(), 1);
+              while (dMonth <= endDMonth) {
+                monthsToFetch.push({ year: dMonth.getFullYear(), month: dMonth.getMonth() });
+                dMonth.setMonth(dMonth.getMonth() + 1);
+              }
+              var firebaseLogsForCoach = [];
+              for (var mi = 0; mi < monthsToFetch.length; mi++) {
+                var ym = monthsToFetch[mi];
+                var monthLogs = await window.getTrainingLogsByDateRange(currentUser.id, ym.year, ym.month);
+                if (!Array.isArray(monthLogs)) continue;
+                monthLogs.forEach(function(log) {
+                  var dateVal = log.date;
+                  if (dateVal && typeof dateVal.toDate === 'function') {
+                    dateVal = dateVal.toDate().toISOString().split('T')[0];
+                  } else if (dateVal && typeof dateVal !== 'string') {
+                    dateVal = (dateVal.toISOString && dateVal.toISOString()) ? dateVal.toISOString().split('T')[0] : String(dateVal).slice(0, 10);
+                  }
+                  if (!dateVal || dateVal < startStrForFetch || dateVal > endStrForFetch) return;
+                  var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+                  if (sec < 60) return;
+                  firebaseLogsForCoach.push({
+                    completed_at: dateVal + 'T12:00:00.000Z',
+                    workout_name: (log.title || log.workout_name || '훈련').trim(),
+                    duration_min: Math.round(sec / 60),
+                    avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
+                    np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? log.avg_power ?? 0),
+                    tss: Math.round(log.tss ?? 0)
+                  });
+                });
+              }
+              var seenForCoach = {};
+              cleanLogs = firebaseLogsForCoach.filter(function(h) {
+                var key = (h.completed_at || '') + '|' + (h.workout_name || '');
+                if (seenForCoach[key]) return false;
+                seenForCoach[key] = true;
+                return true;
+              });
+            } catch (e) {
+              console.warn('[AI] getTrainingLogsByDateRange 실패, 기존 로그 사용:', e);
+            }
+          }
+          if (cleanLogs.length === 0) {
+            if (typeof window.sanitizeLogs === 'function') {
+              cleanLogs = window.sanitizeLogs(logsToSend);
+            } else {
+              cleanLogs = logsToSend.map(function(log) {
+                return {
+                  date: log.date,
+                  title: log.title,
+                  duration_min: Math.round((log.duration_sec || 0) / 60),
+                  distance_km: log.distance_km,
+                  tss: log.tss,
+                  if: log.if,
+                  avg_watts: log.avg_watts,
+                  weighted_watts: log.weighted_watts,
+                  avg_hr: log.avg_hr,
+                  max_hr: log.max_hr,
+                  avg_cadence: log.avg_cadence,
+                  rpe: log.rpe
+                };
+              });
+            }
           }
           
           // 사용자 프로필 준비 (컨디션 점수 모듈용 age, gender 포함)
@@ -10748,11 +10800,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             ];
           }
           
-          // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (있을 경우 우선 사용)
+          // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (1번·2번 동일: 중복 제거 + 기준일 오늘)
           var condition_score = 50;
           if (typeof window.computeConditionScore === 'function') {
             var userForScore = { age: userProfile && userProfile.age, gender: userProfile && userProfile.gender, challenge: userProfile && userProfile.challenge, ftp: userProfile && userProfile.ftp, weight: userProfile && userProfile.weight };
-            var csResult = window.computeConditionScore(userForScore, recentLogs || []);
+            var logsForScore = (recentLogs || []).slice();
+            var deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
+            var todayForScore = new Date();
+            var todayStrForScore = todayForScore.getFullYear() + '-' + String(todayForScore.getMonth() + 1).padStart(2, '0') + '-' + String(todayForScore.getDate()).padStart(2, '0');
+            var csResult = window.computeConditionScore(userForScore, deduped, todayStrForScore);
             condition_score = Math.max(50, Math.min(100, csResult.score));
           } else {
             var rawScore = (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50;
@@ -12096,8 +12152,65 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             aiAnalysisInProgressRef.current = true;
             setAiLoading(true);
             
-            // [Optimization] Prepare Light Payload - Sanitize logs to reduce payload size
-            var cleanLogs = sanitizeLogs(logsToSend);
+            // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·30일 구간)
+            var cleanLogs = [];
+            if (typeof window.getTrainingLogsByDateRange === 'function' && userProfile && userProfile.id) {
+              try {
+                var todayForFetch = new Date();
+                todayForFetch.setHours(0, 0, 0, 0);
+                var startForFetch = new Date(todayForFetch);
+                startForFetch.setDate(todayForFetch.getDate() - 30);
+                var startStrForFetch = startForFetch.getFullYear() + '-' + String(startForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(startForFetch.getDate()).padStart(2, '0');
+                var endStrForFetch = todayForFetch.getFullYear() + '-' + String(todayForFetch.getMonth() + 1).padStart(2, '0') + '-' + String(todayForFetch.getDate()).padStart(2, '0');
+                var monthsToFetch = [];
+                var dMonth = new Date(startForFetch.getFullYear(), startForFetch.getMonth(), 1);
+                var endDMonth = new Date(todayForFetch.getFullYear(), todayForFetch.getMonth(), 1);
+                while (dMonth <= endDMonth) {
+                  monthsToFetch.push({ year: dMonth.getFullYear(), month: dMonth.getMonth() });
+                  dMonth.setMonth(dMonth.getMonth() + 1);
+                }
+                var firebaseLogsForCoach = [];
+                for (var mi = 0; mi < monthsToFetch.length; mi++) {
+                  var ym = monthsToFetch[mi];
+                  var monthLogs = await window.getTrainingLogsByDateRange(userProfile.id, ym.year, ym.month);
+                  if (!Array.isArray(monthLogs)) continue;
+                  monthLogs.forEach(function(log) {
+                    var dateVal = log.date;
+                    if (dateVal && typeof dateVal.toDate === 'function') {
+                      dateVal = dateVal.toDate().toISOString().split('T')[0];
+                    } else if (dateVal && typeof dateVal !== 'string') {
+                      dateVal = (dateVal.toISOString && dateVal.toISOString()) ? dateVal.toISOString().split('T')[0] : String(dateVal).slice(0, 10);
+                    }
+                    if (!dateVal || dateVal < startStrForFetch || dateVal > endStrForFetch) return;
+                    var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+                    if (sec < 60) return;
+                    firebaseLogsForCoach.push({
+                      completed_at: dateVal + 'T12:00:00.000Z',
+                      workout_name: (log.title || log.workout_name || '훈련').trim(),
+                      duration_min: Math.round(sec / 60),
+                      avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
+                      np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? log.avg_power ?? 0),
+                      tss: Math.round(log.tss ?? 0)
+                    });
+                  });
+                }
+                var seenForCoach = {};
+                cleanLogs = firebaseLogsForCoach.filter(function(h) {
+                  var key = (h.completed_at || '') + '|' + (h.workout_name || '');
+                  if (seenForCoach[key]) return false;
+                  seenForCoach[key] = true;
+                  return true;
+                });
+                if (cleanLogs.length > 0) {
+                  console.log('[AI] 컨디션/대시보드 로그 소스 통일: getTrainingLogsByDateRange 30일', cleanLogs.length, '건');
+                }
+              } catch (e) {
+                console.warn('[AI] getTrainingLogsByDateRange 실패, 기존 로그 사용:', e);
+              }
+            }
+            if (cleanLogs.length === 0) {
+              cleanLogs = sanitizeLogs(logsToSend);
+            }
             var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
             console.log('[AI] Sending ' + cleanLogs.length + ' logs (Sanitized) to Gemini...', {
               originalCount: logsToSend.length,
