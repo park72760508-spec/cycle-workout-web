@@ -8084,7 +8084,7 @@
                       var d = dataForChart[ctx.dataIndex];
                       if (!d) return 'TSS: ' + ctx.raw;
                       var short = d.dateRangeShort || (d.startDate && d.endDate ? (d.startDate.getMonth() + 1) + '/' + d.startDate.getDate() + '~' + (d.endDate.getMonth() + 1) + '/' + d.endDate.getDate() : '');
-                      return (d.label + (short ? '(' + short + ')' : '') + ', TSS : ' + Math.round(Number(ctx.raw) || 0));
+                      return ('기간 : ' + short + ', TSS : ' + Math.round(Number(ctx.raw) || 0));
                     }
                   }
                 }
@@ -8288,7 +8288,7 @@
                       <h4 className="text-sm font-semibold text-gray-700 mb-2">Weekly TSS Load</h4>
                       {selectedWeeklyTssIndex != null && weeklyTSSData[selectedWeeklyTssIndex] && (
                         <p className="text-sm text-gray-500 mb-1">
-                          {weeklyTSSData[selectedWeeklyTssIndex].label}({weeklyTSSData[selectedWeeklyTssIndex].dateRangeShort || ''}), TSS : {Math.round(Number(weeklyTSSData[selectedWeeklyTssIndex].TSS) || 0)}
+                          기간 : {weeklyTSSData[selectedWeeklyTssIndex].dateRangeShort || ''}, TSS : {Math.round(Number(weeklyTSSData[selectedWeeklyTssIndex].TSS) || 0)}
                         </p>
                       )}
                       <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2 cursor-pointer" title="바를 클릭하면 해당 주의 날짜와 TSS를 볼 수 있습니다">
