@@ -11078,9 +11078,13 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
               avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
               np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? log.avg_power ?? 0),
               tss: Math.round(log.tss ?? 0),
-              hr_avg: Math.round(log.avg_hr ?? log.hr_avg ?? 0)
+              hr_avg: Math.round(log.avg_hr ?? log.hr_avg ?? 0),
+              source: log.source || ''
             });
           });
+        }
+        if (typeof window.oneLogPerDayPreferStrava === 'function') {
+          firebaseLogs = window.oneLogPerDayPreferStrava(firebaseLogs);
         }
         recentHistory = firebaseLogs.sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
         if (typeof window.dedupeLogsForConditionScore === 'function') {

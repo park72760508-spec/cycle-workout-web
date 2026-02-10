@@ -61,6 +61,44 @@
   }
 
   /**
+   * 일별 훈련 로그 중 복수개 존재 시 source: "strava" 로그 1개만 분석 대상으로 사용
+   * @param {Array} logs - 원본 로그 배열 (date|completed_at, source 등)
+   * @returns {Array} - 날짜별 1개씩만 남긴 로그 (해당 날짜에 strava 있으면 strava 1개, 없으면 첫 번째 1개)
+   */
+  function oneLogPerDayPreferStrava(logs) {
+    if (!logs || !logs.length) return [];
+    function getDateStr(log) {
+      var dateStr = '';
+      if (log.completed_at) {
+        var d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
+        dateStr = d && d.toISOString ? d.toISOString().split('T')[0] : String(log.completed_at).split('T')[0];
+      } else if (log.date) {
+        var d2 = log.date;
+        if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
+        dateStr = d2 && d2.toISOString ? d2.toISOString().split('T')[0] : String(d2 || '').split('T')[0];
+      }
+      return dateStr;
+    }
+    var byDate = {};
+    for (var i = 0; i < logs.length; i++) {
+      var log = logs[i];
+      var dateStr = getDateStr(log);
+      if (!dateStr) continue;
+      if (!byDate[dateStr]) byDate[dateStr] = [];
+      byDate[dateStr].push(log);
+    }
+    var result = [];
+    var dates = Object.keys(byDate).sort();
+    for (var j = 0; j < dates.length; j++) {
+      var arr = byDate[dates[j]];
+      var stravaLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() === 'strava'; });
+      var chosen = stravaLogs.length > 0 ? stravaLogs[0] : arr[0];
+      result.push(chosen);
+    }
+    return result;
+  }
+
+  /**
    * 최근 30일 로그만 필터(날짜 문자열 YYYY-MM-DD 기준, 정확히 30일: today-29 ~ today)
    */
   function filterLast30Days(logs, todayStr) {
@@ -226,11 +264,12 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
+    module.exports = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, oneLogPerDayPreferStrava: oneLogPerDayPreferStrava, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
   }
   if (typeof global !== 'undefined') {
     global.computeConditionScore = computeConditionScore;
     global.dedupeLogsForConditionScore = dedupeLogsForConditionScore;
-    global.StelvioConditionScore = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
+    global.oneLogPerDayPreferStrava = oneLogPerDayPreferStrava;
+    global.StelvioConditionScore = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, oneLogPerDayPreferStrava: oneLogPerDayPreferStrava, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
   }
 })(typeof window !== 'undefined' ? window : this);
