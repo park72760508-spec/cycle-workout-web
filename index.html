@@ -4343,6 +4343,23 @@
     </div>
   </div>
 
+  <!-- 워크아웃 화면 선택 팝업 (훈련 준비 그래프 블록 클릭 시, 훈련 결과와 무관한 독립 팝업) -->
+  <div id="workoutScreenChoiceModal" class="training-result-modal workout-screen-choice-modal" style="display: none;" onclick="if(event.target === this) closeWorkoutScreenChoiceModal();">
+    <div class="training-result-background">
+      <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" />
+    </div>
+    <div class="training-result-content workout-screen-choice-content" onclick="event.stopPropagation();">
+      <div class="result-header">
+        <h2 class="result-title">워크아웃 화면 선택</h2>
+        <p class="result-subtitle">워크아웃 화면을 선택하세요.</p>
+      </div>
+      <div class="workout-screen-choice-buttons">
+        <button type="button" class="result-close-btn workout-screen-choice-btn" onclick="chooseWorkoutScreenType('graph');">그래프 타잎</button>
+        <button type="button" class="result-close-btn workout-screen-choice-btn" onclick="chooseWorkoutScreenType('list');">리스트 타잎</button>
+      </div>
+    </div>
+  </div>
+
   <!-- AI 추천 확인 팝업 -->
   <div id="aiRecommendationConfirmModal" class="training-result-modal" style="display: none;" onclick="if(event.target === this) closeAIRecommendationConfirmModal();">
     <div class="training-result-background">
