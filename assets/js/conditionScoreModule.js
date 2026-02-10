@@ -33,6 +33,32 @@
   }
 
   /**
+   * 컨디션 점수용 로그 중복 제거 (1번·2번 동일 규칙: date + workout_name 기준)
+   * @param {Array} logs - 원본 로그 배열 (completed_at|date, workout_name|title 등)
+   * @returns {Array} - 중복 제거된 로그 배열 (첫 번째 발생만 유지)
+   */
+  function dedupeLogsForConditionScore(logs) {
+    if (!logs || !logs.length) return [];
+    var seen = {};
+    return logs.filter(function (log) {
+      var dateStr = '';
+      if (log.completed_at) {
+        var d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
+        dateStr = d && d.toISOString ? d.toISOString().split('T')[0] : String(log.completed_at).split('T')[0];
+      } else if (log.date) {
+        var d2 = log.date;
+        if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
+        dateStr = d2 && d2.toISOString ? d2.toISOString().split('T')[0] : String(d2 || '').split('T')[0];
+      }
+      var name = (log.workout_name || log.title || '').trim();
+      var key = dateStr + '|' + name;
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
+  /**
    * 최근 30일 로그만 필터(날짜 문자열 YYYY-MM-DD 기준)
    */
   function filterLast30Days(logs, todayStr) {
@@ -198,10 +224,11 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeConditionScore: computeConditionScore, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
+    module.exports = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
   }
   if (typeof global !== 'undefined') {
     global.computeConditionScore = computeConditionScore;
-    global.StelvioConditionScore = { computeConditionScore: computeConditionScore, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
+    global.dedupeLogsForConditionScore = dedupeLogsForConditionScore;
+    global.StelvioConditionScore = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
   }
 })(typeof window !== 'undefined' ? window : this);

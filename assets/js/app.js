@@ -11866,10 +11866,12 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
     recommendationData.recommendations = deduped.slice(0, 3);
     
-    // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (연령·성별·훈련목적·최근 30일 로그 반영)
+    // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (1번·2번 통일: 기준일 항상 오늘)
     if (typeof window.computeConditionScore === 'function') {
       const userForScore = { age: user.age, gender: user.gender, challenge: challenge, ftp: Number(ftp) || 200, weight: Number(weight) || 70 };
-      const csResult = window.computeConditionScore(userForScore, recentHistory, date);
+      const today = new Date();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      const csResult = window.computeConditionScore(userForScore, recentHistory, todayStr);
       recommendationData.condition_score = csResult.score;
     }
     

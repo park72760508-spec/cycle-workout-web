@@ -108,11 +108,15 @@ Output Format (JSON Only):
     // JSON 파싱
     const result = JSON.parse(jsonText);
     
-    // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (있을 경우 우선 사용)
+    // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (1번·2번 동일: 중복 제거 + 기준일 오늘)
     let conditionScore = result.condition_score || 50;
     if (typeof window.computeConditionScore === 'function') {
       const userForScore = { age: userProfile?.age, gender: userProfile?.gender, challenge: userProfile?.challenge, ftp: userProfile?.ftp, weight: userProfile?.weight };
-      const csResult = window.computeConditionScore(userForScore, recentLogs || []);
+      const logsForScore = (recentLogs || []).slice();
+      const deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
+      const today = new Date();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      const csResult = window.computeConditionScore(userForScore, deduped, todayStr);
       conditionScore = Math.max(50, Math.min(100, csResult.score));
     } else {
       conditionScore = Math.max(50, Math.min(100, Math.round(conditionScore)));
