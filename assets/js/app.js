@@ -889,8 +889,8 @@ function normalizeType(seg){
   return "interval"; // 기본값
 }
 
-// 세그먼트 카운트다운 상태 관리 (전역)
-let segmentCountdownActive = false;
+// 세그먼트 카운트다운 상태 관리 (전역) — individual.js와 중복 선언 방지
+if (typeof window.segmentCountdownActive === 'undefined') window.segmentCountdownActive = false;
 let segmentCountdownTimer = null;
 let countdownTriggered = []; // 세그먼트별 카운트다운 트리거 상태
 
@@ -1023,12 +1023,12 @@ function startSegmentCountdown(initialNumber, nextSegment) {
   }
   
   // initialNumber 는 보통 5 (6초 시점에서 5 표시)
-  if (segmentCountdownActive) return;
-  segmentCountdownActive = true;
+  if (window.segmentCountdownActive) return;
+  window.segmentCountdownActive = true;
 
   const ok = CountdownDisplay.ensure(nextSegment);
   if (!ok) {
-    segmentCountdownActive = false;
+    window.segmentCountdownActive = false;
     return;
   }
 
@@ -1054,13 +1054,13 @@ function stopSegmentCountdown() {
   // 모바일 대시보드용 카운트다운도 정지
   MobileCountdownDisplay.hideImmediate();
   
-  segmentCountdownActive = false;     // [PATCH] 상태 리셋
+  window.segmentCountdownActive = false;     // [PATCH] 상태 리셋
    
   if (segmentCountdownTimer) {
     clearInterval(segmentCountdownTimer);
     segmentCountdownTimer = null;
   }
-  segmentCountdownActive = false;
+  window.segmentCountdownActive = false;
 }
 
 
@@ -1143,7 +1143,7 @@ function stopSegmentCountdown() {
     overlay.style.display = "none";
   }
   
-  segmentCountdownActive = false;
+  window.segmentCountdownActive = false;
 }
 
 // 세그먼트 건너뛰기 시에도 카운트다운 정리
@@ -1167,7 +1167,7 @@ function skipCurrentSegment() {
     }
     
     // 활성 카운트다운 정지
-    if (segmentCountdownActive) {
+    if (window.segmentCountdownActive) {
       stopSegmentCountdown();
     }
     
@@ -2795,8 +2795,8 @@ function startSegmentLoop() {
         if (remainMsNow <= 0) {
           // 이미 종료된 세그먼트이므로 카운트다운 로직 건너뛰기
           // 카운트다운이 활성화되어 있으면 즉시 종료
-          if (segmentCountdownActive) {
-            segmentCountdownActive = false;
+          if (window.segmentCountdownActive) {
+            window.segmentCountdownActive = false;
             CountdownDisplay.hideImmediate();
             MobileCountdownDisplay.hideImmediate();
           }
@@ -2827,8 +2827,8 @@ function startSegmentLoop() {
         // remainMsNow가 0 이하이면 더 이상 카운트다운 실행하지 않음 (0초 반복 방지)
         if (remainMsNow <= 0) {
           // 이미 종료된 세그먼트이므로 카운트다운 종료 및 상태 초기화
-          if (segmentCountdownActive) {
-            segmentCountdownActive = false;
+          if (window.segmentCountdownActive) {
+            window.segmentCountdownActive = false;
             CountdownDisplay.hideImmediate();
             MobileCountdownDisplay.hideImmediate();
           }
@@ -2843,9 +2843,9 @@ function startSegmentLoop() {
         }
       
         // 오버레이 표시 시작(6초 시점에 "5" 표시)
-        if (n === 5 && !segmentCountdownActive && nextSeg) {
+        if (n === 5 && !window.segmentCountdownActive && nextSeg) {
           startSegmentCountdown(5, nextSeg); // 오버레이 켜고 5 표시 + 짧은 비프
-        } else if (segmentCountdownActive) {
+        } else if (window.segmentCountdownActive) {
           // 진행 중이면 숫자 업데이트만(내부 타이머 없음)
           CountdownDisplay.render(n);
           
@@ -2878,7 +2878,7 @@ function startSegmentLoop() {
             MobileCountdownDisplay.finish(800);
           }
           
-          segmentCountdownActive = false;
+          window.segmentCountdownActive = false;
         }
       
         ts._countdownFired[key] = { ...firedMap, [n]: true };
@@ -2977,7 +2977,7 @@ function startSegmentLoop() {
    
    if (shouldTransition) {
      // (변경) 소리와 전환을 분리: 전환은 즉시, 소리는 비동기로 마무리
-     if (segmentCountdownActive && typeof stopSegmentCountdown === "function") {
+     if (window.segmentCountdownActive && typeof stopSegmentCountdown === "function") {
        setTimeout(() => { try { stopSegmentCountdown(); } catch(_){} }, 750);
      }
    
@@ -3019,7 +3019,7 @@ function startSegmentLoop() {
        applySegmentTarget(nextSegIndex);
    
        // 남아있을 수 있는 카운트다운 정리
-       if (segmentCountdownActive) {
+       if (window.segmentCountdownActive) {
          stopSegmentCountdown();
        }
    
@@ -3101,7 +3101,7 @@ function setPaused(isPaused) {
   }
 
   // 카운트다운 정지
-  if (wantPause && segmentCountdownActive) stopSegmentCountdown();
+  if (wantPause && window.segmentCountdownActive) stopSegmentCountdown();
 
   const btn = safeGetElement("btnTogglePause");
   if (btn) {

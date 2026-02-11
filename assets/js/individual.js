@@ -14,8 +14,9 @@ while (!myBikeId) {
     }
 }
 
-// 초기 표시 (나중에 사용자 이름으로 업데이트됨)
-document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
+// 초기 표시 (나중에 사용자 이름으로 업데이트됨) — individual.html 전용, index.html에서는 요소 없음
+var bikeIdEl = document.getElementById('bike-id-display');
+if (bikeIdEl) bikeIdEl.innerText = 'Bike ' + myBikeId;
 
 // 사용자 FTP 값 저장 (전역 변수)
 let userFTP = 200; // 기본값 200W
@@ -922,8 +923,8 @@ function updateIndividualLapTimeDisplay(elapsedSeconds) {
 // Firebase status 저장용 전역 변수
 window.individualFirebaseStatus = null;
 
-// 5초 카운트다운 상태 관리
-let segmentCountdownActive = false;
+// 5초 카운트다운 상태 관리 (app.js와 공유 — window 사용)
+window.segmentCountdownActive = window.segmentCountdownActive ?? false;
 let segmentCountdownTimer = null;
 let lastCountdownValue = null;
 let startCountdownActive = false; // 시작 카운트다운 활성 상태
@@ -1112,7 +1113,7 @@ function handleSegmentCountdown(countdownValue, status) {
         // 5초 이상이면 오버레이 표시하지 않음 (Firebase 동기화 지연 고려)
         if (countdownValue <= 5) {
             // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
-            if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+            if (lastCountdownValue !== countdownValue || !window.segmentCountdownActive) {
                 lastCountdownValue = countdownValue;
                 // 0일 때는 "GO!!" 표시
                 const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
@@ -1151,7 +1152,7 @@ function handleSegmentCountdown(countdownValue, status) {
     // 세그먼트 카운트다운 처리 (기존 로직)
     // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
     if (countdownValue === null || countdownValue > 5) {
-        if (segmentCountdownActive && !startCountdownActive) {
+        if (window.segmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -1161,13 +1162,13 @@ function handleSegmentCountdown(countdownValue, status) {
     // 5초 이하일 때만 오버레이 표시
     if (countdownValue <= 5 && countdownValue >= 0) {
         // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
-        if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+        if (lastCountdownValue !== countdownValue || !window.segmentCountdownActive) {
             lastCountdownValue = countdownValue;
             showSegmentCountdown(countdownValue);
         }
     } else if (countdownValue < 0) {
         // 0 미만이면 오버레이 숨김 (시작 카운트다운이 아닐 때만)
-        if (segmentCountdownActive && !startCountdownActive) {
+        if (window.segmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -1219,7 +1220,7 @@ function showSegmentCountdown(value) {
         });
     }
     
-    segmentCountdownActive = true;
+    window.segmentCountdownActive = true;
     
     // 0 또는 "GO!!"일 때 1초 후 오버레이 숨김 (GO!!는 더 길게 표시)
     if (value === 0 || value === 'GO!!') {
@@ -1270,7 +1271,7 @@ function stopSegmentCountdown() {
         segmentCountdownTimer = null;
     }
     
-    segmentCountdownActive = false;
+    window.segmentCountdownActive = false;
     lastCountdownValue = null;
     startCountdownActive = false;
     goDisplayTime = null;
