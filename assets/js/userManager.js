@@ -469,8 +469,8 @@ async function signInWithGoogle() {
       await userDocRef.update({
         lastLogin: firebase.firestore.FieldValue.serverTimestamp()
       });
-      var docDataSignIn = userDoc.data();
-      const userData = { id: user.uid, ...(docDataSignIn != null && typeof docDataSignIn === 'object' ? docDataSignIn : {}) };
+      
+      const userData = { id: user.uid, ...userDoc.data() };
       
       // 전역 상태 업데이트
       window.currentUser = userData;
@@ -624,8 +624,8 @@ function initAuthStateListener() {
         await userDocRef.update({
           lastLogin: firebase.firestore.FieldValue.serverTimestamp()
         });
-        var docDataRedirect = userDoc.data();
-        const userData = { id: result.user.uid, ...(docDataRedirect != null && typeof docDataRedirect === 'object' ? docDataRedirect : {}) };
+        
+        const userData = { id: result.user.uid, ...userDoc.data() };
         
         // 전역 상태 업데이트
         window.currentUser = userData;
@@ -746,8 +746,7 @@ function initAuthStateListener() {
           // compat auth + compat firestore 사용
           const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
           if (userDoc.exists) {
-            var docDataAuth = userDoc.data();
-            userData = { id: firebaseUser.uid, ...(docDataAuth != null && typeof docDataAuth === 'object' ? docDataAuth : {}) };
+            userData = { id: firebaseUser.uid, ...userDoc.data() };
           }
         }
         
@@ -977,12 +976,11 @@ async function apiGetUsers() {
           console.error('[apiGetUsers] Firebase Firestore CDN 로드 실패 (방화벽/네트워크 확인):', importErr);
           throw new Error('Firebase 모듈을 불러올 수 없습니다. 회사 WiFi/방화벽에서 gstatic.com 차단 여부를 확인해주세요.');
         }
-        var fsMod = firestoreModule && typeof firestoreModule.getDoc === 'function' ? firestoreModule : (firestoreModule && firestoreModule.default);
-        if (!fsMod || typeof fsMod.getDoc !== 'function') {
+        if (!firestoreModule || typeof firestoreModule.getDoc !== 'function') {
           console.error('[apiGetUsers] Firestore 모듈이 비정상입니다. CDN 응답 확인 필요.');
           throw new Error('Firebase Firestore 모듈을 사용할 수 없습니다. 네트워크 환경을 확인해주세요.');
         }
-        const { getDoc, doc, collection } = fsMod;
+        const { getDoc, doc, collection } = firestoreModule;
         const usersRef = collection(window.firestoreV9, 'users');
         const userDocRef = doc(usersRef, userIdToCheck);
         const userDocSnap = await getDoc(userDocRef);
@@ -1070,20 +1068,18 @@ async function apiGetUsers() {
             console.error('[apiGetUsers] Firebase Firestore CDN 로드 실패:', importErr);
             throw new Error('Firebase 모듈을 불러올 수 없습니다. 회사 WiFi/방화벽에서 gstatic.com 차단 여부를 확인해주세요.');
           }
-          var fsModAdmin = firestoreModule && typeof firestoreModule.getDocs === 'function' ? firestoreModule : (firestoreModule && firestoreModule.default);
-          if (!fsModAdmin || typeof fsModAdmin.getDocs !== 'function') {
+          if (!firestoreModule || typeof firestoreModule.getDocs !== 'function') {
             throw new Error('Firebase Firestore 모듈을 사용할 수 없습니다. 네트워크 환경을 확인해주세요.');
           }
-          const { getDocs, collection } = fsModAdmin;
+          const { getDocs, collection } = firestoreModule;
           const usersRef = collection(window.firestoreV9, 'users');
           const usersSnapshot = await getDocs(usersRef);
           const users = [];
           
-          usersSnapshot.forEach(function(doc) {
-            var d = doc.data();
+          usersSnapshot.forEach(doc => {
             users.push({
               id: doc.id,
-              ...(d != null && typeof d === 'object' ? d : {})
+              ...doc.data()
             });
           });
           
@@ -1098,11 +1094,10 @@ async function apiGetUsers() {
           const usersSnapshot = await getUsersCollection().get();
           const users = [];
           
-          usersSnapshot.forEach(function(doc) {
-            var d = doc.data();
+          usersSnapshot.forEach(doc => {
             users.push({
               id: doc.id,
-              ...(d != null && typeof d === 'object' ? d : {})
+              ...doc.data()
             });
           });
           
@@ -1167,12 +1162,7 @@ async function apiGetUser(id) {
     
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
-      var fsModGetUser = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      if (!fsModGetUser || (typeof fsModGetUser.getDoc !== 'function' && (!fsModGetUser.default || typeof fsModGetUser.default.getDoc !== 'function'))) {
-        return { success: false, error: 'Firebase Firestore 모듈을 불러올 수 없습니다.' };
-      }
-      var fsNamespace = typeof fsModGetUser.getDoc === 'function' ? fsModGetUser : fsModGetUser.default;
-      const { getDoc, doc, collection } = fsNamespace;
+      const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
       const usersRef = collection(window.firestoreV9, 'users');
       const userDocRef = doc(usersRef, id);
       const userDocSnap = await getDoc(userDocRef);
@@ -1181,10 +1171,9 @@ async function apiGetUser(id) {
         return { success: false, error: 'User not found' };
       }
       
-      var snapData = userDocSnap.data();
       const userData = {
         id: userDocSnap.id,
-        ...(snapData != null && typeof snapData === 'object' ? snapData : {})
+        ...userDocSnap.data()
       };
       
       return { success: true, item: userData };
@@ -1196,10 +1185,9 @@ async function apiGetUser(id) {
         return { success: false, error: 'User not found' };
       }
       
-      var docData = userDoc.data();
       const userData = {
         id: userDoc.id,
-        ...(docData != null && typeof docData === 'object' ? docData : {})
+        ...userDoc.data()
       };
       
       return { success: true, item: userData };
@@ -1300,12 +1288,7 @@ async function apiCreateUser(userData) {
     // Firestore에 저장
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
-      var fsModSet = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      if (!fsModSet || (typeof fsModSet.setDoc !== 'function' && (!fsModSet.default || typeof fsModSet.default.setDoc !== 'function'))) {
-        return { success: false, error: 'Firebase Firestore 모듈을 불러올 수 없습니다.' };
-      }
-      var fsSetNamespace = typeof fsModSet.setDoc === 'function' ? fsModSet : fsModSet.default;
-      const { setDoc, doc, collection } = fsSetNamespace;
+      const { setDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
       const usersRef = collection(window.firestoreV9, 'users');
       const userDocRef = doc(usersRef, currentUser.uid);
       await setDoc(userDocRef, newUserData);
@@ -1366,12 +1349,7 @@ async function apiUpdateUser(id, userData) {
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
-      var fsModUpdate = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      if (!fsModUpdate || (typeof fsModUpdate.updateDoc !== 'function' && (!fsModUpdate.default || typeof fsModUpdate.default.updateDoc !== 'function'))) {
-        return { success: false, error: 'Firebase Firestore 모듈을 불러올 수 없습니다.' };
-      }
-      var fsUpdateNs = typeof fsModUpdate.updateDoc === 'function' ? fsModUpdate : fsModUpdate.default;
-      const { updateDoc, doc, collection } = fsUpdateNs;
+      const { updateDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
       const usersRef = collection(window.firestoreV9, 'users');
       const userDocRef = doc(usersRef, id);
       await updateDoc(userDocRef, updateData);
@@ -1406,12 +1384,7 @@ async function apiDeleteUser(id) {
     
     // 1. Firestore에서 사용자 문서 삭제
     if (window.firestoreV9) {
-      var fsModDelete = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      if (!fsModDelete || (typeof fsModDelete.deleteDoc !== 'function' && (!fsModDelete.default || typeof fsModDelete.default.deleteDoc !== 'function'))) {
-        return { success: false, error: 'Firebase Firestore 모듈을 불러올 수 없습니다.' };
-      }
-      var fsDeleteNs = typeof fsModDelete.deleteDoc === 'function' ? fsModDelete : fsModDelete.default;
-      const { deleteDoc, doc, collection } = fsDeleteNs;
+      const { deleteDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
       const usersRef = collection(window.firestoreV9, 'users');
       const userDocRef = doc(usersRef, id);
       await deleteDoc(userDocRef);
@@ -1445,9 +1418,8 @@ async function apiDeleteUser(id) {
           
           // v9 Modular 삭제
           if (currentAuthV9User && currentAuthV9User.uid === id && window.authV9) {
-            var authDelMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-            var deleteUserV9Fn = (authDelMod && typeof authDelMod.deleteUser === 'function') ? authDelMod.deleteUser : (authDelMod && authDelMod.default && authDelMod.default.deleteUser);
-            if (typeof deleteUserV9Fn === 'function') await deleteUserV9Fn(currentAuthV9User);
+            const { deleteUser: deleteUserV9 } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+            await deleteUserV9(currentAuthV9User);
             console.log('✅ Firebase Authentication에서 본인 계정 삭제 완료 (v9):', id);
           }
         } catch (authError) {
@@ -3008,9 +2980,8 @@ async function deleteUser(userId) {
               await window.auth.signOut();
             }
             if (window.authV9?.currentUser) {
-              var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-              var signOutFn = (authMod && typeof authMod.signOut === 'function') ? authMod.signOut : (authMod && authMod.default && authMod.default.signOut);
-              if (typeof signOutFn === 'function') await signOutFn(window.authV9);
+              const { signOut } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+              await signOut(window.authV9);
             }
           }
           // 프로필 선택 화면으로 이동
