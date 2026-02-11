@@ -891,7 +891,7 @@ function normalizeType(seg){
 
 // 세그먼트 카운트다운 상태 관리 (전역) — individual.js와 중복 선언 방지
 if (typeof window.segmentCountdownActive === 'undefined') window.segmentCountdownActive = false;
-let segmentCountdownTimer = null;
+if (typeof window.segmentCountdownTimer === 'undefined') window.segmentCountdownTimer = null;
 let countdownTriggered = []; // 세그먼트별 카운트다운 트리거 상태
 
 
@@ -1056,9 +1056,9 @@ function stopSegmentCountdown() {
   
   window.segmentCountdownActive = false;     // [PATCH] 상태 리셋
    
-  if (segmentCountdownTimer) {
-    clearInterval(segmentCountdownTimer);
-    segmentCountdownTimer = null;
+  if (window.segmentCountdownTimer) {
+    clearInterval(window.segmentCountdownTimer);
+    window.segmentCountdownTimer = null;
   }
   window.segmentCountdownActive = false;
 }
@@ -1132,9 +1132,9 @@ function startWithCountdown(sec = 5) {
 // 카운트다운 강제 정지 함수
 function stopSegmentCountdown() {
   console.log('카운트다운 강제 정지');
-  if (segmentCountdownTimer) {
-    clearInterval(segmentCountdownTimer);
-    segmentCountdownTimer = null;
+  if (window.segmentCountdownTimer) {
+    clearInterval(window.segmentCountdownTimer);
+    window.segmentCountdownTimer = null;
   }
   
   const overlay = document.getElementById("countdownOverlay");
