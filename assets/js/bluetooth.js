@@ -245,25 +245,14 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     var optionalServices;
     
     if (savedDeviceName && String(savedDeviceName).trim()) {
-      // 저장된 디바이스만 보이게: namePrefix + 서비스 조합(한 필터에 둘 다 만족하는 기기만 표시)
+      // 저장된 디바이스만 보이게: 이름만으로 필터(서비스는 optionalServices로만 요청 → 검색 목록은 해당 기기만 표시)
       var namePrefix = String(savedDeviceName).trim();
+      filters = [{ namePrefix: namePrefix }];
       if (deviceType === 'heartRate') {
-        filters = [
-          { namePrefix: namePrefix, services: ['heart_rate'] },
-          { namePrefix: namePrefix, services: [UUIDS.HR_SERVICE] }
-        ];
         optionalServices = ['heart_rate', UUIDS.HR_SERVICE, 'battery_service'];
       } else if (deviceType === 'trainer') {
-        filters = [
-          { namePrefix: namePrefix, services: [UUIDS.FTMS_SERVICE] },
-          { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] }
-        ];
         optionalServices = mergeOptionalServicesWithLegacy([UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']);
       } else if (deviceType === 'powerMeter') {
-        filters = [
-          { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] },
-          { namePrefix: namePrefix, services: [UUIDS.CSC_SERVICE] }
-        ];
         optionalServices = [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
       }
     }
@@ -393,9 +382,9 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
   } catch (e) {
     result = null;
   }
-  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (실제 기기명 우선 → 저장된 디바이스만 보이게)
+  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (실제 기기명 우선 → 검색 시 해당 기기만 표시)
   if (!result && navigator.bluetooth && (saved.name || saved.nickname)) {
-    const nameForFilter = saved.name || saved.nickname || '';
+    const nameForFilter = (saved.name && String(saved.name).trim()) ? String(saved.name).trim() : (saved.nickname && String(saved.nickname).trim()) ? String(saved.nickname).trim() : '';
     if (nameForFilter) {
       try {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
@@ -774,7 +763,10 @@ async function connectTrainer() {
         if (nickname) {
           saveDevice(device.id, deviceName, 'trainer', nickname);
           showToast('✅ ' + nickname + ' 저장 완료');
-          if (typeof updateDevicesList === 'function') updateDevicesList();
+          if (typeof updateDevicesList === 'function') {
+            updateDevicesList();
+            setTimeout(function () { updateDevicesList(); }, 250);
+          }
         }
       });
     } else {
@@ -1010,7 +1002,10 @@ async function connectHeartRate() {
         if (nickname) {
           saveDevice(device.id, deviceName, 'heartRate', nickname);
           showToast('✅ ' + nickname + ' 저장 완료');
-          if (typeof updateDevicesList === 'function') updateDevicesList();
+          if (typeof updateDevicesList === 'function') {
+            updateDevicesList();
+            setTimeout(function () { updateDevicesList(); }, 250);
+          }
         }
       });
     } else {
@@ -1138,7 +1133,10 @@ async function connectPowerMeter() {
         if (nickname) {
           saveDevice(device.id, deviceName, 'powerMeter', nickname);
           showToast('✅ ' + nickname + ' 저장 완료');
-          if (typeof updateDevicesList === 'function') updateDevicesList();
+          if (typeof updateDevicesList === 'function') {
+            updateDevicesList();
+            setTimeout(function () { updateDevicesList(); }, 250);
+          }
         }
       });
     } else {
