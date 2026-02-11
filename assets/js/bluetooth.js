@@ -153,18 +153,84 @@ window.saveDevice = window.saveDevice || saveDevice;
 window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
 window.MAX_BLUETOOTH_DEVICES_IN_LIST = MAX_BLUETOOTH_DEVICES_IN_LIST;
 
-// 닉네임 입력 모달 표시
+// 닉네임 입력 모달 표시 (모바일 iOS Bluefy/Android에서 prompt()가 동작하지 않으므로 DOM 모달 사용)
 function showNicknameModal(deviceName, callback) {
-  const nickname = prompt(
-    `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
-    deviceName || ''
-  );
-  
-  if (nickname !== null && nickname.trim()) {
-    callback(nickname.trim());
-    return true;
-  }
-  return false;
+  var displayName = (deviceName && String(deviceName).trim()) ? deviceName : '알 수 없는 기기';
+  var existing = document.getElementById('bluetoothNicknameModal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'bluetoothNicknameModal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-label', '기기 이름 저장');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,0.6);-webkit-tap-highlight-color:transparent;';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#1e293b;border-radius:12px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.4);';
+
+  var title = document.createElement('p');
+  title.style.cssText = 'margin:0 0 8px 0;font-size:15px;color:#e2e8f0;';
+  title.textContent = '이 기기를 저장할 이름을 입력하세요';
+
+  var hint = document.createElement('p');
+  hint.style.cssText = 'margin:0 0 12px 0;font-size:12px;color:#94a3b8;';
+  hint.textContent = '기기명: ' + displayName;
+
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.value = displayName;
+  input.placeholder = '예: 지성이의 로라, 센터 3번 자전거';
+  input.setAttribute('autocomplete', 'off');
+  input.style.cssText = 'width:100%;padding:12px;font-size:16px;border:1px solid #475569;border-radius:8px;background:#0f172a;color:#e2e8f0;box-sizing:border-box;margin-bottom:16px;';
+
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.textContent = '취소';
+  cancelBtn.style.cssText = 'padding:10px 18px;font-size:14px;border-radius:8px;border:1px solid #475569;background:transparent;color:#94a3b8;cursor:pointer;';
+  cancelBtn.onclick = function () {
+    overlay.remove();
+    if (typeof callback === 'function') callback(null);
+  };
+
+  var saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.textContent = '저장';
+  saveBtn.style.cssText = 'padding:10px 18px;font-size:14px;border-radius:8px;border:none;background:#0ea5e9;color:#fff;cursor:pointer;';
+  saveBtn.onclick = function () {
+    var val = (input.value && input.value.trim()) ? input.value.trim() : '';
+    overlay.remove();
+    if (val && typeof callback === 'function') {
+      callback(val);
+      return true;
+    }
+    if (typeof callback === 'function') callback(null);
+    return false;
+  };
+
+  overlay.appendChild(modal);
+  modal.appendChild(title);
+  modal.appendChild(hint);
+  modal.appendChild(input);
+  modal.appendChild(wrap);
+  wrap.appendChild(cancelBtn);
+  wrap.appendChild(saveBtn);
+
+  overlay.onclick = function (e) {
+    if (e.target === overlay) {
+      overlay.remove();
+      if (typeof callback === 'function') callback(null);
+    }
+  };
+  modal.onclick = function (e) { e.stopPropagation(); };
+
+  document.body.appendChild(overlay);
+  input.focus();
+  input.select();
+
+  return true;
 }
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
@@ -469,7 +535,9 @@ window.showToast = window.showToast || function (msg) {
   setTimeout(() => t.classList.remove("show"), 2400);
 };
 window.updateDevicesList = function () {
-    if (typeof window.updateDeviceButtonImages === 'function') window.updateDeviceButtonImages();
+  if (typeof window.updateDeviceButtonImages === 'function') window.updateDeviceButtonImages();
+  if (typeof window.updateIndividualBluetoothConnectionStatus === 'function') window.updateIndividualBluetoothConnectionStatus();
+  if (typeof window.updateMobileBluetoothConnectionStatus === 'function') window.updateMobileBluetoothConnectionStatus();
 };
 
 // ── [Connection Engine] ──
@@ -703,8 +771,11 @@ async function connectTrainer() {
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'trainer', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
+        if (nickname) {
+          saveDevice(device.id, deviceName, 'trainer', nickname);
+          showToast('✅ ' + nickname + ' 저장 완료');
+          if (typeof updateDevicesList === 'function') updateDevicesList();
+        }
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
@@ -936,8 +1007,11 @@ async function connectHeartRate() {
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'heartRate', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
+        if (nickname) {
+          saveDevice(device.id, deviceName, 'heartRate', nickname);
+          showToast('✅ ' + nickname + ' 저장 완료');
+          if (typeof updateDevicesList === 'function') updateDevicesList();
+        }
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
@@ -1061,8 +1135,11 @@ async function connectPowerMeter() {
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'powerMeter', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
+        if (nickname) {
+          saveDevice(device.id, deviceName, 'powerMeter', nickname);
+          showToast('✅ ' + nickname + ' 저장 완료');
+          if (typeof updateDevicesList === 'function') updateDevicesList();
+        }
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
