@@ -468,7 +468,6 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         console.error('[Individual] users/{userId}/workout/workoutPlan 구독 실패:', error);
     }
 })();
-});
 
 // =========================================================
 // UI 업데이트 함수들
