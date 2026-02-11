@@ -31,6 +31,47 @@ const COMPREHENSIVE_ERG_OPTIONAL_SERVICES = [
   '00001818-0000-1000-8000-00805f9b34fb'  // Cycling Power (CPS)
 ];
 
+// app.js LEGACY_UUIDS와 동일: iOS Bluefy/구형 기기 호환용 (optionalServices에 통합)
+const LEGACY_UUIDS = [
+  'a026ee01-0a1d-4335-9d7f-245f24e1a229', // Wahoo/CycleOps 표준 제어
+  '347b0001-7635-408b-8918-8ff3949ce592', // 아주 오래된 CycleOps 기기용
+  '00001826-0000-1000-8000-00805f9b34fb'  // FTMS (표준)
+];
+
+// 모바일 기기 검색 무한 대기 방지 (10초 타임아웃)
+const REQUEST_DEVICE_TIMEOUT_MS = 10000;
+
+function mergeOptionalServicesWithLegacy(baseList) {
+  if (!Array.isArray(baseList)) baseList = [];
+  var merged = baseList.slice();
+  LEGACY_UUIDS.forEach(function (uuid) {
+    if (merged.indexOf(uuid) === -1) merged.push(uuid);
+  });
+  COMPREHENSIVE_ERG_OPTIONAL_SERVICES.forEach(function (uuid) {
+    if (merged.indexOf(uuid) === -1) merged.push(uuid);
+  });
+  return merged;
+}
+
+// requestDevice 호출을 타임아웃으로 래핑 (모바일 무한 대기 방지)
+function requestDeviceWithTimeout(options, timeoutMs) {
+  timeoutMs = timeoutMs || REQUEST_DEVICE_TIMEOUT_MS;
+  if (!navigator.bluetooth || !navigator.bluetooth.requestDevice) {
+    return Promise.reject(new Error('Bluetooth API를 사용할 수 없습니다.'));
+  }
+  var timeoutId;
+  var timeoutPromise = new Promise(function (_, reject) {
+    timeoutId = setTimeout(function () {
+      reject(new Error('REQUEST_DEVICE_TIMEOUT'));
+    }, timeoutMs);
+  });
+  var requestPromise = navigator.bluetooth.requestDevice(options).then(function (device) {
+    clearTimeout(timeoutId);
+    return device;
+  });
+  return Promise.race([requestPromise, timeoutPromise]);
+}
+
 // Global State
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
@@ -151,7 +192,7 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
           { namePrefix: namePrefix, services: [UUIDS.FTMS_SERVICE] },
           { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] }
         ];
-        optionalServices = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
+        optionalServices = mergeOptionalServicesWithLegacy([UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']);
       } else if (deviceType === 'powerMeter') {
         filters = [
           { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] },
@@ -176,7 +217,7 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         filters.push({ namePrefix: 'Wahoo' });
         filters.push({ namePrefix: 'KICKR' });
         filters.push({ namePrefix: 'Tacx' });
-        optionalServices = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
+        optionalServices = mergeOptionalServicesWithLegacy([UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']);
       } else if (deviceType === 'powerMeter') {
         filters.push({ services: [UUIDS.CPS_SERVICE] });
         filters.push({ services: [UUIDS.CSC_SERVICE] });
@@ -186,11 +227,15 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     
     var device;
     try {
-      device = await navigator.bluetooth.requestDevice({
+      device = await requestDeviceWithTimeout({
         filters: filters.length > 0 ? filters : undefined,
         optionalServices: optionalServices
-      });
+      }, REQUEST_DEVICE_TIMEOUT_MS);
     } catch (strictErr) {
+      if (strictErr && strictErr.message === 'REQUEST_DEVICE_TIMEOUT') {
+        if (typeof showToast === 'function') showToast('기기를 찾을 수 없습니다. 전원을 확인해주세요.');
+        throw new Error('기기 검색 시간이 초과되었습니다.');
+      }
       // 저장된 이름만 필터했는데 기기 없음(이름 변경 등): 넓은 필터로 재시도
       if (savedDeviceName && String(savedDeviceName).trim() && filters.length > 0) {
         var broadFilters = [];
@@ -208,10 +253,10 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         if (broadFilters.length > 0 && typeof showToast === 'function') {
           showToast('저장된 기기 이름과 일치하는 기기가 없습니다. 목록에서 선택해주세요.');
         }
-        device = await navigator.bluetooth.requestDevice({
+        device = await requestDeviceWithTimeout({
           filters: broadFilters,
           optionalServices: optionalServices
-        });
+        }, REQUEST_DEVICE_TIMEOUT_MS);
       } else {
         throw strictErr;
       }
@@ -219,6 +264,9 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     return device;
   } catch (error) {
     console.error('[requestDeviceWithSavedInfo] 기기 요청 실패:', error);
+    if (error && error.name === 'SecurityError' && typeof showToast === 'function') {
+      showToast('블루투스 권한이 거부되었습니다. 브라우저 설정에서 허용해주세요.');
+    }
     throw error;
   }
 }
