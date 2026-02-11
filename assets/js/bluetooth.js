@@ -31,47 +31,6 @@ const COMPREHENSIVE_ERG_OPTIONAL_SERVICES = [
   '00001818-0000-1000-8000-00805f9b34fb'  // Cycling Power (CPS)
 ];
 
-// app.js LEGACY_UUIDS와 동일: iOS Bluefy/구형 기기 호환용 (optionalServices에 통합)
-const LEGACY_UUIDS = [
-  'a026ee01-0a1d-4335-9d7f-245f24e1a229', // Wahoo/CycleOps 표준 제어
-  '347b0001-7635-408b-8918-8ff3949ce592', // 아주 오래된 CycleOps 기기용
-  '00001826-0000-1000-8000-00805f9b34fb'  // FTMS (표준)
-];
-
-// 모바일 기기 검색 무한 대기 방지 (10초 타임아웃)
-const REQUEST_DEVICE_TIMEOUT_MS = 10000;
-
-function mergeOptionalServicesWithLegacy(baseList) {
-  if (!Array.isArray(baseList)) baseList = [];
-  var merged = baseList.slice();
-  LEGACY_UUIDS.forEach(function (uuid) {
-    if (merged.indexOf(uuid) === -1) merged.push(uuid);
-  });
-  COMPREHENSIVE_ERG_OPTIONAL_SERVICES.forEach(function (uuid) {
-    if (merged.indexOf(uuid) === -1) merged.push(uuid);
-  });
-  return merged;
-}
-
-// requestDevice 호출을 타임아웃으로 래핑 (모바일 무한 대기 방지)
-function requestDeviceWithTimeout(options, timeoutMs) {
-  timeoutMs = timeoutMs || REQUEST_DEVICE_TIMEOUT_MS;
-  if (!navigator.bluetooth || !navigator.bluetooth.requestDevice) {
-    return Promise.reject(new Error('Bluetooth API를 사용할 수 없습니다.'));
-  }
-  var timeoutId;
-  var timeoutPromise = new Promise(function (_, reject) {
-    timeoutId = setTimeout(function () {
-      reject(new Error('REQUEST_DEVICE_TIMEOUT'));
-    }, timeoutMs);
-  });
-  var requestPromise = navigator.bluetooth.requestDevice(options).then(function (device) {
-    clearTimeout(timeoutId);
-    return device;
-  });
-  return Promise.race([requestPromise, timeoutPromise]);
-}
-
 // Global State
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
@@ -153,84 +112,18 @@ window.saveDevice = window.saveDevice || saveDevice;
 window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
 window.MAX_BLUETOOTH_DEVICES_IN_LIST = MAX_BLUETOOTH_DEVICES_IN_LIST;
 
-// 닉네임 입력 모달 표시 (모바일 iOS Bluefy/Android에서 prompt()가 동작하지 않으므로 DOM 모달 사용)
+// 닉네임 입력 모달 표시
 function showNicknameModal(deviceName, callback) {
-  var displayName = (deviceName && String(deviceName).trim()) ? deviceName : '알 수 없는 기기';
-  var existing = document.getElementById('bluetoothNicknameModal');
-  if (existing) existing.remove();
-
-  var overlay = document.createElement('div');
-  overlay.id = 'bluetoothNicknameModal';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-label', '기기 이름 저장');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(0,0,0,0.6);-webkit-tap-highlight-color:transparent;';
-
-  var modal = document.createElement('div');
-  modal.style.cssText = 'background:#1e293b;border-radius:12px;padding:20px;max-width:360px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.4);';
-
-  var title = document.createElement('p');
-  title.style.cssText = 'margin:0 0 8px 0;font-size:15px;color:#e2e8f0;';
-  title.textContent = '이 기기를 저장할 이름을 입력하세요';
-
-  var hint = document.createElement('p');
-  hint.style.cssText = 'margin:0 0 12px 0;font-size:12px;color:#94a3b8;';
-  hint.textContent = '기기명: ' + displayName;
-
-  var input = document.createElement('input');
-  input.type = 'text';
-  input.value = displayName;
-  input.placeholder = '예: 지성이의 로라, 센터 3번 자전거';
-  input.setAttribute('autocomplete', 'off');
-  input.style.cssText = 'width:100%;padding:12px;font-size:16px;border:1px solid #475569;border-radius:8px;background:#0f172a;color:#e2e8f0;box-sizing:border-box;margin-bottom:16px;';
-
-  var wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
-
-  var cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.textContent = '취소';
-  cancelBtn.style.cssText = 'padding:10px 18px;font-size:14px;border-radius:8px;border:1px solid #475569;background:transparent;color:#94a3b8;cursor:pointer;';
-  cancelBtn.onclick = function () {
-    overlay.remove();
-    if (typeof callback === 'function') callback(null);
-  };
-
-  var saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.textContent = '저장';
-  saveBtn.style.cssText = 'padding:10px 18px;font-size:14px;border-radius:8px;border:none;background:#0ea5e9;color:#fff;cursor:pointer;';
-  saveBtn.onclick = function () {
-    var val = (input.value && input.value.trim()) ? input.value.trim() : '';
-    overlay.remove();
-    if (val && typeof callback === 'function') {
-      callback(val);
-      return true;
-    }
-    if (typeof callback === 'function') callback(null);
-    return false;
-  };
-
-  overlay.appendChild(modal);
-  modal.appendChild(title);
-  modal.appendChild(hint);
-  modal.appendChild(input);
-  modal.appendChild(wrap);
-  wrap.appendChild(cancelBtn);
-  wrap.appendChild(saveBtn);
-
-  overlay.onclick = function (e) {
-    if (e.target === overlay) {
-      overlay.remove();
-      if (typeof callback === 'function') callback(null);
-    }
-  };
-  modal.onclick = function (e) { e.stopPropagation(); };
-
-  document.body.appendChild(overlay);
-  input.focus();
-  input.select();
-
-  return true;
+  const nickname = prompt(
+    `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
+    deviceName || ''
+  );
+  
+  if (nickname !== null && nickname.trim()) {
+    callback(nickname.trim());
+    return true;
+  }
+  return false;
 }
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
@@ -245,14 +138,25 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     var optionalServices;
     
     if (savedDeviceName && String(savedDeviceName).trim()) {
-      // 저장된 디바이스만 보이게: 이름만으로 필터(서비스는 optionalServices로만 요청 → 검색 목록은 해당 기기만 표시)
+      // 저장된 디바이스만 보이게: namePrefix + 서비스 조합(한 필터에 둘 다 만족하는 기기만 표시)
       var namePrefix = String(savedDeviceName).trim();
-      filters = [{ namePrefix: namePrefix }];
       if (deviceType === 'heartRate') {
+        filters = [
+          { namePrefix: namePrefix, services: ['heart_rate'] },
+          { namePrefix: namePrefix, services: [UUIDS.HR_SERVICE] }
+        ];
         optionalServices = ['heart_rate', UUIDS.HR_SERVICE, 'battery_service'];
       } else if (deviceType === 'trainer') {
-        optionalServices = mergeOptionalServicesWithLegacy([UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']);
+        filters = [
+          { namePrefix: namePrefix, services: [UUIDS.FTMS_SERVICE] },
+          { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] }
+        ];
+        optionalServices = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
       } else if (deviceType === 'powerMeter') {
+        filters = [
+          { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] },
+          { namePrefix: namePrefix, services: [UUIDS.CSC_SERVICE] }
+        ];
         optionalServices = [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
       }
     }
@@ -272,7 +176,7 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         filters.push({ namePrefix: 'Wahoo' });
         filters.push({ namePrefix: 'KICKR' });
         filters.push({ namePrefix: 'Tacx' });
-        optionalServices = mergeOptionalServicesWithLegacy([UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service']);
+        optionalServices = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
       } else if (deviceType === 'powerMeter') {
         filters.push({ services: [UUIDS.CPS_SERVICE] });
         filters.push({ services: [UUIDS.CSC_SERVICE] });
@@ -282,15 +186,11 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     
     var device;
     try {
-      device = await requestDeviceWithTimeout({
+      device = await navigator.bluetooth.requestDevice({
         filters: filters.length > 0 ? filters : undefined,
         optionalServices: optionalServices
-      }, REQUEST_DEVICE_TIMEOUT_MS);
+      });
     } catch (strictErr) {
-      if (strictErr && strictErr.message === 'REQUEST_DEVICE_TIMEOUT') {
-        if (typeof showToast === 'function') showToast('기기를 찾을 수 없습니다. 전원을 확인해주세요.');
-        throw new Error('기기 검색 시간이 초과되었습니다.');
-      }
       // 저장된 이름만 필터했는데 기기 없음(이름 변경 등): 넓은 필터로 재시도
       if (savedDeviceName && String(savedDeviceName).trim() && filters.length > 0) {
         var broadFilters = [];
@@ -308,10 +208,10 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         if (broadFilters.length > 0 && typeof showToast === 'function') {
           showToast('저장된 기기 이름과 일치하는 기기가 없습니다. 목록에서 선택해주세요.');
         }
-        device = await requestDeviceWithTimeout({
+        device = await navigator.bluetooth.requestDevice({
           filters: broadFilters,
           optionalServices: optionalServices
-        }, REQUEST_DEVICE_TIMEOUT_MS);
+        });
       } else {
         throw strictErr;
       }
@@ -319,9 +219,6 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     return device;
   } catch (error) {
     console.error('[requestDeviceWithSavedInfo] 기기 요청 실패:', error);
-    if (error && error.name === 'SecurityError' && typeof showToast === 'function') {
-      showToast('블루투스 권한이 거부되었습니다. 브라우저 설정에서 허용해주세요.');
-    }
     throw error;
   }
 }
@@ -382,9 +279,9 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
   } catch (e) {
     result = null;
   }
-  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (실제 기기명 우선 → 검색 시 해당 기기만 표시)
+  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (실제 기기명 우선 → 저장된 디바이스만 보이게)
   if (!result && navigator.bluetooth && (saved.name || saved.nickname)) {
-    const nameForFilter = (saved.name && String(saved.name).trim()) ? String(saved.name).trim() : (saved.nickname && String(saved.nickname).trim()) ? String(saved.nickname).trim() : '';
+    const nameForFilter = saved.name || saved.nickname || '';
     if (nameForFilter) {
       try {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
@@ -524,9 +421,7 @@ window.showToast = window.showToast || function (msg) {
   setTimeout(() => t.classList.remove("show"), 2400);
 };
 window.updateDevicesList = function () {
-  if (typeof window.updateDeviceButtonImages === 'function') window.updateDeviceButtonImages();
-  if (typeof window.updateIndividualBluetoothConnectionStatus === 'function') window.updateIndividualBluetoothConnectionStatus();
-  if (typeof window.updateMobileBluetoothConnectionStatus === 'function') window.updateMobileBluetoothConnectionStatus();
+    if (typeof window.updateDeviceButtonImages === 'function') window.updateDeviceButtonImages();
 };
 
 // ── [Connection Engine] ──
@@ -760,14 +655,8 @@ async function connectTrainer() {
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       showNicknameModal(deviceName, (nickname) => {
-        if (nickname) {
-          saveDevice(device.id, deviceName, 'trainer', nickname);
-          showToast('✅ ' + nickname + ' 저장 완료');
-          if (typeof updateDevicesList === 'function') {
-            updateDevicesList();
-            setTimeout(function () { updateDevicesList(); }, 250);
-          }
-        }
+        saveDevice(device.id, deviceName, 'trainer', nickname);
+        showToast(`✅ ${nickname} 저장 완료`);
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
@@ -999,14 +888,8 @@ async function connectHeartRate() {
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       showNicknameModal(deviceName, (nickname) => {
-        if (nickname) {
-          saveDevice(device.id, deviceName, 'heartRate', nickname);
-          showToast('✅ ' + nickname + ' 저장 완료');
-          if (typeof updateDevicesList === 'function') {
-            updateDevicesList();
-            setTimeout(function () { updateDevicesList(); }, 250);
-          }
-        }
+        saveDevice(device.id, deviceName, 'heartRate', nickname);
+        showToast(`✅ ${nickname} 저장 완료`);
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트
@@ -1130,14 +1013,8 @@ async function connectPowerMeter() {
     if (!saved) {
       // 처음 연결하는 기기이면 닉네임 입력 받기
       showNicknameModal(deviceName, (nickname) => {
-        if (nickname) {
-          saveDevice(device.id, deviceName, 'powerMeter', nickname);
-          showToast('✅ ' + nickname + ' 저장 완료');
-          if (typeof updateDevicesList === 'function') {
-            updateDevicesList();
-            setTimeout(function () { updateDevicesList(); }, 250);
-          }
-        }
+        saveDevice(device.id, deviceName, 'powerMeter', nickname);
+        showToast(`✅ ${nickname} 저장 완료`);
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트

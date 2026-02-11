@@ -889,9 +889,9 @@ function normalizeType(seg){
   return "interval"; // 기본값
 }
 
-// 세그먼트 카운트다운 상태 관리 (전역) — individual.js와 중복 선언 방지
-if (typeof window.segmentCountdownActive === 'undefined') window.segmentCountdownActive = false;
-if (typeof window.segmentCountdownTimer === 'undefined') window.segmentCountdownTimer = null;
+// 세그먼트 카운트다운 상태 관리 (전역)
+let segmentCountdownActive = false;
+let segmentCountdownTimer = null;
 let countdownTriggered = []; // 세그먼트별 카운트다운 트리거 상태
 
 
@@ -1023,12 +1023,12 @@ function startSegmentCountdown(initialNumber, nextSegment) {
   }
   
   // initialNumber 는 보통 5 (6초 시점에서 5 표시)
-  if (window.segmentCountdownActive) return;
-  window.segmentCountdownActive = true;
+  if (segmentCountdownActive) return;
+  segmentCountdownActive = true;
 
   const ok = CountdownDisplay.ensure(nextSegment);
   if (!ok) {
-    window.segmentCountdownActive = false;
+    segmentCountdownActive = false;
     return;
   }
 
@@ -1054,13 +1054,13 @@ function stopSegmentCountdown() {
   // 모바일 대시보드용 카운트다운도 정지
   MobileCountdownDisplay.hideImmediate();
   
-  window.segmentCountdownActive = false;     // [PATCH] 상태 리셋
+  segmentCountdownActive = false;     // [PATCH] 상태 리셋
    
-  if (window.segmentCountdownTimer) {
-    clearInterval(window.segmentCountdownTimer);
-    window.segmentCountdownTimer = null;
+  if (segmentCountdownTimer) {
+    clearInterval(segmentCountdownTimer);
+    segmentCountdownTimer = null;
   }
-  window.segmentCountdownActive = false;
+  segmentCountdownActive = false;
 }
 
 
@@ -1132,9 +1132,9 @@ function startWithCountdown(sec = 5) {
 // 카운트다운 강제 정지 함수
 function stopSegmentCountdown() {
   console.log('카운트다운 강제 정지');
-  if (window.segmentCountdownTimer) {
-    clearInterval(window.segmentCountdownTimer);
-    window.segmentCountdownTimer = null;
+  if (segmentCountdownTimer) {
+    clearInterval(segmentCountdownTimer);
+    segmentCountdownTimer = null;
   }
   
   const overlay = document.getElementById("countdownOverlay");
@@ -1143,7 +1143,7 @@ function stopSegmentCountdown() {
     overlay.style.display = "none";
   }
   
-  window.segmentCountdownActive = false;
+  segmentCountdownActive = false;
 }
 
 // 세그먼트 건너뛰기 시에도 카운트다운 정리
@@ -1167,7 +1167,7 @@ function skipCurrentSegment() {
     }
     
     // 활성 카운트다운 정지
-    if (window.segmentCountdownActive) {
+    if (segmentCountdownActive) {
       stopSegmentCountdown();
     }
     
@@ -2795,8 +2795,8 @@ function startSegmentLoop() {
         if (remainMsNow <= 0) {
           // 이미 종료된 세그먼트이므로 카운트다운 로직 건너뛰기
           // 카운트다운이 활성화되어 있으면 즉시 종료
-          if (window.segmentCountdownActive) {
-            window.segmentCountdownActive = false;
+          if (segmentCountdownActive) {
+            segmentCountdownActive = false;
             CountdownDisplay.hideImmediate();
             MobileCountdownDisplay.hideImmediate();
           }
@@ -2827,8 +2827,8 @@ function startSegmentLoop() {
         // remainMsNow가 0 이하이면 더 이상 카운트다운 실행하지 않음 (0초 반복 방지)
         if (remainMsNow <= 0) {
           // 이미 종료된 세그먼트이므로 카운트다운 종료 및 상태 초기화
-          if (window.segmentCountdownActive) {
-            window.segmentCountdownActive = false;
+          if (segmentCountdownActive) {
+            segmentCountdownActive = false;
             CountdownDisplay.hideImmediate();
             MobileCountdownDisplay.hideImmediate();
           }
@@ -2843,9 +2843,9 @@ function startSegmentLoop() {
         }
       
         // 오버레이 표시 시작(6초 시점에 "5" 표시)
-        if (n === 5 && !window.segmentCountdownActive && nextSeg) {
+        if (n === 5 && !segmentCountdownActive && nextSeg) {
           startSegmentCountdown(5, nextSeg); // 오버레이 켜고 5 표시 + 짧은 비프
-        } else if (window.segmentCountdownActive) {
+        } else if (segmentCountdownActive) {
           // 진행 중이면 숫자 업데이트만(내부 타이머 없음)
           CountdownDisplay.render(n);
           
@@ -2878,7 +2878,7 @@ function startSegmentLoop() {
             MobileCountdownDisplay.finish(800);
           }
           
-          window.segmentCountdownActive = false;
+          segmentCountdownActive = false;
         }
       
         ts._countdownFired[key] = { ...firedMap, [n]: true };
@@ -2977,7 +2977,7 @@ function startSegmentLoop() {
    
    if (shouldTransition) {
      // (변경) 소리와 전환을 분리: 전환은 즉시, 소리는 비동기로 마무리
-     if (window.segmentCountdownActive && typeof stopSegmentCountdown === "function") {
+     if (segmentCountdownActive && typeof stopSegmentCountdown === "function") {
        setTimeout(() => { try { stopSegmentCountdown(); } catch(_){} }, 750);
      }
    
@@ -3019,7 +3019,7 @@ function startSegmentLoop() {
        applySegmentTarget(nextSegIndex);
    
        // 남아있을 수 있는 카운트다운 정리
-       if (window.segmentCountdownActive) {
+       if (segmentCountdownActive) {
          stopSegmentCountdown();
        }
    
@@ -3101,7 +3101,7 @@ function setPaused(isPaused) {
   }
 
   // 카운트다운 정지
-  if (wantPause && window.segmentCountdownActive) stopSegmentCountdown();
+  if (wantPause && segmentCountdownActive) stopSegmentCountdown();
 
   const btn = safeGetElement("btnTogglePause");
   if (btn) {
@@ -16600,17 +16600,324 @@ function toggleMobileBluetoothDropdown() {
   toggleBluetoothDropdown('mobile');
 }
 
-// 블루투스 디바이스 연결 (모바일 대시보드: individual.js 공유 로직 사용)
+// 블루투스 디바이스 연결 함수 (모바일 + 개인 훈련 화면 공통, 연결 후 두 UI 모두 갱신)
+// 저장된 기기에 재연결하는 함수 (모바일 대시보드용)
 async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
-  var ctx = window.BLUETOOTH_UI_CONTEXTS && window.BLUETOOTH_UI_CONTEXTS.mobile ? window.BLUETOOTH_UI_CONTEXTS.mobile : null;
-  if (!ctx || typeof window.connectBluetoothDeviceToSavedShared !== 'function') {
-    if (typeof showToast === 'function') showToast('블루투스 공유 모듈을 불러올 수 없습니다. individual.js가 로드되었는지 확인해주세요.');
-    return;
+  try {
+    // bluetooth.js의 reconnectToSavedDevice 함수 사용
+    const reconnectFn = typeof reconnectToSavedDevice === 'function' 
+      ? reconnectToSavedDevice 
+      : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
+    
+    if (!reconnectFn) {
+      throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인하세요.');
+    }
+    
+    console.log('[Mobile Dashboard] 저장된 기기 재연결 시도:', { deviceId, deviceType });
+    
+    let result;
+    try {
+      result = await reconnectFn(deviceId, deviceType);
+      
+      // getDevices() 미지원(Android Chrome 등): bluetooth.js connectToSavedDeviceById가 requestDevice 폴백 사용
+      if (!result) {
+        const connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null);
+        if (connectById) {
+          try {
+            const out = await connectById(deviceId, deviceType);
+            if (out) {
+              setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
+              return;
+            }
+          } catch (fallbackErr) {
+            console.warn('[Mobile Dashboard] 저장된 기기 requestDevice 폴백 실패:', fallbackErr);
+            if (typeof showToast === 'function') {
+              showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
+            }
+            return;
+          }
+        }
+        if (typeof showToast === 'function') {
+          showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴(스마트 트레이너/심박계/파워미터)에서 새로 연결해주세요.');
+        }
+        return;
+      }
+    } catch (reconnectError) {
+      console.warn('[Mobile Dashboard] 저장된 기기 재연결 실패:', reconnectError);
+      if (typeof showToast === 'function') {
+        showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
+      }
+      return;
+    }
+    
+    const { device, server } = result;
+    
+    // 디바이스 타입별 연결 로직 실행
+    if (deviceType === 'heartRate') {
+      let service;
+      try { 
+        service = await server.getPrimaryService('heart_rate'); 
+      } catch (e) { 
+        service = await server.getPrimaryService('0000180d-0000-1000-8000-00805f9b34fb'); 
+      }
+      
+      let characteristic;
+      try { 
+        characteristic = await service.getCharacteristic('heart_rate_measurement'); 
+      } catch (e) { 
+        characteristic = await service.getCharacteristic(0x2A37); 
+      }
+      
+      await characteristic.startNotifications();
+      const hrHandler = typeof handleHeartRateData === 'function' ? handleHeartRateData : (typeof window.handleHeartRateData === 'function' ? window.handleHeartRateData : null);
+      if (hrHandler) {
+        characteristic.addEventListener("characteristicvaluechanged", hrHandler);
+      }
+      
+      window.connectedDevices.heartRate = { 
+        name: device.name || '알 수 없는 기기', 
+        device, 
+        server, 
+        characteristic 
+      };
+      
+      window.isSensorConnected = true;
+      try { 
+        window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
+          detail: { connected: true, deviceType: 'heartRate' } 
+        })); 
+      } catch (e) {}
+      
+      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
+      if (disconnectHandler) {
+        device.addEventListener("gattserverdisconnected", () => disconnectHandler('heartRate', device));
+      }
+      
+      // 저장된 기기 정보 업데이트
+      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'heartRate');
+      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
+        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
+        saveFn(deviceId, device.name || saved.name, 'heartRate', saved.nickname);
+      }
+      
+      if (typeof updateDevicesList === 'function') updateDevicesList();
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      if (typeof showToast === 'function') {
+        showToast(`✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결 성공`);
+      }
+      
+    } else if (deviceType === 'trainer') {
+      // 트레이너 연결 로직 (bluetooth.js의 connectTrainer 로직과 동일)
+      const UUIDS = {
+        FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb',
+        FTMS_DATA: '00002ad2-0000-1000-8000-00805f9b34fb',
+        FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb',
+        CPS_SERVICE: '00001818-0000-1000-8000-00805f9b34fb',
+        CPS_DATA: '00002a63-0000-1000-8000-00805f9b34fb',
+        CYCLEOPS_SERVICE: '347b0001-7635-408b-8918-8ff3949ce592',
+        CYCLEOPS_CONTROL: '347b0012-7635-408b-8918-8ff3949ce592',
+        WAHOO_SERVICE: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+        WAHOO_CONTROL: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+      };
+      
+      const _safeGetService = async (uuid) => { 
+        try { return await server.getPrimaryService(uuid); } 
+        catch (e) { return null; } 
+      };
+      const _safeGetChar = async (svc, uuid) => { 
+        if(!svc) return null; 
+        try { return await svc.getCharacteristic(uuid); } 
+        catch (e) { return null; } 
+      };
+      
+      let dataChar = null;
+      let dataProtocol = 'UNKNOWN';
+      
+      if (!dataChar) {
+        const svc = await _safeGetService(UUIDS.FTMS_SERVICE);
+        dataChar = await _safeGetChar(svc, UUIDS.FTMS_DATA);
+        if(dataChar) dataProtocol = 'FTMS';
+      }
+      if (!dataChar) {
+        const svc = await _safeGetService(UUIDS.CPS_SERVICE);
+        dataChar = await _safeGetChar(svc, UUIDS.CPS_DATA);
+        if(dataChar) dataProtocol = 'CPS';
+      }
+      if (!dataChar) {
+        const svc = await _safeGetService(UUIDS.CYCLEOPS_SERVICE);
+        if (svc) {
+          try {
+            const chars = await svc.getCharacteristics();
+            if (chars.length > 0) { 
+              dataChar = chars[0]; 
+              dataProtocol = 'CYCLEOPS_LEGACY'; 
+            }
+          } catch(e) {}
+        }
+      }
+      
+      if (!dataChar) throw new Error("데이터 전송 서비스를 찾을 수 없습니다.");
+      
+      await dataChar.startNotifications();
+      const trainerHandler = typeof handleTrainerData === 'function' ? handleTrainerData : (typeof window.handleTrainerData === 'function' ? window.handleTrainerData : null);
+      const powerHandler = typeof handlePowerMeterData === 'function' ? handlePowerMeterData : (typeof window.handlePowerMeterData === 'function' ? window.handlePowerMeterData : null);
+      const parser = (dataProtocol === 'FTMS') ? (trainerHandler || (() => {})) : (powerHandler || (() => {})); 
+      if (parser) {
+        dataChar.addEventListener("characteristicvaluechanged", parser);
+      }
+      
+      let controlChar = null;
+      let controlProtocol = 'NONE';
+      
+      if (!controlChar) {
+        const svc = await _safeGetService(UUIDS.FTMS_SERVICE);
+        controlChar = await _safeGetChar(svc, UUIDS.FTMS_CONTROL);
+        if(controlChar) controlProtocol = 'FTMS';
+      }
+      if (!controlChar) {
+        const svc = await _safeGetService(UUIDS.CYCLEOPS_SERVICE);
+        controlChar = await _safeGetChar(svc, UUIDS.CYCLEOPS_CONTROL);
+        if(controlChar) controlProtocol = 'CYCLEOPS';
+      }
+      if (!controlChar) {
+        const svc = await _safeGetService(UUIDS.WAHOO_SERVICE);
+        controlChar = await _safeGetChar(svc, UUIDS.WAHOO_CONTROL);
+        if(controlChar) controlProtocol = 'WAHOO';
+      }
+      
+      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'trainer');
+      
+      window.connectedDevices.trainer = { 
+        name: device.name || saved?.name || '알 수 없는 기기', 
+        device, 
+        server, 
+        characteristic: dataChar, 
+        controlPoint: controlChar,
+        protocol: controlProtocol, 
+        dataProtocol: dataProtocol, 
+        realProtocol: controlProtocol
+      };
+      
+      window.isSensorConnected = true;
+      try { 
+        window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
+          detail: { connected: true, deviceType: 'trainer' } 
+        })); 
+      } catch (e) {}
+      
+      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
+      if (disconnectHandler) {
+        device.addEventListener("gattserverdisconnected", () => disconnectHandler('trainer', device));
+      }
+      
+      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
+        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
+        saveFn(deviceId, device.name || saved.name, 'trainer', saved.nickname);
+      }
+      
+      if (typeof updateDevicesList === 'function') updateDevicesList();
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      
+      let statusMsg = `✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결됨 [${dataProtocol}]`;
+      if (controlChar) statusMsg += `\n⚡ ERG 제어 가능 [${controlProtocol}]`;
+      else statusMsg += `\n⚠️ 파워미터 모드 (제어 불가)`;
+      if (typeof showToast === 'function') showToast(statusMsg);
+      
+      if (window.ergController) setTimeout(() => window.ergController.initializeTrainer(), 500);
+      
+    } else if (deviceType === 'powerMeter') {
+      // 파워미터 연결 로직
+      const UUIDS = {
+        CPS_SERVICE: '00001818-0000-1000-8000-00805f9b34fb',
+        CPS_DATA: '00002a63-0000-1000-8000-00805f9b34fb',
+        CSC_SERVICE: '00001816-0000-1000-8000-00805f9b34fb',
+      };
+      
+      let service, characteristic;
+      try {
+        service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
+        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
+      } catch (e) {
+        service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+        characteristic = await service.getCharacteristic(0x2A5B);
+      }
+      
+      await characteristic.startNotifications();
+      const powerHandler = typeof handlePowerMeterData === 'function' ? handlePowerMeterData : (typeof window.handlePowerMeterData === 'function' ? window.handlePowerMeterData : null);
+      if (powerHandler) {
+        characteristic.addEventListener("characteristicvaluechanged", powerHandler);
+      }
+      
+      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'powerMeter');
+      
+      window.connectedDevices.powerMeter = { 
+        name: device.name || saved?.name || '알 수 없는 기기', 
+        device, 
+        server, 
+        characteristic 
+      };
+      
+      window.isSensorConnected = true;
+      try { 
+        window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { 
+          detail: { connected: true, deviceType: 'powerMeter' } 
+        })); 
+      } catch (e) {}
+      
+      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
+      if (disconnectHandler) {
+        device.addEventListener("gattserverdisconnected", () => disconnectHandler('powerMeter', device));
+      }
+      
+      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
+        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
+        saveFn(deviceId, device.name || saved.name, 'powerMeter', saved.nickname);
+      }
+      
+      if (typeof updateDevicesList === 'function') updateDevicesList();
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      if (typeof showToast === 'function') {
+        showToast(`✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결 성공`);
+      }
+    }
+    
+    // 연결 성공 후 상태 업데이트
+    setTimeout(() => {
+      updateMobileBluetoothConnectionStatus();
+    }, 200);
+    
+  } catch (error) {
+    console.error('[Mobile Dashboard] 저장된 기기 재연결 실패:', error);
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+    
+    // 재연결 실패 시 사용자에게 알리고 새 기기 검색 제안
+    const errorMessage = error.message || '알 수 없는 오류';
+    if (typeof showToast === 'function') {
+      showToast(`저장된 기기를 찾을 수 없습니다.\n기기가 켜져 있고 범위 내에 있는지 확인하세요.\n\n새 기기 검색을 시도합니다...`);
+    }
+    
+    // 자동으로 새 기기 검색으로 폴백
+    try {
+      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
+        : deviceType === 'heartRate' ? window.connectHeartRate 
+        : deviceType === 'powerMeter' ? window.connectPowerMeter 
+        : null;
+      
+      if (connectFunction && typeof connectFunction === 'function') {
+        console.log('[Mobile Dashboard] 새 기기 검색으로 폴백:', deviceType);
+        await connectFunction();
+        setTimeout(() => {
+          updateMobileBluetoothConnectionStatus();
+        }, 200);
+        return;
+      }
+    } catch (fallbackError) {
+      console.error('[Mobile Dashboard] 새 기기 검색도 실패:', fallbackError);
+      if (typeof showToast === 'function') {
+        showToast('기기 연결에 실패했습니다: ' + (fallbackError.message || '알 수 없는 오류'));
+      }
+    }
   }
-  ctx.onUpdateStatus = updateMobileBluetoothConnectionStatus;
-  ctx.onUpdateDropdown = function () { if (typeof window.updateBluetoothDropdownWithSavedDevicesShared === 'function') window.updateBluetoothDropdownWithSavedDevicesShared(ctx); };
-  ctx.onConnect = connectMobileBluetoothDevice;
-  await window.connectBluetoothDeviceToSavedShared(ctx, deviceId, deviceType);
 }
 
 async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
@@ -16664,23 +16971,125 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   }
 }
 
-// 모바일 대시보드 드롭다운에 저장된 기기 목록 표시 (individual.js 공유 로직 사용, 블루투스 개인훈련과 동일 흐름)
+// 블루투스 연결 상태 업데이트 (모바일 대시보드 + 개인 훈련 화면 두 UI 모두 갱신)
+// 모바일 대시보드 드롭다운에 저장된 기기 목록 표시
 function updateMobileBluetoothDropdownWithSavedDevices() {
-  var ctx = window.BLUETOOTH_UI_CONTEXTS && window.BLUETOOTH_UI_CONTEXTS.mobile ? window.BLUETOOTH_UI_CONTEXTS.mobile : null;
-  if (!ctx || typeof window.updateBluetoothDropdownWithSavedDevicesShared !== 'function') return;
-  ctx.onUpdateStatus = updateMobileBluetoothConnectionStatus;
-  ctx.onUpdateDropdown = function () { window.updateBluetoothDropdownWithSavedDevicesShared(ctx); };
-  ctx.onConnect = connectMobileBluetoothDevice;
-  window.updateBluetoothDropdownWithSavedDevicesShared(ctx);
-}
-
-// 모바일 컨텍스트 콜백 고정 바인딩 (individual.js 공유 모듈이 모바일 전용 콜백만 사용하도록)
-function bindMobileBluetoothContextCallbacks() {
-  if (!window.BLUETOOTH_UI_CONTEXTS || !window.BLUETOOTH_UI_CONTEXTS.mobile) return;
-  var ctx = window.BLUETOOTH_UI_CONTEXTS.mobile;
-  ctx.onUpdateStatus = updateMobileBluetoothConnectionStatus;
-  ctx.onUpdateDropdown = function () { if (typeof window.updateBluetoothDropdownWithSavedDevicesShared === 'function') window.updateBluetoothDropdownWithSavedDevicesShared(ctx); };
-  ctx.onConnect = connectMobileBluetoothDevice;
+  const dropdown = document.getElementById('mobileBluetoothDropdown');
+  if (!dropdown) return;
+  
+  // 저장된 기기 로드 함수가 있는지 확인
+  const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' 
+    ? getSavedDevicesByType 
+    : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
+  
+  if (!getSavedDevicesByTypeFn) {
+    console.warn('[Mobile Dashboard] getSavedDevicesByType 함수를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 각 디바이스 타입별로 저장된 기기 목록 추가
+  const deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+  const deviceTypeLabels = {
+    trainer: '스마트 트레이너',
+    heartRate: '심박계',
+    powerMeter: '파워미터'
+  };
+  
+  deviceTypes.forEach(deviceType => {
+    const savedDevices = getSavedDevicesByTypeFn(deviceType);
+    if (savedDevices.length === 0) return;
+    
+    // 기존 아이템 찾기
+    let itemId = '';
+    switch(deviceType) {
+      case 'trainer':
+        itemId = 'mobileBluetoothTrainerItem';
+        break;
+      case 'heartRate':
+        itemId = 'mobileBluetoothHRItem';
+        break;
+      case 'powerMeter':
+        itemId = 'mobileBluetoothPMItem';
+        break;
+    }
+    
+    const mainItem = document.getElementById(itemId);
+    if (!mainItem) return;
+    
+    // 저장된 기기 목록 컨테이너 ID
+    const savedListId = `mobileBluetoothSaved${deviceType.charAt(0).toUpperCase() + deviceType.slice(1)}List`;
+    
+    // 기존 저장된 기기 목록 제거
+    const existingList = document.getElementById(savedListId);
+    if (existingList) {
+      existingList.remove();
+    }
+    
+    // 저장된 기기 목록 컨테이너 (구분선은 디바이스+저장 목록 아래에, 글자는 디바이스 텍스트 시작 위치에 맞춤)
+    const savedListContainer = document.createElement('div');
+    savedListContainer.id = savedListId;
+    savedListContainer.style.cssText = 'padding-top: 4px; margin-top: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; margin-bottom: 8px;';
+    
+    // 저장된 기기 목록 헤더 (디바이스 글자 시작 위치와 맞춤: 아이콘 24px + gap 10px = 34px)
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px 4px 34px; margin-bottom: 4px; text-align: left;';
+    header.textContent = `⭐ 저장된 ${deviceTypeLabels[deviceType]}`;
+    savedListContainer.appendChild(header);
+    
+    // 각 저장된 기기 항목 추가 (닉네임(디바이스코드) 왼쪽, 오른쪽 끝에 "삭제" — 블루투스 개인훈련 대시보드와 동일)
+    savedDevices.forEach(saved => {
+      const savedItem = document.createElement('div');
+      savedItem.className = 'mobile-bluetooth-dropdown-item';
+      savedItem.style.cssText = 'padding: 8px 12px 8px 34px; font-size: 13px; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px;';
+      
+      const labelWrap = document.createElement('span');
+      labelWrap.style.cssText = 'flex: 1; min-width: 0;';
+      labelWrap.onclick = (e) => {
+        e.stopPropagation();
+        console.log('[Mobile Dashboard] 저장된 기기 클릭:', { 
+          deviceType, 
+          deviceId: saved.deviceId, 
+          nickname: saved.nickname,
+          name: saved.name 
+        });
+        connectMobileBluetoothDevice(deviceType, saved.deviceId);
+      };
+      
+      const nickname = document.createElement('span');
+      nickname.textContent = saved.nickname || saved.name || '알 수 없는 기기';
+      nickname.style.cssText = 'color: #fff;';
+      
+      const deviceName = document.createElement('span');
+      deviceName.textContent = ' (' + (saved.name || '') + ')';
+      deviceName.style.cssText = 'color: #888; font-size: 11px;';
+      
+      labelWrap.appendChild(nickname);
+      labelWrap.appendChild(deviceName);
+      savedItem.appendChild(labelWrap);
+      
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = '삭제';
+      deleteBtn.style.cssText = 'color: #f87171; font-size: 12px; flex-shrink: 0; cursor: pointer;';
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        var removed = false;
+        if (typeof window.removeSavedDevice === 'function') {
+          removed = window.removeSavedDevice(saved.deviceId, deviceType);
+        }
+        if (removed && typeof showToast === 'function') {
+          showToast('저장된 기기가 목록에서 삭제되었습니다.');
+        }
+        if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
+          updateMobileBluetoothDropdownWithSavedDevices();
+        }
+      };
+      savedItem.appendChild(deleteBtn);
+      savedListContainer.appendChild(savedItem);
+    });
+    
+    // 메인 아이템 다음에 삽입
+    mainItem.parentNode.insertBefore(savedListContainer, mainItem.nextSibling);
+  });
 }
 
 function updateMobileBluetoothConnectionStatus() {
@@ -17017,10 +17426,6 @@ window.toggleBluetoothDropdown = toggleBluetoothDropdown;
 window.toggleMobileBluetoothDropdown = toggleMobileBluetoothDropdown;
 window.connectMobileBluetoothDevice = connectMobileBluetoothDevice;
 window.updateMobileBluetoothConnectionStatus = updateMobileBluetoothConnectionStatus;
-bindMobileBluetoothContextCallbacks();
-document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible' && typeof updateMobileBluetoothConnectionStatus === 'function') updateMobileBluetoothConnectionStatus();
-});
 window.exitMobileIndividualTraining = exitMobileIndividualTraining;
 window.initMobileErgController = initMobileErgController;
 window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
