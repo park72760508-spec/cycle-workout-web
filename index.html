@@ -3406,7 +3406,7 @@
             <span>연결</span>
           </button>
           <div id="mobileBluetoothDropdown" class="mobile-bluetooth-dropdown">
-            <div id="mobileBluetoothTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('trainer', null)">
+            <div id="mobileBluetoothTrainerItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('trainer')">
               <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
               <span>스마트 트레이너</span>
               <span class="status" id="mobileTrainerStatus">미연결</span>
@@ -3428,12 +3428,12 @@
                 <button id="mobileBluetoothErgSetBtn" style="padding: 4px 12px; background: #00d4aa; border: none; border-radius: 4px; color: #000; font-size: 12px; font-weight: bold; cursor: pointer;">설정</button>
               </div>
             </div>
-            <div id="mobileBluetoothHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('heartRate', null)">
+            <div id="mobileBluetoothHRItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('heartRate')">
               <img src="assets/img/bpm_i.png" alt="심박계">
               <span>심박계</span>
               <span class="status" id="mobileHeartRateStatus">미연결</span>
             </div>
-            <div id="mobileBluetoothPMItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('powerMeter', null)">
+            <div id="mobileBluetoothPMItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('powerMeter')">
               <img src="assets/img/power_i.png" alt="파워미터">
               <span>파워미터</span>
               <span class="status" id="mobilePowerMeterStatus">미연결</span>
@@ -9576,8 +9576,6 @@
 <script src="assets/js/trainingResultsManager.js"></script>
 <script src="assets/js/resultManager.js"></script>
 <script src="assets/js/bluetooth.js"></script>
-<!-- 모바일 개인훈련 대시보드: 저장된 디바이스 목록·연결 로직(블루투스 개인훈련과 동일) 사용 -->
-<script src="assets/js/individual.js"></script>
 <script src="assets/js/ErgController.js"></script>
 <script src="assets/js/ergMode.js"></script>
 <script src="assets/js/training.js"></script>
