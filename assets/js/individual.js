@@ -2546,10 +2546,12 @@ function getBluetoothUIContext(contextType) {
 }
 
 // 공유: 저장된 기기 재연결 + requestDevice 폴백 + 타임아웃/권한 방어
+// 모바일/개인훈련 각각 독립 동작: 모바일 컨텍스트일 때 individual 콜백으로 폴백하지 않음
 async function connectBluetoothDeviceToSavedShared(context, deviceId, deviceType) {
   var ctx = typeof context === 'string' ? getBluetoothUIContext(context) : context;
-  var onUpdateStatus = ctx.onUpdateStatus || (typeof window.updateIndividualBluetoothConnectionStatus === 'function' ? window.updateIndividualBluetoothConnectionStatus : function () {});
-  var onUpdateDropdown = ctx.onUpdateDropdown || (typeof window.updateIndividualBluetoothDropdownWithSavedDevices === 'function' ? window.updateIndividualBluetoothDropdownWithSavedDevices : function () {});
+  var isMobile = ctx && ctx.logPrefix === '[Mobile]';
+  var onUpdateStatus = ctx.onUpdateStatus || (isMobile ? function () {} : (typeof window.updateIndividualBluetoothConnectionStatus === 'function' ? window.updateIndividualBluetoothConnectionStatus : function () {}));
+  var onUpdateDropdown = ctx.onUpdateDropdown || (isMobile ? function () {} : (typeof window.updateIndividualBluetoothDropdownWithSavedDevices === 'function' ? window.updateIndividualBluetoothDropdownWithSavedDevices : function () {}));
 
   try {
     var reconnectFn = typeof reconnectToSavedDevice === 'function' ? reconnectToSavedDevice : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
@@ -2673,14 +2675,16 @@ async function connectBluetoothDeviceToSavedShared(context, deviceId, deviceType
 }
 
 // 공유: 드롭다운에 저장된 기기 목록 + 기기 선택 행 + 빨간 X 삭제 (삭제 시 캐시 null + 즉시 UI 갱신)
+// 모바일/개인훈련 각각 독립: 모바일일 때 individual 콜백 사용 금지
 function updateBluetoothDropdownWithSavedDevicesShared(context) {
   var ctx = typeof context === 'string' ? getBluetoothUIContext(context) : context;
+  var isMobile = ctx && ctx.logPrefix === '[Mobile]';
   var dropdownId = ctx.dropdownId || 'individualBluetoothDropdown';
   var prefix = ctx.savedListIdPrefix || 'individualBluetoothSaved';
   var itemIds = ctx.itemIds || { trainer: 'individualBluetoothTrainerItem', heartRate: 'individualBluetoothHRItem', powerMeter: 'individualBluetoothPMItem' };
-  var onConnect = ctx.onConnect || connectIndividualBluetoothDevice;
-  var onUpdateStatus = ctx.onUpdateStatus || (typeof window.updateIndividualBluetoothConnectionStatus === 'function' ? window.updateIndividualBluetoothConnectionStatus : function () {});
-  var onUpdateDropdown = ctx.onUpdateDropdown || (typeof window.updateIndividualBluetoothDropdownWithSavedDevices === 'function' ? window.updateIndividualBluetoothDropdownWithSavedDevices : function () {});
+  var onConnect = ctx.onConnect || (isMobile && typeof window.connectMobileBluetoothDevice === 'function' ? window.connectMobileBluetoothDevice : connectIndividualBluetoothDevice);
+  var onUpdateStatus = ctx.onUpdateStatus || (isMobile ? function () {} : (typeof window.updateIndividualBluetoothConnectionStatus === 'function' ? window.updateIndividualBluetoothConnectionStatus : function () {}));
+  var onUpdateDropdown = ctx.onUpdateDropdown || (isMobile ? function () {} : (typeof window.updateIndividualBluetoothDropdownWithSavedDevices === 'function' ? window.updateIndividualBluetoothDropdownWithSavedDevices : function () {}));
 
   var dropdown = document.getElementById(dropdownId);
   if (!dropdown) return;

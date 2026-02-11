@@ -16664,7 +16664,7 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   }
 }
 
-// 모바일 대시보드 드롭다운에 저장된 기기 목록 표시 (individual.js 공유 로직 사용)
+// 모바일 대시보드 드롭다운에 저장된 기기 목록 표시 (individual.js 공유 로직 사용, 블루투스 개인훈련과 동일 흐름)
 function updateMobileBluetoothDropdownWithSavedDevices() {
   var ctx = window.BLUETOOTH_UI_CONTEXTS && window.BLUETOOTH_UI_CONTEXTS.mobile ? window.BLUETOOTH_UI_CONTEXTS.mobile : null;
   if (!ctx || typeof window.updateBluetoothDropdownWithSavedDevicesShared !== 'function') return;
@@ -16672,6 +16672,15 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
   ctx.onUpdateDropdown = function () { window.updateBluetoothDropdownWithSavedDevicesShared(ctx); };
   ctx.onConnect = connectMobileBluetoothDevice;
   window.updateBluetoothDropdownWithSavedDevicesShared(ctx);
+}
+
+// 모바일 컨텍스트 콜백 고정 바인딩 (individual.js 공유 모듈이 모바일 전용 콜백만 사용하도록)
+function bindMobileBluetoothContextCallbacks() {
+  if (!window.BLUETOOTH_UI_CONTEXTS || !window.BLUETOOTH_UI_CONTEXTS.mobile) return;
+  var ctx = window.BLUETOOTH_UI_CONTEXTS.mobile;
+  ctx.onUpdateStatus = updateMobileBluetoothConnectionStatus;
+  ctx.onUpdateDropdown = function () { if (typeof window.updateBluetoothDropdownWithSavedDevicesShared === 'function') window.updateBluetoothDropdownWithSavedDevicesShared(ctx); };
+  ctx.onConnect = connectMobileBluetoothDevice;
 }
 
 function updateMobileBluetoothConnectionStatus() {
@@ -17008,6 +17017,10 @@ window.toggleBluetoothDropdown = toggleBluetoothDropdown;
 window.toggleMobileBluetoothDropdown = toggleMobileBluetoothDropdown;
 window.connectMobileBluetoothDevice = connectMobileBluetoothDevice;
 window.updateMobileBluetoothConnectionStatus = updateMobileBluetoothConnectionStatus;
+bindMobileBluetoothContextCallbacks();
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible' && typeof updateMobileBluetoothConnectionStatus === 'function') updateMobileBluetoothConnectionStatus();
+});
 window.exitMobileIndividualTraining = exitMobileIndividualTraining;
 window.initMobileErgController = initMobileErgController;
 window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
