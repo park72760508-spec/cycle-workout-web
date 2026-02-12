@@ -16566,9 +16566,12 @@ function toggleBluetoothDropdown(context) {
   const isOpening = !dropdown.classList.contains('show');
   dropdown.classList.toggle('show');
   
-  // 드롭다운 열 때 저장된 기기 목록 업데이트 (모바일 대시보드만)
+  // 드롭다운 열 때 저장된 기기 목록 업데이트 (모바일 / 훈련 화면 각각)
   if (isOpening && context === 'mobile') {
     updateMobileBluetoothDropdownWithSavedDevices();
+  }
+  if (isOpening && context === 'trainingScreen') {
+    if (typeof updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') updateTrainingScreenBluetoothDropdownWithSavedDevices();
   }
   
   if (dropdown.classList.contains('show')) {
@@ -16601,25 +16604,45 @@ function toggleMobileBluetoothDropdown() {
 }
 
 // 블루투스 디바이스 연결 함수 (모바일 + 개인 훈련 화면 공통, 연결 후 두 UI 모두 갱신)
-// 저장된 기기에 재연결하는 함수 (모바일 대시보드용)
+// 저장된 기기 재연결: 저장된 디바이스만 검색(필터) → 타임아웃 시 일반 검색 하이브리드 (확장성: 블루투스 개인훈련 대시보드에서도 동일 로직 사용 가능)
 async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
   try {
-    // bluetooth.js의 reconnectToSavedDevice 함수 사용
-    const reconnectFn = typeof reconnectToSavedDevice === 'function' 
-      ? reconnectToSavedDevice 
-      : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
-    
-    if (!reconnectFn) {
-      throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인하세요.');
+    const tryPolling = typeof tryReconnectToSavedDeviceWithPolling === 'function'
+      ? tryReconnectToSavedDeviceWithPolling
+      : (typeof window.tryReconnectToSavedDeviceWithPolling === 'function' ? window.tryReconnectToSavedDeviceWithPolling : null);
+
+    let result = null;
+    let useFallback = false;
+
+    if (tryPolling) {
+      console.log('[Mobile Dashboard] 저장된 기기 전용 검색(하이브리드) 시도:', { deviceId, deviceType });
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+      if (typeof showToast === 'function') showToast('저장된 기기 검색 중…');
+      const pollResult = await tryPolling(deviceId, deviceType);
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      if (pollResult.success && pollResult.result) {
+        result = pollResult.result;
+      } else if (pollResult.fallback === 'general') {
+        useFallback = true;
+      }
     }
-    
-    console.log('[Mobile Dashboard] 저장된 기기 재연결 시도:', { deviceId, deviceType });
-    
-    let result;
-    try {
+
+    if (useFallback) {
+      if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 엽니다.');
+      const connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+      if (connectFn && typeof connectFn === 'function') {
+        await connectFn();
+        if (typeof updateMobileBluetoothConnectionStatus === 'function') setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
+      }
+      return;
+    }
+
+    if (!result) {
+      const reconnectFn = typeof reconnectToSavedDevice === 'function' ? reconnectToSavedDevice : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
+      if (!reconnectFn) {
+        throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인하세요.');
+      }
       result = await reconnectFn(deviceId, deviceType);
-      
-      // getDevices() 미지원(Android Chrome 등): bluetooth.js connectToSavedDeviceById가 requestDevice 폴백 사용
       if (!result) {
         const connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null);
         if (connectById) {
@@ -16631,25 +16654,17 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
             }
           } catch (fallbackErr) {
             console.warn('[Mobile Dashboard] 저장된 기기 requestDevice 폴백 실패:', fallbackErr);
-            if (typeof showToast === 'function') {
-              showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
-            }
+            if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 시도합니다.');
+            const connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+            if (connectFn && typeof connectFn === 'function') { await connectFn(); setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200); }
             return;
           }
         }
-        if (typeof showToast === 'function') {
-          showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴(스마트 트레이너/심박계/파워미터)에서 새로 연결해주세요.');
-        }
+        if (typeof showToast === 'function') showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴에서 새로 연결해주세요.');
         return;
       }
-    } catch (reconnectError) {
-      console.warn('[Mobile Dashboard] 저장된 기기 재연결 실패:', reconnectError);
-      if (typeof showToast === 'function') {
-        showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
-      }
-      return;
     }
-    
+
     const { device, server } = result;
     
     // 디바이스 타입별 연결 로직 실행
@@ -17072,6 +17087,7 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
       deleteBtn.style.cssText = 'color: #f87171; font-size: 12px; flex-shrink: 0; cursor: pointer;';
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
+        if (!confirm('저장된 기기를 목록에서 삭제할까요?')) return;
         var removed = false;
         if (typeof window.removeSavedDevice === 'function') {
           removed = window.removeSavedDevice(saved.deviceId, deviceType);
@@ -17079,8 +17095,9 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
         if (removed && typeof showToast === 'function') {
           showToast('저장된 기기가 목록에서 삭제되었습니다.');
         }
-        if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') {
-          updateMobileBluetoothDropdownWithSavedDevices();
+        if (removed) {
+          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') updateMobileBluetoothDropdownWithSavedDevices();
+          if (typeof updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') updateTrainingScreenBluetoothDropdownWithSavedDevices();
         }
       };
       savedItem.appendChild(deleteBtn);
@@ -17088,6 +17105,73 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
     });
     
     // 메인 아이템 다음에 삽입
+    mainItem.parentNode.insertBefore(savedListContainer, mainItem.nextSibling);
+  });
+}
+
+// 훈련 화면(trainingScreen) 드롭다운에 저장된 기기 목록 표시 (연결 > 목록 즉시 반영용, 블루투스 개인훈련 대시보드 확장 시 동일 패턴 적용)
+function updateTrainingScreenBluetoothDropdownWithSavedDevices() {
+  var dropdown = document.getElementById('trainingScreenBluetoothDropdown');
+  if (!dropdown) return;
+  var getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' ? getSavedDevicesByType : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
+  if (!getSavedDevicesByTypeFn) return;
+  var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+  var deviceTypeLabels = { trainer: '스마트 트레이너', heartRate: '심박계', powerMeter: '파워미터' };
+  deviceTypes.forEach(function (deviceType) {
+    var savedDevices = getSavedDevicesByTypeFn(deviceType);
+    if (savedDevices.length === 0) return;
+    var itemId = '';
+    if (deviceType === 'trainer') itemId = 'trainingScreenBluetoothTrainerItem';
+    else if (deviceType === 'heartRate') itemId = 'trainingScreenBluetoothHRItem';
+    else if (deviceType === 'powerMeter') itemId = 'trainingScreenBluetoothPMItem';
+    var mainItem = document.getElementById(itemId);
+    if (!mainItem) return;
+    var savedListId = 'trainingScreenBluetoothSaved' + deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + 'List';
+    var existingList = document.getElementById(savedListId);
+    if (existingList) existingList.remove();
+    var savedListContainer = document.createElement('div');
+    savedListContainer.id = savedListId;
+    savedListContainer.style.cssText = 'padding-top: 4px; margin-top: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; margin-bottom: 8px;';
+    var header = document.createElement('div');
+    header.style.cssText = 'font-size: 11px; color: #888; padding: 4px 12px 4px 34px; margin-bottom: 4px; text-align: left;';
+    header.textContent = '⭐ 저장된 ' + deviceTypeLabels[deviceType];
+    savedListContainer.appendChild(header);
+    savedDevices.forEach(function (saved) {
+      var savedItem = document.createElement('div');
+      savedItem.className = 'mobile-bluetooth-dropdown-item';
+      savedItem.style.cssText = 'padding: 8px 12px 8px 34px; font-size: 13px; cursor: pointer; text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 8px;';
+      var labelWrap = document.createElement('span');
+      labelWrap.style.cssText = 'flex: 1; min-width: 0;';
+      labelWrap.onclick = function (e) {
+        e.stopPropagation();
+        connectMobileBluetoothDevice(deviceType, saved.deviceId);
+      };
+      var nickname = document.createElement('span');
+      nickname.textContent = saved.nickname || saved.name || '알 수 없는 기기';
+      nickname.style.cssText = 'color: #fff;';
+      var deviceName = document.createElement('span');
+      deviceName.textContent = ' (' + (saved.name || '') + ')';
+      deviceName.style.cssText = 'color: #888; font-size: 11px;';
+      labelWrap.appendChild(nickname);
+      labelWrap.appendChild(deviceName);
+      savedItem.appendChild(labelWrap);
+      var deleteBtn = document.createElement('span');
+      deleteBtn.textContent = '삭제';
+      deleteBtn.style.cssText = 'color: #f87171; font-size: 12px; flex-shrink: 0; cursor: pointer;';
+      deleteBtn.onclick = function (e) {
+        e.stopPropagation();
+        if (!confirm('저장된 기기를 목록에서 삭제할까요?')) return;
+        var removed = false;
+        if (typeof window.removeSavedDevice === 'function') removed = window.removeSavedDevice(saved.deviceId, deviceType);
+        if (removed && typeof showToast === 'function') showToast('저장된 기기가 목록에서 삭제되었습니다.');
+        if (removed) {
+          if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') updateMobileBluetoothDropdownWithSavedDevices();
+          if (typeof updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') updateTrainingScreenBluetoothDropdownWithSavedDevices();
+        }
+      };
+      savedItem.appendChild(deleteBtn);
+      savedListContainer.appendChild(savedItem);
+    });
     mainItem.parentNode.insertBefore(savedListContainer, mainItem.nextSibling);
   });
 }
@@ -17101,8 +17185,9 @@ function updateMobileBluetoothConnectionStatus() {
   var pmStatus = document.getElementById('mobilePowerMeterStatus');
   var connectBtn = document.getElementById('mobileBluetoothConnectBtn');
   
-  // 저장된 기기 목록 업데이트 (모바일 드롭다운)
+  // 저장된 기기 목록 업데이트 (모바일 + 훈련 화면 드롭다운 즉시 반영)
   updateMobileBluetoothDropdownWithSavedDevices();
+  if (typeof updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') updateTrainingScreenBluetoothDropdownWithSavedDevices();
 
   function setStatus(item, statusEl, connected) {
     if (item) item.classList.toggle('connected', !!connected);

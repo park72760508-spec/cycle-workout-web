@@ -223,6 +223,35 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
   }
 }
 
+// 저장된 디바이스 전용 검색 타임아웃 (ms). 이 시간 내 미발견 시 일반 검색으로 전환 (하이브리드)
+// BLE 발견은 보통 5~15초 내 완료되므로 20초로 설정 (확장성: 블루투스 개인훈련 대시보드에서도 동일 상수 사용)
+const SAVED_DEVICE_SEARCH_TIMEOUT_MS = 20000;
+const SAVED_DEVICE_POLL_INTERVAL_MS = 2000;
+window.SAVED_DEVICE_SEARCH_TIMEOUT_MS = SAVED_DEVICE_SEARCH_TIMEOUT_MS;
+
+// 저장된 디바이스만 검색: getDevices() 1회 시도 후, 미발견 시 폴링으로 타임아웃까지 대기. 타임아웃 시 일반 검색 폴백용 플래그 반환
+// 반환: { success: true, result: { device, server } } 또는 { success: false, fallback: 'general' }
+async function tryReconnectToSavedDeviceWithPolling(deviceId, deviceType) {
+  const idStr = String(deviceId);
+  const reconnectFn = typeof reconnectToSavedDevice === 'function' ? reconnectToSavedDevice : (window.reconnectToSavedDevice || null);
+  if (!reconnectFn) return { success: false, fallback: 'general' };
+
+  let result = await reconnectFn(idStr, deviceType);
+  if (result) return { success: true, result };
+
+  if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))
+    return { success: false, fallback: 'general' };
+
+  const deadline = Date.now() + SAVED_DEVICE_SEARCH_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise(function (r) { setTimeout(r, SAVED_DEVICE_POLL_INTERVAL_MS); });
+    result = await reconnectFn(idStr, deviceType);
+    if (result) return { success: true, result };
+  }
+  return { success: false, fallback: 'general' };
+}
+window.tryReconnectToSavedDeviceWithPolling = window.tryReconnectToSavedDeviceWithPolling || tryReconnectToSavedDeviceWithPolling;
+
 // 저장된 기기에 재연결 시도
 // iOS/Bluefy: getDevices()가 비어있거나 ID 형식이 다르면 null 반환 → 호출자가 requestDevice 폴백 사용
 async function reconnectToSavedDevice(deviceId, deviceType) {
