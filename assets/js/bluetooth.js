@@ -719,10 +719,10 @@ async function connectTrainer() {
     }
 
     server = await device.gatt.connect();
-    
-    // Helper: Safe Service Discovery (Prevents Bluefy crashes)
-    const _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
-    const _safeGetChar = async (svc, uuid) => { if(!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
+
+    // Helper: Safe Service Discovery (같은 함수 내 위쪽 if 블록에서 이미 var로 선언될 수 있으므로 재선언 방지)
+    var _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
+    var _safeGetChar = async (svc, uuid) => { if (!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
 
     // 3. Data Channel Discovery (FTMS -> CPS -> Legacy)
     let dataChar = null;
