@@ -784,18 +784,22 @@ async function connectTrainer() {
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'trainer' } })); } catch (e) {}
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
     
-    // 새 기기 저장 (원인: deviceId 비교 시 문자열/숫자 타입 불일치로 기존 저장으로 오인 → String() 통일)
+    // 새 기기 저장 (모바일 개인훈련 대시보드 전용: 모달은 app.js 이벤트 리스너에서 표시 → 같은 문서/컨텍스트 보장)
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'trainer');
     
     if (!saved) {
-      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (확인 시 캐시 저장 + 연결 목록 갱신은 모달 콜백에서 처리)
-      if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
-        saveDevice(device.id, nameToSave, 'trainer', nameToSave);
-        if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
-      });
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-show-new-device-save-modal', {
+          detail: { deviceId: device.id, deviceName: deviceName, deviceType: 'trainer' }
+        }));
+      } catch (evErr) {
+        if (typeof showConfirmDeviceNameModal === 'function') showConfirmDeviceNameModal(deviceName, (nameToSave) => {
+          saveDevice(device.id, nameToSave, 'trainer', nameToSave);
+          if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
+        });
+      }
     } else {
-      // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
       saveDevice(device.id, deviceName, 'trainer', saved.name || deviceName);
     }
     
@@ -1017,15 +1021,21 @@ async function connectHeartRate() {
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'heartRate' } })); } catch (e) {}
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('heartRate', device));
     
-    // 3. 새 기기 저장 (deviceId 비교 String 통일)
+    // 3. 새 기기 저장 (모바일 개인훈련 대시보드: app.js 이벤트로 모달 표시)
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'heartRate');
     
     if (!saved) {
-      if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
-        saveDevice(device.id, nameToSave, 'heartRate', nameToSave);
-        if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
-      });
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-show-new-device-save-modal', {
+          detail: { deviceId: device.id, deviceName: deviceName, deviceType: 'heartRate' }
+        }));
+      } catch (evErr) {
+        if (typeof showConfirmDeviceNameModal === 'function') showConfirmDeviceNameModal(deviceName, (nameToSave) => {
+          saveDevice(device.id, nameToSave, 'heartRate', nameToSave);
+          if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
+        });
+      }
     } else {
       saveDevice(device.id, deviceName, 'heartRate', saved.name || deviceName);
     }
@@ -1140,15 +1150,21 @@ async function connectPowerMeter() {
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'powerMeter' } })); } catch (e) {}
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('powerMeter', device));
     
-    // 새 기기 저장 (deviceId 비교 String 통일)
+    // 새 기기 저장 (모바일 개인훈련 대시보드: app.js 이벤트로 모달 표시)
     const deviceName = device.name || '알 수 없는 기기';
     const saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'powerMeter');
     
     if (!saved) {
-      if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
-        saveDevice(device.id, nameToSave, 'powerMeter', nameToSave);
-        if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
-      });
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-show-new-device-save-modal', {
+          detail: { deviceId: device.id, deviceName: deviceName, deviceType: 'powerMeter' }
+        }));
+      } catch (evErr) {
+        if (typeof showConfirmDeviceNameModal === 'function') showConfirmDeviceNameModal(deviceName, (nameToSave) => {
+          saveDevice(device.id, nameToSave, 'powerMeter', nameToSave);
+          if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
+        });
+      }
     } else {
       saveDevice(device.id, deviceName, 'powerMeter', saved.name || deviceName);
     }

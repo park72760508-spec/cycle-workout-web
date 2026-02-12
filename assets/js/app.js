@@ -16986,6 +16986,65 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   }
 }
 
+// 모바일 개인훈련 대시보드 전용: 신규 디바이스 저장 화면 (bluetooth.js에서 이벤트로만 호출 → 같은 문서/컨텍스트에서 모달 표시 보장)
+(function initNewDeviceSaveModalListener() {
+  if (typeof window.addEventListener !== 'function') return;
+  window.addEventListener('stelvio-show-new-device-save-modal', function (e) {
+    var d = e.detail || {};
+    var deviceId = d.deviceId;
+    var deviceName = (d.deviceName && String(d.deviceName).trim()) || '알 수 없는 기기';
+    var deviceType = d.deviceType || 'trainer';
+    var overlay = document.createElement('div');
+    overlay.id = 'stelvio-new-device-save-modal';
+    overlay.setAttribute('aria-label', '신규 디바이스 저장');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.35);';
+    var title = document.createElement('p');
+    title.textContent = '신규 디바이스 저장';
+    title.style.cssText = 'margin:0 0 8px;font-size:18px;font-weight:600;color:#111;';
+    var desc = document.createElement('p');
+    desc.textContent = '기기 검색 시 사용될 이름으로 저장됩니다. (변경 불가)';
+    desc.style.cssText = 'margin:0 0 16px;font-size:13px;color:#666;line-height:1.4;';
+    var label = document.createElement('p');
+    label.textContent = '저장 디바이스 이름';
+    label.style.cssText = 'margin:0 0 6px;font-size:12px;color:#888;';
+    var nameDisplay = document.createElement('div');
+    nameDisplay.textContent = deviceName;
+    nameDisplay.style.cssText = 'padding:12px 14px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;color:#111;margin-bottom:20px;';
+    var btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+    var cancel = document.createElement('button');
+    cancel.textContent = '취소';
+    cancel.style.cssText = 'padding:10px 18px;border:1px solid #ccc;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+    var ok = document.createElement('button');
+    ok.textContent = '확인';
+    ok.style.cssText = 'padding:10px 18px;border:none;background:#2e74e8;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+    function close(doSave) {
+      if (overlay.parentNode) overlay.remove();
+      if (!doSave) return;
+      if (typeof window.saveDevice === 'function') window.saveDevice(deviceId, deviceName, deviceType, deviceName);
+      if (typeof showToast === 'function') showToast('✅ ' + deviceName + ' 저장 완료');
+      if (typeof updateMobileBluetoothDropdownWithSavedDevices === 'function') updateMobileBluetoothDropdownWithSavedDevices();
+      if (typeof updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') updateTrainingScreenBluetoothDropdownWithSavedDevices();
+      if (typeof updateMobileBluetoothConnectionStatus === 'function') updateMobileBluetoothConnectionStatus();
+      if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+    }
+    cancel.onclick = function () { close(false); };
+    ok.onclick = function () { close(true); };
+    overlay.onclick = function (ev) { if (ev.target === overlay) close(false); };
+    btns.appendChild(cancel);
+    btns.appendChild(ok);
+    box.appendChild(title);
+    box.appendChild(desc);
+    box.appendChild(label);
+    box.appendChild(nameDisplay);
+    box.appendChild(btns);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
+})();
+
 // 블루투스 연결 상태 업데이트 (모바일 대시보드 + 개인 훈련 화면 두 UI 모두 갱신)
 // 모바일 대시보드 드롭다운에 저장된 기기 목록 표시
 function updateMobileBluetoothDropdownWithSavedDevices() {
