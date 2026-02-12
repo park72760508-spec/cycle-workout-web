@@ -231,7 +231,8 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     var filters = [];
     var optionalServices;
     
-    if (savedDeviceName && String(savedDeviceName).trim()) {
+    var hasSavedName = !!(savedDeviceName && String(savedDeviceName).trim());
+    if (hasSavedName) {
       // 저장된 디바이스만 보이게: namePrefix + 서비스 조합(한 필터에 둘 다 만족하는 기기만 표시)
       var namePrefix = String(savedDeviceName).trim();
       if (deviceType === 'heartRate') {
@@ -252,11 +253,15 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
           { namePrefix: namePrefix, services: [UUIDS.CSC_SERVICE] }
         ];
         optionalServices = [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
+      } else {
+        // deviceType 불명: namePrefix만으로 필터 (저장된 이름이 있으면 절대 넓은 필터 사용 안 함)
+        filters = [{ namePrefix: namePrefix }];
+        optionalServices = [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
       }
     }
-    
-    if (filters.length === 0) {
-      // 이름 없을 때: 기존처럼 넓은 필터
+    // 저장된 이름이 있을 때는 절대 넓은 필터 추가 안 함 → 전체 검색으로 넘어가지 않게
+    if (filters.length === 0 && !hasSavedName) {
+      // 이름 없을 때만: 넓은 필터
       if (deviceType === 'heartRate') {
         filters.push({ services: ['heart_rate'] });
         filters.push({ services: [UUIDS.HR_SERVICE] });
@@ -364,22 +369,21 @@ async function reconnectToSavedDevice(deviceId, deviceType) {
 // 저장된 기기 ID로 직접 연결 (Bluetooth Individual 등에서 특정 저장 기기 클릭 시 사용)
 // getDevices() 미지원(Android) 또는 페어링 목록에 없음(iOS/Bluefy) 시 저장된 기기 이름으로 requestDevice() 호출 후 연결
 async function connectToSavedDeviceById(deviceId, deviceType) {
-  const allSaved = typeof loadSavedDevices === 'function' ? loadSavedDevices() : [];
-  const saved = allSaved.find(function (d) { return String(d.deviceId) === String(deviceId) && String(d.deviceType) === String(deviceType); });
+  var loadFn = typeof window.loadSavedDevices === 'function' ? window.loadSavedDevices : (typeof loadSavedDevices === 'function' ? loadSavedDevices : function () { return []; });
+  var allSaved = loadFn();
+  var saved = allSaved.find(function (d) { return String(d.deviceId) === String(deviceId) && String(d.deviceType) === String(deviceType); });
   if (!saved) {
     throw new Error('저장된 기기를 찾을 수 없습니다.');
   }
-  let result = null;
+  var result = null;
   try {
     result = await reconnectToSavedDevice(deviceId, deviceType);
   } catch (e) {
     result = null;
   }
-  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도
-  // saved.name 우선, 비어 있으면 saved.nickname 사용(구 데이터 호환) → 둘 다 없으면 requestDevice 생략
-  if (!result && navigator.bluetooth) {
-    const nameForFilter = (String(saved.name || '').trim() || String(saved.nickname || '').trim());
-    if (nameForFilter) {
+  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (반드시 namePrefix 필터만 사용)
+  var nameForFilter = (String(saved.name || '').trim() || String(saved.nickname || '').trim());
+  if (!result && navigator.bluetooth && nameForFilter) {
       try {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
         if (typeof showToast === 'function') showToast('같은 종류 기기가 여러 대 있으면 목록에서 본인 기기를 선택하세요.');
@@ -402,7 +406,6 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
         throw reqErr;
       }
-    }
   }
   if (!result) return null;
   const { device, server } = result;
