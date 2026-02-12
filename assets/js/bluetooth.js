@@ -112,17 +112,54 @@ window.saveDevice = window.saveDevice || saveDevice;
 window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
 window.MAX_BLUETOOTH_DEVICES_IN_LIST = MAX_BLUETOOTH_DEVICES_IN_LIST;
 
-// 기기명 확인 후 저장 (검색에 사용되는 BLE 기기명은 수정 불가, 확인만 눌러 저장)
+// 신규 디바이스 저장 화면 (모바일에서 confirm() 미동작 방지용 커스텀 모달)
+// 저장 디바이스 이름: 기기검색 시 사용될 디폴트 이름으로 자동 입력된 상태로 표시 → 확인 후 저장
 function showConfirmDeviceNameModal(deviceName, callback) {
-  const name = (deviceName && String(deviceName).trim()) || '알 수 없는 기기';
-  const ok = confirm(
-    '다음 기기를 저장합니다.\n검색에 사용되는 기기명은 변경할 수 없습니다.\n\n기기명: ' + name + '\n\n확인을 누르면 저장됩니다.'
-  );
-  if (ok) {
-    callback(name);
-    return true;
+  var name = (deviceName && String(deviceName).trim()) || '알 수 없는 기기';
+  var overlay = document.createElement('div');
+  overlay.setAttribute('aria-label', '신규 디바이스 저장');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10004;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+  var title = document.createElement('p');
+  title.textContent = '신규 디바이스 저장';
+  title.style.cssText = 'margin:0 0 8px;font-size:18px;font-weight:600;color:#111;';
+  var desc = document.createElement('p');
+  desc.textContent = '기기 검색 시 사용될 이름으로 저장됩니다. (변경 불가)';
+  desc.style.cssText = 'margin:0 0 16px;font-size:13px;color:#666;line-height:1.4;';
+  var label = document.createElement('p');
+  label.textContent = '저장 디바이스 이름';
+  label.style.cssText = 'margin:0 0 6px;font-size:12px;color:#888;';
+  var nameDisplay = document.createElement('div');
+  nameDisplay.textContent = name;
+  nameDisplay.style.cssText = 'padding:12px 14px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;color:#111;margin-bottom:20px;';
+  var btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+  var cancel = document.createElement('button');
+  cancel.textContent = '취소';
+  cancel.style.cssText = 'padding:10px 18px;border:1px solid #ccc;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+  var ok = document.createElement('button');
+  ok.textContent = '확인';
+  ok.style.cssText = 'padding:10px 18px;border:none;background:#2e74e8;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+  function close(doSave) {
+    overlay.remove();
+    if (doSave && typeof callback === 'function') {
+      callback(name);
+    }
   }
-  return false;
+  cancel.onclick = function () { close(false); };
+  ok.onclick = function () { close(true); };
+  overlay.onclick = function (e) { if (e.target === overlay) close(false); };
+  btns.appendChild(cancel);
+  btns.appendChild(ok);
+  box.appendChild(title);
+  box.appendChild(desc);
+  box.appendChild(label);
+  box.appendChild(nameDisplay);
+  box.appendChild(btns);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  return true;
 }
 
 // 하위 호환: 기존 showNicknameModal 호출부는 확인 전용 모달로 대체
