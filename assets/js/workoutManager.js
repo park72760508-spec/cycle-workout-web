@@ -3513,13 +3513,21 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     // 카테고리 필터 적용 전 전체 목록 (카테고리 개수 표시용, author 기준)
     const allWorkoutsForCount = filteredWorkouts;
 
-    // 카테고리 필터 (구글 시트 author 필드 기준)
+    // 카테고리 필터 (구글 시트 author 필드 기준). '기타'=입문자 전용: title에 (Lite) 포함 워크아웃만
     if (categoryId && categoryId !== 'all') {
-      filteredWorkouts = allWorkoutsForCount.filter(w => {
-        const cat = getWorkoutCategoryId(w);
-        return cat === categoryId;
-      });
-      console.log('📂 카테고리 필터 적용 (author 기준):', { categoryId, count: filteredWorkouts.length });
+      if (categoryId === '기타') {
+        filteredWorkouts = allWorkoutsForCount.filter(w => {
+          const t = String(w.title || w.name || '');
+          return t.indexOf('(Lite)') !== -1;
+        });
+        console.log('📂 카테고리 필터 적용 (입문자 전용, Lite):', { categoryId, count: filteredWorkouts.length });
+      } else {
+        filteredWorkouts = allWorkoutsForCount.filter(w => {
+          const cat = getWorkoutCategoryId(w);
+          return cat === categoryId;
+        });
+        console.log('📂 카테고리 필터 적용 (author 기준):', { categoryId, count: filteredWorkouts.length });
+      }
     }
 
     if (filteredWorkouts.length === 0) {
