@@ -16604,37 +16604,27 @@ function toggleMobileBluetoothDropdown() {
 }
 
 // 블루투스 디바이스 연결 함수 (모바일 + 개인 훈련 화면 공통, 연결 후 두 UI 모두 갱신)
-// 저장된 기기 재연결: 저장된 디바이스만 검색(필터) → 타임아웃 시 일반 검색 하이브리드 (확장성: 블루투스 개인훈련 대시보드에서도 동일 로직 사용 가능)
+// 저장된 기기 재연결: getDevices 1회 시도 후 즉시 connectToSavedDeviceById(저장된 이름으로 requestDevice) 시도
+// 원인: 20초 폴링 후 requestDevice 호출 시 사용자 제스처가 소진되어 모바일에서 requestDevice()가 차단됨 → 폴링 제거, 클릭 직후 requestDevice 호출
 async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
   try {
-    const tryPolling = typeof tryReconnectToSavedDeviceWithPolling === 'function'
-      ? tryReconnectToSavedDeviceWithPolling
-      : (typeof window.tryReconnectToSavedDeviceWithPolling === 'function' ? window.tryReconnectToSavedDeviceWithPolling : null);
-
-    let result = null;
-    let useFallback = false;
-
-    if (tryPolling) {
-      console.log('[Mobile Dashboard] 저장된 기기 전용 검색(하이브리드) 시도:', { deviceId, deviceType });
-      if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
-      if (typeof showToast === 'function') showToast('저장된 기기 검색 중…');
-      const pollResult = await tryPolling(deviceId, deviceType);
-      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-      if (pollResult.success && pollResult.result) {
-        result = pollResult.result;
-      } else if (pollResult.fallback === 'general') {
-        useFallback = true;
-      }
+    const reconnectFn = typeof reconnectToSavedDevice === 'function' ? reconnectToSavedDevice : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
+    if (!reconnectFn) {
+      throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인하세요.');
     }
 
-    // 원인: getDevices() 미지원(Android 등) 또는 타임아웃 시 곧바로 전체 검색으로 넘어가서, 저장된 기기 이름으로 requestDevice하는 connectToSavedDeviceById를 시도하지 않음
-    // 조치: fallback 시 먼저 connectToSavedDeviceById(저장된 기기 이름 필터 requestDevice) 시도 → 실패 시에만 전체 검색
-    if (useFallback) {
+    let result = null;
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+    if (typeof showToast === 'function') showToast('저장된 기기 검색 중…');
+    result = await reconnectFn(deviceId, deviceType);
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+
+    if (!result) {
       const connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null);
       if (connectById) {
         try {
           if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
-          if (typeof showToast === 'function') showToast('저장된 기기로 연결 시도 중…');
+          if (typeof showToast === 'function') showToast('저장된 기기 이름으로 연결 시도 중…');
           const out = await connectById(deviceId, deviceType);
           if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
           if (out) {
@@ -16653,34 +16643,6 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
         if (typeof updateMobileBluetoothConnectionStatus === 'function') setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
       }
       return;
-    }
-
-    if (!result) {
-      const reconnectFn = typeof reconnectToSavedDevice === 'function' ? reconnectToSavedDevice : (typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null);
-      if (!reconnectFn) {
-        throw new Error('재연결 함수를 찾을 수 없습니다. bluetooth.js가 로드되었는지 확인하세요.');
-      }
-      result = await reconnectFn(deviceId, deviceType);
-      if (!result) {
-        const connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null);
-        if (connectById) {
-          try {
-            const out = await connectById(deviceId, deviceType);
-            if (out) {
-              setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
-              return;
-            }
-          } catch (fallbackErr) {
-            console.warn('[Mobile Dashboard] 저장된 기기 requestDevice 폴백 실패:', fallbackErr);
-            if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 시도합니다.');
-            const connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
-            if (connectFn && typeof connectFn === 'function') { await connectFn(); setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200); }
-            return;
-          }
-        }
-        if (typeof showToast === 'function') showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴에서 새로 연결해주세요.');
-        return;
-      }
     }
 
     const { device, server } = result;

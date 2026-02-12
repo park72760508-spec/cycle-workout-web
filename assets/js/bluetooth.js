@@ -402,10 +402,10 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
   } catch (e) {
     result = null;
   }
-  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (검색은 반드시 BLE 기기명(saved.name)만 사용, 닉네임은 사용 안 함)
-  // 주의: requestDevice는 이름(namePrefix)으로만 필터하므로, 같은 제조사/같은 이름 기기가 여러 대 있으면 목록에 모두 표시됨 → 사용자가 잘못 선택할 수 있음
-  if (!result && navigator.bluetooth && saved.name) {
-    const nameForFilter = String(saved.name).trim();
+  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도
+  // saved.name 우선, 비어 있으면 saved.nickname 사용(구 데이터 호환) → 둘 다 없으면 requestDevice 생략
+  if (!result && navigator.bluetooth) {
+    const nameForFilter = (String(saved.name || '').trim() || String(saved.nickname || '').trim());
     if (nameForFilter) {
       try {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
