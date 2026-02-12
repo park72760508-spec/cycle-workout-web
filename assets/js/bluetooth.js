@@ -278,38 +278,11 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
       }
     }
     
-    var device;
-    try {
-      device = await navigator.bluetooth.requestDevice({
-        filters: filters.length > 0 ? filters : undefined,
-        optionalServices: optionalServices
-      });
-    } catch (strictErr) {
-      // 저장된 이름만 필터했는데 기기 없음(이름 변경 등): 넓은 필터로 재시도
-      if (savedDeviceName && String(savedDeviceName).trim() && filters.length > 0) {
-        var broadFilters = [];
-        if (deviceType === 'heartRate') {
-          broadFilters = [{ services: ['heart_rate'] }, { services: [UUIDS.HR_SERVICE] }];
-        } else if (deviceType === 'trainer') {
-          broadFilters = [
-            { services: [UUIDS.FTMS_SERVICE] },
-            { services: [UUIDS.CPS_SERVICE] },
-            { namePrefix: 'CycleOps' }, { namePrefix: 'Wahoo' }, { namePrefix: 'KICKR' }, { namePrefix: 'Tacx' }
-          ];
-        } else if (deviceType === 'powerMeter') {
-          broadFilters = [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }];
-        }
-        if (broadFilters.length > 0 && typeof showToast === 'function') {
-          showToast('저장된 기기 이름과 일치하는 기기가 없습니다. 목록에서 선택해주세요.');
-        }
-        device = await navigator.bluetooth.requestDevice({
-          filters: broadFilters,
-          optionalServices: optionalServices
-        });
-      } else {
-        throw strictErr;
-      }
-    }
+    // 저장된 기기 연결 시: namePrefix 필터만 사용. 실패 시 넓은 필터로 재시도하지 않음 → 다른 기기가 목록에 푸시되는 것 방지
+    var device = await navigator.bluetooth.requestDevice({
+      filters: filters.length > 0 ? filters : undefined,
+      optionalServices: optionalServices
+    });
     return device;
   } catch (error) {
     console.error('[requestDeviceWithSavedInfo] 기기 요청 실패:', error);
