@@ -3,6 +3,13 @@
    - Dual-Channel: Data (Read) and Control (Write) discovered independently
    - Mobile Safe: Bluefy/Android compatible (try-catch guarded)
    - Features Preserved: 3-sec Power Buffer, Garmin-style Cadence Logic
+   - [신규 디바이스 저장 미동작 원인 및 조치]
+     원인1: 저장 모달이 연결 직후 동기 호출로 뜨며 모바일에서 다른 레이어에 가리거나 페인트 전에 덮여 미표시
+           → 모달 표시를 setTimeout(..., 150)으로 지연, z-index 99999 적용
+     원인2: 저장 확인 시 캐시(localStorage)만 갱신하고 연결 목록(드롭다운) 갱신 미호출
+           → 확인 콜백에서 updateMobileBluetoothDropdownWithSavedDevices 등 호출로 즉시 반영
+     원인3: deviceId 비교 시 문자열/숫자 타입 불일치로 "이미 저장된 기기"로 오인해 신규 저장 모달 생략
+           → loadSavedDevices().find() 비교 시 String(deviceId) 통일
 ========================================================== */
 
 const UUIDS = {
@@ -113,52 +120,62 @@ window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
 window.MAX_BLUETOOTH_DEVICES_IN_LIST = MAX_BLUETOOTH_DEVICES_IN_LIST;
 
 // 신규 디바이스 저장 화면 (모바일에서 confirm() 미동작 방지용 커스텀 모달)
+// 원인: 연결 직후 동기 호출 시 모바일에서 다른 레이어에 가리거나 페인트 전에 덮여 미표시 → 지연 표시 + 최상단 z-index 적용
 // 저장 디바이스 이름: 기기검색 시 사용될 디폴트 이름으로 자동 입력된 상태로 표시 → 확인 후 저장
 function showConfirmDeviceNameModal(deviceName, callback) {
   var name = (deviceName && String(deviceName).trim()) || '알 수 없는 기기';
-  var overlay = document.createElement('div');
-  overlay.setAttribute('aria-label', '신규 디바이스 저장');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10004;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
-  var title = document.createElement('p');
-  title.textContent = '신규 디바이스 저장';
-  title.style.cssText = 'margin:0 0 8px;font-size:18px;font-weight:600;color:#111;';
-  var desc = document.createElement('p');
-  desc.textContent = '기기 검색 시 사용될 이름으로 저장됩니다. (변경 불가)';
-  desc.style.cssText = 'margin:0 0 16px;font-size:13px;color:#666;line-height:1.4;';
-  var label = document.createElement('p');
-  label.textContent = '저장 디바이스 이름';
-  label.style.cssText = 'margin:0 0 6px;font-size:12px;color:#888;';
-  var nameDisplay = document.createElement('div');
-  nameDisplay.textContent = name;
-  nameDisplay.style.cssText = 'padding:12px 14px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;color:#111;margin-bottom:20px;';
-  var btns = document.createElement('div');
-  btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
-  var cancel = document.createElement('button');
-  cancel.textContent = '취소';
-  cancel.style.cssText = 'padding:10px 18px;border:1px solid #ccc;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
-  var ok = document.createElement('button');
-  ok.textContent = '확인';
-  ok.style.cssText = 'padding:10px 18px;border:none;background:#2e74e8;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
-  function close(doSave) {
-    overlay.remove();
-    if (doSave && typeof callback === 'function') {
-      callback(name);
+  var cb = typeof callback === 'function' ? callback : null;
+  function show() {
+    var overlay = document.createElement('div');
+    overlay.setAttribute('aria-label', '신규 디바이스 저장');
+    overlay.id = 'stelvio-new-device-save-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:360px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+    var title = document.createElement('p');
+    title.textContent = '신규 디바이스 저장';
+    title.style.cssText = 'margin:0 0 8px;font-size:18px;font-weight:600;color:#111;';
+    var desc = document.createElement('p');
+    desc.textContent = '기기 검색 시 사용될 이름으로 저장됩니다. (변경 불가)';
+    desc.style.cssText = 'margin:0 0 16px;font-size:13px;color:#666;line-height:1.4;';
+    var label = document.createElement('p');
+    label.textContent = '저장 디바이스 이름';
+    label.style.cssText = 'margin:0 0 6px;font-size:12px;color:#888;';
+    var nameDisplay = document.createElement('div');
+    nameDisplay.textContent = name;
+    nameDisplay.style.cssText = 'padding:12px 14px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;font-size:15px;color:#111;margin-bottom:20px;';
+    var btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+    var cancel = document.createElement('button');
+    cancel.textContent = '취소';
+    cancel.style.cssText = 'padding:10px 18px;border:1px solid #ccc;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+    var ok = document.createElement('button');
+    ok.textContent = '확인';
+    ok.style.cssText = 'padding:10px 18px;border:none;background:#2e74e8;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+    function close(doSave) {
+      if (overlay.parentNode) overlay.remove();
+      if (doSave && cb) {
+        cb(name);
+        if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+        if (typeof window.updateMobileBluetoothDropdownWithSavedDevices === 'function') window.updateMobileBluetoothDropdownWithSavedDevices();
+        if (typeof window.updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') window.updateTrainingScreenBluetoothDropdownWithSavedDevices();
+        if (typeof window.updateMobileBluetoothConnectionStatus === 'function') window.updateMobileBluetoothConnectionStatus();
+      }
     }
+    cancel.onclick = function () { close(false); };
+    ok.onclick = function () { close(true); };
+    overlay.onclick = function (e) { if (e.target === overlay) close(false); };
+    btns.appendChild(cancel);
+    btns.appendChild(ok);
+    box.appendChild(title);
+    box.appendChild(desc);
+    box.appendChild(label);
+    box.appendChild(nameDisplay);
+    box.appendChild(btns);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
   }
-  cancel.onclick = function () { close(false); };
-  ok.onclick = function () { close(true); };
-  overlay.onclick = function (e) { if (e.target === overlay) close(false); };
-  btns.appendChild(cancel);
-  btns.appendChild(ok);
-  box.appendChild(title);
-  box.appendChild(desc);
-  box.appendChild(label);
-  box.appendChild(nameDisplay);
-  box.appendChild(btns);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
+  setTimeout(show, 150);
   return true;
 }
 
@@ -767,15 +784,15 @@ async function connectTrainer() {
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'trainer' } })); } catch (e) {}
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
     
-    // 새 기기 저장 (닉네임 설정)
+    // 새 기기 저장 (원인: deviceId 비교 시 문자열/숫자 타입 불일치로 기존 저장으로 오인 → String() 통일)
     const deviceName = device.name || '알 수 없는 기기';
-    const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'trainer');
+    const saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'trainer');
     
     if (!saved) {
-      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (수정 불가)
+      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (확인 시 캐시 저장 + 연결 목록 갱신은 모달 콜백에서 처리)
       if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
         saveDevice(device.id, nameToSave, 'trainer', nameToSave);
-        showToast('✅ ' + nameToSave + ' 저장 완료');
+        if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
       });
     } else {
       // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
@@ -1000,18 +1017,16 @@ async function connectHeartRate() {
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'heartRate' } })); } catch (e) {}
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('heartRate', device));
     
-    // 3. 새 기기 저장 (닉네임 설정)
+    // 3. 새 기기 저장 (deviceId 비교 String 통일)
     const deviceName = device.name || '알 수 없는 기기';
-    const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'heartRate');
+    const saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'heartRate');
     
     if (!saved) {
-      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (수정 불가)
       if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
         saveDevice(device.id, nameToSave, 'heartRate', nameToSave);
-        showToast('✅ ' + nameToSave + ' 저장 완료');
+        if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
       });
     } else {
-      // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
       saveDevice(device.id, deviceName, 'heartRate', saved.name || deviceName);
     }
     
@@ -1125,18 +1140,16 @@ async function connectPowerMeter() {
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'powerMeter' } })); } catch (e) {}
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('powerMeter', device));
     
-    // 새 기기 저장 (닉네임 설정)
+    // 새 기기 저장 (deviceId 비교 String 통일)
     const deviceName = device.name || '알 수 없는 기기';
-    const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'powerMeter');
+    const saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'powerMeter');
     
     if (!saved) {
-      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (수정 불가)
       if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
         saveDevice(device.id, nameToSave, 'powerMeter', nameToSave);
-        showToast('✅ ' + nameToSave + ' 저장 완료');
+        if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
       });
     } else {
-      // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
       saveDevice(device.id, deviceName, 'powerMeter', saved.name || deviceName);
     }
     
