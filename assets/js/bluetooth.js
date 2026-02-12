@@ -533,9 +533,9 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
     }
   }
   if (!result) return null;
-  const { device, server } = result;
+  var device = result.device, server = result.server;
 
-  const _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
+  var _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
   const _safeGetChar = async (svc, uuid) => { if (!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
 
   if (deviceType === 'heartRate') {
