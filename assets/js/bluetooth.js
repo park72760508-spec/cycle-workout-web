@@ -44,6 +44,15 @@ window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter
 window._lastCadenceUpdateTime = {};
 window._lastCrankData = {};
 
+// 모바일에서 스크립트 로드 실패 시 안내용 스텁 (실제 구현은 아래에서 덮어씀)
+function _stelvioBluetoothStub() {
+  var msg = '블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해 주세요.';
+  if (typeof showToast === 'function') showToast(msg); else alert(msg);
+}
+if (typeof window.connectTrainer !== 'function') window.connectTrainer = _stelvioBluetoothStub;
+if (typeof window.connectHeartRate !== 'function') window.connectHeartRate = _stelvioBluetoothStub;
+if (typeof window.connectPowerMeter !== 'function') window.connectPowerMeter = _stelvioBluetoothStub;
+
 // ========== Smart Pairing: 기기 저장 및 관리 ==========
 const STORAGE_KEY = 'stelvio_saved_devices';
 // 인도어 훈련장 등 다수 기기 환경: 브라우저 피커 목록 상한(참고용). 네이티브 requestDevice 피커는 브라우저가 제어.
@@ -536,7 +545,7 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
   var device = result.device, server = result.server;
 
   var _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
-  const _safeGetChar = async (svc, uuid) => { if (!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
+  var _safeGetChar = async (svc, uuid) => { if (!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
 
   if (deviceType === 'heartRate') {
     let service;

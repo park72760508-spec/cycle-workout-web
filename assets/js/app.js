@@ -16944,11 +16944,19 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   }
   
   if (!connectFunction || typeof connectFunction !== 'function') {
+    await new Promise(function (r) { setTimeout(r, 300); });
+    connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+  }
+  if (!connectFunction || typeof connectFunction !== 'function') {
     console.error('[Mobile Dashboard] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
-    alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+    if (typeof showToast === 'function') {
+      showToast('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해 주세요.');
+    } else {
+      alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해 주세요.');
+    }
     return;
   }
-  
+
   try {
     console.log('[Mobile Dashboard] 블루투스 디바이스 연결 시도:', deviceType);
     await connectFunction();
@@ -17027,31 +17035,36 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
 })();
 
 // 블루투스 연결 상태 업데이트 (모바일 대시보드 + 개인 훈련 화면 두 UI 모두 갱신)
-// 모바일 대시보드 드롭다운에 저장된 기기 목록 표시
+// 모바일 대시보드 드롭다운에 저장된 기기 목록 표시 (bluetooth.js 미로드 시 localStorage 직접 사용)
+var STELVIO_SAVED_DEVICES_KEY = 'stelvio_saved_devices';
+
 function updateMobileBluetoothDropdownWithSavedDevices() {
-  const dropdown = document.getElementById('mobileBluetoothDropdown');
+  var dropdown = document.getElementById('mobileBluetoothDropdown');
   if (!dropdown) return;
-  
-  // 저장된 기기 로드 함수가 있는지 확인
-  const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' 
-    ? getSavedDevicesByType 
+
+  var getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function'
+    ? getSavedDevicesByType
     : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
-  
+
   if (!getSavedDevicesByTypeFn) {
-    console.warn('[Mobile Dashboard] getSavedDevicesByType 함수를 찾을 수 없습니다.');
-    return;
+    getSavedDevicesByTypeFn = function (deviceType) {
+      try {
+        var stored = localStorage.getItem(STELVIO_SAVED_DEVICES_KEY);
+        var all = stored ? JSON.parse(stored) : [];
+        return all.filter(function (d) { return String(d.deviceType) === String(deviceType); });
+      } catch (e) { return []; }
+    };
   }
-  
-  // 각 디바이스 타입별로 저장된 기기 목록 추가
-  const deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
-  const deviceTypeLabels = {
+
+  var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+  var deviceTypeLabels = {
     trainer: '스마트 트레이너',
     heartRate: '심박계',
     powerMeter: '파워미터'
   };
-  
-  deviceTypes.forEach(deviceType => {
-    const savedDevices = getSavedDevicesByTypeFn(deviceType);
+
+  deviceTypes.forEach(function (deviceType) {
+    var savedDevices = getSavedDevicesByTypeFn(deviceType);
     if (savedDevices.length === 0) return;
     
     // 기존 아이템 찾기
@@ -17149,12 +17162,20 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
   });
 }
 
-// 훈련 화면(trainingScreen) 드롭다운에 저장된 기기 목록 표시 (연결 > 목록 즉시 반영용, 블루투스 개인훈련 대시보드 확장 시 동일 패턴 적용)
+// 훈련 화면(trainingScreen) 드롭다운에 저장된 기기 목록 표시 (bluetooth.js 미로드 시 localStorage 직접 사용)
 function updateTrainingScreenBluetoothDropdownWithSavedDevices() {
   var dropdown = document.getElementById('trainingScreenBluetoothDropdown');
   if (!dropdown) return;
   var getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function' ? getSavedDevicesByType : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
-  if (!getSavedDevicesByTypeFn) return;
+  if (!getSavedDevicesByTypeFn) {
+    getSavedDevicesByTypeFn = function (deviceType) {
+      try {
+        var stored = localStorage.getItem(STELVIO_SAVED_DEVICES_KEY || 'stelvio_saved_devices');
+        var all = stored ? JSON.parse(stored) : [];
+        return all.filter(function (d) { return String(d.deviceType) === String(deviceType); });
+      } catch (e) { return []; }
+    };
+  }
   var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
   var deviceTypeLabels = { trainer: '스마트 트레이너', heartRate: '심박계', powerMeter: '파워미터' };
   deviceTypes.forEach(function (deviceType) {
