@@ -724,9 +724,9 @@ async function connectTrainer() {
     var _safeGetService = async (uuid) => { try { return await server.getPrimaryService(uuid); } catch (e) { return null; } };
     var _safeGetChar = async (svc, uuid) => { if (!svc) return null; try { return await svc.getCharacteristic(uuid); } catch (e) { return null; } };
 
-    // 3. Data Channel Discovery (FTMS -> CPS -> Legacy)
-    let dataChar = null;
-    let dataProtocol = 'UNKNOWN';
+    // 3. Data Channel Discovery (FTMS -> CPS -> Legacy) — 상단 if 블록과 동일 스코프이므로 var 사용
+    var dataChar = null;
+    var dataProtocol = 'UNKNOWN';
 
     // A. FTMS
     if (!dataChar) {
@@ -758,9 +758,9 @@ async function connectTrainer() {
     const parser = (dataProtocol === 'FTMS') ? handleTrainerData : handlePowerMeterData; 
     dataChar.addEventListener("characteristicvaluechanged", parser);
 
-    // 4. Control Channel Discovery (Independent Search)
-    let controlChar = null;
-    let controlProtocol = 'NONE';
+    // 4. Control Channel Discovery (Independent Search) — 상단 if 블록과 동일 스코프이므로 var 사용
+    var controlChar = null;
+    var controlProtocol = 'NONE';
 
     // A. FTMS Control
     if (!controlChar) {
