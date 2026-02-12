@@ -16901,9 +16901,7 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       if (connectFunction && typeof connectFunction === 'function') {
         console.log('[Mobile Dashboard] 새 기기 검색으로 폴백:', deviceType);
         await connectFunction();
-        setTimeout(() => {
-          updateMobileBluetoothConnectionStatus();
-        }, 200);
+        // 연결 성공 시 stelvio-bluetooth-connected로 즉시 UI 갱신
         return;
       }
     } catch (fallbackError) {
@@ -16954,17 +16952,20 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   try {
     console.log('[Mobile Dashboard] 블루투스 디바이스 연결 시도:', deviceType);
     await connectFunction();
-    
-    // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
-    setTimeout(() => {
-      // 연결 상태 업데이트
-      updateMobileBluetoothConnectionStatus();
-    }, 200); // 200ms 대기 후 업데이트
+    // 연결 성공 시 UI 갱신은 bluetooth.js에서 stelvio-bluetooth-connected 이벤트로 즉시 호출됨 (setTimeout 없음)
   } catch (error) {
     console.error('[Mobile Dashboard] 블루투스 디바이스 연결 실패:', deviceType, error);
     // 에러는 bluetooth.js의 showToast에서 표시됨
   }
 }
+
+// 연결 성공 시 대시보드 UI(드롭다운·연결 상태) 즉시 갱신 (bluetooth.js에서 dispatch, setTimeout 없음)
+(function initBluetoothConnectedListener() {
+  if (typeof window.addEventListener !== 'function') return;
+  window.addEventListener('stelvio-bluetooth-connected', function () {
+    if (typeof updateMobileBluetoothConnectionStatus === 'function') updateMobileBluetoothConnectionStatus();
+  });
+})();
 
 // 모바일 개인훈련 대시보드 전용: 신규 디바이스 저장 화면 (bluetooth.js에서 이벤트로만 호출 → 같은 문서/컨텍스트에서 모달 표시 보장)
 (function initNewDeviceSaveModalListener() {
