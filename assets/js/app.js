@@ -16627,7 +16627,25 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       }
     }
 
+    // 원인: getDevices() 미지원(Android 등) 또는 타임아웃 시 곧바로 전체 검색으로 넘어가서, 저장된 기기 이름으로 requestDevice하는 connectToSavedDeviceById를 시도하지 않음
+    // 조치: fallback 시 먼저 connectToSavedDeviceById(저장된 기기 이름 필터 requestDevice) 시도 → 실패 시에만 전체 검색
     if (useFallback) {
+      const connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null);
+      if (connectById) {
+        try {
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+          if (typeof showToast === 'function') showToast('저장된 기기로 연결 시도 중…');
+          const out = await connectById(deviceId, deviceType);
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+          if (out) {
+            if (typeof updateMobileBluetoothConnectionStatus === 'function') setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
+            return;
+          }
+        } catch (byIdErr) {
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+          console.warn('[Mobile Dashboard] connectToSavedDeviceById 실패:', byIdErr);
+        }
+      }
       if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 엽니다.');
       const connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
       if (connectFn && typeof connectFn === 'function') {
