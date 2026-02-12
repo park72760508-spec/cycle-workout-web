@@ -112,19 +112,24 @@ window.saveDevice = window.saveDevice || saveDevice;
 window.removeSavedDevice = window.removeSavedDevice || removeSavedDevice;
 window.MAX_BLUETOOTH_DEVICES_IN_LIST = MAX_BLUETOOTH_DEVICES_IN_LIST;
 
-// 닉네임 입력 모달 표시
-function showNicknameModal(deviceName, callback) {
-  const nickname = prompt(
-    `이 기기의 이름을 무엇으로 저장할까요?\n\n기기명: ${deviceName}\n\n예: 지성이의 로라, 센터 3번 자전거`,
-    deviceName || ''
+// 기기명 확인 후 저장 (검색에 사용되는 BLE 기기명은 수정 불가, 확인만 눌러 저장)
+function showConfirmDeviceNameModal(deviceName, callback) {
+  const name = (deviceName && String(deviceName).trim()) || '알 수 없는 기기';
+  const ok = confirm(
+    '다음 기기를 저장합니다.\n검색에 사용되는 기기명은 변경할 수 없습니다.\n\n기기명: ' + name + '\n\n확인을 누르면 저장됩니다.'
   );
-  
-  if (nickname !== null && nickname.trim()) {
-    callback(nickname.trim());
+  if (ok) {
+    callback(name);
     return true;
   }
   return false;
 }
+
+// 하위 호환: 기존 showNicknameModal 호출부는 확인 전용 모달로 대체
+function showNicknameModal(deviceName, callback) {
+  return showConfirmDeviceNameModal(deviceName, callback);
+}
+window.showConfirmDeviceNameModal = window.showConfirmDeviceNameModal || showConfirmDeviceNameModal;
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
 // savedDeviceName이 있으면 "저장된 디바이스만" 보이도록 namePrefix+서비스 조합 필터 사용
@@ -308,9 +313,9 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
   } catch (e) {
     result = null;
   }
-  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (실제 기기명 우선 → 저장된 디바이스만 보이게)
-  if (!result && navigator.bluetooth && (saved.name || saved.nickname)) {
-    const nameForFilter = saved.name || saved.nickname || '';
+  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (검색은 반드시 BLE 기기명(saved.name)만 사용, 닉네임은 사용 안 함)
+  if (!result && navigator.bluetooth && saved.name) {
+    const nameForFilter = String(saved.name).trim();
     if (nameForFilter) {
       try {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
@@ -682,20 +687,20 @@ async function connectTrainer() {
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'trainer');
     
     if (!saved) {
-      // 처음 연결하는 기기이면 닉네임 입력 받기
-      showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'trainer', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
+      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (수정 불가)
+      if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
+        saveDevice(device.id, nameToSave, 'trainer', nameToSave);
+        showToast('✅ ' + nameToSave + ' 저장 완료');
       });
     } else {
-      // 이미 저장된 기기면 lastConnected만 업데이트
-      saveDevice(device.id, deviceName, 'trainer', saved.nickname);
+      // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
+      saveDevice(device.id, deviceName, 'trainer', saved.name || deviceName);
     }
     
     updateDevicesList();
     showConnectionStatus(false);
     
-    const displayName = saved ? (saved.nickname || deviceName) : deviceName;
+    const displayName = saved ? (saved.name || deviceName) : deviceName;
     let statusMsg = `✅ ${displayName} 연결됨 [${dataProtocol}]`;
     if (controlChar) statusMsg += `\n⚡ ERG 제어 가능 [${controlProtocol}]`;
     else statusMsg += `\n⚠️ 파워미터 모드 (제어 불가)`;
@@ -915,19 +920,19 @@ async function connectHeartRate() {
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'heartRate');
     
     if (!saved) {
-      // 처음 연결하는 기기이면 닉네임 입력 받기
-      showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'heartRate', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
+      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (수정 불가)
+      if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
+        saveDevice(device.id, nameToSave, 'heartRate', nameToSave);
+        showToast('✅ ' + nameToSave + ' 저장 완료');
       });
     } else {
-      // 이미 저장된 기기면 lastConnected만 업데이트
-      saveDevice(device.id, deviceName, 'heartRate', saved.nickname);
+      // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
+      saveDevice(device.id, deviceName, 'heartRate', saved.name || deviceName);
     }
     
     updateDevicesList();
     showConnectionStatus(false);
-    showToast(`✅ ${deviceName} 연결 성공`);
+    showToast('✅ ' + deviceName + ' 연결 성공');
   } catch (err) {
     showConnectionStatus(false);
     if (err.name !== 'NotFoundError' && err.name !== 'SecurityError') {
@@ -1040,19 +1045,19 @@ async function connectPowerMeter() {
     const saved = loadSavedDevices().find(d => d.deviceId === device.id && d.deviceType === 'powerMeter');
     
     if (!saved) {
-      // 처음 연결하는 기기이면 닉네임 입력 받기
-      showNicknameModal(deviceName, (nickname) => {
-        saveDevice(device.id, deviceName, 'powerMeter', nickname);
-        showToast(`✅ ${nickname} 저장 완료`);
+      // 처음 연결하는 기기: 검색용 기기명 확인만 하고 저장 (수정 불가)
+      if (typeof showConfirmDeviceNameModal === 'function' ? showConfirmDeviceNameModal : showNicknameModal)(deviceName, (nameToSave) => {
+        saveDevice(device.id, nameToSave, 'powerMeter', nameToSave);
+        showToast('✅ ' + nameToSave + ' 저장 완료');
       });
     } else {
-      // 이미 저장된 기기면 lastConnected만 업데이트
-      saveDevice(device.id, deviceName, 'powerMeter', saved.nickname);
+      // 이미 저장된 기기면 lastConnected만 업데이트 (검색용 이름은 기존 saved.name 유지)
+      saveDevice(device.id, deviceName, 'powerMeter', saved.name || deviceName);
     }
     
     updateDevicesList();
     showConnectionStatus(false);
-    showToast(`✅ ${deviceName} 연결 성공`);
+    showToast('✅ ' + deviceName + ' 연결 성공');
   } catch (err) {
     showConnectionStatus(false);
     if (err.name !== 'NotFoundError' && err.name !== 'SecurityError') {
