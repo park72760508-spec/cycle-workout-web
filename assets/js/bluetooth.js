@@ -221,7 +221,8 @@ function confirmDeviceMismatch(message) {
 window.confirmDeviceMismatch = window.confirmDeviceMismatch || confirmDeviceMismatch;
 
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
-// savedDeviceName이 있으면 "저장된 디바이스만" 보이도록 namePrefix+서비스 조합 필터 사용
+// 모바일(iOS-Bluefy, Android): namePrefix와 services를 한 필터에 같이 쓰면 브라우저가 이름 필터를 무시하는 버그 있음
+// → 저장된 기기 선택 시 "이름(name/namePrefix)만" 필터로 요청하고, 서비스는 optionalServices로만 지정
 async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName) {
   try {
     if (!navigator.bluetooth || !('requestDevice' in navigator.bluetooth)) {
@@ -233,29 +234,17 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
     
     var hasSavedName = !!(savedDeviceName && String(savedDeviceName).trim());
     if (hasSavedName) {
-      // 저장된 디바이스만 보이게: namePrefix + 서비스 조합(한 필터에 둘 다 만족하는 기기만 표시)
       var namePrefix = String(savedDeviceName).trim();
+      // 이름만 필터(서비스는 필터에 넣지 않음) → 모바일에서 name+services 동시 사용 시 이름 무시되는 버그 회피
+      filters = [{ name: namePrefix }, { namePrefix: namePrefix }];
+      if (namePrefix.length > 20) filters.push({ namePrefix: namePrefix.substring(0, 20) });
       if (deviceType === 'heartRate') {
-        filters = [
-          { namePrefix: namePrefix, services: ['heart_rate'] },
-          { namePrefix: namePrefix, services: [UUIDS.HR_SERVICE] }
-        ];
         optionalServices = ['heart_rate', UUIDS.HR_SERVICE, 'battery_service'];
       } else if (deviceType === 'trainer') {
-        filters = [
-          { namePrefix: namePrefix, services: [UUIDS.FTMS_SERVICE] },
-          { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] }
-        ];
         optionalServices = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
       } else if (deviceType === 'powerMeter') {
-        filters = [
-          { namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] },
-          { namePrefix: namePrefix, services: [UUIDS.CSC_SERVICE] }
-        ];
         optionalServices = [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
       } else {
-        // deviceType 불명: namePrefix만으로 필터 (저장된 이름이 있으면 절대 넓은 필터 사용 안 함)
-        filters = [{ namePrefix: namePrefix }];
         optionalServices = [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
       }
     }
@@ -313,24 +302,16 @@ function getOptionalServicesForType(deviceType) {
   return [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
 }
 
+// 모바일: namePrefix+services 동시 사용 시 이름 필터가 무시되는 버그 있음 → 이름만 사용
 function buildSavedOnlyFilters(deviceType, savedList) {
   var filters = [];
   var namePrefix;
   savedList.forEach(function (saved) {
     namePrefix = (saved.name && String(saved.name).trim()) || (saved.nickname && String(saved.nickname).trim());
     if (!namePrefix) return;
-    if (deviceType === 'heartRate') {
-      filters.push({ namePrefix: namePrefix, services: ['heart_rate'] });
-      filters.push({ namePrefix: namePrefix, services: [UUIDS.HR_SERVICE] });
-    } else if (deviceType === 'trainer') {
-      filters.push({ namePrefix: namePrefix, services: [UUIDS.FTMS_SERVICE] });
-      filters.push({ namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] });
-    } else if (deviceType === 'powerMeter') {
-      filters.push({ namePrefix: namePrefix, services: [UUIDS.CPS_SERVICE] });
-      filters.push({ namePrefix: namePrefix, services: [UUIDS.CSC_SERVICE] });
-    } else {
-      filters.push({ namePrefix: namePrefix });
-    }
+    filters.push({ name: namePrefix });
+    filters.push({ namePrefix: namePrefix });
+    if (namePrefix.length > 20) filters.push({ namePrefix: namePrefix.substring(0, 20) });
   });
   return filters;
 }
