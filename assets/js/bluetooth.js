@@ -479,31 +479,58 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
   } catch (e) {
     result = null;
   }
-  // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (반드시 namePrefix 필터만 사용)
   var nameForFilter = (String(saved.name || '').trim() || String(saved.nickname || '').trim());
-  if (!result && navigator.bluetooth && nameForFilter) {
-      try {
-        if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
-        if (typeof showToast === 'function') showToast('같은 종류 기기가 여러 대 있으면 목록에서 본인 기기를 선택하세요.');
-        const device = await requestDeviceWithSavedInfo(deviceId, deviceType, nameForFilter);
-        const server = await device.gatt.connect();
-        result = { device, server };
-        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-        // 선택한 기기가 저장된 deviceId와 다르면 다른 기기 → 빨간색 경고 모달 후 진행 여부 선택
-        if (result && result.device && String(result.device.id) !== String(deviceId)) {
-          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-          var confirmFn = typeof confirmDeviceMismatch === 'function' ? confirmDeviceMismatch : (window.confirmDeviceMismatch || function (msg) { return Promise.resolve(confirm(msg)); });
-          var goAhead = await confirmFn('선택한 기기가 저장된 기기와 다른 기기입니다. 이 기기로 연결할까요?');
-          if (!goAhead) {
-            try { result.device.gatt.disconnect(); } catch (e) {}
-            result = null;
+  if (!result && navigator.bluetooth && 'requestDevice' in navigator.bluetooth) {
+    try {
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+      var device = null;
+      if (nameForFilter) {
+        if (typeof showToast === 'function') showToast('저장된 기기 이름으로 검색 중… 목록에서 본인 기기를 선택하세요.');
+        try {
+          device = await requestDeviceWithSavedInfo(deviceId, deviceType, nameForFilter);
+        } catch (nameErr) {
+          if (nameErr.name === 'NotFoundError') {
+            var firstWord = nameForFilter.split(/\s/)[0] || nameForFilter.substring(0, 10);
+            if (firstWord && firstWord.length >= 2) {
+              try {
+                if (typeof showToast === 'function') showToast('기기 검색 중… 목록에서 본인 기기를 선택하세요.');
+                device = await requestDeviceWithSavedInfo(deviceId, deviceType, firstWord);
+              } catch (retryErr) {
+                if (retryErr.name === 'NotFoundError' && typeof showToast === 'function') showToast('목록에서 본인 기기를 선택하세요.');
+                var optSvc = getOptionalServicesForType(deviceType);
+                device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: optSvc });
+              }
+            } else {
+              if (typeof showToast === 'function') showToast('목록에서 본인 기기를 선택하세요.');
+              var optSvc = getOptionalServicesForType(deviceType);
+              device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: optSvc });
+            }
+          } else {
+            throw nameErr;
           }
-          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
         }
-      } catch (reqErr) {
-        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
-        throw reqErr;
+      } else {
+        if (typeof showToast === 'function') showToast('저장된 기기 이름이 없습니다. 목록에서 본인 기기를 선택하세요.');
+        var optionalServices = getOptionalServicesForType(deviceType);
+        device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: optionalServices });
       }
+      var server = await device.gatt.connect();
+      result = { device: device, server: server };
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      if (result && result.device && String(result.device.id) !== String(deviceId)) {
+        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+        var confirmFn = typeof confirmDeviceMismatch === 'function' ? confirmDeviceMismatch : (window.confirmDeviceMismatch || function (msg) { return Promise.resolve(confirm(msg)); });
+        var goAhead = await confirmFn('선택한 기기가 저장된 기기와 다른 기기입니다. 이 기기로 연결할까요?');
+        if (!goAhead) {
+          try { result.device.gatt.disconnect(); } catch (e) {}
+          result = null;
+        }
+        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      }
+    } catch (reqErr) {
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      throw reqErr;
+    }
   }
   if (!result) return null;
   const { device, server } = result;
