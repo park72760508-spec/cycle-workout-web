@@ -131,6 +131,41 @@ function showNicknameModal(deviceName, callback) {
 }
 window.showConfirmDeviceNameModal = window.showConfirmDeviceNameModal || showConfirmDeviceNameModal;
 
+// 선택한 기기가 저장된 기기와 다를 때 빨간색 경고 모달 (confirm 대체)
+function confirmDeviceMismatch(message) {
+  return new Promise(function (resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10003;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:340px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3);';
+    var msg = document.createElement('p');
+    msg.textContent = message || '선택한 기기가 저장된 기기와 다른 기기입니다. 이 기기로 연결할까요?';
+    msg.style.cssText = 'margin:0 0 20px;font-size:15px;line-height:1.5;color:#c00;font-weight:600;';
+    var btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+    var cancel = document.createElement('button');
+    cancel.textContent = '취소';
+    cancel.style.cssText = 'padding:10px 18px;border:1px solid #ccc;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+    var ok = document.createElement('button');
+    ok.textContent = '확인';
+    ok.style.cssText = 'padding:10px 18px;border:none;background:#2e74e8;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;';
+    function close(choice) {
+      overlay.remove();
+      resolve(!!choice);
+    }
+    cancel.onclick = function () { close(false); };
+    ok.onclick = function () { close(true); };
+    overlay.onclick = function (e) { if (e.target === overlay) close(false); };
+    btns.appendChild(cancel);
+    btns.appendChild(ok);
+    box.appendChild(msg);
+    box.appendChild(btns);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
+}
+window.confirmDeviceMismatch = window.confirmDeviceMismatch || confirmDeviceMismatch;
+
 // 저장된 기기 정보로 requestDevice 호출 (getDevices API 미지원 환경용)
 // savedDeviceName이 있으면 "저장된 디바이스만" 보이도록 namePrefix+서비스 조합 필터 사용
 async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName) {
@@ -314,15 +349,28 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
     result = null;
   }
   // iOS/Bluefy·Android: getDevices 실패 또는 목록에 없으면 저장된 기기 이름으로 requestDevice 시도 (검색은 반드시 BLE 기기명(saved.name)만 사용, 닉네임은 사용 안 함)
+  // 주의: requestDevice는 이름(namePrefix)으로만 필터하므로, 같은 제조사/같은 이름 기기가 여러 대 있으면 목록에 모두 표시됨 → 사용자가 잘못 선택할 수 있음
   if (!result && navigator.bluetooth && saved.name) {
     const nameForFilter = String(saved.name).trim();
     if (nameForFilter) {
       try {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+        if (typeof showToast === 'function') showToast('같은 종류 기기가 여러 대 있으면 목록에서 본인 기기를 선택하세요.');
         const device = await requestDeviceWithSavedInfo(deviceId, deviceType, nameForFilter);
         const server = await device.gatt.connect();
         result = { device, server };
         if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+        // 선택한 기기가 저장된 deviceId와 다르면 다른 기기 → 빨간색 경고 모달 후 진행 여부 선택
+        if (result && result.device && String(result.device.id) !== String(deviceId)) {
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+          var confirmFn = typeof confirmDeviceMismatch === 'function' ? confirmDeviceMismatch : (window.confirmDeviceMismatch || function (msg) { return Promise.resolve(confirm(msg)); });
+          var goAhead = await confirmFn('선택한 기기가 저장된 기기와 다른 기기입니다. 이 기기로 연결할까요?');
+          if (!goAhead) {
+            try { result.device.gatt.disconnect(); } catch (e) {}
+            result = null;
+          }
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+        }
       } catch (reqErr) {
         if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
         throw reqErr;
