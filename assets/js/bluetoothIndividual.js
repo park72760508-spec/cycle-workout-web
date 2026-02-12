@@ -4284,21 +4284,28 @@ function closeBluetoothDropdownOnOutsideClick(event) {
     }
 }
 
-// Bluetooth 개인 훈련 대시보드 드롭다운에 저장된 기기 목록 표시 (모바일 개인훈련 대시보드와 동일 로직)
+// Bluetooth 개인 훈련 대시보드 드롭다운에 저장된 기기 목록 표시 (모바일 개인훈련 대시보드와 동일 로직, localStorage 폴백 포함)
+var BLUETOOTH_INDIVIDUAL_SAVED_DEVICES_KEY = 'stelvio_saved_devices';
+
 function updateBluetoothIndividualDropdownWithSavedDevices() {
-    const dropdown = document.getElementById('bluetoothDropdown');
+    var dropdown = document.getElementById('bluetoothDropdown');
     if (!dropdown) return;
 
-    const getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function'
+    var getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function'
         ? getSavedDevicesByType
         : (typeof window.getSavedDevicesByType === 'function' ? window.getSavedDevicesByType : null);
 
     if (!getSavedDevicesByTypeFn) {
-        console.warn('[BluetoothIndividual] getSavedDevicesByType 함수를 찾을 수 없습니다.');
-        return;
+        getSavedDevicesByTypeFn = function (deviceType) {
+            try {
+                var stored = localStorage.getItem(BLUETOOTH_INDIVIDUAL_SAVED_DEVICES_KEY);
+                var all = stored ? JSON.parse(stored) : [];
+                return all.filter(function (d) { return String(d.deviceType) === String(deviceType); });
+            } catch (e) { return []; }
+        };
     }
 
-    const deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+    var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
     const deviceTypeLabels = {
         trainer: '스마트 트레이너',
         heartRate: '심박계',
@@ -4381,91 +4388,106 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
     });
 }
 
-// 블루투스 디바이스 연결 함수 (deviceType, savedDeviceId 선택)
-// savedDeviceId가 있으면 해당 저장 기기로 재연결, 없으면 새 기기 검색
+// 블루투스 디바이스 연결 함수 (모바일 개인훈련 대시보드와 동일 로직)
+// savedDeviceId 있음: reconnectToSavedDevice → connectToSavedDeviceById(이름 필터) → 실패 시 일반 검색 폴백
+// savedDeviceId 없음: connectTrainer/connectHeartRate/connectPowerMeter (하이브리드)
 async function connectBluetoothDevice(deviceType, savedDeviceId) {
     console.log('[BluetoothIndividual] connectBluetoothDevice 호출됨:', deviceType, savedDeviceId || '(새 기기 검색)');
 
-    // 드롭다운 닫기
-    const dropdown = document.getElementById('bluetoothDropdown');
+    var dropdown = document.getElementById('bluetoothDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
     }
 
-    // 저장된 기기 클릭 시: 바로 재연결만 시도 (기기 검색 목록 화면으로 넘어가지 않음)
-    if (savedDeviceId && typeof window.connectToSavedDeviceById === 'function') {
-        try {
-            const result = await window.connectToSavedDeviceById(savedDeviceId, deviceType);
-            if (result) {
-                setTimeout(() => {
+    // 저장된 기기 클릭 시: 모바일과 동일 플로우 (reconnect → connectById → 실패 시 일반 검색)
+    if (savedDeviceId) {
+        var reconnectFn = typeof window.reconnectToSavedDevice === 'function' ? window.reconnectToSavedDevice : null;
+        if (reconnectFn) {
+            var result = null;
+            if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+            if (typeof showToast === 'function') showToast('저장된 기기 검색 중…');
+            try { result = await reconnectFn(savedDeviceId, deviceType); } catch (e) { result = null; }
+            if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+
+            if (!result && typeof window.connectToSavedDeviceById === 'function') {
+                try {
+                    if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+                    if (typeof showToast === 'function') showToast('저장된 기기 이름으로 연결 시도 중…');
+                    var out = await window.connectToSavedDeviceById(savedDeviceId, deviceType);
+                    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+                    if (out) {
+                        updateBluetoothConnectionStatus();
+                        updateFirebaseDevices();
+                        if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+                        return;
+                    }
+                } catch (byIdErr) {
+                    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+                    console.warn('[BluetoothIndividual] connectToSavedDeviceById 실패:', byIdErr);
+                }
+            } else if (result) {
+                updateBluetoothConnectionStatus();
+                updateFirebaseDevices();
+                if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+                return;
+            }
+        } else if (typeof window.connectToSavedDeviceById === 'function') {
+            try {
+                if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+                if (typeof showToast === 'function') showToast('저장된 기기 이름으로 연결 시도 중…');
+                var out = await window.connectToSavedDeviceById(savedDeviceId, deviceType);
+                if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+                if (out) {
                     updateBluetoothConnectionStatus();
                     updateFirebaseDevices();
                     if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
-                }, 300);
-            } else {
-                // getDevices() 미지원 등으로 재연결 불가 시
-                if (typeof showToast === 'function') {
-                    showToast('이 브라우저에서는 저장된 기기 재연결이 지원되지 않습니다. 상단 메뉴(스마트 트레이너/심박계/파워미터)에서 새로 연결해주세요.');
+                    return;
                 }
+            } catch (byIdErr) {
+                if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+                console.warn('[BluetoothIndividual] connectToSavedDeviceById 실패:', byIdErr);
             }
-            return;
-        } catch (err) {
-            console.warn('[BluetoothIndividual] 저장된 기기 재연결 실패:', err);
-            if (typeof showToast === 'function') {
-                showToast('저장된 기기를 찾을 수 없습니다.\n기기가 전원이 켜져 있고 가까이 있는지 확인해주세요.');
-            }
-            return; // 기기 검색 화면으로 넘기지 않음
         }
-    }
 
-    // 연결 함수가 있는지 확인
-    let connectFunction;
-    switch (deviceType) {
-        case 'trainer':
-            connectFunction = window.connectTrainer;
-            break;
-        case 'heartRate':
-            connectFunction = window.connectHeartRate;
-            break;
-        case 'powerMeter':
-            connectFunction = window.connectPowerMeter;
-            break;
-        default:
-            console.error('[BluetoothIndividual] 알 수 없는 디바이스 타입:', deviceType);
-            if (typeof showToast === 'function') {
-                showToast('알 수 없는 디바이스 타입입니다.');
-            } else {
-                alert('알 수 없는 디바이스 타입입니다.');
+        if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 엽니다.');
+        var connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+        if (connectFn && typeof connectFn === 'function') {
+            try {
+                await connectFn();
+                updateBluetoothConnectionStatus();
+                updateFirebaseDevices();
+                if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
+            } catch (e) {
+                console.error('[BluetoothIndividual] 일반 검색 연결 실패:', e);
+                if (typeof showToast === 'function') showToast('연결 실패: ' + (e.message || '알 수 없는 오류'));
             }
-            return;
+        }
+        return;
     }
 
+    // 새 기기 검색: 모바일과 동일하게 연결 함수 확인 + 재시도
+    var connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+    if (!connectFunction || typeof connectFunction !== 'function') {
+        await new Promise(function (r) { setTimeout(r, 300); });
+        connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+    }
     if (!connectFunction || typeof connectFunction !== 'function') {
         console.error('[BluetoothIndividual] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
-        if (typeof showToast === 'function') {
-            showToast('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
-        } else {
-            alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
-        }
+        if (typeof showToast === 'function') showToast('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해 주세요.');
+        else alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해 주세요.');
         return;
     }
 
     try {
         console.log('[BluetoothIndividual] 블루투스 디바이스 연결 시도:', deviceType);
         await connectFunction();
-        console.log('[BluetoothIndividual] 블루투스 디바이스 연결 성공:', deviceType);
-
-        setTimeout(() => {
-            updateBluetoothConnectionStatus();
-            updateFirebaseDevices();
-            if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
-        }, 500);
+        updateBluetoothConnectionStatus();
+        updateFirebaseDevices();
+        if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
     } catch (error) {
         console.error('[BluetoothIndividual] 블루투스 디바이스 연결 실패:', deviceType, error);
-        if (typeof showToast === 'function') {
-            showToast('연결 실패: ' + (error.message || '알 수 없는 오류'));
-        }
+        if (typeof showToast === 'function') showToast('연결 실패: ' + (error.message || '알 수 없는 오류'));
     }
 }
 
@@ -4614,6 +4636,16 @@ window.connectBluetoothDevice = connectBluetoothDevice;
 window.exitBluetoothIndividualTraining = exitBluetoothIndividualTraining;
 window.updateBluetoothConnectionStatus = updateBluetoothConnectionStatus;
 window.updateFirebaseDevices = updateFirebaseDevices;
+window.updateBluetoothIndividualDropdownWithSavedDevices = updateBluetoothIndividualDropdownWithSavedDevices;
+
+// 모바일과 동일: 연결 성공 시 대시보드 UI 즉시 갱신 (bluetooth.js의 stelvio-bluetooth-connected 수신)
+if (typeof window.addEventListener === 'function') {
+    window.addEventListener('stelvio-bluetooth-connected', function () {
+        if (typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
+        if (typeof updateBluetoothIndividualDropdownWithSavedDevices === 'function') updateBluetoothIndividualDropdownWithSavedDevices();
+        if (typeof updateFirebaseDevices === 'function') updateFirebaseDevices();
+    });
+}
 
 // 초기 속도계 눈금 및 레이블 생성
 // ErgController 초기화 함수 (BluetoothIndividual 전용)
