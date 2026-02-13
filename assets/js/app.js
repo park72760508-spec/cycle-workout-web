@@ -10683,11 +10683,21 @@ function confirmRPESelection() {
       showWorkoutRecommendationModal();
     }
     if (typeof analyzeAndRecommendWorkouts === 'function') {
+      if (typeof window.__aiRecommendationInProgress !== 'undefined') {
+        window.__aiRecommendationInProgress = true;
+      }
       analyzeAndRecommendWorkouts(pending.date, pending.currentUser, pending.apiKey, {
         userConditionScore: userConditionScore,
         userConditionName: conditionName
+      }).then(function () {
+        if (typeof window.__aiRecommendationInProgress !== 'undefined') {
+          window.__aiRecommendationInProgress = false;
+        }
       }).catch(function (err) {
         console.error('AI 워크아웃 추천 오류:', err);
+        if (typeof window.__aiRecommendationInProgress !== 'undefined') {
+          window.__aiRecommendationInProgress = false;
+        }
         if (typeof showToast === 'function') {
           showToast('워크아웃 추천 중 오류가 발생했습니다.', 'error');
         }
