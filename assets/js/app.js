@@ -8291,11 +8291,13 @@ async function handleAIWorkoutRecommendation(event, date) {
       console.warn('[AI] 목적 미설정');
     }
     
-    // 추천 모달 표시
-    showWorkoutRecommendationModal();
-    
-    // 분석 및 추천 실행
-    await analyzeAndRecommendWorkouts(date, currentUser, apiKey);
+    // 컨디션별 강도 보정 화면 먼저 띄워 입력 받은 뒤 추천 로직에 반영
+    if (typeof showRPEModalForAIRecommendation === 'function') {
+      showRPEModalForAIRecommendation(date, currentUser, apiKey);
+    } else {
+      showWorkoutRecommendationModal();
+      await analyzeAndRecommendWorkouts(date, currentUser, apiKey);
+    }
     
   } catch (error) {
     console.error('AI 워크아웃 추천 오류:', error);
@@ -9353,7 +9355,13 @@ ${pastSummary}
       throw new Error('JSON 파싱에 실패했습니다. API 응답이 불완전할 수 있습니다. 잠시 후 다시 시도해주세요.');
     }
     
-    // 분석 결과 저장 (나중에 내보내기용)
+    // 분석 결과 저장 (나중에 내보내기용). SOLO 훈련 시 컨디션별 강도 보정 정보 포함
+    var bodyCondition = null;
+    var intensityAdjustment = null;
+    try {
+      bodyCondition = localStorage.getItem('bodyCondition_' + date) || null;
+      intensityAdjustment = window.trainingIntensityAdjustment || localStorage.getItem('trainingIntensityAdjustment') || null;
+    } catch (e) { /* ignore */ }
     window.currentAnalysisReport = {
       date,
       workoutName,
@@ -9364,6 +9372,8 @@ ${pastSummary}
       hrAvg,
       ftp,
       weight,
+      bodyCondition: bodyCondition || undefined,
+      intensityAdjustment: intensityAdjustment != null ? String(intensityAdjustment) : undefined,
       analysis: analysisData ? JSON.stringify(analysisData, null, 2) : analysisText,
       analysisData: analysisData
     };
@@ -9374,13 +9384,19 @@ ${pastSummary}
       window.trainingAnalysisStatusInterval = null;
     }
     
-    // 결과 표시 (구조화된 데이터가 있으면 시각화, 없으면 텍스트)
+    // 결과 표시 (구조화된 데이터가 있으면 시각화, 없으면 텍스트). SOLO 시 컨디션 정보 전달
     if (analysisData) {
-      contentDiv.innerHTML = renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, analysisData);
+      contentDiv.innerHTML = renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, analysisData, window.currentAnalysisReport.bodyCondition, window.currentAnalysisReport.intensityAdjustment);
       // 차트 렌더링 (비동기)
       setTimeout(() => renderAnalysisCharts(analysisData, avgPower, np, tss, hrAvg, ftp), 100);
     } else {
-      // 폴백: 기존 텍스트 형식
+      // 폴백: 기존 텍스트 형식 (SOLO 시 컨디션 정보 표시)
+      var condMeta = '';
+      if (window.currentAnalysisReport && (window.currentAnalysisReport.bodyCondition || window.currentAnalysisReport.intensityAdjustment != null)) {
+        var bc = window.currentAnalysisReport.bodyCondition || '선택';
+        var adj = window.currentAnalysisReport.intensityAdjustment != null ? (Math.round(parseFloat(window.currentAnalysisReport.intensityAdjustment) * 100)) : '';
+        condMeta = '<span>컨디션: ' + bc + (adj !== '' ? ' (' + adj + '%)' : '') + '</span>';
+      }
       contentDiv.innerHTML = `
         <div class="analysis-header">
           <h3>${date} - ${workoutName}</h3>
@@ -9390,6 +9406,7 @@ ${pastSummary}
             <span>NP: ${np}W</span>
             <span>TSS: ${tss}</span>
             <span>평균 심박: ${hrAvg} bpm</span>
+            ${condMeta}
           </div>
         </div>
         <div class="analysis-content">
@@ -9467,8 +9484,8 @@ ${pastSummary}
   }
 }
 
-// 시각화된 분석 결과 렌더링
-function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, data) {
+// 시각화된 분석 결과 렌더링 (bodyCondition, intensityAdjustment: SOLO 훈련 시 컨디션별 강도 보정 표시용)
+function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, data, bodyCondition, intensityAdjustment) {
   const summary = data.summary || {};
   const metrics = data.metrics || {};
   const coaching = data.coaching || {};
@@ -9490,6 +9507,12 @@ function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, 
     return '#ef4444';
   }
   
+  var conditionMeta = '';
+  if (bodyCondition || intensityAdjustment != null) {
+    var adjPct = intensityAdjustment != null ? (Math.round(parseFloat(intensityAdjustment) * 100)) : '';
+    conditionMeta = '<span>컨디션: ' + (bodyCondition || '선택') + (adjPct !== '' ? ' (' + adjPct + '%)' : '') + '</span>';
+  }
+  
   return `
     <div class="analysis-header">
       <h3>${date} - ${workoutName}</h3>
@@ -9499,6 +9522,7 @@ function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, 
         <span>NP: ${np}W</span>
         <span>TSS: ${tss}</span>
         <span>평균 심박: ${hrAvg} bpm</span>
+        ${conditionMeta}
       </div>
     </div>
     
@@ -10293,6 +10317,9 @@ async function exportAnalysisReport() {
   }
 }
 
+// 컨디션 이름 → AI 추천용 컨디션 점수 (55~95, 5 단위). 사용자 입력 반영 시 사용.
+const RPE_CONDITION_TO_SCORE = { '최상': 90, '좋음': 80, '보통': 70, '나쁨': 60 };
+
 // ========== Challenge 타입별 컨디션별 강도 보정 표시값 테이블 ==========
 const RPE_CONDITION_VALUES = {
   'Fitness': {
@@ -10500,6 +10527,18 @@ function showRPEModalForSoloTraining() {
 }
 
 /**
+ * AI 워크아웃 추천용 RPE 모달 표시 (컨디션 입력 후 추천 로직에 반영)
+ * @param {string} date - YYYY-MM-DD
+ * @param {object} currentUser - 사용자 객체
+ * @param {string} apiKey - Gemini API 키
+ */
+function showRPEModalForAIRecommendation(date, currentUser, apiKey) {
+  window.rpeModalSource = 'ai_recommend';
+  window.pendingAIRecommend = { date: date, currentUser: currentUser, apiKey: apiKey };
+  showRPEModal('ai_recommend');
+}
+
+/**
  * RPE 모달 내용 업데이트 (challenge 타입에 따라)
  */
 function updateRPEModalContent(modal, challenge) {
@@ -10631,6 +10670,31 @@ function confirmRPESelection() {
   const source = window.rpeModalSource || 'solo'; // 기본값은 solo (기존 동작 유지)
   
   console.log('[RPE Modal] 확인 버튼 클릭, 출처:', source);
+
+  // AI 워크아웃 추천: 컨디션 입력 반영 후 추천 실행
+  if (source === 'ai_recommend' && window.pendingAIRecommend) {
+    var pending = window.pendingAIRecommend;
+    window.pendingAIRecommend = null;
+    window.rpeModalSource = null;
+    var todayStr = new Date().toISOString().split('T')[0];
+    var conditionName = localStorage.getItem('bodyCondition_' + todayStr) || '보통';
+    var userConditionScore = RPE_CONDITION_TO_SCORE[conditionName] != null ? RPE_CONDITION_TO_SCORE[conditionName] : 70;
+    if (typeof showWorkoutRecommendationModal === 'function') {
+      showWorkoutRecommendationModal();
+    }
+    if (typeof analyzeAndRecommendWorkouts === 'function') {
+      analyzeAndRecommendWorkouts(pending.date, pending.currentUser, pending.apiKey, {
+        userConditionScore: userConditionScore,
+        userConditionName: conditionName
+      }).catch(function (err) {
+        console.error('AI 워크아웃 추천 오류:', err);
+        if (typeof showToast === 'function') {
+          showToast('워크아웃 추천 중 오류가 발생했습니다.', 'error');
+        }
+      });
+    }
+    return;
+  }
   
   // 화면 전환 (인증 체크 우회를 위해 직접 DOM 조작 사용)
   if (source === 'indoor') {
@@ -10720,6 +10784,7 @@ function confirmRPESelection() {
 window.showRPEModal = showRPEModal;
 window.showRPEModalForIndoorTraining = showRPEModalForIndoorTraining;
 window.showRPEModalForSoloTraining = showRPEModalForSoloTraining;
+window.showRPEModalForAIRecommendation = showRPEModalForAIRecommendation;
 window.closeRPEModal = closeRPEModal;
 
 /**
@@ -11039,9 +11104,11 @@ function confirmAIRecommendation() {
 }
 
 // Gemini API를 사용한 워크아웃 분석 및 추천
-// options: { basisRecommendedWorkout?: string } (대시보드 '추천: X' 클릭 시 해당 타입 기반 + 목적/등급 가중)
+// options: { basisRecommendedWorkout?: string, userConditionScore?: number, userConditionName?: string } (컨디션별 강도 보정 입력 반영)
 async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
   options = options || {};
+  const userConditionScore = options.userConditionScore != null ? Math.max(55, Math.min(95, Math.round(Number(options.userConditionScore)))) : null;
+  const userConditionName = options.userConditionName ? String(options.userConditionName).trim() : '';
   const contentDiv = document.getElementById('workoutRecommendationContent');
   
   try {
@@ -11391,6 +11458,11 @@ ${basisBlock}
   → **이 목적에 맞는 훈련만 추천해야 합니다. 목적과 무관한 훈련은 추천하지 마세요.**
 - **등급(grade): ${grade}** (1·3: 관리자/코치, 2: 일반) → 목적·등급에 따른 가중 적용.
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
+${userConditionScore != null && userConditionName ? `
+**⚠️ [최우선] 사용자가 선택한 오늘의 컨디션: "${userConditionName}" (${userConditionScore}점).**
+- JSON의 condition_score는 반드시 ${userConditionScore}로 설정하세요. (5 단위 정수이면 그대로, 아니면 55~95 범위 5 단위로 맞춤)
+- 이 컨디션에 맞는 강도의 워크아웃을 우선 추천하세요.
+` : ''}
 
 **과거 훈련 이력 분석 (최근 30일, 총 ${totalSessions}회):**
 ${JSON.stringify(limitedHistory, null, 2)}
@@ -11987,8 +12059,10 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
 
     recommendationData.recommendations = deduped;
     
-    // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (1번·2번 통일: 강한 중복 제거 + 기준일 오늘)
-    if (typeof window.computeConditionScore === 'function') {
+    // 컨디션 점수: 사용자 입력(컨디션별 강도 보정)이 있으면 우선 사용, 없으면 공통 모듈로 산출
+    if (userConditionScore != null && userConditionScore >= 55 && userConditionScore <= 95) {
+      recommendationData.condition_score = userConditionScore;
+    } else if (typeof window.computeConditionScore === 'function') {
       const userForScore = { age: user.age, gender: user.gender, challenge: challenge, ftp: Number(ftp) || 200, weight: Number(weight) || 70 };
       const logsForScore = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(recentHistory) : recentHistory;
       const today = new Date();
