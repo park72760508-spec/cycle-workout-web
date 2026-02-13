@@ -11938,7 +11938,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
     deduped = deduped.slice(0, 3);
 
-    // Fitness/GranFondo일 때 1순위에 (Lite) 워크아웃 강제 포함 (클라이언트 필터)
+    // Fitness/GranFondo일 때: 1순위만 (Lite), 2~3순위는 비-Lite만 (강한 훈련 니즈 반영)
     // workoutDetails 항목: getWorkout API의 item → id, title, description, author, total_seconds, segments 등
     const challengeNorm = String(challenge || '').trim();
     if (challengeNorm === 'Fitness' || challengeNorm === 'GranFondo') {
@@ -11958,8 +11958,25 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
         const liteWorkout = liteWorkouts.find(function (w) { return Number(w.id) === liteId; });
         const liteTitle = liteWorkout ? getTitle(liteWorkout) || '(Lite)' : '(Lite)';
         const newFirst = { rank: 1, workoutId: liteId, reason: '입문자 접근성을 위해 (Lite) 워크아웃을 1순위로 추천합니다. ' + liteTitle };
-        const rest = deduped.filter(function (r) { return Number(r.workoutId) !== liteId; }).slice(0, 2);
-        deduped = [newFirst].concat(rest.map(function (r, i) { return { rank: i + 2, workoutId: r.workoutId, reason: r.reason }; }));
+        // 2~3순위: AI 추천 중 비-Lite만 사용 (Lite 제외 → 더 강한 훈련 선택 가능)
+        const restCandidates = deduped.filter(function (r) { return Number(r.workoutId) !== liteId; });
+        const nonLiteRest = restCandidates.filter(function (r) {
+          const w = (workoutDetails || []).find(function (wd) { return Number(wd.id) === Number(r.workoutId); });
+          return w && !isLite(w);
+        });
+        let slot2and3 = nonLiteRest.slice(0, 2);
+        if (slot2and3.length < 2) {
+          const usedFor2and3 = new Set(slot2and3.map(function (r) { return Number(r.workoutId); }));
+          const pool = (workoutDetails || []).filter(function (w) {
+            return !isLite(w) && Number(w.id) !== liteId && !usedFor2and3.has(Number(w.id));
+          });
+          for (var i = slot2and3.length; i < 2 && pool.length > 0; i++) {
+            const w = pool.shift();
+            usedFor2and3.add(Number(w.id));
+            slot2and3.push({ rank: i + 2, workoutId: Number(w.id), reason: getTitle(w) ? '강도 업 선택: ' + getTitle(w) : '추가 추천 워크아웃' });
+          }
+        }
+        deduped = [newFirst].concat(slot2and3.map(function (r, i) { return { rank: i + 2, workoutId: r.workoutId, reason: r.reason || '' }; }));
       }
     }
 
