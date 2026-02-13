@@ -11242,7 +11242,21 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     
     // 5. 워크아웃 상세 정보 조회 (세그먼트 포함) - 병렬 처리로 최적화
     const workoutDetails = [];
-    const workoutIds = availableWorkouts.slice(0, 15).map(w => w.id); // 최대 15개로 제한하여 시간 단축
+    // (Lite) 판별: API는 id, title, description, author, total_seconds, segments 등 반환 (Code.gs getWorkout/getWorkoutsByCategory)
+    const getWorkoutTitle = (w) => String(w.title != null ? w.title : (w.name || w.workout_title || w.workout_name || '')).trim();
+    const isLiteWorkout = (w) => /\(lite\)/i.test(getWorkoutTitle(w));
+    const challengeNormForLite = String(challenge || '').trim();
+    const needLiteFirst = (challengeNormForLite === 'Fitness' || challengeNormForLite === 'GranFondo');
+    const listForDetailFetch = needLiteFirst && availableWorkouts.length > 0
+      ? [...availableWorkouts].sort((a, b) => {
+          const aLite = isLiteWorkout(a);
+          const bLite = isLiteWorkout(b);
+          if (aLite && !bLite) return -1;
+          if (!aLite && bLite) return 1;
+          return 0;
+        })
+      : availableWorkouts;
+    const workoutIds = listForDetailFetch.slice(0, 15).map(w => w.id); // 최대 15개, Fitness/GranFondo일 때 (Lite) 우선 포함
     
     // 병렬 처리로 모든 워크아웃 상세 정보를 동시에 조회
     const workoutDetailPromises = workoutIds.map(async (workoutId) => {
@@ -11925,12 +11939,12 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped = deduped.slice(0, 3);
 
     // Fitness/GranFondo일 때 1순위에 (Lite) 워크아웃 강제 포함 (클라이언트 필터)
+    // workoutDetails 항목: getWorkout API의 item → id, title, description, author, total_seconds, segments 등
     const challengeNorm = String(challenge || '').trim();
     if (challengeNorm === 'Fitness' || challengeNorm === 'GranFondo') {
-      const liteWorkouts = (workoutDetails || []).filter(function (w) {
-        const t = String(w.title || w.name || '').trim();
-        return t.indexOf('(Lite)') !== -1;
-      });
+      const getTitle = (w) => String(w.title != null ? w.title : (w.name || w.workout_title || w.workout_name || '')).trim();
+      const isLite = (w) => /\(lite\)/i.test(getTitle(w));
+      const liteWorkouts = (workoutDetails || []).filter(function (w) { return isLite(w); });
       const liteIds = new Set(liteWorkouts.map(function (w) { return Number(w.id); }).filter(function (id) { return !isNaN(id) && id > 0; }));
       const currentFirstId = deduped[0] && deduped[0].workoutId != null ? Number(deduped[0].workoutId) : null;
       const firstIsLite = currentFirstId != null && liteIds.has(currentFirstId);
@@ -11942,7 +11956,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
         });
         if (liteId == null) liteId = liteIds.values().next().value;
         const liteWorkout = liteWorkouts.find(function (w) { return Number(w.id) === liteId; });
-        const liteTitle = liteWorkout && (liteWorkout.title || liteWorkout.name) ? String(liteWorkout.title || liteWorkout.name).trim() : '(Lite)';
+        const liteTitle = liteWorkout ? getTitle(liteWorkout) || '(Lite)' : '(Lite)';
         const newFirst = { rank: 1, workoutId: liteId, reason: '입문자 접근성을 위해 (Lite) 워크아웃을 1순위로 추천합니다. ' + liteTitle };
         const rest = deduped.filter(function (r) { return Number(r.workoutId) !== liteId; }).slice(0, 2);
         deduped = [newFirst].concat(rest.map(function (r, i) { return { rank: i + 2, workoutId: r.workoutId, reason: r.reason }; }));
