@@ -10760,23 +10760,20 @@ function confirmRPESelection() {
   // 모달 출처 초기화
   window.rpeModalSource = null;
   
-  // challenge 타입에 따라 조건 이름 매핑 (동기 버전 사용)
+  // challenge 타입에 따라 조건 이름 매핑 (토스트 표시용, conditionName은 ai_recommend 블록에서 이미 선언될 수 있음)
   const challenge = getUserChallengeSync();
   const conditionValues = RPE_CONDITION_VALUES[challenge] || RPE_CONDITION_VALUES['Fitness'];
-  
-  // 가장 가까운 조건 찾기
-  let conditionName = '선택됨';
+  let toastConditionName = '선택됨';
   let minDiff = Infinity;
   for (const [name, value] of Object.entries(conditionValues)) {
     const diff = Math.abs(value - adjustment);
     if (diff < minDiff) {
       minDiff = diff;
-      conditionName = name;
+      toastConditionName = name;
     }
   }
-  
   if (typeof showToast === 'function') {
-    showToast(`컨디션: ${conditionName} (${(adjustment * 100).toFixed(0)}%) 적용됨`, 'success');
+    showToast(`컨디션: ${toastConditionName} (${(adjustment * 100).toFixed(0)}%) 적용됨`, 'success');
   }
 }
 
