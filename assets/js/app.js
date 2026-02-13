@@ -11938,7 +11938,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
     deduped = deduped.slice(0, 3);
 
-    // Fitness/GranFondo일 때: 1순위만 (Lite), 2~3순위는 비-Lite만 (강한 훈련 니즈 반영)
+    // Fitness/GranFondo일 때: 1순위만 (Lite), 2~3순위는 반드시 비-Lite만 (liteIds로 완전 배제)
     // workoutDetails 항목: getWorkout API의 item → id, title, description, author, total_seconds, segments 등
     const challengeNorm = String(challenge || '').trim();
     if (challengeNorm === 'Fitness' || challengeNorm === 'GranFondo') {
@@ -11946,9 +11946,9 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
       const isLite = (w) => /\(lite\)/i.test(getTitle(w));
       const liteWorkouts = (workoutDetails || []).filter(function (w) { return isLite(w); });
       const liteIds = new Set(liteWorkouts.map(function (w) { return Number(w.id); }).filter(function (id) { return !isNaN(id) && id > 0; }));
-      const currentFirstId = deduped[0] && deduped[0].workoutId != null ? Number(deduped[0].workoutId) : null;
-      const firstIsLite = currentFirstId != null && liteIds.has(currentFirstId);
-      if (!firstIsLite && liteIds.size > 0) {
+
+      if (liteIds.size > 0) {
+        // 1순위: 항상 (Lite) 1개 고정 (AI 1순위가 이미 Lite여도 이 블록은 항상 실행)
         const usedIds = new Set(deduped.map(function (r) { return Number(r.workoutId); }));
         let liteId = null;
         liteIds.forEach(function (id) {
@@ -11958,17 +11958,23 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
         const liteWorkout = liteWorkouts.find(function (w) { return Number(w.id) === liteId; });
         const liteTitle = liteWorkout ? getTitle(liteWorkout) || '(Lite)' : '(Lite)';
         const newFirst = { rank: 1, workoutId: liteId, reason: '입문자 접근성을 위해 (Lite) 워크아웃을 1순위로 추천합니다. ' + liteTitle };
-        // 2~3순위: AI 추천 중 비-Lite만 사용 (Lite 제외 → 더 강한 훈련 선택 가능)
-        const restCandidates = deduped.filter(function (r) { return Number(r.workoutId) !== liteId; });
+
+        // 2~3순위: Lite 완전 배제 — (1) workoutId가 liteIds에 있으면 무조건 제외, (2) workoutDetails에서도 isLite 아님 확인
+        const restCandidates = deduped.filter(function (r) {
+          const rid = Number(r.workoutId);
+          return rid !== liteId && !liteIds.has(rid);
+        });
         const nonLiteRest = restCandidates.filter(function (r) {
           const w = (workoutDetails || []).find(function (wd) { return Number(wd.id) === Number(r.workoutId); });
-          return w && !isLite(w);
+          return w && !isLite(w) && !liteIds.has(Number(r.workoutId));
         });
         let slot2and3 = nonLiteRest.slice(0, 2);
         if (slot2and3.length < 2) {
           const usedFor2and3 = new Set(slot2and3.map(function (r) { return Number(r.workoutId); }));
+          // 보조 풀: workoutDetails 중 Lite id 전부 제외(liteIds), 1순위 liteId 제외, 이미 쓴 id 제외
           const pool = (workoutDetails || []).filter(function (w) {
-            return !isLite(w) && Number(w.id) !== liteId && !usedFor2and3.has(Number(w.id));
+            const wid = Number(w.id);
+            return !liteIds.has(wid) && wid !== liteId && !usedFor2and3.has(wid) && !isLite(w);
           });
           for (var i = slot2and3.length; i < 2 && pool.length > 0; i++) {
             const w = pool.shift();
