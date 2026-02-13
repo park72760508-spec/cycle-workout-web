@@ -11247,16 +11247,15 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     const isLiteWorkout = (w) => /\(lite\)/i.test(getWorkoutTitle(w));
     const challengeNormForLite = String(challenge || '').trim();
     const needLiteFirst = (challengeNormForLite === 'Fitness' || challengeNormForLite === 'GranFondo');
+    // Fitness/GranFondo: 1순위용 Lite 소수(최대 5) + 2~3순위용 비-Lite 충분히 포함되도록 섞어서 15개
     const listForDetailFetch = needLiteFirst && availableWorkouts.length > 0
-      ? [...availableWorkouts].sort((a, b) => {
-          const aLite = isLiteWorkout(a);
-          const bLite = isLiteWorkout(b);
-          if (aLite && !bLite) return -1;
-          if (!aLite && bLite) return 1;
-          return 0;
-        })
+      ? (function () {
+          const liteList = availableWorkouts.filter(function (w) { return isLiteWorkout(w); });
+          const nonLiteList = availableWorkouts.filter(function (w) { return !isLiteWorkout(w); });
+          return liteList.slice(0, 5).concat(nonLiteList).slice(0, 15);
+        })()
       : availableWorkouts;
-    const workoutIds = listForDetailFetch.slice(0, 15).map(w => w.id); // 최대 15개, Fitness/GranFondo일 때 (Lite) 우선 포함
+    const workoutIds = listForDetailFetch.slice(0, 15).map(w => w.id); // 최대 15개
     
     // 병렬 처리로 모든 워크아웃 상세 정보를 동시에 조회
     const workoutDetailPromises = workoutIds.map(async (workoutId) => {
