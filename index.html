@@ -4758,12 +4758,6 @@
         // 진행 중 플래그 설정
         window.__aiRecommendationInProgress = true;
         
-        // 🔒 모달이 이미 열려있을 수 있으므로 초기화
-        var modal = document.getElementById('workoutRecommendationModal');
-        if (modal) {
-          modal.style.display = 'flex';
-        }
-        
         // Gemini API 키 확인
         var apiKey = null;
         try {
@@ -4887,24 +4881,25 @@
           return;
         }
         
-        // AI 추천 모달 표시
+        // 컨디션별 강도 보정 모달 먼저 표시 → 확인 후 AI 추천 실행 (app.js confirmRPESelection에서 처리)
+        var todayStr = new Date().toISOString().split('T')[0];
+        if (typeof window.showRPEModalForAIRecommendation === 'function') {
+          window.__aiRecommendationInProgress = false;
+          window.showRPEModalForAIRecommendation(todayStr, currentUser, apiKey);
+          return;
+        }
+        
+        // 폴백: 컨디션 모달 없이 바로 AI 추천
         var modal = document.getElementById('workoutRecommendationModal');
         var content = document.getElementById('workoutRecommendationContent');
         if (modal) {
           modal.style.display = 'flex';
           modal.classList.remove('hidden');
           console.log('[AI] 모달 표시');
-        } else {
-          console.error('[AI] 모달 없음');
         }
         if (content) {
           content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div></div>';
-        } else {
-          console.error('[AI] 컨텐츠 없음');
         }
-        
-        // 워크아웃 화면 AI 추천도 app.js 흐름 사용 (대시보드 블록·예상 TSS·1=약 2=중 3=강·서로 다른 3개 반영)
-        var todayStr = new Date().toISOString().split('T')[0];
         if (typeof window.showWorkoutRecommendationModal === 'function' && typeof window.analyzeAndRecommendWorkouts === 'function') {
           window.showWorkoutRecommendationModal();
           window.analyzeAndRecommendWorkouts(todayStr, currentUser, apiKey).then(function() {
