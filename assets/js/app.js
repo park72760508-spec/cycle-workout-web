@@ -11913,7 +11913,7 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     // 추천 배열: workoutId 중복 제거(먼저 나온 rank 유지), rank 1·2·3 순 정렬
     const rawRecs = recommendationData.recommendations;
     const seenIds = new Set();
-    const deduped = [];
+    let deduped = [];
     for (let i = 0; i < rawRecs.length; i++) {
       const r = rawRecs[i];
       const id = r.workoutId != null ? Number(r.workoutId) : null;
@@ -11922,7 +11922,34 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
       deduped.push({ rank: r.rank != null ? Number(r.rank) : i + 1, workoutId: id, reason: r.reason || '' });
     }
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
-    recommendationData.recommendations = deduped.slice(0, 3);
+    deduped = deduped.slice(0, 3);
+
+    // Fitness/GranFondo일 때 1순위에 (Lite) 워크아웃 강제 포함 (클라이언트 필터)
+    const challengeNorm = String(challenge || '').trim();
+    if (challengeNorm === 'Fitness' || challengeNorm === 'GranFondo') {
+      const liteWorkouts = (workoutDetails || []).filter(function (w) {
+        const t = String(w.title || w.name || '').trim();
+        return t.indexOf('(Lite)') !== -1;
+      });
+      const liteIds = new Set(liteWorkouts.map(function (w) { return Number(w.id); }).filter(function (id) { return !isNaN(id) && id > 0; }));
+      const currentFirstId = deduped[0] && deduped[0].workoutId != null ? Number(deduped[0].workoutId) : null;
+      const firstIsLite = currentFirstId != null && liteIds.has(currentFirstId);
+      if (!firstIsLite && liteIds.size > 0) {
+        const usedIds = new Set(deduped.map(function (r) { return Number(r.workoutId); }));
+        let liteId = null;
+        liteIds.forEach(function (id) {
+          if (liteId == null && !usedIds.has(id)) liteId = id;
+        });
+        if (liteId == null) liteId = liteIds.values().next().value;
+        const liteWorkout = liteWorkouts.find(function (w) { return Number(w.id) === liteId; });
+        const liteTitle = liteWorkout && (liteWorkout.title || liteWorkout.name) ? String(liteWorkout.title || liteWorkout.name).trim() : '(Lite)';
+        const newFirst = { rank: 1, workoutId: liteId, reason: '입문자 접근성을 위해 (Lite) 워크아웃을 1순위로 추천합니다. ' + liteTitle };
+        const rest = deduped.filter(function (r) { return Number(r.workoutId) !== liteId; }).slice(0, 2);
+        deduped = [newFirst].concat(rest.map(function (r, i) { return { rank: i + 2, workoutId: r.workoutId, reason: r.reason }; }));
+      }
+    }
+
+    recommendationData.recommendations = deduped;
     
     // 컨디션 점수: 공통 모듈로 50~100점 1점 단위 객관 산출 (1번·2번 통일: 강한 중복 제거 + 기준일 오늘)
     if (typeof window.computeConditionScore === 'function') {
