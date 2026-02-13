@@ -1,8 +1,10 @@
 /**
  * 관리자 비밀번호 초기화 Callable Function (v2)
  * Strava 토큰 교환/갱신 Callable (v2) - Client Secret은 서버에서만 사용
+ * Strava 전날 로그 동기화 스케줄 함수 (Firebase 기반, 매일 새벽 2시 Asia/Seoul)
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -564,5 +566,274 @@ exports.refreshStravaToken = onRequest(
         });
       }
     }
+  }
+);
+
+// ---------- Strava 전날 로그 동기화 (Firebase 기반, 수동 동기화와 동일한 Firestore 사용자/로그/포인트 사용) ----------
+function getStravaClientSecret() {
+  let clientSecret = STRAVA_CLIENT_SECRET_VALUE;
+  if (STRAVA_CLIENT_SECRET) {
+    try {
+      let v = STRAVA_CLIENT_SECRET.value();
+      if (v && typeof v === "string") {
+        v = v.trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+        if (v) clientSecret = v;
+      }
+    } catch (e) {
+      console.warn("[stravaSyncPreviousDay] Secret 읽기 실패, 기본값 사용:", e.message);
+    }
+  }
+  return clientSecret;
+}
+
+function computeTssFromActivity(activity, ftp) {
+  const durationSec = Number(activity.moving_time) || 0;
+  if (durationSec <= 0) return 0;
+  const np = Number(activity.weighted_average_watts) || Number(activity.average_watts) || 0;
+  if (np <= 0) return 0;
+  ftp = Number(ftp) || 0;
+  if (ftp <= 0) return 0;
+  const ifVal = np / ftp;
+  const tss = (durationSec * np * ifVal) / (ftp * 3600) * 100;
+  return Math.max(0, Math.round(tss * 100) / 100);
+}
+
+function getYesterdayAfterBefore() {
+  const now = new Date();
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0, 0);
+  const startOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0, 0);
+  const endOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59, 999);
+  const afterUnix = Math.floor(startOfYesterday.getTime() / 1000);
+  const beforeUnix = Math.floor(endOfYesterday.getTime() / 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateFrom = `${startOfYesterday.getFullYear()}-${pad(startOfYesterday.getMonth() + 1)}-${pad(startOfYesterday.getDate())}`;
+  const dateTo = `${endOfYesterday.getFullYear()}-${pad(endOfYesterday.getMonth() + 1)}-${pad(endOfYesterday.getDate())}`;
+  return { afterUnix, beforeUnix, dateFrom, dateTo };
+}
+
+async function getStelvioLogDates(db, userId) {
+  const dates = new Set();
+  const snapshot = await db.collection("users").doc(userId).collection("logs").get();
+  snapshot.docs.forEach((doc) => {
+    const log = doc.data();
+    if (log.source === "strava") return;
+    let dateStr = "";
+    if (log.date) {
+      if (typeof log.date === "string") dateStr = log.date;
+      else if (log.date.toDate) dateStr = log.date.toDate().toISOString().split("T")[0];
+      else if (log.date instanceof Date) dateStr = log.date.toISOString().split("T")[0];
+    }
+    if (dateStr) dates.add(dateStr);
+  });
+  return dates;
+}
+
+async function getExistingStravaActivityIds(db, userId) {
+  const ids = new Set();
+  const snapshot = await db.collection("users").doc(userId).collection("logs").where("source", "==", "strava").get();
+  snapshot.docs.forEach((doc) => {
+    const data = doc.data();
+    if (data.activity_id) ids.add(String(data.activity_id));
+  });
+  return ids;
+}
+
+async function refreshStravaTokenForUser(db, userId) {
+  const userRef = db.collection("users").doc(userId);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new Error("사용자를 찾을 수 없습니다.");
+  const refreshToken = userSnap.data().strava_refresh_token || "";
+  if (!refreshToken) throw new Error("Strava 리프레시 토큰이 없습니다.");
+  const appConfigSnap = await db.collection("appConfig").doc("strava").get();
+  if (!appConfigSnap.exists) throw new Error("Strava 앱 설정이 없습니다.");
+  const clientId = appConfigSnap.data().strava_client_id || "";
+  const clientSecret = getStravaClientSecret();
+  if (!clientId || !clientSecret) throw new Error("Strava 설정이 불완전합니다.");
+  const tokenUrl = "https://www.strava.com/api/v3/oauth/token";
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  const tokenRes = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const tokenData = await tokenRes.json().catch(() => ({}));
+  if (!tokenRes.ok) throw new Error(tokenData.message || tokenData.error || `Strava ${tokenRes.status}`);
+  const accessToken = tokenData.access_token || "";
+  const newRefreshToken = tokenData.refresh_token || refreshToken;
+  const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
+  if (!accessToken) throw new Error("Strava에서 access_token을 받지 못했습니다.");
+  await userRef.update({
+    strava_access_token: accessToken,
+    strava_refresh_token: newRefreshToken,
+    strava_expires_at: expiresAt,
+  });
+  return { accessToken };
+}
+
+async function updateUserMileageInFirestore(db, userId, todayTss) {
+  const userRef = db.collection("users").doc(userId);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new Error("사용자를 찾을 수 없습니다.");
+  const userData = userSnap.data();
+  let accPoints = Number(userData.acc_points || 0);
+  let remPoints = Number(userData.rem_points || 0);
+  const expiryDate = userData.expiry_date || "";
+  const lastTrainingDate = userData.last_training_date || "";
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentDate = today.toISOString().split("T")[0];
+  let shouldResetAccPoints = false;
+  if (lastTrainingDate) {
+    try {
+      const lastYear = new Date(lastTrainingDate).getFullYear();
+      if (lastYear < currentYear) shouldResetAccPoints = true;
+    } catch (e) { /* ignore */ }
+  } else {
+    shouldResetAccPoints = true;
+  }
+  if (shouldResetAccPoints) accPoints = 0;
+  const calcPool = remPoints + todayTss;
+  const addDays = Math.floor(calcPool / 500);
+  const newRemPoints = calcPool % 500;
+  const newAccPoints = accPoints + todayTss;
+  let newExpiryDate = expiryDate;
+  if (addDays > 0 && expiryDate) {
+    try {
+      const expiry = new Date(expiryDate);
+      expiry.setDate(expiry.getDate() + addDays);
+      newExpiryDate = expiry.toISOString().split("T")[0];
+    } catch (e) { /* ignore */ }
+  }
+  const updateData = {
+    acc_points: newAccPoints,
+    rem_points: newRemPoints,
+    last_training_date: currentDate,
+  };
+  if (addDays > 0 && newExpiryDate) updateData.expiry_date = newExpiryDate;
+  await userRef.update(updateData);
+  return { acc_points: newAccPoints, rem_points: newRemPoints, expiry_date: newExpiryDate };
+}
+
+/**
+ * 매일 새벽 2시(Asia/Seoul)에 Firestore users 중 strava_refresh_token이 있는 사용자에 대해
+ * 전날 Strava 활동을 조회해 users/{userId}/logs에 저장하고 포인트(acc_points, rem_points)를 반영.
+ * 수동 동기화(최근 1/3/6개월, 오늘)와 동일하게 Firebase(Firestore)만 사용.
+ */
+const stravaSyncScheduleOptions = { schedule: "0 2 * * *", timeZone: "Asia/Seoul" };
+if (STRAVA_CLIENT_SECRET) {
+  stravaSyncScheduleOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.stravaSyncPreviousDay = onSchedule(
+  stravaSyncScheduleOptions,
+  async (event) => {
+    const db = admin.firestore();
+    const errors = [];
+    let processed = 0;
+    let newActivitiesTotal = 0;
+    const totalTssByUser = {};
+    const { afterUnix, beforeUnix, dateFrom, dateTo } = getYesterdayAfterBefore();
+    console.log("[stravaSyncPreviousDay] 시작", { dateFrom, dateTo, afterUnix, beforeUnix });
+
+    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+    if (usersSnap.empty) {
+      console.log("[stravaSyncPreviousDay] Strava 연결 사용자 없음");
+      return;
+    }
+
+    for (const doc of usersSnap.docs) {
+      const userId = doc.id;
+      const userData = doc.data();
+      const ftp = Number(userData.ftp) || 0;
+      let accessToken;
+      try {
+        const tokenResult = await refreshStravaTokenForUser(db, userId);
+        accessToken = tokenResult.accessToken;
+      } catch (e) {
+        errors.push(`사용자 ${userId}: 토큰 갱신 실패 - ${e.message}`);
+        continue;
+      }
+
+      const actRes = await fetch(
+        `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const activities = await actRes.json().catch(() => []);
+      if (!actRes.ok) {
+        errors.push(`사용자 ${userId}: 활동 조회 실패 - ${actRes.status}`);
+        continue;
+      }
+
+      processed += 1;
+      const existingIds = await getExistingStravaActivityIds(db, userId);
+      const stelvioDates = await getStelvioLogDates(db, userId);
+      const logsRef = db.collection("users").doc(userId).collection("logs");
+      let userTss = 0;
+
+      for (const act of Array.isArray(activities) ? activities : []) {
+        const actId = String(act.id);
+        if (existingIds.has(actId)) continue;
+
+        const startDate = act.start_date || act.start_date_local || "";
+        let dateStr = "";
+        if (startDate) {
+          try {
+            dateStr = new Date(startDate).toISOString().split("T")[0];
+          } catch (e) {
+            dateStr = String(startDate).split("T")[0] || "";
+          }
+        }
+        const title = act.name || "";
+        const distanceKm = Math.round(((Number(act.distance) || 0) / 1000) * 100) / 100;
+        const movingTime = Math.round(Number(act.moving_time) || 0);
+        const tss = computeTssFromActivity(act, ftp);
+
+        const logDoc = {
+          activity_id: actId,
+          user_id: userId,
+          source: "strava",
+          date: dateStr,
+          title,
+          distance_km: distanceKm,
+          duration_sec: movingTime,
+          time: movingTime,
+          tss,
+          tss_applied: true,
+          created_at: new Date().toISOString(),
+        };
+        await logsRef.add(logDoc);
+        existingIds.add(actId);
+        newActivitiesTotal += 1;
+        if (!stelvioDates.has(dateStr)) userTss += tss;
+      }
+
+      if (userTss > 0) {
+        totalTssByUser[userId] = (totalTssByUser[userId] || 0) + userTss;
+      }
+    }
+
+    for (const uid of Object.keys(totalTssByUser)) {
+      const tss = totalTssByUser[uid];
+      if (tss <= 0) continue;
+      try {
+        await updateUserMileageInFirestore(db, uid, tss);
+      } catch (e) {
+        errors.push(`사용자 ${uid}: 포인트 업데이트 실패 - ${e.message}`);
+      }
+    }
+
+    console.log("[stravaSyncPreviousDay] 완료", {
+      processed,
+      newActivities: newActivitiesTotal,
+      errors: errors.length,
+      dateFrom,
+      dateTo,
+    });
+    if (errors.length) console.warn("[stravaSyncPreviousDay] 오류:", errors);
   }
 );
