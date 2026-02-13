@@ -599,16 +599,30 @@ function computeTssFromActivity(activity, ftp) {
   return Math.max(0, Math.round(tss * 100) / 100);
 }
 
+/**
+ * 한국(Asia/Seoul) 기준 "전날" 00:00~23:59 구간을 반환.
+ * Cloud Functions 서버는 UTC이므로, 서버 시간이 아닌 서울 시간 기준으로 계산해야
+ * 한국 사용자 기준 "어제" 로그를 올바르게 가져온다.
+ */
 function getYesterdayAfterBefore() {
   const now = new Date();
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0, 0);
-  const startOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0, 0);
-  const endOfYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59, 999);
-  const afterUnix = Math.floor(startOfYesterday.getTime() / 1000);
-  const beforeUnix = Math.floor(endOfYesterday.getTime() / 1000);
+  // 오늘 날짜를 서울 시간 기준 YYYY-MM-DD로 얻기
+  const todaySeoulStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todaySeoulStr.split("-").map(Number);
+  // 전날(서울 기준) 날짜 계산
+  const todaySeoul = new Date(y, m - 1, d);
+  todaySeoul.setDate(todaySeoul.getDate() - 1);
+  const yesterY = todaySeoul.getFullYear();
+  const yesterM = todaySeoul.getMonth() + 1;
+  const yesterD = todaySeoul.getDate();
   const pad = (n) => String(n).padStart(2, "0");
-  const dateFrom = `${startOfYesterday.getFullYear()}-${pad(startOfYesterday.getMonth() + 1)}-${pad(startOfYesterday.getDate())}`;
-  const dateTo = `${endOfYesterday.getFullYear()}-${pad(endOfYesterday.getMonth() + 1)}-${pad(endOfYesterday.getDate())}`;
+  const dateFrom = `${yesterY}-${pad(yesterM)}-${pad(yesterD)}`;
+  const dateTo = dateFrom;
+  // 서울 시간 00:00:00, 23:59:59.999 를 Unix 타임스탬프로 (Strava API는 UTC Unix 사용)
+  const startSeoul = new Date(`${dateFrom}T00:00:00+09:00`);
+  const endSeoul = new Date(`${dateTo}T23:59:59.999+09:00`);
+  const afterUnix = Math.floor(startSeoul.getTime() / 1000);
+  const beforeUnix = Math.floor(endSeoul.getTime() / 1000);
   return { afterUnix, beforeUnix, dateFrom, dateTo };
 }
 
