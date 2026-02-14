@@ -2807,6 +2807,38 @@ button[aria-disabled="true"] {
   margin: 0 auto;
 }
 
+/* 주간 마일리지 TOP10 모달 로딩: 커다란 녹색 원 스피너 (화면 맨 앞 표시) */
+.weekly-top10-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  min-height: 160px;
+  position: relative;
+  z-index: 50;
+  background: #ffffff;
+}
+.weekly-top10-spinner {
+  width: 72px;
+  height: 72px;
+  border: 5px solid #e5e7eb;
+  border-top-color: #00d4aa;
+  border-right-color: #00a88a;
+  border-radius: 50%;
+  animation: weekly-top10-spin 0.85s linear infinite;
+  position: relative;
+  z-index: 51;
+}
+.weekly-top10-loading-text {
+  margin: 20px 0 0 0;
+  font-size: 0.95em;
+  color: #6b7280;
+}
+@keyframes weekly-top10-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* 주간 마일리지 TOP10 모달 헤더 부가 문구 (제목 아래) */
 .weekly-top10-header-text {
   display: flex;
@@ -2820,7 +2852,7 @@ button[aria-disabled="true"] {
   line-height: 1.3;
 }
 .weekly-top10-points {
-  font-size: 0.55em; /* 제목(1.1em) 대비 50% */
+  font-size: 0.77em; /* 기간 문구와 동일 (제목 대비 70%) */
   color: #6b7280;
   margin: 0;
   line-height: 1.3;
@@ -2945,7 +2977,7 @@ button[aria-disabled="true"] {
     font-size: 0.7em; /* 제목(1em) 대비 70% */
   }
   .weekly-top10-points {
-    font-size: 0.5em; /* 제목(1em) 대비 50% */
+    font-size: 0.7em; /* 기간 문구와 동일 */
   }
 
   .training-detail-body {
