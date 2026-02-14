@@ -740,12 +740,7 @@ function showAuthScreen() {
     authScreen.style.visibility = 'visible';
     if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen') && typeof enableForScreen === 'function') {
       if (window.__pullToRefreshBlockerCleanup) window.__pullToRefreshBlockerCleanup();
-      var cleanupFn = enableForScreen('authScreen', { documentCapture: true });
-      if (typeof lockBodyScroll === 'function') lockBodyScroll(true);
-      window.__pullToRefreshBlockerCleanup = function () {
-        if (cleanupFn) cleanupFn();
-        if (typeof lockBodyScroll === 'function') lockBodyScroll(false);
-      };
+      window.__pullToRefreshBlockerCleanup = enableForScreen('authScreen', { documentCapture: true });
     }
   }
 }
@@ -3223,17 +3218,12 @@ if (!window.showScreen) {
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
         
-        // Pull-to-refresh 차단 적용 화면 진입 시 (iOS Bluefy 등) — authScreen은 documentCapture + body 잠금
+        // Pull-to-refresh 차단 적용 화면 진입 시 (iOS Bluefy 등) — 스크롤은 유지, 맨 위에서 당길 때만 차단
         if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && typeof enableForScreen === 'function') {
           if (window.__pullToRefreshBlockerCleanup) window.__pullToRefreshBlockerCleanup();
           var isAuthScreen = (id === 'authScreen');
           var opts = isAuthScreen ? { documentCapture: true } : undefined;
-          var cleanupFn = enableForScreen(id, opts);
-          if (isAuthScreen && typeof lockBodyScroll === 'function') lockBodyScroll(true);
-          window.__pullToRefreshBlockerCleanup = function () {
-            if (cleanupFn) cleanupFn();
-            if (isAuthScreen && typeof lockBodyScroll === 'function') lockBodyScroll(false);
-          };
+          window.__pullToRefreshBlockerCleanup = enableForScreen(id, opts);
         }
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
