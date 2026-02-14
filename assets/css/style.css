@@ -2807,6 +2807,25 @@ button[aria-disabled="true"] {
   margin: 0 auto;
 }
 
+/* 주간 마일리지 TOP10 모달 헤더 부가 문구 (제목 아래) */
+.weekly-top10-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.weekly-top10-period {
+  font-size: 0.77em; /* 제목(1.1em) 대비 70% */
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.3;
+}
+.weekly-top10-points {
+  font-size: 0.55em; /* 제목(1.1em) 대비 50% */
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.3;
+}
+
 /* 주간 마일리지 TOP10 랭킹 행 */
 .weekly-rank-item {
   display: flex;
@@ -2920,6 +2939,13 @@ button[aria-disabled="true"] {
   .training-detail-title {
     font-size: 1em; /* 대시보드 추천 디자인: text-xs 기반 */
     color: #1e40af; /* 대시보드 추천 디자인: text-blue-800 유지 */
+  }
+
+  .weekly-top10-period {
+    font-size: 0.7em; /* 제목(1em) 대비 70% */
+  }
+  .weekly-top10-points {
+    font-size: 0.5em; /* 제목(1em) 대비 50% */
   }
 
   .training-detail-body {
