@@ -738,6 +738,10 @@ function showAuthScreen() {
     authScreen.style.display = 'block';
     authScreen.style.opacity = '1';
     authScreen.style.visibility = 'visible';
+    if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen') && typeof enableForScreen === 'function') {
+      if (window.__pullToRefreshBlockerCleanup) window.__pullToRefreshBlockerCleanup();
+      window.__pullToRefreshBlockerCleanup = enableForScreen('authScreen');
+    }
   }
 }
 
@@ -3132,6 +3136,11 @@ if (!window.screenHistory) {
   window.screenHistory = [];
 }
 
+// Pull-to-refresh 차단 적용 화면 ID 목록 (한 줄 추가로 확장 가능)
+if (!window.PULL_TO_REFRESH_BLOCKED_SCREENS) {
+  window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen'];
+}
+
 if (!window.showScreen) {
   window.showScreen = function(id, skipHistory) {
     try {
@@ -3182,6 +3191,14 @@ if (!window.showScreen) {
         return; // 화면 전환 자체를 차단
       }
       
+      // Pull-to-refresh 차단 적용 화면에서 나갈 때 클린업
+      const currentActiveScreen = document.querySelector(".screen.active") ||
+        Array.from(document.querySelectorAll(".screen")).find(s => s.style.display === "block" || window.getComputedStyle(s).display === "block");
+      if (currentActiveScreen && (window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(currentActiveScreen.id) && window.__pullToRefreshBlockerCleanup) {
+        window.__pullToRefreshBlockerCleanup();
+        window.__pullToRefreshBlockerCleanup = null;
+      }
+      
       document.querySelectorAll(".screen").forEach(s => {
         if (s.id !== 'splashScreen') {
         s.style.display = "none";
@@ -3200,6 +3217,12 @@ if (!window.showScreen) {
         }
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
+        
+        // Pull-to-refresh 차단 적용 화면 진입 시 (iOS Bluefy 등) — 추가 화면은 PULL_TO_REFRESH_BLOCKED_SCREENS에 ID만 추가
+        if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && typeof enableForScreen === 'function') {
+          if (window.__pullToRefreshBlockerCleanup) window.__pullToRefreshBlockerCleanup();
+          window.__pullToRefreshBlockerCleanup = enableForScreen(id);
+        }
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
         if (id === 'mobileDashboardScreen') {
