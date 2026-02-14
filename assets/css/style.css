@@ -60,10 +60,12 @@ body.body-pull-to-refresh-lock {
 /* body 잠금 시 인증 화면은 내부만 스크롤 (아래로 스크롤 가능, 콘텐츠가 길어도 폼 접근 가능) */
 body.body-pull-to-refresh-lock #authScreen {
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
   height: 100vh !important;
   max-height: 100vh !important;
   overscroll-behavior-y: none !important;
+  touch-action: pan-y !important;
 }
 
 /* ========== 디바이스 연결 방식 슬라이드 스위치 ========== */
