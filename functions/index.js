@@ -837,102 +837,117 @@ async function updateUserMileageInFirestore(db, userId, todayTss) {
   return { acc_points: newAccPoints, rem_points: newRemPoints, expiry_date: newExpiryDate };
 }
 
+// ---------- 1000명 규모 설계 상수 ----------
+const STRAVA_SYNC_CHUNK_SIZE = 50;        // 청크당 사용자 수 (팬아웃)
+const STRAVA_SYNC_CONCURRENCY = 10;      // 청크 내 동시 처리 사용자 수
+const STRAVA_SYNC_CHUNK_THRESHOLD = 100; // 이 인원 초과 시 청크 팬아웃 사용
+const INTERNAL_SYNC_SECRET = "stelvio-internal-sync-v1"; // 청크 HTTP 인증 (필요 시 Secret으로 교체)
+
+/** 단일 사용자 Strava 동기화 (병렬 배치용) */
+async function processOneUserStravaSync(db, userId, userData, { afterUnix, beforeUnix }) {
+  const ftp = Number(userData.ftp) || 0;
+  let accessToken;
+  try {
+    const tokenResult = await refreshStravaTokenForUser(db, userId);
+    accessToken = tokenResult.accessToken;
+  } catch (e) {
+    return { userId, processed: 0, newActivities: 0, userTss: 0, error: `토큰 갱신 실패: ${e.message}` };
+  }
+  const actRes = await fetch(
+    `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const activities = await actRes.json().catch(() => []);
+  if (!actRes.ok) {
+    return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${actRes.status}` };
+  }
+  const existingIds = await getExistingStravaActivityIds(db, userId);
+  const stelvioDates = await getStelvioLogDates(db, userId);
+  const logsRef = db.collection("users").doc(userId).collection("logs");
+  let userTss = 0;
+  let newActivities = 0;
+  for (const act of Array.isArray(activities) ? activities : []) {
+    const actId = String(act.id);
+    if (existingIds.has(actId)) continue;
+    let detailedActivity = act;
+    const detailRes = await fetchStravaActivityDetail(accessToken, actId);
+    if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
+    const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
+    const dateStr = mapped.date || "";
+    const tssAppliedAt = new Date().toISOString();
+    const logDoc = {
+      activity_id: mapped.activity_id,
+      user_id: mapped.user_id,
+      source: mapped.source,
+      date: mapped.date,
+      title: mapped.title,
+      distance_km: mapped.distance_km,
+      duration_sec: mapped.duration_sec,
+      time: mapped.time,
+      avg_cadence: mapped.avg_cadence,
+      avg_hr: mapped.avg_hr,
+      max_hr: mapped.max_hr,
+      avg_watts: mapped.avg_watts,
+      max_watts: mapped.max_watts,
+      weighted_watts: mapped.weighted_watts,
+      kilojoules: mapped.kilojoules,
+      elevation_gain: mapped.elevation_gain,
+      rpe: mapped.rpe,
+      ftp_at_time: mapped.ftp_at_time,
+      if: mapped.if,
+      tss: mapped.tss,
+      efficiency_factor: mapped.efficiency_factor,
+      time_in_zones: mapped.time_in_zones,
+      earned_points: mapped.earned_points,
+      workout_id: mapped.workout_id,
+      tss_applied: true,
+      tss_applied_at: tssAppliedAt,
+      created_at: mapped.created_at,
+    };
+    await logsRef.add(logDoc);
+    existingIds.add(actId);
+    newActivities += 1;
+    if (!stelvioDates.has(dateStr)) userTss += mapped.tss || 0;
+  }
+  return { userId, processed: 1, newActivities, userTss, error: null };
+}
+
 /**
- * 지정 구간(afterUnix~beforeUnix)에 대해 Strava 로그 수집 및 Firestore 반영.
- * stravaSyncPreviousDay(전날) / stravaSyncSunday(일요일 당일 19시)에서 공통 사용.
+ * 지정 구간에 대해 Strava 로그 수집 및 Firestore 반영.
+ * userIdsFilter 있으면 해당 사용자만 처리(청크 워커용). 없으면 전체.
+ * 1000명 대비: 사용자별 병렬 배치(STRAVA_SYNC_CONCURRENCY) 처리.
  */
-async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, dateTo }, logPrefix) {
+async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, dateTo }, logPrefix, userIdsFilter) {
   const prefix = logPrefix || "[stravaSync]";
   const errors = [];
   let processed = 0;
   let newActivitiesTotal = 0;
   const totalTssByUser = {};
-  console.log(`${prefix} 시작`, { dateFrom, dateTo, afterUnix, beforeUnix });
+  console.log(`${prefix} 시작`, { dateFrom, dateTo, userCount: userIdsFilter ? userIdsFilter.length : "all" });
 
-  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-  if (usersSnap.empty) {
-    console.log(`${prefix} Strava 연결 사용자 없음`);
+  let docs;
+  if (userIdsFilter && userIdsFilter.length > 0) {
+    const snapshots = await Promise.all(userIdsFilter.map((id) => db.collection("users").doc(id).get()));
+    docs = snapshots.filter((s) => s.exists).map((s) => ({ id: s.id, data: () => s.data() }));
+  } else {
+    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+    docs = usersSnap.docs;
+  }
+  if (docs.length === 0) {
+    console.log(`${prefix} 처리 대상 사용자 없음`);
     return;
   }
 
-  for (const doc of usersSnap.docs) {
-    const userId = doc.id;
-    const userData = doc.data();
-    const ftp = Number(userData.ftp) || 0;
-    let accessToken;
-    try {
-      const tokenResult = await refreshStravaTokenForUser(db, userId);
-      accessToken = tokenResult.accessToken;
-    } catch (e) {
-      errors.push(`사용자 ${userId}: 토큰 갱신 실패 - ${e.message}`);
-      continue;
-    }
-
-    const actRes = await fetch(
-      `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+  for (let i = 0; i < docs.length; i += STRAVA_SYNC_CONCURRENCY) {
+    const batch = docs.slice(i, i + STRAVA_SYNC_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((doc) => processOneUserStravaSync(db, doc.id, doc.data(), { afterUnix, beforeUnix }))
     );
-    const activities = await actRes.json().catch(() => []);
-    if (!actRes.ok) {
-      errors.push(`사용자 ${userId}: 활동 조회 실패 - ${actRes.status}`);
-      continue;
-    }
-
-    processed += 1;
-    const existingIds = await getExistingStravaActivityIds(db, userId);
-    const stelvioDates = await getStelvioLogDates(db, userId);
-    const logsRef = db.collection("users").doc(userId).collection("logs");
-    let userTss = 0;
-
-    for (const act of Array.isArray(activities) ? activities : []) {
-      const actId = String(act.id);
-      if (existingIds.has(actId)) continue;
-
-      let detailedActivity = act;
-      const detailRes = await fetchStravaActivityDetail(accessToken, actId);
-      if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
-
-      const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
-      const dateStr = mapped.date || "";
-      const tssAppliedAt = new Date().toISOString();
-
-      const logDoc = {
-        activity_id: mapped.activity_id,
-        user_id: mapped.user_id,
-        source: mapped.source,
-        date: mapped.date,
-        title: mapped.title,
-        distance_km: mapped.distance_km,
-        duration_sec: mapped.duration_sec,
-        time: mapped.time,
-        avg_cadence: mapped.avg_cadence,
-        avg_hr: mapped.avg_hr,
-        max_hr: mapped.max_hr,
-        avg_watts: mapped.avg_watts,
-        max_watts: mapped.max_watts,
-        weighted_watts: mapped.weighted_watts,
-        kilojoules: mapped.kilojoules,
-        elevation_gain: mapped.elevation_gain,
-        rpe: mapped.rpe,
-        ftp_at_time: mapped.ftp_at_time,
-        if: mapped.if,
-        tss: mapped.tss,
-        efficiency_factor: mapped.efficiency_factor,
-        time_in_zones: mapped.time_in_zones,
-        earned_points: mapped.earned_points,
-        workout_id: mapped.workout_id,
-        tss_applied: true,
-        tss_applied_at: tssAppliedAt,
-        created_at: mapped.created_at,
-      };
-      await logsRef.add(logDoc);
-      existingIds.add(actId);
-      newActivitiesTotal += 1;
-      if (!stelvioDates.has(dateStr)) userTss += (mapped.tss || 0);
-    }
-
-    if (userTss > 0) {
-      totalTssByUser[userId] = (totalTssByUser[userId] || 0) + userTss;
+    for (const r of results) {
+      if (r.error) errors.push(`사용자 ${r.userId}: ${r.error}`);
+      if (r.processed) processed += 1;
+      newActivitiesTotal += r.newActivities || 0;
+      if (r.userTss > 0) totalTssByUser[r.userId] = (totalTssByUser[r.userId] || 0) + r.userTss;
     }
   }
 
@@ -956,10 +971,114 @@ async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, date
   if (errors.length) console.warn(`${prefix} 오류:`, errors);
 }
 
+/** 1000명 대비: Strava 동기화 청크 워커 (50명/요청). 스케줄러가 팬아웃 호출. */
+const runStravaSyncChunkOptions = { cors: false, timeoutSeconds: 540 };
+if (STRAVA_CLIENT_SECRET) {
+  runStravaSyncChunkOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.runStravaSyncChunk = onRequest(
+  runStravaSyncChunkOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST only" });
+      return;
+    }
+    const secret = req.headers["x-internal-secret"] || req.query.secret;
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({ success: false, error: "Forbidden" });
+      return;
+    }
+    let body;
+    try {
+      body = typeof req.body === "object" ? req.body : JSON.parse(req.body || "{}");
+    } catch (e) {
+      res.status(400).json({ success: false, error: "Invalid JSON" });
+      return;
+    }
+    const { startStr, endStr, dateFrom, dateTo, userIds } = body;
+    const ids = Array.isArray(userIds) ? userIds.slice(0, STRAVA_SYNC_CHUNK_SIZE) : [];
+    if (ids.length === 0) {
+      res.status(200).json({ success: true, processed: 0 });
+      return;
+    }
+    const pad = (n) => String(n).padStart(2, "0");
+    const from = dateFrom || startStr;
+    const to = dateTo || endStr;
+    const startSeoul = new Date(`${from}T00:00:00+09:00`);
+    const endSeoul = new Date(`${to}T23:59:59.999+09:00`);
+    const afterUnix = Math.floor(startSeoul.getTime() / 1000);
+    const beforeUnix = Math.floor(endSeoul.getTime() / 1000);
+    const db = admin.firestore();
+    await runStravaSyncForRange(
+      db,
+      { afterUnix, beforeUnix, dateFrom: from, dateTo: to },
+      "[stravaSyncChunk]",
+      ids
+    );
+    res.status(200).json({ success: true, userIds: ids.length });
+  }
+);
+
+/** 스케줄 실행 시 1000명 대비: 인원 > 100이면 청크 URL로 팬아웃, 아니면 in-process 병렬 처리 */
+async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
+  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+  const userIds = usersSnap.docs.map((d) => d.id);
+  if (userIds.length === 0) {
+    console.log(`${logPrefix} Strava 연결 사용자 없음`);
+    return;
+  }
+  if (userIds.length <= STRAVA_SYNC_CHUNK_THRESHOLD) {
+    await runStravaSyncForRange(db, range, logPrefix, null);
+    return;
+  }
+  const chunkUrl = typeof getChunkUrl === "function" ? await getChunkUrl() : null;
+  if (!chunkUrl) {
+    console.warn(`${logPrefix} 청크 URL 미설정(appConfig/sync.runStravaSyncChunkUrl), in-process로 진행 (${userIds.length}명)`);
+    await runStravaSyncForRange(db, range, logPrefix, null);
+    return;
+  }
+  const chunks = [];
+  for (let i = 0; i < userIds.length; i += STRAVA_SYNC_CHUNK_SIZE) {
+    chunks.push(userIds.slice(i, i + STRAVA_SYNC_CHUNK_SIZE));
+  }
+  const { dateFrom, dateTo, afterUnix, beforeUnix } = range;
+  const results = await Promise.all(
+    chunks.map((userIdsChunk) =>
+      fetch(chunkUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Secret": INTERNAL_SYNC_SECRET,
+        },
+        body: JSON.stringify({
+          startStr: dateFrom,
+          endStr: dateTo,
+          dateFrom,
+          dateTo,
+          userIds: userIdsChunk,
+        }),
+      })
+    )
+  );
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    console.warn(`${logPrefix} 청크 실패 ${failed.length}/${chunks.length}`, failed.map((r) => r.status));
+  }
+  console.log(`${logPrefix} 팬아웃 완료`, { chunks: chunks.length, totalUsers: userIds.length });
+}
+
 /**
- * 매일 새벽 2시(Asia/Seoul)에 전날 Strava 활동 수집.
+ * 매일 새벽 2시(Asia/Seoul)에 전날 Strava 활동 수집. 1000명 대비 청크 팬아웃.
  */
-const stravaSyncScheduleOptions = { schedule: "0 2 * * *", timeZone: "Asia/Seoul" };
+const stravaSyncScheduleOptions = {
+  schedule: "0 2 * * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 540,
+};
 if (STRAVA_CLIENT_SECRET) {
   stravaSyncScheduleOptions.secrets = [STRAVA_CLIENT_SECRET];
 }
@@ -968,15 +1087,22 @@ exports.stravaSyncPreviousDay = onSchedule(
   async (event) => {
     const db = admin.firestore();
     const range = getYesterdayAfterBefore();
-    await runStravaSyncForRange(db, range, "[stravaSyncPreviousDay]");
+    const getChunkUrl = async () => {
+      const snap = await db.collection("appConfig").doc("sync").get();
+      return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
+    };
+    await runStravaSyncWithFanOut(db, range, "[stravaSyncPreviousDay]", getChunkUrl);
   }
 );
 
 /**
- * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집.
- * 순위 확정(일요일 21시) 전에 당일 데이터를 반영하기 위함.
+ * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집. 1000명 대비 청크 팬아웃.
  */
-const stravaSyncSundayOptions = { schedule: "0 19 * * 0", timeZone: "Asia/Seoul" };
+const stravaSyncSundayOptions = {
+  schedule: "0 19 * * 0",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 540,
+};
 if (STRAVA_CLIENT_SECRET) {
   stravaSyncSundayOptions.secrets = [STRAVA_CLIENT_SECRET];
 }
@@ -985,7 +1111,11 @@ exports.stravaSyncSunday = onSchedule(
   async (event) => {
     const db = admin.firestore();
     const range = getTodayAfterBefore();
-    await runStravaSyncForRange(db, range, "[stravaSyncSunday]");
+    const getChunkUrl = async () => {
+      const snap = await db.collection("appConfig").doc("sync").get();
+      return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
+    };
+    await runStravaSyncWithFanOut(db, range, "[stravaSyncSunday]", getChunkUrl);
   }
 );
 
@@ -1032,7 +1162,7 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
 }
 
 const WEEKLY_RANKING_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
-const WEEKLY_TSS_BATCH_SIZE = 25; // 동시 요청 수 제한
+const WEEKLY_TSS_BATCH_SIZE = 50; // 1000명 대비: 20배치로 완료
 
 /** 여러 사용자 주간 TSS 병렬 조회 (배치 단위로 실행해 Firestore 부하 완화) */
 async function getWeeklyRankingEntries(db, startStr, endStr) {
@@ -1055,9 +1185,9 @@ async function getWeeklyRankingEntries(db, startStr, endStr) {
   return entries;
 }
 
-/** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 조회로 300명 규모 부하 완화) */
+/** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 50명/배치, 1000명 대비 타임아웃 9분) */
 exports.getWeeklyRanking = onRequest(
-  { cors: true },
+  { cors: true, timeoutSeconds: 540 },
   async (req, res) => {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
@@ -1098,8 +1228,12 @@ exports.getWeeklyRanking = onRequest(
   }
 );
 
-/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (병렬 조회 사용) */
-const finalizeWeeklyOptions = { schedule: "0 21 * * 0", timeZone: "Asia/Seoul" };
+/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (1000명 대비 타임아웃 9분) */
+const finalizeWeeklyOptions = {
+  schedule: "0 21 * * 0",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 540,
+};
 exports.finalizeWeeklyRanking = onSchedule(
   finalizeWeeklyOptions,
   async (event) => {
@@ -1107,7 +1241,7 @@ exports.finalizeWeeklyRanking = onSchedule(
     const { startStr, endStr } = getWeekRangeSeoul();
     const entries = await getWeeklyRankingEntries(db, startStr, endStr);
     const top3 = entries.slice(0, 3);
-    const points = [100, 50, 30];
+    const points = [100, 50, 30]; // 1등 100SP, 2등 50SP, 3등 30SP
     for (let i = 0; i < top3.length; i++) {
       const u = top3[i];
       const userRef = db.collection("users").doc(u.userId);
@@ -1116,7 +1250,7 @@ exports.finalizeWeeklyRanking = onSchedule(
       const data = snap.data();
       const rem = Number(data.rem_points || 0) + points[i];
       await userRef.update({ rem_points: rem });
-      console.log("[finalizeWeeklyRanking] 포인트 지급:", u.rank, u.name, "+" + points[i]);
+      console.log("[finalizeWeeklyRanking] 포인트 지급:", (i + 1) + "등", u.name, "+" + points[i] + "SP → rem_points:", rem);
     }
     console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, top3: top3.map((e) => e.name) });
   }
