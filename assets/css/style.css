@@ -46,6 +46,26 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* iOS Bluefy 등: body 스크롤 잠금 시 window overscroll 제거 → 네이티브 Pull-to-refresh 무력화 */
+body.body-pull-to-refresh-lock {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: auto;
+}
+/* body 잠금 시 인증 화면은 내부만 스크롤 (아래로 스크롤 가능, 콘텐츠가 길어도 폼 접근 가능) */
+body.body-pull-to-refresh-lock #authScreen {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overscroll-behavior-y: none !important;
+}
+
 /* ========== 디바이스 연결 방식 슬라이드 스위치 ========== */
 .device-connection-switch-container {
   user-select: none;
