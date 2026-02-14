@@ -1,17 +1,24 @@
 {
   "name": "stelvio-admin-functions",
-  "description": "관리자 비밀번호 초기화 등 Admin SDK 필요 기능",
+  "description": "관리자 비밀번호 초기화, Strava 연동, STELVIO AI 네이버 구독 자동화",
   "main": "index.js",
-  "engines": {
-    "node": "20"
-  },
+  "engines": { "node": "20" },
   "scripts": {
+    "build": "tsc",
+    "build:naver": "tsc",
     "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "npm run build:naver && firebase deploy --only functions"
   },
   "dependencies": {
     "firebase-admin": "^11.11.0",
-    "firebase-functions": "^4.5.0"
+    "firebase-functions": "^4.5.0",
+    "bcrypt": "^5.1.1",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/bcrypt": "^5.0.2",
+    "@types/nodemailer": "^6.4.16"
   },
   "private": true
 }
