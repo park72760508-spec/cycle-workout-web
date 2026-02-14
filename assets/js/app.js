@@ -11320,8 +11320,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     const getWorkoutTitle = (w) => String(w.title != null ? w.title : (w.name || w.workout_title || w.workout_name || '')).trim();
     const isLiteWorkout = (w) => /\(lite\)/i.test(getWorkoutTitle(w));
     const challengeNormForLite = String(challenge || '').trim();
-    const needLiteFirst = (challengeNormForLite === 'Fitness' || challengeNormForLite === 'GranFondo');
-    // Fitness/GranFondo: 1순위용 Lite 소수(최대 5) + 2~3순위용 비-Lite 충분히 포함되도록 섞어서 15개
+    const needLiteFirst = (challengeNormForLite === 'Fitness');
+    // Fitness만: 1순위용 Lite 소수(최대 5) + 2~3순위용 비-Lite 충분히 포함되도록 섞어서 15개 (GranFondo는 일반 배정)
     const listForDetailFetch = needLiteFirst && availableWorkouts.length > 0
       ? (function () {
           const liteList = availableWorkouts.filter(function (w) { return isLiteWorkout(w); });
@@ -12016,10 +12016,10 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
     deduped.sort((a, b) => (a.rank || 0) - (b.rank || 0));
     deduped = deduped.slice(0, 3);
 
-    // Fitness/GranFondo일 때: 1순위만 (Lite), 2~3순위는 반드시 비-Lite만 (liteIds로 완전 배제)
+    // Fitness일 때만: 1순위 (Lite) 우선배정, 2~3순위는 비-Lite만. GranFondo는 일반 배정 방식 유지
     // workoutDetails 항목: getWorkout API의 item → id, title, description, author, total_seconds, segments 등
     const challengeNorm = String(challenge || '').trim();
-    if (challengeNorm === 'Fitness' || challengeNorm === 'GranFondo') {
+    if (challengeNorm === 'Fitness') {
       const getTitle = (w) => String(w.title != null ? w.title : (w.name || w.workout_title || w.workout_name || '')).trim();
       const isLite = (w) => /\(lite\)/i.test(getTitle(w));
       const liteWorkouts = (workoutDetails || []).filter(function (w) { return isLite(w); });
