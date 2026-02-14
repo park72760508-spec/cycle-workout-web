@@ -1031,7 +1031,31 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
   return total;
 }
 
-/** 주간 랭킹 TOP10 조회 (월~오늘, Asia/Seoul) */
+const WEEKLY_RANKING_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
+const WEEKLY_TSS_BATCH_SIZE = 25; // 동시 요청 수 제한
+
+/** 여러 사용자 주간 TSS 병렬 조회 (배치 단위로 실행해 Firestore 부하 완화) */
+async function getWeeklyRankingEntries(db, startStr, endStr) {
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs;
+  const entries = [];
+  for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
+    const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (doc) => {
+        const userId = doc.id;
+        const name = doc.data().name || "(이름 없음)";
+        const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
+        return totalTss > 0 ? { userId, name, totalTss } : null;
+      })
+    );
+    results.forEach((r) => { if (r) entries.push(r); });
+  }
+  entries.sort((a, b) => b.totalTss - a.totalTss);
+  return entries;
+}
+
+/** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 조회로 300명 규모 부하 완화) */
 exports.getWeeklyRanking = onRequest(
   { cors: true },
   async (req, res) => {
@@ -1041,52 +1065,47 @@ exports.getWeeklyRanking = onRequest(
     }
     const db = admin.firestore();
     const { startStr, endStr } = getWeekRangeSeoul();
-    const usersSnap = await db.collection("users").get();
-    const entries = [];
-    for (const doc of usersSnap.docs) {
-      const userId = doc.id;
-      const name = doc.data().name || "(이름 없음)";
-      const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
-      if (totalTss > 0) entries.push({ userId, name, totalTss });
+    const cacheRef = db.collection("cache").doc("weeklyRanking");
+    const cacheSnap = await cacheRef.get();
+    const nowMs = Date.now();
+    if (cacheSnap.exists) {
+      const data = cacheSnap.data();
+      const cachedStart = data.startStr;
+      const cachedEnd = data.endStr;
+      const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+      if (cachedStart === startStr && cachedEnd === endStr && updatedAt && nowMs - updatedAt < WEEKLY_RANKING_CACHE_TTL_MS) {
+        const ranking = Array.isArray(data.ranking) ? data.ranking : [];
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Cache-Control", "public, max-age=120"); // 클라이언트 캐시 2분
+        return res.status(200).json({ success: true, ranking, startStr, endStr, cached: true });
+      }
     }
-    entries.sort((a, b) => b.totalTss - a.totalTss);
+    const entries = await getWeeklyRankingEntries(db, startStr, endStr);
     const top10 = entries.slice(0, 10).map((e, i) => ({
       rank: i + 1,
       userId: e.userId,
       name: e.name,
       totalTss: Math.round(e.totalTss * 100) / 100,
     }));
+    await cacheRef.set({
+      ranking: top10,
+      startStr,
+      endStr,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     res.set("Access-Control-Allow-Origin", "*");
     res.status(200).json({ success: true, ranking: top10, startStr, endStr });
   }
 );
 
-/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 */
+/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (병렬 조회 사용) */
 const finalizeWeeklyOptions = { schedule: "0 21 * * 0", timeZone: "Asia/Seoul" };
 exports.finalizeWeeklyRanking = onSchedule(
   finalizeWeeklyOptions,
   async (event) => {
     const db = admin.firestore();
-    const now = new Date();
-    const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-    const [y, m, d] = todayStr.split("-").map(Number);
-    const today = new Date(y, m - 1, d);
-    const dayOfWeek = today.getDay();
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + mondayOffset);
-    const pad = (n) => String(n).padStart(2, "0");
-    const startStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
-    const endStr = todayStr;
-    const usersSnap = await db.collection("users").get();
-    const entries = [];
-    for (const doc of usersSnap.docs) {
-      const userId = doc.id;
-      const name = doc.data().name || "(이름 없음)";
-      const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
-      if (totalTss > 0) entries.push({ userId, name, totalTss });
-    }
-    entries.sort((a, b) => b.totalTss - a.totalTss);
+    const { startStr, endStr } = getWeekRangeSeoul();
+    const entries = await getWeeklyRankingEntries(db, startStr, endStr);
     const top3 = entries.slice(0, 3);
     const points = [100, 50, 30];
     for (let i = 0; i < top3.length; i++) {
