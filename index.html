@@ -7077,23 +7077,20 @@
                 dateKeys: Object.keys(touchedDateKeys).length
               });
               
-              // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+              // 같은 날 Strava와 Stelvio가 둘 다 있으면 Strava 훈련 로그 우선 표시, Stelvio만 있으면 Stelvio 표시
               Object.keys(touchedDateKeys).forEach(function(dateKey) {
                 var arr = miniCalendarStateJournal.trainingLogs[dateKey];
                 if (!arr || arr.length === 0) return;
-                var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
-                if (hasStelvio) {
+                var hasStrava = arr.some(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+                if (hasStrava) {
                   var beforeCount = arr.length;
-                  miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+                  miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
                   var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
                   if (beforeCount !== afterCount) {
-                    console.log('[MiniCalendarJournal] Strava 로그 필터링:', {
-                      dateKey: dateKey,
-                      before: beforeCount,
-                      after: afterCount
-                    });
+                    console.log('[MiniCalendarJournal] Strava 우선 적용:', { dateKey: dateKey, before: beforeCount, after: afterCount });
                   }
                 }
+                // Stelvio만 있으면 그대로 유지 (필터 없음)
               });
             } else {
               console.log('[MiniCalendarJournal] 해당 월에 로그가 없습니다.');
@@ -7167,8 +7164,9 @@
         return;
       }
       
-      // 첫 번째 로그 사용 (같은 날 여러 훈련이 있으면 첫 번째 것)
-      const log = logs[0];
+      // source=strava 로그가 있으면 우선 사용, 없으면 stelvio 로그 사용
+      const stravaLog = logs.find(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+      const log = stravaLog || logs[0];
       
       // 날짜 포맷팅
       const date = parseTrainingDate(log.date);
@@ -7526,21 +7524,17 @@
           totalDatesAfter: Object.keys(miniCalendarStateJournal.trainingLogs).length
         });
         
-        // 같은 날 Strava/Stelvio 정리
+        // 같은 날 Strava 있으면 Strava 우선 표시, Stelvio만 있으면 Stelvio 표시
         Object.keys(miniCalendarStateJournal.trainingLogs).forEach(function(dateKey) {
           var arr = miniCalendarStateJournal.trainingLogs[dateKey];
           if (!arr || arr.length === 0) return;
-          var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
-          if (hasStelvio) {
+          var hasStrava = arr.some(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+          if (hasStrava) {
             var beforeCount = arr.length;
-            miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+            miniCalendarStateJournal.trainingLogs[dateKey] = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
             var afterCount = miniCalendarStateJournal.trainingLogs[dateKey].length;
             if (beforeCount !== afterCount) {
-              console.log('[MiniCalendarJournal] Strava 로그 필터링 (병합 중):', {
-                dateKey: dateKey,
-                before: beforeCount,
-                after: afterCount
-              });
+              console.log('[MiniCalendarJournal] Strava 우선 적용 (병합 중):', { dateKey: dateKey, before: beforeCount, after: afterCount });
             }
           }
         });
