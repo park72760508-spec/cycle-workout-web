@@ -6024,7 +6024,7 @@
       const modal = document.getElementById('weeklyTop10Modal');
       const body = document.getElementById('weeklyTop10Body');
       if (!modal || !body) return;
-      body.innerHTML = '<div style="text-align:center; padding:24px;">로딩 중...</div>';
+      body.innerHTML = '<div class="weekly-top10-loading"><div class="weekly-top10-spinner"></div><p class="weekly-top10-loading-text">로딩 중....</p></div>';
       modal.classList.remove('hidden');
       try {
         const url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
