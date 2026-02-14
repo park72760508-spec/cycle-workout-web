@@ -1,13 +1,12 @@
 /**
  * Pull-to-Refresh Blocker (STELVIO AI)
  * - CSS(overscroll-behavior-y)만으로 부족한 환경(iOS Bluefy 등) 대응
- * - 특정 화면에서만 활성화/해제 가능한 재사용 유틸
+ * - 인증 화면: body 잠금 + #authScreen 요소에만 터치 차단 → 스크롤 유지, Pull-to-refresh만 차단
  *
  * 사용법:
- * 1) 화면 ID로 한 줄 적용: enableForScreen('authScreen') → cleanup 반환
- * 2) iOS Bluefy 등 강한 차단: enableForScreen('authScreen', { documentCapture: true }) + lockBodyScroll(true)
- * 3) app.js에서 다른 화면 추가: PULL_TO_REFRESH_BLOCKED_SCREENS에 ID만 추가
- * 4) 요소 직접 지정: enablePullToRefreshBlock(document.getElementById('myScreen')) → cleanup 반환
+ * 1) authScreen: enableForScreen('authScreen') + lockBodyScroll(true) → 요소 기준 차단, 내부 스크롤 가능
+ * 2) app.js에서 다른 화면 추가: PULL_TO_REFRESH_BLOCKED_SCREENS에 ID만 추가
+ * 3) 요소 직접 지정: enablePullToRefreshBlock(document.getElementById('myScreen')) → cleanup 반환
  */
 
 (function (global) {
