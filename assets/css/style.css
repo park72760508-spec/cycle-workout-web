@@ -40,6 +40,12 @@
 /* ========== BASE / RESET (공통) ========== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Pull-to-refresh 차단: 모바일(Android Chrome, iOS Bluefy 등)에서 아래로 당길 때 새로고침 방지 */
+html, body {
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ========== 디바이스 연결 방식 슬라이드 스위치 ========== */
 .device-connection-switch-container {
   user-select: none;
