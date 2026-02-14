@@ -1248,9 +1248,11 @@ exports.finalizeWeeklyRanking = onSchedule(
       const snap = await userRef.get();
       if (!snap.exists) continue;
       const data = snap.data();
-      const rem = Number(data.rem_points || 0) + points[i];
-      await userRef.update({ rem_points: rem });
-      console.log("[finalizeWeeklyRanking] 포인트 지급:", (i + 1) + "등", u.name, "+" + points[i] + "SP → rem_points:", rem);
+      const add = points[i];
+      const rem = Number(data.rem_points || 0) + add;
+      const acc = Number(data.acc_points || 0) + add;
+      await userRef.update({ rem_points: rem, acc_points: acc });
+      console.log("[finalizeWeeklyRanking] 포인트 지급:", (i + 1) + "등", u.name, "+" + add + "SP → rem_points:", rem, ", acc_points:", acc);
     }
     console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, top3: top3.map((e) => e.name) });
   }
