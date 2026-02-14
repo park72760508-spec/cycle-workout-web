@@ -711,6 +711,24 @@ function getYesterdayAfterBefore() {
   return { afterUnix, beforeUnix, dateFrom, dateTo };
 }
 
+/**
+ * 한국(Asia/Seoul) 기준 "오늘" 00:00~23:59 구간을 반환.
+ * 일요일 19시 당일 Strava 수집 스케줄에서 사용.
+ */
+function getTodayAfterBefore() {
+  const now = new Date();
+  const todaySeoulStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todaySeoulStr.split("-").map(Number);
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateFrom = `${y}-${pad(m)}-${pad(d)}`;
+  const dateTo = dateFrom;
+  const startSeoul = new Date(`${dateFrom}T00:00:00+09:00`);
+  const endSeoul = new Date(`${dateTo}T23:59:59.999+09:00`);
+  const afterUnix = Math.floor(startSeoul.getTime() / 1000);
+  const beforeUnix = Math.floor(endSeoul.getTime() / 1000);
+  return { afterUnix, beforeUnix, dateFrom, dateTo };
+}
+
 async function getStelvioLogDates(db, userId) {
   const dates = new Set();
   const snapshot = await db.collection("users").doc(userId).collection("logs").get();
@@ -820,9 +838,126 @@ async function updateUserMileageInFirestore(db, userId, todayTss) {
 }
 
 /**
- * 매일 새벽 2시(Asia/Seoul)에 Firestore users 중 strava_refresh_token이 있는 사용자에 대해
- * 전날 Strava 활동을 조회해 users/{userId}/logs에 저장하고 포인트(acc_points, rem_points)를 반영.
- * 수동 동기화(최근 1/3/6개월, 오늘)와 동일하게 Firebase(Firestore)만 사용.
+ * 지정 구간(afterUnix~beforeUnix)에 대해 Strava 로그 수집 및 Firestore 반영.
+ * stravaSyncPreviousDay(전날) / stravaSyncSunday(일요일 당일 19시)에서 공통 사용.
+ */
+async function runStravaSyncForRange(db, { afterUnix, beforeUnix, dateFrom, dateTo }, logPrefix) {
+  const prefix = logPrefix || "[stravaSync]";
+  const errors = [];
+  let processed = 0;
+  let newActivitiesTotal = 0;
+  const totalTssByUser = {};
+  console.log(`${prefix} 시작`, { dateFrom, dateTo, afterUnix, beforeUnix });
+
+  const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+  if (usersSnap.empty) {
+    console.log(`${prefix} Strava 연결 사용자 없음`);
+    return;
+  }
+
+  for (const doc of usersSnap.docs) {
+    const userId = doc.id;
+    const userData = doc.data();
+    const ftp = Number(userData.ftp) || 0;
+    let accessToken;
+    try {
+      const tokenResult = await refreshStravaTokenForUser(db, userId);
+      accessToken = tokenResult.accessToken;
+    } catch (e) {
+      errors.push(`사용자 ${userId}: 토큰 갱신 실패 - ${e.message}`);
+      continue;
+    }
+
+    const actRes = await fetch(
+      `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const activities = await actRes.json().catch(() => []);
+    if (!actRes.ok) {
+      errors.push(`사용자 ${userId}: 활동 조회 실패 - ${actRes.status}`);
+      continue;
+    }
+
+    processed += 1;
+    const existingIds = await getExistingStravaActivityIds(db, userId);
+    const stelvioDates = await getStelvioLogDates(db, userId);
+    const logsRef = db.collection("users").doc(userId).collection("logs");
+    let userTss = 0;
+
+    for (const act of Array.isArray(activities) ? activities : []) {
+      const actId = String(act.id);
+      if (existingIds.has(actId)) continue;
+
+      let detailedActivity = act;
+      const detailRes = await fetchStravaActivityDetail(accessToken, actId);
+      if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
+
+      const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
+      const dateStr = mapped.date || "";
+      const tssAppliedAt = new Date().toISOString();
+
+      const logDoc = {
+        activity_id: mapped.activity_id,
+        user_id: mapped.user_id,
+        source: mapped.source,
+        date: mapped.date,
+        title: mapped.title,
+        distance_km: mapped.distance_km,
+        duration_sec: mapped.duration_sec,
+        time: mapped.time,
+        avg_cadence: mapped.avg_cadence,
+        avg_hr: mapped.avg_hr,
+        max_hr: mapped.max_hr,
+        avg_watts: mapped.avg_watts,
+        max_watts: mapped.max_watts,
+        weighted_watts: mapped.weighted_watts,
+        kilojoules: mapped.kilojoules,
+        elevation_gain: mapped.elevation_gain,
+        rpe: mapped.rpe,
+        ftp_at_time: mapped.ftp_at_time,
+        if: mapped.if,
+        tss: mapped.tss,
+        efficiency_factor: mapped.efficiency_factor,
+        time_in_zones: mapped.time_in_zones,
+        earned_points: mapped.earned_points,
+        workout_id: mapped.workout_id,
+        tss_applied: true,
+        tss_applied_at: tssAppliedAt,
+        created_at: mapped.created_at,
+      };
+      await logsRef.add(logDoc);
+      existingIds.add(actId);
+      newActivitiesTotal += 1;
+      if (!stelvioDates.has(dateStr)) userTss += (mapped.tss || 0);
+    }
+
+    if (userTss > 0) {
+      totalTssByUser[userId] = (totalTssByUser[userId] || 0) + userTss;
+    }
+  }
+
+  for (const uid of Object.keys(totalTssByUser)) {
+    const tss = totalTssByUser[uid];
+    if (tss <= 0) continue;
+    try {
+      await updateUserMileageInFirestore(db, uid, tss);
+    } catch (e) {
+      errors.push(`사용자 ${uid}: 포인트 업데이트 실패 - ${e.message}`);
+    }
+  }
+
+  console.log(`${prefix} 완료`, {
+    processed,
+    newActivities: newActivitiesTotal,
+    errors: errors.length,
+    dateFrom,
+    dateTo,
+  });
+  if (errors.length) console.warn(`${prefix} 오류:`, errors);
+}
+
+/**
+ * 매일 새벽 2시(Asia/Seoul)에 전날 Strava 활동 수집.
  */
 const stravaSyncScheduleOptions = { schedule: "0 2 * * *", timeZone: "Asia/Seoul" };
 if (STRAVA_CLIENT_SECRET) {
@@ -832,118 +967,138 @@ exports.stravaSyncPreviousDay = onSchedule(
   stravaSyncScheduleOptions,
   async (event) => {
     const db = admin.firestore();
-    const errors = [];
-    let processed = 0;
-    let newActivitiesTotal = 0;
-    const totalTssByUser = {};
-    const { afterUnix, beforeUnix, dateFrom, dateTo } = getYesterdayAfterBefore();
-    console.log("[stravaSyncPreviousDay] 시작", { dateFrom, dateTo, afterUnix, beforeUnix });
+    const range = getYesterdayAfterBefore();
+    await runStravaSyncForRange(db, range, "[stravaSyncPreviousDay]");
+  }
+);
 
-    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
-    if (usersSnap.empty) {
-      console.log("[stravaSyncPreviousDay] Strava 연결 사용자 없음");
+/**
+ * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집.
+ * 순위 확정(일요일 21시) 전에 당일 데이터를 반영하기 위함.
+ */
+const stravaSyncSundayOptions = { schedule: "0 19 * * 0", timeZone: "Asia/Seoul" };
+if (STRAVA_CLIENT_SECRET) {
+  stravaSyncSundayOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.stravaSyncSunday = onSchedule(
+  stravaSyncSundayOptions,
+  async (event) => {
+    const db = admin.firestore();
+    const range = getTodayAfterBefore();
+    await runStravaSyncForRange(db, range, "[stravaSyncSunday]");
+  }
+);
+
+// ---------- 주간 마일리지 TOP10 랭킹 (Choose Your Path 입장 시 팝업) ----------
+/** 현재 주 월요일 00:00 ~ 오늘 23:59 (Asia/Seoul) 날짜 문자열 반환 */
+function getWeekRangeSeoul() {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const today = new Date(y, m - 1, d);
+  const dayOfWeek = today.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  return { startStr, endStr };
+}
+
+/** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) */
+async function getWeeklyTssForUser(db, userId, startStr, endStr) {
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  const byDate = {};
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
+    const tss = Number(d.tss) || 0;
+    const isStrava = String(d.source || "").toLowerCase() === "strava";
+    if (!byDate[dateStr]) byDate[dateStr] = { strava: 0, stelvio: 0 };
+    if (isStrava) byDate[dateStr].strava += tss;
+    else byDate[dateStr].stelvio += tss;
+  });
+  let total = 0;
+  Object.keys(byDate).forEach((dateStr) => {
+    const o = byDate[dateStr];
+    total += o.strava > 0 ? o.strava : o.stelvio;
+  });
+  return total;
+}
+
+/** 주간 랭킹 TOP10 조회 (월~오늘, Asia/Seoul) */
+exports.getWeeklyRanking = onRequest(
+  { cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
       return;
     }
-
+    const db = admin.firestore();
+    const { startStr, endStr } = getWeekRangeSeoul();
+    const usersSnap = await db.collection("users").get();
+    const entries = [];
     for (const doc of usersSnap.docs) {
       const userId = doc.id;
-      const userData = doc.data();
-      const ftp = Number(userData.ftp) || 0;
-      let accessToken;
-      try {
-        const tokenResult = await refreshStravaTokenForUser(db, userId);
-        accessToken = tokenResult.accessToken;
-      } catch (e) {
-        errors.push(`사용자 ${userId}: 토큰 갱신 실패 - ${e.message}`);
-        continue;
-      }
-
-      const actRes = await fetch(
-        `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=50`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const activities = await actRes.json().catch(() => []);
-      if (!actRes.ok) {
-        errors.push(`사용자 ${userId}: 활동 조회 실패 - ${actRes.status}`);
-        continue;
-      }
-
-      processed += 1;
-      const existingIds = await getExistingStravaActivityIds(db, userId);
-      const stelvioDates = await getStelvioLogDates(db, userId);
-      const logsRef = db.collection("users").doc(userId).collection("logs");
-      let userTss = 0;
-
-      for (const act of Array.isArray(activities) ? activities : []) {
-        const actId = String(act.id);
-        if (existingIds.has(actId)) continue;
-
-        // 수동 동기화와 동일: 상세 API로 avg_hr, max_hr, elevation_gain 등 전체 필드 확보
-        let detailedActivity = act;
-        const detailRes = await fetchStravaActivityDetail(accessToken, actId);
-        if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
-
-        const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
-        const dateStr = mapped.date || "";
-        const tssAppliedAt = new Date().toISOString();
-
-        const logDoc = {
-          activity_id: mapped.activity_id,
-          user_id: mapped.user_id,
-          source: mapped.source,
-          date: mapped.date,
-          title: mapped.title,
-          distance_km: mapped.distance_km,
-          duration_sec: mapped.duration_sec,
-          time: mapped.time,
-          avg_cadence: mapped.avg_cadence,
-          avg_hr: mapped.avg_hr,
-          max_hr: mapped.max_hr,
-          avg_watts: mapped.avg_watts,
-          max_watts: mapped.max_watts,
-          weighted_watts: mapped.weighted_watts,
-          kilojoules: mapped.kilojoules,
-          elevation_gain: mapped.elevation_gain,
-          rpe: mapped.rpe,
-          ftp_at_time: mapped.ftp_at_time,
-          if: mapped.if,
-          tss: mapped.tss,
-          efficiency_factor: mapped.efficiency_factor,
-          time_in_zones: mapped.time_in_zones,
-          earned_points: mapped.earned_points,
-          workout_id: mapped.workout_id,
-          tss_applied: true,
-          tss_applied_at: tssAppliedAt,
-          created_at: mapped.created_at,
-        };
-        await logsRef.add(logDoc);
-        existingIds.add(actId);
-        newActivitiesTotal += 1;
-        if (!stelvioDates.has(dateStr)) userTss += (mapped.tss || 0);
-      }
-
-      if (userTss > 0) {
-        totalTssByUser[userId] = (totalTssByUser[userId] || 0) + userTss;
-      }
+      const name = doc.data().name || "(이름 없음)";
+      const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
+      if (totalTss > 0) entries.push({ userId, name, totalTss });
     }
+    entries.sort((a, b) => b.totalTss - a.totalTss);
+    const top10 = entries.slice(0, 10).map((e, i) => ({
+      rank: i + 1,
+      userId: e.userId,
+      name: e.name,
+      totalTss: Math.round(e.totalTss * 100) / 100,
+    }));
+    res.set("Access-Control-Allow-Origin", "*");
+    res.status(200).json({ success: true, ranking: top10, startStr, endStr });
+  }
+);
 
-    for (const uid of Object.keys(totalTssByUser)) {
-      const tss = totalTssByUser[uid];
-      if (tss <= 0) continue;
-      try {
-        await updateUserMileageInFirestore(db, uid, tss);
-      } catch (e) {
-        errors.push(`사용자 ${uid}: 포인트 업데이트 실패 - ${e.message}`);
-      }
+/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 */
+const finalizeWeeklyOptions = { schedule: "0 21 * * 0", timeZone: "Asia/Seoul" };
+exports.finalizeWeeklyRanking = onSchedule(
+  finalizeWeeklyOptions,
+  async (event) => {
+    const db = admin.firestore();
+    const now = new Date();
+    const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    const [y, m, d] = todayStr.split("-").map(Number);
+    const today = new Date(y, m - 1, d);
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+    const pad = (n) => String(n).padStart(2, "0");
+    const startStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+    const endStr = todayStr;
+    const usersSnap = await db.collection("users").get();
+    const entries = [];
+    for (const doc of usersSnap.docs) {
+      const userId = doc.id;
+      const name = doc.data().name || "(이름 없음)";
+      const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
+      if (totalTss > 0) entries.push({ userId, name, totalTss });
     }
-
-    console.log("[stravaSyncPreviousDay] 완료", {
-      processed,
-      newActivities: newActivitiesTotal,
-      errors: errors.length,
-      dateFrom,
-      dateTo,
-    });
-    if (errors.length) console.warn("[stravaSyncPreviousDay] 오류:", errors);
+    entries.sort((a, b) => b.totalTss - a.totalTss);
+    const top3 = entries.slice(0, 3);
+    const points = [100, 50, 30];
+    for (let i = 0; i < top3.length; i++) {
+      const u = top3[i];
+      const userRef = db.collection("users").doc(u.userId);
+      const snap = await userRef.get();
+      if (!snap.exists) continue;
+      const data = snap.data();
+      const rem = Number(data.rem_points || 0) + points[i];
+      await userRef.update({ rem_points: rem });
+      console.log("[finalizeWeeklyRanking] 포인트 지급:", u.rank, u.name, "+" + points[i]);
+    }
+    console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, top3: top3.map((e) => e.name) });
   }
 );
