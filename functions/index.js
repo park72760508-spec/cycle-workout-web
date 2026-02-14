@@ -599,6 +599,91 @@ function computeTssFromActivity(activity, ftp) {
   return Math.max(0, Math.round(tss * 100) / 100);
 }
 
+/** Strava 상세 활동 API 호출 (수동 동기화와 동일한 상세 필드 확보) */
+async function fetchStravaActivityDetail(accessToken, activityId) {
+  const url = `https://www.strava.com/api/v3/activities/${activityId}`;
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return { success: false, error: `Strava ${res.status}` };
+    const activity = await res.json().catch(() => null);
+    return activity ? { success: true, activity } : { success: false, error: "Invalid response" };
+  } catch (e) {
+    return { success: false, error: e.message || "Request failed" };
+  }
+}
+
+/**
+ * Strava 활동 → 로그 스키마 매핑 (수동 동기화 mapStravaActivityToSchema와 동일한 필드)
+ * 상세 API 응답 기준으로 avg_hr, max_hr, avg_cadence, elevation_gain, kilojoules 등 포함.
+ */
+function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
+  const title = activity.name || "";
+  const startDateLocal = activity.start_date_local || activity.start_date || "";
+  let dateStr = "";
+  if (startDateLocal) {
+    try {
+      dateStr = new Date(startDateLocal).toISOString().split("T")[0];
+    } catch (e) {
+      dateStr = String(startDateLocal).split("T")[0] || "";
+    }
+  }
+  const distanceMeters = Number(activity.distance) || 0;
+  const distanceKm = Math.round((distanceMeters / 1000) * 100) / 100;
+  const durationSec = Math.round(Number(activity.moving_time) || 0);
+  const avgCadence = activity.average_cadence != null ? Number(activity.average_cadence) : null;
+  const avgHr = activity.average_heartrate != null ? Number(activity.average_heartrate) : null;
+  const maxHr = activity.max_heartrate != null ? Number(activity.max_heartrate) : null;
+  const avgWatts = activity.average_watts != null ? Number(activity.average_watts) : null;
+  const maxWatts = activity.max_watts != null ? Number(activity.max_watts) : null;
+  const weightedWatts = activity.weighted_average_watts != null ? Number(activity.weighted_average_watts) : null;
+  const kilojoules = activity.kilojoules != null ? Number(activity.kilojoules) : null;
+  const elevationGain = activity.total_elevation_gain != null ? Number(activity.total_elevation_gain) : null;
+  const rpe = activity.perceived_exertion != null ? Number(activity.perceived_exertion) : null;
+  const ftp = Number(ftpAtTime) || 0;
+  const np = weightedWatts != null ? weightedWatts : (avgWatts != null ? avgWatts : 0);
+  let ifValue = null;
+  if (ftp > 0 && np > 0) ifValue = Math.round((np / ftp) * 1000) / 1000;
+  let tss = null;
+  if (ftp > 0 && np > 0 && durationSec > 0 && ifValue != null) {
+    tss = Math.round(((durationSec * np * ifValue) / (ftp * 36)) * 100) / 100;
+    tss = Math.max(0, tss);
+  } else if (ftp > 0 && np > 0 && durationSec > 0) {
+    const ifVal = np / ftp;
+    tss = Math.round(((durationSec * np * ifVal) / (ftp * 36)) * 100) / 100;
+    tss = Math.max(0, tss);
+  }
+  let efficiencyFactor = null;
+  if (np > 0 && avgHr != null && avgHr > 0) efficiencyFactor = Math.round((np / avgHr) * 100) / 100;
+  const now = new Date().toISOString();
+  return {
+    activity_id: String(activity.id || ""),
+    user_id: userId,
+    source: "strava",
+    title,
+    date: dateStr,
+    distance_km: distanceKm,
+    duration_sec: durationSec,
+    time: durationSec,
+    avg_cadence: avgCadence,
+    avg_hr: avgHr,
+    max_hr: maxHr,
+    avg_watts: avgWatts,
+    max_watts: maxWatts,
+    weighted_watts: weightedWatts,
+    kilojoules: kilojoules,
+    elevation_gain: elevationGain,
+    rpe: rpe,
+    ftp_at_time: ftp > 0 ? ftp : null,
+    if: ifValue,
+    tss: tss != null ? tss : 0,
+    efficiency_factor: efficiencyFactor,
+    time_in_zones: null,
+    earned_points: 0,
+    workout_id: null,
+    created_at: now,
+  };
+}
+
 /**
  * 한국(Asia/Seoul) 기준 "전날" 00:00~23:59 구간을 반환.
  * Cloud Functions 서버는 UTC이므로, 서버 시간이 아닌 서울 시간 기준으로 계산해야
@@ -793,37 +878,48 @@ exports.stravaSyncPreviousDay = onSchedule(
         const actId = String(act.id);
         if (existingIds.has(actId)) continue;
 
-        const startDate = act.start_date || act.start_date_local || "";
-        let dateStr = "";
-        if (startDate) {
-          try {
-            dateStr = new Date(startDate).toISOString().split("T")[0];
-          } catch (e) {
-            dateStr = String(startDate).split("T")[0] || "";
-          }
-        }
-        const title = act.name || "";
-        const distanceKm = Math.round(((Number(act.distance) || 0) / 1000) * 100) / 100;
-        const movingTime = Math.round(Number(act.moving_time) || 0);
-        const tss = computeTssFromActivity(act, ftp);
+        // 수동 동기화와 동일: 상세 API로 avg_hr, max_hr, elevation_gain 등 전체 필드 확보
+        let detailedActivity = act;
+        const detailRes = await fetchStravaActivityDetail(accessToken, actId);
+        if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
+
+        const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
+        const dateStr = mapped.date || "";
+        const tssAppliedAt = new Date().toISOString();
 
         const logDoc = {
-          activity_id: actId,
-          user_id: userId,
-          source: "strava",
-          date: dateStr,
-          title,
-          distance_km: distanceKm,
-          duration_sec: movingTime,
-          time: movingTime,
-          tss,
+          activity_id: mapped.activity_id,
+          user_id: mapped.user_id,
+          source: mapped.source,
+          date: mapped.date,
+          title: mapped.title,
+          distance_km: mapped.distance_km,
+          duration_sec: mapped.duration_sec,
+          time: mapped.time,
+          avg_cadence: mapped.avg_cadence,
+          avg_hr: mapped.avg_hr,
+          max_hr: mapped.max_hr,
+          avg_watts: mapped.avg_watts,
+          max_watts: mapped.max_watts,
+          weighted_watts: mapped.weighted_watts,
+          kilojoules: mapped.kilojoules,
+          elevation_gain: mapped.elevation_gain,
+          rpe: mapped.rpe,
+          ftp_at_time: mapped.ftp_at_time,
+          if: mapped.if,
+          tss: mapped.tss,
+          efficiency_factor: mapped.efficiency_factor,
+          time_in_zones: mapped.time_in_zones,
+          earned_points: mapped.earned_points,
+          workout_id: mapped.workout_id,
           tss_applied: true,
-          created_at: new Date().toISOString(),
+          tss_applied_at: tssAppliedAt,
+          created_at: mapped.created_at,
         };
         await logsRef.add(logDoc);
         existingIds.add(actId);
         newActivitiesTotal += 1;
-        if (!stelvioDates.has(dateStr)) userTss += tss;
+        if (!stelvioDates.has(dateStr)) userTss += (mapped.tss || 0);
       }
 
       if (userTss > 0) {
