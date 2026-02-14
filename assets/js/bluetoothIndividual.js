@@ -1211,94 +1211,47 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 }
                 
                 // 모바일 대시보드와 동일한 훈련 결과 저장 로직 적용 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
-                // ✅ 저장 중 애니메이션 표시 → 저장 → 초기화 → 결과 모달 표시
-                
-                // 1단계: 저장 중 모달 표시 (저장 중 애니메이션)
-                showBluetoothTrainingResultModalSaving();
-                
-                // 훈련 종료 전 포인트 값 저장 (결과 화면 표시용)
-                const beforeAccPoints = window.currentUser?.acc_points || 0;
-                const beforeRemPoints = window.currentUser?.rem_points || 0;
-                window.beforeTrainingPoints = {
-                    acc_points: beforeAccPoints,
-                    rem_points: beforeRemPoints
-                };
-                console.log('[BluetoothIndividual] 0️⃣ 훈련 전 포인트 저장:', window.beforeTrainingPoints);
-                
-                // 모바일 개인훈련 대시보드와 동일한 저장 로직 적용
-                Promise.resolve()
-                    .then(() => {
-                        console.log('[BluetoothIndividual] 🚀 결과 저장 시작 (모바일 대시보드와 동일한 로직)');
-                        
-                        // 세션 종료
+                // Android 등에서 탭 백그라운드 시 저장 미완료 방지: 저장 완료까지 await 후 결과 모달 표시
+                (async function bluetoothSaveAndShowResult() {
+                    showBluetoothTrainingResultModalSaving();
+                    const beforeAccPoints = window.currentUser?.acc_points || 0;
+                    const beforeRemPoints = window.currentUser?.rem_points || 0;
+                    window.beforeTrainingPoints = {
+                        acc_points: beforeAccPoints,
+                        rem_points: beforeRemPoints
+                    };
+                    console.log('[BluetoothIndividual] 0️⃣ 훈련 전 포인트 저장:', window.beforeTrainingPoints);
+                    try {
                         if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
                             window.trainingResults.endSession();
-                            console.log('[BluetoothIndividual] ✅ 세션 종료 완료');
                         }
-                        
-                        // 추가 메타데이터 준비
                         const extra = {
                             workoutId: window.currentWorkout?.id || '',
                             workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                            elapsedTime: status?.elapsedTime !== undefined ? status.elapsedTime : (window.lastElapsedTime || 0), // 경과 시간
+                            elapsedTime: status?.elapsedTime !== undefined ? status.elapsedTime : (window.lastElapsedTime || 0),
                             completionType: 'normal',
                             appVersion: '1.0.0',
                             timestamp: new Date().toISOString(),
-                            source: 'bluetooth_individual_dashboard' // 블루투스 개인훈련 대시보드에서 저장됨을 표시
+                            source: 'bluetooth_individual_dashboard'
                         };
-                        
-                        console.log('[BluetoothIndividual] 📋 저장 메타데이터:', extra);
-                        
-                        // 결과 저장 (resultManager.js의 saveTrainingResult 호출)
-                        // 이 함수 내부에서 window.saveTrainingSession()이 호출되어 Firebase에 저장됨
-                        if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
-                            return window.trainingResults.saveTrainingResult(extra);
-                        } else {
-                            console.warn('[BluetoothIndividual] ⚠️ window.trainingResults.saveTrainingResult 함수가 없습니다.');
-                            return Promise.resolve({ success: false, error: 'trainingResults not initialized' });
-                        }
-                    })
-                    .then((saveResult) => {
+                        console.log('[BluetoothIndividual] 🚀 결과 저장 시작 (저장 완료까지 대기)');
+                        var saveResult = (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function')
+                            ? await window.trainingResults.saveTrainingResult(extra)
+                            : { success: false, error: 'trainingResults not initialized' };
                         console.log('[BluetoothIndividual] ✅ 저장 결과:', saveResult);
-                        
-                        // 저장 결과 확인 및 알림
-                        if (saveResult?.source === 'local') {
-                            console.log('[BluetoothIndividual] 📱 로컬 저장 모드 - CORS 오류로 서버 저장 실패');
-                            if (typeof showToast === "function") {
-                                showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
-                            }
-                        } else if (saveResult?.source === 'gas') {
-                            console.log('[BluetoothIndividual] 🌐 서버 저장 성공');
-                            if (typeof showToast === "function") {
-                                showToast("훈련 결과가 서버에 저장되었습니다");
-                            }
-                        } else if (saveResult?.success) {
-                            console.log('[BluetoothIndividual] ✅ Firebase Firestore 저장 성공');
-                            // 마일리지 업데이트 결과 확인 (resultManager.js에서 이미 window.lastMileageUpdate에 저장됨)
-                            if (window.lastMileageUpdate && window.lastMileageUpdate.success) {
-                                console.log('[BluetoothIndividual] ✅ 포인트 적립 완료:', window.lastMileageUpdate);
-                            }
+                        if (saveResult?.source === 'local' && typeof showToast === "function") {
+                            showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
+                        } else if (saveResult?.source === 'gas' && typeof showToast === "function") {
+                            showToast("훈련 결과가 서버에 저장되었습니다");
+                        } else if (saveResult?.success && window.lastMileageUpdate?.success) {
+                            console.log('[BluetoothIndividual] ✅ 포인트 적립 완료:', window.lastMileageUpdate);
                         }
-                        
-                        return window.trainingResults?.initializeResultScreen?.();
-                    })
-                    .catch((e) => { 
+                        await (window.trainingResults?.initializeResultScreen?.() || Promise.resolve());
+                    } catch (e) {
                         console.error('[BluetoothIndividual] ❌ 저장 중 오류:', e);
-                        // 오류가 발생해도 결과 화면 초기화 시도
-                        return window.trainingResults?.initializeResultScreen?.().catch(err => {
-                            console.warn('[BluetoothIndividual] initializeResultScreen error', err);
-                        });
-                    })
-                    .then(() => {
-                        console.log('[BluetoothIndividual] ✅ 결과 화면 초기화 완료');
-                        // 저장 완료 후 결과 팝업 표시
-                        showBluetoothTrainingResultModal(status);
-                    })
-                    .catch((error) => {
-                        console.error('[BluetoothIndividual] ❌ 훈련 결과 저장/초기화 실패:', error);
-                        // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
-                        showBluetoothTrainingResultModal(status);
-                    });
+                    }
+                    showBluetoothTrainingResultModal(status);
+                })();
             }
         }
         

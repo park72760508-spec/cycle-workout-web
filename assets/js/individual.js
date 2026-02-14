@@ -312,44 +312,36 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     console.log('[Individual] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
                 }
                 
-                // 모바일 대시보드와 동일한 훈련 결과 저장 로직 적용
-                // ✅ await 없이 순차 실행(저장 → 초기화 → 결과 모달 표시)
-                Promise.resolve()
-                    .then(() => {
-                        console.log('[Individual] 🚀 1단계: 결과 저장 시작');
-                        return window.saveTrainingResultAtEnd?.();
-                    })
-                    .then((saveResult) => {
-                        console.log('[Individual] ✅ 1단계 완료:', saveResult);
-                        
-                        // 저장 결과 확인 및 알림
+                // Android 등에서 탭 백그라운드 시 Promise 미완료로 저장이 누락되는 문제 방지:
+                // 저장이 완료될 때까지 await 후 결과 모달 표시 (저장 완료 전에 화면 전환되지 않도록)
+                (async function individualSaveAndShowResult() {
+                    if (typeof showToast === "function") {
+                        showToast("훈련 결과 저장 중입니다...", "info");
+                    }
+                    console.log('[Individual] 🚀 결과 저장 시작 (저장 완료까지 대기)');
+                    try {
+                        var saveResult = await (window.saveTrainingResultAtEnd?.() || Promise.resolve(null));
+                        console.log('[Individual] ✅ 저장 완료:', saveResult);
                         if (saveResult?.saveResult?.source === 'local') {
-                            console.log('[Individual] 📱 로컬 저장 모드 - CORS 오류로 서버 저장 실패');
                             if (typeof showToast === "function") {
                                 showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
                             }
                         } else if (saveResult?.saveResult?.source === 'gas') {
-                            console.log('[Individual] 🌐 서버 저장 성공');
                             if (typeof showToast === "function") {
                                 showToast("훈련 결과가 서버에 저장되었습니다");
                             }
                         }
-                        
-                        return window.trainingResults?.initializeResultScreen?.();
-                    })
-                    .catch((e) => { 
-                        console.warn('[Individual] initializeResultScreen error', e); 
-                    })
-                    .then(() => {
-                        console.log('[Individual] ✅ 2단계: 결과 화면 초기화 완료');
-                        // 결과 팝업 표시
+                        await (window.trainingResults?.initializeResultScreen?.() || Promise.resolve());
+                    } catch (e) {
+                        console.warn('[Individual] initializeResultScreen error', e);
+                    }
+                    try {
                         showTrainingResultModal(status);
-                    })
-                    .catch((error) => {
-                        console.error('[Individual] ❌ 훈련 결과 저장/초기화 실패:', error);
-                        // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
+                    } catch (err) {
+                        console.error('[Individual] ❌ 훈련 결과 저장/초기화 실패:', err);
                         showTrainingResultModal(status);
-                    });
+                    }
+                })();
             }
         }
         

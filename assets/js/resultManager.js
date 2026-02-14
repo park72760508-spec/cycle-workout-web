@@ -447,7 +447,22 @@ async function saveTrainingResult(extra = {}) {
             ...trainingData,
             powerDataCount: trainingData.powerData?.length || 0
           });
-          const saveResult = await window.saveTrainingSession(currentUserId, trainingData);
+          // Android 등 모바일에서 네트워크 불안정 시 재시도 (최대 3회, 1초 간격)
+          var saveResult = null;
+          var lastErr = null;
+          for (var attempt = 1; attempt <= 3; attempt++) {
+            try {
+              saveResult = await window.saveTrainingSession(currentUserId, trainingData);
+              if (saveResult && saveResult.success) break;
+              lastErr = saveResult?.message || '저장 실패';
+            } catch (e) {
+              lastErr = e;
+              console.warn('[saveTrainingResult] saveTrainingSession 시도 ' + attempt + '/3 실패:', e?.message || e);
+              if (attempt < 3) {
+                await new Promise(function(r) { setTimeout(r, 1000); });
+              }
+            }
+          }
           console.log('[saveTrainingResult] 📥 saveTrainingSession 응답:', saveResult);
           
           if (saveResult && saveResult.success) {
