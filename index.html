@@ -5987,6 +5987,12 @@
         </div>
       `;
       
+      // Powered by Strava: source === "strava" 인 경우에만 푸터 표시
+      const stravaFooter = document.getElementById('trainingDetailStravaFooter');
+      if (stravaFooter) {
+        stravaFooter.style.display = String(log.source || '').toLowerCase() === 'strava' ? 'block' : 'none';
+      }
+      
       // 모달 표시
       modal.classList.remove('hidden');
     }
@@ -6000,6 +6006,63 @@
         modal.classList.add('hidden');
       }
     }
+
+    /**
+     * 주간 마일리지 TOP10 모달 닫기
+     */
+    function closeWeeklyTop10Modal() {
+      const modal = document.getElementById('weeklyTop10Modal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    }
+
+    /**
+     * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
+     */
+    async function fetchAndShowWeeklyTop10Modal() {
+      const modal = document.getElementById('weeklyTop10Modal');
+      const body = document.getElementById('weeklyTop10Body');
+      if (!modal || !body) return;
+      body.innerHTML = '<div style="text-align:center; padding:24px;">로딩 중...</div>';
+      modal.classList.remove('hidden');
+      try {
+        const url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
+        const res = await fetch(url, { method: 'GET', mode: 'cors' });
+        const data = await res.json().catch(function() { return { success: false }; });
+        if (!data.success || !Array.isArray(data.ranking)) {
+          body.innerHTML = '<div style="text-align:center; padding:24px;">랭킹을 불러올 수 없습니다.</div>';
+          return;
+        }
+        var list = data.ranking;
+        var medals = ['🥇', '🥈', '🥉'];
+        var html = '';
+        list.forEach(function(item, idx) {
+          var rank = item.rank || (idx + 1);
+          var name = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var tss = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
+          html += '<div class="weekly-rank-item">';
+          if (rank <= 3) {
+            html += '<span class="weekly-rank-medal">' + medals[rank - 1] + '</span>';
+          }
+          html += '<span class="weekly-rank-position">' + rank + '위</span>';
+          html += '<span class="weekly-rank-name">' + name + '</span>';
+          html += '<span class="weekly-rank-tss">' + tss + ' TSS</span>';
+          html += '</div>';
+        });
+        if (html === '') {
+          body.innerHTML = '<div style="text-align:center; padding:24px;">이번 주 훈련 기록이 없습니다.</div>';
+        } else {
+          body.innerHTML = html;
+        }
+      } catch (e) {
+        console.warn('[WeeklyTop10] 조회 실패:', e);
+        body.innerHTML = '<div style="text-align:center; padding:24px;">랭킹을 불러올 수 없습니다.</div>';
+      }
+    }
+
+    window.closeWeeklyTop10Modal = closeWeeklyTop10Modal;
+    window.fetchAndShowWeeklyTop10Modal = fetchAndShowWeeklyTop10Modal;
 
     /**
      * 프로필 화면 진입 시 달력 초기화
@@ -7164,6 +7227,12 @@
           <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
       `;
+      
+      // Powered by Strava: source === "strava" 인 경우에만 푸터 표시 (Stelvio 로그는 미표시)
+      const stravaFooterJournal = document.getElementById('trainingDetailStravaFooter');
+      if (stravaFooterJournal) {
+        stravaFooterJournal.style.display = String(log.source || '').toLowerCase() === 'strava' ? 'block' : 'none';
+      }
       
       // 모달 표시
       modal.classList.remove('hidden');
@@ -13104,6 +13173,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 300);
         }
         
+        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (로그인 사용자)
+        if (screenId === 'basecampScreen') {
+          setTimeout(function() {
+            var cur = window.currentUser || (function() {
+              try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
+            })();
+            if (cur && (cur.id || cur.uid) && typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
+              window.fetchAndShowWeeklyTop10Modal();
+            }
+          }, 400);
+        }
+        
         // Training Journal: initializeCurrentScreen 호출 보장
         if (screenId === 'trainingJournalScreen') {
           console.log('[showScreen] trainingJournalScreen 감지 - initializeCurrentScreen 호출 시도');
@@ -13232,6 +13313,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     </div>
   </div>
 
+  <!-- 주간 마일리지 TOP10 모달 (Choose Your Path 입장 시 표시, 훈련 상세 모달과 동일 디자인) -->
+  <div id="weeklyTop10Modal" class="training-detail-modal hidden" onclick="if(event.target === this) closeWeeklyTop10Modal();">
+    <div class="training-detail-modal-content" onclick="event.stopPropagation();">
+      <div class="training-detail-header">
+        <h3 class="training-detail-title">STELVIO 주간 마일리지 TOP10</h3>
+        <button class="training-detail-close" onclick="closeWeeklyTop10Modal()" aria-label="닫기">✖</button>
+      </div>
+      <div class="training-detail-body" id="weeklyTop10Body">
+        <!-- 랭킹 목록이 여기에 동적으로 표시됩니다 -->
+      </div>
+      <div class="training-detail-strava-footer" style="display: flex; justify-content: center; padding: 16px;">
+        <button type="button" class="btn btn-primary" onclick="closeWeeklyTop10Modal()" style="min-width: 120px;">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 훈련 상세 정보 모달 -->
   <div id="trainingDetailModal" class="training-detail-modal hidden" onclick="if(event.target === this) closeTrainingDetailModal();">
     <div class="training-detail-modal-content" onclick="event.stopPropagation();">
@@ -13242,11 +13339,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       <div class="training-detail-body" id="trainingDetailBody">
         <!-- 상세 정보가 여기에 동적으로 표시됩니다 -->
       </div>
-      <!-- api_strava.png 이미지 하단 삽입 -->
-      <div class="training-detail-strava-footer">
-        <a href="https://www.strava.com" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; padding: 12px 0;">
-          <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: block; margin: 0 auto;" />
-        </a>
+      <!-- Powered by Strava: source === "strava" 인 경우에만 표시, 링크 없음 -->
+      <div id="trainingDetailStravaFooter" class="training-detail-strava-footer" style="display: none;">
+        <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: block; margin: 0 auto;" />
       </div>
     </div>
   </div>
