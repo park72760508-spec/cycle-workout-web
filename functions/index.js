@@ -1268,6 +1268,9 @@ if (fs.existsSync(libPath)) {
     if (naverSubscription && naverSubscription.naverSubscriptionSyncSchedule) {
       exports.naverSubscriptionSyncSchedule = naverSubscription.naverSubscriptionSyncSchedule;
     }
+    if (naverSubscription && naverSubscription.naverSubscriptionSyncTest) {
+      exports.naverSubscriptionSyncTest = naverSubscription.naverSubscriptionSyncTest;
+    }
   } catch (e) {
     console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
   }
