@@ -195,10 +195,9 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     }
 
     /* 상품별 기간(optionManageCode/productOption) × 수량(quantity). 없으면 기본 31일·수량 1 */
-    const { totalDays, matchedCode } = detail
+    const { totalDays } = detail
       ? computeSubscriptionDaysFromProduct(detail)
-      : { totalDays: DEFAULT_SUBSCRIPTION_DAYS, matchedCode: undefined };
-    const periodLabel = matchedCode ?? `${totalDays}일`;
+      : { totalDays: DEFAULT_SUBSCRIPTION_DAYS };
 
     try {
       const { newEndDate } = await applySubscription(db, user.userId, productOrderId, totalDays);
