@@ -83,21 +83,27 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     lastChangedTo: range.lastChangedTo,
     limitCount: 100,
   });
-  const { orders } = result;
-  if (orders.length === 0) {
+  const { orders, count } = result;
+  const lastChangeStatusesLength = orders.length;
+  if (lastChangeStatusesLength === 0) {
     console.warn(
-      "[naverSubscription] PAYED 조회 0건. 구간:",
+      "[naverSubscription] PAYED 조회 0건 (lastChangeStatuses.length=0). 구간:",
       range.lastChangedFrom,
       "~",
       range.lastChangedTo,
       "— naverApi 로그에서 전체 Response Body 확인"
     );
+  } else {
+    console.log(
+      "[naverSubscription] PAYED 조회",
+      lastChangeStatusesLength,
+      "건 (lastChangeStatuses.length=",
+      lastChangeStatusesLength,
+      ", response.data.count=",
+      count ?? "-",
+      ")"
+    );
   }
-  console.log(
-    "[naverSubscription] PAYED 조회",
-    orders.length,
-    "건 (From=Now-24h, To=Now, KST +09:00)"
-  );
 
   const matchingFailures: Array<{
     productOrderId: string;

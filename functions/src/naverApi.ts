@@ -79,8 +79,13 @@ export interface ProductOrderItem {
   [key: string]: unknown;
 }
 
+/** 네이버 API 실제 응답: data.lastChangeStatuses(배열), data.count(건수) */
 export interface LastChangedStatusesResponse {
-  data?: ProductOrderItem[];
+  data?: {
+    lastChangeStatuses?: ProductOrderItem[];
+    count?: number;
+    [key: string]: unknown;
+  };
   moreSequence?: number;
   [key: string]: unknown;
 }
@@ -95,7 +100,7 @@ export async function getLastChangedOrders(
     limitCount?: number;
     moreSequence?: number;
   }
-): Promise<{ orders: ProductOrderItem[]; moreSequence?: number }> {
+): Promise<{ orders: ProductOrderItem[]; count?: number; moreSequence?: number }> {
   const params = new URLSearchParams({
     lastChangedFrom: options.lastChangedFrom,
     lastChangedType,
@@ -116,19 +121,29 @@ export async function getLastChangedOrders(
   }
 
   const data = (await res.json()) as LastChangedStatusesResponse;
-  const orders = Array.isArray(data.data) ? data.data : [];
-  if (orders.length === 0) {
+  const lastChangeStatuses = Array.isArray(data.data?.lastChangeStatuses)
+    ? data.data.lastChangeStatuses
+    : [];
+  const count = data.data?.count;
+  if (lastChangeStatuses.length === 0) {
     const reqParams = Object.fromEntries(params.entries());
     const resBodyStr = JSON.stringify(data);
     const truncate = resBodyStr.length > 2000 ? resBodyStr.slice(0, 2000) + "...(truncated)" : resBodyStr;
     console.warn(
-      "[naverApi] last-changed-statuses 응답 0건. 요청 params:",
+      "[naverApi] last-changed-statuses 응답 0건 (lastChangeStatuses.length=0). 요청 params:",
       reqParams,
       "| Response Body(디버깅용):",
       truncate
     );
+  } else {
+    console.log(
+      "[naverApi] last-changed-statuses 수신: lastChangeStatuses.length=",
+      lastChangeStatuses.length,
+      "response.data.count=",
+      count
+    );
   }
-  return { orders, moreSequence: data.moreSequence };
+  return { orders: lastChangeStatuses, count, moreSequence: data.moreSequence };
 }
 
 /** 주문 옵션/연락처에서 전화번호 또는 사용자 식별자 추출 (1순위: 옵션, 2순위: 주문자 연락처) */
