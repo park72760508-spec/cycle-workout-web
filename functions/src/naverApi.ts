@@ -118,11 +118,14 @@ export async function getLastChangedOrders(
   const data = (await res.json()) as LastChangedStatusesResponse;
   const orders = Array.isArray(data.data) ? data.data : [];
   if (orders.length === 0) {
+    const reqParams = Object.fromEntries(params.entries());
+    const resBodyStr = JSON.stringify(data);
+    const truncate = resBodyStr.length > 2000 ? resBodyStr.slice(0, 2000) + "...(truncated)" : resBodyStr;
     console.warn(
       "[naverApi] last-changed-statuses 응답 0건. 요청 params:",
-      Object.fromEntries(params.entries()),
-      "응답 키:",
-      Object.keys(data)
+      reqParams,
+      "| Response Body(디버깅용):",
+      truncate
     );
   }
   return { orders, moreSequence: data.moreSequence };

@@ -57,7 +57,7 @@ export async function isOrderProcessed(
   return doc.exists;
 }
 
-/** PAYED 적용 시 처리 기록 저장 (환불 시 회수용으로 addedDays 저장) */
+/** PAYED 적용 시 처리 기록 저장 (환불 시 회수용으로 addedDays 저장). productOrderId를 문서 ID로 사용하여 upsert: 기존 건은 덮어쓰기, 신규 건은 추가 */
 export async function markOrderProcessed(
   db: Firestore,
   productOrderId: string,

@@ -33,7 +33,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). lastChangedTo 생략 시 API가 lastChangedFrom+24h로 조회 */
+/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). 타임존 +09:00 명시 */
 function toKstIso8601(date: Date): string {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
   const pad = (n: number) => n.toString().padStart(2, "0");
@@ -46,44 +46,47 @@ function toKstIso8601(date: Date): string {
   const ms = kst.getUTCMilliseconds();
   return `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:${pad(sec)}.${ms.toString().padStart(3, "0")}+09:00`;
 }
-/** lastChangedFrom = 오늘 00:00 KST. lastChangedTo 생략 → API가 +24시간으로 조회. 오늘 결제분 누락 방지 */
-function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo?: string } {
-  const kstMs = Date.now() + 9 * 60 * 60 * 1000;
-  const kstDate = new Date(kstMs);
-  const y = kstDate.getUTCFullYear();
-  const m = kstDate.getUTCMonth();
-  const d = kstDate.getUTCDate();
-  const todayStartKst = new Date(Date.UTC(y, m, d, 0, 0, 0, 0) - 9 * 60 * 60 * 1000);
+
+/** 조회 구간: 실행 시점 기준 최근 48시간 (네이버 API 지연·배치 주기 고려). lastChangedTo 명시로 24h 기본값에 의존하지 않음 */
+function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string } {
+  const now = Date.now();
+  const from = new Date(now - 48 * 60 * 60 * 1000);
+  const to = new Date(now);
   return {
-    lastChangedFrom: toKstIso8601(todayStartKst),
-    lastChangedTo: undefined,
+    lastChangedFrom: toKstIso8601(from),
+    lastChangedTo: toKstIso8601(to),
   };
 }
 
-/** PAYED 주문 처리: 매칭 → 중복 체크 → 구독 적용 → 네이버 발송 처리 */
+/** PAYED 주문 처리: 매칭 → 중복 체크(upsert) → 구독 적용 → 네이버 발송 처리 */
 async function processPayedOrders(accessToken: string): Promise<void> {
   const range = getLastChangedRange();
   console.log(
     "[naverSubscription] PAYED 조회 요청: lastChangedFrom=",
     range.lastChangedFrom,
-    "(lastChangedTo 생략 → API 기본 24시간)"
+    "lastChangedTo=",
+    range.lastChangedTo,
+    "(실행 시점 기준 최근 48시간)"
   );
   const result = await getLastChangedOrders(accessToken, "PAYED", {
-    ...range,
+    lastChangedFrom: range.lastChangedFrom,
+    lastChangedTo: range.lastChangedTo,
     limitCount: 100,
   });
   const { orders } = result;
   if (orders.length === 0) {
     console.warn(
-      "[naverSubscription] PAYED 조회 0건. API 응답 키:",
-      Object.keys(result),
-      "응답에 data 외 다른 키가 있으면 로그로 확인"
+      "[naverSubscription] PAYED 조회 0건. 구간:",
+      range.lastChangedFrom,
+      "~",
+      range.lastChangedTo,
+      "— naverApi 로그에서 전체 Response Body 확인"
     );
   }
   console.log(
     "[naverSubscription] PAYED 조회",
     orders.length,
-    "건 (오늘 00:00 KST 기준 24시간)"
+    "건 (최근 48시간, lastChangedTo 명시)"
   );
 
   const matchingFailures: Array<{
@@ -163,7 +166,8 @@ async function processRevokedOrders(
 ): Promise<void> {
   const range = getLastChangedRange();
   const { orders } = await getLastChangedOrders(accessToken, type, {
-    ...range,
+    lastChangedFrom: range.lastChangedFrom,
+    lastChangedTo: range.lastChangedTo,
     limitCount: 100,
   });
 
