@@ -47,10 +47,10 @@ function toKstIso8601(date: Date): string {
   return `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:${pad(sec)}.${ms.toString().padStart(3, "0")}+09:00`;
 }
 
-/** 조회 구간: 실행 시점 기준 최근 48시간 (네이버 API 지연·배치 주기 고려). lastChangedTo 명시로 24h 기본값에 의존하지 않음 */
+/** 조회 구간: 네이버 API 제한(104140) 준수 — 정확히 24시간. From = Now-24h, To = Now (KST ISO8601, +09:00) */
 function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string } {
   const now = Date.now();
-  const from = new Date(now - 48 * 60 * 60 * 1000);
+  const from = new Date(now - 24 * 60 * 60 * 1000);
   const to = new Date(now);
   return {
     lastChangedFrom: toKstIso8601(from),
@@ -58,16 +58,26 @@ function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string
   };
 }
 
+/** 요청 파라미터 및 구간 검증 로그 (From~To 간격 24시간 이내 확인용) */
+function logLastChangedRange(range: { lastChangedFrom: string; lastChangedTo: string }): void {
+  const fromMs = new Date(range.lastChangedFrom).getTime();
+  const toMs = new Date(range.lastChangedTo).getTime();
+  const intervalHours = (toMs - fromMs) / (60 * 60 * 1000);
+  const within24 = intervalHours > 0 && intervalHours <= 24;
+  console.log(
+    "[naverSubscription] 조회 구간 요청 파라미터:",
+    { lastChangedFrom: range.lastChangedFrom, lastChangedTo: range.lastChangedTo },
+    "| 간격:",
+    intervalHours.toFixed(2),
+    "시간 | 24시간 이내:",
+    within24 ? "OK" : "초과(API 104140 위험)"
+  );
+}
+
 /** PAYED 주문 처리: 매칭 → 중복 체크(upsert) → 구독 적용 → 네이버 발송 처리 */
 async function processPayedOrders(accessToken: string): Promise<void> {
   const range = getLastChangedRange();
-  console.log(
-    "[naverSubscription] PAYED 조회 요청: lastChangedFrom=",
-    range.lastChangedFrom,
-    "lastChangedTo=",
-    range.lastChangedTo,
-    "(실행 시점 기준 최근 48시간)"
-  );
+  logLastChangedRange(range);
   const result = await getLastChangedOrders(accessToken, "PAYED", {
     lastChangedFrom: range.lastChangedFrom,
     lastChangedTo: range.lastChangedTo,
@@ -86,7 +96,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   console.log(
     "[naverSubscription] PAYED 조회",
     orders.length,
-    "건 (최근 48시간, lastChangedTo 명시)"
+    "건 (From=Now-24h, To=Now, KST +09:00)"
   );
 
   const matchingFailures: Array<{
@@ -165,6 +175,7 @@ async function processRevokedOrders(
   type: LastChangedType
 ): Promise<void> {
   const range = getLastChangedRange();
+  logLastChangedRange(range);
   const { orders } = await getLastChangedOrders(accessToken, type, {
     lastChangedFrom: range.lastChangedFrom,
     lastChangedTo: range.lastChangedTo,
