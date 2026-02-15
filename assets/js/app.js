@@ -3247,13 +3247,18 @@ if (!window.showScreen) {
           });
         }
         
-        // 모바일 대시보드에서 다른 화면으로 이동 시 body 스크롤 복원
+        // 모바일/블루투스 개인훈련 대시보드가 아닌 화면에서는 스크롤 허용 (안드로이드 등)
+        // 스크롤 잠금은 mobileDashboardScreen 전용이므로, 다른 화면으로 전환 시 반드시 해제
         if (id !== 'mobileDashboardScreen') {
+          document.body.classList.remove('mobile-dashboard-active');
           document.body.style.overflow = '';
           document.body.style.position = '';
           document.body.style.width = '';
           document.body.style.height = '';
-          document.documentElement.style.overflow = '';
+          if (document.documentElement) {
+            document.documentElement.style.overflow = '';
+            document.documentElement.style.position = '';
+          }
           console.log('✅ Body scroll restored for screen:', id);
         }
         
