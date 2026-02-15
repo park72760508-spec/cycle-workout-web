@@ -16347,20 +16347,16 @@ line[id^="needle-"] {
   /* iOS Safari/Bluefy 추가 대응 */
   -webkit-user-select: none;
   user-select: none;
-  /* 스크롤 방지 */
-  overflow-y: hidden !important;
+  /* 스크롤 허용 (안드로이드 등에서 화면 사용 가능하도록 원복) */
+  overflow-y: auto !important;
   overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* body에도 Pull-to-refresh 방지 적용 (모바일 대시보드 활성화 시) */
+/* body: 모바일 대시보드 활성화 시 스크롤 잠금 제거 (원복 - 안드로이드 스크롤 가능) */
 body.mobile-dashboard-active {
   overscroll-behavior-y: none !important;
   overscroll-behavior: none !important;
-  touch-action: manipulation !important;
-  overflow: hidden !important;
-  position: fixed !important;
-  width: 100% !important;
-  height: 100% !important;
 }
 
 /* 모바일 대시보드 가로 모드 방지 */
