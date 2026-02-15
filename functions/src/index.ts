@@ -33,7 +33,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). 조회 기간 최대 24시간 */
+/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). lastChangedTo 생략 시 API가 lastChangedFrom+24h로 자동 설정 */
 const LAST_CHANGED_WINDOW_HOURS = 24;
 function toKstIso8601(date: Date): string {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
@@ -47,12 +47,13 @@ function toKstIso8601(date: Date): string {
   const ms = kst.getUTCMilliseconds();
   return `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:${pad(sec)}.${ms.toString().padStart(3, "0")}+09:00`;
 }
-function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - LAST_CHANGED_WINDOW_HOURS * 60 * 60 * 1000);
+/** lastChangedFrom만 반환. lastChangedTo는 보내지 않음 → 네이버가 lastChangedFrom 기준 24시간으로 조회 */
+function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo?: string } {
+  const now = new Date();
+  const from = new Date(now.getTime() - LAST_CHANGED_WINDOW_HOURS * 60 * 60 * 1000);
   return {
     lastChangedFrom: toKstIso8601(from),
-    lastChangedTo: toKstIso8601(to),
+    lastChangedTo: undefined,
   };
 }
 
@@ -60,21 +61,26 @@ function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string
 async function processPayedOrders(accessToken: string): Promise<void> {
   const range = getLastChangedRange();
   console.log(
-    "[naverSubscription] PAYED 조회 요청 범위:",
+    "[naverSubscription] PAYED 조회 요청: lastChangedFrom=",
     range.lastChangedFrom,
-    "~",
-    range.lastChangedTo
+    "(lastChangedTo 생략 → API 기본 24시간)"
   );
-  const { orders } = await getLastChangedOrders(accessToken, "PAYED", {
+  const result = await getLastChangedOrders(accessToken, "PAYED", {
     ...range,
     limitCount: 100,
   });
+  const { orders } = result;
+  if (orders.length === 0) {
+    console.warn(
+      "[naverSubscription] PAYED 조회 0건. API 응답 키:",
+      Object.keys(result),
+      "응답에 data 외 다른 키가 있으면 로그로 확인"
+    );
+  }
   console.log(
     "[naverSubscription] PAYED 조회",
     orders.length,
-    "건 (범위: 최근",
-    LAST_CHANGED_WINDOW_HOURS,
-    "시간, KST)"
+    "건 (lastChangedFrom 기준 24시간, KST)"
   );
 
   const matchingFailures: Array<{
