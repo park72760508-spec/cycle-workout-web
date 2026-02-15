@@ -127,6 +127,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   const matchingFailures: Array<{
     productOrderId: string;
     orderId?: string;
+    ordererName?: string | null;
     optionPhoneOrId: string | null;
     ordererTel: string | null;
     reason: string;
@@ -145,9 +146,11 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     let ordererTel: string | null = null;
     let ordererNo: string | null = null;
     let memoOrOptionId: string | null = null;
+    let ordererName: string | null = null;
     if (detail) {
       const extracted = extractContactFromDetail(detail);
       ordererTel = extracted.ordererTel;
+      ordererName = extracted.ordererName;
       ordererNo = extracted.ordererNo;
       optionPhoneOrId = extracted.optionPhoneOrId;
       memoOrOptionId = extracted.memoOrOptionId;
@@ -157,6 +160,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       optionPhoneOrId = fromOrder.optionPhoneOrId;
       ordererTel = fromOrder.ordererTel;
     }
+    /* ordererTel 하이픈 제거·숫자만 비교는 findUserByContact 내부 normalizePhoneOrId에서 수행 */
     const user = await findUserByContact(
       db,
       optionPhoneOrId,
@@ -169,6 +173,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       matchingFailures.push({
         productOrderId,
         orderId: (order.orderId || "").toString(),
+        ordererName,
         optionPhoneOrId,
         ordererTel,
         reason: "전화번호/주문요청사항·옵션(ID)으로 매칭되는 사용자가 없음",
@@ -188,6 +193,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       matchingFailures.push({
         productOrderId,
         orderId: (order.orderId || "").toString(),
+        ordererName,
         optionPhoneOrId,
         ordererTel,
         reason: (e as Error).message,

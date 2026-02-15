@@ -7,8 +7,8 @@ import * as bcrypt from "bcryptjs";
 
 const NAVER_TOKEN_URL = "https://api.commerce.naver.com/external/v1/oauth2/token";
 const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/seller";
-/** 주문 상세 조회 API: POST /product-orders/query, Body: {"productOrderIds": ["id1","id2"]} */
-const NAVER_PRODUCT_ORDERS_QUERY_URL = "https://api.commerce.naver.com/external/v1/product-orders/query";
+/** 주문 상세 조회 API(공식): POST pay-order/seller/product-orders/query, Body: {"productOrderIds": ["id1","id2"]} */
+const NAVER_PRODUCT_ORDERS_QUERY_URL = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query";
 
 /** API 허용값: PAYED(결제완료), CLAIM_COMPLETED(클레임 완료 = 취소/반품 완료). CANCELLED/RETURNED는 미지원 */
 export type LastChangedType = "PAYED" | "CLAIM_COMPLETED";
@@ -148,15 +148,17 @@ export async function getLastChangedOrders(
   return { orders: lastChangeStatuses, count, moreSequence: data.moreSequence };
 }
 
-/** 주문 상세 내역 조회 API 응답 항목 — ordererTel, ordererNo, productOption 등 연락처·옵션 포함 */
+/** 주문 상세 내역 조회 API 응답 항목 — productOrder 내 ordererTel, ordererName, productOption 등 */
 export interface ProductOrderDetailItem {
   productOrderId?: string;
   orderId?: string;
-  /** API 응답: 주문자 연락처 (상세 조회 시 최상위 필드) */
+  /** API 응답: 주문자 연락처 (매칭용 핵심) */
   ordererTel?: string;
+  /** API 응답: 주문자 이름 */
+  ordererName?: string;
   /** API 응답: 주문자 번호 */
   ordererNo?: string;
-  /** API 응답: 상품 옵션 (사용자 아이디 입력 시) */
+  /** API 응답: 사용자 입력 추가 정보(옵션) */
   productOption?: string | { optionValue?: string; optionName?: string; [key: string]: unknown };
   orderer?: {
     tel?: string;
@@ -176,11 +178,13 @@ export interface ProductOrderDetailItem {
   [key: string]: unknown;
 }
 
-/** 주문 상세 내역 조회 API 응답 (response.data 배열 또는 data.productOrders 등 다양한 래핑 대응) */
+/** 주문 상세 조회 API 응답: data(배열), 각 항목은 productOrder 객체 래핑 가능 */
 export interface ProductOrderDetailsResponse {
-  data?:
-    | ProductOrderDetailItem[]
-    | { productOrders?: ProductOrderDetailItem[]; [key: string]: unknown };
+  /** 성공 시 data는 배열. 각 요소가 { productOrder: {...} } 형태일 수 있음 */
+  data?: Array<
+    | ProductOrderDetailItem
+    | { productOrder?: ProductOrderDetailItem; [key: string]: unknown }
+  >;
   productOrders?: ProductOrderDetailItem[];
   [key: string]: unknown;
 }
@@ -212,25 +216,32 @@ export async function getProductOrderDetails(
   const logJson = rawJson.length > 3000 ? rawJson.slice(0, 3000) + "...(truncated)" : rawJson;
   console.log("[naverApi] 주문 상세 조회 응답 전체 (필드 확인용):", logJson);
 
-  /* response.data 가 배열인 경우 우선, 그 다음 productOrders / data.productOrders */
-  const list =
+  /* 공식 API: 응답은 data(배열). 각 항목이 productOrder 객체로 래핑된 경우 풀어서 사용 */
+  const rawList: Array<ProductOrderDetailItem | { productOrder?: ProductOrderDetailItem }> =
     Array.isArray(data.data) ? data.data
-    : Array.isArray(data.data?.productOrders) ? data.data.productOrders
     : Array.isArray(data.productOrders) ? data.productOrders
-    : Array.isArray(data) ? data
     : [];
+  const list: ProductOrderDetailItem[] = rawList.map((item) =>
+    item && typeof item === "object" && "productOrder" in item && item.productOrder != null
+      ? item.productOrder
+      : (item as ProductOrderDetailItem)
+  );
   console.log("[naverApi] 주문 상세 조회:", batch.length, "건 요청 →", list.length, "건 수신");
   return list;
 }
 
-/** 상세 주문에서 연락처·요청사항·옵션 추출 (ordererTel, ordererNo, productOption 타겟, 하이픈 제거는 매칭 단계에서) */
+/** 상세 주문에서 연락처·이름·옵션 추출 (ordererTel, ordererName, productOption). 하이픈 제거는 매칭 단계에서 */
 export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   ordererTel: string | null;
+  ordererName: string | null;
   ordererNo: string | null;
   optionPhoneOrId: string | null;
   memoOrOptionId: string | null;
 } {
   let ordererTel: string | null = (detail.ordererTel ?? "")
+    .toString()
+    .trim() || null;
+  let ordererName: string | null = (detail.ordererName ?? "")
     .toString()
     .trim() || null;
   let ordererNo: string | null = (detail.ordererNo ?? "")
@@ -243,6 +254,7 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
         (orderer.tel || orderer.contact || (orderer as { phone?: string }).phone || "")
           .toString()
           .trim() || null;
+    if (!ordererName) ordererName = (orderer.name ?? "").toString().trim() || null;
     if (!ordererNo) ordererNo = (orderer.no ?? (orderer as { ordererNo?: string }).ordererNo ?? "").toString().trim() || null;
   }
   let optionPhoneOrId: string | null = null;
@@ -271,7 +283,7 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   }
   const memo = (detail.orderMemo ?? detail.buyerComment ?? "").toString().trim() || null;
   if (memo) memoOrOptionId = memoOrOptionId ?? memo;
-  return { ordererTel, ordererNo, optionPhoneOrId, memoOrOptionId };
+  return { ordererTel, ordererName, ordererNo, optionPhoneOrId, memoOrOptionId };
 }
 
 /** 주문 옵션/연락처에서 전화번호 또는 사용자 식별자 추출 (1순위: 옵션, 2순위: 주문자 연락처) — last-changed-statuses용 */

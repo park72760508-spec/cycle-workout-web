@@ -75,6 +75,7 @@ export async function sendErrorReport(payload: ErrorReportPayload): Promise<bool
 export interface FailureEmailPayload {
   productOrderId: string;
   orderId?: string;
+  ordererName?: string | null;
   optionPhoneOrId: string | null;
   ordererTel: string | null;
   reason: string;
@@ -88,7 +89,7 @@ export async function sendFailureEmail(failures: FailureEmailPayload[]): Promise
 
   const lines = failures.map(
     (f) =>
-      `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  옵션(전화번호): ${f.optionPhoneOrId || "-"}, 주문자연락처: ${f.ordererTel || "-"}\n  사유: ${f.reason}`
+      `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  주문자: ${f.ordererName || "-"}, 옵션(전화번호): ${f.optionPhoneOrId || "-"}, 주문자연락처: ${f.ordererTel || "-"}\n  사유: ${f.reason}`
   );
 
   return sendErrorReport({
