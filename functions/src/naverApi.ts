@@ -7,8 +7,8 @@ import * as bcrypt from "bcryptjs";
 
 const NAVER_TOKEN_URL = "https://api.commerce.naver.com/external/v1/oauth2/token";
 const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/seller";
-/** 주문 상세 조회 API (productOrderIds 배열로 조회) */
-const NAVER_PRODUCT_ORDERS_URL = "https://api.commerce.naver.com/external/v1/product-orders";
+/** 주문 상세 조회 API: POST /product-orders/query, Body: {"productOrderIds": ["id1","id2"]} */
+const NAVER_PRODUCT_ORDERS_QUERY_URL = "https://api.commerce.naver.com/external/v1/product-orders/query";
 
 /** API 허용값: PAYED(결제완료), CLAIM_COMPLETED(클레임 완료 = 취소/반품 완료). CANCELLED/RETURNED는 미지원 */
 export type LastChangedType = "PAYED" | "CLAIM_COMPLETED";
@@ -176,27 +176,26 @@ export interface ProductOrderDetailItem {
   [key: string]: unknown;
 }
 
-/** 주문 상세 내역 조회 API 응답 (다양한 래핑 구조 대응) */
+/** 주문 상세 내역 조회 API 응답 (response.data 배열 또는 data.productOrders 등 다양한 래핑 대응) */
 export interface ProductOrderDetailsResponse {
-  data?: {
-    productOrders?: ProductOrderDetailItem[];
-    [key: string]: unknown;
-  };
+  data?:
+    | ProductOrderDetailItem[]
+    | { productOrders?: ProductOrderDetailItem[]; [key: string]: unknown };
   productOrders?: ProductOrderDetailItem[];
   [key: string]: unknown;
 }
 
-/** 주문 상세 내역 조회 — productOrderIds 반드시 배열 ["ID1","ID2"] 로 POST (최대 300건) */
+/** 주문 상세 내역 조회 — POST /product-orders/query, Body: {"productOrderIds": ["id1","id2"]}, Authorization: Bearer 필수 */
 export async function getProductOrderDetails(
   accessToken: string,
   productOrderIds: string[]
 ): Promise<ProductOrderDetailItem[]> {
   if (productOrderIds.length === 0) return [];
   const batch = Array.isArray(productOrderIds) ? productOrderIds.slice(0, 300) : [String(productOrderIds)];
-  const payload = { productOrderIds: batch };
+  const payload: { productOrderIds: string[] } = { productOrderIds: batch };
   console.log("[naverApi] 주문 상세 조회 요청 payload:", JSON.stringify(payload));
 
-  const res = await fetch(NAVER_PRODUCT_ORDERS_URL, {
+  const res = await fetch(NAVER_PRODUCT_ORDERS_QUERY_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -206,17 +205,18 @@ export async function getProductOrderDetails(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Naver product-orders failed: ${res.status} ${text}`);
+    throw new Error(`Naver product-orders/query failed: ${res.status} ${text}`);
   }
   const data = (await res.json()) as ProductOrderDetailsResponse;
   const rawJson = JSON.stringify(data);
   const logJson = rawJson.length > 3000 ? rawJson.slice(0, 3000) + "...(truncated)" : rawJson;
   console.log("[naverApi] 주문 상세 조회 응답 전체 (필드 확인용):", logJson);
 
+  /* response.data 가 배열인 경우 우선, 그 다음 productOrders / data.productOrders */
   const list =
-    Array.isArray(data.data?.productOrders) ? data.data.productOrders
+    Array.isArray(data.data) ? data.data
+    : Array.isArray(data.data?.productOrders) ? data.data.productOrders
     : Array.isArray(data.productOrders) ? data.productOrders
-    : Array.isArray(data.data) ? data.data
     : Array.isArray(data) ? data
     : [];
   console.log("[naverApi] 주문 상세 조회:", batch.length, "건 요청 →", list.length, "건 수신");
