@@ -15298,6 +15298,22 @@ function closeMobileTrainingResultModal() {
   }
 }
 
+/** 구독하기 안내 오버레이 열기 (Manage Your Career > 구독하기, 훈련결과 팝업 동일 디자인) */
+function openSubscribeOverlay() {
+  const modal = document.getElementById('subscribeOverlayModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+/** 구독하기 안내 오버레이 닫기 */
+function closeSubscribeOverlay() {
+  const modal = document.getElementById('subscribeOverlayModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
 /**
  * 모바일 대시보드 마스코트 펄스 애니메이션 시작
  */
@@ -15443,6 +15459,8 @@ if (typeof showScreen === 'function') {
 window.startMobileDashboard = startMobileDashboard;
 window.showMobileTrainingResultModal = showMobileTrainingResultModal;
 window.closeMobileTrainingResultModal = closeMobileTrainingResultModal;
+window.openSubscribeOverlay = openSubscribeOverlay;
+window.closeSubscribeOverlay = closeSubscribeOverlay;
 window.showMobileMileageCelebration = showMobileMileageCelebration;
 window.closeMobileMileageCelebration = closeMobileMileageCelebration;
 window.cleanupMobileDashboard = cleanupMobileDashboard;
