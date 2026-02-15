@@ -22,9 +22,13 @@ function getTransporter(): nodemailer.Transporter | null {
     return null;
   }
 
+  const useNaverMail = !!process.env.NAVER_MAIL_USER && !process.env.SMTP_HOST;
+  const host = process.env.SMTP_HOST || (useNaverMail ? "smtp.naver.com" : "smtp.gmail.com");
+  const port = Number(process.env.SMTP_PORT) || 587;
+
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 587,
+    host,
+    port,
     secure: process.env.SMTP_SECURE === "true",
     auth: { user, pass },
   });

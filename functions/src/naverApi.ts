@@ -146,7 +146,95 @@ export async function getLastChangedOrders(
   return { orders: lastChangeStatuses, count, moreSequence: data.moreSequence };
 }
 
-/** 주문 옵션/연락처에서 전화번호 또는 사용자 식별자 추출 (1순위: 옵션, 2순위: 주문자 연락처) */
+/** 주문 상세 내역 조회 API 응답 항목 (연락처·옵션·요청사항 포함) */
+export interface ProductOrderDetailItem {
+  productOrderId?: string;
+  orderId?: string;
+  orderer?: {
+    tel?: string;
+    contact?: string;
+    name?: string;
+    [key: string]: unknown;
+  };
+  orderOptions?: Array<{
+    optionCode?: string;
+    optionValue?: string;
+    optionName?: string;
+    [key: string]: unknown;
+  }>;
+  /** 주문 시 요청사항(스마트스토어) */
+  orderMemo?: string;
+  buyerComment?: string;
+  [key: string]: unknown;
+}
+
+/** 주문 상세 내역 조회 API 응답 (POST product-orders/query) */
+export interface ProductOrderDetailsResponse {
+  data?: {
+    productOrders?: ProductOrderDetailItem[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/** 주문 상세 내역 조회 — 연락처·옵션·요청사항 추출용 (최대 300건) */
+export async function getProductOrderDetails(
+  accessToken: string,
+  productOrderIds: string[]
+): Promise<ProductOrderDetailItem[]> {
+  if (productOrderIds.length === 0) return [];
+  const batch = productOrderIds.slice(0, 300);
+  const res = await fetch(`${NAVER_API_BASE}/product-orders/query`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ productOrderIds: batch }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Naver product-orders/query failed: ${res.status} ${text}`);
+  }
+  const data = (await res.json()) as ProductOrderDetailsResponse;
+  const list = Array.isArray(data.data?.productOrders) ? data.data.productOrders : [];
+  console.log("[naverApi] 주문 상세 조회:", batch.length, "건 요청 →", list.length, "건 수신");
+  return list;
+}
+
+/** 상세 주문에서 연락처·요청사항·옵션값 추출 (매칭용) */
+export function extractContactFromDetail(detail: ProductOrderDetailItem): {
+  ordererTel: string | null;
+  optionPhoneOrId: string | null;
+  memoOrOptionId: string | null;
+} {
+  let ordererTel: string | null = null;
+  const orderer = detail.orderer;
+  if (orderer) {
+    ordererTel =
+      (orderer.tel || orderer.contact || (orderer as { phone?: string }).phone || "")
+        .toString()
+        .trim() || null;
+  }
+  let optionPhoneOrId: string | null = null;
+  let memoOrOptionId: string | null = null;
+  const options = detail.orderOptions;
+  if (options && options.length > 0) {
+    for (const opt of options) {
+      const val = (opt.optionValue ?? opt.optionName ?? "").toString().trim();
+      if (val) {
+        optionPhoneOrId = optionPhoneOrId ?? val;
+        memoOrOptionId = memoOrOptionId ?? val;
+        break;
+      }
+    }
+  }
+  const memo = (detail.orderMemo ?? detail.buyerComment ?? "").toString().trim() || null;
+  if (memo) memoOrOptionId = memoOrOptionId ?? memo;
+  return { ordererTel, optionPhoneOrId, memoOrOptionId };
+}
+
+/** 주문 옵션/연락처에서 전화번호 또는 사용자 식별자 추출 (1순위: 옵션, 2순위: 주문자 연락처) — last-changed-statuses용 */
 export function extractContactFromOrder(order: ProductOrderItem): {
   optionPhoneOrId: string | null;
   ordererTel: string | null;

@@ -9,9 +9,11 @@ import { defineSecret } from "firebase-functions/params";
 import {
   getAccessToken,
   getLastChangedOrders,
-  dispatchProductOrders,
+  getProductOrderDetails,
   extractContactFromOrder,
+  extractContactFromDetail,
   type LastChangedType,
+  type ProductOrderDetailItem,
 } from "./naverApi";
 import {
   findUserByContact,
@@ -105,6 +107,22 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     );
   }
 
+  const productOrderIds = orders
+    .map((o) => (o.productOrderId || "").toString())
+    .filter(Boolean);
+  let detailMap: Record<string, ProductOrderDetailItem> = {};
+  if (productOrderIds.length > 0) {
+    try {
+      const details = await getProductOrderDetails(accessToken, productOrderIds);
+      for (const d of details) {
+        const id = (d.productOrderId || "").toString();
+        if (id) detailMap[id] = d;
+      }
+    } catch (e) {
+      console.warn("[naverSubscription] 주문 상세 조회 실패, last-changed 정보만으로 매칭 시도:", (e as Error).message);
+    }
+  }
+
   const matchingFailures: Array<{
     productOrderId: string;
     orderId?: string;
@@ -121,8 +139,22 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     const alreadyProcessed = await isOrderProcessed(db, productOrderId);
     if (alreadyProcessed) continue;
 
-    const { optionPhoneOrId, ordererTel } = extractContactFromOrder(order);
-    const user = await findUserByContact(db, optionPhoneOrId, ordererTel);
+    const detail = detailMap[productOrderId];
+    let optionPhoneOrId: string | null = null;
+    let ordererTel: string | null = null;
+    let memoOrOptionId: string | null = null;
+    if (detail) {
+      const extracted = extractContactFromDetail(detail);
+      ordererTel = extracted.ordererTel;
+      optionPhoneOrId = extracted.optionPhoneOrId;
+      memoOrOptionId = extracted.memoOrOptionId;
+    }
+    if (ordererTel === null && optionPhoneOrId === null) {
+      const fromOrder = extractContactFromOrder(order);
+      optionPhoneOrId = fromOrder.optionPhoneOrId;
+      ordererTel = fromOrder.ordererTel;
+    }
+    const user = await findUserByContact(db, optionPhoneOrId, ordererTel, memoOrOptionId ?? undefined);
 
     if (!user) {
       matchingFailures.push({
@@ -130,7 +162,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
         orderId: (order.orderId || "").toString(),
         optionPhoneOrId,
         ordererTel,
-        reason: "전화번호/ID로 매칭되는 사용자가 없음",
+        reason: "전화번호/주문요청사항·옵션(ID)으로 매칭되는 사용자가 없음",
       });
       continue;
     }

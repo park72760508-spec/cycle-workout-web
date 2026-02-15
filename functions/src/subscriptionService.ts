@@ -7,7 +7,7 @@ import type { Firestore } from "firebase-admin/firestore";
 const USERS_COLLECTION = "users";
 const PROCESSED_ORDERS_COLLECTION = "processed_orders";
 
-/** 전화번호/ID 정규화 (숫자만 추출 등) */
+/** 전화번호 정규화: 하이픈·공백 제거 후 숫자만 (매칭 시 필수). 10자리 이상이면 숫자만 반환 */
 function normalizePhoneOrId(value: string): string {
   const trimmed = value.trim();
   const digitsOnly = trimmed.replace(/\D/g, "");
@@ -15,16 +15,26 @@ function normalizePhoneOrId(value: string): string {
   return trimmed;
 }
 
-/** 1순위: 주문 옵션 전화번호/ID로 유저 매칭, 2순위: 주문자 연락처로 매칭 */
+/** 1순위: 전화번호/옵션·요청사항 ID, 2순위: 주문자 연락처. 전화번호는 하이픈 제거 후 숫자만 비교 */
 export async function findUserByContact(
   db: Firestore,
   optionPhoneOrId: string | null,
-  ordererTel: string | null
+  ordererTel: string | null,
+  memoOrOptionId?: string | null
 ): Promise<{ userId: string } | null> {
   const candidates: string[] = [];
-  if (optionPhoneOrId) candidates.push(normalizePhoneOrId(optionPhoneOrId), optionPhoneOrId.trim());
-  if (ordererTel && !candidates.includes(normalizePhoneOrId(ordererTel)))
-    candidates.push(normalizePhoneOrId(ordererTel), ordererTel.trim());
+  if (optionPhoneOrId) {
+    candidates.push(normalizePhoneOrId(optionPhoneOrId), optionPhoneOrId.trim());
+  }
+  if (ordererTel) {
+    const normalized = normalizePhoneOrId(ordererTel);
+    if (!candidates.includes(normalized)) candidates.push(normalized);
+    if (!candidates.includes(ordererTel.trim())) candidates.push(ordererTel.trim());
+  }
+  if (memoOrOptionId) {
+    const trimmed = memoOrOptionId.trim();
+    if (trimmed && !candidates.includes(trimmed)) candidates.push(trimmed);
+  }
 
   if (candidates.length === 0) return null;
 
