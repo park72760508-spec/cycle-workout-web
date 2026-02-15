@@ -735,23 +735,23 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 8px 16px rgba(135, 206, 235, 0.4);
 }
 
-/* 사용자 메뉴얼 화면: 상단 제목부터 보이도록 스크롤 가능하게 */
+/* 사용자 메뉴얼 화면: 강제 스크롤 제어 없음 — 문서( body ) 스크롤로 상단 제목까지 자연 스크롤 */
 #userManualScreen {
   position: relative;
-  overflow-x: hidden;
+  overflow: visible;
+  overscroll-behavior: auto;
 }
 
 #userManualScreen.active {
   display: flex !important;
-  align-items: flex-start;   /* 상단 정렬로 제목이 보이도록 (기존 center는 콘텐츠가 화면 밖으로 밀려 상단이 안 보임) */
+  align-items: flex-start;
   justify-content: center;
   min-height: 100vh;
-  overflow-y: auto;         /* 내용이 길 때 스크롤로 상단까지 볼 수 있도록 */
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
-  padding-top: max(20px, env(safe-area-inset-top, 0px));  /* 상단 Safe Area 확보 */
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
