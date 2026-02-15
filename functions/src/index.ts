@@ -33,8 +33,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). lastChangedTo 생략 시 API가 lastChangedFrom+24h로 자동 설정 */
-const LAST_CHANGED_WINDOW_HOURS = 24;
+/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). lastChangedTo 생략 시 API가 lastChangedFrom+24h로 조회 */
 function toKstIso8601(date: Date): string {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
   const pad = (n: number) => n.toString().padStart(2, "0");
@@ -47,12 +46,16 @@ function toKstIso8601(date: Date): string {
   const ms = kst.getUTCMilliseconds();
   return `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:${pad(sec)}.${ms.toString().padStart(3, "0")}+09:00`;
 }
-/** lastChangedFrom만 반환. lastChangedTo는 보내지 않음 → 네이버가 lastChangedFrom 기준 24시간으로 조회 */
+/** lastChangedFrom = 오늘 00:00 KST. lastChangedTo 생략 → API가 +24시간으로 조회. 오늘 결제분 누락 방지 */
 function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo?: string } {
-  const now = new Date();
-  const from = new Date(now.getTime() - LAST_CHANGED_WINDOW_HOURS * 60 * 60 * 1000);
+  const kstMs = Date.now() + 9 * 60 * 60 * 1000;
+  const kstDate = new Date(kstMs);
+  const y = kstDate.getUTCFullYear();
+  const m = kstDate.getUTCMonth();
+  const d = kstDate.getUTCDate();
+  const todayStartKst = new Date(Date.UTC(y, m, d, 0, 0, 0, 0) - 9 * 60 * 60 * 1000);
   return {
-    lastChangedFrom: toKstIso8601(from),
+    lastChangedFrom: toKstIso8601(todayStartKst),
     lastChangedTo: undefined,
   };
 }
@@ -80,7 +83,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   console.log(
     "[naverSubscription] PAYED 조회",
     orders.length,
-    "건 (lastChangedFrom 기준 24시간, KST)"
+    "건 (오늘 00:00 KST 기준 24시간)"
   );
 
   const matchingFailures: Array<{
