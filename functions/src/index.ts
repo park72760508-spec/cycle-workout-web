@@ -13,6 +13,7 @@ import {
   dispatchProductOrders,
   extractContactFromOrder,
   extractContactFromDetail,
+  computeSubscriptionDaysFromProduct,
   type LastChangedType,
   type ProductOrderDetailItem,
 } from "./naverApi";
@@ -130,6 +131,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     ordererName?: string | null;
     optionPhoneOrId: string | null;
     ordererTel: string | null;
+    shippingMemo?: string | null;
     reason: string;
   }> = [];
   const toDispatch: string[] = [];
@@ -147,11 +149,13 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     let ordererNo: string | null = null;
     let memoOrOptionId: string | null = null;
     let ordererName: string | null = null;
+    let shippingMemo: string | null = null;
     if (detail) {
       const extracted = extractContactFromDetail(detail);
       ordererTel = extracted.ordererTel;
       ordererName = extracted.ordererName;
       ordererNo = extracted.ordererNo;
+      shippingMemo = extracted.shippingMemo;
       optionPhoneOrId = extracted.optionPhoneOrId;
       memoOrOptionId = extracted.memoOrOptionId;
     }
@@ -160,14 +164,18 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       optionPhoneOrId = fromOrder.optionPhoneOrId;
       ordererTel = fromOrder.ordererTel;
     }
-    /* ordererTel 하이픈 제거·숫자만 비교는 findUserByContact 내부 normalizePhoneOrId에서 수행 */
-    const user = await findUserByContact(
+    /* 1) ordererTel로 먼저 검색, 2) 없으면 shippingMemo 연락처로 검색 (하이픈 제거·숫자만 비교는 findUserByContact 내부) */
+    let user = await findUserByContact(
       db,
       optionPhoneOrId,
       ordererTel,
       memoOrOptionId ?? undefined,
-      ordererNo ?? undefined
+      ordererNo ?? undefined,
+      null
     );
+    if (!user && shippingMemo) {
+      user = await findUserByContact(db, null, null, null, null, shippingMemo);
+    }
 
     if (!user) {
       matchingFailures.push({
@@ -176,18 +184,19 @@ async function processPayedOrders(accessToken: string): Promise<void> {
         ordererName,
         optionPhoneOrId,
         ordererTel,
-        reason: "전화번호/주문요청사항·옵션(ID)으로 매칭되는 사용자가 없음",
+        shippingMemo,
+        reason: "전화번호(ordererTel)/배송메모(shippingMemo)·옵션으로 매칭되는 사용자가 없음",
       });
       continue;
     }
 
+    /* 상품별 기간(optionManageCode/productOption) × 수량(quantity). 없으면 기본 30일·수량 1 */
+    const { totalDays } = detail
+      ? computeSubscriptionDaysFromProduct(detail)
+      : { totalDays: DEFAULT_SUBSCRIPTION_DAYS };
+
     try {
-      await applySubscription(
-        db,
-        user.userId,
-        productOrderId,
-        DEFAULT_SUBSCRIPTION_DAYS
-      );
+      await applySubscription(db, user.userId, productOrderId, totalDays);
       toDispatch.push(productOrderId);
     } catch (e) {
       matchingFailures.push({
@@ -196,6 +205,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
         ordererName,
         optionPhoneOrId,
         ordererTel,
+        shippingMemo,
         reason: (e as Error).message,
       });
     }

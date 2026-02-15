@@ -148,7 +148,7 @@ export async function getLastChangedOrders(
   return { orders: lastChangeStatuses, count, moreSequence: data.moreSequence };
 }
 
-/** 주문 상세 내역 조회 API 응답 항목 — productOrder 내 ordererTel, ordererName, productOption 등 */
+/** 주문 상세 내역 조회 API 응답 항목 — productOrder 내 ordererTel, shippingMemo, optionManageCode 등 */
 export interface ProductOrderDetailItem {
   productOrderId?: string;
   orderId?: string;
@@ -158,6 +158,12 @@ export interface ProductOrderDetailItem {
   ordererName?: string;
   /** API 응답: 주문자 번호 */
   ordererNo?: string;
+  /** API 응답: 배송 메모 (연락처 포함 가능) */
+  shippingMemo?: string;
+  /** API 응답: 옵션 관리 코드 (예: 01M, 06M, 12M) */
+  optionManageCode?: string;
+  /** API 응답: 수량 */
+  quantity?: number;
   /** API 응답: 사용자 입력 추가 정보(옵션) */
   productOption?: string | { optionValue?: string; optionName?: string; [key: string]: unknown };
   orderer?: {
@@ -231,11 +237,12 @@ export async function getProductOrderDetails(
   return list;
 }
 
-/** 상세 주문에서 연락처·이름·옵션 추출 (ordererTel, ordererName, productOption). 하이픈 제거는 매칭 단계에서 */
+/** 상세 주문에서 연락처·이름·배송메모·옵션 추출. order.ordererTel, productOrder.shippingMemo 포함. 하이픈 제거는 매칭 단계에서 */
 export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   ordererTel: string | null;
   ordererName: string | null;
   ordererNo: string | null;
+  shippingMemo: string | null;
   optionPhoneOrId: string | null;
   memoOrOptionId: string | null;
 } {
@@ -258,6 +265,9 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
     if (!ordererName) ordererName = (orderer.name ?? "").toString().trim() || null;
     if (!ordererNo) ordererNo = (orderer.no ?? (orderer as { ordererNo?: string }).ordererNo ?? "").toString().trim() || null;
   }
+  const shippingMemo: string | null = (detail.shippingMemo ?? "")
+    .toString()
+    .trim() || null;
   let optionPhoneOrId: string | null = null;
   let memoOrOptionId: string | null = null;
   const productOption = detail.productOption;
@@ -284,7 +294,35 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   }
   const memo = (detail.orderMemo ?? detail.buyerComment ?? "").toString().trim() || null;
   if (memo) memoOrOptionId = memoOrOptionId ?? memo;
-  return { ordererTel, ordererName, ordererNo, optionPhoneOrId, memoOrOptionId };
+  return { ordererTel, ordererName, ordererNo, shippingMemo, optionPhoneOrId, memoOrOptionId };
+}
+
+/** optionManageCode / productOption 명으로 기본 기간(일) 산정, quantity 곱하여 총 연장 일수 반환. 매칭 안 되면 31일, quantity 없으면 1 */
+export function computeSubscriptionDaysFromProduct(detail: ProductOrderDetailItem): {
+  totalDays: number;
+  matchedCode?: string;
+} {
+  const quantity = Math.max(1, Math.floor(Number(detail.quantity) || 1));
+  let baseDays = 31;
+  let matchedCode: string | undefined;
+  const code = (detail.optionManageCode ?? "").toString().trim().toUpperCase();
+  const optionLabel =
+    typeof detail.productOption === "string"
+      ? detail.productOption
+      : (detail.productOption?.optionValue ?? detail.productOption?.optionName ?? "").toString().trim();
+  const combined = `${code} ${optionLabel}`;
+  if (/\b01M\b|1개월권|1개월/.test(combined)) {
+    baseDays = 31;
+    matchedCode = "01M/1개월권";
+  } else if (/\b06M\b|6개월권|6개월/.test(combined)) {
+    baseDays = 183;
+    matchedCode = "06M/6개월권";
+  } else if (/\b12M\b|1년권|12개월/.test(combined)) {
+    baseDays = 365;
+    matchedCode = "12M/1년권";
+  }
+  const totalDays = baseDays * quantity;
+  return { totalDays, matchedCode };
 }
 
 /** 주문 옵션/연락처에서 전화번호 또는 사용자 식별자 추출 (1순위: 옵션, 2순위: 주문자 연락처) — last-changed-statuses용 */

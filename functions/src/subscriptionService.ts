@@ -15,13 +15,14 @@ function normalizePhoneOrId(value: string): string {
   return trimmed;
 }
 
-/** 1순위: 전화번호/옵션·요청사항 ID, 2순위: 주문자 연락처. 연락처는 하이픈 제거 후 숫자만 비교, DB는 phoneNumber·phone·tel 모두 대조 */
+/** ordererTel 우선, 없으면 shippingMemo 등으로 검색. 연락처는 하이픈 제거 후 숫자만 비교, DB는 phoneNumber·phone·tel 모두 대조 */
 export async function findUserByContact(
   db: Firestore,
   optionPhoneOrId: string | null,
   ordererTel: string | null,
   memoOrOptionId?: string | null,
-  ordererNo?: string | null
+  ordererNo?: string | null,
+  shippingMemo?: string | null
 ): Promise<{ userId: string } | null> {
   const candidates: string[] = [];
   if (optionPhoneOrId) {
@@ -39,6 +40,12 @@ export async function findUserByContact(
   }
   if (memoOrOptionId) {
     const trimmed = memoOrOptionId.trim();
+    if (trimmed && !candidates.includes(trimmed)) candidates.push(trimmed);
+  }
+  if (shippingMemo) {
+    const normalized = normalizePhoneOrId(shippingMemo);
+    if (normalized.length >= 10 && !candidates.includes(normalized)) candidates.push(normalized);
+    const trimmed = shippingMemo.trim();
     if (trimmed && !candidates.includes(trimmed)) candidates.push(trimmed);
   }
 
@@ -171,13 +178,13 @@ export function computeNewSubscriptionEndDate(
 /** 상품별 구독 일수 (상품 설정 또는 기본값). 필요 시 Firestore appConfig/naver 에서 상품별 일수 매핑 */
 export const DEFAULT_SUBSCRIPTION_DAYS = 30;
 
-/** 유저 문서에 구독 만료일 적용 (subscription_end_date, 필요 시 expiry_date 동기화) */
+/** 유저 문서에 구독 만료일 적용 (subscription_end_date, 필요 시 expiry_date 동기화). 기존 종료일 없거나 과거면 현재+일수, 미래면 기존+일수 */
 export async function applySubscription(
   db: Firestore,
   userId: string,
   productOrderId: string,
   addDays: number
-): Promise<{ success: boolean; newEndDate: string }> {
+): Promise<{ success: boolean; newEndDate: string; previousEndDate: string | null }> {
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
   const userSnap = await userRef.get();
   if (!userSnap.exists) {
@@ -185,8 +192,8 @@ export async function applySubscription(
   }
 
   const data = userSnap.data()!;
-  const currentEnd = (data.subscription_end_date || data.expiry_date || "").toString().trim() || null;
-  const newEndDate = computeNewSubscriptionEndDate(currentEnd, addDays);
+  const previousEndDate = (data.subscription_end_date || data.expiry_date || "").toString().trim() || null;
+  const newEndDate = computeNewSubscriptionEndDate(previousEndDate, addDays);
 
   const update: Record<string, unknown> = {
     subscription_end_date: newEndDate,
@@ -198,5 +205,8 @@ export async function applySubscription(
   await userRef.update(update);
   await markOrderProcessed(db, productOrderId, userId, addDays);
 
-  return { success: true, newEndDate };
+  console.log(
+    "[naverSubscription] 성공: 유저[" + userId + "] 구독 종료일이 [" + (previousEndDate ?? "(없음)") + "]에서 [" + newEndDate + "]로 연장됨"
+  );
+  return { success: true, newEndDate, previousEndDate };
 }
