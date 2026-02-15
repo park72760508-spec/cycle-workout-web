@@ -33,10 +33,11 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/** 지난 1시간 구간 (ISO 8601) - 중복 방지를 위해 넉넉히 */
+/** 조회 시간 구간 (ISO 8601). 24시간으로 넓혀 결제 후 1시간 지난 주문도 수집 (중복은 isOrderProcessed로 방지) */
+const LAST_CHANGED_WINDOW_HOURS = 24;
 function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string } {
   const to = new Date();
-  const from = new Date(to.getTime() - 60 * 60 * 1000);
+  const from = new Date(to.getTime() - LAST_CHANGED_WINDOW_HOURS * 60 * 60 * 1000);
   return {
     lastChangedFrom: from.toISOString(),
     lastChangedTo: to.toISOString(),
@@ -50,6 +51,13 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     ...range,
     limitCount: 100,
   });
+  console.log(
+    "[naverSubscription] PAYED 조회",
+    orders.length,
+    "건 (범위: 최근",
+    LAST_CHANGED_WINDOW_HOURS,
+    "시간)"
+  );
 
   const matchingFailures: Array<{
     productOrderId: string;
