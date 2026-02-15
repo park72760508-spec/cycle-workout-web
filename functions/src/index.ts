@@ -33,8 +33,8 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/** 조회 시간 구간 (ISO 8601). 24시간으로 넓혀 결제 후 1시간 지난 주문도 수집 (중복은 isOrderProcessed로 방지) */
-const LAST_CHANGED_WINDOW_HOURS = 24;
+/** 조회 시간 구간 (ISO 8601). 7일로 넓혀 결제 후 며칠 지난 주문도 수집 (중복은 isOrderProcessed로 방지) */
+const LAST_CHANGED_WINDOW_HOURS = 24 * 7; // 168시간 = 7일
 function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string } {
   const to = new Date();
   const from = new Date(to.getTime() - LAST_CHANGED_WINDOW_HOURS * 60 * 60 * 1000);
@@ -47,6 +47,12 @@ function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string
 /** PAYED 주문 처리: 매칭 → 중복 체크 → 구독 적용 → 네이버 발송 처리 */
 async function processPayedOrders(accessToken: string): Promise<void> {
   const range = getLastChangedRange();
+  console.log(
+    "[naverSubscription] PAYED 조회 요청 범위:",
+    range.lastChangedFrom,
+    "~",
+    range.lastChangedTo
+  );
   const { orders } = await getLastChangedOrders(accessToken, "PAYED", {
     ...range,
     limitCount: 100,
@@ -55,8 +61,8 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     "[naverSubscription] PAYED 조회",
     orders.length,
     "건 (범위: 최근",
-    LAST_CHANGED_WINDOW_HOURS,
-    "시간)"
+    LAST_CHANGED_WINDOW_HOURS / 24,
+    "일)"
   );
 
   const matchingFailures: Array<{
