@@ -8,7 +8,8 @@ import * as bcrypt from "bcryptjs";
 const NAVER_TOKEN_URL = "https://api.commerce.naver.com/external/v1/oauth2/token";
 const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/seller";
 
-export type LastChangedType = "PAYED" | "CANCELLED" | "RETURNED" | "DISPATCHED";
+/** API 허용값: PAYED(결제완료), CLAIM_COMPLETED(클레임 완료 = 취소/반품 완료). CANCELLED/RETURNED는 미지원 */
+export type LastChangedType = "PAYED" | "CLAIM_COMPLETED";
 
 /** 전자서명 생성: client_id_timestamp 를 client_secret(salt)으로 bcrypt 후 Base64 */
 export function createClientSecretSign(
@@ -84,7 +85,7 @@ export interface LastChangedStatusesResponse {
   [key: string]: unknown;
 }
 
-/** 최근 상태 변경된 주문 조회 (PAYED, CANCELLED, RETURNED 등) */
+/** 최근 상태 변경된 주문 조회 (PAYED, CLAIM_COMPLETED 등) */
 export async function getLastChangedOrders(
   accessToken: string,
   lastChangedType: LastChangedType,

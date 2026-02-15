@@ -4,6 +4,7 @@
  */
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import {
   getAccessToken,
@@ -120,7 +121,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   }
 }
 
-/** CANCELLED / RETURNED 주문 처리: 구독 회수 */
+/** CLAIM_COMPLETED(취소/반품 완료) 주문 처리: 구독 회수 */
 async function processRevokedOrders(
   accessToken: string,
   type: LastChangedType
@@ -160,10 +161,10 @@ export async function runNaverSubscriptionSync(
   clientSecret: string
 ): Promise<void> {
   const accessToken = await getAccessToken(NAVER_CLIENT_ID, clientSecret);
+  console.log("[naverSubscription] 네이버 토큰 발급 완료, PAYED·CLAIM_COMPLETED 처리 시작");
 
   await processPayedOrders(accessToken);
-  await processRevokedOrders(accessToken, "CANCELLED");
-  await processRevokedOrders(accessToken, "RETURNED");
+  await processRevokedOrders(accessToken, "CLAIM_COMPLETED");
 }
 
 /**
@@ -183,22 +184,77 @@ export const naverSubscriptionSyncSchedule = onSchedule(
     secrets: [navSecret],
   },
   async () => {
-    const clientSecret =
-      navSecret.value() ||
-      (process.env.NAVER_CLIENT_SECRET ?? "");
+    const runId = Date.now();
+    console.log("[naverSubscription] 스케줄 실행 시작", { runId, region: "asia-northeast3" });
+
+    let clientSecret: string;
+    try {
+      clientSecret = navSecret.value() || (process.env.NAVER_CLIENT_SECRET ?? "");
+    } catch (e) {
+      console.error("[naverSubscription] Secret 읽기 실패:", (e as Error).message, { runId });
+      throw e;
+    }
 
     if (!clientSecret.trim()) {
       console.error(
-        "[naverSubscription] NAVER_CLIENT_SECRET이 설정되지 않았습니다. .env 또는 Firebase Secret(NAVER_CLIENT_SECRET)을 확인하세요."
+        "[naverSubscription] NAVER_CLIENT_SECRET이 비어 있습니다. Firebase Secret(NAVER_CLIENT_SECRET) 또는 .env 확인 필요.",
+        { runId }
       );
       return;
     }
 
     try {
       await runNaverSubscriptionSync(clientSecret.trim());
+      console.log("[naverSubscription] 스케줄 실행 완료", { runId });
     } catch (err) {
-      console.error("[naverSubscription] 동기화 실패:", err);
+      const errMsg = (err as Error).message;
+      const errStack = (err as Error).stack;
+      console.error("[naverSubscription] 동기화 실패:", errMsg, { runId });
+      if (errStack) console.error("[naverSubscription] stack:", errStack);
       throw err;
+    }
+  }
+);
+
+/** 네이버 구독 동기화 수동 테스트용 (스케줄 동작 확인) */
+const NAVER_SYNC_TEST_SECRET = process.env.NAVER_SYNC_TEST_SECRET || "stelvio-naver-sync-test";
+
+export const naverSubscriptionSyncTest = onRequest(
+  {
+    region: "asia-northeast3",
+    vpcConnector: "stelvio-connector",
+    vpcConnectorEgressSettings: "ALL_TRAFFIC",
+    secrets: [navSecret],
+    cors: false,
+  },
+  async (req, res) => {
+    const auth = req.headers["x-naver-sync-secret"] || req.query.secret;
+    if (auth !== NAVER_SYNC_TEST_SECRET) {
+      res.status(403).json({ success: false, error: "Forbidden" });
+      return;
+    }
+
+    const clientSecret = navSecret.value() || (process.env.NAVER_CLIENT_SECRET ?? "");
+    if (!clientSecret.trim()) {
+      res.status(500).json({
+        success: false,
+        error: "NAVER_CLIENT_SECRET not set",
+      });
+      return;
+    }
+
+    try {
+      await runNaverSubscriptionSync(clientSecret.trim());
+      res.status(200).json({
+        success: true,
+        message: "네이버 구독 동기화 1회 실행 완료. Firebase Console → Functions → 로그에서 상세 확인.",
+      });
+    } catch (err) {
+      console.error("[naverSubscriptionSyncTest]", err);
+      res.status(500).json({
+        success: false,
+        error: (err as Error).message,
+      });
     }
   }
 );

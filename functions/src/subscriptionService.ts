@@ -73,7 +73,7 @@ export async function markOrderProcessed(
   });
 }
 
-/** CANCELLED/RETURNED 시 기존 처리 내역 조회 (회수용) */
+/** CLAIM_COMPLETED(취소/반품) 시 기존 처리 내역 조회 (회수용) */
 export async function getProcessedOrderInfo(
   db: Firestore,
   productOrderId: string
