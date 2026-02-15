@@ -2,7 +2,7 @@
   "name": "stelvio-admin-functions",
   "description": "관리자 비밀번호 초기화, Strava 연동, STELVIO AI 네이버 구독 자동화",
   "main": "index.js",
-  "engines": { "node": "20" },
+  "engines": { "node": ">=20" },
   "scripts": {
     "build": "tsc",
     "build:naver": "tsc",
