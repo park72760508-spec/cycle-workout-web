@@ -13174,7 +13174,7 @@ async function startMobileDashboard() {
     // 화면 방향 세로 모드로 고정
     await lockScreenOrientation();
     
-    // body에 클래스 추가 (CSS 적용)
+    // body에 클래스 추가 (CSS 적용) — 최적화된 스크롤 방지·body 잠금 유지, 건드리지 않음
     document.body.classList.add('mobile-dashboard-active');
     
     // Pull-to-refresh 방지 이벤트 핸들러 추가
