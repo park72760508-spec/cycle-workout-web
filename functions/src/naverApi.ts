@@ -1,8 +1,9 @@
 /**
  * STELVIO AI - 네이버 커머스 API 모듈
  * OAuth 2.0 인증, 주문 조회(last-changed-statuses), 발송 처리(dispatch)
+ * bcryptjs 사용 (순수 JS, Cloud Functions 배포 호환)
  */
-import * as bcrypt from "bcrypt";
+import * as bcrypt from "bcryptjs";
 
 const NAVER_TOKEN_URL = "https://api.commerce.naver.com/external/v1/oauth2/token";
 const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/seller";
