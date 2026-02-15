@@ -259,6 +259,18 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 .screen.active { display: block; }
 
+/* 인증 화면과 동일하게: 모바일/블루투스 개인훈련 대시보드 제외한 활성 화면은 내부 스크롤 허용 (안드로이드 등) */
+.screen.active:not(#mobileDashboardScreen) {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: 100vh;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+}
+
 /* 스플래시 화면은 transition 제거로 깜빡임 방지 */
 #splashScreen,
 #splashScreen *,
