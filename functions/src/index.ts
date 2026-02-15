@@ -10,6 +10,7 @@ import {
   getAccessToken,
   getLastChangedOrders,
   getProductOrderDetails,
+  dispatchProductOrders,
   extractContactFromOrder,
   extractContactFromDetail,
   type LastChangedType,
