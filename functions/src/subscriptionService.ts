@@ -5,7 +5,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 
 const USERS_COLLECTION = "users";
-const PROCESSED_ORDERS_COLLECTION = "naverProcessedOrders";
+const PROCESSED_ORDERS_COLLECTION = "processed_orders";
 
 /** 전화번호/ID 정규화 (숫자만 추출 등) */
 function normalizePhoneOrId(value: string): string {

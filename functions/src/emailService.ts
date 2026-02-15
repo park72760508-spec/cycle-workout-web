@@ -67,9 +67,34 @@ export async function sendErrorReport(payload: ErrorReportPayload): Promise<bool
   }
 }
 
+/** 실패한 주문 번호·옵션 정보를 포함한 알림 이메일 (stelvio.ai.kr@gmail.com) */
+export interface FailureEmailPayload {
+  productOrderId: string;
+  orderId?: string;
+  optionPhoneOrId: string | null;
+  ordererTel: string | null;
+  reason: string;
+}
+
 /**
- * 네이버 구독 매칭 실패 건 요약 리포트
+ * 유저 매칭 실패 시 stelvio.ai.kr@gmail.com 으로 실패한 주문 번호·옵션 정보 알림 발송
  */
+export async function sendFailureEmail(failures: FailureEmailPayload[]): Promise<boolean> {
+  if (failures.length === 0) return true;
+
+  const lines = failures.map(
+    (f) =>
+      `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  옵션(전화번호): ${f.optionPhoneOrId || "-"}, 주문자연락처: ${f.ordererTel || "-"}\n  사유: ${f.reason}`
+  );
+
+  return sendErrorReport({
+    subject: `[STELVIO AI] 네이버 구독 매칭 실패 ${failures.length}건`,
+    to: ERROR_REPORT_TO,
+    body: `다음 주문에서 사용자 매칭에 실패했습니다.\n\n${lines.join("\n\n")}\n\n발생 시각: ${new Date().toISOString()}`,
+  });
+}
+
+/** @deprecated sendFailureEmail 사용 권장 */
 export async function sendMatchingFailureReport(
   failures: Array<{
     productOrderId: string;
@@ -79,16 +104,5 @@ export async function sendMatchingFailureReport(
     reason: string;
   }>
 ): Promise<boolean> {
-  if (failures.length === 0) return true;
-
-  const lines = failures.map(
-    (f) =>
-      `- productOrderId: ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  옵션입력: ${f.optionPhoneOrId || "-"}, 주문자연락처: ${f.ordererTel || "-"}\n  사유: ${f.reason}`
-  );
-
-  return sendErrorReport({
-    subject: `[STELVIO AI] 네이버 구독 매칭 실패 ${failures.length}건`,
-    to: ERROR_REPORT_TO,
-    body: `다음 주문에서 사용자 매칭에 실패했습니다.\n\n${lines.join("\n\n")}\n\n발생 시각: ${new Date().toISOString()}`,
-  });
+  return sendFailureEmail(failures);
 }

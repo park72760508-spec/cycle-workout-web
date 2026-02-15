@@ -1,6 +1,6 @@
 /**
  * STELVIO AI - 네이버 구독 자동화 메인 엔트리
- * 30분 단위 스케줄러 및 오케스트레이션
+ * 30분 단위 스케줄러, VPC Connector(고정 IP 34.64.250.77) 적용
  */
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -19,11 +19,11 @@ import {
   revokeSubscriptionByOrder,
   DEFAULT_SUBSCRIPTION_DAYS,
 } from "./subscriptionService";
-import { sendMatchingFailureReport } from "./emailService";
+import { sendFailureEmail } from "./emailService";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
-// Client Secret은 Firebase Secret Manager 또는 .env의 NAVER_CLIENT_SECRET 사용
+// Client Secret: process.env.NAVER_CLIENT_SECRET 또는 Firebase Secret Manager
 const navSecret = defineSecret("NAVER_CLIENT_SECRET");
 
 if (!admin.apps.length) {
@@ -100,7 +100,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   }
 
   if (matchingFailures.length > 0) {
-    await sendMatchingFailureReport(matchingFailures);
+    await sendFailureEmail(matchingFailures);
   }
 
   if (toDispatch.length > 0) {
@@ -168,24 +168,28 @@ export async function runNaverSubscriptionSync(
 
 /**
  * 30분마다 실행되는 스케줄러.
- * NAVER_CLIENT_SECRET 은 Firebase Secret Manager 또는 환경변수에 설정.
+ * - Region: asia-northeast3 (서울)
+ * - VPC Connector: stelvio-connector → 고정 IP(34.64.250.77)로 네이버 API 호출
+ * - Client Secret: process.env.NAVER_CLIENT_SECRET 또는 Firebase Secret
  */
 export const naverSubscriptionSyncSchedule = onSchedule(
   {
     schedule: "every 30 minutes",
     timeZone: "Asia/Seoul",
     timeoutSeconds: 300,
+    region: "asia-northeast3",
+    vpcConnector: "stelvio-connector",
+    vpcConnectorEgressSettings: "ALL_TRAFFIC",
     secrets: [navSecret],
   },
   async () => {
     const clientSecret =
       navSecret.value() ||
-      process.env.NAVER_CLIENT_SECRET ||
-      "";
+      (process.env.NAVER_CLIENT_SECRET ?? "");
 
     if (!clientSecret.trim()) {
       console.error(
-        "[naverSubscription] NAVER_CLIENT_SECRET이 설정되지 않았습니다. Firebase Secret(NAVER_CLIENT_SECRET) 또는 .env를 확인하세요."
+        "[naverSubscription] NAVER_CLIENT_SECRET이 설정되지 않았습니다. .env 또는 Firebase Secret(NAVER_CLIENT_SECRET)을 확인하세요."
       );
       return;
     }
