@@ -6,6 +6,7 @@ import type { Firestore } from "firebase-admin/firestore";
 
 const USERS_COLLECTION = "users";
 const PROCESSED_ORDERS_COLLECTION = "processed_orders";
+const ORDERS_SUBCOLLECTION = "orders";
 
 /** 전화번호 정규화: 하이픈·공백 제거 후 숫자만 (매칭 시 필수). 10자리 이상이면 숫자만 반환 */
 function normalizePhoneOrId(value: string): string {
@@ -136,7 +137,10 @@ export async function revokeSubscriptionByOrder(
 
   const end = new Date(endDate);
   end.setDate(end.getDate() - info.addedDays);
-  const newEndDate = end.toISOString().split("T")[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const newEnd = end.getTime() < today.getTime() ? today : end;
+  const newEndDate = newEnd.toISOString().split("T")[0];
 
   await userRef.update({
     subscription_end_date: newEndDate,
@@ -209,4 +213,67 @@ export async function applySubscription(
     "[naverSubscription] 성공: 유저[" + userId + "] 구독 종료일이 [" + (previousEndDate ?? "(없음)") + "]에서 [" + newEndDate + "]로 연장됨"
   );
   return { success: true, newEndDate, previousEndDate };
+}
+
+/** 구매 로그 저장: users/{userId}/orders/{productOrderId} (PAYED 성공 시) */
+export interface OrderLogPayload {
+  orderId: string;
+  productOrderId: string;
+  productName: string;
+  productOption: string;
+  quantity: number;
+  totalPaymentAmount: number;
+  paymentDate: string;
+  processedAt: string;
+  status: "COMPLETED";
+}
+
+export async function saveOrderLog(
+  db: Firestore,
+  userId: string,
+  productOrderId: string,
+  payload: OrderLogPayload
+): Promise<void> {
+  await db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(ORDERS_SUBCOLLECTION)
+    .doc(productOrderId)
+    .set(payload);
+}
+
+/** 구매 로그 조회 (취소 중복 방지용) */
+export async function getOrderLog(
+  db: Firestore,
+  userId: string,
+  productOrderId: string
+): Promise<{ status: string } | null> {
+  const doc = await db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(ORDERS_SUBCOLLECTION)
+    .doc(productOrderId)
+    .get();
+  if (!doc.exists) return null;
+  const d = doc.data();
+  return d ? { status: String(d.status ?? "") } : null;
+}
+
+/** 취소/환불 시 구매 로그 상태 업데이트 (status, claimDate, claimReason). 문서 없으면 merge로 생성 */
+export async function updateOrderLogClaim(
+  db: Firestore,
+  userId: string,
+  productOrderId: string,
+  status: "CANCELLED" | "REFUNDED",
+  claimDate: string,
+  claimReason?: string
+): Promise<void> {
+  const ref = db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection(ORDERS_SUBCOLLECTION)
+    .doc(productOrderId);
+  const payload: Record<string, unknown> = { status, claimDate, productOrderId };
+  if (claimReason != null) payload.claimReason = claimReason;
+  await ref.set(payload, { merge: true });
 }

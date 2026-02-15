@@ -20,8 +20,12 @@ import {
 import {
   findUserByContact,
   isOrderProcessed,
+  getProcessedOrderInfo,
   applySubscription,
   revokeSubscriptionByOrder,
+  saveOrderLog,
+  getOrderLog,
+  updateOrderLogClaim,
   DEFAULT_SUBSCRIPTION_DAYS,
 } from "./subscriptionService";
 import { sendFailureEmail } from "./emailService";
@@ -190,13 +194,46 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       continue;
     }
 
-    /* 상품별 기간(optionManageCode/productOption) × 수량(quantity). 없으면 기본 30일·수량 1 */
-    const { totalDays } = detail
+    /* 상품별 기간(optionManageCode/productOption) × 수량(quantity). 없으면 기본 31일·수량 1 */
+    const { totalDays, matchedCode } = detail
       ? computeSubscriptionDaysFromProduct(detail)
-      : { totalDays: DEFAULT_SUBSCRIPTION_DAYS };
+      : { totalDays: DEFAULT_SUBSCRIPTION_DAYS, matchedCode: undefined };
+    const periodLabel = matchedCode ?? `${totalDays}일`;
 
     try {
       await applySubscription(db, user.userId, productOrderId, totalDays);
+
+      const orderId = (order.orderId || "").toString();
+      const productName =
+        (detail?.productName ?? "").toString().trim() || "STELVIO AI";
+      const productOptionStr =
+        typeof detail?.productOption === "string"
+          ? detail.productOption.trim()
+          : (detail?.productOption?.optionValue ?? detail?.productOption?.optionName ?? "").toString().trim() || "";
+      const quantity = Math.max(1, Math.floor(Number(detail?.quantity) || 1));
+      const totalPaymentAmount = Number(detail?.totalPaymentAmount) || 0;
+      const paymentDate = (detail?.paymentDate ?? order.paymentDate ?? new Date().toISOString()).toString().trim();
+      const processedAt = new Date().toISOString();
+
+      await saveOrderLog(db, user.userId, productOrderId, {
+        orderId,
+        productOrderId,
+        productName,
+        productOption: productOptionStr,
+        quantity,
+        totalPaymentAmount,
+        paymentDate,
+        processedAt,
+        status: "COMPLETED",
+      });
+
+      console.log(
+        "[naverSubscription] 성공: 유저",
+        user.userId,
+        "매칭 완료, 구독",
+        periodLabel,
+        "연장 및 구매로그 저장 성공"
+      );
       toDispatch.push(productOrderId);
     } catch (e) {
       matchingFailures.push({
@@ -232,7 +269,7 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   }
 }
 
-/** CLAIM_COMPLETED(취소/반품 완료) 주문 처리: 구독 회수 */
+/** CLAIM_COMPLETED(취소/반품 완료) 주문 처리: 구독 회수 + 구매 로그 status 업데이트 (멱등: 이미 CANCELLED/REFUNDED면 스킵) */
 async function processRevokedOrders(
   accessToken: string,
   type: LastChangedType
@@ -245,22 +282,43 @@ async function processRevokedOrders(
     limitCount: 100,
   });
 
+  const claimDate = new Date().toISOString();
+  const claimStatus: "CANCELLED" | "REFUNDED" = type === "CLAIM_COMPLETED" ? "CANCELLED" : "REFUNDED";
+
   for (const order of orders) {
     const productOrderId = (order.productOrderId || "").toString();
     if (!productOrderId) continue;
 
     try {
+      const info = await getProcessedOrderInfo(db, productOrderId);
+      if (!info) continue;
+
+      const orderLog = await getOrderLog(db, info.userId, productOrderId);
+      if (orderLog && (orderLog.status === "CANCELLED" || orderLog.status === "REFUNDED")) {
+        continue;
+      }
+
       const { revoked, userId } = await revokeSubscriptionByOrder(
         db,
         productOrderId
       );
       if (revoked && userId) {
+        await updateOrderLogClaim(
+          db,
+          userId,
+          productOrderId,
+          claimStatus,
+          claimDate,
+          `${type} 처리`
+        );
         console.log(
-          "[naverSubscription] 구독 회수:",
+          "[naverSubscription] 구독 회수 및 구매로그 업데이트:",
           type,
           productOrderId,
           "userId:",
-          userId
+          userId,
+          "status:",
+          claimStatus
         );
       }
     } catch (e) {

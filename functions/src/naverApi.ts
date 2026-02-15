@@ -164,6 +164,12 @@ export interface ProductOrderDetailItem {
   optionManageCode?: string;
   /** API 응답: 수량 */
   quantity?: number;
+  /** API 응답: 상품명 */
+  productName?: string;
+  /** API 응답: 결제 금액 */
+  totalPaymentAmount?: number;
+  /** API 응답: 결제 시각 */
+  paymentDate?: string;
   /** API 응답: 사용자 입력 추가 정보(옵션) */
   productOption?: string | { optionValue?: string; optionName?: string; [key: string]: unknown };
   orderer?: {
