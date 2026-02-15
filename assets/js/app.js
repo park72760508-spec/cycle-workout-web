@@ -738,12 +738,10 @@ function showAuthScreen() {
     authScreen.style.display = 'block';
     authScreen.style.opacity = '1';
     authScreen.style.visibility = 'visible';
-    if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen')) {
-      if (window.__pullToRefreshBlockerCleanup) window.__pullToRefreshBlockerCleanup();
-      if (typeof lockBodyScroll === 'function') lockBodyScroll(true);
-      window.__pullToRefreshBlockerCleanup = function () {
-        if (typeof lockBodyScroll === 'function') lockBodyScroll(false);
-      };
+    /* body 스크롤 잠금 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤 */
+    if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen') && window.__pullToRefreshBlockerCleanup) {
+      window.__pullToRefreshBlockerCleanup();
+      window.__pullToRefreshBlockerCleanup = null;
     }
   }
 }
@@ -3221,18 +3219,13 @@ if (!window.showScreen) {
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
         
-        // Pull-to-refresh 차단: authScreen은 body 잠금만 사용 (터치 리스너 없음 → 스크롤 정상 동작)
-        if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id)) {
-          if (window.__pullToRefreshBlockerCleanup) window.__pullToRefreshBlockerCleanup();
-          var isAuthScreen = (id === 'authScreen');
-          if (isAuthScreen && typeof lockBodyScroll === 'function') lockBodyScroll(true);
-          if (!isAuthScreen && typeof enableForScreen === 'function') {
-            window.__pullToRefreshBlockerCleanup = enableForScreen(id);
-          } else {
-            window.__pullToRefreshBlockerCleanup = function () {
-              if (isAuthScreen && typeof lockBodyScroll === 'function') lockBodyScroll(false);
-            };
-          }
+        // body 스크롤 잠금/고정 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤
+        if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && window.__pullToRefreshBlockerCleanup) {
+          window.__pullToRefreshBlockerCleanup();
+          window.__pullToRefreshBlockerCleanup = null;
+        }
+        if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && id !== 'authScreen' && typeof enableForScreen === 'function') {
+          window.__pullToRefreshBlockerCleanup = enableForScreen(id);
         }
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
