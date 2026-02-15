@@ -40,32 +40,9 @@
 /* ========== BASE / RESET (공통) ========== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Pull-to-refresh 차단: 모바일(Android Chrome, iOS Bluefy 등)에서 아래로 당길 때 새로고침 방지 */
+/* 스크롤: body 고정/잠금 사용 안 함. 모든 화면은 인증 화면과 동일하게 화면 단위 스크롤 */
 html, body {
-  overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
-}
-
-/* iOS Bluefy 등: body 스크롤 잠금 시 window overscroll 제거 → 네이티브 Pull-to-refresh 무력화 */
-body.body-pull-to-refresh-lock {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow: hidden !important;
-  overscroll-behavior: none !important;
-  -webkit-overflow-scrolling: auto;
-}
-/* body 잠금 시 인증 화면은 내부만 스크롤 (아래로 스크롤 가능, 콘텐츠가 길어도 폼 접근 가능) */
-body.body-pull-to-refresh-lock #authScreen {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  -webkit-overflow-scrolling: touch;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  overscroll-behavior-y: none !important;
-  touch-action: pan-y !important;
 }
 
 /* ========== 디바이스 연결 방식 슬라이드 스위치 ========== */
@@ -221,9 +198,6 @@ body.body-pull-to-refresh-lock #authScreen {
 }
 html, body { 
   height: 100%; 
-  /* Pull-to-refresh 방지 (모든 화면, 스크롤은 유지) */
-  overscroll-behavior-y: contain;
-  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 body {
@@ -231,6 +205,7 @@ body {
   background: #f6f8fa;
   color: #222;
   overflow-x: hidden;
+  /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
 }
 h1,h2,h3,h4 { font-weight: 600; }
 
@@ -258,6 +233,20 @@ h1,h2,h3,h4 { font-weight: 600; }
   -webkit-overflow-scrolling: touch;
 }
 .screen.active { display: block; }
+
+/* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen) {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: 100vh;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  box-sizing: border-box;
+}
 
 /* 스플래시 화면은 transition 제거로 깜빡임 방지 */
 #splashScreen,
@@ -735,19 +724,15 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 8px 16px rgba(135, 206, 235, 0.4);
 }
 
-/* 사용자 메뉴얼 화면: 강제 스크롤 제어 없음 — 문서( body ) 스크롤로 상단 제목까지 자연 스크롤 */
+/* 사용자 메뉴얼 화면: 인증과 동일한 화면 단위 스크롤 적용 (공통 규칙 + 레이아웃만 추가) */
 #userManualScreen {
   position: relative;
-  overflow: visible;
-  overscroll-behavior: auto;
 }
 
 #userManualScreen.active {
   display: flex !important;
   align-items: flex-start;
   justify-content: center;
-  min-height: 100vh;
-  overflow: visible;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
