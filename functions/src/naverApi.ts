@@ -223,7 +223,7 @@ export async function getProductOrderDetails(
     : [];
   const list = rawList.map((item): ProductOrderDetailItem => {
     if (item && typeof item === "object" && "productOrder" in item && item.productOrder != null) {
-      return item.productOrder;
+      return item.productOrder as ProductOrderDetailItem;
     }
     return item as ProductOrderDetailItem;
   });
