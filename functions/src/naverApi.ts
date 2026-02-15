@@ -221,11 +221,12 @@ export async function getProductOrderDetails(
     Array.isArray(data.data) ? data.data
     : Array.isArray(data.productOrders) ? data.productOrders
     : [];
-  const list: ProductOrderDetailItem[] = rawList.map((item) =>
-    item && typeof item === "object" && "productOrder" in item && item.productOrder != null
-      ? item.productOrder
-      : (item as ProductOrderDetailItem)
-  );
+  const list = rawList.map((item): ProductOrderDetailItem => {
+    if (item && typeof item === "object" && "productOrder" in item && item.productOrder != null) {
+      return item.productOrder;
+    }
+    return item as ProductOrderDetailItem;
+  });
   console.log("[naverApi] 주문 상세 조회:", batch.length, "건 요청 →", list.length, "건 수신");
   return list;
 }
