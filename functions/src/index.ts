@@ -33,14 +33,26 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/** 조회 시간 구간 (ISO 8601). 7일로 넓혀 결제 후 며칠 지난 주문도 수집 (중복은 isOrderProcessed로 방지) */
-const LAST_CHANGED_WINDOW_HOURS = 24 * 7; // 168시간 = 7일
+/** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). 조회 기간 최대 24시간 */
+const LAST_CHANGED_WINDOW_HOURS = 24;
+function toKstIso8601(date: Date): string {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const y = kst.getUTCFullYear();
+  const m = kst.getUTCMonth() + 1;
+  const d = kst.getUTCDate();
+  const h = kst.getUTCHours();
+  const min = kst.getUTCMinutes();
+  const sec = kst.getUTCSeconds();
+  const ms = kst.getUTCMilliseconds();
+  return `${y}-${pad(m)}-${pad(d)}T${pad(h)}:${pad(min)}:${pad(sec)}.${ms.toString().padStart(3, "0")}+09:00`;
+}
 function getLastChangedRange(): { lastChangedFrom: string; lastChangedTo: string } {
   const to = new Date();
   const from = new Date(to.getTime() - LAST_CHANGED_WINDOW_HOURS * 60 * 60 * 1000);
   return {
-    lastChangedFrom: from.toISOString(),
-    lastChangedTo: to.toISOString(),
+    lastChangedFrom: toKstIso8601(from),
+    lastChangedTo: toKstIso8601(to),
   };
 }
 
@@ -61,8 +73,8 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     "[naverSubscription] PAYED 조회",
     orders.length,
     "건 (범위: 최근",
-    LAST_CHANGED_WINDOW_HOURS / 24,
-    "일)"
+    LAST_CHANGED_WINDOW_HOURS,
+    "시간, KST)"
   );
 
   const matchingFailures: Array<{
