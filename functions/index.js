@@ -1258,18 +1258,17 @@ exports.finalizeWeeklyRanking = onSchedule(
   }
 );
 
-// ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄) ----------
-// 네이버 함수만 배포 실패 시: 아래 주석 해제 후 lib 폴더·빌드 확인
-// const path = require("path");
-// const fs = require("fs");
-// const libPath = path.join(__dirname, "lib", "index.js");
-// if (fs.existsSync(libPath)) {
-//   try {
-//     const naverSubscription = require("./lib/index.js");
-//     if (naverSubscription && naverSubscription.naverSubscriptionSyncSchedule) {
-//       exports.naverSubscriptionSyncSchedule = naverSubscription.naverSubscriptionSyncSchedule;
-//     }
-//   } catch (e) {
-//     console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
-//   }
-// }
+// ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
+const path = require("path");
+const fs = require("fs");
+const libPath = path.join(__dirname, "lib", "index.js");
+if (fs.existsSync(libPath)) {
+  try {
+    const naverSubscription = require("./lib/index.js");
+    if (naverSubscription && naverSubscription.naverSubscriptionSyncSchedule) {
+      exports.naverSubscriptionSyncSchedule = naverSubscription.naverSubscriptionSyncSchedule;
+    }
+  } catch (e) {
+    console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
+  }
+}
