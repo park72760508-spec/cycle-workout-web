@@ -16553,6 +16553,14 @@ body.mobile-dashboard-active {
   box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
 }
 
+/* 구독 안내 오버레이 우측 상단 X(닫기) 버튼 */
+.subscribe-overlay-close-x:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #00d4aa;
+}
+.subscribe-overlay-close-x:active {
+  background: rgba(255, 255, 255, 0.15);
+}
 
 /* ==========================================================
    [모바일 대시보드 컨트롤 버튼 스타일]
