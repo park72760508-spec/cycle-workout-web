@@ -243,7 +243,7 @@ export async function getProductOrderDetails(
   return list;
 }
 
-/** 상세 주문에서 연락처·이름·배송메모·옵션 추출. order.ordererTel, productOrder.shippingMemo 포함. 하이픈 제거는 매칭 단계에서 */
+/** 상세 주문에서 추출. API 경로: order.ordererName, order.ordererTel, productOrder.shippingMemo, quantity, optionManageCode. 숫자 정규화는 매칭 단계에서 */
 export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   ordererTel: string | null;
   ordererName: string | null;
@@ -252,20 +252,21 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   optionPhoneOrId: string | null;
   memoOrOptionId: string | null;
 } {
-  let ordererTel: string | null = (detail.ordererTel ?? "")
-    .toString()
-    .trim() || null;
-  let ordererName: string | null = (detail.ordererName ?? "")
-    .toString()
-    .trim() || null;
-  let ordererNo: string | null = (detail.ordererNo ?? "")
-    .toString()
-    .trim() || null;
   const orderer = detail.orderer;
+  const orderAny = orderer as { ordererName?: string; ordererTel?: string; name?: string; tel?: string } | undefined;
+  let ordererTel: string | null = (detail.ordererTel ?? orderAny?.ordererTel ?? orderAny?.tel ?? "")
+    .toString()
+    .trim() || null;
+  let ordererName: string | null = (detail.ordererName ?? orderAny?.ordererName ?? orderAny?.name ?? "")
+    .toString()
+    .trim() || null;
+  let ordererNo: string | null = (detail.ordererNo ?? (orderer as { no?: string; ordererNo?: string })?.no ?? (orderer as { ordererNo?: string })?.ordererNo ?? "")
+    .toString()
+    .trim() || null;
   if (orderer) {
     if (!ordererTel)
       ordererTel =
-        (orderer.tel || orderer.contact || (orderer as { phone?: string }).phone || "")
+        (orderer.tel || (orderer as { contact?: string }).contact || (orderer as { phone?: string }).phone || "")
           .toString()
           .trim() || null;
     if (!ordererName) ordererName = (orderer.name ?? "").toString().trim() || null;

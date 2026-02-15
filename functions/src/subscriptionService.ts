@@ -16,7 +16,7 @@ function normalizePhoneOrId(value: string): string {
   return trimmed;
 }
 
-/** ordererTel 우선, 없으면 shippingMemo 등으로 검색. 연락처는 하이픈 제거 후 숫자만 비교, DB는 phoneNumber·phone·tel 모두 대조 */
+/** 1순위 ordererTel, 2순위 shippingMemo. 숫자 아닌 문자 제거 후 비교. DB는 contact·phoneNumber·phone·tel 대조 */
 export async function findUserByContact(
   db: Firestore,
   optionPhoneOrId: string | null,
@@ -26,27 +26,28 @@ export async function findUserByContact(
   shippingMemo?: string | null
 ): Promise<{ userId: string } | null> {
   const candidates: string[] = [];
-  if (optionPhoneOrId) {
-    candidates.push(normalizePhoneOrId(optionPhoneOrId), optionPhoneOrId.trim());
-  }
   if (ordererTel) {
     const normalized = normalizePhoneOrId(ordererTel);
     if (!candidates.includes(normalized)) candidates.push(normalized);
     if (!candidates.includes(ordererTel.trim())) candidates.push(ordererTel.trim());
   }
-  if (ordererNo) {
-    const normalized = normalizePhoneOrId(ordererNo);
-    if (!candidates.includes(normalized)) candidates.push(normalized);
-    if (!candidates.includes(ordererNo.trim())) candidates.push(ordererNo.trim());
-  }
-  if (memoOrOptionId) {
-    const trimmed = memoOrOptionId.trim();
-    if (trimmed && !candidates.includes(trimmed)) candidates.push(trimmed);
-  }
   if (shippingMemo) {
     const normalized = normalizePhoneOrId(shippingMemo);
     if (normalized.length >= 10 && !candidates.includes(normalized)) candidates.push(normalized);
     const trimmed = shippingMemo.trim();
+    if (trimmed && !candidates.includes(trimmed)) candidates.push(trimmed);
+  }
+  if (optionPhoneOrId) {
+    const n = normalizePhoneOrId(optionPhoneOrId);
+    if (!candidates.includes(n)) candidates.push(n);
+    if (!candidates.includes(optionPhoneOrId.trim())) candidates.push(optionPhoneOrId.trim());
+  }
+  if (ordererNo) {
+    const normalized = normalizePhoneOrId(ordererNo);
+    if (!candidates.includes(normalized)) candidates.push(normalized);
+  }
+  if (memoOrOptionId) {
+    const trimmed = memoOrOptionId.trim();
     if (trimmed && !candidates.includes(trimmed)) candidates.push(trimmed);
   }
 
@@ -56,17 +57,17 @@ export async function findUserByContact(
   for (const doc of usersSnap.docs) {
     const data = doc.data();
     const uid = doc.id;
-    const phone = (data.phoneNumber ?? data.phone ?? data.tel ?? "").toString().trim();
-    const normalizedPhone = normalizePhoneOrId(phone);
+    const contact = (data.contact ?? data.phoneNumber ?? data.phone ?? data.tel ?? "").toString().trim();
+    const normalizedContact = normalizePhoneOrId(contact);
     const email = (data.email ?? "").toString().trim();
     const idField = (data.id ?? data.uid ?? uid).toString().trim();
 
     for (const c of candidates) {
       if (!c) continue;
-      if (c === phone || c === normalizedPhone || c === idField || c === uid || c === email) {
+      if (c === contact || c === normalizedContact || c === idField || c === uid || c === email) {
         return { userId: uid };
       }
-      if (normalizedPhone && c === normalizedPhone) return { userId: uid };
+      if (normalizedContact && c === normalizedContact) return { userId: uid };
     }
   }
   return null;
@@ -129,7 +130,7 @@ export async function revokeSubscriptionByOrder(
   }
 
   const data = userSnap.data()!;
-  let endDate = (data.subscription_end_date || data.expiry_date || "").toString().trim();
+  let endDate = (data.expiry_date ?? data.subscription_end_date ?? "").toString().trim();
   if (!endDate) {
     await markOrderRevoked(db, productOrderId);
     return { revoked: true, userId: info.userId };
@@ -143,8 +144,8 @@ export async function revokeSubscriptionByOrder(
   const newEndDate = newEnd.toISOString().split("T")[0];
 
   await userRef.update({
-    subscription_end_date: newEndDate,
-    ...(data.expiry_date !== undefined ? { expiry_date: newEndDate } : {}),
+    expiry_date: newEndDate,
+    ...(data.subscription_end_date !== undefined ? { subscription_end_date: newEndDate } : {}),
   });
 
   await markOrderRevoked(db, productOrderId);
@@ -182,7 +183,7 @@ export function computeNewSubscriptionEndDate(
 /** 상품별 구독 일수 (상품 설정 또는 기본값). 필요 시 Firestore appConfig/naver 에서 상품별 일수 매핑 */
 export const DEFAULT_SUBSCRIPTION_DAYS = 30;
 
-/** 유저 문서에 구독 만료일 적용 (subscription_end_date, 필요 시 expiry_date 동기화). 기존 종료일 없거나 과거면 현재+일수, 미래면 기존+일수 */
+/** 유저 문서에 구독 만료일 적용. 대상 필드: expiry_date (YYYY-MM-DD). 기존이 미래면 기존+일수, 과거/없으면 현재+일수 */
 export async function applySubscription(
   db: Firestore,
   userId: string,
@@ -196,36 +197,29 @@ export async function applySubscription(
   }
 
   const data = userSnap.data()!;
-  const previousEndDate = (data.subscription_end_date || data.expiry_date || "").toString().trim() || null;
+  const previousEndDate = (data.expiry_date ?? data.subscription_end_date ?? "").toString().trim() || null;
   const newEndDate = computeNewSubscriptionEndDate(previousEndDate, addDays);
 
-  const update: Record<string, unknown> = {
-    subscription_end_date: newEndDate,
-  };
-  if (data.expiry_date !== undefined) {
-    update.expiry_date = newEndDate;
-  }
-
-  await userRef.update(update);
+  await userRef.update({
+    expiry_date: newEndDate,
+    ...(data.subscription_end_date !== undefined ? { subscription_end_date: newEndDate } : {}),
+  });
   await markOrderProcessed(db, productOrderId, userId, addDays);
 
-  console.log(
-    "[naverSubscription] 성공: 유저[" + userId + "] 구독 종료일이 [" + (previousEndDate ?? "(없음)") + "]에서 [" + newEndDate + "]로 연장됨"
-  );
   return { success: true, newEndDate, previousEndDate };
 }
 
-/** 구매 로그 저장: users/{userId}/orders/{productOrderId} (PAYED 성공 시) */
+/** 구매 로그 저장: users/{userId}/orders/{productOrderId} (PAYED 성공 시). status: "PAYED" | "CANCELLED" */
 export interface OrderLogPayload {
   orderId: string;
   productOrderId: string;
   productName: string;
   productOption: string;
   quantity: number;
-  totalPaymentAmount: number;
+  totalPaymentAmount?: number;
   paymentDate: string;
-  processedAt: string;
-  status: "COMPLETED";
+  processedAt?: string;
+  status: "PAYED" | "CANCELLED";
 }
 
 export async function saveOrderLog(
@@ -259,12 +253,12 @@ export async function getOrderLog(
   return d ? { status: String(d.status ?? "") } : null;
 }
 
-/** 취소/환불 시 구매 로그 상태 업데이트 (status, claimDate, claimReason). 문서 없으면 merge로 생성 */
+/** 취소 시 구매 로그 상태 업데이트 (status: CANCELLED, claimDate, claimReason). 문서 없으면 merge로 생성 */
 export async function updateOrderLogClaim(
   db: Firestore,
   userId: string,
   productOrderId: string,
-  status: "CANCELLED" | "REFUNDED",
+  status: "CANCELLED",
   claimDate: string,
   claimReason?: string
 ): Promise<void> {

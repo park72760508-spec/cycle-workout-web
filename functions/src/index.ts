@@ -201,19 +201,19 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     const periodLabel = matchedCode ?? `${totalDays}일`;
 
     try {
-      await applySubscription(db, user.userId, productOrderId, totalDays);
+      const { newEndDate } = await applySubscription(db, user.userId, productOrderId, totalDays);
 
       const orderId = (order.orderId || "").toString();
       const productName =
         (detail?.productName ?? "").toString().trim() || "STELVIO AI";
       const productOptionStr =
-        typeof detail?.productOption === "string"
+        (detail?.optionManageCode ?? "").toString().trim() ||
+        (typeof detail?.productOption === "string"
           ? detail.productOption.trim()
-          : (detail?.productOption?.optionValue ?? detail?.productOption?.optionName ?? "").toString().trim() || "";
+          : (detail?.productOption?.optionValue ?? detail?.productOption?.optionName ?? "").toString().trim()) ||
+        "";
       const quantity = Math.max(1, Math.floor(Number(detail?.quantity) || 1));
-      const totalPaymentAmount = Number(detail?.totalPaymentAmount) || 0;
       const paymentDate = (detail?.paymentDate ?? order.paymentDate ?? new Date().toISOString()).toString().trim();
-      const processedAt = new Date().toISOString();
 
       await saveOrderLog(db, user.userId, productOrderId, {
         orderId,
@@ -221,18 +221,16 @@ async function processPayedOrders(accessToken: string): Promise<void> {
         productName,
         productOption: productOptionStr,
         quantity,
-        totalPaymentAmount,
         paymentDate,
-        processedAt,
-        status: "COMPLETED",
+        status: "PAYED",
       });
 
       console.log(
-        "[naverSubscription] 성공: 유저",
+        "[naverSubscription] 처리완료:",
         user.userId,
-        "매칭 완료, 구독",
-        periodLabel,
-        "연장 및 구매로그 저장 성공"
+        "-",
+        newEndDate,
+        "갱신 및 로그 저장 성공"
       );
       toDispatch.push(productOrderId);
     } catch (e) {
@@ -283,7 +281,6 @@ async function processRevokedOrders(
   });
 
   const claimDate = new Date().toISOString();
-  const claimStatus: "CANCELLED" | "REFUNDED" = type === "CLAIM_COMPLETED" ? "CANCELLED" : "REFUNDED";
 
   for (const order of orders) {
     const productOrderId = (order.productOrderId || "").toString();
@@ -294,7 +291,7 @@ async function processRevokedOrders(
       if (!info) continue;
 
       const orderLog = await getOrderLog(db, info.userId, productOrderId);
-      if (orderLog && (orderLog.status === "CANCELLED" || orderLog.status === "REFUNDED")) {
+      if (orderLog && orderLog.status === "CANCELLED") {
         continue;
       }
 
@@ -307,7 +304,7 @@ async function processRevokedOrders(
           db,
           userId,
           productOrderId,
-          claimStatus,
+          "CANCELLED",
           claimDate,
           `${type} 처리`
         );
@@ -317,8 +314,7 @@ async function processRevokedOrders(
           productOrderId,
           "userId:",
           userId,
-          "status:",
-          claimStatus
+          "status: CANCELLED"
         );
       }
     } catch (e) {
