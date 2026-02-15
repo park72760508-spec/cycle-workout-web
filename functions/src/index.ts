@@ -143,10 +143,12 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     const detail = detailMap[productOrderId];
     let optionPhoneOrId: string | null = null;
     let ordererTel: string | null = null;
+    let ordererNo: string | null = null;
     let memoOrOptionId: string | null = null;
     if (detail) {
       const extracted = extractContactFromDetail(detail);
       ordererTel = extracted.ordererTel;
+      ordererNo = extracted.ordererNo;
       optionPhoneOrId = extracted.optionPhoneOrId;
       memoOrOptionId = extracted.memoOrOptionId;
     }
@@ -155,7 +157,13 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       optionPhoneOrId = fromOrder.optionPhoneOrId;
       ordererTel = fromOrder.ordererTel;
     }
-    const user = await findUserByContact(db, optionPhoneOrId, ordererTel, memoOrOptionId ?? undefined);
+    const user = await findUserByContact(
+      db,
+      optionPhoneOrId,
+      ordererTel,
+      memoOrOptionId ?? undefined,
+      ordererNo ?? undefined
+    );
 
     if (!user) {
       matchingFailures.push({

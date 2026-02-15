@@ -15,12 +15,13 @@ function normalizePhoneOrId(value: string): string {
   return trimmed;
 }
 
-/** 1순위: 전화번호/옵션·요청사항 ID, 2순위: 주문자 연락처. 전화번호는 하이픈 제거 후 숫자만 비교 */
+/** 1순위: 전화번호/옵션·요청사항 ID, 2순위: 주문자 연락처. 연락처는 하이픈 제거 후 숫자만 비교, DB는 phoneNumber·phone·tel 모두 대조 */
 export async function findUserByContact(
   db: Firestore,
   optionPhoneOrId: string | null,
   ordererTel: string | null,
-  memoOrOptionId?: string | null
+  memoOrOptionId?: string | null,
+  ordererNo?: string | null
 ): Promise<{ userId: string } | null> {
   const candidates: string[] = [];
   if (optionPhoneOrId) {
@@ -30,6 +31,11 @@ export async function findUserByContact(
     const normalized = normalizePhoneOrId(ordererTel);
     if (!candidates.includes(normalized)) candidates.push(normalized);
     if (!candidates.includes(ordererTel.trim())) candidates.push(ordererTel.trim());
+  }
+  if (ordererNo) {
+    const normalized = normalizePhoneOrId(ordererNo);
+    if (!candidates.includes(normalized)) candidates.push(normalized);
+    if (!candidates.includes(ordererNo.trim())) candidates.push(ordererNo.trim());
   }
   if (memoOrOptionId) {
     const trimmed = memoOrOptionId.trim();
@@ -42,10 +48,10 @@ export async function findUserByContact(
   for (const doc of usersSnap.docs) {
     const data = doc.data();
     const uid = doc.id;
-    const phone = (data.phone || data.tel || "").toString().trim();
+    const phone = (data.phoneNumber ?? data.phone ?? data.tel ?? "").toString().trim();
     const normalizedPhone = normalizePhoneOrId(phone);
-    const email = (data.email || "").toString().trim();
-    const idField = (data.id || data.uid || uid).toString().trim();
+    const email = (data.email ?? "").toString().trim();
+    const idField = (data.id ?? data.uid ?? uid).toString().trim();
 
     for (const c of candidates) {
       if (!c) continue;

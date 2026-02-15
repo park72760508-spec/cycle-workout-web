@@ -7,6 +7,8 @@ import * as bcrypt from "bcryptjs";
 
 const NAVER_TOKEN_URL = "https://api.commerce.naver.com/external/v1/oauth2/token";
 const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/seller";
+/** 주문 상세 조회 API (productOrderIds 배열로 조회) */
+const NAVER_PRODUCT_ORDERS_URL = "https://api.commerce.naver.com/external/v1/product-orders";
 
 /** API 허용값: PAYED(결제완료), CLAIM_COMPLETED(클레임 완료 = 취소/반품 완료). CANCELLED/RETURNED는 미지원 */
 export type LastChangedType = "PAYED" | "CLAIM_COMPLETED";
@@ -146,14 +148,21 @@ export async function getLastChangedOrders(
   return { orders: lastChangeStatuses, count, moreSequence: data.moreSequence };
 }
 
-/** 주문 상세 내역 조회 API 응답 항목 (연락처·옵션·요청사항 포함) */
+/** 주문 상세 내역 조회 API 응답 항목 — ordererTel, ordererNo, productOption 등 연락처·옵션 포함 */
 export interface ProductOrderDetailItem {
   productOrderId?: string;
   orderId?: string;
+  /** API 응답: 주문자 연락처 (상세 조회 시 최상위 필드) */
+  ordererTel?: string;
+  /** API 응답: 주문자 번호 */
+  ordererNo?: string;
+  /** API 응답: 상품 옵션 (사용자 아이디 입력 시) */
+  productOption?: string | { optionValue?: string; optionName?: string; [key: string]: unknown };
   orderer?: {
     tel?: string;
     contact?: string;
     name?: string;
+    no?: string;
     [key: string]: unknown;
   };
   orderOptions?: Array<{
@@ -162,68 +171,99 @@ export interface ProductOrderDetailItem {
     optionName?: string;
     [key: string]: unknown;
   }>;
-  /** 주문 시 요청사항(스마트스토어) */
   orderMemo?: string;
   buyerComment?: string;
   [key: string]: unknown;
 }
 
-/** 주문 상세 내역 조회 API 응답 (POST product-orders/query) */
+/** 주문 상세 내역 조회 API 응답 (다양한 래핑 구조 대응) */
 export interface ProductOrderDetailsResponse {
   data?: {
     productOrders?: ProductOrderDetailItem[];
     [key: string]: unknown;
   };
+  productOrders?: ProductOrderDetailItem[];
   [key: string]: unknown;
 }
 
-/** 주문 상세 내역 조회 — 연락처·옵션·요청사항 추출용 (최대 300건) */
+/** 주문 상세 내역 조회 — productOrderIds 반드시 배열 ["ID1","ID2"] 로 POST (최대 300건) */
 export async function getProductOrderDetails(
   accessToken: string,
   productOrderIds: string[]
 ): Promise<ProductOrderDetailItem[]> {
   if (productOrderIds.length === 0) return [];
-  const batch = productOrderIds.slice(0, 300);
-  const res = await fetch(`${NAVER_API_BASE}/product-orders/query`, {
+  const batch = Array.isArray(productOrderIds) ? productOrderIds.slice(0, 300) : [String(productOrderIds)];
+  const payload = { productOrderIds: batch };
+  console.log("[naverApi] 주문 상세 조회 요청 payload:", JSON.stringify(payload));
+
+  const res = await fetch(NAVER_PRODUCT_ORDERS_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ productOrderIds: batch }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Naver product-orders/query failed: ${res.status} ${text}`);
+    throw new Error(`Naver product-orders failed: ${res.status} ${text}`);
   }
   const data = (await res.json()) as ProductOrderDetailsResponse;
-  const list = Array.isArray(data.data?.productOrders) ? data.data.productOrders : [];
+  const rawJson = JSON.stringify(data);
+  const logJson = rawJson.length > 3000 ? rawJson.slice(0, 3000) + "...(truncated)" : rawJson;
+  console.log("[naverApi] 주문 상세 조회 응답 전체 (필드 확인용):", logJson);
+
+  const list =
+    Array.isArray(data.data?.productOrders) ? data.data.productOrders
+    : Array.isArray(data.productOrders) ? data.productOrders
+    : Array.isArray(data.data) ? data.data
+    : Array.isArray(data) ? data
+    : [];
   console.log("[naverApi] 주문 상세 조회:", batch.length, "건 요청 →", list.length, "건 수신");
   return list;
 }
 
-/** 상세 주문에서 연락처·요청사항·옵션값 추출 (매칭용) */
+/** 상세 주문에서 연락처·요청사항·옵션 추출 (ordererTel, ordererNo, productOption 타겟, 하이픈 제거는 매칭 단계에서) */
 export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   ordererTel: string | null;
+  ordererNo: string | null;
   optionPhoneOrId: string | null;
   memoOrOptionId: string | null;
 } {
-  let ordererTel: string | null = null;
+  let ordererTel: string | null = (detail.ordererTel ?? "")
+    .toString()
+    .trim() || null;
+  let ordererNo: string | null = (detail.ordererNo ?? "")
+    .toString()
+    .trim() || null;
   const orderer = detail.orderer;
   if (orderer) {
-    ordererTel =
-      (orderer.tel || orderer.contact || (orderer as { phone?: string }).phone || "")
-        .toString()
-        .trim() || null;
+    if (!ordererTel)
+      ordererTel =
+        (orderer.tel || orderer.contact || (orderer as { phone?: string }).phone || "")
+          .toString()
+          .trim() || null;
+    if (!ordererNo) ordererNo = (orderer.no ?? (orderer as { ordererNo?: string }).ordererNo ?? "").toString().trim() || null;
   }
   let optionPhoneOrId: string | null = null;
   let memoOrOptionId: string | null = null;
+  const productOption = detail.productOption;
+  if (productOption != null) {
+    const val =
+      typeof productOption === "string"
+        ? productOption.trim()
+        : (productOption.optionValue ?? productOption.optionName ?? "").toString().trim();
+    if (val) {
+      optionPhoneOrId = val;
+      memoOrOptionId = val;
+    }
+  }
   const options = detail.orderOptions;
-  if (options && options.length > 0) {
+  if (options && options.length > 0 && !optionPhoneOrId) {
     for (const opt of options) {
       const val = (opt.optionValue ?? opt.optionName ?? "").toString().trim();
       if (val) {
-        optionPhoneOrId = optionPhoneOrId ?? val;
+        optionPhoneOrId = val;
         memoOrOptionId = memoOrOptionId ?? val;
         break;
       }
@@ -231,7 +271,7 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   }
   const memo = (detail.orderMemo ?? detail.buyerComment ?? "").toString().trim() || null;
   if (memo) memoOrOptionId = memoOrOptionId ?? memo;
-  return { ordererTel, optionPhoneOrId, memoOrOptionId };
+  return { ordererTel, ordererNo, optionPhoneOrId, memoOrOptionId };
 }
 
 /** 주문 옵션/연락처에서 전화번호 또는 사용자 식별자 추출 (1순위: 옵션, 2순위: 주문자 연락처) — last-changed-statuses용 */
