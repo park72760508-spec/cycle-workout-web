@@ -16347,16 +16347,31 @@ line[id^="needle-"] {
   /* iOS Safari/Bluefy 추가 대응 */
   -webkit-user-select: none;
   user-select: none;
-  /* 스크롤 허용 (안드로이드 등에서 화면 사용 가능하도록 원복) */
-  overflow-y: auto !important;
+  /* 스크롤 방지 */
+  overflow-y: hidden !important;
   overflow-x: hidden !important;
-  -webkit-overflow-scrolling: touch;
 }
 
-/* body: 모바일 대시보드 활성화 시 스크롤 잠금 제거 (원복 - 안드로이드 스크롤 가능) */
+/* body에도 Pull-to-refresh 방지 적용 (모바일 대시보드 활성화 시, iOS/Bluefy 전용) */
 body.mobile-dashboard-active {
   overscroll-behavior-y: none !important;
   overscroll-behavior: none !important;
+  touch-action: manipulation !important;
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Android 전용: body 잠금 없음(오전 작업 원복), 대시보드 내부만 스크롤 허용 */
+body.mobile-dashboard-android {
+  overscroll-behavior-y: none !important;
+  overscroll-behavior: none !important;
+}
+body.mobile-dashboard-android #mobileDashboardScreen.active {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 모바일 대시보드 가로 모드 방지 */
