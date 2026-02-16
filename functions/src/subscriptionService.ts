@@ -173,6 +173,7 @@ export async function revokeSubscriptionByOrder(
   end.setDate(end.getDate() - info.addedDays);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  // 차감 후 만료일이 과거면 오늘 날짜로 맞춤(구독 만료 처리)
   const newEnd = end.getTime() < today.getTime() ? today : end;
   const newEndDate = newEnd.toISOString().split("T")[0];
 
@@ -242,7 +243,7 @@ export async function applySubscription(
   return { success: true, newEndDate, previousEndDate };
 }
 
-/** 구매 로그 저장: users/{userId}/orders/{productOrderId} (PAYED 성공 시). status: "PAYED" | "CANCELLED" */
+/** 구매 로그 저장: users/{userId}/orders/{productOrderId} (PAYED 성공 시). status: "PAYED" | "CANCELLED" | "RETURNED" */
 export interface OrderLogPayload {
   orderId: string;
   productOrderId: string;
@@ -252,7 +253,7 @@ export interface OrderLogPayload {
   totalPaymentAmount?: number;
   paymentDate: string;
   processedAt?: string;
-  status: "PAYED" | "CANCELLED";
+  status: "PAYED" | "CANCELLED" | "RETURNED";
 }
 
 export async function saveOrderLog(
@@ -286,12 +287,12 @@ export async function getOrderLog(
   return d ? { status: String(d.status ?? "") } : null;
 }
 
-/** 취소 시 구매 로그 상태 업데이트 (status: CANCELLED, claimDate, claimReason). 문서 없으면 merge로 생성 */
+/** 취소/반품 시 구매 로그 상태 업데이트 (status: CANCELLED | RETURNED, claimDate, claimReason). 문서 없으면 merge로 생성 */
 export async function updateOrderLogClaim(
   db: Firestore,
   userId: string,
   productOrderId: string,
-  status: "CANCELLED",
+  status: "CANCELLED" | "RETURNED",
   claimDate: string,
   claimReason?: string
 ): Promise<void> {

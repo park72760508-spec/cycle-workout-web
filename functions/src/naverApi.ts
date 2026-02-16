@@ -10,8 +10,8 @@ const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/sel
 /** 주문 상세 조회 API(공식): POST pay-order/seller/product-orders/query, Body: {"productOrderIds": ["id1","id2"]} */
 const NAVER_PRODUCT_ORDERS_QUERY_URL = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query";
 
-/** API 허용값: PAYED(결제완료), CLAIM_COMPLETED(클레임 완료 = 취소/반품 완료). CANCELLED/RETURNED는 미지원 */
-export type LastChangedType = "PAYED" | "CLAIM_COMPLETED";
+/** API 허용값: PAYED(결제완료), CANCEL(취소), RETURN(반품), CLAIM_COMPLETED(클레임 최종 완료). 한 번에 한 타입만 조회 가능 */
+export type LastChangedType = "PAYED" | "CANCEL" | "RETURN" | "CLAIM_COMPLETED";
 
 /** 전자서명 생성: client_id_timestamp 를 client_secret(salt)으로 bcrypt 후 Base64 */
 export function createClientSecretSign(
@@ -189,6 +189,10 @@ export interface ProductOrderDetailItem {
   }>;
   orderMemo?: string;
   buyerComment?: string;
+  /** 클레임 유형: CANCEL(취소), RETURN(반품) */
+  claimType?: string;
+  /** 클레임 상태: CANCEL_REQUEST, CANCEL_DONE, RETURN_REQUEST, RETURN_DONE 등 */
+  claimStatus?: string;
   [key: string]: unknown;
 }
 
