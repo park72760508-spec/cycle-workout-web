@@ -6023,22 +6023,36 @@
     }
 
     /**
+     * 주간 마일리지 TOP10 로딩 UI: 녹색 큰 원 스피너 HTML
+     */
+    function getWeeklyTop10LoadingHtml() {
+      return '<div class="weekly-top10-loading" aria-live="polite" aria-busy="true">' +
+        '<div class="weekly-top10-spinner" role="img" aria-label="로딩 중"></div>' +
+        '<p class="weekly-top10-loading-text">주간 마일리지 TOP10 불러오는 중...</p>' +
+        '</div>';
+    }
+
+    /**
      * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
-     * 훈련 기록이 있을 때만 팝업 표시, 없으면 팝업 띄우지 않음
+     * 로딩 시 녹색 큰 원 스피너 표시 → 조회 완료 시 랭킹 목록으로 교체. 훈련 기록 없으면 팝업 띄우지 않음.
      */
     async function fetchAndShowWeeklyTop10Modal() {
       const modal = document.getElementById('weeklyTop10Modal');
       const body = document.getElementById('weeklyTop10Body');
       if (!modal || !body) return;
+      body.innerHTML = getWeeklyTop10LoadingHtml();
+      modal.classList.remove('hidden');
       try {
         const url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
         const res = await fetch(url, { method: 'GET', mode: 'cors' });
         const data = await res.json().catch(function() { return { success: false }; });
         if (!data.success || !Array.isArray(data.ranking)) {
+          body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">데이터를 불러올 수 없습니다.</p>';
           return;
         }
         var list = data.ranking;
         if (!list || list.length === 0) {
+          modal.classList.add('hidden');
           return;
         }
         var medals = ['🥇', '🥈', '🥉'];
@@ -6057,9 +6071,9 @@
           html += '</div>';
         });
         body.innerHTML = html;
-        modal.classList.remove('hidden');
       } catch (e) {
         console.warn('[WeeklyTop10] 조회 실패:', e);
+        body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">연결에 실패했습니다. 나중에 다시 시도해 주세요.</p>';
       }
     }
 
