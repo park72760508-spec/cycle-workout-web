@@ -52,6 +52,26 @@
 })();
 /* ========================================================================== */
 
+/* ==========================================================================
+   [모바일 뷰포트] VisualViewport 기반 --vvh 설정
+   - 100vh는 모바일에서 주소창·하단 메뉴를 제외한 "큰 뷰포트" 기준이라,
+     브라우저 UI가 보일 때 화면 하단이 가려지고 스크롤이 고정되는 현상 발생.
+   - 100dvh 미지원 구형 브라우저용 폴백: --vvh(보이는 높이)를 설정하여
+     CSS에서 height: var(--vvh, 100vh) 사용 가능.
+   ========================================================================== */
+(function setVisualViewportHeight() {
+  function updateVvh() {
+    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    if (document.documentElement) document.documentElement.style.setProperty('--vvh', h + 'px');
+  }
+  updateVvh();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateVvh);
+    window.visualViewport.addEventListener('scroll', updateVvh);
+  }
+  window.addEventListener('resize', updateVvh);
+})();
+
 // ... (여기서부터 원래 app.js의 코드가 시작됩니다) ...
 
 
