@@ -133,8 +133,6 @@ const MAX_URL_LENGTH = 1800;
 const MAX_RETRIES = 3;
 const BATCH_DELAY = 1000;
 const JSONP_TIMEOUT = 60000; // 60초 타임아웃
-const JSONP_TIMEOUT_ANDROID_GAS = 90000; // 안드로이드 전용 GAS(구글 시트) 90초 — 느린 기기·GAS 지연 대응
-const SEGMENT_REQUEST_TIMEOUT_ANDROID = 35000; // 안드로이드 세그먼트 요청 35초 (구글 시트 응답 지연 고려)
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -168,9 +166,8 @@ function initializeWorkoutManager() {
   }
 }
 
-// 개선된 JSONP 요청 함수 — options.timeout 지정 시 해당 값 사용, 미지정 시 60초 (구글 시트 느린 기기 대응)
-function jsonpRequest(url, params = {}, options = {}) {
-  const timeoutMs = (options && typeof options.timeout === 'number') ? options.timeout : JSONP_TIMEOUT;
+// 개선된 JSONP 요청 함수 (60초 타임아웃) - groupTrainingManager의 jsonpRequest와 분리
+function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
     if (!url || typeof url !== 'string') {
       reject(new Error('유효하지 않은 URL입니다.'));
@@ -262,11 +259,11 @@ function jsonpRequest(url, params = {}, options = {}) {
       setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
-          console.warn('JSONP request timeout for URL:', url, '(' + (timeoutMs / 1000) + 's)');
+          console.warn('JSONP request timeout for URL:', url);
           cleanup();
           reject(new Error(`요청 시간 초과: ${url}`));
         }
-      }, timeoutMs);
+      }, JSONP_TIMEOUT); // 60초 타임아웃
       
     } catch (error) {
       if (!isResolved) {
@@ -280,24 +277,27 @@ function jsonpRequest(url, params = {}, options = {}) {
 // workoutManager 전용 참조 (groupTrainingManager 로드 시 jsonpRequest 덮어쓰기 방지)
 var wmJsonpRequest = jsonpRequest;
 
-// 재시도 로직이 포함된 JSONP 요청 함수 (options.timeout 지원)
-async function jsonpRequestWithRetry(url, params = {}, maxRetries = MAX_RETRIES, options = {}) {
+// 재시도 로직이 포함된 JSONP 요청 함수
+async function jsonpRequestWithRetry(url, params = {}, maxRetries = MAX_RETRIES) {
   let lastError;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`API 요청 시도 ${attempt}/${maxRetries}:`, params.action);
-      const result = await jsonpRequest(url, params, options);
+      const result = await jsonpRequest(url, params);
       return result;
     } catch (error) {
       lastError = error;
       console.warn(`시도 ${attempt} 실패:`, error.message);
+      
       if (attempt < maxRetries) {
-        const delay = attempt * 3000;
-        console.log((delay / 1000) + '초 후 재시도...');
+        const delay = attempt * 2000;
+        console.log(`${delay/1000}초 후 재시도...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
+  
   throw lastError;
 }
 
@@ -2583,53 +2583,88 @@ function clearWorkoutCache() {
 
 async function apiGetWorkouts(forceRefresh = false) {
   try {
-    const isAndroidGas = /android/i.test(navigator.userAgent);
-    // 강제 새로고침이 아니고, 캐시가 있고, (안드로이드에서는 캐시가 6개 이상일 때만) 서버 갯수 확인 후 캐시 반환
-    // 안드로이드에서 캐시가 0~5개면 이전에 서버 조회 실패로 쌓인 불량 캐시일 수 있으므로 캐시 경로 스킵 → 항상 서버에서 조회
+    // 강제 새로고침이 아니고 캐시가 있으면 먼저 서버의 목록 수만 확인
     if (!forceRefresh) {
       const cache = getWorkoutCache();
-      const cacheHasEnough = cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0;
-      const skipCachePath = isAndroidGas && cache && cache.workouts && (cache.workouts.length === 0 || cache.workouts.length <= 5);
-      if (cacheHasEnough && !skipCachePath) {
-        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개 — 서버와 갯수 비교 시도');
+      if (cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0) {
+        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개');
+        
+        // 서버에서 목록 수만 확인 (간단한 요청)
+        // 실제로는 전체 목록을 가져와서 비교하는 것이 더 정확하지만,
+        // API가 목록 수만 반환하는 기능이 없으므로 전체 목록을 가져와서 비교
+        // 다만, 캐시된 데이터를 먼저 반환하고 백그라운드에서 업데이트하는 방식 사용
         try {
           if (!window.GAS_URL) {
             console.warn('[Workout Cache] GAS_URL이 없어 캐시 사용');
-            return { success: true, items: cache.workouts, fromCache: true };
+            return {
+              success: true,
+              items: cache.workouts,
+              fromCache: true
+            };
           }
-          const serverResult = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' },
-            isAndroidGas ? { timeout: typeof JSONP_TIMEOUT_ANDROID_GAS !== 'undefined' ? JSONP_TIMEOUT_ANDROID_GAS : 90000 } : {});
+          
+          const serverResult = await jsonpRequest(window.GAS_URL, { 
+            action: 'listWorkouts'
+          });
+          
           if (serverResult && serverResult.success) {
             const serverWorkouts = serverResult.items || serverResult.data || serverResult.workouts || (Array.isArray(serverResult) ? serverResult : []);
             const serverCount = Array.isArray(serverWorkouts) ? serverWorkouts.length : 0;
+            
+            // 서버의 목록 수가 캐시와 같으면 캐시 반환
             if (serverCount === cache.count) {
               console.log('[Workout Cache] 목록 수 동일 - 캐시 사용:', serverCount, '개');
-              return { success: true, items: cache.workouts, fromCache: true };
-            }
-            console.log('[Workout Cache] 목록 수 변경 - 서버 데이터 사용:', { cached: cache.count, server: serverCount });
-            if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
-              try {
-                const workoutsWithSegments = serverWorkouts.map(workout => {
-                  const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workout.id));
-                  if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0)
-                    return { ...workout, segments: cachedWorkout.segments };
-                  return workout;
-                });
-                setWorkoutCache(workoutsWithSegments);
-              } catch (e) {
-                setWorkoutCache(serverWorkouts);
+              return {
+                success: true,
+                items: cache.workouts,
+                fromCache: true
+              };
+            } else {
+              // 목록 수가 다르면 서버 데이터 사용 및 캐시 업데이트
+              console.log('[Workout Cache] 목록 수 변경 감지 - 서버 데이터 사용:', {
+                cached: cache.count,
+                server: serverCount
+              });
+              
+              // 서버 데이터 캐시에 저장 (기존 세그먼트 병합)
+              if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
+                try {
+                  // 기존 캐시의 세그먼트를 새 워크아웃에 병합
+                  const workoutsWithSegments = serverWorkouts.map(workout => {
+                    const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workout.id));
+                    if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
+                      return {
+                        ...workout,
+                        segments: cachedWorkout.segments  // 기존 캐시된 세그먼트 유지
+                      };
+                    }
+                    return workout;
+                  });
+                  setWorkoutCache(workoutsWithSegments);
+                } catch (mergeError) {
+                  console.warn('[Workout Cache] 세그먼트 병합 실패, 기본 저장:', mergeError);
+                  setWorkoutCache(serverWorkouts);
+                }
               }
+              
+              return {
+                success: true,
+                items: serverWorkouts,
+                fromCache: false
+              };
             }
-            return { success: true, items: serverWorkouts, fromCache: false };
           }
         } catch (checkError) {
           console.warn('[Workout Cache] 서버 확인 실패, 캐시 사용:', checkError);
-          return { success: true, items: cache.workouts, fromCache: true };
+          // 서버 확인 실패 시 캐시 반환
+          return {
+            success: true,
+            items: cache.workouts,
+            fromCache: true
+          };
         }
-      }
-      if (skipCachePath) {
-        console.log('[Workout Cache] 안드로이드: 캐시가 비었거나 5개 이하 — 서버에서 직접 조회 (갯수 조회 실패 방지)');
-      } else if (!cacheHasEnough) {
+      } else {
+        // 캐시가 없거나 비어있으면 서버에서 가져오기
         console.log('[Workout Cache] 캐시 없음 - 서버에서 로드');
       }
     }
@@ -2643,12 +2678,9 @@ async function apiGetWorkouts(forceRefresh = false) {
       };
     }
     
-    // 안드로이드: 구글 시트(GAS) 응답 지연·불안정 대응 — 90초 타임아웃 + 2회 재시도(3초 간격)
-    const isAndroidGas = /android/i.test(navigator.userAgent);
-    const listOptions = isAndroidGas ? { timeout: typeof JSONP_TIMEOUT_ANDROID_GAS !== 'undefined' ? JSONP_TIMEOUT_ANDROID_GAS : 90000 } : {};
-    const result = isAndroidGas
-      ? await jsonpRequestWithRetry(window.GAS_URL, { action: 'listWorkouts' }, 2, listOptions)
-      : await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+    const result = await jsonpRequest(window.GAS_URL, { 
+      action: 'listWorkouts'
+    });
     
     if (result && result.success) {
       const workouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
@@ -2688,18 +2720,24 @@ async function apiGetWorkouts(forceRefresh = false) {
     return result;
   } catch (error) {
     console.error('[Workout Cache] apiGetWorkouts 실패:', error);
-    const isAndroidErr = /android/i.test(navigator.userAgent);
+    
+    // 에러 발생 시 캐시에서 시도
     if (!forceRefresh) {
       const cache = getWorkoutCache();
-      const cacheUsable = cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0;
-      // 안드로이드에서 캐시가 5개 이하는 불량 캐시로 간주 — 서버 실패 시에도 캐시 반환하지 않고 에러 반환 (재시도 유도)
-      const avoidBadCache = isAndroidErr && cache && cache.workouts && (cache.workouts.length === 0 || cache.workouts.length <= 5);
-      if (cacheUsable && !avoidBadCache) {
+      if (cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0) {
         console.warn('[Workout Cache] 서버 오류 - 캐시 사용:', cache.count, '개');
-        return { success: true, items: cache.workouts, fromCache: true };
+        return {
+          success: true,
+          items: cache.workouts,
+          fromCache: true
+        };
       }
     }
-    return { success: false, error: error.message };
+    
+    return { 
+      success: false, 
+      error: error.message 
+    };
   }
 }
 
@@ -2744,13 +2782,8 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
     return [];
   }
   
-  const isAndroidSeg = /android/i.test(navigator.userAgent);
-  const segOptions = isAndroidSeg && typeof SEGMENT_REQUEST_TIMEOUT_ANDROID !== 'undefined'
-    ? { timeout: Math.max(SEGMENT_REQUEST_TIMEOUT_ANDROID + 5000, 40000) }
-    : {};
   const doFetch = async () => {
-    const req = typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest;
-    const result = await req(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) }, segOptions);
+    const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
     if (!result || !result.success) return [];
     const segs = result.segments || result.items || (Array.isArray(result) ? result : []);
     return Array.isArray(segs) ? segs : [];
@@ -2759,12 +2792,8 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
   try {
     let segs = await doFetch();
     if (segs.length === 0 && /android/i.test(navigator.userAgent)) {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 150));
       segs = await doFetch();
-      if (segs.length === 0) {
-        await new Promise(r => setTimeout(r, 400));
-        segs = await doFetch();
-      }
     }
     
     // 세그먼트를 가져온 후 워크아웃 캐시에 업데이트
@@ -3262,51 +3291,23 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       }
     }
 
-    // 캐시가 아닌 경우 목록이 5개 이하이면 재시도 (느린 기기에서 불완전 수신 대응)
-    const isAndroid = /android/i.test(navigator.userAgent);
+    // 캐시가 아닌 경우에만 재시도 로직 실행
     if (!result.fromCache && rawWorkouts.length <= 5 && (categoryId === 'all' || !categoryId)) {
-      const retryDelays = isAndroid ? [1500, 3000] : [800];
-      for (let r = 0; r < retryDelays.length; r++) {
-        await new Promise(resolve => setTimeout(resolve, retryDelays[r]));
-        try {
-          const retryResult = await apiGetWorkouts(forceRefresh);
-          if (retryResult && retryResult.success) {
-            const retryItems = retryResult.items || retryResult.data || retryResult.workouts || (Array.isArray(retryResult) ? retryResult : []);
-            if (Array.isArray(retryItems) && retryItems.length > rawWorkouts.length) {
-              rawWorkouts = retryItems;
-              console.log('[loadWorkouts] 재요청으로 더 많은 워크아웃 수신:', rawWorkouts.length, '개 (시도', r + 2, ')');
-              break;
-            }
+      try {
+        const retryResult = await apiGetWorkouts(forceRefresh);
+        if (retryResult && retryResult.success) {
+          const retryItems = retryResult.items || retryResult.data || retryResult.workouts || (Array.isArray(retryResult) ? retryResult : []);
+          if (Array.isArray(retryItems) && retryItems.length > rawWorkouts.length) {
+            rawWorkouts = retryItems;
+            console.log('워크아웃 목록 재요청으로 더 많은 데이터 수신:', rawWorkouts.length, '개');
           }
-        } catch (retryErr) {
-          console.warn('[loadWorkouts] 재요청 실패:', retryErr);
         }
+      } catch (retryErr) {
+        console.warn('워크아웃 목록 재요청 실패:', retryErr);
       }
     }
 
-    let totalWorkouts = rawWorkouts.length;
-    // Android 등에서 서버 빈 목록 + 캐시 없을 때만 로딩 실패 처리 (iOS 등 정상 동작 유지)
-    const isAndroidCheck = /android/i.test(navigator.userAgent);
-    if (totalWorkouts === 0 && isAndroidCheck) {
-      const cacheForEmpty = getWorkoutCache();
-      if (cacheForEmpty && cacheForEmpty.workouts && Array.isArray(cacheForEmpty.workouts) && cacheForEmpty.workouts.length > 0) {
-        console.warn('[loadWorkouts] 목록 비어 있음 - 캐시로 복구:', cacheForEmpty.workouts.length, '개');
-        rawWorkouts = cacheForEmpty.workouts;
-        totalWorkouts = rawWorkouts.length;
-      } else {
-        hideLoading();
-        workoutList.innerHTML = `
-          <div class="error-state">
-            <div class="error-state-icon">⚠️</div>
-            <div class="error-state-title">워크아웃 목록을 불러올 수 없습니다</div>
-            <div class="error-state-description">네트워크가 불안정할 수 있습니다. 아래 버튼으로 다시 시도해 주세요.</div>
-            <button class="retry-button" onclick="loadWorkouts('${categoryId || 'all'}', true)">다시 시도</button>
-          </div>
-        `;
-        return;
-      }
-    }
-
+    const totalWorkouts = rawWorkouts.length;
     // isFromCache는 이미 위에서 선언되었으므로 재사용
     
     // 로딩 표시: 캐시 모드인지 서버 모드인지 명확히 표시
@@ -3547,7 +3548,8 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       return;
     }
 
-    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만) — isAndroid는 위에서 선언됨
+    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
+    const isAndroid = /android/i.test(navigator.userAgent);
     // result 객체가 이 스코프에서 접근 가능한지 확인 (위에서 이미 정의됨)
     const isFromCacheForSegments = result && result.fromCache;
     console.log('[loadWorkouts] 세그먼트 조회 모드:', {
@@ -3589,36 +3591,20 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       }
       console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
     } else if (!isFromCacheForSegments && totalToFetch > 0) {
-      // 서버 모드: 안드로이드 등 느린 기기는 배치 축소·지연 증가·요청별 타임아웃으로 0/N 멈춤 방지
-      const SEGMENT_BATCH_SIZE = isAndroid ? 3 : 20;
-      const SEGMENT_BATCH_DELAY = isAndroid ? 800 : 100;
-      const segmentTimeout = isAndroid ? (typeof SEGMENT_REQUEST_TIMEOUT_ANDROID !== 'undefined' ? SEGMENT_REQUEST_TIMEOUT_ANDROID : 25000) : 0;
-      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치: ', SEGMENT_BATCH_SIZE, ', 지연: ', SEGMENT_BATCH_DELAY, 'ms', segmentTimeout ? ', 요청타임아웃: ' + segmentTimeout + 'ms' : '', ')');
+      // 서버 모드: 기존 배치 처리 유지 (20개씩, 지연 있음)
+      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치 크기: 20개, 지연: ', (isAndroid ? 250 : 100), 'ms)');
       showLoading(totalToFetch, 0);
+      
+      const SEGMENT_BATCH_SIZE = 20;  // 서버 모드: 20개씩
+      const SEGMENT_BATCH_DELAY = isAndroid ? 250 : 100;  // 서버 모드: 지연 있음
       
       for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
         const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
         console.log('[loadWorkouts] 서버 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + SEGMENT_BATCH_SIZE, totalToFetch), '/', totalToFetch);
-        const loadOne = async (workout) => {
-          if (segmentTimeout > 0) {
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SEGMENT_TIMEOUT')), segmentTimeout));
-            try {
-              const segments = await Promise.race([apiGetWorkoutSegments(workout.id), timeoutPromise]);
-              workout.segments = Array.isArray(segments) ? segments : [];
-            } catch (e) {
-              if (e && e.message === 'SEGMENT_TIMEOUT') console.warn('[loadWorkouts] 세그먼트 요청 타임아웃:', workout.id);
-              workout.segments = [];
-            }
-          } else {
-            try {
-              const segments = await apiGetWorkoutSegments(workout.id);
-              workout.segments = Array.isArray(segments) ? segments : [];
-            } catch (err) {
-              workout.segments = [];
-            }
-          }
-        };
-        await Promise.all(batch.map(loadOne));
+        await Promise.all(batch.map(async (workout) => {
+          const segments = await apiGetWorkoutSegments(workout.id);
+          workout.segments = segments;
+        }));
         const loadedCount = Math.min(i + batch.length, totalToFetch);
         showLoading(totalToFetch, loadedCount);
         if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length && SEGMENT_BATCH_DELAY > 0) {
