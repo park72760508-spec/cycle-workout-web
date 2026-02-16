@@ -30,11 +30,12 @@
    * Pull-to-refresh 차단 활성화
    * - 스크롤이 맨 위일 때만 아래로 당기는 터치를 막아 브라우저 새로고침 방지
    * @param {Element|string} elementOrSelector - 대상 DOM 요소 또는 CSS 선택자
-   * @param {{ useCapture?: boolean }} options - useCapture: true면 document에 캡처 단계로 등록 (Bluefy 대응)
+   * @param {{ useCapture?: boolean, scrollElement?: Element }} options - useCapture: true면 document에 캡처 단계로 등록 (Bluefy 대응). scrollElement: 캡처 시 스크롤 위치 확인할 요소 (미지정 시 body)
    * @returns {function} cleanup - 호출 시 리스너 제거
    */
   function enablePullToRefreshBlock(elementOrSelector, options) {
     var useDocumentCapture = options && options.useCapture === true;
+    var scrollElement = options && options.scrollElement;
     var target = useDocumentCapture ? document : (typeof elementOrSelector === 'string'
       ? document.querySelector(elementOrSelector)
       : elementOrSelector);
@@ -46,6 +47,7 @@
 
     var touchStartY = 0;
     var capture = useDocumentCapture;
+    var elForScroll = useDocumentCapture ? (scrollElement || document.body) : target;
 
     function onTouchStart(e) {
       if (e.touches && e.touches.length) {
@@ -56,9 +58,7 @@
     function onTouchMove(e) {
       if (!e.touches || !e.touches.length) return;
       var currentY = e.touches[0].clientY;
-      var scrollTop = useDocumentCapture
-        ? getScrollTop(document.body)
-        : getScrollTop(target);
+      var scrollTop = getScrollTop(elForScroll);
       if (scrollTop <= 0 && currentY > touchStartY) {
         e.preventDefault();
         e.stopPropagation();
@@ -77,15 +77,18 @@
 
   /**
    * 화면 ID로 Pull-to-refresh 차단 활성화 (한 줄로 적용용)
-   * @param {string} screenId - 예: 'authScreen', 'trainingScreen'
-   * @param {{ documentCapture?: boolean }} options - documentCapture: true면 document 캡처 단계로 등록 (iOS Bluefy 권장)
+   * @param {string} screenId - 예: 'authScreen', 'basecampScreen'
+   * @param {{ documentCapture?: boolean }} options - documentCapture: true면 document 캡처 단계로 등록, 해당 화면 요소의 scrollTop으로 판단 (iOS Bluefy 권장)
    * @returns {function|undefined} cleanup 또는 undefined(요소 없음)
    */
   function enableForScreen(screenId, options) {
+    var el = document.getElementById(screenId);
+    if (options && options.documentCapture && el) {
+      return enablePullToRefreshBlock(document, { useCapture: true, scrollElement: el });
+    }
     if (options && options.documentCapture) {
       return enablePullToRefreshBlock(document, { useCapture: true });
     }
-    var el = document.getElementById(screenId);
     if (!el) return undefined;
     return enablePullToRefreshBlock(el);
   }

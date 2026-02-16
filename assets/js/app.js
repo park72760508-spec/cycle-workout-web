@@ -3139,7 +3139,7 @@ if (!window.screenHistory) {
 
 // Pull-to-refresh 차단 적용 화면 ID 목록 (한 줄 추가로 확장 가능)
 if (!window.PULL_TO_REFRESH_BLOCKED_SCREENS) {
-  window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen'];
+  window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen', 'basecampScreen'];
 }
 
 if (!window.showScreen) {
@@ -3225,7 +3225,10 @@ if (!window.showScreen) {
           window.__pullToRefreshBlockerCleanup = null;
         }
         if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && id !== 'authScreen' && typeof enableForScreen === 'function') {
-          window.__pullToRefreshBlockerCleanup = enableForScreen(id);
+          // basecampScreen: Bluefy 등에서 당김 새로고침·줌 방지 위해 document 캡처 단계 + 해당 화면 scrollTop 기준 차단
+          window.__pullToRefreshBlockerCleanup = id === 'basecampScreen'
+            ? enableForScreen(id, { documentCapture: true })
+            : enableForScreen(id);
         }
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
@@ -3240,19 +3243,19 @@ if (!window.showScreen) {
           });
         }
         
-        // 모바일/블루투스 개인훈련 대시보드가 아닌 화면에서는 스크롤 허용 (안드로이드 등)
-        // 스크롤 잠금은 mobileDashboardScreen 전용이므로, 다른 화면으로 전환 시 반드시 해제
+        // 모바일/블루투스 개인훈련 대시보드가 아닌 화면: body/document 스크롤 비활성화 → 화면 단위 스크롤만 사용 (Bluefy 등 당김 새로고침·줌 메뉴 방지)
         if (id !== 'mobileDashboardScreen') {
           document.body.classList.remove('mobile-dashboard-active');
-          document.body.style.overflow = '';
+          document.body.style.overflow = 'hidden';
+          document.body.style.height = '100%';
           document.body.style.position = '';
           document.body.style.width = '';
-          document.body.style.height = '';
           if (document.documentElement) {
-            document.documentElement.style.overflow = '';
+            document.documentElement.style.overflow = 'hidden';
+            document.documentElement.style.height = '100%';
             document.documentElement.style.position = '';
           }
-          console.log('✅ Body scroll restored for screen:', id);
+          console.log('✅ Body/document scroll locked for screen (scroll-contained):', id);
         }
         
       // 연결 화면이 표시될 때 버튼 이미지 업데이트 및 ANT+ 버튼 활성화 상태 확인
