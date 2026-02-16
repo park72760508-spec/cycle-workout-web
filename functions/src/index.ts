@@ -18,8 +18,8 @@ import {
   type ProductOrderDetailItem,
 } from "./naverApi";
 
-/** 네이버 API 정책상 lastChangedType은 한 번에 하나만 조회 가능. 취소/반품 수집용 타입 목록 */
-const CLAIM_LAST_CHANGED_TYPES: LastChangedType[] = ["CANCEL", "RETURN", "CLAIM_COMPLETED"];
+/** 네이버 API 정책상 lastChangedType은 한 번에 하나만 조회 가능. PAYED는 별도 처리, 취소/반품은 CANCELED·RETURNED 각각 조회 */
+const CLAIM_LAST_CHANGED_TYPES: LastChangedType[] = ["CANCELED", "RETURNED"];
 import {
   findUserByContactWithPriority,
   normalizeToContactFormat,
@@ -264,31 +264,27 @@ async function processPayedOrders(accessToken: string): Promise<void> {
   }
 }
 
-/**
- * 취소/반품 완료 여부 판단.
- * 정책: '완료' 시점(CANCEL_DONE, RETURN_DONE)에 구독 회수. REQUEST 시점은 스킵(필요 시 정책 변경).
- */
-function isClaimDoneForRevoke(claimType: string | undefined, claimStatus: string | undefined): boolean {
+/** 취소 시 구독 회수 대상 claimStatus: 요청/처리중/완료 모두 포함(어뷰징 방지) */
+const CANCEL_CLAIM_STATUSES = new Set(["CANCEL_REQUEST", "CANCELING", "CANCEL_DONE"]);
+
+/** 반품 시 구독 회수 대상 claimStatus: 요청/완료 포함 */
+const RETURN_CLAIM_STATUSES = new Set(["RETURN_REQUEST", "RETURN_DONE"]);
+
+/** lastChangedType + claimStatus로 구독 회수 실행 여부 판단 */
+function shouldRevokeByClaimStatus(claimStatus: string | undefined, lastChangedType: LastChangedType): boolean {
   if (!claimStatus) return false;
-  const s = claimStatus.toUpperCase();
-  if (claimType?.toUpperCase() === "CANCEL" && (s === "CANCEL_DONE" || s === "CANCEL_COMPLETED")) return true;
-  if (claimType?.toUpperCase() === "RETURN" && (s === "RETURN_DONE" || s === "RETURN_COMPLETED")) return true;
+  const s = claimStatus.toUpperCase().replace(/\s/g, "");
+  if (lastChangedType === "CANCELED") return CANCEL_CLAIM_STATUSES.has(s);
+  if (lastChangedType === "RETURNED") return RETURN_CLAIM_STATUSES.has(s);
   return false;
 }
 
-/** lastChangedType만으로 완료로 간주할지 (상세 없을 때 CLAIM_COMPLETED는 완료로 처리) */
-function isClaimCompletedType(lastChangedType: LastChangedType): boolean {
-  return lastChangedType === "CLAIM_COMPLETED";
+/** lastChangedType → 구매 로그 status */
+function claimTypeToOrderStatus(lastChangedType: LastChangedType): "CANCELLED" | "RETURNED" {
+  return lastChangedType === "RETURNED" ? "RETURNED" : "CANCELLED";
 }
 
-/** CLAIM 타입 → 구매 로그 status. CANCELLED | RETURNED */
-function claimTypeToOrderStatus(claimType: string | undefined, lastChangedType: LastChangedType): "CANCELLED" | "RETURNED" {
-  const t = (claimType ?? "").toUpperCase();
-  if (t === "RETURN") return "RETURNED";
-  return "CANCELLED"; // CANCEL 또는 미구분 시
-}
-
-/** CANCEL / RETURN / CLAIM_COMPLETED 주문 처리: 상세 조회로 클레임 확인 후 구독 회수 + 구매 로그 업데이트 */
+/** CANCELED / RETURNED 주문 처리: 주문 로그 status 선체크(중복 차감 방지) → claimStatus 확인 → 구독 회수 → 로그 업데이트 */
 async function processRevokedOrders(
   accessToken: string,
   type: LastChangedType
@@ -312,7 +308,7 @@ async function processRevokedOrders(
       if (id) detailMap[id] = d;
     }
   } catch (e) {
-    console.warn("[naverSubscription] 클레임 상세 조회 실패, lastChangedType 기준으로 처리 시도:", (e as Error).message);
+    console.warn("[naverSubscription] 클레임 상세 조회 실패:", (e as Error).message);
   }
 
   const claimDate = new Date().toISOString();
@@ -322,30 +318,28 @@ async function processRevokedOrders(
     if (!productOrderId) continue;
 
     try {
-      const detail = detailMap[productOrderId];
-      const claimType = detail?.claimType ?? (order as ProductOrderDetailItem).claimType;
-      const claimStatus = detail?.claimStatus ?? (order as ProductOrderDetailItem).claimStatus;
-
-      // 완료 시점에만 회수: 상세에 CANCEL_DONE/RETURN_DONE 등이 있거나, lastChangedType이 CLAIM_COMPLETED인 경우
-      const treatAsDone = isClaimDoneForRevoke(claimType, claimStatus) || isClaimCompletedType(type);
-      if (!treatAsDone && (type === "CANCEL" || type === "RETURN")) {
-        continue; // REQUEST 등 미완료 건은 스킵
-      }
-
       const info = await getProcessedOrderInfo(db, productOrderId);
       if (!info) continue;
 
+      // 방어: 이미 CANCELLED/RETURNED 처리된 주문은 중복 차감하지 않음
       const orderLog = await getOrderLog(db, info.userId, productOrderId);
       if (orderLog && (orderLog.status === "CANCELLED" || orderLog.status === "RETURNED")) {
         continue;
       }
 
+      const detail = detailMap[productOrderId];
+      const claimStatus = detail?.claimStatus ?? (order as ProductOrderDetailItem).claimStatus;
+      if (!shouldRevokeByClaimStatus(claimStatus, type)) {
+        continue;
+      }
+
       const { revoked, userId } = await revokeSubscriptionByOrder(db, productOrderId);
       if (revoked && userId) {
-        const logStatus = claimTypeToOrderStatus(claimType, type);
+        const logStatus = claimTypeToOrderStatus(type);
         await updateOrderLogClaim(db, userId, productOrderId, logStatus, claimDate, `${type} 처리`);
-        const claimLabel = (claimType ?? type).toString();
-        console.log(`[naverSubscription] 클레임 감지: ${claimLabel} - 유저 ${userId} 기간 회수 완료`);
+        console.log(
+          `[naverSubscription] 클레임 처리: 유저 ${userId}, 상태 ${claimStatus ?? "-"}, expiry_date 정정 완료`
+        );
       }
     } catch (e) {
       console.error("[naverSubscription] revoke 실패:", productOrderId, e);
@@ -358,7 +352,7 @@ export async function runNaverSubscriptionSync(
   clientSecret: string
 ): Promise<void> {
   const accessToken = await getAccessToken(NAVER_CLIENT_ID, clientSecret);
-  console.log("[naverSubscription] 네이버 토큰 발급 완료, PAYED·CANCEL·RETURN·CLAIM_COMPLETED 처리 시작");
+  console.log("[naverSubscription] 네이버 토큰 발급 완료, PAYED·CANCELED·RETURNED 처리 시작");
 
   await processPayedOrders(accessToken);
   for (const claimType of CLAIM_LAST_CHANGED_TYPES) {
