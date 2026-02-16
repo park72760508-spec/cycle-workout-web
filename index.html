@@ -11862,7 +11862,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               setLogsLoaded(true);
             }
 
-            // Calculate weekly TSS — 훈련일지 "이번달 Weekly TSS" 5주차와 동일 구간: 오늘-6일 ~ 오늘 (최근 7일)
+            // Calculate weekly TSS — 훈련일지 5주차 구간(오늘-6일~오늘) + 날짜별 1개만 반영: 같은날 STRAVA+STELVIO 있으면 STRAVA, STELVIO만 있으면 STELVIO, STRAVA만 있으면 STRAVA
             var todayForWeekly = new Date();
             todayForWeekly.setHours(0, 0, 0, 0);
             var week5End = new Date(todayForWeekly);
@@ -11875,12 +11875,32 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               String(week5End.getMonth() + 1).padStart(2, '0') + '-' +
               String(week5End.getDate()).padStart(2, '0');
 
-            var weeklyTss = 0;
-            logs.forEach(function(log) {
+            var logsInWeek = logs.filter(function(log) {
               var dateStr = parseDateForDashboard(log.date);
-              if (dateStr && dateStr >= week5StartStr && dateStr <= week5EndStr) {
-                weeklyTss += (Number(log.tss) || 0);
+              return dateStr && dateStr >= week5StartStr && dateStr <= week5EndStr;
+            });
+            var byDate = {};
+            logsInWeek.forEach(function(log) {
+              var dateStr = parseDateForDashboard(log.date);
+              if (!dateStr) return;
+              if (!byDate[dateStr]) byDate[dateStr] = { strava: [], stelvio: [] };
+              var src = String(log.source || '').toLowerCase();
+              if (src === 'strava') {
+                byDate[dateStr].strava.push(Number(log.tss) || 0);
+              } else {
+                byDate[dateStr].stelvio.push(Number(log.tss) || 0);
               }
+            });
+            var weeklyTss = 0;
+            Object.keys(byDate).forEach(function(dateStr) {
+              var day = byDate[dateStr];
+              var dayTss = 0;
+              if (day.strava.length > 0) {
+                day.strava.forEach(function(t) { dayTss += t; });
+              } else if (day.stelvio.length > 0) {
+                day.stelvio.forEach(function(t) { dayTss += t; });
+              }
+              weeklyTss += dayTss;
             });
             var weeklyTssRounded = Math.round(weeklyTss);
 
