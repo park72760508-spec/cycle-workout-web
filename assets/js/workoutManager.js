@@ -2583,88 +2583,53 @@ function clearWorkoutCache() {
 
 async function apiGetWorkouts(forceRefresh = false) {
   try {
-    // 강제 새로고침이 아니고 캐시가 있으면 먼저 서버의 목록 수만 확인
+    const isAndroidGas = /android/i.test(navigator.userAgent);
+    // 강제 새로고침이 아니고, 캐시가 있고, (안드로이드에서는 캐시가 6개 이상일 때만) 서버 갯수 확인 후 캐시 반환
+    // 안드로이드에서 캐시가 0~5개면 이전에 서버 조회 실패로 쌓인 불량 캐시일 수 있으므로 캐시 경로 스킵 → 항상 서버에서 조회
     if (!forceRefresh) {
       const cache = getWorkoutCache();
-      if (cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0) {
-        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개');
-        
-        // 서버에서 목록 수만 확인 (간단한 요청)
-        // 실제로는 전체 목록을 가져와서 비교하는 것이 더 정확하지만,
-        // API가 목록 수만 반환하는 기능이 없으므로 전체 목록을 가져와서 비교
-        // 다만, 캐시된 데이터를 먼저 반환하고 백그라운드에서 업데이트하는 방식 사용
+      const cacheHasEnough = cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0;
+      const skipCachePath = isAndroidGas && cache && cache.workouts && (cache.workouts.length === 0 || cache.workouts.length <= 5);
+      if (cacheHasEnough && !skipCachePath) {
+        console.log('[Workout Cache] 캐시된 워크아웃:', cache.count, '개 — 서버와 갯수 비교 시도');
         try {
           if (!window.GAS_URL) {
             console.warn('[Workout Cache] GAS_URL이 없어 캐시 사용');
-            return {
-              success: true,
-              items: cache.workouts,
-              fromCache: true
-            };
+            return { success: true, items: cache.workouts, fromCache: true };
           }
-          
-          const isAndroidGas = /android/i.test(navigator.userAgent);
           const serverResult = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' },
             isAndroidGas ? { timeout: typeof JSONP_TIMEOUT_ANDROID_GAS !== 'undefined' ? JSONP_TIMEOUT_ANDROID_GAS : 90000 } : {});
-          
           if (serverResult && serverResult.success) {
             const serverWorkouts = serverResult.items || serverResult.data || serverResult.workouts || (Array.isArray(serverResult) ? serverResult : []);
             const serverCount = Array.isArray(serverWorkouts) ? serverWorkouts.length : 0;
-            
-            // 서버의 목록 수가 캐시와 같으면 캐시 반환
             if (serverCount === cache.count) {
               console.log('[Workout Cache] 목록 수 동일 - 캐시 사용:', serverCount, '개');
-              return {
-                success: true,
-                items: cache.workouts,
-                fromCache: true
-              };
-            } else {
-              // 목록 수가 다르면 서버 데이터 사용 및 캐시 업데이트
-              console.log('[Workout Cache] 목록 수 변경 감지 - 서버 데이터 사용:', {
-                cached: cache.count,
-                server: serverCount
-              });
-              
-              // 서버 데이터 캐시에 저장 (기존 세그먼트 병합)
-              if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
-                try {
-                  // 기존 캐시의 세그먼트를 새 워크아웃에 병합
-                  const workoutsWithSegments = serverWorkouts.map(workout => {
-                    const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workout.id));
-                    if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0) {
-                      return {
-                        ...workout,
-                        segments: cachedWorkout.segments  // 기존 캐시된 세그먼트 유지
-                      };
-                    }
-                    return workout;
-                  });
-                  setWorkoutCache(workoutsWithSegments);
-                } catch (mergeError) {
-                  console.warn('[Workout Cache] 세그먼트 병합 실패, 기본 저장:', mergeError);
-                  setWorkoutCache(serverWorkouts);
-                }
-              }
-              
-              return {
-                success: true,
-                items: serverWorkouts,
-                fromCache: false
-              };
+              return { success: true, items: cache.workouts, fromCache: true };
             }
+            console.log('[Workout Cache] 목록 수 변경 - 서버 데이터 사용:', { cached: cache.count, server: serverCount });
+            if (Array.isArray(serverWorkouts) && serverWorkouts.length > 0) {
+              try {
+                const workoutsWithSegments = serverWorkouts.map(workout => {
+                  const cachedWorkout = cache.workouts.find(w => String(w.id) === String(workout.id));
+                  if (cachedWorkout && cachedWorkout.segments && Array.isArray(cachedWorkout.segments) && cachedWorkout.segments.length > 0)
+                    return { ...workout, segments: cachedWorkout.segments };
+                  return workout;
+                });
+                setWorkoutCache(workoutsWithSegments);
+              } catch (e) {
+                setWorkoutCache(serverWorkouts);
+              }
+            }
+            return { success: true, items: serverWorkouts, fromCache: false };
           }
         } catch (checkError) {
           console.warn('[Workout Cache] 서버 확인 실패, 캐시 사용:', checkError);
-          // 서버 확인 실패 시 캐시 반환
-          return {
-            success: true,
-            items: cache.workouts,
-            fromCache: true
-          };
+          return { success: true, items: cache.workouts, fromCache: true };
         }
-      } else {
-        // 캐시가 없거나 비어있으면 서버에서 가져오기
+      }
+      if (skipCachePath) {
+        console.log('[Workout Cache] 안드로이드: 캐시가 비었거나 5개 이하 — 서버에서 직접 조회 (갯수 조회 실패 방지)');
+      } else if (!cacheHasEnough) {
         console.log('[Workout Cache] 캐시 없음 - 서버에서 로드');
       }
     }
@@ -2723,24 +2688,18 @@ async function apiGetWorkouts(forceRefresh = false) {
     return result;
   } catch (error) {
     console.error('[Workout Cache] apiGetWorkouts 실패:', error);
-    
-    // 에러 발생 시 캐시에서 시도
+    const isAndroidErr = /android/i.test(navigator.userAgent);
     if (!forceRefresh) {
       const cache = getWorkoutCache();
-      if (cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0) {
+      const cacheUsable = cache && cache.workouts && Array.isArray(cache.workouts) && cache.workouts.length > 0;
+      // 안드로이드에서 캐시가 5개 이하는 불량 캐시로 간주 — 서버 실패 시에도 캐시 반환하지 않고 에러 반환 (재시도 유도)
+      const avoidBadCache = isAndroidErr && cache && cache.workouts && (cache.workouts.length === 0 || cache.workouts.length <= 5);
+      if (cacheUsable && !avoidBadCache) {
         console.warn('[Workout Cache] 서버 오류 - 캐시 사용:', cache.count, '개');
-        return {
-          success: true,
-          items: cache.workouts,
-          fromCache: true
-        };
+        return { success: true, items: cache.workouts, fromCache: true };
       }
     }
-    
-    return { 
-      success: false, 
-      error: error.message 
-    };
+    return { success: false, error: error.message };
   }
 }
 
