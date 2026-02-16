@@ -434,10 +434,14 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 
-/* 베이스캠프 컨테이너 z-index 조정 */
+/* 베이스캠프 컨테이너 z-index 조정 + [인증 화면 공통] flex 자식 min-height: 0 → 스크롤이 #basecampScreen 안에서만 발생, body 스크롤 방지 */
 #basecampScreen .connection-main-container {
   position: relative;
   z-index: 1;
+  min-height: 0;
+}
+#basecampScreen.active > .connection-main-container {
+  min-height: 0;
 }
 
 #basecampScreen .connection-form-container {
