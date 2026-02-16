@@ -2678,11 +2678,8 @@ async function apiGetWorkouts(forceRefresh = false) {
       };
     }
     
-    // 안드로이드 등 느린 기기: 타임아웃/불완전 응답 방지를 위해 재시도 로직 사용
-    const isAndroidForApi = /android/i.test(navigator.userAgent);
-    const result = await (isAndroidForApi
-      ? jsonpRequestWithRetry(window.GAS_URL, { action: 'listWorkouts' }, 3)
-      : jsonpRequest(window.GAS_URL, { action: 'listWorkouts' }));
+    // 목록 조회는 단일 요청으로 수행 (재시도는 loadWorkouts 쪽 5개 이하 시에만 적용)
+    const result = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
     
     if (result && result.success) {
       const workouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
@@ -3319,7 +3316,29 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       }
     }
 
-    const totalWorkouts = rawWorkouts.length;
+    let totalWorkouts = rawWorkouts.length;
+    // Android 등에서 서버 빈 목록 + 캐시 없을 때만 로딩 실패 처리 (iOS 등 정상 동작 유지)
+    const isAndroidCheck = /android/i.test(navigator.userAgent);
+    if (totalWorkouts === 0 && isAndroidCheck) {
+      const cacheForEmpty = getWorkoutCache();
+      if (cacheForEmpty && cacheForEmpty.workouts && Array.isArray(cacheForEmpty.workouts) && cacheForEmpty.workouts.length > 0) {
+        console.warn('[loadWorkouts] 목록 비어 있음 - 캐시로 복구:', cacheForEmpty.workouts.length, '개');
+        rawWorkouts = cacheForEmpty.workouts;
+        totalWorkouts = rawWorkouts.length;
+      } else {
+        hideLoading();
+        workoutList.innerHTML = `
+          <div class="error-state">
+            <div class="error-state-icon">⚠️</div>
+            <div class="error-state-title">워크아웃 목록을 불러올 수 없습니다</div>
+            <div class="error-state-description">네트워크가 불안정할 수 있습니다. 아래 버튼으로 다시 시도해 주세요.</div>
+            <button class="retry-button" onclick="loadWorkouts('${categoryId || 'all'}', true)">다시 시도</button>
+          </div>
+        `;
+        return;
+      }
+    }
+
     // isFromCache는 이미 위에서 선언되었으므로 재사용
     
     // 로딩 표시: 캐시 모드인지 서버 모드인지 명확히 표시
