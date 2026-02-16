@@ -173,25 +173,19 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     );
 
     if (!user) {
-      const triedNumbers = [
-        shippingAddressTel1 ? normalizeToContactFormat(shippingAddressTel1) : "",
-        ordererTel ? normalizeToContactFormat(ordererTel) : "",
-        shippingMemo ? normalizeToContactFormat(shippingMemo) : "",
-      ].filter(Boolean);
-      console.warn(
-        "[naverSubscription] 매칭 실패: 시도한 번호(변환 후)=",
-        triedNumbers,
-        "productOrderId=",
-        productOrderId
-      );
+      const tried1 = shippingAddressTel1 ? normalizeToContactFormat(shippingAddressTel1) : "-";
+      const tried2 = ordererTel ? normalizeToContactFormat(ordererTel) : "-";
+      const tried3 = shippingMemo ? normalizeToContactFormat(shippingMemo) : "-";
+      const triedNumbersLabel = `시도 번호: [1순위: ${tried1}, 2순위: ${tried2}, 3순위: ${tried3}]`;
+      console.warn("[naverSubscription] 매칭 실패:", triedNumbersLabel, "productOrderId=", productOrderId);
       matchingFailures.push({
         productOrderId,
         orderId: (order.orderId || "").toString(),
         ordererName,
         ordererTel,
         shippingMemo,
-        triedNumbers: triedNumbers.length > 0 ? triedNumbers : undefined,
-        reason: "1~3순위(수령인·주문자·배송메모) 연락처로 매칭되는 사용자 없음. 시도한 번호: " + (triedNumbers.length > 0 ? triedNumbers.join(", ") : "-"),
+        triedNumbers: [tried1, tried2, tried3],
+        reason: "1~3순위(수령인·주문자·배송메모) 연락처로 매칭되는 사용자 없음. " + triedNumbersLabel,
       });
       continue;
     }

@@ -23,7 +23,7 @@ export function normalizeToContactFormat(phone: string): string {
   return "010-" + digits.slice(3, 7) + "-" + digits.slice(7, 11);
 }
 
-/** 1순위 shippingAddress.tel1, 2순위 ordererTel, 3순위 shippingMemo. contact 포맷(010-XXXX-XXXX)으로 비교, 1순위 매칭 시 2·3순위 생략 */
+/** 1순위 shippingAddress.tel1, 2순위 ordererTel, 3순위 shippingMemo. contact(010-XXXX-XXXX)로 where 절 비교, 1순위 매칭 시 2·3순위 생략 */
 export async function findUserByContactWithPriority(
   db: Firestore,
   shippingAddressTel1: string | null,
@@ -40,23 +40,10 @@ export async function findUserByContactWithPriority(
   add(ordererTel, 2);
   add(shippingMemo, 3);
 
-  if (candidates.length === 0) return null;
-
-  const usersSnap = await db.collection(USERS_COLLECTION).get();
-  const userContacts = new Map<string, string>();
-  for (const doc of usersSnap.docs) {
-    const contact = (doc.data().contact ?? doc.data().phoneNumber ?? doc.data().phone ?? doc.data().tel ?? "")
-      .toString()
-      .trim();
-    const formatted = normalizeToContactFormat(contact) || contact;
-    if (formatted) userContacts.set(doc.id, formatted);
-  }
-
   for (const { formatted, priority } of candidates) {
-    for (const [uid, userFormatted] of userContacts) {
-      if (userFormatted === formatted) {
-        return { userId: uid, priority };
-      }
+    const snap = await db.collection(USERS_COLLECTION).where("contact", "==", formatted).limit(1).get();
+    if (!snap.empty) {
+      return { userId: snap.docs[0].id, priority };
     }
   }
   return null;

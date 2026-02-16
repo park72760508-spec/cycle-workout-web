@@ -230,14 +230,23 @@ export async function getProductOrderDetails(
   const logJson = rawJson.length > 3000 ? rawJson.slice(0, 3000) + "...(truncated)" : rawJson;
   console.log("[naverApi] 주문 상세 조회 응답 전체 (필드 확인용):", logJson);
 
-  /* 공식 API: 응답은 data(배열). 각 항목이 productOrder 객체로 래핑된 경우 풀어서 사용 */
-  const rawList: Array<ProductOrderDetailItem | { productOrder?: ProductOrderDetailItem }> =
+  /* 공식 API: 응답은 data(배열). 각 항목이 { order, productOrder } 형태일 수 있음. order.ordererTel(2순위)을 productOrder에 병합 */
+  const rawList: Array<
+    ProductOrderDetailItem | { productOrder?: ProductOrderDetailItem; order?: { ordererTel?: string; ordererName?: string } }
+  > =
     Array.isArray(data.data) ? data.data
     : Array.isArray(data.productOrders) ? data.productOrders
     : [];
   const list = rawList.map((item): ProductOrderDetailItem => {
+    let detail: ProductOrderDetailItem;
     if (item && typeof item === "object" && "productOrder" in item && item.productOrder != null) {
-      return item.productOrder as ProductOrderDetailItem;
+      detail = { ...(item.productOrder as ProductOrderDetailItem) };
+      const order = item && "order" in item ? (item as { order?: { ordererTel?: string; ordererName?: string } }).order : undefined;
+      if (order && typeof order === "object") {
+        if (order.ordererTel != null && order.ordererTel !== "") detail.ordererTel = order.ordererTel;
+        if (order.ordererName != null && order.ordererName !== "") detail.ordererName = order.ordererName;
+      }
+      return detail;
     }
     return item as ProductOrderDetailItem;
   });

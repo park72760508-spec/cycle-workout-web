@@ -88,10 +88,15 @@ export interface FailureEmailPayload {
 export async function sendFailureEmail(failures: FailureEmailPayload[]): Promise<boolean> {
   if (failures.length === 0) return true;
 
-  const lines = failures.map(
-    (f) =>
-      `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  주문자: ${f.ordererName || "-"}, 주문자연락처: ${f.ordererTel || "-"}, 배송메모: ${f.shippingMemo || "-"}\n  시도한 번호(변환 후): ${(f.triedNumbers && f.triedNumbers.length > 0) ? f.triedNumbers.join(", ") : "-"}\n  사유: ${f.reason}`
-  );
+  const lines = failures.map((f) => {
+    const triedLabel =
+      f.triedNumbers && f.triedNumbers.length >= 3
+        ? `시도 번호: [1순위: ${f.triedNumbers[0]}, 2순위: ${f.triedNumbers[1]}, 3순위: ${f.triedNumbers[2]}]`
+        : f.triedNumbers && f.triedNumbers.length > 0
+          ? `시도 번호: ${f.triedNumbers.join(", ")}`
+          : "시도 번호: -";
+    return `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  주문자: ${f.ordererName || "-"}, 주문자연락처: ${f.ordererTel || "-"}, 배송메모: ${f.shippingMemo || "-"}\n  ${triedLabel}\n  사유: ${f.reason}`;
+  });
 
   return sendErrorReport({
     subject: `[STELVIO AI] 네이버 구독 매칭 실패 ${failures.length}건`,
