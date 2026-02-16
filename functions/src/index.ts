@@ -18,7 +18,8 @@ import {
   type ProductOrderDetailItem,
 } from "./naverApi";
 import {
-  findUserByContact,
+  findUserByContactWithPriority,
+  normalizeToContactFormat,
   isOrderProcessed,
   getProcessedOrderInfo,
   applySubscription,
@@ -133,9 +134,9 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     productOrderId: string;
     orderId?: string;
     ordererName?: string | null;
-    optionPhoneOrId: string | null;
     ordererTel: string | null;
     shippingMemo?: string | null;
+    triedNumbers?: string[];
     reason: string;
   }> = [];
   const toDispatch: string[] = [];
@@ -148,48 +149,49 @@ async function processPayedOrders(accessToken: string): Promise<void> {
     if (alreadyProcessed) continue;
 
     const detail = detailMap[productOrderId];
-    let optionPhoneOrId: string | null = null;
+    let shippingAddressTel1: string | null = null;
     let ordererTel: string | null = null;
-    let ordererNo: string | null = null;
-    let memoOrOptionId: string | null = null;
-    let ordererName: string | null = null;
     let shippingMemo: string | null = null;
+    let ordererName: string | null = null;
     if (detail) {
       const extracted = extractContactFromDetail(detail);
+      shippingAddressTel1 = extracted.shippingAddressTel1;
       ordererTel = extracted.ordererTel;
-      ordererName = extracted.ordererName;
-      ordererNo = extracted.ordererNo;
       shippingMemo = extracted.shippingMemo;
-      optionPhoneOrId = extracted.optionPhoneOrId;
-      memoOrOptionId = extracted.memoOrOptionId;
+      ordererName = extracted.ordererName;
     }
-    if (ordererTel === null && optionPhoneOrId === null) {
+    if (!ordererTel && !shippingAddressTel1 && !shippingMemo) {
       const fromOrder = extractContactFromOrder(order);
-      optionPhoneOrId = fromOrder.optionPhoneOrId;
       ordererTel = fromOrder.ordererTel;
     }
-    /* 1) ordererTel로 먼저 검색, 2) 없으면 shippingMemo 연락처로 검색 (하이픈 제거·숫자만 비교는 findUserByContact 내부) */
-    let user = await findUserByContact(
+
+    const user = await findUserByContactWithPriority(
       db,
-      optionPhoneOrId,
+      shippingAddressTel1,
       ordererTel,
-      memoOrOptionId ?? undefined,
-      ordererNo ?? undefined,
-      null
+      shippingMemo
     );
-    if (!user && shippingMemo) {
-      user = await findUserByContact(db, null, null, null, null, shippingMemo);
-    }
 
     if (!user) {
+      const triedNumbers = [
+        shippingAddressTel1 ? normalizeToContactFormat(shippingAddressTel1) : "",
+        ordererTel ? normalizeToContactFormat(ordererTel) : "",
+        shippingMemo ? normalizeToContactFormat(shippingMemo) : "",
+      ].filter(Boolean);
+      console.warn(
+        "[naverSubscription] 매칭 실패: 시도한 번호(변환 후)=",
+        triedNumbers,
+        "productOrderId=",
+        productOrderId
+      );
       matchingFailures.push({
         productOrderId,
         orderId: (order.orderId || "").toString(),
         ordererName,
-        optionPhoneOrId,
         ordererTel,
         shippingMemo,
-        reason: "전화번호(ordererTel)/배송메모(shippingMemo)·옵션으로 매칭되는 사용자가 없음",
+        triedNumbers: triedNumbers.length > 0 ? triedNumbers : undefined,
+        reason: "1~3순위(수령인·주문자·배송메모) 연락처로 매칭되는 사용자 없음. 시도한 번호: " + (triedNumbers.length > 0 ? triedNumbers.join(", ") : "-"),
       });
       continue;
     }
@@ -225,11 +227,11 @@ async function processPayedOrders(accessToken: string): Promise<void> {
       });
 
       console.log(
-        "[naverSubscription] 처리완료:",
+        "[naverSubscription] 매칭 성공(" + user.priority + "순위): 유저",
         user.userId,
-        "-",
+        "- expiry_date",
         newEndDate,
-        "갱신 및 로그 저장 성공"
+        "로 갱신 완료"
       );
       toDispatch.push(productOrderId);
     } catch (e) {
@@ -237,7 +239,6 @@ async function processPayedOrders(accessToken: string): Promise<void> {
         productOrderId,
         orderId: (order.orderId || "").toString(),
         ordererName,
-        optionPhoneOrId,
         ordererTel,
         shippingMemo,
         reason: (e as Error).message,

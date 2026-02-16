@@ -16,7 +16,53 @@ function normalizePhoneOrId(value: string): string {
   return trimmed;
 }
 
-/** 1순위 ordererTel, 2순위 shippingMemo. 숫자 아닌 문자 제거 후 비교. DB는 contact·phoneNumber·phone·tel 대조 */
+/** DB contact 포맷: "010-XXXX-XXXX" (13자). 숫자만 추출 후 010-앞4자-뒤4자로 변환 */
+export function normalizeToContactFormat(phone: string): string {
+  const digits = (phone ?? "").toString().trim().replace(/\D/g, "");
+  if (digits.length !== 11 || !digits.startsWith("010")) return "";
+  return "010-" + digits.slice(3, 7) + "-" + digits.slice(7, 11);
+}
+
+/** 1순위 shippingAddress.tel1, 2순위 ordererTel, 3순위 shippingMemo. contact 포맷(010-XXXX-XXXX)으로 비교, 1순위 매칭 시 2·3순위 생략 */
+export async function findUserByContactWithPriority(
+  db: Firestore,
+  shippingAddressTel1: string | null,
+  ordererTel: string | null,
+  shippingMemo: string | null
+): Promise<{ userId: string; priority: 1 | 2 | 3 } | null> {
+  const candidates: Array<{ formatted: string; priority: 1 | 2 | 3 }> = [];
+  const add = (raw: string | null, priority: 1 | 2 | 3) => {
+    if (!raw || !raw.trim()) return;
+    const formatted = normalizeToContactFormat(raw);
+    if (formatted) candidates.push({ formatted, priority });
+  };
+  add(shippingAddressTel1, 1);
+  add(ordererTel, 2);
+  add(shippingMemo, 3);
+
+  if (candidates.length === 0) return null;
+
+  const usersSnap = await db.collection(USERS_COLLECTION).get();
+  const userContacts = new Map<string, string>();
+  for (const doc of usersSnap.docs) {
+    const contact = (doc.data().contact ?? doc.data().phoneNumber ?? doc.data().phone ?? doc.data().tel ?? "")
+      .toString()
+      .trim();
+    const formatted = normalizeToContactFormat(contact) || contact;
+    if (formatted) userContacts.set(doc.id, formatted);
+  }
+
+  for (const { formatted, priority } of candidates) {
+    for (const [uid, userFormatted] of userContacts) {
+      if (userFormatted === formatted) {
+        return { userId: uid, priority };
+      }
+    }
+  }
+  return null;
+}
+
+/** (레거시) 1순위 ordererTel, 2순위 shippingMemo. 숫자 아닌 문자 제거 후 비교. DB는 contact·phoneNumber·phone·tel 대조 */
 export async function findUserByContact(
   db: Firestore,
   optionPhoneOrId: string | null,

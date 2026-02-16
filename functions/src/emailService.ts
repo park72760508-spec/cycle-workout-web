@@ -71,14 +71,14 @@ export async function sendErrorReport(payload: ErrorReportPayload): Promise<bool
   }
 }
 
-/** 실패한 주문 번호·옵션·배송메모 정보를 포함한 알림 이메일 (stelvio.ai.kr@gmail.com) */
+/** 실패한 주문 번호·시도한 연락처·사유를 포함한 알림 이메일 (stelvio.ai.kr@gmail.com) */
 export interface FailureEmailPayload {
   productOrderId: string;
   orderId?: string;
   ordererName?: string | null;
-  optionPhoneOrId: string | null;
-  ordererTel: string | null;
+  ordererTel?: string | null;
   shippingMemo?: string | null;
+  triedNumbers?: string[];
   reason: string;
 }
 
@@ -90,7 +90,7 @@ export async function sendFailureEmail(failures: FailureEmailPayload[]): Promise
 
   const lines = failures.map(
     (f) =>
-      `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  주문자: ${f.ordererName || "-"}, 주문자연락처: ${f.ordererTel || "-"}, 배송메모: ${f.shippingMemo || "-"}, 옵션: ${f.optionPhoneOrId || "-"}\n  사유: ${f.reason}`
+      `- 주문번호(productOrderId): ${f.productOrderId}, orderId: ${f.orderId || "-"}\n  주문자: ${f.ordererName || "-"}, 주문자연락처: ${f.ordererTel || "-"}, 배송메모: ${f.shippingMemo || "-"}\n  시도한 번호(변환 후): ${(f.triedNumbers && f.triedNumbers.length > 0) ? f.triedNumbers.join(", ") : "-"}\n  사유: ${f.reason}`
   );
 
   return sendErrorReport({

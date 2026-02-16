@@ -160,6 +160,8 @@ export interface ProductOrderDetailItem {
   ordererNo?: string;
   /** API 응답: 배송 메모 (연락처 포함 가능) */
   shippingMemo?: string;
+  /** API 응답: 수령인 연락처 (1순위 매칭) productOrder.shippingAddress.tel1 */
+  shippingAddress?: { tel1?: string; [key: string]: unknown };
   /** API 응답: 옵션 관리 코드 (예: 01M, 06M, 12M) */
   optionManageCode?: string;
   /** API 응답: 수량 */
@@ -243,17 +245,24 @@ export async function getProductOrderDetails(
   return list;
 }
 
-/** 상세 주문에서 추출. API 경로: order.ordererName, order.ordererTel, productOrder.shippingMemo, quantity, optionManageCode. 숫자 정규화는 매칭 단계에서 */
+/** 연락처 추출 (매칭 우선순위용). 1순위: productOrder.shippingAddress.tel1, 2순위: order.ordererTel, 3순위: productOrder.shippingMemo */
 export function extractContactFromDetail(detail: ProductOrderDetailItem): {
+  /** 1순위: 수령인 번호 */
+  shippingAddressTel1: string | null;
+  /** 2순위: 주문자 번호 */
   ordererTel: string | null;
+  /** 3순위: 배송 메모 */
+  shippingMemo: string | null;
   ordererName: string | null;
   ordererNo: string | null;
-  shippingMemo: string | null;
   optionPhoneOrId: string | null;
   memoOrOptionId: string | null;
 } {
   const orderer = detail.orderer;
   const orderAny = orderer as { ordererName?: string; ordererTel?: string; name?: string; tel?: string } | undefined;
+  const shippingAddressTel1: string | null = (detail.shippingAddress?.tel1 ?? "")
+    .toString()
+    .trim() || null;
   let ordererTel: string | null = (detail.ordererTel ?? orderAny?.ordererTel ?? orderAny?.tel ?? "")
     .toString()
     .trim() || null;
@@ -301,7 +310,7 @@ export function extractContactFromDetail(detail: ProductOrderDetailItem): {
   }
   const memo = (detail.orderMemo ?? detail.buyerComment ?? "").toString().trim() || null;
   if (memo) memoOrOptionId = memoOrOptionId ?? memo;
-  return { ordererTel, ordererName, ordererNo, shippingMemo, optionPhoneOrId, memoOrOptionId };
+  return { shippingAddressTel1, ordererTel, shippingMemo, ordererName, ordererNo, optionPhoneOrId, memoOrOptionId };
 }
 
 /** optionManageCode / productOption 명으로 기본 기간(일) 산정, quantity 곱하여 총 연장 일수 반환. 매칭 안 되면 31일, quantity 없으면 1 */
