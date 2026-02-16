@@ -5,7 +5,7 @@
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
+import { defineSecret, defineString, defineInt } from "firebase-functions/params";
 import {
   getAccessToken,
   getLastChangedOrders,
@@ -36,8 +36,28 @@ import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
-// Client Secret: process.env.NAVER_CLIENT_SECRET 또는 Firebase Secret Manager
+// Client Secret: Firebase Secret Manager
 const navSecret = defineSecret("NAVER_CLIENT_SECRET");
+
+// SMTP: 배포 시 .env에서 로드. Secret은 firebase functions:secrets:set SMTP_PASS 로 설정
+const smtpUser = defineString("SMTP_USER", { default: "" });
+const smtpHost = defineString("SMTP_HOST", { default: "smtp.naver.com" });
+const smtpPort = defineInt("SMTP_PORT", { default: 465 });
+const adminEmail = defineString("ADMIN_EMAIL", { default: "stelvio.ai.kr@gmail.com" });
+const smtpPassSecret = defineSecret("SMTP_PASS");
+
+/** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
+function injectSmtpEnv(): void {
+  try {
+    process.env.SMTP_USER = smtpUser.value() || process.env.SMTP_USER;
+    process.env.SMTP_PASS = smtpPassSecret.value() || process.env.SMTP_PASS;
+    process.env.SMTP_HOST = smtpHost.value() || process.env.SMTP_HOST;
+    process.env.SMTP_PORT = String(smtpPort.value() || process.env.SMTP_PORT || "465");
+    process.env.ADMIN_EMAIL = adminEmail.value() || process.env.ADMIN_EMAIL;
+  } catch {
+    // Secret 미설정 시 무시 (emailService에서 SMTP 미설정으로 처리)
+  }
+}
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -386,9 +406,10 @@ export const naverSubscriptionSyncSchedule = onSchedule(
     region: "asia-northeast3",
     vpcConnector: "stelvio-connector",
     vpcConnectorEgressSettings: "ALL_TRAFFIC",
-    secrets: [navSecret],
+    secrets: [navSecret, smtpPassSecret],
   },
   async () => {
+    injectSmtpEnv();
     const runId = Date.now();
     console.log("[naverSubscription] 스케줄 실행 시작", { runId, region: "asia-northeast3" });
 
@@ -429,7 +450,7 @@ export const naverSubscriptionSyncTest = onRequest(
     region: "asia-northeast3",
     vpcConnector: "stelvio-connector",
     vpcConnectorEgressSettings: "ALL_TRAFFIC",
-    secrets: [navSecret],
+    secrets: [navSecret, smtpPassSecret],
     cors: false,
   },
   async (req, res) => {
@@ -438,6 +459,8 @@ export const naverSubscriptionSyncTest = onRequest(
       res.status(403).json({ success: false, error: "Forbidden" });
       return;
     }
+
+    injectSmtpEnv();
 
     // SMTP 테스트: ?smtpTest=1 이면 테스트 메일만 발송 후 종료 (Jisung/관리자 Gmail로)
     const smtpTest = req.query.smtpTest === "1" || req.query.smtpTest === "true";
