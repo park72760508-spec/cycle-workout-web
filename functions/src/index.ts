@@ -32,7 +32,7 @@ import {
   updateOrderLogClaim,
   DEFAULT_SUBSCRIPTION_DAYS,
 } from "./subscriptionService";
-import { sendFailureEmail } from "./emailService";
+import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
@@ -354,6 +354,7 @@ async function processRevokedOrders(
       }
     } catch (e) {
       console.error("[naverSubscription] revoke 실패:", productOrderId, e);
+      await sendRevokeFailureReport(productOrderId, (e as Error).message);
     }
   }
 }
@@ -435,6 +436,30 @@ export const naverSubscriptionSyncTest = onRequest(
     const auth = req.headers["x-naver-sync-secret"] || req.query.secret;
     if (auth !== NAVER_SYNC_TEST_SECRET) {
       res.status(403).json({ success: false, error: "Forbidden" });
+      return;
+    }
+
+    // SMTP 테스트: ?smtpTest=1 이면 테스트 메일만 발송 후 종료 (Jisung/관리자 Gmail로)
+    const smtpTest = req.query.smtpTest === "1" || req.query.smtpTest === "true";
+    if (smtpTest) {
+      try {
+        const sent = await sendSmtpTestEmail();
+        res.status(200).json({
+          success: true,
+          message: sent
+            ? "SMTP 설정 완료 테스트 메일을 ADMIN_EMAIL로 발송했습니다. 수신함을 확인하세요."
+            : "SMTP 미설정으로 테스트 메일 미발송. SMTP_USER, SMTP_PASS, ADMIN_EMAIL을 설정하세요.",
+          smtpTest: true,
+          mailSent: sent,
+        });
+      } catch (err) {
+        console.error("[naverSubscriptionSyncTest] SMTP 테스트 실패:", err);
+        res.status(500).json({
+          success: false,
+          error: (err as Error).message,
+          smtpTest: true,
+        });
+      }
       return;
     }
 
