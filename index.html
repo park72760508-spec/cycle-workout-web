@@ -4424,7 +4424,7 @@
   <div id="settingsModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeSettingsModal();">
     <div class="modal-content" style="max-width: 600px;" onclick="event.stopPropagation();">
       <div class="modal-header settings-modal-header">
-        <button type="button" class="settings-modal-back" onclick="closeSettingsModal()" aria-label="뒤로 가기">&lt;</button>
+        <span style="width: 40px; flex-shrink: 0;" aria-hidden="true"></span>
         <h2>환경설정</h2>
         <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
       </div>
@@ -4443,12 +4443,10 @@
               <button class="btn btn-default-style btn-with-icon btn-api-reset" id="settingsResetApiKeyBtn" onclick="resetApiKeyFromSettings()" style="flex: 1; white-space: nowrap;" title="키 입력란 활성화">
                 초기화
               </button>
-              <button class="btn btn-default-style btn-with-icon" id="settingsTestApiKeyBtn" onclick="testGeminiApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">
-                <img src="assets/img/api.png" alt="API 키 확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-                API 키 확인
+              <button class="btn btn-default-style" id="settingsTestApiKeyBtn" onclick="testGeminiApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">
+                API 키 검증
               </button>
-              <button class="btn btn-secondary btn-refresh btn-with-icon" id="settingsSaveApiKeyBtn" onclick="saveGeminiApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">
-                <img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              <button class="btn btn-secondary btn-refresh" id="settingsSaveApiKeyBtn" onclick="saveGeminiApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">
                 저장
               </button>
             </div>
