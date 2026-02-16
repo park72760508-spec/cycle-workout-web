@@ -133,6 +133,7 @@ const MAX_URL_LENGTH = 1800;
 const MAX_RETRIES = 3;
 const BATCH_DELAY = 1000;
 const JSONP_TIMEOUT = 60000; // 60초 타임아웃
+const SEGMENT_REQUEST_TIMEOUT_ANDROID = 25000; // 안드로이드 세그먼트 요청 25초 타임아웃 (0/N 멈춤 방지)
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -3317,8 +3318,9 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     }
 
     let totalWorkouts = rawWorkouts.length;
-    // 서버에서 빈 목록만 수신했을 때: 캐시 있으면 사용, 없으면 로딩 실패로 간주 (자료 없이 화면 전환 방지)
-    if (totalWorkouts === 0) {
+    // Android 등에서 서버 빈 목록 + 캐시 없을 때만 로딩 실패 처리 (iOS 등 정상 동작 유지)
+    const isAndroidCheck = /android/i.test(navigator.userAgent);
+    if (totalWorkouts === 0 && isAndroidCheck) {
       const cacheForEmpty = getWorkoutCache();
       if (cacheForEmpty && cacheForEmpty.workouts && Array.isArray(cacheForEmpty.workouts) && cacheForEmpty.workouts.length > 0) {
         console.warn('[loadWorkouts] 목록 비어 있음 - 캐시로 복구:', cacheForEmpty.workouts.length, '개');
@@ -3578,8 +3580,7 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       return;
     }
 
-    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
-    const isAndroid = /android/i.test(navigator.userAgent);
+    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만) — isAndroid는 위에서 선언됨
     // result 객체가 이 스코프에서 접근 가능한지 확인 (위에서 이미 정의됨)
     const isFromCacheForSegments = result && result.fromCache;
     console.log('[loadWorkouts] 세그먼트 조회 모드:', {
@@ -3621,19 +3622,36 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       }
       console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
     } else if (!isFromCacheForSegments && totalToFetch > 0) {
-      // 서버 모드: 안드로이드 등 느린 기기는 배치 축소·지연 증가로 타임아웃/실패 방지
-      const SEGMENT_BATCH_SIZE = isAndroid ? 10 : 20;
-      const SEGMENT_BATCH_DELAY = isAndroid ? 450 : 100;
-      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치 크기: ', SEGMENT_BATCH_SIZE, '개, 지연: ', SEGMENT_BATCH_DELAY, 'ms)');
+      // 서버 모드: 안드로이드 등 느린 기기는 배치 축소·지연 증가·요청별 타임아웃으로 0/N 멈춤 방지
+      const SEGMENT_BATCH_SIZE = isAndroid ? 5 : 20;
+      const SEGMENT_BATCH_DELAY = isAndroid ? 600 : 100;
+      const segmentTimeout = isAndroid ? (typeof SEGMENT_REQUEST_TIMEOUT_ANDROID !== 'undefined' ? SEGMENT_REQUEST_TIMEOUT_ANDROID : 25000) : 0;
+      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치: ', SEGMENT_BATCH_SIZE, ', 지연: ', SEGMENT_BATCH_DELAY, 'ms', segmentTimeout ? ', 요청타임아웃: ' + segmentTimeout + 'ms' : '', ')');
       showLoading(totalToFetch, 0);
       
       for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
         const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
         console.log('[loadWorkouts] 서버 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + SEGMENT_BATCH_SIZE, totalToFetch), '/', totalToFetch);
-        await Promise.all(batch.map(async (workout) => {
-          const segments = await apiGetWorkoutSegments(workout.id);
-          workout.segments = segments;
-        }));
+        const loadOne = async (workout) => {
+          if (segmentTimeout > 0) {
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SEGMENT_TIMEOUT')), segmentTimeout));
+            try {
+              const segments = await Promise.race([apiGetWorkoutSegments(workout.id), timeoutPromise]);
+              workout.segments = Array.isArray(segments) ? segments : [];
+            } catch (e) {
+              if (e && e.message === 'SEGMENT_TIMEOUT') console.warn('[loadWorkouts] 세그먼트 요청 타임아웃:', workout.id);
+              workout.segments = [];
+            }
+          } else {
+            try {
+              const segments = await apiGetWorkoutSegments(workout.id);
+              workout.segments = Array.isArray(segments) ? segments : [];
+            } catch (err) {
+              workout.segments = [];
+            }
+          }
+        };
+        await Promise.all(batch.map(loadOne));
         const loadedCount = Math.min(i + batch.length, totalToFetch);
         showLoading(totalToFetch, loadedCount);
         if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length && SEGMENT_BATCH_DELAY > 0) {
