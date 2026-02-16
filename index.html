@@ -4454,12 +4454,12 @@
             </div>
           </div>
         </div>
-        <!-- STRAVA 계정 연결하기 문구 (Gemini API 키와 동일 스타일: 왼쪽 정렬, 0.9em, 동일 색상) -->
-        <p style="margin-top: 12px; margin-bottom: 0; font-size: 0.9em; text-align: left; color: inherit;">
-          STRAVA 계정 연결하기
-        </p>
-        <!-- CONNECT WITH STRAVA 블럭 (프로필 선택 화면과 동일한 이미지·효과, 기능은 connectStrava 유지) -->
+        <!-- CONNECT WITH STRAVA 블럭 (문구 + 버튼) -->
         <div class="card" style="margin-top: 16px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
+            <img src="assets/img/strava2.png" alt="Strava" style="height: 1.5em; width: auto; vertical-align: middle;" />
+            <span style="font-size: 0.9em; font-weight: bold; color: inherit;">STRAVA 계정 연결하기</span>
+          </div>
           <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0;">
             <button class="btn btn-exit-inline profile-strava-button" id="btnConnectStravaSettings" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="min-width: 200px; padding: 0; cursor: pointer; height: 48px; display: flex; align-items: center; justify-content: center;">
               <img src="assets/img/btn_strava.png" alt="Connect with Strava" style="height: 100%; width: auto; max-width: 100%; object-fit: contain; display: block;" />
