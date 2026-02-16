@@ -3142,6 +3142,32 @@ if (!window.PULL_TO_REFRESH_BLOCKED_SCREENS) {
   window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen', 'basecampScreen'];
 }
 
+/**
+ * showScreen 없이 화면을 직접 표시한 뒤 호출 — body/document 스크롤 잠금 + PTR 블로커 적용 (Bluefy 등 당김 새로고침·줌 방지)
+ * 직접 DOM으로 basecampScreen 등을 띄우는 경로(앱 로드 시, 신규 사용자 등록 후 등)에서 반드시 호출해야 동작 적용됨.
+ * @param {string} screenId - 예: 'basecampScreen'
+ */
+function applyScrollContainmentForScreen(screenId) {
+  if (!screenId || screenId === 'mobileDashboardScreen') return;
+  document.body.style.overflow = 'hidden';
+  document.body.style.height = '100%';
+  if (document.documentElement) {
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.height = '100%';
+  }
+  if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(screenId) && screenId !== 'authScreen' && typeof enableForScreen === 'function') {
+    if (window.__pullToRefreshBlockerCleanup) {
+      window.__pullToRefreshBlockerCleanup();
+      window.__pullToRefreshBlockerCleanup = null;
+    }
+    window.__pullToRefreshBlockerCleanup = screenId === 'basecampScreen'
+      ? enableForScreen(screenId, { documentCapture: true })
+      : enableForScreen(screenId);
+    console.log('✅ applyScrollContainmentForScreen:', screenId);
+  }
+}
+window.applyScrollContainmentForScreen = applyScrollContainmentForScreen;
+
 if (!window.showScreen) {
   window.showScreen = function(id, skipHistory) {
     try {
@@ -7270,6 +7296,7 @@ async function authenticatePhone() {
             target.style.opacity = '1';
             target.style.visibility = 'visible';
             target.style.zIndex = '1000';
+            if (target.id === 'basecampScreen' && typeof applyScrollContainmentForScreen === 'function') applyScrollContainmentForScreen('basecampScreen');
             console.log('✅ 다음 화면 표시 완료:', target.id);
 
             // (디버깅 도우미) 내용 존재 확인
@@ -7718,6 +7745,7 @@ async function handleNewUserRegistered(userData) {
              basecampScreen.style.display = 'block';
              basecampScreen.style.opacity = '1';
              basecampScreen.style.visibility = 'visible';
+             if (typeof applyScrollContainmentForScreen === 'function') applyScrollContainmentForScreen('basecampScreen');
              console.log('✅ basecampScreen 표시 완료');
            } else {
              console.error('❌ basecampScreen을 찾을 수 없습니다');
@@ -7838,6 +7866,7 @@ window.addEventListener('load', () => {
       basecampScreen.style.display = 'block';
       basecampScreen.style.opacity = '1';
       basecampScreen.style.visibility = 'visible';
+      if (typeof applyScrollContainmentForScreen === 'function') applyScrollContainmentForScreen('basecampScreen');
     } else {
       // 대체: connectionScreen으로 이동
       const connectionScreen = document.getElementById('connectionScreen');
