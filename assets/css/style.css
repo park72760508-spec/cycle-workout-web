@@ -244,16 +244,21 @@ h1,h2,h3,h4 { font-weight: 600; }
 .screen.active { display: block; }
 
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
+/* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
 .screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen) {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
   height: 100vh !important;
+  height: 100dvh !important;
   max-height: 100vh !important;
+  max-height: 100dvh !important;
   min-height: 100vh;
+  min-height: 100dvh;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -389,8 +394,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   height: 100vh !important;
+  height: 100dvh !important;
   max-height: 100vh !important;
+  max-height: 100dvh !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
@@ -399,6 +407,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   overscroll-behavior: contain;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
@@ -806,10 +815,10 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 50;
 }
 
-/* MY CAREER 화면 스타일 (베이스캠프와 동일) */
+/* MY CAREER 화면 스타일 (베이스캠프와 동일) — 모바일 하단 가림·스크롤 고정 방지: 100dvh + 하단 여백 */
 #myCareerScreen {
   position: relative;
-  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 #myCareerScreen.active {
@@ -817,9 +826,22 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
-  padding: 20px;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -828,6 +850,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 #myCareerScreen .connection-main-container {
   position: relative;
   z-index: 1;
+  min-height: 0;
+}
+#myCareerScreen.active > .connection-main-container {
+  min-height: 0;
 }
 
 #myCareerScreen .connection-form-container {
