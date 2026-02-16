@@ -243,9 +243,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 .screen.active { display: block; }
 
-/* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
+/* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen) {
+/* 성과 대시보드는 스크롤을 #performance-dashboard-container만 쓰도록 제외 → 상단 락 방지 */
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen) {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
@@ -259,6 +260,20 @@ h1,h2,h3,h4 { font-weight: 600; }
   overscroll-behavior-y: contain;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
   padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+/* 사용자 대시보드(성과 화면): 화면 자체는 스크롤 없음, 내부 #performance-dashboard-container만 스크롤 → 상단 락 방지 */
+#performanceDashboardScreen.active {
+  overflow: hidden !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex !important;
+  flex-direction: column !important;
   box-sizing: border-box;
 }
 
