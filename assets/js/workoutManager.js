@@ -3579,8 +3579,7 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       return;
     }
 
-    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만)
-    const isAndroid = /android/i.test(navigator.userAgent);
+    // WorkoutSegments에서 세그먼트 조회 (그래프 표시용, 표시할 워크아웃만) — isAndroid는 위에서 선언됨
     // result 객체가 이 스코프에서 접근 가능한지 확인 (위에서 이미 정의됨)
     const isFromCacheForSegments = result && result.fromCache;
     console.log('[loadWorkouts] 세그먼트 조회 모드:', {
