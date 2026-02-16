@@ -133,6 +133,8 @@ const MAX_URL_LENGTH = 1800;
 const MAX_RETRIES = 3;
 const BATCH_DELAY = 1000;
 const JSONP_TIMEOUT = 60000; // 60초 타임아웃
+const JSONP_TIMEOUT_ANDROID_GAS = 90000; // 안드로이드 전용 GAS(구글 시트) 90초 — 느린 기기·GAS 지연 대응
+const SEGMENT_REQUEST_TIMEOUT_ANDROID = 35000; // 안드로이드 세그먼트 요청 35초 (구글 시트 응답 지연 고려)
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -166,8 +168,9 @@ function initializeWorkoutManager() {
   }
 }
 
-// 개선된 JSONP 요청 함수 (60초 타임아웃) - groupTrainingManager의 jsonpRequest와 분리
-function jsonpRequest(url, params = {}) {
+// 개선된 JSONP 요청 함수 — options.timeout 지정 시 해당 값 사용, 미지정 시 60초 (구글 시트 느린 기기 대응)
+function jsonpRequest(url, params = {}, options = {}) {
+  const timeoutMs = (options && typeof options.timeout === 'number') ? options.timeout : JSONP_TIMEOUT;
   return new Promise((resolve, reject) => {
     if (!url || typeof url !== 'string') {
       reject(new Error('유효하지 않은 URL입니다.'));
@@ -259,11 +262,11 @@ function jsonpRequest(url, params = {}) {
       setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
-          console.warn('JSONP request timeout for URL:', url);
+          console.warn('JSONP request timeout for URL:', url, '(' + (timeoutMs / 1000) + 's)');
           cleanup();
           reject(new Error(`요청 시간 초과: ${url}`));
         }
-      }, JSONP_TIMEOUT); // 60초 타임아웃
+      }, timeoutMs);
       
     } catch (error) {
       if (!isResolved) {
@@ -277,27 +280,24 @@ function jsonpRequest(url, params = {}) {
 // workoutManager 전용 참조 (groupTrainingManager 로드 시 jsonpRequest 덮어쓰기 방지)
 var wmJsonpRequest = jsonpRequest;
 
-// 재시도 로직이 포함된 JSONP 요청 함수
-async function jsonpRequestWithRetry(url, params = {}, maxRetries = MAX_RETRIES) {
+// 재시도 로직이 포함된 JSONP 요청 함수 (options.timeout 지원)
+async function jsonpRequestWithRetry(url, params = {}, maxRetries = MAX_RETRIES, options = {}) {
   let lastError;
-  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`API 요청 시도 ${attempt}/${maxRetries}:`, params.action);
-      const result = await jsonpRequest(url, params);
+      const result = await jsonpRequest(url, params, options);
       return result;
     } catch (error) {
       lastError = error;
       console.warn(`시도 ${attempt} 실패:`, error.message);
-      
       if (attempt < maxRetries) {
-        const delay = attempt * 2000;
-        console.log(`${delay/1000}초 후 재시도...`);
+        const delay = attempt * 3000;
+        console.log((delay / 1000) + '초 후 재시도...');
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
-  
   throw lastError;
 }
 
@@ -2603,9 +2603,9 @@ async function apiGetWorkouts(forceRefresh = false) {
             };
           }
           
-          const serverResult = await jsonpRequest(window.GAS_URL, { 
-            action: 'listWorkouts'
-          });
+          const isAndroidGas = /android/i.test(navigator.userAgent);
+          const serverResult = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' },
+            isAndroidGas ? { timeout: typeof JSONP_TIMEOUT_ANDROID_GAS !== 'undefined' ? JSONP_TIMEOUT_ANDROID_GAS : 90000 } : {});
           
           if (serverResult && serverResult.success) {
             const serverWorkouts = serverResult.items || serverResult.data || serverResult.workouts || (Array.isArray(serverResult) ? serverResult : []);
@@ -2678,8 +2678,12 @@ async function apiGetWorkouts(forceRefresh = false) {
       };
     }
     
-    // 목록 조회는 단일 요청으로 수행 (재시도는 loadWorkouts 쪽 5개 이하 시에만 적용)
-    const result = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+    // 안드로이드: 구글 시트(GAS) 응답 지연·불안정 대응 — 90초 타임아웃 + 2회 재시도(3초 간격)
+    const isAndroidGas = /android/i.test(navigator.userAgent);
+    const listOptions = isAndroidGas ? { timeout: typeof JSONP_TIMEOUT_ANDROID_GAS !== 'undefined' ? JSONP_TIMEOUT_ANDROID_GAS : 90000 } : {};
+    const result = isAndroidGas
+      ? await jsonpRequestWithRetry(window.GAS_URL, { action: 'listWorkouts' }, 2, listOptions)
+      : await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
     
     if (result && result.success) {
       const workouts = result.items || result.data || result.workouts || (Array.isArray(result) ? result : []);
@@ -2781,8 +2785,13 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
     return [];
   }
   
+  const isAndroidSeg = /android/i.test(navigator.userAgent);
+  const segOptions = isAndroidSeg && typeof SEGMENT_REQUEST_TIMEOUT_ANDROID !== 'undefined'
+    ? { timeout: Math.max(SEGMENT_REQUEST_TIMEOUT_ANDROID + 5000, 40000) }
+    : {};
   const doFetch = async () => {
-    const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) });
+    const req = typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest;
+    const result = await req(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) }, segOptions);
     if (!result || !result.success) return [];
     const segs = result.segments || result.items || (Array.isArray(result) ? result : []);
     return Array.isArray(segs) ? segs : [];
@@ -3621,19 +3630,36 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
       }
       console.log('[loadWorkouts] ✅ 캐시 모드: 세그먼트 로딩 완료 (', totalToFetch, '개)');
     } else if (!isFromCacheForSegments && totalToFetch > 0) {
-      // 서버 모드: 안드로이드 등 느린 기기는 배치 축소·지연 증가로 타임아웃/실패 방지
-      const SEGMENT_BATCH_SIZE = isAndroid ? 10 : 20;
-      const SEGMENT_BATCH_DELAY = isAndroid ? 450 : 100;
-      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치 크기: ', SEGMENT_BATCH_SIZE, '개, 지연: ', SEGMENT_BATCH_DELAY, 'ms)');
+      // 서버 모드: 안드로이드 등 느린 기기는 배치 축소·지연 증가·요청별 타임아웃으로 0/N 멈춤 방지
+      const SEGMENT_BATCH_SIZE = isAndroid ? 3 : 20;
+      const SEGMENT_BATCH_DELAY = isAndroid ? 800 : 100;
+      const segmentTimeout = isAndroid ? (typeof SEGMENT_REQUEST_TIMEOUT_ANDROID !== 'undefined' ? SEGMENT_REQUEST_TIMEOUT_ANDROID : 25000) : 0;
+      console.log('[loadWorkouts] 🌐 서버 모드: 세그먼트 배치 로딩 시작 (', totalToFetch, '개, 배치: ', SEGMENT_BATCH_SIZE, ', 지연: ', SEGMENT_BATCH_DELAY, 'ms', segmentTimeout ? ', 요청타임아웃: ' + segmentTimeout + 'ms' : '', ')');
       showLoading(totalToFetch, 0);
       
       for (let i = 0; i < workoutsNeedingSegments.length; i += SEGMENT_BATCH_SIZE) {
         const batch = workoutsNeedingSegments.slice(i, i + SEGMENT_BATCH_SIZE);
         console.log('[loadWorkouts] 서버 모드: 세그먼트 배치 처리 중...', i + 1, '-', Math.min(i + SEGMENT_BATCH_SIZE, totalToFetch), '/', totalToFetch);
-        await Promise.all(batch.map(async (workout) => {
-          const segments = await apiGetWorkoutSegments(workout.id);
-          workout.segments = segments;
-        }));
+        const loadOne = async (workout) => {
+          if (segmentTimeout > 0) {
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SEGMENT_TIMEOUT')), segmentTimeout));
+            try {
+              const segments = await Promise.race([apiGetWorkoutSegments(workout.id), timeoutPromise]);
+              workout.segments = Array.isArray(segments) ? segments : [];
+            } catch (e) {
+              if (e && e.message === 'SEGMENT_TIMEOUT') console.warn('[loadWorkouts] 세그먼트 요청 타임아웃:', workout.id);
+              workout.segments = [];
+            }
+          } else {
+            try {
+              const segments = await apiGetWorkoutSegments(workout.id);
+              workout.segments = Array.isArray(segments) ? segments : [];
+            } catch (err) {
+              workout.segments = [];
+            }
+          }
+        };
+        await Promise.all(batch.map(loadOne));
         const loadedCount = Math.min(i + batch.length, totalToFetch);
         showLoading(totalToFetch, loadedCount);
         if (i + SEGMENT_BATCH_SIZE < workoutsNeedingSegments.length && SEGMENT_BATCH_DELAY > 0) {
