@@ -10473,7 +10473,7 @@
   <div id="performanceDashboardScreen" class="screen" style="display: none; background: #f9fafb;">
     <div style="position: relative; width: 100%; height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
       <!-- Dashboard Root Container (scoped to prevent CSS conflicts) -->
-      <div id="performance-dashboard-container" style="width: 100%; flex: 1; overflow-y: auto; overflow-x: hidden;">
+      <div id="performance-dashboard-container" style="width: 100%; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;">
         <!-- 초기 로딩 스피너 (React 마운트 전 표시) -->
         <div id="dashboard-initial-loader" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100vh; background: #f9fafb;">
           <div style="text-align: center;">
@@ -13297,10 +13297,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   
   <!-- Performance Dashboard: CSS Styles (Scoped) -->
   <style>
-    /* Scrollbar hiding for dashboard */
+    /* Scrollbar hiding + flex 스크롤 영역 확보 (min-height: 0) → 맨 위에서 아래 스크롤 락 방지 */
     #performance-dashboard-container {
       -ms-overflow-style: none;
       scrollbar-width: none;
+      min-height: 0;
+      -webkit-overflow-scrolling: touch;
     }
     #performance-dashboard-container::-webkit-scrollbar {
       display: none;
