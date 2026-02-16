@@ -10,8 +10,8 @@ const NAVER_API_BASE = "https://api.commerce.naver.com/external/v1/pay-order/sel
 /** 주문 상세 조회 API(공식): POST pay-order/seller/product-orders/query, Body: {"productOrderIds": ["id1","id2"]} */
 const NAVER_PRODUCT_ORDERS_QUERY_URL = "https://api.commerce.naver.com/external/v1/pay-order/seller/product-orders/query";
 
-/** API 명세: PAYED(결제완료), CANCELED(취소), RETURNED(반품). 한 번에 한 타입만 조회 가능 */
-export type LastChangedType = "PAYED" | "CANCELED" | "RETURNED";
+/** 네이버 공식 변경 상품 주문 정보: PAYED(결제완료), CLAIM_REQUESTED(취소/반품/교환 요청), CLAIM_COMPLETED(취소/반품/교환 완료). 한 번에 한 타입만 조회 가능 */
+export type LastChangedType = "PAYED" | "CLAIM_REQUESTED" | "CLAIM_COMPLETED";
 
 /** 전자서명 생성: client_id_timestamp 를 client_secret(salt)으로 bcrypt 후 Base64 */
 export function createClientSecretSign(
@@ -92,7 +92,7 @@ export interface LastChangedStatusesResponse {
   [key: string]: unknown;
 }
 
-/** 최근 상태 변경된 주문 조회 (PAYED, CANCELED, RETURNED) */
+/** 최근 상태 변경된 주문 조회 (PAYED, CLAIM_REQUESTED, CLAIM_COMPLETED) */
 export async function getLastChangedOrders(
   accessToken: string,
   lastChangedType: LastChangedType,
