@@ -378,12 +378,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* basecampScreen 특별 처리 - 투명 녹색톤 디자인 */
+/* [인증 화면 공통 적용] 스크롤을 화면 요소 안으로 한정, overscroll contain, body 스크롤 방지 */
 #basecampScreen {
   position: relative;
-  overflow: hidden;
-  /* Pull-to-refresh 방지 (iOS & Android) */
-  overscroll-behavior-y: none;
-  overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -392,15 +389,22 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
-  padding: 20px;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
-  /* Pull-to-refresh 방지 (iOS & Android) */
-  overscroll-behavior-y: none;
-  overscroll-behavior: none;
 }
 
 /* 베이스캠프 배경 이미지 - 흐리게 */
