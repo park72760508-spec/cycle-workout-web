@@ -45,6 +45,14 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* 한/영/숫자 폰트 통일: 전체 상속 (안드로이드 등에서 영문·숫자만 다른 폰트로 나오는 것 방지) */
+html {
+  font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+input, button, select, textarea, .screen {
+  font-family: inherit;
+}
+
 /* ========== 디바이스 연결 방식 슬라이드 스위치 ========== */
 .device-connection-switch-container {
   user-select: none;
@@ -201,7 +209,8 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 body {
-  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  /* 한/영/숫자 통일: Noto Sans KR 우선 적용 (index.html에서 로드). 영문·숫자도 동일 폰트로 표시 */
+  font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
   background: #f6f8fa;
   color: #222;
   overflow-x: hidden;
@@ -8203,7 +8212,7 @@ button[aria-disabled="true"] {
   text-align: center;
   background: rgba(255, 255, 255, 0.95);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-family: inherit;
   letter-spacing: 2px;
   font-weight: 600;
 }
@@ -8330,7 +8339,7 @@ button[aria-disabled="true"] {
   color: #667eea;
   padding: 8px 12px;
   border-radius: 8px;
-  font-family: 'Courier New', monospace;
+  font-family: inherit;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -13536,7 +13545,7 @@ button[aria-disabled="true"] {
   letter-spacing: 2px;
   margin-bottom: 11px; /* 70% of 16px */
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
-  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 기본 폰트 */
+  font-family: "Noto Sans KR", "Pretendard", sans-serif; /* 기본 폰트 */
 }
 
 .scoreboard-value {
@@ -13545,7 +13554,7 @@ button[aria-disabled="true"] {
   color: #ffffff;
   line-height: 1.2;
   text-shadow: none; /* 네온 효과 제거 */
-  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
+  font-family: "Noto Sans KR", "Pretendard", sans-serif; /* 라벨과 동일한 폰트 */
   letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
 }
 
@@ -13554,14 +13563,14 @@ button[aria-disabled="true"] {
   font-weight: 900;
   color: #00d4aa; /* 라벨과 동일한 색상 */
   margin-left: 6px; /* 70% of 8px */
-  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
+  font-family: "Noto Sans KR", "Pretendard", sans-serif; /* 라벨과 동일한 폰트 */
   letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
   text-shadow: none; /* 네온 효과 제거 */
 }
 
 /* 디지털 숫자 스타일 (전광판용) */
 .digital-number {
-  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
+  font-family: "Noto Sans KR", "Pretendard", sans-serif; /* 라벨과 동일한 폰트 */
   font-weight: 900;
   letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
   display: inline-block;
@@ -16321,7 +16330,7 @@ line[id^="needle-"] {
 #mobileDashboardScreen {
   background-color: #121212 !important;
   color: #ffffff;
-  font-family: 'Pretendard', sans-serif;
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
   margin: 0 !important;
   padding: 0 !important;
   overflow: hidden !important;
