@@ -16697,6 +16697,21 @@ body.mobile-dashboard-active {
   position: relative;
   width: 100%;
 }
+/* 속도계 박스: 녹색바탕, 속도계·목표값 위쪽 정렬 */
+#trainingScreen .laptop-gauge-box {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+  padding: 12px 10px 16px;
+  align-items: flex-start;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-box-inner {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: flex-start;
+}
 #trainingScreen .laptop-gauge-wrapper .enhanced-current-power-value,
 #trainingScreen .laptop-gauge-wrapper .enhanced-current-power-unit {
   display: none; /* gauge SVG 내 laptop-ui-current-power로 표시 */
@@ -16712,6 +16727,25 @@ body.mobile-dashboard-active {
   width: 100%;
   height: 100%;
   display: block;
+}
+/* 현재 파워 아래: 달성도 표시·진행바 블럭 (속도계 박스 안) */
+#trainingScreen .laptop-gauge-box .enhanced-power-progress.laptop-gauge-below-progress {
+  width: 100%;
+  margin-top: 10px;
+  margin-bottom: 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-below-progress .enhanced-power-progress-bar {
+  height: 10px;
+  border-radius: 5px;
+  margin-bottom: 4px;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-below-progress .enhanced-progress-labels {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* 세그먼트 평균 파워: 속도계 현재 파워 아래 배치 (중앙 패널) */
