@@ -18156,6 +18156,32 @@ function exitMobileIndividualTraining() {
 }
 
 /**
+ * 노트북/태블릿 훈련 화면 종료 → 훈련 준비 화면으로 이동
+ * 연결 > 메뉴 목록의 "종료" 클릭 시 호출 (모바일 개인훈련 대시보드 종료 기능과 동일 패턴)
+ */
+function exitLaptopTrainingToReady() {
+  const trainingScreenEl = document.getElementById('trainingScreen');
+  const isTrainingScreenActive = trainingScreenEl &&
+    (trainingScreenEl.classList.contains('active') ||
+     window.getComputedStyle(trainingScreenEl).display !== 'none');
+
+  if (!isTrainingScreenActive) {
+    return;
+  }
+
+  var trainingDropdown = document.getElementById('trainingScreenBluetoothDropdown');
+  if (trainingDropdown) trainingDropdown.classList.remove('show');
+  document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
+
+  if (confirm('훈련 준비 화면으로 이동하시겠습니까?')) {
+    if (typeof showScreen === 'function') {
+      showScreen('trainingReadyScreen');
+      console.log('[Laptop Training] 훈련 준비 화면으로 이동');
+    }
+  }
+}
+
+/**
  * ErgController 초기화 함수 (모바일 대시보드 전용, 독립적 구동)
  */
 function initMobileErgController() {
@@ -18344,6 +18370,7 @@ window.toggleMobileBluetoothDropdown = toggleMobileBluetoothDropdown;
 window.connectMobileBluetoothDevice = connectMobileBluetoothDevice;
 window.updateMobileBluetoothConnectionStatus = updateMobileBluetoothConnectionStatus;
 window.exitMobileIndividualTraining = exitMobileIndividualTraining;
+window.exitLaptopTrainingToReady = exitLaptopTrainingToReady;
 window.initMobileErgController = initMobileErgController;
 window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
 
