@@ -2107,9 +2107,9 @@ function updateTargetPower() {
             const targetValue = seg.target_value;
             let minPercent = 60;
             let maxPercent = 75;
-            
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
+            const pctzSep = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+            if (pctzSep && typeof targetValue === 'string') {
+                const parts = targetValue.split(pctzSep).map(s => s.trim());
                 if (parts.length >= 2) {
                     minPercent = Number(parts[0]) || 60;
                     maxPercent = Number(parts[1]) || 75;
@@ -2138,11 +2138,11 @@ function updateTargetPower() {
         }
         
         if (targetType === 'dual') {
-            // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
             const targetValue = seg?.target_value || seg?.target || '0';
             let targetRpm = 0;
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
+            const dualSep = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+            if (dualSep && typeof targetValue === 'string') {
+                const parts = targetValue.split(dualSep).map(s => s.trim());
                 targetRpm = Number(parts[1]) || 0;
             } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
                 targetRpm = Number(targetValue[1]) || 0;
@@ -2324,9 +2324,10 @@ function updateTargetPower() {
         targetPower = Math.round(ftp * (ftpPercent / 100));
         console.log('[updateTargetPower] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
     } else if (targetType === 'dual') {
-        // dual 타입: "100/120" 형식 파싱
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-            const parts = targetValue.split('/').map(s => s.trim());
+        // dual 타입: 구분자 "~" 또는 "/" 파싱
+        const dualDelim = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+        if (dualDelim && typeof targetValue === 'string') {
+            const parts = targetValue.split(dualDelim).map(s => s.trim());
             if (parts.length >= 1) {
                 const ftpPercent = Number(parts[0]) || 100;
                 targetPower = Math.round(ftp * (ftpPercent / 100));
@@ -2353,12 +2354,11 @@ function updateTargetPower() {
         // RPM만 있는 경우 파워는 0
         targetPower = 0;
     } else if (targetType === 'ftp_pctz') {
-        // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
         let minPercent = 60;
         let maxPercent = 75;
-        
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-            const parts = targetValue.split('/').map(s => s.trim());
+        const pctzD = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+        if (pctzD && typeof targetValue === 'string') {
+            const parts = targetValue.split(pctzD).map(s => s.trim());
             if (parts.length >= 2) {
                 minPercent = Number(parts[0]) || 60;
                 maxPercent = Number(parts[1]) || 75;
@@ -2413,10 +2413,10 @@ function updateTargetPower() {
     const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
     
     if (targetType === 'dual') {
-        // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
         let targetRpm = 0;
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-            const parts = targetValue.split('/').map(s => s.trim());
+        const dualD = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+        if (dualD && typeof targetValue === 'string') {
+            const parts = targetValue.split(dualD).map(s => s.trim());
             targetRpm = Number(parts[1]) || 0;
         } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
             targetRpm = Number(targetValue[1]) || 0;
@@ -2608,9 +2608,9 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             let ftpPercent = 100;
             let targetRpm = 0;
             
-            // target_value 파싱
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
+            const dualDelim2 = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+            if (dualDelim2 && typeof targetValue === 'string') {
+                const parts = targetValue.split(dualDelim2).map(s => s.trim());
                 if (parts.length >= 2) {
                     ftpPercent = Number(parts[0]) || 100;
                     targetRpm = Number(parts[1]) || 0;
@@ -2678,13 +2678,11 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             console.log('[updateSpeedometerTargetForSegment] dual 타입 - FTP%:', ftpPercent, 'RPM:', targetRpm, 'Power:', adjustedTargetPower);
             
         } else if (targetType === 'ftp_pctz') {
-            // ftp_pctz 타입: 하한/상한 범위
             let minPercent = 60;
             let maxPercent = 75;
-            
-            // target_value 파싱
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
+            const pctzDelim2 = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+            if (pctzDelim2 && typeof targetValue === 'string') {
+                const parts = targetValue.split(pctzDelim2).map(s => s.trim());
                 if (parts.length >= 2) {
                     minPercent = Number(parts[0]) || 60;
                     maxPercent = Number(parts[1]) || 75;
@@ -2702,7 +2700,6 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
                 maxPercent = Number(targetValue[1]) || 75;
             }
             
-            // 하한값을 목표 파워로 사용
             const baseTargetPower = Math.round(ftp * (minPercent / 100));
             const adjustedTargetPower = Math.round(baseTargetPower * intensityAdjustment);
             
@@ -2855,9 +2852,9 @@ function updateSpeedometerSegmentInfo() {
             let ftpPercent = 100;
             let targetRpm = 0;
             
-            // target_value 파싱 (인도어 대시보드 로직 참고)
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
+            const dualSep2 = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+            if (dualSep2 && typeof targetValue === 'string') {
+                const parts = targetValue.split(dualSep2).map(s => s.trim());
                 if (parts.length >= 2) {
                     ftpPercent = Number(parts[0]) || 100;
                     targetRpm = Number(parts[1]) || 0;
@@ -3032,9 +3029,9 @@ function formatSegmentInfo(targetType, targetValue) {
         // FTP 퍼센트 존: "FTP 60-75%" 형식
         let minPercent = 60;
         let maxPercent = 75;
-        
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-            const parts = targetValue.split('/').map(s => s.trim());
+        const pctzSep3 = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+        if (pctzSep3 && typeof targetValue === 'string') {
+            const parts = targetValue.split(pctzSep3).map(s => s.trim());
             if (parts.length >= 2) {
                 minPercent = Number(parts[0]) || 60;
                 maxPercent = Number(parts[1]) || 75;

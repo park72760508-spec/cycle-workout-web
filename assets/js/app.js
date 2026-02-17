@@ -1261,25 +1261,23 @@ function getSegmentFtpPercent(seg) {
   
   const targetType = seg.target_type || 'ftp_pct';
   
-  // dual 타입인 경우: target_value가 "100/120" 형식이면 첫 번째 값(ftp%)만 추출
+  // dual 타입: target_value 구분자 "~" (저장 규칙), 파싱 시 "~" 또는 "/" 호환
   if (targetType === 'dual') {
     const targetValue = seg.target_value;
     if (targetValue != null) {
       if (Array.isArray(targetValue) && targetValue.length > 0) {
-        // 배열 형식: [100, 120]
         return Math.round(Number(targetValue[0]) || 100);
       }
-      
       const targetValueStr = String(targetValue).trim();
-      if (targetValueStr.includes('/')) {
-        // "100/120" 형식: 슬래시로 분리하여 첫 번째 값만 반환
-        const parts = targetValueStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      const delim = targetValueStr.includes('~') ? '~' : (targetValueStr.includes('/') ? '/' : null);
+      if (delim) {
+        const parts = targetValueStr.split(delim).map(s => s.trim()).filter(s => s.length > 0);
         if (parts.length > 0) {
           const ftpPercent = Number(parts[0]) || 100;
           return Math.round(ftpPercent);
         }
       } else {
-        // 슬래시가 없는 경우: 숫자로 저장된 경우일 수 있음
+        // 구분자(~ 또는 /)가 없는 경우: 숫자로 저장된 경우일 수 있음
         // DB에서 "100/120"이 숫자 100120으로 변환된 경우 처리
         const numValue = Number(targetValueStr);
         if (!isNaN(numValue) && numValue > 0) {
@@ -1301,10 +1299,9 @@ function getSegmentFtpPercent(seg) {
                 return Math.round(estimatedFtp);
               }
             }
-            console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다. "100/120" 형식이어야 합니다:', targetValue);
-            return 100; // 기본값 반환
+            console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다. "100~120" 형식이어야 합니다:', targetValue);
+            return 100;
           } else if (numValue <= 1000) {
-            // 1000 이하는 FTP%로만 간주
             return Math.round(numValue);
           } else {
             console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다:', targetValue);
@@ -2331,11 +2328,10 @@ function applySegmentTarget(i) {
       }
       
     } else if (targetType === 'dual') {
-      // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+      // dual 타입: target_value 구분자 "~" (저장 규칙), 파싱 시 "~" 또는 "/" 호환
       let ftpPercent = 100;
       let targetRpm = 0;
       
-      // target_value를 문자열로 변환하여 처리
       let targetValueStr = '';
       console.log('[dual] 원본 target_value:', targetValue, '타입:', typeof targetValue);
       
@@ -2343,22 +2339,17 @@ function applySegmentTarget(i) {
         targetValueStr = '';
         console.warn('[dual] target_value가 null이거나 빈 문자열입니다');
       } else if (Array.isArray(targetValue)) {
-        // 배열 형식: [100, 120]
-        console.log('[dual] 배열 형식으로 파싱:', targetValue);
         ftpPercent = Number(targetValue[0]) || 100;
         targetRpm = Number(targetValue[1]) || 0;
-        targetValueStr = `${targetValue[0]}/${targetValue[1]}`;
+        targetValueStr = `${targetValue[0]}~${targetValue[1]}`;
       } else {
-        // 숫자 또는 문자열로 변환
         targetValueStr = String(targetValue).trim();
         console.log('[dual] 문자열로 변환된 target_value:', targetValueStr);
       }
       
-      // 배열이 아닌 경우에만 파싱 수행
-      if (!Array.isArray(targetValue)) {
-        if (targetValueStr.includes('/')) {
-          // 문자열 형식: "100/120" (앞값: ftp%, 뒤값: rpm)
-          const parts = targetValueStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      const dualDelim = (targetValueStr.includes('~') ? '~' : (targetValueStr.includes('/') ? '/' : null));
+      if (!Array.isArray(targetValue) && dualDelim) {
+        const parts = targetValueStr.split(dualDelim).map(s => s.trim()).filter(s => s.length > 0);
           console.log('[dual] 슬래시로 분리된 parts:', parts, '길이:', parts.length);
           
           if (parts.length >= 2) {
@@ -2389,14 +2380,12 @@ function applySegmentTarget(i) {
             ftpPercent = Number(parts[0]) || 100;
             targetRpm = 0;
           } else {
-            console.error('[dual] 슬래시로 분리했지만 parts가 비어있습니다:', parts);
+            console.error('[dual] 구분자로 분리했지만 parts가 비어있습니다:', parts);
             ftpPercent = 100;
             targetRpm = 0;
           }
         } else if (targetValueStr.length > 0) {
-          // 슬래시가 없는 경우: 숫자로 저장된 경우일 수 있음
-          // DB에서 "100/120"이 숫자 100120으로 변환된 경우 처리
-          console.warn('[dual] target_value에 슬래시가 없습니다. 문자열:', targetValueStr);
+          console.warn('[dual] target_value에 구분자(~ 또는 /)가 없습니다. 문자열:', targetValueStr);
           const numValue = Number(targetValueStr);
           if (!isNaN(numValue) && numValue > 0) {
             // 숫자가 1000보다 크고 1000000보다 작으면 (예: 100120) "100/120"이 숫자로 변환된 것으로 간주
@@ -2422,13 +2411,12 @@ function applySegmentTarget(i) {
                   targetRpm = 0;
                 }
               } else {
-                console.error('[dual] target_value가 잘못된 형식입니다. "100/120" 형식이어야 합니다. 현재 값:', targetValueStr);
+                console.error('[dual] target_value가 잘못된 형식입니다. "100~120" 형식이어야 합니다. 현재 값:', targetValueStr);
                 ftpPercent = 100;
                 targetRpm = 0;
               }
             } else if (numValue <= 1000) {
-              // 1000 이하의 숫자는 FTP%로만 간주 (RPM은 0)
-              console.warn('[dual] target_value에 슬래시가 없습니다. "100/120" 형식이어야 합니다. 현재 값:', targetValueStr);
+              console.warn('[dual] target_value에 구분자가 없습니다. "100~120" 형식이어야 합니다. 현재 값:', targetValueStr);
               ftpPercent = numValue;
               targetRpm = 0;
             } else {
@@ -2456,12 +2444,10 @@ function applySegmentTarget(i) {
       parsedFtpPercent = ftpPercent;
       parsedTargetRpm = targetRpm;
       
-      // 최종 검증: 파싱된 값이 올바른지 확인
-      if (targetRpm === 0 && targetValueStr.includes('/')) {
-        // 슬래시가 있는데 RPM이 0이면 파싱에 문제가 있을 수 있음
-        console.error('[dual] 경고: 슬래시가 있는데 RPM이 0입니다. target_value:', targetValue, 'targetValueStr:', targetValueStr);
-        // 다시 한 번 파싱 시도
-        const parts = targetValueStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      if (targetRpm === 0 && (targetValueStr.includes('~') || targetValueStr.includes('/'))) {
+        console.error('[dual] 경고: 구분자가 있는데 RPM이 0입니다. target_value:', targetValue, 'targetValueStr:', targetValueStr);
+        const retryDelim = targetValueStr.includes('~') ? '~' : '/';
+        const parts = targetValueStr.split(retryDelim).map(s => s.trim()).filter(s => s.length > 0);
         if (parts.length >= 2) {
           const retryFtpPercent = Number(parts[0]) || 100;
           const retryTargetRpm = Number(parts[1]) || 0;
@@ -2519,17 +2505,40 @@ function applySegmentTarget(i) {
       
       console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', adjustedTargetRpm, 'rpm (강도조절:', intensityAdjustment, ')');
       
-      // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
       if (window.ergController && window.ergController.state.enabled && targetW > 0) {
         window.ergController.setTargetPower(targetW).catch(err => {
           console.warn('[applySegmentTarget] ErgController 목표 파워 설정 실패:', err);
         });
       }
-      
-      // 기존 ERG 모드 호환성 유지
       if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') {
         setErgTargetPower(targetW);
       }
+      
+    } else if (targetType === 'ftp_pctz') {
+      // ftp_pctz 타입: target_value 구분자 "~" (하한~상한), 파싱 시 "~" 또는 "/" 호환, 속도계에는 하한 파워 표시
+      let minPercent = 60;
+      const pctzDelim = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (pctzDelim && typeof targetValue === 'string') {
+        const parts = String(targetValue).split(pctzDelim).map(s => s.trim()).filter(s => s.length > 0);
+        if (parts.length >= 1) minPercent = Number(parts[0]) || 60;
+      } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+        minPercent = Number(targetValue[0]) || 60;
+      } else if (targetValue != null) {
+        minPercent = Number(targetValue) || 60;
+      }
+      const basePower = ftp * (minPercent / 100);
+      const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      const targetW = Math.round(basePower * intensityAdjustment);
+      if (targetLabelEl) targetLabelEl.textContent = "목표 파워";
+      if (targetValueEl) targetValueEl.textContent = String(targetW || 0);
+      if (targetUnitEl) targetUnitEl.textContent = "W";
+      if (targetRpmSectionEl) targetRpmSectionEl.style.display = "none";
+      window.liveData.targetPower = targetW;
+      window.liveData.targetRpm = 0;
+      if (window.ergController && window.ergController.state.enabled && targetW > 0) {
+        window.ergController.setTargetPower(targetW).catch(err => { console.warn('[applySegmentTarget] ErgController 실패:', err); });
+      }
+      if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') setErgTargetPower(targetW);
       
     } else {
       // ftp_pct 타입 (기본): 기존 로직 유지 (RPE 보정 적용)
@@ -2976,22 +2985,32 @@ function startSegmentLoop() {
        // 노트북 훈련 화면: 저장 후 훈련결과 팝업만 표시 (훈련일지 이동 없음)
        const trainingScreenEl = document.getElementById('trainingScreen');
        const isLaptopTraining = trainingScreenEl && (trainingScreenEl.classList.contains('active') || window.getComputedStyle(trainingScreenEl).display !== 'none');
-       if (isLaptopTraining && typeof window.saveLaptopTrainingResultAtEnd === 'function') {
-         Promise.resolve()
-           .then(() => window.saveLaptopTrainingResultAtEnd())
-           .catch((e) => { console.warn('[result] saveLaptopTrainingResultAtEnd error', e); })
-           .then((saveResult) => {
-             if (typeof window.showMobileTrainingResultModal === 'function') {
-               window.__laptopResultModalOpen = true;
-               window.showMobileTrainingResultModal();
-             } else if (typeof window.showLaptopTrainingResultPopup === 'function') {
-               window.showLaptopTrainingResultPopup(saveResult);
-             } else {
-               if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
-               if (typeof showScreen === 'function') showScreen('trainingReadyScreen');
-             }
-           });
-       } else {
+      if (isLaptopTraining && typeof window.saveLaptopTrainingResultAtEnd === 'function') {
+        var tabletLoadingModal = document.getElementById('tabletTrainingLoadingModal');
+        if (tabletLoadingModal) {
+          if (tabletLoadingModal.parentNode !== document.body) document.body.appendChild(tabletLoadingModal);
+          tabletLoadingModal.classList.remove('hidden');
+          tabletLoadingModal.style.display = 'flex';
+        }
+        Promise.resolve()
+          .then(() => window.saveLaptopTrainingResultAtEnd())
+          .catch((e) => { console.warn('[result] saveLaptopTrainingResultAtEnd error', e); })
+          .then((saveResult) => {
+            if (tabletLoadingModal) {
+              tabletLoadingModal.classList.add('hidden');
+              tabletLoadingModal.style.display = 'none';
+            }
+            if (typeof window.showMobileTrainingResultModal === 'function') {
+              window.__laptopResultModalOpen = true;
+              window.showMobileTrainingResultModal();
+            } else if (typeof window.showLaptopTrainingResultPopup === 'function') {
+              window.showLaptopTrainingResultPopup(saveResult);
+            } else {
+              if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
+              if (typeof showScreen === 'function') showScreen('trainingReadyScreen');
+            }
+          });
+      } else {
          // 기존 화면(개인훈련 대시보드 등)의 경우 훈련일지로 이동
          Promise.resolve()
            .then(() => window.saveTrainingResultAtEnd?.())
@@ -3739,7 +3758,7 @@ window.updateTrainingDisplay = function () {
   const laptopCurrentEl = safeGetElement("laptop-ui-current-power");
   const laptopTargetEl = safeGetElement("laptop-ui-target-power");
   if (laptopCurrentEl) laptopCurrentEl.textContent = String(Math.round(currentPower));
-  if (laptopTargetEl) laptopTargetEl.textContent = String(Math.round(targetPower));
+  // laptopTargetEl은 아래 TARGET 타입별 업데이트 블록에서 설정
 
   // target_type에 따라 현재 파워/RPM 표시 변경
   if (targetType === 'cadence_rpm') {
@@ -3822,25 +3841,39 @@ window.updateTrainingDisplay = function () {
     }
   }
 
-  // 속도계 TARGET 텍스트 업데이트
+  // 속도계 TARGET 텍스트 업데이트 (ftp_pct, ftp_pctz, cadence_rpm, dual 타입별 독립 표시)
   if (t) {
     if (targetType === 'dual' || targetType === 'cadence_rpm') {
-      // dual 또는 cadence_rpm: 목표 RPM 값 표시 (빨강색)
       if (targetRpm > 0) {
         t.textContent = String(Math.round(targetRpm));
-        t.style.color = '#ef4444'; // 빨강색
+        t.style.color = '#ef4444';
       } else {
         t.textContent = '';
-        t.style.color = ''; // 원래 색상으로 복원
+        t.style.color = '';
       }
-    } else {
-      // ftp_pct 타입: 목표 파워 표시 (원래 색상)
+    } else if (targetType === 'ftp_pctz' || targetType === 'ftp_pct') {
       if (targetPower > 0) {
         t.textContent = String(Math.round(targetPower));
-        t.style.color = ''; // 원래 색상으로 복원
+        t.style.color = '';
       } else {
         t.textContent = '';
       }
+    } else {
+      if (targetPower > 0) {
+        t.textContent = String(Math.round(targetPower));
+        t.style.color = '';
+      } else {
+        t.textContent = '';
+      }
+    }
+  }
+  if (laptopTargetEl) {
+    if (targetType === 'dual' || targetType === 'cadence_rpm') {
+      laptopTargetEl.textContent = targetRpm > 0 ? String(Math.round(targetRpm)) : String(Math.round(targetPower));
+      laptopTargetEl.style.color = (targetType === 'cadence_rpm' || targetRpm > 0) ? '#ef4444' : '';
+    } else {
+      laptopTargetEl.textContent = String(Math.round(targetPower));
+      laptopTargetEl.style.color = '';
     }
   }
 
@@ -5272,7 +5305,13 @@ document.addEventListener("DOMContentLoaded", () => {
          console.log('[훈련완료] 노트북 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
        }
 
-       // Firebase log 저장 및 포인트 적립 후 "수고하셨습니다. 훈련결과" 팝업만 표시 (훈련일지 이동 제거)
+       // 훈련결과 저장 중 스피너 표시 → 저장 완료 시 훈련 결과 화면 표시
+       var tabletLoadingModal = document.getElementById('tabletTrainingLoadingModal');
+       if (tabletLoadingModal) {
+         if (tabletLoadingModal.parentNode !== document.body) document.body.appendChild(tabletLoadingModal);
+         tabletLoadingModal.classList.remove('hidden');
+         tabletLoadingModal.style.display = 'flex';
+       }
        Promise.resolve()
          .then(function () {
            console.log('[훈련완료] 🚀 결과 저장 및 포인트 적립 시작 (노트북)');
@@ -5282,7 +5321,10 @@ document.addEventListener("DOMContentLoaded", () => {
          })
          .then(function (saveResult) {
            console.log('[훈련완료] ✅ 저장 완료:', saveResult);
-           // 모바일 개인훈련 대시보드와 동일한 결과 모달(수고하셨습니다) 표시
+           if (tabletLoadingModal) {
+             tabletLoadingModal.classList.add('hidden');
+             tabletLoadingModal.style.display = 'none';
+           }
            if (typeof window.showMobileTrainingResultModal === 'function') {
              window.__laptopResultModalOpen = true;
              window.showMobileTrainingResultModal();
@@ -5295,6 +5337,10 @@ document.addEventListener("DOMContentLoaded", () => {
          })
          .catch(function (err) {
            console.error('[훈련완료] 💥 오류:', err);
+           if (tabletLoadingModal) {
+             tabletLoadingModal.classList.add('hidden');
+             tabletLoadingModal.style.display = 'none';
+           }
            if (typeof showToast === 'function') showToast('오류가 발생했습니다. 훈련 결과를 확인해 주세요.', 'error');
            if (typeof window.showMobileTrainingResultModal === 'function') {
              window.__laptopResultModalOpen = true;
@@ -8668,8 +8714,9 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         let targetValue = seg.target_value || 100;
         
         if (targetType === 'dual' && typeof targetValue === 'string') {
-          const parts = targetValue.split('/');
-          targetValue = `${parts[0]}% FTP / ${parts[1]} RPM`;
+          const dualSep = targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null);
+          const parts = dualSep ? targetValue.split(dualSep).map(s => s.trim()) : [targetValue];
+          targetValue = parts.length >= 2 ? `${parts[0]}% FTP / ${parts[1]} RPM` : `${targetValue}% FTP`;
         } else if (targetType === 'ftp_pct') {
           targetValue = `${targetValue}% FTP`;
         } else if (targetType === 'cadence_rpm') {
@@ -15150,9 +15197,9 @@ function updateMobileTargetPower() {
         const targetValue = seg.target_value;
         let minPercent = 60;
         let maxPercent = 75;
-        
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-          const parts = targetValue.split('/').map(s => s.trim());
+        const pctzD = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+        if (pctzD && typeof targetValue === 'string') {
+          const parts = targetValue.split(pctzD).map(s => s.trim());
           if (parts.length >= 2) {
             minPercent = Number(parts[0]) || 60;
             maxPercent = Number(parts[1]) || 75;
@@ -15183,11 +15230,11 @@ function updateMobileTargetPower() {
       
       // target_type에 따른 TARGET 라벨 및 값 업데이트
       if (targetType === 'dual') {
-        // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
         const targetValue = seg?.target_value || seg?.target || '0';
         let targetRpm = 0;
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-          const parts = targetValue.split('/').map(s => s.trim());
+        const dualDelimStr = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+        if (dualDelimStr && typeof targetValue === 'string') {
+          const parts = targetValue.split(dualDelimStr).map(s => s.trim());
           targetRpm = Number(parts[1]) || 0;
         } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
           targetRpm = Number(targetValue[1]) || 0;
@@ -15341,9 +15388,9 @@ function updateMobileTargetPower() {
     targetPower = Math.round(ftp * (ftpPercent / 100));
     console.log('[Mobile Dashboard] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
   } else if (targetType === 'dual') {
-    // dual 타입: "100/120" 형식 파싱
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelim = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+    if (dualDelim && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelim).map(s => s.trim());
       if (parts.length >= 1) {
         const ftpPercent = Number(parts[0]) || 100;
         targetPower = Math.round(ftp * (ftpPercent / 100));
@@ -15370,12 +15417,11 @@ function updateMobileTargetPower() {
     // RPM만 있는 경우 파워는 0
     targetPower = 0;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
     let minPercent = 60;
     let maxPercent = 75;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const pctzDelimStr = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+    if (pctzDelimStr && typeof targetValue === 'string') {
+      const parts = targetValue.split(pctzDelimStr).map(s => s.trim());
       if (parts.length >= 2) {
         minPercent = Number(parts[0]) || 60;
         maxPercent = Number(parts[1]) || 75;
@@ -15424,10 +15470,10 @@ function updateMobileTargetPower() {
   const targetRpmUnitEl = safeGetElement('mobile-ui-target-rpm-unit');
   
   if (targetType === 'dual') {
-    // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
     let targetRpm = 0;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualD = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+    if (dualD && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualD).map(s => s.trim());
       targetRpm = Number(parts[1]) || 0;
     } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
       targetRpm = Number(targetValue[1]) || 0;
@@ -16767,13 +16813,12 @@ function formatMobileSegmentInfo(targetType, targetValue, segmentIndex) {
     const percent = Number(targetValue) || 100;
     return `FTP ${percent}%`;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56, 75" 또는 "56/75" 형식 (하한, 상한)
     let minPercent = 60;
     let maxPercent = 75;
-    
     if (typeof targetValue === 'string') {
-      if (targetValue.includes('/')) {
-        const parts = targetValue.split('/').map(s => s.trim());
+      const pctzDelimF = targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null);
+      if (pctzDelimF) {
+        const parts = targetValue.split(pctzDelimF).map(s => s.trim());
         if (parts.length >= 2) {
           minPercent = Number(parts[0]) || 60;
           maxPercent = Number(parts[1]) || 75;
@@ -16800,12 +16845,11 @@ function formatMobileSegmentInfo(targetType, targetValue, segmentIndex) {
     
     return `FTP ${minPercent}%/${maxPercent}%`;
   } else if (targetType === 'dual') {
-    // Dual 타입: "100/120" 또는 "100/90" 형식 (FTP%/RPM)
     let ftpPercent = 100;
     let rpm = 90;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelimF = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
+    if (dualDelimF && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimF).map(s => s.trim());
       if (parts.length >= 1) {
         ftpPercent = Number(parts[0].replace('%', '')) || 100;
       }
