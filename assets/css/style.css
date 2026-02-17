@@ -16748,13 +16748,37 @@ body.mobile-dashboard-active {
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* 세그먼트 평균 파워: 속도계 현재 파워 아래 배치 (중앙 패널) */
+/* 세그먼트 평균 파워: 속도계 박스 밖(아래) 배치 시 */
 #trainingScreen .enhanced-segment-avg-power.enhanced-segment-avg-below-gauge {
   flex: none;
   width: 100%;
   margin-top: 8px;
   margin-bottom: 12px;
   text-align: center;
+}
+/* 세그먼트 평균: 속도계 박스 안, 달성도 표시 위쪽 */
+#trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
+  flex: none;
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-label {
+  font-size: 11px;
+  margin-right: 6px;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-unit {
+  font-size: 12px;
+  margin-left: 2px;
 }
 
 /* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
