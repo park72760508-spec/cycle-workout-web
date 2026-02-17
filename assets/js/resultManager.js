@@ -375,8 +375,8 @@ async function saveTrainingResult(extra = {}) {
      
      if (currentUserId && totalSeconds > 0) {
       try {
-        // np가 0이면 avgPower를 사용하거나 기본값 사용
-        const finalNP = np > 0 ? np : (stats.avgPower > 0 ? stats.avgPower : 100);
+        // 포인트는 TSS에만 반영: NP/평균파워가 모두 0이면 finalNP 0 유지 (기본값 100 사용 금지)
+        const finalNP = np > 0 ? np : (stats.avgPower > 0 ? stats.avgPower : 0);
         const finalAvgWatts = stats.avgPower > 0 ? stats.avgPower : finalNP;
         
         console.log('[saveTrainingResult] 🎁 훈련 결과 저장 및 포인트 적립 시도:', { 
