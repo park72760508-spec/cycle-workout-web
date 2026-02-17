@@ -13226,9 +13226,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 300);
         }
         
-        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (사용자 인증 후 로딩)
+        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (반드시 사용자 인증 후에만 노출, 태블릿 인증 전 노출 방지)
         if (screenId === 'basecampScreen') {
           function tryShowWeeklyTop10() {
+            if (window.__showScreenRedirectedToAuth === true) return false;
+            var authScreen = document.getElementById('authScreen');
+            var authActive = authScreen && (authScreen.classList.contains('active') || window.getComputedStyle(authScreen).display !== 'none');
+            if (authActive) return false;
             var basecamp = document.getElementById('basecampScreen');
             if (!basecamp || !basecamp.classList.contains('active')) return false;
             var cur = window.currentUser || (function() {
