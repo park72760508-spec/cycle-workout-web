@@ -4019,6 +4019,20 @@ function initTrainingScreenForReady() {
     if (typeof buildSegmentBar === "function") {
       try { buildSegmentBar(); } catch (e) { console.warn('buildSegmentBar failed:', e); }
     }
+    // 노트북 훈련 화면 세그먼트 그래프(캔버스)에 워크아웃 세그먼트 로딩
+    var segs = (window.currentWorkout && window.currentWorkout.segments) || [];
+    if (segs.length > 0 && typeof drawSegmentGraph === "function") {
+      setTimeout(function () {
+        try {
+          drawSegmentGraph(segs, -1, "trainingSegmentGraph");
+          if (typeof updateSegmentGraphMascot === "function") {
+            updateSegmentGraphMascot();
+          }
+        } catch (e) {
+          console.warn("drawSegmentGraph (노트북 준비) failed:", e);
+        }
+      }, 100);
+    }
     if (typeof applySegmentTarget === "function") {
       try { applySegmentTarget(0); } catch (e) { console.warn('applySegmentTarget failed:', e); }
     }
