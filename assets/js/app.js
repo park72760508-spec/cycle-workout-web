@@ -5180,9 +5180,54 @@ document.addEventListener("DOMContentLoaded", () => {
     btnSkipSegment.addEventListener("click", skipCurrentSegment);
   }
 
-  // 훈련 종료
-   // 훈련 종료 (확인 후 종료)
-   const btnStopTraining = safeGetElement("btnStopTraining");
+  /**
+   * 노트북 훈련 종료 후 "수고하셨습니다. 훈련결과" 팝업 표시 (훈련일지 이동 없음)
+   * 확인 클릭 시 훈련 준비 화면으로 이동
+   */
+  function showLaptopTrainingResultPopup(saveResult) {
+    var mileage = window.lastMileageUpdate || null;
+    var earned = mileage && (mileage.earned_points != null) ? mileage.earned_points : null;
+    var saveSource = saveResult?.saveResult?.source;
+    var msg = '수고하셨습니다.\n훈련 결과가 저장되었습니다.';
+    if (earned != null && earned > 0) {
+      msg += '\n획득 포인트: ' + earned + ' P';
+    }
+    if (saveSource === 'local') {
+      msg += '\n(서버 연결 불가로 기기에만 저장됨)';
+    }
+
+    var overlay = document.createElement('div');
+    overlay.id = 'laptopTrainingResultPopupOverlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'laptopTrainingResultPopupTitle');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+    overlay.innerHTML = [
+      '<div style="background:#fff;border-radius:16px;padding:24px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">',
+      '<h3 id="laptopTrainingResultPopupTitle" style="margin:0 0 16px;font-size:1.25rem;text-align:center;color:#333;">훈련 결과</h3>',
+      '<p style="margin:0 0 20px;font-size:1rem;line-height:1.5;color:#555;white-space:pre-line;text-align:center;">' + (msg.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</p>',
+      '<button type="button" id="laptopTrainingResultPopupOk" style="display:block;width:100%;padding:12px 20px;background:#2e74e8;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:bold;cursor:pointer;">확인</button>',
+      '</div>'
+    ].join('');
+
+    function closeAndGoReady() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (typeof showScreen === 'function') {
+        showScreen('trainingReadyScreen');
+        console.log('[훈련완료] 훈련 결과 팝업 확인 → 훈련 준비 화면 전환');
+      }
+    }
+
+    var btn = overlay.querySelector('#laptopTrainingResultPopupOk');
+    if (btn) btn.addEventListener('click', closeAndGoReady);
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeAndGoReady();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  // 훈련 종료 (확인 후 종료 → 저장·포인트 적립 → 훈련결과 팝업 → 확인 시 훈련 준비 화면)
+  const btnStopTraining = safeGetElement("btnStopTraining");
    if (btnStopTraining) {
      btnStopTraining.addEventListener("click", () => {
        const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
@@ -5201,95 +5246,32 @@ document.addEventListener("DOMContentLoaded", () => {
          console.log('[훈련완료] 노트북 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
        }
 
-       // ✅ 노트북 전용 저장 파이프라인 (모바일과 동일한 결과 저장·포인트 적립 로직 미러링)
+       // Firebase log 저장 및 포인트 적립 후 "수고하셨습니다. 훈련결과" 팝업만 표시 (훈련일지 이동 제거)
        Promise.resolve()
-                .then(() => {
-                  console.log('[훈련완료] 🚀 1단계: 결과 저장 시작 (노트북)');
-                  return (typeof window.saveLaptopTrainingResultAtEnd === 'function')
-                    ? window.saveLaptopTrainingResultAtEnd()
-                    : window.saveTrainingResultAtEnd?.();
-                })
-                .then((saveResult) => {
-                  console.log('[훈련완료] ✅ 1단계 완료:', saveResult);
-                  
-                  // 저장 결과 확인 및 알림
-                  if (saveResult?.saveResult?.source === 'local') {
-                    console.log('[훈련완료] 📱 로컬 저장 모드 - CORS 오류로 서버 저장 실패');
-                    if (typeof showToast === "function") {
-                      showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
-                    }
-                  } else if (saveResult?.saveResult?.source === 'gas') {
-                    console.log('[훈련완료] 🌐 서버 저장 성공');
-                    if (typeof showToast === "function") {
-                      showToast("훈련 결과가 서버에 저장되었습니다");
-                    }
-                  }
-                  
-                  console.log('[훈련완료] 🔧 2단계: 결과 화면 초기화 시작');
-                  return window.trainingResults?.initializeResultScreen?.().catch(e => {
-                    console.warn('[훈련완료] 초기화 실패 (무시하고 계속):', e);
-                    return Promise.resolve();
-                  });
-                })
-                .then(() => {
-                  console.log('[훈련완료] 📊 3단계: 세션 요약 렌더링 시작');
-                  
-                  // 여러 번 시도해서라도 결과 렌더링
-                  let renderSuccess = false;
-                  for (let attempt = 1; attempt <= 3; attempt++) {
-                    try {
-                      window.renderCurrentSessionSummary?.();
-                      console.log(`[훈련완료] ✅ 렌더링 성공 (${attempt}번째 시도)`);
-                      renderSuccess = true;
-                      break;
-                    } catch (e) {
-                      console.warn(`[훈련완료] ❌ 렌더링 실패 ${attempt}/3:`, e.message);
-                      if (attempt < 3) {
-                        // 재시도 전 잠시 대기
-                        setTimeout(() => {}, 100);
-                      }
-                    }
-                  }
-                  
-                  if (!renderSuccess) {
-                    console.error('[훈련완료] 🚨 모든 렌더링 시도 실패 - 기본 데이터라도 표시');
-                    // 최소한의 데이터라도 표시하도록 강제 설정
-                    try {
-                      document.getElementById('finalAchievement').textContent = '완료';
-                      document.getElementById('resultAvgPower').textContent = '데이터 처리 중';
-                    } catch (_) {}
-                  }
-                })
-                .then(() => {
-                  console.log('[훈련완료] 🎯 4단계: 훈련일지 화면으로 전환');
-                  
-                  // 화면 전환 전 추가 검증
-                  const hasSession = !!window.trainingResults?.getCurrentSessionData?.();
-                  console.log('[훈련완료] 세션 데이터 존재:', hasSession);
-                  
-                  if (typeof showScreen === "function") {
-                    showScreen("trainingJournalScreen");
-                    console.log('[훈련완료] 🎉 훈련일지 화면 전환 완료');
-                  } else {
-                    console.error('[훈련완료] showScreen 함수를 찾을 수 없습니다');
-                  }
-                })
-                .catch((criticalError) => {
-                  console.error('[훈련완료] 💥 치명적 오류 발생:', criticalError);
-                  
-                  // 그래도 훈련일지 화면으로 이동 시도
-                  try {
-                    if (typeof showToast === "function") {
-                      showToast("오류가 발생했지만 훈련일지를 표시합니다", "error");
-                    }
-                    if (typeof showScreen === "function") {
-                      showScreen("trainingJournalScreen");
-                    }
-                  } catch (finalError) {
-                    console.error('[훈련완료] 🔥 최종 복구도 실패:', finalError);
-                    alert('훈련일지 화면 표시 중 오류가 발생했습니다. 페이지를 새로고침해주세요.');
-                  }
-                });
+         .then(function () {
+           console.log('[훈련완료] 🚀 결과 저장 및 포인트 적립 시작 (노트북)');
+           return (typeof window.saveLaptopTrainingResultAtEnd === 'function')
+             ? window.saveLaptopTrainingResultAtEnd()
+             : window.saveTrainingResultAtEnd?.();
+         })
+         .then(function (saveResult) {
+           console.log('[훈련완료] ✅ 저장 완료:', saveResult);
+           if (typeof showLaptopTrainingResultPopup === 'function') {
+             showLaptopTrainingResultPopup(saveResult);
+           } else {
+             if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
+             if (typeof showScreen === 'function') showScreen('trainingReadyScreen');
+           }
+         })
+         .catch(function (err) {
+           console.error('[훈련완료] 💥 오류:', err);
+           if (typeof showToast === 'function') showToast('오류가 발생했습니다. 훈련 결과를 확인해 주세요.', 'error');
+           if (typeof showLaptopTrainingResultPopup === 'function') {
+             showLaptopTrainingResultPopup({ saveResult: { source: 'error' } });
+           } else if (typeof showScreen === 'function') {
+             showScreen('trainingReadyScreen');
+           }
+         });
      });
    }
 
