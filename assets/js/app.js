@@ -2229,6 +2229,8 @@ function updateTimeUI() {
       const segDur = Math.max(0, segDurationSec(seg) || 0);
       const segRemain = Math.max(0, segDur - (Number(window.trainingState?.segElapsedSec) || 0));
       safeSetText("segmentTime", formatMMSS(segRemain));
+      const laptopLapTime = safeGetElement('laptop-ui-lap-time');
+      if (laptopLapTime) laptopLapTime.textContent = formatMMSS(segRemain);
     }
 
     // 다음 세그먼트 안내 - 수정된 부분
@@ -3711,6 +3713,13 @@ window.updateTrainingDisplay = function () {
   const currentRpmSectionEl = safeGetElement("currentRpmSection");
   const currentRpmValueEl = safeGetElement("currentRpmValue");
 
+  // 노트북 파워 속도계: 바늘/중앙 텍스트/목표 텍스트 동기화
+  if (typeof updateLaptopGaugeNeedle === "function") updateLaptopGaugeNeedle(currentPower);
+  const laptopCurrentEl = safeGetElement("laptop-ui-current-power");
+  const laptopTargetEl = safeGetElement("laptop-ui-target-power");
+  if (laptopCurrentEl) laptopCurrentEl.textContent = String(Math.round(currentPower));
+  if (laptopTargetEl) laptopTargetEl.textContent = String(Math.round(targetPower));
+
   // target_type에 따라 현재 파워/RPM 표시 변경
   if (targetType === 'cadence_rpm') {
     // cadence_rpm 타입: 현재 W (현재 RPM) 형식
@@ -4024,6 +4033,9 @@ function initTrainingScreenForReady() {
     if (typeof window.updateTrainingDisplay === "function") {
       try { window.updateTrainingDisplay(); } catch (e) { console.warn('updateTrainingDisplay failed:', e); }
     }
+    if (typeof initializeLaptopGauge === "function") {
+      try { initializeLaptopGauge(); } catch (e) { console.warn('initializeLaptopGauge failed:', e); }
+    }
 
     var startWrap = document.getElementById("trainingScreenStartWrap");
     var controlBtns = document.getElementById("trainingScreenControlBtns");
@@ -4153,7 +4165,10 @@ function startWorkoutTraining() {
     if (typeof showScreen === "function") {
       showScreen("trainingScreen");
       console.log('Switched to training screen');
-      
+      if (typeof initializeLaptopGauge === "function") {
+        try { initializeLaptopGauge(); } catch (e) { console.warn('initializeLaptopGauge failed:', e); }
+      }
+
       // ERG 모드 UI 초기화 (스마트로라 연결 상태 확인)
       if (typeof initializeErgMode === 'function') {
         setTimeout(() => {
@@ -14657,6 +14672,185 @@ function updateMobileTargetPowerArc() {
     const mts = window.mobileTrainingState || {};
     const maxPowerValue = mts.currentSegmentMaxPower || window.currentSegmentMaxPower;
     console.log(`[Mobile Dashboard] updateMobileTargetPowerArc 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${maxPowerValue}W` : ''}`);
+  }
+}
+
+// ----- 노트북 훈련 대시보드용 파워 속도계 (모바일 gauge 이식, namespace 분리) -----
+let laptopCurrentPowerValue = 0;
+let laptopDisplayPower = 0;
+let laptopGaugeAnimationFrameId = null;
+let laptopUserFTP = 200;
+
+function generateLaptopGaugeTicks() {
+  const centerX = 100;
+  const centerY = 140;
+  const radius = 80;
+  const innerRadius = radius - 10;
+  let ticksHTML = '';
+  for (let i = 0; i <= 24; i++) {
+    const isMajor = i % 4 === 0;
+    let angle = 180 + (i / 24) * 180;
+    if (angle >= 360) angle = angle % 360;
+    const rad = (angle * Math.PI) / 180;
+    const x1 = centerX + innerRadius * Math.cos(rad);
+    const y1 = centerY + innerRadius * Math.sin(rad);
+    const tickLength = isMajor ? 14 : 7;
+    const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
+    const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
+    ticksHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#ffffff" stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
+  }
+  return ticksHTML;
+}
+
+function generateLaptopGaugeLabels() {
+  const centerX = 100;
+  const centerY = 140;
+  const radius = 80;
+  const labelRadius = radius + 18;
+  const ftp = laptopUserFTP || window.userFTP || 200;
+  const multipliers = [
+    { index: 0, mult: 0, color: '#ffffff' },
+    { index: 1, mult: 0.33, color: '#ffffff' },
+    { index: 2, mult: 0.67, color: '#ffffff' },
+    { index: 3, mult: 1, color: '#ef4444' },
+    { index: 4, mult: 1.33, color: '#ffffff' },
+    { index: 5, mult: 1.67, color: '#ffffff' },
+    { index: 6, mult: 2, color: '#ffffff' }
+  ];
+  let labelsHTML = '';
+  multipliers.forEach((item, i) => {
+    let angle = 180 + (i / 6) * 180;
+    if (angle >= 360) angle = angle % 360;
+    const rad = (angle * Math.PI) / 180;
+    const x = centerX + labelRadius * Math.cos(rad);
+    const y = centerY + labelRadius * Math.sin(rad);
+    const value = Math.round(ftp * item.mult);
+    labelsHTML += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="${item.color}" font-size="10" font-weight="600">${value}</text>`;
+  });
+  return labelsHTML;
+}
+
+function initializeLaptopGauge() {
+  const ticksGroup = safeGetElement('laptop-gauge-ticks');
+  const labelsGroup = safeGetElement('laptop-gauge-labels');
+  if (!ticksGroup || !labelsGroup) return;
+  const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+  laptopUserFTP = currentUser?.ftp || window.userFTP || 200;
+  ticksGroup.innerHTML = generateLaptopGaugeTicks();
+  labelsGroup.innerHTML = generateLaptopGaugeLabels();
+  startLaptopGaugeAnimationLoop();
+}
+
+function startLaptopGaugeAnimationLoop() {
+  if (laptopGaugeAnimationFrameId !== null) return;
+  const loop = () => {
+    const trainingScreen = document.getElementById('trainingScreen');
+    if (!trainingScreen || (!trainingScreen.classList.contains('active') && window.getComputedStyle(trainingScreen).display === 'none')) {
+      laptopGaugeAnimationFrameId = null;
+      return;
+    }
+    const target = laptopCurrentPowerValue || 0;
+    const current = laptopDisplayPower || 0;
+    const diff = target - current;
+    if (Math.abs(diff) > 0.1) {
+      laptopDisplayPower = current + diff * 0.15;
+    } else {
+      laptopDisplayPower = target;
+    }
+    const ftp = laptopUserFTP || window.userFTP || 200;
+    const maxPower = ftp * 2;
+    if (maxPower > 0 && !isNaN(maxPower) && isFinite(maxPower)) {
+      let ratio = Math.min(Math.max(laptopDisplayPower / maxPower, 0), 1);
+      const angle = -90 + (ratio * 180);
+      const needle = safeGetElement('laptop-gauge-needle');
+      if (needle && !isNaN(angle) && isFinite(angle)) {
+        needle.style.transition = 'none';
+        needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
+      }
+    }
+    const centerText = safeGetElement('laptop-ui-current-power');
+    if (centerText) centerText.textContent = String(Math.round(laptopDisplayPower));
+    if (typeof updateLaptopTargetPowerArc === 'function') updateLaptopTargetPowerArc();
+    laptopGaugeAnimationFrameId = requestAnimationFrame(loop);
+  };
+  laptopGaugeAnimationFrameId = requestAnimationFrame(loop);
+}
+
+function updateLaptopGaugeNeedle(power) {
+  laptopCurrentPowerValue = Math.max(0, Number(power) || 0);
+}
+
+function getLaptopCurrentSegment() {
+  const segIndex = window.trainingState?.segIndex !== undefined ? window.trainingState.segIndex : -1;
+  if (segIndex < 0 || !window.currentWorkout?.segments?.length || segIndex >= window.currentWorkout.segments.length) return null;
+  return window.currentWorkout.segments[segIndex];
+}
+
+function updateLaptopTargetPowerArc() {
+  const targetPowerEl = safeGetElement('laptop-ui-target-power');
+  if (!targetPowerEl) return;
+  const targetPower = Number(targetPowerEl.textContent) || 0;
+  if (targetPower <= 0) {
+    const targetArc = safeGetElement('laptop-gauge-target-arc');
+    const maxArc = safeGetElement('laptop-gauge-max-arc');
+    if (targetArc) targetArc.style.display = 'none';
+    if (maxArc) maxArc.style.display = 'none';
+    return;
+  }
+  const lapPowerEl = safeGetElement('avgSegmentPowerValue');
+  const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
+  const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
+  const arcColor = achievementRatio >= 0.985 ? 'rgba(0, 212, 170, 0.5)' : 'rgba(255, 140, 0, 0.5)';
+  const ftp = laptopUserFTP || window.userFTP || 200;
+  const maxPower = ftp * 2;
+  if (maxPower <= 0) return;
+  const seg = getLaptopCurrentSegment();
+  const targetType = seg?.target_type || 'ftp_pct';
+  const isFtpPctz = targetType === 'ftp_pctz';
+  if (targetType === 'cadence_rpm') {
+    const targetArc = safeGetElement('laptop-gauge-target-arc');
+    const maxArc = safeGetElement('laptop-gauge-max-arc');
+    if (targetArc) targetArc.style.display = 'none';
+    if (maxArc) maxArc.style.display = 'none';
+    return;
+  }
+  const minRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+  const startAngle = 180;
+  let minEndAngle = 180 + (minRatio * 180);
+  const centerX = 100, centerY = 140, radius = 80;
+  const startRad = (startAngle * Math.PI) / 180;
+  const minEndRad = (minEndAngle * Math.PI) / 180;
+  const startX = centerX + radius * Math.cos(startRad);
+  const startY = centerY + radius * Math.sin(startRad);
+  const minEndX = centerX + radius * Math.cos(minEndRad);
+  const minEndY = centerY + radius * Math.sin(minEndRad);
+  const minAngleDiff = minEndAngle - startAngle;
+  const minLargeArcFlag = minAngleDiff > 180 ? 1 : 0;
+  const minPathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${minLargeArcFlag} 1 ${minEndX} ${minEndY}`;
+  const targetArc = safeGetElement('laptop-gauge-target-arc');
+  if (!targetArc) return;
+  targetArc.setAttribute('d', minPathData);
+  targetArc.setAttribute('stroke', arcColor);
+  targetArc.style.display = 'block';
+  const maxPowerValue = window.currentSegmentMaxPower;
+  if (isFtpPctz && maxPowerValue && maxPowerValue > targetPower) {
+    const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
+    const maxEndAngle = 180 + (maxRatio * 180);
+    const maxEndRad = (maxEndAngle * Math.PI) / 180;
+    const maxEndX = centerX + radius * Math.cos(maxEndRad);
+    const maxEndY = centerY + radius * Math.sin(maxEndRad);
+    const maxAngleDiff = maxEndAngle - minEndAngle;
+    const maxLargeArcFlag = maxAngleDiff > 180 ? 1 : 0;
+    const maxPathData = `M ${minEndX} ${minEndY} A ${radius} ${radius} 0 ${maxLargeArcFlag} 1 ${maxEndX} ${maxEndY}`;
+    const maxArc = safeGetElement('laptop-gauge-max-arc');
+    if (maxArc) {
+      maxArc.setAttribute('d', maxPathData);
+      maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)');
+      maxArc.style.display = 'block';
+    }
+  } else {
+    const maxArc = safeGetElement('laptop-gauge-max-arc');
+    if (maxArc) maxArc.style.display = 'none';
   }
 }
 
