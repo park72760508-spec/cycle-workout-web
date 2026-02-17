@@ -2981,7 +2981,10 @@ function startSegmentLoop() {
            .then(() => window.saveLaptopTrainingResultAtEnd())
            .catch((e) => { console.warn('[result] saveLaptopTrainingResultAtEnd error', e); })
            .then((saveResult) => {
-             if (typeof window.showLaptopTrainingResultPopup === 'function') {
+             if (typeof window.showMobileTrainingResultModal === 'function') {
+               window.__laptopResultModalOpen = true;
+               window.showMobileTrainingResultModal();
+             } else if (typeof window.showLaptopTrainingResultPopup === 'function') {
                window.showLaptopTrainingResultPopup(saveResult);
              } else {
                if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
@@ -5279,8 +5282,12 @@ document.addEventListener("DOMContentLoaded", () => {
          })
          .then(function (saveResult) {
            console.log('[훈련완료] ✅ 저장 완료:', saveResult);
-           if (typeof showLaptopTrainingResultPopup === 'function') {
-             showLaptopTrainingResultPopup(saveResult);
+           // 모바일 개인훈련 대시보드와 동일한 결과 모달(수고하셨습니다) 표시
+           if (typeof window.showMobileTrainingResultModal === 'function') {
+             window.__laptopResultModalOpen = true;
+             window.showMobileTrainingResultModal();
+           } else if (typeof window.showLaptopTrainingResultPopup === 'function') {
+             window.showLaptopTrainingResultPopup(saveResult);
            } else {
              if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
              if (typeof showScreen === 'function') showScreen('trainingReadyScreen');
@@ -5289,8 +5296,11 @@ document.addEventListener("DOMContentLoaded", () => {
          .catch(function (err) {
            console.error('[훈련완료] 💥 오류:', err);
            if (typeof showToast === 'function') showToast('오류가 발생했습니다. 훈련 결과를 확인해 주세요.', 'error');
-           if (typeof showLaptopTrainingResultPopup === 'function') {
-             showLaptopTrainingResultPopup({ saveResult: { source: 'error' } });
+           if (typeof window.showMobileTrainingResultModal === 'function') {
+             window.__laptopResultModalOpen = true;
+             window.showMobileTrainingResultModal();
+           } else if (typeof window.showLaptopTrainingResultPopup === 'function') {
+             window.showLaptopTrainingResultPopup({ saveResult: { source: 'error' } });
            } else if (typeof showScreen === 'function') {
              showScreen('trainingReadyScreen');
            }
@@ -15780,6 +15790,14 @@ function closeMobileTrainingResultModal() {
   const modal = safeGetElement('mobileTrainingResultModal');
   if (modal) {
     modal.classList.add('hidden');
+  }
+  // 노트북 훈련 결과로 열었을 때: 확인 클릭 시 훈련 준비 화면으로 이동
+  if (window.__laptopResultModalOpen) {
+    window.__laptopResultModalOpen = false;
+    if (typeof showScreen === 'function') {
+      showScreen('trainingReadyScreen');
+      console.log('[훈련완료] 훈련 결과 모달 확인 → 훈련 준비 화면 전환');
+    }
   }
 }
 

@@ -287,9 +287,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       
       transaction.update(userRef, userUpdateData);
       
-      // 6. 훈련 로그 데이터 준비 (트랜잭션 외부에서 저장)
-      // userId는 서브컬렉션 경로에 포함되므로 중복 저장 불필요하지만, 
-      // 쿼리 편의성을 위해 유지 (선택사항)
+      // 6. 훈련 로그 데이터 준비 및 트랜잭션 내에서 로그 저장 (권한 오류 시 포인트 중복 적립 방지)
+      // 로그 쓰기가 실패하면 트랜잭션 전체 롤백 → 재시도 시 포인트 이중 적립 없음
       
       // Intensity Factor 계산
       const intensityFactor = np / currentFTP;
@@ -353,19 +352,20 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         rpe: trainingData.rpe || null // 90% ~ 110% 몸상태
       };
       
+      // 7. 트랜잭션 내에서 로그 문서 저장 (실패 시 user 업데이트도 롤백 → 재시도 시 포인트 중복 없음)
+      const userLogsRef = collection(db, 'users', userId, 'logs');
+      const logRef = doc(userLogsRef);
+      transaction.set(logRef, trainingLogData);
+      
       return {
         success: true,
         userUpdateData,
         trainingLogData,
         extendedDays,
-        earnedPoints
+        earnedPoints,
+        trainingLogId: logRef.id
       };
     });
-    
-    // 7. 트랜잭션 완료 후 users/{userId}/logs 서브컬렉션에 저장
-    // Subcollection 구조: users/{userId}/logs/{logId}
-    const userLogsRef = collection(db, 'users', userId, 'logs');
-    const trainingLogDocRef = await addDoc(userLogsRef, result.trainingLogData);
     
     console.log('[saveTrainingSession] ✅ 저장 완료:', {
       userId,
@@ -374,7 +374,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       newRemPoints: result.userUpdateData.rem_points,
       newAccPoints: result.userUpdateData.acc_points,
       newExpiryDate: result.userUpdateData.expiry_date,
-      trainingLogId: trainingLogDocRef.id
+      trainingLogId: result.trainingLogId
     });
     
     return {
@@ -384,7 +384,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       newRemPoints: result.userUpdateData.rem_points,
       newAccPoints: result.userUpdateData.acc_points,
       newExpiryDate: result.userUpdateData.expiry_date,
-      trainingLogId: trainingLogDocRef.id
+      trainingLogId: result.trainingLogId
     };
     
   } catch (error) {
