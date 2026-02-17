@@ -14874,6 +14874,30 @@ line[id^="needle-"] {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 20px;
+  /* 트랙 15개 이상 시 스크롤 가능 */
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.1);
+}
+
+.player-list-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.player-list-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.player-list-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 170, 0.5);
+  border-radius: 4px;
+}
+
+.player-list-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 170, 0.7);
 }
 
 .player-track-item {
@@ -16307,6 +16331,10 @@ line[id^="needle-"] {
   width: 100%;
   height: auto;
   min-height: auto;
+  /* 15개 이상 트랙(룸) 시 스크롤 가능 */
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .training-room-list::-webkit-scrollbar {
