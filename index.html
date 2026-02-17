@@ -3308,6 +3308,17 @@
           <span class="enhanced-current-rpm-unit">rpm</span>)
         </div>
 
+        <!-- 세그먼트 평균 (달성도 표시 위쪽) -->
+        <div class="enhanced-segment-avg-power enhanced-segment-avg-below-gauge laptop-gauge-inside-avg">
+          <span class="enhanced-avg-label">세그먼트 평균</span>
+          <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
+          <span class="enhanced-avg-unit" id="avgSegmentPowerUnit">W</span>
+          <span class="enhanced-avg-rpm" id="avgSegmentRpmSection" style="display: none;">
+            (<span class="enhanced-avg-rpm-value" id="avgSegmentRpmValue">88</span>
+            <span class="enhanced-avg-rpm-unit">rpm</span>)
+          </span>
+        </div>
+
         <!-- 현재 파워 아래: 달성도 표시 블럭 -->
         <div class="enhanced-power-progress laptop-gauge-below-progress">
           <div class="enhanced-power-progress-bar" id="powerProgressBar"></div>
@@ -3315,17 +3326,6 @@
             <span>달성도: <span id="achievementValueBar">98</span>%</span>
           </div>
         </div>
-      </div>
-
-      <!-- 세그먼트 평균 파워 (속도계 박스 아래 배치) -->
-      <div class="enhanced-segment-avg-power enhanced-segment-avg-below-gauge">
-        <span class="enhanced-avg-label">세그먼트 평균</span>
-        <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
-        <span class="enhanced-avg-unit" id="avgSegmentPowerUnit">W</span>
-        <span class="enhanced-avg-rpm" id="avgSegmentRpmSection" style="display: none;">
-          (<span class="enhanced-avg-rpm-value" id="avgSegmentRpmValue">88</span>
-          <span class="enhanced-avg-rpm-unit">rpm</span>)
-        </span>
       </div>
 
       <!-- 현재 세그먼트 이름 -->
