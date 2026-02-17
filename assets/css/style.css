@@ -16765,7 +16765,7 @@ body.mobile-dashboard-active {
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: -24px; /* 현재 파워↔세그먼트 평균 간격을 1/4 수준으로 축소 (SVG 하단 여백 상쇄) */
+  margin-top: -12px; /* 현재 파워↔세그먼트 평균 간격을 약 1/2 수준으로 축소 */
   margin-bottom: 6px;
   padding: 0 10px 6px;
   text-align: center;
