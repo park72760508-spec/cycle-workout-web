@@ -4187,6 +4187,12 @@ function startWorkoutTraining() {
       } else {
         console.warn("[ScreenAwake] util not found or acquire missing");
       }
+      // 노트북 훈련 전용 화면 꺼짐 방지 (모바일과 독립)
+      setTimeout(function () {
+        if (typeof window.laptopTrainingWakeLockControl !== 'undefined' && window.laptopTrainingWakeLockControl.request) {
+          window.laptopTrainingWakeLockControl.request();
+        }
+      }, 100);
 
   if (typeof window.updateGroupTrainingControlButtons === "function") {
     window.updateGroupTrainingControlButtons();
@@ -5170,6 +5176,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
        // 확인: 종료 처리
        stopSegmentLoop();
+       // 노트북 훈련 전용 화면 꺼짐 방지 해제 (모바일과 독립)
+       if (typeof window.laptopTrainingWakeLockControl !== 'undefined' && window.laptopTrainingWakeLockControl.release) {
+         window.laptopTrainingWakeLockControl.release();
+       }
 
        // 노트북 훈련 문맥: 경과 시간 저장 (저장/포인트 계산에 사용, 모바일과 동일 정책)
        if (window.trainingState && window.trainingState.elapsedSec !== undefined) {
@@ -5269,8 +5279,10 @@ document.addEventListener("DOMContentLoaded", () => {
      });
    }
 
-
-
+  // 노트북 훈련 화면 전용 화면 꺼짐 방지 초기화 (모바일과 독립, 한 번만 호출)
+  if (typeof initializeLaptopTrainingWakeLock === "function") {
+    try { initializeLaptopTrainingWakeLock(); } catch (e) { console.warn("initializeLaptopTrainingWakeLock failed:", e); }
+  }
 
   console.log("App initialization complete!");
 
@@ -13981,6 +13993,208 @@ function initializeMobileDashboardWakeLock() {
   };
   
   console.log('[Mobile Dashboard] 화면 꺼짐 방지 초기화 완료');
+}
+
+/**
+ * 노트북 훈련 화면 전용 화면 꺼짐 방지 (모바일과 동일 로직, 독립 구동)
+ * - window.laptopTrainingWakeLock / laptopTrainingWakeLockControl 사용 (모바일 미사용)
+ * - 노트북 문맥: #trainingScreen 표시 중 + window.trainingState.timerId 로만 동작
+ */
+function initializeLaptopTrainingWakeLock() {
+  if (!window.laptopTrainingWakeLock) {
+    window.laptopTrainingWakeLock = {
+      wakeLock: null,
+      wakeLockVideo: null,
+      videoWakeLockInterval: null,
+      wakeLockCheckInterval: null,
+      isActive: false
+    };
+  }
+
+  var wakeLockState = window.laptopTrainingWakeLock;
+  var wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+  var WAKE_LOCK_CHECK_MS = 10000;
+
+  function isLaptopTrainingScreenActive() {
+    var el = document.getElementById('trainingScreen');
+    return el && (el.classList.contains('active') || (window.getComputedStyle(el).display !== 'none'));
+  }
+
+  function isLaptopTrainingRunning() {
+    return isLaptopTrainingScreenActive() && window.trainingState && window.trainingState.timerId != null;
+  }
+
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  function isAndroid() {
+    return /Android/.test(navigator.userAgent || '');
+  }
+  function isChrome() {
+    var ua = navigator.userAgent || '';
+    return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
+  }
+  function isMobileChrome() {
+    return (isIOS() || isAndroid()) && isChrome();
+  }
+  function isBluefy() {
+    return /Bluefy/i.test(navigator.userAgent || '');
+  }
+
+  function startWakeLockPeriodicCheck() {
+    if (wakeLockState.wakeLockCheckInterval) return;
+    wakeLockState.wakeLockCheckInterval = setInterval(function () {
+      if (!isLaptopTrainingRunning() || !wakeLockState.isActive || document.visibilityState !== 'visible') return;
+      var needReacquire = !wakeLockState.wakeLock ||
+        (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended));
+      if (needReacquire) {
+        console.log('[Laptop Training Wake Lock] 주기 체크: 화면 꺼짐 방지 재요청');
+        requestWakeLock();
+      }
+    }, WAKE_LOCK_CHECK_MS);
+    console.log('[Laptop Training Wake Lock] 주기적 재요청 체크 시작');
+  }
+
+  function requestWakeLock() {
+    wakeLockState.isActive = true;
+    if (isMobileChrome() || (isIOS() && isBluefy())) {
+      if (!wakeLockState.wakeLockVideo) {
+        startVideoWakeLock();
+      }
+      startWakeLockPeriodicCheck();
+      return;
+    }
+
+    if (wakeLockSupported) {
+      try {
+        if (wakeLockState.wakeLock) return;
+        navigator.wakeLock.request('screen').then(function (wl) {
+          wakeLockState.wakeLock = wl;
+          console.log('[Laptop Training Wake Lock] Screen Wake Lock 활성화됨');
+          wl.addEventListener('release', function () {
+            wakeLockState.wakeLock = null;
+            if (document.visibilityState === 'visible' && wakeLockState.isActive && isLaptopTrainingRunning()) {
+              requestWakeLock();
+            }
+          });
+          if ((isIOS() || isAndroid()) && !wakeLockState.wakeLockVideo) {
+            startVideoWakeLock();
+          }
+        }).catch(function (err) {
+          console.warn('[Laptop Training Wake Lock] 활성화 실패:', err);
+          if (!wakeLockState.wakeLockVideo) startVideoWakeLock();
+        });
+      } catch (err) {
+        console.warn('[Laptop Training Wake Lock] 활성화 실패:', err);
+        if (!wakeLockState.wakeLockVideo) startVideoWakeLock();
+      }
+    } else {
+      if (!wakeLockState.wakeLockVideo) startVideoWakeLock();
+    }
+    startWakeLockPeriodicCheck();
+  }
+
+  function startVideoWakeLock() {
+    try {
+      if (wakeLockState.wakeLockVideo) return;
+      // 요청된 상태이고 노트북 훈련 화면이면 비디오 트릭 시작 (타이머는 아직 없을 수 있음)
+      if (!wakeLockState.isActive || !isLaptopTrainingScreenActive()) return;
+
+      var canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 2;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 2, 2);
+      var stream = canvas.captureStream(30);
+
+      wakeLockState.wakeLockVideo = document.createElement('video');
+      wakeLockState.wakeLockVideo.setAttribute('playsinline', '');
+      wakeLockState.wakeLockVideo.setAttribute('muted', '');
+      wakeLockState.wakeLockVideo.setAttribute('loop', '');
+      wakeLockState.wakeLockVideo.setAttribute('webkit-playsinline', '');
+      wakeLockState.wakeLockVideo.setAttribute('autoplay', '');
+      wakeLockState.wakeLockVideo.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-9999;';
+      wakeLockState.wakeLockVideo.srcObject = stream;
+      document.body.appendChild(wakeLockState.wakeLockVideo);
+
+      function playVideo() {
+        if (!wakeLockState.wakeLockVideo) return;
+        var p = wakeLockState.wakeLockVideo.play();
+        if (p && p.then) {
+          p.then(function () {
+            console.log('[Laptop Training Video Wake Lock] 화면 꺼짐 방지 활성화 (비디오 트릭)');
+          }).catch(function (err) {
+            setTimeout(playVideo, 1000);
+          });
+        }
+      }
+      playVideo();
+
+      if (isIOS() || isAndroid()) {
+        if (wakeLockState.videoWakeLockInterval) clearInterval(wakeLockState.videoWakeLockInterval);
+        wakeLockState.videoWakeLockInterval = setInterval(function () {
+          if (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended)) {
+            playVideo();
+          }
+        }, 5000);
+      }
+    } catch (err) {
+      console.warn('[Laptop Training Video Wake Lock] 초기화 실패:', err);
+    }
+  }
+
+  function releaseWakeLock() {
+    if (wakeLockState.wakeLockCheckInterval) {
+      clearInterval(wakeLockState.wakeLockCheckInterval);
+      wakeLockState.wakeLockCheckInterval = null;
+    }
+    if (wakeLockState.wakeLock) {
+      wakeLockState.wakeLock.release().then(function () {
+        wakeLockState.wakeLock = null;
+        console.log('[Laptop Training Wake Lock] Screen Wake Lock 해제됨');
+      }).catch(function (err) {
+        wakeLockState.wakeLock = null;
+      });
+    }
+    if (wakeLockState.videoWakeLockInterval) {
+      clearInterval(wakeLockState.videoWakeLockInterval);
+      wakeLockState.videoWakeLockInterval = null;
+    }
+    if (wakeLockState.wakeLockVideo) {
+      try {
+        if (wakeLockState.wakeLockVideo.srcObject) {
+          wakeLockState.wakeLockVideo.srcObject.getTracks().forEach(function (t) { t.stop(); });
+          wakeLockState.wakeLockVideo.srcObject = null;
+        }
+        wakeLockState.wakeLockVideo.pause();
+        if (wakeLockState.wakeLockVideo.parentNode) {
+          wakeLockState.wakeLockVideo.parentNode.removeChild(wakeLockState.wakeLockVideo);
+        }
+        wakeLockState.wakeLockVideo = null;
+      } catch (e) {}
+    }
+    wakeLockState.isActive = false;
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    if (!isLaptopTrainingRunning() || !wakeLockState.isActive) return;
+    if (wakeLockSupported && !wakeLockState.wakeLock) {
+      requestWakeLock();
+    }
+    if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
+      wakeLockState.wakeLockVideo.play().catch(function () {});
+    }
+  });
+
+  window.laptopTrainingWakeLockControl = {
+    request: requestWakeLock,
+    release: releaseWakeLock,
+    isActive: function () { return wakeLockState.isActive; }
+  };
+  console.log('[Laptop Training] 화면 꺼짐 방지 초기화 완료');
 }
 
 /**
