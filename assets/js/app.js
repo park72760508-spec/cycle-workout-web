@@ -2428,8 +2428,6 @@ function applySegmentTarget(i) {
         } else {
           console.warn('[dual] target_value가 빈 문자열입니다');
         }
-      }
-      
       // 값 검증
       if (isNaN(ftpPercent) || ftpPercent <= 0) {
         console.warn('[dual] 유효하지 않은 FTP%:', ftpPercent, '기본값 100 사용');
