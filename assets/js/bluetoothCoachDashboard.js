@@ -1469,9 +1469,10 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
         // cadence_rpm 타입: target_value가 RPM 값
         targetPower = 0; // RPM만 있는 경우 파워는 0
       } else if (targetType === 'dual') {
-        // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-          const parts = targetValue.split('/').map(s => s.trim());
+        // dual 타입: target_value는 "100~120" 또는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
+        const dualDelimBcd = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+        if (dualDelimBcd && typeof targetValue === 'string') {
+          const parts = targetValue.split(dualDelimBcd).map(s => s.trim());
           ftpPercent = Number(parts[0].replace('%', '')) || 100;
         } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
           ftpPercent = Number(targetValue[0]) || 100;
@@ -1480,10 +1481,11 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
         }
         targetPower = (ftp * ftpPercent) / 100;
       } else {
-        // ftp_pct 타입
+        // ftp_pct 타입 (ftp_pctz 등 "/" 또는 "~" 구분자 사용 시 첫 값 사용)
         if (typeof targetValue === 'string') {
-          if (targetValue.includes('/')) {
-            ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+          const pctDelim = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
+          if (pctDelim) {
+            ftpPercent = Number(targetValue.split(pctDelim)[0].trim().replace('%', '')) || 100;
           } else {
             ftpPercent = Number(targetValue.replace('%', '')) || 100;
           }
@@ -1913,14 +1915,12 @@ function updateCurrentSegmentInfo() {
     segmentInfoText = `${segmentLabel} RPM ${Math.round(rpm)} ${durationText}`;
   } else if (targetType === 'dual') {
     // dual: label "FTP" target_value1 %, "RPM" target_value2 (10분)
-    // 예: "Main FTP 80%, RPM 95 (10분)"
-    // dual target_value: "target_value1/target_value2" 형식으로 구분
+    // dual target_value: "target_value1~target_value2" 또는 "target_value1/target_value2" 형식
     let ftpPercent = 100;
     let rpm = 0;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      // "100/120" 형식 (target_value1/target_value2)
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelimLabel = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelimLabel && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimLabel).map(s => s.trim());
       ftpPercent = parseFloat(parts[0].replace('%', '').trim()) || 100;
       rpm = parseFloat(parts[1].trim()) || 0;
     } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
@@ -3482,7 +3482,9 @@ const BluetoothCoachCountdownDisplay = {
           if (seg.ftp_percent) return seg.ftp_percent;
           if (seg.target_type === 'ftp_pct' && seg.target_value) return Number(seg.target_value) || 60;
           if (seg.target_type === 'ftp_pctz' && seg.target_value) {
-            const parts = String(seg.target_value).split('/');
+            const tv = String(seg.target_value);
+            const delim = (tv.includes('~') || tv.includes('/')) ? (tv.includes('~') ? '~' : '/') : null;
+            const parts = delim ? tv.split(delim) : [tv];
             return Number(parts[0]) || 60;
           }
           return 60;

@@ -2992,9 +2992,10 @@ function formatSegmentInfo(targetType, targetValue) {
         let ftpPercent = 100;
         let targetRpm = 0;
         
-        // target_value 파싱 (인도어 대시보드 로직 참고)
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-            const parts = targetValue.split('/').map(s => s.trim());
+        // target_value 파싱 ("~" 또는 "/" 지원)
+        const dualSepParsed = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+        if (dualSepParsed && typeof targetValue === 'string') {
+            const parts = targetValue.split(dualSepParsed).map(s => s.trim());
             if (parts.length >= 2) {
                 ftpPercent = Number(parts[0]) || 100;
                 targetRpm = Number(parts[1]) || 0;

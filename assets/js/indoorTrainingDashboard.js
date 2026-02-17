@@ -1070,9 +1070,10 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
                 targetRpm = Number(targetValue) || 0;
                 targetPower = 0; // RPM만 있는 경우 파워는 0
             } else if (targetType === 'dual') {
-                // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
-                if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                    const parts = targetValue.split('/').map(s => s.trim());
+                // dual 타입: target_value는 "100~120" 또는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
+                const dualDelimItd = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+                if (dualDelimItd && typeof targetValue === 'string') {
+                    const parts = targetValue.split(dualDelimItd).map(s => s.trim());
                     ftpPercent = Number(parts[0].replace('%', '')) || 100;
                     targetRpm = Number(parts[1]) || 0;
                 } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
@@ -1083,10 +1084,11 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
                 }
                 targetPower = (ftp * ftpPercent) / 100;
             } else {
-                // ftp_pct 타입
+                // ftp_pct 타입 (ftp_pctz 등 "~" 또는 "/" 구분자 사용 시 첫 값 사용)
                 if (typeof targetValue === 'string') {
-                    if (targetValue.includes('/')) {
-                        ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+                    const pctDelimItd = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
+                    if (pctDelimItd) {
+                        ftpPercent = Number(targetValue.split(pctDelimItd)[0].trim().replace('%', '')) || 100;
                     } else {
                         ftpPercent = Number(targetValue.replace('%', '')) || 100;
                     }
@@ -1118,8 +1120,9 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
                 // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
                 const targetValue = currentSegment.target_value || currentSegment.target || '0';
                 let targetRpm = 0;
-                if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                    const parts = targetValue.split('/').map(s => s.trim());
+                const dualDelimRpm = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+                if (dualDelimRpm && typeof targetValue === 'string') {
+                    const parts = targetValue.split(dualDelimRpm).map(s => s.trim());
                     targetRpm = Number(parts[1]) || 0;
                 } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
                     targetRpm = Number(targetValue[1]) || 0;
@@ -1713,8 +1716,9 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
                 targetRpm = Number(targetValue) || 0;
                 targetPower = 0; // RPM만 있는 경우 파워는 0
             } else if (targetType === 'dual') {
-                if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                    const parts = targetValue.split('/').map(s => s.trim());
+                const dualDelim2 = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+                if (dualDelim2 && typeof targetValue === 'string') {
+                    const parts = targetValue.split(dualDelim2).map(s => s.trim());
                     ftpPercent = Number(parts[0].replace('%', '')) || 100;
                     targetRpm = Number(parts[1]) || 0;
                 } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
@@ -1724,8 +1728,9 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
                 targetPower = (ftp * ftpPercent) / 100;
             } else {
                 if (typeof targetValue === 'string') {
-                    if (targetValue.includes('/')) {
-                        ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+                    const pctD2 = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
+                    if (pctD2) {
+                        ftpPercent = Number(targetValue.split(pctD2)[0].trim().replace('%', '')) || 100;
                     } else {
                         ftpPercent = Number(targetValue.replace('%', '')) || 100;
                     }
@@ -6887,7 +6892,8 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
                 ftpPercent = Number(seg.target_value) || 100;
             } else if (targetType === 'dual') {
                 const targetValue = String(seg.target_value || '100');
-                const parts = targetValue.split('/');
+                const dualDelim = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
+                const parts = dualDelim ? targetValue.split(dualDelim) : [targetValue];
                 if (parts.length > 0) {
                     const ftpPart = parts[0].trim().replace('%', '');
                     ftpPercent = Number(ftpPart) || 100;

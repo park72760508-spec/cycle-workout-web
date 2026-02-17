@@ -460,13 +460,13 @@ function createSingleSegmentPreview(segment) {
     const ftpValue = Number(segment.target_value) || 0;
     targetDisplay = `${ftpValue}% FTP`;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
+    // ftp_pctz 타입: "56~75" 또는 "56/75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
     let minPercent = 60;
     let maxPercent = 75;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const pctzDelim = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (pctzDelim && typeof targetValue === 'string') {
+      const parts = targetValue.split(pctzDelim).map(s => s.trim());
       if (parts.length >= 2) {
         minPercent = Number(parts[0]) || 60;
         maxPercent = Number(parts[1]) || 75;
@@ -494,10 +494,11 @@ function createSingleSegmentPreview(segment) {
     const rpmValue = Number(segment.target_value) || 0;
     targetDisplay = `${rpmValue} rpm`;
   } else if (targetType === 'dual') {
-    // dual 타입: "100/120" 형식 파싱
+    // dual 타입: "100~120" 또는 "100/120" 형식 파싱
     const targetValue = segment.target_value;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelim = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelim && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelim).map(s => s.trim());
       if (parts.length >= 2) {
         targetDisplay = `${parts[0]}% FTP / ${parts[1]} rpm`;
       } else {
@@ -560,12 +561,21 @@ function createGroupedSegmentPreview(groupedItem) {
       const ftpValue = Number(segment.target_value) || 0;
       targetDisplay = `FTP ${ftpValue}%`;
     } else if (targetType === 'ftp_pctz') {
-      // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+      // ftp_pctz 타입: "56~75", "56/75" 또는 "56, 75" 형식 (하한, 상한)
       const targetValue = segment.target_value;
       let minPercent = 60;
       let maxPercent = 75;
-      
-      if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      const pctzD = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (pctzD && typeof targetValue === 'string') {
+        const parts = targetValue.split(pctzD).map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = 75;
+        }
+      } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
         const parts = targetValue.split(',').map(s => s.trim());
         if (parts.length >= 2) {
           minPercent = Number(parts[0]) || 60;
@@ -584,10 +594,11 @@ function createGroupedSegmentPreview(groupedItem) {
       const rpmValue = Number(segment.target_value) || 0;
       targetDisplay = `${rpmValue} rpm`;
     } else if (targetType === 'dual') {
-      // dual 타입: "100/120" 형식 파싱
+      // dual 타입: "100~120" 또는 "100/120" 형식 파싱
       const targetValue = segment.target_value;
-      if (typeof targetValue === 'string' && targetValue.includes('/')) {
-        const parts = targetValue.split('/').map(s => s.trim());
+      const dualD = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (dualD && typeof targetValue === 'string') {
+        const parts = targetValue.split(dualD).map(s => s.trim());
         if (parts.length >= 2) {
           targetDisplay = `FTP ${parts[0]}% / ${parts[1]} rpm`;
         } else {
@@ -1215,9 +1226,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       let minPercent = 60;
       let maxPercent = 75;
       
-      // 하한/상한 파싱
-      if (typeof targetValue === 'string' && targetValue.includes('/')) {
-        const parts = targetValue.split('/').map(s => s.trim());
+      // 하한/상한 파싱 ("~" 또는 "/" 또는 ",")
+      const pctzDelimDraw = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (pctzDelimDraw && typeof targetValue === 'string') {
+        const parts = targetValue.split(pctzDelimDraw).map(s => s.trim());
         if (parts.length >= 2) {
           minPercent = Number(parts[0]) || 60;
           maxPercent = Number(parts[1]) || 75;
@@ -2004,10 +2016,11 @@ function getSegmentFtpPercentForPreview(seg) {
   if (targetType === 'ftp_pct') {
     return Number(seg.target_value) || 100;
   } else if (targetType === 'dual') {
-    // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+    // dual 타입: target_value는 "85~100" 또는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
     const targetValue = seg.target_value;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim()).filter(s => s.length > 0);
+    const dualDelim = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelim && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelim).map(s => s.trim()).filter(s => s.length > 0);
       if (parts.length >= 2) {
         const ftpPercent = Number(parts[0]);
         if (!isNaN(ftpPercent) && ftpPercent > 0) {
@@ -2061,13 +2074,13 @@ function getSegmentFtpPercentForPreview(seg) {
     // RPM 값은 별도로 표시되므로 FTP %는 0 반환
     return 0;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56/75" 형식 (하한, 상한) - 평균값 사용
+    // ftp_pctz 타입: "56~75" 또는 "56/75" 형식 (하한, 상한) - 평균값 사용
     const targetValue = seg.target_value;
     let minPercent = 60;
     let maxPercent = 75;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const pctzDelim = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (pctzDelim && typeof targetValue === 'string') {
+      const parts = targetValue.split(pctzDelim).map(s => s.trim());
       if (parts.length >= 2) {
         minPercent = Number(parts[0]) || 60;
         maxPercent = Number(parts[1]) || 75;
@@ -2140,15 +2153,16 @@ function getSegmentRpmForPreview(seg) {
     return rpm;
   } else if (targetType === 'dual') {
     // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+    const dualDelimRpm = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
     console.log('[getSegmentRpmForPreview] dual 타입 처리 시작:', {
       targetValue,
       type: typeof targetValue,
       isString: typeof targetValue === 'string',
-      includesSlash: typeof targetValue === 'string' && targetValue.includes('/')
+      includesDelim: !!dualDelimRpm
     });
     
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim()).filter(s => s.length > 0);
+    if (dualDelimRpm && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimRpm).map(s => s.trim()).filter(s => s.length > 0);
       console.log('[getSegmentRpmForPreview] dual 문자열 분리:', {
         original: targetValue,
         parts,
@@ -2289,10 +2303,11 @@ function createSingleTrainingSegment(segment, isCurrent) {
   } else if (targetType === 'cadence_rpm') {
     ftpDisplay = `${Number(segment.target_value) || 0} rpm`;
   } else if (targetType === 'dual') {
-    // dual 타입: "100/120" 형식 파싱
+    // dual 타입: "100~120" 또는 "100/120" 형식 파싱
     const targetValue = segment.target_value;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelimSeg = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelimSeg && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimSeg).map(s => s.trim());
       if (parts.length >= 2) {
         ftpDisplay = `FTP ${parts[0]}% / ${parts[1]} rpm`;
       } else {
@@ -2335,12 +2350,21 @@ function createGroupedTrainingSegment(groupedItem, isCurrent, groupProgress) {
     if (targetType === 'ftp_pct') {
       ftpDisplay = `FTP ${Number(segment.target_value) || 0}%`;
     } else if (targetType === 'ftp_pctz') {
-      // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+      // ftp_pctz 타입: "56~75", "56/75" 또는 "56, 75" 형식 (하한, 상한)
       const targetValue = segment.target_value;
       let minPercent = 60;
       let maxPercent = 75;
-      
-      if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      const pctzDelimG = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (pctzDelimG && typeof targetValue === 'string') {
+        const parts = targetValue.split(pctzDelimG).map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = 75;
+        }
+      } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
         const parts = targetValue.split(',').map(s => s.trim());
         if (parts.length >= 2) {
           minPercent = Number(parts[0]) || 60;
@@ -2358,10 +2382,11 @@ function createGroupedTrainingSegment(groupedItem, isCurrent, groupProgress) {
     } else if (targetType === 'cadence_rpm') {
       ftpDisplay = `${Number(segment.target_value) || 0} rpm`;
     } else if (targetType === 'dual') {
-      // dual 타입: "100/120" 형식 파싱
+      // dual 타입: "100~120" 또는 "100/120" 형식 파싱
       const targetValue = segment.target_value;
-      if (typeof targetValue === 'string' && targetValue.includes('/')) {
-        const parts = targetValue.split('/').map(s => s.trim());
+      const dualDelimG = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (dualDelimG && typeof targetValue === 'string') {
+        const parts = targetValue.split(dualDelimG).map(s => s.trim());
         if (parts.length >= 2) {
           ftpDisplay = `FTP ${parts[0]}% / ${parts[1]} rpm`;
         } else {
@@ -4488,9 +4513,9 @@ async function saveWorkout() {
         // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
         targetValue = String(targetValue || '100/90');
       } else if (targetType === 'ftp_pctz') {
-        // ftp_pctz 타입: target_value는 "50/70" 형식의 문자열로 저장 (하한, 상한)
-        // 이미 "50/70" 형식이면 그대로 사용, 아니면 문자열로 변환
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+        // ftp_pctz 타입: target_value는 "50~70" 또는 "50/70" 형식의 문자열로 저장 (하한, 상한)
+        // 이미 "50~70" 또는 "50/70" 형식이면 그대로 사용, 아니면 문자열로 변환
+        if (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) {
           targetValue = targetValue; // 이미 올바른 형식
         } else {
           // 숫자나 다른 형식이면 기본값 사용
@@ -5101,13 +5126,13 @@ function createSegmentCard(segment, index) {
       ? `${ftpValue}% → ${segment.ramp_to_value}%`
       : `${ftpValue}% FTP`;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
+    // ftp_pctz 타입: "56~75" 또는 "56/75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
     let minPercent = 60;
     let maxPercent = 75;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const pctzDelimCard = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (pctzDelimCard && typeof targetValue === 'string') {
+      const parts = targetValue.split(pctzDelimCard).map(s => s.trim());
       if (parts.length >= 2) {
         minPercent = Number(parts[0]) || 60;
         maxPercent = Number(parts[1]) || 75;
@@ -5135,10 +5160,11 @@ function createSegmentCard(segment, index) {
     const rpmValue = Number(segment.target_value) || 0;
     intensityText = `${rpmValue} rpm`;
   } else if (targetType === 'dual') {
-    // dual 타입: "100/120" 형식 파싱
+    // dual 타입: "100~120" 또는 "100/120" 형식 파싱
     const targetValue = segment.target_value;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelimCard = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelimCard && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimCard).map(s => s.trim());
       if (parts.length >= 2) {
         intensityText = `${parts[0]}% FTP / ${parts[1]} rpm`;
       } else {
@@ -5316,10 +5342,11 @@ function showEditSegmentModal(index) {
   const segmentFtpZoneMax = safeGetElement('segmentFtpZoneMax');
   
   if (targetType === 'dual') {
-    // dual 타입: "100/120" 형식
+    // dual 타입: "100~120" 또는 "100/120" 형식
     const targetValue = segment.target_value;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelimEdit = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelimEdit && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimEdit).map(s => s.trim());
       if (parts.length >= 2) {
         if (segmentIntensity) segmentIntensity.value = parts[0] || 100;
         if (segmentTargetRpm) segmentTargetRpm.value = parts[1] || 90;
@@ -5350,14 +5377,14 @@ function showEditSegmentModal(index) {
       }
     }
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
+    // ftp_pctz 타입: "56~75" 또는 "56/75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
     const segmentFtpZone = safeGetElement('segmentFtpZone');
     let minValue = 60;
     let maxValue = 75;
-    
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const pctzDelimEdit = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (pctzDelimEdit && typeof targetValue === 'string') {
+      const parts = targetValue.split(pctzDelimEdit).map(s => s.trim());
       if (parts.length >= 2) {
         minValue = parseInt(parts[0]) || 60;
         maxValue = parseInt(parts[1]) || 75;
@@ -5756,8 +5783,9 @@ function renderRepeatSegments() {
                 return `${segment.segment_type} · ${duration} · ${Number(segment.target_value) || 0} rpm`;
               } else if (targetType === 'dual') {
                 const targetValue = segment.target_value;
-                if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                  const parts = targetValue.split('/').map(s => s.trim());
+                const dualDelimR = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+                if (dualDelimR && typeof targetValue === 'string') {
+                  const parts = targetValue.split(dualDelimR).map(s => s.trim());
                   if (parts.length >= 2) {
                     return `${segment.segment_type} · ${duration} · ${parts[0]}% FTP / ${parts[1]} rpm`;
                   } else {
@@ -5829,10 +5857,11 @@ function editRepeatSegment(index) {
   
   // target_value 파싱 및 설정
   if (targetType === 'dual') {
-    // dual 타입: "100/120" 형식
+    // dual 타입: "100~120" 또는 "100/120" 형식
     const targetValue = segment.target_value;
-    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
+    const dualDelimRep = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelimRep && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimRep).map(s => s.trim());
       if (parts.length >= 2) {
         if (segmentIntensity) segmentIntensity.value = parts[0] || 100;
         if (segmentTargetRpm) segmentTargetRpm.value = parts[1] || 90;
@@ -6137,8 +6166,9 @@ function getSegmentFtpPercentForZone(seg) {
   }
   if (targetType === 'dual') {
     const tv = seg.target_value;
-    if (typeof tv === 'string' && tv.includes('/')) {
-      const p = tv.split('/').map(s => s.trim());
+    const dualDelimZ = (typeof tv === 'string' && (tv.includes('~') || tv.includes('/'))) ? (tv.includes('~') ? '~' : '/') : null;
+    if (dualDelimZ && typeof tv === 'string') {
+      const p = tv.split(dualDelimZ).map(s => s.trim());
       return Number(p[0]) || 100;
     }
     if (Array.isArray(tv) && tv.length > 0) return Number(tv[0]) || 100;
@@ -6149,7 +6179,8 @@ function getSegmentFtpPercentForZone(seg) {
     const tv = seg.target_value;
     let minPercent = 60;
     if (typeof tv === 'string') {
-      const parts = (tv.includes('/') ? tv.split('/') : tv.split(',')).map(s => s.trim());
+      const delimPctz = (tv.includes('~') || tv.includes('/')) ? (tv.includes('~') ? '~' : '/') : (tv.includes(',') ? ',' : null);
+      const parts = delimPctz ? tv.split(delimPctz).map(s => s.trim()) : [];
       minPercent = Number(parts[0]) || 60;
     } else if (Array.isArray(tv) && tv.length > 0) {
       minPercent = Number(tv[0]) || 60;
@@ -6200,8 +6231,9 @@ function getSegmentFtpPercentForBarHeight(seg) {
   }
   if (targetType === 'dual') {
     const tv = seg.target_value;
-    if (typeof tv === 'string' && tv.includes('/')) {
-      const p = tv.split('/').map(s => s.trim());
+    const dualDelimB = (typeof tv === 'string' && (tv.includes('~') || tv.includes('/'))) ? (tv.includes('~') ? '~' : '/') : null;
+    if (dualDelimB && typeof tv === 'string') {
+      const p = tv.split(dualDelimB).map(s => s.trim());
       return Number(p[0]) || 100;
     }
     if (Array.isArray(tv) && tv.length > 0) return Number(tv[0]) || 100;
@@ -6212,7 +6244,8 @@ function getSegmentFtpPercentForBarHeight(seg) {
     const tv = seg.target_value;
     let maxPercent = 75;
     if (typeof tv === 'string') {
-      const parts = (tv.includes('/') ? tv.split('/') : tv.split(',')).map(s => s.trim());
+      const delimPctzB = (tv.includes('~') || tv.includes('/')) ? (tv.includes('~') ? '~' : '/') : (tv.includes(',') ? ',' : null);
+      const parts = delimPctzB ? tv.split(delimPctzB).map(s => s.trim()) : [];
       maxPercent = parts.length >= 2 ? (Number(parts[1]) || 75) : (Number(parts[0]) || 75);
     } else if (Array.isArray(tv) && tv.length >= 2) {
       maxPercent = Number(tv[1]) || 75;
