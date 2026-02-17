@@ -16714,6 +16714,15 @@ body.mobile-dashboard-active {
   display: block;
 }
 
+/* 세그먼트 평균 파워: 속도계 현재 파워 아래 배치 (중앙 패널) */
+#trainingScreen .enhanced-segment-avg-power.enhanced-segment-avg-below-gauge {
+  flex: none;
+  width: 100%;
+  margin-top: 8px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
 /* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
 #mobile-segment-info {
   text-align: center;
