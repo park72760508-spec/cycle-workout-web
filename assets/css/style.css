@@ -16697,12 +16697,12 @@ body.mobile-dashboard-active {
   position: relative;
   width: 100%;
 }
-/* 속도계 박스: 녹색바탕, 속도계·목표값 위쪽 정렬 */
+/* 속도계 박스: 녹색바탕, 속도계·목표값 위쪽 정렬 (상단 공간 1/2) */
 #trainingScreen .laptop-gauge-box {
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.25);
   border-radius: 12px;
-  padding: 12px 10px 16px;
+  padding: 6px 10px 16px; /* 상단 12px → 6px (1/2) */
   align-items: flex-start;
 }
 #trainingScreen .laptop-gauge-box .laptop-gauge-box-inner {
@@ -16760,11 +16760,11 @@ body.mobile-dashboard-active {
   margin-bottom: 12px;
   text-align: center;
 }
-/* 세그먼트 평균: 속도계 박스 안, 달성도 표시 위쪽 */
+/* 세그먼트 평균: 속도계 박스 안, 달성도 표시 위쪽 (현재 파워↔세그먼트평균 간격 1/2) */
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: 2px;
+  margin-top: 1px;
   margin-bottom: 6px;
   padding: 6px 10px;
   text-align: center;
