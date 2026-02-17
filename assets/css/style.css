@@ -16689,6 +16689,30 @@ body.mobile-dashboard-active {
   margin-bottom: -30px; /* 세그먼트 정보를 Y 좌표 환산 230 위치로 이동 (260 - 30 = 230) */
 }
 
+/* ----- 노트북 훈련 대시보드용 파워 속도계 (#trainingScreen 전용, 모바일과 격리) ----- */
+#trainingScreen .laptop-gauge-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+#trainingScreen .laptop-gauge-wrapper .enhanced-current-power-value,
+#trainingScreen .laptop-gauge-wrapper .enhanced-current-power-unit {
+  display: none; /* gauge SVG 내 laptop-ui-current-power로 표시 */
+}
+#trainingScreen .laptop-gauge-container {
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 230 / 260;
+  position: relative;
+  margin: 0 auto;
+}
+#trainingScreen .laptop-gauge-container .laptop-gauge-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 /* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
 #mobile-segment-info {
   text-align: center;
