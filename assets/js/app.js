@@ -7347,6 +7347,12 @@ async function authenticatePhone() {
         console.log('🔄 인증 완료 - 다음 화면으로 이동 중...');
         
         try {
+          if (typeof window.showScreen === 'function') {
+            window.__basecampShownAfterAuth = true;
+            window.showScreen('basecampScreen');
+            console.log('✅ 다음 화면 표시 완료: basecampScreen');
+            return;
+          }
           // 1단계: 모든 화면 완전히 숨기기
           document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');
@@ -7804,9 +7810,16 @@ async function handleNewUserRegistered(userData) {
            hasWelcomeModal
          });
          
-         // 화면 전환 함수 정의
+         // 화면 전환 함수 정의 (인증 완료 후 베이스캠프 진입 → TOP10 표시 허용)
          const proceedToNextScreen = () => {
            console.log('🔄 자동 인증 완료 - 기기연결 화면으로 이동');
+           
+           if (typeof window.showScreen === 'function') {
+             window.__basecampShownAfterAuth = true;
+             window.showScreen('basecampScreen');
+             console.log('✅ basecampScreen 표시 완료');
+             return;
+           }
            
            // 환영 오버레이가 있으면 먼저 닫기
            const welcomeModal = document.getElementById('userWelcomeModal');
