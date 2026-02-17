@@ -5167,16 +5167,23 @@ document.addEventListener("DOMContentLoaded", () => {
      btnStopTraining.addEventListener("click", () => {
        const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
        if (!ok) return;
-   
+
        // 확인: 종료 처리
        stopSegmentLoop();
-   
-       // ✅ await 없이 순차 실행(저장 → 초기화 → 요약 → 화면 전환)
-         // ✅ 강화된 결과 처리 파이프라인 (절대 실패하지 않음)
-              Promise.resolve()
+
+       // 노트북 훈련 문맥: 경과 시간 저장 (저장/포인트 계산에 사용, 모바일과 동일 정책)
+       if (window.trainingState && window.trainingState.elapsedSec !== undefined) {
+         window.lastElapsedTime = window.trainingState.elapsedSec;
+         console.log('[훈련완료] 노트북 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
+       }
+
+       // ✅ 노트북 전용 저장 파이프라인 (모바일과 동일한 결과 저장·포인트 적립 로직 미러링)
+       Promise.resolve()
                 .then(() => {
-                  console.log('[훈련완료] 🚀 1단계: 결과 저장 시작');
-                  return window.saveTrainingResultAtEnd?.();
+                  console.log('[훈련완료] 🚀 1단계: 결과 저장 시작 (노트북)');
+                  return (typeof window.saveLaptopTrainingResultAtEnd === 'function')
+                    ? window.saveLaptopTrainingResultAtEnd()
+                    : window.saveTrainingResultAtEnd?.();
                 })
                 .then((saveResult) => {
                   console.log('[훈련완료] ✅ 1단계 완료:', saveResult);
