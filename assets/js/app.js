@@ -2229,8 +2229,6 @@ function updateTimeUI() {
       const segDur = Math.max(0, segDurationSec(seg) || 0);
       const segRemain = Math.max(0, segDur - (Number(window.trainingState?.segElapsedSec) || 0));
       safeSetText("segmentTime", formatMMSS(segRemain));
-      const laptopLapTime = safeGetElement('laptop-ui-lap-time');
-      if (laptopLapTime) laptopLapTime.textContent = formatMMSS(segRemain);
     }
 
     // 다음 세그먼트 안내 - 수정된 부분
