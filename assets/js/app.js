@@ -15534,12 +15534,16 @@ function showMobileTrainingResultModal(status = null) {
   // 통계 계산
   const stats = window.trainingResults?.calculateSessionStats?.() || {};
   
-  // 훈련 시간 계산 - 모바일 대시보드 전용 상태 우선 사용
+  // 훈련 시간 계산 - 노트북 결과 모달이면 lastElapsedTime/trainingState 우선, 그 외 모바일 전용 상태 우선
   let totalSeconds = 0;
   let duration_min = 0;
   
-  // 모바일 대시보드는 독립적으로 구동되므로 mobileTrainingState.elapsedSec를 최우선으로 확인
-  if (window.mobileTrainingState && window.mobileTrainingState.elapsedSec !== undefined && window.mobileTrainingState.elapsedSec !== null) {
+  if (window.__laptopResultModalOpen && (window.lastElapsedTime != null || (window.trainingState && window.trainingState.elapsedSec != null))) {
+    totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime != null ? window.lastElapsedTime : window.trainingState.elapsedSec));
+    duration_min = Math.max(0, Math.floor(totalSeconds / 60));
+    if (totalSeconds > 0 && duration_min === 0) duration_min = 1;
+    console.log('[Mobile Dashboard] 노트북 결과 모달: lastElapsedTime/trainingState 사용:', { lastElapsedTime: window.lastElapsedTime, elapsedSec: window.trainingState?.elapsedSec, totalSeconds, duration_min });
+  } else if (window.mobileTrainingState && window.mobileTrainingState.elapsedSec !== undefined && window.mobileTrainingState.elapsedSec !== null) {
     // 모바일 전용 상태의 elapsedSec 사용 (가장 정확)
     totalSeconds = Math.max(0, Math.floor(window.mobileTrainingState.elapsedSec));
     duration_min = Math.max(0, Math.floor(totalSeconds / 60)); // 최소 0분 보장
@@ -15687,7 +15691,12 @@ function showMobileTrainingResultModal(status = null) {
   
   console.log('[Mobile Dashboard] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories, mileageUpdate });
   
-  // 모달 표시
+  // 노트북 훈련 종료 시 모달이 mobileDashboardScreen 내부에 있으면 부모가 숨겨져 보이지 않음 → body로 이동하여 항상 표시
+  if (modal.parentNode && modal.parentNode !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  modal.style.visibility = 'visible';
   modal.classList.remove('hidden');
   
   // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
