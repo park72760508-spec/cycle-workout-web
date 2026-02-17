@@ -3172,6 +3172,11 @@
         <span>파워미터</span>
         <span class="status" id="trainingScreenPowerMeterStatus">미연결</span>
       </div>
+      <!-- 종료 메뉴 (노트북/태블릿 훈련 화면 → 훈련 준비 화면 이동) -->
+      <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitLaptopTrainingToReady()">
+        <img src="assets/img/logout.png" alt="종료">
+        <span>종료</span>
+      </div>
     </div>
   </div>
 </div>
@@ -5427,10 +5432,10 @@
                 totalIntensity += Number(seg.target_value) || 0;
                 intensityCount++;
               } else if (seg.target_type === 'ftp_pctz' && seg.target_value) {
-                // ftp_pctz 타입: "60/75" 형식에서 평균값 사용
                 var targetValue = String(seg.target_value);
-                if (targetValue.includes('/')) {
-                  var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                var pctzSep = targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null);
+                if (pctzSep) {
+                  var parts = targetValue.split(pctzSep).map(function(p) { return Number(p.trim()) || 0; });
                   var avg = parts.length > 0 ? parts.reduce(function(sum, p) { return sum + p; }, 0) / parts.length : 0;
                   totalIntensity += avg;
                   intensityCount++;
@@ -5439,10 +5444,10 @@
                   intensityCount++;
                 }
               } else if (seg.target_type === 'dual' && seg.target_value) {
-                // dual 타입: "100/120" 형식에서 첫 번째 값(FTP%) 사용
                 var targetValue = String(seg.target_value);
-                if (targetValue.includes('/')) {
-                  var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                var dualSep = targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null);
+                if (dualSep) {
+                  var parts = targetValue.split(dualSep).map(function(p) { return Number(p.trim()) || 0; });
                   totalIntensity += parts[0] || 0;
                   intensityCount++;
                 } else {
@@ -5478,15 +5483,17 @@
                   return Number(seg.target_value) || 0;
                 } else if (seg.target_type === 'ftp_pctz' && seg.target_value) {
                   var targetValue = String(seg.target_value);
-                  if (targetValue.includes('/')) {
-                    var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                  var pctzD = targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null);
+                  if (pctzD) {
+                    var parts = targetValue.split(pctzD).map(function(p) { return Number(p.trim()) || 0; });
                     return parts.length > 0 ? parts.reduce(function(sum, p) { return sum + p; }, 0) / parts.length : 0;
                   }
                   return Number(seg.target_value) || 0;
                 } else if (seg.target_type === 'dual' && seg.target_value) {
                   var targetValue = String(seg.target_value);
-                  if (targetValue.includes('/')) {
-                    var parts = targetValue.split('/').map(function(p) { return Number(p.trim()) || 0; });
+                  var dualD = targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null);
+                  if (dualD) {
+                    var parts = targetValue.split(dualD).map(function(p) { return Number(p.trim()) || 0; });
                     return parts[0] || 0;
                   }
                   return Number(seg.target_value) || 0;
