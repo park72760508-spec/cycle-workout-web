@@ -3266,27 +3266,16 @@
         <span class="enhanced-countdown-value" id="segmentTime">05:00</span>
       </div>
 
-      <!-- 목표 파워와 세그먼트 평균 파워 같은 라인 -->
-      <div class="enhanced-power-targets-row">
+      <!-- 목표 파워 (JS 연동용, 화면에는 속도계 내 TARGET 표시만 사용 → 숨김) -->
+      <div class="enhanced-power-targets-row" id="trainingTargetPowerHolder" style="display: none;" aria-hidden="true">
         <div class="enhanced-target-power-section">
           <div class="enhanced-target-label" id="targetLabel">목표 파워</div>
           <div class="enhanced-target-value" id="targetPowerValue">250</div>
           <div class="enhanced-target-unit" id="targetUnit">W</div>
-          <!-- RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
           <div class="enhanced-target-rpm" id="targetRpmSection" style="display: none;">
             <span class="enhanced-target-rpm-value" id="targetRpmValue">90</span>
             <span class="enhanced-target-rpm-unit">rpm</span>
           </div>
-        </div>
-        <div class="enhanced-segment-avg-power">
-          <span class="enhanced-avg-label">세그먼트 평균</span>
-          <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
-          <span class="enhanced-avg-unit" id="avgSegmentPowerUnit">W</span>
-          <!-- 세그먼트 평균 RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
-          <span class="enhanced-avg-rpm" id="avgSegmentRpmSection" style="display: none;">
-            (<span class="enhanced-avg-rpm-value" id="avgSegmentRpmValue">88</span>
-            <span class="enhanced-avg-rpm-unit">rpm</span>)
-          </span>
         </div>
       </div>
 
@@ -3299,7 +3288,6 @@
             <path id="laptop-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
             <g id="laptop-gauge-ticks"></g>
             <g id="laptop-gauge-labels"></g>
-            <text id="laptop-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
             <text id="laptop-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
             <text id="laptop-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
             <text id="laptop-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
@@ -3317,6 +3305,17 @@
           (<span class="enhanced-current-rpm-value" id="currentRpmValue">85</span>
           <span class="enhanced-current-rpm-unit">rpm</span>)
         </div>
+      </div>
+
+      <!-- 세그먼트 평균 파워 (속도계 현재 파워 아래 배치) -->
+      <div class="enhanced-segment-avg-power enhanced-segment-avg-below-gauge">
+        <span class="enhanced-avg-label">세그먼트 평균</span>
+        <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
+        <span class="enhanced-avg-unit" id="avgSegmentPowerUnit">W</span>
+        <span class="enhanced-avg-rpm" id="avgSegmentRpmSection" style="display: none;">
+          (<span class="enhanced-avg-rpm-value" id="avgSegmentRpmValue">88</span>
+          <span class="enhanced-avg-rpm-unit">rpm</span>)
+        </span>
       </div>
 
       <!-- 달성도 프로그레스 바 -->
