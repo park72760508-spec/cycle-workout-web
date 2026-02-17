@@ -2973,14 +2973,31 @@ function startSegmentLoop() {
            }
          });
      } else {
-       // 기존 화면(개인훈련 대시보드 등)의 경우 훈련일지로 이동
-       Promise.resolve()
-         .then(() => window.saveTrainingResultAtEnd?.())
-         .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
-         .then(() => window.trainingResults?.initializeResultScreen?.())
-         .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
-         .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
-         .then(() => { if (typeof showScreen === "function") showScreen("trainingJournalScreen"); });
+       // 노트북 훈련 화면: 저장 후 훈련결과 팝업만 표시 (훈련일지 이동 없음)
+       const trainingScreenEl = document.getElementById('trainingScreen');
+       const isLaptopTraining = trainingScreenEl && (trainingScreenEl.classList.contains('active') || window.getComputedStyle(trainingScreenEl).display !== 'none');
+       if (isLaptopTraining && typeof window.saveLaptopTrainingResultAtEnd === 'function') {
+         Promise.resolve()
+           .then(() => window.saveLaptopTrainingResultAtEnd())
+           .catch((e) => { console.warn('[result] saveLaptopTrainingResultAtEnd error', e); })
+           .then((saveResult) => {
+             if (typeof window.showLaptopTrainingResultPopup === 'function') {
+               window.showLaptopTrainingResultPopup(saveResult);
+             } else {
+               if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
+               if (typeof showScreen === 'function') showScreen('trainingReadyScreen');
+             }
+           });
+       } else {
+         // 기존 화면(개인훈련 대시보드 등)의 경우 훈련일지로 이동
+         Promise.resolve()
+           .then(() => window.saveTrainingResultAtEnd?.())
+           .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+           .then(() => window.trainingResults?.initializeResultScreen?.())
+           .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+           .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
+           .then(() => { if (typeof showScreen === "function") showScreen("trainingJournalScreen"); });
+       }
      }
    
      return;
@@ -3100,10 +3117,13 @@ function stopSegmentLoop() {
      }
      /* ⬆⬆⬆ B) 훈련 정지/종료 지점 — 여기까지 ⬆⬆⬆ */
 
+    // ★ 자동 종료/수동 종료 공통 저장 지점 (노트북 훈련 화면은 제외 — 종료 버튼/자동완료 시 saveLaptopTrainingResultAtEnd + 팝업으로 처리)
+    var trainingScreenEl = document.getElementById('trainingScreen');
+    var isLaptopTrainingActive = trainingScreenEl && (trainingScreenEl.classList.contains('active') || window.getComputedStyle(trainingScreenEl).display !== 'none');
+    if (!isLaptopTrainingActive) {
+      window.saveTrainingResultAtEnd?.();
+    }
 
- // ★ 자동 종료/수동 종료 공통 저장 지점
-  window.saveTrainingResultAtEnd?.();
-   
    // 진행바 초기화
   setNameProgress(0);
 }
@@ -5224,6 +5244,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (e.target === overlay) closeAndGoReady();
     });
     document.body.appendChild(overlay);
+  }
+  if (typeof window !== 'undefined') {
+    window.showLaptopTrainingResultPopup = showLaptopTrainingResultPopup;
   }
 
   // 훈련 종료 (확인 후 종료 → 저장·포인트 적립 → 훈련결과 팝업 → 확인 시 훈련 준비 화면)
