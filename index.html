@@ -3279,25 +3279,27 @@
         </div>
       </div>
 
-      <!-- 현재 파워 (노트북용 파워 속도계 - 모바일 gauge 이식) -->
-      <div class="enhanced-current-power-section laptop-gauge-wrapper">
-        <div class="laptop-gauge-container">
-          <svg viewBox="-15 0 230 260" class="laptop-gauge-svg">
-            <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
-            <path id="laptop-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
-            <path id="laptop-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
-            <g id="laptop-gauge-ticks"></g>
-            <g id="laptop-gauge-labels"></g>
-            <text id="laptop-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
-            <text id="laptop-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
-            <text id="laptop-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
-            <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
-            <text id="laptop-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
-            <g id="laptop-gauge-needle" transform="translate(100, 140) rotate(-90)">
-              <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
-              <circle cx="0" cy="0" r="6" fill="#fff"/>
-            </g>
-          </svg>
+      <!-- 속도계 박스 (녹색바탕): 속도계·목표값 위쪽 정렬, 현재 파워 아래 달성도·진행바 -->
+      <div class="enhanced-current-power-section laptop-gauge-wrapper laptop-gauge-box">
+        <div class="laptop-gauge-box-inner">
+          <div class="laptop-gauge-container">
+            <svg viewBox="-15 0 230 260" class="laptop-gauge-svg">
+              <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+              <path id="laptop-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+              <path id="laptop-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+              <g id="laptop-gauge-ticks"></g>
+              <g id="laptop-gauge-labels"></g>
+              <text id="laptop-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
+              <text id="laptop-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
+              <text id="laptop-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+              <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+              <text id="laptop-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+              <g id="laptop-gauge-needle" transform="translate(100, 140) rotate(-90)">
+                <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="0" cy="0" r="6" fill="#fff"/>
+              </g>
+            </svg>
+          </div>
         </div>
         <div class="enhanced-current-power-value" id="currentPowerValue">245</div>
         <div class="enhanced-current-power-unit" id="currentPowerUnit">WATTS</div>
@@ -3305,9 +3307,17 @@
           (<span class="enhanced-current-rpm-value" id="currentRpmValue">85</span>
           <span class="enhanced-current-rpm-unit">rpm</span>)
         </div>
+
+        <!-- 현재 파워 아래: 달성도 표시 블럭 -->
+        <div class="enhanced-power-progress laptop-gauge-below-progress">
+          <div class="enhanced-power-progress-bar" id="powerProgressBar"></div>
+          <div class="enhanced-progress-labels">
+            <span>달성도: <span id="achievementValueBar">98</span>%</span>
+          </div>
+        </div>
       </div>
 
-      <!-- 세그먼트 평균 파워 (속도계 현재 파워 아래 배치) -->
+      <!-- 세그먼트 평균 파워 (속도계 박스 아래 배치) -->
       <div class="enhanced-segment-avg-power enhanced-segment-avg-below-gauge">
         <span class="enhanced-avg-label">세그먼트 평균</span>
         <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
@@ -3316,15 +3326,6 @@
           (<span class="enhanced-avg-rpm-value" id="avgSegmentRpmValue">88</span>
           <span class="enhanced-avg-rpm-unit">rpm</span>)
         </span>
-      </div>
-
-      <!-- 달성도 프로그레스 바 -->
-      <div class="enhanced-power-progress">
-        <div class="enhanced-power-progress-bar" id="powerProgressBar"></div>
-        <div class="enhanced-progress-labels">
-          <span>달성도: <span id="achievementValueBar">98</span>%</span>
-          <!-- 진행율 표시 제거됨 -->
-        </div>
       </div>
 
       <!-- 현재 세그먼트 이름 -->
