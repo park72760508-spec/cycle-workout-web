@@ -16760,13 +16760,13 @@ body.mobile-dashboard-active {
   margin-bottom: 12px;
   text-align: center;
 }
-/* 세그먼트 평균: 속도계 박스 안, 달성도 표시 위쪽 (현재 파워↔세그먼트평균 간격 1/2) */
+/* 세그먼트 평균: 속도계 박스 안, 현재 파워값 바로 아래 (이격거리 없음) */
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: 1px;
+  margin-top: 0;
   margin-bottom: 6px;
-  padding: 6px 10px;
+  padding: 0 10px 6px;
   text-align: center;
   background: rgba(0, 0, 0, 0.15);
   border-radius: 8px;
