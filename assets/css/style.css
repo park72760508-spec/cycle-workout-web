@@ -16711,6 +16711,10 @@ body.mobile-dashboard-active {
   flex-direction: column;
   align-items: center;
   align-self: flex-start;
+  margin-bottom: 0;
+}
+#trainingScreen .laptop-gauge-box .laptop-gauge-container {
+  margin-bottom: 0;
 }
 #trainingScreen .laptop-gauge-wrapper .enhanced-current-power-value,
 #trainingScreen .laptop-gauge-wrapper .enhanced-current-power-unit {
@@ -16760,9 +16764,9 @@ body.mobile-dashboard-active {
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 2px;
   margin-bottom: 6px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   text-align: center;
   background: rgba(0, 0, 0, 0.15);
   border-radius: 8px;
