@@ -3290,11 +3290,29 @@
         </div>
       </div>
 
-      <!-- 현재 파워 (가장 크게) -->
-      <div class="enhanced-current-power-section">
+      <!-- 현재 파워 (노트북용 파워 속도계 - 모바일 gauge 이식) -->
+      <div class="enhanced-current-power-section laptop-gauge-wrapper">
+        <div class="laptop-gauge-container">
+          <svg viewBox="-15 0 230 260" class="laptop-gauge-svg">
+            <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+            <path id="laptop-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+            <path id="laptop-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+            <g id="laptop-gauge-ticks"></g>
+            <g id="laptop-gauge-labels"></g>
+            <text id="laptop-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
+            <text id="laptop-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
+            <text id="laptop-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
+            <text id="laptop-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+            <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+            <text id="laptop-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+            <g id="laptop-gauge-needle" transform="translate(100, 140) rotate(-90)">
+              <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+              <circle cx="0" cy="0" r="6" fill="#fff"/>
+            </g>
+          </svg>
+        </div>
         <div class="enhanced-current-power-value" id="currentPowerValue">245</div>
         <div class="enhanced-current-power-unit" id="currentPowerUnit">WATTS</div>
-        <!-- 현재 RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
         <div class="enhanced-current-rpm" id="currentRpmSection" style="display: none;">
           (<span class="enhanced-current-rpm-value" id="currentRpmValue">85</span>
           <span class="enhanced-current-rpm-unit">rpm</span>)
