@@ -8865,9 +8865,10 @@
             window.scrollTo(0, 0);
           }
           
-          // showScreen 함수가 있으면 사용 (우선)
+          // showScreen 함수가 있으면 사용 (우선) — 인증 완료 후 베이스캠프 진입이므로 TOP10 표시 허용
           if (typeof window.showScreen === 'function') {
             try {
+              window.__basecampShownAfterAuth = true;
               console.log('✅ showScreen 함수 사용');
               window.showScreen('basecampScreen');
               // showScreen이 성공했는지 확인
@@ -9407,6 +9408,7 @@
       
       if (typeof window.showScreen === 'function') {
         try {
+          window.__basecampShownAfterAuth = true;
           window.showScreen('basecampScreen');
         } catch (err) {
           console.warn('⚠️ showScreen 오류, 직접 전환:', err);
@@ -13109,6 +13111,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     // Initialize when dashboard screen is shown
     // 기존 showScreen 함수를 래핑하여 대시보드 초기화 추가 (무한 루프 방지)
     (function() {
+      // 주간 마일리지 TOP10: 인증 완료 후 Choose Your Path 진입 시에만 표시 (태블릿 등 캐시 인증 시 인증 화면 전에 TOP10 노출 방지)
+      if (typeof window.__basecampShownAfterAuth === 'undefined') {
+        window.__basecampShownAfterAuth = false;
+      }
       // 이미 래핑되었는지 확인 (무한 루프 방지)
       if (window._performanceDashboardWrapped) {
         return; // 이미 래핑됨
@@ -13219,10 +13225,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 300);
         }
         
-        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (반드시 사용자 인증 후에만 노출, 태블릿 인증 전 노출 방지)
+        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (인증 완료 후 Choose Your Path 진입 시에만 노출, 태블릿 캐시 인증 시 인증 화면 전 TOP10 노출 방지)
         if (screenId === 'basecampScreen') {
           function tryShowWeeklyTop10() {
             if (window.__showScreenRedirectedToAuth === true) return false;
+            if (window.__basecampShownAfterAuth !== true) return false;
             var authScreen = document.getElementById('authScreen');
             var authActive = authScreen && (authScreen.classList.contains('active') || window.getComputedStyle(authScreen).display !== 'none');
             if (authActive) return false;
@@ -13236,6 +13243,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var isAuth = (cur && (cur.id || cur.uid)) || authUid;
             if (isAuth && typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
               window.fetchAndShowWeeklyTop10Modal();
+              window.__basecampShownAfterAuth = false;
               return true;
             }
             return false;
