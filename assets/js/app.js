@@ -6060,29 +6060,32 @@ if (typeof window.originalShowScreen === 'undefined') {
 
 window.showScreen = function(screenId) {
   console.log(`🔵 [Step 1] showScreen 함수 진입: '${screenId}'`);
-  
+  // TOP10 등 "인증 후에만 노출" 로직용: 리다이렉트 여부 플래그 (index.html 래퍼에서 사용)
+  window.__showScreenRedirectedToAuth = false;
+
   // Firebase 인증 상태 확인 (우선순위: Firebase Auth > 전화번호 인증)
   const isFirebaseAuthenticated = (window.auth?.currentUser != null || window.authV9?.currentUser != null) || window.currentUser != null;
   const phoneAuth = window.isPhoneAuthenticated === true || isPhoneAuthenticated;
   const isAuthenticated = isFirebaseAuthenticated || phoneAuth;
-  
+
   console.log('🔵 [Step 1-1] 화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', phoneAuth, ')');
-  
+
   // 환영 오버레이가 표시되어 있으면 화면 전환 차단
   const welcomeModal = document.getElementById('userWelcomeModal');
-  const isWelcomeModalActive = welcomeModal && 
-                               !welcomeModal.classList.contains('hidden') && 
+  const isWelcomeModalActive = welcomeModal &&
+                               !welcomeModal.classList.contains('hidden') &&
                                window.getComputedStyle(welcomeModal).display !== 'none' &&
                                window.userWelcomeModalShown === true;
-  
+
   if (isWelcomeModalActive) {
     console.log('⏸️ 환영 오버레이 활성화 중 - 화면 전환 차단:', screenId);
     return; // 화면 전환 자체를 차단
   }
-  
-  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
+
+  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트 (태블릿 등에서 TOP10 인증 전 노출 방지)
   if (!isAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen' && screenId !== 'splashScreen') {
     console.log('⚠️ 인증되지 않은 상태 - 인증 화면으로 리다이렉트');
+    window.__showScreenRedirectedToAuth = true;
     screenId = 'authScreen';
   }
   
