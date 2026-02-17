@@ -3110,8 +3110,8 @@
             <div class="grid-2 training-ready-dashboard-grid">
               <!-- 좌측: 개인 훈련 화면 (워크아웃 선택 시 활성화) -->
               <button class="btn btn-device" id="btnStartTraining" disabled onclick="showScreen('trainingScreen'); if (typeof initTrainingScreenForReady === 'function') { setTimeout(function(){ initTrainingScreenForReady(); }, 200); }">
-                <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
-                <span>노트북</span>
+                <img src="assets/img/laptop.png" alt="태블릿" class="device-btn-icon" />
+                <span>태블릿</span>
               </button>
               <!-- 우측: 모바일 대시보드 화면 (워크아웃 선택 시 활성화) -->
               <button class="btn btn-device" id="btnMobileDashboard" disabled onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
@@ -3565,11 +3565,17 @@
       <div class="mobile-countdown-number" id="mobileCountdownNumber" style="font-size: 300px; font-weight: bold; color: #fff; text-shadow: 0 0 40px rgba(255, 255, 255, 0.6), 0 0 80px rgba(255, 255, 255, 0.4), 0 0 120px rgba(255, 255, 255, 0.2); animation: countdownPulse 0.8s ease-out; user-select: none; line-height: 1;">5</div>
     </div>
 
-    <!-- 훈련 종료 후 로딩 애니메이션 -->
+    <!-- 훈련 종료 후 로딩 애니메이션 (모바일) -->
     <div id="mobileTrainingLoadingModal" class="mobile-training-loading-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10001; animation: fadeIn 0.3s ease-out;">
       <div class="mobile-loading-spinner" style="width: 80px; height: 80px; border: 6px solid rgba(0, 212, 170, 0.2); border-top: 6px solid #00d4aa; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 24px;"></div>
       <div class="mobile-loading-text" style="color: #fff; font-size: 24px; font-weight: 600; text-align: center; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); margin-bottom: 8px;">수고하셨습니다</div>
       <div class="mobile-loading-subtext" style="color: #aaa; font-size: 16px; text-align: center; opacity: 0.9;">훈련 결과를 불러오는 중...</div>
+    </div>
+    <!-- 훈련 종료 후 로딩 애니메이션 (태블릿 훈련 화면) - 녹색 원 스피너, 저장 완료 시 훈련 결과 화면 표시 -->
+    <div id="tabletTrainingLoadingModal" class="mobile-training-loading-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10001; animation: fadeIn 0.3s ease-out;">
+      <div class="mobile-loading-spinner" style="width: 80px; height: 80px; border: 6px solid rgba(0, 212, 170, 0.2); border-top: 6px solid #00d4aa; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 24px;"></div>
+      <div class="mobile-loading-text" style="color: #fff; font-size: 24px; font-weight: 600; text-align: center; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); margin-bottom: 8px;">수고하셨습니다</div>
+      <div class="mobile-loading-subtext" style="color: #aaa; font-size: 16px; text-align: center; opacity: 0.9;">훈련결과 저장 중입니다.</div>
     </div>
 
     <!-- 훈련 결과 팝업 -->
