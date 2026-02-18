@@ -2809,73 +2809,77 @@
     </div>
   </div>
 
-  <!-- AI 스케줄 생성 설정 모달 (Gemini 프롬프트 폼) -->
-  <div id="scheduleCreateAIModal" class="modal" style="display: none;">
+  <!-- AI 스케줄 생성 설정 모달 (Gemini 프롬프트 폼) - 모바일 웹 최적화 -->
+  <div id="scheduleCreateAIModal" class="modal ai-schedule-modal" style="display: none;">
     <div class="modal-overlay" onclick="if(typeof closeScheduleCreateAIModal==='function')closeScheduleCreateAIModal()"></div>
-    <div class="modal-content" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
+    <div class="modal-content ai-schedule-modal-content">
       <div class="modal-header">
         <h3>AI 훈련 스케줄 생성</h3>
         <button type="button" class="modal-close" onclick="closeScheduleCreateAIModal()">&times;</button>
       </div>
-      <div class="modal-body">
-        <div class="form-group" style="margin-bottom: 12px;">
+      <div class="modal-body ai-schedule-modal-body">
+        <div class="form-group ai-schedule-form-group">
           <label>사용자 정보 (읽기 전용)</label>
-          <div id="aiScheduleUserInfo" style="padding: 10px; background: #f5f5f5; border-radius: 8px; font-size: 0.9em; color: #444;"></div>
+          <div id="aiScheduleUserInfo" class="ai-schedule-user-info"></div>
         </div>
-        <div class="form-group">
+        <div class="form-group ai-schedule-form-group">
+          <label>훈련 시작일 *</label>
+          <input type="date" id="aiScheduleStartDate" class="ai-schedule-date-input" required />
+        </div>
+        <div class="form-group ai-schedule-form-group">
           <label>대회 일정 *</label>
-          <input type="date" id="aiScheduleEventDate" required />
+          <input type="date" id="aiScheduleEventDate" class="ai-schedule-date-input" required />
         </div>
-        <div class="form-group">
+        <div class="form-group ai-schedule-form-group">
           <label>대회 거리 (km) *</label>
-          <input type="number" id="aiScheduleEventDistance" placeholder="100" min="10" max="500" required />
+          <input type="number" id="aiScheduleEventDistance" class="ai-schedule-input-full" placeholder="100" min="10" max="500" required />
         </div>
-        <div class="form-group">
+        <div class="form-group ai-schedule-form-group">
           <label>대회 목표 *</label>
-          <select id="aiScheduleEventGoal">
+          <select id="aiScheduleEventGoal" class="ai-schedule-input-full">
             <option value="입상">입상</option>
             <option value="완주">완주</option>
             <option value="기량향상">기량향상</option>
             <option value="참가의의">참가의의</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group ai-schedule-form-group">
           <label>인도어 요일</label>
-          <div class="weekday-checkbox-row">
-            <label><input type="checkbox" name="aiIndoorDays" value="0"><span>일</span></label>
-            <label><input type="checkbox" name="aiIndoorDays" value="1"><span>월</span></label>
-            <label><input type="checkbox" name="aiIndoorDays" value="2"><span>화</span></label>
-            <label><input type="checkbox" name="aiIndoorDays" value="3"><span>수</span></label>
-            <label><input type="checkbox" name="aiIndoorDays" value="4"><span>목</span></label>
-            <label><input type="checkbox" name="aiIndoorDays" value="5"><span>금</span></label>
-            <label><input type="checkbox" name="aiIndoorDays" value="6"><span>토</span></label>
+          <div class="weekday-checkbox-row ai-schedule-weekday-row">
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="0"><span>일</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="1"><span>월</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="2"><span>화</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="3"><span>수</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="4"><span>목</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="5"><span>금</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiIndoorDays" value="6"><span>토</span></label>
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group ai-schedule-form-group">
           <label>아웃도어 요일</label>
-          <div class="weekday-checkbox-row">
-            <label><input type="checkbox" name="aiOutdoorDays" value="0"><span>일</span></label>
-            <label><input type="checkbox" name="aiOutdoorDays" value="1"><span>월</span></label>
-            <label><input type="checkbox" name="aiOutdoorDays" value="2"><span>화</span></label>
-            <label><input type="checkbox" name="aiOutdoorDays" value="3"><span>수</span></label>
-            <label><input type="checkbox" name="aiOutdoorDays" value="4"><span>목</span></label>
-            <label><input type="checkbox" name="aiOutdoorDays" value="5"><span>금</span></label>
-            <label><input type="checkbox" name="aiOutdoorDays" value="6"><span>토</span></label>
+          <div class="weekday-checkbox-row ai-schedule-weekday-row">
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="0"><span>일</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="1"><span>월</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="2"><span>화</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="3"><span>수</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="4"><span>목</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="5"><span>금</span></label>
+            <label class="ai-schedule-weekday-label"><input type="checkbox" name="aiOutdoorDays" value="6"><span>토</span></label>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
+        <div class="form-row ai-schedule-form-row">
+          <div class="form-group ai-schedule-form-group">
             <label>인도어 시간 제한</label>
-            <select id="aiScheduleIndoorTimeLimit">
+            <select id="aiScheduleIndoorTimeLimit" class="ai-schedule-input-full">
               <option value="60">60분</option>
               <option value="90">90분</option>
               <option value="120">120분</option>
               <option value="9999">제한 없음</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group ai-schedule-form-group">
             <label>아웃도어 시간 제한</label>
-            <select id="aiScheduleOutdoorTimeLimit">
+            <select id="aiScheduleOutdoorTimeLimit" class="ai-schedule-input-full">
               <option value="120">2시간</option>
               <option value="180">3시간</option>
               <option value="240">4시간</option>
