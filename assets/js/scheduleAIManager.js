@@ -219,23 +219,46 @@
   };
 
   /**
+   * 사용자 정보 로드 (currentUser/localStorage + Firestore 병합)
+   */
+  async function loadUserForScheduleModal() {
+    var userId = getUserId();
+    if (!userId) return null;
+    var user = window.currentUser || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+    if (!user) user = { id: userId };
+    if ((user.birth_year == null && user.birthYear == null) || (user.gender == null && user.sex == null)) {
+      try {
+        if (typeof window.getUserByUid === 'function') {
+          var firestoreUser = await window.getUserByUid(userId);
+          if (firestoreUser) {
+            user = Object.assign({}, user, firestoreUser);
+          }
+        }
+      } catch (e) {
+        console.warn('[openScheduleCreateAIModal] Firestore 사용자 조회 실패:', e);
+      }
+    }
+    return user;
+  }
+
+  /**
    * 스케줄 생성 설정 모달 열기
    */
-  window.openScheduleCreateAIModal = function () {
+  window.openScheduleCreateAIModal = async function () {
     const modal = document.getElementById('scheduleCreateAIModal');
     const userInfoEl = document.getElementById('aiScheduleUserInfo');
     if (!modal || !userInfoEl) return;
     updateScheduleProgress(false);
 
-    const user = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    if (!user) {
+    const user = await loadUserForScheduleModal();
+    if (!user || !user.id) {
       if (typeof showToast === 'function') showToast('사용자 정보를 찾을 수 없습니다.', 'error');
       return;
     }
 
-    const birthYear = user.birth_year ?? user.birthYear;
-    const age = (user.age != null && user.age !== '') ? user.age : (birthYear ? (new Date().getFullYear() - parseInt(birthYear, 10)) : '-');
-    const sex = user.gender || user.sex || '-';
+    var birthYear = user.birth_year != null ? user.birth_year : user.birthYear;
+    var age = (user.age != null && user.age !== '') ? user.age : (birthYear ? (new Date().getFullYear() - parseInt(birthYear, 10)) : '-');
+    var sex = user.gender || user.sex || '-';
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
     const challenge = user.challenge || 'Fitness';
@@ -484,8 +507,8 @@
       return;
     }
 
-    var user = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    if (!user) {
+    var user = await loadUserForScheduleModal();
+    if (!user || !user.id) {
       if (typeof showToast === 'function') showToast('사용자 정보를 찾을 수 없습니다.', 'error');
       return;
     }
