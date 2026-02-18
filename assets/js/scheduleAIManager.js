@@ -723,7 +723,9 @@
 
     if (visible) {
       overlay.classList.remove('hidden');
-      overlay.style.display = 'flex';
+      overlay.style.setProperty('display', 'flex', 'important');
+      overlay.style.setProperty('visibility', 'visible', 'important');
+      overlay.style.setProperty('opacity', '1', 'important');
       msgEl.textContent = AI_LOADING_MESSAGES[0];
       var idx = 0;
       _aiLoadingOverlayInterval = setInterval(function () {
@@ -736,9 +738,12 @@
         _aiLoadingOverlayInterval = null;
       }
       overlay.classList.add('hidden');
-      overlay.style.display = 'none';
+      overlay.style.removeProperty('display');
+      overlay.style.removeProperty('visibility');
+      overlay.style.removeProperty('opacity');
     }
   }
+  window.showAiScheduleLoadingOverlay = showAiScheduleLoadingOverlay; /* 디버깅: 콘솔에서 showAiScheduleLoadingOverlay(true) 호출로 확인 */
 
   /**
    * Progress UI 업데이트
