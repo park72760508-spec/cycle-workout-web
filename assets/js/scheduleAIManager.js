@@ -233,8 +233,9 @@
       return;
     }
 
-    const age = user.age ?? user.birthYear ? (new Date().getFullYear() - user.birthYear) : '-';
-    const sex = user.sex || user.gender || '-';
+    const birthYear = user.birth_year ?? user.birthYear;
+    const age = (user.age != null && user.age !== '') ? user.age : (birthYear ? (new Date().getFullYear() - parseInt(birthYear, 10)) : '-');
+    const sex = user.gender || user.sex || '-';
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
     const challenge = user.challenge || 'Fitness';
@@ -507,8 +508,9 @@
     var indoorStr = indoorDays.length ? indoorDays.map(function (d) { return dayNames[d]; }).join(', ') : '없음';
     var outdoorStr = outdoorDays.length ? outdoorDays.map(function (d) { return dayNames[d]; }).join(', ') : '없음';
 
-    var age = user.age != null ? user.age : (user.birthYear ? (new Date().getFullYear() - user.birthYear) : 30);
-    var sex = user.sex || user.gender || '-';
+    var birthYear = user.birth_year != null ? user.birth_year : user.birthYear;
+    var age = (user.age != null && user.age !== '') ? user.age : (birthYear ? (new Date().getFullYear() - parseInt(birthYear, 10)) : 30);
+    var sex = user.gender || user.sex || '-';
     var ftp = user.ftp || 0;
     var weight = user.weight || 0;
     var g = String(user.challenge || 'Fitness').trim().toLowerCase();
