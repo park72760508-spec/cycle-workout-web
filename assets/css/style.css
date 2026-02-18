@@ -9415,6 +9415,38 @@ button[aria-disabled="true"] {
   display: block;
 }
 
+/* 일요일: 날짜 숫자 빨강 */
+.ai-schedule-day-sun .ai-schedule-day-num { color: #dc2626; }
+/* 토요일: 날짜 숫자 파랑 */
+.ai-schedule-day-sat .ai-schedule-day-num { color: #2563eb; }
+/* 공휴일: 날짜 숫자 빨강 */
+.ai-schedule-day-holiday .ai-schedule-day-num { color: #dc2626; }
+
+/* 달력 범례 (우측 하단, 도형 세로 한 줄) */
+.ai-schedule-legend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-top: 10px;
+  gap: 6px;
+}
+.ai-schedule-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #374151;
+}
+.ai-schedule-legend-shape {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.ai-schedule-legend-shape.plan { background: rgba(56, 189, 248, 0.6); border: 1px solid rgba(56, 189, 248, 0.8); }
+.ai-schedule-legend-shape.done { background: rgba(34, 197, 94, 0.6); border: 1px solid rgba(34, 197, 94, 0.8); }
+.ai-schedule-legend-shape.missed { background: rgba(156, 163, 175, 0.5); border: 1px solid rgba(156, 163, 175, 0.7); }
+
 .ai-schedule-status {
   position: absolute;
   top: 2px;
@@ -9497,6 +9529,14 @@ button[aria-disabled="true"] {
   display: none !important;
 }
 .schedule-detail-loading-overlay:not(.hidden) {
+  display: flex !important;
+}
+
+/* 스케줄 날짜 변경 업데이트 오버레이 (화면 맨 앞) */
+.schedule-update-overlay.hidden {
+  display: none !important;
+}
+.schedule-update-overlay:not(.hidden) {
   display: flex !important;
 }
 
