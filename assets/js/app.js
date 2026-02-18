@@ -2104,25 +2104,25 @@ function updateSegmentBarTick(){
     const elAvgRpmValue = document.getElementById("avgSegmentRpmValue");
     
     if (targetType === 'cadence_rpm') {
-      // cadence_rpm 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM)
+      // cadence_rpm 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM), 단위 w 삭제
       if (elAvg) elAvg.textContent = String(curAvgPower);
-      if (elAvgUnit) elAvgUnit.textContent = "W";
+      if (elAvgUnit) elAvgUnit.textContent = "";
       if (elAvgRpmSection) {
         elAvgRpmSection.style.display = "inline";
         if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
       }
     } else if (targetType === 'dual') {
-      // dual 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM)
+      // dual 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM), 단위 w 삭제
       if (elAvg) elAvg.textContent = String(curAvgPower);
-      if (elAvgUnit) elAvgUnit.textContent = "W";
+      if (elAvgUnit) elAvgUnit.textContent = "";
       if (elAvgRpmSection) {
         elAvgRpmSection.style.display = "inline";
         if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
       }
     } else {
-      // ftp_pct 타입 (기본): 세그먼트 평균 파워만 표시
+      // ftp_pct 타입 (기본): 세그먼트 평균 파워만 표시, 단위 w 삭제
       if (elAvg) elAvg.textContent = String(curAvgPower);
-      if (elAvgUnit) elAvgUnit.textContent = "W";
+      if (elAvgUnit) elAvgUnit.textContent = "";
       if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
     }
   }
@@ -3781,7 +3781,7 @@ window.updateTrainingDisplay = function () {
       if (currentRpmValueEl) currentRpmValueEl.textContent = String(Math.round(currentCadence));
     }
     
-    // 프로그레스 바는 RPM 기준
+    // 프로그레스 바는 RPM 기준 / 달성도 = (현재값/타겟)*100
     if (bar && targetRpm > 0) {
       const pct = Math.min(100, (currentCadence / targetRpm) * 100);
       bar.style.width = pct + "%";
@@ -3789,6 +3789,10 @@ window.updateTrainingDisplay = function () {
       else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
       else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
       else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+    }
+    const achievementEl = safeGetElement("achievementValueBar");
+    if (achievementEl && targetRpm > 0) {
+      achievementEl.textContent = String(Math.round(Math.min(100, (currentCadence / targetRpm) * 100)));
     }
     
   } else if (targetType === 'dual') {
@@ -3808,7 +3812,7 @@ window.updateTrainingDisplay = function () {
       if (currentRpmValueEl) currentRpmValueEl.textContent = String(Math.round(currentCadence));
     }
     
-    // 프로그레스 바는 파워 기준
+    // 프로그레스 바는 파워 기준 / 달성도 = (현재 파워/타겟)*100
     if (bar) {
       const pct = targetPower > 0 ? Math.min(100, (currentPower / targetPower) * 100) : 0;
       bar.style.width = pct + "%";
@@ -3816,6 +3820,10 @@ window.updateTrainingDisplay = function () {
       else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
       else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
       else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+    }
+    const achievementElDual = safeGetElement("achievementValueBar");
+    if (achievementElDual && targetPower > 0) {
+      achievementElDual.textContent = String(Math.round(Math.min(100, (currentPower / targetPower) * 100)));
     }
     
   } else {
@@ -3832,7 +3840,7 @@ window.updateTrainingDisplay = function () {
     if (currentPowerUnitEl) currentPowerUnitEl.textContent = "WATTS";
     if (currentRpmSectionEl) currentRpmSectionEl.style.display = "none";
     
-    // 프로그레스 바는 파워 기준
+    // 프로그레스 바는 파워 기준 / 달성도 = (현재 파워/타겟)*100
     if (bar) {
       const pct = targetPower > 0 ? Math.min(100, (currentPower / targetPower) * 100) : 0;
       bar.style.width = pct + "%";
@@ -3840,6 +3848,10 @@ window.updateTrainingDisplay = function () {
       else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
       else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
       else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+    }
+    const achievementElFtp = safeGetElement("achievementValueBar");
+    if (achievementElFtp && targetPower > 0) {
+      achievementElFtp.textContent = String(Math.round(Math.min(100, (currentPower / targetPower) * 100)));
     }
   }
 
