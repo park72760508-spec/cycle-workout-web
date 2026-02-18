@@ -9570,21 +9570,27 @@ button[aria-disabled="true"] {
 }
 
 /* 훈련 스케줄 상세 모달 스타일 */
+/* 훈련 상세 상단: 3등분 — start(좌) | 훈련 상세(중) | X(우) */
 .schedule-detail-modal-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   align-items: center;
   gap: 8px;
   min-height: 1.5em;
 }
+.schedule-detail-modal-header .btn-schedule-start {
+  justify-self: start;
+}
 .schedule-detail-modal-header .modal-close {
-  margin-left: auto;
+  justify-self: end;
+  margin-left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .schedule-detail-modal-title {
   text-align: center;
-  flex: 1;
+  justify-self: center;
   margin: 0;
   line-height: 1.2;
   display: flex;
@@ -17338,6 +17344,14 @@ body.mobile-dashboard-active {
 #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-unit {
   font-size: 12px;
   margin-left: 2px;
+}
+/* 세그먼트 평균(w) 블럭에서 (XX rpm)이 있을 때 평균값 아래 줄에 표시 */
+#trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-rpm {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
