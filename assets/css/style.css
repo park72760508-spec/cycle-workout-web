@@ -9314,7 +9314,8 @@ button[aria-disabled="true"] {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
-  padding: 0 4px;
+  padding: 0 4px 12px;
+  border-bottom: 2px solid var(--card-border, #e5e7eb); /* 훈련일지와 동일한 구분선 */
 }
 
 .ai-schedule-calendar-header .mini-calendar-nav-btn {
@@ -9363,21 +9364,48 @@ button[aria-disabled="true"] {
 }
 
 .ai-schedule-day-has {
-  background: rgba(56, 189, 248, 0.5);
   cursor: pointer;
 }
 
-.ai-schedule-day-has:hover {
-  background: rgba(56, 189, 248, 0.7);
+/* 훈련 계획된 날짜: 하늘색 테두리 + 투명 하늘색 */
+.ai-schedule-day-planned {
+  background: rgba(56, 189, 248, 0.25);
+  border: 2px solid rgba(56, 189, 248, 0.5);
+}
+.ai-schedule-day-planned:hover {
+  background: rgba(56, 189, 248, 0.35);
 }
 
-.ai-schedule-day-past.ai-schedule-day-has {
-  background: rgba(56, 189, 248, 0.35);
+/* 훈련 수행된 날짜: 녹색 테두리 + 투명 녹색 */
+.ai-schedule-day-completed {
+  background: rgba(34, 197, 94, 0.3);
+  border: 2px solid rgba(34, 197, 94, 0.5);
+}
+.ai-schedule-day-completed:hover {
+  background: rgba(34, 197, 94, 0.4);
+}
+
+/* 훈련 미수행 날짜: 회색 테두리 + 투명 회색 */
+.ai-schedule-day-missed {
+  background: rgba(156, 163, 175, 0.25);
+  border: 2px solid rgba(156, 163, 175, 0.5);
+}
+.ai-schedule-day-missed:hover {
+  background: rgba(156, 163, 175, 0.35);
+}
+
+/* 대회 일자: 주황색 테두리 + 투명 주황색 */
+.ai-schedule-day-event {
+  background: rgba(251, 146, 60, 0.3);
+  border: 2px solid rgba(251, 146, 60, 0.6);
+  font-weight: 700;
+}
+.ai-schedule-day-event:hover {
+  background: rgba(251, 146, 60, 0.4);
 }
 
 .ai-schedule-day-today {
   font-weight: 700;
-  border: 2px solid rgba(251, 146, 60, 0.6);
 }
 
 .ai-schedule-day-num {
