@@ -9486,6 +9486,91 @@ button[aria-disabled="true"] {
   color: #dc2626;
 }
 
+.ai-schedule-logo-wrap {
+  padding: 0 16px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.ai-schedule-logo {
+  max-width: 120px;
+  height: auto;
+  opacity: 0.9;
+}
+
+/* 훈련 스케줄 화면 - 휴대폰 화면 최적화 */
+@media (max-width: 600px) {
+  #aiScheduleScreen.screen {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  #aiScheduleScreen .header {
+    margin-bottom: 12px;
+  }
+  #aiScheduleScreen .header h1 {
+    font-size: 1.4em;
+  }
+  #aiScheduleScreen .subtitle,
+  #aiScheduleScreen p#aiScheduleSubHeader {
+    margin-bottom: 10px;
+    font-size: 0.85em;
+  }
+  #aiScheduleScreen .ai-schedule-calendar-card {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  #aiScheduleScreen .ai-schedule-calendar,
+  #aiScheduleScreen .ai-schedule-calendar-card .ai-schedule-calendar {
+    padding: 8px;
+  }
+  #aiScheduleScreen .ai-schedule-calendar-header {
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+  }
+  #aiScheduleScreen .ai-schedule-calendar-header .mini-calendar-nav-btn {
+    padding: 2px 8px;
+    font-size: 16px;
+  }
+  #aiScheduleScreen .ai-schedule-day {
+    min-height: 32px;
+    font-size: 12px;
+  }
+  #aiScheduleScreen .ai-schedule-legend {
+    margin-top: 6px;
+    gap: 4px;
+  }
+  #aiScheduleScreen .ai-schedule-legend-item {
+    font-size: 11px;
+  }
+  #aiScheduleScreen .ai-schedule-logo-wrap {
+    padding: 0 12px 12px;
+  }
+  #aiScheduleScreen .ai-schedule-logo {
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 400px) {
+  #aiScheduleScreen.screen {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  #aiScheduleScreen .ai-schedule-calendar-card {
+    padding: 10px;
+  }
+  #aiScheduleScreen .ai-schedule-calendar,
+  #aiScheduleScreen .ai-schedule-calendar-card .ai-schedule-calendar {
+    padding: 6px;
+  }
+  #aiScheduleScreen .ai-schedule-day {
+    min-height: 28px;
+    font-size: 11px;
+  }
+  #aiScheduleScreen .ai-schedule-weekdays {
+    font-size: 11px;
+  }
+}
+
 /* ========== AI 스케줄 생성 로딩 오버레이 ========== */
 .ai-schedule-loading-overlay {
   transition: opacity 0.3s ease;
