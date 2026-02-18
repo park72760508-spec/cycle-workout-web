@@ -2106,17 +2106,11 @@ function updateSegmentBarTick(){
     if (targetType === 'cadence_rpm') {
       if (elAvg) elAvg.textContent = String(curAvgPower);
       if (elAvgUnit) elAvgUnit.textContent = "";
-      if (elAvgRpmSection) {
-        elAvgRpmSection.style.display = "block";
-        if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
-      }
+      if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
     } else if (targetType === 'dual') {
       if (elAvg) elAvg.textContent = String(curAvgPower);
       if (elAvgUnit) elAvgUnit.textContent = "";
-      if (elAvgRpmSection) {
-        elAvgRpmSection.style.display = "block";
-        if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
-      }
+      if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
     } else {
       if (elAvg) elAvg.textContent = String(curAvgPower);
       if (elAvgUnit) elAvgUnit.textContent = "";
