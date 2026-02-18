@@ -708,6 +708,38 @@
     };
   }
 
+  var AI_LOADING_MESSAGES = [
+    '🚴 사용자님의 신체 데이터와 목표를 분석하고 있습니다...',
+    '🧠 엘리트 선수들의 주기화(Periodization) 이론을 적용 중입니다...',
+    '📊 대회 날짜에 맞춘 최적의 컨디셔닝 전략을 수립하고 있습니다...',
+    '✅ STELVIO AI가 맞춤형 훈련 스케줄 생성을 완료했습니다!'
+  ];
+  var _aiLoadingOverlayInterval = null;
+
+  function showAiScheduleLoadingOverlay(visible) {
+    var overlay = document.getElementById('aiScheduleLoadingOverlay');
+    var msgEl = document.getElementById('aiScheduleLoadingMessage');
+    if (!overlay || !msgEl) return;
+
+    if (visible) {
+      overlay.classList.remove('hidden');
+      overlay.style.display = 'flex';
+      msgEl.textContent = AI_LOADING_MESSAGES[0];
+      var idx = 0;
+      _aiLoadingOverlayInterval = setInterval(function () {
+        idx = (idx + 1) % AI_LOADING_MESSAGES.length;
+        msgEl.textContent = AI_LOADING_MESSAGES[idx];
+      }, 3000);
+    } else {
+      if (_aiLoadingOverlayInterval) {
+        clearInterval(_aiLoadingOverlayInterval);
+        _aiLoadingOverlayInterval = null;
+      }
+      overlay.classList.add('hidden');
+      overlay.style.display = 'none';
+    }
+  }
+
   /**
    * Progress UI 업데이트
    */
@@ -804,6 +836,7 @@
 
     if (btn) { btn.disabled = true; btn.textContent = '생성 중...'; }
     if (btnRow) btnRow.style.display = 'none';
+    showAiScheduleLoadingOverlay(true);
     updateScheduleProgress(true, '사용자 목표 분석 중...', '');
 
     var lightweightWorkouts = [];
@@ -826,6 +859,7 @@
 
     var today = new Date();
     if (eventDate < today) {
+      showAiScheduleLoadingOverlay(false);
       updateScheduleProgress(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
       if (btnRow) btnRow.style.display = 'flex';
@@ -857,6 +891,7 @@
 
     if (trainingDates.length === 0) {
       scheduleLog('ERROR', '훈련 가능한 날짜가 없습니다. 인도어/아웃도어 요일을 최소 하나씩 선택하세요.', {});
+      showAiScheduleLoadingOverlay(false);
       updateScheduleProgress(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
       if (btnRow) btnRow.style.display = 'flex';
@@ -1121,8 +1156,10 @@ ${workoutsContext}
       scheduleLog('ERROR', '스케줄 생성 실패: ' + (err.message || err), { error: err, stack: err && err.stack });
       console.error('[AI스케줄] generateScheduleWithGemini 오류', err);
       updateScheduleProgress(false);
+      showAiScheduleLoadingOverlay(false);
       if (typeof showToast === 'function') showToast('스케줄 생성 실패: ' + (err.message || '오류'), 'error');
     } finally {
+      showAiScheduleLoadingOverlay(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
       if (btnRow) btnRow.style.display = 'flex';
     }
