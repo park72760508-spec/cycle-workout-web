@@ -3483,6 +3483,10 @@ if (!window.showScreen) {
             const btnMobile = document.getElementById('btnMobileDashboard');
             if (btnStart) { btnStart.disabled = false; }
             if (btnMobile) { btnMobile.disabled = false; }
+            // 스케줄 등에서 진입 시 지정된 워크아웃·세그먼트 그래프 로딩
+            if (window.currentWorkout && window.currentWorkout.segments && window.currentWorkout.segments.length > 0 && typeof updateTrainingReadyScreenWithWorkout === 'function') {
+              updateTrainingReadyScreenWithWorkout(window.currentWorkout);
+            }
           }
         }, 200);
       }
@@ -10972,6 +10976,12 @@ function confirmRPESelection() {
       targetScreen.style.visibility = 'visible';
       
       console.log('[RPE Modal] SOLO TRAINING 경로: 훈련 준비 화면으로 이동');
+      // 스케줄 등에서 진입 시 훈련날짜 지정 워크아웃·세그먼트 그래프 로딩
+      if (window.currentWorkout && window.currentWorkout.segments && window.currentWorkout.segments.length > 0 && typeof updateTrainingReadyScreenWithWorkout === 'function') {
+        setTimeout(function () {
+          updateTrainingReadyScreenWithWorkout(window.currentWorkout);
+        }, 150);
+      }
     } else {
       // showScreen 함수 사용 (fallback)
       if (typeof showScreen === 'function') {

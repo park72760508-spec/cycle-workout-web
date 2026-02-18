@@ -1285,7 +1285,9 @@ ${workoutsContext}
         }
       }
 
+      var todayStr = new Date().toISOString().split('T')[0];
       if (startBtn) {
+        startBtn.disabled = dateStr !== todayStr;
         startBtn.onclick = function () {
           startScheduleDetailTraining();
         };
