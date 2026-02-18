@@ -9400,20 +9400,84 @@ button[aria-disabled="true"] {
   color: #dc2626;
 }
 
-/* AI 스케줄 생성 모달 - 요일 체크박스 행 */
+/* AI 스케줄 생성 모달 - 모바일 웹 최적화 */
+.ai-schedule-modal .modal-content {
+  max-width: 100%;
+  width: min(480px, calc(100vw - 24px));
+  max-height: 90vh;
+  margin: 12px;
+}
+
+.ai-schedule-modal-body {
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-schedule-form-group {
+  margin-bottom: 14px;
+}
+
+.ai-schedule-user-info {
+  padding: 10px 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  font-size: 0.9em;
+  color: #444;
+}
+
+.ai-schedule-date-input,
+.ai-schedule-input-full {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 16px;
+  box-sizing: border-box;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.ai-schedule-date-input {
+  min-height: 44px;
+}
+
+.ai-schedule-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* AI 스케줄 생성 모달 - 요일 체크박스 (겹침 방지) */
 .weekday-checkbox-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px 14px;
   margin-top: 8px;
 }
 
 .weekday-checkbox-row label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
   font-size: 14px;
+}
+
+.ai-schedule-weekday-row .ai-schedule-weekday-label {
+  min-width: 36px;
+  min-height: 28px;
+  padding: 4px 0;
+}
+
+.ai-schedule-weekday-row .ai-schedule-weekday-label input {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.ai-schedule-weekday-row .ai-schedule-weekday-label span {
+  flex-shrink: 0;
 }
 
 /* 스케줄 목록 */
