@@ -1152,7 +1152,9 @@ ${workoutsContext}
             days: allDays,
             meta: meta,
             taperDaysCount: taperDaysCount,
-            taperStartStr: taperStartStr
+            taperStartStr: taperStartStr,
+            macroStrategy: macroStrategy,
+            totalWeeks: totalWeeks
           });
         }
         if (typeof showToast === 'function') showToast('스케줄이 생성되었습니다.');
@@ -1170,6 +1172,18 @@ ${workoutsContext}
     }
   };
 
+  function showScheduleDetailLoadingOverlay(visible) {
+    var overlay = document.getElementById('scheduleDetailLoadingOverlay');
+    if (!overlay) return;
+    if (visible) {
+      overlay.classList.remove('hidden');
+      overlay.style.setProperty('display', 'flex', 'important');
+    } else {
+      overlay.classList.add('hidden');
+      overlay.style.removeProperty('display');
+    }
+  }
+
   /**
    * 스케줄 상세 모달 열기
    */
@@ -1182,52 +1196,58 @@ ${workoutsContext}
 
     if (!modal || !aiScheduleData || !aiScheduleData.days || !aiScheduleData.days[dateStr]) return;
 
-    scheduleDetailCurrentDate = dateStr;
-    scheduleDetailCurrentDay = aiScheduleData.days[dateStr];
+    showScheduleDetailLoadingOverlay(true);
 
-    const d = scheduleDetailCurrentDay;
-    infoEl.innerHTML = `
-      <p><strong>${d.workoutName}</strong></p>
-      <p>운동 시간: ${d.duration}분 | 예상 TSS: ${d.predictedTSS}</p>
-      <p>날짜: ${dateStr} | 타입: ${d.type || 'Indoor'}</p>
-    `;
+    try {
+      scheduleDetailCurrentDate = dateStr;
+      scheduleDetailCurrentDay = aiScheduleData.days[dateStr];
 
-    if (dateInput) dateInput.value = dateStr;
+      const d = scheduleDetailCurrentDay;
+      infoEl.innerHTML = `
+        <p><strong>${d.workoutName}</strong></p>
+        <p>운동 시간: ${d.duration}분 | 예상 TSS: ${d.predictedTSS}</p>
+        <p>날짜: ${dateStr} | 타입: ${d.type || 'Indoor'}</p>
+      `;
 
-    graphEl.innerHTML = '';
-    if (d.workoutId && window.GAS_URL) {
-      try {
-        const res = await fetch(`${window.GAS_URL}?action=getWorkout&id=${d.workoutId}`);
-        const r = await res.json();
-        if (r?.success && r.item?.segments?.length) {
-          const segs = r.item.segments;
-          const canvas = document.createElement('canvas');
-          canvas.id = 'scheduleDetailGraphCanvas';
-          canvas.width = 320;
-          canvas.height = 120;
-          graphEl.appendChild(canvas);
-          if (typeof drawSegmentGraph === 'function') {
-            drawSegmentGraph(segs, -1, 'scheduleDetailGraphCanvas');
-          } else if (typeof renderSegmentedWorkoutGraph === 'function') {
-            const div = document.createElement('div');
-            div.className = 'segmented-workout-graph';
-            graphEl.innerHTML = '';
-            graphEl.appendChild(div);
-            renderSegmentedWorkoutGraph(div, segs, { maxHeight: 100 });
+      if (dateInput) dateInput.value = dateStr;
+
+      graphEl.innerHTML = '';
+      if (d.workoutId && window.GAS_URL) {
+        try {
+          const res = await fetch(`${window.GAS_URL}?action=getWorkout&id=${d.workoutId}`);
+          const r = await res.json();
+          if (r?.success && r.item?.segments?.length) {
+            const segs = r.item.segments;
+            const canvas = document.createElement('canvas');
+            canvas.id = 'scheduleDetailGraphCanvas';
+            canvas.width = 320;
+            canvas.height = 120;
+            graphEl.appendChild(canvas);
+            if (typeof drawSegmentGraph === 'function') {
+              drawSegmentGraph(segs, -1, 'scheduleDetailGraphCanvas');
+            } else if (typeof renderSegmentedWorkoutGraph === 'function') {
+              const div = document.createElement('div');
+              div.className = 'segmented-workout-graph';
+              graphEl.innerHTML = '';
+              graphEl.appendChild(div);
+              renderSegmentedWorkoutGraph(div, segs, { maxHeight: 100 });
+            }
           }
+        } catch (e) {
+          console.warn('워크아웃 세그먼트 로드 실패:', e);
         }
-      } catch (e) {
-        console.warn('워크아웃 세그먼트 로드 실패:', e);
       }
-    }
 
-    if (startBtn) {
-      startBtn.onclick = function () {
-        startScheduleDetailTraining();
-      };
-    }
+      if (startBtn) {
+        startBtn.onclick = function () {
+          startScheduleDetailTraining();
+        };
+      }
 
-    modal.style.display = 'flex';
+      modal.style.display = 'flex';
+    } finally {
+      showScheduleDetailLoadingOverlay(false);
+    }
   };
 
   window.closeScheduleDetailModal = function () {
@@ -1252,6 +1272,8 @@ ${workoutsContext}
     var scheduleName = (data && data.scheduleName) || '훈련 스케줄';
     var taperCount = (data && data.taperDaysCount) || 0;
     var taperStartStr = data && data.taperStartStr;
+    var macroStrategy = (data && data.macroStrategy) || (meta && meta.macroStrategy) || [];
+    var totalWeeks = (data && data.totalWeeks) != null ? data.totalWeeks : (meta && meta.totalWeeks) || 0;
 
     var keys = Object.keys(days).sort();
     var totalDays = keys.length;
@@ -1297,6 +1319,30 @@ ${workoutsContext}
       effectText += '설정된 대회 일정이 훈련 기간 내에 있어 테이퍼 구간이 포함되지 않았습니다.';
     }
     effectText += ' 월별 훈련 분포: ' + (monthSummary || '-') + '.';
+
+    if (macroStrategy.length > 0 && totalWeeks > 0) {
+      var phaseCounts = { Base: 0, Build: 0, Specialty: 0, Taper: 0, Recovery: 0 };
+      for (var p = 0; p < macroStrategy.length; p++) {
+        var ph = String(macroStrategy[p].phase || '').trim();
+        var foc = String(macroStrategy[p].focus || '').trim();
+        if (/recovery|회복/i.test(ph) || /recovery|회복/i.test(foc)) phaseCounts.Recovery++;
+        else if (/taper|조절/i.test(ph) || /taper|조절/i.test(foc)) phaseCounts.Taper++;
+        else if (/base|기초/i.test(ph) || /^base$/i.test(ph)) phaseCounts.Base++;
+        else if (/build|강화/i.test(ph) || /^build$/i.test(ph)) phaseCounts.Build++;
+        else if (/specialty|특화/i.test(ph) || /^specialty$/i.test(ph)) phaseCounts.Specialty++;
+        else phaseCounts.Base++;
+      }
+      var parts = [];
+      if (phaseCounts.Base > 0) parts.push('기초(Base): ' + phaseCounts.Base + '주');
+      if (phaseCounts.Build > 0) parts.push('강화(Build): ' + phaseCounts.Build + '주');
+      if (phaseCounts.Specialty > 0) parts.push('특화(Specialty): ' + phaseCounts.Specialty + '주');
+      if (phaseCounts.Taper > 0) parts.push('테이퍼링(Taper): ' + phaseCounts.Taper + '주');
+      if (phaseCounts.Recovery > 0) parts.push('회복주: ' + phaseCounts.Recovery + '주 포함');
+      if (parts.length > 0) {
+        effectText += ' 대회까지 총 ' + totalWeeks + '주, 프로급 주기화 적용: ' + parts.join(', ') + '.';
+      }
+    }
+
     effectEl.textContent = effectText;
 
     modal.classList.remove('hidden');
