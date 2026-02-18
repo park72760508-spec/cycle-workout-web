@@ -15197,6 +15197,13 @@ function getLaptopCurrentSegment() {
   return window.currentWorkout.segments[segIndex];
 }
 
+/**
+ * 노트북/태블릿 훈련 화면 속도계 원호 — 모바일 개인훈련 대시보드(updateMobileTargetPowerArc)와 동일 로직
+ * - 목표 파워: laptop-ui-target-power (하한 파워)
+ * - LAP AVG: avgSegmentPowerValue (세그먼트 평균 파워)
+ * - 달성도: LAP AVG / 목표 파워 ≥ 0.985 → 민트, 미만 → 주황
+ * - ftp_pctz일 때: 첫 번째 띠(0~하한) + 두 번째 띠(하한~상한, 연한 주황)
+ */
 function updateLaptopTargetPowerArc() {
   const targetPowerEl = safeGetElement('laptop-ui-target-power');
   if (!targetPowerEl) return;
@@ -15208,6 +15215,7 @@ function updateLaptopTargetPowerArc() {
     if (maxArc) maxArc.style.display = 'none';
     return;
   }
+  // LAP AVG 파워 (노트북은 avgSegmentPowerValue = 세그먼트 평균)
   const lapPowerEl = safeGetElement('avgSegmentPowerValue');
   const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
   const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
@@ -15243,6 +15251,7 @@ function updateLaptopTargetPowerArc() {
   targetArc.setAttribute('d', minPathData);
   targetArc.setAttribute('stroke', arcColor);
   targetArc.style.display = 'block';
+  // ftp_pctz일 때만 상한 구간 두 번째 띠 (모바일과 동일: rgba(255, 140, 0, 0.2))
   const maxPowerValue = window.currentSegmentMaxPower;
   if (isFtpPctz && maxPowerValue && maxPowerValue > targetPower) {
     const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
@@ -15256,7 +15265,7 @@ function updateLaptopTargetPowerArc() {
     const maxArc = safeGetElement('laptop-gauge-max-arc');
     if (maxArc) {
       maxArc.setAttribute('d', maxPathData);
-      maxArc.setAttribute('stroke', 'rgba(255, 180, 100, 0.55)'); // ftp_pctz 50~55 구간 연한 주황
+      maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)'); // 모바일과 동일: 더 투명한 주황
       maxArc.style.display = 'block';
     }
   } else {
