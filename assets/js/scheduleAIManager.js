@@ -780,17 +780,17 @@
         }));
 
         var taperNote = monthDates.some(function (t) { return t.taper; })
-          ? '\n**대회 1주 전(taper=true) 훈련:** 강도·TSS를 낮추고 Recovery/Active Recovery 위주. 컨디션 조절·휴식 비중 확대.'
+          ? '\n**[필수] 대회 1주 전(taper=true) 컨디션 조절:** taper가 true인 날짜는 시합 당일 최상의 퍼포먼스를 위해 반드시 다음을 적용하시오:\n- duration: 30~45분 이하\n- predictedTSS: 25~40 이하 (평상시의 40~50% 수준)\n- workoutName: Recovery, Active Recovery, Z1~Z2 기초 유지만 사용\n- 고강도(Threshold, VO2max, Anaerobic 등) 절대 금지'
           : '';
 
-        var baseContext = `당신은 세계 최고의 사이클링 코치입니다.
+        var baseContext = `당신은 세계 최고의 사이클링 코치입니다. 경기 1주 전 테이퍼링을 정확히 적용하는 것이 핵심입니다.
 
 **아래 지정된 날짜에 대해, 각 날짜당 정확히 1개씩 훈련을 생성하시오. 날짜 순서와 개수를 변경하지 마시오.**
 
 **생성할 날짜 목록 (반드시 이 목록의 모든 날짜에 대해 1개씩 생성):**
 ${dateListJson}
 
-**대회 1주 전(taper: true) 컨디션 조절:** taper가 true인 날짜는 최상의 컨디션 유지를 위해 강도·TSS를 낮추고 Recovery/Active Recovery 위주로 배정하시오.
+**대회 1주 전(taper: true) 컨디션 조절 [필수]:** taper가 true인 날짜는 평상시 강도가 적용되면 시합날 최상의 퍼포먼스를 낼 수 없습니다. 반드시 강도·TSS를 크게 낮추고 Recovery/Active Recovery 위주로만 배정하시오.
 ${taperNote}
 
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
@@ -840,6 +840,10 @@ ${workoutsContext}
             wName = fallback.title || fallback.name || '훈련';
             var dur = fallback.duration_min || 60;
             var tss = fallback.tss_predicted || Math.round(dur * 0.6);
+            if (td.taper) {
+              dur = Math.min(dur, 45);
+              tss = Math.min(tss, 40);
+            }
             allDays[dateStr] = {
               workoutName: wName,
               workoutId: wId,
@@ -848,14 +852,28 @@ ${workoutsContext}
               type: td.type,
               description: (item && item.description) ? item.description : ''
             };
-            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')', {});
+            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')' + (td.taper ? ' [테이퍼]' : ''), {});
             workoutIdx++;
           } else {
+            var dur = Math.round(Number(item && item.duration) || 60);
+            var tss = Math.round(Number(item && item.predictedTSS) || 50);
+            if (td.taper) {
+              dur = Math.min(dur, 45);
+              tss = Math.min(tss, 40);
+              var isHeavy = /threshold|vo2|anaerobic|sweet spot|tempo/i.test(wName || '');
+              if (isHeavy && recoveryWorkouts.length > 0) {
+                var r = recoveryWorkouts[j % recoveryWorkouts.length];
+                wName = r.title || r.name || 'Active Recovery';
+                wId = r.id || '';
+                dur = Math.min(r.duration_min || 40, 45);
+                tss = Math.min(r.tss_predicted || 30, 40);
+              }
+            }
             allDays[dateStr] = {
               workoutName: wName || '훈련',
               workoutId: wId || '',
-              duration: Math.round(Number(item && item.duration) || 60),
-              predictedTSS: Math.round(Number(item && item.predictedTSS) || 50),
+              duration: dur,
+              predictedTSS: tss,
               type: td.type,
               description: (item && item.description) ? item.description : ''
             };
@@ -904,9 +922,20 @@ ${workoutsContext}
       if (subHeader) subHeader.textContent = scheduleName;
       renderAIScheduleCalendar();
 
+      var taperDaysCount = trainingDates.filter(function (t) { return t.taper; }).length;
+
       setTimeout(function () {
         updateScheduleProgress(false);
         closeScheduleCreateAIModal();
+        if (typeof showAIScheduleResultModal === 'function') {
+          showAIScheduleResultModal({
+            scheduleName: scheduleName,
+            days: allDays,
+            meta: meta,
+            taperDaysCount: taperDaysCount,
+            taperStartStr: taperStartStr
+          });
+        }
         if (typeof showToast === 'function') showToast('스케줄이 생성되었습니다.');
       }, 800);
     } catch (err) {
@@ -985,6 +1014,76 @@ ${workoutsContext}
     if (modal) modal.style.display = 'none';
     scheduleDetailCurrentDate = null;
     scheduleDetailCurrentDay = null;
+  };
+
+  /**
+   * AI 훈련 계획 수립 결과·효과 분석 팝업 표시 (모바일 훈련 결과 팝업 디자인 동일)
+   * @param {Object} data - { scheduleName, days, meta, taperDaysCount, taperStartStr }
+   */
+  window.showAIScheduleResultModal = function (data) {
+    var modal = document.getElementById('aiScheduleResultModal');
+    var bodyEl = document.getElementById('aiScheduleResultBody');
+    var effectEl = document.getElementById('aiScheduleResultEffect');
+    if (!modal || !bodyEl || !effectEl) return;
+
+    var meta = (data && data.meta) || {};
+    var days = (data && data.days) || {};
+    var scheduleName = (data && data.scheduleName) || '훈련 스케줄';
+    var taperCount = (data && data.taperDaysCount) || 0;
+    var taperStartStr = data && data.taperStartStr;
+
+    var keys = Object.keys(days).sort();
+    var totalDays = keys.length;
+
+    var byMonth = {};
+    var totalTSS = 0;
+    var taperTSS = 0;
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var d = days[k];
+      var tss = Number(d.predictedTSS) || 0;
+      totalTSS += tss;
+      if (taperStartStr && k >= taperStartStr) taperTSS += tss;
+      var ym = k.substring(0, 7);
+      if (!byMonth[ym]) byMonth[ym] = 0;
+      byMonth[ym]++;
+    }
+
+    var monthSummary = Object.keys(byMonth).sort().map(function (ym) {
+      return ym.replace('-', '/') + ': ' + byMonth[ym] + '일';
+    }).join(', ');
+
+    var statStyle = 'background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 8px 10px; text-align: center;';
+    var statLabel = 'font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;';
+    var statValue = 'font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);';
+
+    bodyEl.innerHTML = ''
+      + '<div class="mobile-result-stat-item" style="' + statStyle + '"><div style="' + statLabel + '">대회 일정</div><div style="' + statValue + '">' + (meta.eventDate || '-') + '</div></div>'
+      + '<div class="mobile-result-stat-item" style="' + statStyle + '"><div style="' + statLabel + '">대회 거리</div><div style="' + statValue + '">' + (meta.eventDistance || '-') + 'km</div></div>'
+      + '<div class="mobile-result-stat-item" style="' + statStyle + '"><div style="' + statLabel + '">훈련 목표</div><div style="' + statValue + '">' + (meta.eventGoal || '-') + '</div></div>'
+      + '<div class="mobile-result-stat-item" style="' + statStyle + '"><div style="' + statLabel + '">총 훈련일</div><div style="' + statValue + '">' + totalDays + '일</div></div>'
+      + '<div class="mobile-result-stat-item" style="' + statStyle + '"><div style="' + statLabel + '">예상 총 TSS</div><div style="' + statValue + '">' + totalTSS.toLocaleString() + '</div></div>'
+      + '<div class="mobile-result-stat-item" style="' + statStyle + '"><div style="' + statLabel + '">테이퍼 기간</div><div style="' + statValue + '">' + taperCount + '일</div></div>';
+
+    var effectText = '';
+    if (taperCount > 0) {
+      effectText += '경기 1주 전 컨디션 조절(테이퍼링)이 적용되었습니다. 대회 직전 훈련 강도를 낮춰 시합 당일 최상의 퍼포먼스를 발휘할 수 있도록 설계되었습니다.';
+      if (taperTSS > 0) {
+        var taperShare = totalTSS > 0 ? Math.round((taperTSS / totalTSS) * 100) : 0;
+        effectText += ' 테이퍼 구간 TSS는 전체의 약 ' + taperShare + '% 수준으로 조절되었습니다.';
+      }
+    } else {
+      effectText += '설정된 대회 일정이 훈련 기간 내에 있어 테이퍼 구간이 포함되지 않았습니다.';
+    }
+    effectText += ' 월별 훈련 분포: ' + (monthSummary || '-') + '.';
+    effectEl.textContent = effectText;
+
+    modal.classList.remove('hidden');
+  };
+
+  window.closeAIScheduleResultModal = function () {
+    var modal = document.getElementById('aiScheduleResultModal');
+    if (modal) modal.classList.add('hidden');
   };
 
   /**
