@@ -319,7 +319,7 @@
   }
 
   /**
-   * Gemini 응답 JSON 파싱 (single quote, trailing comma 등 보정)
+   * Gemini 응답 JSON 파싱 (보정 + 개별 객체 추출 폴백)
    */
   function parseGeminiScheduleJson(text) {
     if (!text || typeof text !== 'string') return [];
@@ -328,25 +328,67 @@
     if (match) raw = match[0];
 
     var fix = raw
-      .replace(/'([^']*)'\s*:/g, '"$1":')                    // single-quoted keys -> "key":
-      .replace(/,(\s*[}\]])/g, '$1');                        // trailing commas
+      .replace(/'([^']*)'\s*:/g, '"$1":')
+      .replace(/,(\s*[}\]])/g, '$1');
 
-    try {
-      return JSON.parse(fix);
-    } catch (e1) {
+    function tryParse(s) {
       try {
-        var fix2 = fix.replace(/:\s*'([^']*)'/g, function (_, s) {
-          return ': "' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/\r/g, '') + '"';
-        });
-        return JSON.parse(fix2);
-      } catch (e2) {
-        try {
-          return JSON.parse(raw);
-        } catch (e3) {
-          throw new Error('JSON 파싱 실패: ' + (e1 && e1.message));
-        }
+        var arr = JSON.parse(s);
+        return Array.isArray(arr) ? arr : [];
+      } catch (_) {
+        return null;
       }
     }
+
+    var result = tryParse(fix);
+    if (result) return result;
+
+    result = tryParse(fix.replace(/:\s*'([^']*)'/g, function (_, s) {
+      return ': "' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/\r/g, '') + '"';
+    }));
+    if (result) return result;
+
+    result = tryParse(raw);
+    if (result) return result;
+
+    var collected = [];
+    var i = 0;
+    while (i < fix.length) {
+      var start = fix.indexOf('{', i);
+      if (start < 0) break;
+      var depth = 1;
+      var pos = start + 1;
+      var inStr = false;
+      var strChar = '';
+      var escape = false;
+      while (pos < fix.length && depth > 0) {
+        var c = fix[pos];
+        if (escape) { escape = false; pos++; continue; }
+        if (c === '\\' && inStr) { escape = true; pos++; continue; }
+        if (inStr) {
+          if (c === strChar) inStr = false;
+          pos++;
+          continue;
+        }
+        if (c === '"' || c === "'") { inStr = true; strChar = c; pos++; continue; }
+        if (c === '{') depth++;
+        else if (c === '}') depth--;
+        pos++;
+      }
+      if (depth === 0) {
+        var objStr = fix.substring(start, pos)
+          .replace(/:\s*'([^']*)'/g, function (_, s) {
+            return ': "' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/\r/g, '') + '"';
+          });
+        try {
+          var obj = JSON.parse(objStr);
+          if (obj && (obj.date || obj.dateStr)) collected.push(obj);
+        } catch (_) {}
+      }
+      i = start + 1;
+    }
+    if (collected.length > 0) return collected;
+    throw new Error('JSON 파싱 실패. 개별 객체 추출도 되지 않았습니다.');
   }
 
   /**
