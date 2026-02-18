@@ -8363,7 +8363,6 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
     
     // 공휴일 확인
     const isHoliday = isKoreanHoliday(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-    const dayOfWeek = currentDate.getDay();
     
     days.push({
       date: dateStr,
