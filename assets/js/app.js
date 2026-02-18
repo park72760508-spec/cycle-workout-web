@@ -3908,6 +3908,7 @@ window.updateTrainingDisplay = function () {
       laptopTargetLabelEl.textContent = 'RPM';
       laptopTargetLabelEl.setAttribute('fill', '#888');
       laptopTargetLabelEl.setAttribute('y', '90');
+      laptopTargetLabelEl.setAttribute('font-size', '8.4'); /* WATTS와 동일 */
     }
     if (laptopTargetEl) {
       laptopTargetEl.textContent = targetRpm > 0 ? String(Math.round(targetRpm)) : '0';
@@ -3917,7 +3918,7 @@ window.updateTrainingDisplay = function () {
     if (targetRpm > 0 && laptopTargetLabelEl) {
       laptopTargetLabelEl.textContent = '';
       laptopTargetLabelEl.setAttribute('fill', '#ef4444');
-      laptopTargetLabelEl.setAttribute('font-size', '10');
+      laptopTargetLabelEl.setAttribute('font-size', '8.4'); /* WATTS와 동일 */
       laptopTargetLabelEl.setAttribute('y', '90');
       const tspanNum = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
       tspanNum.setAttribute('fill', '#ef4444');
@@ -3930,6 +3931,7 @@ window.updateTrainingDisplay = function () {
     } else if (laptopTargetLabelEl) {
       laptopTargetLabelEl.textContent = 'TARGET';
       laptopTargetLabelEl.setAttribute('fill', '#888');
+      laptopTargetLabelEl.setAttribute('font-size', '8.4'); /* WATTS와 동일 */
     }
     if (laptopTargetEl) {
       laptopTargetEl.textContent = String(Math.round(targetPower));
@@ -3940,6 +3942,7 @@ window.updateTrainingDisplay = function () {
       laptopTargetLabelEl.textContent = 'TARGET';
       laptopTargetLabelEl.setAttribute('fill', '#888');
       laptopTargetLabelEl.setAttribute('y', '90');
+      laptopTargetLabelEl.setAttribute('font-size', '8.4'); /* WATTS와 동일 */
     }
     if (laptopTargetEl) {
       laptopTargetEl.textContent = targetPower > 0 ? String(Math.round(targetPower)) : '0';
