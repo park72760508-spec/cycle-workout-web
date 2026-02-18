@@ -8363,6 +8363,7 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
     
     // 공휴일 확인
     const isHoliday = isKoreanHoliday(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    const dayOfWeek = currentDate.getDay();
     
     days.push({
       date: dateStr,
@@ -8371,7 +8372,8 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
       isToday,
       result,
       isWeekend,
-      isHoliday
+      isHoliday,
+      dayOfWeek
     });
     
     currentDate.setDate(currentDate.getDate() + 1);
@@ -8425,7 +8427,10 @@ function renderTrainingJournalDay(dayData) {
   const isHoliday = dayData.isHoliday || false;
   
   const result = dayData.result || null;
-  const isOutdoor = hasTraining && result && (String(result.source || '') === 'strava') && ((Number(result.elevation_gain) || 0) > 0);
+  // Outdoor: source === 'strava' 이고 elevation_gain이 null/undefined가 아니며 실제로 > 0 일 때만 (null이면 Indoor)
+  const eg = result && result.elevation_gain;
+  const hasElevation = eg != null && eg !== '' && !Number.isNaN(Number(eg)) && Number(eg) > 0;
+  const isOutdoor = hasTraining && result && (String(result.source || '') === 'strava') && hasElevation;
 
   const classes = ['calendar-day', 'journal-day-only'];
   if (isToday) classes.push('today');
@@ -8436,6 +8441,11 @@ function renderTrainingJournalDay(dayData) {
     classes.push('journal-no-training-day'); // 회색 계열
   }
   if (isWeekend || isHoliday) classes.push('holiday-weekend');
+  // 요일/공휴일 폰트 색 (Outdoor 셀에서 평일=검정, 토=파랑, 일/공휴=빨강)
+  const dayOfWeek = dayData.dayOfWeek ?? -1;
+  if (dayOfWeek === 0) classes.push('journal-day-sun');
+  else if (dayOfWeek === 6) classes.push('journal-day-sat');
+  if (isHoliday) classes.push('journal-day-holiday');
   
   // 날짜만 표시 (휴대폰에서 잘 보이도록 글자 크기는 CSS에서 확대)
   const content = `<div class="calendar-day-number journal-day-number">${day}</div>`;
