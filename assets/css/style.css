@@ -9416,11 +9416,19 @@ button[aria-disabled="true"] {
   background: rgba(251, 146, 60, 0.4);
 }
 
-/* 오늘 날짜: 주황색 투명 테두리 */
+/* 오늘 날짜: 훈련일지와 동일하게 날짜 숫자에 주황색 동그라미 표기 */
 .ai-schedule-day-today {
   font-weight: 700;
-  border: 2px solid rgba(251, 146, 60, 0.6) !important;
-  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.15);
+}
+.ai-schedule-day-today .ai-schedule-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  min-height: 1.6em;
+  border-radius: 50%;
+  background: rgba(249, 115, 22, 0.35);
+  box-sizing: border-box;
 }
 
 .ai-schedule-day-num {
