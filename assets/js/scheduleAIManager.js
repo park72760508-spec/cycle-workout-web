@@ -1258,7 +1258,6 @@ ${workoutsContext}
   window.openScheduleDetailModal = async function (dateStr) {
     const modal = document.getElementById('scheduleDetailModal');
     const infoEl = document.getElementById('scheduleDetailInfo');
-    const titleEl = document.getElementById('scheduleDetailWorkoutTitle');
     const graphEl = document.getElementById('scheduleDetailGraph');
     const dateInput = document.getElementById('scheduleDetailDateInput');
     const startBtn = document.getElementById('btnStartScheduleTraining');
@@ -1272,8 +1271,8 @@ ${workoutsContext}
       scheduleDetailCurrentDay = aiScheduleData.days[dateStr];
 
       const d = scheduleDetailCurrentDay;
-      if (titleEl) titleEl.textContent = d.workoutName || '';
       infoEl.innerHTML = `
+        <p><strong>${d.workoutName || ''}</strong></p>
         <p>운동 시간: ${d.duration}분 | 예상 TSS: ${d.predictedTSS}</p>
         <p>날짜: ${dateStr} | 타입: ${d.type || 'Indoor'}</p>
       `;
