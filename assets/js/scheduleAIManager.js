@@ -687,10 +687,17 @@
     } catch (e) {
       console.warn('워크아웃 로드 실패:', e);
     }
+    scheduleLog('WORKOUTS', '로드된 워크아웃 ' + lightweightWorkouts.length + '개', { count: lightweightWorkouts.length });
+
+    var taperStartStr = (function () {
+      var d = new Date(eventDate);
+      d.setDate(d.getDate() - 7);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    })();
 
     var workoutsContext = lightweightWorkouts.length
-      ? '\n**사용 가능한 워크아웃 메타데이터 (경량화):**\n' + JSON.stringify(lightweightWorkouts, null, 2) + '\n위 워크아웃 중 id를 workoutId로 매칭하거나, 유사 스펙으로 추천하세요.'
-      : '\n워크아웃 정보가 없습니다. workoutName, duration, predictedTSS를 적절히 생성하세요.';
+      ? '\n**필수: 아래 워크아웃 목록에서만 선택하시오. workoutId는 반드시 목록의 id 값 중 하나를 사용. "훈련" 같은 임의의 이름·빈 workoutId 사용 금지.**\n```\n' + JSON.stringify(lightweightWorkouts, null, 2) + '\n```\n각 날짜마다 다른 워크아웃을 다양하게 배정. 동일 훈련 연속 반복 금지.'
+      : '\n워크아웃 API를 사용할 수 없습니다. workoutId는 빈 문자열로 두고, workoutName과 duration·predictedTSS를 구체적으로 작성하시오. (예: Z2 기초 지구력 60분, Sweet Spot 인터벌 45분 등)';
 
     var today = new Date();
     if (eventDate < today) {
@@ -736,6 +743,7 @@
     for (var k = 0; k < trainingDates.length; k++) {
       var td = trainingDates[k];
       var ymKey = td.dateStr.substring(0, 7);
+      td.taper = td.dateStr >= taperStartStr;
       if (!byMonth[ymKey]) byMonth[ymKey] = [];
       byMonth[ymKey].push(td);
     }
@@ -767,7 +775,13 @@
         var label = ymKey.replace('-', '년 ') + '월';
         updateScheduleProgress(true, label + ' 스케줄 생성 중...', (i + 1) + '/' + monthKeys.length + ' 개월 (' + monthDates.length + '일)');
 
-        var dateListJson = JSON.stringify(monthDates.map(function (t) { return { date: t.dateStr, type: t.type, dayName: t.dayName }; }));
+        var dateListJson = JSON.stringify(monthDates.map(function (t) {
+          return { date: t.dateStr, type: t.type, dayName: t.dayName, taper: !!t.taper };
+        }));
+
+        var taperNote = monthDates.some(function (t) { return t.taper; })
+          ? '\n**대회 1주 전(taper=true) 훈련:** 강도·TSS를 낮추고 Recovery/Active Recovery 위주. 컨디션 조절·휴식 비중 확대.'
+          : '';
 
         var baseContext = `당신은 세계 최고의 사이클링 코치입니다.
 
@@ -775,6 +789,9 @@
 
 **생성할 날짜 목록 (반드시 이 목록의 모든 날짜에 대해 1개씩 생성):**
 ${dateListJson}
+
+**대회 1주 전(taper: true) 컨디션 조절:** taper가 true인 날짜는 최상의 컨디션 유지를 위해 강도·TSS를 낮추고 Recovery/Active Recovery 위주로 배정하시오.
+${taperNote}
 
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
 **훈련 목표:** ${goal}${isEliteOrPro ? ' (Elite/Pro: 고강도·높은 TSS)' : ' (일반 동호인: 회복·지속 가능성 중시)'}
@@ -800,19 +817,49 @@ ${workoutsContext}
 
         scheduleLog('GEMINI', label + ' 응답: ' + (parsed ? parsed.length : 0) + '건 (예상 ' + monthDates.length + '건)', { parsedCount: parsed ? parsed.length : 0, expected: monthDates.length });
 
+        var workoutIdx = 0;
+        var recoveryWorkouts = lightweightWorkouts.filter(function (w) {
+          var c = (w.category || '').toLowerCase();
+          return c.indexOf('recovery') >= 0 || c.indexOf('endurance') >= 0;
+        });
+        if (recoveryWorkouts.length === 0) recoveryWorkouts = lightweightWorkouts;
+
         var addedThisMonth = 0;
         for (var j = 0; j < monthDates.length; j++) {
           var td = monthDates[j];
           var item = parsed && parsed[j] ? parsed[j] : null;
           var dateStr = td.dateStr;
-          allDays[dateStr] = {
-            workoutName: (item && item.workoutName) ? item.workoutName : '훈련',
-            workoutId: (item && item.workoutId) ? item.workoutId : '',
-            duration: Math.round(Number(item && item.duration) || 60),
-            predictedTSS: Math.round(Number(item && item.predictedTSS) || 50),
-            type: td.type,
-            description: (item && item.description) ? item.description : ''
-          };
+          var wName = (item && item.workoutName) ? item.workoutName : '';
+          var wId = (item && item.workoutId) ? String(item.workoutId).trim() : '';
+          var isEmpty = !wId && (!wName || wName === '훈련');
+          if (isEmpty && lightweightWorkouts.length > 0) {
+            var fallback = td.taper && recoveryWorkouts.length > 0
+              ? recoveryWorkouts[j % recoveryWorkouts.length]
+              : lightweightWorkouts[workoutIdx % lightweightWorkouts.length];
+            wId = fallback.id || '';
+            wName = fallback.title || fallback.name || '훈련';
+            var dur = fallback.duration_min || 60;
+            var tss = fallback.tss_predicted || Math.round(dur * 0.6);
+            allDays[dateStr] = {
+              workoutName: wName,
+              workoutId: wId,
+              duration: Math.round(Number(item && item.duration) || dur),
+              predictedTSS: Math.round(Number(item && item.predictedTSS) || tss),
+              type: td.type,
+              description: (item && item.description) ? item.description : ''
+            };
+            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')', {});
+            workoutIdx++;
+          } else {
+            allDays[dateStr] = {
+              workoutName: wName || '훈련',
+              workoutId: wId || '',
+              duration: Math.round(Number(item && item.duration) || 60),
+              predictedTSS: Math.round(Number(item && item.predictedTSS) || 50),
+              type: td.type,
+              description: (item && item.description) ? item.description : ''
+            };
+          }
           addedThisMonth++;
         }
         scheduleLog('PARSE', label + ' 반영: ' + addedThisMonth + '일 (전체 ' + Object.keys(allDays).length + '일)', { added: addedThisMonth, total: Object.keys(allDays).length });
