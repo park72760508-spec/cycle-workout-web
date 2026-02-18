@@ -8424,10 +8424,14 @@ function renderTrainingJournalDay(dayData) {
   const isWeekend = dayData.isWeekend || false;
   const isHoliday = dayData.isHoliday || false;
   
+  const result = dayData.result || null;
+  const isOutdoor = hasTraining && result && (String(result.source || '') === 'strava') && ((Number(result.elevation_gain) || 0) > 0);
+
   const classes = ['calendar-day', 'journal-day-only'];
   if (isToday) classes.push('today');
   if (hasTraining) {
-    classes.push('journal-has-training');  // 투명 녹색
+    classes.push('journal-has-training');  // 투명 녹색 (기본)
+    if (isOutdoor) classes.push('journal-outdoor');  // Outdoor: source strava + elevation_gain > 0 → 주황색
   } else {
     classes.push('journal-no-training-day'); // 회색 계열
   }
