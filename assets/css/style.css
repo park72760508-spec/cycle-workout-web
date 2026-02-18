@@ -9302,6 +9302,120 @@ button[aria-disabled="true"] {
 
 /* ========== 훈련 스케줄 관련 스타일 ========== */
 
+/* AI 훈련 스케줄 캘린더 (aiScheduleScreen) */
+#aiScheduleScreen .ai-schedule-calendar,
+.ai-schedule-calendar {
+  padding: 12px;
+  max-width: 100%;
+}
+
+.ai-schedule-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.ai-schedule-calendar-header .mini-calendar-nav-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 12px;
+  color: #374151;
+}
+
+.ai-schedule-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.ai-schedule-weekday:first-child { color: #dc2626; }
+.ai-schedule-weekday:last-child { color: #2563eb; }
+
+.ai-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.ai-schedule-day {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
+  position: relative;
+  min-height: 40px;
+}
+
+.ai-schedule-day-empty {
+  background: transparent;
+  cursor: default;
+}
+
+.ai-schedule-day-has {
+  background: rgba(56, 189, 248, 0.5);
+  cursor: pointer;
+}
+
+.ai-schedule-day-has:hover {
+  background: rgba(56, 189, 248, 0.7);
+}
+
+.ai-schedule-day-past.ai-schedule-day-has {
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.ai-schedule-day-today {
+  font-weight: 700;
+  border: 2px solid rgba(251, 146, 60, 0.6);
+}
+
+.ai-schedule-day-num {
+  display: block;
+}
+
+.ai-schedule-status {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-schedule-status-done {
+  color: #059669;
+}
+
+.ai-schedule-status-missed {
+  color: #dc2626;
+}
+
+/* AI 스케줄 생성 모달 - 요일 체크박스 행 */
+.weekday-checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.weekday-checkbox-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 /* 스케줄 목록 */
 .schedule-list {
   display: flex;
