@@ -118,24 +118,30 @@
   };
 
   /**
-   * 해당 날짜의 훈련 완료 여부 조회 (Firebase logs)
+   * 해당 날짜·워크아웃의 훈련 완료 여부 조회 (Cloud Firestore users/{userId}/logs)
+   * 판단 기준: date와 workoutId가 일치하는 log가 있으면 완수
    */
-  async function getIsCompletedForDate(userId, dateStr) {
+  async function getIsCompletedForDate(userId, dateStr, workoutId) {
     try {
       if (typeof window.getTrainingLogsByDateRange !== 'function') return false;
       const d = new Date(dateStr);
       const logs = await window.getTrainingLogsByDateRange(userId, d.getFullYear(), d.getMonth());
-      const MIN_DURATION_SEC = 600;
+      const scheduledWid = (workoutId != null && workoutId !== '') ? String(workoutId).trim() : null;
       for (let i = 0; i < logs.length; i++) {
         let logDate = logs[i].date;
         if (logDate && typeof logDate.toDate === 'function') {
           logDate = logDate.toDate().toISOString().split('T')[0];
         } else if (logDate && typeof logDate !== 'string') {
           logDate = (logDate.toISOString && logDate.toISOString()) ? logDate.toISOString().split('T')[0] : String(logDate).slice(0, 10);
+        } else if (logDate) {
+          logDate = String(logDate).slice(0, 10);
         }
-        if (logDate === dateStr) {
-          const sec = Number(logs[i].duration_sec ?? logs[i].time ?? logs[i].duration ?? 0);
-          if (sec >= MIN_DURATION_SEC) return true;
+        if (logDate !== dateStr) continue;
+        var logWid = logs[i].workout_id != null ? String(logs[i].workout_id).trim() : (logs[i].actual_workout_id != null ? String(logs[i].actual_workout_id).trim() : '');
+        if (scheduledWid) {
+          if (logWid && logWid === scheduledWid) return true;
+        } else {
+          if (logWid || Number(logs[i].duration_sec || logs[i].time || logs[i].duration || 0) >= 600) return true;
         }
       }
     } catch (e) {
@@ -189,6 +195,7 @@
       const dayData = (rawDayData && dateStr >= startDateFilter) ? rawDayData : null;
       const hasSchedule = !!dayData;
       const isPast = dateStr < todayStr;
+      const isPastOrToday = dateStr <= todayStr; /* 오늘 포함 이전 → 완료 여부 판단 대상 */
       const isToday = dateStr === todayStr;
       const isEventDate = eventDateStr && dateStr === eventDateStr;
 
@@ -197,16 +204,16 @@
       if (isPast) cellClass += ' ai-schedule-day-past';
       if (isToday) cellClass += ' ai-schedule-day-today';
       if (isEventDate) cellClass += ' ai-schedule-day-event';
-      else if (hasSchedule && isPast) {
+      else if (hasSchedule && isPastOrToday) {
         const isCompleted = dayData.isCompleted === true;
         if (isCompleted) cellClass += ' ai-schedule-day-completed';
         else cellClass += ' ai-schedule-day-missed';
-      } else if (hasSchedule && !isPast) {
+      } else if (hasSchedule && !isPastOrToday) {
         cellClass += ' ai-schedule-day-planned';
       }
 
       let statusHtml = '';
-      if (hasSchedule && isPast) {
+      if (hasSchedule && isPastOrToday) {
         const isCompleted = dayData.isCompleted === true;
         if (isCompleted) {
           statusHtml = '<span class="ai-schedule-status ai-schedule-status-done" title="완료">✓</span>';
@@ -227,11 +234,13 @@
     html += '</div>';
     container.innerHTML = html;
 
-    // 과거 날짜 isCompleted 동기화 (비동기)
+    // 오늘 포함 이전 날짜: Firestore logs(userId, date, workoutId) 기준 완료 여부 동기화
     if (aiScheduleData && aiScheduleData.days && rtdbUserId) {
-      const pastDates = Object.keys(aiScheduleData.days).filter(d => d < todayStr && d >= startDateFilter);
-      Promise.all(pastDates.map(async (dateStr) => {
-        const completed = await getIsCompletedForDate(rtdbUserId, dateStr);
+      const checkDates = Object.keys(aiScheduleData.days).filter(d => d <= todayStr && d >= startDateFilter);
+      Promise.all(checkDates.map(async (dateStr) => {
+        const day = aiScheduleData.days[dateStr];
+        const workoutId = (day && day.workoutId) != null ? day.workoutId : '';
+        const completed = await getIsCompletedForDate(rtdbUserId, dateStr, workoutId);
         if (aiScheduleData.days[dateStr].isCompleted !== completed) {
           aiScheduleData.days[dateStr].isCompleted = completed;
           try {
