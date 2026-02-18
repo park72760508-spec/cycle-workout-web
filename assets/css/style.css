@@ -9550,6 +9550,15 @@ button[aria-disabled="true"] {
 .schedule-start-training-overlay:not(.hidden) {
   display: flex !important;
 }
+
+/* Strava 오늘 기록(ALL) 동기화 오버레이 (녹색 큰 원 스피너) */
+.strava-today-all-overlay.hidden {
+  display: none !important;
+}
+.strava-today-all-overlay:not(.hidden) {
+  display: flex !important;
+}
+
 .ai-loading-spinner-wrap--large {
   width: 120px;
   height: 120px;
