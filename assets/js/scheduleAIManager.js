@@ -182,6 +182,7 @@
 
     var rtdbUserId = getUserIdForRTDB() || getUserId();
     var startDateFilter = (aiScheduleData && aiScheduleData.meta && aiScheduleData.meta.startDate) ? aiScheduleData.meta.startDate : todayStr;
+    var eventDateStr = (aiScheduleData && aiScheduleData.meta && aiScheduleData.meta.eventDate) ? aiScheduleData.meta.eventDate : '';
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const rawDayData = aiScheduleData && aiScheduleData.days && aiScheduleData.days[dateStr];
@@ -189,11 +190,20 @@
       const hasSchedule = !!dayData;
       const isPast = dateStr < todayStr;
       const isToday = dateStr === todayStr;
+      const isEventDate = eventDateStr && dateStr === eventDateStr;
 
       let cellClass = 'ai-schedule-day';
       if (hasSchedule) cellClass += ' ai-schedule-day-has';
       if (isPast) cellClass += ' ai-schedule-day-past';
       if (isToday) cellClass += ' ai-schedule-day-today';
+      if (isEventDate) cellClass += ' ai-schedule-day-event';
+      else if (hasSchedule && isPast) {
+        const isCompleted = dayData.isCompleted === true;
+        if (isCompleted) cellClass += ' ai-schedule-day-completed';
+        else cellClass += ' ai-schedule-day-missed';
+      } else if (hasSchedule && !isPast) {
+        cellClass += ' ai-schedule-day-planned';
+      }
 
       let statusHtml = '';
       if (hasSchedule && isPast) {
