@@ -9455,8 +9455,11 @@ button[aria-disabled="true"] {
     padding: 0;
   }
   #aiScheduleScreen .mini-calendar-header {
-    margin-bottom: 8px;
-    padding-bottom: 6px;
+    margin-bottom: 6px;   /* 구분선 ↔ 요일 표시 */
+    padding-bottom: 6px;  /* 년월 ↔ 구분선 */
+  }
+  #aiScheduleScreen .mini-calendar-weekdays {
+    margin-bottom: 6px;   /* 요일 표시 ↔ 1주 라인 */
   }
   #aiScheduleScreen .mini-calendar-day .day-number {
     font-size: 11px !important;
@@ -9574,8 +9577,23 @@ button[aria-disabled="true"] {
   text-align: center;
   flex: 1;
 }
-.schedule-detail-info {
+.schedule-detail-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 16px;
+}
+.schedule-detail-info-row .btn-schedule-start {
+  flex-shrink: 0;
+}
+.schedule-detail-info-row .btn-schedule-start img {
+  height: 3em;
+  width: auto;
+  object-fit: contain;
+}
+.schedule-detail-info {
+  flex: 1;
+  min-width: 0;
 }
 .schedule-detail-date-row {
   display: flex;
@@ -9604,17 +9622,6 @@ button[aria-disabled="true"] {
   margin: 16px 0;
   min-height: 120px;
 }
-.schedule-detail-start-section {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-.schedule-detail-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
 .btn-schedule-start {
   display: inline-flex;
   align-items: center;
@@ -9623,23 +9630,10 @@ button[aria-disabled="true"] {
   background: transparent;
   border: none;
   cursor: pointer;
-  flex-shrink: 0;
-}
-.btn-schedule-start img {
-  height: 1em;
-  width: auto;
-  object-fit: contain;
 }
 .btn-schedule-start:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-.schedule-detail-workout-title {
-  font-weight: 700;
-  font-size: 1em;
-  text-align: left;
-  flex: 1;
-  line-height: 1.4;
 }
 
 /* 스케줄 상세 로딩 오버레이 */
