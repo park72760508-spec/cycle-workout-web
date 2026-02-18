@@ -9632,6 +9632,88 @@ button[aria-disabled="true"] {
   line-height: 1.5;
 }
 
+/* 훈련 스케줄 상세 모달 스타일 */
+.schedule-detail-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.schedule-detail-modal-header .modal-close {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.schedule-detail-modal-title {
+  text-align: center;
+  flex: 1;
+}
+.schedule-detail-info {
+  margin-bottom: 16px;
+}
+.schedule-detail-date-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-schedule-date-change {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.btn-schedule-date-change img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.btn-schedule-date-change:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.schedule-detail-graph {
+  margin: 16px 0;
+  min-height: 120px;
+}
+.schedule-detail-start-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.schedule-detail-workout-title {
+  font-weight: 700;
+  font-size: 1em;
+  text-align: left;
+  width: 100%;
+}
+.schedule-detail-start-btn-wrap {
+  width: 100%;
+}
+.btn-schedule-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.btn-schedule-start img {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  object-fit: contain;
+}
+.btn-schedule-start:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* 스케줄 상세 로딩 오버레이 */
 .schedule-detail-loading-overlay.hidden {
   display: none !important;
