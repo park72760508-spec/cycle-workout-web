@@ -9325,8 +9325,8 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  padding: 0 4px 12px;
+  margin-bottom: 8px;  /* 년월-구분선 간격과 동일 (위쪽 공백) */
+  padding: 0 4px 8px;
   border-bottom: 2px solid var(--card-border, #e5e7eb); /* 훈련일지와 동일한 구분선 */
 }
 
@@ -9346,7 +9346,7 @@ button[aria-disabled="true"] {
   font-size: 12px;
   font-weight: 600;
   color: #6b7280;
-  margin-bottom: 4px;
+  margin-bottom: 2px;  /* 날짜 셀 간격(gap)과 동일 (아래쪽 공백) */
 }
 
 .ai-schedule-weekday:first-child { color: #dc2626; }
