@@ -2950,23 +2950,26 @@
   <!-- AI 스케줄 상세 팝업 모달 (날짜 클릭 시) -->
   <div id="scheduleDetailModal" class="modal" style="display: none;">
     <div class="modal-overlay" onclick="if(typeof closeScheduleDetailModal==='function')closeScheduleDetailModal()"></div>
-    <div class="modal-content" style="max-width: 420px; max-height: 90vh; overflow-y: auto;">
-      <div class="modal-header">
-        <h3 id="scheduleDetailModalTitle">훈련 상세</h3>
+    <div class="modal-content schedule-detail-modal-content" style="max-width: 420px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header schedule-detail-modal-header">
+        <h3 id="scheduleDetailModalTitle" class="schedule-detail-modal-title">훈련 상세</h3>
         <button type="button" class="modal-close" onclick="closeScheduleDetailModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <div id="scheduleDetailInfo" style="margin-bottom: 16px;"></div>
+        <div id="scheduleDetailInfo" class="schedule-detail-info"></div>
         <div class="form-group">
           <label>날짜 변경</label>
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="schedule-detail-date-row">
             <input type="date" id="scheduleDetailDateInput" />
-            <button type="button" class="btn btn-primary" id="btnScheduleDetailDateChange" onclick="if(typeof updateScheduleDetailDate==='function')updateScheduleDetailDate()">변경</button>
+            <button type="button" class="btn btn-schedule-date-change" id="btnScheduleDetailDateChange" onclick="if(typeof updateScheduleDetailDate==='function')updateScheduleDetailDate()" title="날짜 변경"><img src="assets/img/cdate.png" alt="날짜 변경" /></button>
           </div>
         </div>
-        <div id="scheduleDetailGraph" style="margin: 16px 0; min-height: 120px;"></div>
-        <div class="btn-row" onclick="var b=document.getElementById('btnStartScheduleTraining'); if(b&&b.disabled&&event.target===b){ alert('지정된 날짜에서 훈련을 수행해 주세요.'); if(event.preventDefault) event.preventDefault(); if(event.stopPropagation) event.stopPropagation(); return false; }">
-          <button type="button" class="btn btn-success" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()">훈련 시작</button>
+        <div id="scheduleDetailGraph" class="schedule-detail-graph"></div>
+        <div class="schedule-detail-start-section">
+          <div id="scheduleDetailWorkoutTitle" class="schedule-detail-workout-title"></div>
+          <div class="schedule-detail-start-btn-wrap" onclick="var b=document.getElementById('btnStartScheduleTraining'); if(b&&b.disabled&&(event.target===b||event.target.closest('#btnStartScheduleTraining'))){ alert('지정된 날짜에서 훈련을 수행해 주세요.'); if(event.preventDefault) event.preventDefault(); if(event.stopPropagation) event.stopPropagation(); return false; }">
+            <button type="button" class="btn btn-schedule-start" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()" title="훈련 시작"><img src="assets/img/start.png" alt="훈련 시작" /></button>
+          </div>
         </div>
       </div>
     </div>
