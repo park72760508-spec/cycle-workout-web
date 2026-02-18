@@ -1244,6 +1244,7 @@ ${workoutsContext}
   window.openScheduleDetailModal = async function (dateStr) {
     const modal = document.getElementById('scheduleDetailModal');
     const infoEl = document.getElementById('scheduleDetailInfo');
+    const titleEl = document.getElementById('scheduleDetailWorkoutTitle');
     const graphEl = document.getElementById('scheduleDetailGraph');
     const dateInput = document.getElementById('scheduleDetailDateInput');
     const startBtn = document.getElementById('btnStartScheduleTraining');
@@ -1257,8 +1258,8 @@ ${workoutsContext}
       scheduleDetailCurrentDay = aiScheduleData.days[dateStr];
 
       const d = scheduleDetailCurrentDay;
+      if (titleEl) titleEl.textContent = d.workoutName || '';
       infoEl.innerHTML = `
-        <p><strong>${d.workoutName}</strong></p>
         <p>운동 시간: ${d.duration}분 | 예상 TSS: ${d.predictedTSS}</p>
         <p>날짜: ${dateStr} | 타입: ${d.type || 'Indoor'}</p>
       `;
@@ -1297,7 +1298,7 @@ ${workoutsContext}
         }
       }
 
-      var todayStr = new Date().toISOString().split('T')[0];
+      var todayStr = getTodayStrLocal();
       if (startBtn) {
         startBtn.disabled = (dateStr !== todayStr) || (d.isCompleted === true);
         startBtn.onclick = function () {
@@ -1426,7 +1427,7 @@ ${workoutsContext}
       return;
     }
 
-    var todayStr = new Date().toISOString().split('T')[0];
+    var todayStr = getTodayStrLocal();
     if (newDate < todayStr) {
       if (typeof alert === 'function') alert('오늘 이전 날짜로 변경이 불가합니다.');
       return;
@@ -1460,7 +1461,7 @@ ${workoutsContext}
   window.startScheduleDetailTraining = function () {
     if (!scheduleDetailCurrentDay || !scheduleDetailCurrentDate) return;
 
-    var todayStr = new Date().toISOString().split('T')[0];
+    var todayStr = getTodayStrLocal();
     if (scheduleDetailCurrentDate !== todayStr || scheduleDetailCurrentDay.isCompleted === true) {
       if (typeof alert === 'function') alert('지정된 날짜에서 훈련을 수행해 주세요.');
       return;
