@@ -1294,7 +1294,7 @@ ${workoutsContext}
             const canvas = document.createElement('canvas');
             canvas.id = 'scheduleDetailGraphCanvas';
             canvas.width = 320;
-            canvas.height = 120;
+            canvas.height = 180;
             graphEl.appendChild(canvas);
             if (typeof drawSegmentGraph === 'function') {
               drawSegmentGraph(segs, -1, 'scheduleDetailGraphCanvas');
