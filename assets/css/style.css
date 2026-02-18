@@ -10181,14 +10181,21 @@ button[aria-disabled="true"] {
   box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
 }
 
-/* Outdoor 훈련한 날: source strava + elevation_gain > 0 → 주황색 */
+/* Outdoor 훈련한 날: source strava + elevation_gain > 0 (null이면 제외) → 주황색 그라데이션, 폰트는 요일 유형 적용 */
 #trainingJournalScreen .calendar-day.journal-has-training.journal-outdoor {
   background: linear-gradient(135deg, rgba(251, 146, 60, 0.35) 0%, rgba(253, 186, 116, 0.4) 100%);
   border: 1px solid rgba(251, 146, 60, 0.5);
   box-shadow: 0 2px 8px rgba(251, 146, 60, 0.2);
 }
-#trainingJournalScreen .calendar-day.journal-has-training.journal-outdoor .calendar-day-number.journal-day-number {
-  color: #9a3412;
+#trainingJournalScreen .calendar-day.journal-outdoor .calendar-day-number.journal-day-number {
+  color: #171717;
+}
+#trainingJournalScreen .calendar-day.journal-outdoor.journal-day-sat .calendar-day-number.journal-day-number {
+  color: #2563eb;
+}
+#trainingJournalScreen .calendar-day.journal-outdoor.journal-day-sun .calendar-day-number.journal-day-number,
+#trainingJournalScreen .calendar-day.journal-outdoor.journal-day-holiday .calendar-day-number.journal-day-number {
+  color: #dc2626;
 }
 
 /* 훈련 없는 날: 회색 계열 */
