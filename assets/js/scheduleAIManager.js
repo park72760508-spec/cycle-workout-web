@@ -527,6 +527,121 @@
   }
 
   /**
+   * Phase 1: 매크로 전략(주기화) JSON 파싱
+   * @returns {{ week: number, focus: string, phase: string, intensity: string, description: string }[]}
+   */
+  function parseMacroStrategyJson(text) {
+    if (!text || typeof text !== 'string') return [];
+    var raw = text.replace(/```json\n?|\n?```/g, '').trim();
+    var match = raw.match(/\[[\s\S]*\]/);
+    if (match) raw = match[0];
+    raw = raw.replace(/'([^']*)'\s*:/g, '"$1":').replace(/,(\s*[}\]])/g, '$1');
+    try {
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.map(function (o, i) {
+        return {
+          week: (o.week != null ? o.week : i + 1),
+          focus: String(o.focus || '').trim() || '훈련',
+          phase: String(o.phase || '').trim() || 'Base',
+          intensity: String(o.intensity || '').trim() || '중',
+          description: String(o.description || '').trim() || ''
+        };
+      });
+    } catch (e) {
+      console.warn('[AI스케줄] parseMacroStrategyJson 실패:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Phase 1: 매크로 전략(Elite Periodization) Gemini API 호출
+   * @returns {Promise<{ week: number, focus: string, phase: string, intensity: string, description: string }[]>}
+   */
+  function generateMacroStrategyPhase1(apiKey, opts) {
+    var totalWeeks = opts.totalWeeks || 1;
+    var goal = opts.goal || 'Fitness';
+    var eventGoal = opts.eventGoal || '완주';
+    var eventDistance = opts.eventDistance || 100;
+    var modelName = opts.modelName || 'gemini-2.0-flash-exp';
+
+    var eventSpecificity = '';
+    var g = String(eventGoal).toLowerCase();
+    if (g.indexOf('gran') >= 0 || g.indexOf('그란') >= 0 || eventDistance >= 100) {
+      eventSpecificity = '**Event Specificity (Gran Fondo/장거리):** Endurance, SweetSpot 비중을 높이고, 장거리 지속력을 강화하시오.';
+    } else if (g.indexOf('race') >= 0 || g.indexOf('경기') >= 0 || g.indexOf('criterium') >= 0 || eventDistance < 80) {
+      eventSpecificity = '**Event Specificity (Criterium/Race/단거리):** VO2Max, Anaerobic 비중을 높이고, 순간 파워 및 스프린트 능력을 강화하시오.';
+    } else {
+      eventSpecificity = '**Event Specificity:** 대회 거리(' + eventDistance + 'km)와 목표(' + eventGoal + ')에 맞게 균형있게 배분하시오.';
+    }
+
+    var prompt = `당신은 UCI 월드투어 팀의 수석 코치입니다.
+
+사용자의 대회까지 남은 기간은 총 **${totalWeeks}주**입니다.
+
+**선형 주기화(Linear Periodization)** 또는 **블록 주기화(Block Periodization)** 이론을 적용하여 주차별 테마를 설계하시오.
+
+**[필수 적용 로직]**
+1. **Phase Division:** 전체 기간을 Base(기초) -> Build(강화) -> Specialty(특화) -> Taper(조절) 단계로 나누시오. (기간이 짧으면 비율을 조정: 예 4주면 Base1주, Build1주, Specialty1주, Taper1주)
+2. **Recovery Week:** 부상 방지와 초보상(Supercompensation)을 위해, **3주 또는 4주 훈련 후 반드시 1주의 '회복(Recovery)' 주간**을 배치하시오.
+3. ${eventSpecificity}
+
+**대회:** ${eventGoal}, ${eventDistance}km
+**사용자 훈련 목표:** ${goal}
+
+**Output Format (JSON 배열):**
+정확히 ${totalWeeks}개의 객체를, week 1부터 week ${totalWeeks}까지 순서대로 출력하시오.
+각 객체는 focus(테마), phase(단계), intensity(강도: 상/중/하), description(코칭 조언 한 줄)을 포함.
+
+[
+  { "week": 1, "focus": "기초 유산소", "phase": "Base", "intensity": "하", "description": "..." },
+  { "week": 2, "focus": "지구력 기반", "phase": "Base", "intensity": "중", "description": "..." }
+]
+반드시 유효한 JSON 배열만 출력. 작은따옴표 금지, trailing comma 금지.`;
+
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.6, maxOutputTokens: 4096, responseMimeType: 'application/json' }
+      })
+    }).then(function (r) { return r.json(); }).then(function (json) {
+      if (json?.error) throw new Error(json.error.message || 'Gemini API 오류');
+      var text2 = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      var parsed = parseMacroStrategyJson(text2);
+      return parsed;
+    });
+  }
+
+  /**
+   * 훈련 시작일 ~ 대회일 사이의 총 주차 계산 (기간이 1일 미만이어도 1주로 간주)
+   * @param {Date} start - 훈련 시작일
+   * @param {Date} end - 대회일
+   * @returns {number}
+   */
+  function calculateTotalWeeks(start, end) {
+    var ms = end.getTime() - start.getTime();
+    var days = Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)));
+    return Math.max(1, Math.ceil(days / 7));
+  }
+
+  /**
+   * 특정 날짜가 훈련 시작일로부터 몇 주차인지 반환 (1-based)
+   * @param {string} dateStr - YYYY-MM-DD
+   * @param {string} startDateStr - YYYY-MM-DD
+   * @returns {number}
+   */
+  function getWeekIndex(dateStr, startDateStr) {
+    var d = new Date(dateStr);
+    var s = new Date(startDateStr);
+    var ms = d.getTime() - s.getTime();
+    var days = Math.floor(ms / (24 * 60 * 60 * 1000));
+    return Math.max(1, Math.min(Math.floor(days / 7) + 1, 999));
+  }
+
+  /**
    * 사용자 설정(인도어/아웃도어 요일)에 맞는 훈련 날짜 목록 생성
    * @param {Date} start - 훈련 시작일
    * @param {Date} end - 대회일(끝)
@@ -740,21 +855,54 @@
     }
 
     var byMonth = {};
+    var totalWeeks = calculateTotalWeeks(startDate, eventDate);
+    scheduleLog('WEEKS', '대회까지 총 ' + totalWeeks + '주', { totalWeeks: totalWeeks });
+
     for (var k = 0; k < trainingDates.length; k++) {
       var td = trainingDates[k];
       var ymKey = td.dateStr.substring(0, 7);
       td.taper = td.dateStr >= taperStartStr;
+      td.weekIndex = getWeekIndex(td.dateStr, startDateStr);
       if (!byMonth[ymKey]) byMonth[ymKey] = [];
       byMonth[ymKey].push(td);
     }
     var monthKeys = Object.keys(byMonth).sort();
 
     scheduleLog('MONTHS', '월별 분할: ' + monthKeys.join(', ') + ' (총 ' + trainingDates.length + '일)', { byMonth: monthKeys.map(function (mk) { return mk + ':' + byMonth[mk].length + '일'; }) });
-    updateScheduleProgress(true, '스케줄 생성 준비 완료', trainingDates.length + '일 (' + monthKeys.length + '개월)');
+    updateScheduleProgress(true, 'Phase 1 매크로 전략 생성 중...', totalWeeks + '주 주기화 설계');
 
     var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.0-flash-exp';
     var scheduleName = eventGoal + ' ' + eventDistance + 'km (' + eventDateStr + ')';
     var allDays = {};
+    var macroStrategy = [];
+
+    try {
+      macroStrategy = await generateMacroStrategyPhase1(apiKey, {
+        totalWeeks: totalWeeks,
+        goal: goal,
+        eventGoal: eventGoal,
+        eventDistance: Number(eventDistance),
+        modelName: modelName
+      });
+
+      if (macroStrategy.length !== totalWeeks) {
+        scheduleLog('PHASE1_VALIDATE', '매크로 주차 불일치: 생성=' + macroStrategy.length + ', 필요=' + totalWeeks + ' → 보정', { generated: macroStrategy.length, expected: totalWeeks });
+        while (macroStrategy.length < totalWeeks) {
+          var lastIdx = Math.max(0, macroStrategy.length - 1);
+          var last = (macroStrategy[lastIdx] && macroStrategy[lastIdx].phase) ? macroStrategy[lastIdx] : { focus: '훈련', phase: 'Base', intensity: '중', description: '' };
+          macroStrategy.push({ week: macroStrategy.length + 1, focus: last.focus, phase: last.phase, intensity: last.intensity, description: last.description });
+        }
+        if (macroStrategy.length > totalWeeks) macroStrategy = macroStrategy.slice(0, totalWeeks);
+      }
+      scheduleLog('PHASE1', '매크로 전략 수신: ' + macroStrategy.length + '주', { phases: macroStrategy.map(function (m) { return m.week + ':' + m.phase; }) });
+    } catch (phase1Err) {
+      scheduleLog('PHASE1_FALLBACK', '매크로 전략 생성 실패, 기본값 사용: ' + (phase1Err && phase1Err.message), { error: phase1Err });
+      for (var w = 1; w <= totalWeeks; w++) {
+        var phase = w <= Math.ceil(totalWeeks * 0.25) ? 'Base' : w <= Math.ceil(totalWeeks * 0.5) ? 'Build' : w <= Math.ceil(totalWeeks * 0.85) ? 'Specialty' : 'Taper';
+        macroStrategy.push({ week: w, focus: phase === 'Taper' ? '회복·컨디션 조절' : '훈련', phase: phase, intensity: phase === 'Taper' ? '하' : '중', description: '' });
+      }
+    }
+
     var meta = {
       startDate: startDateStr,
       eventDate: eventDateStr,
@@ -765,7 +913,9 @@
       indoorDays: indoorDays,
       outdoorDays: outdoorDays,
       indoorLimit: indoorLimit,
-      outdoorLimit: outdoorLimit
+      outdoorLimit: outdoorLimit,
+      totalWeeks: totalWeeks,
+      macroStrategy: macroStrategy
     };
 
     try {
@@ -776,16 +926,35 @@
         updateScheduleProgress(true, label + ' 스케줄 생성 중...', (i + 1) + '/' + monthKeys.length + ' 개월 (' + monthDates.length + '일)');
 
         var dateListJson = JSON.stringify(monthDates.map(function (t) {
-          return { date: t.dateStr, type: t.type, dayName: t.dayName, taper: !!t.taper };
+          var wIdx = t.weekIndex || 1;
+          var m = macroStrategy[wIdx - 1];
+          return {
+            date: t.dateStr,
+            type: t.type,
+            dayName: t.dayName,
+            taper: !!t.taper,
+            week: wIdx,
+            focus: (m && m.focus) ? m.focus : '',
+            phase: (m && m.phase) ? m.phase : ''
+          };
         }));
+
+        var macroContext = macroStrategy.length > 0
+          ? '\n**주차별 매크로 전략 (Phase 1 주기화):** 이번 월의 날짜에 해당하는 주차 테마(focus, phase)에 맞춰 워크아웃을 선택하시오. Base→Endurance/SweetSpot, Build→Threshold, Specialty→대회 특화, Taper→Recovery만.\n이번 월 날짜별 주차·테마 샘플: ' + monthDates.slice(0, 6).map(function (t) {
+            var m = macroStrategy[(t.weekIndex || 1) - 1];
+            return t.dateStr + '(주' + (t.weekIndex || 1) + ':' + ((m && m.phase) || '-') + '/' + ((m && m.focus) || '-') + ')';
+          }).join(', ') + '\n'
+          : '';
 
         var taperNote = monthDates.some(function (t) { return t.taper; })
           ? '\n**[필수] 대회 1주 전(taper=true) 컨디션 조절:** taper가 true인 날짜는 시합 당일 최상의 퍼포먼스를 위해 반드시 다음을 적용하시오:\n- duration: 30~45분 이하\n- predictedTSS: 25~40 이하 (평상시의 40~50% 수준)\n- workoutName: Recovery, Active Recovery, Z1~Z2 기초 유지만 사용\n- 고강도(Threshold, VO2max, Anaerobic 등) 절대 금지'
           : '';
 
-        var baseContext = `당신은 세계 최고의 사이클링 코치입니다. 경기 1주 전 테이퍼링을 정확히 적용하는 것이 핵심입니다.
+        var baseContext = `당신은 세계 최고의 사이클링 코치입니다. Phase 1 매크로 전략(주기화)과 경기 1주 전 테이퍼링을 정확히 반영하는 것이 핵심입니다.
 
 **아래 지정된 날짜에 대해, 각 날짜당 정확히 1개씩 훈련을 생성하시오. 날짜 순서와 개수를 변경하지 마시오.**
+**각 날짜의 week/focus/phase에 맞는 훈련 유형을 선택하시오.** (Base→Endurance/SweetSpot, Build→Threshold/SweetSpot, Specialty→대회 특화, Taper→Recovery만)
+${macroContext}
 
 **생성할 날짜 목록 (반드시 이 목록의 모든 날짜에 대해 1개씩 생성):**
 ${dateListJson}
