@@ -9455,11 +9455,11 @@ button[aria-disabled="true"] {
     padding: 0;
   }
   #aiScheduleScreen .mini-calendar-header {
-    margin-bottom: 6px;   /* 구분선 ↔ 요일 표시 */
+    margin-bottom: 0px;   /* 구분선 ↔ 요일 표시 */
     padding-bottom: 6px;  /* 년월 ↔ 구분선 */
   }
   #aiScheduleScreen .mini-calendar-weekdays {
-    margin-bottom: 6px;   /* 요일 표시 ↔ 1주 라인 */
+    margin-bottom: 0px;   /* 요일 표시 ↔ 1주 라인 */
   }
   #aiScheduleScreen .mini-calendar-day .day-number {
     font-size: 11px !important;
