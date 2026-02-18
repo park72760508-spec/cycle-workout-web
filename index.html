@@ -6964,13 +6964,14 @@
         
         let className = 'other-month';
         if (hasTraining) {
-          // 훈련 타입 구분: INDOOR (거리 없음), OUTDOOR (거리 > 0)
+          // 훈련 타입 구분: OUTDOOR = source 'strava' + elevation_gain > 0 (null이면 INDOOR), 그 외 INDOOR
           let hasIndoor = false;
           let hasOutdoor = false;
-          
           logsForDate.forEach(log => {
-            const distance = log.distance_km != null ? Number(log.distance_km) : 0;
-            if (distance > 0) {
+            const isStrava = String(log.source || '') === 'strava';
+            const eg = log.elevation_gain;
+            const hasElevation = eg != null && eg !== '' && !Number.isNaN(Number(eg)) && Number(eg) > 0;
+            if (isStrava && hasElevation) {
               hasOutdoor = true;
             } else {
               hasIndoor = true;
@@ -7035,13 +7036,14 @@
         const hasTraining = logsForDate && logsForDate.length > 0;
         
         if (hasTraining) {
-          // 훈련 타입 구분: INDOOR (거리 없음), OUTDOOR (거리 > 0)
+          // 훈련 타입 구분: OUTDOOR = source 'strava' + elevation_gain > 0 (null이면 INDOOR), 그 외 INDOOR
           let hasIndoor = false;
           let hasOutdoor = false;
-          
           logsForDate.forEach(log => {
-            const distance = log.distance_km != null ? Number(log.distance_km) : 0;
-            if (distance > 0) {
+            const isStrava = String(log.source || '') === 'strava';
+            const eg = log.elevation_gain;
+            const hasElevation = eg != null && eg !== '' && !Number.isNaN(Number(eg)) && Number(eg) > 0;
+            if (isStrava && hasElevation) {
               hasOutdoor = true;
             } else {
               hasIndoor = true;
@@ -7096,13 +7098,14 @@
         
         let className = 'other-month';
         if (hasTraining) {
-          // 훈련 타입 구분: INDOOR (거리 없음), OUTDOOR (거리 > 0)
+          // 훈련 타입 구분: OUTDOOR = source 'strava' + elevation_gain > 0 (null이면 INDOOR), 그 외 INDOOR
           let hasIndoor = false;
           let hasOutdoor = false;
-          
           logsForDate.forEach(log => {
-            const distance = log.distance_km != null ? Number(log.distance_km) : 0;
-            if (distance > 0) {
+            const isStrava = String(log.source || '') === 'strava';
+            const eg = log.elevation_gain;
+            const hasElevation = eg != null && eg !== '' && !Number.isNaN(Number(eg)) && Number(eg) > 0;
+            if (isStrava && hasElevation) {
               hasOutdoor = true;
             } else {
               hasIndoor = true;
