@@ -160,8 +160,12 @@
     return false;
   }
 
+  function getDateKey(y, m, d) {
+    return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+
   /**
-   * AI 스케줄 캘린더 렌더링
+   * AI 스케줄 캘린더 렌더링 (훈련일지 미니달력과 동일 구조: 6주 표시, 이전/다음달 회색)
    */
   async function renderAIScheduleCalendar() {
     const container = document.getElementById('aiScheduleCalendar');
@@ -175,26 +179,10 @@
     const month = aiScheduleCurrentMonth;
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    const startBlank = firstDay.getDay();
-    const totalDays = lastDay.getDate();
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - startDate.getDay());
     const todayStr = getTodayStrLocal();
     const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-
-    let html = `
-      <div class="ai-schedule-calendar-header">
-        <button type="button" class="mini-calendar-nav-btn" onclick="aiScheduleNavigate('prev')" aria-label="이전 달">&lt;</button>
-        <span class="mini-calendar-month-year">${year}년 ${month + 1}월</span>
-        <button type="button" class="mini-calendar-nav-btn" onclick="aiScheduleNavigate('next')" aria-label="다음 달">&gt;</button>
-      </div>
-      <div class="ai-schedule-weekdays">
-        ${weekdays.map(w => `<div class="ai-schedule-weekday">${w}</div>`).join('')}
-      </div>
-      <div class="ai-schedule-grid">
-    `;
-
-    for (let i = 0; i < startBlank; i++) {
-      html += '<div class="ai-schedule-day ai-schedule-day-empty"></div>';
-    }
 
     var rtdbUserId = getUserIdForRTDB() || getUserId();
     var startDateFilter = (aiScheduleData && aiScheduleData.meta && aiScheduleData.meta.startDate) ? aiScheduleData.meta.startDate : todayStr;
@@ -222,47 +210,73 @@
         }
       }));
     }
-    for (let d = 1; d <= totalDays; d++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const rawDayData = aiScheduleData && aiScheduleData.days && aiScheduleData.days[dateStr];
-      const dayData = (rawDayData && dateStr >= startDateFilter) ? rawDayData : null;
-      const hasSchedule = !!dayData;
-      const isPast = dateStr < todayStr; /* 오늘 이전만 완료/미수행 판단 */
-      const isToday = dateStr === todayStr;
-      const isEventDate = eventDateStr && dateStr === eventDateStr;
 
-      let cellClass = 'ai-schedule-day';
-      if (hasSchedule) cellClass += ' ai-schedule-day-has';
-      if (isPast) cellClass += ' ai-schedule-day-past';
-      if (isToday) cellClass += ' ai-schedule-day-today';
-      if (isEventDate) cellClass += ' ai-schedule-day-event';
-      else if (hasSchedule && isPast) {
-        const isCompleted = (completionByDate[dateStr] === true) || (dayData.isCompleted === true);
-        if (isCompleted) cellClass += ' ai-schedule-day-completed';
-        else cellClass += ' ai-schedule-day-missed';
-      } else if (hasSchedule && !isPast) {
-        cellClass += ' ai-schedule-day-planned';
+    function buildDayCell(currentDate, isCurrentMonth) {
+      var y = currentDate.getFullYear();
+      var m = currentDate.getMonth();
+      var d = currentDate.getDate();
+      var dateStr = getDateKey(y, m, d);
+      var rawDayData = aiScheduleData && aiScheduleData.days && aiScheduleData.days[dateStr];
+      var dayData = (rawDayData && dateStr >= startDateFilter) ? rawDayData : null;
+      var hasSchedule = !!dayData;
+      var isPast = dateStr < todayStr;
+      var isToday = dateStr === todayStr;
+      var isEventDate = eventDateStr && dateStr === eventDateStr;
+      var dayOfWeek = currentDate.getDay();
+
+      var cellClass = 'mini-calendar-day';
+      if (!isCurrentMonth) cellClass += ' other-month';
+      if (dayOfWeek === 0) cellClass += ' sunday';
+      else if (dayOfWeek === 6) cellClass += ' saturday';
+      if (typeof window.isKoreanHoliday === 'function' && window.isKoreanHoliday(y, m, d)) cellClass += ' holiday';
+      if (isToday) cellClass += ' today';
+
+      if (hasSchedule) {
+        cellClass += ' ai-schedule-has';
+        if (isEventDate) cellClass += ' ai-schedule-event';
+        else if (hasSchedule && isPast) {
+          var isCompleted = (completionByDate[dateStr] === true) || (dayData.isCompleted === true);
+          if (isCompleted) cellClass += ' ai-schedule-completed';
+          else cellClass += ' ai-schedule-missed';
+        } else if (hasSchedule && !isPast) {
+          cellClass += ' ai-schedule-planned';
+        }
       }
-      var dayOfWeek = new Date(year, month, d).getDay();
-      if (dayOfWeek === 0) cellClass += ' ai-schedule-day-sun';
-      else if (dayOfWeek === 6) cellClass += ' ai-schedule-day-sat';
-      if (typeof window.isKoreanHoliday === 'function' && window.isKoreanHoliday(year, month, d)) cellClass += ' ai-schedule-day-holiday';
 
-      const clickHandler = hasSchedule
-        ? `onclick="if(typeof openScheduleDetailModal==='function')openScheduleDetailModal('${dateStr}')"`
+      var clickHandler = hasSchedule
+        ? ' onclick="if(typeof openScheduleDetailModal===\'function\')openScheduleDetailModal(\'' + dateStr + '\')" style="cursor:pointer;"'
         : '';
 
-      html += `<div class="${cellClass}" ${clickHandler} data-date="${dateStr}">
-        <span class="ai-schedule-day-num">${d}</span>
-      </div>`;
+      return '<div class="' + cellClass + '"' + clickHandler + ' data-date="' + dateStr + '"><span class="day-number">' + d + '</span></div>';
     }
 
-    html += '</div>';
-    html += '<div class="ai-schedule-legend">';
-    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape plan" aria-hidden="true"></span><span>계획 (Plan)</span></div>';
-    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape done" aria-hidden="true"></span><span>완료 (Done)</span></div>';
-    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape missed" aria-hidden="true"></span><span>미수행 (Missed)</span></div>';
-    html += '</div>';
+    var days = [];
+    var currentDate = new Date(startDate);
+    for (var i = 0; i < 42; i++) {
+      var isCurrentMonth = currentDate.getMonth() === month;
+      days.push(buildDayCell(new Date(currentDate), isCurrentMonth));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    var svgPrev = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>';
+    var svgNext = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>';
+
+    var html = '<div class="mini-calendar-header">' +
+      '<button type="button" class="mini-calendar-nav-btn" onclick="aiScheduleNavigate(\'prev\')" aria-label="이전 달">' + svgPrev + '</button>' +
+      '<span class="mini-calendar-month-year">' + year + '년 ' + (month + 1) + '월</span>' +
+      '<button type="button" class="mini-calendar-nav-btn" onclick="aiScheduleNavigate(\'next\')" aria-label="다음 달">' + svgNext + '</button>' +
+      '</div>' +
+      '<div class="mini-calendar-weekdays">' +
+      weekdays.map(function (w) { return '<div class="mini-calendar-weekday">' + w + '</div>'; }).join('') +
+      '</div>' +
+      '<div class="mini-calendar-grid">' +
+      days.join('') +
+      '</div>' +
+      '<div class="ai-schedule-legend">' +
+      '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape plan" aria-hidden="true"></span><span>계획 (Plan)</span></div>' +
+      '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape done" aria-hidden="true"></span><span>완료 (Done)</span></div>' +
+      '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape missed" aria-hidden="true"></span><span>미수행 (Missed)</span></div>' +
+      '</div>';
     container.innerHTML = html;
   }
 
