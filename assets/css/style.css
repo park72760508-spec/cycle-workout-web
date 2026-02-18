@@ -9319,6 +9319,19 @@ button[aria-disabled="true"] {
   padding: 0;
   max-width: 100%;
 }
+/* 요일 표시(일~토) 위·아래 공백 제거 */
+#aiScheduleScreen .mini-calendar-header {
+  margin-bottom: 0;
+}
+#aiScheduleScreen .mini-calendar-weekdays {
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+#aiScheduleScreen .mini-calendar-weekday {
+  padding-top: 0;
+  padding-bottom: 0;
+}
 
 /* 훈련 스케줄 미니달력 - 계획/완료/미수행/대회 상태 색상 */
 #aiScheduleScreen .mini-calendar-day.ai-schedule-planned {
@@ -9455,11 +9468,7 @@ button[aria-disabled="true"] {
     padding: 0;
   }
   #aiScheduleScreen .mini-calendar-header {
-    margin-bottom: 0px;   /* 구분선 ↔ 요일 표시 */
     padding-bottom: 6px;  /* 년월 ↔ 구분선 */
-  }
-  #aiScheduleScreen .mini-calendar-weekdays {
-    margin-bottom: 0px;   /* 요일 표시 ↔ 1주 라인 */
   }
   #aiScheduleScreen .mini-calendar-day .day-number {
     font-size: 11px !important;
@@ -9564,36 +9573,27 @@ button[aria-disabled="true"] {
 .schedule-detail-modal-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  gap: 8px;
 }
 .schedule-detail-modal-header .modal-close {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  margin-left: auto;
 }
 .schedule-detail-modal-title {
   text-align: center;
   flex: 1;
-}
-.schedule-detail-info-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.schedule-detail-info-row .btn-schedule-start {
-  flex-shrink: 0;
-}
-.schedule-detail-info-row .btn-schedule-start img {
-  height: 3em;
-  width: auto;
-  object-fit: contain;
+  margin: 0;
 }
 .schedule-detail-info {
-  flex: 1;
-  min-width: 0;
+  margin-bottom: 16px;
+}
+.schedule-detail-modal-header .btn-schedule-start {
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+.schedule-detail-modal-header .btn-schedule-start img {
+  height: 2em;
+  width: auto;
+  object-fit: contain;
 }
 .schedule-detail-date-row {
   display: flex;
