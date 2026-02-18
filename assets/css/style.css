@@ -2490,7 +2490,7 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   padding-bottom: 8px;
   border-bottom: 2px solid var(--card-border, #e5e7eb);
 }
@@ -2531,7 +2531,7 @@ button[aria-disabled="true"] {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .mini-calendar-weekday {
@@ -17318,7 +17318,7 @@ body.mobile-dashboard-active {
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: -70px;
+  margin-top: -50px;
   margin-bottom: 6px;
   padding: 0 10px 6px;
   text-align: center;
