@@ -2121,6 +2121,23 @@
                 </div>
               </div>
               
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
+                  <input type="number" id="completeUserBirthYear" placeholder="1990" min="1900" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">성별 *</label>
+                  <select id="completeUserGender" required 
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="">선택</option>
+                    <option value="남">남</option>
+                    <option value="여">여</option>
+                  </select>
+                </div>
+              </div>
+              
               <div class="form-group" style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
                 <select id="completeUserChallenge" required 
@@ -8871,6 +8888,7 @@
                 window.currentUser = userData;
                 localStorage.setItem('currentUser', JSON.stringify(userData));
                 localStorage.setItem('authUser', JSON.stringify(userData));
+                console.log('✅ [인증] 사용자 정보 저장 (나이/성별 포함):', { birth_year: userData.birth_year, gender: userData.gender, hasBirthYear: !!userData.birth_year, hasGender: !!userData.gender });
                 
                 // 🔒 보안: 로그인 성공 시 훈련일지 상태 초기화 (이전 사용자 데이터 노출 방지)
                 if (typeof window !== 'undefined' && window.miniCalendarStateJournal) {
