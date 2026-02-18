@@ -256,12 +256,14 @@
   };
 
   /**
-   * 사용자 정보 로드 (currentUser/localStorage + Firestore 병합)
-   * 나이(birth_year/birthYear), 성별(gender/sex)는 Firestore users/{uid}에서 조회
+   * 사용자 정보 로드 (인증 시점과 동일하게 Firestore users/{uid}에서 최신 조회)
+   * 나이(birth_year/birthYear), 성별(gender/sex) 포함 - 로그인 시 저장된 데이터 사용
    */
   async function loadUserForScheduleModal() {
-    var userId = getUserId() || getUserIdForRTDB();
+    var authUid = getUserIdForRTDB();
+    var userId = authUid || getUserId();
     if (!userId) return null;
+
     var user = window.currentUser || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
     if (!user) user = { id: userId };
 
@@ -270,35 +272,13 @@
       if (typeof window.getUserByUid === 'function') {
         firestoreUser = await window.getUserByUid(userId);
       }
-      if (!firestoreUser) {
-        var authUid = getUserIdForRTDB();
-        if (authUid && authUid !== userId && typeof window.getUserByUid === 'function') {
-          firestoreUser = await window.getUserByUid(authUid);
-        }
-      }
       if (!firestoreUser && typeof window.apiGetUser === 'function') {
         var res = await window.apiGetUser(userId);
         if (res && res.success && res.item) firestoreUser = res.item;
-        if (!firestoreUser) {
-          var uid2 = getUserIdForRTDB();
-          if (uid2 && uid2 !== userId) {
-            res = await window.apiGetUser(uid2);
-            if (res && res.success && res.item) firestoreUser = res.item;
-          }
-        }
       }
       if (!firestoreUser && window.firestore && window.firestore.collection) {
         var doc = await window.firestore.collection('users').doc(userId).get();
-        if (doc && doc.exists) {
-          firestoreUser = { id: userId, ...doc.data() };
-        }
-        if (!firestoreUser) {
-          var uid2 = getUserIdForRTDB();
-          if (uid2 && uid2 !== userId) {
-            doc = await window.firestore.collection('users').doc(uid2).get();
-            if (doc && doc.exists) firestoreUser = { id: uid2, ...doc.data() };
-          }
-        }
+        if (doc && doc.exists) firestoreUser = { id: userId, ...doc.data() };
       }
     } catch (e) {
       console.warn('[loadUserForScheduleModal] Firestore 사용자 조회 실패:', e);
@@ -306,8 +286,14 @@
 
     if (firestoreUser) {
       user = Object.assign({}, user, firestoreUser);
+      if (firestoreUser.birth_year != null || firestoreUser.gender != null) {
+        var merged = Object.assign({}, window.currentUser || {}, user);
+        window.currentUser = merged;
+        try { localStorage.setItem('currentUser', JSON.stringify(merged)); } catch (e2) {}
+      }
     }
 
+    console.log('[loadUserForScheduleModal] 사용자:', { id: user.id, birth_year: user.birth_year || user.birthYear, gender: user.gender || user.sex });
     return user;
   }
 
@@ -329,6 +315,7 @@
     var birthYear = user.birth_year != null ? user.birth_year : user.birthYear;
     var age = (user.age != null && user.age !== '') ? user.age : (birthYear ? (new Date().getFullYear() - parseInt(birthYear, 10)) : '-');
     var sex = user.gender || user.sex || '-';
+    var hasAgeGender = (birthYear || age !== '-') && (sex !== '-' && sex !== '');
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
     const challenge = user.challenge || 'Fitness';
@@ -336,6 +323,7 @@
     userInfoEl.innerHTML = `
       나이: ${age}세 | 성별: ${sex} | FTP: ${ftp}W | 몸무게: ${weight}kg<br>
       훈련 목적: ${challenge}
+      ${!hasAgeGender ? '<br><span style="color:#e67e22;font-size:0.9em;">나이·성별이 없습니다. 사용자 관리에서 프로필을 수정하면 맞춤형 스케줄에 반영됩니다.</span>' : ''}
     `;
 
     var today = new Date();

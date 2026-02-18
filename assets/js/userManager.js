@@ -483,7 +483,9 @@ async function signInWithGoogle() {
       const hasWeight = userData.weight && userData.weight > 0;
       const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
       
-      const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+      const hasBirthYear = userData.birth_year != null || userData.birthYear != null;
+      const hasGender = (userData.gender === '남' || userData.gender === '여') || (userData.sex === '남' || userData.sex === '여');
+      const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasBirthYear || !hasGender || !hasChallenge;
       
       // 로그인 성공 플래그 설정
       isLoginJustCompleted = true;
@@ -638,7 +640,9 @@ function initAuthStateListener() {
         const hasWeight = userData.weight && userData.weight > 0;
         const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
         
-        const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+        const hasBirthYear = userData.birth_year != null || userData.birthYear != null;
+        const hasGender = (userData.gender === '남' || userData.gender === '여') || (userData.sex === '남' || userData.sex === '여');
+        const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasBirthYear || !hasGender || !hasChallenge;
         
         // 사용자 목록 새로고침
         if (typeof loadUsers === 'function') {
@@ -751,7 +755,7 @@ function initAuthStateListener() {
         }
         
         if (userData) {
-          // 전역 상태 업데이트
+          // 전역 상태 업데이트 (나이·성별 포함 Firestore 전체 데이터)
           window.currentUser = userData;
           localStorage.setItem('currentUser', JSON.stringify(userData));
           localStorage.setItem('authUser', JSON.stringify(userData));
@@ -760,12 +764,12 @@ function initAuthStateListener() {
             window.isPhoneAuthenticated = true;
           }
           
-          // 사용자 정보 상세 로그
-          console.log('✅ 인증된 사용자 정보 설정 완료 (UID 직접 조회):', {
+          // 사용자 정보 상세 로그 (나이·성별 확인)
+          console.log('✅ 인증된 사용자 정보 설정 완료 (나이/성별 포함):', {
             uid: firebaseUser.uid,
             name: userData.name,
-            contact: userData.contact,
-            grade: userData.grade,
+            birth_year: userData.birth_year,
+            gender: userData.gender,
             ftp: userData.ftp
           });
           
@@ -804,7 +808,9 @@ function initAuthStateListener() {
               const hasWeight = userData.weight && userData.weight > 0;
               const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
               
-              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+              const hasBirthYear = userData.birth_year != null || userData.birthYear != null;
+              const hasGender = (userData.gender === '남' || userData.gender === '여') || (userData.sex === '남' || userData.sex === '여');
+              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasBirthYear || !hasGender || !hasChallenge;
               
               if (needsInfo) {
                 // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
@@ -827,7 +833,9 @@ function initAuthStateListener() {
               const hasWeight = userData.weight && userData.weight > 0;
               const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
               
-              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+              const hasBirthYear = userData.birth_year != null || userData.birthYear != null;
+              const hasGender = (userData.gender === '남' || userData.gender === '여') || (userData.sex === '남' || userData.sex === '여');
+              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasBirthYear || !hasGender || !hasChallenge;
               
               if (!needsInfo) {
                 // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
@@ -2669,6 +2677,8 @@ function showCompleteUserInfoModal(userData) {
   const contactEl = document.getElementById('completeUserContact');
   const ftpEl = document.getElementById('completeUserFTP');
   const weightEl = document.getElementById('completeUserWeight');
+  const birthYearEl = document.getElementById('completeUserBirthYear');
+  const genderEl = document.getElementById('completeUserGender');
   const challengeEl = document.getElementById('completeUserChallenge');
   
   // 필드 초기화
@@ -2680,6 +2690,8 @@ function showCompleteUserInfoModal(userData) {
   }
   if (ftpEl) ftpEl.value = userData.ftp || '';
   if (weightEl) weightEl.value = userData.weight || '';
+  if (birthYearEl) birthYearEl.value = userData.birth_year || userData.birthYear || '';
+  if (genderEl) genderEl.value = userData.gender || userData.sex || '';
   if (challengeEl) challengeEl.value = userData.challenge || 'Fitness';
   
   // 모달을 body의 직접 자식으로 이동 (z-index 문제 방지)
@@ -2758,10 +2770,20 @@ async function completeUserInfo() {
   const contactRaw = document.getElementById('completeUserContact')?.value.trim();
   const ftp = parseInt(document.getElementById('completeUserFTP')?.value);
   const weight = parseFloat(document.getElementById('completeUserWeight')?.value);
+  const birthYear = parseInt(document.getElementById('completeUserBirthYear')?.value);
+  const gender = document.getElementById('completeUserGender')?.value?.trim();
   const challenge = document.getElementById('completeUserChallenge')?.value;
   
   if (!contactRaw) {
     showToast('전화번호를 입력해주세요.');
+    return;
+  }
+  if (!birthYear || birthYear < 1900 || birthYear > new Date().getFullYear()) {
+    showToast('올바른 생년을 입력해주세요. (1900년 이상)');
+    return;
+  }
+  if (!gender || (gender !== '남' && gender !== '여')) {
+    showToast('성별을 선택해주세요.');
     return;
   }
   if (!ftp || ftp < 50 || ftp > 600) {
@@ -2787,11 +2809,13 @@ async function completeUserInfo() {
       return d.toISOString().split('T')[0];
     })();
     
-    // 사용자 정보 업데이트 (3개월 연장 포함)
+    // 사용자 정보 업데이트 (3개월 연장 + 나이·성별 포함)
     const updateData = {
       contact: contactDB,
       ftp: ftp,
       weight: weight,
+      birth_year: birthYear,
+      gender: gender,
       challenge: challenge,
       expiry_date: normalizeExpiryDate(extendedExpiryDate) // 3개월 무료 연장 적용
     };
