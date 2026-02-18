@@ -9314,113 +9314,51 @@ button[aria-disabled="true"] {
 
 /* ========== 훈련 스케줄 관련 스타일 ========== */
 
-/* AI 훈련 스케줄 캘린더 (aiScheduleScreen) */
-#aiScheduleScreen .ai-schedule-calendar,
-.ai-schedule-calendar {
-  padding: 12px;
+/* AI 훈련 스케줄 캘린더: 훈련일지 미니달력과 동일 구조 사용 (mini-calendar-*) */
+#aiScheduleScreen .ai-schedule-calendar {
+  padding: 0;
   max-width: 100%;
 }
 
-.ai-schedule-calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;  /* 년월-구분선 간격과 동일 (위쪽 공백) */
-  padding: 0 4px 8px;
-  border-bottom: 2px solid var(--card-border, #e5e7eb); /* 훈련일지와 동일한 구분선 */
-}
-
-.ai-schedule-calendar-header .mini-calendar-nav-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 18px;
-  padding: 4px 12px;
-  color: #374151;
-}
-
-.ai-schedule-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  margin-bottom: 2px;  /* 날짜 셀 간격(gap)과 동일 (아래쪽 공백) */
-}
-
-.ai-schedule-weekday:first-child { color: #dc2626; }
-.ai-schedule-weekday:last-child { color: #2563eb; }
-
-.ai-schedule-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-}
-
-.ai-schedule-day {
-  aspect-ratio: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  font-size: 14px;
-  position: relative;
-  min-height: 40px;
-}
-
-.ai-schedule-day-empty {
-  background: transparent;
-  cursor: default;
-}
-
-.ai-schedule-day-has {
-  cursor: pointer;
-}
-
-/* 훈련 계획된 날짜: 하늘색 테두리 + 투명 하늘색 */
-.ai-schedule-day-planned {
+/* 훈련 스케줄 미니달력 - 계획/완료/미수행/대회 상태 색상 */
+#aiScheduleScreen .mini-calendar-day.ai-schedule-planned {
   background: rgba(56, 189, 248, 0.25);
-  border: 2px solid rgba(56, 189, 248, 0.5);
+  border: 1px solid rgba(56, 189, 248, 0.5);
 }
-.ai-schedule-day-planned:hover {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-planned:hover {
   background: rgba(56, 189, 248, 0.35);
 }
 
-/* 훈련 완수: 녹색 얇은 선 + 녹색 배경 투명 (Firestore logs date·workoutId 일치) */
-.ai-schedule-day-completed {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-completed {
   background: rgba(34, 197, 94, 0.25);
   border: 1px solid rgba(34, 197, 94, 0.55);
 }
-.ai-schedule-day-completed:hover {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-completed:hover {
   background: rgba(34, 197, 94, 0.35);
 }
 
-/* 훈련 미완수: 회색 얇은 선 + 회색 배경 투명 */
-.ai-schedule-day-missed {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-missed {
   background: rgba(156, 163, 175, 0.2);
   border: 1px solid rgba(156, 163, 175, 0.5);
 }
-.ai-schedule-day-missed:hover {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-missed:hover {
   background: rgba(156, 163, 175, 0.3);
 }
 
-/* 대회 일자: 주황색 테두리 + 투명 주황색 */
-.ai-schedule-day-event {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-event {
   background: rgba(251, 146, 60, 0.3);
   border: 2px solid rgba(251, 146, 60, 0.6);
   font-weight: 700;
 }
-.ai-schedule-day-event:hover {
+#aiScheduleScreen .mini-calendar-day.ai-schedule-event:hover {
   background: rgba(251, 146, 60, 0.4);
 }
 
-/* 오늘 날짜: 훈련일지와 동일하게 날짜 숫자에 주황색 동그라미 표기 */
-.ai-schedule-day-today {
-  font-weight: 700;
+/* 훈련 스케줄 - 오늘 날짜: 훈련일지와 동일 주황색 동그라미 */
+#aiScheduleScreen .mini-calendar-day.today::after {
+  display: none;
 }
-.ai-schedule-day-today .ai-schedule-day-num {
+#aiScheduleScreen .mini-calendar-day.today .day-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9431,16 +9369,9 @@ button[aria-disabled="true"] {
   box-sizing: border-box;
 }
 
-.ai-schedule-day-num {
-  display: block;
+#aiScheduleScreen .mini-calendar-day.ai-schedule-has {
+  cursor: pointer;
 }
-
-/* 일요일: 날짜 숫자 빨강 */
-.ai-schedule-day-sun .ai-schedule-day-num { color: #dc2626; }
-/* 토요일: 날짜 숫자 파랑 */
-.ai-schedule-day-sat .ai-schedule-day-num { color: #2563eb; }
-/* 공휴일: 날짜 숫자 빨강 */
-.ai-schedule-day-holiday .ai-schedule-day-num { color: #dc2626; }
 
 /* 달력 범례 (우측 하단, 미수행 기준 왼쪽 라인 정렬) */
 .ai-schedule-legend {
@@ -9521,19 +9452,14 @@ button[aria-disabled="true"] {
   }
   #aiScheduleScreen .ai-schedule-calendar,
   #aiScheduleScreen .ai-schedule-calendar-card .ai-schedule-calendar {
-    padding: 8px;
+    padding: 0;
   }
-  #aiScheduleScreen .ai-schedule-calendar-header {
-    margin-bottom: 6px;
+  #aiScheduleScreen .mini-calendar-header {
+    margin-bottom: 8px;
     padding-bottom: 6px;
   }
-  #aiScheduleScreen .ai-schedule-calendar-header .mini-calendar-nav-btn {
-    padding: 2px 8px;
-    font-size: 16px;
-  }
-  #aiScheduleScreen .ai-schedule-day {
-    min-height: 32px;
-    font-size: 12px;
+  #aiScheduleScreen .mini-calendar-day .day-number {
+    font-size: 11px !important;
   }
   #aiScheduleScreen .ai-schedule-legend {
     margin-top: 6px;
@@ -9560,13 +9486,12 @@ button[aria-disabled="true"] {
   }
   #aiScheduleScreen .ai-schedule-calendar,
   #aiScheduleScreen .ai-schedule-calendar-card .ai-schedule-calendar {
-    padding: 6px;
+    padding: 0;
   }
-  #aiScheduleScreen .ai-schedule-day {
-    min-height: 28px;
-    font-size: 11px;
+  #aiScheduleScreen .mini-calendar-day .day-number {
+    font-size: 10px !important;
   }
-  #aiScheduleScreen .ai-schedule-weekdays {
+  #aiScheduleScreen .mini-calendar-weekdays {
     font-size: 11px;
   }
 }
@@ -9682,16 +9607,12 @@ button[aria-disabled="true"] {
 .schedule-detail-start-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   align-items: flex-start;
 }
-.schedule-detail-workout-title {
-  font-weight: 700;
-  font-size: 1em;
-  text-align: left;
-  width: 100%;
-}
-.schedule-detail-start-btn-wrap {
+.schedule-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
 }
 .btn-schedule-start {
@@ -9702,16 +9623,23 @@ button[aria-disabled="true"] {
   background: transparent;
   border: none;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .btn-schedule-start img {
-  width: 100%;
-  max-width: 200px;
-  height: auto;
+  height: 1em;
+  width: auto;
   object-fit: contain;
 }
 .btn-schedule-start:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.schedule-detail-workout-title {
+  font-weight: 700;
+  font-size: 1em;
+  text-align: left;
+  flex: 1;
+  line-height: 1.4;
 }
 
 /* 스케줄 상세 로딩 오버레이 */
