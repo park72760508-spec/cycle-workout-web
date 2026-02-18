@@ -9543,6 +9543,23 @@ button[aria-disabled="true"] {
   display: flex !important;
 }
 
+/* 훈련 시작 로딩 오버레이 (화면 맨 앞, 녹색 큰 원 스피너) */
+.schedule-start-training-overlay.hidden {
+  display: none !important;
+}
+.schedule-start-training-overlay:not(.hidden) {
+  display: flex !important;
+}
+.ai-loading-spinner-wrap--large {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 24px;
+}
+.schedule-start-training-overlay .ai-loading-spinner {
+  border-top-color: #22c55e;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.25);
+}
+
 /* AI 스케줄 생성 모달 - 모바일 웹 최적화 */
 .ai-schedule-modal .modal-content {
   max-width: 100%;
