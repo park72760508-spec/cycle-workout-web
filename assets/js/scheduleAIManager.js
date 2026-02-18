@@ -242,24 +242,31 @@
 
   /**
    * 사용자 정보 로드 (currentUser/localStorage + Firestore 병합)
+   * 나이(birth_year/birthYear), 성별(gender/sex)는 Firestore users/{uid}에서 조회
    */
   async function loadUserForScheduleModal() {
-    var userId = getUserId();
+    var userId = getUserId() || getUserIdForRTDB();
     if (!userId) return null;
     var user = window.currentUser || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
     if (!user) user = { id: userId };
-    if ((user.birth_year == null && user.birthYear == null) || (user.gender == null && user.sex == null)) {
-      try {
-        if (typeof window.getUserByUid === 'function') {
-          var firestoreUser = await window.getUserByUid(userId);
-          if (firestoreUser) {
-            user = Object.assign({}, user, firestoreUser);
-          }
+
+    var firestoreUser = null;
+    try {
+      if (typeof window.getUserByUid === 'function') {
+        firestoreUser = await window.getUserByUid(userId);
+        if (!firestoreUser && userId !== getUserIdForRTDB()) {
+          var authUid = getUserIdForRTDB();
+          if (authUid) firestoreUser = await window.getUserByUid(authUid);
         }
-      } catch (e) {
-        console.warn('[openScheduleCreateAIModal] Firestore 사용자 조회 실패:', e);
       }
+    } catch (e) {
+      console.warn('[loadUserForScheduleModal] Firestore 사용자 조회 실패:', e);
     }
+
+    if (firestoreUser) {
+      user = Object.assign({}, user, firestoreUser);
+    }
+
     return user;
   }
 
