@@ -194,8 +194,7 @@
       const rawDayData = aiScheduleData && aiScheduleData.days && aiScheduleData.days[dateStr];
       const dayData = (rawDayData && dateStr >= startDateFilter) ? rawDayData : null;
       const hasSchedule = !!dayData;
-      const isPast = dateStr < todayStr;
-      const isPastOrToday = dateStr <= todayStr; /* 오늘 포함 이전 → 완료 여부 판단 대상 */
+      const isPast = dateStr < todayStr; /* 오늘 이전만 완료/미수행 판단 */
       const isToday = dateStr === todayStr;
       const isEventDate = eventDateStr && dateStr === eventDateStr;
 
@@ -204,11 +203,11 @@
       if (isPast) cellClass += ' ai-schedule-day-past';
       if (isToday) cellClass += ' ai-schedule-day-today';
       if (isEventDate) cellClass += ' ai-schedule-day-event';
-      else if (hasSchedule && isPastOrToday) {
+      else if (hasSchedule && isPast) {
         const isCompleted = dayData.isCompleted === true;
         if (isCompleted) cellClass += ' ai-schedule-day-completed';
         else cellClass += ' ai-schedule-day-missed';
-      } else if (hasSchedule && !isPastOrToday) {
+      } else if (hasSchedule && !isPast) {
         cellClass += ' ai-schedule-day-planned';
       }
       var dayOfWeek = new Date(year, month, d).getDay();
@@ -217,7 +216,7 @@
       if (typeof window.isKoreanHoliday === 'function' && window.isKoreanHoliday(year, month, d)) cellClass += ' ai-schedule-day-holiday';
 
       let statusHtml = '';
-      if (hasSchedule && isPastOrToday) {
+      if (hasSchedule && isPast) {
         const isCompleted = dayData.isCompleted === true;
         if (isCompleted) {
           statusHtml = '<span class="ai-schedule-status ai-schedule-status-done" title="완료">✓</span>';
