@@ -6244,6 +6244,13 @@ function initializeCurrentScreen(screenId) {
       }, 100);
       break;
       
+    case 'aiScheduleScreen':
+      // AI 훈련 스케줄 화면: Firebase RTDB 스케줄 로드
+      if (typeof window.loadAIScheduleScreen === 'function') {
+        setTimeout(window.loadAIScheduleScreen, 100);
+      }
+      break;
+      
     case 'scheduleListScreen':
       // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
       // 함수가 로드될 때까지 재시도
