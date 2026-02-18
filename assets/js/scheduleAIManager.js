@@ -64,13 +64,18 @@
    * Firebase Realtime Database에서 AI 스케줄 로드
    */
   window.loadAIScheduleFromFirebase = async function (userId) {
+    console.log('[AI스케줄] loadAIScheduleFromFirebase 시작', { userId: userId, path: 'users/' + userId + '/training_schedule' });
     try {
       var db = getDb();
-      if (!db) throw new Error('Firebase Database를 사용할 수 없습니다.');
+      if (!db) {
+        console.error('[AI스케줄] loadAIScheduleFromFirebase: getDb() null');
+        throw new Error('Firebase Database를 사용할 수 없습니다.');
+      }
 
       var ref = db.ref('users/' + userId + '/training_schedule');
       var snapshot = await ref.once('value');
       var val = snapshot.val();
+      console.log('[AI스케줄] loadAIScheduleFromFirebase 응답', { hasData: !!val, daysCount: val && val.days ? Object.keys(val.days).length : 0 });
       if (val) {
         return {
           scheduleName: val.scheduleName || '내 훈련 스케줄',
@@ -95,11 +100,19 @@
    * Firebase Realtime Database에 AI 스케줄 저장
    */
   window.saveAIScheduleToFirebase = async function (userId, data) {
-    const db = getDb();
-    if (!db) throw new Error('Firebase Database를 사용할 수 없습니다.');
+    var path = 'users/' + userId + '/training_schedule';
+    console.log('[AI스케줄] saveAIScheduleToFirebase 시작', { userId: userId, path: path, daysCount: data && data.days ? Object.keys(data.days).length : 0 });
+    var db = getDb();
+    if (!db) {
+      console.error('[AI스케줄] saveAIScheduleToFirebase: getDb() null');
+      throw new Error('Firebase Database를 사용할 수 없습니다.');
+    }
+    var authUid = (typeof window.authV9 !== 'undefined' && window.authV9 && window.authV9.currentUser) ? window.authV9.currentUser.uid : ((typeof window.auth !== 'undefined' && window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null);
+    console.log('[AI스케줄] saveAIScheduleToFirebase auth 확인', { authUid: authUid, userId: userId, match: authUid === userId });
 
-    const ref = db.ref('users/' + userId + '/training_schedule');
+    var ref = db.ref(path);
     await ref.set(data);
+    console.log('[AI스케줄] saveAIScheduleToFirebase 완료', { path: path });
   };
 
   /**
@@ -254,9 +267,35 @@
     try {
       if (typeof window.getUserByUid === 'function') {
         firestoreUser = await window.getUserByUid(userId);
-        if (!firestoreUser && userId !== getUserIdForRTDB()) {
-          var authUid = getUserIdForRTDB();
-          if (authUid) firestoreUser = await window.getUserByUid(authUid);
+      }
+      if (!firestoreUser) {
+        var authUid = getUserIdForRTDB();
+        if (authUid && authUid !== userId && typeof window.getUserByUid === 'function') {
+          firestoreUser = await window.getUserByUid(authUid);
+        }
+      }
+      if (!firestoreUser && typeof window.apiGetUser === 'function') {
+        var res = await window.apiGetUser(userId);
+        if (res && res.success && res.item) firestoreUser = res.item;
+        if (!firestoreUser) {
+          var uid2 = getUserIdForRTDB();
+          if (uid2 && uid2 !== userId) {
+            res = await window.apiGetUser(uid2);
+            if (res && res.success && res.item) firestoreUser = res.item;
+          }
+        }
+      }
+      if (!firestoreUser && window.firestore && window.firestore.collection) {
+        var doc = await window.firestore.collection('users').doc(userId).get();
+        if (doc && doc.exists) {
+          firestoreUser = { id: userId, ...doc.data() };
+        }
+        if (!firestoreUser) {
+          var uid2 = getUserIdForRTDB();
+          if (uid2 && uid2 !== userId) {
+            doc = await window.firestore.collection('users').doc(uid2).get();
+            if (doc && doc.exists) firestoreUser = { id: uid2, ...doc.data() };
+          }
         }
       }
     } catch (e) {
@@ -448,6 +487,7 @@
       i = start + 1;
     }
     if (collected.length > 0) return collected;
+    console.error('[AI스케줄] parseGeminiScheduleJson 실패', { rawLength: (text || '').length, rawPreview: (text || '').substring(0, 500) });
     throw new Error('JSON 파싱 실패. 개별 객체 추출도 되지 않았습니다.');
   }
 
@@ -527,12 +567,30 @@
   }
 
   /**
+   * 진행사항 로그 (콘솔 + UI)
+   */
+  var _scheduleLogs = [];
+  function scheduleLog(step, message, data) {
+    var line = '[AI스케줄] [' + step + '] ' + message;
+    _scheduleLogs.push({ step: step, msg: message, data: data, ts: new Date().toISOString() });
+    console.log(line, data !== undefined ? data : '');
+    var detailEl = document.getElementById('aiScheduleProgressDetail');
+    if (detailEl) detailEl.textContent = '[' + step + '] ' + message;
+  }
+
+  /**
    * Gemini API로 훈련 스케줄 생성 (Step-by-Step 월별 생성)
    */
   window.generateScheduleWithGemini = async function () {
+    _scheduleLogs = [];
+    scheduleLog('START', '스케줄 생성 시작', {});
+
     var btn = document.getElementById('btnGenerateAISchedule');
     var btnRow = document.getElementById('aiScheduleBtnRow');
     var userId = getUserId();
+    var rtdbUid = getUserIdForRTDB();
+    scheduleLog('USER', 'getUserId=' + (userId || '(없음)') + ', getUserIdForRTDB=' + (rtdbUid || '(없음)'), { userId: userId, rtdbUid: rtdbUid });
+
     var apiKey = (localStorage.getItem('geminiApiKey') || (document.getElementById('settingsGeminiApiKey') && document.getElementById('settingsGeminiApiKey').value) || '').trim();
 
     if (!apiKey) {
@@ -545,9 +603,11 @@
 
     var user = await loadUserForScheduleModal();
     if (!user || !user.id) {
+      scheduleLog('ERROR', '사용자 정보 없음', { user: user });
       if (typeof showToast === 'function') showToast('사용자 정보를 찾을 수 없습니다.', 'error');
       return;
     }
+    scheduleLog('USER', 'user.id=' + user.id, {});
 
     var startDateStr = document.getElementById('aiScheduleStartDate') && document.getElementById('aiScheduleStartDate').value;
     var eventDateStr = document.getElementById('aiScheduleEventDate') && document.getElementById('aiScheduleEventDate').value;
@@ -555,9 +615,11 @@
     var eventGoal = document.getElementById('aiScheduleEventGoal') && document.getElementById('aiScheduleEventGoal').value;
 
     if (!startDateStr || !eventDateStr || !eventDistance) {
+      scheduleLog('ERROR', '필수 입력 누락: startDate=' + startDateStr + ', eventDate=' + eventDateStr + ', distance=' + eventDistance, {});
       if (typeof showToast === 'function') showToast('훈련 시작일, 대회 일정, 거리를 입력해주세요.', 'error');
       return;
     }
+    scheduleLog('INPUT', '시작일=' + startDateStr + ', 대회일=' + eventDateStr + ', 거리=' + eventDistance + 'km', {});
 
     var startDate = new Date(startDateStr);
     var eventDate = new Date(eventDateStr);
@@ -609,6 +671,13 @@
     }
 
     var rtdbUserId = getUserIdForRTDB() || user.id;
+    scheduleLog('RTDB', 'Firebase 저장용 userId=' + rtdbUserId + ', getDb=' + (getDb() ? 'OK' : 'NULL'), {
+      rtdbUserId: rtdbUserId,
+      hasDb: !!getDb(),
+      authV9: !!(typeof window.authV9 !== 'undefined' && window.authV9 && window.authV9.currentUser),
+      authCompat: !!(typeof window.auth !== 'undefined' && window.auth && window.auth.currentUser)
+    });
+
     var monthsToGenerate = [];
     var y = startDate.getFullYear();
     var m = startDate.getMonth();
@@ -620,6 +689,7 @@
       if (m > 11) { m = 0; y++; }
     }
 
+    scheduleLog('MONTHS', '생성할 월 ' + monthsToGenerate.length + '개: ' + monthsToGenerate.map(function (x) { return x.year + '-' + (x.month + 1); }).join(', '), monthsToGenerate);
     updateScheduleProgress(true, '스케줄 생성 준비 완료', monthsToGenerate.length + '개월 생성 예정');
 
     var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.0-flash-exp';
@@ -649,10 +719,17 @@
           ? '\n**이전 달 마지막 주 요약 (문맥 유지):**\n- 훈련 횟수: ' + prevSummary.sessions + '회\n- 주간 TSS: ' + prevSummary.totalTSS + '\n- 최대 단일 TSS: ' + prevSummary.maxSingleTSS + '\n- 마지막 훈련일: ' + prevSummary.lastDate + '\n→ 이에 맞춰 이번 달 강도와 회복을 조정하세요.'
           : '';
 
+        var monthStart = new Date(ym.year, ym.month, 1);
+        var monthEnd = new Date(ym.year, ym.month + 1, 0);
+        var monthDays = monthEnd.getDate();
+        var effectiveStart = startDate > monthStart ? startDate : monthStart;
+        var effectiveStartStr = effectiveStart.getFullYear() + '-' + String(effectiveStart.getMonth() + 1).padStart(2, '0') + '-' + String(effectiveStart.getDate()).padStart(2, '0');
+        var expectedMinDays = Math.max(1, Math.min(monthDays, Math.ceil((monthEnd - effectiveStart) / (24 * 60 * 60 * 1000)) * 0.4));
+
         var baseContext = `당신은 세계 최고의 사이클링 코치입니다.
 
 **이번 요청에서는 오직 ${ym.year}년 ${ym.month + 1}월의 스케줄만 생성하시오.** 다른 달은 생성하지 마세요.
-**반드시 해당 월의 훈련 가능한 모든 날짜(최소 15일~25일)에 대해 훈련을 배정하시오.** 일주일만 생성하지 말고, 월 전체를 꽉 채우시오.
+**필수: 해당 월(${ym.year}-${String(ym.month + 1).padStart(2, '0')})에서 훈련시작일(${effectiveStartStr}) 이후의 거의 모든 훈련 가능일을 포함하시오. 최소 ${expectedMinDays}일 이상 생성. 주 4~6회 훈련 × 4주 = 16~24일 수준으로 꽉 채우시오. 절대 1주(7일)만 생성하지 마시오.**
 
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
 **훈련 목표:** ${goal}${isEliteOrPro ? ' (Elite/Pro: 고강도·높은 TSS)' : ' (일반 동호인: 회복·지속 가능성 중시)'}
@@ -673,6 +750,7 @@ ${prevContext}
   { "date": "YYYY-MM-DD", "workoutName": "String", "workoutId": "String 또는 빈 문자열", "duration": Number(분), "predictedTSS": Number, "type": "Indoor"|"Outdoor", "description": "String" }
 ]`;
 
+        scheduleLog('GEMINI', label + ' API 요청 중...', { year: ym.year, month: ym.month + 1 });
         var parsed = await generateMonthlySchedule(apiKey, {
           year: ym.year,
           month: ym.month,
@@ -680,6 +758,9 @@ ${prevContext}
           modelName: modelName
         });
 
+        scheduleLog('GEMINI', label + ' 응답 파싱 완료: ' + (parsed ? parsed.length : 0) + '건', { parsedCount: parsed ? parsed.length : 0, sample: parsed && parsed[0] ? parsed[0] : null });
+
+        var addedThisMonth = 0;
         for (var j = 0; j < parsed.length; j++) {
           var item = parsed[j];
           var date = item.date || item.dateStr;
@@ -697,7 +778,9 @@ ${prevContext}
             type: item.type === 'Outdoor' ? 'Outdoor' : 'Indoor',
             description: item.description || ''
           };
+          addedThisMonth++;
         }
+        scheduleLog('PARSE', label + ' 추가됨: ' + addedThisMonth + '일 (전체 누적: ' + Object.keys(allDays).length + '일)', { added: addedThisMonth, total: Object.keys(allDays).length });
       }
 
       var data = {
@@ -706,10 +789,20 @@ ${prevContext}
         meta: meta
       };
 
-      updateScheduleProgress(true, 'Firebase에 저장 중...', '');
+      var totalDays = Object.keys(allDays).length;
+      scheduleLog('SAVE', 'Firebase 저장 시도: path=users/' + rtdbUserId + '/training_schedule, days=' + totalDays + '일', { path: 'users/' + rtdbUserId + '/training_schedule', totalDays: totalDays });
+      updateScheduleProgress(true, 'Firebase에 저장 중...', '저장 경로: users/' + rtdbUserId + '/training_schedule');
+
       try {
         await window.saveAIScheduleToFirebase(rtdbUserId, data);
+        scheduleLog('SAVE', 'Firebase 저장 성공', { path: 'users/' + rtdbUserId + '/training_schedule' });
       } catch (saveErr) {
+        scheduleLog('SAVE_FAIL', 'Firebase 저장 실패: ' + (saveErr && (saveErr.message || saveErr.code || String(saveErr))), {
+          error: saveErr,
+          message: saveErr && saveErr.message,
+          code: saveErr && saveErr.code,
+          stack: saveErr && saveErr.stack
+        });
         console.error('[AI스케줄] Firebase 저장 실패:', saveErr);
         var msg = saveErr && (saveErr.message || saveErr.code || '') ? String(saveErr.message || saveErr.code) : '저장 실패';
         if (/permission|PERMISSION_DENIED|unauthorized/i.test(msg)) {
