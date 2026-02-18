@@ -9574,14 +9574,22 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 1.5em;
 }
 .schedule-detail-modal-header .modal-close {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .schedule-detail-modal-title {
   text-align: center;
   flex: 1;
   margin: 0;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .schedule-detail-info {
   margin-bottom: 16px;
@@ -9589,11 +9597,15 @@ button[aria-disabled="true"] {
 .schedule-detail-modal-header .btn-schedule-start {
   flex-shrink: 0;
   margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .schedule-detail-modal-header .btn-schedule-start img {
-  height: 2em;
+  height: 4em;
   width: auto;
   object-fit: contain;
+  vertical-align: middle;
 }
 .schedule-detail-date-row {
   display: flex;
@@ -9620,7 +9632,11 @@ button[aria-disabled="true"] {
 }
 .schedule-detail-graph {
   margin: 16px 0;
-  min-height: 120px;
+  min-height: 180px;
+}
+.schedule-detail-graph canvas {
+  display: block;
+  max-width: 100%;
 }
 .btn-schedule-start {
   display: inline-flex;
