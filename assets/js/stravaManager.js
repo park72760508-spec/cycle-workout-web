@@ -384,6 +384,13 @@ async function fetchAndProcessStravaData(options = {}) {
     }
 
     let usersToProcess = [];
+    const todayOnlyCurrentUser = !!options.todayOnlyCurrentUser;
+
+    if (todayOnlyCurrentUser) {
+      // 오늘 기록: 관리자여도 본인만 처리 (진행 0/1 또는 1/1, 메시지 0개 또는 1개)
+      isAdmin = false;
+      console.log('[fetchAndProcessStravaData] 오늘 기록: 본인만 처리');
+    }
 
     if (isAdmin) {
       // 관리자인 경우: 모든 사용자 조회
@@ -998,8 +1005,9 @@ async function exchangeStravaCode(code, userId) {
  * 진행 상태 표시 및 결과 알림 포함
  * @param {Date} startDate - 시작일 (선택사항)
  * @param {Date} endDate - 종료일 (선택사항)
+ * @param {object} opts - 옵션 (todayOnlyCurrentUser: true면 오늘 기록·본인만 동기화)
  */
-async function syncStravaData(startDate = null, endDate = null) {
+async function syncStravaData(startDate = null, endDate = null, opts = {}) {
   const btn = document.getElementById('btnSyncStrava');
   const originalText = btn ? btn.textContent : '🔄 스트라바 동기화';
   const progressOverlay = document.getElementById('stravaSyncProgressOverlay');
@@ -1021,6 +1029,8 @@ async function syncStravaData(startDate = null, endDate = null) {
     }
   }
 
+  const isTodayAll = !!opts.todayAll;
+
   try {
     // 버튼 비활성화 및 로딩 상태
     if (btn) {
@@ -1028,12 +1038,21 @@ async function syncStravaData(startDate = null, endDate = null) {
       btn.textContent = '⏳ 동기화 중...';
     }
 
-    showProgress(0, -1);
+    if (isTodayAll) {
+      // 오늘 기록(ALL): 녹색 큰 원 스피너만 표시 (진행 0/0 숨김)
+      const todayAllOverlay = document.getElementById('stravaTodayAllOverlay');
+      if (todayAllOverlay) {
+        todayAllOverlay.classList.remove('hidden');
+        todayAllOverlay.style.setProperty('display', 'flex', 'important');
+      }
+    } else {
+      showProgress(0, -1);
+    }
 
-    console.log('[syncStravaData] 🚀 스트라바 동기화 시작');
+    console.log('[syncStravaData] 🚀 스트라바 동기화 시작', opts.todayOnlyCurrentUser ? '(오늘 기록·본인만)' : isTodayAll ? '(오늘 기록 ALL)' : '');
 
     // 날짜를 Unix timestamp로 변환
-    const options = {};
+    const options = { todayOnlyCurrentUser: !!opts.todayOnlyCurrentUser, todayAll: isTodayAll };
     if (startDate) {
       options.after = Math.floor(startDate.getTime() / 1000);
       console.log('[syncStravaData] 시작일:', startDate.toISOString(), '→ after:', options.after);
@@ -1045,7 +1064,7 @@ async function syncStravaData(startDate = null, endDate = null) {
       options.before = Math.floor(endOfDay.getTime() / 1000);
       console.log('[syncStravaData] 종료일:', endDate.toISOString(), '→ before:', options.before);
     }
-    options.onProgress = function (current, total) {
+    options.onProgress = isTodayAll ? function () {} : function (current, total) {
       showProgress(current, total);
     };
 
@@ -1122,6 +1141,14 @@ async function syncStravaData(startDate = null, endDate = null) {
       progressOverlay.classList.add('hidden');
       progressOverlay.style.display = 'none';
     }
+    // 오늘 기록(ALL) 녹색 큰 스피너 숨기기
+    if (isTodayAll) {
+      const todayAllOverlay = document.getElementById('stravaTodayAllOverlay');
+      if (todayAllOverlay) {
+        todayAllOverlay.classList.add('hidden');
+        todayAllOverlay.style.display = 'none';
+      }
+    }
     // 버튼 복원
     if (btn) {
       btn.disabled = false;
@@ -1138,7 +1165,18 @@ function openStravaSyncModal() {
   if (modal) {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
-    
+
+    // 관리자(grade=1)만 오늘 기록(ALL) 버튼 표시
+    const btnTodayAll = document.getElementById('btnStravaSyncTodayAll');
+    if (btnTodayAll) {
+      try {
+        const grade = typeof getViewerGrade === 'function' ? getViewerGrade() : '';
+        btnTodayAll.style.display = grade === '1' ? '' : 'none';
+      } catch (e) {
+        btnTodayAll.style.display = 'none';
+      }
+    }
+
     // 년도 옵션 생성 (현재 년도부터 5년 전까지)
     const currentYear = new Date().getFullYear();
     const startYearSelect = document.getElementById('stravaSyncStartYear');
@@ -1266,7 +1304,7 @@ function clearStravaSyncMonthRange() {
 }
 
 /**
- * 오늘 기록: 오늘 날짜 1일분 Strava 로그만 동기화
+ * 오늘 기록: 오늘 날짜 1일분 Strava 로그만 동기화 (본인만, 관리자도 본인만)
  * (로컬 기준 오늘 00:00:00 ~ 23:59:59)
  */
 function startStravaSyncToday() {
@@ -1277,7 +1315,21 @@ function startStravaSyncToday() {
   const startDate = new Date(y, m, d, 0, 0, 0, 0);   // 오늘 00:00:00
   const endDate = new Date(y, m, d, 23, 59, 59, 999); // 오늘 23:59:59
   closeStravaSyncModal();
-  syncStravaData(startDate, endDate);
+  syncStravaData(startDate, endDate, { todayOnlyCurrentUser: true });
+}
+
+/**
+ * 오늘 기록(ALL): 스트라바 연결 모든 사용자의 오늘 기록 동기화 (관리자 전용, 녹색 큰 원 스피너)
+ */
+function startStravaSyncTodayAll() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const startDate = new Date(y, m, d, 0, 0, 0, 0);
+  const endDate = new Date(y, m, d, 23, 59, 59, 999);
+  closeStravaSyncModal();
+  syncStravaData(startDate, endDate, { todayOnlyCurrentUser: false, todayAll: true });
 }
 
 /**
@@ -1356,4 +1408,5 @@ window.closeStravaSyncModal = closeStravaSyncModal;
 window.setStravaSyncMonthRange = setStravaSyncMonthRange;
 window.clearStravaSyncMonthRange = clearStravaSyncMonthRange;
 window.startStravaSyncToday = startStravaSyncToday;
+window.startStravaSyncTodayAll = startStravaSyncTodayAll;
 window.confirmStravaSync = confirmStravaSync;
