@@ -47,7 +47,9 @@
     calendarEl.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>캘린더를 불러오는 중...</p></div>';
 
     try {
+      console.log('[AI스케줄] loadAIScheduleScreen: userId=' + userId);
       aiScheduleData = await loadAIScheduleFromFirebase(userId);
+      console.log('[AI스케줄] loadAIScheduleScreen: aiScheduleData=', aiScheduleData ? { scheduleName: aiScheduleData.scheduleName, daysCount: aiScheduleData.days ? Object.keys(aiScheduleData.days).length : 0 } : null);
       if (subHeaderEl) {
         subHeaderEl.textContent = aiScheduleData && aiScheduleData.scheduleName
           ? aiScheduleData.scheduleName
@@ -516,11 +518,23 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }).then(function (res) { return res.json(); }).then(function (json) {
-      if (json?.error) throw new Error(json.error.message || 'Gemini API 오류');
+      if (json?.error) {
+        console.error('[AI스케줄] Gemini API 오류', { error: json.error, code: json.error?.code, message: json.error?.message });
+        throw new Error(json.error.message || 'Gemini API 오류');
+      }
       var text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      var parsed = parseGeminiScheduleJson(text);
-      if (!Array.isArray(parsed)) throw new Error('배열 형식이 아닙니다.');
-      return parsed;
+      if (!text) {
+        console.error('[AI스케줄] Gemini 응답 텍스트 없음', { json: json, candidates: json?.candidates });
+        throw new Error('Gemini 응답에 텍스트가 없습니다.');
+      }
+      try {
+        var parsed = parseGeminiScheduleJson(text);
+        if (!Array.isArray(parsed)) throw new Error('배열 형식이 아닙니다.');
+        return parsed;
+      } catch (parseErr) {
+        console.error('[AI스케줄] Gemini 응답 파싱 실패', { parseErr: parseErr, textPreview: text.substring(0, 800) });
+        throw parseErr;
+      }
     });
   }
 
@@ -577,6 +591,8 @@
     var detailEl = document.getElementById('aiScheduleProgressDetail');
     if (detailEl) detailEl.textContent = '[' + step + '] ' + message;
   }
+
+  window.getAIScheduleLogs = function () { return _scheduleLogs.slice(); };
 
   /**
    * Gemini API로 훈련 스케줄 생성 (Step-by-Step 월별 생성)
@@ -721,10 +737,11 @@
 
         var monthStart = new Date(ym.year, ym.month, 1);
         var monthEnd = new Date(ym.year, ym.month + 1, 0);
-        var monthDays = monthEnd.getDate();
         var effectiveStart = startDate > monthStart ? startDate : monthStart;
         var effectiveStartStr = effectiveStart.getFullYear() + '-' + String(effectiveStart.getMonth() + 1).padStart(2, '0') + '-' + String(effectiveStart.getDate()).padStart(2, '0');
-        var expectedMinDays = Math.max(1, Math.min(monthDays, Math.ceil((monthEnd - effectiveStart) / (24 * 60 * 60 * 1000)) * 0.4));
+        var msDiff = monthEnd - effectiveStart;
+        var daysInRange = Math.max(1, Math.floor(msDiff / (24 * 60 * 60 * 1000)) + 1);
+        var expectedMinDays = Math.max(10, Math.min(25, Math.floor(daysInRange * 0.5)));
 
         var baseContext = `당신은 세계 최고의 사이클링 코치입니다.
 
@@ -828,7 +845,8 @@ ${prevContext}
         if (typeof showToast === 'function') showToast('스케줄이 생성되었습니다.');
       }, 800);
     } catch (err) {
-      console.error('generateScheduleWithGemini:', err);
+      scheduleLog('ERROR', '스케줄 생성 실패: ' + (err.message || err), { error: err, stack: err && err.stack });
+      console.error('[AI스케줄] generateScheduleWithGemini 오류', err);
       updateScheduleProgress(false);
       if (typeof showToast === 'function') showToast('스케줄 생성 실패: ' + (err.message || '오류'), 'error');
     } finally {
