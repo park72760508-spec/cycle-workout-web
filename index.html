@@ -2833,9 +2833,10 @@
   <div id="scheduleCreateAIModal" class="modal ai-schedule-modal" style="display: none;">
     <div class="modal-overlay" onclick="if(typeof closeScheduleCreateAIModal==='function')closeScheduleCreateAIModal()"></div>
     <div class="modal-content ai-schedule-modal-content">
-      <div class="modal-header">
-        <h3>AI 훈련 스케줄 생성</h3>
-        <button type="button" class="modal-close" onclick="closeScheduleCreateAIModal()">&times;</button>
+      <div class="modal-header ai-schedule-modal-header" style="display: flex; align-items: center; justify-content: center; position: relative; padding: 15px 20px;">
+        <img src="assets/img/check.png" alt="스케줄 생성" class="ai-schedule-create-btn" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()" style="position: absolute; left: 20px; width: 24px; height: 24px; cursor: pointer; z-index: 10;" />
+        <h3 style="margin: 0; text-align: center; flex: 1;">AI 훈련 스케줄 생성</h3>
+        <button type="button" class="modal-close" onclick="closeScheduleCreateAIModal()" style="position: absolute; right: 20px;">&times;</button>
       </div>
       <div class="modal-body ai-schedule-modal-body">
         <div class="form-group ai-schedule-form-group">
@@ -2914,11 +2915,8 @@
           <div id="aiScheduleProgressText" style="font-size: 0.95em; font-weight: 600; color: #334155;">스케줄 분석 중...</div>
           <div id="aiScheduleProgressDetail" style="font-size: 0.85em; color: #64748b; margin-top: 4px;"></div>
         </div>
-        <div class="btn-row" style="margin-top: 16px;" id="aiScheduleBtnRow">
-          <button type="button" class="btn btn-success" id="btnGenerateAISchedule" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()">
-            스케줄 생성
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="closeScheduleCreateAIModal()">취소</button>
+        <div class="btn-row" style="margin-top: 16px; display: none;" id="aiScheduleBtnRow">
+          <button type="button" class="btn btn-success" id="btnGenerateAISchedule" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()">스케줄 생성</button>
         </div>
       </div>
     </div>
