@@ -2926,16 +2926,6 @@
     </div>
   </div>
 
-  <!-- AI 스케줄 생성 로딩 오버레이 (전체 화면, 3초 간격 AI 스토리텔링) -->
-  <div id="aiScheduleLoadingOverlay" class="ai-schedule-loading-overlay hidden" style="position: fixed; inset: 0; z-index: 10003; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(4px);">
-    <div class="ai-loading-spinner-wrap">
-      <div class="ai-loading-spinner-bg"></div>
-      <div class="ai-loading-spinner"></div>
-    </div>
-    <p class="ai-loading-title">STELVIO AI Agent</p>
-    <p class="ai-loading-message" id="aiScheduleLoadingMessage">🚴 사용자님의 신체 데이터와 목표를 분석하고 있습니다...</p>
-  </div>
-
   <!-- AI 스케줄 상세 팝업 모달 (날짜 클릭 시) -->
   <div id="scheduleDetailModal" class="modal" style="display: none;">
     <div class="modal-overlay" onclick="if(typeof closeScheduleDetailModal==='function')closeScheduleDetailModal()"></div>
@@ -13682,5 +13672,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     }
   })();
   </script>
+
+  <!-- AI 스케줄 생성 로딩 오버레이 (body 직계, 최상위 z-index) -->
+  <div id="aiScheduleLoadingOverlay" class="ai-schedule-loading-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 999999; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(4px);">
+    <div class="ai-loading-spinner-wrap">
+      <div class="ai-loading-spinner-bg"></div>
+      <div class="ai-loading-spinner"></div>
+    </div>
+    <p class="ai-loading-title">STELVIO AI Agent</p>
+    <p class="ai-loading-message" id="aiScheduleLoadingMessage">🚴 사용자님의 신체 데이터와 목표를 분석하고 있습니다...</p>
+  </div>
 </body>
 </html>
