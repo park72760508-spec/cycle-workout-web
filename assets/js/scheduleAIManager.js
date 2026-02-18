@@ -211,6 +211,10 @@
       } else if (hasSchedule && !isPastOrToday) {
         cellClass += ' ai-schedule-day-planned';
       }
+      var dayOfWeek = new Date(year, month, d).getDay();
+      if (dayOfWeek === 0) cellClass += ' ai-schedule-day-sun';
+      else if (dayOfWeek === 6) cellClass += ' ai-schedule-day-sat';
+      if (typeof window.isKoreanHoliday === 'function' && window.isKoreanHoliday(year, month, d)) cellClass += ' ai-schedule-day-holiday';
 
       let statusHtml = '';
       if (hasSchedule && isPastOrToday) {
@@ -231,6 +235,11 @@
       </div>`;
     }
 
+    html += '</div>';
+    html += '<div class="ai-schedule-legend">';
+    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape plan" aria-hidden="true"></span><span>🩵 계획 (Plan)</span></div>';
+    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape done" aria-hidden="true"></span><span>💚 완료 (Done)</span></div>';
+    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape missed" aria-hidden="true"></span><span>🩶 미수행 (Missed)</span></div>';
     html += '</div>';
     container.innerHTML = html;
 
@@ -1193,6 +1202,18 @@ ${workoutsContext}
     }
   }
 
+  function showScheduleUpdateOverlay(visible) {
+    var overlay = document.getElementById('scheduleUpdateOverlay');
+    if (!overlay) return;
+    if (visible) {
+      overlay.classList.remove('hidden');
+      overlay.style.setProperty('display', 'flex', 'important');
+    } else {
+      overlay.classList.add('hidden');
+      overlay.style.removeProperty('display');
+    }
+  }
+
   /**
    * 스케줄 상세 모달 열기
    */
@@ -1219,6 +1240,11 @@ ${workoutsContext}
       `;
 
       if (dateInput) dateInput.value = dateStr;
+
+      var changeBtn = document.getElementById('btnScheduleDetailDateChange');
+      var isCompleted = d.isCompleted === true;
+      if (changeBtn) changeBtn.disabled = isCompleted;
+      if (dateInput) dateInput.disabled = isCompleted;
 
       graphEl.innerHTML = '';
       if (d.workoutId && window.GAS_URL) {
@@ -1363,22 +1389,43 @@ ${workoutsContext}
   };
 
   /**
-   * 스케줄 상세 날짜 변경
+   * 스케줄 상세 날짜 변경 (완료된 훈련은 불가, 오늘 포함 이후만, 대상 날짜에 계획 없어야 함)
    */
   window.updateScheduleDetailDate = async function () {
     const newDate = document.getElementById('scheduleDetailDateInput')?.value;
     if (!newDate || !scheduleDetailCurrentDate || !scheduleDetailCurrentDay || !aiScheduleData) return;
 
+    if (scheduleDetailCurrentDay.isCompleted === true) {
+      if (typeof alert === 'function') alert('완료된 훈련은 날짜 변경이 불가합니다.');
+      return;
+    }
+
+    var todayStr = new Date().toISOString().split('T')[0];
+    if (newDate < todayStr) {
+      if (typeof alert === 'function') alert('오늘 이전 날짜로 변경이 불가합니다.');
+      return;
+    }
+
+    if (newDate !== scheduleDetailCurrentDate && aiScheduleData.days[newDate]) {
+      if (typeof alert === 'function') alert(newDate + '는 이미 훈련계획이 수립되어 있습니다.');
+      return;
+    }
+
     var userId = getUserIdForRTDB() || getUserId();
     if (!userId) return;
 
-    delete aiScheduleData.days[scheduleDetailCurrentDate];
-    aiScheduleData.days[newDate] = scheduleDetailCurrentDay;
+    showScheduleUpdateOverlay(true);
 
-    await window.saveAIScheduleToFirebase(userId, aiScheduleData);
-    closeScheduleDetailModal();
-    renderAIScheduleCalendar();
-    if (typeof showToast === 'function') showToast('날짜가 변경되었습니다.');
+    try {
+      delete aiScheduleData.days[scheduleDetailCurrentDate];
+      aiScheduleData.days[newDate] = scheduleDetailCurrentDay;
+      await window.saveAIScheduleToFirebase(userId, aiScheduleData);
+      closeScheduleDetailModal();
+      renderAIScheduleCalendar();
+      if (typeof showToast === 'function') showToast('날짜가 변경되었습니다.');
+    } finally {
+      showScheduleUpdateOverlay(false);
+    }
   };
 
   /**
