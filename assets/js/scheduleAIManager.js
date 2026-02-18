@@ -1226,6 +1226,18 @@ ${workoutsContext}
     }
   }
 
+  function showScheduleStartTrainingOverlay(visible) {
+    var overlay = document.getElementById('scheduleStartTrainingOverlay');
+    if (!overlay) return;
+    if (visible) {
+      overlay.classList.remove('hidden');
+      overlay.style.setProperty('display', 'flex', 'important');
+    } else {
+      overlay.classList.add('hidden');
+      overlay.style.removeProperty('display');
+    }
+  }
+
   /**
    * 스케줄 상세 모달 열기
    */
@@ -1443,16 +1455,24 @@ ${workoutsContext}
   };
 
   /**
-   * 훈련 시작: 컨디션 보정(RPE 모달) -> 훈련 준비 -> 대시보드(노트북/모바일)
+   * 훈련 시작: 녹색 스피너 표시 -> 컨디션 보정(RPE 모달) -> 훈련 준비 -> 대시보드(노트북/모바일)
    */
   window.startScheduleDetailTraining = function () {
     if (!scheduleDetailCurrentDay || !scheduleDetailCurrentDate) return;
 
+    var todayStr = new Date().toISOString().split('T')[0];
+    if (scheduleDetailCurrentDate !== todayStr || scheduleDetailCurrentDay.isCompleted === true) {
+      if (typeof alert === 'function') alert('지정된 날짜에서 훈련을 수행해 주세요.');
+      return;
+    }
+
     const workoutId = scheduleDetailCurrentDay.workoutId;
 
+    showScheduleStartTrainingOverlay(true);
     closeScheduleDetailModal();
 
     function doStart() {
+      showScheduleStartTrainingOverlay(false);
       window.rpeModalSource = 'solo';
       if (typeof showRPEModal === 'function') {
         showRPEModal('solo');
