@@ -9376,22 +9376,22 @@ button[aria-disabled="true"] {
   background: rgba(56, 189, 248, 0.35);
 }
 
-/* 훈련 수행된 날짜: 녹색 테두리 + 투명 녹색 */
+/* 훈련 완수: 녹색 얇은 선 + 녹색 배경 투명 (Firestore logs date·workoutId 일치) */
 .ai-schedule-day-completed {
-  background: rgba(34, 197, 94, 0.3);
-  border: 2px solid rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.55);
 }
 .ai-schedule-day-completed:hover {
-  background: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.35);
 }
 
-/* 훈련 미수행 날짜: 회색 테두리 + 투명 회색 */
+/* 훈련 미완수: 회색 얇은 선 + 회색 배경 투명 */
 .ai-schedule-day-missed {
-  background: rgba(156, 163, 175, 0.25);
-  border: 2px solid rgba(156, 163, 175, 0.5);
+  background: rgba(156, 163, 175, 0.2);
+  border: 1px solid rgba(156, 163, 175, 0.5);
 }
 .ai-schedule-day-missed:hover {
-  background: rgba(156, 163, 175, 0.35);
+  background: rgba(156, 163, 175, 0.3);
 }
 
 /* 대회 일자: 주황색 테두리 + 투명 주황색 */
