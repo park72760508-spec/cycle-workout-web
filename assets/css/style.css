@@ -9404,8 +9404,11 @@ button[aria-disabled="true"] {
   background: rgba(251, 146, 60, 0.4);
 }
 
+/* 오늘 날짜: 주황색 투명 테두리 */
 .ai-schedule-day-today {
   font-weight: 700;
+  border: 2px solid rgba(251, 146, 60, 0.6) !important;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.15);
 }
 
 .ai-schedule-day-num {
@@ -9487,6 +9490,14 @@ button[aria-disabled="true"] {
   padding: 0 24px;
   max-width: 320px;
   line-height: 1.5;
+}
+
+/* 스케줄 상세 로딩 오버레이 */
+.schedule-detail-loading-overlay.hidden {
+  display: none !important;
+}
+.schedule-detail-loading-overlay:not(.hidden) {
+  display: flex !important;
 }
 
 /* AI 스케줄 생성 모달 - 모바일 웹 최적화 */
