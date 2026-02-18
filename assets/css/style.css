@@ -9525,11 +9525,13 @@ button[aria-disabled="true"] {
   color: #444;
 }
 
+/* 훈련 시작일, 대회 일정, 대회 거리: 모바일 기준 동일한 넓이/길이 */
 .ai-schedule-date-input,
 .ai-schedule-input-full {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  min-height: 44px;
   padding: 10px 12px;
   font-size: 16px;
   box-sizing: border-box;
@@ -9537,8 +9539,10 @@ button[aria-disabled="true"] {
   border-radius: 8px;
 }
 
-.ai-schedule-date-input {
-  min-height: 44px;
+/* date input 기본 min-width 제거 (대회 거리와 동일하게) */
+.ai-schedule-modal .ai-schedule-date-input {
+  width: 100%;
+  min-width: 0;
 }
 
 .ai-schedule-form-row {
