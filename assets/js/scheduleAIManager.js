@@ -237,9 +237,9 @@
 
     html += '</div>';
     html += '<div class="ai-schedule-legend">';
-    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape plan" aria-hidden="true"></span><span>🩵 계획 (Plan)</span></div>';
-    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape done" aria-hidden="true"></span><span>💚 완료 (Done)</span></div>';
-    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape missed" aria-hidden="true"></span><span>🩶 미수행 (Missed)</span></div>';
+    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape plan" aria-hidden="true"></span><span>계획 (Plan)</span></div>';
+    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape done" aria-hidden="true"></span><span>완료 (Done)</span></div>';
+    html += '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape missed" aria-hidden="true"></span><span>미수행 (Missed)</span></div>';
     html += '</div>';
     container.innerHTML = html;
 
@@ -671,8 +671,9 @@
 
   /**
    * 사용자 설정(인도어/아웃도어 요일)에 맞는 훈련 날짜 목록 생성
+   * 대회 당일은 제외 (대회 참가로 훈련 불가)
    * @param {Date} start - 훈련 시작일
-   * @param {Date} end - 대회일(끝)
+   * @param {Date} end - 대회일(당일은 훈련 제외)
    * @param {number[]} indoorDays - 인도어 요일 (0=일..6=토)
    * @param {number[]} outdoorDays - 아웃도어 요일
    * @returns {{dateStr: string, type: string, dayOfWeek: number}[]}
@@ -681,9 +682,11 @@
     var dates = [];
     var d = new Date(start);
     d.setHours(0, 0, 0, 0);
-    var endMs = end.getTime();
+    var endExclusive = new Date(end);
+    endExclusive.setHours(0, 0, 0, 0);
+    var endMs = endExclusive.getTime();
     var dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    while (d.getTime() <= endMs) {
+    while (d.getTime() < endMs) {
       var dow = d.getDay();
       var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       if (indoorDays.indexOf(dow) >= 0) {
@@ -926,11 +929,14 @@
     var totalWeeks = calculateTotalWeeks(startDate, eventDate);
     scheduleLog('WEEKS', '대회까지 총 ' + totalWeeks + '주', { totalWeeks: totalWeeks });
 
+    var eventMs = eventDate.getTime();
     for (var k = 0; k < trainingDates.length; k++) {
       var td = trainingDates[k];
       var ymKey = td.dateStr.substring(0, 7);
       td.taper = td.dateStr >= taperStartStr;
       td.weekIndex = getWeekIndex(td.dateStr, startDateStr);
+      td.daysUntilEvent = Math.round((eventMs - new Date(td.dateStr + 'T12:00:00').getTime()) / (24 * 60 * 60 * 1000));
+      td.mustRecovery = td.daysUntilEvent >= 2 && td.daysUntilEvent <= 3;
       if (!byMonth[ymKey]) byMonth[ymKey] = [];
       byMonth[ymKey].push(td);
     }
@@ -1001,6 +1007,7 @@
             type: t.type,
             dayName: t.dayName,
             taper: !!t.taper,
+            mustRecovery: !!t.mustRecovery,
             week: wIdx,
             focus: (m && m.focus) ? m.focus : '',
             phase: (m && m.phase) ? m.phase : ''
@@ -1014,8 +1021,13 @@
           }).join(', ') + '\n'
           : '';
 
-        var taperNote = monthDates.some(function (t) { return t.taper; })
-          ? '\n**[필수] 대회 1주 전(taper=true) 컨디션 조절:** taper가 true인 날짜는 시합 당일 최상의 퍼포먼스를 위해 반드시 다음을 적용하시오:\n- duration: 30~45분 이하\n- predictedTSS: 25~40 이하 (평상시의 40~50% 수준)\n- workoutName: Recovery, Active Recovery, Z1~Z2 기초 유지만 사용\n- 고강도(Threshold, VO2max, Anaerobic 등) 절대 금지'
+        var hasTaper = monthDates.some(function (t) { return t.taper; });
+        var hasMustRecovery = monthDates.some(function (t) { return t.mustRecovery; });
+        var taperNote = hasTaper
+          ? '\n**[필수] 대회가 있는 마지막 1주(taper=true):** taper가 true인 날짜는 Recovery 또는 아주 약한 Endurance 훈련만 배정하시오. 시합 당일 최상의 퍼포먼스를 위해:\n- duration: 30~45분 이하\n- predictedTSS: 25~40 이하\n- workoutName: Recovery, Active Recovery, Z1~Z2 기초 유지 등만 사용. 고강도(Threshold, VO2max, Anaerobic 등) 절대 금지'
+          : '';
+        var mustRecoveryNote = hasMustRecovery
+          ? '\n**[필수] 대회 2~3일 전(mustRecovery=true):** mustRecovery가 true인 날짜는 반드시 Recovery 훈련만 배치하시오. (Active Recovery, Z1 회복 등)'
           : '';
 
         var baseContext = `당신은 세계 최고의 사이클링 코치입니다. Phase 1 매크로 전략(주기화)과 경기 1주 전 테이퍼링을 정확히 반영하는 것이 핵심입니다.
@@ -1028,7 +1040,7 @@ ${macroContext}
 ${dateListJson}
 
 **대회 1주 전(taper: true) 컨디션 조절 [필수]:** taper가 true인 날짜는 평상시 강도가 적용되면 시합날 최상의 퍼포먼스를 낼 수 없습니다. 반드시 강도·TSS를 크게 낮추고 Recovery/Active Recovery 위주로만 배정하시오.
-${taperNote}
+${taperNote}${mustRecoveryNote}
 
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
 **훈련 목표:** ${goal}${isEliteOrPro ? ' (Elite/Pro: 고강도·높은 TSS)' : ' (일반 동호인: 회복·지속 가능성 중시)'}
@@ -1070,14 +1082,14 @@ ${workoutsContext}
           var wId = (item && item.workoutId) ? String(item.workoutId).trim() : '';
           var isEmpty = !wId && (!wName || wName === '훈련');
           if (isEmpty && lightweightWorkouts.length > 0) {
-            var fallback = td.taper && recoveryWorkouts.length > 0
+            var fallback = (td.taper || td.mustRecovery) && recoveryWorkouts.length > 0
               ? recoveryWorkouts[j % recoveryWorkouts.length]
               : lightweightWorkouts[workoutIdx % lightweightWorkouts.length];
             wId = fallback.id || '';
             wName = fallback.title || fallback.name || '훈련';
             var dur = fallback.duration_min || 60;
             var tss = fallback.tss_predicted || Math.round(dur * 0.6);
-            if (td.taper) {
+            if (td.taper || td.mustRecovery) {
               dur = Math.min(dur, 45);
               tss = Math.min(tss, 40);
             }
@@ -1089,16 +1101,16 @@ ${workoutsContext}
               type: td.type,
               description: (item && item.description) ? item.description : ''
             };
-            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')' + (td.taper ? ' [테이퍼]' : ''), {});
+            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')' + (td.taper ? ' [테이퍼]' : '') + (td.mustRecovery ? ' [대회 2~3일 전 Recovery]' : ''), {});
             workoutIdx++;
           } else {
             var dur = Math.round(Number(item && item.duration) || 60);
             var tss = Math.round(Number(item && item.predictedTSS) || 50);
-            if (td.taper) {
+            var forceRecovery = td.mustRecovery || (td.taper && /threshold|vo2|anaerobic|sweet spot|tempo/i.test(wName || ''));
+            if (td.taper || td.mustRecovery) {
               dur = Math.min(dur, 45);
               tss = Math.min(tss, 40);
-              var isHeavy = /threshold|vo2|anaerobic|sweet spot|tempo/i.test(wName || '');
-              if (isHeavy && recoveryWorkouts.length > 0) {
+              if (forceRecovery && recoveryWorkouts.length > 0) {
                 var r = recoveryWorkouts[j % recoveryWorkouts.length];
                 wName = r.title || r.name || 'Active Recovery';
                 wId = r.id || '';
