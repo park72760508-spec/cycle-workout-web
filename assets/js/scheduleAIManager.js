@@ -1287,7 +1287,7 @@ ${workoutsContext}
 
       var todayStr = new Date().toISOString().split('T')[0];
       if (startBtn) {
-        startBtn.disabled = dateStr !== todayStr;
+        startBtn.disabled = (dateStr !== todayStr) || (d.isCompleted === true);
         startBtn.onclick = function () {
           startScheduleDetailTraining();
         };
