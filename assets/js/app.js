@@ -3781,18 +3781,18 @@ window.updateTrainingDisplay = function () {
       if (currentRpmValueEl) currentRpmValueEl.textContent = String(Math.round(currentCadence));
     }
     
-    // 프로그레스 바는 RPM 기준 / 달성도 = (현재값/타겟)*100
+    // 프로그레스 바는 RPM 기준 / 달성도 = (현재값/타겟)*100 (100% 초과 허용, 바는 100%까지 채움)
     if (bar && targetRpm > 0) {
-      const pct = Math.min(100, (currentCadence / targetRpm) * 100);
-      bar.style.width = pct + "%";
-      if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
-      else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
-      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
-      else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+      const pct = (currentCadence / targetRpm) * 100;
+      bar.style.width = Math.min(100, pct) + "%";
+      if (pct < 90) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+      else if (pct < 105) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#5eead4,#2dd4bf)";
+      else bar.style.background = "linear-gradient(90deg,#a855f7,#7c3aed)";
     }
     const achievementEl = safeGetElement("achievementValueBar");
     if (achievementEl && targetRpm > 0) {
-      achievementEl.textContent = String(Math.round(Math.min(100, (currentCadence / targetRpm) * 100)));
+      achievementEl.textContent = String(Math.round((currentCadence / targetRpm) * 100));
     }
     
   } else if (targetType === 'dual') {
@@ -3812,18 +3812,18 @@ window.updateTrainingDisplay = function () {
       if (currentRpmValueEl) currentRpmValueEl.textContent = String(Math.round(currentCadence));
     }
     
-    // 프로그레스 바는 파워 기준 / 달성도 = (현재 파워/타겟)*100
+    // 프로그레스 바는 파워 기준 / 달성도 = (현재 파워/타겟)*100 (100% 초과 허용, 바는 100%까지 채움)
     if (bar) {
-      const pct = targetPower > 0 ? Math.min(100, (currentPower / targetPower) * 100) : 0;
-      bar.style.width = pct + "%";
-      if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
-      else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
-      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
-      else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+      const pct = targetPower > 0 ? (currentPower / targetPower) * 100 : 0;
+      bar.style.width = Math.min(100, pct) + "%";
+      if (pct < 90) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+      else if (pct < 105) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#5eead4,#2dd4bf)";
+      else bar.style.background = "linear-gradient(90deg,#a855f7,#7c3aed)";
     }
     const achievementElDual = safeGetElement("achievementValueBar");
     if (achievementElDual && targetPower > 0) {
-      achievementElDual.textContent = String(Math.round(Math.min(100, (currentPower / targetPower) * 100)));
+      achievementElDual.textContent = String(Math.round((currentPower / targetPower) * 100));
     }
     
   } else {
@@ -3840,18 +3840,18 @@ window.updateTrainingDisplay = function () {
     if (currentPowerUnitEl) currentPowerUnitEl.textContent = "WATTS";
     if (currentRpmSectionEl) currentRpmSectionEl.style.display = "none";
     
-    // 프로그레스 바는 파워 기준 / 달성도 = (현재 파워/타겟)*100
+    // 프로그레스 바는 파워 기준 / 달성도 = (현재 파워/타겟)*100 (100% 초과 허용, 바는 100%까지 채움)
     if (bar) {
-      const pct = targetPower > 0 ? Math.min(100, (currentPower / targetPower) * 100) : 0;
-      bar.style.width = pct + "%";
-      if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
-      else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
-      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
-      else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+      const pct = targetPower > 0 ? (currentPower / targetPower) * 100 : 0;
+      bar.style.width = Math.min(100, pct) + "%";
+      if (pct < 90) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+      else if (pct < 105) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#5eead4,#2dd4bf)";
+      else bar.style.background = "linear-gradient(90deg,#a855f7,#7c3aed)";
     }
     const achievementElFtp = safeGetElement("achievementValueBar");
     if (achievementElFtp && targetPower > 0) {
-      achievementElFtp.textContent = String(Math.round(Math.min(100, (currentPower / targetPower) * 100)));
+      achievementElFtp.textContent = String(Math.round((currentPower / targetPower) * 100));
     }
   }
 
