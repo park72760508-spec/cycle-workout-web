@@ -2938,6 +2938,14 @@
     </div>
     <p class="schedule-update-overlay-text" style="margin-top: 20px; font-size: 1em; font-weight: 600; color: #22c55e;">업데이트 중.....</p>
   </div>
+  <!-- 훈련 시작 로딩 오버레이 (화면 맨 앞, 녹색 큰 원 스피너) -->
+  <div id="scheduleStartTrainingOverlay" class="schedule-start-training-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100002; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);">
+    <div class="ai-loading-spinner-wrap ai-loading-spinner-wrap--large">
+      <div class="ai-loading-spinner-bg"></div>
+      <div class="ai-loading-spinner"></div>
+    </div>
+    <p class="schedule-start-training-overlay-text" style="margin-top: 24px; font-size: 1.1em; font-weight: 600; color: #22c55e;">훈련 준비 중.....</p>
+  </div>
 
   <!-- AI 스케줄 상세 팝업 모달 (날짜 클릭 시) -->
   <div id="scheduleDetailModal" class="modal" style="display: none;">
@@ -2957,7 +2965,7 @@
           </div>
         </div>
         <div id="scheduleDetailGraph" style="margin: 16px 0; min-height: 120px;"></div>
-        <div class="btn-row">
+        <div class="btn-row" onclick="var b=document.getElementById('btnStartScheduleTraining'); if(b&&b.disabled&&event.target===b){ alert('지정된 날짜에서 훈련을 수행해 주세요.'); if(event.preventDefault) event.preventDefault(); if(event.stopPropagation) event.stopPropagation(); return false; }">
           <button type="button" class="btn btn-success" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()">훈련 시작</button>
         </div>
       </div>
