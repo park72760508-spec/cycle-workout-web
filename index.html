@@ -1952,7 +1952,7 @@
                 <span>훈련 일지</span>
               </button>
               <!-- 2줄: 훈련 스케줄, 사용자 정보 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('scheduleListScreen'); if (typeof loadTrainingSchedules === 'function') { setTimeout(() => loadTrainingSchedules(), 200); } }">
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('aiScheduleScreen'); if (typeof loadAIScheduleScreen === 'function') { setTimeout(loadAIScheduleScreen, 200); } }">
                 <span>훈련 스케줄</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }">
@@ -2617,6 +2617,30 @@
 
   <!-- ========== 훈련 스케줄 관련 화면들 ========== -->
   
+  <!-- AI 훈련 스케줄 메인 화면 (Route: /schedule, Manage Your Career > 훈련 스케줄) -->
+  <div id="aiScheduleScreen" class="screen">
+    <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
+      <button type="button" class="p-2 rounded-lg" onclick="showScreen('myCareerScreen')" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="schedule-title-icon"> 훈련 스케줄</h1>
+      <button type="button" class="p-2 rounded-lg" onclick="if(typeof openScheduleCreateAIModal==='function')openScheduleCreateAIModal()" aria-label="스케줄 작성" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+      </button>
+    </div>
+    <p class="subtitle" id="aiScheduleSubHeader" style="text-align: center; margin: 0 0 12px; color: #666; font-size: 0.9em;">스케줄을 생성해주세요</p>
+    
+    <div id="aiScheduleCalendar" class="ai-schedule-calendar training-calendar">
+      <div class="loading-spinner">캘린더를 불러오는 중...</div>
+    </div>
+    
+    <div style="padding: 0 16px 16px; display: flex; gap: 8px; justify-content: center;">
+      <button type="button" class="btn btn-secondary btn-default-style" onclick="showScreen('scheduleListScreen');if(typeof loadTrainingSchedules==='function')setTimeout(loadTrainingSchedules,200);">
+        Training Rooms
+      </button>
+    </div>
+  </div>
+
   <!-- 스케줄 목록 화면 -->
   <div id="scheduleListScreen" class="screen">
     <div class="header">
@@ -2782,6 +2806,122 @@
         <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
         <span>뒤로 가기</span>
       </button>
+    </div>
+  </div>
+
+  <!-- AI 스케줄 생성 설정 모달 (Gemini 프롬프트 폼) -->
+  <div id="scheduleCreateAIModal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="if(typeof closeScheduleCreateAIModal==='function')closeScheduleCreateAIModal()"></div>
+    <div class="modal-content" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3>AI 훈련 스케줄 생성</h3>
+        <button type="button" class="modal-close" onclick="closeScheduleCreateAIModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>사용자 정보 (읽기 전용)</label>
+          <div id="aiScheduleUserInfo" style="padding: 10px; background: #f5f5f5; border-radius: 8px; font-size: 0.9em; color: #444;"></div>
+        </div>
+        <div class="form-group">
+          <label>대회 일정 *</label>
+          <input type="date" id="aiScheduleEventDate" required />
+        </div>
+        <div class="form-group">
+          <label>대회 거리 (km) *</label>
+          <input type="number" id="aiScheduleEventDistance" placeholder="100" min="10" max="500" required />
+        </div>
+        <div class="form-group">
+          <label>대회 목표 *</label>
+          <select id="aiScheduleEventGoal">
+            <option value="입상">입상</option>
+            <option value="완주">완주</option>
+            <option value="기량향상">기량향상</option>
+            <option value="참가의의">참가의의</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>인도어 요일</label>
+          <div class="weekday-checkbox-row">
+            <label><input type="checkbox" name="aiIndoorDays" value="0"><span>일</span></label>
+            <label><input type="checkbox" name="aiIndoorDays" value="1"><span>월</span></label>
+            <label><input type="checkbox" name="aiIndoorDays" value="2"><span>화</span></label>
+            <label><input type="checkbox" name="aiIndoorDays" value="3"><span>수</span></label>
+            <label><input type="checkbox" name="aiIndoorDays" value="4"><span>목</span></label>
+            <label><input type="checkbox" name="aiIndoorDays" value="5"><span>금</span></label>
+            <label><input type="checkbox" name="aiIndoorDays" value="6"><span>토</span></label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>아웃도어 요일</label>
+          <div class="weekday-checkbox-row">
+            <label><input type="checkbox" name="aiOutdoorDays" value="0"><span>일</span></label>
+            <label><input type="checkbox" name="aiOutdoorDays" value="1"><span>월</span></label>
+            <label><input type="checkbox" name="aiOutdoorDays" value="2"><span>화</span></label>
+            <label><input type="checkbox" name="aiOutdoorDays" value="3"><span>수</span></label>
+            <label><input type="checkbox" name="aiOutdoorDays" value="4"><span>목</span></label>
+            <label><input type="checkbox" name="aiOutdoorDays" value="5"><span>금</span></label>
+            <label><input type="checkbox" name="aiOutdoorDays" value="6"><span>토</span></label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>인도어 시간 제한</label>
+            <select id="aiScheduleIndoorTimeLimit">
+              <option value="60">60분</option>
+              <option value="90">90분</option>
+              <option value="120">120분</option>
+              <option value="9999">제한 없음</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>아웃도어 시간 제한</label>
+            <select id="aiScheduleOutdoorTimeLimit">
+              <option value="120">2시간</option>
+              <option value="180">3시간</option>
+              <option value="240">4시간</option>
+              <option value="9999">제한 없음</option>
+            </select>
+          </div>
+        </div>
+        <div id="aiScheduleProgressSection" style="display: none; margin-top: 16px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div class="loading-spinner" style="margin-bottom: 8px;">
+            <div class="spinner"></div>
+          </div>
+          <div id="aiScheduleProgressText" style="font-size: 0.95em; font-weight: 600; color: #334155;">스케줄 분석 중...</div>
+          <div id="aiScheduleProgressDetail" style="font-size: 0.85em; color: #64748b; margin-top: 4px;"></div>
+        </div>
+        <div class="btn-row" style="margin-top: 16px;" id="aiScheduleBtnRow">
+          <button type="button" class="btn btn-success" id="btnGenerateAISchedule" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()">
+            스케줄 생성
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeScheduleCreateAIModal()">취소</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 스케줄 상세 팝업 모달 (날짜 클릭 시) -->
+  <div id="scheduleDetailModal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="if(typeof closeScheduleDetailModal==='function')closeScheduleDetailModal()"></div>
+    <div class="modal-content" style="max-width: 420px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 id="scheduleDetailModalTitle">훈련 상세</h3>
+        <button type="button" class="modal-close" onclick="closeScheduleDetailModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="scheduleDetailInfo" style="margin-bottom: 16px;"></div>
+        <div class="form-group">
+          <label>날짜 변경</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="date" id="scheduleDetailDateInput" />
+            <button type="button" class="btn btn-primary" onclick="if(typeof updateScheduleDetailDate==='function')updateScheduleDetailDate()">변경</button>
+          </div>
+        </div>
+        <div id="scheduleDetailGraph" style="margin: 16px 0; min-height: 120px;"></div>
+        <div class="btn-row">
+          <button type="button" class="btn btn-success" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()">훈련 시작</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -9696,6 +9836,7 @@
 <script src="assets/js/groupTrainingManager_part2.js"></script>
 <!-- 훈련 스케줄 모듈 (다른 JS 파일들과 동일한 위치) -->
 <script src="assets/js/scheduleManager.js"></script>
+  <script src="assets/js/scheduleAIManager.js"></script>
 <!-- Training Manager - 주간 목표 TSS 계산 -->
 <script src="assets/js/trainingManager.js"></script>
 <!-- Training Room 모듈 -->
