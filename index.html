@@ -2946,6 +2946,24 @@
     </div>
   </div>
 
+  <!-- AI 훈련 계획 수립 결과·효과 분석 팝업 (모바일 훈련 결과 팝업 디자인 동일) -->
+  <div id="aiScheduleResultModal" class="mobile-training-result-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; justify-content: center; z-index: 10002; animation: fadeIn 0.3s ease-out;" onclick="if(event.target===this && typeof closeAIScheduleResultModal==='function')closeAIScheduleResultModal()">
+    <div class="mobile-training-result-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.1;">
+      <img src="assets/img/STELVIO AI.png" alt="Stelvio" style="max-width: 400px; max-height: 400px; width: 100%; height: auto; object-fit: contain; opacity: 0.08; filter: blur(1px);" />
+    </div>
+    <div class="mobile-training-result-content" style="position: relative; background: rgba(30, 30, 30, 0.95); border: 2px solid #00d4aa; border-radius: 12px; padding: 16px 20px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3); backdrop-filter: blur(10px);">
+      <div class="mobile-result-header" style="text-align: center; margin-bottom: 16px;">
+        <h2 class="mobile-result-title" style="font-size: 1.5em; font-weight: bold; color: #00d4aa; margin: 0 0 4px 0; text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);">훈련 계획 수립 완료</h2>
+        <p class="mobile-result-subtitle" style="font-size: 0.9em; color: #ffffff; margin: 0; opacity: 0.9;">목적과 수립 결과 효과 분석</p>
+      </div>
+      <div id="aiScheduleResultBody" class="mobile-result-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+        <!-- 동적 삽입 -->
+      </div>
+      <div id="aiScheduleResultEffect" style="font-size: 0.9em; color: #ccc; line-height: 1.6; margin-bottom: 16px; padding: 12px; background: rgba(0, 212, 170, 0.08); border-radius: 8px; border: 1px solid rgba(0, 212, 170, 0.2);"></div>
+      <button class="mobile-result-close-btn" onclick="if(typeof closeAIScheduleResultModal==='function')closeAIScheduleResultModal()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px; color: #000; font-size: 1em; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);">확인</button>
+    </div>
+  </div>
+
   <!-- 4) 워크아웃 작성/수정 화면 -->
   <!-- 워크아웃 작성/수정 화면에서 이 ID들이 있어야 합니다 -->
   <div id="workoutBuilderScreen" class="screen">
