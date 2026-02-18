@@ -64,20 +64,31 @@
    * Firebase Realtime Database에서 AI 스케줄 로드
    */
   window.loadAIScheduleFromFirebase = async function (userId) {
-    const db = getDb();
-    if (!db) throw new Error('Firebase Database를 사용할 수 없습니다.');
+    try {
+      var db = getDb();
+      if (!db) throw new Error('Firebase Database를 사용할 수 없습니다.');
 
-    const ref = db.ref('users/' + userId + '/training_schedule');
-    const snapshot = await ref.once('value');
-    const val = snapshot.val();
-    if (!val) return null;
-
-    const data = {
-      scheduleName: val.scheduleName || '내 훈련 스케줄',
-      days: val.days || {},
-      meta: val.meta || {}
-    };
-    return data;
+      var ref = db.ref('users/' + userId + '/training_schedule');
+      var snapshot = await ref.once('value');
+      var val = snapshot.val();
+      if (val) {
+        return {
+          scheduleName: val.scheduleName || '내 훈련 스케줄',
+          days: val.days || {},
+          meta: val.meta || {}
+        };
+      }
+    } catch (e) {
+      console.warn('[AI스케줄] Firebase 로드 실패:', e);
+    }
+    try {
+      var fallback = localStorage.getItem('aiScheduleFallback_' + userId);
+      if (fallback) {
+        var parsed = JSON.parse(fallback);
+        if (parsed && parsed.days) return parsed;
+      }
+    } catch (e2) {}
+    return null;
   };
 
   /**
@@ -634,6 +645,7 @@
         var baseContext = `당신은 세계 최고의 사이클링 코치입니다.
 
 **이번 요청에서는 오직 ${ym.year}년 ${ym.month + 1}월의 스케줄만 생성하시오.** 다른 달은 생성하지 마세요.
+**반드시 해당 월의 훈련 가능한 모든 날짜(최소 15일~25일)에 대해 훈련을 배정하시오.** 일주일만 생성하지 말고, 월 전체를 꽉 채우시오.
 
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
 **훈련 목표:** ${goal}${isEliteOrPro ? ' (Elite/Pro: 고강도·높은 TSS)' : ' (일반 동호인: 회복·지속 가능성 중시)'}
@@ -646,7 +658,7 @@ ${prevContext}
 **엄격한 지침:**
 - 주말(토/일)에는 사용자가 설정한 아웃도어/인도어 선호도와 시간 제한을 엄격히 준수하시오.
 - 주중에는 회복과 인터벌을 적절히 분배하여 TSS 급증을 방지하시오.
-- 이번 요청에서는 ${ym.year}년 ${ym.month + 1}월에 해당하는 날짜만 포함하시오.
+- 이번 요청에서는 ${ym.year}년 ${ym.month + 1}월에 해당하는 날짜만 포함하시오. 해당 월 내 훈련 가능한 거의 모든 날을 포함해야 함(예: 주 4~6회 훈련 × 4주 = 16~24일).
 - 모든 날짜는 훈련 시작일(${startDateStr}) 이후 또는 당일이어야 한다. 그 이전 날짜는 절대 포함하지 마시오.
 
 **출력 규칙:** 반드시 유효한 JSON 배열만 출력. 작은따옴표 사용 금지, 모든 키와 문자열 값은 큰따옴표(")만 사용. 마지막 요소 뒤 쉼표 금지(trailing comma 금지). description에는 줄바꿈 넣지 말고 한 줄로.
@@ -679,13 +691,28 @@ ${prevContext}
             description: item.description || ''
           };
         }
+      }
 
-        var data = {
-          scheduleName: scheduleName,
-          days: allDays,
-          meta: meta
-        };
+      var data = {
+        scheduleName: scheduleName,
+        days: allDays,
+        meta: meta
+      };
+
+      updateScheduleProgress(true, 'Firebase에 저장 중...', '');
+      try {
         await window.saveAIScheduleToFirebase(rtdbUserId, data);
+      } catch (saveErr) {
+        console.error('[AI스케줄] Firebase 저장 실패:', saveErr);
+        var msg = saveErr && (saveErr.message || saveErr.code || '') ? String(saveErr.message || saveErr.code) : '저장 실패';
+        if (/permission|PERMISSION_DENIED|unauthorized/i.test(msg)) {
+          if (typeof showToast === 'function') showToast('저장 권한이 없습니다. 로그인 상태와 Realtime Database 규칙을 확인하세요.', 'error');
+        } else {
+          if (typeof showToast === 'function') showToast('Firebase 저장 실패: ' + msg, 'error');
+        }
+        try {
+          localStorage.setItem('aiScheduleFallback_' + rtdbUserId, JSON.stringify(data));
+        } catch (e) {}
       }
 
       updateScheduleProgress(true, '완료!', '스케줄이 저장되었습니다.');
