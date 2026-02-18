@@ -539,6 +539,33 @@
   }
 
   /**
+   * 사용자 설정(인도어/아웃도어 요일)에 맞는 훈련 날짜 목록 생성
+   * @param {Date} start - 훈련 시작일
+   * @param {Date} end - 대회일(끝)
+   * @param {number[]} indoorDays - 인도어 요일 (0=일..6=토)
+   * @param {number[]} outdoorDays - 아웃도어 요일
+   * @returns {{dateStr: string, type: string, dayOfWeek: number}[]}
+   */
+  function computeTrainingDates(start, end, indoorDays, outdoorDays) {
+    var dates = [];
+    var d = new Date(start);
+    d.setHours(0, 0, 0, 0);
+    var endMs = end.getTime();
+    var dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    while (d.getTime() <= endMs) {
+      var dow = d.getDay();
+      var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (indoorDays.indexOf(dow) >= 0) {
+        dates.push({ dateStr: dateStr, type: 'Indoor', dayOfWeek: dow, dayName: dayNames[dow] });
+      } else if (outdoorDays.indexOf(dow) >= 0) {
+        dates.push({ dateStr: dateStr, type: 'Outdoor', dayOfWeek: dow, dayName: dayNames[dow] });
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    return dates;
+  }
+
+  /**
    * 이전 달 마지막 주 요약 생성 (문맥 체이닝용)
    */
   function summarizeLastWeek(days) {
@@ -705,8 +732,29 @@
       if (m > 11) { m = 0; y++; }
     }
 
-    scheduleLog('MONTHS', '생성할 월 ' + monthsToGenerate.length + '개: ' + monthsToGenerate.map(function (x) { return x.year + '-' + (x.month + 1); }).join(', '), monthsToGenerate);
-    updateScheduleProgress(true, '스케줄 생성 준비 완료', monthsToGenerate.length + '개월 생성 예정');
+    var trainingDates = computeTrainingDates(startDate, eventDate, indoorDays, outdoorDays);
+    scheduleLog('DATES', '계산된 훈련일 ' + trainingDates.length + '일: 인도어(' + indoorStr + '), 아웃도어(' + outdoorStr + ')', { count: trainingDates.length, sample: trainingDates.slice(0, 5) });
+
+    if (trainingDates.length === 0) {
+      scheduleLog('ERROR', '훈련 가능한 날짜가 없습니다. 인도어/아웃도어 요일을 최소 하나씩 선택하세요.', {});
+      updateScheduleProgress(false);
+      if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
+      if (btnRow) btnRow.style.display = 'flex';
+      if (typeof showToast === 'function') showToast('인도어 또는 아웃도어 요일을 최소 하나씩 선택해주세요.', 'error');
+      return;
+    }
+
+    var byMonth = {};
+    for (var k = 0; k < trainingDates.length; k++) {
+      var td = trainingDates[k];
+      var ymKey = td.dateStr.substring(0, 7);
+      if (!byMonth[ymKey]) byMonth[ymKey] = [];
+      byMonth[ymKey].push(td);
+    }
+    var monthKeys = Object.keys(byMonth).sort();
+
+    scheduleLog('MONTHS', '월별 분할: ' + monthKeys.join(', ') + ' (총 ' + trainingDates.length + '일)', { byMonth: monthKeys.map(function (mk) { return mk + ':' + byMonth[mk].length + '일'; }) });
+    updateScheduleProgress(true, '스케줄 생성 준비 완료', trainingDates.length + '일 (' + monthKeys.length + '개월)');
 
     var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.0-flash-exp';
     var scheduleName = eventGoal + ' ' + eventDistance + 'km (' + eventDateStr + ')';
@@ -725,79 +773,61 @@
     };
 
     try {
-      for (var i = 0; i < monthsToGenerate.length; i++) {
-        var ym = monthsToGenerate[i];
-        var label = ym.year + '년 ' + (ym.month + 1) + '월';
-        updateScheduleProgress(true, label + ' 스케줄 생성 중...', (i + 1) + '/' + monthsToGenerate.length + ' 개월');
+      for (var i = 0; i < monthKeys.length; i++) {
+        var ymKey = monthKeys[i];
+        var monthDates = byMonth[ymKey];
+        var label = ymKey.replace('-', '년 ') + '월';
+        updateScheduleProgress(true, label + ' 스케줄 생성 중...', (i + 1) + '/' + monthKeys.length + ' 개월 (' + monthDates.length + '일)');
 
-        var prevSummary = i > 0 ? summarizeLastWeek(allDays) : null;
-        var prevContext = prevSummary
-          ? '\n**이전 달 마지막 주 요약 (문맥 유지):**\n- 훈련 횟수: ' + prevSummary.sessions + '회\n- 주간 TSS: ' + prevSummary.totalTSS + '\n- 최대 단일 TSS: ' + prevSummary.maxSingleTSS + '\n- 마지막 훈련일: ' + prevSummary.lastDate + '\n→ 이에 맞춰 이번 달 강도와 회복을 조정하세요.'
-          : '';
-
-        var monthStart = new Date(ym.year, ym.month, 1);
-        var monthEnd = new Date(ym.year, ym.month + 1, 0);
-        var effectiveStart = startDate > monthStart ? startDate : monthStart;
-        var effectiveStartStr = effectiveStart.getFullYear() + '-' + String(effectiveStart.getMonth() + 1).padStart(2, '0') + '-' + String(effectiveStart.getDate()).padStart(2, '0');
-        var msDiff = monthEnd - effectiveStart;
-        var daysInRange = Math.max(1, Math.floor(msDiff / (24 * 60 * 60 * 1000)) + 1);
-        var expectedMinDays = Math.max(10, Math.min(25, Math.floor(daysInRange * 0.5)));
+        var dateListJson = JSON.stringify(monthDates.map(function (t) { return { date: t.dateStr, type: t.type, dayName: t.dayName }; }));
 
         var baseContext = `당신은 세계 최고의 사이클링 코치입니다.
 
-**이번 요청에서는 오직 ${ym.year}년 ${ym.month + 1}월의 스케줄만 생성하시오.** 다른 달은 생성하지 마세요.
-**필수: 해당 월(${ym.year}-${String(ym.month + 1).padStart(2, '0')})에서 훈련시작일(${effectiveStartStr}) 이후의 거의 모든 훈련 가능일을 포함하시오. 최소 ${expectedMinDays}일 이상 생성. 주 4~6회 훈련 × 4주 = 16~24일 수준으로 꽉 채우시오. 절대 1주(7일)만 생성하지 마시오.**
+**아래 지정된 날짜에 대해, 각 날짜당 정확히 1개씩 훈련을 생성하시오. 날짜 순서와 개수를 변경하지 마시오.**
+
+**생성할 날짜 목록 (반드시 이 목록의 모든 날짜에 대해 1개씩 생성):**
+${dateListJson}
 
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
 **훈련 목표:** ${goal}${isEliteOrPro ? ' (Elite/Pro: 고강도·높은 TSS)' : ' (일반 동호인: 회복·지속 가능성 중시)'}
-**제약:** 인도어 요일 ${indoorStr} (최대 ${indoorLimit}분), 아웃도어 요일 ${outdoorStr} (최대 ${outdoorLimit}분)
-**훈련 시작일:** ${startDateStr} (이 날짜 이전의 날짜는 절대 포함하지 마시오.)
+**제약:** 인도어일은 최대 ${indoorLimit}분, 아웃도어일은 최대 ${outdoorLimit}분
 **대회:** ${eventDateStr}, ${eventDistance}km, ${eventGoal}
 ${workoutsContext}
-${prevContext}
 
-**엄격한 지침:**
-- 주말(토/일)에는 사용자가 설정한 아웃도어/인도어 선호도와 시간 제한을 엄격히 준수하시오.
-- 주중에는 회복과 인터벌을 적절히 분배하여 TSS 급증을 방지하시오.
-- 이번 요청에서는 ${ym.year}년 ${ym.month + 1}월에 해당하는 날짜만 포함하시오. 해당 월 내 훈련 가능한 거의 모든 날을 포함해야 함(예: 주 4~6회 훈련 × 4주 = 16~24일).
-- 모든 날짜는 훈련 시작일(${startDateStr}) 이후 또는 당일이어야 한다. 그 이전 날짜는 절대 포함하지 마시오.
-
-**출력 규칙:** 반드시 유효한 JSON 배열만 출력. 작은따옴표 사용 금지, 모든 키와 문자열 값은 큰따옴표(")만 사용. 마지막 요소 뒤 쉼표 금지(trailing comma 금지). description에는 줄바꿈 넣지 말고 한 줄로.
+**출력 규칙:**
+- 위 날짜 목록의 각 항목에 대해 정확히 1개씩, 같은 순서대로 JSON 배열로 출력.
+- type 필드는 각 날짜의 Indoor/Outdoor 값을 그대로 사용.
+- 반드시 유효한 JSON 배열만 출력. 작은따옴표 금지, 큰따옴표만 사용. trailing comma 금지. description은 한 줄로.
 [
   { "date": "YYYY-MM-DD", "workoutName": "String", "workoutId": "String 또는 빈 문자열", "duration": Number(분), "predictedTSS": Number, "type": "Indoor"|"Outdoor", "description": "String" }
 ]`;
 
-        scheduleLog('GEMINI', label + ' API 요청 중...', { year: ym.year, month: ym.month + 1 });
+        scheduleLog('GEMINI', label + ' API 요청 (' + monthDates.length + '일)', { count: monthDates.length });
         var parsed = await generateMonthlySchedule(apiKey, {
-          year: ym.year,
-          month: ym.month,
+          year: parseInt(ymKey.substring(0, 4), 10),
+          month: parseInt(ymKey.substring(5, 7), 10) - 1,
           prompt: baseContext,
           modelName: modelName
         });
 
-        scheduleLog('GEMINI', label + ' 응답 파싱 완료: ' + (parsed ? parsed.length : 0) + '건', { parsedCount: parsed ? parsed.length : 0, sample: parsed && parsed[0] ? parsed[0] : null });
+        scheduleLog('GEMINI', label + ' 응답: ' + (parsed ? parsed.length : 0) + '건 (예상 ' + monthDates.length + '건)', { parsedCount: parsed ? parsed.length : 0, expected: monthDates.length });
 
         var addedThisMonth = 0;
-        for (var j = 0; j < parsed.length; j++) {
-          var item = parsed[j];
-          var date = item.date || item.dateStr;
-          if (!date) continue;
-          var d = String(date).slice(0, 10);
-          if (d < startDateStr) continue;
-          var yr = parseInt(d.substring(0, 4), 10);
-          var mo = parseInt(d.substring(5, 7), 10) - 1;
-          if (yr !== ym.year || mo !== ym.month) continue;
-          allDays[d] = {
-            workoutName: item.workoutName || '훈련',
-            workoutId: item.workoutId || '',
-            duration: Math.round(Number(item.duration) || 60),
-            predictedTSS: Math.round(Number(item.predictedTSS) || 50),
-            type: item.type === 'Outdoor' ? 'Outdoor' : 'Indoor',
-            description: item.description || ''
+        for (var j = 0; j < monthDates.length; j++) {
+          var td = monthDates[j];
+          var item = parsed && parsed[j] ? parsed[j] : null;
+          var dateStr = td.dateStr;
+          allDays[dateStr] = {
+            workoutName: (item && item.workoutName) ? item.workoutName : '훈련',
+            workoutId: (item && item.workoutId) ? item.workoutId : '',
+            duration: Math.round(Number(item && item.duration) || 60),
+            predictedTSS: Math.round(Number(item && item.predictedTSS) || 50),
+            type: td.type,
+            description: (item && item.description) ? item.description : ''
           };
           addedThisMonth++;
         }
-        scheduleLog('PARSE', label + ' 추가됨: ' + addedThisMonth + '일 (전체 누적: ' + Object.keys(allDays).length + '일)', { added: addedThisMonth, total: Object.keys(allDays).length });
+        scheduleLog('PARSE', label + ' 반영: ' + addedThisMonth + '일 (전체 ' + Object.keys(allDays).length + '일)', { added: addedThisMonth, total: Object.keys(allDays).length });
       }
 
       var data = {
