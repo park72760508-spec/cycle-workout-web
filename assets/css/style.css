@@ -7247,6 +7247,9 @@ button[aria-disabled="true"] {
   .enhanced-countdown-value {
     font-size: 48px;
   }
+  #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-value {
+    font-size: 48px;
+  }
 }
 
 /* 태블릿 세로 모드 (768px 이하 1024px 이상) - 여전히 3열 유지 */
@@ -7271,6 +7274,9 @@ button[aria-disabled="true"] {
   }
   
   .enhanced-countdown-value {
+    font-size: 46px;
+  }
+  #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-value {
     font-size: 46px;
   }
   
@@ -7467,6 +7473,9 @@ button[aria-disabled="true"] {
   .enhanced-countdown-value {
     font-size: 44px;
   }
+  #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-value {
+    font-size: 44px;
+  }
   
   .enhanced-left-panel .enhanced-metric-value,
   .enhanced-right-panel .enhanced-metric-value {
@@ -7494,6 +7503,9 @@ button[aria-disabled="true"] {
   }
   
   .enhanced-countdown-value {
+    font-size: 40px;
+  }
+  #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-value {
     font-size: 40px;
   }
 }
@@ -17206,8 +17218,9 @@ body.mobile-dashboard-active {
   font-size: 11px;
   margin-right: 6px;
 }
+/* 세그먼트 평균값 폰트 크기 = 세그먼트 남은 시간(05:00)과 동일 */
 #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-value {
-  font-size: 18px;
+  font-size: 50px;
   font-weight: 700;
 }
 #trainingScreen .laptop-gauge-box .laptop-gauge-inside-avg .enhanced-avg-unit {
