@@ -2104,21 +2104,15 @@ function updateSegmentBarTick(){
     const elAvgRpmValue = document.getElementById("avgSegmentRpmValue");
     
     if (targetType === 'cadence_rpm') {
-      // cadence_rpm 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM), 단위 w 삭제
+      // cadence_rpm: 세그먼트 평균 파워만 표시, (XX rpm) 제거
       if (elAvg) elAvg.textContent = String(curAvgPower);
       if (elAvgUnit) elAvgUnit.textContent = "";
-      if (elAvgRpmSection) {
-        elAvgRpmSection.style.display = "inline";
-        if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
-      }
+      if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
     } else if (targetType === 'dual') {
-      // dual 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM), 단위 w 삭제
+      // dual: 세그먼트 평균 파워만 표시, (XX rpm) 제거
       if (elAvg) elAvg.textContent = String(curAvgPower);
       if (elAvgUnit) elAvgUnit.textContent = "";
-      if (elAvgRpmSection) {
-        elAvgRpmSection.style.display = "inline";
-        if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
-      }
+      if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
     } else {
       // ftp_pct 타입 (기본): 세그먼트 평균 파워만 표시, 단위 w 삭제
       if (elAvg) elAvg.textContent = String(curAvgPower);
@@ -3855,6 +3849,20 @@ window.updateTrainingDisplay = function () {
     }
   }
 
+  // ftp_pctz일 때 상한값 저장 (노트북 원호 상한 표시용)
+  if (targetType === 'ftp_pctz' && seg?.target_value) {
+    const tv = seg.target_value;
+    const pctzD = typeof tv === 'string' ? (tv.includes('~') ? '~' : (tv.includes('/') ? '/' : null)) : null;
+    if (pctzD && typeof tv === 'string') {
+      const parts = tv.split(pctzD).map(s => s.trim());
+      if (parts.length >= 2) {
+        const ftp = window.userFTP || 200;
+        const maxPct = Number(parts[1]) || 75;
+        window.currentSegmentMaxPower = Math.round(ftp * (maxPct / 100));
+      }
+    }
+  }
+
   // 속도계 TARGET 텍스트 업데이트 (ftp_pct, ftp_pctz, cadence_rpm, dual 타입별 독립 표시)
   if (t) {
     if (targetType === 'dual' || targetType === 'cadence_rpm') {
@@ -3881,13 +3889,55 @@ window.updateTrainingDisplay = function () {
       }
     }
   }
-  if (laptopTargetEl) {
-    if (targetType === 'dual' || targetType === 'cadence_rpm') {
-      laptopTargetEl.textContent = targetRpm > 0 ? String(Math.round(targetRpm)) : String(Math.round(targetPower));
-      laptopTargetEl.style.color = (targetType === 'cadence_rpm' || targetRpm > 0) ? '#ef4444' : '';
-    } else {
+
+  // 노트북(태블릿) 속도계: 라벨·값 표기 (모바일 개인훈련 대시보드와 동일 기준)
+  const laptopTargetLabelEl = safeGetElement("laptop-ui-target-label");
+  const laptopTargetRpmUnitEl = safeGetElement("laptop-ui-target-rpm-unit");
+  if (laptopTargetLabelEl) {
+    laptopTargetLabelEl.removeAttribute('fill');
+    laptopTargetLabelEl.removeAttribute('font-size');
+    laptopTargetLabelEl.removeAttribute('y');
+  }
+  if (laptopTargetRpmUnitEl) laptopTargetRpmUnitEl.style.display = 'none';
+  if (targetType === 'cadence_rpm') {
+    if (laptopTargetLabelEl) {
+      laptopTargetLabelEl.textContent = 'RPM';
+      laptopTargetLabelEl.setAttribute('fill', '#888');
+    }
+    if (laptopTargetEl) {
+      laptopTargetEl.textContent = targetRpm > 0 ? String(Math.round(targetRpm)) : '0';
+      laptopTargetEl.setAttribute('fill', targetRpm > 0 ? '#ef4444' : '#ff8c00');
+    }
+  } else if (targetType === 'dual') {
+    if (targetRpm > 0 && laptopTargetLabelEl) {
+      laptopTargetLabelEl.textContent = '';
+      laptopTargetLabelEl.setAttribute('fill', '#ef4444');
+      laptopTargetLabelEl.setAttribute('font-size', '10');
+      laptopTargetLabelEl.setAttribute('y', '90');
+      const tspanNum = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspanNum.setAttribute('fill', '#ef4444');
+      tspanNum.textContent = String(Math.round(targetRpm));
+      laptopTargetLabelEl.appendChild(tspanNum);
+      const tspanUnit = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspanUnit.setAttribute('fill', '#888');
+      tspanUnit.textContent = ' RPM';
+      laptopTargetLabelEl.appendChild(tspanUnit);
+    } else if (laptopTargetLabelEl) {
+      laptopTargetLabelEl.textContent = 'TARGET';
+      laptopTargetLabelEl.setAttribute('fill', '#888');
+    }
+    if (laptopTargetEl) {
       laptopTargetEl.textContent = String(Math.round(targetPower));
-      laptopTargetEl.style.color = '';
+      laptopTargetEl.setAttribute('fill', '#ff8c00');
+    }
+  } else {
+    if (laptopTargetLabelEl) {
+      laptopTargetLabelEl.textContent = 'TARGET';
+      laptopTargetLabelEl.setAttribute('fill', '#888');
+    }
+    if (laptopTargetEl) {
+      laptopTargetEl.textContent = targetPower > 0 ? String(Math.round(targetPower)) : '0';
+      laptopTargetEl.setAttribute('fill', '#ff8c00');
     }
   }
 
@@ -15196,7 +15246,7 @@ function updateLaptopTargetPowerArc() {
     const maxArc = safeGetElement('laptop-gauge-max-arc');
     if (maxArc) {
       maxArc.setAttribute('d', maxPathData);
-      maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)');
+      maxArc.setAttribute('stroke', 'rgba(255, 180, 100, 0.4)'); // 연한 주황색
       maxArc.style.display = 'block';
     }
   } else {
