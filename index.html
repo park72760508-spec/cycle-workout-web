@@ -4472,8 +4472,9 @@
           <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: inline-block;" />
         </div>
       </div>
-      <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end;">
-        <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: #374151; transition: all 0.2s;">오늘 기록</button>
+      <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
+        <button id="btnStravaSyncTodayAll" type="button" onclick="if(typeof startStravaSyncTodayAll==='function'){startStravaSyncTodayAll();}" style="display: none; padding: 12px 24px; background: rgba(59, 130, 246, 0.25); border: 1px solid rgba(59, 130, 246, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #1d4ed8; transition: all 0.2s;">오늘 기록(ALL)</button>
+        <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: rgba(34, 197, 94, 0.25); border: 1px solid rgba(34, 197, 94, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #15803d; transition: all 0.2s;">오늘 기록</button>
         <button onclick="confirmStravaSync()" style="padding: 12px 24px; background: #fc4c02; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; transition: all 0.2s;">동기화 시작</button>
       </div>
     </div>
@@ -4483,6 +4484,14 @@
   <div id="stravaSyncProgressOverlay" class="strava-sync-progress-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10001; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); flex-direction: column;">
     <div class="strava-sync-spinner" style="width: 64px; height: 64px; border: 4px solid rgba(34, 197, 94, 0.3); border-top-color: #22c55e; border-radius: 50%; animation: stravaSyncSpin 0.9s linear infinite;"></div>
     <p id="stravaSyncProgressText" style="margin-top: 16px; font-size: 1.1em; font-weight: 600; color: #fff;">0 / 0</p>
+  </div>
+  <!-- Strava 오늘 기록(ALL) 동기화 시 녹색 큰 원 스피너 -->
+  <div id="stravaTodayAllOverlay" class="strava-today-all-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100002; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);">
+    <div class="ai-loading-spinner-wrap ai-loading-spinner-wrap--large">
+      <div class="ai-loading-spinner-bg"></div>
+      <div class="ai-loading-spinner" style="border-top-color: #22c55e; box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.25);"></div>
+    </div>
+    <p class="strava-today-all-overlay-text" style="margin-top: 24px; font-size: 1.1em; font-weight: 600; color: #22c55e;">오늘 기록(ALL) 동기화 중.....</p>
   </div>
 
   <!-- 카운트다운 오버레이 -->
