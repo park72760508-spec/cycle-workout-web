@@ -2647,8 +2647,13 @@
     </div>
     <p class="subtitle" id="aiScheduleSubHeader" style="text-align: center; margin: 0 0 12px; color: #666; font-size: 0.9em;">스케줄을 생성해주세요</p>
     
-    <div id="aiScheduleCalendar" class="ai-schedule-calendar training-calendar">
-      <div class="loading-spinner">캘린더를 불러오는 중...</div>
+    <!-- 훈련일지 달력처럼 사각 블럭으로 감싼 미니 달력 -->
+    <div class="card ai-schedule-calendar-card">
+      <div class="mini-calendar-container">
+        <div id="aiScheduleCalendar" class="ai-schedule-calendar training-calendar">
+          <div class="loading-spinner">캘린더를 불러오는 중...</div>
+        </div>
+      </div>
     </div>
     
     <div style="padding: 0 16px 16px; display: flex; gap: 8px; justify-content: center;">
