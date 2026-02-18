@@ -17314,11 +17314,11 @@ body.mobile-dashboard-active {
   margin-bottom: 12px;
   text-align: center;
 }
-/* 세그먼트 평균: 속도계 박스 안, 현재 파워값 바로 아래 (공백 제거) */
+/* 세그먼트 평균: 현재 파워값 바로 밑에 붙여 배치 */
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: 0;   /* 현재 파워↔세그먼트 평균 간격 제거 */
+  margin-top: -28px; /* 속도계 SVG 하단 여백만큼 당겨서 현재 파워값 바로 아래에 붙임 */
   margin-bottom: 6px;
   padding: 0 10px 6px;
   text-align: center;
