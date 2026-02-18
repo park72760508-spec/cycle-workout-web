@@ -319,6 +319,37 @@
   }
 
   /**
+   * Gemini 응답 JSON 파싱 (single quote, trailing comma 등 보정)
+   */
+  function parseGeminiScheduleJson(text) {
+    if (!text || typeof text !== 'string') return [];
+    var raw = text.replace(/```json\n?|\n?```/g, '').trim();
+    var match = raw.match(/\[[\s\S]*\]/);
+    if (match) raw = match[0];
+
+    var fix = raw
+      .replace(/'([^']*)'\s*:/g, '"$1":')                    // single-quoted keys -> "key":
+      .replace(/,(\s*[}\]])/g, '$1');                        // trailing commas
+
+    try {
+      return JSON.parse(fix);
+    } catch (e1) {
+      try {
+        var fix2 = fix.replace(/:\s*'([^']*)'/g, function (_, s) {
+          return ': "' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/\r/g, '') + '"';
+        });
+        return JSON.parse(fix2);
+      } catch (e2) {
+        try {
+          return JSON.parse(raw);
+        } catch (e3) {
+          throw new Error('JSON 파싱 실패: ' + (e1 && e1.message));
+        }
+      }
+    }
+  }
+
+  /**
    * 해당 월의 스케줄을 Gemini에 요청하여 생성 (generateMonthlySchedule)
    */
   function generateMonthlySchedule(apiKey, opts) {
@@ -345,15 +376,7 @@
     }).then(function (res) { return res.json(); }).then(function (json) {
       if (json?.error) throw new Error(json.error.message || 'Gemini API 오류');
       var text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      var parsed = [];
-      try {
-        var cleaned = text.replace(/```json\n?|\n?```/g, '').trim();
-        parsed = JSON.parse(cleaned);
-      } catch (e) {
-        var match = text.match(/\[[\s\S]*\]/);
-        if (match) parsed = JSON.parse(match[0]);
-        else throw new Error('JSON 파싱 실패: ' + (e && e.message));
-      }
+      var parsed = parseGeminiScheduleJson(text);
       if (!Array.isArray(parsed)) throw new Error('배열 형식이 아닙니다.');
       return parsed;
     });
@@ -530,7 +553,7 @@ ${prevContext}
 - 주중에는 회복과 인터벌을 적절히 분배하여 TSS 급증을 방지하시오.
 - 이번 요청에서는 ${ym.year}년 ${ym.month + 1}월에 해당하는 날짜만 포함하시오.
 
-**출력:** JSON 배열만. 다른 텍스트 없음.
+**출력 규칙:** 반드시 유효한 JSON 배열만 출력. 작은따옴표 사용 금지, 모든 키와 문자열 값은 큰따옴표(")만 사용. 마지막 요소 뒤 쉼표 금지(trailing comma 금지). description에는 줄바꿈 넣지 말고 한 줄로.
 [
   { "date": "YYYY-MM-DD", "workoutName": "String", "workoutId": "String 또는 빈 문자열", "duration": Number(분), "predictedTSS": Number, "type": "Indoor"|"Outdoor", "description": "String" }
 ]`;
