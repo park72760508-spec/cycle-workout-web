@@ -2966,9 +2966,9 @@
         </div>
         <div id="scheduleDetailGraph" class="schedule-detail-graph"></div>
         <div class="schedule-detail-start-section">
-          <div id="scheduleDetailWorkoutTitle" class="schedule-detail-workout-title"></div>
-          <div class="schedule-detail-start-btn-wrap" onclick="var b=document.getElementById('btnStartScheduleTraining'); if(b&&b.disabled&&(event.target===b||event.target.closest('#btnStartScheduleTraining'))){ alert('지정된 날짜에서 훈련을 수행해 주세요.'); if(event.preventDefault) event.preventDefault(); if(event.stopPropagation) event.stopPropagation(); return false; }">
+          <div class="schedule-detail-title-row">
             <button type="button" class="btn btn-schedule-start" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()" title="훈련 시작"><img src="assets/img/start.png" alt="훈련 시작" /></button>
+            <div id="scheduleDetailWorkoutTitle" class="schedule-detail-workout-title"></div>
           </div>
         </div>
       </div>
