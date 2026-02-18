@@ -298,64 +298,65 @@ async function saveTrainingResult(extra = {}) {
        tss = Math.max(0, tss);
        np = Math.max(0, np);
        
+       // ----- [임시 비활성화] 스케줄 결과 저장: Firestore 인덱스 적용 후 필요 시 아래 주석 해제 -----
        // schedule_day_id: 스케줄 훈련이면 window.currentScheduleDayId, 일반 훈련이면 null
-       const scheduleDayId = window.currentScheduleDayId || null;
-       
-       // actual_workout_id 우선순위: trainingResult.workoutId > extra.workoutId > window.currentWorkout?.id
-       const actualWorkoutId = trainingResult.workoutId || extra.workoutId || window.currentWorkout?.id || null;
-       
-       const scheduleResultData = {
-         scheduleDayId: scheduleDayId,
-         userId: currentUserId,
-         actualWorkoutId: actualWorkoutId,
-         status: 'completed',
-         duration_min: duration_min,
-         avg_power: stats.avgPower || 0,
-         np: np,
-         tss: tss,
-         hr_avg: stats.avgHR || 0,
-         rpe: 0 // RPE는 사용자 입력 필요
-       };
-       
-       console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
-       console.log('[saveTrainingResult] actual_workout_id 확인:', {
-         trainingResultWorkoutId: trainingResult.workoutId,
-         extraWorkoutId: extra.workoutId,
-         currentWorkoutId: window.currentWorkout?.id,
-         finalActualWorkoutId: actualWorkoutId
-       });
-       console.log('[saveTrainingResult] 세션 데이터 확인:', {
-         startTime: trainingResult.startTime,
-         endTime: trainingResult.endTime,
-         powerDataCount: trainingResult.powerData?.length || 0,
-         hrDataCount: trainingResult.hrData?.length || 0,
-         elapsedTime: extra.elapsedTime,
-         lastElapsedTime: window.lastElapsedTime
-       });
-       
-       // Firebase로 스케줄 결과 저장
-       if (typeof window.saveScheduleResultToFirebase === 'function') {
-         const scheduleResult = await window.saveScheduleResultToFirebase({
-           scheduleDayId: scheduleDayId,
-           userId: String(scheduleResultData.userId || ''),
-           actualWorkoutId: String(scheduleResultData.actualWorkoutId || ''),
-           status: scheduleResultData.status,
-           duration_min: scheduleResultData.duration_min,
-           avg_power: scheduleResultData.avg_power,
-           np: scheduleResultData.np,
-           tss: scheduleResultData.tss,
-           hr_avg: scheduleResultData.hr_avg,
-           rpe: scheduleResultData.rpe
-         });
-         
-         console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공, ID:', scheduleResult.id);
-         // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
-         if (window.currentScheduleDayId) {
-           window.currentScheduleDayId = null;
-         }
-       } else {
-         console.warn('[saveTrainingResult] ⚠️ saveScheduleResultToFirebase 함수가 없습니다. trainingResultsManager.js를 로드하세요.');
-       }
+       // const scheduleDayId = window.currentScheduleDayId || null;
+       //
+       // // actual_workout_id 우선순위: trainingResult.workoutId > extra.workoutId > window.currentWorkout?.id
+       // const actualWorkoutId = trainingResult.workoutId || extra.workoutId || window.currentWorkout?.id || null;
+       //
+       // const scheduleResultData = {
+       //   scheduleDayId: scheduleDayId,
+       //   userId: currentUserId,
+       //   actualWorkoutId: actualWorkoutId,
+       //   status: 'completed',
+       //   duration_min: duration_min,
+       //   avg_power: stats.avgPower || 0,
+       //   np: np,
+       //   tss: tss,
+       //   hr_avg: stats.avgHR || 0,
+       //   rpe: 0 // RPE는 사용자 입력 필요
+       // };
+       //
+       // console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
+       // console.log('[saveTrainingResult] actual_workout_id 확인:', {
+       //   trainingResultWorkoutId: trainingResult.workoutId,
+       //   extraWorkoutId: extra.workoutId,
+       //   currentWorkoutId: window.currentWorkout?.id,
+       //   finalActualWorkoutId: actualWorkoutId
+       // });
+       // console.log('[saveTrainingResult] 세션 데이터 확인:', {
+       //   startTime: trainingResult.startTime,
+       //   endTime: trainingResult.endTime,
+       //   powerDataCount: trainingResult.powerData?.length || 0,
+       //   hrDataCount: trainingResult.hrData?.length || 0,
+       //   elapsedTime: extra.elapsedTime,
+       //   lastElapsedTime: window.lastElapsedTime
+       // });
+       //
+       // // Firebase로 스케줄 결과 저장
+       // if (typeof window.saveScheduleResultToFirebase === 'function') {
+       //   const scheduleResult = await window.saveScheduleResultToFirebase({
+       //     scheduleDayId: scheduleDayId,
+       //     userId: String(scheduleResultData.userId || ''),
+       //     actualWorkoutId: String(scheduleResultData.actualWorkoutId || ''),
+       //     status: scheduleResultData.status,
+       //     duration_min: scheduleResultData.duration_min,
+       //     avg_power: scheduleResultData.avg_power,
+       //     np: scheduleResultData.np,
+       //     tss: scheduleResultData.tss,
+       //     hr_avg: scheduleResultData.hr_avg,
+       //     rpe: scheduleResultData.rpe
+       //   });
+       //
+       //   console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공, ID:', scheduleResult.id);
+       //   // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
+       //   if (window.currentScheduleDayId) {
+       //     window.currentScheduleDayId = null;
+       //   }
+       // } else {
+       //   console.warn('[saveTrainingResult] ⚠️ saveScheduleResultToFirebase 함수가 없습니다. trainingResultsManager.js를 로드하세요.');
+       // }
        } catch (scheduleError) {
          console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
          // 스케줄 결과 저장 실패해도 계속 진행
