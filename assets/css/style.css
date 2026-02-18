@@ -17318,7 +17318,7 @@ body.mobile-dashboard-active {
 #trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg {
   flex: none;
   width: 100%;
-  margin-top: -28px; /* 속도계 SVG 하단 여백만큼 당겨서 현재 파워값 바로 아래에 붙임 */
+  margin-top: -100px;
   margin-bottom: 6px;
   padding: 0 10px 6px;
   text-align: center;
