@@ -2952,14 +2952,12 @@
     <div class="modal-overlay" onclick="if(typeof closeScheduleDetailModal==='function')closeScheduleDetailModal()"></div>
     <div class="modal-content schedule-detail-modal-content" style="max-width: 420px; max-height: 90vh; overflow-y: auto;">
       <div class="modal-header schedule-detail-modal-header">
+        <button type="button" class="btn btn-schedule-start" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()" title="훈련 시작"><img src="assets/img/start.png" alt="훈련 시작" /></button>
         <h3 id="scheduleDetailModalTitle" class="schedule-detail-modal-title">훈련 상세</h3>
         <button type="button" class="modal-close" onclick="closeScheduleDetailModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="schedule-detail-info-row">
-          <button type="button" class="btn btn-schedule-start" id="btnStartScheduleTraining" onclick="if(typeof startScheduleDetailTraining==='function')startScheduleDetailTraining()" title="훈련 시작"><img src="assets/img/start.png" alt="훈련 시작" /></button>
-          <div id="scheduleDetailInfo" class="schedule-detail-info"></div>
-        </div>
+        <div id="scheduleDetailInfo" class="schedule-detail-info"></div>
         <div class="form-group">
           <label>날짜 변경</label>
           <div class="schedule-detail-date-row">
