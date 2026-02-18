@@ -17,7 +17,16 @@
   }
 
   function getUserId() {
-    return (window.currentUser && window.currentUser.id) || (JSON.parse(localStorage.getItem('currentUser') || 'null')?.id) || '';
+    return (window.currentUser && window.currentUser.id) || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } }())?.id || '';
+  }
+
+  function getUserIdForRTDB() {
+    var u = null;
+    if (typeof window.authV9 !== 'undefined' && window.authV9 && window.authV9.currentUser) u = window.authV9.currentUser.uid;
+    if (!u && typeof window.auth !== 'undefined' && window.auth && window.auth.currentUser) u = window.auth.currentUser.uid;
+    if (!u && typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) u = firebase.auth().currentUser.uid;
+    if (u) return u;
+    return getUserId();
   }
 
   /**
@@ -28,7 +37,7 @@
     const subHeaderEl = document.getElementById('aiScheduleSubHeader');
     if (!calendarEl) return;
 
-    const userId = getUserId();
+    var userId = getUserIdForRTDB() || getUserId();
     if (!userId) {
       calendarEl.innerHTML = '<div class="error-message">사용자 정보를 찾을 수 없습니다.</div>';
       if (subHeaderEl) subHeaderEl.textContent = '스케줄을 생성해주세요';
@@ -145,10 +154,12 @@
       html += '<div class="ai-schedule-day ai-schedule-day-empty"></div>';
     }
 
-    const userId = getUserId();
+    var rtdbUserId = getUserIdForRTDB() || getUserId();
+    var startDateFilter = (aiScheduleData && aiScheduleData.meta && aiScheduleData.meta.startDate) ? aiScheduleData.meta.startDate : todayStr;
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayData = aiScheduleData && aiScheduleData.days && aiScheduleData.days[dateStr];
+      const rawDayData = aiScheduleData && aiScheduleData.days && aiScheduleData.days[dateStr];
+      const dayData = (rawDayData && dateStr >= startDateFilter) ? rawDayData : null;
       const hasSchedule = !!dayData;
       const isPast = dateStr < todayStr;
       const isToday = dateStr === todayStr;
@@ -181,14 +192,14 @@
     container.innerHTML = html;
 
     // 과거 날짜 isCompleted 동기화 (비동기)
-    if (aiScheduleData && aiScheduleData.days && userId) {
-      const pastDates = Object.keys(aiScheduleData.days).filter(d => d < todayStr);
+    if (aiScheduleData && aiScheduleData.days && rtdbUserId) {
+      const pastDates = Object.keys(aiScheduleData.days).filter(d => d < todayStr && d >= startDateFilter);
       Promise.all(pastDates.map(async (dateStr) => {
-        const completed = await getIsCompletedForDate(userId, dateStr);
+        const completed = await getIsCompletedForDate(rtdbUserId, dateStr);
         if (aiScheduleData.days[dateStr].isCompleted !== completed) {
           aiScheduleData.days[dateStr].isCompleted = completed;
           try {
-            await window.saveAIScheduleToFirebase(userId, aiScheduleData);
+            await window.saveAIScheduleToFirebase(rtdbUserId, aiScheduleData);
           } catch (e) {
             console.warn('isCompleted sync fail:', e);
           }
@@ -268,15 +279,22 @@
       훈련 목적: ${challenge}
     `;
 
-    const eventDate = document.getElementById('aiScheduleEventDate');
-    if (eventDate) {
-      const d = new Date();
+    var today = new Date();
+    var startDateEl = document.getElementById('aiScheduleStartDate');
+    if (startDateEl) {
+      startDateEl.value = today.toISOString().split('T')[0];
+    }
+    var eventDateEl = document.getElementById('aiScheduleEventDate');
+    if (eventDateEl) {
+      var d = new Date(today);
       d.setMonth(d.getMonth() + 2);
-      eventDate.value = d.toISOString().split('T')[0];
+      eventDateEl.value = d.toISOString().split('T')[0];
     }
 
-    document.getElementById('aiScheduleEventDistance').value = 100;
-    document.getElementById('aiScheduleEventGoal').value = '완주';
+    var distEl = document.getElementById('aiScheduleEventDistance');
+    if (distEl) distEl.value = 100;
+    var goalEl = document.getElementById('aiScheduleEventGoal');
+    if (goalEl) goalEl.value = '완주';
 
     ['aiIndoorDays', 'aiOutdoorDays'].forEach(name => {
       document.querySelectorAll(`input[name="${name}"]`).forEach(cb => cb.checked = false);
@@ -513,12 +531,20 @@
       return;
     }
 
+    var startDateStr = document.getElementById('aiScheduleStartDate') && document.getElementById('aiScheduleStartDate').value;
     var eventDateStr = document.getElementById('aiScheduleEventDate') && document.getElementById('aiScheduleEventDate').value;
     var eventDistance = document.getElementById('aiScheduleEventDistance') && document.getElementById('aiScheduleEventDistance').value;
     var eventGoal = document.getElementById('aiScheduleEventGoal') && document.getElementById('aiScheduleEventGoal').value;
 
-    if (!eventDateStr || !eventDistance) {
-      if (typeof showToast === 'function') showToast('대회 일정과 거리를 입력해주세요.', 'error');
+    if (!startDateStr || !eventDateStr || !eventDistance) {
+      if (typeof showToast === 'function') showToast('훈련 시작일, 대회 일정, 거리를 입력해주세요.', 'error');
+      return;
+    }
+
+    var startDate = new Date(startDateStr);
+    var eventDate = new Date(eventDateStr);
+    if (startDate > eventDate) {
+      if (typeof showToast === 'function') showToast('훈련 시작일은 대회 일정보다 이전이어야 합니다.', 'error');
       return;
     }
 
@@ -556,7 +582,6 @@
       : '\n워크아웃 정보가 없습니다. workoutName, duration, predictedTSS를 적절히 생성하세요.';
 
     var today = new Date();
-    var eventDate = new Date(eventDateStr);
     if (eventDate < today) {
       updateScheduleProgress(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
@@ -565,9 +590,10 @@
       return;
     }
 
+    var rtdbUserId = getUserIdForRTDB() || user.id;
     var monthsToGenerate = [];
-    var y = today.getFullYear();
-    var m = today.getMonth();
+    var y = startDate.getFullYear();
+    var m = startDate.getMonth();
     var ey = eventDate.getFullYear();
     var em = eventDate.getMonth();
     while (y < ey || (y === ey && m <= em)) {
@@ -582,6 +608,7 @@
     var scheduleName = eventGoal + ' ' + eventDistance + 'km (' + eventDateStr + ')';
     var allDays = {};
     var meta = {
+      startDate: startDateStr,
       eventDate: eventDateStr,
       eventDistance: Number(eventDistance),
       eventGoal: eventGoal,
@@ -611,6 +638,7 @@
 **사용자 프로필:** 나이 ${age}세, 성별 ${sex}, FTP ${ftp}W, 몸무게 ${weight}kg
 **훈련 목표:** ${goal}${isEliteOrPro ? ' (Elite/Pro: 고강도·높은 TSS)' : ' (일반 동호인: 회복·지속 가능성 중시)'}
 **제약:** 인도어 요일 ${indoorStr} (최대 ${indoorLimit}분), 아웃도어 요일 ${outdoorStr} (최대 ${outdoorLimit}분)
+**훈련 시작일:** ${startDateStr} (이 날짜 이전의 날짜는 절대 포함하지 마시오.)
 **대회:** ${eventDateStr}, ${eventDistance}km, ${eventGoal}
 ${workoutsContext}
 ${prevContext}
@@ -619,6 +647,7 @@ ${prevContext}
 - 주말(토/일)에는 사용자가 설정한 아웃도어/인도어 선호도와 시간 제한을 엄격히 준수하시오.
 - 주중에는 회복과 인터벌을 적절히 분배하여 TSS 급증을 방지하시오.
 - 이번 요청에서는 ${ym.year}년 ${ym.month + 1}월에 해당하는 날짜만 포함하시오.
+- 모든 날짜는 훈련 시작일(${startDateStr}) 이후 또는 당일이어야 한다. 그 이전 날짜는 절대 포함하지 마시오.
 
 **출력 규칙:** 반드시 유효한 JSON 배열만 출력. 작은따옴표 사용 금지, 모든 키와 문자열 값은 큰따옴표(")만 사용. 마지막 요소 뒤 쉼표 금지(trailing comma 금지). description에는 줄바꿈 넣지 말고 한 줄로.
 [
@@ -637,6 +666,7 @@ ${prevContext}
           var date = item.date || item.dateStr;
           if (!date) continue;
           var d = String(date).slice(0, 10);
+          if (d < startDateStr) continue;
           var yr = parseInt(d.substring(0, 4), 10);
           var mo = parseInt(d.substring(5, 7), 10) - 1;
           if (yr !== ym.year || mo !== ym.month) continue;
@@ -655,7 +685,7 @@ ${prevContext}
           days: allDays,
           meta: meta
         };
-        await window.saveAIScheduleToFirebase(userId, data);
+        await window.saveAIScheduleToFirebase(rtdbUserId, data);
       }
 
       updateScheduleProgress(true, '완료!', '스케줄이 저장되었습니다.');
@@ -754,7 +784,7 @@ ${prevContext}
     const newDate = document.getElementById('scheduleDetailDateInput')?.value;
     if (!newDate || !scheduleDetailCurrentDate || !scheduleDetailCurrentDay || !aiScheduleData) return;
 
-    const userId = getUserId();
+    var userId = getUserIdForRTDB() || getUserId();
     if (!userId) return;
 
     delete aiScheduleData.days[scheduleDetailCurrentDate];
