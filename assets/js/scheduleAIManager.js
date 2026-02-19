@@ -1286,6 +1286,7 @@ ${workoutsContext}
       if (changeBtn) changeBtn.disabled = isCompleted;
       if (dateInput) dateInput.disabled = isCompleted;
 
+      /* 워크아웃 목록 카드와 동일한 막대형 세그먼트 그래프 사용 (Canvas 제거) */
       graphEl.innerHTML = '';
       if (d.workoutId && window.GAS_URL) {
         try {
@@ -1293,19 +1294,10 @@ ${workoutsContext}
           const r = await res.json();
           if (r?.success && r.item?.segments?.length) {
             const segs = r.item.segments;
-            const canvas = document.createElement('canvas');
-            canvas.id = 'scheduleDetailGraphCanvas';
-            canvas.width = 320;
-            canvas.height = 180;
-            graphEl.appendChild(canvas);
-            if (typeof drawSegmentGraph === 'function') {
-              drawSegmentGraph(segs, -1, 'scheduleDetailGraphCanvas');
-            } else if (typeof renderSegmentedWorkoutGraph === 'function') {
-              const div = document.createElement('div');
-              div.className = 'segmented-workout-graph';
-              graphEl.innerHTML = '';
-              graphEl.appendChild(div);
-              renderSegmentedWorkoutGraph(div, segs, { maxHeight: 100 });
+            if (typeof renderSegmentedWorkoutGraph === 'function') {
+              renderSegmentedWorkoutGraph(graphEl, segs, { maxHeight: 200 });
+            } else {
+              graphEl.innerHTML = '<div class="segmented-workout-graph-empty">그래프를 표시할 수 없습니다</div>';
             }
           }
         } catch (e) {
