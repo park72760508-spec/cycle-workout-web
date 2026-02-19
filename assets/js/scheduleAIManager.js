@@ -47,7 +47,15 @@
     calendarEl.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>캘린더를 불러오는 중...</p></div>';
 
     try {
-      console.log('[AI스케줄] loadAIScheduleScreen: userId=' + userId);
+      var todayKorea = getTodayStrLocal();
+      var parts = todayKorea.split('-');
+      if (parts.length >= 2) {
+        aiScheduleCurrentYear = parseInt(parts[0], 10) || aiScheduleCurrentYear;
+        aiScheduleCurrentMonth = (parseInt(parts[1], 10) - 1);
+        if (aiScheduleCurrentMonth < 0) aiScheduleCurrentMonth = 0;
+        if (aiScheduleCurrentMonth > 11) aiScheduleCurrentMonth = 11;
+      }
+      console.log('[AI스케줄] loadAIScheduleScreen: userId=' + userId + ', today(KST)=' + todayKorea);
       aiScheduleData = await loadAIScheduleFromFirebase(userId);
       console.log('[AI스케줄] loadAIScheduleScreen: aiScheduleData=', aiScheduleData ? { scheduleName: aiScheduleData.scheduleName, daysCount: aiScheduleData.days ? Object.keys(aiScheduleData.days).length : 0 } : null);
       if (subHeaderEl) {
@@ -117,29 +125,61 @@
     console.log('[AI스케줄] saveAIScheduleToFirebase 완료', { path: path });
   };
 
-  /** 로컬 날짜 YYYY-MM-DD (타임존 오차 방지) */
+  /** 한국 시간(Asia/Seoul) 기준 오늘 날짜 YYYY-MM-DD */
   function getTodayStrLocal() {
-    const n = new Date();
-    return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+    const now = new Date();
+    try {
+      var formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+      var parts = formatter.formatToParts(now);
+      var y = parts.find(function (p) { return p.type === 'year'; }).value;
+      var m = parts.find(function (p) { return p.type === 'month'; }).value;
+      var d = parts.find(function (p) { return p.type === 'day'; }).value;
+      return y + '-' + m + '-' + d;
+    } catch (e) {
+      var n = new Date();
+      return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+    }
+  }
+
+  /** Date를 한국 시간(Asia/Seoul) 기준 YYYY-MM-DD 문자열로 */
+  function getDateStrInKorea(date) {
+    if (!date || !(date instanceof Date)) return '';
+    try {
+      var formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+      var parts = formatter.formatToParts(date);
+      var y = parts.find(function (p) { return p.type === 'year'; }).value;
+      var m = parts.find(function (p) { return p.type === 'month'; }).value;
+      var d = parts.find(function (p) { return p.type === 'day'; }).value;
+      return y + '-' + m + '-' + d;
+    } catch (e) {
+      return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    }
   }
 
   /**
    * 해당 날짜·워크아웃의 훈련 완료 여부 조회 (Cloud Firestore users/{userId}/logs)
    * 판단 기준: date와 workoutId(또는 workout_id)가 일치하는 log가 있으면 완수
    * RTDB: workoutId / Firestore: workout_id (필드명 차이 고려)
+   * @param {string} userId - Firestore 로그 조회용 사용자 ID (저장 시 사용한 currentUser.id와 동일해야 함)
    */
   async function getIsCompletedForDate(userId, dateStr, workoutId) {
     try {
-      if (typeof window.getTrainingLogsByDateRange !== 'function') return false;
+      var getLogs = window.getTrainingLogsByDateRange;
+      if (typeof getLogs !== 'function') {
+        await new Promise(function (r) { setTimeout(r, 300); });
+        getLogs = window.getTrainingLogsByDateRange;
+      }
+      if (typeof getLogs !== 'function') return false;
       const d = new Date(dateStr + 'T12:00:00');
       const year = d.getFullYear();
       const month = d.getMonth();
-      const logs = await window.getTrainingLogsByDateRange(userId, year, month);
+      const logs = await getLogs(userId, year, month);
       const scheduledWid = (workoutId != null && workoutId !== '') ? String(workoutId).trim() : null;
       for (let i = 0; i < logs.length; i++) {
         let logDate = logs[i].date;
         if (logDate && typeof logDate.toDate === 'function') {
-          logDate = logDate.toDate().toISOString().split('T')[0];
+          var dt = logDate.toDate();
+          logDate = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
         } else if (logDate && typeof logDate !== 'string') {
           logDate = (logDate.toISOString && logDate.toISOString()) ? logDate.toISOString().split('T')[0] : String(logDate).slice(0, 10);
         } else if (logDate) {
@@ -185,6 +225,7 @@
     const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
     var rtdbUserId = getUserIdForRTDB() || getUserId();
+    var firestoreUserId = getUserId() || rtdbUserId;
     var startDateFilter = (aiScheduleData && aiScheduleData.meta && aiScheduleData.meta.startDate) ? aiScheduleData.meta.startDate : todayStr;
     var eventDateStr = (aiScheduleData && aiScheduleData.meta && aiScheduleData.meta.eventDate) ? aiScheduleData.meta.eventDate : '';
     var daysNeedingSync = [];
@@ -198,7 +239,7 @@
       await Promise.all(daysNeedingSync.map(async function (dateStr) {
         var day = aiScheduleData.days[dateStr];
         var wid = (day && (day.workoutId ?? day.workout_id) != null) ? String(day.workoutId ?? day.workout_id).trim() : '';
-        var completed = await getIsCompletedForDate(rtdbUserId, dateStr, wid);
+        var completed = await getIsCompletedForDate(firestoreUserId, dateStr, wid);
         completionByDate[dateStr] = completed;
         if (aiScheduleData.days[dateStr].isCompleted !== completed) {
           aiScheduleData.days[dateStr].isCompleted = completed;
@@ -234,12 +275,16 @@
       if (hasSchedule) {
         cellClass += ' ai-schedule-has';
         if (isEventDate) cellClass += ' ai-schedule-event';
-        else if (hasSchedule && isPast) {
+        else {
           var isCompleted = (completionByDate[dateStr] === true) || (dayData.isCompleted === true);
-          if (isCompleted) cellClass += ' ai-schedule-completed';
-          else cellClass += ' ai-schedule-missed';
-        } else if (hasSchedule && !isPast) {
-          cellClass += ' ai-schedule-planned';
+          if (isCompleted) {
+            /* 오늘 포함, 해당 날짜에 훈련 로그가 있으면 완료 */
+            cellClass += ' ai-schedule-completed';
+          } else if (isPast) {
+            cellClass += ' ai-schedule-missed';
+          } else {
+            cellClass += ' ai-schedule-planned';
+          }
         }
       }
 
@@ -373,13 +418,13 @@
     var today = new Date();
     var startDateEl = document.getElementById('aiScheduleStartDate');
     if (startDateEl) {
-      startDateEl.value = today.toISOString().split('T')[0];
+      startDateEl.value = getDateStrInKorea(today) || getTodayStrLocal();
     }
     var eventDateEl = document.getElementById('aiScheduleEventDate');
     if (eventDateEl) {
       var d = new Date(today);
       d.setMonth(d.getMonth() + 2);
-      eventDateEl.value = d.toISOString().split('T')[0];
+      eventDateEl.value = getDateStrInKorea(d) || (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
     }
 
     var distEl = document.getElementById('aiScheduleEventDistance');
@@ -723,9 +768,9 @@
     var keys = Object.keys(days).sort();
     if (keys.length === 0) return null;
     var lastDate = keys[keys.length - 1];
-    var d = new Date(lastDate);
+    var d = new Date(lastDate + 'T12:00:00');
     d.setDate(d.getDate() - 6);
-    var weekStart = d.toISOString().split('T')[0];
+    var weekStart = getDateStrInKorea(d) || (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
     var weekDays = [];
     var totalTSS = 0;
     var maxTSS = 0;
