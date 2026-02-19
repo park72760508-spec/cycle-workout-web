@@ -9666,8 +9666,11 @@ button[aria-disabled="true"] {
   overflow: hidden;
 }
 .schedule-detail-graph .segmented-workout-graph {
-  height: 200px;
-  min-height: 160px;
+  height: 160px;   /* 200 * 4/5 */
+  min-height: 128px;
+}
+.schedule-detail-graph .segmented-workout-graph__ftp-line {
+  border-top-width: 1.5px;   /* FTP 100% 기준선 두께 1.5배 (흐릿한 주황 점선) */
 }
 .schedule-detail-graph .segmented-workout-graph-empty {
   min-height: 120px;
