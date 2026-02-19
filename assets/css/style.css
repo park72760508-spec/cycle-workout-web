@@ -3334,6 +3334,19 @@ button[aria-disabled="true"] {
   border-radius: 12px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+/* FTP 100% 기준선 — 흐릿한 주황색 점선 (워크아웃 카드·목록 그래프) */
+.segmented-workout-graph__ftp-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--ftp-line-bottom, 57.14%); /* Zone 4 = FTP 91~105% → 4/7 ≈ 57.14% */
+  height: 0;
+  border-top: 1px dashed rgba(249, 115, 22, 0.35);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .segmented-workout-graph-empty {
