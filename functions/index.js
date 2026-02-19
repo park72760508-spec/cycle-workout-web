@@ -746,6 +746,25 @@ async function getStelvioLogDates(db, userId) {
   return dates;
 }
 
+/** 해당 날짜의 Stelvio(앱) 적립 포인트 합계 조회. 차액 적립 시 사용. */
+async function getStelvioPointsForDate(db, userId, dateStr) {
+  if (!userId || !dateStr) return 0;
+  try {
+    const snapshot = await db.collection("users").doc(userId).collection("logs").where("date", "==", dateStr).get();
+    let sum = 0;
+    snapshot.docs.forEach((doc) => {
+      const log = doc.data();
+      if (log.source === "strava") return;
+      const pts = Number(log.earned_points != null ? log.earned_points : log.tss) || 0;
+      sum += pts;
+    });
+    return sum;
+  } catch (e) {
+    console.warn("[getStelvioPointsForDate]", dateStr, e.message);
+    return 0;
+  }
+}
+
 async function getExistingStravaActivityIds(db, userId) {
   const ids = new Set();
   const snapshot = await db.collection("users").doc(userId).collection("logs").where("source", "==", "strava").get();
@@ -864,6 +883,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   const existingIds = await getExistingStravaActivityIds(db, userId);
   const stelvioDates = await getStelvioLogDates(db, userId);
   const logsRef = db.collection("users").doc(userId).collection("logs");
+  /** 같은 날 Stelvio가 있는 날짜별 Strava TSS 합산 → 차액만 추가 적립 */
+  const stelvioDateStravaTssAccumulator = new Map();
   let userTss = 0;
   let newActivities = 0;
   for (const act of Array.isArray(activities) ? activities : []) {
@@ -874,6 +895,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
     const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
     const dateStr = mapped.date || "";
+    const activityTss = mapped.tss || 0;
+    const distanceKm = mapped.distance_km || 0;
     const tssAppliedAt = new Date().toISOString();
     const logDoc = {
       activity_id: mapped.activity_id,
@@ -907,7 +930,22 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     await logsRef.add(logDoc);
     existingIds.add(actId);
     newActivities += 1;
-    if (!stelvioDates.has(dateStr)) userTss += mapped.tss || 0;
+    if (stelvioDates.has(dateStr)) {
+      if (distanceKm !== 0) {
+        const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
+        stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
+      }
+    } else {
+      if (distanceKm !== 0) userTss += activityTss;
+    }
+  }
+  for (const [dateStr, stravaSum] of stelvioDateStravaTssAccumulator) {
+    const stelvioPoints = await getStelvioPointsForDate(db, userId, dateStr);
+    const diff = Math.max(0, (stravaSum || 0) - (stelvioPoints || 0));
+    if (diff > 0) {
+      userTss += diff;
+      console.log(`[processOneUserStravaSync] 차액 추가 적립: ${userId} ${dateStr} Stelvio ${stelvioPoints} + Strava합 ${stravaSum} → 추가 ${diff}`);
+    }
   }
   return { userId, processed: 1, newActivities, userTss, error: null };
 }
