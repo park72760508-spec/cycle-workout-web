@@ -9418,7 +9418,7 @@ button[aria-disabled="true"] {
 }
 #aiScheduleScreen .mini-calendar-day.other-month {
   color: #9ca3af;
-  opacity: 0.72;
+  opacity: 0.56;
 }
 #aiScheduleScreen .mini-calendar-day.other-month .day-number {
   color: #9ca3af;
@@ -9427,12 +9427,12 @@ button[aria-disabled="true"] {
 #aiScheduleScreen .mini-calendar-day.other-month.sunday .day-number,
 #aiScheduleScreen .mini-calendar-day.other-month.sunday {
   color: #b91c1c;
-  opacity: 0.72;
+  opacity: 0.56;
 }
 #aiScheduleScreen .mini-calendar-day.other-month.saturday .day-number,
 #aiScheduleScreen .mini-calendar-day.other-month.saturday {
   color: #2563eb;
-  opacity: 0.72;
+  opacity: 0.56;
 }
 #aiScheduleScreen .mini-calendar-day.sunday .day-number,
 #aiScheduleScreen .mini-calendar-day.sunday {
