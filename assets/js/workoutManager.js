@@ -6297,6 +6297,19 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     return 0;
   }
   
+  // FTP% → 막대 높이 비율 (55% = 15%, 150% = 100%, 선형 보간). 색상은 Zone 유지.
+  const FTP_HEIGHT_MIN = 55;
+  const FTP_HEIGHT_MAX = 150;
+  const BAR_HEIGHT_MIN_PCT = 15;
+  const BAR_HEIGHT_MAX_PCT = 100;
+  function ftpPercentToBarHeight(ftpPercent) {
+    if (ftpPercent == null || isNaN(ftpPercent)) return BAR_HEIGHT_MIN_PCT;
+    const pct = Number(ftpPercent);
+    if (pct <= FTP_HEIGHT_MIN) return BAR_HEIGHT_MIN_PCT;
+    if (pct >= FTP_HEIGHT_MAX) return BAR_HEIGHT_MAX_PCT;
+    return BAR_HEIGHT_MIN_PCT + (pct - FTP_HEIGHT_MIN) / (FTP_HEIGHT_MAX - FTP_HEIGHT_MIN) * (BAR_HEIGHT_MAX_PCT - BAR_HEIGHT_MIN_PCT);
+  }
+
   // 세그먼트 데이터 생성
   const bars = segments.map(seg => {
     const duration = seg.duration_sec || seg.duration || 0;
@@ -6319,12 +6332,10 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       cadenceRpm = getRpmFromSegment(seg);
       cadenceLineBottom = 100; /* dual: RPM 바를 FTP 막대 상단 끝에 맞춤 */
       const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
-      const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
-      heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
+      heightPercent = ftpPercentToBarHeight(ftpForHeight);
     } else {
       const ftpForHeight = getSegmentFtpPercentForBarHeight(seg);
-      const zoneForHeight = getZoneFromFtpPercentValue(ftpForHeight);
-      heightPercent = Math.max(15, (zoneForHeight / 7) * 100);
+      heightPercent = ftpPercentToBarHeight(ftpForHeight);
     }
     const cadenceClass = isCadence ? ' segmented-workout-graph__bar--cadence' : '';
     return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, isDual, cadenceRpm, cadenceLineBottom };
