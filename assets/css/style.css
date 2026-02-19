@@ -9648,6 +9648,17 @@ button[aria-disabled="true"] {
 .schedule-detail-graph {
   margin: 16px 0;
   min-height: 180px;
+  width: 100%;
+}
+.schedule-detail-graph .segmented-workout-graph {
+  height: 200px;
+  min-height: 160px;
+}
+.schedule-detail-graph .segmented-workout-graph-empty {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .schedule-detail-graph canvas {
   display: block;
