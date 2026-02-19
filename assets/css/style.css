@@ -9631,16 +9631,13 @@ button[aria-disabled="true"] {
 }
 
 /* 훈련 스케줄 상세 모달 스타일 */
-/* 훈련 상세 상단: 3등분 — start(좌) | 훈련 상세(중) | X(우) */
+/* 훈련 상세 상단: 제목(중) | X(우) — START 버튼은 그래프 상단 중앙에 배치 */
 .schedule-detail-modal-header {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px;
   min-height: 1.5em;
-}
-.schedule-detail-modal-header .btn-schedule-start {
-  justify-self: start;
 }
 .schedule-detail-modal-header .modal-close {
   justify-self: end;
@@ -9661,23 +9658,46 @@ button[aria-disabled="true"] {
 .schedule-detail-info {
   margin-bottom: 16px;
 }
-.schedule-detail-modal-header .btn-schedule-start {
+/* 훈련 상세: 워크아웃명 좌측 삭제 버튼 (워크아웃명 높이와 동일) */
+.schedule-detail-workout-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.schedule-detail-workout-row .schedule-detail-workout-name {
+  margin: 0;
+  flex: 1;
+  line-height: 1.4;
+}
+.btn-schedule-detail-delete {
   flex-shrink: 0;
-  margin-right: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  line-height: 0;
 }
-.schedule-detail-modal-header .btn-schedule-start img {
-  height: 4em;
+.btn-schedule-detail-delete img {
+  height: 1.4em;
   width: auto;
+  max-height: 24px;
   object-fit: contain;
-  vertical-align: middle;
 }
+
+/* 날짜 변경: 입력 80% 너비, 변경 버튼 50% 확대 */
 .schedule-detail-date-row {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.schedule-detail-date-row #scheduleDetailDateInput {
+  width: 80%;
+  max-width: 80%;
+  box-sizing: border-box;
 }
 .btn-schedule-date-change {
   display: inline-flex;
@@ -9687,6 +9707,8 @@ button[aria-disabled="true"] {
   background: transparent;
   border: none;
   cursor: pointer;
+  transform: scale(1.5);
+  transform-origin: center;
 }
 .btn-schedule-date-change img {
   width: 28px;
@@ -9697,13 +9719,45 @@ button[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
 }
-/* 훈련 스케줄 상세 모달: renderSegmentedWorkoutGraph 막대 그래프 컨테이너 */
+/* 훈련 스케줄 상세 모달: 그래프 영역 + START 버튼 상단 중앙 */
 .schedule-detail-graph {
   margin: 16px 0;
   min-height: 180px;
   width: 100%;
   overflow: hidden;
 }
+.schedule-detail-graph-with-start {
+  position: relative;
+}
+.btn-schedule-start-on-graph {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.btn-schedule-start-on-graph img {
+  height: 2.5em;
+  width: auto;
+  object-fit: contain;
+}
+.btn-schedule-start-on-graph:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.schedule-detail-graph-inner {
+  width: 100%;
+  min-height: 180px;
+}
+
+/* 훈련 스케줄 상세 모달: renderSegmentedWorkoutGraph 막대 그래프 컨테이너 */
 .schedule-detail-graph .segmented-workout-graph {
   height: 160px;   /* 200 * 4/5 */
   min-height: 128px;
