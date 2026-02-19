@@ -272,13 +272,12 @@
       if (typeof window.isKoreanHoliday === 'function' && window.isKoreanHoliday(y, m, d)) cellClass += ' holiday';
       if (isToday) cellClass += ' today';
 
+      if (isEventDate) cellClass += ' ai-schedule-event';
       if (hasSchedule) {
         cellClass += ' ai-schedule-has';
-        if (isEventDate) cellClass += ' ai-schedule-event';
-        else {
+        if (!isEventDate) {
           var isCompleted = (completionByDate[dateStr] === true) || (dayData.isCompleted === true);
           if (isCompleted) {
-            /* 오늘 포함, 해당 날짜에 훈련 로그가 있으면 완료 */
             cellClass += ' ai-schedule-completed';
           } else if (isPast) {
             cellClass += ' ai-schedule-missed';
