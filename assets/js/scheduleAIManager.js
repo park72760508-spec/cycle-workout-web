@@ -261,7 +261,8 @@
     var svgPrev = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>';
     var svgNext = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>';
 
-    var html = '<div class="mini-calendar-header">' +
+    /* 훈련일지(#trainingJournalScreen)와 동일한 DOM 구조: .mini-calendar-container > header, weekdays, grid */
+    var calendarInner = '<div class="mini-calendar-header">' +
       '<button type="button" class="mini-calendar-nav-btn" onclick="aiScheduleNavigate(\'prev\')" aria-label="이전 달">' + svgPrev + '</button>' +
       '<span class="mini-calendar-month-year">' + year + '년 ' + (month + 1) + '월</span>' +
       '<button type="button" class="mini-calendar-nav-btn" onclick="aiScheduleNavigate(\'next\')" aria-label="다음 달">' + svgNext + '</button>' +
@@ -271,7 +272,8 @@
       '</div>' +
       '<div class="mini-calendar-grid">' +
       days.join('') +
-      '</div>' +
+      '</div>';
+    var html = '<div class="mini-calendar-container">' + calendarInner + '</div>' +
       '<div class="ai-schedule-legend">' +
       '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape plan" aria-hidden="true"></span><span>계획 (Plan)</span></div>' +
       '<div class="ai-schedule-legend-item"><span class="ai-schedule-legend-shape done" aria-hidden="true"></span><span>완료 (Done)</span></div>' +
