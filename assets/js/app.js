@@ -3846,18 +3846,28 @@ window.updateTrainingDisplay = function () {
     }
   }
 
-  // ftp_pctz일 때 상한값 저장 (노트북 원호 상한 표시용)
-  if (targetType === 'ftp_pctz' && seg?.target_value) {
+  // ftp_pctz일 때 상한값 저장 (노트북 원호 상한 표시용) — 모바일과 동일하게 ~ / , 배열 지원
+  if (targetType === 'ftp_pctz' && seg?.target_value != null) {
     const tv = seg.target_value;
-    const pctzD = typeof tv === 'string' ? (tv.includes('~') ? '~' : (tv.includes('/') ? '/' : null)) : null;
+    let maxPct = null;
+    const pctzD = typeof tv === 'string' ? (tv.includes('~') ? '~' : (tv.includes('/') ? '/' : (tv.includes(',') ? ',' : null))) : null;
     if (pctzD && typeof tv === 'string') {
       const parts = tv.split(pctzD).map(s => s.trim());
-      if (parts.length >= 2) {
-        const ftp = window.userFTP || 200;
-        const maxPct = Number(parts[1]) || 75;
-        window.currentSegmentMaxPower = Math.round(ftp * (maxPct / 100));
-      }
+      if (parts.length >= 2) maxPct = Number(parts[1]) || 75;
+    } else if (typeof tv === 'string' && tv.includes(',')) {
+      const parts = tv.split(',').map(s => s.trim());
+      if (parts.length >= 2) maxPct = Number(parts[1]) || 75;
+    } else if (Array.isArray(tv) && tv.length >= 2) {
+      maxPct = Number(tv[1]) || 75;
     }
+    if (maxPct != null) {
+      const ftp = window.userFTP || 200;
+      window.currentSegmentMaxPower = Math.round(ftp * (maxPct / 100));
+    } else {
+      window.currentSegmentMaxPower = null;
+    }
+  } else if (targetType !== 'ftp_pctz') {
+    window.currentSegmentMaxPower = null;
   }
 
   // 속도계 TARGET 텍스트 업데이트 (ftp_pct, ftp_pctz, cadence_rpm, dual 타입별 독립 표시)
@@ -15254,8 +15264,10 @@ function updateLaptopGaugeNeedle(power) {
 }
 
 function getLaptopCurrentSegment() {
-  const segIndex = window.trainingState?.segIndex !== undefined ? window.trainingState.segIndex : -1;
-  if (segIndex < 0 || !window.currentWorkout?.segments?.length || segIndex >= window.currentWorkout.segments.length) return null;
+  // updateTrainingDisplay와 동일: segIndex 미설정 시 0 사용 (노트북 훈련 화면 일관성)
+  const raw = window.trainingState?.segIndex;
+  const segIndex = (raw !== undefined && raw >= 0) ? raw : 0;
+  if (!window.currentWorkout?.segments?.length || segIndex >= window.currentWorkout.segments.length) return null;
   return window.currentWorkout.segments[segIndex];
 }
 
@@ -15314,7 +15326,23 @@ function updateLaptopTargetPowerArc() {
   targetArc.setAttribute('stroke', arcColor);
   targetArc.style.display = 'block';
   // ftp_pctz일 때만 상한 구간 두 번째 띠 (모바일과 동일: rgba(255, 140, 0, 0.2))
-  const maxPowerValue = window.currentSegmentMaxPower;
+  let maxPowerValue = window.currentSegmentMaxPower;
+  // 상한값이 없으면 세그먼트 target_value에서 직접 파싱 (updateTrainingDisplay보다 먼저 호출된 경우 대비)
+  if (isFtpPctz && (!maxPowerValue || maxPowerValue <= targetPower) && seg?.target_value != null) {
+    const tv = seg.target_value;
+    let maxPct = null;
+    const pctzD = typeof tv === 'string' ? (tv.includes('~') ? '~' : (tv.includes('/') ? '/' : (tv.includes(',') ? ',' : null))) : null;
+    if (pctzD && typeof tv === 'string') {
+      const parts = tv.split(pctzD).map(s => s.trim());
+      if (parts.length >= 2) maxPct = Number(parts[1]) || 75;
+    } else if (typeof tv === 'string' && tv.includes(',')) {
+      const parts = tv.split(',').map(s => s.trim());
+      if (parts.length >= 2) maxPct = Number(parts[1]) || 75;
+    } else if (Array.isArray(tv) && tv.length >= 2) {
+      maxPct = Number(tv[1]) || 75;
+    }
+    if (maxPct != null) maxPowerValue = Math.round(ftp * (maxPct / 100));
+  }
   if (isFtpPctz && maxPowerValue && maxPowerValue > targetPower) {
     const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
     const maxEndAngle = 180 + (maxRatio * 180);
@@ -15332,7 +15360,10 @@ function updateLaptopTargetPowerArc() {
     }
   } else {
     const maxArc = safeGetElement('laptop-gauge-max-arc');
-    if (maxArc) maxArc.style.display = 'none';
+    if (maxArc) {
+      maxArc.setAttribute('d', '');
+      maxArc.style.display = 'none';
+    }
   }
 }
 
