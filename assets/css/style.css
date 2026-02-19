@@ -9395,13 +9395,17 @@ button[aria-disabled="true"] {
   background: rgba(156, 163, 175, 0.3);
 }
 
+/* 대회일: 빨간 테두리 + 투명 빨간 배경 */
 #aiScheduleScreen .mini-calendar-day.ai-schedule-event {
-  background: rgba(251, 146, 60, 0.3);
-  border: 2px solid rgba(251, 146, 60, 0.6);
+  background: rgba(220, 38, 38, 0.2);
+  border: 2px solid #dc2626;
   font-weight: 700;
 }
+#aiScheduleScreen .mini-calendar-day.ai-schedule-event .day-number {
+  color: #b91c1c;
+}
 #aiScheduleScreen .mini-calendar-day.ai-schedule-event:hover {
-  background: rgba(251, 146, 60, 0.4);
+  background: rgba(220, 38, 38, 0.3);
 }
 
 #aiScheduleScreen .mini-calendar-day.ai-schedule-has {
