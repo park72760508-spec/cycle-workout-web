@@ -1286,7 +1286,7 @@ ${workoutsContext}
       if (changeBtn) changeBtn.disabled = isCompleted;
       if (dateInput) dateInput.disabled = isCompleted;
 
-      /* 워크아웃 목록 카드와 동일한 막대형 세그먼트 그래프 사용 (Canvas 제거) */
+      /* 훈련 상세: Canvas 기반 그래프 (높이 3/5, FTP 100% 주황 점선) — drawSegmentGraph 사용 */
       graphEl.innerHTML = '';
       if (d.workoutId && window.GAS_URL) {
         try {
@@ -1294,7 +1294,12 @@ ${workoutsContext}
           const r = await res.json();
           if (r?.success && r.item?.segments?.length) {
             const segs = r.item.segments;
-            if (typeof renderSegmentedWorkoutGraph === 'function') {
+            if (typeof drawSegmentGraph === 'function') {
+              const canvas = document.createElement('canvas');
+              canvas.id = 'scheduleDetailGraphCanvas';
+              graphEl.appendChild(canvas);
+              drawSegmentGraph(segs, -1, 'scheduleDetailGraphCanvas');
+            } else if (typeof renderSegmentedWorkoutGraph === 'function') {
               renderSegmentedWorkoutGraph(graphEl, segs, { maxHeight: 200 });
             } else {
               graphEl.innerHTML = '<div class="segmented-workout-graph-empty">그래프를 표시할 수 없습니다</div>';
