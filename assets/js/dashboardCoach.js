@@ -50,9 +50,9 @@ async function callGeminiCoach(userProfile, recentLogs) {
     throw new Error('Gemini API 키가 설정되지 않았습니다. 환경 설정에서 API 키를 입력해주세요.');
   }
 
-  // 일별 복수개 시 source: "strava" 1개만 분석 — 훈련 횟수·컨디션 점수 정확도 보정 (워크아웃 추천·대시보드 동일 규칙)
-  recentLogs = (typeof window.oneLogPerDayPreferStrava === 'function')
-    ? window.oneLogPerDayPreferStrava(recentLogs)
+  // 훈련 횟수·TSS: 같은 날 Strava 있으면 Strava만, 없으면 Stelvio만 (TSS 규칙과 동일)
+  recentLogs = (typeof window.buildHistoryWithTSSRuleByDate === 'function')
+    ? window.buildHistoryWithTSSRuleByDate(recentLogs || [])
     : oneLogPerDayPreferStravaForCoach(recentLogs || []);
 
   // 시스템 프롬프트 가져오기

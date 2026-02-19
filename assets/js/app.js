@@ -6678,6 +6678,60 @@ function initializeCurrentScreen(screenId) {
   }
 }
 
+// ========== 일별 TSS 산출 규칙 (사용자 대시보드 AI 분석·모든 데이터 산출 기준) ==========
+// 같은 날 Strava 있으면 Strava만 합산, Strava 없으면 Stelvio만 사용. 같은 날 두 종류 있으면 Stelvio 제외.
+function buildHistoryWithTSSRuleByDate(logs) {
+  if (!logs || !logs.length) return [];
+  function getDateStr(log) {
+    var dateStr = '';
+    if (log.completed_at) {
+      var d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
+      dateStr = d && d.toISOString ? d.toISOString().split('T')[0] : String(log.completed_at).split('T')[0];
+    } else if (log.date) {
+      var d2 = log.date;
+      if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
+      dateStr = d2 && d2.toISOString ? d2.toISOString().split('T')[0] : String(d2 || '').split('T')[0];
+    }
+    return dateStr;
+  }
+  var byDate = {};
+  for (var i = 0; i < logs.length; i++) {
+    var log = logs[i];
+    var dateStr = getDateStr(log);
+    if (!dateStr) continue;
+    if (!byDate[dateStr]) byDate[dateStr] = [];
+    byDate[dateStr].push(log);
+  }
+  var result = [];
+  var dates = Object.keys(byDate).sort();
+  for (var j = 0; j < dates.length; j++) {
+    var dateStr = dates[j];
+    var arr = byDate[dateStr];
+    var stravaLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() === 'strava'; });
+    var stelvioLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() !== 'strava'; });
+    var useStrava = stravaLogs.length > 0;
+    var chosen = useStrava ? stravaLogs : stelvioLogs;
+    if (chosen.length === 0) continue;
+    var tssSum = chosen.reduce(function (s, l) { return s + (Number(l.tss) || 0); }, 0);
+    var durationSum = chosen.reduce(function (s, l) { return s + (Number(l.duration_min) || 0); }, 0);
+    var first = chosen[0];
+    result.push({
+      date: dateStr,
+      completed_at: dateStr + 'T12:00:00.000Z',
+      workout_name: first.workout_name || first.title || '훈련',
+      duration_min: Math.round(durationSum),
+      duration_sec: Math.round(durationSum) * 60,
+      avg_power: Math.round(first.avg_power || first.avg_watts || 0),
+      np: Math.round(first.np || first.weighted_watts || first.avg_power || first.avg_watts || 0),
+      tss: Math.round(tssSum),
+      hr_avg: Math.round(first.hr_avg || first.avg_hr || 0),
+      source: first.source || (useStrava ? 'strava' : '')
+    });
+  }
+  return result;
+}
+window.buildHistoryWithTSSRuleByDate = buildHistoryWithTSSRuleByDate;
+
 // ========== 일별 1건(strava 우선) 폴백 — conditionScoreModule 미로드 시에도 훈련 횟수 정확도 보정 ==========
 // 일별 훈련 로그 중 복수개 존재 시 source: "strava" 로그 1개만 분석 대상 (워크아웃 추천·대시보드 공통)
 function oneLogPerDayPreferStravaFallback(logs) {
@@ -6785,14 +6839,27 @@ function oneLogPerDayPreferStravaFallback(logs) {
       var logs = [];
       snapshot.forEach(function(doc) {
         var d = doc.data();
-        if (d.source !== 'strava' && d.source) return;
         if (d.date && d.date < dateStr) return;
-        logs.push({ id: doc.id, ...d });
+        var sec = Number(d.duration_sec ?? d.time ?? 0) || 0;
+        if (sec < 60) return;
+        logs.push({
+          id: doc.id,
+          date: d.date,
+          completed_at: (d.date || '') + 'T12:00:00.000Z',
+          workout_name: d.title || '훈련',
+          duration_min: Math.round(sec / 60),
+          avg_power: Math.round(d.avg_watts || 0),
+          np: Math.round(d.weighted_watts || d.avg_watts || 0),
+          tss: Math.round(d.tss || 0),
+          hr_avg: Math.round(d.avg_hr || 0),
+          source: d.source || '',
+          ...d
+        });
       });
       logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-      // 일별 복수개 시 source: "strava" 1개만 전송 — 대시보드 훈련 횟수·컨디션 점수 정확도 보정
-      logs = (typeof window.oneLogPerDayPreferStrava === 'function')
-        ? window.oneLogPerDayPreferStrava(logs)
+      // 훈련 횟수·TSS: 같은 날 Strava 있으면 Strava만, 없으면 Stelvio만 (TSS 규칙과 동일)
+      logs = (typeof window.buildHistoryWithTSSRuleByDate === 'function')
+        ? window.buildHistoryWithTSSRuleByDate(logs)
         : oneLogPerDayPreferStravaFallback(logs);
       logs = logs.slice(0, 50);
 
@@ -11498,10 +11565,10 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
             });
           });
         }
-        // 일별 복수개 시 source: "strava" 1개만 분석 — 훈련 횟수 17회→13회 등 오카운트 방지
-        firebaseLogs = (typeof window.oneLogPerDayPreferStrava === 'function')
-          ? window.oneLogPerDayPreferStrava(firebaseLogs)
-          : oneLogPerDayPreferStravaFallback(firebaseLogs);
+        // TSS 산출 규칙: 같은 날 Strava 있으면 Strava만 합산, 없으면 Stelvio만. 같은 날 두 종류 있으면 Stelvio 제외 (AI 분석·데이터 산출 기준)
+        firebaseLogs = (typeof window.buildHistoryWithTSSRuleByDate === 'function')
+          ? window.buildHistoryWithTSSRuleByDate(firebaseLogs)
+          : buildHistoryWithTSSRuleByDate(firebaseLogs);
         recentHistory = firebaseLogs.sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
         if (typeof window.dedupeLogsForConditionScore === 'function') {
           recentHistory = window.dedupeLogsForConditionScore(recentHistory);
@@ -11544,10 +11611,11 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
             const dateB = new Date(b.completed_at || 0);
             return dateB - dateA;
           });
-          recentHistory = (typeof window.oneLogPerDayPreferStrava === 'function')
-            ? window.oneLogPerDayPreferStrava(gasLogs)
-            : oneLogPerDayPreferStravaFallback(gasLogs);
-          console.log('[AI 워크아웃 추천] GAS getScheduleResultsByUser 훈련 이력 사용:', recentHistory.length, '건');
+          recentHistory = (typeof window.buildHistoryWithTSSRuleByDate === 'function')
+            ? window.buildHistoryWithTSSRuleByDate(gasLogs)
+            : buildHistoryWithTSSRuleByDate(gasLogs);
+          recentHistory = recentHistory.sort(function(a, b) { return (b.completed_at || '').localeCompare(a.completed_at || ''); });
+          console.log('[AI 워크아웃 추천] GAS getScheduleResultsByUser 훈련 이력 사용 (TSS 규칙 적용):', recentHistory.length, '건');
         }
       } catch (error) {
         console.warn('최근 운동 이력 조회 실패:', error);
