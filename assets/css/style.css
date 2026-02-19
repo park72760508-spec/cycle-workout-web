@@ -9669,9 +9669,11 @@ button[aria-disabled="true"] {
   margin: 0;
   flex: 1;
   line-height: 1.4;
+  min-width: 0;
 }
 .btn-schedule-detail-delete {
   flex-shrink: 0;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9698,6 +9700,9 @@ button[aria-disabled="true"] {
   width: 80%;
   max-width: 80%;
   box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 8px;
 }
 .btn-schedule-date-change {
   display: inline-flex;
@@ -9744,7 +9749,7 @@ button[aria-disabled="true"] {
   cursor: pointer;
 }
 .btn-schedule-start-on-graph img {
-  height: 2.5em;
+  height: 3.25em;
   width: auto;
   object-fit: contain;
 }
