@@ -9658,10 +9658,12 @@ button[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* 훈련 스케줄 상세 모달: renderSegmentedWorkoutGraph 막대 그래프 컨테이너 */
 .schedule-detail-graph {
   margin: 16px 0;
   min-height: 180px;
   width: 100%;
+  overflow: hidden;
 }
 .schedule-detail-graph .segmented-workout-graph {
   height: 200px;
