@@ -576,6 +576,9 @@ async function fetchAndProcessStravaData(options = {}) {
         // 조회 실패해도 계속 진행
       }
 
+      // 같은 날 Stelvio 로그가 있는 날짜별 Strava TSS 합산 (차액 추가 적립용)
+      const stelvioDateStravaTssAccumulator = new Map();
+
       // 각 활동 처리
       let activityIndex = 0;
       for (const act of activities) {
@@ -700,7 +703,12 @@ async function fetchAndProcessStravaData(options = {}) {
                 if (!isAfterCreatedDate) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 가입일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
                 } else if (stelvioLogDates.has(dateStr)) {
-                  console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 같은 날짜에 stelvio 로그 존재): ${actId}`);
+                  // 같은 날 Stelvio 있음 → Strava TSS는 나중에 차액만 추가 적립하도록 합산만 해 둠
+                  if (isAfterCreatedDate && !(isStravaSource && distanceKm === 0)) {
+                    const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
+                    stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
+                  }
+                  console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS는 차액 적립 대상으로 합산): ${actId} (${dateStr})`);
                 } else if (isStravaSource && distanceKm === 0) {
                   console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - source가 'strava'이고 distance_km이 0): ${actId} (거리: ${distanceKm}km)`);
                 }
@@ -757,7 +765,12 @@ async function fetchAndProcessStravaData(options = {}) {
                   }
                 } else {
                   if (stelvioLogDates.has(dateStr)) {
-                    console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외: ${actId} - 같은 날짜에 stelvio 로그 존재`);
+                    // 같은 날 Stelvio 있음 → Strava TSS는 나중에 차액만 추가 적립하도록 합산만 해 둠
+                    if (isAfterCreatedDate && !(isStravaSource && distanceKm === 0)) {
+                      const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
+                      stelvioDateStravaTssAccumulator.set(dateStr, prev + (unapplied.tss || 0));
+                    }
+                    console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS는 차액 적립 대상으로 합산: ${actId} (${dateStr})`);
                   } else if (isStravaSource && distanceKm === 0) {
                     console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외: ${actId} - source가 'strava'이고 distance_km이 0 (거리: ${distanceKm}km)`);
                   }
@@ -790,6 +803,22 @@ async function fetchAndProcessStravaData(options = {}) {
         activityIndex++;
         if (options.onProgress && typeof options.onProgress === 'function') {
           options.onProgress(activityIndex, activities.length);
+        }
+      }
+
+      // 같은 날 Stelvio 로그가 있는 날짜: Strava TSS 합계 - Stelvio 적립 포인트 = 차액만 추가 적립
+      if (stelvioDateStravaTssAccumulator.size > 0 && typeof window.getStelvioPointsForDate === 'function') {
+        for (const [dateStr, stravaSum] of stelvioDateStravaTssAccumulator) {
+          try {
+            const stelvioPoints = await window.getStelvioPointsForDate(userId, dateStr);
+            const diff = Math.max(0, (stravaSum || 0) - (stelvioPoints || 0));
+            if (diff > 0) {
+              totalTss += diff;
+              console.log(`[fetchAndProcessStravaData] ✅ 같은 날 Stelvio 존재 → 차액 추가 적립: ${dateStr} Stelvio ${stelvioPoints} + Strava합 ${stravaSum} → 추가 ${diff}`);
+            }
+          } catch (e) {
+            console.warn(`[fetchAndProcessStravaData] 차액 적립 처리 실패 (${dateStr}):`, e);
+          }
         }
       }
 
