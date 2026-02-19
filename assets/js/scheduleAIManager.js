@@ -1349,8 +1349,8 @@ ${workoutsContext}
       var deleteDate = dateStr;
       infoEl.innerHTML = `
         <div class="schedule-detail-workout-row">
-          <button type="button" class="btn-schedule-detail-delete" title="해당일 훈련 계획 삭제" onclick="if(typeof deleteScheduleDetailDay==='function')deleteScheduleDetailDay('${deleteDate}')" aria-label="삭제"><img src="assets/img/delete2.png" alt="삭제" /></button>
           <p class="schedule-detail-workout-name"><strong>${(d.workoutName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong></p>
+          <button type="button" class="btn-schedule-detail-delete" title="해당일 훈련 계획 삭제" onclick="if(typeof deleteScheduleDetailDay==='function')deleteScheduleDetailDay('${deleteDate}')" aria-label="삭제"><img src="assets/img/delete2.png" alt="삭제" /></button>
         </div>
         <p>운동 시간: ${d.duration}분 | 예상 TSS: ${d.predictedTSS}</p>
         <p>날짜: ${dateStr} | 타입: ${d.type || 'Indoor'}</p>
