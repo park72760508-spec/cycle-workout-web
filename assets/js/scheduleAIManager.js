@@ -731,9 +731,9 @@
 
   /**
    * 사용자 설정(인도어/아웃도어 요일)에 맞는 훈련 날짜 목록 생성
-   * 대회 당일은 제외 (대회 참가로 훈련 불가)
+   * 대회 전날·대회 당일은 훈련 계획에서 제외 (휴식·경기 준비)
    * @param {Date} start - 훈련 시작일
-   * @param {Date} end - 대회일(당일은 훈련 제외)
+   * @param {Date} end - 대회일(당일·전날 제외)
    * @param {number[]} indoorDays - 인도어 요일 (0=일..6=토)
    * @param {number[]} outdoorDays - 아웃도어 요일
    * @returns {{dateStr: string, type: string, dayOfWeek: number}[]}
@@ -745,10 +745,18 @@
     var endExclusive = new Date(end);
     endExclusive.setHours(0, 0, 0, 0);
     var endMs = endExclusive.getTime();
+    var eventStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+    var dayBeforeEvent = new Date(end);
+    dayBeforeEvent.setDate(dayBeforeEvent.getDate() - 1);
+    var dayBeforeStr = dayBeforeEvent.getFullYear() + '-' + String(dayBeforeEvent.getMonth() + 1).padStart(2, '0') + '-' + String(dayBeforeEvent.getDate()).padStart(2, '0');
     var dayNames = ['일', '월', '화', '수', '목', '금', '토'];
     while (d.getTime() < endMs) {
       var dow = d.getDay();
       var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (dateStr === eventStr || dateStr === dayBeforeStr) {
+        d.setDate(d.getDate() + 1);
+        continue;
+      }
       if (indoorDays.indexOf(dow) >= 0) {
         dates.push({ dateStr: dateStr, type: 'Indoor', dayOfWeek: dow, dayName: dayNames[dow] });
       } else if (outdoorDays.indexOf(dow) >= 0) {
@@ -1133,6 +1141,20 @@ ${workoutsContext}
         });
         if (recoveryWorkouts.length === 0) recoveryWorkouts = lightweightWorkouts;
 
+        /* 테이퍼 주간 전용: Active Recovery(Recovery 카테고리) + 30~90분 워크아웃만 사용 */
+        var activeRecoveryWorkouts = lightweightWorkouts.filter(function (w) {
+          var c = (w.category || '').toLowerCase();
+          var d = Number(w.duration_min) || 0;
+          return c.indexOf('recovery') >= 0 && d >= 30 && d <= 90;
+        });
+        if (activeRecoveryWorkouts.length === 0) {
+          activeRecoveryWorkouts = lightweightWorkouts.filter(function (w) {
+            var c = (w.category || '').toLowerCase();
+            return c.indexOf('recovery') >= 0;
+          });
+        }
+        if (activeRecoveryWorkouts.length === 0) activeRecoveryWorkouts = recoveryWorkouts;
+
         var addedThisMonth = 0;
         for (var j = 0; j < monthDates.length; j++) {
           var td = monthDates[j];
@@ -1141,18 +1163,37 @@ ${workoutsContext}
           var wName = (item && item.workoutName) ? item.workoutName : '';
           var wId = (item && item.workoutId) ? String(item.workoutId).trim() : '';
           var isEmpty = !wId && (!wName || wName === '훈련');
+
+          if (td.taper || td.mustRecovery) {
+            /* 테이퍼/대회 2~3일 전: Active Recovery 풀에서만 배정, 실제 훈련시간·이름 그대로 사용 */
+            if (activeRecoveryWorkouts.length > 0) {
+              var ar = activeRecoveryWorkouts[j % activeRecoveryWorkouts.length];
+              wName = ar.title || ar.name || 'Active Recovery';
+              wId = ar.id || '';
+              var dur = Number(ar.duration_min) || 45;
+              var tss = Math.round(Number(ar.tss_predicted) || dur * 0.5);
+              allDays[dateStr] = {
+                workoutName: wName,
+                workoutId: wId,
+                duration: dur,
+                predictedTSS: Math.min(tss, 50),
+                type: td.type,
+                description: (td.mustRecovery ? '대회 2~3일 전 회복 훈련' : '대회 1주 전 테이퍼')
+              };
+              scheduleLog('TAPER', dateStr + ' Active Recovery 배정: ' + wName + ' ' + dur + '분 (id:' + wId + ')', {});
+              addedThisMonth++;
+              continue;
+            }
+          }
+
           if (isEmpty && lightweightWorkouts.length > 0) {
-            var fallback = (td.taper || td.mustRecovery) && recoveryWorkouts.length > 0
+            var fallback = recoveryWorkouts.length > 0
               ? recoveryWorkouts[j % recoveryWorkouts.length]
               : lightweightWorkouts[workoutIdx % lightweightWorkouts.length];
             wId = fallback.id || '';
             wName = fallback.title || fallback.name || '훈련';
             var dur = fallback.duration_min || 60;
             var tss = fallback.tss_predicted || Math.round(dur * 0.6);
-            if (td.taper || td.mustRecovery) {
-              dur = Math.min(dur, 45);
-              tss = Math.min(tss, 40);
-            }
             allDays[dateStr] = {
               workoutName: wName,
               workoutId: wId,
@@ -1161,23 +1202,11 @@ ${workoutsContext}
               type: td.type,
               description: (item && item.description) ? item.description : ''
             };
-            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')' + (td.taper ? ' [테이퍼]' : '') + (td.mustRecovery ? ' [대회 2~3일 전 Recovery]' : ''), {});
+            scheduleLog('FALLBACK', dateStr + ' 빈 훈련 -> 워크아웃 할당: ' + wName + '(id:' + wId + ')', {});
             workoutIdx++;
           } else {
             var dur = Math.round(Number(item && item.duration) || 60);
             var tss = Math.round(Number(item && item.predictedTSS) || 50);
-            var forceRecovery = td.mustRecovery || (td.taper && /threshold|vo2|anaerobic|sweet spot|tempo/i.test(wName || ''));
-            if (td.taper || td.mustRecovery) {
-              dur = Math.min(dur, 45);
-              tss = Math.min(tss, 40);
-              if (forceRecovery && recoveryWorkouts.length > 0) {
-                var r = recoveryWorkouts[j % recoveryWorkouts.length];
-                wName = r.title || r.name || 'Active Recovery';
-                wId = r.id || '';
-                dur = Math.min(r.duration_min || 40, 45);
-                tss = Math.min(r.tss_predicted || 30, 40);
-              }
-            }
             allDays[dateStr] = {
               workoutName: wName || '훈련',
               workoutId: wId || '',
