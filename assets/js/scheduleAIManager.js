@@ -1333,7 +1333,7 @@ ${workoutsContext}
   window.openScheduleDetailModal = async function (dateStr) {
     const modal = document.getElementById('scheduleDetailModal');
     const infoEl = document.getElementById('scheduleDetailInfo');
-    const graphEl = document.getElementById('scheduleDetailGraph');
+    const graphEl = document.getElementById('scheduleDetailGraphInner');
     const dateInput = document.getElementById('scheduleDetailDateInput');
     const startBtn = document.getElementById('btnStartScheduleTraining');
 
@@ -1346,8 +1346,12 @@ ${workoutsContext}
       scheduleDetailCurrentDay = aiScheduleData.days[dateStr];
 
       const d = scheduleDetailCurrentDay;
+      var deleteDate = dateStr;
       infoEl.innerHTML = `
-        <p><strong>${d.workoutName || ''}</strong></p>
+        <div class="schedule-detail-workout-row">
+          <button type="button" class="btn-schedule-detail-delete" title="해당일 훈련 계획 삭제" onclick="if(typeof deleteScheduleDetailDay==='function')deleteScheduleDetailDay('${deleteDate}')" aria-label="삭제"><img src="assets/img/delete2.png" alt="삭제" /></button>
+          <p class="schedule-detail-workout-name"><strong>${(d.workoutName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong></p>
+        </div>
         <p>운동 시간: ${d.duration}분 | 예상 TSS: ${d.predictedTSS}</p>
         <p>날짜: ${dateStr} | 타입: ${d.type || 'Indoor'}</p>
       `;
@@ -1397,6 +1401,29 @@ ${workoutsContext}
     if (modal) modal.style.display = 'none';
     scheduleDetailCurrentDate = null;
     scheduleDetailCurrentDay = null;
+  };
+
+  /**
+   * 훈련 상세 > 해당일 훈련 계획 삭제 (확인 후 삭제, 저장, 캘린더 갱신, 모달 닫기)
+   */
+  window.deleteScheduleDetailDay = async function (dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return;
+    if (!confirm('삭제하시겠습니까?')) return;
+    if (!aiScheduleData || !aiScheduleData.days || !aiScheduleData.days[dateStr]) {
+      closeScheduleDetailModal();
+      return;
+    }
+    delete aiScheduleData.days[dateStr];
+    var rtdbUserId = getUserIdForRTDB() || getUserId();
+    if (rtdbUserId) {
+      try {
+        await window.saveAIScheduleToFirebase(rtdbUserId, aiScheduleData);
+      } catch (e) {
+        console.warn('삭제 후 저장 실패:', e);
+      }
+    }
+    closeScheduleDetailModal();
+    if (typeof renderAIScheduleCalendar === 'function') await renderAIScheduleCalendar();
   };
 
   /**
