@@ -9634,23 +9634,25 @@ button[aria-disabled="true"] {
 /* 훈련 상세 상단: 제목(중) | X(우) — START 버튼은 그래프 상단 중앙에 배치 */
 .schedule-detail-modal-header {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 1fr 1fr;
   align-items: center;
   gap: 8px;
   min-height: 1.5em;
 }
-.schedule-detail-modal-header .modal-close {
-  justify-self: end;
-  margin-left: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .schedule-detail-modal-title {
+  grid-column: 2;
   text-align: center;
   justify-self: center;
   margin: 0;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.schedule-detail-modal-header .modal-close {
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9695,6 +9697,9 @@ button[aria-disabled="true"] {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.schedule-detail-date-row .btn-schedule-date-change {
+  margin-left: auto;
 }
 .schedule-detail-date-row #scheduleDetailDateInput {
   width: 80%;
