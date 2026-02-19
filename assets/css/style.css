@@ -9408,6 +9408,41 @@ button[aria-disabled="true"] {
   cursor: pointer;
 }
 
+/* 훈련 스케줄 미니달력 날짜 가독성: 이전/다음달·평일 더 진하게, 토·일 20% 더 진하게 */
+#aiScheduleScreen .mini-calendar-day .day-number {
+  color: inherit;
+}
+#aiScheduleScreen .mini-calendar-day:not(.sunday):not(.saturday):not(.other-month) .day-number {
+  color: #1f2937;
+  font-weight: 600;
+}
+#aiScheduleScreen .mini-calendar-day.other-month {
+  color: #6b7280;
+  opacity: 0.92;
+}
+#aiScheduleScreen .mini-calendar-day.other-month .day-number {
+  color: #6b7280;
+}
+/* 이전달·다음달 주말(토·일) — 평일과 동일한 가독성(진한 색) */
+#aiScheduleScreen .mini-calendar-day.other-month.sunday .day-number,
+#aiScheduleScreen .mini-calendar-day.other-month.sunday {
+  color: #991b1b;
+  opacity: 0.92;
+}
+#aiScheduleScreen .mini-calendar-day.other-month.saturday .day-number,
+#aiScheduleScreen .mini-calendar-day.other-month.saturday {
+  color: #1e40af;
+  opacity: 0.92;
+}
+#aiScheduleScreen .mini-calendar-day.sunday .day-number,
+#aiScheduleScreen .mini-calendar-day.sunday {
+  color: #b91c1c;
+}
+#aiScheduleScreen .mini-calendar-day.saturday .day-number,
+#aiScheduleScreen .mini-calendar-day.saturday {
+  color: #1d4ed8;
+}
+
 /* 달력 범례 (우측 하단, 미수행 기준 왼쪽 라인 정렬) */
 .ai-schedule-legend {
   display: flex;
