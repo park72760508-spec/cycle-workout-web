@@ -2532,6 +2532,8 @@ button[aria-disabled="true"] {
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   margin-bottom: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--card-border, #e5e7eb);
 }
 
 .mini-calendar-weekday {
@@ -2554,6 +2556,7 @@ button[aria-disabled="true"] {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  row-gap: 4px;
   width: 100%; /* 화면 크기 변경 시 전체 너비 사용 */
   box-sizing: border-box;
 }
@@ -2713,11 +2716,13 @@ button[aria-disabled="true"] {
   border-color: rgba(64, 224, 208, 0.6);
 }
 
-/* 훈련일지 화면 전용: 오늘 날짜 = 폰트 크기에 맞춘 주황색 투명 원 */
-#trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today::after {
+/* 훈련일지·훈련 스케줄 공통: 오늘 날짜 = 폰트 크기에 맞춘 주황색 투명 원 */
+#trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today::after,
+#aiScheduleScreen .mini-calendar-day.today::after {
   display: none;
 }
-#trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today .day-number {
+#trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today .day-number,
+#aiScheduleScreen .mini-calendar-day.today .day-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9314,23 +9319,42 @@ button[aria-disabled="true"] {
 
 /* ========== 훈련 스케줄 관련 스타일 ========== */
 
-/* AI 훈련 스케줄 캘린더: 훈련일지 미니달력과 동일 구조 사용 (mini-calendar-*) */
-#aiScheduleScreen .ai-schedule-calendar {
+/* AI 훈련 스케줄 캘린더: 훈련일지 미니달력과 동일 구조·스타일 (mini-calendar-*) */
+#aiScheduleScreen .ai-schedule-calendar,
+#aiScheduleScreen .mini-calendar-container {
   padding: 0;
   max-width: 100%;
 }
-/* 요일 표시(일~토) 위·아래 공백 제거 */
+/* 훈련일지와 동일: 헤더·요일·그리드 레이아웃(년월 폰트, 구분선, gap) */
+#trainingJournalScreen .mini-calendar-header,
 #aiScheduleScreen .mini-calendar-header {
   margin-bottom: 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--card-border, #e5e7eb);
 }
+#trainingJournalScreen .mini-calendar-month-year,
+#aiScheduleScreen .mini-calendar-month-year {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong, #111827);
+}
+#trainingJournalScreen .mini-calendar-weekdays,
 #aiScheduleScreen .mini-calendar-weekdays {
   margin-bottom: 0;
-  padding-top: 0;
-  padding-bottom: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--card-border, #e5e7eb);
 }
+#trainingJournalScreen .mini-calendar-weekday,
 #aiScheduleScreen .mini-calendar-weekday {
-  padding-top: 0;
-  padding-bottom: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  padding: 4px 0;
+}
+#trainingJournalScreen .mini-calendar-grid,
+#aiScheduleScreen .mini-calendar-grid {
+  gap: 4px;
+  row-gap: 4px;
 }
 
 /* 훈련 스케줄 미니달력 - 계획/완료/미수행/대회 상태 색상 */
@@ -9365,21 +9389,6 @@ button[aria-disabled="true"] {
 }
 #aiScheduleScreen .mini-calendar-day.ai-schedule-event:hover {
   background: rgba(251, 146, 60, 0.4);
-}
-
-/* 훈련 스케줄 - 오늘 날짜: 훈련일지와 동일 주황색 동그라미 */
-#aiScheduleScreen .mini-calendar-day.today::after {
-  display: none;
-}
-#aiScheduleScreen .mini-calendar-day.today .day-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6em;
-  min-height: 1.6em;
-  border-radius: 50%;
-  background: rgba(249, 115, 22, 0.35);
-  box-sizing: border-box;
 }
 
 #aiScheduleScreen .mini-calendar-day.ai-schedule-has {
