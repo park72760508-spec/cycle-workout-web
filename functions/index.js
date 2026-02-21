@@ -1296,6 +1296,217 @@ exports.finalizeWeeklyRanking = onSchedule(
   }
 );
 
+// ---------- STELVIO AI 사용자 선택형 FTP 갱신: 제안 API (계산만, DB 미수정) ----------
+/** Firebase ID 토큰 검증 헬퍼 */
+async function getUidFromRequest(req, res) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: { code: "unauthenticated", message: "Authorization Bearer 토큰이 필요합니다." } });
+    return null;
+  }
+  const idToken = authHeader.split("Bearer ")[1];
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    return decoded.uid;
+  } catch (e) {
+    res.status(401).json({ error: { code: "unauthenticated", message: "유효하지 않거나 만료된 토큰입니다." } });
+    return null;
+  }
+}
+
+/** 최근 N일 날짜 문자열 (로컬 YYYY-MM-DD, Asia/Seoul 기준) */
+function getDateStrDaysAgo(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** FTP 제안 계산: 로그·CTL 기반. DB 수정 없음. */
+exports.getFtpSuggestion = onRequest(
+  { cors: true, timeoutSeconds: 60 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.set("Access-Control-Max-Age", "3600");
+      res.status(204).send("");
+      return;
+    }
+    const origin = req.headers.origin;
+    if (origin && CORS_ORIGINS.some((o) => (typeof o === "string" ? origin === o : o.test(origin)))) {
+      res.set("Access-Control-Allow-Origin", origin);
+    }
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      res.status(404).json({ error: { code: "not-found", message: "사용자를 찾을 수 없습니다." } });
+      return;
+    }
+    const userData = userSnap.data() || {};
+    const previousFtp = Math.round(Number(userData.ftp) || 200);
+    const userName = (userData.name && String(userData.name).trim()) || "사용자";
+
+    const todayStr = getDateStrDaysAgo(0);
+    const start42Str = getDateStrDaysAgo(42);
+    const start30Str = getDateStrDaysAgo(30);
+    const start14Str = getDateStrDaysAgo(14);
+
+    const logsSnap = await db.collection("users").doc(uid).collection("logs")
+      .where("date", ">=", start42Str)
+      .where("date", "<=", todayStr)
+      .get();
+
+    const byDate = {};
+    logsSnap.docs.forEach((doc) => {
+      const d = doc.data();
+      const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+      if (!dateStr) return;
+      const tss = Number(d.tss) || 0;
+      const np = Number(d.np) || Number(d.avg_power) || 0;
+      const durationMin = Number(d.duration_min) || Math.round(Number(d.duration_sec || 0) / 60) || 0;
+      const isStrava = String(d.source || "").toLowerCase() === "strava";
+      if (!byDate[dateStr]) byDate[dateStr] = { tss: 0, np: 0, durationMin: 0, isStrava: false };
+      const row = byDate[dateStr];
+      if (isStrava && row.tss === 0) {
+        row.tss = tss;
+        row.np = np;
+        row.durationMin = durationMin;
+        row.isStrava = true;
+      } else if (!row.isStrava) {
+        row.tss = tss;
+        row.np = np;
+        row.durationMin = durationMin;
+      }
+    });
+
+    const sortedDates = Object.keys(byDate).sort();
+    let last7Tss = 0;
+    let last14Tss = 0;
+    let last30Tss = 0;
+    let last42Tss = 0;
+    let lastTrainingDateStr = null;
+    let bestNpForFtp = 0;
+
+    sortedDates.forEach((dateStr) => {
+      const row = byDate[dateStr];
+      const tss = row.tss || 0;
+      if (dateStr >= start14Str) last14Tss += tss;
+      if (dateStr >= start30Str) last30Tss += tss;
+      last42Tss += tss;
+      if (dateStr >= start42Str) {
+        const daysAgo = Math.floor((new Date(todayStr) - new Date(dateStr)) / 86400000);
+        if (daysAgo <= 7) last7Tss += tss;
+      }
+      if (tss > 0) lastTrainingDateStr = dateStr;
+      if (row.durationMin >= 15 && row.np > 0 && dateStr >= start30Str) {
+        const estimatedFtp = Math.round(row.np * 0.95);
+        if (estimatedFtp > bestNpForFtp) bestNpForFtp = estimatedFtp;
+      }
+    });
+
+    const daysSinceLastTraining = lastTrainingDateStr
+      ? Math.floor((new Date(todayStr) - new Date(lastTrainingDateStr)) / 86400000)
+      : 999;
+
+    let hasSuggestion = false;
+    let suggestionType = null;
+    let suggestedFtp = previousFtp;
+    let message = "제안 없음";
+
+    if (bestNpForFtp >= previousFtp * 1.02 && bestNpForFtp > previousFtp) {
+      hasSuggestion = true;
+      suggestionType = "UPGRADE";
+      suggestedFtp = Math.min(bestNpForFtp, previousFtp + 30);
+      suggestedFtp = Math.round(suggestedFtp);
+      message = "최근 고강도 훈련(NP 기반)으로 상승 제안";
+    } else if (daysSinceLastTraining >= 14 || (last7Tss < 20 && last42Tss < 150)) {
+      const decayed = Math.round(previousFtp * 0.9);
+      if (decayed < previousFtp && decayed >= 100) {
+        hasSuggestion = true;
+        suggestionType = "DECAY";
+        suggestedFtp = Math.round(decayed / 5) * 5;
+        message = "휴식/저부하 기간으로 보수적 하락 제안";
+      }
+    }
+
+    res.status(200).json({
+      hasSuggestion: !!hasSuggestion,
+      suggestionType: suggestionType || undefined,
+      previousFtp,
+      suggestedFtp,
+      message,
+      userName,
+    });
+  }
+);
+
+/** 사용자 FTP 승인 반영 API (POST). '예' 선택 시에만 호출. current_ftp 및 ftp_updated_at 갱신 */
+exports.confirmFtp = onRequest(
+  { cors: true, timeoutSeconds: 30 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.set("Access-Control-Max-Age", "3600");
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ error: { code: "method-not-allowed", message: "POST만 허용됩니다." } });
+      return;
+    }
+    const origin = req.headers.origin;
+    if (origin && CORS_ORIGINS.some((o) => (typeof o === "string" ? origin === o : o.test(origin)))) {
+      res.set("Access-Control-Allow-Origin", origin);
+    }
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    let body = {};
+    try {
+      body = typeof req.body === "object" && req.body !== null ? req.body : {};
+    } catch (e) {
+      res.status(400).json({ error: { code: "invalid-argument", message: "요청 본문이 올바르지 않습니다." } });
+      return;
+    }
+    const suggestedFtp = Math.round(Number(body.suggestedFtp) || 0);
+    if (suggestedFtp < 100 || suggestedFtp > 500) {
+      res.status(400).json({ error: { code: "invalid-argument", message: "suggestedFtp는 100~500 범위여야 합니다." } });
+      return;
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      res.status(404).json({ error: { code: "not-found", message: "사용자를 찾을 수 없습니다." } });
+      return;
+    }
+
+    await userRef.update({
+      ftp: suggestedFtp,
+      ftp_updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.status(200).json({ success: true, ftp: suggestedFtp });
+  }
+);
+
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
 const fs = require("fs");
