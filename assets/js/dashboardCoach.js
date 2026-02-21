@@ -8,6 +8,7 @@
  * Gemini API를 사용하여 사용자 코치 인사이트 생성
  * @param {Object} userProfile - 사용자 프로필 데이터
  * @param {Array} recentLogs - 최근 30일간의 훈련 로그
+ * @param {number} [last7DaysTSSFromDashboard] - 대시보드 주간 목표 실적(최근 7일 TSS). 전달 시 코멘트에 이 값만 사용(화면과 일치)
  * @returns {Promise<Object>} AI 분석 결과 (condition_score, training_status, vo2max_estimate, coach_comment, recommended_workout)
  */
 // 일별 훈련 로그 중 복수개 시 source: "strava" 1개만 분석 대상 (conditionScoreModule 미로드 시 폴백)
@@ -43,7 +44,7 @@ function oneLogPerDayPreferStravaForCoach(logs) {
   return result;
 }
 
-async function callGeminiCoach(userProfile, recentLogs) {
+async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboard) {
   const apiKey = localStorage.getItem('geminiApiKey');
   
   if (!apiKey) {
@@ -55,29 +56,34 @@ async function callGeminiCoach(userProfile, recentLogs) {
     ? window.buildHistoryWithTSSRuleByDate(recentLogs || [])
     : oneLogPerDayPreferStravaForCoach(recentLogs || []);
 
-  // 최근 7일 TSS 누적 산출 (오늘 기준 -6일 ~ 오늘, 로컬 날짜 기준 — AI가 자체 계산하지 않고 이 값을 사용)
-  function getLocalDateStrFromLog(log) {
-    var d = null;
-    if (log.completed_at) {
-      d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
-    } else if (log.date) {
-      var d2 = log.date;
-      if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
-      d = d2 ? new Date(d2) : null;
+  // 최근 7일 TSS: 대시보드에서 전달한 주간 실적이 있으면 그대로 사용(화면과 코멘트 일치), 없으면 여기서 계산
+  var last7DaysTSS;
+  if (typeof last7DaysTSSFromDashboard === 'number' && !isNaN(last7DaysTSSFromDashboard)) {
+    last7DaysTSS = Math.round(last7DaysTSSFromDashboard);
+  } else {
+    function getLocalDateStrFromLog(log) {
+      var d = null;
+      if (log.completed_at) {
+        d = typeof log.completed_at === 'string' ? new Date(log.completed_at) : log.completed_at;
+      } else if (log.date) {
+        var d2 = log.date;
+        if (d2 && typeof d2.toDate === 'function') d2 = d2.toDate();
+        d = d2 ? new Date(d2) : null;
+      }
+      if (!d || !d.getFullYear) return '';
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
-    if (!d || !d.getFullYear) return '';
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    var today = new Date();
+    var todayStrForTSS = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var start7 = new Date(today);
+    start7.setDate(start7.getDate() - 6);
+    var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+    var logsLast7 = (recentLogs || []).filter(function (log) {
+      var d = getLocalDateStrFromLog(log);
+      return d && d >= start7Str && d <= todayStrForTSS;
+    });
+    last7DaysTSS = Math.round(logsLast7.reduce(function (sum, l) { return sum + (Number(l.tss) || 0); }, 0));
   }
-  var today = new Date();
-  var todayStrForTSS = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-  var start7 = new Date(today);
-  start7.setDate(start7.getDate() - 6);
-  var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
-  var logsLast7 = (recentLogs || []).filter(function (log) {
-    var d = getLocalDateStrFromLog(log);
-    return d && d >= start7Str && d <= todayStrForTSS;
-  });
-  var last7DaysTSS = Math.round(logsLast7.reduce(function (sum, l) { return sum + (Number(l.tss) || 0); }, 0));
   var totalTSS = Math.round((recentLogs || []).reduce(function (sum, l) { return sum + (Number(l.tss) || 0); }, 0));
   var weeklyTSS = Math.round(totalTSS / 4.3);
 
@@ -193,8 +199,38 @@ Output Format (JSON Only):
       jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
     }
     
-    // JSON 파싱
-    const result = JSON.parse(jsonText);
+    // JSON 파싱 (Gemini 응답 잘림/문자열 미종료 시 복구 시도)
+    var result = null;
+    try {
+      result = JSON.parse(jsonText);
+    } catch (parseErr) {
+      // Unterminated string 등: 응답 잘림으로 보면 끝에 " } 추가 후 재시도
+      if (parseErr instanceof SyntaxError && jsonText.indexOf('"coach_comment"') !== -1) {
+        var repaired = jsonText;
+        if (!/"\s*}\s*$/.test(repaired)) {
+          if (/"[^"]*$/.test(repaired)) repaired = repaired + '"';
+          if (!/\}\s*$/.test(repaired)) repaired = repaired + ' }';
+        }
+        try {
+          result = JSON.parse(repaired);
+        } catch (e2) {
+          // 필드만 정규식으로 추출해 최소 결과 구성 (응답 잘림/미종료 문자열 대응)
+          var coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)"?\s*[,}]/);
+          if (!coachCommentMatch) coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
+          var statusMatch = jsonText.match(/"training_status"\s*:\s*"([^"]+)"/);
+          var vo2Match = jsonText.match(/"vo2max_estimate"\s*:\s*(\d+)/);
+          var workoutMatch = jsonText.match(/"recommended_workout"\s*:\s*"([^"]+)"/);
+          var commentStr = (coachCommentMatch && coachCommentMatch[1]) ? coachCommentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+          result = {
+            training_status: (statusMatch && statusMatch[1]) ? statusMatch[1] : 'Building Base',
+            vo2max_estimate: (vo2Match && vo2Match[1]) ? Math.max(20, Math.min(100, parseInt(vo2Match[1], 10))) : 40,
+            coach_comment: commentStr || (userName + '님, 오늘도 화이팅하세요!'),
+            recommended_workout: (workoutMatch && workoutMatch[1]) ? workoutMatch[1] : 'Active Recovery (Z1)'
+          };
+        }
+      }
+      if (!result) throw parseErr;
+    }
     
     // 컨디션 점수: API 호출 전에 이미 산출한 conditionScoreForPrompt 사용 (코멘트와 화면 표시 일치)
     const conditionScore = conditionScoreForPrompt;
