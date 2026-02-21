@@ -81,6 +81,17 @@ async function callGeminiCoach(userProfile, recentLogs) {
   var totalTSS = Math.round((recentLogs || []).reduce(function (sum, l) { return sum + (Number(l.tss) || 0); }, 0));
   var weeklyTSS = Math.round(totalTSS / 4.3);
 
+  // 컨디션 점수: API 호출 전에 공통 모듈로 산출해 프롬프트에 주입 — 코멘트에 표시되는 점수와 화면 표시(93점)가 일치하도록
+  var conditionScoreForPrompt = 50;
+  if (typeof window.computeConditionScore === 'function') {
+    var userForScore = { age: userProfile?.age, gender: userProfile?.gender, challenge: userProfile?.challenge, ftp: userProfile?.ftp, weight: userProfile?.weight };
+    var logsForScore = (recentLogs || []).slice();
+    var deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
+    var todayStrScore = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var csResult = window.computeConditionScore(userForScore, deduped, todayStrScore);
+    conditionScoreForPrompt = Math.max(50, Math.min(100, csResult.score));
+  }
+
   // 시스템 프롬프트 가져오기
   const systemPrompt = window.GEMINI_COACH_SYSTEM_PROMPT || `
 Role: 당신은 'Stelvio AI'의 수석 사이클링 코치이자 데이터 분석가입니다.
@@ -92,10 +103,14 @@ Context: 사용자의 프로필({{userProfile}})과 최근 30일간의 훈련 �
 - 주간 평균 TSS: {{weeklyTSS}}점 (최근 30일 기준)
 Coach Comment에서 TSS를 언급할 때 위 수치를 **그대로** 사용하세요. 자체 계산하지 마세요.
 
+**컨디션 점수 (반드시 이 값을 사용하세요):**
+- 현재 컨디션 점수: {{conditionScore}}점 (화면에 표시되는 점수와 동일)
+Coach Comment에서 "컨디션 점수" 또는 "현재 컨디션"을 언급할 때 반드시 **{{conditionScore}}점**이라고만 쓰세요. 다른 숫자를 쓰지 마세요.
+
 Task Requirements:
-1. **Condition Score (0~100):** TSB(Training Stress Balance)와 최근 운동 강도를 기반으로 컨디션 점수를 산출하세요.
+1. **Condition Score (0~100):** JSON의 condition_score는 반드시 **{{conditionScore}}** 로 설정하세요. (위에 제공된 값)
 2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
-3. **Coach Comment:** 사용자의 이름({{userName}})을 부르며, **최근 7일 TSS({{last7DaysTSS}}점)·주간 평균 TSS({{weeklyTSS}}점)** 등 위에 제공된 수치를 사용해 최근 훈련 성과를 언급하고 동기를 부여하는 따뜻한 조언을 한국어(경어체)로 한 문장 작성하세요.
+3. **Coach Comment:** 사용자의 이름({{userName}})을 부르며, **최근 7일 TSS({{last7DaysTSS}}점)·주간 평균 TSS({{weeklyTSS}}점)·현재 컨디션 점수({{conditionScore}}점)** 를 위에 제공된 수치 그대로 사용해 최근 훈련 성과를 언급하고 동기를 부여하는 따뜻한 조언을 한국어(경어체)로 한 문장 작성하세요.
 4. **VO2max Estimate:** 파워 데이터를 기반으로 추정된 VO2max 값을 정수로 반환하세요.
 5. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입을 제안하세요.
 
@@ -116,7 +131,8 @@ Output Format (JSON Only):
     .replace('{{recentLogs}}', JSON.stringify(recentLogs, null, 2))
     .replace('{{userName}}', userName)
     .replace(/\{\{last7DaysTSS\}\}/g, String(last7DaysTSS))
-    .replace(/\{\{weeklyTSS\}\}/g, String(weeklyTSS));
+    .replace(/\{\{weeklyTSS\}\}/g, String(weeklyTSS))
+    .replace(/\{\{conditionScore\}\}/g, String(conditionScoreForPrompt));
 
   // 모델 설정
   let modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
@@ -180,19 +196,8 @@ Output Format (JSON Only):
     // JSON 파싱
     const result = JSON.parse(jsonText);
     
-    // 컨디션 점수: 공통 모듈(conditionScoreModule)로 50~100 1점 단위 객관 산출 (1번·2번 동일: 중복 제거 + 기준일 오늘)
-    let conditionScore = result.condition_score || 50;
-    if (typeof window.computeConditionScore === 'function') {
-      const userForScore = { age: userProfile?.age, gender: userProfile?.gender, challenge: userProfile?.challenge, ftp: userProfile?.ftp, weight: userProfile?.weight };
-      const logsForScore = (recentLogs || []).slice();
-      const deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
-      const today = new Date();
-      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-      const csResult = window.computeConditionScore(userForScore, deduped, todayStr);
-      conditionScore = Math.max(50, Math.min(100, csResult.score));
-    } else {
-      conditionScore = Math.max(50, Math.min(100, Math.round(conditionScore)));
-    }
+    // 컨디션 점수: API 호출 전에 이미 산출한 conditionScoreForPrompt 사용 (코멘트와 화면 표시 일치)
+    const conditionScore = conditionScoreForPrompt;
     
     // 기본값 설정
     return {
