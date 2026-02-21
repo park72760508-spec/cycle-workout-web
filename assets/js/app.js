@@ -5177,7 +5177,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnANT.style.pointerEvents = 'none';
   }
   
-  // 심박계 버튼
+  // 심박계 버튼 (신규 검색: 즉시 전체 검색창 오픈)
   if (btnHR) {
     btnHR.addEventListener("click", async (e) => {
       e.preventDefault();
@@ -5194,7 +5194,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btnHR.disabled = true;
       
       try {
-        await window.connectHeartRate();
+        await window.connectHeartRate(true);
       } catch (err) {
         console.error("HR connection error:", err);
       } finally {
@@ -5203,24 +5203,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   
-  // 트레이너 버튼
+  // 트레이너 버튼 (신규 검색: 즉시 전체 검색창 오픈)
   if (btnTrainer) {
     btnTrainer.addEventListener("click", async (e) => {
       e.preventDefault();
       console.log("Trainer button clicked!");
       if (window.connectTrainer) {
-        await window.connectTrainer();
+        await window.connectTrainer(true);
       }
     });
   }
   
-  // 파워미터 버튼
+  // 파워미터 버튼 (신규 검색: 즉시 전체 검색창 오픈)
   if (btnPM) {
     btnPM.addEventListener("click", async (e) => {
       e.preventDefault();
       console.log("PM button clicked!");
       if (window.connectPowerMeter) {
-        await window.connectPowerMeter();
+        await window.connectPowerMeter(true);
       }
     });
   }
@@ -17611,12 +17611,7 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
           console.warn('[Mobile Dashboard] connectToSavedDeviceById 실패:', byIdErr);
         }
       }
-      if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 엽니다.');
-      const connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
-      if (connectFn && typeof connectFn === 'function') {
-        await connectFn();
-        if (typeof updateMobileBluetoothConnectionStatus === 'function') setTimeout(function () { updateMobileBluetoothConnectionStatus(); }, 200);
-      }
+      if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
       return;
     }
 
@@ -17933,8 +17928,8 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   }
 
   try {
-    console.log('[Mobile Dashboard] 블루투스 디바이스 연결 시도:', deviceType);
-    await connectFunction();
+    console.log('[Mobile Dashboard] 블루투스 디바이스 연결 시도 (신규 검색):', deviceType);
+    await connectFunction(true);
     // 연결 성공 시 UI 갱신은 bluetooth.js에서 stelvio-bluetooth-connected 이벤트로 즉시 호출됨 (setTimeout 없음)
   } catch (error) {
     console.error('[Mobile Dashboard] 블루투스 디바이스 연결 실패:', deviceType, error);

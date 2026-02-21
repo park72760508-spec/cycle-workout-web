@@ -2562,48 +2562,45 @@ async function connectIndividualBluetoothDeviceToSaved(deviceId, deviceType) {
     try {
       result = await reconnectFn(deviceId, deviceType);
       
-      // getDevices() API가 사용 불가능하거나 기기를 찾지 못한 경우 null 반환
+      // getDevices() API가 사용 불가능하거나 기기를 찾지 못한 경우 connectToSavedDeviceById 시도 후 없으면 조용히 종료
       if (!result) {
-        console.warn('[Individual Dashboard] 저장된 기기 재연결 실패 (getDevices API 미지원 또는 기기 없음), 새 기기 검색으로 진행');
-        // 재연결 실패 시 일반 디바이스 함수로 폴백 (새 기기 검색)
-        const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-          : deviceType === 'heartRate' ? window.connectHeartRate 
-          : deviceType === 'powerMeter' ? window.connectPowerMeter 
-          : null;
-        
-        if (connectFunction && typeof connectFunction === 'function') {
-          if (typeof showToast === 'function') {
-            showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
+        const connectById = typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null;
+        if (connectById) {
+          try {
+            if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+            if (typeof showToast === 'function') showToast('저장된 기기 이름으로 연결 시도 중…');
+            const out = await connectById(deviceId, deviceType);
+            if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+            if (out) {
+              setTimeout(() => updateIndividualBluetoothConnectionStatus(), 200);
+              return;
+            }
+          } catch (e) {
+            if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
           }
-          await connectFunction();
-          setTimeout(() => {
-            updateIndividualBluetoothConnectionStatus();
-          }, 200);
-          return;
-        } else {
-          throw new Error('기기를 찾을 수 없고 새 기기 검색도 실패했습니다.');
         }
+        if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
+        return;
       }
     } catch (reconnectError) {
-      console.warn('[Individual Dashboard] 저장된 기기 재연결 실패, 새 기기 검색으로 진행:', reconnectError);
-      // 재연결 실패 시 일반 디바이스 함수로 폴백 (새 기기 검색)
-      const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
-        : deviceType === 'heartRate' ? window.connectHeartRate 
-        : deviceType === 'powerMeter' ? window.connectPowerMeter 
-        : null;
-      
-      if (connectFunction && typeof connectFunction === 'function') {
-        if (typeof showToast === 'function') {
-          showToast('저장된 기기를 찾을 수 없습니다. 새 기기를 검색합니다...');
+      console.warn('[Individual Dashboard] 저장된 기기 재연결 실패:', reconnectError);
+      const connectById = typeof window.connectToSavedDeviceById === 'function' ? window.connectToSavedDeviceById : null;
+      if (connectById) {
+        try {
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(true);
+          if (typeof showToast === 'function') showToast('저장된 기기 이름으로 연결 시도 중…');
+          const out = await connectById(deviceId, deviceType);
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+          if (out) {
+            setTimeout(() => updateIndividualBluetoothConnectionStatus(), 200);
+            return;
+          }
+        } catch (e) {
+          if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
         }
-        await connectFunction();
-        setTimeout(() => {
-          updateIndividualBluetoothConnectionStatus();
-        }, 200);
-        return;
-      } else {
-        throw reconnectError; // 디바이스 함수가 없으면 원래 에러를 다시 던짐
       }
+      if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
+      return;
     }
     
     const { device, server } = result;
@@ -2915,8 +2912,8 @@ async function connectIndividualBluetoothDevice(deviceType, savedDeviceId) {
     }
     
     try {
-        console.log('[Individual] 블루투스 디바이스 연결 시도:', deviceType);
-        await connectFunction();
+        console.log('[Individual] 블루투스 디바이스 연결 시도 (신규 검색):', deviceType);
+        await connectFunction(true);
         
         // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
         setTimeout(() => {

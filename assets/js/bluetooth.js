@@ -306,7 +306,12 @@ function getOptionalServicesForType(deviceType) {
     return list;
   }
   if (deviceType === 'powerMeter') {
-    return [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
+    // 스마트 트레이너와 동일하게 크랭크형/페달형 파워미터 모두 노출 (FTMS, CycleOps, Wahoo, Tacx, device_information 등)
+    const list = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
+    COMPREHENSIVE_ERG_OPTIONAL_SERVICES.forEach(function (uuid) {
+      if (list.indexOf(uuid) === -1) list.push(uuid);
+    });
+    return list;
   }
   return [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
 }
@@ -327,17 +332,37 @@ function buildSavedOnlyFilters(deviceType, savedList) {
 
 /**
  * 하이브리드 디바이스 선택: Phase 1 저장 기기만 → 취소/미발견 시 Phase 2 전체 검색.
+ * isNewSearch === true 이면 Phase 1/1b 건너뛰고 즉시 Phase 2(acceptAllDevices) 실행.
  * 반환: { device, server?, fromReconnect: boolean }. server 있으면 이미 GATT 연결됨.
  */
-async function requestDeviceHybrid(deviceType) {
+async function requestDeviceHybrid(deviceType, isNewSearch) {
   if (!navigator.bluetooth || !('requestDevice' in navigator.bluetooth)) {
     var msg = '이 브라우저는 블루투스 기기 검색을 지원하지 않습니다.';
     if (typeof showToast === 'function') showToast(msg);
     throw new Error(msg);
   }
 
-  var savedDevices = getSavedDevicesByType(deviceType);
   var optionalServices = getOptionalServicesForType(deviceType);
+
+  // 신규 검색 의도: Phase 1·1b 건너뛰고 바로 Phase 2로 전체 검색창 즉시 오픈
+  if (isNewSearch) {
+    try {
+      var device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: optionalServices
+      });
+      return { device: device, server: null, fromReconnect: false };
+    } catch (err) {
+      if (err.name === 'NotFoundError') {
+        if (typeof showToast === 'function') showToast('기기를 선택하지 않았습니다.');
+      } else if (err.name === 'SecurityError') {
+        if (typeof showToast === 'function') showToast('블루투스 권한이 필요합니다. 브라우저 설정에서 허용해주세요.');
+      }
+      throw err;
+    }
+  }
+
+  var savedDevices = getSavedDevicesByType(deviceType);
 
   // Phase 1: getDevices() 교차 검증 후 재연결 시도
   if (navigator.bluetooth && 'getDevices' in navigator.bluetooth && savedDevices.length > 0) {
@@ -505,23 +530,23 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
                 if (typeof showToast === 'function') showToast('기기 검색 중… 목록에서 본인 기기를 선택하세요.');
                 device = await requestDeviceWithSavedInfo(deviceId, deviceType, firstWord);
               } catch (retryErr) {
-                if (retryErr.name === 'NotFoundError' && typeof showToast === 'function') showToast('목록에서 본인 기기를 선택하세요.');
-                var optSvc = getOptionalServicesForType(deviceType);
-                device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: optSvc });
+                if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+                if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
+                return null;
               }
             } else {
-              if (typeof showToast === 'function') showToast('목록에서 본인 기기를 선택하세요.');
-              var optSvc = getOptionalServicesForType(deviceType);
-              device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: optSvc });
+              if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+              if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
+              return null;
             }
           } else {
             throw nameErr;
           }
         }
       } else {
-        if (typeof showToast === 'function') showToast('저장된 기기 이름이 없습니다. 목록에서 본인 기기를 선택하세요.');
-        var optionalServices = getOptionalServicesForType(deviceType);
-        device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: optionalServices });
+        if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+        if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
+        return null;
       }
       var server = await device.gatt.connect();
       result = { device: device, server: server };
@@ -538,6 +563,10 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
       }
     } catch (reqErr) {
       if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      if (reqErr.name === 'NotFoundError') {
+        if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
+        return null;
+      }
       throw reqErr;
     }
   }
@@ -675,7 +704,8 @@ window.updateDevicesList = function () {
 
 // ── [Connection Engine] ──
 
-async function connectTrainer() {
+async function connectTrainer(isNewSearch) {
+  if (typeof isNewSearch === 'undefined') isNewSearch = false;
   try {
     showConnectionStatus(true);
     
@@ -701,7 +731,7 @@ async function connectTrainer() {
     
     console.log('[connectTrainer] ZWIFT-Class Scan (Dual-Channel) Started...');
 
-    var hybrid = await requestDeviceHybrid('trainer');
+    var hybrid = await requestDeviceHybrid('trainer', isNewSearch);
     var device = hybrid.device;
     var server = hybrid.server;
 
@@ -936,7 +966,8 @@ function handlePowerMeterData(event) {
 }
 
 // (Helper functions for HR/PM connection are kept standard)
-async function connectHeartRate() {
+async function connectHeartRate(isNewSearch) {
+  if (typeof isNewSearch === 'undefined') isNewSearch = false;
   try {
     showConnectionStatus(true);
     
@@ -960,7 +991,7 @@ async function connectHeartRate() {
       }
     }
     
-    var hybrid = await requestDeviceHybrid('heartRate');
+    var hybrid = await requestDeviceHybrid('heartRate', isNewSearch);
     var device = hybrid.device;
     var server = hybrid.server;
 
@@ -1027,7 +1058,8 @@ async function connectHeartRate() {
   }
 }
 
-async function connectPowerMeter() {
+async function connectPowerMeter(isNewSearch) {
+  if (typeof isNewSearch === 'undefined') isNewSearch = false;
   // 트레이너가 연결되어 있으면 확인 (트레이너와 파워미터는 별개)
   if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
   
@@ -1054,7 +1086,7 @@ async function connectPowerMeter() {
       }
     }
     
-    var hybrid = await requestDeviceHybrid('powerMeter');
+    var hybrid = await requestDeviceHybrid('powerMeter', isNewSearch);
     var device = hybrid.device;
     var server = hybrid.server;
 

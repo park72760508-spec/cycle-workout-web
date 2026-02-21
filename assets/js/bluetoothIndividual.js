@@ -4401,23 +4401,11 @@ async function connectBluetoothDevice(deviceType, savedDeviceId) {
             }
         }
 
-        if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 일반 검색을 엽니다.');
-        var connectFn = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
-        if (connectFn && typeof connectFn === 'function') {
-            try {
-                await connectFn();
-                updateBluetoothConnectionStatus();
-                updateFirebaseDevices();
-                if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
-            } catch (e) {
-                console.error('[BluetoothIndividual] 일반 검색 연결 실패:', e);
-                if (typeof showToast === 'function') showToast('연결 실패: ' + (e.message || '알 수 없는 오류'));
-            }
-        }
+        if (typeof showToast === 'function') showToast('저장된 기기를 찾을 수 없습니다. 전원과 연결 상태를 확인해주세요.');
         return;
     }
 
-    // 새 기기 검색: 모바일과 동일하게 연결 함수 확인 + 재시도
+    // 새 기기 검색: 신규 검색 의도로 연결 함수에 true 전달 (Phase 1/1b 건너뛰고 즉시 전체 검색창 오픈)
     var connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
     if (!connectFunction || typeof connectFunction !== 'function') {
         await new Promise(function (r) { setTimeout(r, 300); });
@@ -4431,8 +4419,8 @@ async function connectBluetoothDevice(deviceType, savedDeviceId) {
     }
 
     try {
-        console.log('[BluetoothIndividual] 블루투스 디바이스 연결 시도:', deviceType);
-        await connectFunction();
+        console.log('[BluetoothIndividual] 블루투스 디바이스 연결 시도 (신규 검색):', deviceType);
+        await connectFunction(true);
         updateBluetoothConnectionStatus();
         updateFirebaseDevices();
         if (typeof window.updateDevicesList === 'function') window.updateDevicesList();
