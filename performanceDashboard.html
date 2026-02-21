@@ -46,6 +46,9 @@
   <script src="assets/js/trainingManager.js"></script>
   <script src="assets/js/stravaManager.js"></script>
   <script src="assets/js/userManager.js"></script>
+  <script src="assets/js/conditionScoreModule.js"></script>
+  <script src="assets/js/geminiCoachPrompt.js"></script>
+  <script src="assets/js/dashboardCoach.js"></script>
   
   <!-- Dashboard 전용: Firebase Standalone Fallback (iOS Bluefy 호환) -->
   <script>
@@ -1218,18 +1221,22 @@ Output Format (JSON Only):
                 var targetInfo = window.getWeeklyTargetTSS(challenge);
                 weeklyTarget = targetInfo.target;
               }
+              // 주간 실적 = 최근 7일 TSS (오늘-6일 ~ 오늘, 화면·코멘트 동일)
               var today = new Date();
-              var dayOfWeek = today.getDay();
-              var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-              var monday = new Date(today);
-              monday.setDate(today.getDate() + mondayOffset);
-              monday.setHours(0, 0, 0, 0);
-              var mondayStr = monday.toISOString().split('T')[0];
-              var weeklyTss = 0;
+              var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+              var start7 = new Date(today);
+              start7.setDate(today.getDate() - 6);
+              var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+              var byDate7 = {};
               logs.forEach(function(log) {
-                if (log.date && log.date >= mondayStr) {
-                  weeklyTss += (Number(log.tss) || 0);
-                }
+                var d = log.date ? String(log.date).split('T')[0] : '';
+                if (!d) return;
+                if (!byDate7[d]) byDate7[d] = 0;
+                byDate7[d] += Number(log.tss) || 0;
+              });
+              var weeklyTss = 0;
+              Object.keys(byDate7).forEach(function(d) {
+                if (d >= start7Str && d <= todayStr) weeklyTss += byDate7[d];
               });
               var weeklyTssRounded = Math.round(weeklyTss);
               
@@ -1450,18 +1457,22 @@ Output Format (JSON Only):
                   var targetInfo = window.getWeeklyTargetTSS(challenge);
                   weeklyTarget = targetInfo.target;
                 }
+                // 주간 실적 = 최근 7일 TSS (오늘-6일 ~ 오늘, 화면·코멘트 동일)
                 var today = new Date();
-                var dayOfWeek = today.getDay();
-                var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                var monday = new Date(today);
-                monday.setDate(today.getDate() + mondayOffset);
-                monday.setHours(0, 0, 0, 0);
-                var mondayStr = monday.toISOString().split('T')[0];
-                var weeklyTss = 0;
+                var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                var start7 = new Date(today);
+                start7.setDate(today.getDate() - 6);
+                var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+                var byDate7 = {};
                 proxyLogs.forEach(function(log) {
-                  if (log.date && log.date >= mondayStr) {
-                    weeklyTss += (Number(log.tss) || 0);
-                  }
+                  var d = log.date ? String(log.date).split('T')[0] : '';
+                  if (!d) return;
+                  if (!byDate7[d]) byDate7[d] = 0;
+                  byDate7[d] += Number(log.tss) || 0;
+                });
+                var weeklyTss = 0;
+                Object.keys(byDate7).forEach(function(d) {
+                  if (d >= start7Str && d <= todayStr) weeklyTss += byDate7[d];
                 });
                 var weeklyTssRounded = Math.round(weeklyTss);
                 
@@ -1792,19 +1803,22 @@ Output Format (JSON Only):
                   dateRange: logs.length > 0 ? (logs[logs.length - 1].date + ' ~ ' + logs[0].date) : '없음',
                   weeklyTss: logs.length > 0 ? (function() {
                     var today = new Date();
-                    var dayOfWeek = today.getDay();
-                    var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                    var monday = new Date(today);
-                    monday.setDate(today.getDate() + mondayOffset);
-                    monday.setHours(0, 0, 0, 0);
-                    var mondayStr = monday.toISOString().split('T')[0];
-                    var weeklyTss = 0;
+                    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                    var start7 = new Date(today);
+                    start7.setDate(today.getDate() - 6);
+                    var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+                    var byDate7 = {};
                     logs.forEach(function(log) {
-                      if (log.date && log.date >= mondayStr) {
-                        weeklyTss += (Number(log.tss) || 0);
-                      }
+                      var d = log.date ? String(log.date).split('T')[0] : '';
+                      if (!d) return;
+                      if (!byDate7[d]) byDate7[d] = 0;
+                      byDate7[d] += Number(log.tss) || 0;
                     });
-                    return Math.round(weeklyTss);
+                    var sum = 0;
+                    Object.keys(byDate7).forEach(function(d) {
+                      if (d >= start7Str && d <= todayStr) sum += byDate7[d];
+                    });
+                    return Math.round(sum);
                   })() : 0
                 });
               }
@@ -1868,20 +1882,22 @@ Output Format (JSON Only):
               }
             }
             
-            // 이번 주(월요일~일요일)의 TSS 계산
+            // 주간 실적 = 최근 7일 TSS (오늘-6일 ~ 오늘, 화면·코멘트 동일)
             var today = new Date();
-            var dayOfWeek = today.getDay(); // 0=일요일, 1=월요일, ..., 6=토요일
-            var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 월요일까지의 일수
-            var monday = new Date(today);
-            monday.setDate(today.getDate() + mondayOffset);
-            monday.setHours(0, 0, 0, 0);
-            var mondayStr = monday.toISOString().split('T')[0];
-            
-            var weeklyTss = 0;
+            var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            var start7 = new Date(today);
+            start7.setDate(today.getDate() - 6);
+            var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+            var byDate7 = {};
             logs.forEach(function(log) {
-              if (log.date && log.date >= mondayStr) {
-                weeklyTss += (Number(log.tss) || 0);
-              }
+              var d = log.date ? String(log.date).split('T')[0] : '';
+              if (!d) return;
+              if (!byDate7[d]) byDate7[d] = 0;
+              byDate7[d] += Number(log.tss) || 0;
+            });
+            var weeklyTss = 0;
+            Object.keys(byDate7).forEach(function(d) {
+              if (d >= start7Str && d <= todayStr) weeklyTss += byDate7[d];
             });
             var weeklyTssRounded = Math.round(weeklyTss);
             
@@ -1895,10 +1911,11 @@ Output Format (JSON Only):
               setStats(function(prev) {
                 return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
               });
-              console.log('[Dashboard] 주간 목표 계산:', {
+              console.log('[Dashboard] 주간 목표 계산 (최근 7일 TSS):', {
                 weeklyTss: weeklyTssRounded,
                 weeklyTarget: weeklyTarget,
-                monday: mondayStr,
+                start7: start7Str,
+                today: todayStr,
                 logsCount: logs.length
               });
               
@@ -2121,9 +2138,28 @@ Output Format (JSON Only):
             if (typeof window.callGeminiCoach === 'function') {
               // B. Optimize Payload - Use sanitized logs
               var cleanLogs = sanitizeLogs(logs);
+              // 주간 목표 실적(최근 7일 TSS)과 코멘트 일치: 화면과 동일한 계산으로 산출해 코치에 전달
+              var todayObj = new Date();
+              var todayStr = todayObj.getFullYear() + '-' + String(todayObj.getMonth() + 1).padStart(2, '0') + '-' + String(todayObj.getDate()).padStart(2, '0');
+              var start7 = new Date(todayObj);
+              start7.setDate(todayObj.getDate() - 6);
+              var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+              var byDateFor7 = {};
+              (logs || []).forEach(function(log) {
+                var d = log.date ? String(log.date).split('T')[0] : '';
+                if (!d) return;
+                if (!byDateFor7[d]) byDateFor7[d] = 0;
+                byDateFor7[d] += Number(log.tss) || 0;
+              });
+              var last7TSSForCoach = 0;
+              Object.keys(byDateFor7).forEach(function(d) {
+                if (d >= start7Str && d <= todayStr) last7TSSForCoach += byDateFor7[d];
+              });
+              last7TSSForCoach = Math.round(last7TSSForCoach);
               console.log('[AI] Sending ' + cleanLogs.length + ' days of data to Gemini...', {
                 originalCount: logs.length,
                 sanitizedCount: cleanLogs.length,
+                last7DaysTSSForComment: last7TSSForCoach,
                 device: isMobile() ? 'mobile' : 'desktop'
               });
               
@@ -2137,8 +2173,8 @@ Output Format (JSON Only):
               // AI 분석에 전달되는 데이터:
               // - userProfile: { id, name, ftp, weight, grade, challenge, acc_points, rem_points, ... }
               // - cleanLogs: 최근 30일간 훈련 로그 배열 (sanitized - technical IDs removed)
-              //   각 로그: { date, title, duration_min, tss, if, avg_watts, weighted_watts, avg_hr, max_hr, avg_cadence }
-              var analysisPromise = window.callGeminiCoach(userProfile, cleanLogs);
+              // - last7TSSForCoach: 주간 목표 실적(최근 7일 TSS) — 코멘트에 이 값만 사용(화면과 일치)
+              var analysisPromise = window.callGeminiCoach(userProfile, cleanLogs, last7TSSForCoach);
               var analysis = await Promise.race([analysisPromise, timeoutPromise]);
               var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
               setCoachData(analysis);
