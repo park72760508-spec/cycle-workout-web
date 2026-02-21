@@ -144,15 +144,10 @@ Output Format (JSON Only):
   let modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
   let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
 
-  // API 호출
+  // API 호출 (최대 3회 재시도)
   const apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-  
   const requestBody = {
-    contents: [{
-      parts: [{
-        text: prompt
-      }]
-    }],
+    contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
       maxOutputTokens: 8192,
       temperature: 0.7,
@@ -161,116 +156,124 @@ Output Format (JSON Only):
     }
   };
 
-  try {
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
+  function isCommentTruncated(str) {
+    if (!str || typeof str !== 'string') return true;
+    var t = str.trim();
+    if (t.length < 10) return true;
+    return !/(세요|습니다|니다|합니다|해요|네요|죠|조|요|다|음|함)[.!?~]*\s*$/.test(t);
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = '';
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error?.message || errorText;
-      } catch (e) {
-        errorMessage = errorText;
-      }
-      throw new Error(`Gemini API 오류: ${errorMessage}`);
+  var lastError = null;
+  const MAX_RETRIES = 3;
+
+  for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 1) {
+      await new Promise(function (r) { setTimeout(r, 1000 * (attempt - 1)); });
     }
-
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-    const responseText = candidate?.content?.parts?.[0]?.text || '';
-    const finishReason = candidate?.finishReason || candidate?.finish_reason || '';
-
-    if (!responseText) {
-      throw new Error('Gemini API 응답이 비어있습니다.');
-    }
-
-    // 응답이 토큰 제한으로 잘렸으면 코치 코멘트는 사용하지 않고 대체 문구 사용
-    var responseWasTruncated = (finishReason === 'MAX_TOKENS' || finishReason === 'max_tokens');
-
-    // JSON 추출 (마크다운 코드 블록 제거)
-    let jsonText = responseText.trim();
-    if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-    }
-
-    // 잘린 코치 코멘트인지 판별 (한국어 문장이 마침으로 끝나지 않으면 잘린 것으로 간주)
-    function isCommentTruncated(str) {
-      if (!str || typeof str !== 'string') return true;
-      var t = str.trim();
-      if (t.length < 10) return true;
-      return !/(세요|습니다|니다|합니다|해요|네요|죠|조|요|다|음|함)[.!?~]*\s*$/.test(t);
-    }
-
-    var result = null;
     try {
-      result = JSON.parse(jsonText);
-    } catch (parseErr) {
-      if (parseErr instanceof SyntaxError && jsonText.indexOf('"coach_comment"') !== -1) {
-        var repaired = jsonText;
-        if (!/"\s*}\s*$/.test(repaired)) {
-          if (/"[^"]*$/.test(repaired)) repaired = repaired + '"';
-          if (!/\}\s*$/.test(repaired)) repaired = repaired + ' }';
-        }
+      var response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        var errorText = await response.text();
+        var errorMessage = '';
         try {
-          result = JSON.parse(repaired);
-        } catch (e2) {
-          var coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)"?\s*[,}]/);
-          if (!coachCommentMatch) coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
-          var statusMatch = jsonText.match(/"training_status"\s*:\s*"([^"]+)"/);
-          var vo2Match = jsonText.match(/"vo2max_estimate"\s*:\s*(\d+)/);
-          var workoutMatch = jsonText.match(/"recommended_workout"\s*:\s*"([^"]+)"/);
-          var commentStr = (coachCommentMatch && coachCommentMatch[1]) ? coachCommentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
-          result = {
-            training_status: (statusMatch && statusMatch[1]) ? statusMatch[1] : 'Building Base',
-            vo2max_estimate: (vo2Match && vo2Match[1]) ? Math.max(20, Math.min(100, parseInt(vo2Match[1], 10))) : 40,
-            coach_comment: commentStr,
-            recommended_workout: (workoutMatch && workoutMatch[1]) ? workoutMatch[1] : 'Active Recovery (Z1)'
-          };
-          if (isCommentTruncated(commentStr) || responseWasTruncated) {
-            result.coach_comment = userName + '님, 분석이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.';
-          } else if (!result.coach_comment) {
-            result.coach_comment = userName + '님, 오늘도 화이팅하세요!';
+          var errorData = JSON.parse(errorText);
+          errorMessage = errorData.error?.message || errorText;
+        } catch (e) {
+          errorMessage = errorText;
+        }
+        lastError = new Error('Gemini API 오류: ' + errorMessage);
+        continue;
+      }
+
+      var data = await response.json();
+      var candidate = data.candidates?.[0];
+      var responseText = candidate?.content?.parts?.[0]?.text || '';
+      var finishReason = candidate?.finishReason || candidate?.finish_reason || '';
+      if (!responseText) {
+        lastError = new Error('Gemini API 응답이 비어있습니다.');
+        continue;
+      }
+
+      var responseWasTruncated = (finishReason === 'MAX_TOKENS' || finishReason === 'max_tokens');
+      var jsonText = responseText.trim();
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+      }
+
+      var result = null;
+      try {
+        result = JSON.parse(jsonText);
+      } catch (parseErr) {
+        if (parseErr instanceof SyntaxError && jsonText.indexOf('"coach_comment"') !== -1) {
+          var repaired = jsonText;
+          if (!/"\s*}\s*$/.test(repaired)) {
+            if (/"[^"]*$/.test(repaired)) repaired = repaired + '"';
+            if (!/\}\s*$/.test(repaired)) repaired = repaired + ' }';
+          }
+          try {
+            result = JSON.parse(repaired);
+          } catch (e2) {
+            var coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)"?\s*[,}]/);
+            if (!coachCommentMatch) coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
+            var statusMatch = jsonText.match(/"training_status"\s*:\s*"([^"]+)"/);
+            var vo2Match = jsonText.match(/"vo2max_estimate"\s*:\s*(\d+)/);
+            var workoutMatch = jsonText.match(/"recommended_workout"\s*:\s*"([^"]+)"/);
+            var commentStr = (coachCommentMatch && coachCommentMatch[1]) ? coachCommentMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim() : '';
+            result = {
+              training_status: (statusMatch && statusMatch[1]) ? statusMatch[1] : 'Building Base',
+              vo2max_estimate: (vo2Match && vo2Match[1]) ? Math.max(20, Math.min(100, parseInt(vo2Match[1], 10))) : 40,
+              coach_comment: commentStr,
+              recommended_workout: (workoutMatch && workoutMatch[1]) ? workoutMatch[1] : 'Active Recovery (Z1)'
+            };
+            if (!result.coach_comment) result.coach_comment = userName + '님, 오늘도 화이팅하세요!';
           }
         }
+        if (!result) {
+          lastError = parseErr;
+          continue;
+        }
       }
-      if (!result) throw parseErr;
-    }
 
-    if (result && (responseWasTruncated || isCommentTruncated(result.coach_comment))) {
-      result.coach_comment = userName + '님, 분석이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.';
-    }
-    if (result && !result.coach_comment) {
-      result.coach_comment = userName + '님, 오늘도 화이팅하세요!';
-    }
+      if (responseWasTruncated || isCommentTruncated(result.coach_comment)) {
+        lastError = new Error('응답이 잘렸거나 코멘트가 불완전합니다.');
+        continue;
+      }
+      if (!result.coach_comment) {
+        result.coach_comment = userName + '님, 오늘도 화이팅하세요!';
+      }
 
-    const conditionScore = conditionScoreForPrompt;
-    return {
-      condition_score: conditionScore,
-      training_status: result.training_status || 'Building Base',
-      vo2max_estimate: result.vo2max_estimate || 40,
-      coach_comment: result.coach_comment || (userName + '님, 오늘도 화이팅하세요!'),
-      recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
-    };
-    
-  } catch (error) {
-    console.error('Gemini Coach API 오류:', error);
-    
-    // 기본값 반환 (오류 발생 시)
-    return {
-      condition_score: 50,
-      training_status: 'Building Base',
-      vo2max_estimate: 40,
-      coach_comment: `${userName}님, 데이터 분석 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.`,
-      recommended_workout: 'Active Recovery (Z1)'
-    };
+      var conditionScore = conditionScoreForPrompt;
+      return {
+        condition_score: conditionScore,
+        training_status: result.training_status || 'Building Base',
+        vo2max_estimate: result.vo2max_estimate || 40,
+        coach_comment: result.coach_comment || (userName + '님, 오늘도 화이팅하세요!'),
+        recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
+      };
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_RETRIES) {
+        continue;
+      }
+      break;
+    }
   }
+
+  if (lastError) {
+    console.error('Gemini Coach API 오류 (재시도 ' + MAX_RETRIES + '회 후 실패):', lastError);
+  }
+  return {
+    condition_score: 50,
+    training_status: 'Building Base',
+    vo2max_estimate: 40,
+    coach_comment: userName + '님, 분석이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.',
+    recommended_workout: 'Active Recovery (Z1)'
+  };
 }
 
 // 전역으로 노출
