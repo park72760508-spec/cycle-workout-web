@@ -231,6 +231,26 @@ let isCompleteUserInfoModalShown = false;
 // 로그인 성공 여부 추적 (페이지 로드 시 모달 표시 방지)
 let isLoginJustCompleted = false;
 
+// 훈련 중인지 여부 (노트북/태블릿 훈련 화면 활성 또는 타이머 동작 중)
+function isTrainingInProgress() {
+  try {
+    const trainingScreen = typeof document !== 'undefined' ? document.getElementById('trainingScreen') : null;
+    if (trainingScreen && (trainingScreen.classList.contains('active') || (typeof window.getComputedStyle === 'function' && window.getComputedStyle(trainingScreen).display !== 'none'))) {
+      const timerId = (typeof window.trainingState !== 'undefined' && window.trainingState) ? window.trainingState.timerId : null;
+      const individualTimer = typeof window.individualTrainingTimerInterval !== 'undefined' ? window.individualTrainingTimerInterval : null;
+      if (timerId || individualTimer) return true;
+      return true; // 훈련 화면이 활성이면 진행 중으로 간주 (타이머만 믿지 않음)
+    }
+    const mobileDashboard = typeof document !== 'undefined' ? document.getElementById('mobileDashboardScreen') : null;
+    if (mobileDashboard && (mobileDashboard.classList.contains('active') || (typeof window.getComputedStyle === 'function' && window.getComputedStyle(mobileDashboard).display !== 'none'))) {
+      if (typeof window.mobileTrainingState !== 'undefined' && window.mobileTrainingState && (window.mobileTrainingState.running || window.mobileTrainingState.started)) return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 // 베이스캠프 화면으로 전환하는 헬퍼 함수
 function switchToBasecampScreen() {
   // callback.html에서는 basecampScreen이 없으므로 조용히 종료
@@ -239,6 +259,11 @@ function switchToBasecampScreen() {
      window.location.href.includes('callback.html'));
   if (isCallbackPage) {
     return; // callback.html에서는 화면 전환 불필요
+  }
+  // 훈련 중에는 전환하지 않음 (Firebase 토큰 갱신 시 onAuthStateChanged 재호출로 인한 갑작스런 베이스캠프 전환 방지)
+  if (typeof isTrainingInProgress === 'function' && isTrainingInProgress()) {
+    console.log('🛡️ [Auth] 훈련 진행 중이라 베이스캠프 전환 생략');
+    return;
   }
   
   console.log('🔄 베이스캠프 화면으로 전환 시작');
@@ -827,7 +852,10 @@ function initAuthStateListener() {
               // 플래그 리셋 (한 번만 실행되도록)
               isLoginJustCompleted = false;
             } else {
-              // 페이지 로드 시 인증 상태 복원인 경우: 화면만 전환 (모달 표시하지 않음)
+              // 페이지 로드 시 인증 상태 복원인 경우 (또는 토큰 갱신 시 재호출됨 — 토큰 갱신 시에는 화면 전환 금지)
+              if (window.__authRestoreBasecampDone) {
+                return; // 이미 이번 페이지 세션에서 베이스캠프 전환을 한 번 수행함 (토큰 갱신 시 재호출 방지)
+              }
               const hasContact = userData.contact && userData.contact.trim() !== '';
               const hasFTP = userData.ftp && userData.ftp > 0;
               const hasWeight = userData.weight && userData.weight > 0;
@@ -838,7 +866,8 @@ function initAuthStateListener() {
               const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasBirthYear || !hasGender || !hasChallenge;
               
               if (!needsInfo) {
-                // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+                // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동 (최초 1회만)
+                window.__authRestoreBasecampDone = true;
                 setTimeout(() => {
                   switchToBasecampScreen();
                 }, 300);
