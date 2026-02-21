@@ -6554,7 +6554,7 @@ function initializeCurrentScreen(screenId) {
       break;
 
     case 'performanceDashboardScreen': {
-      // 모바일/iframe: userId를 URL로 전달, 로드 후 postMessage로 사용자 객체 전달
+      // 대시보드는 index.html에 통합(No Iframe). performanceDashboard.html 삭제됨 — initPerformanceDashboard가 #dashboard-root에 React 렌더
       const iframe = document.getElementById('performanceDashboardFrame');
       const cu = window.currentUser || null;
       const uid = (cu && cu.id) ? String(cu.id) : '';
