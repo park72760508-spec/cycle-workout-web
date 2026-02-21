@@ -4402,13 +4402,13 @@
   </div>
 
   <!-- Strava 동기화 날짜 선택 모달 -->
-  <div id="stravaSyncModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); overflow: hidden; overscroll-behavior: contain;" onclick="if(event.target === this) closeStravaSyncModal();">
-    <div class="modal-content" id="stravaSyncModalContent" style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; max-height: 90vh; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; overflow: hidden;" onclick="event.stopPropagation();">
-      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
+  <div id="stravaSyncModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); overflow-y: auto; overscroll-behavior: contain; padding: 16px 0;" onclick="if(event.target === this) closeStravaSyncModal();">
+    <div class="modal-content" id="stravaSyncModalContent" style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); margin: auto;" onclick="event.stopPropagation();">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 style="margin: 0; font-size: 1.3em; color: #1f2937;">Strava 동기화</h3>
         <button onclick="closeStravaSyncModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;">&times;</button>
       </div>
-      <div class="modal-body" style="overflow-y: auto; overscroll-behavior-y: contain; flex: 1 1 0; min-height: 0; margin-bottom: 0;">
+      <div class="modal-body" style="margin-bottom: 0;">
         <p style="margin: 0 0 20px 0; color: #6b7280; font-size: 0.95em;">동기화할 기간을 선택하세요. 년/월을 선택하지 않으면 최근 30개의 활동을 가져옵니다.</p>
         
         <div style="margin-bottom: 16px;">
@@ -4467,12 +4467,12 @@
         
         <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
       </div>
-      <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; flex-shrink: 0;">
+      <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
         <button id="btnStravaSyncTodayAll" type="button" onclick="if(typeof startStravaSyncTodayAll==='function'){startStravaSyncTodayAll();}" style="display: none; padding: 12px 24px; background: rgba(59, 130, 246, 0.25); border: 1px solid rgba(59, 130, 246, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #1d4ed8; transition: all 0.2s;">오늘 기록(ALL)</button>
         <button onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: rgba(34, 197, 94, 0.25); border: 1px solid rgba(34, 197, 94, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #15803d; transition: all 0.2s;">오늘 기록</button>
         <button onclick="confirmStravaSync()" style="padding: 12px 24px; background: #fc4c02; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; transition: all 0.2s;">동기화 시작</button>
       </div>
-      <div style="text-align: center; padding-top: 12px; flex-shrink: 0;">
+      <div style="text-align: center; padding-top: 12px;">
         <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: inline-block;" />
       </div>
     </div>
