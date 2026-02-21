@@ -5371,17 +5371,13 @@
               }
               
               if (content) {
-                // 총괄 레포트 간소화 (200자 내로 요약)
+                // 총괄 레포트: 400자 이상 넉넉히 표시 (풍부한 코멘트용)
                 var originalCoachComment = analysis.coach_comment || 'AI 추천';
                 
-                // 200자 내에서 자연스럽게 끝맺음되도록 처리
-                function truncateTo200Chars(text) {
-                  if (text.length <= 200) return text;
-                  
-                  // 200자까지 자르기
-                  var truncated = text.substring(0, 200);
-                  
-                  // 마지막 문장이 완전하지 않으면 이전 문장 끝까지로 조정
+                function truncateTo400Chars(text) {
+                  var limit = 400;
+                  if (text.length <= limit) return text;
+                  var truncated = text.substring(0, limit);
                   var lastPeriod = truncated.lastIndexOf('。');
                   var lastPeriodKr = truncated.lastIndexOf('.');
                   var lastPeriodKr2 = truncated.lastIndexOf('!');
@@ -5390,23 +5386,15 @@
                   var lastPeriodKr5 = truncated.lastIndexOf('니다.');
                   var lastPeriodKr6 = truncated.lastIndexOf('요.');
                   var lastPeriodKr7 = truncated.lastIndexOf('습니다.');
-                  
-                  var lastEnd = Math.max(lastPeriod, lastPeriodKr, lastPeriodKr2, lastPeriodKr3, 
+                  var lastEnd = Math.max(lastPeriod, lastPeriodKr, lastPeriodKr2, lastPeriodKr3,
                                         lastPeriodKr4 !== -1 ? lastPeriodKr4 + 2 : -1,
                                         lastPeriodKr5 !== -1 ? lastPeriodKr5 + 3 : -1,
                                         lastPeriodKr6 !== -1 ? lastPeriodKr6 + 2 : -1,
                                         lastPeriodKr7 !== -1 ? lastPeriodKr7 + 3 : -1);
-                  
-                  // 문장 끝을 찾았고, 최소 150자 이상이면 그 위치까지 사용
-                  if (lastEnd >= 150) {
-                    return truncated.substring(0, lastEnd + 1);
-                  }
-                  
-                  // 문장 끝을 찾지 못했거나 너무 짧으면 200자에서 자르고 ".." 추가
-                  return truncated.substring(0, 198) + '..';
+                  if (lastEnd >= 350) return truncated.substring(0, lastEnd + 1);
+                  return truncated.substring(0, limit - 2) + '..';
                 }
-                
-                var coachComment = truncateTo200Chars(originalCoachComment);
+                var coachComment = truncateTo400Chars(originalCoachComment);
                 
                 // 30일간 훈련 log 반영 여부 확인 및 표시
                 var logCount = cleanLogs.length;
@@ -5449,8 +5437,7 @@
                   var workoutType = workout.workout_type || 'Active Recovery (Z1)';
                   // 각 워크아웃 레포트 간소화 (30~40자 내외로 충실하게 반영)
                   var originalDescription = workout.description || workout.reason || 'AI 추천';
-                  // 40자 초과 시 38자로 자르고 ".." 추가
-                  var description = originalDescription.length > 40 ? originalDescription.substring(0, 38) + '..' : originalDescription;
+                  var description = originalDescription;
                   var rank = workout.rank || (idx + 1);
                   
                   // 세그먼트 생성
@@ -5472,7 +5459,7 @@
                     '</div>' +
                     '<div style="font-size: 12px; color: #6b7280;">약 ' + totalMinutes + '분</div>' +
                     '</div>' +
-                    '<div style="font-size: 14px; color: #6b7280; margin-bottom: 12px; line-height: 1.5;">' + description + '</div>' +
+                    '<div style="font-size: 14px; color: #6b7280; margin-bottom: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">' + description + '</div>' +
                     '<div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin-bottom: 12px; position: relative;">' +
                     '<div id="' + graphContainerId + '" style="width: 100%; min-height: 100px;"></div>' +
                     '</div>' +
@@ -10801,21 +10788,9 @@ Task Requirements:
 
 2. **Training Status:** 현재 상태를 정확히 분석하여 다음 중 하나를 선택: "Recovery Needed", "Building Base", "Ready to Race", "Peaking", "Overreaching"
 
-3. **Coach Comment (매우 중요):** 사용자 이름({{userName}})을 부르며, 최근 훈련 성과를 구체적으로 분석하여 한국어(경어체)로 조언합니다. 
-   - **반드시 200자 내외로 충실하게 작성**해야 하며, 최소 150자는 넘어야 합니다.
-   - 200자 내에서 자연스럽게 끝맺음이 되도록 문장을 완성해야 합니다 (마지막 문장이 중간에 끊기지 않도록).
-   - 최근 훈련의 구체적인 성과를 상세히 분석하여 명시해야 합니다:
-     * 최근 7일/30일간의 TSS 합계 및 평균, 목표 대비 달성률
-     * 평균 파워, 최대 파워, 파워 유지율 등 파워 관련 지표
-     * 훈련 빈도, 훈련 일수, 휴식 패턴
-     * 컨디션 점수(Condition Score)와 훈련 상태(Training Status)의 근거
-     * 개선이 필요한 부분이나 강점이 되는 부분
-   - 단순히 "꾸준히", "좋습니다" 같은 추상적 표현은 피하고, 구체적인 수치와 분석 결과를 포함해야 합니다.
-   - 사용자가 시사점을 얻을 수 있도록 훈련 데이터를 깊이 있게 분석한 결과를 반영해야 합니다.
-   - 현재 컨디션에 맞는 구체적인 조언과 다음 훈련 방향을 제시해야 합니다.
-   - 예시 (좋은 예): "박지성님, 최근 7일간 총 TSS가 3,150으로 주간 목표 3,500 대비 90%를 달성하셨네요. 평균 파워 220W, 최대 파워 350W를 기록하셨으며 훈련 빈도는 주 5회로 양호합니다. 현재 컨디션 점수 85점으로 레이스 준비 상태입니다. 오늘은 가벼운 리커버리 훈련으로 피로를 회복하시고, 내일부터는 중강도 훈련으로 지구력을 강화하시기 바랍니다. 지속적인 훈련으로 목표 달성을 위해 노력하시기 바랍니다." (약 150자)
-   - 예시 (좋은 예): "지성님, 최근 30일간 총 22회의 훈련을 완료하셨으며, 평균 TSS 450으로 목표를 초과 달성하셨습니다. 특히 임계값 구간에서 파워 유지율이 88%로 우수하며, VO2max 구간 훈련도 꾸준히 진행하셨네요. 현재 피크 상태(Peaking)로 최고 성능을 발휘할 수 있는 시점입니다. 오늘은 고강도 임계값 훈련을 추천드리며, 충분한 회복 시간을 확보하시기 바랍니다. 레이스 전 마지막 주간이므로 컨디션 관리에 특히 주의하시기 바랍니다." (약 180자)
-   - 예시 (나쁜 예 - 피해야 할 것): "박지성님, 최근 훈련에서 꾸준히 .." (너무 짧고 구체적이지 않음)
+3. **Coach Comment (매우 중요):** 사용자의 이름을 부르며, 최근 7일 TSS, 주간 평균 TSS, 현재 컨디션 점수 데이터를 활용해 사용자의 현재 상태를 심도있게 분석하고, 앞으로 어떻게 훈련해야 하는지 3~4문장 분량의 상세하고 충분한 코멘트를 경어체로 작성해주세요. 절대 문장을 도중에 끊지 마세요.
+   - 최근 훈련의 구체적인 성과(TSS, 파워, 훈련 빈도 등)와 컨디션 점수·훈련 상태 근거를 포함하고, 현재 컨디션에 맞는 조언과 다음 훈련 방향을 제시하세요.
+   - 단순히 "꾸준히", "좋습니다" 같은 추상적 표현은 피하고, 구체적인 수치와 분석 결과를 포함하세요.
 
 4. **VO2max Estimate:** 파워 기반 추정 VO2max 정수 (20-100 범위).
 
@@ -11070,10 +11045,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 else if (workoutType.indexOf('(Z1)') !== -1 || workoutType.indexOf('Z1') !== -1 || workoutType.toLowerCase().indexOf('recovery') !== -1) normalizedType = allowed[0];
               }
               
-              // description 간소화 (30~40자 내외로 충실하게 반영)
               var originalDesc = (w.description && String(w.description).trim()) || (w.reason && String(w.reason).trim()) || 'AI 추천';
-              // 40자 초과 시 38자로 자르고 ".." 추가
-              var shortDesc = originalDesc.length > 40 ? originalDesc.substring(0, 38) + '..' : originalDesc;
+              var shortDesc = originalDesc;
               
               recommended_workouts.push({
                 rank: w.rank || (idx + 1),
@@ -11180,21 +11153,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
             coach_comment: (function() {
               var original = result.coach_comment || 'AI 추천';
-              // 대시보드 표시용: 200자 내로 요약
-              // 너무 짧은 경우(60자 미만) 기본 메시지로 대체
+              // 대시보드 표시용: 400자 이상 넉넉히 표시 (풍부한 코멘트)
               if (original.length < 60) {
                 console.warn('[AI] coach_comment가 너무 짧습니다:', original);
                 return (currentUser && currentUser.name || '사용자') + '님, 최근 훈련 데이터를 분석한 결과를 바탕으로 오늘의 훈련을 추천드립니다. 현재 컨디션과 훈련 성과를 종합적으로 고려하여 맞춤형 조언을 제공합니다.';
               }
               
-              // 200자 내에서 자연스럽게 끝맺음되도록 처리
-              function truncateTo200Chars(text) {
-                if (text.length <= 200) return text;
-                
-                // 200자까지 자르기
-                var truncated = text.substring(0, 200);
-                
-                // 마지막 문장이 완전하지 않으면 이전 문장 끝까지로 조정
+              function truncateTo400Chars(text) {
+                var limit = 400;
+                if (text.length <= limit) return text;
+                var truncated = text.substring(0, limit);
                 var lastPeriod = truncated.lastIndexOf('。');
                 var lastPeriodKr = truncated.lastIndexOf('.');
                 var lastPeriodKr2 = truncated.lastIndexOf('!');
@@ -11203,23 +11171,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 var lastPeriodKr5 = truncated.lastIndexOf('니다.');
                 var lastPeriodKr6 = truncated.lastIndexOf('요.');
                 var lastPeriodKr7 = truncated.lastIndexOf('습니다.');
-                
-                var lastEnd = Math.max(lastPeriod, lastPeriodKr, lastPeriodKr2, lastPeriodKr3, 
+                var lastEnd = Math.max(lastPeriod, lastPeriodKr, lastPeriodKr2, lastPeriodKr3,
                                       lastPeriodKr4 !== -1 ? lastPeriodKr4 + 2 : -1,
                                       lastPeriodKr5 !== -1 ? lastPeriodKr5 + 3 : -1,
                                       lastPeriodKr6 !== -1 ? lastPeriodKr6 + 2 : -1,
                                       lastPeriodKr7 !== -1 ? lastPeriodKr7 + 3 : -1);
-                
-                // 문장 끝을 찾았고, 최소 150자 이상이면 그 위치까지 사용
-                if (lastEnd >= 150) {
-                  return truncated.substring(0, lastEnd + 1);
-                }
-                
-                // 문장 끝을 찾지 못했거나 너무 짧으면 200자에서 자르고 ".." 추가
-                return truncated.substring(0, 198) + '..';
+                if (lastEnd >= 350) return truncated.substring(0, lastEnd + 1);
+                return truncated.substring(0, limit - 2) + '..';
               }
-              
-              return truncateTo200Chars(original);
+              return truncateTo400Chars(original);
             })(),
             recommended_workout: recommended_workout, // 하위 호환성 유지
             recommended_workouts: recommended_workouts // 새로운 3개 추천
