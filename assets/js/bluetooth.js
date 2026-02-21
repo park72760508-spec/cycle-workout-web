@@ -1015,6 +1015,42 @@ function handlePowerMeterData(event) {
   }
 }
 
+// 스피드/케이던스 분리형 센서(CSC) 전용 데이터 파서 (와트바이크 등 대응)
+function handleCSCData(event) {
+  const dv = event.target.value;
+  let off = 0;
+  const flags = dv.getUint8(off); off += 1;
+
+  if (flags & 0x01) off += 6; // Wheel Revolution Data Present (Skip)
+
+  if (flags & 0x02) { // Crank Revolution Data Present (Cadence)
+    const cumulativeCrankRevolutions = dv.getUint16(off, true); off += 2;
+    const lastCrankEventTime = dv.getUint16(off, true); off += 2;
+
+    const deviceKey = window.connectedDevices.trainer ? 'trainer' : 'powerMeter';
+    const lastData = window._lastCrankData[deviceKey];
+
+    if (lastData && lastCrankEventTime !== lastData.lastCrankEventTime) {
+      let timeDiff = lastCrankEventTime - lastData.lastCrankEventTime;
+      if (timeDiff < 0) timeDiff += 65536; // Overflow 처리
+      let revDiff = cumulativeCrankRevolutions - lastData.cumulativeCrankRevolutions;
+      if (revDiff < 0) revDiff += 65536; // Overflow 처리
+
+      if (timeDiff > 0 && revDiff > 0) {
+        const timeInSeconds = timeDiff / 1024.0;
+        const cadence = Math.round((revDiff / timeInSeconds) * 60);
+        if (cadence > 0 && cadence <= 250) {
+          window.liveData.cadence = cadence;
+          window._lastCadenceUpdateTime[deviceKey] = Date.now();
+          if (typeof notifyChildWindows === 'function') notifyChildWindows('cadence', cadence);
+        }
+      }
+    }
+    window._lastCrankData[deviceKey] = { cumulativeCrankRevolutions, lastCrankEventTime, timestamp: Date.now() };
+  }
+}
+window.handleCSCData = window.handleCSCData || handleCSCData;
+
 // (Helper functions for HR/PM connection are kept standard)
 async function connectHeartRate(isNewSearch) {
   if (typeof isNewSearch === 'undefined') isNewSearch = false;
