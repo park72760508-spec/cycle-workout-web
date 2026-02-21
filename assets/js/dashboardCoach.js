@@ -57,6 +57,7 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
     : oneLogPerDayPreferStravaForCoach(recentLogs || []);
 
   // 최근 7일 TSS: 대시보드에서 전달한 주간 실적이 있으면 그대로 사용(화면과 코멘트 일치), 없으면 여기서 계산
+  var today = new Date(); // 컨디션 점수(todayStrScore)에서 항상 사용하므로 if 밖에서 정의
   var last7DaysTSS;
   if (typeof last7DaysTSSFromDashboard === 'number' && !isNaN(last7DaysTSSFromDashboard)) {
     last7DaysTSS = Math.round(last7DaysTSSFromDashboard);
@@ -73,7 +74,6 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
       if (!d || !d.getFullYear) return '';
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
-    var today = new Date();
     var todayStrForTSS = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
     var start7 = new Date(today);
     start7.setDate(start7.getDate() - 6);
