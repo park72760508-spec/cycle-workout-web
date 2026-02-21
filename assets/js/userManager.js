@@ -1750,6 +1750,11 @@ if (typeof window !== 'undefined') {
 function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
   const userList = document.getElementById('userList');
   if (!userList) return;
+  let hasAiKey = false;
+  try {
+    const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+    hasAiKey = !!(key && String(key).trim());
+  } catch (e) {}
   const canEditFor = (u) => {
     if (viewerGrade === '1') return true;
     if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
@@ -1780,11 +1785,20 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
     if (challenge === 'GranFondo') challengeImage = 'green.png'; else if (challenge === 'Racing') challengeImage = 'blue.png'; else if (challenge === 'Elite') challengeImage = 'orenge.png'; else if (challenge === 'PRO') challengeImage = 'red.png';
     const accPoints = user.acc_points || 0;
     const remPoints = user.rem_points || 0;
+    const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
+    const aiDot = hasAiKey ? 'background:#22c55e' : 'background:#d1d5db';
+    const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
     return `
       <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
         <div class="user-header">
           <div class="user-name-wrapper">
-            <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
+            <div class="user-name user-name-with-indicators">
+              <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</span>
+              <span class="user-name-badges" title="AI 페어링 / Strava 연결">
+                <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
+                <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
+              </span>
+            </div>
             <div class="user-points">
               <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
               <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
