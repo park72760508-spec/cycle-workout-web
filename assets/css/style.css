@@ -3208,6 +3208,28 @@ button[aria-disabled="true"] {
   line-height: 1.4;
 }
 
+/* 프로필 선택: 이름과 같은 줄 우측 표시등 (A: AI 페어링, S: Strava) */
+#profileScreen .user-card .user-name.user-name-with-indicators {
+  justify-content: space-between;
+  width: 100%;
+}
+#profileScreen .user-card .user-name-with-indicators .user-name-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+#profileScreen .user-card .user-name-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+#profileScreen .user-card .profile-indicator-dot {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 /* 포인트 배지 스타일 */
 #profileScreen .user-card .user-points {
   display: flex;
