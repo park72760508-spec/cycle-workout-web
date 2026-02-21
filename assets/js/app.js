@@ -11744,8 +11744,15 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     
     // 6. Gemini API에 전달할 프롬프트 생성
     // 훈련 이력 분석을 위한 상세 정보 포함
+    // 로그 날짜는 로컬 기준 YYYY-MM-DD 사용 (toISOString은 UTC라 타임존 오류 발생)
+    function toLocalDateStr(val) {
+      if (!val) return '';
+      const d = typeof val === 'string' ? new Date(val) : (val && val.toDate ? val.toDate() : val);
+      if (!d || !d.getFullYear) return '';
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
     const historySummary = recentHistory.map(h => ({
-      date: h.completed_at ? new Date(h.completed_at).toISOString().split('T')[0] : '',
+      date: toLocalDateStr(h.completed_at || h.date),
       workout: h.workout_name || '알 수 없음',
       duration: h.duration_min || 0,
       avgPower: Math.round(h.avg_power || 0),
@@ -11754,7 +11761,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       hrAvg: Math.round(h.hr_avg || 0),
       ftpPercent: ftp > 0 ? Math.round((h.avg_power || 0) / ftp * 100) : 0
     }));
-    
+
     // 훈련 패턴 분석 데이터 계산
     const totalSessions = historySummary.length;
     const totalTSS = historySummary.reduce((sum, h) => sum + h.tss, 0);
@@ -11762,12 +11769,12 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     const weeklyTSS = Math.round(totalTSS / 4.3); // 30일 기준 주간 평균
     const avgDuration = totalSessions > 0 ? Math.round(historySummary.reduce((sum, h) => sum + h.duration, 0) / totalSessions) : 0;
     const avgPower = totalSessions > 0 ? Math.round(historySummary.reduce((sum, h) => sum + h.avgPower, 0) / totalSessions) : 0;
-    
-    // 최근 7일 이력 (단기 패턴) — 오늘 포함: 날짜 문자열로 [오늘-6일, 오늘] 구간 포함
-    const todayStr = today.toISOString ? today.toISOString().split('T')[0] : (today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'));
+
+    // 최근 7일 이력 (단기 패턴) — 오늘 포함: 로컬 날짜 기준 [오늘-6일, 오늘] 7일간 합계 (UTC 사용 시 타임존 오류)
+    const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
     const last7Days = historySummary.filter(h => {
       const d = (h.date || '').split('T')[0];
       return d && d >= sevenDaysAgoStr && d <= todayStr;
