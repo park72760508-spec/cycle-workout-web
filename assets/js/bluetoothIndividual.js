@@ -4537,7 +4537,7 @@ function updateBluetoothConnectionStatus() {
 // 전역 함수로 노출
 /**
  * Bluetooth 개인 훈련 대시보드 종료 (초기화면으로 이동)
- * Bluetooth 개인 훈련 대시보드 전용, 독립적 구동
+ * 훈련 중이면 종료 전까지의 훈련 로그를 저장한 뒤 종료
  */
 function exitBluetoothIndividualTraining() {
     // Bluetooth 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
@@ -4553,20 +4553,59 @@ function exitBluetoothIndividualTraining() {
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
     }
     
-    // 확인 대화상자
-    if (confirm('초기화면으로 나가시겠습니까?')) {
-        // 화면 잠금 방지 해제 (화면 나가기 전에 해제)
+    if (!confirm('초기화면으로 나가시겠습니까?')) {
+        return;
+    }
+
+    function doExit() {
         if (typeof window.wakeLockControl !== 'undefined' && typeof window.wakeLockControl.release === 'function') {
-            console.log('[Bluetooth 개인 훈련] 화면 나가기 - 화면 잠금 방지 해제');
             window.wakeLockControl.release();
         }
-        
-        // 초기화면으로 이동 (bluetoothIndividual.html은 독립 페이지이므로 index.html로 이동)
-        // showScreen 함수는 index.html 내부에서만 작동하므로 직접 URL 이동
         window.location.href = 'index.html#basecampScreen';
-        
         console.log('[Bluetooth 개인 훈련] 초기화면으로 이동');
     }
+
+    var isTrainingRunning = window.currentTrainingState === 'running';
+    if (!isTrainingRunning) {
+        doExit();
+        return;
+    }
+
+    // 훈련 중: 경과시간 갱신 → 결과 저장 후 종료
+    if (bluetoothIndividualTrainingStartTime) {
+        bluetoothIndividualTotalElapsedTime = Math.floor((Date.now() - bluetoothIndividualTrainingStartTime) / 1000);
+    }
+    window.lastElapsedTime = bluetoothIndividualTotalElapsedTime || 0;
+    console.log('[Bluetooth 개인 훈련] 연결>종료 시 훈련 로그 저장 후 종료, elapsedTime:', window.lastElapsedTime);
+
+    var beforeAccPoints = window.currentUser?.acc_points || 0;
+    var beforeRemPoints = window.currentUser?.rem_points || 0;
+    window.beforeTrainingPoints = { acc_points: beforeAccPoints, rem_points: beforeRemPoints };
+
+    (async function saveAndExit() {
+        try {
+            if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
+                window.trainingResults.endSession();
+            }
+            var extra = {
+                workoutId: window.currentWorkout?.id || '',
+                workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                elapsedTime: window.lastElapsedTime || 0,
+                completionType: 'early_exit',
+                appVersion: '1.0.0',
+                timestamp: new Date().toISOString(),
+                source: 'bluetooth_individual_dashboard'
+            };
+            if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
+                await window.trainingResults.saveTrainingResult(extra);
+            }
+            await (window.trainingResults?.initializeResultScreen?.() || Promise.resolve());
+        } catch (e) {
+            console.error('[Bluetooth 개인 훈련] 종료 시 저장 오류:', e);
+            if (typeof showToast === 'function') showToast('훈련 로그 저장 중 오류가 났습니다. 초기화면으로 이동합니다.');
+        }
+        doExit();
+    })();
 }
 
 // 전역 함수로 노출

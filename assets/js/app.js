@@ -18319,7 +18319,7 @@ function updateMobileConnectionButtonColor() {
 
 /**
  * 모바일 개인 훈련 대시보드 종료 (초기화면으로 이동)
- * 모바일 개인 훈련 대시보드 전용, 독립적 구동
+ * 훈련 중이면 종료 전까지의 훈련 로그를 저장한 뒤 종료
  */
 function exitMobileIndividualTraining() {
   // 모바일 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
@@ -18338,25 +18338,56 @@ function exitMobileIndividualTraining() {
   if (trainingDropdown) trainingDropdown.classList.remove('show');
   document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
 
-  if (confirm('초기화면으로 나가시겠습니까?')) {
-    // 종료 시 스크롤 방지 해제 (다른 화면에서 스크롤 잠금 해제 - iOS/Bluefy 대응)
+  if (!confirm('초기화면으로 나가시겠습니까?')) {
+    return;
+  }
+
+  var mts = window.mobileTrainingState;
+  var isTrainingRunning = mts && (mts.timerId || mts.running || mts.started);
+
+  function doExit() {
     if (typeof cleanupMobileDashboard === 'function') {
       cleanupMobileDashboard();
     }
-    // 초기화면으로 이동 (모바일 대시보드는 index.html 내부 화면이므로 showScreen 사용)
     if (typeof showScreen === 'function') {
       showScreen('basecampScreen');
       console.log('[Mobile Dashboard] 초기화면으로 이동');
     } else {
-      // showScreen이 없으면 직접 이동
       window.location.href = '#basecampScreen';
     }
+  }
+
+  if (isTrainingRunning) {
+    // 훈련 중: 타이머 정지 → 경과시간 저장 → 결과 저장 후 종료
+    if (mts.timerId) {
+      clearInterval(mts.timerId);
+      mts.timerId = null;
+    }
+    if (mts && mts.elapsedSec !== undefined) {
+      window.lastElapsedTime = mts.elapsedSec;
+      console.log('[Mobile Dashboard] 연결>종료 시 훈련 로그 저장 후 종료, elapsedTime:', window.lastElapsedTime);
+    }
+    Promise.resolve()
+      .then(function () { return window.saveTrainingResultAtEnd?.(); })
+      .then(function () {
+        if (window.trainingResults && typeof window.trainingResults.initializeResultScreen === 'function') {
+          return window.trainingResults.initializeResultScreen();
+        }
+      })
+      .then(doExit)
+      .catch(function (err) {
+        console.error('[Mobile Dashboard] 종료 시 저장 오류:', err);
+        if (typeof showToast === 'function') showToast('훈련 로그 저장 중 오류가 났습니다. 초기화면으로 이동합니다.');
+        doExit();
+      });
+  } else {
+    doExit();
   }
 }
 
 /**
  * 노트북/태블릿 훈련 화면 종료 → 훈련 준비 화면으로 이동
- * 연결 > 메뉴 목록의 "종료" 클릭 시 호출 (모바일 개인훈련 대시보드 종료 기능과 동일 패턴)
+ * 훈련 중이면 종료 전까지의 훈련 로그를 저장한 뒤 이동
  */
 function exitLaptopTrainingToReady() {
   const trainingScreenEl = document.getElementById('trainingScreen');
@@ -18372,11 +18403,43 @@ function exitLaptopTrainingToReady() {
   if (trainingDropdown) trainingDropdown.classList.remove('show');
   document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
 
-  if (confirm('훈련 준비 화면으로 이동하시겠습니까?')) {
+  if (!confirm('훈련 준비 화면으로 이동하시겠습니까?')) {
+    return;
+  }
+
+  var ts = window.trainingState;
+  var isTrainingRunning = ts && ts.timerId != null;
+
+  function doExit() {
     if (typeof showScreen === 'function') {
       showScreen('trainingReadyScreen');
       console.log('[Laptop Training] 훈련 준비 화면으로 이동');
     }
+  }
+
+  if (isTrainingRunning) {
+    if (typeof stopSegmentLoop === 'function') stopSegmentLoop();
+    if (ts && ts.elapsedSec !== undefined) {
+      window.lastElapsedTime = ts.elapsedSec;
+      console.log('[Laptop Training] 연결>종료 시 훈련 로그 저장 후 이동, elapsedTime:', window.lastElapsedTime);
+    }
+    if (typeof window.laptopTrainingWakeLockControl !== 'undefined' && window.laptopTrainingWakeLockControl.release) {
+      window.laptopTrainingWakeLockControl.release();
+    }
+    Promise.resolve()
+      .then(function () {
+        return (typeof window.saveLaptopTrainingResultAtEnd === 'function')
+          ? window.saveLaptopTrainingResultAtEnd()
+          : window.saveTrainingResultAtEnd?.();
+      })
+      .then(doExit)
+      .catch(function (err) {
+        console.error('[Laptop Training] 종료 시 저장 오류:', err);
+        if (typeof showToast === 'function') showToast('훈련 로그 저장 중 오류가 났습니다. 훈련 준비 화면으로 이동합니다.');
+        doExit();
+      });
+  } else {
+    doExit();
   }
 }
 
