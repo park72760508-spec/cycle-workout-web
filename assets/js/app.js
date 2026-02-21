@@ -6307,6 +6307,12 @@ function initializeCurrentScreen(screenId) {
       }, 300);
       break;
       
+    case 'basecampScreen':
+      if (typeof window.checkFtpSuggestionAndShow === 'function') {
+        setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
+      }
+      break;
+
     case 'connectionScreen':
       console.log('기기 연결 화면 초기화');
       // ANT+ 버튼 비활성화 (클릭 기능 제거)
@@ -7549,6 +7555,9 @@ async function authenticatePhone() {
             window.__basecampShownAfterAuth = true;
             window.showScreen('basecampScreen');
             console.log('✅ 다음 화면 표시 완료: basecampScreen');
+            if (typeof window.checkFtpSuggestionAndShow === 'function') {
+              setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
+            }
             return;
           }
           // 1단계: 모든 화면 완전히 숨기기
