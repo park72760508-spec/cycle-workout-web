@@ -12606,9 +12606,39 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               }
             }
             var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+            // 주간 목표 실적(최근 7일 TSS)과 코멘트 일치: 화면과 동일한 계산으로 산출해 코치에 전달
+            function toDateStrForCoach(date) {
+              if (!date) return null;
+              var d = date.toDate && typeof date.toDate === 'function' ? date.toDate() : (date instanceof Date ? date : new Date(typeof date === 'string' ? date.split('T')[0] + 'T00:00:00' : date));
+              if (!d || isNaN(d.getTime())) return null;
+              return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+            var todayFor7 = new Date();
+            var todayStr7 = todayFor7.getFullYear() + '-' + String(todayFor7.getMonth() + 1).padStart(2, '0') + '-' + String(todayFor7.getDate()).padStart(2, '0');
+            var start7ForCoach = new Date(todayFor7);
+            start7ForCoach.setDate(todayFor7.getDate() - 6);
+            var start7StrForCoach = start7ForCoach.getFullYear() + '-' + String(start7ForCoach.getMonth() + 1).padStart(2, '0') + '-' + String(start7ForCoach.getDate()).padStart(2, '0');
+            var byDate7ForCoach = {};
+            (logsToSend || []).forEach(function(log) {
+              var d = toDateStrForCoach(log.date);
+              if (!d || d < start7StrForCoach || d > todayStr7) return;
+              if (!byDate7ForCoach[d]) byDate7ForCoach[d] = { strava: [], stelvio: [] };
+              var src = String(log.source || '').toLowerCase();
+              var tss = Number(log.tss) || 0;
+              if (src === 'strava') byDate7ForCoach[d].strava.push(tss); else byDate7ForCoach[d].stelvio.push(tss);
+            });
+            var last7TSSForCoach = 0;
+            Object.keys(byDate7ForCoach).forEach(function(dateStr) {
+              var day = byDate7ForCoach[dateStr];
+              var dayTss = 0;
+              if (day.strava.length > 0) { day.strava.forEach(function(t) { dayTss += t; }); } else if (day.stelvio.length > 0) { day.stelvio.forEach(function(t) { dayTss += t; }); }
+              last7TSSForCoach += dayTss;
+            });
+            last7TSSForCoach = Math.round(last7TSSForCoach);
             console.log('[AI] Sending ' + cleanLogs.length + ' logs (Sanitized) to Gemini...', {
               originalCount: logsToSend.length,
               sanitizedCount: cleanLogs.length,
+              last7DaysTSSForComment: last7TSSForCoach,
               device: isMobileDevice ? 'mobile' : 'desktop',
               scope: logScope
             });
@@ -12624,9 +12654,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             if (typeof window.callGeminiCoach === 'function') {
               try {
-                // Call Gemini with sanitized logs (Race against timeout)
+                // Call Gemini with sanitized logs + 주간 실적(최근 7일 TSS) 전달 → 코멘트와 화면 일치
                 var analysis = await Promise.race([
-                  window.callGeminiCoach(userProfile, cleanLogs), // Send CLEAN logs
+                  window.callGeminiCoach(userProfile, cleanLogs, last7TSSForCoach),
                   timeoutPromise
                 ]);
                 
@@ -12637,6 +12667,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }
                 
                 if (!isMounted) return;
+                
+                // 컨디션 점수: 동그라미와 코멘트 일치 — 공통 모듈로 산출한 값으로 표시 점수 덮어쓰기
+                if (analysis && typeof window.computeConditionScore === 'function') {
+                  try {
+                    var userForScore = { age: userProfile && userProfile.age, gender: userProfile && userProfile.gender, challenge: userProfile && userProfile.challenge, ftp: userProfile && userProfile.ftp, weight: userProfile && userProfile.weight };
+                    var logsForScore = (cleanLogs && cleanLogs.length) ? cleanLogs.slice() : (logsToSend || []).slice();
+                    var deduped = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
+                    var todayObj = new Date();
+                    var todayStrScore = todayObj.getFullYear() + '-' + String(todayObj.getMonth() + 1).padStart(2, '0') + '-' + String(todayObj.getDate()).padStart(2, '0');
+                    var csResult = window.computeConditionScore(userForScore, deduped, todayStrScore);
+                    var displayScore = Math.max(50, Math.min(100, csResult.score));
+                    analysis.condition_score = displayScore;
+                  } catch (e) {
+                    console.warn('[Dashboard] 컨디션 점수 덮어쓰기 실패:', e);
+                  }
+                }
                 
                 var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
                 setCoachData(analysis);
@@ -13713,5 +13759,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <p class="ai-loading-title">STELVIO AI Agent</p>
     <p class="ai-loading-message" id="aiScheduleLoadingMessage">🚴 사용자님의 신체 데이터와 목표를 분석하고 있습니다...</p>
   </div>
+  <!-- 대시보드 AI: 주간 실적·컨디션 점수 코멘트 일치 (통합 대시보드에서 사용) -->
+  <script src="assets/js/geminiCoachPrompt.js"></script>
+  <script src="assets/js/dashboardCoach.js"></script>
 </body>
 </html>
