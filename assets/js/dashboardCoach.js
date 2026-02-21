@@ -116,7 +116,7 @@ Coach Comment에서 "컨디션 점수" 또는 "현재 컨디션"을 언급할 �
 Task Requirements:
 1. **Condition Score (0~100):** JSON의 condition_score는 반드시 **{{conditionScore}}** 로 설정하세요. (위에 제공된 값)
 2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
-3. **Coach Comment:** 사용자의 이름({{userName}})을 부르며, **최근 7일 TSS({{last7DaysTSS}}점)·주간 평균 TSS({{weeklyTSS}}점)·현재 컨디션 점수({{conditionScore}}점)** 를 위에 제공된 수치 그대로 사용해 최근 훈련 성과를 언급하고 동기를 부여하는 따뜻한 조언을 한국어(경어체)로 한 문장 작성하세요.
+3. **Coach Comment:** 사용자의 이름을 부르며, 최근 7일 TSS, 주간 평균 TSS, 현재 컨디션 점수 데이터를 활용해 사용자의 현재 상태를 심도있게 분석하고, 앞으로 어떻게 훈련해야 하는지 3~4문장 분량의 상세하고 충분한 코멘트를 경어체로 작성해주세요. 절대 문장을 도중에 끊지 마세요.
 4. **VO2max Estimate:** 파워 데이터를 기반으로 추정된 VO2max 값을 정수로 반환하세요.
 5. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입을 제안하세요.
 
@@ -157,8 +157,7 @@ Output Format (JSON Only):
       maxOutputTokens: 8192,
       temperature: 0.7,
       topP: 0.8,
-      topK: 40,
-      responseMimeType: 'application/json'
+      topK: 40
     }
   };
 
@@ -184,28 +183,35 @@ Output Format (JSON Only):
     }
 
     const data = await response.json();
-    
-    // 응답 파싱
-    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+    const candidate = data.candidates?.[0];
+    const responseText = candidate?.content?.parts?.[0]?.text || '';
+    const finishReason = candidate?.finishReason || candidate?.finish_reason || '';
+
     if (!responseText) {
       throw new Error('Gemini API 응답이 비어있습니다.');
     }
 
+    // 응답이 토큰 제한으로 잘렸으면 코치 코멘트는 사용하지 않고 대체 문구 사용
+    var responseWasTruncated = (finishReason === 'MAX_TOKENS' || finishReason === 'max_tokens');
+
     // JSON 추출 (마크다운 코드 블록 제거)
     let jsonText = responseText.trim();
-    
-    // ```json 또는 ``` 제거
     if (jsonText.startsWith('```')) {
       jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
     }
-    
-    // JSON 파싱 (Gemini 응답 잘림/문자열 미종료 시 복구 시도)
+
+    // 잘린 코치 코멘트인지 판별 (한국어 문장이 마침으로 끝나지 않으면 잘린 것으로 간주)
+    function isCommentTruncated(str) {
+      if (!str || typeof str !== 'string') return true;
+      var t = str.trim();
+      if (t.length < 10) return true;
+      return !/(세요|습니다|니다|합니다|해요|네요|죠|조|요|다|음|함)[.!?~]*\s*$/.test(t);
+    }
+
     var result = null;
     try {
       result = JSON.parse(jsonText);
     } catch (parseErr) {
-      // Unterminated string 등: 응답 잘림으로 보면 끝에 " } 추가 후 재시도
       if (parseErr instanceof SyntaxError && jsonText.indexOf('"coach_comment"') !== -1) {
         var repaired = jsonText;
         if (!/"\s*}\s*$/.test(repaired)) {
@@ -215,7 +221,6 @@ Output Format (JSON Only):
         try {
           result = JSON.parse(repaired);
         } catch (e2) {
-          // 필드만 정규식으로 추출해 최소 결과 구성 (응답 잘림/미종료 문자열 대응)
           var coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)"?\s*[,}]/);
           if (!coachCommentMatch) coachCommentMatch = jsonText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
           var statusMatch = jsonText.match(/"training_status"\s*:\s*"([^"]+)"/);
@@ -225,23 +230,32 @@ Output Format (JSON Only):
           result = {
             training_status: (statusMatch && statusMatch[1]) ? statusMatch[1] : 'Building Base',
             vo2max_estimate: (vo2Match && vo2Match[1]) ? Math.max(20, Math.min(100, parseInt(vo2Match[1], 10))) : 40,
-            coach_comment: commentStr || (userName + '님, 오늘도 화이팅하세요!'),
+            coach_comment: commentStr,
             recommended_workout: (workoutMatch && workoutMatch[1]) ? workoutMatch[1] : 'Active Recovery (Z1)'
           };
+          if (isCommentTruncated(commentStr) || responseWasTruncated) {
+            result.coach_comment = userName + '님, 분석이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.';
+          } else if (!result.coach_comment) {
+            result.coach_comment = userName + '님, 오늘도 화이팅하세요!';
+          }
         }
       }
       if (!result) throw parseErr;
     }
-    
-    // 컨디션 점수: API 호출 전에 이미 산출한 conditionScoreForPrompt 사용 (코멘트와 화면 표시 일치)
+
+    if (result && (responseWasTruncated || isCommentTruncated(result.coach_comment))) {
+      result.coach_comment = userName + '님, 분석이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.';
+    }
+    if (result && !result.coach_comment) {
+      result.coach_comment = userName + '님, 오늘도 화이팅하세요!';
+    }
+
     const conditionScore = conditionScoreForPrompt;
-    
-    // 기본값 설정
     return {
       condition_score: conditionScore,
       training_status: result.training_status || 'Building Base',
       vo2max_estimate: result.vo2max_estimate || 40,
-      coach_comment: result.coach_comment || `${userName}님, 오늘도 화이팅하세요!`,
+      coach_comment: result.coach_comment || (userName + '님, 오늘도 화이팅하세요!'),
       recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
     };
     
