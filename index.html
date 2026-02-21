@@ -12476,6 +12476,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             return;
           }
           
+          // 갱신 주기: 정상 분석 결과는 1시간 캐시. 같은 사용자·같은 로그 범위면 재호출 없이 캐시 사용. 실패/폴백은 캐시하지 않아 "다시 분석"으로 재시도 가능.
           console.log('[Mobile Debug] [AI] API Key found. Scope: ' + logScope + ' (' + logsToSend.length + ' logs). Checking cache...');
           var logsTssSum = logsToSend.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
           var logsHash = logsToSend.length + '_' + (logsToSend[0] && logsToSend[0].date || '') + '_' + (logsToSend[logsToSend.length - 1] && logsToSend[logsToSend.length - 1].date || '') + '_' + Math.round(logsTssSum);
@@ -12662,7 +12663,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   }
                 }
                 
-                var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
+                // 실패/폴백(일시적 오류, 분석 미완료, error_reason)인 경우 캐시하지 않음 → "다시 분석"으로 재시도 가능
+                var isFallback = !analysis || (analysis.coach_comment && (analysis.coach_comment.indexOf('일시적인 오류') !== -1 || analysis.coach_comment.indexOf('분석이 완료되지 않았습니다') !== -1)) || !!(analysis && analysis.error_reason);
                 setCoachData(analysis);
                 setAiLoading(false);
                 if (!isFallback && analysis && !analysis.error_reason) {
@@ -12991,7 +12993,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                         type="button"
                         onClick={() => {
                           try {
-                            localStorage.removeItem('coach_analysis_' + (userProfile && userProfile.id));
+                            // v3 캐시 키 접두사로 해당 사용자 캐시 무효화 (재분석 시 캐시 미사용)
+                            var prefix = 'coach_analysis_v3_' + (userProfile && userProfile.id) + '_';
+                            Object.keys(localStorage).forEach(function(k) { if (k.indexOf(prefix) === 0) localStorage.removeItem(k); });
                           } catch (e) {}
                           setRetryCoach(function(c) { return c + 1; });
                         }}
