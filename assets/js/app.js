@@ -5108,7 +5108,14 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // 카드 렌더 (이름, FTP, W/kg 포함)
+    // AI 페어링 표시등: API 키 등록 여부(전역)
+    let hasAiKey = false;
+    try {
+      const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+      hasAiKey = !!(key && String(key).trim());
+    } catch (e) {}
+
+    // 카드 렌더 (이름, FTP, W/kg, 표시등 A/S 포함)
     box.innerHTML = list.map((u) => {
       const name = (u?.name ?? "").toString();
       const ftp  = Number(u?.ftp);
@@ -5116,10 +5123,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const wkg  = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0)
         ? (ftp / wt).toFixed(2)
         : "-";
+      const hasStrava = !!(u?.strava_refresh_token || u?.strava_access_token);
+      const aiDot = hasAiKey ? 'background:#22c55e' : 'background:#d1d5db';
+      const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
 
       return `
         <div class="user-card" data-id="${u.id}">
-          <div class="user-name"><img src="assets/img/add-user3.gif" alt="" class="user-name-icon"> ${name}</div>
+          <div class="user-name user-name-with-indicators">
+            <span class="user-name-text"><img src="assets/img/add-user3.gif" alt="" class="user-name-icon"> ${name}</span>
+            <span class="user-name-badges" title="AI 페어링 / Strava 연결">
+              <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
+              <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
+            </span>
+          </div>
           <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
           <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
         </div>
