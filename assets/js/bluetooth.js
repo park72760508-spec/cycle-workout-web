@@ -316,6 +316,40 @@ function getOptionalServicesForType(deviceType) {
   return [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
 }
 
+// 디바이스 타입별 엄격한 스캔 필터 (TV 등 불필요한 장비 차단)
+function getStrictFiltersForType(deviceType) {
+  if (deviceType === 'heartRate') {
+    return [
+      { services: ['heart_rate'] },
+      { services: [UUIDS.HR_SERVICE] }
+    ];
+  }
+  if (deviceType === 'powerMeter') {
+    return [
+      { services: [UUIDS.CPS_SERVICE] },
+      { services: [UUIDS.CSC_SERVICE] }
+    ];
+  }
+  if (deviceType === 'trainer') {
+    return [
+      { services: [UUIDS.FTMS_SERVICE] },
+      { services: [UUIDS.CPS_SERVICE] },
+      { namePrefix: 'CycleOps' },
+      { namePrefix: 'Saris' },
+      { namePrefix: 'Hammer' },
+      { namePrefix: 'Wahoo' },
+      { namePrefix: 'KICKR' },
+      { namePrefix: 'Tacx' },
+      { namePrefix: 'ZWEAT' },
+      { namePrefix: 'ThinkRider' },
+      { namePrefix: 'Magene' },
+      { namePrefix: 'Garmin' },
+      { namePrefix: 'Elite' }
+    ];
+  }
+  return [];
+}
+
 // 모바일: namePrefix+services 동시 사용 시 이름 필터가 무시되는 버그 있음 → 이름만 사용
 function buildSavedOnlyFilters(deviceType, savedList) {
   var filters = [];
@@ -344,13 +378,22 @@ async function requestDeviceHybrid(deviceType, isNewSearch) {
 
   var optionalServices = getOptionalServicesForType(deviceType);
 
-  // 신규 검색 의도: Phase 1·1b 건너뛰고 바로 Phase 2로 전체 검색창 즉시 오픈
+  // 신규 검색 의도: Phase 1·1b 건너뛰고 바로 엄격 필터로 검색 (TV 등 불필요한 기기 차단)
   if (isNewSearch) {
     try {
-      var device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: optionalServices
-      });
+      var strictFilters = getStrictFiltersForType(deviceType);
+      var device;
+      if (strictFilters.length > 0) {
+        device = await navigator.bluetooth.requestDevice({
+          filters: strictFilters,
+          optionalServices: optionalServices
+        });
+      } else {
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: optionalServices
+        });
+      }
       return { device: device, server: null, fromReconnect: false };
     } catch (err) {
       if (err.name === 'NotFoundError') {
@@ -402,12 +445,21 @@ async function requestDeviceHybrid(deviceType, isNewSearch) {
     }
   }
 
-  // Phase 2: 전체 검색 (acceptAllDevices + optionalServices)
+  // Phase 2: 엄격한 다중 필터로 검색 (TV 등 불필요한 기기 차단), 필터 없으면 acceptAllDevices 폴백
   try {
-    var device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: optionalServices
-    });
+    var strictFilters = getStrictFiltersForType(deviceType);
+    var device;
+    if (strictFilters.length > 0) {
+      device = await navigator.bluetooth.requestDevice({
+        filters: strictFilters,
+        optionalServices: optionalServices
+      });
+    } else {
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: optionalServices
+      });
+    }
     return { device: device, server: null, fromReconnect: false };
   } catch (err) {
     if (err.name === 'NotFoundError') {
