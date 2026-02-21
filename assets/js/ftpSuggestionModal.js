@@ -316,10 +316,58 @@
 
   injectStyles();
 
-  if (typeof global !== 'undefined') {
-    global.checkFtpSuggestionAndShow = checkFtpSuggestionAndShow;
-    global.getFtpSuggestionFromApi = getFtpSuggestionFromApi;
-    global.confirmFtpApi = confirmFtpApi;
-    global.renderFtpSuggestionModal = renderFtpSuggestionModal;
+  /** 검증용: 쿨타임(다시 보지 않기 7일) 초기화 — 콘솔에서 호출 후 베이스캠프 재진입 시 FTP 제안 다시 표시 */
+  function clearFtpSuggestionCooldown() {
+    try {
+      localStorage.removeItem(FTP_SUGGESTION_DISMISSED_KEY);
+      if (typeof global.showToast === 'function') global.showToast('FTP 제안 쿨타임이 초기화되었습니다.');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * 검증용: API 없이 모달 UI만 강제 표시 (UPGRADE/DECAY 테스트)
+   * 콘솔에서 testFtpSuggestionModal('UPGRADE') 또는 testFtpSuggestionModal('DECAY') 호출
+   * '예' 클릭 시 실제 confirmFtp API가 호출되므로 테스트 계정으로 진행 권장
+   */
+  function testFtpSuggestionModal(type) {
+    var t = (type && String(type).toUpperCase()) || 'UPGRADE';
+    var previousFtp = 200;
+    var suggestedFtp = t === 'DECAY' ? 180 : 210;
+    var userName = (window.currentUser && window.currentUser.name) || '테스트';
+    renderFtpSuggestionModal({
+      type: t,
+      previousFtp: previousFtp,
+      suggestedFtp: suggestedFtp,
+      userName: userName,
+      onConfirm: function (val) {
+        return confirmFtpApi(val).then(function (r) {
+          if (r.success && typeof global.showToast === 'function') global.showToast('FTP가 ' + r.ftp + 'W로 반영되었습니다.');
+          return !!r.success;
+        });
+      },
+      onDecline: function () {}
+    });
+  }
+
+  function assignToTarget(tgt) {
+    if (!tgt || typeof tgt !== 'object') return;
+    tgt.checkFtpSuggestionAndShow = checkFtpSuggestionAndShow;
+    tgt.getFtpSuggestionFromApi = getFtpSuggestionFromApi;
+    tgt.confirmFtpApi = confirmFtpApi;
+    tgt.renderFtpSuggestionModal = renderFtpSuggestionModal;
+    tgt.clearFtpSuggestionCooldown = clearFtpSuggestionCooldown;
+    tgt.testFtpSuggestionModal = testFtpSuggestionModal;
+    tgt.stelvioTestFtpModal = testFtpSuggestionModal;
+  }
+  var win = typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : null);
+  if (win) assignToTarget(win);
+  if (typeof top !== 'undefined' && top && top !== win) {
+    try { assignToTarget(top); } catch (e) {}
+  }
+  if (typeof parent !== 'undefined' && parent && parent !== win) {
+    try { assignToTarget(parent); } catch (e) {}
   }
 })(typeof window !== 'undefined' ? window : this);
