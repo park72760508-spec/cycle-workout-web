@@ -266,7 +266,6 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         optionalServices = ['heart_rate', UUIDS.HR_SERVICE, 'battery_service'];
       } else if (deviceType === 'trainer') {
         filters.push({ services: [UUIDS.FTMS_SERVICE] });
-        filters.push({ services: [UUIDS.CPS_SERVICE] });
         filters.push({ namePrefix: 'CycleOps' });
         filters.push({ namePrefix: 'Hammer' });
         filters.push({ namePrefix: 'Saris' });
@@ -333,7 +332,6 @@ function getStrictFiltersForType(deviceType) {
   if (deviceType === 'trainer') {
     return [
       { services: [UUIDS.FTMS_SERVICE] },
-      { services: [UUIDS.CPS_SERVICE] },
       { namePrefix: 'CycleOps' },
       { namePrefix: 'Saris' },
       { namePrefix: 'Hammer' },
