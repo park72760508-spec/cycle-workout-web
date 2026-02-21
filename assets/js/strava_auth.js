@@ -42,7 +42,8 @@
 
   /**
    * Strava 인증 페이지로 이동한다.
-   * scope: activity:read_all (훈련 데이터 조회 필수)
+   * scope: read, activity:read_all, profile:read_all (비공개 훈련 로그 포함 전체 수집)
+   * approval_prompt=force: 기존 연동 사용자도 상향된 권한 동의창을 다시 보도록 강제
    * state: user_id 전달용 (콜백에서 그대로 돌려받음)
    *
    * @param {string|number} userId - 현재 로그인한 사용자 ID (Firebase 문서 ID 또는 Users 시트 id)
@@ -83,7 +84,7 @@
     }
 
     var redirectUri = getRedirectUri();
-    var scope = 'activity:read_all';
+    var scope = 'read,activity:read_all,profile:read_all';
     var state = uid;
     console.log('[Strava] connectStrava: state에 전달할 userId:', state);
     var url =
