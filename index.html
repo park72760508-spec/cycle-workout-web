@@ -8696,7 +8696,7 @@
                     <div className="bg-red-50 rounded-xl p-3 border border-red-100">
                       <div className="text-xs font-medium text-red-700 mb-0.5">VO₂max</div>
                       <div className="text-xl font-bold text-red-800">
-                        {vo2Values.current != null ? vo2Values.current + '(ml/kg/min)' : '–'}
+                        {vo2Values.current != null ? <><span>{vo2Values.current}</span><span className="text-xs font-medium text-red-700">(ml/kg/min)</span></> : '–'}
                       </div>
                     </div>
                   </div>
