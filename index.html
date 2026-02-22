@@ -11602,19 +11602,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
         var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
         var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
-        var yMin = Math.max(20, Math.floor(dataMin - 10));
-        var yMax = Math.min(100, Math.ceil(dataMax + 10));
+        var yMin = Math.max(20, Math.floor(dataMin - 5));
+        var yMax = Math.min(100, Math.ceil(dataMax + 5));
         var vo2LabelPlugin = {
           id: 'vo2ValueLabels',
           afterDatasetsDraw: function(chart) {
             var meta = chart.getDatasetMeta(0);
             if (!meta || !meta.data || meta.data.length === 0) return;
+            var dataset = chart.data && chart.data.datasets && chart.data.datasets[0];
+            var values = dataset && dataset.data ? dataset.data : [];
             chart.ctx.save();
             chart.ctx.font = '11px sans-serif';
             chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
             chart.ctx.textAlign = 'center';
             meta.data.forEach(function(point, i) {
-              var value = meta.dataset.data[i];
+              if (!point || point.x == null || point.y == null) return;
+              var value = values[i];
               if (value == null || isNaN(value)) return;
               var y = point.y - 10;
               if (y < 0) y = point.y + 16;
