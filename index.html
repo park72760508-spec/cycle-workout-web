@@ -11598,16 +11598,41 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           chartInstanceRef.current.destroy();
           chartInstanceRef.current = null;
         }
+        var vo2Data = data.map(function(d) { return d.vo2; });
+        var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
+        var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
+        var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
+        var yMin = Math.max(20, Math.floor(dataMin - 10));
+        var yMax = Math.min(100, Math.ceil(dataMax + 10));
+        var vo2LabelPlugin = {
+          id: 'vo2ValueLabels',
+          afterDatasetsDraw: function(chart) {
+            var meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data || meta.data.length === 0) return;
+            chart.ctx.save();
+            chart.ctx.font = '11px sans-serif';
+            chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
+            chart.ctx.textAlign = 'center';
+            meta.data.forEach(function(point, i) {
+              var value = meta.dataset.data[i];
+              if (value == null || isNaN(value)) return;
+              var y = point.y - 10;
+              if (y < 0) y = point.y + 16;
+              chart.ctx.fillText(String(Math.round(value)), point.x, y);
+            });
+            chart.ctx.restore();
+          }
+        };
         chartInstanceRef.current = new Chart(ctx, {
           type: 'line',
           data: {
             labels: data.map(function(d) { return d.monthLabel; }),
             datasets: [{
               label: 'VO₂max (ml/kg/min)',
-              data: data.map(function(d) { return d.vo2; }),
+              data: vo2Data,
               borderColor: '#dc2626',
               backgroundColor: 'rgba(220, 38, 38, 0.12)',
-              tension: 0.35,
+              tension: 0.5,
               fill: true,
               pointRadius: 5,
               pointBackgroundColor: '#dc2626',
@@ -11648,13 +11673,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               },
               y: {
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280' },
-                min: 20,
-                max: 100,
+                ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 5 },
+                min: yMin,
+                max: yMax,
                 beginAtZero: false
               }
             }
-          }
+          },
+          plugins: [vo2LabelPlugin]
         });
         return function cleanup() {
           if (chartInstanceRef.current) {
