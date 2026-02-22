@@ -8148,24 +8148,19 @@
           };
         }, [enrichedLogs]);
 
-        /** 현재 월 = 오늘 기준 30일, 이전 달 = 이전 1개월(캘린더). allTrainingLogs는 과거 35일 분이므로 여기서 30일 필터. */
+        /** 선택한 달 = 해당 월 1개월 단위 VO2(메인), 이전 달 = 그 이전 1개월 VO2. 현재월 선택 시 monthlyLogs는 오늘 기준 30일, 과거월 선택 시 해당 캘린더월. */
         const vo2Values = React.useMemo(function() {
           var profile = userProfile || {};
           function toVo2Format(log) {
             var durMin = parseDurationToMinutes(log.duration);
             return { date: log.date, duration_sec: Math.round(durMin * 60), duration_min: durMin, weighted_watts: Number(log.NP ?? log.normPower ?? 0), avg_watts: Number(log.avgPower ?? 0), avg_hr: Number(log.avgHeartRate ?? 0) };
           }
-          var now = new Date();
-          var todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-          var start30 = new Date(now);
-          start30.setDate(now.getDate() - 30);
-          var start30Str = start30.getFullYear() + '-' + String(start30.getMonth() + 1).padStart(2, '0') + '-' + String(start30.getDate()).padStart(2, '0');
-          var currentMonthLogsVo2 = (allTrainingLogs || []).filter(function(log) { var d = log.date || ''; return d >= start30Str && d <= todayStr; }).map(toVo2Format);
+          var selectedMonthLogsVo2 = (logs || []).map(toVo2Format);
           var prevLogsVo2 = (prevMonthLogs || []).map(toVo2Format);
-          var current = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(profile, currentMonthLogsVo2) : null;
+          var selected = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(profile, selectedMonthLogsVo2) : null;
           var prev = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(profile, prevLogsVo2) : null;
-          return { current: current, prev: prev };
-        }, [allTrainingLogs, prevMonthLogs, userProfile]);
+          return { current: selected, prev: prev };
+        }, [logs, prevMonthLogs, userProfile]);
 
         const chartDataByDate = React.useMemo(function() {
           const byDate = {};
