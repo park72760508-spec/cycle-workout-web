@@ -8694,9 +8694,9 @@
                       <div className="text-xl font-bold text-slate-800">{stats.avgVI}</div>
                     </div>
                     <div className="bg-red-50 rounded-xl p-3 border border-red-100">
-                      <div className="text-xs font-medium text-red-700 mb-0.5">VO₂max (ml/kg/min)</div>
+                      <div className="text-xs font-medium text-red-700 mb-0.5">VO₂max</div>
                       <div className="text-xl font-bold text-red-800">
-                        {vo2Values.current != null ? vo2Values.current : '–'}
+                        {vo2Values.current != null ? vo2Values.current + '(ml/kg/min)' : '–'}
                       </div>
                     </div>
                   </div>
