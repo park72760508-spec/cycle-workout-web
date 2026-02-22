@@ -6272,8 +6272,25 @@
     }
 
     /**
+     * Asia/Seoul 기준 일요일 21시 순위 확정 여부
+     */
+    function isWeeklyRankingFinalizedSeoul() {
+      try {
+        var now = new Date();
+        var hourFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', hour12: false });
+        var weekDayFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' });
+        var seoulHour = parseInt(hourFmt.format(now), 10);
+        var seoulWeekday = weekDayFmt.format(now);
+        return seoulWeekday === 'Sun' && seoulHour >= 21;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    /**
      * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
      * 로딩 시 녹색 큰 원 스피너 표시 → 조회 완료 시 랭킹 목록으로 교체. 훈련 기록 없으면 팝업 띄우지 않음.
+     * 매주 일요일 21시 순위 확정 이후에는 화면 중앙에 crop1.png 이미지 표시.
      */
     async function fetchAndShowWeeklyTop10Modal() {
       const modal = document.getElementById('weeklyTop10Modal');
@@ -6309,6 +6326,11 @@
           html += '<span class="weekly-rank-tss">' + tss + ' TSS</span>';
           html += '</div>';
         });
+        if (isWeeklyRankingFinalizedSeoul()) {
+          html += '<div class="weekly-top10-finalized-image" style="display:flex;justify-content:center;align-items:center;padding:16px 0;">';
+          html += '<img src="assets/img/crop1.png" alt="" style="max-width:100%;height:auto;display:block;" />';
+          html += '</div>';
+        }
         body.innerHTML = html;
       } catch (e) {
         console.warn('[WeeklyTop10] 조회 실패:', e);
