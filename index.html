@@ -6327,9 +6327,10 @@
           html += '</div>';
         });
         if (isWeeklyRankingFinalizedSeoul()) {
-          html += '<div class="weekly-top10-finalized-image" style="display:flex;justify-content:center;align-items:center;padding:16px 0;">';
-          html += '<img src="assets/img/crop1.png" alt="" style="max-width:100%;height:auto;display:block;" />';
-          html += '</div>';
+          html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html;
+          html += '<div class="weekly-top10-stamp-overlay" style="position:absolute;left:0;top:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;pointer-events:none;">';
+          html += '<img src="assets/img/crop1.png" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />';
+          html += '</div></div>';
         }
         body.innerHTML = html;
       } catch (e) {
