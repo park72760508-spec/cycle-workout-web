@@ -12662,14 +12662,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     console.warn('[Dashboard] 컨디션 점수 덮어쓰기 실패:', e);
                   }
                 }
-                // VO2max: 동일 로그·동일 사용자여도 AI 응답이 분석 시점마다 달라지는 문제 방지 — FTP/체중 기반 결정론적 추정으로 표시값 고정
-                if (analysis && typeof window.computeVo2maxEstimate === 'function') {
-                  try {
-                    analysis.vo2max_estimate = window.computeVo2maxEstimate({ ftp: userProfile && userProfile.ftp, weight: userProfile && userProfile.weight });
-                  } catch (e) {
-                    console.warn('[Dashboard] VO2max 추정 덮어쓰기 실패:', e);
-                  }
-                }
+                // VO2 Max는 callGeminiCoach(dashboardCoach.js) 내부에서 calculateStelvioVO2Max로 이미 확정되어 반환됨 — 별도 덮어쓰기 없음
                 
                 // 실패/폴백(일시적 오류, 분석 미완료, error_reason)인 경우 캐시하지 않음 → "다시 분석"으로 재시도 가능
                 var isFallback = !analysis || (analysis.coach_comment && (analysis.coach_comment.indexOf('일시적인 오류') !== -1 || analysis.coach_comment.indexOf('분석이 완료되지 않았습니다') !== -1)) || !!(analysis && analysis.error_reason);
