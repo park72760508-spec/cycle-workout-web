@@ -8824,11 +8824,73 @@
       }
 
       /**
+       * 하루 로그 배열을 1건으로 합침: Strava 다건이면 duration/TSS/거리 합산, NP·avgPower·avg_hr은 duration 가중 평균.
+       * @param {Array} logs - 같은 날의 로그 배열 (duration_sec|time|duration, tss, distance_km, weighted_watts|avg_watts, avg_hr)
+       * @returns {Object} RideLog 1건
+       */
+      function mergeLogsForDay(logs, dateKey) {
+        if (!logs || logs.length === 0) return null;
+        if (logs.length === 1) {
+          var log = logs[0];
+          var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+          var min = Math.floor(sec / 60);
+          var s = sec % 60;
+          var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
+          return {
+            date: dateKey,
+            distance: log.distance_km != null ? Number(log.distance_km) : 0,
+            duration: min + '분 ' + s + '초',
+            IF: log.if != null ? Number(log.if) : null,
+            TSS: log.tss != null ? Number(log.tss) : 0,
+            kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
+            avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
+            avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
+            avgPower: log.avg_watts != null ? Number(log.avg_watts) : 0,
+            NP: np,
+            normPower: np
+          };
+        }
+        var totalSec = 0, totalTSS = 0, totalDist = 0, totalKj = 0;
+        var sumNpSec = 0, sumAvgPSec = 0, sumHrSec = 0;
+        logs.forEach(function(log) {
+          var sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
+          totalSec += sec;
+          totalTSS += Number(log.tss ?? 0);
+          totalDist += Number(log.distance_km ?? 0);
+          totalKj += Number(log.kilojoules ?? 0);
+          var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
+          var ap = log.avg_watts != null ? Number(log.avg_watts) : 0;
+          var hr = log.avg_hr != null ? Number(log.avg_hr) : 0;
+          sumNpSec += np * sec;
+          sumAvgPSec += ap * sec;
+          sumHrSec += hr * sec;
+        });
+        var min = Math.floor(totalSec / 60);
+        var s = Math.round(totalSec % 60);
+        var npAvg = totalSec > 0 ? sumNpSec / totalSec : 0;
+        var apAvg = totalSec > 0 ? sumAvgPSec / totalSec : 0;
+        var hrAvg = totalSec > 0 ? sumHrSec / totalSec : 0;
+        return {
+          date: dateKey,
+          distance: totalDist,
+          duration: min + '분 ' + s + '초',
+          IF: null,
+          TSS: Math.round(totalTSS),
+          kJ: totalKj,
+          avgCadence: 0,
+          avgHeartRate: Math.round(hrAvg),
+          avgPower: Math.round(apAvg),
+          NP: Math.round(npAvg),
+          normPower: Math.round(npAvg)
+        };
+      }
+
+      /**
        * Build monthlyLogs (RideLog[]) for the given year/month from trainingLogs by date.
-       * - 오늘 날짜 달력(현재 연·월): 오늘 기준 -30일 ~ 오늘까지로 분석 기간 (월간 분석 = 오늘 기준 1개월간).
-       * - 이전 달: 해당 월 1일 ~ 말일 기존 로직 유지.
-       * trainingLogs: { "2026-01-13": [ log, ... ], ... }
-       * RideLog: { date, distance, duration, IF, TSS, kJ, avgCadence, avgHeartRate, avgPower, NP }
+       * - 현재월: 오늘 기준 30일 (오늘-29일 ~ 오늘) — 대시보드와 동일.
+       * - 이전 달: 해당 월 1일 ~ 말일.
+       * - 일별 로그: Strava·Stelvio 둘 다 있으면 Strava만 사용(Strava 다건이면 합산). Stelvio만 있으면 Stelvio 사용.
+       * trainingLogs: { "2026-01-13": [ log, ... ], ... }, log.source === 'strava' | 'stelvio' 등
        */
       function buildMonthlyLogsForDashboard(year, month, trainingLogsByDate) {
         if (!trainingLogsByDate || typeof trainingLogsByDate !== 'object') return [];
@@ -8839,7 +8901,7 @@
         if (isCurrentMonth) {
           var endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           var startDate = new Date(endDate);
-          startDate.setDate(startDate.getDate() - 30);
+          startDate.setDate(endDate.getDate() - 29);
           startStr = startDate.getFullYear() + '-' + pad(startDate.getMonth() + 1) + '-' + pad(startDate.getDate());
           endStr = endDate.getFullYear() + '-' + pad(endDate.getMonth() + 1) + '-' + pad(endDate.getDate());
         } else {
@@ -8852,26 +8914,12 @@
           if (dateKey < startStr || dateKey > endStr) return;
           const arr = trainingLogsByDate[dateKey];
           if (!Array.isArray(arr)) return;
-          arr.forEach(function(log) {
-            const sec = Number(log.duration_sec ?? log.time ?? log.duration ?? 0);
-            const min = Math.floor(sec / 60);
-            const s = sec % 60;
-            const durationStr = min + '분 ' + s + '초';
-            var np = log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : 0);
-            monthlyLogs.push({
-              date: dateKey,
-              distance: log.distance_km != null ? Number(log.distance_km) : 0,
-              duration: durationStr,
-              IF: log.if != null ? Number(log.if) : null,
-              TSS: log.tss != null ? Number(log.tss) : 0,
-              kJ: log.kilojoules != null ? Number(log.kilojoules) : 0,
-              avgCadence: log.avg_cadence != null ? Number(log.avg_cadence) : 0,
-              avgHeartRate: log.avg_hr != null ? Number(log.avg_hr) : 0,
-              avgPower: log.avg_watts != null ? Number(log.avg_watts) : 0,
-              NP: np,
-              normPower: np
-            });
-          });
+          var stravaLogs = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+          var stelvioLogs = arr.filter(function(l) { return String(l.source || '').toLowerCase() !== 'strava'; });
+          var chosen = stravaLogs.length > 0 ? stravaLogs : stelvioLogs;
+          if (chosen.length === 0) return;
+          var merged = mergeLogsForDay(chosen, dateKey);
+          if (merged) monthlyLogs.push(merged);
         });
         monthlyLogs.sort(function(a, b) { return a.date.localeCompare(b.date); });
         return monthlyLogs;
