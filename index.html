@@ -12355,7 +12355,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var monthLabel = m + '월';
               if (mOff === 0) monthLabel = m + '월(현재)';
               vo2TrendRows.push({ monthLabel: monthLabel, vo2: vo2Val != null ? vo2Val : 0, sortKey: y + '-' + pad2(m) });
-            });
+            }
             vo2TrendRows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
             if (isMounted) setVo2TrendData(vo2TrendRows);
 
