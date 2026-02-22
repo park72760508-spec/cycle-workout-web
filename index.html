@@ -12638,15 +12638,65 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       completed_at: dateVal + 'T12:00:00.000Z',
                       workout_name: (log.title || log.workout_name || '훈련').trim(),
                       duration_min: Math.round(sec / 60),
+                      duration_sec: sec,
                       avg_power: Math.round(log.avg_watts ?? log.avg_power ?? 0),
                       np: Math.round(log.weighted_watts ?? log.np ?? log.avg_watts ?? log.avg_power ?? 0),
                       tss: Math.round(log.tss ?? 0),
-                      source: log.source || ''
+                      avg_hr: log.avg_hr != null ? Math.round(Number(log.avg_hr)) : 0,
+                      source: (log.source || '').toLowerCase()
                     });
                   });
                 }
-                if (typeof window.oneLogPerDayPreferStrava === 'function' && firebaseLogsForCoach.length > 0) {
-                  firebaseLogsForCoach = window.oneLogPerDayPreferStrava(firebaseLogsForCoach);
+                // 훈련일지와 동일: 일별 Strava 우선, Strava 다건이면 합산(duration/TSS 합, NP·avg_power·avg_hr은 duration 가중 평균)
+                if (firebaseLogsForCoach.length > 0) {
+                  var byDateCoach = {};
+                  firebaseLogsForCoach.forEach(function(h) {
+                    var d = (h.completed_at || '').split('T')[0];
+                    if (!d) return;
+                    if (!byDateCoach[d]) byDateCoach[d] = [];
+                    byDateCoach[d].push(h);
+                  });
+                  var mergedForCoach = [];
+                  Object.keys(byDateCoach).sort().forEach(function(dateKey) {
+                    var arr = byDateCoach[dateKey];
+                    var strava = arr.filter(function(h) { return h.source === 'strava'; });
+                    var stelvio = arr.filter(function(h) { return h.source !== 'strava'; });
+                    var chosen = strava.length > 0 ? strava : stelvio;
+                    if (chosen.length === 0) return;
+                    if (chosen.length === 1) {
+                      mergedForCoach.push({
+                        completed_at: dateKey + 'T12:00:00.000Z',
+                        duration_min: chosen[0].duration_min,
+                        duration_sec: chosen[0].duration_sec || chosen[0].duration_min * 60,
+                        avg_power: chosen[0].avg_power,
+                        np: chosen[0].np,
+                        tss: chosen[0].tss,
+                        avg_hr: chosen[0].avg_hr != null ? chosen[0].avg_hr : 0,
+                        source: chosen[0].source
+                      });
+                      return;
+                    }
+                    var totalMin = 0, totalTss = 0, sumNpMin = 0, sumApMin = 0, sumHrMin = 0;
+                    chosen.forEach(function(h) {
+                      var m = Number(h.duration_min) || 0;
+                      totalMin += m;
+                      totalTss += Number(h.tss) || 0;
+                      sumNpMin += (Number(h.np) || 0) * m;
+                      sumApMin += (Number(h.avg_power) || 0) * m;
+                      sumHrMin += (Number(h.avg_hr) || 0) * m;
+                    });
+                    mergedForCoach.push({
+                      completed_at: dateKey + 'T12:00:00.000Z',
+                      duration_min: Math.round(totalMin),
+                      duration_sec: totalMin * 60,
+                      avg_power: totalMin > 0 ? Math.round(sumApMin / totalMin) : 0,
+                      np: totalMin > 0 ? Math.round(sumNpMin / totalMin) : 0,
+                      tss: Math.round(totalTss),
+                      avg_hr: totalMin > 0 ? Math.round(sumHrMin / totalMin) : 0,
+                      source: chosen[0].source
+                    });
+                  });
+                  firebaseLogsForCoach = mergedForCoach;
                 }
                 if (typeof window.dedupeLogsForConditionScore === 'function') {
                   cleanLogs = window.dedupeLogsForConditionScore(firebaseLogsForCoach);
