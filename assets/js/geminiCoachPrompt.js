@@ -21,19 +21,23 @@ Coach Comment에서 TSS를 언급할 때 위 수치를 **그대로** 사용하�
 - 현재 컨디션 점수: {{conditionScore}}점 (화면에 표시되는 점수와 동일)
 Coach Comment에서 "컨디션 점수" 또는 "현재 컨디션"을 언급할 때 반드시 **{{conditionScore}}점**이라고만 쓰세요. 다른 숫자를 쓰지 마세요.
 
+**VO2 Max (반드시 이 값을 사용하세요):**
+- 현재 추정 VO2 Max: {{calculatedVO2Max}}
+Coach Comment에서 VO2 Max를 언급할 때 반드시 **{{calculatedVO2Max}}** 수치를 사용하세요. 자체 계산하지 마세요.
+
 Task Requirements:
 1. **Condition Score (0~100):** JSON의 condition_score는 반드시 **{{conditionScore}}** 로 설정하세요. (위에 제공된 값)
 2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
-3. **Coach Comment:** 사용자의 이름을 부르며, 최근 7일 TSS, 주간 평균 TSS, 현재 컨디션 점수 데이터를 활용해 사용자의 현재 상태를 심도있게 분석하고, 앞으로 어떻게 훈련해야 하는지 3~4문장 분량의 상세하고 충분한 코멘트를 경어체로 작성해주세요. 절대 문장을 도중에 끊지 마세요.
-4. **VO2max Estimate:** 파워 데이터를 기반으로 추정된 VO2max 값을 정수로 반환하세요.
-5. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입을 제안하세요.
+3. **Coach Comment:** 사용자의 이름을 부르며, 최근 7일 TSS, 주간 평균 TSS, 현재 컨디션 점수와 함께 **현재 추정 VO2 Max({{calculatedVO2Max}})** 수치를 활용하여 훈련 성과를 언급하고 동기를 부여하는 조언을 한국어(경어체)로 작성하세요. 3~4문장 분량으로 상세하고 충분히 작성하고, 절대 문장을 도중에 끊지 마세요.
+4. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입을 제안하세요.
 
 Output Format (JSON Only):
+- vo2max_estimate는 시스템에서 제공한 값 **{{calculatedVO2Max}}**를 그대로 사용하세요. AI가 계산하지 않습니다.
 {
   "condition_score": 85,
   "training_status": "Ready to Race",
-  "vo2max_estimate": 54,
-  "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.",
+  "vo2max_estimate": {{calculatedVO2Max}},
+  "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 현재 추정 VO2 Max는 {{calculatedVO2Max}}로, 컨디션과 잘 맞습니다. 오늘은 가벼운 리커버리로 조절하세요.",
   "recommended_workout": "Active Recovery (Z1)"
 }
 `;
