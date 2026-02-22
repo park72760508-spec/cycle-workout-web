@@ -2940,6 +2940,20 @@ button[aria-disabled="true"] {
   line-height: 1.3;
 }
 
+/* 주간 마일리지 TOP10 순위 확정 후 도장 오버레이 (순위표 정중앙, 1/4 크기, -45도 회전) */
+.weekly-top10-body-inner {
+  min-height: 100%;
+}
+.weekly-top10-stamp-overlay {
+  pointer-events: none;
+}
+.weekly-top10-stamp-img {
+  transform: rotate(-45deg) scale(0.25);
+  transform-origin: center center;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+
 /* 주간 마일리지 TOP10 랭킹 행 */
 .weekly-rank-item {
   display: flex;
