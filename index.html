@@ -7951,7 +7951,15 @@
           return allMonthlyLogs.sort(function(a, b) { return a.date.localeCompare(b.date); });
         })() : monthlyLogs;
         var currentMonthDate = new Date(y, m, 1);
-        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs);
+        var prevMonthDate = m > 0 ? new Date(y, m - 1, 1) : new Date(y - 1, 11, 1);
+        var prevYear = prevMonthDate.getFullYear();
+        var prevMonth1 = prevMonthDate.getMonth() + 1;
+        var prevMonthLogs = window.buildMonthlyLogsForDashboard ? window.buildMonthlyLogsForDashboard(prevYear, prevMonth1, miniCalendarStateJournal.trainingLogs) : [];
+        var userProfile = (function() {
+          var u = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+          return u ? { ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
+        })();
+        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile);
       }
       
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
@@ -8006,7 +8014,15 @@
         return allMonthlyLogs.sort(function(a, b) { return a.date.localeCompare(b.date); });
       })();
       var currentMonthDate = new Date(y, m, 1);
-      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs);
+      var prevMonthDate = m > 0 ? new Date(y, m - 1, 1) : new Date(y - 1, 11, 1);
+      var prevYear = prevMonthDate.getFullYear();
+      var prevMonth1 = prevMonthDate.getMonth() + 1;
+      var prevMonthLogs = window.buildMonthlyLogsForDashboard ? window.buildMonthlyLogsForDashboard(prevYear, prevMonth1, miniCalendarStateJournal.trainingLogs) : [];
+      var userProfile = (function() {
+        var u = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+        return u ? { ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
+      })();
+      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile);
     }
 
     // 전역 함수로 노출
@@ -8079,7 +8095,7 @@
         return 'Normal';
       }
 
-      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs, allTrainingLogs }) {
+      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile }) {
         const chartEfRef = useRef(null);
         const chartEfInstance = useRef(null);
         const chartWeeklyTssRef = useRef(null);
@@ -8131,6 +8147,25 @@
             rides
           };
         }, [enrichedLogs]);
+
+        /** 현재 월 = 오늘 기준 30일, 이전 달 = 이전 1개월(캘린더). allTrainingLogs는 과거 35일 분이므로 여기서 30일 필터. */
+        const vo2Values = React.useMemo(function() {
+          var profile = userProfile || {};
+          function toVo2Format(log) {
+            var durMin = parseDurationToMinutes(log.duration);
+            return { date: log.date, duration_sec: Math.round(durMin * 60), duration_min: durMin, weighted_watts: Number(log.NP ?? log.normPower ?? 0), avg_watts: Number(log.avgPower ?? 0), avg_hr: Number(log.avgHeartRate ?? 0) };
+          }
+          var now = new Date();
+          var todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+          var start30 = new Date(now);
+          start30.setDate(now.getDate() - 30);
+          var start30Str = start30.getFullYear() + '-' + String(start30.getMonth() + 1).padStart(2, '0') + '-' + String(start30.getDate()).padStart(2, '0');
+          var currentMonthLogsVo2 = (allTrainingLogs || []).filter(function(log) { var d = log.date || ''; return d >= start30Str && d <= todayStr; }).map(toVo2Format);
+          var prevLogsVo2 = (prevMonthLogs || []).map(toVo2Format);
+          var current = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(profile, currentMonthLogsVo2) : null;
+          var prev = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(profile, prevLogsVo2) : null;
+          return { current: current, prev: prev };
+        }, [allTrainingLogs, prevMonthLogs, userProfile]);
 
         const chartDataByDate = React.useMemo(function() {
           const byDate = {};
@@ -8641,8 +8676,8 @@
                 </div>
               ) : (
                 <>
-                  {/* Row 1: Summary Cards (Bento) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                  {/* Row 1: Summary Cards (Bento) - 총 TSS·총 거리 등 + VO₂max(빨강 톤) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
                     <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
                       <div className="text-xs font-medium text-emerald-700 mb-0.5">총 TSS</div>
                       <div className="text-xl font-bold text-emerald-800">{stats.totalTSS}</div>
@@ -8662,6 +8697,15 @@
                     <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
                       <div className="text-xs font-medium text-slate-700 mb-0.5">평균 VI</div>
                       <div className="text-xl font-bold text-slate-800">{stats.avgVI}</div>
+                    </div>
+                    <div className="bg-red-50 rounded-xl p-3 border border-red-100">
+                      <div className="text-xs font-medium text-red-700 mb-0.5">VO₂max (ml/kg/min)</div>
+                      <div className="text-xl font-bold text-red-800">
+                        {vo2Values.current != null ? vo2Values.current : '–'}
+                      </div>
+                      <div className="text-xs text-red-600 mt-0.5">
+                        이전 달: {vo2Values.prev != null ? vo2Values.prev : '–'}
+                      </div>
                     </div>
                   </div>
                   {/* Row 2: EF Trend */}
@@ -8761,19 +8805,23 @@
         );
       }
 
-      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs, allTrainingLogs) {
+      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile) {
         const root = document.getElementById('monthly-analysis-dashboard-root');
         if (!root || typeof ReactDOM === 'undefined' || typeof React === 'undefined') return;
         const dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
         
         // allTrainingLogs가 없으면 monthlyLogs를 사용
         const allLogs = allTrainingLogs || monthlyLogs || [];
+        const prevLogs = Array.isArray(prevMonthLogs) ? prevMonthLogs : [];
+        const profile = userProfile || {};
         
         const el = React.createElement(MonthlyTrainingAnalysisDashboard, {
           key: dateObj.getTime(),
           currentMonth: dateObj,
           monthlyLogs: monthlyLogs || [],
-          allTrainingLogs: allLogs
+          allTrainingLogs: allLogs,
+          prevMonthLogs: prevLogs,
+          userProfile: profile
         });
         if (ReactDOM.createRoot) {
           if (!root._monthlyDashboardRoot) root._monthlyDashboardRoot = ReactDOM.createRoot(root);
