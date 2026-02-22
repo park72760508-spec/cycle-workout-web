@@ -2948,7 +2948,7 @@ button[aria-disabled="true"] {
   pointer-events: none;
 }
 .weekly-top10-stamp-img {
-  transform: rotate(-45deg) scale(0.25);
+  transform: rotate(-45deg) scale(1);
   transform-origin: center center;
   opacity: 0.55;
   mix-blend-mode: multiply;
