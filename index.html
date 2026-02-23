@@ -8228,7 +8228,8 @@
               tss: Number(log.TSS ?? log.tss ?? 0)
             };
           }
-          var inPeriod = allLogs.filter(function(log) {
+          // 선택한 달 전체 로그 사용 (logs = monthlyLogs: 현재월이면 오늘 기준 30일, 전월/전전월이면 해당 월 1일~말일)
+          var inPeriod = logs.filter(function(log) {
             var d = log.date;
             var dateStr = (typeof d === 'string' && d.length >= 10) ? d.slice(0, 10) : (d && d.toISOString ? d.toISOString().slice(0, 10) : null);
             return dateStr && dateStr >= startStr && dateStr <= endStr;
@@ -8243,8 +8244,8 @@
           var mergedByDate = {};
           Object.keys(byDateVo2).sort().forEach(function(dateKey) {
             var arr = byDateVo2[dateKey];
-            var strava = arr.filter(function(x) { return String(x.log.source || '').toLowerCase() === 'strava'; });
-            var stelvio = arr.filter(function(x) { return String(x.log.source || '').toLowerCase() !== 'strava'; });
+            var strava = arr.filter(function(x) { return String((x.log && x.log.source) || '').toLowerCase() === 'strava'; });
+            var stelvio = arr.filter(function(x) { return String((x.log && x.log.source) || '').toLowerCase() !== 'strava'; });
             var chosen = strava.length > 0 ? strava : stelvio;
             if (chosen.length === 0) return;
             var totalSec = 0, totalTss = 0, sumNpSec = 0, sumHrSec = 0;
@@ -8278,8 +8279,30 @@
             out.push({ dayLabel: dayLabel, vo2: vo2Val != null ? vo2Val : null, sortKey: dateStr });
             d.setDate(d.getDate() + 1);
           }
+          // 값이 없는 구간은 이전/다음 유효값으로 선형 보간하여 단선 없이 매끄러운 곡선으로 표시
+          var n = out.length;
+          var fallback = 40;
+          for (var i = 0; i < n; i++) {
+            if (out[i].vo2 != null && !isNaN(out[i].vo2)) continue;
+            var prevVal = null, prevIdx = -1, nextVal = null, nextIdx = -1;
+            for (var j = i - 1; j >= 0; j--) {
+              if (out[j].vo2 != null && !isNaN(out[j].vo2)) { prevVal = out[j].vo2; prevIdx = j; break; }
+            }
+            for (var k = i + 1; k < n; k++) {
+              if (out[k].vo2 != null && !isNaN(out[k].vo2)) { nextVal = out[k].vo2; nextIdx = k; break; }
+            }
+            if (prevVal != null && nextVal != null) {
+              out[i].vo2 = Math.round((prevVal + (nextVal - prevVal) * (i - prevIdx) / (nextIdx - prevIdx)) * 10) / 10;
+            } else if (prevVal != null) {
+              out[i].vo2 = prevVal;
+            } else if (nextVal != null) {
+              out[i].vo2 = nextVal;
+            } else {
+              out[i].vo2 = fallback;
+            }
+          }
           return out;
-        }, [year, monthNum, allLogs, userProfile]);
+        }, [year, monthNum, logs, userProfile]);
 
         const chartDataByDate = React.useMemo(function() {
           const byDate = {};
@@ -8754,6 +8777,7 @@
               },
               scales: {
                 x: {
+                  offset: false,
                   grid: { display: true, color: '#e5e7eb', drawBorder: false },
                   ticks: { font: { size: 11 }, color: '#6b7280', maxRotation: 0, minRotation: 0 }
                 },
