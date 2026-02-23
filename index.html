@@ -8187,7 +8187,7 @@
           return { current: selected, prev: prev };
         }, [logs, prevMonthLogs, userProfile]);
 
-        /** Daily VO2 Trend: 현재월이면 오늘 기준 30일, 다른 달이면 해당 월 1일~말일. 일별 Strava 우선·다건 가중평균 후 calculateStelvioVO2Max. */
+        /** Daily VO2 Trend: 현재월이면 오늘 기준 30일, 전월 등 다른 달이면 해당 월 1일~말일 전체. 일별 Strava 우선·다건 가중평균 후 calculateStelvioVO2Max. */
         const dailyVo2TrendData = React.useMemo(function() {
           var profile = userProfile || {};
           var now = new Date();
@@ -8195,18 +8195,22 @@
           var currentYear = today.getFullYear();
           var currentMonthNum = today.getMonth() + 1;
           var isCurrentMonth = (year === currentYear && monthNum === currentMonthNum);
-          var startStr = '', endStr = '';
           var pad2 = function(n) { return String(n).padStart(2, '0'); };
+          var startStr = '', endStr = '';
+          var loopStart = null, loopEnd = null;
           if (isCurrentMonth) {
-            var endD = new Date(today);
-            var startD = new Date(today);
-            startD.setDate(today.getDate() - 29);
+            var startD = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+            var endD = new Date(today.getFullYear(), today.getMonth(), today.getDate());
             startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
             endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
+            loopStart = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
+            loopEnd = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
           } else {
             startStr = year + '-' + pad2(monthNum) + '-01';
             var lastDay = new Date(year, monthNum, 0).getDate();
             endStr = year + '-' + pad2(monthNum) + '-' + pad2(lastDay);
+            loopStart = new Date(year, monthNum - 1, 1);
+            loopEnd = new Date(year, monthNum - 1, lastDay);
           }
           function toVo2Shape(log) {
             var d = log.date;
@@ -8262,9 +8266,9 @@
             };
           });
           var out = [];
-          var d = new Date(startStr);
-          var end = new Date(endStr);
-          while (d <= end) {
+          var d = new Date(loopStart.getFullYear(), loopStart.getMonth(), loopStart.getDate());
+          var end = new Date(loopEnd.getFullYear(), loopEnd.getMonth(), loopEnd.getDate());
+          while (d.getTime() <= end.getTime()) {
             var dateStr = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
             var dayLabel = String(d.getDate());
             var merged = mergedByDate[dateStr];
