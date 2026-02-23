@@ -8276,10 +8276,10 @@
             var vo2Val = (typeof window.calculateStelvioVO2Max === 'function' && merged)
               ? window.calculateStelvioVO2Max(profile, [merged])
               : null;
-            out.push({ dayLabel: dayLabel, vo2: vo2Val != null ? vo2Val : null, sortKey: dateStr });
+            out.push({ dayLabel: dayLabel, vo2: vo2Val != null ? vo2Val : null, sortKey: dateStr, hasData: vo2Val != null });
             d.setDate(d.getDate() + 1);
           }
-          // 값이 없는 구간은 이전/다음 유효값으로 선형 보간하여 단선 없이 매끄러운 곡선으로 표시
+          // 값이 없는 구간은 이전/다음 유효값으로 선형 보간하여 단선 없이 매끄러운 곡선으로 표시 (hasData는 보간된 날 false 유지)
           var n = out.length;
           var fallback = 40;
           for (var i = 0; i < n; i++) {
@@ -8703,6 +8703,7 @@
           if (chartDailyVo2Instance.current) { chartDailyVo2Instance.current.destroy(); chartDailyVo2Instance.current = null; }
           var data = dailyVo2TrendData;
           var vo2Data = data.map(function(d) { return d.vo2; });
+          var hasDataFlags = data.map(function(d) { return !!d.hasData; });
           var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
           var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
           var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
@@ -8715,12 +8716,14 @@
               if (!meta || !meta.data || meta.data.length === 0) return;
               var dataset = chart.data && chart.data.datasets && chart.data.datasets[0];
               var values = dataset && dataset.data ? dataset.data : [];
+              var hasData = dataset && dataset._hasData;
               chart.ctx.save();
               chart.ctx.font = '11px sans-serif';
               chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
               chart.ctx.textAlign = 'center';
               meta.data.forEach(function(point, i) {
                 if (!point || point.x == null || point.y == null) return;
+                if (hasData && hasData[i] === false) return;
                 var value = values[i];
                 if (value == null || isNaN(value)) return;
                 var y = point.y - 10;
@@ -8737,13 +8740,18 @@
               datasets: [{
                 label: 'VO₂max (ml/kg/min)',
                 data: vo2Data,
+                _hasData: hasDataFlags,
                 borderColor: '#dc2626',
                 borderWidth: 2,
                 backgroundColor: 'rgba(220, 38, 38, 0.12)',
                 tension: 0.5,
                 fill: true,
                 spanGaps: true,
-                pointRadius: 5,
+                pointRadius: function(context) {
+                  var ds = context.dataset;
+                  var hasData = ds._hasData && ds._hasData[context.dataIndex];
+                  return hasData ? 5 : 0;
+                },
                 pointBackgroundColor: '#dc2626',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2
