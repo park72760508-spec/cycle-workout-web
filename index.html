@@ -8279,27 +8279,15 @@
             out.push({ dayLabel: dayLabel, vo2: vo2Val != null ? vo2Val : null, sortKey: dateStr, hasData: vo2Val != null });
             d.setDate(d.getDate() + 1);
           }
-          // 값이 없는 구간은 이전/다음 유효값으로 선형 보간하여 단선 없이 매끄러운 곡선으로 표시 (hasData는 보간된 날 false 유지)
+          // X축 0(첫날)에만 값이 없을 때 1일치만 유추. 나머지 날짜는 유추하지 않아 곡선이 실제 데이터만 반영되도록 함.
           var n = out.length;
           var fallback = 40;
-          for (var i = 0; i < n; i++) {
-            if (out[i].vo2 != null && !isNaN(out[i].vo2)) continue;
-            var prevVal = null, prevIdx = -1, nextVal = null, nextIdx = -1;
-            for (var j = i - 1; j >= 0; j--) {
-              if (out[j].vo2 != null && !isNaN(out[j].vo2)) { prevVal = out[j].vo2; prevIdx = j; break; }
+          if (n > 0 && (out[0].vo2 == null || isNaN(out[0].vo2))) {
+            var nextVal = null;
+            for (var k = 1; k < n; k++) {
+              if (out[k].vo2 != null && !isNaN(out[k].vo2)) { nextVal = out[k].vo2; break; }
             }
-            for (var k = i + 1; k < n; k++) {
-              if (out[k].vo2 != null && !isNaN(out[k].vo2)) { nextVal = out[k].vo2; nextIdx = k; break; }
-            }
-            if (prevVal != null && nextVal != null) {
-              out[i].vo2 = Math.round((prevVal + (nextVal - prevVal) * (i - prevIdx) / (nextIdx - prevIdx)) * 10) / 10;
-            } else if (prevVal != null) {
-              out[i].vo2 = prevVal;
-            } else if (nextVal != null) {
-              out[i].vo2 = nextVal;
-            } else {
-              out[i].vo2 = fallback;
-            }
+            out[0].vo2 = nextVal != null ? nextVal : fallback;
           }
           return out;
         }, [year, monthNum, logs, userProfile]);
