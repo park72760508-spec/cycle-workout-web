@@ -8266,29 +8266,19 @@
               tss: Math.round(totalTss)
             };
           });
+          // 데이터가 있는 날짜만 포함 (EF Trend처럼 운동 데이터가 존재하는 일자만 표기, X축에 균등 배치)
           var out = [];
-          var d = new Date(loopStart.getFullYear(), loopStart.getMonth(), loopStart.getDate());
-          var end = new Date(loopEnd.getFullYear(), loopEnd.getMonth(), loopEnd.getDate());
-          while (d.getTime() <= end.getTime()) {
-            var dateStr = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-            var dayLabel = String(d.getDate());
+          Object.keys(mergedByDate).sort().forEach(function(dateStr) {
+            if (dateStr < startStr || dateStr > endStr) return;
             var merged = mergedByDate[dateStr];
             var vo2Val = (typeof window.calculateStelvioVO2Max === 'function' && merged)
               ? window.calculateStelvioVO2Max(profile, [merged])
               : null;
-            out.push({ dayLabel: dayLabel, vo2: vo2Val != null ? vo2Val : null, sortKey: dateStr, hasData: vo2Val != null });
-            d.setDate(d.getDate() + 1);
-          }
-          // X축 0(첫날)에만 값이 없을 때 1일치만 유추. 나머지 날짜는 유추하지 않아 곡선이 실제 데이터만 반영되도록 함.
-          var n = out.length;
-          var fallback = 40;
-          if (n > 0 && (out[0].vo2 == null || isNaN(out[0].vo2))) {
-            var nextVal = null;
-            for (var k = 1; k < n; k++) {
-              if (out[k].vo2 != null && !isNaN(out[k].vo2)) { nextVal = out[k].vo2; break; }
-            }
-            out[0].vo2 = nextVal != null ? nextVal : fallback;
-          }
+            if (vo2Val == null || isNaN(vo2Val)) return;
+            var parts = dateStr.split('-');
+            var dayLabel = parts.length >= 3 ? (parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10)) : dateStr;
+            out.push({ dayLabel: dayLabel, vo2: vo2Val, sortKey: dateStr, hasData: true });
+          });
           return out;
         }, [year, monthNum, logs, userProfile]);
 
