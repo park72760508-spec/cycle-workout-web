@@ -8685,8 +8685,8 @@
           var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
           var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
           var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
-          var yMin = Math.max(20, Math.floor(dataMin - 5));
-          var yMax = Math.min(100, Math.ceil(dataMax + 5));
+          var yMin = Math.max(20, Math.floor(dataMin - 3));
+          var yMax = Math.min(100, Math.ceil(dataMax + 3));
           var vo2LabelPlugin = {
             id: 'vo2DailyValueLabels',
             afterDatasetsDraw: function(chart) {
@@ -8722,7 +8722,7 @@
                 borderColor: '#dc2626',
                 borderWidth: 2,
                 backgroundColor: 'rgba(220, 38, 38, 0.12)',
-                tension: 0.6,
+                tension: 0.8,
                 cubicInterpolationMode: 'monotone',
                 fill: true,
                 spanGaps: true,
