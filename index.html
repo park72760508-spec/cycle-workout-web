@@ -8127,6 +8127,8 @@
         const chartViInstance = useRef(null);
         const chartScatterRef = useRef(null);
         const chartScatterInstance = useRef(null);
+        const chartDailyVo2Ref = useRef(null);
+        const chartDailyVo2Instance = useRef(null);
         const [mounted, setMounted] = useState(false);
         const [activeInfoId, setActiveInfoId] = useState(null);
         const [selectedWeeklyTssIndex, setSelectedWeeklyTssIndex] = useState(null);
@@ -8184,6 +8186,96 @@
           var prev = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(profile, prevLogsVo2) : null;
           return { current: selected, prev: prev };
         }, [logs, prevMonthLogs, userProfile]);
+
+        /** Daily VO2 Trend: 현재월이면 오늘 기준 30일, 다른 달이면 해당 월 1일~말일. 일별 Strava 우선·다건 가중평균 후 calculateStelvioVO2Max. */
+        const dailyVo2TrendData = React.useMemo(function() {
+          var profile = userProfile || {};
+          var now = new Date();
+          var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          var currentYear = today.getFullYear();
+          var currentMonthNum = today.getMonth() + 1;
+          var isCurrentMonth = (year === currentYear && monthNum === currentMonthNum);
+          var startStr = '', endStr = '';
+          var pad2 = function(n) { return String(n).padStart(2, '0'); };
+          if (isCurrentMonth) {
+            var endD = new Date(today);
+            var startD = new Date(today);
+            startD.setDate(today.getDate() - 29);
+            startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
+            endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
+          } else {
+            startStr = year + '-' + pad2(monthNum) + '-01';
+            var lastDay = new Date(year, monthNum, 0).getDate();
+            endStr = year + '-' + pad2(monthNum) + '-' + pad2(lastDay);
+          }
+          function toVo2Shape(log) {
+            var d = log.date;
+            var dateStr = (typeof d === 'string' && d.length >= 10) ? d.slice(0, 10) : (d && d.toISOString ? d.toISOString().slice(0, 10) : null);
+            if (!dateStr) return null;
+            var durMin = parseDurationToMinutes(log.duration);
+            var sec = Math.round(durMin * 60);
+            return {
+              date: dateStr,
+              duration_sec: sec,
+              duration_min: Math.round(durMin),
+              weighted_watts: Number(log.NP ?? log.normPower ?? log.avgPower ?? 0),
+              np: Number(log.NP ?? log.normPower ?? log.avgPower ?? 0),
+              avg_hr: Number(log.avgHeartRate ?? log.avg_hr ?? 0),
+              tss: Number(log.TSS ?? log.tss ?? 0)
+            };
+          }
+          var inPeriod = allLogs.filter(function(log) {
+            var d = log.date;
+            var dateStr = (typeof d === 'string' && d.length >= 10) ? d.slice(0, 10) : (d && d.toISOString ? d.toISOString().slice(0, 10) : null);
+            return dateStr && dateStr >= startStr && dateStr <= endStr;
+          });
+          var byDateVo2 = {};
+          inPeriod.forEach(function(log) {
+            var s = toVo2Shape(log);
+            if (!s) return;
+            if (!byDateVo2[s.date]) byDateVo2[s.date] = [];
+            byDateVo2[s.date].push({ log: log, vo2Shape: s });
+          });
+          var mergedByDate = {};
+          Object.keys(byDateVo2).sort().forEach(function(dateKey) {
+            var arr = byDateVo2[dateKey];
+            var strava = arr.filter(function(x) { return String(x.log.source || '').toLowerCase() === 'strava'; });
+            var stelvio = arr.filter(function(x) { return String(x.log.source || '').toLowerCase() !== 'strava'; });
+            var chosen = strava.length > 0 ? strava : stelvio;
+            if (chosen.length === 0) return;
+            var totalSec = 0, totalTss = 0, sumNpSec = 0, sumHrSec = 0;
+            chosen.forEach(function(x) {
+              var s = x.vo2Shape;
+              totalSec += s.duration_sec;
+              totalTss += s.tss;
+              sumNpSec += (s.np || s.weighted_watts || 0) * s.duration_sec;
+              sumHrSec += (s.avg_hr || 0) * s.duration_sec;
+            });
+            mergedByDate[dateKey] = {
+              date: dateKey,
+              duration_sec: Math.round(totalSec),
+              duration_min: Math.round(totalSec / 60),
+              weighted_watts: totalSec > 0 ? Math.round(sumNpSec / totalSec) : 0,
+              np: totalSec > 0 ? Math.round(sumNpSec / totalSec) : 0,
+              avg_hr: totalSec > 0 ? Math.round(sumHrSec / totalSec) : 0,
+              tss: Math.round(totalTss)
+            };
+          });
+          var out = [];
+          var d = new Date(startStr);
+          var end = new Date(endStr);
+          while (d <= end) {
+            var dateStr = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+            var dayLabel = String(d.getDate());
+            var merged = mergedByDate[dateStr];
+            var vo2Val = (typeof window.calculateStelvioVO2Max === 'function' && merged)
+              ? window.calculateStelvioVO2Max(profile, [merged])
+              : null;
+            out.push({ dayLabel: dayLabel, vo2: vo2Val != null ? vo2Val : null, sortKey: dateStr });
+            d.setDate(d.getDate() + 1);
+          }
+          return out;
+        }, [year, monthNum, allLogs, userProfile]);
 
         const chartDataByDate = React.useMemo(function() {
           const byDate = {};
@@ -8579,6 +8671,106 @@
         }, [weeklyTSSData]);
 
         useEffect(function() {
+          if (!ChartLib || !chartDailyVo2Ref.current || !dailyVo2TrendData || dailyVo2TrendData.length === 0) return;
+          var ctx = chartDailyVo2Ref.current.getContext('2d');
+          if (chartDailyVo2Instance.current) { chartDailyVo2Instance.current.destroy(); chartDailyVo2Instance.current = null; }
+          var data = dailyVo2TrendData;
+          var vo2Data = data.map(function(d) { return d.vo2; });
+          var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
+          var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
+          var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
+          var yMin = Math.max(20, Math.floor(dataMin - 5));
+          var yMax = Math.min(100, Math.ceil(dataMax + 5));
+          var vo2LabelPlugin = {
+            id: 'vo2DailyValueLabels',
+            afterDatasetsDraw: function(chart) {
+              var meta = chart.getDatasetMeta(0);
+              if (!meta || !meta.data || meta.data.length === 0) return;
+              var dataset = chart.data && chart.data.datasets && chart.data.datasets[0];
+              var values = dataset && dataset.data ? dataset.data : [];
+              chart.ctx.save();
+              chart.ctx.font = '11px sans-serif';
+              chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
+              chart.ctx.textAlign = 'center';
+              meta.data.forEach(function(point, i) {
+                if (!point || point.x == null || point.y == null) return;
+                var value = values[i];
+                if (value == null || isNaN(value)) return;
+                var y = point.y - 10;
+                if (y < 0) y = point.y + 16;
+                chart.ctx.fillText(String(Math.round(value)), point.x, y);
+              });
+              chart.ctx.restore();
+            }
+          };
+          chartDailyVo2Instance.current = new ChartLib(ctx, {
+            type: 'line',
+            data: {
+              labels: data.map(function(d) { return d.dayLabel; }),
+              datasets: [{
+                label: 'VO₂max (ml/kg/min)',
+                data: vo2Data,
+                borderColor: '#dc2626',
+                backgroundColor: 'rgba(220, 38, 38, 0.12)',
+                tension: 0.5,
+                fill: true,
+                pointRadius: 5,
+                pointBackgroundColor: '#dc2626',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: 'white',
+                  borderColor: '#e5e7eb',
+                  borderWidth: 1,
+                  cornerRadius: 8,
+                  padding: 12,
+                  titleFont: { size: 13, weight: 'bold' },
+                  bodyFont: { size: 12 },
+                  callbacks: {
+                    title: function(context) {
+                      if (context && context.length > 0 && context[0].label) return context[0].label;
+                      return '';
+                    },
+                    label: function(context) {
+                      var v = context.parsed.y;
+                      if (v == null || isNaN(v)) return 'VO₂max: 데이터 없음';
+                      return 'VO₂max: ' + Number(v) + ' ml/kg/min';
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280', maxRotation: 0, minRotation: 0 }
+                },
+                y: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 5 },
+                  min: yMin,
+                  max: yMax,
+                  beginAtZero: false
+                }
+              }
+            },
+            plugins: [vo2LabelPlugin]
+          });
+          return function() {
+            if (chartDailyVo2Instance.current) {
+              chartDailyVo2Instance.current.destroy();
+              chartDailyVo2Instance.current = null;
+            }
+          };
+        }, [dailyVo2TrendData]);
+
+        useEffect(function() {
           if (!ChartLib || !chartViRef.current) return;
           var ctx = chartViRef.current.getContext('2d');
           if (chartViInstance.current) chartViInstance.current.destroy();
@@ -8748,22 +8940,35 @@
                       <canvas ref={chartEfRef}></canvas>
                     </div>
                   </div>
-                  {/* Row 3: Weekly TSS + VI Distribution (Bento 2 cols) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Weekly TSS Load</h4>
-                      {selectedWeeklyTssIndex != null && weeklyTSSData[selectedWeeklyTssIndex] && (
-                        <p className="text-sm text-gray-500 mb-1">
-                          기간 : {weeklyTSSData[selectedWeeklyTssIndex].dateRangeShort || ''}, TSS : {Math.round(Number(weeklyTSSData[selectedWeeklyTssIndex].TSS) || 0)}
-                        </p>
-                      )}
-                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2 cursor-pointer" title="바를 클릭하면 해당 주의 날짜와 TSS를 볼 수 있습니다">
-                        <canvas ref={chartWeeklyTssRef}></canvas>
-                      </div>
+                  {/* Row 3: Weekly TSS */}
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Weekly TSS Load</h4>
+                    {selectedWeeklyTssIndex != null && weeklyTSSData[selectedWeeklyTssIndex] && (
+                      <p className="text-sm text-gray-500 mb-1">
+                        기간 : {weeklyTSSData[selectedWeeklyTssIndex].dateRangeShort || ''}, TSS : {Math.round(Number(weeklyTSSData[selectedWeeklyTssIndex].TSS) || 0)}
+                      </p>
+                    )}
+                    <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2 cursor-pointer" title="바를 클릭하면 해당 주의 날짜와 TSS를 볼 수 있습니다">
+                      <canvas ref={chartWeeklyTssRef}></canvas>
                     </div>
-                    <div className="relative">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <h4 className="text-sm font-semibold text-gray-700">Ride Style (VI Distribution)</h4>
+                  </div>
+                  {/* Daily VO₂max Trend (오늘 기준 30일 또는 해당 월 1~말일, 일별 Strava 우선·가중평균 후 calculateStelvioVO2Max) */}
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Daily VO₂max Trend</h4>
+                    {(!dailyVo2TrendData || dailyVo2TrendData.length === 0 || dailyVo2TrendData.every(function(d) { return d.vo2 == null; })) ? (
+                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 flex items-center justify-center text-gray-400 text-sm">
+                        데이터가 없습니다
+                      </div>
+                    ) : (
+                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
+                        <canvas ref={chartDailyVo2Ref}></canvas>
+                      </div>
+                    )}
+                  </div>
+                  {/* Ride Style (VI Distribution) */}
+                  <div className="relative mb-4">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <h4 className="text-sm font-semibold text-gray-700">Ride Style (VI Distribution)</h4>
                         <button
                           type="button"
                           className="inline-flex text-slate-400 hover:text-slate-600 transition-colors cursor-help focus:outline-none focus:ring-2 focus:ring-slate-300 rounded-full p-0.5"
@@ -8782,9 +8987,8 @@
                         </div>
                       )}
                       <p className="text-xs text-gray-500 mb-1">Low VI = steady pacing (endurance). High VI = interval/hilly.</p>
-                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
-                        <canvas ref={chartViRef}></canvas>
-                      </div>
+                    <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2">
+                      <canvas ref={chartViRef}></canvas>
                     </div>
                   </div>
                   {/* Row 4: Power vs Cadence Scatter */}
