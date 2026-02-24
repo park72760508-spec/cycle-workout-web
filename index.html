@@ -10199,6 +10199,11 @@
     }
     window.testBridge = testBridge;
 
+    // 앱에서 기기를 찾았을 때 보내는 이벤트 수신 (페이지 로드 시 한 번 등록)
+    window.addEventListener('deviceFound', function(e) {
+      alert('앱이 찾은 기기: ' + (e.detail != null ? e.detail : ''));
+    });
+
     /**
      * 비밀번호 재설정 모달 표시
      */
