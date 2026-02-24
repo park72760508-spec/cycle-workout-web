@@ -10192,7 +10192,7 @@
      */
     function testBridge() {
       if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
-        window.ReactNativeWebView.postMessage('안녕하세요! STELVIO 웹에서 보낸 테스트입니다.');
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'START_SCAN' }));
       } else {
         console.log('현재 앱 환경이 아닙니다.');
       }
