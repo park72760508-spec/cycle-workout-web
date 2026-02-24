@@ -1406,6 +1406,12 @@
                 비밀번호 재설정
               </a>
             </div>
+            <!-- StelvioWebview 앱 연동 테스트 버튼 -->
+            <div class="auth-links" style="text-align: center; margin-top: 6px; margin-bottom: 0; padding: 0;">
+              <button type="button" id="stelvioWebviewTestBtn" onclick="typeof testBridge === 'function' && testBridge(); return false;" style="background: none; border: none; color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; padding: 4px 0; font-family: inherit;">
+                StelvioWebview
+              </button>
+            </div>
             
             <!-- 에러 메시지 -->
             <div class="auth-status" id="authStatus"></div>
@@ -10181,6 +10187,18 @@
       // 비밀번호 재설정 모달 전화번호 입력 필드 제거됨 - 이벤트 리스너 제거
     });
     
+    /**
+     * StelvioWebview 앱 연동 테스트: ReactNativeWebView.postMessage 호출 또는 콘솔 메시지
+     */
+    function testBridge() {
+      if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
+        window.ReactNativeWebView.postMessage('안녕하세요! STELVIO 웹에서 보낸 테스트입니다.');
+      } else {
+        console.log('현재 앱 환경이 아닙니다.');
+      }
+    }
+    window.testBridge = testBridge;
+
     /**
      * 비밀번호 재설정 모달 표시
      */
