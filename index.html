@@ -1406,11 +1406,22 @@
                 비밀번호 재설정
               </a>
             </div>
-            <!-- StelvioWebview 앱 연동 테스트 버튼 -->
+            <!-- StelvioWebview 앱 연동: 스캔 버튼 -->
             <div class="auth-links" style="text-align: center; margin-top: 6px; margin-bottom: 0; padding: 0;">
               <button type="button" id="stelvioWebviewTestBtn" onclick="typeof testBridge === 'function' && testBridge(); return false;" style="background: none; border: none; color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; padding: 4px 0; font-family: inherit;">
                 StelvioWebview
               </button>
+            </div>
+            <!-- deviceFound로 받은 기기 목록 (버튼 리스트) -->
+            <div id="authDeviceListContainer" style="margin-top: 12px; padding: 0; display: none;">
+              <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px 0;">찾은 기기 — 연결할 기기를 선택하세요</p>
+              <div id="authDeviceList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            </div>
+            <!-- 실시간 심박수 표시 -->
+            <div id="authHeartRateContainer" style="margin-top: 16px; text-align: center; padding: 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+              <p style="font-size: 12px; color: #6b7280; margin: 0 0 4px 0;">실시간 심박수</p>
+              <p id="authHeartRateBpm" style="font-size: 2.5rem; font-weight: 700; color: #dc2626; margin: 0; line-height: 1.2;">—</p>
+              <p style="font-size: 11px; color: #9ca3af; margin: 4px 0 0 0;">BPM</p>
             </div>
             
             <!-- 에러 메시지 -->
@@ -10199,9 +10210,66 @@
     }
     window.testBridge = testBridge;
 
-    // 앱에서 기기를 찾았을 때 보내는 이벤트 수신 (페이지 로드 시 한 번 등록)
+    // 기기 목록 상태 (id, name 배열) — deviceFound로 갱신
+    var authBridgeDevices = [];
+    function setAuthBridgeDevices(devices) {
+      authBridgeDevices = Array.isArray(devices) ? devices : [];
+      renderAuthDeviceList();
+    }
+    function renderAuthDeviceList() {
+      var container = document.getElementById('authDeviceListContainer');
+      var listEl = document.getElementById('authDeviceList');
+      if (!container || !listEl) return;
+      if (authBridgeDevices.length === 0) {
+        container.style.display = 'none';
+        listEl.innerHTML = '';
+        return;
+      }
+      container.style.display = 'block';
+      listEl.innerHTML = authBridgeDevices.map(function(device) {
+        var id = (device && device.id != null) ? String(device.id) : '';
+        var name = (device && device.name != null) ? String(device.name) : ('기기 ' + id);
+        return '<button type="button" class="auth-device-btn" data-device-id="' + id.replace(/"/g, '&quot;') + '" style="padding: 10px 14px; font-size: 14px; text-align: left; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; cursor: pointer;">' + name.replace(/</g, '&lt;') + '</button>';
+      }).join('');
+      listEl.querySelectorAll('.auth-device-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var deviceId = btn.getAttribute('data-device-id');
+          if (deviceId != null) sendConnectDevice(deviceId);
+        });
+      });
+    }
+
+    /**
+     * 선택한 기기 ID로 앱에 연결 명령 전송
+     */
+    function sendConnectDevice(deviceId) {
+      if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CONNECT_DEVICE', deviceId: deviceId }));
+      } else {
+        console.log('현재 앱 환경이 아닙니다.');
+      }
+    }
+    window.sendConnectDevice = sendConnectDevice;
+
+    // 앱에서 기기를 찾았을 때: 기기 목록(id, name) 갱신 후 화면에 리스트 표시
     window.addEventListener('deviceFound', function(e) {
-      alert('앱이 찾은 기기: ' + (e.detail != null ? e.detail : ''));
+      var detail = e.detail;
+      if (Array.isArray(detail)) {
+        setAuthBridgeDevices(detail);
+      } else if (detail != null && typeof detail === 'object') {
+        setAuthBridgeDevices(Array.isArray(detail.devices) ? detail.devices : [detail]);
+      } else {
+        setAuthBridgeDevices([]);
+      }
+    });
+
+    // 앱에서 실시간 심박수: heartRateUpdate 이벤트 수신 후 화면에 BPM 표시
+    window.addEventListener('heartRateUpdate', function(e) {
+      var bpm = e.detail != null ? Number(e.detail) : NaN;
+      var el = document.getElementById('authHeartRateBpm');
+      if (el) {
+        el.textContent = (!isNaN(bpm) && bpm > 0) ? Math.round(bpm) : '—';
+      }
     });
 
     /**
