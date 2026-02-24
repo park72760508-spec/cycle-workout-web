@@ -10210,10 +10210,19 @@
     }
     window.testBridge = testBridge;
 
-    // 기기 목록 상태 (id, name 배열) — deviceFound로 갱신
+    // 기기 목록 상태 (id, name 배열) — 사용자가 선택할 때만 연결, deviceFound에서는 추가만
     var authBridgeDevices = [];
-    function setAuthBridgeDevices(devices) {
-      authBridgeDevices = Array.isArray(devices) ? devices : [];
+    function addAuthBridgeDevices(incoming) {
+      var toAdd = Array.isArray(incoming) ? incoming : (incoming != null && typeof incoming === 'object' ? [incoming] : []);
+      var ids = {};
+      authBridgeDevices.forEach(function(d) { ids[d && d.id != null ? String(d.id) : ''] = true; });
+      toAdd.forEach(function(d) {
+        if (!d || d.id == null) return;
+        var id = String(d.id);
+        if (ids[id]) return;
+        ids[id] = true;
+        authBridgeDevices.push({ id: d.id, name: d.name != null ? d.name : ('기기 ' + id) });
+      });
       renderAuthDeviceList();
     }
     function renderAuthDeviceList() {
@@ -10251,15 +10260,17 @@
     }
     window.sendConnectDevice = sendConnectDevice;
 
-    // 앱에서 기기를 찾았을 때: 기기 목록(id, name) 갱신 후 화면에 리스트 표시
+    // 앱에서 기기를 찾았을 때: 연결 명령 보내지 않고, 기기 정보만 devices에 추가 (동일 id 중복 방지)
     window.addEventListener('deviceFound', function(e) {
       var detail = e.detail;
       if (Array.isArray(detail)) {
-        setAuthBridgeDevices(detail);
+        addAuthBridgeDevices(detail);
       } else if (detail != null && typeof detail === 'object') {
-        setAuthBridgeDevices(Array.isArray(detail.devices) ? detail.devices : [detail]);
-      } else {
-        setAuthBridgeDevices([]);
+        if (Array.isArray(detail.devices)) {
+          addAuthBridgeDevices(detail.devices);
+        } else {
+          addAuthBridgeDevices(detail);
+        }
       }
     });
 
