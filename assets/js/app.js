@@ -16018,8 +16018,14 @@ function showMobileTrainingResultModal(status = null) {
   });
   
   if (shouldShowCelebration) {
-    console.log('[Mobile Dashboard] ✅ 축하 화면 표시 시작');
-    showMobileMileageCelebration(mileageUpdate, tss);
+    // 노트북(태블릿) 훈련 종료 시: 전용 세레머니 사용 (모바일 대시보드와 독립)
+    if (window.__laptopResultModalOpen) {
+      console.log('[Tablet Training] ✅ 500점 달성 축하 세레머니 표시 (노트북 전용)');
+      showTabletMileageCelebration(mileageUpdate, tss);
+    } else {
+      console.log('[Mobile Dashboard] ✅ 축하 화면 표시 시작');
+      showMobileMileageCelebration(mileageUpdate, tss);
+    }
   } else {
     console.log('[Mobile Dashboard] ⚠️ 축하 화면 표시 조건 미충족');
   }
@@ -16088,14 +16094,65 @@ function closeMobileMileageCelebration() {
   }
 }
 
+/**
+ * 노트북(태블릿) 훈련 화면 전용: 500점 이상 달성 시 축하 세레머니 표시
+ * 모바일 개인훈련 대시보드와 동일한 조건·메시지, 별도 모달로 서로 영향 없음
+ */
+function showTabletMileageCelebration(mileageUpdate, earnedTss) {
+  const modal = document.getElementById('tabletMileageCelebrationModal');
+  const messageEl = document.getElementById('tablet-celebration-message');
+  if (!modal || !messageEl) {
+    console.warn('[Tablet Training] 축하 오버레이 요소를 찾을 수 없습니다.');
+    return;
+  }
+  if (modal.parentNode && modal.parentNode !== document.body) {
+    document.body.appendChild(modal);
+  }
+  const currentRemPoints = Math.round(mileageUpdate.rem_points || 0);
+  const earnedPoints = Math.round(earnedTss);
+  const addDays = mileageUpdate.add_days || mileageUpdate.extended_days || 0;
+  const usedPoints = addDays * 500;
+  const previousRemPoints = Math.round(currentRemPoints + usedPoints - earnedPoints);
+  const totalAfterEarned = previousRemPoints + earnedPoints;
+  const message = `
+    <div style="margin-bottom: 12px; font-size: 1.1em; font-weight: 600;">
+      오늘의 훈련으로 ${earnedPoints} S-Point 획득!
+    </div>
+    <div style="margin-bottom: 12px; font-size: 0.95em;">
+      💰 (현재 보유: ${previousRemPoints} SP + ${earnedPoints} SP = ${totalAfterEarned} SP)
+    </div>
+    <div style="font-size: 0.95em; font-weight: 600;">
+      🎉 ${usedPoints} SP를 사용하여 구독 기간이 ${addDays}일 연장되었습니다! (잔액: ${currentRemPoints} SP)
+    </div>
+  `;
+  messageEl.innerHTML = message;
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+  modal.style.visibility = 'visible';
+  modal.style.opacity = '1';
+  console.log('[Tablet Training] 축하 오버레이 표시:', { mileageUpdate, earnedTss, addDays, usedPoints });
+}
+
+/**
+ * 노트북(태블릿) 훈련 화면 전용 축하 오버레이 닫기
+ */
+function closeTabletMileageCelebration() {
+  const modal = document.getElementById('tabletMileageCelebrationModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
 function closeMobileTrainingResultModal() {
   const modal = safeGetElement('mobileTrainingResultModal');
   if (modal) {
     modal.classList.add('hidden');
   }
-  // 노트북 훈련 결과로 열었을 때: 확인 클릭 시 훈련 준비 화면으로 이동
+  // 노트북 훈련 결과로 열었을 때: 축하 모달도 닫고, 확인 클릭 시 훈련 준비 화면으로 이동
   if (window.__laptopResultModalOpen) {
     window.__laptopResultModalOpen = false;
+    if (typeof closeTabletMileageCelebration === 'function') closeTabletMileageCelebration();
     if (typeof showScreen === 'function') {
       showScreen('trainingReadyScreen');
       console.log('[훈련완료] 훈련 결과 모달 확인 → 훈련 준비 화면 전환');
@@ -16268,6 +16325,8 @@ window.openSubscribeOverlay = openSubscribeOverlay;
 window.closeSubscribeOverlay = closeSubscribeOverlay;
 window.showMobileMileageCelebration = showMobileMileageCelebration;
 window.closeMobileMileageCelebration = closeMobileMileageCelebration;
+window.showTabletMileageCelebration = showTabletMileageCelebration;
+window.closeTabletMileageCelebration = closeTabletMileageCelebration;
 window.cleanupMobileDashboard = cleanupMobileDashboard;
 
 /* ==========================================================
