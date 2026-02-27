@@ -17626,6 +17626,13 @@ body.mobile-dashboard-active {
 .mobile-bluetooth-dropdown-item.connected .status {
   color: #00d4aa;
 }
+/* deviceError 시 연결 끊김/실패 상태 (훈련 대시보드 브릿지) */
+.mobile-bluetooth-dropdown-item.device-error,
+.mobile-bluetooth-dropdown-item.device-error .status,
+.status.device-error {
+  color: #9ca3af !important;
+  opacity: 0.85;
+}
 
 /* 종료 메뉴 항목 스타일 (모바일 개인 훈련 대시보드 전용, 독립적 구동) */
 .mobile-bluetooth-dropdown-item-exit {
