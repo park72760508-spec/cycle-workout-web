@@ -458,6 +458,110 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 
+/* ========== 센서 연결 (Device Settings) 화면 ========== */
+#deviceSettingScreen .connection-main-container { min-height: 0; }
+#deviceSettingScreen .device-setting-card { padding: 12px 16px 20px; }
+.device-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.device-setting-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.device-setting-item:hover {
+  border-color: #667eea;
+  background: #f5f3ff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+.device-setting-item.connected {
+  border-color: #00d4aa;
+  background: rgba(0, 212, 170, 0.08);
+}
+.device-setting-icon-wrap {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.device-setting-icon {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.device-setting-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+.device-setting-status {
+  font-size: 12px;
+  color: #6b7280;
+}
+.device-setting-item.connected .device-setting-status {
+  color: #00d4aa;
+  font-weight: 600;
+}
+.device-setting-id {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 기기 검색 모달 */
+.device-scan-modal .device-scan-modal-content { max-width: 360px; width: 90%; }
+.device-scan-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.device-scan-modal-title { margin: 0; font-size: 1.1em; color: #1f2937; }
+.device-scan-modal-body { padding: 16px; max-height: 60vh; overflow-y: auto; }
+.device-scan-modal-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+.device-scan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.device-scan-list li {
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.2s, border-color 0.2s;
+}
+.device-scan-list li:hover {
+  background: #f5f3ff;
+  border-color: #667eea;
+}
+.device-scan-list li .device-scan-name { font-weight: 600; color: #1f2937; display: block; }
+.device-scan-list li .device-scan-id { font-size: 11px; color: #9ca3af; }
+
 /* 베이스캠프 컨테이너 z-index 조정 + [인증 화면 공통] flex 자식 min-height: 0 → 스크롤이 #basecampScreen 안에서만 발생, body 스크롤 방지 */
 #basecampScreen .connection-main-container {
   position: relative;
