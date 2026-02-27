@@ -6347,7 +6347,9 @@ function initializeCurrentScreen(screenId) {
       break;
 
     case 'trainingScreen':
-      // 훈련 대시보드 브릿지: AUTO_CONNECT 1회 발송 + deviceError 리스너 등록 (trainingDashboardBridge.js)
+    case 'mobileDashboardScreen':
+    case 'bluetoothTrainingCoachScreen':
+      // 훈련 대시보드 브릿지: AUTO_CONNECT + deviceError/deviceConnected 리스너 (trainingDashboardBridge.js)
       if (window.StelvioTrainingDashboardBridge && typeof window.StelvioTrainingDashboardBridge.mount === 'function') {
         window.StelvioTrainingDashboardBridge.mount();
       }
