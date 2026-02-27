@@ -6346,6 +6346,13 @@ function initializeCurrentScreen(screenId) {
       }, 100);
       break;
 
+    case 'deviceSettingScreen':
+      // 센서 연결 화면: 저장된 기기로 카드 상태 갱신 (deviceSettings.js)
+      if (window.StelvioDeviceSettings && typeof window.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+        window.StelvioDeviceSettings.refreshDeviceSettingCards();
+      }
+      break;
+
     case 'trainingScreen':
     case 'mobileDashboardScreen':
     case 'bluetoothTrainingCoachScreen':
