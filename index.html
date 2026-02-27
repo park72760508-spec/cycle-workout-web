@@ -1784,7 +1784,7 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="showScreen('myCareerScreen')">
                 <span>MY CAREER</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="showScreen('deviceSettingScreen')">
+              <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="typeof openDeviceSettingsOrPrompt === 'function' ? openDeviceSettingsOrPrompt() : showScreen('deviceSettingScreen');">
                 <span>센서 연결 (Device Settings)</span>
               </button>
             </div>
