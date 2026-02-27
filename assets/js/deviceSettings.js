@@ -1,10 +1,13 @@
 /**
  * deviceSettings.js
  * 센서 연결(Device Settings) 화면: 스캔 모달, 앱으로 START_SCAN/CONNECT_DEVICE 발송, deviceFound/deviceConnected로 UI 동기화
+ * - 투 트랙: 앱 환경에서만 설정 화면 진입 허용, 웹 브라우저에서는 안내만 표시
  */
 
 (function (global) {
   'use strict';
+
+  var isAppEnvironment = !!global.ReactNativeWebView;
 
   var MODAL_ID = 'deviceScanModal';
   var LIST_ID = 'deviceScanList';
@@ -182,6 +185,19 @@
   };
 
   global.closeDeviceScanModal = closeDeviceScanModal;
+
+  /**
+   * 메인 메뉴 [센서 연결] 버튼용: 앱이면 설정 화면으로, 웹이면 안내만 표시 (데드락 방지)
+   */
+  global.openDeviceSettingsOrPrompt = function () {
+    if (isAppEnvironment) {
+      if (typeof global.showScreen === 'function') {
+        global.showScreen('deviceSettingScreen');
+      }
+    } else {
+      alert('웹 브라우저 환경에서는 훈련 대시보드 화면 내에 있는 연결 버튼을 눌러 직접 센서를 연결해 주세요.');
+    }
+  };
 
   /**
    * 전역 리스너 등록 (deviceFound, deviceConnected)
