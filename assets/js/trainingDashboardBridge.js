@@ -114,7 +114,8 @@
     var off = 0;
     var flags = dv.getUint16(off, true); off += 2;
     var speedRaw = dv.getUint16(off, true); off += 2;
-    var speedKmh = speedRaw * 0.001 * 3.6;
+    // FTMS Indoor Bike Data 0x2AD2: Instantaneous Speed 단위는 0.01 km/h (트레드밀 0.001 m/s와 혼동 주의)
+    var speedKmh = speedRaw / 100.0;
     if (flags & 0x0002) off += 2;
     if (flags & 0x0004) {
       var cadenceRaw = dv.getUint16(off, true); off += 2;
@@ -163,14 +164,10 @@
         var revDiff = currentRev - last.rev;
         var timeDiff = currentTime - last.time;
         if (revDiff < 0) revDiff += 4294967296;
-        if (timeDiff < 0) timeDiff += 65536;
+        if (timeDiff < 0) timeDiff += 65536; // 16비트 롤오버 보정 (Last Wheel Event Time uint16)
         if (timeDiff > 0 && revDiff > 0) {
-          var speedKmh = (revDiff * DEFAULT_WHEEL_CIRCUMFERENCE_MM * 1024 * 3.6) / timeDiff;
-          if (typeof global.calculateDistanceFromRevolutions === 'function' && typeof global.calculateRevolutionsPerSecond === 'function') {
-            var distKm = global.calculateDistanceFromRevolutions(revDiff, DEFAULT_WHEEL_CIRCUMFERENCE_MM);
-            var timeH = timeDiff / (1024 * 3600);
-            if (timeH > 0) speedKmh = distKm / timeH;
-          }
+          // (바퀴 차이 * 둘레 mm / 1000) = 이동 거리(m), (시간 차이 / 1024) = 걸린 시간(초), m/s → km/h * 3.6
+          var speedKmh = (revDiff * DEFAULT_WHEEL_CIRCUMFERENCE_MM * 1024 * 3.6) / (timeDiff * 1000);
           if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
           global.liveData.speed = Math.min(speedKmh, 999);
           applyLiveDataToScreen();
@@ -186,7 +183,7 @@
       var lastData = global._lastCrankData[deviceKey];
       if (lastData && crankTime !== lastData.lastCrankEventTime) {
         var timeDiff = crankTime - lastData.lastCrankEventTime;
-        if (timeDiff < 0) timeDiff += 65536;
+        if (timeDiff < 0) timeDiff += 65536; // 16비트 롤오버 보정
         var revDiff = crankRev - lastData.cumulativeCrankRevolutions;
         if (revDiff < 0) revDiff += 65536;
         if (timeDiff > 0 && revDiff > 0) {
