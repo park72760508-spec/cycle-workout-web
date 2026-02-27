@@ -742,7 +742,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 #basecampScreen .basecamp-btn-manual {
   background-image: url('https://stelvio.ai.kr/assets/img/b(04).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 85% !important;
+  background-size: 95% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
@@ -824,8 +824,8 @@ h1,h2,h3,h4 { font-weight: 600; }
   border: 2px solid rgba(135, 206, 235, 0.6) !important;
   color: #15803d !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: cover !important;
-  background-position: center !important;
+  background-size: 85% !important;
+  background-position: center center !important;
   background-repeat: no-repeat !important;
   position: relative;
   overflow: hidden;
