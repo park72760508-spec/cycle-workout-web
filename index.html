@@ -1784,8 +1784,8 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="showScreen('myCareerScreen')">
                 <span>MY CAREER</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampManual" onclick="showScreen('userManualScreen')">
-                <span>사용자 메뉴얼</span>
+              <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="showScreen('deviceSettingScreen')">
+                <span>센서 연결 (Device Settings)</span>
               </button>
             </div>
             <!-- 전화번호 로그인 상태 바 (버튼 4개 하단, 내용 중앙 정렬) -->
@@ -1811,6 +1811,68 @@
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 센서 연결 (Device Settings) 화면 -->
+  <div id="deviceSettingScreen" class="screen" style="display: none;">
+    <div class="basecamp-background-image"></div>
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card device-setting-card">
+          <div class="connection-header basecamp-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+            <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+              <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+              </svg>
+            </button>
+            <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0; text-align: center;">센서 연결 (Device Settings)</h3>
+            <span style="width: 2.5em; flex-shrink: 0;"></span>
+          </div>
+          <div class="connection-device-section basecamp-device-section">
+            <div class="device-setting-grid">
+              <button type="button" class="device-setting-item" id="deviceCardHr" data-device-type="hr" onclick="typeof startDeviceScan === 'function' && startDeviceScan('hr');">
+                <span class="device-setting-icon-wrap"><img src="assets/img/bpm_i.png" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
+                <span class="device-setting-label">심박계</span>
+                <span class="device-setting-status" id="deviceStatusHr">미연결</span>
+                <span class="device-setting-id" id="deviceIdHr" style="display: none;"></span>
+              </button>
+              <button type="button" class="device-setting-item" id="deviceCardPower" data-device-type="power" onclick="typeof startDeviceScan === 'function' && startDeviceScan('power');">
+                <span class="device-setting-icon-wrap"><img src="assets/img/power_i.png" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
+                <span class="device-setting-label">파워미터</span>
+                <span class="device-setting-status" id="deviceStatusPower">미연결</span>
+                <span class="device-setting-id" id="deviceIdPower" style="display: none;"></span>
+              </button>
+              <button type="button" class="device-setting-item" id="deviceCardTrainer" data-device-type="trainer" onclick="typeof startDeviceScan === 'function' && startDeviceScan('trainer');">
+                <span class="device-setting-icon-wrap"><img src="assets/img/trainer_i.png" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
+                <span class="device-setting-label">스마트 트레이너</span>
+                <span class="device-setting-status" id="deviceStatusTrainer">미연결</span>
+                <span class="device-setting-id" id="deviceIdTrainer" style="display: none;"></span>
+              </button>
+              <button type="button" class="device-setting-item" id="deviceCardSpeed" data-device-type="speed" onclick="typeof startDeviceScan === 'function' && startDeviceScan('speed');">
+                <span class="device-setting-icon-wrap"><img src="assets/img/power_i.png" alt="" class="device-setting-icon" onerror="this.style.display='none'"></span>
+                <span class="device-setting-label">속도계센서</span>
+                <span class="device-setting-status" id="deviceStatusSpeed">미연결</span>
+                <span class="device-setting-id" id="deviceIdSpeed" style="display: none;"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 기기 검색 모달 (deviceSettings.js에서 제어) -->
+  <div id="deviceScanModal" class="modal-overlay device-scan-modal" style="display: none;" onclick="if(event.target === this) closeDeviceScanModal();">
+    <div class="modal-content device-scan-modal-content" onclick="event.stopPropagation();">
+      <div class="device-scan-modal-header">
+        <h3 class="device-scan-modal-title">기기 검색 중...</h3>
+        <button type="button" class="modal-close" onclick="closeDeviceScanModal();" aria-label="닫기">&times;</button>
+      </div>
+      <div class="device-scan-modal-body">
+        <p class="device-scan-modal-hint" id="deviceScanModalHint">검색된 기기를 탭하면 연결합니다.</p>
+        <ul class="device-scan-list" id="deviceScanList"></ul>
       </div>
     </div>
   </div>
@@ -10391,6 +10453,8 @@
   <script src="assets/js/pullToRefreshBlocker.js"></script>
   <!-- 앱(WebView) deviceConnected 브릿지 → localStorage 영구 저장 (메모리 누수 방지 포함) -->
   <script src="assets/js/deviceBridgeStorage.js"></script>
+  <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
+  <script src="assets/js/deviceSettings.js"></script>
   <script src="assets/js/app.js"></script>
 
   
