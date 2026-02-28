@@ -115,6 +115,7 @@
 
   /**
    * 모달 열기, "기기 검색 중..." 표시, 앱에 START_SCAN 발송
+   * allowReplace: true → 이미 연결된 상태에서도 검색 가능(새 기기로 변경용)
    */
   function openDeviceScanModal(deviceType) {
     savedTargetType = deviceType;
@@ -130,7 +131,11 @@
     if (hint) hint.textContent = '기기 검색 중...';
     try {
       if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
-        global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'START_SCAN', deviceType: deviceType }));
+        global.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'START_SCAN',
+          deviceType: deviceType,
+          allowReplace: true
+        }));
       }
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] START_SCAN postMessage failed', e);
@@ -193,7 +198,8 @@
           global.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'CONNECT_DEVICE',
             deviceId: deviceId,
-            deviceType: deviceTypeToConnect
+            deviceType: deviceTypeToConnect,
+            replaceDevice: true
           }));
         }
       } catch (err) {
