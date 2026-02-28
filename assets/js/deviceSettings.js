@@ -28,8 +28,54 @@
     speed: { card: 'deviceCardSpeed', status: 'deviceStatusSpeed', id: 'deviceIdSpeed' }
   };
 
+  /** 기기 종류별 Service UUID (BLE 표준). 0x 접두사 제거한 4자리 hex로 비교 */
+  var SERVICE_UUID_BY_TYPE = {
+    hr: '180D',         /* Heart Rate */
+    heartRate: '180D',
+    power: '1818',      /* Cycling Power */
+    powerMeter: '1818',
+    trainer: '1826',    /* Fitness Machine */
+    speed: '1816'       /* Cycling Speed and Cadence */
+  };
+
+  /** 모달에 이미 추가된 기기 ID 집합 (중복 제거용). 스캔 모달 열릴 때마다 초기화 */
+  var addedDeviceIds = new Set();
+
   function getCardIds(deviceType) {
     return CARD_IDS[deviceType] || null;
+  }
+
+  /**
+   * 기기가 선택된 카테고리(deviceType)에 해당하는지 Service UUID 또는 name으로 판별
+   * @param {Object} detail - deviceFound 이벤트의 detail (id, deviceId, name, serviceUuids 등)
+   * @param {string} deviceType - hr | power | trainer | speed (또는 heartRate, powerMeter)
+   * @returns {boolean}
+   */
+  function deviceMatchesCategory(detail, deviceType) {
+    var requiredUuid = SERVICE_UUID_BY_TYPE[deviceType];
+    if (!requiredUuid) return true;
+
+    var uuids = detail.serviceUuids || detail.serviceUUIDs;
+    if (Array.isArray(uuids)) {
+      for (var i = 0; i < uuids.length; i++) {
+        var u = String(uuids[i] || '').toUpperCase().replace(/^0X/, '').replace(/-/g, '');
+        if (u.indexOf(requiredUuid.toUpperCase()) !== -1 || (u.length >= 4 && u.slice(-4) === requiredUuid.toUpperCase())) return true;
+      }
+    }
+    var single = detail.serviceUuid || detail.serviceUUID || detail.uuid;
+    if (single) {
+      var s = String(single).toUpperCase().replace(/^0X/, '').replace(/-/g, '');
+      if (s.indexOf(requiredUuid.toUpperCase()) !== -1 || (s.length >= 4 && s.slice(-4) === requiredUuid.toUpperCase())) return true;
+    }
+    /* Name 기반 폴백: 앱이 UUID를 보내지 않을 경우 */
+    var name = (detail.name || detail.deviceName || '').toLowerCase();
+    if (name) {
+      if ((deviceType === 'hr' || deviceType === 'heartRate') && (name.indexOf('heart') !== -1 || name.indexOf('hr') !== -1 || name.indexOf('심박') !== -1)) return true;
+      if ((deviceType === 'power' || deviceType === 'powerMeter') && (name.indexOf('power') !== -1 || name.indexOf('파워') !== -1)) return true;
+      if (deviceType === 'trainer' && (name.indexOf('trainer') !== -1 || name.indexOf('트레이너') !== -1 || name.indexOf('fitness') !== -1)) return true;
+      if (deviceType === 'speed' && (name.indexOf('speed') !== -1 || name.indexOf('cadence') !== -1 || name.indexOf('속도') !== -1 || name.indexOf('csc') !== -1)) return true;
+    }
+    return false;
   }
 
   /**
@@ -37,6 +83,7 @@
    */
   function openDeviceScanModal(deviceType) {
     savedTargetType = deviceType;
+    addedDeviceIds.clear();
     var modal = document.getElementById(MODAL_ID);
     var list = document.getElementById(LIST_ID);
     var hint = document.getElementById(HINT_ID);
@@ -70,21 +117,29 @@
   }
 
   /**
-   * deviceFound: 검색된 기기를 모달 리스트에 추가
+   * deviceFound: 선택된 카테고리에 맞고 중복이 아닌 기기만 모달 리스트에 추가
+   * - 기기 종류별 Service UUID(0x180D/0x1818/0x1826/0x1816) 또는 name 기반 필터링
+   * - 기기 고유 ID(id/deviceId) 기준 중복 제거
    */
   function onDeviceFound(e) {
     var detail = e && e.detail;
     if (!detail) return;
+    var targetType = savedTargetType;
+    if (!targetType) return;
+    if (!deviceMatchesCategory(detail, targetType)) return;
     var id = detail.id != null ? detail.id : detail.deviceId;
     var name = detail.name != null ? detail.name : (detail.deviceName || '알 수 없는 기기');
     if (!id) return;
+    var idStr = String(id);
+    if (addedDeviceIds.has(idStr)) return;
+    addedDeviceIds.add(idStr);
     var list = document.getElementById(LIST_ID);
     var hint = document.getElementById(HINT_ID);
     if (hint) hint.textContent = '검색된 기기를 탭하면 연결합니다.';
     if (!list) return;
     var li = document.createElement('li');
-    li.dataset.deviceId = String(id);
-    li.innerHTML = '<span class="device-scan-name">' + escapeHtml(String(name)) + '</span><span class="device-scan-id">' + escapeHtml(String(id)) + '</span>';
+    li.dataset.deviceId = idStr;
+    li.innerHTML = '<span class="device-scan-name">' + escapeHtml(String(name)) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
     li.addEventListener('click', function () {
       var deviceId = li.dataset.deviceId;
       var deviceTypeToConnect = savedTargetType;
