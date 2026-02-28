@@ -18314,6 +18314,10 @@ function updateTrainingScreenBluetoothDropdownWithSavedDevices() {
   });
 }
 
+/**
+ * 연결 상태 UI 동기화 (하이브리드: 앱/웹 공통, window.connectedDevices 기준)
+ * 적용 화면: 모바일 개인훈련 대시보드, 노트북(태블릿) 훈련 화면 — 동일 연결 버튼/목록 반영
+ */
 function updateMobileBluetoothConnectionStatus() {
   var hrItem = document.getElementById('mobileBluetoothHRItem');
   var hrStatus = document.getElementById('mobileHeartRateStatus');

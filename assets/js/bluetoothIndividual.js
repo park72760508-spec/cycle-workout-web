@@ -4625,6 +4625,21 @@ if (typeof window.addEventListener === 'function') {
     });
 }
 
+// 하이브리드: 앱에서 heartRateUpdate 수신 시 liveData.heartRate 반영 + 블루투스 개인훈련 대시보드(ui-hr) 즉시 갱신
+if (typeof window.addEventListener === 'function') {
+    window.addEventListener('heartRateUpdate', function (e) {
+        var d = e && e.detail;
+        var bpm = NaN;
+        if (typeof d === 'number' && !isNaN(d)) bpm = d;
+        else if (d != null && typeof d === 'object' && (d.bpm != null || d.heartRate != null)) bpm = Number(d.bpm != null ? d.bpm : d.heartRate);
+        else if (d != null) bpm = Number(d);
+        if (!isNaN(bpm) && bpm > 0) bpm = Math.round(Math.min(255, Math.max(0, bpm)));
+        if (!window.liveData) window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+        if (!isNaN(bpm) && bpm >= 0) window.liveData.heartRate = bpm;
+        if (typeof updateDashboard === 'function') updateDashboard();
+    });
+}
+
 // 초기 속도계 눈금 및 레이블 생성
 // ErgController 초기화 함수 (BluetoothIndividual 전용)
 function initBluetoothIndividualErgController() {
