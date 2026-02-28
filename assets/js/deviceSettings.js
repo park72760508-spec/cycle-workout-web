@@ -18,6 +18,7 @@
 
   var deviceFoundHandlerRef = null;
   var deviceConnectedHandlerRef = null;
+  var deviceErrorHandlerRef = null;
 
   var CARD_IDS = {
     hr: { card: 'deviceCardHr', status: 'deviceStatusHr', id: 'deviceIdHr' },
@@ -232,8 +233,18 @@
     return div.innerHTML;
   }
 
+  /** deviceType(hr, power, trainer, speed) → window.connectedDevices 키 */
+  function typeToConnectedKey(deviceType) {
+    var t = String(deviceType || '').toLowerCase();
+    if (t === 'hr' || t === 'heartrate') return 'heartRate';
+    if (t === 'power' || t === 'powermeter') return 'powerMeter';
+    if (t === 'trainer' || t === 'speed') return t;
+    return deviceType;
+  }
+
   /**
-   * 특정 deviceType 카드를 "연결됨" + deviceId 표시로 갱신
+   * 특정 deviceType 카드를 "연결됨" + deviceId 표시로 갱신 (실제 BLE 연결 시에만 사용)
+   * 색상은 기존 유지: 녹색(#00d4aa)
    */
   function setCardConnected(deviceType, deviceId) {
     var ids = getCardIds(deviceType);
@@ -241,11 +252,30 @@
     var card = document.getElementById(ids.card);
     var statusEl = document.getElementById(ids.status);
     var idEl = document.getElementById(ids.id);
-    if (card) {
-      card.classList.add('connected');
-    }
+    if (card) card.classList.add('connected');
     if (statusEl) {
       statusEl.textContent = '연결됨';
+      statusEl.style.color = '#00d4aa';
+    }
+    if (idEl && deviceId) {
+      idEl.textContent = String(deviceId);
+      idEl.style.display = 'block';
+    }
+  }
+
+  /**
+   * 특정 deviceType 카드를 "저장됨" + deviceId 표시로 갱신 (스토리지에만 있고 아직 연결 안 된 경우)
+   * 색상은 연결됨과 동일하게 유지: #00d4aa
+   */
+  function setCardSaved(deviceType, deviceId) {
+    var ids = getCardIds(deviceType);
+    if (!ids) return;
+    var card = document.getElementById(ids.card);
+    var statusEl = document.getElementById(ids.status);
+    var idEl = document.getElementById(ids.id);
+    if (card) card.classList.add('connected');
+    if (statusEl) {
+      statusEl.textContent = '저장됨';
       statusEl.style.color = '#00d4aa';
     }
     if (idEl && deviceId) {
@@ -268,18 +298,28 @@
 
   /**
    * 화면 열릴 때 저장된 기기로 카드 상태 초기화
+   * - 저장된 ID만 있고 실제 연결 안 됨 → "저장됨" (색상 동일)
+   * - 실제 연결됨(window.connectedDevices) → "연결됨"
    */
   function refreshDeviceSettingCards() {
     var api = global.StelvioDeviceBridgeStorage;
     if (!api || typeof api.loadSavedDevices !== 'function') return;
     var saved = api.loadSavedDevices();
     if (!saved || typeof saved !== 'object') return;
+    var connected = global.connectedDevices || {};
     var types = ['hr', 'power', 'trainer', 'speed'];
     for (var i = 0; i < types.length; i++) {
       var t = types[i];
       var id = saved[t];
       if (id) {
-        setCardConnected(t, id);
+        var cKey = typeToConnectedKey(t);
+        var conn = connected[cKey];
+        var isActuallyConnected = conn && (conn.deviceId === id || conn.deviceId === String(id) || (conn.id && (conn.id === id || conn.id === String(id))));
+        if (isActuallyConnected) {
+          setCardConnected(t, id);
+        } else {
+          setCardSaved(t, id);
+        }
       } else {
         var ids = getCardIds(t);
         if (!ids) continue;
@@ -321,16 +361,25 @@
     }
   };
 
+  /** deviceError: 연결 끊김 시 카드 갱신 → 해당 타입은 저장만 있으면 "저장됨"으로 표시 */
+  function onDeviceError(e) {
+    if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+      global.StelvioDeviceSettings.refreshDeviceSettingCards();
+    }
+  }
+
   /**
-   * 전역 리스너 등록 (deviceFound, deviceConnected)
+   * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError)
    */
   function attachListeners() {
     if (deviceFoundHandlerRef !== null) return;
     deviceFoundHandlerRef = onDeviceFound;
     deviceConnectedHandlerRef = onDeviceConnected;
+    deviceErrorHandlerRef = onDeviceError;
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('deviceFound', deviceFoundHandlerRef);
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
+      global.addEventListener('deviceError', deviceErrorHandlerRef);
     }
   }
 

@@ -226,6 +226,8 @@
   }
 
   // ---------- AUTO_CONNECT / deviceError / deviceConnected (기존 유지) ----------
+  // 훈련 화면(모바일/노트북/블루투스 코치) 진입 시마다 mount → sendAutoConnectOnce 호출.
+  // teardown 시 플래그 초기화되므로, 재진입 시 저장된 기기 ID로 앱에 연결 시도.
 
   function sendAutoConnectOnce() {
     if (global[AUTO_CONNECT_SENT_KEY]) return;

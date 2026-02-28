@@ -79,6 +79,24 @@ if (!window.liveData) {
     };
 }
 
+// 훈련 화면 접속 시 저장된 기기 ID로 앱에 연결 시도 (AUTO_CONNECT) — 앱 WebView에서만
+function sendAutoConnectIfInApp() {
+    try {
+        if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') return;
+        var key = 'stelvio_saved_devices_bridge';
+        var raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+        if (!raw) return;
+        var saved = JSON.parse(raw);
+        if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return;
+        var keys = Object.keys(saved);
+        if (keys.length === 0) return;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'AUTO_CONNECT', devices: saved }));
+        if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] AUTO_CONNECT sent on page load', keys);
+    } catch (e) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendAutoConnectIfInApp failed', e);
+    }
+}
+
 // 1. URL 파라미터에서 트랙 번호 확인 (?track=1 또는 ?bike=1)
 const params = new URLSearchParams(window.location.search);
 let myTrackId = params.get('track') || params.get('bike'); // bike 파라미터도 지원 (하위 호환성)
@@ -4844,6 +4862,8 @@ if (document.readyState === 'loading') {
         initializeCelebrationModal();
         // 화면 방향 세로 모드로 고정
         await lockScreenOrientation();
+        // 앱 WebView일 때 저장된 기기로 연결 시도 (훈련 화면 접속 시 연결 로직 가동)
+        sendAutoConnectIfInApp();
         
         // 연결 버튼 이벤트 리스너 확인 및 등록
         const connectBtn = document.getElementById('bluetoothConnectBtn');
@@ -4911,6 +4931,8 @@ if (document.readyState === 'loading') {
     // DOM이 이미 로드되었으면 바로 실행
     // 화면 방향 세로 모드로 고정
     lockScreenOrientation();
+    // 앱 WebView일 때 저장된 기기로 연결 시도 (훈련 화면 접속 시 연결 로직 가동)
+    sendAutoConnectIfInApp();
     
     // 연결 버튼 이벤트 리스너 확인 및 등록
     const connectBtn = document.getElementById('bluetoothConnectBtn');
