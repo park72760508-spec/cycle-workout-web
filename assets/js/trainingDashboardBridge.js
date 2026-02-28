@@ -1,8 +1,9 @@
 /**
  * trainingDashboardBridge.js (Dual Pipeline 업그레이드)
  * - 앱(App) vs 웹(Web) 환경 분기: isAppEnvironment 시 연결 버튼 클릭 가로채기(UI 보호)
- * - deviceConnected/deviceError 시 UI 녹색/회색 유지
- * - Track 1 (App): powerUpdate, trainerUpdate, speedUpdate 파싱 → liveData + 기존 DOM 업데이트 경로 재사용
+ * - deviceConnected/deviceError 시 UI 녹색/회색 유지 + connectedDevices 반영(연결 버튼/목록 동기화)
+ * - Track 1 (App): powerUpdate, trainerUpdate, speedUpdate, heartRateUpdate 파싱 → liveData + 기존 DOM 업데이트 경로 재사용
+ * - 앱에서 심박 표시: heartRateUpdate 이벤트로 detail = BPM 숫자 또는 [flags, bpm] 배열 전달
  */
 
 (function (global) {
@@ -41,6 +42,16 @@
   var powerUpdateHandlerRef = null;
   var trainerUpdateHandlerRef = null;
   var speedUpdateHandlerRef = null;
+  var heartRateUpdateHandlerRef = null;
+
+  /** deviceType(앱) → connectedDevices 키 (heartRate, trainer, powerMeter) */
+  function toConnectedDevicesKey(deviceType) {
+    var t = String(deviceType || '').toLowerCase();
+    if (t === 'hr' || t === 'heartrate') return 'heartRate';
+    if (t === 'power' || t === 'powermeter') return 'powerMeter';
+    if (t === 'trainer') return 'trainer';
+    return deviceType;
+  }
 
   /** CSC 속도 계산용 이전 휠 데이터 (평로라 규격 재사용) */
   var _lastWheelData = { rev: null, time: null };
@@ -290,7 +301,12 @@
     if (!detail) return;
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     if (!deviceType) return;
+    var key = toConnectedDevicesKey(deviceType);
+    if (global.connectedDevices && key) global.connectedDevices[key] = null;
     setDeviceErrorUI(String(deviceType));
+    if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
+      global.updateMobileBluetoothConnectionStatus();
+    }
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] deviceError', deviceType, detail.deviceId);
     }
@@ -302,8 +318,19 @@
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     if (!deviceType) return;
     setDeviceConnectedUI(String(deviceType));
+    if (!global.connectedDevices) global.connectedDevices = { trainer: null, powerMeter: null, heartRate: null };
+    var key = toConnectedDevicesKey(deviceType);
+    if (key) {
+      global.connectedDevices[key] = {
+        name: detail.deviceName || detail.name || '연결됨',
+        deviceId: detail.deviceId || detail.id
+      };
+    }
+    if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
+      global.updateMobileBluetoothConnectionStatus();
+    }
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[trainingDashboardBridge] deviceConnected', deviceType, detail.deviceId);
+      console.log('[trainingDashboardBridge] deviceConnected', deviceType, detail.deviceId, '(connectedDevices 반영)');
     }
   }
 
@@ -322,6 +349,40 @@
     if (detail != null) parseSpeedUpdate(Array.isArray(detail) ? detail : (detail.data || detail.payload));
   }
 
+  /**
+   * heartRateUpdate: 앱에서 심박수(BPM) 전달 시 liveData.heartRate 반영 (하이브리드 표시용)
+   * payload: number(bpm) | { bpm, heartRate } | 배열(BLE 0x2A37: [flags, bpm] 또는 [flags, bpmLo, bpmHi])
+   */
+  function parseHeartRateUpdate(detail) {
+    var bpm = null;
+    if (typeof detail === 'number' && !Number.isNaN(detail)) {
+      bpm = Math.max(0, Math.min(255, Math.round(detail)));
+    } else if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+      bpm = detail.bpm != null ? Number(detail.bpm) : detail.heartRate != null ? Number(detail.heartRate) : null;
+      if (bpm != null && !Number.isNaN(bpm)) bpm = Math.max(0, Math.min(255, Math.round(bpm)));
+    } else if (Array.isArray(detail) && detail.length >= 2) {
+      var flags = detail[0] & 0xff;
+      if (flags & 0x01 && detail.length >= 3) {
+        bpm = (detail[1] & 0xff) | ((detail[2] & 0xff) << 8);
+      } else {
+        bpm = detail[1] & 0xff;
+      }
+      if (bpm != null && !Number.isNaN(bpm)) bpm = Math.max(0, Math.min(255, bpm));
+    }
+    if (bpm == null || Number.isNaN(bpm)) return;
+    if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    global.liveData.heartRate = bpm;
+    if (global.ergController && typeof global.ergController.updateHeartRate === 'function') {
+      try { global.ergController.updateHeartRate(bpm); } catch (err) {}
+    }
+    applyLiveDataToScreen();
+  }
+
+  function onHeartRateUpdate(e) {
+    var detail = e && e.detail;
+    if (detail != null) parseHeartRateUpdate(Array.isArray(detail) ? detail : (detail && (detail.data != null || detail.payload != null) ? (detail.data || detail.payload) : detail));
+  }
+
   function mountTrainingDashboardBridge() {
     sendAutoConnectOnce();
     if (deviceErrorHandlerRef !== null) return;
@@ -335,9 +396,11 @@
       powerUpdateHandlerRef = onPowerUpdate;
       trainerUpdateHandlerRef = onTrainerUpdate;
       speedUpdateHandlerRef = onSpeedUpdate;
+      heartRateUpdateHandlerRef = onHeartRateUpdate;
       global.addEventListener('powerUpdate', powerUpdateHandlerRef);
       global.addEventListener('trainerUpdate', trainerUpdateHandlerRef);
       global.addEventListener('speedUpdate', speedUpdateHandlerRef);
+      global.addEventListener('heartRateUpdate', heartRateUpdateHandlerRef);
     }
   }
 
@@ -362,6 +425,10 @@
       if (speedUpdateHandlerRef !== null) {
         global.removeEventListener('speedUpdate', speedUpdateHandlerRef);
         speedUpdateHandlerRef = null;
+      }
+      if (heartRateUpdateHandlerRef !== null) {
+        global.removeEventListener('heartRateUpdate', heartRateUpdateHandlerRef);
+        heartRateUpdateHandlerRef = null;
       }
     }
     global[AUTO_CONNECT_SENT_KEY] = false;
@@ -416,6 +483,7 @@
     setDeviceConnectedUI: setDeviceConnectedUI,
     parsePowerUpdate: parsePowerUpdate,
     parseTrainerUpdate: parseTrainerUpdate,
-    parseSpeedUpdate: parseSpeedUpdate
+    parseSpeedUpdate: parseSpeedUpdate,
+    parseHeartRateUpdate: parseHeartRateUpdate
   };
 })(typeof window !== 'undefined' ? window : this);
