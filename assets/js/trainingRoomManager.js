@@ -6910,6 +6910,8 @@ function handlePlayerEnterClick(event, trackNumber, roomId) {
 
 /**
  * Bluetooth 입장 버튼 클릭 핸들러 (로딩 애니메이션 적용, Bluetooth Join Session 전용, 독립적 구동)
+ * 앱(WebView) 환경: 현재 창에서 bluetoothIndividual.html로 이동 → 앱 화면 안에서 표시
+ * 브라우저: target="_blank"로 새 창 열기 (기존 동작)
  */
 function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   const button = event?.target?.closest('a.player-enter-btn');
@@ -6924,28 +6926,25 @@ function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   // 로딩 애니메이션 시작
   if (button) {
     button.classList.add('loading');
-    // 페이지 이동이 시작되면 로딩 상태가 자연스럽게 사라짐
   }
-  
-  // 기존 클릭 애니메이션도 유지
   if (button) {
     button.classList.add('clicking');
-    setTimeout(() => {
-      button.classList.remove('clicking');
-    }, 300);
+    setTimeout(function () { if (button) button.classList.remove('clicking'); }, 300);
   }
   
-  // href로 이동하는 것은 브라우저가 처리하도록 허용 (preventDefault 호출하지 않음)
-  // bluetoothIndividual.html이 새 창(target="_blank")으로 열림
-  // 로딩 애니메이션은 페이지 이동 전까지 표시됨
-  // return true를 통해 기본 동작(링크 이동)을 명시적으로 허용
-  
-  // 축하 모달이 표시되지 않도록 확인 (혹시 다른 곳에서 호출되는 경우 대비)
+  // 축하 모달이 표시되지 않도록 확인
   const registerCelebrationModal = document.getElementById('registerCelebrationModal');
   if (registerCelebrationModal && registerCelebrationModal.style.display !== 'none') {
     registerCelebrationModal.classList.add('hidden');
     registerCelebrationModal.style.display = 'none';
-    console.log('[handleBluetoothPlayerEnterClick] 축하 모달이 열려있어서 닫았습니다.');
+  }
+  
+  // 앱(WebView) 환경: 새 창 대신 현재 WebView에서 이동 → 블루투스 개인훈련 대시보드가 앱 화면에 표시됨
+  if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
+    event.preventDefault();
+    var url = (button && button.href) ? button.href : ('bluetoothIndividual.html?bike=' + encodeURIComponent(trackNumber) + (roomId ? '&room=' + encodeURIComponent(roomId) : ''));
+    window.location.href = url;
+    return false;
   }
   
   return true;
