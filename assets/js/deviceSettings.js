@@ -38,13 +38,13 @@
     speed: '1816'
   };
 
-  /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사) */
+  /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사). UUID 매칭 실패 시에도 이름에 키워드 있으면 표시 */
   var NAME_KEYWORDS_BY_TYPE = {
-    hr: ['heart', 'hrm', 'hr', 'magene'],
-    heartRate: ['heart', 'hrm', 'hr', 'magene'],
-    power: ['power', 'assioma', 'stages', 'quarq'],
-    powerMeter: ['power', 'assioma', 'stages', 'quarq'],
-    trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer'],
+    hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
+    heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
+    power: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
+    powerMeter: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
+    trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart'],
     speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
   };
 
@@ -65,9 +65,16 @@
   }
 
   /**
+   * UUID 문자열 정규화: 16비트(180d)·128비트(0000180d-0000-1000-8000-00805f9b34fb) 모두 toLowerCase 후 비교용 문자열로
+   */
+  function normalizeUuidForCompare(uuidStr) {
+    return String(uuidStr || '').toLowerCase().replace(/^0x/, '').replace(/-/g, '');
+  }
+
+  /**
    * 기기가 선택된 카테고리(deviceType)에 해당하는지 Service UUID 또는 name으로 판별
-   * - UUID: 180d/1818/1826/1816 포함 여부 (대소문자 무시)
-   * - Name: 카테고리별 키워드 포함 여부 (대소문자 무시, name + localName 모두 검사)
+   * - UUID: 16비트(180d)·128비트(0000180d-...) 형식 모두 toLowerCase()로 비교
+   * - Name: 카테고리별 키워드 포함 시 UUID 없어도 목록 표시
    * @param {Object} detail - deviceFound 이벤트의 detail
    * @param {string} deviceType - hr | power | trainer | speed (또는 heartRate, powerMeter)
    * @returns {boolean}
@@ -77,14 +84,15 @@
     var nameKeywords = NAME_KEYWORDS_BY_TYPE[deviceType];
     if (!requiredUuid && !nameKeywords) return true;
 
+    var reqLower = requiredUuid ? requiredUuid.toLowerCase() : '';
+
     var uuidMatch = false;
-    if (requiredUuid) {
-      var reqUpper = requiredUuid.toUpperCase();
+    if (reqLower) {
       var uuids = detail.serviceUuids || detail.serviceUUIDs;
       if (Array.isArray(uuids)) {
         for (var i = 0; i < uuids.length; i++) {
-          var u = String(uuids[i] || '').toUpperCase().replace(/^0X/, '').replace(/-/g, '');
-          if (u.indexOf(reqUpper) !== -1 || (u.length >= 4 && u.slice(-4) === reqUpper)) {
+          var u = normalizeUuidForCompare(uuids[i]);
+          if (u.indexOf(reqLower) !== -1 || (u.length >= 4 && u.slice(-4) === reqLower)) {
             uuidMatch = true;
             break;
           }
@@ -93,8 +101,8 @@
       if (!uuidMatch) {
         var single = detail.serviceUuid || detail.serviceUUID || detail.uuid;
         if (single) {
-          var s = String(single).toUpperCase().replace(/^0X/, '').replace(/-/g, '');
-          if (s.indexOf(reqUpper) !== -1 || (s.length >= 4 && s.slice(-4) === reqUpper)) uuidMatch = true;
+          var s = normalizeUuidForCompare(single);
+          if (s.indexOf(reqLower) !== -1 || (s.length >= 4 && s.slice(-4) === reqLower)) uuidMatch = true;
         }
       }
     }
@@ -163,6 +171,20 @@
   function onDeviceFound(e) {
     var detail = e && e.detail;
     if (!detail) return;
+
+    /* 디버깅: 앱에서 넘어오는 모든 기기의 name·localName·uuids 출력 */
+    var uuids = detail.serviceUuids || detail.serviceUUIDs;
+    var uuidList = Array.isArray(uuids) ? uuids : (detail.serviceUuid || detail.serviceUUID || detail.uuid ? [detail.serviceUuid || detail.serviceUUID || detail.uuid] : []);
+    if (console && console.log) {
+      console.log('[deviceSettings] deviceFound 수신:', {
+        name: detail.name || '(없음)',
+        localName: detail.localName || '(없음)',
+        deviceName: detail.deviceName || '(없음)',
+        uuids: uuidList,
+        id: detail.id != null ? detail.id : detail.deviceId
+      });
+    }
+
     var targetType = savedTargetType;
     if (!targetType) return;
 
@@ -171,11 +193,6 @@
 
     var id = detail.id != null ? detail.id : detail.deviceId;
     var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
-    var uuids = detail.serviceUuids || detail.serviceUUIDs;
-    var uuidList = Array.isArray(uuids) ? uuids : (detail.serviceUuid || detail.serviceUUID || detail.uuid ? [detail.serviceUuid || detail.serviceUUID || detail.uuid] : []);
-    if (console && console.log) {
-      console.log('[deviceSettings] 검색된 기기:', { name: name, id: id, serviceUuids: uuidList });
-    }
 
     if (!deviceMatchesCategory(detail, targetType)) return;
     if (!id) return;
