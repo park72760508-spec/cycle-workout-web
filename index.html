@@ -10362,13 +10362,36 @@
       }
     });
 
-    // 앱에서 실시간 심박수: heartRateUpdate 이벤트 수신 후 화면에 BPM 표시
+    // 앱에서 실시간 심박수: heartRateUpdate 수신 시 전역 liveData 반영 + 모든 훈련 화면 동기화 (하이브리드: 앱/웹 공통)
+    // 적용 대상: 인증 화면(authHeartRateBpm), 모바일 개인훈련(mobile-ui-hr), 노트북/태블릿 훈련(heartRateValue), 블루투스 개인훈련(bluetoothIndividual.js에서 동일 이벤트 수신 → ui-hr)
     window.addEventListener('heartRateUpdate', function(e) {
-      var bpm = e.detail != null ? Number(e.detail) : NaN;
+      var d = e.detail;
+      var bpm = NaN;
+      if (typeof d === 'number' && !isNaN(d)) bpm = d;
+      else if (d != null && typeof d === 'object' && (d.bpm != null || d.heartRate != null)) bpm = Number(d.bpm != null ? d.bpm : d.heartRate);
+      else if (d != null) bpm = Number(d);
+      if (!isNaN(bpm) && bpm > 0) bpm = Math.round(Math.min(255, Math.max(0, bpm)));
       var el = document.getElementById('authHeartRateBpm');
-      if (el) {
-        el.textContent = (!isNaN(bpm) && bpm > 0) ? Math.round(bpm) : '—';
-      }
+      if (el) el.textContent = (!isNaN(bpm) && bpm > 0) ? bpm : '—';
+      if (!window.liveData) window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+      if (!isNaN(bpm) && bpm >= 0) window.liveData.heartRate = bpm;
+      if (typeof window.updateTrainingDisplay === 'function') window.updateTrainingDisplay();
+    });
+
+    // 앱에서 기기 연결 시 전역 connectedDevices 반영 + 모든 훈련 화면 연결 UI 동기화 (하이브리드: 앱/웹 공통)
+    // 적용 대상: 모바일 개인훈련 대시보드, 노트북(태블릿) 훈련 화면, 블루투스 개인훈련 대시보드(동일 연결 상태 공유)
+    window.addEventListener('deviceConnected', function(e) {
+      var detail = e && e.detail;
+      if (!detail) return;
+      var deviceType = (detail.deviceType != null ? detail.deviceType : detail.type);
+      if (!deviceType) return;
+      var t = String(deviceType).toLowerCase();
+      var key = (t === 'hr' || t === 'heartrate') ? 'heartRate' : (t === 'power' || t === 'powermeter') ? 'powerMeter' : (t === 'trainer') ? 'trainer' : null;
+      if (!key) return;
+      if (!window.connectedDevices) window.connectedDevices = { trainer: null, powerMeter: null, heartRate: null };
+      window.connectedDevices[key] = { name: detail.deviceName || detail.name || '연결됨', deviceId: detail.deviceId || detail.id };
+      if (typeof window.updateMobileBluetoothConnectionStatus === 'function') window.updateMobileBluetoothConnectionStatus();
+      if (typeof window.updateBluetoothConnectionStatus === 'function') window.updateBluetoothConnectionStatus();
     });
 
     /**
