@@ -10362,8 +10362,9 @@
       }
     });
 
-    // 앱에서 실시간 심박수: heartRateUpdate 수신 시 전역 liveData 반영 + 모든 훈련 화면 동기화 (하이브리드: 앱/웹 공통)
-    // 적용 대상: 인증 화면(authHeartRateBpm), 모바일 개인훈련(mobile-ui-hr), 노트북/태블릿 훈련(heartRateValue), 블루투스 개인훈련(bluetoothIndividual.js에서 동일 이벤트 수신 → ui-hr)
+    // heartRateUpdate: 인증 화면은 테스트용 임시 표시만, 실질 표시는 Device Settings 저장 기기 자동 연결(AUTO_CONNECT) 출력만 반영
+    // - 인증 화면(authScreen) 활성 시: authHeartRateBpm에만 표시, liveData 미반영 → 훈련 화면에 테스트 연결 값 노출 안 함
+    // - 인증 화면 외(훈련 화면 등): Device Settings 저장 기기 연결 출력으로 간주 → liveData 반영 + 모바일/노트북/블루투스 훈련 화면 표시
     window.addEventListener('heartRateUpdate', function(e) {
       var d = e.detail;
       var bpm = NaN;
@@ -10371,11 +10372,17 @@
       else if (d != null && typeof d === 'object' && (d.bpm != null || d.heartRate != null)) bpm = Number(d.bpm != null ? d.bpm : d.heartRate);
       else if (d != null) bpm = Number(d);
       if (!isNaN(bpm) && bpm > 0) bpm = Math.round(Math.min(255, Math.max(0, bpm)));
+      var authScreen = document.getElementById('authScreen');
+      var isAuthScreenActive = authScreen && (authScreen.classList.contains('active') || (typeof window.getComputedStyle === 'function' && window.getComputedStyle(authScreen).display !== 'none'));
       var el = document.getElementById('authHeartRateBpm');
-      if (el) el.textContent = (!isNaN(bpm) && bpm > 0) ? bpm : '—';
+      if (isAuthScreenActive) {
+        if (el) el.textContent = (!isNaN(bpm) && bpm > 0) ? bpm : '—';
+        return;
+      }
       if (!window.liveData) window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
       if (!isNaN(bpm) && bpm >= 0) window.liveData.heartRate = bpm;
       if (typeof window.updateTrainingDisplay === 'function') window.updateTrainingDisplay();
+      if (el) el.textContent = (!isNaN(bpm) && bpm > 0) ? bpm : '—';
     });
 
     // 앱에서 기기 연결 시 전역 connectedDevices 반영 + 모든 훈련 화면 연결 UI 동기화 (하이브리드: 앱/웹 공통)
