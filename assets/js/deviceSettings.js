@@ -28,14 +28,24 @@
     speed: { card: 'deviceCardSpeed', status: 'deviceStatusSpeed', id: 'deviceIdSpeed' }
   };
 
-  /** 기기 종류별 Service UUID (BLE 표준). 0x 접두사 제거한 4자리 hex로 비교 */
+  /** 기기 종류별 Service UUID (BLE 표준). 0x 접두사 제거한 4자리 hex로 비교 (대소문자 무시) */
   var SERVICE_UUID_BY_TYPE = {
-    hr: '180D',         /* Heart Rate */
-    heartRate: '180D',
-    power: '1818',      /* Cycling Power */
+    hr: '180d',
+    heartRate: '180d',
+    power: '1818',
     powerMeter: '1818',
-    trainer: '1826',    /* Fitness Machine */
-    speed: '1816'       /* Cycling Speed and Cadence */
+    trainer: '1826',
+    speed: '1816'
+  };
+
+  /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사) */
+  var NAME_KEYWORDS_BY_TYPE = {
+    hr: ['heart', 'hrm', 'hr', 'magene'],
+    heartRate: ['heart', 'hrm', 'hr', 'magene'],
+    power: ['power', 'assioma', 'stages', 'quarq'],
+    powerMeter: ['power', 'assioma', 'stages', 'quarq'],
+    trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer'],
+    speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
   };
 
   /** 모달에 이미 추가된 기기 ID 집합 (중복 제거용). 스캔 모달 열릴 때마다 초기화 */
@@ -46,36 +56,61 @@
   }
 
   /**
+   * name 또는 localName이 하나라도 있으면 true (빈 문자열만 있는 경우는 false)
+   */
+  function hasNameOrLocalName(detail) {
+    var n = (detail.name || detail.deviceName || '').trim();
+    var ln = (detail.localName || '').trim();
+    return n.length > 0 || ln.length > 0;
+  }
+
+  /**
    * 기기가 선택된 카테고리(deviceType)에 해당하는지 Service UUID 또는 name으로 판별
-   * @param {Object} detail - deviceFound 이벤트의 detail (id, deviceId, name, serviceUuids 등)
+   * - UUID: 180d/1818/1826/1816 포함 여부 (대소문자 무시)
+   * - Name: 카테고리별 키워드 포함 여부 (대소문자 무시, name + localName 모두 검사)
+   * @param {Object} detail - deviceFound 이벤트의 detail
    * @param {string} deviceType - hr | power | trainer | speed (또는 heartRate, powerMeter)
    * @returns {boolean}
    */
   function deviceMatchesCategory(detail, deviceType) {
     var requiredUuid = SERVICE_UUID_BY_TYPE[deviceType];
-    if (!requiredUuid) return true;
+    var nameKeywords = NAME_KEYWORDS_BY_TYPE[deviceType];
+    if (!requiredUuid && !nameKeywords) return true;
 
-    var uuids = detail.serviceUuids || detail.serviceUUIDs;
-    if (Array.isArray(uuids)) {
-      for (var i = 0; i < uuids.length; i++) {
-        var u = String(uuids[i] || '').toUpperCase().replace(/^0X/, '').replace(/-/g, '');
-        if (u.indexOf(requiredUuid.toUpperCase()) !== -1 || (u.length >= 4 && u.slice(-4) === requiredUuid.toUpperCase())) return true;
+    var uuidMatch = false;
+    if (requiredUuid) {
+      var reqUpper = requiredUuid.toUpperCase();
+      var uuids = detail.serviceUuids || detail.serviceUUIDs;
+      if (Array.isArray(uuids)) {
+        for (var i = 0; i < uuids.length; i++) {
+          var u = String(uuids[i] || '').toUpperCase().replace(/^0X/, '').replace(/-/g, '');
+          if (u.indexOf(reqUpper) !== -1 || (u.length >= 4 && u.slice(-4) === reqUpper)) {
+            uuidMatch = true;
+            break;
+          }
+        }
+      }
+      if (!uuidMatch) {
+        var single = detail.serviceUuid || detail.serviceUUID || detail.uuid;
+        if (single) {
+          var s = String(single).toUpperCase().replace(/^0X/, '').replace(/-/g, '');
+          if (s.indexOf(reqUpper) !== -1 || (s.length >= 4 && s.slice(-4) === reqUpper)) uuidMatch = true;
+        }
       }
     }
-    var single = detail.serviceUuid || detail.serviceUUID || detail.uuid;
-    if (single) {
-      var s = String(single).toUpperCase().replace(/^0X/, '').replace(/-/g, '');
-      if (s.indexOf(requiredUuid.toUpperCase()) !== -1 || (s.length >= 4 && s.slice(-4) === requiredUuid.toUpperCase())) return true;
+
+    var nameMatch = false;
+    if (nameKeywords && nameKeywords.length) {
+      var combinedName = ((detail.name || '') + ' ' + (detail.deviceName || '') + ' ' + (detail.localName || '')).toLowerCase();
+      for (var j = 0; j < nameKeywords.length; j++) {
+        if (combinedName.indexOf(nameKeywords[j].toLowerCase()) !== -1) {
+          nameMatch = true;
+          break;
+        }
+      }
     }
-    /* Name 기반 폴백: 앱이 UUID를 보내지 않을 경우 */
-    var name = (detail.name || detail.deviceName || '').toLowerCase();
-    if (name) {
-      if ((deviceType === 'hr' || deviceType === 'heartRate') && (name.indexOf('heart') !== -1 || name.indexOf('hr') !== -1 || name.indexOf('심박') !== -1)) return true;
-      if ((deviceType === 'power' || deviceType === 'powerMeter') && (name.indexOf('power') !== -1 || name.indexOf('파워') !== -1)) return true;
-      if (deviceType === 'trainer' && (name.indexOf('trainer') !== -1 || name.indexOf('트레이너') !== -1 || name.indexOf('fitness') !== -1)) return true;
-      if (deviceType === 'speed' && (name.indexOf('speed') !== -1 || name.indexOf('cadence') !== -1 || name.indexOf('속도') !== -1 || name.indexOf('csc') !== -1)) return true;
-    }
-    return false;
+
+    return uuidMatch || nameMatch;
   }
 
   /**
@@ -118,17 +153,26 @@
 
   /**
    * deviceFound: 선택된 카테고리에 맞고 중복이 아닌 기기만 모달 리스트에 추가
-   * - 기기 종류별 Service UUID(0x180D/0x1818/0x1826/0x1816) 또는 name 기반 필터링
-   * - 기기 고유 ID(id/deviceId) 기준 중복 제거
+   * - name/localName 없는 기기 제외, UUID 또는 name 키워드로 카테고리 필터, id 기준 중복 제거
    */
   function onDeviceFound(e) {
     var detail = e && e.detail;
     if (!detail) return;
     var targetType = savedTargetType;
     if (!targetType) return;
-    if (!deviceMatchesCategory(detail, targetType)) return;
+
+    /* name·localName 둘 다 없으면 목록에서 제외 */
+    if (!hasNameOrLocalName(detail)) return;
+
     var id = detail.id != null ? detail.id : detail.deviceId;
-    var name = detail.name != null ? detail.name : (detail.deviceName || '알 수 없는 기기');
+    var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
+    var uuids = detail.serviceUuids || detail.serviceUUIDs;
+    var uuidList = Array.isArray(uuids) ? uuids : (detail.serviceUuid || detail.serviceUUID || detail.uuid ? [detail.serviceUuid || detail.serviceUUID || detail.uuid] : []);
+    if (console && console.log) {
+      console.log('[deviceSettings] 검색된 기기:', { name: name, id: id, serviceUuids: uuidList });
+    }
+
+    if (!deviceMatchesCategory(detail, targetType)) return;
     if (!id) return;
     var idStr = String(id);
     if (addedDeviceIds.has(idStr)) return;
