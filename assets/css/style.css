@@ -17689,6 +17689,13 @@ body.mobile-dashboard-active {
   background: rgba(59, 130, 246, 0.3);
   border-color: #2563eb;
 }
+/* 자동 연결 진행 중 인디케이터 (버튼 문구 "연결중" + 시각 구분) */
+.mobile-bluetooth-connect-btn.auto-connecting {
+  color: rgba(255, 255, 255, 0.9);
+}
+.mobile-bluetooth-connect-btn.auto-connecting .mobile-bluetooth-icon {
+  opacity: 0.85;
+}
 .mobile-bluetooth-connect-btn .mobile-bluetooth-icon {
   width: 16px;
   height: 16px;
