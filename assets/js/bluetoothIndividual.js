@@ -79,7 +79,40 @@ if (!window.liveData) {
     };
 }
 
-// 훈련 화면 접속 시 저장된 기기 ID로 앱에 연결 시도 (AUTO_CONNECT) — 앱 WebView에서만
+// 훈련 화면 접속 시 저장된 기기 ID로 앱에 연결 시도 (AUTO_CONNECT) — 앱 WebView에서만. 하이브리드 UX: "연결중" 표시, 수동 클릭 시 중단.
+window._bluetoothIndividualAutoConnectInProgress = false;
+window._bluetoothIndividualAutoConnectTimeoutId = null;
+var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS = 20000;
+
+function setBluetoothIndividualConnectButtonLabel(connecting) {
+    var btn = document.getElementById('bluetoothConnectBtn');
+    if (!btn) return;
+    var span = btn.querySelector('span');
+    if (span) span.textContent = connecting ? '연결중' : '연결';
+    btn.classList.toggle('auto-connecting', !!connecting);
+}
+
+function clearBluetoothIndividualAutoConnect() {
+    if (window._bluetoothIndividualAutoConnectTimeoutId != null) {
+        clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
+        window._bluetoothIndividualAutoConnectTimeoutId = null;
+    }
+    window._bluetoothIndividualAutoConnectInProgress = false;
+    setBluetoothIndividualConnectButtonLabel(false);
+    if (typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
+}
+
+function abortBluetoothIndividualAutoConnect() {
+    if (!window._bluetoothIndividualAutoConnectInProgress) return;
+    if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] AUTO_CONNECT aborted by user');
+    try {
+        if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ABORT_AUTO_CONNECT' }));
+        }
+    } catch (e) {}
+    clearBluetoothIndividualAutoConnect();
+}
+
 function sendAutoConnectIfInApp() {
     try {
         if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') return;
@@ -91,10 +124,28 @@ function sendAutoConnectIfInApp() {
         var keys = Object.keys(saved);
         if (keys.length === 0) return;
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'AUTO_CONNECT', devices: saved }));
-        if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] AUTO_CONNECT sent on page load', keys);
+        window._bluetoothIndividualAutoConnectInProgress = true;
+        setBluetoothIndividualConnectButtonLabel(true);
+        if (window._bluetoothIndividualAutoConnectTimeoutId != null) clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
+        window._bluetoothIndividualAutoConnectTimeoutId = setTimeout(function () {
+            window._bluetoothIndividualAutoConnectTimeoutId = null;
+            if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
+        }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
+        if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] AUTO_CONNECT sent on page load', keys, '(연결중 표시)');
     } catch (e) {
         if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendAutoConnectIfInApp failed', e);
     }
+}
+
+// 자동 연결 성공 시 "연결중" 해제 및 연결 상태 UI 갱신 (앱에서 deviceConnected 이벤트 발송 시)
+if (typeof window.addEventListener === 'function') {
+    window.addEventListener('deviceConnected', function (e) {
+        if (window._bluetoothIndividualAutoConnectInProgress) {
+            clearBluetoothIndividualAutoConnect();
+        } else if (typeof updateBluetoothConnectionStatus === 'function') {
+            updateBluetoothConnectionStatus();
+        }
+    });
 }
 
 // 1. URL 파라미터에서 트랙 번호 확인 (?track=1 또는 ?bike=1)
@@ -4216,8 +4267,11 @@ function updateIndividualIntensityDisplay(sliderValue) {
     }
 }
 
-// 블루투스 연결 드롭다운 토글
+// 블루투스 연결 드롭다운 토글. 앱 환경: 수동 클릭 시 자동 연결 중단 후 드롭다운 열기
 function toggleBluetoothDropdown() {
+    if (window._bluetoothIndividualAutoConnectInProgress && window.ReactNativeWebView) {
+        abortBluetoothIndividualAutoConnect();
+    }
     console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨');
     const dropdown = document.getElementById('bluetoothDropdown');
     if (!dropdown) {

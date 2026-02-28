@@ -13,6 +13,10 @@
 
   var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen'];
   var AUTO_CONNECT_SENT_KEY = '_stelvioTrainingAutoConnectSent';
+  /** 자동 연결 진행 중 플래그 — 사용자 수동 클릭 시 중단(Abort)용 */
+  var AUTO_CONNECT_IN_PROGRESS_KEY = '_stelvioAutoConnectInProgress';
+  var AUTO_CONNECT_TIMEOUT_MS = 20000;
+  var _autoConnectTimeoutId = null;
 
   var DEVICE_UI_MAP = {
     hr: [
@@ -215,19 +219,93 @@
 
   var _originalConnectMobileBluetoothDevice = null;
 
+  /** 앱 환경: 연결 버튼 클릭 시 자동 연결 중단 후 Device Settings(수동 검색) 화면으로 이동 */
   function interceptConnectButton() {
-    if (!isAppEnvironment || _originalConnectMobileBluetoothDevice !== null) return;
+    if (!isAppEnvironment) return;
+    var origToggle = global.toggleBluetoothDropdown;
+    var origMobileToggle = global.toggleMobileBluetoothDropdown;
+    if (typeof origToggle === 'function') {
+      global.toggleBluetoothDropdown = function (context) {
+        abortAutoConnect();
+        if (typeof global.showScreen === 'function') {
+          global.showScreen('deviceSettingScreen');
+        } else {
+          origToggle(context);
+        }
+      };
+    }
+    if (typeof origMobileToggle === 'function') {
+      global.toggleMobileBluetoothDropdown = function () {
+        abortAutoConnect();
+        if (typeof global.showScreen === 'function') {
+          global.showScreen('deviceSettingScreen');
+        } else {
+          origMobileToggle();
+        }
+      };
+    }
     _originalConnectMobileBluetoothDevice = global.connectMobileBluetoothDevice;
-    if (typeof _originalConnectMobileBluetoothDevice !== 'function') return;
-    global.connectMobileBluetoothDevice = function (deviceType, savedDeviceId) {
-      alert('앱 환경에서는 메인 메뉴의 [센서 연결]에서 기기를 관리합니다.');
-      return Promise.resolve();
-    };
+    if (typeof _originalConnectMobileBluetoothDevice === 'function') {
+      global.connectMobileBluetoothDevice = function (deviceType, savedDeviceId) {
+        abortAutoConnect();
+        if (typeof global.showScreen === 'function') {
+          global.showScreen('deviceSettingScreen');
+        } else {
+          _originalConnectMobileBluetoothDevice(deviceType, savedDeviceId);
+        }
+        return Promise.resolve();
+      };
+    }
   }
 
   // ---------- AUTO_CONNECT / deviceError / deviceConnected (기존 유지) ----------
   // 훈련 화면(모바일/노트북/블루투스 코치) 진입 시마다 mount → sendAutoConnectOnce 호출.
   // teardown 시 플래그 초기화되므로, 재진입 시 저장된 기기 ID로 앱에 연결 시도.
+  // 하이브리드 UX: 자동 연결 중에는 버튼에 "연결중" 표시, 사용자 수동 클릭 시 중단 후 수동 검색.
+
+  /** 연결 버튼 문구만 설정 (연결중 / 연결). 색상·has-connection은 updateMobileBluetoothConnectionStatus에서 처리 */
+  function setConnectButtonConnectingLabel(connecting) {
+    var mobileBtn = document.getElementById('mobileBluetoothConnectBtn');
+    var tsBtn = document.getElementById('trainingScreenBluetoothConnectBtn');
+    var label = connecting ? '연결중' : '연결';
+    if (mobileBtn) {
+      var span = mobileBtn.querySelector('span');
+      if (span) span.textContent = label;
+      mobileBtn.classList.toggle('auto-connecting', !!connecting);
+    }
+    if (tsBtn) {
+      var spanTs = tsBtn.querySelector('span');
+      if (spanTs) spanTs.textContent = label;
+      tsBtn.classList.toggle('auto-connecting', !!connecting);
+    }
+  }
+
+  /** 자동 연결 진행 종료(성공/실패/타임아웃): 플래그 해제, 버튼 문구 복구, UI 갱신 */
+  function clearAutoConnectInProgress() {
+    if (_autoConnectTimeoutId != null) {
+      clearTimeout(_autoConnectTimeoutId);
+      _autoConnectTimeoutId = null;
+    }
+    global[AUTO_CONNECT_IN_PROGRESS_KEY] = false;
+    setConnectButtonConnectingLabel(false);
+    if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
+      global.updateMobileBluetoothConnectionStatus();
+    }
+  }
+
+  /** 사용자 수동 연결 버튼 클릭 시 호출: 자동 연결 즉시 중단 후 수동 검색(Device Settings)으로 유도 */
+  function abortAutoConnect() {
+    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) return;
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] AUTO_CONNECT aborted by user');
+    }
+    try {
+      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+        global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ABORT_AUTO_CONNECT' }));
+      }
+    } catch (e) {}
+    clearAutoConnectInProgress();
+  }
 
   function sendAutoConnectOnce() {
     if (global[AUTO_CONNECT_SENT_KEY]) return;
@@ -242,8 +320,21 @@
     try {
       global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'AUTO_CONNECT', devices: savedDevices }));
       global[AUTO_CONNECT_SENT_KEY] = true;
+      global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
+      setConnectButtonConnectingLabel(true);
+      if (_autoConnectTimeoutId != null) clearTimeout(_autoConnectTimeoutId);
+      _autoConnectTimeoutId = setTimeout(function () {
+        _autoConnectTimeoutId = null;
+        if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
+          global[AUTO_CONNECT_IN_PROGRESS_KEY] = false;
+          setConnectButtonConnectingLabel(false);
+          if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
+            global.updateMobileBluetoothConnectionStatus();
+          }
+        }
+      }, AUTO_CONNECT_TIMEOUT_MS);
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[trainingDashboardBridge] AUTO_CONNECT sent', keys);
+        console.log('[trainingDashboardBridge] AUTO_CONNECT sent', keys, '(연결중 표시)');
       }
     } catch (e) {
       if (typeof console !== 'undefined' && console.warn) {
@@ -328,7 +419,9 @@
         deviceId: detail.deviceId || detail.id
       };
     }
-    if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
+    if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
+      clearAutoConnectInProgress();
+    } else if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
       global.updateMobileBluetoothConnectionStatus();
     }
     if (typeof console !== 'undefined' && console.log) {
@@ -434,6 +527,12 @@
       }
     }
     global[AUTO_CONNECT_SENT_KEY] = false;
+    global[AUTO_CONNECT_IN_PROGRESS_KEY] = false;
+    if (_autoConnectTimeoutId != null) {
+      clearTimeout(_autoConnectTimeoutId);
+      _autoConnectTimeoutId = null;
+    }
+    setConnectButtonConnectingLabel(false);
   }
 
   function wrapShowScreen() {
@@ -481,6 +580,7 @@
     TARGET_SCREENS: TARGET_SCREENS,
     mount: mountTrainingDashboardBridge,
     teardown: teardownTrainingDashboardBridge,
+    abortAutoConnect: abortAutoConnect,
     setDeviceErrorUI: setDeviceErrorUI,
     setDeviceConnectedUI: setDeviceConnectedUI,
     parsePowerUpdate: parsePowerUpdate,
@@ -488,4 +588,5 @@
     parseSpeedUpdate: parseSpeedUpdate,
     parseHeartRateUpdate: parseHeartRateUpdate
   };
+  global.abortAutoConnect = abortAutoConnect;
 })(typeof window !== 'undefined' ? window : this);
