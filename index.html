@@ -14308,6 +14308,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       window.showScreen = function(screenId) {
         console.log('[showScreen] 화면 전환 요청:', screenId);
         
+        // 베이스캠프로 전환 시: 현재 인증 화면이 활성이면 "인증 후 베이스캠프 진입"으로 간주 → 주가마일리지 TOP10 표시 허용 (원래 동작 복귀)
+        if (screenId === 'basecampScreen') {
+          var authScreenEl = document.getElementById('authScreen');
+          var authCurrentlyActive = authScreenEl && (authScreenEl.classList.contains('active') || window.getComputedStyle(authScreenEl).display !== 'none');
+          var curUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
+          var authUid = (typeof window.auth !== 'undefined' && window.auth.currentUser && window.auth.currentUser.uid) ||
+            (typeof window.authV9 !== 'undefined' && window.authV9.currentUser && window.authV9.currentUser.uid);
+          var isAuthenticated = (curUser && (curUser.id || curUser.uid)) || authUid;
+          if (authCurrentlyActive && isAuthenticated) {
+            window.__basecampShownAfterAuth = true;
+          }
+        }
+        
         // originalShowScreenFunc 호출 시도
         var originalCalled = false;
         if (typeof originalShowScreenFunc === 'function') {
