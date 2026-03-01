@@ -31,6 +31,11 @@
     trainer: { card: 'deviceCardTrainer', status: 'deviceStatusTrainer', id: 'deviceIdTrainer' },
     speed: { card: 'deviceCardSpeed', status: 'deviceStatusSpeed', id: 'deviceIdSpeed' }
   };
+  /** 연결됨일 때 카드 아이콘 이미지, 연결 해제/저장됨/미연결일 때 원래 이미지 */
+  var CARD_IMG_CONNECTED = { hr: 'assets/img/bpm_b.png', power: 'assets/img/power_b.png', trainer: 'assets/img/trainer_b_b.png', speed: 'assets/img/s(02).png' };
+  var CARD_IMG_DEFAULT = { hr: 'assets/img/bpm_i.png', power: 'assets/img/power_i.png', trainer: 'assets/img/trainer_i.png', speed: 'assets/img/s(01).png' };
+  var TRAINER_LABEL_CONNECTED = '스마트로라';
+  var TRAINER_LABEL_DEFAULT = '스마트 트레이너';
 
   /** 기기 종류별 Service UUID (BLE 표준). 0x 접두사 제거한 4자리 hex로 비교 (대소문자 무시) */
   var SERVICE_UUID_BY_TYPE = {
@@ -57,6 +62,23 @@
 
   function getCardIds(deviceType) {
     return CARD_IDS[deviceType] || null;
+  }
+
+  /** Device Settings 카드 아이콘 및 스마트 트레이너 라벨 설정. connected true=연결됨 이미지/스마트로라, false=원래 이미지/스마트 트레이너 */
+  function setDeviceCardIconAndLabel(deviceType, connected) {
+    var ids = getCardIds(deviceType);
+    if (!ids) return;
+    var card = document.getElementById(ids.card);
+    if (!card) return;
+    var img = card.querySelector('.device-setting-icon');
+    var t = (deviceType === 'heartRate' || deviceType === 'hr') ? 'hr' : (deviceType === 'powerMeter' || deviceType === 'power') ? 'power' : (deviceType === 'trainer') ? 'trainer' : (deviceType === 'speed') ? 'speed' : null;
+    if (img && t && CARD_IMG_CONNECTED[t] && CARD_IMG_DEFAULT[t]) {
+      img.src = connected ? CARD_IMG_CONNECTED[t] : CARD_IMG_DEFAULT[t];
+    }
+    if (t === 'trainer') {
+      var labelEl = card.querySelector('.device-setting-label');
+      if (labelEl) labelEl.textContent = connected ? TRAINER_LABEL_CONNECTED : TRAINER_LABEL_DEFAULT;
+    }
   }
 
   /**
@@ -289,10 +311,10 @@
   }
 
   /**
-   * 특정 deviceType 카드를 "연결됨" + deviceId 표시로 갱신 (실제 BLE 연결 시에만 사용)
-   * 색상은 기존 유지: 녹색(#00d4aa)
+   * 특정 deviceType 카드를 "연결됨" + 디바이스 이름(또는 ID) 표시로 갱신 (실제 BLE 연결 시에만 사용)
+   * @param {string} [deviceName] - 있으면 이름 표시, 없으면 deviceId 표시
    */
-  function setCardConnected(deviceType, deviceId) {
+  function setCardConnected(deviceType, deviceId, deviceName) {
     var ids = getCardIds(deviceType);
     if (!ids) return;
     var card = document.getElementById(ids.card);
@@ -303,16 +325,17 @@
       statusEl.textContent = '연결됨';
       statusEl.style.color = '#00d4aa';
     }
-    if (idEl && deviceId) {
-      idEl.textContent = String(deviceId);
+    if (idEl && (deviceId || deviceName)) {
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
       idEl.style.display = 'block';
     }
+    setDeviceCardIconAndLabel(deviceType, true);
   }
 
   /**
-   * 특정 deviceType 카드를 "연결해제"로 표시 (연결되었다가 끊어진 경우, 배터리 방전 등)
+   * 특정 deviceType 카드를 "연결해제" + 디바이스 이름(또는 ID) 표시
    */
-  function setCardDisconnected(deviceType, deviceId) {
+  function setCardDisconnected(deviceType, deviceId, deviceName) {
     var ids = getCardIds(deviceType);
     if (!ids) return;
     var card = document.getElementById(ids.card);
@@ -323,17 +346,18 @@
       statusEl.textContent = '연결해제';
       statusEl.style.color = '#9ca3af';
     }
-    if (idEl && deviceId) {
-      idEl.textContent = String(deviceId);
+    if (idEl && (deviceId || deviceName)) {
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
       idEl.style.display = 'block';
     }
+    setDeviceCardIconAndLabel(deviceType, false);
   }
 
   /**
-   * 특정 deviceType 카드를 "저장됨" + deviceId 표시로 갱신 (스토리지에만 있고 아직 연결 안 된 경우)
+   * 특정 deviceType 카드를 "저장됨" + 디바이스 이름(또는 ID) 표시로 갱신 (스토리지에만 있고 아직 연결 안 된 경우)
    * 색상은 연결됨과 동일하게 유지: #00d4aa
    */
-  function setCardSaved(deviceType, deviceId) {
+  function setCardSaved(deviceType, deviceId, deviceName) {
     var ids = getCardIds(deviceType);
     if (!ids) return;
     var card = document.getElementById(ids.card);
@@ -344,10 +368,11 @@
       statusEl.textContent = '저장됨';
       statusEl.style.color = '#00d4aa';
     }
-    if (idEl && deviceId) {
-      idEl.textContent = String(deviceId);
+    if (idEl && (deviceId || deviceName)) {
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
       idEl.style.display = 'block';
     }
+    setDeviceCardIconAndLabel(deviceType, false);
   }
 
   /** stelvio-connection-lost의 key(heartRate 등) → 카드 타입(hr, power, trainer, speed) */
@@ -372,7 +397,7 @@
   }
 
   /**
-   * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 기기 ID 표시
+   * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 기기 이름 표시
    * 연결 중이었으면 연결 중 UI 숨기고 모달 닫기
    */
   function onDeviceConnected(e) {
@@ -380,11 +405,12 @@
     if (!detail) return;
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
+    var deviceName = detail.deviceName != null ? detail.deviceName : (detail.name != null ? detail.name : '');
     if (!deviceType) return;
     var key = typeToConnectedKey(deviceType);
     var cardType = connectedKeyToCardType(key) || (key || String(deviceType).toLowerCase());
     if (cardType) delete _lastDisconnectedTypes[cardType];
-    setCardConnected(String(deviceType), deviceId);
+    setCardConnected(String(deviceType), deviceId, deviceName);
     if (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType)) {
       hideDeviceScanConnecting();
       _connectingDeviceName = null;
@@ -403,26 +429,28 @@
     if (!api || typeof api.loadSavedDevices !== 'function') return;
     var saved = api.loadSavedDevices();
     if (!saved || typeof saved !== 'object') return;
+    var names = (typeof api.loadSavedDeviceNames === 'function') ? api.loadSavedDeviceNames() : {};
     var connected = global.connectedDevices || {};
     var types = ['hr', 'power', 'trainer', 'speed'];
     var now = Date.now();
     for (var i = 0; i < types.length; i++) {
       var t = types[i];
       var id = saved[t];
+      var displayName = (names && names[t]) ? names[t] : '';
       if (id) {
         var cKey = typeToConnectedKey(t);
         var conn = connected[cKey];
         var isActuallyConnected = conn && (conn.deviceId === id || conn.deviceId === String(id) || (conn.id && (conn.id === id || conn.id === String(id))));
         if (isActuallyConnected) {
           delete _lastDisconnectedTypes[t];
-          setCardConnected(t, id);
+          setCardConnected(t, id, conn && (conn.name || conn.deviceName) ? (conn.name || conn.deviceName) : displayName);
         } else {
           var disconnectedAt = _lastDisconnectedTypes[t];
           if (disconnectedAt != null && (now - disconnectedAt) < DISCONNECTED_LABEL_EXPIRE_MS) {
-            setCardDisconnected(t, id);
+            setCardDisconnected(t, id, displayName);
           } else {
             if (disconnectedAt != null) delete _lastDisconnectedTypes[t];
-            setCardSaved(t, id);
+            setCardSaved(t, id, displayName);
           }
         }
       } else {
@@ -440,6 +468,7 @@
           idEl.textContent = '';
           idEl.style.display = 'none';
         }
+        setDeviceCardIconAndLabel(t, false);
       }
     }
   }
