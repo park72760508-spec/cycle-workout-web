@@ -524,6 +524,9 @@
     try {
       global.dispatchEvent(new CustomEvent('stelvio-connection-lost', { detail: { deviceType: deviceType, key: key } }));
     } catch (evErr) {}
+    if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+      try { global.StelvioDeviceSettings.refreshDeviceSettingCards(); } catch (e) {}
+    }
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] 연결해제 적용', deviceType, key);
     }
@@ -699,14 +702,27 @@
     }
   }
 
-  function mountTrainingDashboardBridge() {
-    if (deviceErrorHandlerRef !== null) return;
+  /** deviceError/deviceConnected는 페이지 로드 시 1회만 등록. 훈련 화면 여부와 무관하게 연결 해제 시 UI 반영 */
+  var _connectionListenersRegistered = false;
+  function registerConnectionListenersOnce() {
+    if (_connectionListenersRegistered) return;
+    _connectionListenersRegistered = true;
     deviceErrorHandlerRef = onDeviceError;
     deviceConnectedHandlerRef = onDeviceConnected;
-    autoConnectStateHandlerRef = onAutoConnectState;
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('deviceError', deviceErrorHandlerRef);
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
+    }
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] deviceError/deviceConnected 리스너 등록 (연결 해제 시 훈련/Device Settings 반영)');
+    }
+  }
+
+  function mountTrainingDashboardBridge() {
+    registerConnectionListenersOnce();
+    if (autoConnectStateHandlerRef !== null) return;
+    autoConnectStateHandlerRef = onAutoConnectState;
+    if (typeof global.addEventListener === 'function') {
       global.addEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
     }
     if (isAppEnvironmentNow()) {
@@ -723,14 +739,6 @@
 
   function teardownTrainingDashboardBridge() {
     if (typeof global.removeEventListener === 'function') {
-      if (deviceErrorHandlerRef !== null) {
-        global.removeEventListener('deviceError', deviceErrorHandlerRef);
-        deviceErrorHandlerRef = null;
-      }
-      if (deviceConnectedHandlerRef !== null) {
-        global.removeEventListener('deviceConnected', deviceConnectedHandlerRef);
-        deviceConnectedHandlerRef = null;
-      }
       if (autoConnectStateHandlerRef !== null) {
         global.removeEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
         autoConnectStateHandlerRef = null;
@@ -898,6 +906,7 @@
       setTimeout(checkActiveScreenForAutoConnect, 600);
     });
   }
+  registerConnectionListenersOnce();
   setTimeout(installShowScreenAndInitialAutoConnect, 0);
   setTimeout(installShowScreenAndInitialAutoConnect, 300);
   setTimeout(function () {

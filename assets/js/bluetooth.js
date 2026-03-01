@@ -1258,6 +1258,17 @@ function handleDisconnect(type, device) {
   const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
   window.isSensorConnected = anyConnected;
   try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } })); } catch (e) {}
+
+  // 훈련 화면 연결 버튼 + 센서 연결(Device Settings) 화면/팝업 반영: 연결해제 상태 및 "연결 전" 디자인
+  if (!window._stelvioDisconnectedTypes) window._stelvioDisconnectedTypes = {};
+  window._stelvioDisconnectedTypes[type] = Date.now();
+  if (typeof window.updateMobileBluetoothConnectionStatus === 'function') {
+    window.updateMobileBluetoothConnectionStatus();
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('stelvio-connection-lost', { detail: { deviceType: type, key: type } }));
+  } catch (evErr) {}
+
   updateDevicesList();
 }
 
