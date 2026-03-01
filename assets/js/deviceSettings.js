@@ -310,6 +310,26 @@
   }
 
   /**
+   * 특정 deviceType 카드를 "연결해제"로 표시 (연결되었다가 끊어진 경우, 배터리 방전 등)
+   */
+  function setCardDisconnected(deviceType, deviceId) {
+    var ids = getCardIds(deviceType);
+    if (!ids) return;
+    var card = document.getElementById(ids.card);
+    var statusEl = document.getElementById(ids.status);
+    var idEl = document.getElementById(ids.id);
+    if (card) card.classList.remove('connected');
+    if (statusEl) {
+      statusEl.textContent = '연결해제';
+      statusEl.style.color = '#9ca3af';
+    }
+    if (idEl && deviceId) {
+      idEl.textContent = String(deviceId);
+      idEl.style.display = 'block';
+    }
+  }
+
+  /**
    * 특정 deviceType 카드를 "저장됨" + deviceId 표시로 갱신 (스토리지에만 있고 아직 연결 안 된 경우)
    * 색상은 연결됨과 동일하게 유지: #00d4aa
    */
@@ -330,6 +350,19 @@
     }
   }
 
+  /** stelvio-connection-lost의 key(heartRate 등) → 카드 타입(hr, power, trainer, speed) */
+  function connectedKeyToCardType(key) {
+    if (!key) return null;
+    var k = String(key);
+    if (k === 'heartRate') return 'hr';
+    if (k === 'powerMeter') return 'power';
+    if (k === 'trainer' || k === 'speed') return k;
+    return key;
+  }
+  /** 연결 해제된 타입 기록 (연결해제 문구 표시용, 60초 후에는 저장됨으로 복귀) */
+  var _lastDisconnectedTypes = {};
+  var DISCONNECTED_LABEL_EXPIRE_MS = 60000;
+
   /** 연결 중 대기 타입과 이벤트 타입이 같은지 비교 (hr/heartRate 등 통일) */
   function isSameDeviceType(a, b) {
     if (!a || !b) return false;
@@ -348,6 +381,9 @@
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
     if (!deviceType) return;
+    var key = typeToConnectedKey(deviceType);
+    var cardType = connectedKeyToCardType(key) || (key || String(deviceType).toLowerCase());
+    if (cardType) delete _lastDisconnectedTypes[cardType];
     setCardConnected(String(deviceType), deviceId);
     if (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType)) {
       hideDeviceScanConnecting();
@@ -369,6 +405,7 @@
     if (!saved || typeof saved !== 'object') return;
     var connected = global.connectedDevices || {};
     var types = ['hr', 'power', 'trainer', 'speed'];
+    var now = Date.now();
     for (var i = 0; i < types.length; i++) {
       var t = types[i];
       var id = saved[t];
@@ -377,9 +414,16 @@
         var conn = connected[cKey];
         var isActuallyConnected = conn && (conn.deviceId === id || conn.deviceId === String(id) || (conn.id && (conn.id === id || conn.id === String(id))));
         if (isActuallyConnected) {
+          delete _lastDisconnectedTypes[t];
           setCardConnected(t, id);
         } else {
-          setCardSaved(t, id);
+          var disconnectedAt = _lastDisconnectedTypes[t];
+          if (disconnectedAt != null && (now - disconnectedAt) < DISCONNECTED_LABEL_EXPIRE_MS) {
+            setCardDisconnected(t, id);
+          } else {
+            if (disconnectedAt != null) delete _lastDisconnectedTypes[t];
+            setCardSaved(t, id);
+          }
         }
       } else {
         var ids = getCardIds(t);
@@ -422,7 +466,7 @@
     }
   };
 
-  /** deviceError: 연결 끊김 시 카드 갱신. 연결 대기 중이었으면 연결 중 UI 숨기고 모달 닫기 */
+  /** deviceError: 연결 대기 중이었으면 모달만 닫기. 실제 카드 갱신은 stelvio-connection-lost(디바운스 후)에서 처리 */
   function onDeviceError(e) {
     var detail = e && e.detail;
     var errorType = detail && (detail.deviceType != null ? detail.deviceType : detail.type);
@@ -432,23 +476,36 @@
       _connectingDeviceType = null;
       closeDeviceScanModal();
     }
-    if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
-      global.StelvioDeviceSettings.refreshDeviceSettingCards();
+  }
+
+  /** stelvio-connection-lost: 디바운스 후 연결 해제 확정 시 카드에 "연결해제" 반영 */
+  function onConnectionLost(e) {
+    var detail = e && e.detail;
+    var key = detail && detail.key;
+    var cardType = connectedKeyToCardType(key);
+    if (cardType) {
+      _lastDisconnectedTypes[cardType] = Date.now();
+      if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+        global.StelvioDeviceSettings.refreshDeviceSettingCards();
+      }
     }
   }
 
   /**
    * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError)
    */
+  var connectionLostHandlerRef = null;
   function attachListeners() {
     if (deviceFoundHandlerRef !== null) return;
     deviceFoundHandlerRef = onDeviceFound;
     deviceConnectedHandlerRef = onDeviceConnected;
     deviceErrorHandlerRef = onDeviceError;
+    connectionLostHandlerRef = onConnectionLost;
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('deviceFound', deviceFoundHandlerRef);
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
       global.addEventListener('deviceError', deviceErrorHandlerRef);
+      global.addEventListener('stelvio-connection-lost', connectionLostHandlerRef);
     }
   }
 

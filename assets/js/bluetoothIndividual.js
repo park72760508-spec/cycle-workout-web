@@ -96,7 +96,7 @@ function setBluetoothIndividualConnectButtonLabel(connecting) {
             if (!wrapEl) {
                 wrapEl = document.createElement('span');
                 wrapEl.className = 'stelvio-auto-connect-status-wrap';
-                wrapEl.style.cssText = 'display:inline-flex;align-items:center;margin-left:8px;white-space:nowrap;gap:6px;';
+                wrapEl.style.cssText = 'display:inline-flex;align-items:center;margin-right:8px;white-space:nowrap;gap:6px;';
                 var spinner = document.createElement('span');
                 spinner.className = 'stelvio-auto-connect-spinner';
                 spinner.setAttribute('aria-hidden', 'true');
@@ -104,7 +104,7 @@ function setBluetoothIndividualConnectButtonLabel(connecting) {
                 textEl.className = 'stelvio-auto-connect-status';
                 wrapEl.appendChild(spinner);
                 wrapEl.appendChild(textEl);
-                btn.parentNode.insertBefore(wrapEl, btn.nextSibling);
+                btn.parentNode.insertBefore(wrapEl, btn);
             }
             var textEl = wrapEl.querySelector('.stelvio-auto-connect-status');
             if (textEl) textEl.textContent = '연결 중...';
@@ -4579,7 +4579,7 @@ function updateBluetoothConnectionStatus() {
     } else {
         if (hrItem) hrItem.classList.remove('connected');
         if (hrStatus) {
-            hrStatus.textContent = '미연결';
+            hrStatus.textContent = (window._stelvioDisconnectedTypes && window._stelvioDisconnectedTypes.heartRate) ? '연결해제' : '미연결';
             hrStatus.style.color = '#888';
         }
     }
@@ -4605,7 +4605,7 @@ function updateBluetoothConnectionStatus() {
     } else {
         if (trainerItem) trainerItem.classList.remove('connected');
         if (trainerStatus) {
-            trainerStatus.textContent = '미연결';
+            trainerStatus.textContent = (window._stelvioDisconnectedTypes && window._stelvioDisconnectedTypes.trainer) ? '연결해제' : '미연결';
             trainerStatus.style.color = '#888';
         }
         
@@ -4631,7 +4631,7 @@ function updateBluetoothConnectionStatus() {
     } else {
         if (pmItem) pmItem.classList.remove('connected');
         if (pmStatus) {
-            pmStatus.textContent = '미연결';
+            pmStatus.textContent = (window._stelvioDisconnectedTypes && window._stelvioDisconnectedTypes.powerMeter) ? '연결해제' : '미연결';
             pmStatus.style.color = '#888';
         }
     }

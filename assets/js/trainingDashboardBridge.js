@@ -28,6 +28,13 @@
   /** 파워/케이던스 소스 선택: 'powerMeter' | 'trainer' | null(미선택). 파워미터·스마트트레이너 동시 연결 시 팝업으로 선택 */
   var POWER_CADENCE_SOURCE_KEY = '_stelvioPowerCadenceSource';
 
+  /**
+   * 순간 끊김 디바운스: deviceError 수신 후 이 시간(ms) 이내에 deviceConnected 오면 해제로 간주하지 않음.
+   * 15초: 일시 끊김과 실제 방전/이탈 구분, 재연결 여유 확보.
+   */
+  var DISCONNECT_DEBOUNCE_MS = 15000;
+  var _disconnectDebounceTimers = {};
+
   var DEVICE_UI_MAP = {
     hr: [
       { item: 'trainingScreenBluetoothHRItem', status: 'trainingScreenHeartRateStatus' },
@@ -326,7 +333,7 @@
   // 앱에서 '연결 중' 신호(stelvio-auto-connect-state)가 오면 버튼 옆에 상태 표시, 성공 시 deviceConnected로 데이터 노출.
   // 수동: 연결 버튼 클릭 시 목록(드롭다운) 유지, 목록에서 기기 클릭 시만 상세 연결 흐름.
 
-  /** 버튼 옆 '연결 중...' + 로딩 인디케이터 영역 찾기 또는 생성 후 표시/숨김 */
+  /** 연결 버튼 왼쪽에 '연결 중...' + 로딩 인디케이터 표시 (O 연결중,, [연결 버튼] 형태) */
   function setAutoConnectStatusNextToButton(buttonEl, show, text) {
     if (!buttonEl || !buttonEl.parentNode) return;
     var statusId = buttonEl.id ? 'stelvio-auto-connect-wrap-' + buttonEl.id : null;
@@ -336,7 +343,7 @@
         wrapEl = document.createElement('span');
         wrapEl.className = 'stelvio-auto-connect-status-wrap';
         if (statusId) wrapEl.id = statusId;
-        wrapEl.style.cssText = 'display:inline-flex;align-items:center;margin-left:8px;white-space:nowrap;gap:6px;';
+        wrapEl.style.cssText = 'display:inline-flex;align-items:center;margin-right:8px;white-space:nowrap;gap:6px;';
         var spinner = document.createElement('span');
         spinner.className = 'stelvio-auto-connect-spinner';
         spinner.setAttribute('aria-hidden', 'true');
@@ -344,7 +351,7 @@
         textEl.className = 'stelvio-auto-connect-status';
         wrapEl.appendChild(spinner);
         wrapEl.appendChild(textEl);
-        buttonEl.parentNode.insertBefore(wrapEl, buttonEl.nextSibling);
+        buttonEl.parentNode.insertBefore(wrapEl, buttonEl);
       }
       var textNode = wrapEl.querySelector('.stelvio-auto-connect-status');
       if (textNode) textNode.textContent = text;
@@ -462,7 +469,7 @@
       var itemEl = document.getElementById(ui.item);
       var statusEl = document.getElementById(ui.status);
       if (statusEl) {
-        statusEl.textContent = '연결 끊김';
+        statusEl.textContent = '연결해제';
         statusEl.classList.add('device-error');
         statusEl.classList.remove('device-connected');
         statusEl.style.color = '#9ca3af';
@@ -500,24 +507,45 @@
     }
   }
 
-  function onDeviceError(e) {
-    var detail = e && e.detail;
-    if (!detail) return;
-    var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
-    if (!deviceType) return;
-    var key = toConnectedDevicesKey(deviceType);
+  /** 디바운스 후 실제 연결 해제 적용: connectedDevices 갱신, UI, 전역 플래그, 이벤트 */
+  function applyDisconnect(key, deviceType) {
     if (global.connectedDevices && key) global.connectedDevices[key] = null;
     if (key === 'powerMeter' || key === 'trainer') {
       if (!global.connectedDevices.powerMeter && !global.connectedDevices.trainer) {
         global[POWER_CADENCE_SOURCE_KEY] = null;
       }
     }
+    if (!global._stelvioDisconnectedTypes) global._stelvioDisconnectedTypes = {};
+    global._stelvioDisconnectedTypes[key] = Date.now();
     setDeviceErrorUI(String(deviceType));
     if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
       global.updateMobileBluetoothConnectionStatus();
     }
+    try {
+      global.dispatchEvent(new CustomEvent('stelvio-connection-lost', { detail: { deviceType: deviceType, key: key } }));
+    } catch (evErr) {}
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[trainingDashboardBridge] deviceError', deviceType, detail.deviceId);
+      console.log('[trainingDashboardBridge] 연결해제 적용', deviceType, key);
+    }
+  }
+
+  function onDeviceError(e) {
+    var detail = e && e.detail;
+    if (!detail) return;
+    var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
+    if (!deviceType) return;
+    var key = toConnectedDevicesKey(deviceType);
+    if (!key) return;
+    if (_disconnectDebounceTimers[key]) {
+      clearTimeout(_disconnectDebounceTimers[key]);
+      _disconnectDebounceTimers[key] = null;
+    }
+    _disconnectDebounceTimers[key] = setTimeout(function () {
+      _disconnectDebounceTimers[key] = null;
+      applyDisconnect(key, deviceType);
+    }, DISCONNECT_DEBOUNCE_MS);
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] deviceError(디바운스 ' + DISCONNECT_DEBOUNCE_MS + 'ms)', deviceType, detail.deviceId);
     }
   }
 
@@ -526,9 +554,16 @@
     if (!detail) return;
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     if (!deviceType) return;
+    var key = toConnectedDevicesKey(deviceType);
+    if (key && _disconnectDebounceTimers[key]) {
+      clearTimeout(_disconnectDebounceTimers[key]);
+      _disconnectDebounceTimers[key] = null;
+    }
+    if (key && global._stelvioDisconnectedTypes) {
+      delete global._stelvioDisconnectedTypes[key];
+    }
     setDeviceConnectedUI(String(deviceType));
     if (!global.connectedDevices) global.connectedDevices = { trainer: null, powerMeter: null, heartRate: null, speed: null };
-    var key = toConnectedDevicesKey(deviceType);
     if (key) {
       global.connectedDevices[key] = {
         name: detail.deviceName || detail.name || '연결됨',

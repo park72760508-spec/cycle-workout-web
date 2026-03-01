@@ -18331,10 +18331,11 @@ function updateMobileBluetoothConnectionStatus() {
   updateMobileBluetoothDropdownWithSavedDevices();
   if (typeof updateTrainingScreenBluetoothDropdownWithSavedDevices === 'function') updateTrainingScreenBluetoothDropdownWithSavedDevices();
 
-  function setStatus(item, statusEl, connected) {
+  function setStatus(item, statusEl, connected, disconnectKey) {
     if (item) item.classList.toggle('connected', !!connected);
     if (statusEl) {
-      statusEl.textContent = connected ? '연결됨' : '미연결';
+      var isRecentlyDisconnected = disconnectKey && window._stelvioDisconnectedTypes && window._stelvioDisconnectedTypes[disconnectKey];
+      statusEl.textContent = connected ? '연결됨' : (isRecentlyDisconnected ? '연결해제' : '미연결');
       statusEl.style.color = connected ? '#00d4aa' : '#888';
     }
   }
@@ -18343,9 +18344,9 @@ function updateMobileBluetoothConnectionStatus() {
   var hasTrainer = !!window.connectedDevices?.trainer;
   var hasPm = !!window.connectedDevices?.powerMeter;
 
-  setStatus(hrItem, hrStatus, hasHr);
-  setStatus(trainerItem, trainerStatus, hasTrainer);
-  setStatus(pmItem, pmStatus, hasPm);
+  setStatus(hrItem, hrStatus, hasHr, 'heartRate');
+  setStatus(trainerItem, trainerStatus, hasTrainer, 'trainer');
+  setStatus(pmItem, pmStatus, hasPm, 'powerMeter');
 
   var mobileErgMenu = document.getElementById('mobileBluetoothErgMenu');
   if (mobileErgMenu) mobileErgMenu.style.display = hasTrainer ? 'block' : 'none';
@@ -18372,9 +18373,9 @@ function updateMobileBluetoothConnectionStatus() {
   var tsErgToggle = document.getElementById('trainingScreenBluetoothErgToggle');
   var tsErgTarget = document.getElementById('trainingScreenBluetoothErgTargetPower');
 
-  setStatus(tsHrItem, tsHrStatus, hasHr);
-  setStatus(tsTrainerItem, tsTrainerStatus, hasTrainer);
-  setStatus(tsPmItem, tsPmStatus, hasPm);
+  setStatus(tsHrItem, tsHrStatus, hasHr, 'heartRate');
+  setStatus(tsTrainerItem, tsTrainerStatus, hasTrainer, 'trainer');
+  setStatus(tsPmItem, tsPmStatus, hasPm, 'powerMeter');
   if (tsErgMenu) tsErgMenu.style.display = hasTrainer ? 'block' : 'none';
   if (hasTrainer && window.ergController) {
     if (tsErgToggle) tsErgToggle.checked = window.ergController.state.enabled;
