@@ -1863,6 +1863,15 @@
     </div>
   </div>
 
+  <!-- 센서 연결(Device Settings) 오버레이 팝업 (훈련 화면에서 연결 버튼 클릭 시 전체 화면 대신 표시) -->
+  <div id="deviceSettingOverlay" class="device-setting-overlay" style="display: none;" aria-hidden="true">
+    <div class="device-setting-overlay-backdrop" onclick="if(typeof closeDeviceSettingPopup === 'function') closeDeviceSettingPopup();"></div>
+    <div class="device-setting-popup-box">
+      <button type="button" class="device-setting-popup-close" onclick="if(typeof closeDeviceSettingPopup === 'function') closeDeviceSettingPopup();" aria-label="닫기">&times;</button>
+      <div id="deviceSettingPopupContent"></div>
+    </div>
+  </div>
+
   <!-- 기기 검색 모달 (deviceSettings.js에서 제어) -->
   <div id="deviceScanModal" class="modal-overlay device-scan-modal" style="display: none;" onclick="if(event.target === this) closeDeviceScanModal();">
     <div class="modal-content device-scan-modal-content" onclick="event.stopPropagation();">
