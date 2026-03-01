@@ -3462,12 +3462,18 @@
   <!-- 6) 훈련 화면 신규 버젼으로 업데이트 -->
 <!-- 6) 훈련 화면 - 개선된 디자인으로 교체 -->
 <div id="trainingScreen" class="screen">
-  <!-- 1. 최상단: 사용자 정보 + 연결 버튼 (모바일 개인훈련 대시보드와 동일 디자인/기능, 독립 ID) -->
+  <!-- 1. 최상단: 좌(베이스캠프 이동) | 중(사용자 정보) | 우(연결 버튼) 3분할 -->
 <div class="enhanced-training-user-info enhanced-training-user-info-with-connect" id="userPanel">
-  <div class="enhanced-training-user-info-left training-screen-top-row">
+  <div class="enhanced-training-header-left">
+    <button type="button" id="trainingScreenExitToBasecamp" class="training-screen-exit-btn" title="베이스캠프로 이동" aria-label="베이스캠프로 이동">
+      <img src="assets/img/left_aw.png" alt="" class="training-screen-exit-icon" onerror="this.style.display='none'">
+    </button>
+  </div>
+  <div class="enhanced-training-header-center">
     <div id="trainingScreenGradeIcon" class="training-screen-grade-icon" aria-hidden="true"></div>
     <div id="userInfo" class="enhanced-training-user-info-text"></div>
   </div>
+  <div class="enhanced-training-header-right">
   <div class="enhanced-training-connect-wrap" style="position: relative;">
     <button id="trainingScreenBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="toggleBluetoothDropdown('trainingScreen')">
       <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
@@ -3510,6 +3516,7 @@
         <span>종료</span>
       </div>
     </div>
+  </div>
   </div>
 </div>
 
