@@ -4602,6 +4602,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 500);
   }
 
+  // 블루투스 개인훈련 화면에서 돌아올 때: #basecampScreen → 베이스캠프 표시
+  if (window.location.hash === '#basecampScreen') {
+    setTimeout(function() {
+      if (typeof showScreen === 'function') showScreen('basecampScreen');
+    }, 500);
+  }
+
+  // 블루투스 개인훈련 화면 연결 버튼에서 이동 시: openDeviceSettings=1 → 센서 연결(Device Settings) 오버레이 열기
+  if (window.location.search.indexOf('openDeviceSettings=1') !== -1) {
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + (window.location.hash || ''));
+      }
+    } catch (e) {}
+    setTimeout(function() {
+      if (typeof showScreen === 'function') showScreen('basecampScreen');
+      if (typeof window.openDeviceSettingPopup === 'function') {
+        window.openDeviceSettingPopup();
+      }
+    }, 600);
+  }
+
   // 노트북 훈련 화면: 좌측 베이스캠프 이동 버튼 (확인 후 이동)
   var trainingScreenExitBtn = document.getElementById('trainingScreenExitToBasecamp');
   if (trainingScreenExitBtn) {

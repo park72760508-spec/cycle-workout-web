@@ -4341,16 +4341,28 @@ function updateIndividualIntensityDisplay(sliderValue) {
     }
 }
 
-// 블루투스 연결 드롭다운 토글. 앱 환경 + 부모 창 있음: 모바일과 동일하게 Device Settings 팝업 열기 (드롭다운 미표시)
+// 블루투스 연결 드롭다운 토글. 앱 환경: 모바일과 동일하게 Device Settings만 사용(드롭다운 미표시). 웹: 드롭다운 표시.
 function toggleBluetoothDropdown() {
     if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
         abortBluetoothIndividualAutoConnect();
     }
+    // 1) 부모 창이 있고 Device Settings 팝업 있음 → 부모 팝업 열기 (웹에서 window.open으로 연 경우)
     if (window.opener && !window.opener.closed && typeof window.opener.openDeviceSettingPopup === 'function') {
         window.opener.openDeviceSettingPopup();
         return;
     }
-    console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨');
+    // 2) 부모 없음(앱에서 bluetoothIndividual로 직접 이동한 경우): 앱에 센서 연결 요청 또는 메인 페이지에서 오버레이 열기
+    if (!window.opener || window.opener.closed) {
+        if (isAppEnvironmentNow()) {
+            try {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_DEVICE_SETTINGS' }));
+            } catch (e) {}
+        }
+        // ReactNativeWebView 미주입 시 또는 앱 미처리 시: 메인 페이지로 이동 후 센서 연결(Device Settings) 오버레이 자동 오픈
+        window.location.href = 'index.html?openDeviceSettings=1';
+        return;
+    }
+    console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨 (웹, 부모 창 있음)');
     const dropdown = document.getElementById('bluetoothDropdown');
     if (!dropdown) {
         console.error('[BluetoothIndividual] bluetoothDropdown 요소를 찾을 수 없습니다.');
@@ -4761,18 +4773,19 @@ function exitBluetoothIndividualTraining() {
 /** 좌측 상단 둥근네모(이름) 클릭 시 베이스캠프로 이동하고 블루투스 화면 닫기 */
 function goToBaseCampAndClose() {
     try {
-        if (window.opener && typeof window.opener.showScreen === 'function') {
+        if (window.opener && !window.opener.closed && typeof window.opener.showScreen === 'function') {
             window.opener.showScreen('basecampScreen');
             window.close();
             return;
         }
         if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'NAVIGATE_BASE_CAMP', screen: 'basecampScreen' }));
-            window.close();
-            return;
         }
-    } catch (e) {}
-    window.location.href = 'index.html#basecampScreen';
+        // 앱에서 window.close()가 동작하지 않는 경우(직접 이동한 페이지) 대비: 메인 페이지로 이동해 베이스캠프 표시
+        window.location.href = 'index.html#basecampScreen';
+    } catch (e) {
+        window.location.href = 'index.html#basecampScreen';
+    }
 }
 window.goToBaseCampAndClose = goToBaseCampAndClose;
 
