@@ -22,6 +22,9 @@
   var AUTO_CONNECT_TIMEOUT_MS = 20000;
   var _autoConnectTimeoutId = null;
 
+  /** 파워/케이던스 소스 선택: 'powerMeter' | 'trainer' | null(미선택). 파워미터·스마트트레이너 동시 연결 시 팝업으로 선택 */
+  var POWER_CADENCE_SOURCE_KEY = '_stelvioPowerCadenceSource';
+
   var DEVICE_UI_MAP = {
     hr: [
       { item: 'trainingScreenBluetoothHRItem', status: 'trainingScreenHeartRateStatus' },
@@ -106,6 +109,7 @@
    * Flags(2) + Instantaneous Power(2, int16 LE)
    */
   function parsePowerUpdate(detail) {
+    if (global[POWER_CADENCE_SOURCE_KEY] === 'trainer') return;
     var arr = detail;
     if (!Array.isArray(arr) || arr.length < 4) return;
     var dv = arrayToDataView(arr);
@@ -132,25 +136,27 @@
     if (!Array.isArray(arr) || arr.length < 4) return;
     var dv = arrayToDataView(arr);
     if (!dv) return;
+    var usePowerCadence = global[POWER_CADENCE_SOURCE_KEY] !== 'powerMeter';
     var off = 0;
     var flags = dv.getUint16(off, true); off += 2;
     var speedRaw = dv.getUint16(off, true); off += 2;
-    // FTMS Indoor Bike Data 0x2AD2: Instantaneous Speed 단위는 0.01 km/h (트레드밀 0.001 m/s와 혼동 주의)
     var speedKmh = speedRaw / 100.0;
     if (flags & 0x0002) off += 2;
     if (flags & 0x0004) {
       var cadenceRaw = dv.getUint16(off, true); off += 2;
       var rpm = Math.round(cadenceRaw * 0.5);
-      if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
-      global.liveData.cadence = rpm;
-      if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', rpm);
+      if (usePowerCadence) {
+        if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+        global.liveData.cadence = rpm;
+        if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', rpm);
+      }
     }
     if (flags & 0x0008) off += 2;
     if (flags & 0x0010) off += 3;
     if (flags & 0x0020) off += 2;
     if (flags & 0x0040) {
       var p = dv.getInt16(off, true);
-      if (!Number.isNaN(p)) {
+      if (!Number.isNaN(p) && usePowerCadence) {
         if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
         global.liveData.power = p;
         if (typeof global.addPowerToBuffer === 'function') global.addPowerToBuffer(p);
@@ -479,6 +485,11 @@
     if (!deviceType) return;
     var key = toConnectedDevicesKey(deviceType);
     if (global.connectedDevices && key) global.connectedDevices[key] = null;
+    if (key === 'powerMeter' || key === 'trainer') {
+      if (!global.connectedDevices.powerMeter && !global.connectedDevices.trainer) {
+        global[POWER_CADENCE_SOURCE_KEY] = null;
+      }
+    }
     setDeviceErrorUI(String(deviceType));
     if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
       global.updateMobileBluetoothConnectionStatus();
@@ -510,6 +521,59 @@
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] deviceConnected', deviceType, detail.deviceId, '(connectedDevices 반영)');
     }
+    tryShowPowerSourceSelectPopup();
+  }
+
+  function openPowerSourceSelectPopup() {
+    var overlay = document.getElementById('powerSourceSelectOverlay');
+    var pmName = document.getElementById('powerSourcePowerMeterName');
+    var trName = document.getElementById('powerSourceTrainerName');
+    if (!overlay) return;
+    var pm = global.connectedDevices && global.connectedDevices.powerMeter;
+    var tr = global.connectedDevices && global.connectedDevices.trainer;
+    if (pmName) pmName.textContent = pm && pm.name ? pm.name : '—';
+    if (trName) trName.textContent = tr && tr.name ? tr.name : '—';
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closePowerSourceSelectPopup() {
+    var overlay = document.getElementById('powerSourceSelectOverlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function setPowerCadenceSource(source) {
+    if (source === 'powerMeter' || source === 'trainer') {
+      global[POWER_CADENCE_SOURCE_KEY] = source;
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[trainingDashboardBridge] 파워/케이던스 소스 선택:', source);
+      }
+    }
+    closePowerSourceSelectPopup();
+    applyLiveDataToScreen();
+  }
+
+  var _powerSourcePopupBound = false;
+  function bindPowerSourceSelectPopup() {
+    if (_powerSourcePopupBound) return;
+    _powerSourcePopupBound = true;
+    var btnPm = document.getElementById('powerSourceSelectPowerMeter');
+    var btnTr = document.getElementById('powerSourceSelectTrainer');
+    if (btnPm) btnPm.addEventListener('click', function () { setPowerCadenceSource('powerMeter'); });
+    if (btnTr) btnTr.addEventListener('click', function () { setPowerCadenceSource('trainer'); });
+  }
+
+  function tryShowPowerSourceSelectPopup() {
+    if (!global.connectedDevices) return;
+    var pm = global.connectedDevices.powerMeter;
+    var tr = global.connectedDevices.trainer;
+    if (!pm || !tr) return;
+    if (global[POWER_CADENCE_SOURCE_KEY] != null) return;
+    bindPowerSourceSelectPopup();
+    openPowerSourceSelectPopup();
   }
 
   function onPowerUpdate(e) {
@@ -666,6 +730,7 @@
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();
         sendRequestAutoConnect();
+        tryShowPowerSourceSelectPopup();
         if (typeof console !== 'undefined' && console.log) {
           console.log('[trainingDashboardBridge] 훈련 화면 진입 → REQUEST_AUTO_CONNECT 시도, screenId=', screenId, 'inApp=', isAppEnvironmentNow());
         }
@@ -681,6 +746,7 @@
         _initialAutoConnectDone = true;
         mountTrainingDashboardBridge();
         sendRequestAutoConnect();
+        tryShowPowerSourceSelectPopup();
         if (typeof console !== 'undefined' && console.log) {
           console.log('[trainingDashboardBridge] 초기 화면이 훈련 화면 → REQUEST_AUTO_CONNECT 시도, screenId=', activeId, 'inApp=', isAppEnvironmentNow());
         }
@@ -730,6 +796,8 @@
     abortAutoConnect: abortAutoConnect,
     openDeviceSettingPopup: openDeviceSettingPopup,
     closeDeviceSettingPopup: closeDeviceSettingPopup,
+    closePowerSourceSelectPopup: closePowerSourceSelectPopup,
+    setPowerCadenceSource: setPowerCadenceSource,
     setDeviceErrorUI: setDeviceErrorUI,
     setDeviceConnectedUI: setDeviceConnectedUI,
     parsePowerUpdate: parsePowerUpdate,
@@ -740,4 +808,5 @@
   global.abortAutoConnect = abortAutoConnect;
   global.openDeviceSettingPopup = openDeviceSettingPopup;
   global.closeDeviceSettingPopup = closeDeviceSettingPopup;
+  global.closePowerSourceSelectPopup = closePowerSourceSelectPopup;
 })(typeof window !== 'undefined' ? window : this);
