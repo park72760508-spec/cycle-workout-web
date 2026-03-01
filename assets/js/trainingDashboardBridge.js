@@ -221,7 +221,46 @@
 
   var _originalConnectMobileBluetoothDevice = null;
 
-  /** 앱 환경: 연결 버튼 클릭 시 자동 연결 중단 후 Device Settings(수동 검색) 화면으로 이동 */
+  /** 훈련 화면에서 연결 버튼 클릭 시: Device Settings를 오버레이 팝업으로 표시 (화면 이탈 없음) */
+  function openDeviceSettingPopup() {
+    var overlay = document.getElementById('deviceSettingOverlay');
+    var popupContent = document.getElementById('deviceSettingPopupContent');
+    var screenEl = document.getElementById('deviceSettingScreen');
+    if (!overlay || !popupContent || !screenEl) return;
+    var container = screenEl.querySelector('.connection-main-container');
+    if (!container) return;
+    popupContent.innerHTML = '';
+    popupContent.appendChild(container);
+    var backBtn = container.querySelector('.connection-header button[aria-label="뒤로 가기"], .connection-header button[onclick*="basecamp"]');
+    if (backBtn) {
+      backBtn._originalOnClick = backBtn.onclick;
+      backBtn.onclick = function () { if (typeof global.closeDeviceSettingPopup === 'function') global.closeDeviceSettingPopup(); };
+    }
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+    if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+      global.StelvioDeviceSettings.refreshDeviceSettingCards();
+    }
+  }
+
+  function closeDeviceSettingPopup() {
+    var overlay = document.getElementById('deviceSettingOverlay');
+    var popupContent = document.getElementById('deviceSettingPopupContent');
+    var screenEl = document.getElementById('deviceSettingScreen');
+    if (!overlay || !popupContent || !screenEl) return;
+    var container = popupContent.querySelector('.connection-main-container');
+    if (container) {
+      var backBtn = container.querySelector('.connection-header button[aria-label="뒤로 가기"], .connection-header button[onclick*="basecamp"]');
+      if (backBtn && backBtn._originalOnClick != null) {
+        backBtn.onclick = backBtn._originalOnClick;
+      }
+      screenEl.appendChild(container);
+    }
+    overlay.style.display = 'none';
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  /** 앱 환경: 연결 버튼 클릭 시 자동 연결 중단 후 Device Settings를 오버레이 팝업으로 표시 */
   function interceptConnectButton() {
     if (!isAppEnvironment) return;
     var origToggle = global.toggleBluetoothDropdown;
@@ -229,7 +268,9 @@
     if (typeof origToggle === 'function') {
       global.toggleBluetoothDropdown = function (context) {
         abortAutoConnect();
-        if (typeof global.showScreen === 'function') {
+        if (typeof global.openDeviceSettingPopup === 'function') {
+          global.openDeviceSettingPopup();
+        } else if (typeof global.showScreen === 'function') {
           global.showScreen('deviceSettingScreen');
         } else {
           origToggle(context);
@@ -239,7 +280,9 @@
     if (typeof origMobileToggle === 'function') {
       global.toggleMobileBluetoothDropdown = function () {
         abortAutoConnect();
-        if (typeof global.showScreen === 'function') {
+        if (typeof global.openDeviceSettingPopup === 'function') {
+          global.openDeviceSettingPopup();
+        } else if (typeof global.showScreen === 'function') {
           global.showScreen('deviceSettingScreen');
         } else {
           origMobileToggle();
@@ -250,7 +293,9 @@
     if (typeof _originalConnectMobileBluetoothDevice === 'function') {
       global.connectMobileBluetoothDevice = function (deviceType, savedDeviceId) {
         abortAutoConnect();
-        if (typeof global.showScreen === 'function') {
+        if (typeof global.openDeviceSettingPopup === 'function') {
+          global.openDeviceSettingPopup();
+        } else if (typeof global.showScreen === 'function') {
           global.showScreen('deviceSettingScreen');
         } else {
           _originalConnectMobileBluetoothDevice(deviceType, savedDeviceId);
@@ -635,6 +680,8 @@
     mount: mountTrainingDashboardBridge,
     teardown: teardownTrainingDashboardBridge,
     abortAutoConnect: abortAutoConnect,
+    openDeviceSettingPopup: openDeviceSettingPopup,
+    closeDeviceSettingPopup: closeDeviceSettingPopup,
     setDeviceErrorUI: setDeviceErrorUI,
     setDeviceConnectedUI: setDeviceConnectedUI,
     parsePowerUpdate: parsePowerUpdate,
@@ -643,4 +690,6 @@
     parseHeartRateUpdate: parseHeartRateUpdate
   };
   global.abortAutoConnect = abortAutoConnect;
+  global.openDeviceSettingPopup = openDeviceSettingPopup;
+  global.closeDeviceSettingPopup = closeDeviceSettingPopup;
 })(typeof window !== 'undefined' ? window : this);
