@@ -1,0 +1,545 @@
+/**
+ * deviceSettings.js
+ * 센서 연결(Device Settings) 화면: 스캔 모달, 앱으로 START_SCAN/CONNECT_DEVICE 발송, deviceFound/deviceConnected로 UI 동기화
+ * - 투 트랙: 앱 환경에서만 설정 화면 진입 허용, 웹 브라우저에서는 안내만 표시
+ */
+
+(function (global) {
+  'use strict';
+
+  var isAppEnvironment = !!global.ReactNativeWebView;
+
+  var MODAL_ID = 'deviceScanModal';
+  var LIST_ID = 'deviceScanList';
+  var HINT_ID = 'deviceScanModalHint';
+
+  /** 현재 스캔/연결 대상 deviceType (hr, power, trainer, speed) */
+  var savedTargetType = null;
+  /** 디바이스 선택 후 연결 대기 중일 때 표시용: 기기명, deviceType */
+  var _connectingDeviceName = null;
+  var _connectingDeviceType = null;
+
+  var deviceFoundHandlerRef = null;
+  var deviceConnectedHandlerRef = null;
+  var deviceErrorHandlerRef = null;
+
+  var CARD_IDS = {
+    hr: { card: 'deviceCardHr', status: 'deviceStatusHr', id: 'deviceIdHr' },
+    heartRate: { card: 'deviceCardHr', status: 'deviceStatusHr', id: 'deviceIdHr' },
+    power: { card: 'deviceCardPower', status: 'deviceStatusPower', id: 'deviceIdPower' },
+    powerMeter: { card: 'deviceCardPower', status: 'deviceStatusPower', id: 'deviceIdPower' },
+    trainer: { card: 'deviceCardTrainer', status: 'deviceStatusTrainer', id: 'deviceIdTrainer' },
+    speed: { card: 'deviceCardSpeed', status: 'deviceStatusSpeed', id: 'deviceIdSpeed' }
+  };
+
+  /** 기기 종류별 Service UUID (BLE 표준). 0x 접두사 제거한 4자리 hex로 비교 (대소문자 무시) */
+  var SERVICE_UUID_BY_TYPE = {
+    hr: '180d',
+    heartRate: '180d',
+    power: '1818',
+    powerMeter: '1818',
+    trainer: '1826',
+    speed: '1816'
+  };
+
+  /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사). UUID 매칭 실패 시에도 이름에 키워드 있으면 표시 */
+  var NAME_KEYWORDS_BY_TYPE = {
+    hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
+    heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
+    power: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
+    powerMeter: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
+    trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart'],
+    speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
+  };
+
+  /** 모달에 이미 추가된 기기 ID 집합 (중복 제거용). 스캔 모달 열릴 때마다 초기화 */
+  var addedDeviceIds = new Set();
+
+  function getCardIds(deviceType) {
+    return CARD_IDS[deviceType] || null;
+  }
+
+  /**
+   * name 또는 localName이 하나라도 있으면 true (빈 문자열만 있는 경우는 false)
+   */
+  function hasNameOrLocalName(detail) {
+    var n = (detail.name || detail.deviceName || '').trim();
+    var ln = (detail.localName || '').trim();
+    return n.length > 0 || ln.length > 0;
+  }
+
+  /**
+   * UUID 문자열 정규화: 16비트(180d)·128비트(0000180d-0000-1000-8000-00805f9b34fb) 모두 toLowerCase 후 비교용 문자열로
+   */
+  function normalizeUuidForCompare(uuidStr) {
+    return String(uuidStr || '').toLowerCase().replace(/^0x/, '').replace(/-/g, '');
+  }
+
+  /**
+   * 기기가 선택된 카테고리(deviceType)에 해당하는지 Service UUID 또는 name으로 판별
+   * - UUID: 16비트(180d)·128비트(0000180d-...) 형식 모두 toLowerCase()로 비교
+   * - Name: 카테고리별 키워드 포함 시 UUID 없어도 목록 표시
+   * @param {Object} detail - deviceFound 이벤트의 detail
+   * @param {string} deviceType - hr | power | trainer | speed (또는 heartRate, powerMeter)
+   * @returns {boolean}
+   */
+  function deviceMatchesCategory(detail, deviceType) {
+    var requiredUuid = SERVICE_UUID_BY_TYPE[deviceType];
+    var nameKeywords = NAME_KEYWORDS_BY_TYPE[deviceType];
+    if (!requiredUuid && !nameKeywords) return true;
+
+    var reqLower = requiredUuid ? requiredUuid.toLowerCase() : '';
+
+    var uuidMatch = false;
+    if (reqLower) {
+      var uuids = detail.serviceUuids || detail.serviceUUIDs;
+      if (Array.isArray(uuids)) {
+        for (var i = 0; i < uuids.length; i++) {
+          var u = normalizeUuidForCompare(uuids[i]);
+          if (u.indexOf(reqLower) !== -1 || (u.length >= 4 && u.slice(-4) === reqLower)) {
+            uuidMatch = true;
+            break;
+          }
+        }
+      }
+      if (!uuidMatch) {
+        var single = detail.serviceUuid || detail.serviceUUID || detail.uuid;
+        if (single) {
+          var s = normalizeUuidForCompare(single);
+          if (s.indexOf(reqLower) !== -1 || (s.length >= 4 && s.slice(-4) === reqLower)) uuidMatch = true;
+        }
+      }
+    }
+
+    var nameMatch = false;
+    if (nameKeywords && nameKeywords.length) {
+      var combinedName = ((detail.name || '') + ' ' + (detail.deviceName || '') + ' ' + (detail.localName || '')).toLowerCase();
+      for (var j = 0; j < nameKeywords.length; j++) {
+        if (combinedName.indexOf(nameKeywords[j].toLowerCase()) !== -1) {
+          nameMatch = true;
+          break;
+        }
+      }
+    }
+
+    return uuidMatch || nameMatch;
+  }
+
+  /**
+   * 모달 열기, "기기 검색 중..." 표시, 앱에 START_SCAN 발송
+   * allowReplace: true → 이미 연결된 상태에서도 검색 가능(새 기기로 변경용)
+   */
+  function openDeviceScanModal(deviceType) {
+    savedTargetType = deviceType;
+    addedDeviceIds.clear();
+    var modal = document.getElementById(MODAL_ID);
+    var list = document.getElementById(LIST_ID);
+    var hint = document.getElementById(HINT_ID);
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.remove('hidden');
+    }
+    if (list) list.innerHTML = '';
+    if (hint) hint.textContent = '기기 검색 중...';
+    try {
+      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+        global.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'START_SCAN',
+          deviceType: deviceType,
+          allowReplace: true
+        }));
+      }
+    } catch (e) {
+      if (console && console.warn) console.warn('[deviceSettings] START_SCAN postMessage failed', e);
+    }
+  }
+
+  /**
+   * 모달 닫기, 리스트 비우기, 연결 중 UI 숨김
+   */
+  function closeDeviceScanModal() {
+    savedTargetType = null;
+    _connectingDeviceName = null;
+    _connectingDeviceType = null;
+    var modal = document.getElementById(MODAL_ID);
+    var list = document.getElementById(LIST_ID);
+    var connectingWrap = document.getElementById('deviceScanConnectingWrap');
+    var hint = document.getElementById(HINT_ID);
+    if (connectingWrap) {
+      connectingWrap.style.display = 'none';
+    }
+    if (hint) hint.style.display = '';
+    if (list) {
+      list.innerHTML = '';
+      list.style.display = '';
+    }
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.add('hidden');
+    }
+  }
+
+  /**
+   * 기기 검색 모달에서 "연결 중" UI 표시: 녹색 원 스피너 + "기기명 연결 중....."
+   */
+  function showDeviceScanConnecting(deviceName) {
+    var wrap = document.getElementById('deviceScanConnectingWrap');
+    var textEl = document.getElementById('deviceScanConnectingText');
+    var list = document.getElementById(LIST_ID);
+    var hint = document.getElementById(HINT_ID);
+    if (wrap) {
+      if (textEl) textEl.textContent = (deviceName || '기기') + ' 연결 중.....';
+      wrap.style.display = 'flex';
+    }
+    if (list) list.style.display = 'none';
+    if (hint) hint.style.display = 'none';
+  }
+
+  function hideDeviceScanConnecting() {
+    var wrap = document.getElementById('deviceScanConnectingWrap');
+    var list = document.getElementById(LIST_ID);
+    var hint = document.getElementById(HINT_ID);
+    if (wrap) wrap.style.display = 'none';
+    if (list) list.style.display = '';
+    if (hint) hint.style.display = '';
+  }
+
+  /**
+   * deviceFound: 선택된 카테고리에 맞고 중복이 아닌 기기만 모달 리스트에 추가
+   * - name/localName 없는 기기 제외, UUID 또는 name 키워드로 카테고리 필터, id 기준 중복 제거
+   */
+  function onDeviceFound(e) {
+    var detail = e && e.detail;
+    if (!detail) return;
+
+    /* 디버깅: 앱에서 넘어오는 모든 기기의 name·localName·uuids 출력 */
+    var uuids = detail.serviceUuids || detail.serviceUUIDs;
+    var uuidList = Array.isArray(uuids) ? uuids : (detail.serviceUuid || detail.serviceUUID || detail.uuid ? [detail.serviceUuid || detail.serviceUUID || detail.uuid] : []);
+    if (console && console.log) {
+      console.log('[deviceSettings] deviceFound 수신:', {
+        name: detail.name || '(없음)',
+        localName: detail.localName || '(없음)',
+        deviceName: detail.deviceName || '(없음)',
+        uuids: uuidList,
+        id: detail.id != null ? detail.id : detail.deviceId
+      });
+    }
+
+    var targetType = savedTargetType;
+    if (!targetType) return;
+
+    /* name·localName 둘 다 없으면 목록에서 제외 */
+    if (!hasNameOrLocalName(detail)) return;
+
+    var id = detail.id != null ? detail.id : detail.deviceId;
+    var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
+
+    if (!deviceMatchesCategory(detail, targetType)) return;
+    if (!id) return;
+    var idStr = String(id);
+    if (addedDeviceIds.has(idStr)) return;
+    addedDeviceIds.add(idStr);
+    var list = document.getElementById(LIST_ID);
+    var hint = document.getElementById(HINT_ID);
+    if (hint) hint.textContent = '검색된 기기를 탭하면 연결합니다.';
+    if (!list) return;
+    var li = document.createElement('li');
+    li.dataset.deviceId = idStr;
+    li.innerHTML = '<span class="device-scan-name">' + escapeHtml(String(name)) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
+    li.addEventListener('click', function () {
+      var deviceId = li.dataset.deviceId;
+      var deviceTypeToConnect = savedTargetType;
+      var nameEl = li.querySelector('.device-scan-name');
+      var deviceName = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : '기기';
+      _connectingDeviceName = deviceName;
+      _connectingDeviceType = deviceTypeToConnect;
+      showDeviceScanConnecting(deviceName);
+      try {
+        if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+          global.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'CONNECT_DEVICE',
+            deviceId: deviceId,
+            deviceType: deviceTypeToConnect,
+            replaceDevice: true
+          }));
+        }
+      } catch (err) {
+        if (console && console.warn) console.warn('[deviceSettings] CONNECT_DEVICE postMessage failed', err);
+        hideDeviceScanConnecting();
+        _connectingDeviceName = null;
+        _connectingDeviceType = null;
+      }
+    });
+    list.appendChild(li);
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  /** deviceType(hr, power, trainer, speed) → window.connectedDevices 키 */
+  function typeToConnectedKey(deviceType) {
+    var t = String(deviceType || '').toLowerCase();
+    if (t === 'hr' || t === 'heartrate') return 'heartRate';
+    if (t === 'power' || t === 'powermeter') return 'powerMeter';
+    if (t === 'trainer' || t === 'speed') return t;
+    return deviceType;
+  }
+
+  /**
+   * 특정 deviceType 카드를 "연결됨" + 디바이스 이름(또는 ID) 표시로 갱신 (실제 BLE 연결 시에만 사용)
+   * @param {string} [deviceName] - 있으면 이름 표시, 없으면 deviceId 표시
+   */
+  function setCardConnected(deviceType, deviceId, deviceName) {
+    var ids = getCardIds(deviceType);
+    if (!ids) return;
+    var card = document.getElementById(ids.card);
+    var statusEl = document.getElementById(ids.status);
+    var idEl = document.getElementById(ids.id);
+    if (card) card.classList.add('connected');
+    if (statusEl) {
+      statusEl.textContent = '연결됨';
+      statusEl.style.color = '#00d4aa';
+    }
+    if (idEl && (deviceId || deviceName)) {
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
+      idEl.style.display = 'block';
+    }
+  }
+
+  /**
+   * 특정 deviceType 카드를 "연결해제" + 디바이스 이름(또는 ID) 표시
+   */
+  function setCardDisconnected(deviceType, deviceId, deviceName) {
+    var ids = getCardIds(deviceType);
+    if (!ids) return;
+    var card = document.getElementById(ids.card);
+    var statusEl = document.getElementById(ids.status);
+    var idEl = document.getElementById(ids.id);
+    if (card) card.classList.remove('connected');
+    if (statusEl) {
+      statusEl.textContent = '연결해제';
+      statusEl.style.color = '#9ca3af';
+    }
+    if (idEl && (deviceId || deviceName)) {
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
+      idEl.style.display = 'block';
+    }
+  }
+
+  /**
+   * 특정 deviceType 카드를 "저장됨" + 디바이스 이름(또는 ID) 표시로 갱신 (스토리지에만 있고 아직 연결 안 된 경우)
+   * 색상은 연결됨과 동일하게 유지: #00d4aa
+   */
+  function setCardSaved(deviceType, deviceId, deviceName) {
+    var ids = getCardIds(deviceType);
+    if (!ids) return;
+    var card = document.getElementById(ids.card);
+    var statusEl = document.getElementById(ids.status);
+    var idEl = document.getElementById(ids.id);
+    if (card) card.classList.add('connected');
+    if (statusEl) {
+      statusEl.textContent = '저장됨';
+      statusEl.style.color = '#00d4aa';
+    }
+    if (idEl && (deviceId || deviceName)) {
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
+      idEl.style.display = 'block';
+    }
+  }
+
+  /** stelvio-connection-lost의 key(heartRate 등) → 카드 타입(hr, power, trainer, speed) */
+  function connectedKeyToCardType(key) {
+    if (!key) return null;
+    var k = String(key);
+    if (k === 'heartRate') return 'hr';
+    if (k === 'powerMeter') return 'power';
+    if (k === 'trainer' || k === 'speed') return k;
+    return key;
+  }
+  /** 연결 해제된 타입 기록 (연결해제 문구 표시용, 60초 후에는 저장됨으로 복귀) */
+  var _lastDisconnectedTypes = {};
+  var DISCONNECTED_LABEL_EXPIRE_MS = 60000;
+
+  /** 연결 중 대기 타입과 이벤트 타입이 같은지 비교 (hr/heartRate 등 통일) */
+  function isSameDeviceType(a, b) {
+    if (!a || !b) return false;
+    var ka = typeToConnectedKey(a);
+    var kb = typeToConnectedKey(b);
+    return ka === kb;
+  }
+
+  /**
+   * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 기기 이름 표시
+   * 연결 중이었으면 연결 중 UI 숨기고 모달 닫기
+   */
+  function onDeviceConnected(e) {
+    var detail = e && e.detail;
+    if (!detail) return;
+    var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
+    var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
+    var deviceName = detail.deviceName != null ? detail.deviceName : (detail.name != null ? detail.name : '');
+    if (!deviceType) return;
+    var key = typeToConnectedKey(deviceType);
+    var cardType = connectedKeyToCardType(key) || (key || String(deviceType).toLowerCase());
+    if (cardType) delete _lastDisconnectedTypes[cardType];
+    setCardConnected(String(deviceType), deviceId, deviceName);
+    if (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType)) {
+      hideDeviceScanConnecting();
+      _connectingDeviceName = null;
+      _connectingDeviceType = null;
+      closeDeviceScanModal();
+    }
+  }
+
+  /**
+   * 화면 열릴 때 저장된 기기로 카드 상태 초기화
+   * - 저장된 ID만 있고 실제 연결 안 됨 → "저장됨" (색상 동일)
+   * - 실제 연결됨(window.connectedDevices) → "연결됨"
+   */
+  function refreshDeviceSettingCards() {
+    var api = global.StelvioDeviceBridgeStorage;
+    if (!api || typeof api.loadSavedDevices !== 'function') return;
+    var saved = api.loadSavedDevices();
+    if (!saved || typeof saved !== 'object') return;
+    var names = (typeof api.loadSavedDeviceNames === 'function') ? api.loadSavedDeviceNames() : {};
+    var connected = global.connectedDevices || {};
+    var types = ['hr', 'power', 'trainer', 'speed'];
+    var now = Date.now();
+    for (var i = 0; i < types.length; i++) {
+      var t = types[i];
+      var id = saved[t];
+      var displayName = (names && names[t]) ? names[t] : '';
+      if (id) {
+        var cKey = typeToConnectedKey(t);
+        var conn = connected[cKey];
+        var isActuallyConnected = conn && (conn.deviceId === id || conn.deviceId === String(id) || (conn.id && (conn.id === id || conn.id === String(id))));
+        if (isActuallyConnected) {
+          delete _lastDisconnectedTypes[t];
+          setCardConnected(t, id, conn && (conn.name || conn.deviceName) ? (conn.name || conn.deviceName) : displayName);
+        } else {
+          var disconnectedAt = _lastDisconnectedTypes[t];
+          if (disconnectedAt != null && (now - disconnectedAt) < DISCONNECTED_LABEL_EXPIRE_MS) {
+            setCardDisconnected(t, id, displayName);
+          } else {
+            if (disconnectedAt != null) delete _lastDisconnectedTypes[t];
+            setCardSaved(t, id, displayName);
+          }
+        }
+      } else {
+        var ids = getCardIds(t);
+        if (!ids) continue;
+        var card = document.getElementById(ids.card);
+        var statusEl = document.getElementById(ids.status);
+        var idEl = document.getElementById(ids.id);
+        if (card) card.classList.remove('connected');
+        if (statusEl) {
+          statusEl.textContent = '미연결';
+          statusEl.style.color = '';
+        }
+        if (idEl) {
+          idEl.textContent = '';
+          idEl.style.display = 'none';
+        }
+      }
+    }
+  }
+
+  /**
+   * 스캔 트리거: 카드 클릭 시 호출. 모달 띄우고 START_SCAN 발송, 타겟 타입 저장
+   */
+  global.startDeviceScan = function (deviceType) {
+    openDeviceScanModal(deviceType);
+  };
+
+  global.closeDeviceScanModal = closeDeviceScanModal;
+
+  /**
+   * 메인 메뉴 [센서 연결] 버튼용: 앱이면 설정 화면으로, 웹이면 안내만 표시 (데드락 방지)
+   */
+  global.openDeviceSettingsOrPrompt = function () {
+    if (isAppEnvironment) {
+      if (typeof global.showScreen === 'function') {
+        global.showScreen('deviceSettingScreen');
+      }
+    } else {
+      alert('웹 브라우저 환경에서는 훈련 대시보드 화면 내에 있는 연결 버튼을 눌러 직접 센서를 연결해 주세요.');
+    }
+  };
+
+  /** deviceError: 연결 대기 중이었으면 모달만 닫기. 실제 카드 갱신은 stelvio-connection-lost(디바운스 후)에서 처리 */
+  function onDeviceError(e) {
+    var detail = e && e.detail;
+    var errorType = detail && (detail.deviceType != null ? detail.deviceType : detail.type);
+    if (_connectingDeviceType != null && (!errorType || isSameDeviceType(errorType, _connectingDeviceType))) {
+      hideDeviceScanConnecting();
+      _connectingDeviceName = null;
+      _connectingDeviceType = null;
+      closeDeviceScanModal();
+    }
+  }
+
+  /** stelvio-connection-lost: 디바운스 후 연결 해제 확정 시 카드에 "연결해제" 반영 */
+  function onConnectionLost(e) {
+    var detail = e && e.detail;
+    var key = detail && detail.key;
+    var cardType = connectedKeyToCardType(key);
+    if (cardType) {
+      _lastDisconnectedTypes[cardType] = Date.now();
+      if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+        global.StelvioDeviceSettings.refreshDeviceSettingCards();
+      }
+    }
+  }
+
+  /**
+   * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError)
+   */
+  var connectionLostHandlerRef = null;
+  function attachListeners() {
+    if (deviceFoundHandlerRef !== null) return;
+    deviceFoundHandlerRef = onDeviceFound;
+    deviceConnectedHandlerRef = onDeviceConnected;
+    deviceErrorHandlerRef = onDeviceError;
+    connectionLostHandlerRef = onConnectionLost;
+    if (typeof global.addEventListener === 'function') {
+      global.addEventListener('deviceFound', deviceFoundHandlerRef);
+      global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
+      global.addEventListener('deviceError', deviceErrorHandlerRef);
+      global.addEventListener('stelvio-connection-lost', connectionLostHandlerRef);
+    }
+  }
+
+  /**
+   * showScreen 래핑: deviceSettingScreen 진입 시 저장된 기기로 카드 갱신
+   */
+  function wrapShowScreen() {
+    var original = global.showScreen;
+    if (typeof original !== 'function') return;
+    global.showScreen = function (screenId) {
+      original(screenId);
+      if (screenId === 'deviceSettingScreen') {
+        refreshDeviceSettingCards();
+      }
+    };
+  }
+
+  attachListeners();
+  if (typeof global.showScreen === 'function') {
+    wrapShowScreen();
+  } else {
+    if (typeof global.addEventListener === 'function') {
+      global.addEventListener('DOMContentLoaded', function onReady() {
+        global.removeEventListener('DOMContentLoaded', onReady);
+        wrapShowScreen();
+      });
+    }
+  }
+
+  global.StelvioDeviceSettings = {
+    refreshDeviceSettingCards: refreshDeviceSettingCards,
+    closeDeviceScanModal: closeDeviceScanModal
+  };
+})(typeof window !== 'undefined' ? window : this);
