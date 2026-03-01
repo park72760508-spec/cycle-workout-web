@@ -6670,6 +6670,10 @@ button[aria-disabled="true"] {
   font-weight: 600;
   color: #e2e8f0;
 }
+.enhanced-training-connect-wrap {
+  display: flex;
+  align-items: center;
+}
 .enhanced-training-user-info-with-connect .enhanced-training-connect-wrap {
   flex-shrink: 0;
 }
