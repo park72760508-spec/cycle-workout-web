@@ -4618,13 +4618,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 500);
   }
 
-  // 블루투스 개인훈련 화면 연결 버튼에서 이동 시: openDeviceSettings=1 → 스플래시 없이 베이스캠프 + 센서 연결 오버레이만 열기
+  // 블루투스 개인훈련 화면 연결 버튼에서 이동 시: openDeviceSettings=1 → 스플래시 없이 베이스캠프 + 센서 연결 오버레이만 열기 (주간 마일리지 TOP10은 이 경로에서는 표시하지 않음)
   if (window.location.search.indexOf('openDeviceSettings=1') !== -1) {
     try {
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname + (window.location.hash || ''));
       }
     } catch (e) {}
+    window.__basecampShownAfterAuth = false; // 센서연결만 띄우는 흐름이므로 TOP10 미표시
     function openBasecampAndDeviceSettingsPopup() {
       if (typeof showScreen === 'function') showScreen('basecampScreen');
       if (typeof window.openDeviceSettingPopup === 'function') {
