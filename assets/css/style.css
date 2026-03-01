@@ -8485,6 +8485,39 @@ button[aria-disabled="true"] {
   font-size: 1.1em;
 }
 
+/* 앱 설치 링크 박스 (인증 화면 - 사용자 등록 버튼 아래) */
+.auth-app-download-box {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  text-align: center;
+}
+.auth-app-download-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+}
+.auth-app-download-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.auth-app-download-link {
+  display: inline-block;
+  line-height: 0;
+}
+.auth-app-download-icon {
+  height: 1.8em;
+  width: auto;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
 .phone-input-section {
   margin-bottom: 20px; /* 기존 30px에서 20px로 축소 */
 }
