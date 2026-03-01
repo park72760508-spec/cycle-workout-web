@@ -43,6 +43,7 @@
 
   var deviceErrorHandlerRef = null;
   var deviceConnectedHandlerRef = null;
+  var autoConnectStateHandlerRef = null;
   var powerUpdateHandlerRef = null;
   var trainerUpdateHandlerRef = null;
   var speedUpdateHandlerRef = null;
@@ -258,25 +259,50 @@
     }
   }
 
-  // ---------- AUTO_CONNECT / deviceError / deviceConnected (기존 유지) ----------
-  // 훈련 화면(모바일/노트북/블루투스 코치) 진입 시마다 mount → sendAutoConnectOnce 호출.
-  // teardown 시 플래그 초기화되므로, 재진입 시 저장된 기기 ID로 앱에 연결 시도.
-  // 하이브리드 UX: 자동 연결 중에는 버튼에 "연결중" 표시, 사용자 수동 클릭 시 중단 후 수동 검색.
+  // ---------- REQUEST_AUTO_CONNECT / 앱 '연결 중' 신호 / deviceConnected ----------
+  // 훈련 화면 진입 시 앱에 REQUEST_AUTO_CONNECT 전송 → 앱이 기억한 기기로 자동 연결.
+  // 앱에서 '연결 중' 신호(stelvio-auto-connect-state)가 오면 버튼 옆에 상태 표시, 성공 시 deviceConnected로 데이터 노출.
+  // 수동: 연결 버튼 클릭 시 목록(드롭다운) 유지, 목록에서 기기 클릭 시만 상세 연결 흐름.
 
-  /** 연결 버튼 문구만 설정 (연결중 / 연결). 색상·has-connection은 updateMobileBluetoothConnectionStatus에서 처리 */
+  /** 버튼 옆 '연결 중' 상태 요소 찾기 또는 생성 후 표시/숨김 */
+  function setAutoConnectStatusNextToButton(buttonEl, show, text) {
+    if (!buttonEl || !buttonEl.parentNode) return;
+    var wrap = buttonEl.parentNode;
+    var statusId = buttonEl.id ? 'stelvio-auto-connect-status-' + buttonEl.id : null;
+    var statusEl = statusId ? document.getElementById(statusId) : wrap.querySelector('.stelvio-auto-connect-status');
+    if (show && text) {
+      if (!statusEl) {
+        statusEl = document.createElement('span');
+        statusEl.className = 'stelvio-auto-connect-status';
+        if (statusId) statusEl.id = statusId;
+        statusEl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);margin-left:6px;white-space:nowrap;';
+        buttonEl.parentNode.insertBefore(statusEl, buttonEl.nextSibling);
+      }
+      statusEl.textContent = text;
+      statusEl.style.display = '';
+    } else if (statusEl) {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+    }
+  }
+
+  /** 연결 버튼 문구 + 버튼 옆 상태 표시 (연결중 / 연결). 색상·has-connection은 updateMobileBluetoothConnectionStatus에서 처리 */
   function setConnectButtonConnectingLabel(connecting) {
     var mobileBtn = document.getElementById('mobileBluetoothConnectBtn');
     var tsBtn = document.getElementById('trainingScreenBluetoothConnectBtn');
     var label = connecting ? '연결중' : '연결';
+    var statusText = connecting ? '연결 중' : '';
     if (mobileBtn) {
       var span = mobileBtn.querySelector('span');
       if (span) span.textContent = label;
       mobileBtn.classList.toggle('auto-connecting', !!connecting);
+      setAutoConnectStatusNextToButton(mobileBtn, !!connecting, statusText);
     }
     if (tsBtn) {
       var spanTs = tsBtn.querySelector('span');
       if (spanTs) spanTs.textContent = label;
       tsBtn.classList.toggle('auto-connecting', !!connecting);
+      setAutoConnectStatusNextToButton(tsBtn, !!connecting, statusText);
     }
   }
 
@@ -307,18 +333,12 @@
     clearAutoConnectInProgress();
   }
 
-  function sendAutoConnectOnce() {
-    if (global[AUTO_CONNECT_SENT_KEY]) return;
-    var api = global.StelvioDeviceBridgeStorage;
-    if (!api || typeof api.loadSavedDevices !== 'function') return;
-    var savedDevices = api.loadSavedDevices();
-    if (!savedDevices || typeof savedDevices !== 'object') return;
-    var keys = Object.keys(savedDevices);
-    if (keys.length === 0) return;
+  /** 훈련 화면 진입 시 앱에 자동 연결 요청 (앱이 기억한 기기로 연결). 트리거만 전송, 버튼 옆 '연결 중' 표시 */
+  function sendRequestAutoConnect() {
     var post = global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function';
     if (!post) return;
     try {
-      global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'AUTO_CONNECT', devices: savedDevices }));
+      global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_AUTO_CONNECT' }));
       global[AUTO_CONNECT_SENT_KEY] = true;
       global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
       setConnectButtonConnectingLabel(true);
@@ -326,19 +346,15 @@
       _autoConnectTimeoutId = setTimeout(function () {
         _autoConnectTimeoutId = null;
         if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
-          global[AUTO_CONNECT_IN_PROGRESS_KEY] = false;
-          setConnectButtonConnectingLabel(false);
-          if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
-            global.updateMobileBluetoothConnectionStatus();
-          }
+          clearAutoConnectInProgress();
         }
       }, AUTO_CONNECT_TIMEOUT_MS);
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[trainingDashboardBridge] AUTO_CONNECT sent', keys, '(연결중 표시)');
+        console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT sent');
       }
     } catch (e) {
       if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[trainingDashboardBridge] AUTO_CONNECT postMessage failed', e);
+        console.warn('[trainingDashboardBridge] REQUEST_AUTO_CONNECT postMessage failed', e);
       }
     }
   }
@@ -478,14 +494,35 @@
     if (detail != null) parseHeartRateUpdate(Array.isArray(detail) ? detail : (detail && (detail.data != null || detail.payload != null) ? (detail.data || detail.payload) : detail));
   }
 
+  /** 앱에서 보내는 '연결 중' 신호 수신. detail.state: 'connecting' | 'connected' | 'idle' */
+  function onAutoConnectState(e) {
+    var state = e && e.detail && e.detail.state;
+    if (state === 'connecting') {
+      global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
+      setConnectButtonConnectingLabel(true);
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[trainingDashboardBridge] stelvio-auto-connect-state: connecting');
+      }
+    } else if (state === 'connected' || state === 'idle') {
+      if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+      if (state === 'connected' && typeof global.updateMobileBluetoothConnectionStatus === 'function') {
+        global.updateMobileBluetoothConnectionStatus();
+      }
+    }
+  }
+
   function mountTrainingDashboardBridge() {
-    sendAutoConnectOnce();
+    if (isAppEnvironment) {
+      sendRequestAutoConnect();
+    }
     if (deviceErrorHandlerRef !== null) return;
     deviceErrorHandlerRef = onDeviceError;
     deviceConnectedHandlerRef = onDeviceConnected;
+    autoConnectStateHandlerRef = onAutoConnectState;
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('deviceError', deviceErrorHandlerRef);
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
+      global.addEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
     }
     if (isAppEnvironment) {
       powerUpdateHandlerRef = onPowerUpdate;
@@ -508,6 +545,10 @@
       if (deviceConnectedHandlerRef !== null) {
         global.removeEventListener('deviceConnected', deviceConnectedHandlerRef);
         deviceConnectedHandlerRef = null;
+      }
+      if (autoConnectStateHandlerRef !== null) {
+        global.removeEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
+        autoConnectStateHandlerRef = null;
       }
       if (powerUpdateHandlerRef !== null) {
         global.removeEventListener('powerUpdate', powerUpdateHandlerRef);

@@ -79,7 +79,7 @@ if (!window.liveData) {
     };
 }
 
-// 훈련 화면 접속 시 저장된 기기 ID로 앱에 연결 시도 (AUTO_CONNECT) — 앱 WebView에서만. 하이브리드 UX: "연결중" 표시, 수동 클릭 시 중단.
+// 훈련 화면 접속 시 앱에 자동 연결 요청 (REQUEST_AUTO_CONNECT). 앱이 기억한 기기로 연결, 앱 '연결 중' 신호에 따라 UI 표시.
 window._bluetoothIndividualAutoConnectInProgress = false;
 window._bluetoothIndividualAutoConnectTimeoutId = null;
 var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS = 20000;
@@ -90,6 +90,22 @@ function setBluetoothIndividualConnectButtonLabel(connecting) {
     var span = btn.querySelector('span');
     if (span) span.textContent = connecting ? '연결중' : '연결';
     btn.classList.toggle('auto-connecting', !!connecting);
+    if (btn.parentNode) {
+        var statusEl = btn.parentNode.querySelector('.stelvio-auto-connect-status');
+        if (connecting) {
+            if (!statusEl) {
+                statusEl = document.createElement('span');
+                statusEl.className = 'stelvio-auto-connect-status';
+                statusEl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);margin-left:6px;white-space:nowrap;';
+                btn.parentNode.insertBefore(statusEl, btn.nextSibling);
+            }
+            statusEl.textContent = '연결 중';
+            statusEl.style.display = '';
+        } else if (statusEl) {
+            statusEl.style.display = 'none';
+            statusEl.textContent = '';
+        }
+    }
 }
 
 function clearBluetoothIndividualAutoConnect() {
@@ -104,7 +120,7 @@ function clearBluetoothIndividualAutoConnect() {
 
 function abortBluetoothIndividualAutoConnect() {
     if (!window._bluetoothIndividualAutoConnectInProgress) return;
-    if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] AUTO_CONNECT aborted by user');
+    if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] auto-connect aborted by user');
     try {
         if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ABORT_AUTO_CONNECT' }));
@@ -113,17 +129,11 @@ function abortBluetoothIndividualAutoConnect() {
     clearBluetoothIndividualAutoConnect();
 }
 
-function sendAutoConnectIfInApp() {
+/** 페이지 로드 시 앱에 자동 연결 요청 (앱이 기억한 기기로 연결). 수동 권한·목록 클릭 UX 유지 */
+function sendRequestAutoConnectIfInApp() {
     try {
         if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') return;
-        var key = 'stelvio_saved_devices_bridge';
-        var raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-        if (!raw) return;
-        var saved = JSON.parse(raw);
-        if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return;
-        var keys = Object.keys(saved);
-        if (keys.length === 0) return;
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'AUTO_CONNECT', devices: saved }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_AUTO_CONNECT' }));
         window._bluetoothIndividualAutoConnectInProgress = true;
         setBluetoothIndividualConnectButtonLabel(true);
         if (window._bluetoothIndividualAutoConnectTimeoutId != null) clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
@@ -131,9 +141,9 @@ function sendAutoConnectIfInApp() {
             window._bluetoothIndividualAutoConnectTimeoutId = null;
             if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
         }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
-        if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] AUTO_CONNECT sent on page load', keys, '(연결중 표시)');
+        if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] REQUEST_AUTO_CONNECT sent on page load');
     } catch (e) {
-        if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendAutoConnectIfInApp failed', e);
+        if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendRequestAutoConnectIfInApp failed', e);
     }
 }
 
@@ -144,6 +154,17 @@ if (typeof window.addEventListener === 'function') {
             clearBluetoothIndividualAutoConnect();
         } else if (typeof updateBluetoothConnectionStatus === 'function') {
             updateBluetoothConnectionStatus();
+        }
+    });
+    // 앱에서 '연결 중' 신호 수신 시 UI 유지, connected/idle 시 해제
+    window.addEventListener('stelvio-auto-connect-state', function (e) {
+        var state = e && e.detail && e.detail.state;
+        if (state === 'connecting') {
+            window._bluetoothIndividualAutoConnectInProgress = true;
+            setBluetoothIndividualConnectButtonLabel(true);
+        } else if (state === 'connected' || state === 'idle') {
+            if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
+            if (state === 'connected' && typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
         }
     });
 }
@@ -4916,8 +4937,8 @@ if (document.readyState === 'loading') {
         initializeCelebrationModal();
         // 화면 방향 세로 모드로 고정
         await lockScreenOrientation();
-        // 앱 WebView일 때 저장된 기기로 연결 시도 (훈련 화면 접속 시 연결 로직 가동)
-        sendAutoConnectIfInApp();
+        // 앱 WebView일 때 자동 연결 요청 (앱이 기억한 기기로 연결)
+        sendRequestAutoConnectIfInApp();
         
         // 연결 버튼 이벤트 리스너 확인 및 등록
         const connectBtn = document.getElementById('bluetoothConnectBtn');
@@ -4985,8 +5006,8 @@ if (document.readyState === 'loading') {
     // DOM이 이미 로드되었으면 바로 실행
     // 화면 방향 세로 모드로 고정
     lockScreenOrientation();
-    // 앱 WebView일 때 저장된 기기로 연결 시도 (훈련 화면 접속 시 연결 로직 가동)
-    sendAutoConnectIfInApp();
+    // 앱 WebView일 때 자동 연결 요청 (앱이 기억한 기기로 연결)
+    sendRequestAutoConnectIfInApp();
     
     // 연결 버튼 이벤트 리스너 확인 및 등록
     const connectBtn = document.getElementById('bluetoothConnectBtn');
