@@ -15,6 +15,9 @@
 
   /** 현재 스캔/연결 대상 deviceType (hr, power, trainer, speed) */
   var savedTargetType = null;
+  /** 디바이스 선택 후 연결 대기 중일 때 표시용: 기기명, deviceType */
+  var _connectingDeviceName = null;
+  var _connectingDeviceType = null;
 
   var deviceFoundHandlerRef = null;
   var deviceConnectedHandlerRef = null;
@@ -152,17 +155,53 @@
   }
 
   /**
-   * 모달 닫기, 리스트 비우기
+   * 모달 닫기, 리스트 비우기, 연결 중 UI 숨김
    */
   function closeDeviceScanModal() {
     savedTargetType = null;
+    _connectingDeviceName = null;
+    _connectingDeviceType = null;
     var modal = document.getElementById(MODAL_ID);
     var list = document.getElementById(LIST_ID);
+    var connectingWrap = document.getElementById('deviceScanConnectingWrap');
+    var hint = document.getElementById(HINT_ID);
+    if (connectingWrap) {
+      connectingWrap.style.display = 'none';
+    }
+    if (hint) hint.style.display = '';
+    if (list) {
+      list.innerHTML = '';
+      list.style.display = '';
+    }
     if (modal) {
       modal.style.display = 'none';
       modal.classList.add('hidden');
     }
-    if (list) list.innerHTML = '';
+  }
+
+  /**
+   * 기기 검색 모달에서 "연결 중" UI 표시: 녹색 원 스피너 + "기기명 연결 중....."
+   */
+  function showDeviceScanConnecting(deviceName) {
+    var wrap = document.getElementById('deviceScanConnectingWrap');
+    var textEl = document.getElementById('deviceScanConnectingText');
+    var list = document.getElementById(LIST_ID);
+    var hint = document.getElementById(HINT_ID);
+    if (wrap) {
+      if (textEl) textEl.textContent = (deviceName || '기기') + ' 연결 중.....';
+      wrap.style.display = 'flex';
+    }
+    if (list) list.style.display = 'none';
+    if (hint) hint.style.display = 'none';
+  }
+
+  function hideDeviceScanConnecting() {
+    var wrap = document.getElementById('deviceScanConnectingWrap');
+    var list = document.getElementById(LIST_ID);
+    var hint = document.getElementById(HINT_ID);
+    if (wrap) wrap.style.display = 'none';
+    if (list) list.style.display = '';
+    if (hint) hint.style.display = '';
   }
 
   /**
@@ -210,7 +249,11 @@
     li.addEventListener('click', function () {
       var deviceId = li.dataset.deviceId;
       var deviceTypeToConnect = savedTargetType;
-      closeDeviceScanModal();
+      var nameEl = li.querySelector('.device-scan-name');
+      var deviceName = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : '기기';
+      _connectingDeviceName = deviceName;
+      _connectingDeviceType = deviceTypeToConnect;
+      showDeviceScanConnecting(deviceName);
       try {
         if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
           global.ReactNativeWebView.postMessage(JSON.stringify({
@@ -222,6 +265,9 @@
         }
       } catch (err) {
         if (console && console.warn) console.warn('[deviceSettings] CONNECT_DEVICE postMessage failed', err);
+        hideDeviceScanConnecting();
+        _connectingDeviceName = null;
+        _connectingDeviceType = null;
       }
     });
     list.appendChild(li);
@@ -284,8 +330,17 @@
     }
   }
 
+  /** 연결 중 대기 타입과 이벤트 타입이 같은지 비교 (hr/heartRate 등 통일) */
+  function isSameDeviceType(a, b) {
+    if (!a || !b) return false;
+    var ka = typeToConnectedKey(a);
+    var kb = typeToConnectedKey(b);
+    return ka === kb;
+  }
+
   /**
    * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 기기 ID 표시
+   * 연결 중이었으면 연결 중 UI 숨기고 모달 닫기
    */
   function onDeviceConnected(e) {
     var detail = e && e.detail;
@@ -294,6 +349,12 @@
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
     if (!deviceType) return;
     setCardConnected(String(deviceType), deviceId);
+    if (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType)) {
+      hideDeviceScanConnecting();
+      _connectingDeviceName = null;
+      _connectingDeviceType = null;
+      closeDeviceScanModal();
+    }
   }
 
   /**
@@ -361,8 +422,16 @@
     }
   };
 
-  /** deviceError: 연결 끊김 시 카드 갱신 → 해당 타입은 저장만 있으면 "저장됨"으로 표시 */
+  /** deviceError: 연결 끊김 시 카드 갱신. 연결 대기 중이었으면 연결 중 UI 숨기고 모달 닫기 */
   function onDeviceError(e) {
+    var detail = e && e.detail;
+    var errorType = detail && (detail.deviceType != null ? detail.deviceType : detail.type);
+    if (_connectingDeviceType != null && (!errorType || isSameDeviceType(errorType, _connectingDeviceType))) {
+      hideDeviceScanConnecting();
+      _connectingDeviceName = null;
+      _connectingDeviceType = null;
+      closeDeviceScanModal();
+    }
     if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
       global.StelvioDeviceSettings.refreshDeviceSettingCards();
     }
