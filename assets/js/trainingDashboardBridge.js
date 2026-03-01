@@ -49,12 +49,13 @@
   var speedUpdateHandlerRef = null;
   var heartRateUpdateHandlerRef = null;
 
-  /** deviceType(앱) → connectedDevices 키 (heartRate, trainer, powerMeter) */
+  /** deviceType(앱) → connectedDevices 키 (heartRate, trainer, powerMeter, speed). 다중 센서 개별 반영 */
   function toConnectedDevicesKey(deviceType) {
     var t = String(deviceType || '').toLowerCase();
     if (t === 'hr' || t === 'heartrate') return 'heartRate';
     if (t === 'power' || t === 'powermeter') return 'powerMeter';
     if (t === 'trainer') return 'trainer';
+    if (t === 'speed') return 'speed';
     return deviceType;
   }
 
@@ -264,34 +265,42 @@
   // 앱에서 '연결 중' 신호(stelvio-auto-connect-state)가 오면 버튼 옆에 상태 표시, 성공 시 deviceConnected로 데이터 노출.
   // 수동: 연결 버튼 클릭 시 목록(드롭다운) 유지, 목록에서 기기 클릭 시만 상세 연결 흐름.
 
-  /** 버튼 옆 '연결 중' 상태 요소 찾기 또는 생성 후 표시/숨김 */
+  /** 버튼 옆 '연결 중...' + 로딩 인디케이터 영역 찾기 또는 생성 후 표시/숨김 */
   function setAutoConnectStatusNextToButton(buttonEl, show, text) {
     if (!buttonEl || !buttonEl.parentNode) return;
-    var wrap = buttonEl.parentNode;
-    var statusId = buttonEl.id ? 'stelvio-auto-connect-status-' + buttonEl.id : null;
-    var statusEl = statusId ? document.getElementById(statusId) : wrap.querySelector('.stelvio-auto-connect-status');
+    var statusId = buttonEl.id ? 'stelvio-auto-connect-wrap-' + buttonEl.id : null;
+    var wrapEl = statusId ? document.getElementById(statusId) : buttonEl.parentNode.querySelector('.stelvio-auto-connect-status-wrap');
     if (show && text) {
-      if (!statusEl) {
-        statusEl = document.createElement('span');
-        statusEl.className = 'stelvio-auto-connect-status';
-        if (statusId) statusEl.id = statusId;
-        statusEl.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.85);margin-left:6px;white-space:nowrap;';
-        buttonEl.parentNode.insertBefore(statusEl, buttonEl.nextSibling);
+      if (!wrapEl) {
+        wrapEl = document.createElement('span');
+        wrapEl.className = 'stelvio-auto-connect-status-wrap';
+        if (statusId) wrapEl.id = statusId;
+        wrapEl.style.cssText = 'display:inline-flex;align-items:center;margin-left:8px;white-space:nowrap;gap:6px;';
+        var spinner = document.createElement('span');
+        spinner.className = 'stelvio-auto-connect-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        var textEl = document.createElement('span');
+        textEl.className = 'stelvio-auto-connect-status';
+        wrapEl.appendChild(spinner);
+        wrapEl.appendChild(textEl);
+        buttonEl.parentNode.insertBefore(wrapEl, buttonEl.nextSibling);
       }
-      statusEl.textContent = text;
-      statusEl.style.display = '';
-    } else if (statusEl) {
-      statusEl.style.display = 'none';
-      statusEl.textContent = '';
+      var textNode = wrapEl.querySelector('.stelvio-auto-connect-status');
+      if (textNode) textNode.textContent = text;
+      wrapEl.style.display = '';
+    } else if (wrapEl) {
+      wrapEl.style.display = 'none';
+      var t = wrapEl.querySelector('.stelvio-auto-connect-status');
+      if (t) t.textContent = '';
     }
   }
 
-  /** 연결 버튼 문구 + 버튼 옆 상태 표시 (연결중 / 연결). 색상·has-connection은 updateMobileBluetoothConnectionStatus에서 처리 */
+  /** 연결 버튼 문구 + 버튼 옆 상태 표시 (연결중 / 연결). 앱 'connecting' 시 '연결 중...' + 로딩 인디케이터 */
   function setConnectButtonConnectingLabel(connecting) {
     var mobileBtn = document.getElementById('mobileBluetoothConnectBtn');
     var tsBtn = document.getElementById('trainingScreenBluetoothConnectBtn');
     var label = connecting ? '연결중' : '연결';
-    var statusText = connecting ? '연결 중' : '';
+    var statusText = connecting ? '연결 중...' : '';
     if (mobileBtn) {
       var span = mobileBtn.querySelector('span');
       if (span) span.textContent = label;
@@ -338,7 +347,8 @@
     var post = global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function';
     if (!post) return;
     try {
-      global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_AUTO_CONNECT' }));
+      var payload = { type: 'REQUEST_AUTO_CONNECT' };
+      global.ReactNativeWebView.postMessage(JSON.stringify(payload));
       global[AUTO_CONNECT_SENT_KEY] = true;
       global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
       setConnectButtonConnectingLabel(true);
@@ -350,7 +360,7 @@
         }
       }, AUTO_CONNECT_TIMEOUT_MS);
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT sent');
+        console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
       }
     } catch (e) {
       if (typeof console !== 'undefined' && console.warn) {
@@ -427,7 +437,7 @@
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     if (!deviceType) return;
     setDeviceConnectedUI(String(deviceType));
-    if (!global.connectedDevices) global.connectedDevices = { trainer: null, powerMeter: null, heartRate: null };
+    if (!global.connectedDevices) global.connectedDevices = { trainer: null, powerMeter: null, heartRate: null, speed: null };
     var key = toConnectedDevicesKey(deviceType);
     if (key) {
       global.connectedDevices[key] = {
@@ -512,9 +522,6 @@
   }
 
   function mountTrainingDashboardBridge() {
-    if (isAppEnvironment) {
-      sendRequestAutoConnect();
-    }
     if (deviceErrorHandlerRef !== null) return;
     deviceErrorHandlerRef = onDeviceError;
     deviceConnectedHandlerRef = onDeviceConnected;
@@ -587,6 +594,12 @@
       original(screenId);
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();
+        if (isAppEnvironment) {
+          sendRequestAutoConnect();
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[trainingDashboardBridge] 훈련 화면 진입 → REQUEST_AUTO_CONNECT 발송 완료, screenId=', screenId);
+          }
+        }
       }
       prevScreen = screenId;
     };
