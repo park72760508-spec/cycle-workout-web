@@ -400,20 +400,31 @@
   }
 
   /**
-   * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 기기 이름 표시
-   * 연결 중이었으면 연결 중 UI 숨기고 모달 닫기
+   * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 다음 줄에 검색 시 보이는 디바이스 이름 표시
+   * 앱이 name을 안 보내면 스캔 목록에서 선택한 _connectingDeviceName 사용. 동일 로직은 화면/팝업 공통 DOM이라 둘 다 반영됨.
    */
   function onDeviceConnected(e) {
     var detail = e && e.detail;
     if (!detail) return;
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
-    var deviceName = detail.deviceName != null ? detail.deviceName : (detail.name != null ? detail.name : '');
+    var fromEvent = (detail.deviceName != null && String(detail.deviceName).trim()) ? String(detail.deviceName).trim() : (detail.name != null && String(detail.name).trim()) ? String(detail.name).trim() : '';
+    var deviceName = fromEvent || (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType) && _connectingDeviceName ? String(_connectingDeviceName).trim() : '') || '';
     if (!deviceType) return;
     var key = typeToConnectedKey(deviceType);
     var cardType = connectedKeyToCardType(key) || (key || String(deviceType).toLowerCase());
     if (cardType) delete _lastDisconnectedTypes[cardType];
     setCardConnected(String(deviceType), deviceId, deviceName);
+    if (deviceName) {
+      if (global.connectedDevices && global.connectedDevices[key]) {
+        global.connectedDevices[key].name = deviceName;
+        global.connectedDevices[key].deviceName = deviceName;
+      }
+      if (global.StelvioDeviceBridgeStorage && typeof global.StelvioDeviceBridgeStorage.saveDevice === 'function') {
+        var storageKey = cardType || (key === 'heartRate' ? 'hr' : key === 'powerMeter' ? 'power' : key);
+        try { global.StelvioDeviceBridgeStorage.saveDevice(storageKey, deviceId, deviceName); } catch (err) { if (console && console.warn) console.warn('[deviceSettings] saveDevice name failed', err); }
+      }
+    }
     if (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType)) {
       hideDeviceScanConnecting();
       _connectingDeviceName = null;
@@ -446,7 +457,8 @@
         var isActuallyConnected = conn && (conn.deviceId === id || conn.deviceId === String(id) || (conn.id && (conn.id === id || conn.id === String(id))));
         if (isActuallyConnected) {
           delete _lastDisconnectedTypes[t];
-          setCardConnected(t, id, conn && (conn.name || conn.deviceName) ? (conn.name || conn.deviceName) : displayName);
+          var nameToShow = (displayName && String(displayName).trim()) ? String(displayName).trim() : (conn && (conn.name || conn.deviceName) ? (conn.name || conn.deviceName) : '');
+          setCardConnected(t, id, nameToShow);
         } else {
           var disconnectedAt = _lastDisconnectedTypes[t];
           if (disconnectedAt != null && (now - disconnectedAt) < DISCONNECTED_LABEL_EXPIRE_MS) {
