@@ -4372,48 +4372,41 @@ function openDeviceSettingsOverlayOnly() {
     document.body.appendChild(wrap);
 }
 
-// 블루투스 연결 드롭다운 토글. 앱 환경: 모바일과 동일하게 Device Settings만 사용(드롭다운 미표시). 웹: 드롭다운 표시.
+// 블루투스 연결 드롭다운 토글. [앱 전용] Device Settings 팝업/오버레이. [웹] 기존 드롭다운 토글.
 function toggleBluetoothDropdown() {
     if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
         abortBluetoothIndividualAutoConnect();
     }
-    // 1) 부모 창이 있고 Device Settings 팝업 있음 → 부모 팝업 열기 (웹에서 window.open으로 연 경우)
-    if (window.opener && !window.opener.closed && typeof window.opener.openDeviceSettingPopup === 'function') {
-        window.opener.openDeviceSettingPopup();
-        return;
-    }
-    // 2) 부모 없음: 모바일과 동일하게 센서연결(Device Settings) 오버레이만 바로 띄움 (iframe, 화면 이동 없음)
-    if (!window.opener || window.opener.closed) {
-        if (isAppEnvironmentNow()) {
+    // [앱 화면 전용] 앱일 때만 센서연결(Device Settings) 팝업/오버레이 사용. 웹은 아래 기존 드롭다운 로직으로 동작.
+    if (isAppEnvironmentNow()) {
+        if (window.opener && !window.opener.closed && typeof window.opener.openDeviceSettingPopup === 'function') {
+            window.opener.openDeviceSettingPopup();
+            return;
+        }
+        if (!window.opener || window.opener.closed) {
             try {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_DEVICE_SETTINGS' }));
             } catch (e) {}
+            openDeviceSettingsOverlayOnly();
+            return;
         }
-        openDeviceSettingsOverlayOnly();
-        return;
     }
-    console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨 (웹, 부모 창 있음)');
+    // [웹 화면] 기존 로직: 연결 버튼 클릭 시 드롭다운(메뉴 트리) 토글
     const dropdown = document.getElementById('bluetoothDropdown');
     if (!dropdown) {
         console.error('[BluetoothIndividual] bluetoothDropdown 요소를 찾을 수 없습니다.');
         return;
     }
-    
     const isShowing = dropdown.classList.contains('show');
     if (isShowing) {
-        // 드롭다운 닫기
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
-        console.log('[BluetoothIndividual] 드롭다운 닫힘');
     } else {
-        // 드롭다운 열기 + 저장된 기기 목록 갱신 (모바일 개인훈련 대시보드와 동일 로직)
         updateBluetoothIndividualDropdownWithSavedDevices();
         dropdown.classList.add('show');
-        // 드롭다운 외부 클릭 시 닫기
         setTimeout(() => {
             document.addEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
         }, 0);
-        console.log('[BluetoothIndividual] 드롭다운 열림');
     }
 }
 
