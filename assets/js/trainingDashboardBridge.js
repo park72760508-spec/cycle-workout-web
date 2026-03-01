@@ -9,7 +9,11 @@
 (function (global) {
   'use strict';
 
+  /** 스크립트 로드 시점 값. 앱에서는 WebView 주입이 늦을 수 있으므로 런타임에 재확인 */
   var isAppEnvironment = !!global.ReactNativeWebView;
+  function isAppEnvironmentNow() {
+    return !!(global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function');
+  }
 
   var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen'];
   var AUTO_CONNECT_SENT_KEY = '_stelvioTrainingAutoConnectSent';
@@ -260,9 +264,12 @@
     overlay.setAttribute('aria-hidden', 'true');
   }
 
+  var _interceptConnectButtonDone = false;
   /** 앱 환경: 연결 버튼 클릭 시 자동 연결 중단 후 Device Settings를 오버레이 팝업으로 표시 */
   function interceptConnectButton() {
-    if (!isAppEnvironment) return;
+    if (_interceptConnectButtonDone) return;
+    if (!isAppEnvironmentNow()) return;
+    _interceptConnectButtonDone = true;
     var origToggle = global.toggleBluetoothDropdown;
     var origMobileToggle = global.toggleMobileBluetoothDropdown;
     if (typeof origToggle === 'function') {
@@ -390,7 +397,12 @@
   /** 훈련 화면 진입 시 앱에 자동 연결 요청 (앱이 기억한 기기로 연결). 트리거만 전송, 버튼 옆 '연결 중' 표시 */
   function sendRequestAutoConnect() {
     var post = global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function';
-    if (!post) return;
+    if (!post) {
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[trainingDashboardBridge] sendRequestAutoConnect: ReactNativeWebView 없음, 스킵');
+      }
+      return;
+    }
     try {
       var payload = { type: 'REQUEST_AUTO_CONNECT' };
       global.ReactNativeWebView.postMessage(JSON.stringify(payload));
@@ -628,6 +640,20 @@
     setConnectButtonConnectingLabel(false);
   }
 
+  /** 현재 활성(보이는) 화면 ID 반환. .active 클래스 또는 display !== 'none' 기준 */
+  function getActiveScreenId() {
+    var screens = document.querySelectorAll('.screen');
+    for (var i = 0; i < screens.length; i++) {
+      var el = screens[i];
+      var id = el.id;
+      if (!id) continue;
+      if (el.classList.contains('active')) return id;
+      var style = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(el) : null;
+      if (style && style.display !== 'none') return id;
+    }
+    return null;
+  }
+
   function wrapShowScreen() {
     var original = global.showScreen;
     if (typeof original !== 'function') return;
@@ -639,15 +665,33 @@
       original(screenId);
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();
-        if (isAppEnvironment) {
-          sendRequestAutoConnect();
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[trainingDashboardBridge] 훈련 화면 진입 → REQUEST_AUTO_CONNECT 발송 완료, screenId=', screenId);
-          }
+        sendRequestAutoConnect();
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[trainingDashboardBridge] 훈련 화면 진입 → REQUEST_AUTO_CONNECT 시도, screenId=', screenId, 'inApp=', isAppEnvironmentNow());
         }
       }
       prevScreen = screenId;
     };
+
+    var _initialAutoConnectDone = false;
+    function tryInitialAutoConnect() {
+      if (_initialAutoConnectDone) return;
+      var activeId = getActiveScreenId();
+      if (activeId && isTargetScreen(activeId)) {
+        _initialAutoConnectDone = true;
+        mountTrainingDashboardBridge();
+        sendRequestAutoConnect();
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[trainingDashboardBridge] 초기 화면이 훈련 화면 → REQUEST_AUTO_CONNECT 시도, screenId=', activeId, 'inApp=', isAppEnvironmentNow());
+        }
+      }
+    }
+
+    setTimeout(tryInitialAutoConnect, 0);
+    setTimeout(tryInitialAutoConnect, 300);
+    if (typeof global.addEventListener === 'function') {
+      global.addEventListener('DOMContentLoaded', tryInitialAutoConnect);
+    }
   }
 
   if (typeof global.showScreen === 'function') {
@@ -661,17 +705,21 @@
     }
   }
 
-  if (isAppEnvironment) {
-    if (typeof global.connectMobileBluetoothDevice === 'function') {
+  function tryInterceptConnectButton() {
+    if (!isAppEnvironmentNow()) return;
+    if (typeof global.connectMobileBluetoothDevice === 'function' || typeof global.toggleBluetoothDropdown === 'function') {
       interceptConnectButton();
-    } else {
-      if (typeof global.addEventListener === 'function') {
-        global.addEventListener('DOMContentLoaded', function onReady() {
-          global.removeEventListener('DOMContentLoaded', onReady);
-          interceptConnectButton();
-        });
-      }
     }
+  }
+  if (isAppEnvironmentNow()) {
+    tryInterceptConnectButton();
+  }
+  setTimeout(tryInterceptConnectButton, 300);
+  setTimeout(tryInterceptConnectButton, 800);
+  if (typeof global.addEventListener === 'function') {
+    global.addEventListener('DOMContentLoaded', function onReady() {
+      tryInterceptConnectButton();
+    });
   }
 
   global.StelvioTrainingDashboardBridge = {
