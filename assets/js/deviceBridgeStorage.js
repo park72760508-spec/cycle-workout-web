@@ -14,10 +14,11 @@
 
   // 기존 웹 BLE용 stelvio_saved_devices는 배열 포맷 사용 → 브릿지 전용 객체 포맷은 별도 키로 저장해 호환 유지
   var STELVIO_SAVED_DEVICES_KEY = 'stelvio_saved_devices_bridge';
+  var STELVIO_SAVED_DEVICES_NAMES_KEY = 'stelvio_saved_devices_names_bridge';
 
   /**
-   * 저장된 기기 맵 로드. 항상 객체 반환 (병합 안전).
-   * @returns {{ hr?: string, power?: string, trainer?: string }}
+   * 저장된 기기 ID 맵 로드. 항상 객체 반환 (병합 안전).
+   * @returns {{ hr?: string, power?: string, trainer?: string, speed?: string }}
    */
   function loadSavedDevices() {
     try {
@@ -31,16 +32,37 @@
   }
 
   /**
-   * 단일 타입 기기 저장. 기존 다른 타입은 그대로 두고 병합.
-   * @param {string} deviceType - 'hr' | 'power' | 'trainer' (앱에서 오는 값에 따라 매핑 가능)
-   * @param {string} deviceId - 기기 ID (예: "F0:13:...")
+   * 저장된 기기 이름 맵 로드 (카드 표시용). 이름 없으면 빈 객체/빈 문자열.
+   * @returns {{ hr?: string, power?: string, trainer?: string, speed?: string }}
    */
-  function saveDevice(deviceType, deviceId) {
+  function loadSavedDeviceNames() {
+    try {
+      var raw = localStorage.getItem(STELVIO_SAVED_DEVICES_NAMES_KEY);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /**
+   * 단일 타입 기기 저장. 기존 다른 타입은 그대로 두고 병합.
+   * @param {string} deviceType - 'hr' | 'power' | 'trainer' | 'speed'
+   * @param {string} deviceId - 기기 ID (맥주소 등)
+   * @param {string} [deviceName] - 기기 이름 (표시용, 있으면 함께 저장)
+   */
+  function saveDevice(deviceType, deviceId, deviceName) {
     if (!deviceType || !deviceId) return;
     var saved = loadSavedDevices();
     saved[deviceType] = String(deviceId);
     try {
       localStorage.setItem(STELVIO_SAVED_DEVICES_KEY, JSON.stringify(saved));
+      if (deviceName != null && String(deviceName).trim() !== '') {
+        var names = loadSavedDeviceNames();
+        names[deviceType] = String(deviceName).trim();
+        localStorage.setItem(STELVIO_SAVED_DEVICES_NAMES_KEY, JSON.stringify(names));
+      }
       try {
         global.dispatchEvent(new CustomEvent('stelvio-bridge-devices-updated', { detail: saved }));
       } catch (evErr) { /* no-op */ }
@@ -49,13 +71,14 @@
     }
   }
 
-  // 앱에서 보낼 수 있는 deviceType → 저장 키 매핑 (요구 포맷 hr, power, trainer)
+  // 앱에서 보낼 수 있는 deviceType → 저장 키 매핑 (요구 포맷 hr, power, trainer, speed)
   var DEVICE_TYPE_TO_KEY = {
     hr: 'hr',
     heartRate: 'hr',
     power: 'power',
     powerMeter: 'power',
-    trainer: 'trainer'
+    trainer: 'trainer',
+    speed: 'speed'
   };
 
   function normalizeDeviceType(deviceType) {
@@ -74,12 +97,13 @@
     if (!detail) return;
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
+    var deviceName = detail.deviceName != null ? detail.deviceName : (detail.name != null ? detail.name : '');
     if (!deviceId) return;
     var key = normalizeDeviceType(deviceType);
     if (!key) return;
-    saveDevice(key, deviceId);
+    saveDevice(key, deviceId, deviceName);
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[deviceBridgeStorage] deviceConnected saved:', key, deviceId);
+      console.log('[deviceBridgeStorage] deviceConnected saved:', key, deviceId, deviceName || '(no name)');
     }
   }
 
@@ -113,7 +137,9 @@
   // 전역 노출 (다른 스크립트/React 훅에서 사용 가능)
   global.StelvioDeviceBridgeStorage = {
     STELVIO_SAVED_DEVICES_KEY: STELVIO_SAVED_DEVICES_KEY,
+    STELVIO_SAVED_DEVICES_NAMES_KEY: STELVIO_SAVED_DEVICES_NAMES_KEY,
     loadSavedDevices: loadSavedDevices,
+    loadSavedDeviceNames: loadSavedDeviceNames,
     saveDevice: saveDevice,
     setupDeviceConnectedBridge: setupDeviceConnectedBridge,
     teardownDeviceConnectedBridge: teardownDeviceConnectedBridge

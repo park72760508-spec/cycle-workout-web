@@ -371,7 +371,7 @@
       statusEl.textContent = '저장됨';
       statusEl.style.color = '#00d4aa';
     }
-    if (idEl && (deviceId || deviceName)) {
+    if (idEl && (deviceId || (deviceName && String(deviceName).trim()))) {
       idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
       idEl.style.display = 'block';
     }
@@ -433,10 +433,13 @@
     }
   }
 
+  /** localStorage 키 (저장된 기기 이름) — 화면/팝업 열 때 항상 최신 이름 로드용 */
+  var STORAGE_NAMES_KEY = 'stelvio_saved_devices_names_bridge';
+
   /**
-   * 화면 열릴 때 저장된 기기로 카드 상태 초기화
-   * - 저장된 ID만 있고 실제 연결 안 됨 → "저장됨" (색상 동일)
-   * - 실제 연결됨(window.connectedDevices) → "연결됨"
+   * 화면/팝업 열릴 때 저장된 기기로 카드 상태 초기화. 저장된 기기 이름은 항상 localStorage에서 로드해 계속 표시.
+   * - 저장된 ID만 있고 실제 연결 안 됨 → "저장됨" + 기기 이름
+   * - 실제 연결됨 → "연결됨" + 기기 이름
    */
   function refreshDeviceSettingCards() {
     var api = global.StelvioDeviceBridgeStorage;
@@ -444,13 +447,22 @@
     var saved = api.loadSavedDevices();
     if (!saved || typeof saved !== 'object') return;
     var names = (typeof api.loadSavedDeviceNames === 'function') ? api.loadSavedDeviceNames() : {};
+    try {
+      var raw = global.localStorage && global.localStorage.getItem(STORAGE_NAMES_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (var k in parsed) { if (parsed[k] != null && String(parsed[k]).trim()) names[k] = String(parsed[k]).trim(); }
+        }
+      }
+    } catch (e) {}
     var connected = global.connectedDevices || {};
     var types = ['hr', 'power', 'trainer', 'speed'];
     var now = Date.now();
     for (var i = 0; i < types.length; i++) {
       var t = types[i];
       var id = saved[t];
-      var displayName = (names && names[t]) ? names[t] : '';
+      var displayName = (names && names[t] && String(names[t]).trim()) ? String(names[t]).trim() : '';
       if (id) {
         var cKey = typeToConnectedKey(t);
         var conn = connected[cKey];
