@@ -84,6 +84,11 @@ window._bluetoothIndividualAutoConnectInProgress = false;
 window._bluetoothIndividualAutoConnectTimeoutId = null;
 var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS = 20000;
 
+/** 앱 WebView 여부 (모바일 훈련화면과 동일 판단). 웹 전용이면 연결 버튼은 드롭다운, 앱이면 부모 창 Device Settings 팝업 */
+function isAppEnvironmentNow() {
+    return !!(window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function');
+}
+
 function setBluetoothIndividualConnectButtonLabel(connecting) {
     var btn = document.getElementById('bluetoothConnectBtn');
     if (!btn) return;
@@ -194,6 +199,44 @@ if (typeof window.addEventListener === 'function') {
         } else if (state === 'connected' || state === 'idle') {
             if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
             if (state === 'connected' && typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
+        }
+    });
+}
+
+// 부모 창(메인 앱)에서 전달되는 연결/해제/자동연결 상태 — 모바일 훈련화면과 동일 로직 반영
+function toConnectedDevicesKeyBluetooth(deviceType) {
+    var t = String(deviceType || '').toLowerCase();
+    if (t === 'hr' || t === 'heartrate') return 'heartRate';
+    if (t === 'power' || t === 'powermeter') return 'powerMeter';
+    if (t === 'trainer') return 'trainer';
+    if (t === 'speed') return 'speed';
+    return deviceType;
+}
+if (typeof window.addEventListener === 'function') {
+    window.addEventListener('message', function (event) {
+        if (!event.data || typeof event.data.type !== 'string') return;
+        if (event.source !== window.opener || !window.opener || window.opener.closed) return;
+        var type = event.data.type;
+        var detail = event.data.detail || {};
+        if (type === 'deviceConnected') {
+            var key = toConnectedDevicesKeyBluetooth(detail.deviceType != null ? detail.deviceType : detail.type);
+            if (key) {
+                if (!window.connectedDevices) window.connectedDevices = { trainer: null, powerMeter: null, heartRate: null, speed: null };
+                window.connectedDevices[key] = { name: detail.deviceName || detail.name || '연결됨', deviceId: detail.deviceId || detail.id };
+            }
+            if (window._stelvioDisconnectedTypes && key) delete window._stelvioDisconnectedTypes[key];
+            window.dispatchEvent(new CustomEvent('deviceConnected', { detail: detail }));
+        } else if (type === 'deviceError') {
+            var key = toConnectedDevicesKeyBluetooth(detail.deviceType != null ? detail.deviceType : detail.type) || detail.key;
+            if (key && window.connectedDevices) window.connectedDevices[key] = null;
+            if (key) {
+                if (!window._stelvioDisconnectedTypes) window._stelvioDisconnectedTypes = {};
+                window._stelvioDisconnectedTypes[key] = Date.now();
+            }
+            window.dispatchEvent(new CustomEvent('deviceError', { detail: detail }));
+            if (typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
+        } else if (type === 'stelvio-auto-connect-state') {
+            window.dispatchEvent(new CustomEvent('stelvio-auto-connect-state', { detail: detail }));
         }
     });
 }
@@ -4298,10 +4341,14 @@ function updateIndividualIntensityDisplay(sliderValue) {
     }
 }
 
-// 블루투스 연결 드롭다운 토글. 앱 환경: 수동 클릭 시 자동 연결 중단 후 드롭다운 열기
+// 블루투스 연결 드롭다운 토글. 앱 환경 + 부모 창 있음: 모바일과 동일하게 Device Settings 팝업 열기 (드롭다운 미표시)
 function toggleBluetoothDropdown() {
-    if (window._bluetoothIndividualAutoConnectInProgress && window.ReactNativeWebView) {
+    if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
         abortBluetoothIndividualAutoConnect();
+    }
+    if (window.opener && !window.opener.closed && typeof window.opener.openDeviceSettingPopup === 'function') {
+        window.opener.openDeviceSettingPopup();
+        return;
     }
     console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨');
     const dropdown = document.getElementById('bluetoothDropdown');

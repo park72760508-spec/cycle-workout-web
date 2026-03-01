@@ -531,6 +531,7 @@
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] 연결해제 적용', deviceType, key);
     }
+    notifyBluetoothChildWindows('deviceError', { deviceType: deviceType, key: key });
   }
 
   function onDeviceError(e) {
@@ -583,6 +584,7 @@
       console.log('[trainingDashboardBridge] deviceConnected', deviceType, detail.deviceId, '(connectedDevices 반영)');
     }
     tryShowPowerSourceSelectPopup();
+    notifyBluetoothChildWindows('deviceConnected', detail);
   }
 
   function openPowerSourceSelectPopup() {
@@ -700,6 +702,20 @@
       if (state === 'connected' && typeof global.updateMobileBluetoothConnectionStatus === 'function') {
         global.updateMobileBluetoothConnectionStatus();
       }
+    }
+    notifyBluetoothChildWindows('stelvio-auto-connect-state', (e && e.detail) ? e.detail : {});
+  }
+
+  /** 블루투스 개인 훈련 창(자식 창)에 연결/해제/자동연결 상태 전달 — 모바일과 동일 로직 반영용 */
+  function notifyBluetoothChildWindows(msgType, detail) {
+    var list = global._bluetoothChildWindows;
+    if (!list || !list.length) return;
+    list = list.filter(function (w) { return w && !w.closed; });
+    global._bluetoothChildWindows = list;
+    for (var i = 0; i < list.length; i++) {
+      try {
+        list[i].postMessage({ type: msgType, detail: detail || {} }, '*');
+      } catch (err) {}
     }
   }
 
