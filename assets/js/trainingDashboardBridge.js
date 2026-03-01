@@ -278,6 +278,9 @@
     }
     overlay.style.display = 'none';
     overlay.setAttribute('aria-hidden', 'true');
+    if (global.self !== global.top) {
+      try { global.parent.postMessage({ type: 'CLOSE_DEVICE_SETTINGS_OVERLAY' }, '*'); } catch (e) {}
+    }
   }
 
   var _interceptConnectButtonDone = false;

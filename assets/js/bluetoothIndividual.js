@@ -642,6 +642,8 @@ function initializeBluetoothDashboard() {
                     powerMeter: window.connectedDevices.powerMeter?.name || null,
                     trainer: window.connectedDevices.trainer?.name || null
                 });
+                clearBluetoothIndividualAutoConnect();
+                if (typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
             }
             
             // 부모 창의 window.liveData 값 복사 (초기값)
@@ -4341,6 +4343,35 @@ function updateIndividualIntensityDisplay(sliderValue) {
     }
 }
 
+/** 모바일과 동일: 센서연결(Device Settings) 오버레이만 iframe으로 띄움. 베이스캠프로 이동 없음. */
+function openDeviceSettingsOverlayOnly() {
+    var wrapId = 'stelvio-device-settings-iframe-wrap';
+    if (document.getElementById(wrapId)) return;
+    var baseUrl = window.location.href.replace(/[#?].*$/, '').replace(/\/[^/]*$/, '/');
+    var iframeSrc = baseUrl + 'index.html?openDeviceSettingsOnly=1';
+    var wrap = document.createElement('div');
+    wrap.id = wrapId;
+    wrap.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:rgba(0,0,0,0.5);';
+    var iframe = document.createElement('iframe');
+    iframe.src = iframeSrc;
+    iframe.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;border:none;background:transparent;';
+    wrap.appendChild(iframe);
+    function removeOverlay() {
+        var w = document.getElementById(wrapId);
+        if (w) w.remove();
+        window.removeEventListener('message', onMessage);
+        if (typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
+    }
+    function onMessage(e) {
+        if (e.data && e.data.type === 'CLOSE_DEVICE_SETTINGS_OVERLAY') removeOverlay();
+    }
+    window.addEventListener('message', onMessage);
+    wrap.addEventListener('click', function (ev) {
+        if (ev.target === wrap) removeOverlay();
+    });
+    document.body.appendChild(wrap);
+}
+
 // 블루투스 연결 드롭다운 토글. 앱 환경: 모바일과 동일하게 Device Settings만 사용(드롭다운 미표시). 웹: 드롭다운 표시.
 function toggleBluetoothDropdown() {
     if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
@@ -4351,15 +4382,14 @@ function toggleBluetoothDropdown() {
         window.opener.openDeviceSettingPopup();
         return;
     }
-    // 2) 부모 없음(앱에서 bluetoothIndividual로 직접 이동한 경우): 앱에 센서 연결 요청 또는 메인 페이지에서 오버레이 열기
+    // 2) 부모 없음: 모바일과 동일하게 센서연결(Device Settings) 오버레이만 바로 띄움 (iframe, 화면 이동 없음)
     if (!window.opener || window.opener.closed) {
         if (isAppEnvironmentNow()) {
             try {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_DEVICE_SETTINGS' }));
             } catch (e) {}
         }
-        // ReactNativeWebView 미주입 시 또는 앱 미처리 시: 메인 페이지로 이동 후 센서 연결(Device Settings) 오버레이 자동 오픈
-        window.location.href = 'index.html?openDeviceSettings=1';
+        openDeviceSettingsOverlayOnly();
         return;
     }
     console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨 (웹, 부모 창 있음)');

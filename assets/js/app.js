@@ -4582,6 +4582,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.location.search.indexOf('openDeviceSettings=1') !== -1) {
     window._openDeviceSettingsFromBluetooth = true;
   }
+  // iframe으로 센서연결 오버레이만 띄울 때 (모바일과 동일하게 팝업만 표시)
+  if (window.location.search.indexOf('openDeviceSettingsOnly=1') !== -1) {
+    window._openDeviceSettingsOnly = true;
+  }
 
   // Strava 콜백에서 돌아온 경우 베이스캠프 화면으로 이동
   const stravaCallbackReturn = localStorage.getItem('stravaCallbackReturn');
@@ -4651,7 +4655,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const splashLoaderProgress = document.getElementById("splashLoaderProgress");
   
   // 블루투스 연결 버튼에서 센서연결만 열려고 온 경우 스플래시 비활성화 (초기 로딩 화면 건너뛰기)
-  const skipSplashForDeviceSettings = !!window._openDeviceSettingsFromBluetooth;
+  const skipSplashForDeviceSettings = !!window._openDeviceSettingsFromBluetooth || !!window._openDeviceSettingsOnly;
   const isSplashActive = !skipSplashForDeviceSettings && splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
   
   // 스플래시 화면 보호 플래그 (전역)
@@ -4660,6 +4664,20 @@ document.addEventListener("DOMContentLoaded", () => {
   if (skipSplashForDeviceSettings && splashScreen) {
     splashScreen.style.setProperty('display', 'none', 'important');
     splashScreen.classList.remove('active');
+  }
+  if (window._openDeviceSettingsOnly) {
+    document.querySelectorAll('.screen').forEach(function (s) {
+      s.style.setProperty('display', 'none', 'important');
+      s.classList.remove('active');
+    });
+    function openDeviceSettingsOverlayOnly() {
+      if (typeof window.openDeviceSettingPopup === 'function') {
+        window.openDeviceSettingPopup();
+      } else {
+        setTimeout(openDeviceSettingsOverlayOnly, 100);
+      }
+    }
+    setTimeout(openDeviceSettingsOverlayOnly, 250);
   }
   
   // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
