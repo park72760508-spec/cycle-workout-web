@@ -719,6 +719,7 @@
     }
     global[AUTO_CONNECT_SENT_KEY] = false;
     global[AUTO_CONNECT_IN_PROGRESS_KEY] = false;
+    _lastActiveTargetScreenId = null;
     if (_autoConnectTimeoutId != null) {
       clearTimeout(_autoConnectTimeoutId);
       _autoConnectTimeoutId = null;
@@ -742,7 +743,6 @@
 
   var _stelvioShowScreenWrapped = false;
   function wrapShowScreen() {
-    if (_stelvioShowScreenWrapped) return;
     var current = global.showScreen;
     if (typeof current !== 'function') return;
     if (current._stelvioTrainingBridgeWrap) return;
@@ -759,13 +759,75 @@
         sendRequestAutoConnect();
         tryShowPowerSourceSelectPopup();
         if (typeof console !== 'undefined' && console.log) {
-          console.log('[trainingDashboardBridge] 훈련 화면 진입 → REQUEST_AUTO_CONNECT 시도, screenId=', screenId, 'inApp=', isAppEnvironmentNow());
+          console.log('[trainingDashboardBridge] 훈련 화면 진입(showScreen) → REQUEST_AUTO_CONNECT, screenId=', screenId);
         }
       }
       prevScreen = screenId;
     }
     wrappedShowScreen._stelvioTrainingBridgeWrap = true;
     global.showScreen = wrappedShowScreen;
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] showScreen 래핑 완료');
+    }
+  }
+
+  /** 훈련 화면이 DOM에서 active가 된 것을 감지해 자동연결 트리거 (showScreen 미호출 시 폴백) */
+  var _lastActiveTargetScreenId = null;
+  function onTargetScreenBecameActive(screenId) {
+    if (!screenId || !isTargetScreen(screenId)) return;
+    if (_lastActiveTargetScreenId === screenId) return;
+    _lastActiveTargetScreenId = screenId;
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] 훈련 화면 active 감지 → 자동연결 트리거, screenId=', screenId);
+    }
+    mountTrainingDashboardBridge();
+    sendRequestAutoConnect();
+    tryShowPowerSourceSelectPopup();
+  }
+  function checkActiveScreenForAutoConnect() {
+    var activeId = getActiveScreenId();
+    if (activeId && isTargetScreen(activeId)) {
+      onTargetScreenBecameActive(activeId);
+    } else {
+      _lastActiveTargetScreenId = null;
+    }
+  }
+  var _observerRef = null;
+  var _checkActiveDebounceTimer = null;
+  function startActiveScreenObserver() {
+    if (_observerRef) return;
+    try {
+      var body = global.document && global.document.body;
+      if (!body) return;
+      _observerRef = new MutationObserver(function () {
+        if (_checkActiveDebounceTimer) clearTimeout(_checkActiveDebounceTimer);
+        _checkActiveDebounceTimer = setTimeout(function () {
+          _checkActiveDebounceTimer = null;
+          checkActiveScreenForAutoConnect();
+        }, 150);
+      });
+      _observerRef.observe(body, { attributes: true, attributeFilter: ['class'], subtree: true, childList: false });
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[trainingDashboardBridge] 훈련 화면 active 감시(MutationObserver) 시작');
+      }
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[trainingDashboardBridge] MutationObserver 실패', e);
+    }
+  }
+  /** 앱/디버깅용: 훈련 화면에서 수동으로 자동연결 트리거 */
+  function triggerAutoConnectNow() {
+    mountTrainingDashboardBridge();
+    sendRequestAutoConnect();
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] triggerAutoConnectNow() 호출됨');
+    }
+  }
+  /** 주기적으로 showScreen이 덮어씌워졌는지 확인 후 재래핑 */
+  function ensureShowScreenWrapped() {
+    if (typeof global.showScreen !== 'function') return;
+    if (global.showScreen._stelvioTrainingBridgeWrap) return;
+    _stelvioShowScreenWrapped = false;
+    wrapShowScreen();
   }
 
   var _initialAutoConnectDone = false;
@@ -796,13 +858,31 @@
       _stelvioShowScreenWrapped = false;
       if (typeof global.showScreen === 'function') wrapShowScreen();
       tryInitialAutoConnect();
+      startActiveScreenObserver();
+      setTimeout(checkActiveScreenForAutoConnect, 100);
+      setTimeout(checkActiveScreenForAutoConnect, 600);
     });
   }
   setTimeout(installShowScreenAndInitialAutoConnect, 0);
   setTimeout(installShowScreenAndInitialAutoConnect, 300);
+  setTimeout(function () {
+    startActiveScreenObserver();
+    checkActiveScreenForAutoConnect();
+  }, 100);
   setTimeout(tryInitialAutoConnect, 500);
   setTimeout(tryInitialAutoConnect, 1000);
   setTimeout(tryInitialAutoConnect, 1500);
+  var _rewrapCount = 0;
+  var _rewrapInterval = setInterval(function () {
+    ensureShowScreenWrapped();
+    checkActiveScreenForAutoConnect();
+    _rewrapCount += 1;
+    if (_rewrapCount >= 10) clearInterval(_rewrapInterval);
+  }, 2000);
+  if (typeof global.document !== 'undefined' && global.document.readyState === 'complete') {
+    startActiveScreenObserver();
+    checkActiveScreenForAutoConnect();
+  }
 
   function tryInterceptConnectButton() {
     if (!isAppEnvironmentNow()) return;
@@ -826,6 +906,7 @@
     TARGET_SCREENS: TARGET_SCREENS,
     mount: mountTrainingDashboardBridge,
     teardown: teardownTrainingDashboardBridge,
+    triggerAutoConnectNow: triggerAutoConnectNow,
     abortAutoConnect: abortAutoConnect,
     openDeviceSettingPopup: openDeviceSettingPopup,
     closeDeviceSettingPopup: closeDeviceSettingPopup,
@@ -839,6 +920,7 @@
     parseHeartRateUpdate: parseHeartRateUpdate
   };
   global.abortAutoConnect = abortAutoConnect;
+  global.StelvioTriggerAutoConnect = triggerAutoConnectNow;
   global.openDeviceSettingPopup = openDeviceSettingPopup;
   global.closeDeviceSettingPopup = closeDeviceSettingPopup;
   global.closePowerSourceSelectPopup = closePowerSourceSelectPopup;
