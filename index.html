@@ -1404,13 +1404,13 @@
             
             <!-- 앱 설치 링크 박스 -->
             <div class="auth-app-download-box">
-              <p class="auth-app-download-title">STELVIO App S/W Download</p>
+              <p class="auth-app-download-title">STELVIO App Download</p>
               <div class="auth-app-download-icons">
-                <a href="#" id="authAppDownloadAndroid" class="auth-app-download-link" title="Android 앱 다운로드" target="_blank" rel="noopener">
-                  <img src="assets/img/android.png" alt="Android" class="auth-app-download-icon">
+                <a href="https://appdistribution.firebase.dev/i/96a25d97d44564c5" id="authAppDownloadAndroid" class="auth-app-download-link" title="Android 앱 다운로드" target="_blank" rel="noopener">
+                  <img src="assets/img/android.png" alt="Android" class="auth-app-download-icon auth-app-download-icon-ref">
                 </a>
-                <a href="#" id="authAppDownloadIos" class="auth-app-download-link" title="iOS 앱 다운로드" target="_blank" rel="noopener">
-                  <img src="assets/img/appl.png" alt="iOS" class="auth-app-download-icon">
+                <a href="javascript:void(0)" id="authAppDownloadIos" class="auth-app-download-link" title="iOS 앱 다운로드" onclick="if(typeof showStelvioIosComingSoonPopup==='function')showStelvioIosComingSoonPopup(); return false;">
+                  <img src="assets/img/appl.png" alt="iOS" class="auth-app-download-icon auth-app-download-icon-ref">
                 </a>
               </div>
             </div>
@@ -1476,6 +1476,15 @@
               </div>
             </div>
           </div>
+            
+            <!-- iOS 앱 향후 구현 예정 팝업 -->
+            <div id="stelvioIosComingSoonModal" class="stelvio-coming-soon-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10003;">
+              <div class="stelvio-coming-soon-overlay" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();"></div>
+              <div class="stelvio-coming-soon-content">
+                <p class="stelvio-coming-soon-message">향후 구현 예정입니다</p>
+                <button type="button" class="stelvio-coming-soon-btn" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();">확인</button>
+              </div>
+            </div>
             
             <!-- 새 사용자 추가 폼 (Google 로그인 사용으로 더 이상 필요 없음 - 숨김) -->
             <div class="new-user-form-container" id="newUserFormContainer" style="display: none !important;">
@@ -10507,6 +10516,28 @@
         statusEl.style.display = 'block';
       }
     }
+    
+    /**
+     * iOS 앱 "향후 구현 예정" 팝업 표시/닫기
+     */
+    function showStelvioIosComingSoonPopup() {
+      var modal = document.getElementById('stelvioIosComingSoonModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    function closeStelvioIosComingSoonPopup() {
+      var modal = document.getElementById('stelvioIosComingSoonModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+    window.showStelvioIosComingSoonPopup = showStelvioIosComingSoonPopup;
+    window.closeStelvioIosComingSoonPopup = closeStelvioIosComingSoonPopup;
     
     // 전역 함수로 등록
     window.showForgotPasswordModal = showForgotPasswordModal;
