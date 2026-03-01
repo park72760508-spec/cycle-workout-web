@@ -4578,6 +4578,11 @@ function togglePause() {
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
 
+  // 블루투스 개인훈련 화면 연결 버튼에서 센서연결만 열기 위해 온 경우: 스플래시 건너뛰기
+  if (window.location.search.indexOf('openDeviceSettings=1') !== -1) {
+    window._openDeviceSettingsFromBluetooth = true;
+  }
+
   // Strava 콜백에서 돌아온 경우 베이스캠프 화면으로 이동
   const stravaCallbackReturn = localStorage.getItem('stravaCallbackReturn');
   if (stravaCallbackReturn === 'basecampScreen') {
@@ -4609,19 +4614,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 500);
   }
 
-  // 블루투스 개인훈련 화면 연결 버튼에서 이동 시: openDeviceSettings=1 → 센서 연결(Device Settings) 오버레이 열기
+  // 블루투스 개인훈련 화면 연결 버튼에서 이동 시: openDeviceSettings=1 → 스플래시 없이 베이스캠프 + 센서 연결 오버레이만 열기
   if (window.location.search.indexOf('openDeviceSettings=1') !== -1) {
     try {
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname + (window.location.hash || ''));
       }
     } catch (e) {}
-    setTimeout(function() {
+    function openBasecampAndDeviceSettingsPopup() {
       if (typeof showScreen === 'function') showScreen('basecampScreen');
       if (typeof window.openDeviceSettingPopup === 'function') {
         window.openDeviceSettingPopup();
+      } else {
+        setTimeout(openBasecampAndDeviceSettingsPopup, 100);
       }
-    }, 600);
+    }
+    setTimeout(openBasecampAndDeviceSettingsPopup, 200);
   }
 
   // 노트북 훈련 화면: 좌측 베이스캠프 이동 버튼 (확인 후 이동)
@@ -4642,11 +4650,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const splashVideo = document.getElementById("splashVideo");
   const splashLoaderProgress = document.getElementById("splashLoaderProgress");
   
-  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
-  const isSplashActive = splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
+  // 블루투스 연결 버튼에서 센서연결만 열려고 온 경우 스플래시 비활성화 (초기 로딩 화면 건너뛰기)
+  const skipSplashForDeviceSettings = !!window._openDeviceSettingsFromBluetooth;
+  const isSplashActive = !skipSplashForDeviceSettings && splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
   
   // 스플래시 화면 보호 플래그 (전역)
   window.isSplashActive = isSplashActive || window.isSplashActive;
+  
+  if (skipSplashForDeviceSettings && splashScreen) {
+    splashScreen.style.setProperty('display', 'none', 'important');
+    splashScreen.classList.remove('active');
+  }
   
   // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
   if (window.isSplashActive) {
