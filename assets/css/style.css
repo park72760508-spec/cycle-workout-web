@@ -6629,7 +6629,7 @@ button[aria-disabled="true"] {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* 개인 훈련 화면: 사용자 정보 + 연결 버튼 한 줄 (좌: 사용자, 우: 연결) */
+/* 노트북 훈련 화면 상단: 좌(베이스캠프 이동) | 중(사용자 정보) | 우(연결 버튼) 3분할 */
 .enhanced-training-user-info-with-connect {
   display: flex;
   flex-direction: row;
@@ -6638,11 +6638,50 @@ button[aria-disabled="true"] {
   gap: 12px;
   text-align: left;
 }
-.enhanced-training-user-info-with-connect .enhanced-training-user-info-left {
+.enhanced-training-header-left {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+.training-screen-exit-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.training-screen-exit-icon {
+  width: auto;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
+.enhanced-training-header-center {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
-/* 개인 훈련 화면 상단: 훈련등급 아이콘 + 사용자 정보 한 줄 */
+.enhanced-training-header-center .training-screen-grade-icon {
+  flex-shrink: 0;
+}
+.enhanced-training-header-center .enhanced-training-user-info-text {
+  min-width: 0;
+}
+.enhanced-training-header-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* 개인 훈련 화면 상단: 훈련등급 아이콘 + 사용자 정보 (가운데 블록 내) */
 .training-screen-top-row {
   display: flex;
   flex-direction: row;
