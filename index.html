@@ -14308,21 +14308,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       window.showScreen = function(screenId) {
         console.log('[showScreen] 화면 전환 요청:', screenId);
         
-        // 베이스캠프로 전환 시: "인증 후 베이스캠프 진입"일 때만 주가마일리지 TOP10 표시 허용. 블루투스 연결버튼(센서연결만 띄우기) 흐름에서는 TOP10 미표시.
-        if (screenId === 'basecampScreen') {
-          var isDeviceSettingsOnlyFlow = !!(window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly);
-          if (!isDeviceSettingsOnlyFlow) {
-            var authScreenEl = document.getElementById('authScreen');
-            var authCurrentlyActive = authScreenEl && (authScreenEl.classList.contains('active') || window.getComputedStyle(authScreenEl).display !== 'none');
-            var curUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
-            var authUid = (typeof window.auth !== 'undefined' && window.auth.currentUser && window.auth.currentUser.uid) ||
-              (typeof window.authV9 !== 'undefined' && window.authV9.currentUser && window.authV9.currentUser.uid);
-            var isAuthenticated = (curUser && (curUser.id || curUser.uid)) || authUid;
-            if (authCurrentlyActive && isAuthenticated) {
-              window.__basecampShownAfterAuth = true;
-            }
-          }
-        }
+        // 주간 마일리지 TOP10: __basecampShownAfterAuth는 인증 완료 처리(로그인/회원가입 성공)에서만 true로 설정.
+        // showScreen 래퍼에서는 설정하지 않음 → 초기 로딩 후 베이스캠프로 바로 갈 때 TOP10 미표시, 인증 후 베이스캠프 진입 시에만 1회 표시.
         
         // originalShowScreenFunc 호출 시도
         var originalCalled = false;
