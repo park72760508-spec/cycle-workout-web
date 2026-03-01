@@ -214,11 +214,7 @@ while (!myTrackId) {
 
 // 초기 표시 (나중에 사용자 이름으로 업데이트됨)
 // 상단 사용자 이름 라벨의 나가기 기능 제거 (종료 메뉴로 이동)
-const bikeIdDisplayEl = document.getElementById('bike-id-display');
-if (bikeIdDisplayEl) {
-    bikeIdDisplayEl.innerText = `Track ${myTrackId}`;
-    // 클릭 이벤트 제거 - 나가기 기능은 종료 메뉴로 이동
-}
+// 좌측 상단은 left_a.png + 사용자 이름 표시 (bluetooth-dashboard-user-name). 클릭 시 베이스캠프로 이동·화면 닫기
 
 // 사용자 FTP 값 저장 (전역 변수)
 let userFTP = 200; // 기본값 200W
@@ -1039,9 +1035,9 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).on('value', (snapshot) => {
             window.currentUser.name = userName;
             
             // UI 업데이트
-            const bikeIdDisplay = document.getElementById('bike-id-display');
-            if (bikeIdDisplay && bikeIdDisplay.innerText.startsWith('Track ')) {
-                bikeIdDisplay.innerText = userName;
+            const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+            if (nameEl) {
+                nameEl.textContent = userName || '사용자';
                 console.log('[BluetoothIndividual] ✅ 사용자 이름 실시간 업데이트:', userName);
             }
         }
@@ -1050,9 +1046,9 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).on('value', (snapshot) => {
 
 // 사용자 이름 업데이트 함수 (강화된 버전 - 여러 소스에서 사용자 정보 확인)
 function updateUserName(data) {
-    const bikeIdDisplay = document.getElementById('bike-id-display');
-    if (!bikeIdDisplay) {
-        console.warn('[BluetoothIndividual] bike-id-display 요소를 찾을 수 없습니다.');
+    const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+    if (!nameEl) {
+        console.warn('[BluetoothIndividual] bluetooth-dashboard-user-name 요소를 찾을 수 없습니다.');
         return;
     }
     
@@ -1095,33 +1091,18 @@ function updateUserName(data) {
     }
     
     if (userName && userName !== 'null' && userName !== 'undefined') {
-        bikeIdDisplay.innerText = userName;
+        nameEl.textContent = userName;
         console.log('[BluetoothIndividual] ✅ 사용자 이름 표시 완료:', userName);
     } else {
-        // 이름이 없으면 Track 번호 표시 (임시)
-        bikeIdDisplay.innerText = `Track ${myTrackId}`;
-        console.warn('[BluetoothIndividual] ⚠️ 사용자 이름을 찾을 수 없어 Track 번호 표시:', myTrackId);
-        
-        // 사용자 정보를 다시 시도하여 로드 (비동기)
-        setTimeout(() => {
-            loadUserInfoAndUpdateName();
-        }, 500);
+        nameEl.textContent = '사용자';
+        setTimeout(() => loadUserInfoAndUpdateName(), 500);
     }
-    
-    // 상단 사용자 이름 라벨의 나가기 기능 제거 (종료 메뉴로 이동)
-    // 클릭 이벤트 제거 - 나가기 기능은 종료 메뉴로 이동
 }
 
 // 사용자 정보를 로드하고 이름을 업데이트하는 함수 (재시도 로직 포함)
 async function loadUserInfoAndUpdateName() {
-    const bikeIdDisplay = document.getElementById('bike-id-display');
-    if (!bikeIdDisplay) return;
-    
-    // 이미 사용자 이름이 표시되어 있으면 중단
-    if (bikeIdDisplay.innerText && !bikeIdDisplay.innerText.startsWith('Track ')) {
-        console.log('[BluetoothIndividual] 이미 사용자 이름이 표시되어 있음:', bikeIdDisplay.innerText);
-        return;
-    }
+    const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+    if (!nameEl) return;
     
     let userName = null;
     
@@ -1188,10 +1169,10 @@ async function loadUserInfoAndUpdateName() {
     
     // 사용자 이름 업데이트
     if (userName && userName !== 'null' && userName !== 'undefined') {
-        bikeIdDisplay.innerText = userName;
+        nameEl.textContent = userName;
         console.log('[BluetoothIndividual] ✅ 사용자 이름 업데이트 완료:', userName);
     } else {
-        console.warn('[BluetoothIndividual] ⚠️ 사용자 이름을 찾을 수 없습니다. Track 번호 유지:', myTrackId);
+        nameEl.textContent = '사용자';
     }
 }
 
@@ -4730,6 +4711,24 @@ function exitBluetoothIndividualTraining() {
     })();
 }
 
+/** 좌측 상단 둥근네모(이름) 클릭 시 베이스캠프로 이동하고 블루투스 화면 닫기 */
+function goToBaseCampAndClose() {
+    try {
+        if (window.opener && typeof window.opener.showScreen === 'function') {
+            window.opener.showScreen('basecampScreen');
+            window.close();
+            return;
+        }
+        if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'NAVIGATE_BASE_CAMP', screen: 'basecampScreen' }));
+            window.close();
+            return;
+        }
+    } catch (e) {}
+    window.location.href = 'index.html#basecampScreen';
+}
+window.goToBaseCampAndClose = goToBaseCampAndClose;
+
 // 전역 함수로 노출
 window.toggleBluetoothDropdown = toggleBluetoothDropdown;
 window.connectBluetoothDevice = connectBluetoothDevice;
@@ -4939,11 +4938,10 @@ function initializeUserInfo() {
         
         // 사용자 이름이 있으면 모든 관련 요소 업데이트
         if (userName && userName !== 'null' && userName !== 'undefined') {
-            // bike-id-display 요소 업데이트 (메인 표시)
-            const bikeIdDisplay = document.getElementById('bike-id-display');
-            if (bikeIdDisplay) {
-                bikeIdDisplay.innerText = userName;
-                console.log('[Bluetooth 개인 훈련] ✅ bike-id-display 업데이트:', userName);
+            const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+            if (nameEl) {
+                nameEl.textContent = userName;
+                console.log('[Bluetooth 개인 훈련] ✅ 좌측 사용자 이름 업데이트:', userName);
             }
             
             // bluetoothUserName 요소 업데이트 (있는 경우)
@@ -4972,7 +4970,6 @@ if (document.readyState === 'loading') {
         // 연결 버튼 이벤트 리스너 확인 및 등록
         const connectBtn = document.getElementById('bluetoothConnectBtn');
         if (connectBtn) {
-            // 기존 onclick 제거 후 이벤트 리스너로 재등록 (더 안정적)
             connectBtn.onclick = null;
             connectBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -4982,6 +4979,16 @@ if (document.readyState === 'loading') {
             console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료');
         } else {
             console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
+        }
+        // 좌측 상단 둥근네모(이름) 클릭 시 확인 후 베이스캠프로 이동·화면 닫기
+        const userNameWrap = document.getElementById('bluetooth-user-name-wrap');
+        if (userNameWrap) {
+            userNameWrap.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!confirm('훈련화면을 정말 종료하시겠습니까?')) return;
+                if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
+            });
         }
         
         // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
@@ -5038,10 +5045,8 @@ if (document.readyState === 'loading') {
     // 앱 WebView일 때 자동 연결 요청 (앱이 기억한 기기로 연결)
     sendRequestAutoConnectIfInApp();
     
-    // 연결 버튼 이벤트 리스너 확인 및 등록
     const connectBtn = document.getElementById('bluetoothConnectBtn');
     if (connectBtn) {
-        // 기존 onclick 제거 후 이벤트 리스너로 재등록 (더 안정적)
         connectBtn.onclick = null;
         connectBtn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -5051,6 +5056,15 @@ if (document.readyState === 'loading') {
         console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료 (DOM 이미 로드됨)');
     } else {
         console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
+    }
+    const userNameWrap = document.getElementById('bluetooth-user-name-wrap');
+    if (userNameWrap) {
+        userNameWrap.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!confirm('훈련화면을 정말 종료하시겠습니까?')) return;
+            if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
+        });
     }
     
     // 사용자 정보 초기화 (window.currentUser에서 가져오기)

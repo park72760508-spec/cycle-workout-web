@@ -13617,21 +13617,17 @@ async function startMobileDashboard() {
       }
     }
     
-    // 사용자 이름 표시 및 뒤로가기 기능 추가
-    const bikeIdDisplay = safeGetElement('mobile-bike-id-display');
-    if (bikeIdDisplay) {
-      if (currentUser && currentUser.name) {
-        bikeIdDisplay.textContent = currentUser.name;
-      } else {
-        bikeIdDisplay.textContent = 'Bike ?';
-      }
-      
-      // 뒤로가기 기능 추가 (디자인 변경 없음) - 훈련 준비 화면으로 이동
-      bikeIdDisplay.style.cursor = 'pointer';
-      bikeIdDisplay.title = '뒤로 가기';
-      bikeIdDisplay.onclick = function(e) {
+    // 좌측 상단: 녹색 둥근네모(left_a.png) + 사용자 이름 표시 및 뒤로가기
+    const mobileUserNameWrap = safeGetElement('mobile-dashboard-user-name-wrap');
+    const mobileUserNameEl = safeGetElement('mobile-dashboard-user-name');
+    if (mobileUserNameEl) {
+      mobileUserNameEl.textContent = (currentUser && currentUser.name) ? currentUser.name : '사용자';
+    }
+    if (mobileUserNameWrap) {
+      mobileUserNameWrap.title = '뒤로 가기';
+      mobileUserNameWrap.onclick = function(e) {
         e.stopPropagation();
-        // 훈련 준비 화면으로 이동
+        if (!confirm('훈련화면을 정말 종료하시겠습니까?')) return;
         if (typeof showScreen === 'function') {
           showScreen('trainingReadyScreen', true);
         }
