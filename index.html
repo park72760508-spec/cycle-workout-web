@@ -1643,6 +1643,18 @@
     </div>
   </div>
 
+  <!-- 훈련 화면 종료 확인 팝업 (모바일/노트북/블루투스 - 사용자 이름 클릭 시) -->
+  <div id="stelvioExitConfirmModal" class="stelvio-exit-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10004;">
+    <div class="stelvio-exit-confirm-overlay" onclick="if(typeof closeStelvioExitConfirmPopup==='function')closeStelvioExitConfirmPopup();"></div>
+    <div class="stelvio-exit-confirm-content">
+      <p class="stelvio-exit-confirm-message">정말 종료하시겠습니까?</p>
+      <div class="stelvio-exit-confirm-buttons">
+        <button type="button" class="stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel" onclick="if(typeof closeStelvioExitConfirmPopup==='function')closeStelvioExitConfirmPopup();">취소</button>
+        <button type="button" class="stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok" id="stelvioExitConfirmOkBtn" onclick="if(typeof window.__stelvioExitConfirmCallback==='function'){ window.__stelvioExitConfirmCallback(); } if(typeof closeStelvioExitConfirmPopup==='function')closeStelvioExitConfirmPopup();">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 사용자 등록 화면 -->
   <div id="registerScreen" class="screen" style="display: none;">
     <div class="auth-main-container">
@@ -10538,6 +10550,31 @@
     }
     window.showStelvioIosComingSoonPopup = showStelvioIosComingSoonPopup;
     window.closeStelvioIosComingSoonPopup = closeStelvioIosComingSoonPopup;
+    
+    /**
+     * 훈련 화면 종료 확인 팝업 표시 (확인 시 callback 실행 후 닫기, 취소/오버레이 시 닫기만)
+     * @param {function} callback - 확인 클릭 시 실행할 함수 (예: function(){ showScreen('basecampScreen'); })
+     */
+    function showStelvioExitConfirmPopup(callback) {
+      window.__stelvioExitConfirmCallback = typeof callback === 'function' ? callback : function() {};
+      var modal = document.getElementById('stelvioExitConfirmModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    function closeStelvioExitConfirmPopup() {
+      var modal = document.getElementById('stelvioExitConfirmModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+      window.__stelvioExitConfirmCallback = null;
+    }
+    window.showStelvioExitConfirmPopup = showStelvioExitConfirmPopup;
+    window.closeStelvioExitConfirmPopup = closeStelvioExitConfirmPopup;
     
     // 전역 함수로 등록
     window.showForgotPasswordModal = showForgotPasswordModal;

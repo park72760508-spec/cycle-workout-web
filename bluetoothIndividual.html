@@ -723,6 +723,41 @@
             border-radius: 3px;
             background: rgba(255, 255, 255, 0.1);
         }
+        /* 훈련 화면 종료 확인 팝업 (STELVIO 스타일) */
+        .stelvio-exit-confirm-modal.hidden { display: none !important; }
+        .stelvio-exit-confirm-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(4px);
+        }
+        .stelvio-exit-confirm-content {
+            position: relative; z-index: 1; padding: 28px 32px; min-width: 280px; max-width: 90%;
+            background: rgba(255, 255, 255, 0.98); border-radius: 16px;
+            border: 1px solid rgba(102, 126, 234, 0.25);
+            box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.1);
+            text-align: center;
+        }
+        .stelvio-exit-confirm-message {
+            margin: 0 0 24px 0; font-size: 16px; font-weight: 600; color: #2d3748; line-height: 1.4;
+        }
+        .stelvio-exit-confirm-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .stelvio-exit-confirm-btn {
+            flex: 1; min-width: 100px; padding: 12px 20px; font-size: 15px; font-weight: 600;
+            border: none; border-radius: 10px; cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stelvio-exit-confirm-btn-cancel {
+            background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;
+        }
+        .stelvio-exit-confirm-btn-cancel:hover { background: #e2e8f0; transform: translateY(-1px); }
+        .stelvio-exit-confirm-btn-ok {
+            color: #fff; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+        }
+        .stelvio-exit-confirm-btn-ok:hover {
+            transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .stelvio-exit-confirm-btn-ok:active,
+        .stelvio-exit-confirm-btn-cancel:active { transform: translateY(0); }
     </style>
 </head>
 <body>
@@ -1483,7 +1518,41 @@
             request: requestWakeLock,
             release: releaseWakeLock
         };
+        
+        /* 훈련 화면 종료 확인 팝업 (STELVIO 스타일) */
+        function showStelvioExitConfirmPopup(callback) {
+            window.__stelvioExitConfirmCallback = typeof callback === 'function' ? callback : function() {};
+            var modal = document.getElementById('stelvioExitConfirmModal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        function closeStelvioExitConfirmPopup() {
+            var modal = document.getElementById('stelvioExitConfirmModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+            window.__stelvioExitConfirmCallback = null;
+        }
+        window.showStelvioExitConfirmPopup = showStelvioExitConfirmPopup;
+        window.closeStelvioExitConfirmPopup = closeStelvioExitConfirmPopup;
     </script>
+    
+    <!-- 훈련 화면 종료 확인 팝업 (블루투스 훈련 화면) -->
+    <div id="stelvioExitConfirmModal" class="stelvio-exit-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10004;">
+        <div class="stelvio-exit-confirm-overlay" onclick="closeStelvioExitConfirmPopup();"></div>
+        <div class="stelvio-exit-confirm-content">
+            <p class="stelvio-exit-confirm-message">정말 종료하시겠습니까?</p>
+            <div class="stelvio-exit-confirm-buttons">
+                <button type="button" class="stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel" onclick="closeStelvioExitConfirmPopup();">취소</button>
+                <button type="button" class="stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok" onclick="if(typeof window.__stelvioExitConfirmCallback==='function'){ window.__stelvioExitConfirmCallback(); } closeStelvioExitConfirmPopup();">확인</button>
+            </div>
+        </div>
+    </div>
     
     <script src="assets/js/bluetooth.js"></script>
     <script src="assets/js/ErgController.js"></script>
