@@ -411,10 +411,11 @@
   }
 
   /**
-   * 훈련 화면 진입 시 앱에 자동 연결 요청.
+   * 훈련 화면 진입 시 앱에 자동 연결 요청. (앱 WebView 전용 — 웹 전용에서는 표시/요청 없음)
    * - 진입 시 즉시 '연결중' 표시(낙관적). ReactNativeWebView가 없으면 재시도(100,300,600,1000,2000ms).
    */
   function sendRequestAutoConnect() {
+    if (!isAppEnvironmentNow()) return;
     _autoConnectRetryCount = 0;
     global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
     setConnectButtonConnectingLabel(true);

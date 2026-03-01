@@ -141,16 +141,8 @@ function abortBluetoothIndividualAutoConnect() {
 var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS = [100, 300, 600, 1000, 2000];
 var _bluetoothIndividualAutoConnectRetryCount = 0;
 
-/** 페이지 로드 즉시 앱에 자동 연결 요청. 진입 시 즉시 '연결중' 표시, 브릿지 없으면 재시도 */
+/** 페이지 로드 시 앱 WebView일 때만 자동 연결 요청. 웹 전용에서는 '연결중' 표시 및 요청 없음. */
 function sendRequestAutoConnectIfInApp() {
-    window._bluetoothIndividualAutoConnectInProgress = true;
-    setBluetoothIndividualConnectButtonLabel(true);
-    if (window._bluetoothIndividualAutoConnectTimeoutId != null) clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
-    window._bluetoothIndividualAutoConnectTimeoutId = setTimeout(function () {
-        window._bluetoothIndividualAutoConnectTimeoutId = null;
-        if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
-    }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
-
     function tryPost() {
         try {
             if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') {
@@ -164,10 +156,16 @@ function sendRequestAutoConnectIfInApp() {
                     setTimeout(tryPost, delay);
                     return;
                 }
-                if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] 재시도 후에도 ReactNativeWebView 없음');
                 return;
             }
             _bluetoothIndividualAutoConnectRetryCount = 0;
+            window._bluetoothIndividualAutoConnectInProgress = true;
+            setBluetoothIndividualConnectButtonLabel(true);
+            if (window._bluetoothIndividualAutoConnectTimeoutId != null) clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
+            window._bluetoothIndividualAutoConnectTimeoutId = setTimeout(function () {
+                window._bluetoothIndividualAutoConnectTimeoutId = null;
+                if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
+            }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
             var payload = { type: 'REQUEST_AUTO_CONNECT' };
             window.ReactNativeWebView.postMessage(JSON.stringify(payload));
             if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] REQUEST_AUTO_CONNECT 발송 완료', payload);
