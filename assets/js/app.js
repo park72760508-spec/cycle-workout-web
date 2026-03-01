@@ -4582,12 +4582,36 @@ document.addEventListener("DOMContentLoaded", () => {
   if (window.location.search.indexOf('openDeviceSettings=1') !== -1) {
     window._openDeviceSettingsFromBluetooth = true;
   }
-  // iframe으로 센서연결 오버레이만 띄울 때 (모바일과 동일하게 팝업만 표시)
+  // iframe으로 센서연결 오버레이만 띄울 때 (모바일과 동일하게 팝업만 표시) — head에서 이미 설정될 수 있음
   if (window.location.search.indexOf('openDeviceSettingsOnly=1') !== -1) {
     window._openDeviceSettingsOnly = true;
   }
 
-  // Strava 콜백에서 돌아온 경우 베이스캠프 화면으로 이동
+  // openDeviceSettingsOnly=1 이면 초기로딩·인증·베이스캠프 진행 없이 센서연결 오버레이만 띄움 (블루투스 훈련화면 연결버튼)
+  if (window._openDeviceSettingsOnly) {
+    var splashEl = document.getElementById('splashScreen');
+    if (splashEl) {
+      splashEl.style.setProperty('display', 'none', 'important');
+      splashEl.classList.remove('active');
+    }
+    document.querySelectorAll('.screen').forEach(function (s) {
+      s.style.setProperty('display', 'none', 'important');
+      s.classList.remove('active');
+    });
+    function openDeviceSettingsOverlayOnly() {
+      if (typeof window.openDeviceSettingPopup === 'function') {
+        window.openDeviceSettingPopup();
+      } else {
+        setTimeout(openDeviceSettingsOverlayOnly, 100);
+      }
+    }
+    setTimeout(openDeviceSettingsOverlayOnly, 150);
+    window.isSplashActive = false;
+    // 이하 Strava/해시/베이스캠프 등 다른 화면 전환 로직은 실행하지 않음 (return 아님, 아래 조건으로 스킵)
+  }
+
+  // Strava 콜백에서 돌아온 경우 베이스캠프 화면으로 이동 (센서연결 오버레이 전용 모드가 아닐 때만)
+  if (!window._openDeviceSettingsOnly) {
   const stravaCallbackReturn = localStorage.getItem('stravaCallbackReturn');
   if (stravaCallbackReturn === 'basecampScreen') {
     localStorage.removeItem('stravaCallbackReturn');
@@ -4636,6 +4660,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     setTimeout(openBasecampAndDeviceSettingsPopup, 200);
   }
+  } // end if (!window._openDeviceSettingsOnly) — 센서연결 오버레이 전용 모드에서는 Strava/해시/베이스캠프 전환 없음
 
   // 노트북 훈련 화면: 좌측 베이스캠프 이동 버튼 (확인 후 이동)
   var trainingScreenExitBtn = document.getElementById('trainingScreenExitToBasecamp');
