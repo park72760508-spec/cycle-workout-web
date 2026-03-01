@@ -4602,6 +4602,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 500);
   }
 
+  // 노트북 훈련 화면: 좌측 베이스캠프 이동 버튼 (확인 후 이동)
+  var trainingScreenExitBtn = document.getElementById('trainingScreenExitToBasecamp');
+  if (trainingScreenExitBtn) {
+    trainingScreenExitBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!confirm('정말 종료하시겠습니까?')) return;
+      if (typeof showScreen === 'function') {
+        showScreen('basecampScreen');
+      }
+    });
+  }
+
   // 스플래시 화면 처리 (최우선 실행 - 다른 모든 초기화보다 먼저)
   const splashScreen = document.getElementById("splashScreen");
   const splashVideo = document.getElementById("splashVideo");
