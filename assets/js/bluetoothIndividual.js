@@ -138,23 +138,44 @@ function abortBluetoothIndividualAutoConnect() {
     clearBluetoothIndividualAutoConnect();
 }
 
-/** 페이지 로드 즉시 앱에 자동 연결 요청 (앱이 기억한 기기로 연결). 수동 권한·목록 클릭 UX 유지 */
+var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS = [100, 300, 600, 1000, 2000];
+var _bluetoothIndividualAutoConnectRetryCount = 0;
+
+/** 페이지 로드 즉시 앱에 자동 연결 요청. 진입 시 즉시 '연결중' 표시, 브릿지 없으면 재시도 */
 function sendRequestAutoConnectIfInApp() {
-    try {
-        if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') return;
-        var payload = { type: 'REQUEST_AUTO_CONNECT' };
-        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-        window._bluetoothIndividualAutoConnectInProgress = true;
-        setBluetoothIndividualConnectButtonLabel(true);
-        if (window._bluetoothIndividualAutoConnectTimeoutId != null) clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
-        window._bluetoothIndividualAutoConnectTimeoutId = setTimeout(function () {
-            window._bluetoothIndividualAutoConnectTimeoutId = null;
-            if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
-        }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
-        if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] 훈련 화면 진입 → REQUEST_AUTO_CONNECT 발송 완료', payload);
-    } catch (e) {
-        if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendRequestAutoConnectIfInApp failed', e);
+    window._bluetoothIndividualAutoConnectInProgress = true;
+    setBluetoothIndividualConnectButtonLabel(true);
+    if (window._bluetoothIndividualAutoConnectTimeoutId != null) clearTimeout(window._bluetoothIndividualAutoConnectTimeoutId);
+    window._bluetoothIndividualAutoConnectTimeoutId = setTimeout(function () {
+        window._bluetoothIndividualAutoConnectTimeoutId = null;
+        if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
+    }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
+
+    function tryPost() {
+        try {
+            if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') {
+                var idx = _bluetoothIndividualAutoConnectRetryCount;
+                if (idx < BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS.length) {
+                    var delay = BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS[idx];
+                    _bluetoothIndividualAutoConnectRetryCount += 1;
+                    if (typeof console !== 'undefined' && console.log) {
+                        console.log('[BluetoothIndividual] ReactNativeWebView 대기 중, ' + delay + 'ms 후 재시도');
+                    }
+                    setTimeout(tryPost, delay);
+                    return;
+                }
+                if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] 재시도 후에도 ReactNativeWebView 없음');
+                return;
+            }
+            _bluetoothIndividualAutoConnectRetryCount = 0;
+            var payload = { type: 'REQUEST_AUTO_CONNECT' };
+            window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+            if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] REQUEST_AUTO_CONNECT 발송 완료', payload);
+        } catch (e) {
+            if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendRequestAutoConnectIfInApp failed', e);
+        }
     }
+    tryPost();
 }
 
 // 자동 연결 성공 시 "연결중" 해제 및 연결 상태 UI 갱신 (앱에서 deviceConnected 이벤트 발송 시)

@@ -21,6 +21,9 @@
   var AUTO_CONNECT_IN_PROGRESS_KEY = '_stelvioAutoConnectInProgress';
   var AUTO_CONNECT_TIMEOUT_MS = 20000;
   var _autoConnectTimeoutId = null;
+  /** 브릿지 미주입 시 재시도 간격(ms). 앱에서 ReactNativeWebView가 늦게 들어올 수 있음 */
+  var AUTO_CONNECT_RETRY_DELAYS_MS = [100, 300, 600, 1000, 2000];
+  var _autoConnectRetryCount = 0;
 
   /** 파워/케이던스 소스 선택: 'powerMeter' | 'trainer' | null(미선택). 파워미터·스마트트레이너 동시 연결 시 팝업으로 선택 */
   var POWER_CADENCE_SOURCE_KEY = '_stelvioPowerCadenceSource';
@@ -400,36 +403,55 @@
     clearAutoConnectInProgress();
   }
 
-  /** 훈련 화면 진입 시 앱에 자동 연결 요청 (앱이 기억한 기기로 연결). 트리거만 전송, 버튼 옆 '연결 중' 표시 */
+  /**
+   * 훈련 화면 진입 시 앱에 자동 연결 요청.
+   * - 진입 시 즉시 '연결중' 표시(낙관적). ReactNativeWebView가 없으면 재시도(100,300,600,1000,2000ms).
+   */
   function sendRequestAutoConnect() {
-    var post = global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function';
-    if (!post) {
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[trainingDashboardBridge] sendRequestAutoConnect: ReactNativeWebView 없음, 스킵');
+    _autoConnectRetryCount = 0;
+    global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
+    setConnectButtonConnectingLabel(true);
+    if (_autoConnectTimeoutId != null) clearTimeout(_autoConnectTimeoutId);
+    _autoConnectTimeoutId = setTimeout(function () {
+      _autoConnectTimeoutId = null;
+      if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
+        clearAutoConnectInProgress();
       }
-      return;
-    }
-    try {
-      var payload = { type: 'REQUEST_AUTO_CONNECT' };
-      global.ReactNativeWebView.postMessage(JSON.stringify(payload));
-      global[AUTO_CONNECT_SENT_KEY] = true;
-      global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
-      setConnectButtonConnectingLabel(true);
-      if (_autoConnectTimeoutId != null) clearTimeout(_autoConnectTimeoutId);
-      _autoConnectTimeoutId = setTimeout(function () {
-        _autoConnectTimeoutId = null;
-        if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
-          clearAutoConnectInProgress();
+    }, AUTO_CONNECT_TIMEOUT_MS);
+
+    function tryPost() {
+      var post = global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function';
+      if (!post) {
+        var idx = _autoConnectRetryCount;
+        if (idx < AUTO_CONNECT_RETRY_DELAYS_MS.length) {
+          var delay = AUTO_CONNECT_RETRY_DELAYS_MS[idx];
+          _autoConnectRetryCount += 1;
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[trainingDashboardBridge] ReactNativeWebView 대기 중, ' + delay + 'ms 후 재시도 (' + (_autoConnectRetryCount) + '/' + AUTO_CONNECT_RETRY_DELAYS_MS.length + ')');
+          }
+          setTimeout(tryPost, delay);
+          return;
         }
-      }, AUTO_CONNECT_TIMEOUT_MS);
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[trainingDashboardBridge] sendRequestAutoConnect: 재시도 후에도 ReactNativeWebView 없음');
+        }
+        return;
       }
-    } catch (e) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[trainingDashboardBridge] REQUEST_AUTO_CONNECT postMessage failed', e);
+      _autoConnectRetryCount = 0;
+      try {
+        var payload = { type: 'REQUEST_AUTO_CONNECT' };
+        global.ReactNativeWebView.postMessage(JSON.stringify(payload));
+        global[AUTO_CONNECT_SENT_KEY] = true;
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
+        }
+      } catch (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[trainingDashboardBridge] REQUEST_AUTO_CONNECT postMessage failed', e);
+        }
       }
     }
+    tryPost();
   }
 
   function setDeviceErrorUI(deviceType) {
@@ -652,7 +674,7 @@
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
       global.addEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
     }
-    if (isAppEnvironment) {
+    if (isAppEnvironmentNow()) {
       powerUpdateHandlerRef = onPowerUpdate;
       trainerUpdateHandlerRef = onTrainerUpdate;
       speedUpdateHandlerRef = onSpeedUpdate;
@@ -718,15 +740,20 @@
     return null;
   }
 
+  var _stelvioShowScreenWrapped = false;
   function wrapShowScreen() {
-    var original = global.showScreen;
-    if (typeof original !== 'function') return;
+    if (_stelvioShowScreenWrapped) return;
+    var current = global.showScreen;
+    if (typeof current !== 'function') return;
+    if (current._stelvioTrainingBridgeWrap) return;
+    var original = current;
+    _stelvioShowScreenWrapped = true;
     var prevScreen = null;
-    global.showScreen = function (screenId) {
+    function wrappedShowScreen(screenId, skipHistory) {
       if (wasOnTargetScreen(prevScreen) && !isTargetScreen(screenId)) {
         teardownTrainingDashboardBridge();
       }
-      original(screenId);
+      original(screenId, skipHistory);
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();
         sendRequestAutoConnect();
@@ -736,40 +763,46 @@
         }
       }
       prevScreen = screenId;
-    };
+    }
+    wrappedShowScreen._stelvioTrainingBridgeWrap = true;
+    global.showScreen = wrappedShowScreen;
+  }
 
-    var _initialAutoConnectDone = false;
-    function tryInitialAutoConnect() {
-      if (_initialAutoConnectDone) return;
-      var activeId = getActiveScreenId();
-      if (activeId && isTargetScreen(activeId)) {
-        _initialAutoConnectDone = true;
-        mountTrainingDashboardBridge();
-        sendRequestAutoConnect();
-        tryShowPowerSourceSelectPopup();
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[trainingDashboardBridge] 초기 화면이 훈련 화면 → REQUEST_AUTO_CONNECT 시도, screenId=', activeId, 'inApp=', isAppEnvironmentNow());
-        }
+  var _initialAutoConnectDone = false;
+  function tryInitialAutoConnect() {
+    if (_initialAutoConnectDone) return;
+    var activeId = getActiveScreenId();
+    if (activeId && isTargetScreen(activeId)) {
+      _initialAutoConnectDone = true;
+      mountTrainingDashboardBridge();
+      sendRequestAutoConnect();
+      tryShowPowerSourceSelectPopup();
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[trainingDashboardBridge] 초기 화면이 훈련 화면 → REQUEST_AUTO_CONNECT 시도, screenId=', activeId, 'inApp=', isAppEnvironmentNow());
       }
     }
+  }
 
-    setTimeout(tryInitialAutoConnect, 0);
-    setTimeout(tryInitialAutoConnect, 300);
-    if (typeof global.addEventListener === 'function') {
-      global.addEventListener('DOMContentLoaded', tryInitialAutoConnect);
-    }
+  function installShowScreenAndInitialAutoConnect() {
+    wrapShowScreen();
+    tryInitialAutoConnect();
   }
 
   if (typeof global.showScreen === 'function') {
-    wrapShowScreen();
-  } else {
-    if (typeof global.addEventListener === 'function') {
-      global.addEventListener('DOMContentLoaded', function onReady() {
-        global.removeEventListener('DOMContentLoaded', onReady);
-        wrapShowScreen();
-      });
-    }
+    installShowScreenAndInitialAutoConnect();
   }
+  if (typeof global.addEventListener === 'function') {
+    global.addEventListener('DOMContentLoaded', function onReady() {
+      _stelvioShowScreenWrapped = false;
+      if (typeof global.showScreen === 'function') wrapShowScreen();
+      tryInitialAutoConnect();
+    });
+  }
+  setTimeout(installShowScreenAndInitialAutoConnect, 0);
+  setTimeout(installShowScreenAndInitialAutoConnect, 300);
+  setTimeout(tryInitialAutoConnect, 500);
+  setTimeout(tryInitialAutoConnect, 1000);
+  setTimeout(tryInitialAutoConnect, 1500);
 
   function tryInterceptConnectButton() {
     if (!isAppEnvironmentNow()) return;
