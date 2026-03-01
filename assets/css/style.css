@@ -15948,6 +15948,7 @@ line[id^="needle-"] {
   border-radius: 12px;
   transition: all 0.3s ease;
   min-height: 80px;
+  box-sizing: border-box;
 }
 
 .player-track-item:hover {
@@ -15980,6 +15981,8 @@ line[id^="needle-"] {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .player-track-user-section {
@@ -16593,6 +16596,43 @@ line[id^="needle-"] {
 
   .player-track-action {
     width: 100%;
+  }
+}
+
+/* 태블릿/PC(641px 이상): Live Training Session 트랙 카드 안에 버튼이 모두 들어가도록 줄바꿈 */
+@media (min-width: 641px) {
+  .player-track-item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .player-track-number-fixed {
+    flex-shrink: 0;
+  }
+
+  .player-track-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .player-track-user-section {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .player-track-action {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .player-track-action .btn,
+  .player-track-action .player-enter-btn {
+    flex: 1 1 auto;
+    min-width: 80px;
+    max-width: 100%;
   }
 }
 
