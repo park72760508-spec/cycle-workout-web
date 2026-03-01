@@ -14308,16 +14308,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       window.showScreen = function(screenId) {
         console.log('[showScreen] 화면 전환 요청:', screenId);
         
-        // 베이스캠프로 전환 시: 현재 인증 화면이 활성이면 "인증 후 베이스캠프 진입"으로 간주 → 주가마일리지 TOP10 표시 허용 (원래 동작 복귀)
+        // 베이스캠프로 전환 시: "인증 후 베이스캠프 진입"일 때만 주가마일리지 TOP10 표시 허용. 블루투스 연결버튼(센서연결만 띄우기) 흐름에서는 TOP10 미표시.
         if (screenId === 'basecampScreen') {
-          var authScreenEl = document.getElementById('authScreen');
-          var authCurrentlyActive = authScreenEl && (authScreenEl.classList.contains('active') || window.getComputedStyle(authScreenEl).display !== 'none');
-          var curUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
-          var authUid = (typeof window.auth !== 'undefined' && window.auth.currentUser && window.auth.currentUser.uid) ||
-            (typeof window.authV9 !== 'undefined' && window.authV9.currentUser && window.authV9.currentUser.uid);
-          var isAuthenticated = (curUser && (curUser.id || curUser.uid)) || authUid;
-          if (authCurrentlyActive && isAuthenticated) {
-            window.__basecampShownAfterAuth = true;
+          var isDeviceSettingsOnlyFlow = !!(window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly);
+          if (!isDeviceSettingsOnlyFlow) {
+            var authScreenEl = document.getElementById('authScreen');
+            var authCurrentlyActive = authScreenEl && (authScreenEl.classList.contains('active') || window.getComputedStyle(authScreenEl).display !== 'none');
+            var curUser = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
+            var authUid = (typeof window.auth !== 'undefined' && window.auth.currentUser && window.auth.currentUser.uid) ||
+              (typeof window.authV9 !== 'undefined' && window.authV9.currentUser && window.authV9.currentUser.uid);
+            var isAuthenticated = (curUser && (curUser.id || curUser.uid)) || authUid;
+            if (authCurrentlyActive && isAuthenticated) {
+              window.__basecampShownAfterAuth = true;
+            }
           }
         }
         
@@ -14368,9 +14371,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 300);
         }
         
-        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (인증 완료 후 Choose Your Path 진입 시에만 노출, 태블릿 캐시 인증 시 인증 화면 전 TOP10 노출 방지)
+        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (인증 완료 후 Choose Your Path 진입 시에만 노출). 블루투스 연결버튼→센서연결만 띄우는 흐름에서는 TOP10 표시 안 함.
         if (screenId === 'basecampScreen') {
           function tryShowWeeklyTop10() {
+            if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return false;
             if (window.__showScreenRedirectedToAuth === true) return false;
             if (window.__basecampShownAfterAuth !== true) return false;
             var authScreen = document.getElementById('authScreen');
