@@ -1872,6 +1872,25 @@
     </div>
   </div>
 
+  <!-- 파워/케이던스 소스 선택 팝업 (파워미터·스마트 트레이너 동시 연결 시) -->
+  <div id="powerSourceSelectOverlay" class="power-source-select-overlay" style="display: none;" aria-hidden="true">
+    <div class="power-source-select-backdrop" onclick="if(typeof closePowerSourceSelectPopup === 'function') closePowerSourceSelectPopup();"></div>
+    <div class="power-source-select-box">
+      <h3 class="power-source-select-title">파워/케이던스 데이터 소스 선택</h3>
+      <p class="power-source-select-desc">파워미터와 스마트 트레이너가 모두 연결되었습니다. 훈련 화면에 표시할 데이터 소스를 선택하세요.</p>
+      <div class="power-source-select-buttons">
+        <button type="button" id="powerSourceSelectPowerMeter" class="power-source-select-btn" data-source="powerMeter">
+          <span class="power-source-select-label">파워미터</span>
+          <span class="power-source-select-name" id="powerSourcePowerMeterName">—</span>
+        </button>
+        <button type="button" id="powerSourceSelectTrainer" class="power-source-select-btn" data-source="trainer">
+          <span class="power-source-select-label">스마트 트레이너</span>
+          <span class="power-source-select-name" id="powerSourceTrainerName">—</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 기기 검색 모달 (deviceSettings.js에서 제어) -->
   <div id="deviceScanModal" class="modal-overlay device-scan-modal" style="display: none;" onclick="if(event.target === this) closeDeviceScanModal();">
     <div class="modal-content device-scan-modal-content" onclick="event.stopPropagation();">
