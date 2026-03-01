@@ -34,8 +34,9 @@
   /** 연결됨일 때 카드 아이콘 이미지, 연결 해제/저장됨/미연결일 때 원래 이미지 */
   var CARD_IMG_CONNECTED = { hr: 'assets/img/bpm_b.png', power: 'assets/img/power_b.png', trainer: 'assets/img/trainer_b_b.png', speed: 'assets/img/s(02).png' };
   var CARD_IMG_DEFAULT = { hr: 'assets/img/bpm_i.png', power: 'assets/img/power_i.png', trainer: 'assets/img/trainer_i.png', speed: 'assets/img/s(01).png' };
+  /** Device Settings 팝업에서는 스마트 트레이너 카드 라벨을 항상 "스마트로라"로 표시 */
   var TRAINER_LABEL_CONNECTED = '스마트로라';
-  var TRAINER_LABEL_DEFAULT = '스마트 트레이너';
+  var TRAINER_LABEL_DEFAULT = '스마트로라';
 
   /** 기기 종류별 Service UUID (BLE 표준). 0x 접두사 제거한 4자리 hex로 비교 (대소문자 무시) */
   var SERVICE_UUID_BY_TYPE = {
@@ -311,8 +312,9 @@
   }
 
   /**
-   * 특정 deviceType 카드를 "연결됨" + 디바이스 이름(또는 ID) 표시로 갱신 (실제 BLE 연결 시에만 사용)
-   * @param {string} [deviceName] - 있으면 이름 표시, 없으면 deviceId 표시
+   * 특정 deviceType 카드를 "연결됨"(녹색) + 그 아래 디바이스 이름 표시로 갱신 (실제 BLE 연결 시에만 사용)
+   * 연결됨 밑에는 "연결됨" 문구 대신 디바이스 이름을 표시
+   * @param {string} [deviceName] - 연결됨일 때 밑줄에 표시할 디바이스 이름 (없으면 deviceId 표시)
    */
   function setCardConnected(deviceType, deviceId, deviceName) {
     var ids = getCardIds(deviceType);
@@ -325,9 +327,10 @@
       statusEl.textContent = '연결됨';
       statusEl.style.color = '#00d4aa';
     }
-    if (idEl && (deviceId || deviceName)) {
-      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
-      idEl.style.display = 'block';
+    if (idEl) {
+      var nameToShow = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : (deviceId ? String(deviceId) : '');
+      idEl.textContent = nameToShow;
+      idEl.style.display = nameToShow ? 'block' : 'none';
     }
     setDeviceCardIconAndLabel(deviceType, true);
   }
