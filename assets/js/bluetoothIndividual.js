@@ -4097,7 +4097,7 @@ function updateTargetPowerArc() {
  * 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
  */
 // ========== Challenge 타입별 목표값 조절 슬라이드 범위 테이블 ==========
-const SLIDER_RANGE_BY_CHALLENGE = {
+const INDIV_SLIDER_RANGE_BY_CHALLENGE = {
     'Fitness': { min: -10, max: 10 },      // -10% ~ +10%
     'GranFondo': { min: -8, max: 8 },      // -8% ~ +8%
     'Racing': { min: -6, max: 6 },         // -6% ~ +6%
@@ -4235,7 +4235,7 @@ function initializeIndividualIntensitySlider() {
     
     // challenge 타입에 따른 슬라이더 범위 설정 (동기 버전 사용)
     const challenge = getUserChallengeSync();
-    const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+    const range = INDIV_SLIDER_RANGE_BY_CHALLENGE[challenge] || INDIV_SLIDER_RANGE_BY_CHALLENGE['Fitness'];
     slider.min = range.min;
     slider.max = range.max;
     
