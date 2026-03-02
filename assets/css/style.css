@@ -16805,6 +16805,53 @@ line[id^="needle-"] {
   }
 }
 
+/* Live Training Session 전용(PC/태블릿): 트랙 카드 테두리 안에 버튼(변경, 신청, 퇴실, Enter) 배치 */
+@media (min-width: 641px) {
+  #bluetoothPlayerListScreen .player-track-item {
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 14px 16px;
+    align-items: stretch;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  #bluetoothPlayerListScreen .player-track-number-fixed {
+    flex-shrink: 0;
+  }
+
+  #bluetoothPlayerListScreen .player-track-content {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  #bluetoothPlayerListScreen .player-track-user-section {
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  #bluetoothPlayerListScreen .player-track-action {
+    width: 100%;
+    flex-shrink: 0;
+    margin-top: 6px;
+    padding-top: 4px;
+    border-top: 1px solid #e5e7eb;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #bluetoothPlayerListScreen .player-track-action .btn,
+  #bluetoothPlayerListScreen .player-track-action .player-enter-btn {
+    flex: 1 1 auto;
+    min-width: 72px;
+    max-width: 100%;
+  }
+}
+
 /* ========== Training Room 화면 헤더 및 뒤로 버튼 스타일 ========== */
 /* trainingRoomScreen 특별 처리 - 베이스캠프 화면과 동일한 구조 */
 #trainingRoomScreen {
