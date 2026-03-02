@@ -873,8 +873,24 @@
     }
   }
 
+  /**
+   * 연결 초기화: 저장된 디바이스 정보(ID·이름)를 모두 삭제하고 카드를 "미연결"로 갱신.
+   * 센서 연결 화면·훈련 화면 연결 버튼 팝업 양쪽에서 사용 (동일 헤더 DOM).
+   */
+  function resetDeviceSettingsSaved() {
+    if (typeof global.confirm === 'function' && !global.confirm('저장된 센서 연결 정보를 모두 초기화할까요?\n다시 기기를 검색해 연결해야 합니다.')) return;
+    var api = global.StelvioDeviceBridgeStorage;
+    if (api && typeof api.clearSavedDevices === 'function') api.clearSavedDevices();
+    if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+      global.StelvioDeviceSettings.refreshDeviceSettingCards();
+    }
+  }
+
   global.StelvioDeviceSettings = {
     refreshDeviceSettingCards: refreshDeviceSettingCards,
-    closeDeviceScanModal: closeDeviceScanModal
+    closeDeviceScanModal: closeDeviceScanModal,
+    resetDeviceSettingsSaved: resetDeviceSettingsSaved
   };
+
+  global.resetDeviceSettingsSaved = resetDeviceSettingsSaved;
 })(typeof window !== 'undefined' ? window : this);

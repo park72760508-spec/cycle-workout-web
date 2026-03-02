@@ -135,6 +135,25 @@
     }
   }
 
+  /**
+   * 저장된 디바이스 정보 전체 초기화 (연결 초기화).
+   * localStorage의 기기 ID·이름 맵을 삭제하고, stelvio-bridge-devices-updated 이벤트를 발생시킨다.
+   */
+  function clearSavedDevices() {
+    try {
+      localStorage.removeItem(STELVIO_SAVED_DEVICES_KEY);
+      localStorage.removeItem(STELVIO_SAVED_DEVICES_NAMES_KEY);
+      try {
+        global.dispatchEvent(new CustomEvent('stelvio-bridge-devices-updated', { detail: {} }));
+      } catch (evErr) { /* no-op */ }
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[deviceBridgeStorage] 연결 초기화: 저장된 디바이스 정보 삭제됨');
+      }
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[deviceBridgeStorage] clearSavedDevices failed:', e);
+    }
+  }
+
   // 전역 노출 (다른 스크립트/React 훅에서 사용 가능)
   global.StelvioDeviceBridgeStorage = {
     STELVIO_SAVED_DEVICES_KEY: STELVIO_SAVED_DEVICES_KEY,
@@ -142,6 +161,7 @@
     loadSavedDevices: loadSavedDevices,
     loadSavedDeviceNames: loadSavedDeviceNames,
     saveDevice: saveDevice,
+    clearSavedDevices: clearSavedDevices,
     setupDeviceConnectedBridge: setupDeviceConnectedBridge,
     teardownDeviceConnectedBridge: teardownDeviceConnectedBridge
   };
