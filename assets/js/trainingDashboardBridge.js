@@ -66,6 +66,7 @@
   var powerUpdateHandlerRef = null;
   var trainerUpdateHandlerRef = null;
   var speedUpdateHandlerRef = null;
+  var speedDataHandlerRef = null;
   var heartRateUpdateHandlerRef = null;
 
   /** deviceType(앱) → connectedDevices 키 (heartRate, trainer, powerMeter, speed). 다중 센서 개별 반영. smartrola → trainer 매핑 */
@@ -774,9 +775,34 @@
     if (changed) applyLiveDataToScreen();
   }
 
+  /**
+   * 앱이 파싱한 속도만 보낼 때: detail = { deviceId?, speed } (km/h) → liveData.speed 반영
+   */
+  function applySpeedUpdateSimple(detail) {
+    if (!detail || typeof detail !== 'object' || Number.isNaN(Number(detail.speed))) return;
+    var speedKmh = Number(detail.speed);
+    if (speedKmh < 0 || speedKmh >= 1000) return;
+    if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    global.liveData.speed = Math.min(speedKmh, 999);
+    if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('speed', speedKmh);
+    applyLiveDataToScreen();
+  }
+
   function onSpeedUpdate(e) {
     var detail = e && e.detail;
-    if (detail != null) parseSpeedUpdate(Array.isArray(detail) ? detail : (detail.data || detail.payload));
+    if (detail == null) return;
+    if (typeof detail === 'object' && !Array.isArray(detail) && detail.speed != null) {
+      applySpeedUpdateSimple(detail);
+      return;
+    }
+    var raw = Array.isArray(detail) ? detail : (detail.data || detail.payload);
+    if (raw != null) parseSpeedUpdate(raw);
+  }
+
+  /** 앱이 CustomEvent('speedData', { detail: { deviceId, speed } }) 로 보낼 때 */
+  function onSpeedData(e) {
+    var detail = e && e.detail;
+    if (detail && typeof detail === 'object' && detail.speed != null) applySpeedUpdateSimple(detail);
   }
 
   /**
@@ -871,10 +897,12 @@
       powerUpdateHandlerRef = onPowerUpdate;
       trainerUpdateHandlerRef = onTrainerUpdate;
       speedUpdateHandlerRef = onSpeedUpdate;
+      speedDataHandlerRef = onSpeedData;
       heartRateUpdateHandlerRef = onHeartRateUpdate;
       global.addEventListener('powerUpdate', powerUpdateHandlerRef);
       global.addEventListener('trainerUpdate', trainerUpdateHandlerRef);
       global.addEventListener('speedUpdate', speedUpdateHandlerRef);
+      global.addEventListener('speedData', speedDataHandlerRef);
       global.addEventListener('heartRateUpdate', heartRateUpdateHandlerRef);
     }
   }
@@ -896,6 +924,10 @@
       if (speedUpdateHandlerRef !== null) {
         global.removeEventListener('speedUpdate', speedUpdateHandlerRef);
         speedUpdateHandlerRef = null;
+      }
+      if (speedDataHandlerRef !== null) {
+        global.removeEventListener('speedData', speedDataHandlerRef);
+        speedDataHandlerRef = null;
       }
       if (heartRateUpdateHandlerRef !== null) {
         global.removeEventListener('heartRateUpdate', heartRateUpdateHandlerRef);
