@@ -1880,9 +1880,9 @@
               </svg>
             </button>
             <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0; text-align: center;">센서 연결 (Device Settings)</h3>
-            <button type="button" class="device-setting-reset-btn p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="typeof resetDeviceSettingsSaved === 'function' && resetDeviceSettingsSaved();" aria-label="연결 초기화" title="저장된 센서 정보 초기화" style="width: 2.5em; flex-shrink: 0; padding: 6px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-              <img src="assets/img/reset.png" alt="연결 초기화" class="device-setting-reset-icon" style="width: 24px; height: 24px; display: block;" onerror="this.style.display='none'; this.nextElementSibling && (this.nextElementSibling.style.display='inline');">
-              <span style="display: none; font-size: 18px; line-height: 1;" aria-hidden="true">↺</span>
+            <button type="button" class="device-setting-reset-btn p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="typeof resetDeviceSettingsSaved === 'function' && resetDeviceSettingsSaved();" aria-label="연결 초기화" title="저장된 센서 정보 초기화" style="flex-shrink: 0; padding: 0; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+              <img src="assets/img/reset.png" alt="연결 초기화" class="device-setting-reset-icon" style="display: block;" onerror="this.style.display='none'; this.nextElementSibling && (this.nextElementSibling.style.display='inline');">
+              <span class="device-setting-reset-fallback" style="display: none;" aria-hidden="true">↺</span>
             </button>
           </div>
           <div class="connection-device-section basecamp-device-section">
