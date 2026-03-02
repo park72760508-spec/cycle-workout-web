@@ -8577,6 +8577,11 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
+/* Device Settings 웹 사용자 안내 팝업: 화면 맨 앞 표시 (body 직계, 고 z-index) */
+.stelvio-device-settings-web-modal.hidden {
+  display: none !important;
+}
+
 /* 훈련 화면 종료 확인 팝업 (STELVIO 스타일 - 확인/취소) */
 .stelvio-exit-confirm-modal.hidden {
   display: none !important;
@@ -18260,24 +18265,28 @@ body.mobile-dashboard-active {
 
 #bluetoothPlayerListScreen.active {
   display: flex !important;
-  align-items: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
-  justify-content: center; /* 베이스캠프와 동일: 화면 중앙 정렬 */
-  min-height: 100vh; /* 베이스캠프와 동일: 전체 화면 높이 */
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); /* 베이스캠프와 동일한 배경 */
+  align-items: stretch; /* 카드 블럭이 하단까지 늘어나도록 */
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
-  /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
 }
 
-/* Live Training Session 화면 컨테이너: 베이스캠프와 동일한 구조 */
+/* Live Training Session 화면 컨테이너: 높이 채워서 카드 목록이 하단까지 늘어나도록 */
 #bluetoothPlayerListScreen .connection-main-container {
   position: relative;
   z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 #bluetoothPlayerListScreen .connection-form-container {
@@ -18290,23 +18299,40 @@ body.mobile-dashboard-active {
   display: none; /* 베이스캠프처럼 헤더 숨김 */
 }
 
-/* Live Training Session 화면: 디바이스 섹션 (베이스캠프 스타일) - 바깥쪽 스크롤 제거, 안쪽 녹색 스크롤만 유지 */
+/* Live Training Session 화면: 카드 영역이 하단까지 늘어나도록 (상단 여백만큼만 하단 여백) */
+#bluetoothPlayerListScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+#bluetoothPlayerListScreen .connection-form-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Live Training Session 화면: 디바이스 섹션 (베이스캠프 스타일) - 바깥쪽 스크롤 제거, 안쪽 녹색 스크롤만 유지, 하단까지 길이 확장 */
 #bluetoothPlayerListScreen .connection-device-section.basecamp-device-section {
   background-color: #ffffff !important;
   border-radius: 12px;
   padding: 15px;
+  /* 상단 여백(15px)과 동일하게 하단만 여백 유지 */
   margin-bottom: 20px;
+  padding-bottom: 20px;
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  max-height: calc(100vh - 200px);
+  /* 전체 블럭 하단까지 늘리기 (max-height 제거, flex로 채움) */
+  flex: 1;
+  min-height: 0;
   /* 바깥쪽 회색 스크롤 제거: 섹션 자체는 스크롤 없음 */
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
-  padding-bottom: 120px;
 }
 
 /* Live Training Session: 안쪽 트랙 목록(.player-list-content)만 스크롤 (녹색 스크롤바 유지) */
