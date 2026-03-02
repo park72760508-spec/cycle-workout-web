@@ -1514,7 +1514,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 lapTimeEl.setAttribute('fill', '#00d4aa');
             }
             // 카운트다운 오버레이 숨김
-            if (segmentCountdownActive) {
+            if (indivSegmentCountdownActive) {
                 stopSegmentCountdown();
             }
             // 더 이상 업데이트하지 않음 (return으로 함수 종료)
@@ -1787,7 +1787,7 @@ function formatHMS(totalSeconds) {
 }
 
 // 5초 카운트다운 상태 관리
-let segmentCountdownActive = false;
+let indivSegmentCountdownActive = false;
 let segmentCountdownTimer = null;
 let lastCountdownValue = null;
 let startCountdownActive = false; // 시작 카운트다운 활성 상태
@@ -2031,7 +2031,7 @@ function handleSegmentCountdown(countdownValue, status) {
         // 5초 이상이면 오버레이 표시하지 않음 (Firebase 동기화 지연 고려)
         if (countdownValue <= 5) {
             // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
-            if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+            if (lastCountdownValue !== countdownValue || !indivSegmentCountdownActive) {
                 lastCountdownValue = countdownValue;
                 // 0일 때는 "GO!!" 표시
                 const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
@@ -2070,7 +2070,7 @@ function handleSegmentCountdown(countdownValue, status) {
     // 세그먼트 카운트다운 처리 (기존 로직)
     // countdownValue가 null이면 세그먼트가 완료되었으므로 오버레이 숨김
     if (countdownValue === null) {
-        if (segmentCountdownActive && !startCountdownActive) {
+        if (indivSegmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -2081,7 +2081,7 @@ function handleSegmentCountdown(countdownValue, status) {
     const isLastSegment = checkIsLastSegment(status);
     if (isLastSegment) {
         // 마지막 세그먼트에서는 5초 카운트다운 표시하지 않음
-        if (segmentCountdownActive && !startCountdownActive) {
+        if (indivSegmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -2090,7 +2090,7 @@ function handleSegmentCountdown(countdownValue, status) {
     
     // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
     if (countdownValue > 5) {
-        if (segmentCountdownActive && !startCountdownActive) {
+        if (indivSegmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -2100,13 +2100,13 @@ function handleSegmentCountdown(countdownValue, status) {
     // 5초 이하일 때만 오버레이 표시 (마지막 세그먼트가 아닐 때만)
     if (countdownValue <= 5 && countdownValue >= 0) {
         // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
-        if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+        if (lastCountdownValue !== countdownValue || !indivSegmentCountdownActive) {
             lastCountdownValue = countdownValue;
             showSegmentCountdown(countdownValue);
         }
     } else if (countdownValue < 0) {
         // 0 미만이면 오버레이 숨김 (시작 카운트다운이 아닐 때만)
-        if (segmentCountdownActive && !startCountdownActive) {
+        if (indivSegmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -2158,7 +2158,7 @@ function showSegmentCountdown(value) {
         });
     }
     
-    segmentCountdownActive = true;
+    indivSegmentCountdownActive = true;
     
     // 0 또는 "GO!!"일 때 1초 후 오버레이 숨김 (GO!!는 더 길게 표시)
     if (value === 0 || value === 'GO!!') {
@@ -2209,7 +2209,7 @@ function stopSegmentCountdown() {
         segmentCountdownTimer = null;
     }
     
-    segmentCountdownActive = false;
+    indivSegmentCountdownActive = false;
     lastCountdownValue = null;
     startCountdownActive = false;
     goDisplayTime = null;
