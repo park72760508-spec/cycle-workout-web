@@ -8,6 +8,9 @@ function __indivEl(id) {
 }
 var __indivHiddenClass = __indivIdPrefix ? 'indiv-hidden' : 'hidden';
 
+// Firebase status (updateTargetPower, updateSpeedometerSegmentInfo 등에서 사용, attachBluetoothIndividualFirebaseListeners 내부 리스너가 설정)
+var firebaseStatus = null;
+
 // 화면 방향 고정 함수 (세로 모드)
 async function lockScreenOrientation() {
     try {
@@ -1235,12 +1238,11 @@ async function loadUserInfoAndUpdateName() {
     }
 }
 
-// 3. 훈련 상태 구독 (타이머, 세그먼트 정보)
+// 3. 훈련 상태 구독 (타이머, 세그먼트 정보) — firebaseStatus는 스크립트 상단에 선언됨
 let currentSegmentIndex = -1;
 let previousTrainingState = null; // 이전 훈련 상태 추적
 let lastWorkoutId = null; // 마지막 워크아웃 ID
 window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
-let firebaseStatus = null; // Firebase status 저장 (세그먼트 정보용)
 
 // Bluetooth 개인훈련 대시보드 전용 세그먼트 경과 시간 추적 (다른 화면과 독립)
 let bluetoothIndividualSegmentStartTime = null; // 현재 세그먼트 시작 시간
@@ -2956,14 +2958,13 @@ function updateSpeedometerSegmentInfo() {
         console.warn('[updateSpeedometerSegmentInfo] segment-info 요소를 찾을 수 없습니다.');
         return;
     }
-    
+    // 폰트 크기를 60%로 축소 (기본 9 * 0.6 = 5.4) — try/catch 모두에서 사용
+    const segmentInfoFontSize = '5.4';
+
     try {
         // 현재 상태 확인
         const status = firebaseStatus || { state: 'idle' };
         const currentState = status.state || 'idle';
-        
-        // 폰트 크기를 60%로 축소 (기본 9 * 0.6 = 5.4)
-        const fontSize = '5.4';
         
         // 훈련이 실행 중이 아니면 기본 메시지 표시
         if (currentState !== 'running') {
@@ -2973,7 +2974,7 @@ function updateSpeedometerSegmentInfo() {
                 segmentInfoEl.textContent = '대기 중';
             }
             segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-            segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
+            segmentInfoEl.setAttribute('font-size', segmentInfoFontSize); // 60% 축소
             return;
         }
         
@@ -2985,11 +2986,11 @@ function updateSpeedometerSegmentInfo() {
                 const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
                 segmentInfoEl.textContent = segmentText;
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
+                segmentInfoEl.setAttribute('font-size', segmentInfoFontSize); // 60% 축소
             } else {
                 segmentInfoEl.textContent = '준비 중';
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
+                segmentInfoEl.setAttribute('font-size', segmentInfoFontSize); // 60% 축소
             }
             return;
         }
@@ -3037,17 +3038,17 @@ function updateSpeedometerSegmentInfo() {
         // 표시
         segmentInfoEl.textContent = segmentText;
         segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-        segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
+        segmentInfoEl.setAttribute('font-size', segmentInfoFontSize); // 60% 축소
         
         console.log('[updateSpeedometerSegmentInfo] 세그먼트 정보 업데이트:', segmentText, '타입:', targetType, '값:', targetValue);
         
     } catch (error) {
         console.error('[updateSpeedometerSegmentInfo] 오류:', error);
-        const segmentInfoEl = __indivEl('segment-info');
-        if (segmentInfoEl) {
-            segmentInfoEl.textContent = '준비 중';
-            segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-            segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
+        const errSegmentInfoEl = __indivEl('segment-info');
+        if (errSegmentInfoEl) {
+            errSegmentInfoEl.textContent = '준비 중';
+            errSegmentInfoEl.setAttribute('fill', '#fff'); // 흰색
+            errSegmentInfoEl.setAttribute('font-size', segmentInfoFontSize); // 60% 축소
         }
     }
 }
