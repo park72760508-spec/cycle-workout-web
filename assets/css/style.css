@@ -8353,6 +8353,9 @@ button[aria-disabled="true"] {
   .auth-form-card {
     padding: 24px;              /* 기존 40px 35px → 모바일 24px로 다운 */
   }
+  #authScreen .auth-form-card {
+    padding: 24px;              /* 인증 카드 하단 여백 = 상단 여백 (24px) */
+  }
   .auth-hero-icon {
     padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
   }
@@ -8443,6 +8446,24 @@ button[aria-disabled="true"] {
   backdrop-filter: blur(25px);
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+/* 인증 카드: 하단 여백을 상단과 동일하게 (40px) */
+#authScreen .auth-form-card {
+  padding-top: 40px;
+  padding-bottom: 40px;
+  padding-left: 35px;
+  padding-right: 35px;
+}
+#authScreen .auth-form-card .phone-auth-section {
+  margin-bottom: 0;
+}
+
+/* 인증 카드 아래 영역 (StelvioWebview·기기 목록·심박수 등은 카드 밖에 표시) */
+#authScreen .auth-below-card {
+  margin-top: 16px;
+  padding: 0 8px;
   text-align: center;
 }
 
@@ -8870,6 +8891,12 @@ button[aria-disabled="true"] {
   .auth-form-card {
     padding: 30px 25px;
     margin: 15px;
+  }
+  #authScreen .auth-form-card {
+    padding-top: 30px;
+    padding-bottom: 30px;
+    padding-left: 25px;
+    padding-right: 25px;
   }
   
   .phone-input {
