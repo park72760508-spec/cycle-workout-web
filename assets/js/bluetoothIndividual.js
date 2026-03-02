@@ -951,12 +951,15 @@ function initializeBluetoothDashboard() {
     }, 500); // bluetooth.js가 로드되고 초기화될 시간을 줌
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+// 통합 스크린(index.html): 로드 시 대시보드 자동 초기화하지 않음 → 화면 표시 시 initBluetoothIndividualIntegratedScreen() 호출
+if (!__indivIdPrefix) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeBluetoothDashboard();
+        });
+    } else {
         initializeBluetoothDashboard();
-    });
-} else {
-    initializeBluetoothDashboard();
+    }
 }
 
 // 페이지 언로드 시 Firebase 데이터 전송 중지
@@ -964,9 +967,12 @@ window.addEventListener('beforeunload', () => {
     stopFirebaseDataTransmission();
 });
 
-// 사용자 이름 및 기타 메타데이터는 Firebase에서 한 번만 읽기
+// 사용자 이름 및 기타 메타데이터는 Firebase에서 한 번만 읽기 (통합 모드: 화면 표시 시 attachBluetoothIndividualFirebaseListeners 호출)
 let userDataLoaded = false;
-db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => {
+function attachBluetoothIndividualFirebaseListeners() {
+    if (window.__bluetoothIndividualFirebaseListenersAttached) return;
+    window.__bluetoothIndividualFirebaseListenersAttached = true;
+    db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => {
     const data = snapshot.val();
     
     if (data && !userDataLoaded) {
@@ -1583,6 +1589,8 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
         }
     }
 });
+}
+if (!__indivIdPrefix) attachBluetoothIndividualFirebaseListeners();
 
 // =========================================================
 // UI 업데이트 함수들
@@ -4380,7 +4388,7 @@ function openDeviceSettingsOverlayOnly() {
     document.body.appendChild(wrap);
 }
 
-// 블루투스 연결 드롭다운 토글. [앱 전용] Device Settings 팝업/오버레이. [웹] 기존 드롭다운 토글.
+// 블루투스 연결 드롭다운 토글. [앱 전용] Device Settings 팝업/오버레이. [통합 웹] index 오버레이 재사용. [standalone 웹] 드롭다운 토글.
 function toggleBluetoothDropdown() {
     if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
         abortBluetoothIndividualAutoConnect();
@@ -4399,7 +4407,17 @@ function toggleBluetoothDropdown() {
             return;
         }
     }
-    // [웹 화면] 기존 로직: 연결 버튼 클릭 시 드롭다운(메뉴 트리) 토글
+    // [통합 스크린(index.html) 웹] 같은 페이지의 Device Settings 오버레이 재사용
+    if (__indivIdPrefix && (typeof window.openDeviceSettingPopup === 'function' || typeof openDeviceSettingPopup === 'function')) {
+        var openFn = typeof window.openDeviceSettingPopup === 'function' ? window.openDeviceSettingPopup : openDeviceSettingPopup;
+        openFn();
+        return;
+    }
+    if (__indivIdPrefix && typeof showScreen === 'function') {
+        showScreen('deviceSettingScreen');
+        return;
+    }
+    // [standalone 웹] 기존 로직: 연결 버튼 클릭 시 드롭다운(메뉴 트리) 토글
     const dropdown = __indivEl('bluetoothDropdown');
     if (!dropdown) {
         console.error('[BluetoothIndividual] bluetoothDropdown 요소를 찾을 수 없습니다.');
@@ -5049,98 +5067,11 @@ function initializeUserInfo() {
     }
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', async () => {
-        // 축하 모달 초기화
-        initializeCelebrationModal();
-        // 화면 방향 세로 모드로 고정
-        await lockScreenOrientation();
-        // 앱 WebView일 때 자동 연결 요청 (앱이 기억한 기기로 연결)
-        sendRequestAutoConnectIfInApp();
-        
-        // 연결 버튼 이벤트 리스너 확인 및 등록
-        const connectBtn = __indivEl('bluetoothConnectBtn');
-        if (connectBtn) {
-            connectBtn.onclick = null;
-            connectBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleBluetoothDropdown();
-            });
-            console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료');
-        } else {
-            console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
-        }
-        // 좌측 상단 둥근네모(이름) 클릭 시 확인 후 베이스캠프로 이동·화면 닫기
-        const userNameWrap = __indivEl('bluetooth-user-name-wrap');
-        if (userNameWrap) {
-            userNameWrap.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (typeof showStelvioExitConfirmPopup === 'function') {
-                    showStelvioExitConfirmPopup(function () {
-                        if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
-                    });
-                } else if (typeof goToBaseCampAndClose === 'function') {
-                    goToBaseCampAndClose();
-                }
-            });
-        }
-        
-        // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
-        initializeIndividualIntensitySlider();
-        
-        // 사용자 정보 초기화 (window.currentUser에서 가져오기)
-        initializeUserInfo();
-        
-        // 사용자 이름 즉시 로드 및 업데이트 (비동기 로딩 타이밍 문제 해결)
-        loadUserInfoAndUpdateName();
-        
-        // 추가 재시도 (Firebase 데이터가 늦게 도착할 수 있으므로)
-        setTimeout(() => {
-            loadUserInfoAndUpdateName();
-        }, 1000);
-        
-        setTimeout(() => {
-            loadUserInfoAndUpdateName();
-        }, 3000);
-        
-        // 속도계 눈금 및 레이블 생성 (즉시 실행)
-        setTimeout(() => {
-            updateGaugeTicksAndLabels();
-            console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료');
-        }, 100);
-        
-        startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
-        
-        // ErgController 초기화 (BluetoothIndividual 전용)
-        setTimeout(() => {
-            initBluetoothIndividualErgController();
-        }, 500); // ErgController.js 로드 대기
-        
-        // 블루투스 연결 상태 초기 업데이트
-        setTimeout(() => {
-            updateBluetoothConnectionStatus();
-            // 1초마다 연결 상태 확인 및 업데이트
-            setInterval(updateBluetoothConnectionStatus, 1000);
-        }, 1000);
-        
-        // 페이지 언로드 시 화면 방향 고정 해제
-        window.addEventListener('beforeunload', unlockScreenOrientation);
-        window.addEventListener('pagehide', unlockScreenOrientation);
-        
-        // 축하 모달 초기화 (DOM 로드 후 다시 한 번 확인)
-        initializeCelebrationModal();
-    });
-} else {
-    // DOM이 이미 로드된 경우 즉시 초기화
+/** 통합 스크린(SPA) 전용: 화면이 열릴 때 한 번만 호출. Firebase 리스너 + 블루투스 대시보드 + UI 초기화 */
+function runBluetoothIndividualScreenInit() {
     initializeCelebrationModal();
-    // DOM이 이미 로드되었으면 바로 실행
-    // 화면 방향 세로 모드로 고정
     lockScreenOrientation();
-    // 앱 WebView일 때 자동 연결 요청 (앱이 기억한 기기로 연결)
     sendRequestAutoConnectIfInApp();
-    
     const connectBtn = __indivEl('bluetoothConnectBtn');
     if (connectBtn) {
         connectBtn.onclick = null;
@@ -5149,7 +5080,7 @@ if (document.readyState === 'loading') {
             e.stopPropagation();
             toggleBluetoothDropdown();
         });
-        console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료 (DOM 이미 로드됨)');
+        console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료');
     } else {
         console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
     }
@@ -5167,33 +5098,46 @@ if (document.readyState === 'loading') {
             }
         });
     }
-    
-    // 사용자 정보 초기화 (window.currentUser에서 가져오기)
+    initializeIndividualIntensitySlider();
     initializeUserInfo();
-    
-    // 속도계 눈금 및 레이블 생성 (즉시 실행)
+    loadUserInfoAndUpdateName();
+    setTimeout(() => loadUserInfoAndUpdateName(), 1000);
+    setTimeout(() => loadUserInfoAndUpdateName(), 3000);
     setTimeout(() => {
         updateGaugeTicksAndLabels();
-        console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료 (DOM 이미 로드됨)');
+        console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료');
     }, 100);
-    
-    startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
-    
-    // ErgController 초기화 (BluetoothIndividual 전용)
-    setTimeout(() => {
-        initBluetoothIndividualErgController();
-    }, 500); // ErgController.js 로드 대기
-    
-    // 페이지 언로드 시 화면 방향 고정 해제
-    window.addEventListener('beforeunload', unlockScreenOrientation);
-    window.addEventListener('pagehide', unlockScreenOrientation);
-    
-    // 블루투스 연결 상태 초기 업데이트
+    startGaugeAnimationLoop();
+    setTimeout(() => initBluetoothIndividualErgController(), 500);
     setTimeout(() => {
         updateBluetoothConnectionStatus();
-        // 1초마다 연결 상태 확인 및 업데이트
         setInterval(updateBluetoothConnectionStatus, 1000);
     }, 1000);
+    window.addEventListener('beforeunload', unlockScreenOrientation);
+    window.addEventListener('pagehide', unlockScreenOrientation);
+    initializeCelebrationModal();
+}
+
+if (__indivIdPrefix) {
+    // 통합 모드: 로드 시 초기화하지 않음. 화면 표시 시 index에서 initBluetoothIndividualIntegratedScreen() 호출
+    window.initBluetoothIndividualIntegratedScreen = function () {
+        if (window.__bluetoothIndividualIntegratedScreenInitialized) return;
+        window.__bluetoothIndividualIntegratedScreenInitialized = true;
+        attachBluetoothIndividualFirebaseListeners();
+        initializeBluetoothDashboard();
+        runBluetoothIndividualScreenInit();
+        console.log('[BluetoothIndividual] 통합 스크린 초기화 완료 (Firebase·블루투스·UI)');
+    };
+} else {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', async () => {
+            await lockScreenOrientation();
+            runBluetoothIndividualScreenInit();
+        });
+    } else {
+        lockScreenOrientation();
+        runBluetoothIndividualScreenInit();
+    }
 }
 
 // 통합 스크린(index.html)에서 사용: 훈련 종료 확인 팝업 (standalone은 HTML 인라인 스크립트에서 정의)
