@@ -2,6 +2,11 @@
  * deviceSettings.js
  * 센서 연결(Device Settings) 화면: 스캔 모달, 앱으로 START_SCAN/CONNECT_DEVICE 발송, deviceFound/deviceConnected로 UI 동기화
  * - 투 트랙: 앱 환경에서만 설정 화면 진입 허용, 웹 브라우저에서는 안내만 표시
+ *
+ * 앱 연동 (권장):
+ * - CONNECT_DEVICE 후 BLE 연결 성공 시 반드시 deviceConnected 디스패치: { deviceType, deviceId, deviceName }
+ * - REQUEST_KNOWN_DEVICES 수신 시 페어링된(이미 연결된) 기기 목록을 knownDevices 이벤트로 전달하면
+ *   스마트로라 등 LED 파란색(페어링된) 기기가 스캔에 안 뜨는 경우에도 목록에 표시됨
  */
 
 (function (global) {
@@ -18,10 +23,15 @@
   /** 디바이스 선택 후 연결 대기 중일 때 표시용: 기기명, deviceType */
   var _connectingDeviceName = null;
   var _connectingDeviceType = null;
+  /** CONNECT_DEVICE 후 deviceConnected 미수신 시 카드 갱신용 타임아웃 ID */
+  var _connectFallbackTimeoutId = null;
+  /** 연결 대기 타임아웃(ms). 이 시간 내에 deviceConnected 없으면 스피너 숨기고 저장 상태로 카드 갱신 */
+  var CONNECT_FALLBACK_MS = 14000;
 
   var deviceFoundHandlerRef = null;
   var deviceConnectedHandlerRef = null;
   var deviceErrorHandlerRef = null;
+  var knownDevicesHandlerRef = null;
 
   var CARD_IDS = {
     hr: { card: 'deviceCardHr', status: 'deviceStatusHr', id: 'deviceIdHr' },
@@ -54,7 +64,7 @@
     heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
     power: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
     powerMeter: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
-    trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart'],
+    trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart', '스마트로라', 'smartrola', 'rola'],
     speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
   };
 
@@ -171,6 +181,10 @@
           deviceType: deviceType,
           allowReplace: true
         }));
+        global.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'REQUEST_KNOWN_DEVICES',
+          deviceType: deviceType
+        }));
       }
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] START_SCAN postMessage failed', e);
@@ -181,6 +195,10 @@
    * 모달 닫기, 리스트 비우기, 연결 중 UI 숨김
    */
   function closeDeviceScanModal() {
+    if (_connectFallbackTimeoutId) {
+      clearTimeout(_connectFallbackTimeoutId);
+      _connectFallbackTimeoutId = null;
+    }
     savedTargetType = null;
     _connectingDeviceName = null;
     _connectingDeviceType = null;
@@ -228,8 +246,35 @@
   }
 
   /**
+   * knownDevices: 앱이 페어링된(이미 연결된) 기기 목록을 보낼 때 목록에 추가 (스캔에 안 뜨는 스마트로라 등)
+   * 앱에서 REQUEST_KNOWN_DEVICES 수신 후 dispatchEvent('knownDevices', { deviceType, devices: [{ id, name }] }) 로 응답
+   */
+  function onKnownDevices(e) {
+    var detail = e && e.detail;
+    if (!detail || !savedTargetType) return;
+    var type = detail.deviceType != null ? detail.deviceType : detail.type;
+    if (!type) return;
+    var norm = function (t) {
+      t = String(t).toLowerCase();
+      if (t === 'heartrate') return 'hr';
+      if (t === 'powermeter') return 'power';
+      return t;
+    };
+    if (norm(type) !== norm(savedTargetType)) return;
+    var devices = detail.devices;
+    if (!Array.isArray(devices) || devices.length === 0) return;
+    for (var i = 0; i < devices.length; i++) {
+      var d = devices[i];
+      var id = d.id != null ? d.id : d.deviceId;
+      var name = (d.name || d.deviceName || '').trim() || '알 수 없는 기기';
+      if (id) addDeviceItemToList(String(id), name);
+    }
+    if (console && console.log) console.log('[deviceSettings] knownDevices 반영:', type, devices.length, '대');
+  }
+
+  /**
    * deviceFound: 선택된 카테고리에 맞고 중복이 아닌 기기만 모달 리스트에 추가
-   * - name/localName 없는 기기 제외, UUID 또는 name 키워드로 카테고리 필터, id 기준 중복 제거
+   * - name/localName 없는 기기도 UUID 매칭 시 추가 (페어링된 기기 등), id 기준 중복 제거
    */
   function onDeviceFound(e) {
     var detail = e && e.detail;
@@ -251,16 +296,28 @@
     var targetType = savedTargetType;
     if (!targetType) return;
 
-    /* name·localName 둘 다 없으면 목록에서 제외 */
-    if (!hasNameOrLocalName(detail)) return;
+    /* name·localName 둘 다 없어도 UUID로 카테고리 매칭되면 목록에 추가 (페어링된 기기 등 광고 이름이 비어 올 수 있음) */
+    if (!hasNameOrLocalName(detail) && !deviceMatchesCategory(detail, targetType)) return;
 
     var id = detail.id != null ? detail.id : detail.deviceId;
     var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
 
     if (!deviceMatchesCategory(detail, targetType)) return;
     if (!id) return;
-    var idStr = String(id);
-    if (addedDeviceIds.has(idStr)) return;
+    addDeviceItemToList(String(id), name);
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  /**
+   * 스캔/knownDevices 목록에 기기 한 건 추가 (중복 제거, 동일 클릭·저장·연결 로직)
+   */
+  function addDeviceItemToList(idStr, name) {
+    if (!idStr || addedDeviceIds.has(idStr)) return;
     addedDeviceIds.add(idStr);
     var list = document.getElementById(LIST_ID);
     var hint = document.getElementById(HINT_ID);
@@ -268,7 +325,7 @@
     if (!list) return;
     var li = document.createElement('li');
     li.dataset.deviceId = idStr;
-    li.innerHTML = '<span class="device-scan-name">' + escapeHtml(String(name)) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
+    li.innerHTML = '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
     li.addEventListener('click', function () {
       var deviceId = li.dataset.deviceId;
       var deviceTypeToConnect = savedTargetType;
@@ -276,6 +333,16 @@
       var deviceName = (nameEl && nameEl.textContent) ? nameEl.textContent.trim() : '기기';
       _connectingDeviceName = deviceName;
       _connectingDeviceType = deviceTypeToConnect;
+      if (_connectFallbackTimeoutId) {
+        clearTimeout(_connectFallbackTimeoutId);
+        _connectFallbackTimeoutId = null;
+      }
+      if (global.StelvioDeviceBridgeStorage && typeof global.StelvioDeviceBridgeStorage.saveDevice === 'function') {
+        var storageKey = (deviceTypeToConnect === 'heartRate' || deviceTypeToConnect === 'hr') ? 'hr' : (deviceTypeToConnect === 'powerMeter' || deviceTypeToConnect === 'power') ? 'power' : deviceTypeToConnect;
+        try {
+          global.StelvioDeviceBridgeStorage.saveDevice(storageKey, deviceId, deviceName);
+        } catch (e) { if (console && console.warn) console.warn('[deviceSettings] saveDevice on select failed', e); }
+      }
       showDeviceScanConnecting(deviceName);
       try {
         if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
@@ -283,6 +350,7 @@
             type: 'CONNECT_DEVICE',
             deviceId: deviceId,
             deviceType: deviceTypeToConnect,
+            deviceName: deviceName,
             replaceDevice: true
           }));
         }
@@ -291,15 +359,22 @@
         hideDeviceScanConnecting();
         _connectingDeviceName = null;
         _connectingDeviceType = null;
+        if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') global.StelvioDeviceSettings.refreshDeviceSettingCards();
+        return;
       }
+      _connectFallbackTimeoutId = setTimeout(function () {
+        _connectFallbackTimeoutId = null;
+        if (_connectingDeviceType != null && _connectingDeviceName != null) {
+          hideDeviceScanConnecting();
+          closeDeviceScanModal();
+          _connectingDeviceName = null;
+          _connectingDeviceType = null;
+          if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') global.StelvioDeviceSettings.refreshDeviceSettingCards();
+          if (console && console.log) console.log('[deviceSettings] 연결 대기 타임아웃 — 카드를 저장됨 상태로 갱신 (deviceConnected 미수신)');
+        }
+      }, CONNECT_FALLBACK_MS);
     });
     list.appendChild(li);
-  }
-
-  function escapeHtml(s) {
-    var div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
   }
 
   /** deviceType(hr, power, trainer, speed) → window.connectedDevices 키 */
@@ -406,6 +481,10 @@
   function onDeviceConnected(e) {
     var detail = e && e.detail;
     if (!detail) return;
+    if (_connectFallbackTimeoutId) {
+      clearTimeout(_connectFallbackTimeoutId);
+      _connectFallbackTimeoutId = null;
+    }
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
     var fromEvent = (detail.deviceName != null && String(detail.deviceName).trim()) ? String(detail.deviceName).trim() : (detail.name != null && String(detail.name).trim()) ? String(detail.name).trim() : '';
@@ -531,10 +610,15 @@
     var detail = e && e.detail;
     var errorType = detail && (detail.deviceType != null ? detail.deviceType : detail.type);
     if (_connectingDeviceType != null && (!errorType || isSameDeviceType(errorType, _connectingDeviceType))) {
+      if (_connectFallbackTimeoutId) {
+        clearTimeout(_connectFallbackTimeoutId);
+        _connectFallbackTimeoutId = null;
+      }
       hideDeviceScanConnecting();
       _connectingDeviceName = null;
       _connectingDeviceType = null;
       closeDeviceScanModal();
+      if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') global.StelvioDeviceSettings.refreshDeviceSettingCards();
     }
   }
 
@@ -552,7 +636,7 @@
   }
 
   /**
-   * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError)
+   * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError, knownDevices)
    */
   var connectionLostHandlerRef = null;
   function attachListeners() {
@@ -560,11 +644,13 @@
     deviceFoundHandlerRef = onDeviceFound;
     deviceConnectedHandlerRef = onDeviceConnected;
     deviceErrorHandlerRef = onDeviceError;
+    knownDevicesHandlerRef = onKnownDevices;
     connectionLostHandlerRef = onConnectionLost;
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('deviceFound', deviceFoundHandlerRef);
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
       global.addEventListener('deviceError', deviceErrorHandlerRef);
+      global.addEventListener('knownDevices', knownDevicesHandlerRef);
       global.addEventListener('stelvio-connection-lost', connectionLostHandlerRef);
     }
   }
