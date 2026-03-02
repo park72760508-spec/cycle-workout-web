@@ -11351,6 +11351,76 @@
     </div>
   </div>
 
+  <!-- ========== 훈련 화면 버전 선택 모달 (Live Training Session Enter 클릭 시, iOS 안내 팝업 동일 디자인) ========== -->
+  <div id="bluetoothTrainingVersionChoiceModal" class="stelvio-coming-soon-modal stelvio-version-choice-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10010;">
+    <div class="stelvio-coming-soon-overlay" onclick="if(typeof closeBluetoothTrainingVersionChoiceModal === 'function') closeBluetoothTrainingVersionChoiceModal();"></div>
+    <div class="stelvio-coming-soon-content stelvio-version-choice-content">
+      <p class="stelvio-coming-soon-message" style="margin-bottom: 20px;">훈련 화면 버전 선택</p>
+      <button type="button" class="stelvio-coming-soon-btn stelvio-version-choice-btn" onclick="if(typeof applyBluetoothTrainingVersionLegacy === 'function') applyBluetoothTrainingVersionLegacy();">
+        구 버전 (안정화 버전)
+      </button>
+      <button type="button" class="stelvio-coming-soon-btn stelvio-version-choice-btn stelvio-version-choice-btn-secondary" onclick="if(typeof applyBluetoothTrainingVersionIntegrated === 'function') applyBluetoothTrainingVersionIntegrated();">
+        신 버전 (통합 모듈 Beta)
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 블루투스 개인 훈련 통합 스크린 (SPA, 2단계에서 컨텐츠 채움) ========== -->
+  <div id="bluetoothIndividualScreen" class="screen" style="display: none;">
+    <div class="bluetooth-session-header-top" style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
+      <button type="button" class="bluetooth-session-back-btn" onclick="if (typeof showScreen === 'function') showScreen('trainingRoomScreen');" aria-label="뒤로 가기" style="background: none; border: none; cursor: pointer; padding: 4px;">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+      </button>
+      <h3 class="basecamp-status-bar" style="flex: 1; text-align: center; margin: 0;">블루투스 개인 훈련 (통합 Beta)</h3>
+      <div style="width: 40px;"></div>
+    </div>
+    <div style="padding: 24px; text-align: center; color: #6b7280;">
+      <p>통합 모듈 화면입니다. 2단계에서 bluetoothIndividual.html 컨텐츠가 이 영역에 추가됩니다.</p>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    function openBluetoothTrainingVersionChoiceModal(trackNumber, roomId) {
+      window.__bluetoothVersionChoiceBike = trackNumber;
+      window.__bluetoothVersionChoiceRoom = roomId || '';
+      var modal = document.getElementById('bluetoothTrainingVersionChoiceModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    function closeBluetoothTrainingVersionChoiceModal() {
+      var modal = document.getElementById('bluetoothTrainingVersionChoiceModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+    function applyBluetoothTrainingVersionLegacy() {
+      var bike = window.__bluetoothVersionChoiceBike;
+      var room = window.__bluetoothVersionChoiceRoom || '';
+      closeBluetoothTrainingVersionChoiceModal();
+      var url = 'bluetoothIndividual.html?bike=' + encodeURIComponent(bike) + (room ? '&room=' + encodeURIComponent(room) : '');
+      if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
+        window.location.href = url;
+      } else {
+        window.open(url, '_blank');
+      }
+    }
+    function applyBluetoothTrainingVersionIntegrated() {
+      closeBluetoothTrainingVersionChoiceModal();
+      if (typeof showScreen === 'function') showScreen('bluetoothIndividualScreen');
+    }
+    window.openBluetoothTrainingVersionChoiceModal = openBluetoothTrainingVersionChoiceModal;
+    window.closeBluetoothTrainingVersionChoiceModal = closeBluetoothTrainingVersionChoiceModal;
+    window.applyBluetoothTrainingVersionLegacy = applyBluetoothTrainingVersionLegacy;
+    window.applyBluetoothTrainingVersionIntegrated = applyBluetoothTrainingVersionIntegrated;
+  })();
+  </script>
+
   <!-- ========== Bluetooth Training Coach 대시보드 화면 ========== -->
   <div id="bluetoothTrainingCoachScreen" class="screen">
     <div class="dashboard-header" style="position: relative;">
