@@ -218,6 +218,9 @@
       modal.style.display = 'none';
       modal.classList.add('hidden');
     }
+    if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
+      global.StelvioDeviceSettings.refreshDeviceSettingCards();
+    }
   }
 
   /**
@@ -258,18 +261,20 @@
       t = String(t).toLowerCase();
       if (t === 'heartrate') return 'hr';
       if (t === 'powermeter') return 'power';
+      if (t === 'smartrola') return 'trainer';
       return t;
     };
     if (norm(type) !== norm(savedTargetType)) return;
     var devices = detail.devices;
-    if (!Array.isArray(devices) || devices.length === 0) return;
+    if (!Array.isArray(devices)) devices = (detail.device != null) ? [detail.device] : [];
+    if (devices.length === 0) return;
+    if (console && console.log) console.log('[deviceSettings] knownDevices 수신', type, devices.length, '대', devices);
     for (var i = 0; i < devices.length; i++) {
       var d = devices[i];
       var id = d.id != null ? d.id : d.deviceId;
       var name = (d.name || d.deviceName || '').trim() || '알 수 없는 기기';
       if (id) addDeviceItemToList(String(id), name);
     }
-    if (console && console.log) console.log('[deviceSettings] knownDevices 반영:', type, devices.length, '대');
   }
 
   /**
@@ -343,6 +348,7 @@
           global.StelvioDeviceBridgeStorage.saveDevice(storageKey, deviceId, deviceName);
         } catch (e) { if (console && console.warn) console.warn('[deviceSettings] saveDevice on select failed', e); }
       }
+      setCardSaved(deviceTypeToConnect, deviceId, deviceName);
       showDeviceScanConnecting(deviceName);
       try {
         if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
@@ -477,18 +483,27 @@
   /**
    * deviceConnected: 해당 타입 카드 UI를 연결됨(녹색) + 다음 줄에 검색 시 보이는 디바이스 이름 표시
    * 앱이 name을 안 보내면 스캔 목록에서 선택한 _connectingDeviceName 사용. 동일 로직은 화면/팝업 공통 DOM이라 둘 다 반영됨.
+   * payload: deviceType|type, deviceId|id, deviceName|name (앱 구현에 따라 필드명 유연 처리)
    */
   function onDeviceConnected(e) {
     var detail = e && e.detail;
     if (!detail) return;
+    if (console && console.log) console.log('[deviceSettings] deviceConnected 수신', JSON.stringify({ deviceType: detail.deviceType, type: detail.type, deviceId: detail.deviceId, id: detail.id, deviceName: detail.deviceName, name: detail.name }));
     if (_connectFallbackTimeoutId) {
       clearTimeout(_connectFallbackTimeoutId);
       _connectFallbackTimeoutId = null;
     }
     var deviceType = detail.deviceType != null ? detail.deviceType : detail.type;
+    if (deviceType && String(deviceType).toLowerCase() === 'smartrola') deviceType = 'trainer';
     var deviceId = detail.deviceId != null ? detail.deviceId : detail.id;
+    if (!deviceId && _connectingDeviceType != null && deviceType && isSameDeviceType(deviceType, _connectingDeviceType) && global.StelvioDeviceBridgeStorage && typeof global.StelvioDeviceBridgeStorage.loadSavedDevices === 'function') {
+      var saved = global.StelvioDeviceBridgeStorage.loadSavedDevices();
+      var cKey = typeToConnectedKey(deviceType);
+      var storageKey = (cKey === 'heartRate') ? 'hr' : (cKey === 'powerMeter') ? 'power' : cKey;
+      if (saved && saved[storageKey]) deviceId = saved[storageKey];
+    }
     var fromEvent = (detail.deviceName != null && String(detail.deviceName).trim()) ? String(detail.deviceName).trim() : (detail.name != null && String(detail.name).trim()) ? String(detail.name).trim() : '';
-    var deviceName = fromEvent || (_connectingDeviceType != null && isSameDeviceType(deviceType, _connectingDeviceType) && _connectingDeviceName ? String(_connectingDeviceName).trim() : '') || '';
+    var deviceName = fromEvent || (_connectingDeviceType != null && deviceType && isSameDeviceType(deviceType, _connectingDeviceType) && _connectingDeviceName ? String(_connectingDeviceName).trim() : '') || '';
     if (!deviceType) return;
     var key = typeToConnectedKey(deviceType);
     var cardType = connectedKeyToCardType(key) || (key || String(deviceType).toLowerCase());
