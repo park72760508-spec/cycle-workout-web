@@ -471,9 +471,40 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 #deviceSettingScreen .device-setting-card { padding: 12px 16px 20px; }
-.device-setting-reset-btn { min-width: 2.5em; min-height: 2.5em; }
-.device-setting-reset-btn .device-setting-reset-icon { object-fit: contain; }
-.device-setting-overlay .device-setting-reset-btn { min-width: 2.5em; min-height: 2.5em; }
+/* 연결 초기화 버튼/아이콘: 제목(.basecamp-status-bar) 폰트 높이(24px)와 동일 */
+.connection-header.basecamp-header .device-setting-reset-btn {
+  width: 1.2em;
+  min-width: 1.2em;
+  height: 1.2em;
+  min-height: 1.2em;
+  font-size: 24px;
+  box-sizing: content-box;
+}
+.connection-header.basecamp-header .device-setting-reset-icon {
+  width: 1em;
+  height: 1em;
+  object-fit: contain;
+}
+.connection-header.basecamp-header .device-setting-reset-fallback {
+  font-size: 1em;
+  line-height: 1;
+}
+.device-setting-overlay .connection-header.basecamp-header .device-setting-reset-btn {
+  width: 1.2em;
+  min-width: 1.2em;
+  height: 1.2em;
+  min-height: 1.2em;
+  font-size: 24px;
+}
+.device-setting-overlay .connection-header.basecamp-header .device-setting-reset-icon {
+  width: 1em;
+  height: 1em;
+  object-fit: contain;
+}
+.device-setting-overlay .connection-header.basecamp-header .device-setting-reset-fallback {
+  font-size: 1em;
+  line-height: 1;
+}
 .device-setting-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
