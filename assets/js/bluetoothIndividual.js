@@ -5069,8 +5069,13 @@ if (document.readyState === 'loading') {
             userNameWrap.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (!confirm('훈련화면을 정말 종료하시겠습니까?')) return;
-                if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
+                if (typeof showStelvioExitConfirmPopup === 'function') {
+                    showStelvioExitConfirmPopup(function () {
+                        if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
+                    });
+                } else if (typeof goToBaseCampAndClose === 'function') {
+                    goToBaseCampAndClose();
+                }
             });
         }
         
@@ -5145,8 +5150,13 @@ if (document.readyState === 'loading') {
         userNameWrap.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (!confirm('훈련화면을 정말 종료하시겠습니까?')) return;
-            if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
+            if (typeof showStelvioExitConfirmPopup === 'function') {
+                showStelvioExitConfirmPopup(function () {
+                    if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
+                });
+            } else if (typeof goToBaseCampAndClose === 'function') {
+                goToBaseCampAndClose();
+            }
         });
     }
     

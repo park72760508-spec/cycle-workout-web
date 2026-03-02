@@ -4662,14 +4662,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   } // end if (!window._openDeviceSettingsOnly) — 센서연결 오버레이 전용 모드에서는 Strava/해시/베이스캠프 전환 없음
 
-  // 노트북 훈련 화면: 좌측 베이스캠프 이동 버튼 (확인 후 이동)
+  // 노트북 훈련 화면: 좌측 베이스캠프 이동 버튼 (STELVIO 종료 확인 팝업 후 이동)
   var trainingScreenExitBtn = document.getElementById('trainingScreenExitToBasecamp');
   if (trainingScreenExitBtn) {
     trainingScreenExitBtn.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
-      if (!confirm('정말 종료하시겠습니까?')) return;
-      if (typeof showScreen === 'function') {
+      if (typeof showStelvioExitConfirmPopup === 'function') {
+        showStelvioExitConfirmPopup(function() {
+          if (typeof showScreen === 'function') showScreen('basecampScreen');
+        });
+      } else if (typeof showScreen === 'function') {
         showScreen('basecampScreen');
       }
     });
@@ -13720,9 +13723,12 @@ async function startMobileDashboard() {
       mobileUserNameWrap.title = '뒤로 가기';
       mobileUserNameWrap.onclick = function(e) {
         e.stopPropagation();
-        if (!confirm('훈련화면을 정말 종료하시겠습니까?')) return;
-        if (typeof showScreen === 'function') {
-          showScreen('trainingReadyScreen', true);
+        if (typeof showStelvioExitConfirmPopup === 'function') {
+          showStelvioExitConfirmPopup(function() {
+            if (typeof showScreen === 'function') showScreen('basecampScreen');
+          });
+        } else if (typeof showScreen === 'function') {
+          showScreen('basecampScreen');
         }
       };
     }
