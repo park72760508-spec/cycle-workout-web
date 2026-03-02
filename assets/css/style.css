@@ -8577,9 +8577,23 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
-/* Device Settings 웹 사용자 안내 팝업: 화면 맨 앞 표시 (body 직계, 고 z-index) */
+/* Device Settings 웹 사용자 안내 팝업: 화면 맨 앞·정중앙 표시 */
 .stelvio-device-settings-web-modal.hidden {
   display: none !important;
+  visibility: hidden !important;
+}
+.stelvio-device-settings-web-modal:not(.hidden) {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 999999 !important;
+  background: transparent;
+  visibility: visible !important;
 }
 
 /* 훈련 화면 종료 확인 팝업 (STELVIO 스타일 - 확인/취소) */
@@ -16805,15 +16819,16 @@ line[id^="needle-"] {
   }
 }
 
-/* Live Training Session 전용(PC/태블릿): 트랙 카드 테두리 안에 버튼(변경, 신청, 퇴실, Enter) 배치 */
+/* Live Training Session 전용(PC/태블릿): 트랙 카드 테두리 안에 버튼이 전부 보이도록 높이 확보 */
 @media (min-width: 641px) {
   #bluetoothPlayerListScreen .player-track-item {
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
     padding: 14px 16px;
     align-items: stretch;
     display: flex;
     flex-wrap: wrap;
+    min-height: 120px;
   }
 
   #bluetoothPlayerListScreen .player-track-number-fixed {
@@ -16823,6 +16838,7 @@ line[id^="needle-"] {
   #bluetoothPlayerListScreen .player-track-content {
     flex: 1 1 0%;
     min-width: 0;
+    min-height: 0;
     overflow: visible;
     display: flex;
     flex-direction: column;
@@ -16838,16 +16854,19 @@ line[id^="needle-"] {
     width: 100%;
     flex-shrink: 0;
     margin-top: 6px;
-    padding-top: 4px;
+    padding-top: 8px;
+    padding-bottom: 4px;
     border-top: 1px solid #e5e7eb;
     flex-wrap: wrap;
     gap: 8px;
+    min-height: 44px;
   }
 
   #bluetoothPlayerListScreen .player-track-action .btn,
   #bluetoothPlayerListScreen .player-track-action .player-enter-btn {
     flex: 1 1 auto;
     min-width: 72px;
+    min-height: 44px;
     max-width: 100%;
   }
 }
@@ -18390,6 +18409,12 @@ body.mobile-dashboard-active {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
   overscroll-behavior: none;
+}
+
+/* Live Training Session: 트랙 카드가 내용 높이만큼 늘어나 버튼이 잘리지 않도록 */
+#bluetoothPlayerListScreen .player-list-content .player-track-item {
+  flex: 0 0 auto;
+  min-height: 120px;
 }
 
 /* ==========================================================
