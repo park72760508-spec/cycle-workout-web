@@ -11564,6 +11564,9 @@
     function applyBluetoothTrainingVersionIntegrated() {
       closeBluetoothTrainingVersionChoiceModal();
       if (typeof showScreen === 'function') showScreen('bluetoothIndividualScreen');
+      if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
+        window.initBluetoothIndividualIntegratedScreen();
+      }
     }
     window.openBluetoothTrainingVersionChoiceModal = openBluetoothTrainingVersionChoiceModal;
     window.closeBluetoothTrainingVersionChoiceModal = closeBluetoothTrainingVersionChoiceModal;
