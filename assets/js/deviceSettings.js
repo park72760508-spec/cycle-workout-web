@@ -17,6 +17,12 @@
   var MODAL_ID = 'deviceScanModal';
   var LIST_ID = 'deviceScanList';
   var HINT_ID = 'deviceScanModalHint';
+  var TITLE_ID = 'deviceScanModalTitle';
+  var RESCAN_WRAP_ID = 'deviceScanRescanWrap';
+
+  /** 스캔 완료로 간주하는 대기 시간(ms). 이 시간 후 "기기 검색 완료" + 재검색 버튼 표시 */
+  var SCAN_COMPLETE_MS = 12000;
+  var _scanCompleteTimeoutId = null;
 
   /** 현재 스캔/연결 대상 deviceType (hr, power, trainer, speed) */
   var savedTargetType = null;
@@ -159,21 +165,92 @@
   }
 
   /**
+   * 검색 완료 상태 표시: 제목 "기기 검색 완료", 재검색 버튼 노출
+   * 연결 대기 중(스피너 표시)이면 표시하지 않음
+   */
+  function showScanComplete() {
+    if (_scanCompleteTimeoutId) {
+      clearTimeout(_scanCompleteTimeoutId);
+      _scanCompleteTimeoutId = null;
+    }
+    if (_connectingDeviceName != null || _connectingDeviceType != null) return;
+    var titleEl = document.getElementById(TITLE_ID);
+    var hint = document.getElementById(HINT_ID);
+    var rescanWrap = document.getElementById(RESCAN_WRAP_ID);
+    if (titleEl) titleEl.textContent = '기기 검색 완료';
+    if (hint) {
+      hint.textContent = '검색된 기기를 탭하면 연결합니다. 원하는 기기가 없으면 재검색을 눌러주세요.';
+      hint.style.display = '';
+    }
+    if (rescanWrap) rescanWrap.style.display = 'flex';
+  }
+
+  /**
+   * 재검색 실행: 목록 초기화 후 START_SCAN·REQUEST_KNOWN_DEVICES 재전송, "기기 검색 중..." 표시
+   */
+  function triggerDeviceRescan() {
+    if (!savedTargetType) return;
+    if (_scanCompleteTimeoutId) {
+      clearTimeout(_scanCompleteTimeoutId);
+      _scanCompleteTimeoutId = null;
+    }
+    var titleEl = document.getElementById(TITLE_ID);
+    var hint = document.getElementById(HINT_ID);
+    var list = document.getElementById(LIST_ID);
+    var rescanWrap = document.getElementById(RESCAN_WRAP_ID);
+    if (titleEl) titleEl.textContent = '기기 검색 중...';
+    if (hint) {
+      hint.textContent = '기기 검색 중...';
+      hint.style.display = '';
+    }
+    if (rescanWrap) rescanWrap.style.display = 'none';
+    addedDeviceIds.clear();
+    if (list) list.innerHTML = '';
+    try {
+      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+        global.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'START_SCAN',
+          deviceType: savedTargetType,
+          allowReplace: true
+        }));
+        global.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'REQUEST_KNOWN_DEVICES',
+          deviceType: savedTargetType
+        }));
+      }
+    } catch (e) {
+      if (console && console.warn) console.warn('[deviceSettings] 재검색 START_SCAN failed', e);
+    }
+    _scanCompleteTimeoutId = setTimeout(showScanComplete, SCAN_COMPLETE_MS);
+  }
+
+  /**
    * 모달 열기, "기기 검색 중..." 표시, 앱에 START_SCAN 발송
    * allowReplace: true → 이미 연결된 상태에서도 검색 가능(새 기기로 변경용)
    */
   function openDeviceScanModal(deviceType) {
     savedTargetType = deviceType;
     addedDeviceIds.clear();
+    if (_scanCompleteTimeoutId) {
+      clearTimeout(_scanCompleteTimeoutId);
+      _scanCompleteTimeoutId = null;
+    }
     var modal = document.getElementById(MODAL_ID);
     var list = document.getElementById(LIST_ID);
     var hint = document.getElementById(HINT_ID);
+    var titleEl = document.getElementById(TITLE_ID);
+    var rescanWrap = document.getElementById(RESCAN_WRAP_ID);
     if (modal) {
       modal.style.display = 'flex';
       modal.classList.remove('hidden');
     }
+    if (titleEl) titleEl.textContent = '기기 검색 중...';
     if (list) list.innerHTML = '';
-    if (hint) hint.textContent = '기기 검색 중...';
+    if (hint) {
+      hint.textContent = '기기 검색 중...';
+      hint.style.display = '';
+    }
+    if (rescanWrap) rescanWrap.style.display = 'none';
     try {
       if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
         global.ReactNativeWebView.postMessage(JSON.stringify({
@@ -189,6 +266,7 @@
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] START_SCAN postMessage failed', e);
     }
+    _scanCompleteTimeoutId = setTimeout(showScanComplete, SCAN_COMPLETE_MS);
   }
 
   /**
@@ -198,6 +276,10 @@
     if (_connectFallbackTimeoutId) {
       clearTimeout(_connectFallbackTimeoutId);
       _connectFallbackTimeoutId = null;
+    }
+    if (_scanCompleteTimeoutId) {
+      clearTimeout(_scanCompleteTimeoutId);
+      _scanCompleteTimeoutId = null;
     }
     savedTargetType = null;
     _connectingDeviceName = null;
@@ -602,6 +684,7 @@
   };
 
   global.closeDeviceScanModal = closeDeviceScanModal;
+  global.triggerDeviceRescan = triggerDeviceRescan;
 
   /**
    * 메인 메뉴 [센서 연결] 버튼용: 앱이면 설정 화면으로, 웹이면 안내만 표시 (데드락 방지)
@@ -651,7 +734,15 @@
   }
 
   /**
-   * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError, knownDevices)
+   * 앱에서 스캔 종료 알림 시 검색 완료 처리 (앱이 dispatchEvent('deviceScanComplete') 시 즉시 "기기 검색 완료" 표시)
+   */
+  var scanCompleteHandlerRef = null;
+  function onDeviceScanComplete() {
+    showScanComplete();
+  }
+
+  /**
+   * 전역 리스너 등록 (deviceFound, deviceConnected, deviceError, knownDevices, deviceScanComplete)
    */
   var connectionLostHandlerRef = null;
   function attachListeners() {
@@ -661,12 +752,21 @@
     deviceErrorHandlerRef = onDeviceError;
     knownDevicesHandlerRef = onKnownDevices;
     connectionLostHandlerRef = onConnectionLost;
+    scanCompleteHandlerRef = onDeviceScanComplete;
     if (typeof global.addEventListener === 'function') {
       global.addEventListener('deviceFound', deviceFoundHandlerRef);
       global.addEventListener('deviceConnected', deviceConnectedHandlerRef);
       global.addEventListener('deviceError', deviceErrorHandlerRef);
       global.addEventListener('knownDevices', knownDevicesHandlerRef);
       global.addEventListener('stelvio-connection-lost', connectionLostHandlerRef);
+      global.addEventListener('deviceScanComplete', scanCompleteHandlerRef);
+    }
+    var rescanBtn = document.getElementById('deviceScanRescanBtn');
+    if (rescanBtn && !rescanBtn._deviceSettingsBound) {
+      rescanBtn._deviceSettingsBound = true;
+      rescanBtn.addEventListener('click', function () {
+        triggerDeviceRescan();
+      });
     }
   }
 
