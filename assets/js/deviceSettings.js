@@ -518,7 +518,11 @@
         global.showScreen('deviceSettingScreen');
       }
     } else {
-      alert('웹 브라우저 환경에서는 훈련 대시보드 화면 내에 있는 연결 버튼을 눌러 직접 센서를 연결해 주세요.');
+      if (typeof global.showStelvioDeviceSettingsWebPopup === 'function') {
+        global.showStelvioDeviceSettingsWebPopup();
+      } else {
+        alert('App설치 사용자 전용 메뉴입니다. 웹 사용자는 훈련화면에 연결버튼을 사용하세요.');
+      }
     }
   };
 
