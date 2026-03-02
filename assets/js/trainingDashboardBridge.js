@@ -79,6 +79,8 @@
   /** CSC 속도 계산용 이전 휠 데이터 (평로라 규격 재사용) */
   var _lastWheelData = { rev: null, time: null };
   var DEFAULT_WHEEL_CIRCUMFERENCE_MM = 2096;
+  /** 파워미터 케이던스 계산용 크랭크 데이터 (앱 powerUpdate 시 케이던스 반영) */
+  var _lastCrankDataBridge = {};
 
   function isTargetScreen(screenId) {
     return TARGET_SCREENS.indexOf(screenId) !== -1;
@@ -116,7 +118,8 @@
 
   /**
    * powerUpdate: BLE Cycling Power (0x1818/0x2a63) 규격
-   * Flags(2) + Instantaneous Power(2, int16 LE)
+   * Flags(2) + Instantaneous Power(2) + [선택: Pedal 0x01, Torque 0x04, Wheel 0x10, Crank 0x20]
+   * 앱에서 파워미터 데이터 수신 시 파워+케이던스 모두 반영 (웹 bluetooth.js handlePowerMeterData와 동일)
    */
   function parsePowerUpdate(detail) {
     if (global[POWER_CADENCE_SOURCE_KEY] === 'trainer') return;
@@ -124,8 +127,9 @@
     if (!Array.isArray(arr) || arr.length < 4) return;
     var dv = arrayToDataView(arr);
     if (!dv) return;
-    var flags = dv.getUint16(0, true);
-    var instPower = dv.getInt16(2, true);
+    var off = 0;
+    var flags = dv.getUint16(off, true); off += 2;
+    var instPower = dv.getInt16(off, true); off += 2;
     if (Number.isNaN(instPower)) return;
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     global.liveData.power = instPower;
@@ -134,6 +138,31 @@
       global.ergController.updatePower(instPower);
     }
     if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('power', instPower);
+    // 선택 필드 스킵 후 Crank Revolution Data(0x0020) 파싱 — 케이던스 반영
+    if (flags & 0x0001) off += 1;
+    if (flags & 0x0004) off += 2;
+    if (flags & 0x0010) off += 6;
+    if (flags & 0x0020 && arr.length >= off + 4) {
+      var cumulativeCrankRevolutions = dv.getUint16(off, true); off += 2;
+      var lastCrankEventTime = dv.getUint16(off, true); off += 2;
+      var deviceKey = (global.connectedDevices && global.connectedDevices.trainer) ? 'trainer' : 'powerMeter';
+      var lastData = _lastCrankDataBridge[deviceKey];
+      if (lastData && lastCrankEventTime !== lastData.lastCrankEventTime) {
+        var timeDiff = lastCrankEventTime - lastData.lastCrankEventTime;
+        if (timeDiff < 0) timeDiff += 65536;
+        var revDiff = cumulativeCrankRevolutions - lastData.cumulativeCrankRevolutions;
+        if (revDiff < 0) revDiff += 65536;
+        if (timeDiff > 0 && revDiff > 0) {
+          var timeInSeconds = timeDiff / 1024.0;
+          var cadence = Math.round((revDiff / timeInSeconds) * 60);
+          if (cadence > 0 && cadence <= 250) {
+            global.liveData.cadence = cadence;
+            if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', cadence);
+          }
+        }
+      }
+      _lastCrankDataBridge[deviceKey] = { cumulativeCrankRevolutions: cumulativeCrankRevolutions, lastCrankEventTime: lastCrankEventTime };
+    }
     applyLiveDataToScreen();
   }
 
