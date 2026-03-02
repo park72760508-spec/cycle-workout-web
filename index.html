@@ -11384,7 +11384,7 @@
       <div id="indiv-main-timer" class="indiv-timer" style="position: absolute; left: 50%; transform: translateX(-50%);">00:00:00</div>
       <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
         <div style="position: relative;">
-          <button id="indiv-bluetoothConnectBtn" class="indiv-bluetooth-connect-btn" onclick="toggleBluetoothDropdown()">
+          <button id="indiv-bluetoothConnectBtn" class="indiv-bluetooth-connect-btn" onclick="if(typeof window.toggleBluetoothIndividualConnectDropdown==='function'){ window.toggleBluetoothIndividualConnectDropdown(); } return false;">
             <img src="assets/img/wifi2.png" alt="연결" class="indiv-bluetooth-icon" style="width: 16px; height: 16px;">
             <span>연결</span>
           </button>
