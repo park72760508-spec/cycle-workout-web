@@ -6743,7 +6743,7 @@ function renderBluetoothPlayerListToContainer(container, data) {
                target="_blank"
                class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
                ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
-               onclick="handleBluetoothPlayerEnterClick(event, ${track.trackNumber}, '${roomId || ''}'); return true;"
+               onclick="return handleBluetoothPlayerEnterClick(event, ${track.trackNumber}, '${roomId || ''}');"
                title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
               <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
               <span>Enter</span>
