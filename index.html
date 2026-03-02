@@ -11562,6 +11562,10 @@
       }
     }
     function applyBluetoothTrainingVersionIntegrated() {
+      var track = window.__bluetoothVersionChoiceBike;
+      if (track != null && track !== undefined) {
+        window.__bluetoothIndividualTrackId = String(track);
+      }
       closeBluetoothTrainingVersionChoiceModal();
       if (typeof showScreen === 'function') showScreen('bluetoothIndividualScreen');
       if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
