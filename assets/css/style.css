@@ -18794,4 +18794,400 @@ body.mobile-dashboard-active {
   margin-top: calc(16px + 3%);
 }
 
+/* ========== 블루투스 개인 훈련 통합 스크린 (indiv- 접두사, index.html SPA) ========== */
+#bluetoothIndividualScreen.indiv-screen-wrap {
+  display: flex !important;
+  font-family: 'Pretendard', sans-serif;
+}
+#bluetoothIndividualScreen .indiv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #333;
+  position: relative;
+  flex-shrink: 0;
+}
+#bluetoothIndividualScreen .indiv-timer {
+  font-size: 1.5em;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-connect-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: #fff;
+  font-size: 0.85em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-connect-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+#bluetoothIndividualScreen .indiv-bluetooth-connect-btn.has-connection {
+  background: rgba(0, 212, 170, 0.2);
+  border-color: #00d4aa;
+  color: #00d4aa;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 200px;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown.show { display: block; }
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 0.9em;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item:hover { background: rgba(255, 255, 255, 0.1); }
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item.connected { color: #00d4aa; }
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item img { width: 24px; height: 24px; }
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item .indiv-status { margin-left: auto; font-size: 0.8em; color: #888; }
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item.connected .indiv-status { color: #00d4aa; }
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item-exit {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-dropdown-item-exit:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+#bluetoothIndividualScreen .indiv-segment-graph-section {
+  padding: 0 20px;
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 0.4 0.4 0;
+  min-height: 80px;
+  overflow: hidden;
+}
+#bluetoothIndividualScreen .indiv-segment-graph-container {
+  width: 98%;
+  max-width: 600px;
+  height: 95% !important;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#bluetoothIndividualScreen .indiv-main-content {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+#bluetoothIndividualScreen .indiv-gauge-container {
+  width: 90vw;
+  max-width: 500px;
+  aspect-ratio: 1/1;
+  position: relative;
+}
+#bluetoothIndividualScreen .indiv-stats-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background-color: #1e1e1e;
+  padding: 7.5px 0;
+  border-top: 1px solid #333;
+  flex-shrink: 0;
+}
+#bluetoothIndividualScreen .indiv-stat-box {
+  text-align: center;
+  border-right: 1px solid #333;
+}
+#bluetoothIndividualScreen .indiv-stat-box:last-child { border-right: none; }
+#bluetoothIndividualScreen .indiv-stat-label { font-size: 0.8em; color: #888; margin-bottom: 2.5px; }
+#bluetoothIndividualScreen .indiv-stat-value { font-size: 1.8em; font-weight: bold; }
+#bluetoothIndividualScreen .indiv-unit { font-size: 0.5em; color: #aaa; }
+#bluetoothIndividualScreen .indiv-c-cadence { color: #ff4444; }
+#bluetoothIndividualScreen .indiv-c-target { color: #ff8c00; }
+#bluetoothIndividualScreen .indiv-c-hr { color: #00d4aa; }
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: rgba(26, 29, 41, 0.6);
+  border-top: 1px solid #333;
+  flex-shrink: 0;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #9ca3af;
+  min-width: 45px;
+  text-align: center;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+#bluetoothIndividualScreen .indiv-countdown-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+#bluetoothIndividualScreen .indiv-countdown-overlay.indiv-hidden { display: none !important; }
+#bluetoothIndividualScreen .indiv-countdown-number {
+  font-size: 200px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+  user-select: none;
+}
+#bluetoothIndividualScreen .indiv-training-result-modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+#bluetoothIndividualScreen .indiv-training-result-modal.indiv-hidden { display: none !important; }
+#bluetoothIndividualScreen .indiv-training-result-background {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.1;
+}
+#bluetoothIndividualScreen .indiv-result-background-logo {
+  max-width: 400px;
+  max-height: 400px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.08;
+  filter: blur(1px);
+}
+#bluetoothIndividualScreen .indiv-training-result-content {
+  position: relative;
+  background: rgba(30, 30, 30, 0.95);
+  border: 2px solid #00d4aa;
+  border-radius: 12px;
+  padding: 16px 20px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+  backdrop-filter: blur(10px);
+}
+#bluetoothIndividualScreen .indiv-bluetooth-result-saving-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-saving-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(0, 212, 170, 0.2);
+  border-top-color: #00d4aa;
+  border-radius: 50%;
+  animation: bluetooth-saving-spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+@keyframes bluetooth-saving-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+#bluetoothIndividualScreen .indiv-bluetooth-saving-text {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #00d4aa;
+  margin: 0;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-result-content-area { display: none; }
+#bluetoothIndividualScreen .indiv-bluetooth-result-content-area.show { display: block; }
+#bluetoothIndividualScreen .indiv-result-header { text-align: center; margin-bottom: 16px; }
+#bluetoothIndividualScreen .indiv-result-title { font-size: 1.5em; font-weight: bold; color: #00d4aa; margin: 0 0 4px 0; }
+#bluetoothIndividualScreen .indiv-result-subtitle { font-size: 0.9em; color: #fff; margin: 0; opacity: 0.9; }
+#bluetoothIndividualScreen .indiv-result-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+#bluetoothIndividualScreen .indiv-result-stat-item {
+  background: rgba(0, 212, 170, 0.1);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+}
+#bluetoothIndividualScreen .indiv-result-stat-label { font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500; }
+#bluetoothIndividualScreen .indiv-result-stat-value { font-size: 1.1em; font-weight: bold; color: #00d4aa; }
+#bluetoothIndividualScreen .indiv-result-close-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%);
+  border: none;
+  border-radius: 8px;
+  color: #000;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
+}
+#bluetoothIndividualScreen .indiv-bluetooth-mileage-celebration-modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-mileage-celebration-modal.indiv-hidden { display: none !important; }
+#bluetoothIndividualScreen .indiv-celebration-content {
+  position: relative;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffd700 100%);
+  border: 3px solid #ffd700;
+  border-radius: 20px;
+  padding: 30px 25px;
+  max-width: 90%;
+  width: 400px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5);
+}
+#bluetoothIndividualScreen .indiv-celebration-icon { font-size: 4em; margin-bottom: 15px; }
+#bluetoothIndividualScreen .indiv-celebration-title { font-size: 1.4em; font-weight: bold; color: #fff; margin: 0 0 15px 0; }
+#bluetoothIndividualScreen .indiv-celebration-message { font-size: 1em; color: #fff; line-height: 1.6; margin-bottom: 20px; }
+#bluetoothIndividualScreen .indiv-celebration-close-btn {
+  width: 100%;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #ffd700;
+  border-radius: 10px;
+  color: #ff6b35;
+  font-size: 1.1em;
+  font-weight: bold;
+  cursor: pointer;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10004;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-modal.indiv-hidden { display: none !important; }
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-content {
+  position: relative;
+  z-index: 1;
+  padding: 28px 32px;
+  min-width: 280px;
+  max-width: 90%;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2);
+  text-align: center;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-message {
+  margin: 0 0 24px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+  line-height: 1.4;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+#bluetoothIndividualScreen .indiv-stelvio-exit-confirm-btn-ok {
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+}
+
 
