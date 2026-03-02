@@ -572,6 +572,18 @@ h1,h2,h3,h4 { font-weight: 600; }
 .device-scan-list li .device-scan-name { font-weight: 600; color: #1f2937; display: block; }
 .device-scan-list li .device-scan-id { font-size: 11px; color: #9ca3af; }
 
+/* 기기 검색 완료 후 재검색 버튼 */
+.device-scan-rescan-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+.device-scan-rescan-btn {
+  min-width: 120px;
+}
+
 /* 기기 검색 모달: 디바이스 선택 후 연결 중 표시 (녹색 원 스피너 + 기기명 연결 중.....) */
 .device-scan-connecting-wrap {
   display: flex;
