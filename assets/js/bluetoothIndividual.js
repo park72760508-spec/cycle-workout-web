@@ -264,13 +264,17 @@ if (typeof window.addEventListener === 'function') {
 const params = new URLSearchParams(window.location.search);
 let myTrackId = params.get('track') || params.get('bike'); // bike 파라미터도 지원 (하위 호환성)
 
-// 번호가 없으면 강제로 물어봄
-while (!myTrackId) {
-    myTrackId = prompt("트랙 번호를 입력하세요 (예: 1, 5, 12)", "1");
-    if(myTrackId) {
-        // 입력받은 번호로 URL 새로고침 (track 파라미터로 통일)
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?track=' + myTrackId + (params.get('room') ? '&room=' + params.get('room') : '');
-        window.history.pushState({path:newUrl},'',newUrl);
+// 통합 모드(index.html): 초기 로딩 시 prompt 금지 — URL 또는 신버전 선택 시 전달된 트랙 사용, 없으면 기본값 1
+if (__indivIdPrefix) {
+    myTrackId = myTrackId || (typeof window.__bluetoothIndividualTrackId !== 'undefined' ? String(window.__bluetoothIndividualTrackId) : null) || '1';
+} else {
+    // 단독 페이지(bluetoothIndividual.html): 번호가 없으면 사용자에게 물어봄
+    while (!myTrackId) {
+        myTrackId = prompt("트랙 번호를 입력하세요 (예: 1, 5, 12)", "1");
+        if (myTrackId) {
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?track=' + myTrackId + (params.get('room') ? '&room=' + params.get('room') : '');
+            window.history.pushState({ path: newUrl }, '', newUrl);
+        }
     }
 }
 
@@ -5075,6 +5079,9 @@ if (__indivIdPrefix) {
     // 통합 모드: 로드 시 초기화하지 않음. 화면 표시 시 index에서 initBluetoothIndividualIntegratedScreen() 호출
     window.initBluetoothIndividualIntegratedScreen = function () {
         if (window.__bluetoothIndividualIntegratedScreenInitialized) return;
+        if (typeof window.__bluetoothIndividualTrackId !== 'undefined' && window.__bluetoothIndividualTrackId != null && window.__bluetoothIndividualTrackId !== '') {
+            myTrackId = String(window.__bluetoothIndividualTrackId);
+        }
         window.__bluetoothIndividualIntegratedScreenInitialized = true;
         attachBluetoothIndividualFirebaseListeners();
         initializeBluetoothDashboard();
