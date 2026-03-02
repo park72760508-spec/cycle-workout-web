@@ -10490,7 +10490,7 @@
       var deviceType = (detail.deviceType != null ? detail.deviceType : detail.type);
       if (!deviceType) return;
       var t = String(deviceType).toLowerCase();
-      var key = (t === 'hr' || t === 'heartrate') ? 'heartRate' : (t === 'power' || t === 'powermeter') ? 'powerMeter' : (t === 'trainer') ? 'trainer' : (t === 'speed') ? 'speed' : null;
+      var key = (t === 'hr' || t === 'heartrate') ? 'heartRate' : (t === 'power' || t === 'powermeter') ? 'powerMeter' : (t === 'trainer' || t === 'smartrola') ? 'trainer' : (t === 'speed') ? 'speed' : null;
       if (!key) return;
       if (!window.connectedDevices) window.connectedDevices = { trainer: null, powerMeter: null, heartRate: null, speed: null };
       window.connectedDevices[key] = { name: detail.deviceName || detail.name || '연결됨', deviceId: detail.deviceId || detail.id };
