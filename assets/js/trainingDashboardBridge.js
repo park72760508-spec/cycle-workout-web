@@ -722,7 +722,43 @@
 
   function onTrainerUpdate(e) {
     var detail = e && e.detail;
-    if (detail != null) parseTrainerUpdate(Array.isArray(detail) ? detail : (detail.data || detail.payload));
+    if (detail == null) return;
+    if (detail && typeof detail === 'object' && !Array.isArray(detail) && (detail.power != null || detail.cadence != null || detail.speed != null)) {
+      applyTrainerUpdateSimple(detail);
+      return;
+    }
+    parseTrainerUpdate(Array.isArray(detail) ? detail : (detail.data || detail.payload));
+  }
+
+  /** 앱이 파싱한 값을 보낼 때: detail = { power?, cadence?, speed? } → liveData 반영 */
+  function applyTrainerUpdateSimple(detail) {
+    if (global[POWER_CADENCE_SOURCE_KEY] === 'powerMeter') return;
+    if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    var changed = false;
+    if (detail.power != null && !Number.isNaN(Number(detail.power))) {
+      var p = Math.round(Number(detail.power));
+      if (p >= 0 && p <= 2000) {
+        global.liveData.power = p;
+        if (typeof global.addPowerToBuffer === 'function') global.addPowerToBuffer(p);
+        if (global.ergController && typeof global.ergController.updatePower === 'function') global.ergController.updatePower(p);
+        if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('power', p);
+        changed = true;
+      }
+    }
+    if (detail.cadence != null && !Number.isNaN(Number(detail.cadence))) {
+      var c = Math.round(Number(detail.cadence));
+      if (c >= 0 && c <= 250) {
+        global.liveData.cadence = c;
+        if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', c);
+        changed = true;
+      }
+    }
+    if (detail.speed != null && !Number.isNaN(Number(detail.speed))) {
+      var s = Number(detail.speed);
+      if (s >= 0 && s < 1000) global.liveData.speed = s;
+      changed = true;
+    }
+    if (changed) applyLiveDataToScreen();
   }
 
   function onSpeedUpdate(e) {
