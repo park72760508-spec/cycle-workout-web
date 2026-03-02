@@ -10482,6 +10482,13 @@
       if (el) el.textContent = (!isNaN(bpm) && bpm > 0) ? bpm : '—';
     });
 
+    // [디버깅] deviceConnected 수신 시 payload 확인용 (확인 후 제거 가능) — docs/deviceConnected_디버깅_확인방법.md 참고
+    window.addEventListener('deviceConnected', function _dbgDeviceConnected(e) {
+      var d = e && e.detail;
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[deviceConnected 수신] detail:', d ? JSON.stringify(d) : '(없음)', 'deviceType=', d && (d.deviceType != null ? d.deviceType : d.type));
+      }
+    }, true);
     // 앱에서 기기 연결 시 전역 connectedDevices 반영 + 모든 훈련 화면 연결 UI 동기화 (하이브리드: 앱/웹 공통)
     // 적용 대상: 모바일 개인훈련 대시보드, 노트북(태블릿) 훈련 화면, 블루투스 개인훈련 대시보드(동일 연결 상태 공유)
     window.addEventListener('deviceConnected', function(e) {
