@@ -8526,7 +8526,7 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 40px;
 }
 .auth-app-download-link {
   display: inline-block;
@@ -8538,10 +8538,10 @@ button[aria-disabled="true"] {
   object-fit: contain;
 }
 .auth-app-download-icon-ref {
-  width: 1.8em;
-  height: 1.8em;
-  min-width: 1.8em;
-  min-height: 1.8em;
+  width: 2.7em;
+  height: 2.7em;
+  min-width: 2.7em;
+  min-height: 2.7em;
 }
 
 /* iOS 앱 향후 구현 예정 팝업 (STELVIO 디자인) */
