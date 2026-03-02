@@ -4788,6 +4788,10 @@ window.goToBaseCampAndClose = goToBaseCampAndClose;
 
 // 전역 함수로 노출
 window.toggleBluetoothDropdown = toggleBluetoothDropdown;
+// 통합 화면 전용: 인라인 onclick에서 이 이름으로 호출 (app.js의 toggleBluetoothDropdown에 덮어쓰이지 않도록)
+window.toggleBluetoothIndividualConnectDropdown = function () {
+    toggleBluetoothDropdown();
+};
 window.connectBluetoothDevice = connectBluetoothDevice;
 window.exitBluetoothIndividualTraining = exitBluetoothIndividualTraining;
 window.updateBluetoothConnectionStatus = updateBluetoothConnectionStatus;
@@ -5020,15 +5024,15 @@ function runBluetoothIndividualScreenInit() {
     initializeCelebrationModal();
     lockScreenOrientation();
     sendRequestAutoConnectIfInApp();
+    // 연결 버튼: 인라인 onclick="toggleBluetoothIndividualConnectDropdown()" 사용 (app.js 전역 덮어쓰기 회피), 중복 리스너 제거
     const connectBtn = __indivEl('bluetoothConnectBtn');
     if (connectBtn) {
-        connectBtn.onclick = null;
-        connectBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleBluetoothDropdown();
-        });
-        console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료');
+        connectBtn.onclick = function (e) {
+            if (e) e.preventDefault();
+            if (typeof window.toggleBluetoothIndividualConnectDropdown === 'function') window.toggleBluetoothIndividualConnectDropdown();
+            return false;
+        };
+        console.log('[BluetoothIndividual] 연결 버튼 핸들러 설정 완료');
     } else {
         console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
     }
