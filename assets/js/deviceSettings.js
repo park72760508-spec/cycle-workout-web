@@ -221,6 +221,7 @@
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] 재검색 START_SCAN failed', e);
     }
+    addSavedDeviceToScanListIfAny(savedTargetType);
     _scanCompleteTimeoutId = setTimeout(showScanComplete, SCAN_COMPLETE_MS);
   }
 
@@ -266,7 +267,83 @@
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] START_SCAN postMessage failed', e);
     }
+    addSavedDeviceToScanListIfAny(deviceType);
     _scanCompleteTimeoutId = setTimeout(showScanComplete, SCAN_COMPLETE_MS);
+  }
+
+  /**
+   * 현재 선택된 deviceType에 대해 웹 저장소에 저장된 기기가 있으면 검색 목록 맨 앞에 추가.
+   * 스캔/앱 knownDevices에 안 뜨는 저장된 스마트로라 등이 목록에 보이도록 함.
+   */
+  function addSavedDeviceToScanListIfAny(deviceType) {
+    if (!savedTargetType || !deviceType) return;
+    if (!global.StelvioDeviceBridgeStorage || typeof global.StelvioDeviceBridgeStorage.loadSavedDevices !== 'function') return;
+    var storageKey = (deviceType === 'heartRate' || deviceType === 'hr') ? 'hr' : (deviceType === 'powerMeter' || deviceType === 'power') ? 'power' : deviceType;
+    var saved = global.StelvioDeviceBridgeStorage.loadSavedDevices();
+    var deviceId = saved && saved[storageKey] ? String(saved[storageKey]).trim() : null;
+    if (!deviceId) return;
+    var names = typeof global.StelvioDeviceBridgeStorage.loadSavedDeviceNames === 'function' ? global.StelvioDeviceBridgeStorage.loadSavedDeviceNames() : {};
+    var deviceName = (names && names[storageKey]) ? String(names[storageKey]).trim() : '저장된 기기';
+    if (!deviceName) deviceName = '저장된 기기';
+    deviceName = deviceName + ' (저장됨)';
+    var list = document.getElementById(LIST_ID);
+    if (list && !addedDeviceIds.has(deviceId)) {
+      addedDeviceIds.add(deviceId);
+      var hint = document.getElementById(HINT_ID);
+      if (hint) hint.textContent = '검색된 기기를 탭하면 연결합니다.';
+      var li = document.createElement('li');
+      li.dataset.deviceId = deviceId;
+      li.classList.add('device-scan-item-saved');
+      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id">' + escapeHtml(deviceId) + '</span>';
+      li.addEventListener('click', function () {
+        var id = li.dataset.deviceId;
+        var typeToConnect = savedTargetType;
+        var nameEl = li.querySelector('.device-scan-name');
+        var displayName = (nameEl && nameEl.textContent) ? nameEl.textContent.replace(/\s*\(저장됨\)\s*$/, '').trim() : '기기';
+        _connectingDeviceName = displayName;
+        _connectingDeviceType = typeToConnect;
+        if (_connectFallbackTimeoutId) {
+          clearTimeout(_connectFallbackTimeoutId);
+          _connectFallbackTimeoutId = null;
+        }
+        if (global.StelvioDeviceBridgeStorage && typeof global.StelvioDeviceBridgeStorage.saveDevice === 'function') {
+          var key = (typeToConnect === 'heartRate' || typeToConnect === 'hr') ? 'hr' : (typeToConnect === 'powerMeter' || typeToConnect === 'power') ? 'power' : typeToConnect;
+          try { global.StelvioDeviceBridgeStorage.saveDevice(key, id, displayName); } catch (e) { if (console && console.warn) console.warn('[deviceSettings] saveDevice on saved-item click failed', e); }
+        }
+        setCardSaved(typeToConnect, id, displayName);
+        showDeviceScanConnecting(displayName);
+        try {
+          if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+            global.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'CONNECT_DEVICE',
+              deviceId: id,
+              deviceType: typeToConnect,
+              deviceName: displayName,
+              replaceDevice: true
+            }));
+          }
+        } catch (err) {
+          if (console && console.warn) console.warn('[deviceSettings] CONNECT_DEVICE postMessage failed', err);
+          hideDeviceScanConnecting();
+          _connectingDeviceName = null;
+          _connectingDeviceType = null;
+          if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') global.StelvioDeviceSettings.refreshDeviceSettingCards();
+          return;
+        }
+        _connectFallbackTimeoutId = setTimeout(function () {
+          _connectFallbackTimeoutId = null;
+          if (_connectingDeviceType != null && _connectingDeviceName != null) {
+            hideDeviceScanConnecting();
+            closeDeviceScanModal();
+            _connectingDeviceName = null;
+            _connectingDeviceType = null;
+            if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') global.StelvioDeviceSettings.refreshDeviceSettingCards();
+            if (console && console.log) console.log('[deviceSettings] 연결 대기 타임아웃 — 카드를 저장됨 상태로 갱신 (deviceConnected 미수신)');
+          }
+        }, CONNECT_FALLBACK_MS);
+      });
+      list.insertBefore(li, list.firstChild);
+    }
   }
 
   /**
