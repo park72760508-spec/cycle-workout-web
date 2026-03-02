@@ -10647,6 +10647,8 @@
 <script src="assets/js/trainingManager.js"></script>
 <!-- Training Room 모듈 -->
 <script src="assets/js/trainingRoomManager.js"></script>
+<script>window.__bluetoothIndividualIdPrefix = 'indiv-';</script>
+<script src="assets/js/bluetoothIndividual.js"></script>
 <!-- Bluetooth Training 모듈 -->
 <script src="assets/js/bluetoothTrainingManager.js"></script>
 <!-- AI 분석 공통: 컨디션 점수 모듈 (50~100, 1점 단위 객관 산출) -->
@@ -11365,17 +11367,166 @@
     </div>
   </div>
 
-  <!-- ========== 블루투스 개인 훈련 통합 스크린 (SPA, 2단계에서 컨텐츠 채움) ========== -->
-  <div id="bluetoothIndividualScreen" class="screen" style="display: none;">
-    <div class="bluetooth-session-header-top" style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
-      <button type="button" class="bluetooth-session-back-btn" onclick="if (typeof showScreen === 'function') showScreen('trainingRoomScreen');" aria-label="뒤로 가기" style="background: none; border: none; cursor: pointer; padding: 4px;">
+  <!-- ========== 블루투스 개인 훈련 통합 스크린 (SPA, bluetoothIndividual.html body 통합, ID/class는 indiv- 접두사) ========== -->
+  <div id="bluetoothIndividualScreen" class="screen indiv-screen-wrap" style="display: none; background-color: #121212; color: #fff; flex-direction: column; height: 100%; overflow: hidden;">
+    <div class="bluetooth-session-header-top" style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #333; flex-shrink: 0;">
+      <button type="button" class="bluetooth-session-back-btn" onclick="if (typeof showScreen === 'function') showScreen('trainingRoomScreen');" aria-label="뒤로 가기" style="background: none; border: none; cursor: pointer; padding: 4px; color: #fff;">
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
       </button>
-      <h3 class="basecamp-status-bar" style="flex: 1; text-align: center; margin: 0;">블루투스 개인 훈련 (통합 Beta)</h3>
+      <h3 class="basecamp-status-bar" style="flex: 1; text-align: center; margin: 0; color: #fff;">블루투스 개인 훈련</h3>
       <div style="width: 40px;"></div>
     </div>
-    <div style="padding: 24px; text-align: center; color: #6b7280;">
-      <p>통합 모듈 화면입니다. 2단계에서 bluetoothIndividual.html 컨텐츠가 이 영역에 추가됩니다.</p>
+    <div id="indiv-header" class="indiv-header">
+      <button type="button" id="indiv-bluetooth-user-name-wrap" class="indiv-bluetooth-user-name-wrap" style="display: inline-flex; align-items: center; gap: 6px; background: #00d4aa; border: none; cursor: pointer; padding: 2px 10px; border-radius: 6px; line-height: 1.25; font-weight: 600; font-size: 1em; color: #000; box-sizing: border-box;" title="베이스캠프로 이동" onclick="if(typeof showScreen==='function') showScreen('basecampScreen');">
+        <img src="assets/img/left_a.png" alt="" class="indiv-bluetooth-user-name-icon" style="height: 1em; width: auto; object-fit: contain; flex-shrink: 0;" onerror="this.style.display='none'">
+        <span id="indiv-bluetooth-dashboard-user-name" style="color: #000;">홍길동</span>
+      </button>
+      <div id="indiv-main-timer" class="indiv-timer" style="position: absolute; left: 50%; transform: translateX(-50%);">00:00:00</div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+        <div style="position: relative;">
+          <button id="indiv-bluetoothConnectBtn" class="indiv-bluetooth-connect-btn" onclick="toggleBluetoothDropdown()">
+            <img src="assets/img/wifi2.png" alt="연결" class="indiv-bluetooth-icon" style="width: 16px; height: 16px;">
+            <span>연결</span>
+          </button>
+          <div id="indiv-bluetoothDropdown" class="indiv-bluetooth-dropdown">
+            <div id="indiv-bluetoothTrainerItem" class="indiv-bluetooth-dropdown-item" onclick="connectBluetoothDevice('trainer')">
+              <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
+              <span>스마트 트레이너</span>
+              <span class="indiv-status" id="indiv-trainerStatus">미연결</span>
+            </div>
+            <div id="indiv-bluetoothErgMenu" class="indiv-bluetooth-erg-menu" style="display: none; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+              <div style="font-size: 12px; color: #888; margin-bottom: 8px;">ERG 동작</div>
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                  <input type="checkbox" id="indiv-bluetoothErgToggle" style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>ERG 모드</span>
+                </label>
+                <span id="indiv-bluetoothErgStatus" style="font-size: 12px; color: #888;">OFF</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 12px; color: #888;">목표 파워 (W):</label>
+                <input type="number" id="indiv-bluetoothErgTargetPower" min="0" max="1000" value="0" style="width: 80px; padding: 4px 8px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #fff; font-size: 14px;">
+                <button id="indiv-bluetoothErgSetBtn" style="padding: 4px 12px; background: #00d4aa; border: none; border-radius: 4px; color: #000; font-size: 12px; font-weight: bold; cursor: pointer;">설정</button>
+              </div>
+            </div>
+            <div id="indiv-bluetoothHRItem" class="indiv-bluetooth-dropdown-item" onclick="connectBluetoothDevice('heartRate')">
+              <img src="assets/img/bpm_i.png" alt="심박계">
+              <span>심박계</span>
+              <span class="indiv-status" id="indiv-heartRateStatus">미연결</span>
+            </div>
+            <div id="indiv-bluetoothPMItem" class="indiv-bluetooth-dropdown-item" onclick="connectBluetoothDevice('powerMeter')">
+              <img src="assets/img/power_i.png" alt="파워미터">
+              <span>파워미터</span>
+              <span class="indiv-status" id="indiv-powerMeterStatus">미연결</span>
+            </div>
+            <div class="indiv-bluetooth-dropdown-item indiv-bluetooth-dropdown-item-exit" onclick="exitBluetoothIndividualTraining()">
+              <img src="assets/img/logout.png" alt="종료">
+              <span>종료</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="indiv-segment-graph-section">
+      <div class="indiv-segment-graph-container">
+        <canvas id="indiv-individualSegmentGraph"></canvas>
+      </div>
+    </div>
+    <div class="indiv-main-content">
+      <div class="indiv-gauge-container">
+        <svg viewBox="0 0 200 220" style="width:100%; height:100%;">
+          <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+          <g id="indiv-gauge-ticks"></g>
+          <g id="indiv-gauge-labels"></g>
+          <text x="100" y="0" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
+          <text id="indiv-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
+          <text id="indiv-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
+          <text id="indiv-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
+          <text id="indiv-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+          <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+          <text id="indiv-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+          <text id="indiv-segment-info" x="100" y="215" text-anchor="middle" fill="#ccc" font-size="9">준비 중</text>
+          <g id="indiv-gauge-needle" transform="translate(100, 140) rotate(-90)">
+            <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="0" cy="0" r="6" fill="#fff"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="indiv-stats-footer">
+      <div class="indiv-stat-box">
+        <div class="indiv-stat-label">CADENCE</div>
+        <div class="indiv-stat-value indiv-c-cadence"><span id="indiv-ui-cadence">0</span><span class="indiv-unit">rpm</span></div>
+      </div>
+      <div class="indiv-stat-box">
+        <div class="indiv-stat-label">LAP AVG</div>
+        <div class="indiv-stat-value indiv-c-target"><span id="indiv-ui-lap-power">0</span><span class="indiv-unit">w</span></div>
+      </div>
+      <div class="indiv-stat-box">
+        <div class="indiv-stat-label">HEART RATE</div>
+        <div class="indiv-stat-value indiv-c-hr"><span id="indiv-ui-hr">0</span><span class="indiv-unit">bpm</span></div>
+      </div>
+    </div>
+    <div class="indiv-individual-intensity-adjustment-container">
+      <div class="indiv-individual-intensity-adjustment-label">
+        <span>목표값 조절</span>
+        <span class="indiv-individual-intensity-adjustment-value" id="indiv-individualIntensityAdjustmentValue">0%</span>
+      </div>
+      <div class="indiv-individual-intensity-adjustment-slider-wrapper">
+        <span class="indiv-individual-intensity-adjustment-min">-5%</span>
+        <input type="range" id="indiv-individualIntensityAdjustmentSlider" min="-5" max="5" step="1" value="0" class="indiv-individual-intensity-adjustment-slider">
+        <span class="indiv-individual-intensity-adjustment-max">+5%</span>
+      </div>
+    </div>
+    <div id="indiv-countdownOverlay" class="indiv-countdown-overlay indiv-hidden" style="display: none;">
+      <div class="indiv-countdown-number" id="indiv-countdownNumber">5</div>
+    </div>
+    <div id="indiv-trainingResultModal" class="indiv-training-result-modal indiv-hidden" style="display: none;">
+      <div class="indiv-training-result-background"><img src="assets/img/STELVIO AI.png" alt="Stelvio" class="indiv-result-background-logo" /></div>
+      <div class="indiv-training-result-content">
+        <div id="indiv-bluetoothResultSavingState" class="indiv-bluetooth-result-saving-state" style="display: none;">
+          <div class="indiv-bluetooth-saving-spinner"></div>
+          <p class="indiv-bluetooth-saving-text">저장 중입니다...</p>
+        </div>
+        <div id="indiv-bluetoothResultContent" class="indiv-bluetooth-result-content-area">
+          <div class="indiv-result-header">
+            <h2 class="indiv-result-title">수고하셨습니다</h2>
+            <p class="indiv-result-subtitle">훈련 결과가 저장되었습니다</p>
+          </div>
+          <div class="indiv-result-stats">
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">훈련 시간</div><div class="indiv-result-stat-value" id="indiv-result-duration">0분</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">평균 파워</div><div class="indiv-result-stat-value" id="indiv-result-avg-power">0W</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">NP</div><div class="indiv-result-stat-value" id="indiv-result-np">0W</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">TSS</div><div class="indiv-result-stat-value" id="indiv-result-tss">0</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">평균 심박수</div><div class="indiv-result-stat-value" id="indiv-result-hr-avg">0bpm</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">칼로리</div><div class="indiv-result-stat-value" id="indiv-result-calories">0kcal</div></div>
+          </div>
+          <div class="indiv-result-stats">
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">누적 포인트</div><div class="indiv-result-stat-value" id="indiv-result-acc-points">0</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">보유 포인트</div><div class="indiv-result-stat-value" id="indiv-result-rem-points">0</div></div>
+            <div class="indiv-result-stat-item"><div class="indiv-result-stat-label">획득 포인트</div><div class="indiv-result-stat-value" id="indiv-result-earned-points">0</div></div>
+          </div>
+          <button class="indiv-result-close-btn" onclick="closeTrainingResultModal()">확인</button>
+        </div>
+      </div>
+    </div>
+    <div id="indiv-bluetoothMileageCelebrationModal" class="indiv-bluetooth-mileage-celebration-modal indiv-hidden" style="display: none;">
+      <div class="indiv-celebration-content">
+        <div class="indiv-celebration-icon">🎉</div>
+        <h2 class="indiv-celebration-title">축하합니다!</h2>
+        <div class="indiv-celebration-message" id="indiv-bluetooth-celebration-message"></div>
+        <button class="indiv-celebration-close-btn" onclick="closeBluetoothMileageCelebration()">확인</button>
+      </div>
+    </div>
+    <div id="indiv-stelvioExitConfirmModal" class="indiv-stelvio-exit-confirm-modal indiv-hidden" style="display: none;">
+      <div class="indiv-stelvio-exit-confirm-overlay" onclick="closeStelvioExitConfirmPopup();"></div>
+      <div class="indiv-stelvio-exit-confirm-content">
+        <p class="indiv-stelvio-exit-confirm-message">정말 종료하시겠습니까?</p>
+        <div class="indiv-stelvio-exit-confirm-buttons">
+          <button type="button" class="indiv-stelvio-exit-confirm-btn indiv-stelvio-exit-confirm-btn-cancel" onclick="closeStelvioExitConfirmPopup();">취소</button>
+          <button type="button" class="indiv-stelvio-exit-confirm-btn indiv-stelvio-exit-confirm-btn-ok" onclick="if(typeof window.__stelvioExitConfirmCallback==='function'){ window.__stelvioExitConfirmCallback(); } closeStelvioExitConfirmPopup();">확인</button>
+        </div>
+      </div>
     </div>
   </div>
 
