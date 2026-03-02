@@ -1788,7 +1788,7 @@ function formatHMS(totalSeconds) {
 
 // 5초 카운트다운 상태 관리
 let indivSegmentCountdownActive = false;
-let segmentCountdownTimer = null;
+let indivSegmentCountdownTimer = null;
 let lastCountdownValue = null;
 let startCountdownActive = false; // 시작 카운트다운 활성 상태
 let goDisplayTime = null; // GO!! 표시 시작 시간
@@ -2163,10 +2163,10 @@ function showSegmentCountdown(value) {
     // 0 또는 "GO!!"일 때 1초 후 오버레이 숨김 (GO!!는 더 길게 표시)
     if (value === 0 || value === 'GO!!') {
         // 기존 타이머가 있으면 제거
-        if (segmentCountdownTimer) {
-            clearTimeout(segmentCountdownTimer);
+        if (indivSegmentCountdownTimer) {
+            clearTimeout(indivSegmentCountdownTimer);
         }
-        segmentCountdownTimer = setTimeout(() => {
+        indivSegmentCountdownTimer = setTimeout(() => {
             // GO!! 표시 후 1초가 지났는지 확인
             if (goDisplayTime !== null) {
                 const elapsedSinceGo = Date.now() - goDisplayTime;
@@ -2177,7 +2177,7 @@ function showSegmentCountdown(value) {
                 } else {
                     // 아직 1초가 안 지났으면 추가 대기
                     const remainingTime = 1000 - elapsedSinceGo;
-                    segmentCountdownTimer = setTimeout(() => {
+                    indivSegmentCountdownTimer = setTimeout(() => {
                         stopSegmentCountdown();
                         goDisplayTime = null;
                         startCountdownActive = false;
@@ -2204,9 +2204,9 @@ function stopSegmentCountdown() {
         overlay.style.visibility = 'hidden';
     }
     
-    if (segmentCountdownTimer) {
-        clearTimeout(segmentCountdownTimer);
-        segmentCountdownTimer = null;
+    if (indivSegmentCountdownTimer) {
+        clearTimeout(indivSegmentCountdownTimer);
+        indivSegmentCountdownTimer = null;
     }
     
     indivSegmentCountdownActive = false;
