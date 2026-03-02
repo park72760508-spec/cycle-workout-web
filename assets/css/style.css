@@ -471,6 +471,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 #deviceSettingScreen .device-setting-card { padding: 12px 16px 20px; }
+.device-setting-reset-btn { min-width: 2.5em; min-height: 2.5em; }
+.device-setting-reset-btn .device-setting-reset-icon { object-fit: contain; }
+.device-setting-overlay .device-setting-reset-btn { min-width: 2.5em; min-height: 2.5em; }
 .device-setting-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
