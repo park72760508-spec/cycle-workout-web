@@ -4345,36 +4345,27 @@ function openDeviceSettingsOverlayOnly() {
     document.body.appendChild(wrap);
 }
 
-// 블루투스 연결 드롭다운 토글. [앱 전용] Device Settings 팝업/오버레이. [통합 웹] index 오버레이 재사용. [standalone 웹] 드롭다운 토글.
+// 블루투스 연결 버튼 — 모바일 개인훈련 대시보드와 동일: [앱] Device Settings 오버레이, [웹] 드롭다운(저장된 기기 목록)
 function toggleBluetoothDropdown() {
     if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
         abortBluetoothIndividualAutoConnect();
     }
-    // [앱 화면 전용] 앱일 때만 센서연결(Device Settings) 팝업/오버레이 사용. 웹은 아래 기존 드롭다운 로직으로 동작.
+    // [앱] 모바일 개인훈련 대시보드와 동일: 연결 클릭 시 자동연결 중단 후 Device Settings 오버레이만 표시
     if (isAppEnvironmentNow()) {
+        if (typeof window.abortAutoConnect === 'function') window.abortAutoConnect();
         if (window.opener && !window.opener.closed && typeof window.opener.openDeviceSettingPopup === 'function') {
             window.opener.openDeviceSettingPopup();
             return;
         }
         if (!window.opener || window.opener.closed) {
             try {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_DEVICE_SETTINGS' }));
+                if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_DEVICE_SETTINGS' }));
             } catch (e) {}
             openDeviceSettingsOverlayOnly();
             return;
         }
     }
-    // [통합 스크린(index.html) 웹] 같은 페이지의 Device Settings 오버레이 재사용
-    if (__indivIdPrefix && (typeof window.openDeviceSettingPopup === 'function' || typeof openDeviceSettingPopup === 'function')) {
-        var openFn = typeof window.openDeviceSettingPopup === 'function' ? window.openDeviceSettingPopup : openDeviceSettingPopup;
-        openFn();
-        return;
-    }
-    if (__indivIdPrefix && typeof showScreen === 'function') {
-        showScreen('deviceSettingScreen');
-        return;
-    }
-    // [standalone 웹] 기존 로직: 연결 버튼 클릭 시 드롭다운(메뉴 트리) 토글
+    // [웹 — 통합/standalone 동일] 모바일 개인훈련 대시보드와 동일: 연결 클릭 시 드롭다운(저장된 기기 목록) 토글
     const dropdown = __indivEl('bluetoothDropdown');
     if (!dropdown) {
         console.error('[BluetoothIndividual] bluetoothDropdown 요소를 찾을 수 없습니다.');
