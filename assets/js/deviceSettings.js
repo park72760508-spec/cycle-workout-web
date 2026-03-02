@@ -542,12 +542,12 @@
     list.appendChild(li);
   }
 
-  /** deviceType(hr, power, trainer, speed) → window.connectedDevices 키 */
+  /** deviceType(hr, power, trainer, speed, smartrola) → window.connectedDevices 키. smartrola → trainer */
   function typeToConnectedKey(deviceType) {
     var t = String(deviceType || '').toLowerCase();
     if (t === 'hr' || t === 'heartrate') return 'heartRate';
     if (t === 'power' || t === 'powermeter') return 'powerMeter';
-    if (t === 'trainer' || t === 'speed') return t;
+    if (t === 'trainer' || t === 'smartrola' || t === 'speed') return t === 'speed' ? 'speed' : 'trainer';
     return deviceType;
   }
 

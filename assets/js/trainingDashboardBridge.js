@@ -606,6 +606,17 @@
     if (!deviceType) return;
     var key = toConnectedDevicesKey(deviceType);
     if (!key) return;
+    var hadConnection = !!(global.connectedDevices && global.connectedDevices[key]);
+    if (!hadConnection) {
+      if (_disconnectDebounceTimers[key]) {
+        clearTimeout(_disconnectDebounceTimers[key]);
+        _disconnectDebounceTimers[key] = null;
+      }
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[trainingDashboardBridge] deviceError 무시 (연결된 적 없음, "연결 해제" 미표시)', deviceType, key);
+      }
+      return;
+    }
     if (_disconnectDebounceTimers[key]) {
       clearTimeout(_disconnectDebounceTimers[key]);
       _disconnectDebounceTimers[key] = null;
