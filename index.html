@@ -1947,7 +1947,7 @@
   <div id="deviceScanModal" class="modal-overlay device-scan-modal" style="display: none;" onclick="if(event.target === this) closeDeviceScanModal();">
     <div class="modal-content device-scan-modal-content" onclick="event.stopPropagation();">
       <div class="device-scan-modal-header">
-        <h3 class="device-scan-modal-title">기기 검색 중...</h3>
+        <h3 class="device-scan-modal-title" id="deviceScanModalTitle">기기 검색 중...</h3>
         <button type="button" class="modal-close" onclick="closeDeviceScanModal();" aria-label="닫기">&times;</button>
       </div>
       <div class="device-scan-modal-body">
@@ -1957,6 +1957,9 @@
         </div>
         <p class="device-scan-modal-hint" id="deviceScanModalHint">검색된 기기를 탭하면 연결합니다.</p>
         <ul class="device-scan-list" id="deviceScanList"></ul>
+        <div id="deviceScanRescanWrap" class="device-scan-rescan-wrap" style="display: none;">
+          <button type="button" id="deviceScanRescanBtn" class="btn btn-primary device-scan-rescan-btn">재검색</button>
+        </div>
       </div>
     </div>
   </div>
