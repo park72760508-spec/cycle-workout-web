@@ -659,6 +659,16 @@
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] deviceConnected', deviceType, detail.deviceId, '(connectedDevices 반영)');
     }
+    // 트레이너만 연결된 경우 파워/케이던스 소스를 trainer로 자동 설정 (앱이 trainerUpdate 보내면 즉시 표시)
+    if (key === 'trainer') {
+      var hasPm = global.connectedDevices && global.connectedDevices.powerMeter;
+      if (!hasPm && (global[POWER_CADENCE_SOURCE_KEY] == null)) {
+        global[POWER_CADENCE_SOURCE_KEY] = 'trainer';
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[trainingDashboardBridge] 트레이너만 연결됨 → 파워/케이던스 소스: trainer (trainerUpdate 수신 시 표시)');
+        }
+      }
+    }
     tryShowPowerSourceSelectPopup();
     notifyBluetoothChildWindows('deviceConnected', detail);
   }
