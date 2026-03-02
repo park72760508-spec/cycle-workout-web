@@ -6910,23 +6910,20 @@ function handlePlayerEnterClick(event, trackNumber, roomId) {
 
 /**
  * Bluetooth 입장 버튼 클릭 핸들러 (로딩 애니메이션 적용, Bluetooth Join Session 전용, 독립적 구동)
- * 앱(WebView) 환경: 현재 창에서 bluetoothIndividual.html로 이동 → 앱 화면 안에서 표시
- * 브라우저: target="_blank"로 새 창 열기 (기존 동작)
+ * 클릭 시 [훈련 화면 버전 선택] 모달 표시 → 구 버전(bluetoothIndividual.html) / 신 버전(SPA 통합 스크린) 선택
  */
 function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   const button = event?.target?.closest('a.player-enter-btn');
   
+  event.preventDefault();
+  event.stopPropagation();
+  
   // 비활성화된 버튼은 클릭 무시
   if (button && (button.classList.contains('disabled') || button.getAttribute('aria-disabled') === 'true')) {
-    event.preventDefault();
-    event.stopPropagation();
     return false;
   }
   
-  // 로딩 애니메이션 시작
-  if (button) {
-    button.classList.add('loading');
-  }
+  // 로딩/클릭 애니메이션
   if (button) {
     button.classList.add('clicking');
     setTimeout(function () { if (button) button.classList.remove('clicking'); }, 300);
@@ -6939,14 +6936,19 @@ function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
     registerCelebrationModal.style.display = 'none';
   }
   
-  // 앱(WebView) 환경: 새 창 대신 현재 WebView에서 이동 → 블루투스 개인훈련 대시보드가 앱 화면에 표시됨
-  if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
-    event.preventDefault();
+  // 훈련 화면 버전 선택 모달 표시 (구 버전 / 신 버전 통합)
+  if (typeof window.openBluetoothTrainingVersionChoiceModal === 'function') {
+    window.openBluetoothTrainingVersionChoiceModal(trackNumber, roomId || '');
+  } else {
+    // 폴백: 모달 미정의 시 기존처럼 구 버전으로 이동
     var url = (button && button.href) ? button.href : ('bluetoothIndividual.html?bike=' + encodeURIComponent(trackNumber) + (roomId ? '&room=' + encodeURIComponent(roomId) : ''));
-    window.location.href = url;
-    return false;
+    if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
   }
   
-  return true;
+  return false;
 }
 
