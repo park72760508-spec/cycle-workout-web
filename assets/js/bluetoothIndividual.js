@@ -5024,30 +5024,26 @@ function runBluetoothIndividualScreenInit() {
     initializeCelebrationModal();
     lockScreenOrientation();
     sendRequestAutoConnectIfInApp();
-    // 연결 버튼: 인라인 onclick="toggleBluetoothIndividualConnectDropdown()" 사용 (app.js 전역 덮어쓰기 회피), 중복 리스너 제거
-    const connectBtn = __indivEl('bluetoothConnectBtn');
-    if (connectBtn) {
-        connectBtn.onclick = function (e) {
-            if (e) e.preventDefault();
-            if (typeof window.toggleBluetoothIndividualConnectDropdown === 'function') window.toggleBluetoothIndividualConnectDropdown();
-            return false;
-        };
-        console.log('[BluetoothIndividual] 연결 버튼 핸들러 설정 완료');
-    } else {
-        console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
+    // 연결 버튼: 화면 컨테이너에 위임 처리해 항상 통합 화면 전용 토글 동작 (웹=드롭다운, 앱=Device Settings)
+    var screenEl = document.getElementById('bluetoothIndividualScreen');
+    if (screenEl && !screenEl._indivConnectDelegate) {
+        screenEl._indivConnectDelegate = true;
+        screenEl.addEventListener('click', function (e) {
+            var btn = e.target && (e.target.closest ? e.target.closest('#indiv-bluetoothConnectBtn') : (e.target.id === 'indiv-bluetoothConnectBtn' ? e.target : null));
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            toggleBluetoothDropdown();
+        });
+        console.log('[BluetoothIndividual] 연결 버튼 위임 핸들러 등록 완료');
     }
+    // 사용자 이름 클릭: 상단 좌측 < 버튼과 동일 — trainingRoomScreen으로 이동
     const userNameWrap = __indivEl('bluetooth-user-name-wrap');
     if (userNameWrap) {
         userNameWrap.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (typeof showStelvioExitConfirmPopup === 'function') {
-                showStelvioExitConfirmPopup(function () {
-                    if (typeof goToBaseCampAndClose === 'function') goToBaseCampAndClose();
-                });
-            } else if (typeof goToBaseCampAndClose === 'function') {
-                goToBaseCampAndClose();
-            }
+            if (typeof showScreen === 'function') showScreen('trainingRoomScreen');
         });
     }
     initializeIndividualIntensitySlider();
