@@ -723,6 +723,9 @@
   function onTrainerUpdate(e) {
     var detail = e && e.detail;
     if (detail == null) return;
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[trainingDashboardBridge] trainerUpdate 수신', Array.isArray(detail) ? '배열(' + detail.length + ')' : detail);
+    }
     if (detail && typeof detail === 'object' && !Array.isArray(detail) && (detail.power != null || detail.cadence != null || detail.speed != null)) {
       applyTrainerUpdateSimple(detail);
       return;
