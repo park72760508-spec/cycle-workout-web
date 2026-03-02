@@ -18290,7 +18290,7 @@ body.mobile-dashboard-active {
   display: none; /* 베이스캠프처럼 헤더 숨김 */
 }
 
-/* Live Training Session 화면: 디바이스 섹션 (베이스캠프 스타일) */
+/* Live Training Session 화면: 디바이스 섹션 (베이스캠프 스타일) - 바깥쪽 스크롤 제거, 안쪽 녹색 스크롤만 유지 */
 #bluetoothPlayerListScreen .connection-device-section.basecamp-device-section {
   background-color: #ffffff !important;
   border-radius: 12px;
@@ -18300,11 +18300,23 @@ body.mobile-dashboard-active {
   overscroll-behavior-y: none;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  /* 스크롤 가능하도록 설정 */
-  max-height: calc(100vh - 200px); /* 화면 높이에 맞춰 조정 */
-  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  /* 바깥쪽 회색 스크롤 제거: 섹션 자체는 스크롤 없음 */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
   padding-bottom: 120px;
+}
+
+/* Live Training Session: 안쪽 트랙 목록(.player-list-content)만 스크롤 (녹색 스크롤바 유지) */
+#bluetoothPlayerListScreen .connection-device-section .player-list-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* ==========================================================
