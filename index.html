@@ -1414,13 +1414,16 @@
                 </a>
               </div>
             </div>
-            
             <!-- 비밀번호 재설정 링크 -->
             <div class="auth-links" style="text-align: center; margin-top: 4px; margin-bottom: 0; padding: 0;">
               <a href="#" id="forgotPasswordLink" style="color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; display: inline-block; padding: 4px 0;">
                 비밀번호 재설정
               </a>
             </div>
+          </div>
+        </div>
+        <!-- 인증 카드 밖: StelvioWebview 등 -->
+        <div class="auth-below-card">
             <!-- StelvioWebview 앱 연동: 스캔 버튼 -->
             <div class="auth-links" style="text-align: center; margin-top: 6px; margin-bottom: 0; padding: 0;">
               <button type="button" id="stelvioWebviewTestBtn" onclick="typeof testBridge === 'function' && testBridge(); return false;" style="background: none; border: none; color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; padding: 4px 0; font-family: inherit;">
@@ -1438,10 +1441,9 @@
               <p id="authHeartRateBpm" style="font-size: 2.5rem; font-weight: 700; color: #dc2626; margin: 0; line-height: 1.2;">—</p>
               <p style="font-size: 11px; color: #9ca3af; margin: 4px 0 0 0;">BPM</p>
             </div>
-            
             <!-- 에러 메시지 -->
             <div class="auth-status" id="authStatus"></div>
-          </div>
+        </div>
           
           <!-- 비밀번호 재설정 모달 -->
           <div id="forgotPasswordModal" class="modal hidden" style="z-index: 10001;">
