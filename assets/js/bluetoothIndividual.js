@@ -1,5 +1,13 @@
 // bluetoothIndividual.js
 
+// 통합 스크린(id=bluetoothIndividualScreen)용 ID 접두사: index.html에서는 'indiv-', bluetoothIndividual.html에서는 ''
+var __indivIdPrefix = (typeof window.__bluetoothIndividualIdPrefix === 'string') ? window.__bluetoothIndividualIdPrefix : '';
+function __indivEl(id) {
+  var mapped = (id === 'bluetoothUserName') ? 'bluetooth-dashboard-user-name' : id;
+  return document.getElementById(__indivIdPrefix + mapped);
+}
+var __indivHiddenClass = __indivIdPrefix ? 'indiv-hidden' : 'hidden';
+
 // 화면 방향 고정 함수 (세로 모드)
 async function lockScreenOrientation() {
     try {
@@ -90,7 +98,7 @@ function isAppEnvironmentNow() {
 }
 
 function setBluetoothIndividualConnectButtonLabel(connecting) {
-    var btn = document.getElementById('bluetoothConnectBtn');
+    var btn = __indivEl('bluetoothConnectBtn');
     if (!btn) return;
     var span = btn.querySelector('span');
     if (span) span.textContent = connecting ? '연결중' : '연결';
@@ -1080,7 +1088,7 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).on('value', (snapshot) => {
             window.currentUser.name = userName;
             
             // UI 업데이트
-            const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+            const nameEl = __indivEl('bluetooth-dashboard-user-name');
             if (nameEl) {
                 nameEl.textContent = userName || '사용자';
                 console.log('[BluetoothIndividual] ✅ 사용자 이름 실시간 업데이트:', userName);
@@ -1091,7 +1099,7 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).on('value', (snapshot) => {
 
 // 사용자 이름 업데이트 함수 (강화된 버전 - 여러 소스에서 사용자 정보 확인)
 function updateUserName(data) {
-    const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+    const nameEl = __indivEl('bluetooth-dashboard-user-name');
     if (!nameEl) {
         console.warn('[BluetoothIndividual] bluetooth-dashboard-user-name 요소를 찾을 수 없습니다.');
         return;
@@ -1146,7 +1154,7 @@ function updateUserName(data) {
 
 // 사용자 정보를 로드하고 이름을 업데이트하는 함수 (재시도 로직 포함)
 async function loadUserInfoAndUpdateName() {
-    const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+    const nameEl = __indivEl('bluetooth-dashboard-user-name');
     if (!nameEl) return;
     
     let userName = null;
@@ -1493,14 +1501,14 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         if (isAllSegmentsComplete) {
             console.log('[BluetoothIndividual] 모든 세그먼트 완료 - 업데이트 중지');
             // 완료 상태 표시
-            const segmentInfoEl = document.getElementById('segment-info');
+            const segmentInfoEl = __indivEl('segment-info');
             if (segmentInfoEl) {
                 segmentInfoEl.textContent = '훈련 완료';
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
                 segmentInfoEl.setAttribute('font-size', '5.4'); // 60% 축소
             }
             // 경과시간은 마지막 값 유지, 카운트다운은 00:00으로 표시
-            const lapTimeEl = document.getElementById('ui-lap-time');
+            const lapTimeEl = __indivEl('ui-lap-time');
             if (lapTimeEl) {
                 lapTimeEl.textContent = '00:00';
                 lapTimeEl.setAttribute('fill', '#00d4aa');
@@ -1584,7 +1592,7 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
 // Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
 function updateDashboard(data = null) {
     // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
@@ -1639,7 +1647,7 @@ function updateDashboard(data = null) {
     
     // SVG text 요소는 textContent 사용 (innerText보다 안정적)
     // 텍스트는 즉시 업데이트 (바늘은 애니메이션 루프에서 부드럽게 이동)
-    const powerEl = document.getElementById('ui-current-power');
+    const powerEl = __indivEl('ui-current-power');
     if (powerEl) {
         powerEl.textContent = powerValue;
         powerEl.setAttribute('fill', '#fff');
@@ -1659,7 +1667,7 @@ function updateDashboard(data = null) {
     // CADENCE 표시 (Bluetooth 디바이스에서 받은 값)
     // window.liveData.cadence 우선 사용 (bluetooth.js에서 직접 업데이트됨)
     const cadence = Number(window.liveData?.cadence || data?.cadence || data?.rpm || 0);
-    const cadenceEl = document.getElementById('ui-cadence');
+    const cadenceEl = __indivEl('ui-cadence');
     if (cadenceEl) {
         // cadence가 0이거나 유효하지 않으면 확실히 0으로 표시
         const displayCadence = (cadence > 0 && !isNaN(cadence)) ? Math.round(cadence) : 0;
@@ -1669,7 +1677,7 @@ function updateDashboard(data = null) {
     // HEART RATE 표시 (Bluetooth 디바이스에서 받은 값)
     // window.liveData.heartRate 우선 사용 (bluetooth.js에서 직접 업데이트됨)
     const hr = Number(window.liveData?.heartRate || data?.hr || data?.heartRate || data?.bpm || 0);
-    const hrEl = document.getElementById('ui-hr');
+    const hrEl = __indivEl('ui-hr');
     if (hrEl) {
         hrEl.textContent = Math.round(hr);
         // 디버깅 로그 (심박수가 업데이트될 때마다)
@@ -1694,7 +1702,7 @@ function updateDashboard(data = null) {
         lapPower = Number(data.segmentPower || data.avgPower || data.segmentAvgPower || data.averagePower || 0);
     }
     
-    const lapPowerEl = document.getElementById('ui-lap-power');
+    const lapPowerEl = __indivEl('ui-lap-power');
     if (lapPowerEl) {
         lapPowerEl.textContent = Math.round(lapPower);
     }
@@ -1719,7 +1727,7 @@ function updateDashboard(data = null) {
 }
 
 function updateTimer(status) {
-    const timerEl = document.getElementById('main-timer');
+    const timerEl = __indivEl('main-timer');
     
     if (status.state === 'running') {
         // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확)
@@ -1861,7 +1869,7 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
 // 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
 // Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
 function updateLapTime(status = null) {
-    const lapTimeEl = document.getElementById('ui-lap-time');
+    const lapTimeEl = __indivEl('ui-lap-time');
     if (!lapTimeEl) return;
     
     // status가 없으면 firebaseStatus 사용
@@ -2043,7 +2051,7 @@ function handleSegmentCountdown(countdownValue, status) {
         const elapsedSinceGo = Date.now() - goDisplayTime;
         if (elapsedSinceGo < 1000) { // GO!! 표시 후 1초 이내
             // 오버레이가 표시되어 있는지 확인하고 유지
-            const overlay = document.getElementById('countdownOverlay');
+            const overlay = __indivEl('countdownOverlay');
             if (overlay && !overlay.classList.contains('hidden')) {
                 return; // 오버레이 유지
             }
@@ -2107,13 +2115,13 @@ function handleSegmentCountdown(countdownValue, status) {
 
 // 세그먼트 카운트다운 오버레이 표시
 function showSegmentCountdown(value) {
-    const overlay = document.getElementById('countdownOverlay');
-    const numEl = document.getElementById('countdownNumber');
+    const overlay = __indivEl('countdownOverlay');
+    const numEl = __indivEl('countdownNumber');
     
     if (!overlay || !numEl) return;
     
     // 오버레이 표시 (강제로 표시)
-    overlay.classList.remove('hidden');
+    overlay.classList.remove(__indivHiddenClass);
     overlay.style.display = 'flex';
     overlay.style.visibility = 'visible';
     overlay.style.opacity = '1';
@@ -2189,9 +2197,9 @@ function stopSegmentCountdown() {
         return;
     }
     
-    const overlay = document.getElementById('countdownOverlay');
+    const overlay = __indivEl('countdownOverlay');
     if (overlay) {
-        overlay.classList.add('hidden');
+        overlay.classList.add(__indivHiddenClass);
         overlay.style.display = 'none';
         overlay.style.visibility = 'hidden';
     }
@@ -2211,12 +2219,12 @@ function stopSegmentCountdown() {
 // Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
 function updateTargetPower() {
     // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
     
-    const targetPowerEl = document.getElementById('ui-target-power');
+    const targetPowerEl = __indivEl('ui-target-power');
     if (!targetPowerEl) {
         console.warn('[updateTargetPower] ui-target-power 요소를 찾을 수 없습니다.');
         return;
@@ -2242,8 +2250,8 @@ function updateTargetPower() {
         console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
         
         // TARGET 라벨 업데이트 로직 (Firebase 값 사용 시)
-        const targetLabelEl = document.getElementById('ui-target-label');
-        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+        const targetLabelEl = __indivEl('ui-target-label');
+        const targetRpmUnitEl = __indivEl('ui-target-rpm-unit');
         const seg = getCurrentSegment();
         const targetType = seg?.target_type || 'ftp_pct';
         
@@ -2414,8 +2422,8 @@ function updateTargetPower() {
         if (window.DEBUG_MODE) {
             console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
         }
-        const targetLabelEl = document.getElementById('ui-target-label');
-        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+        const targetLabelEl = __indivEl('ui-target-label');
+        const targetRpmUnitEl = __indivEl('ui-target-rpm-unit');
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
@@ -2433,8 +2441,8 @@ function updateTargetPower() {
         }
         
         // 워크아웃 데이터가 있어도 세그먼트 정보가 없으면 기본값 사용
-        const targetLabelEl = document.getElementById('ui-target-label');
-        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+        const targetLabelEl = __indivEl('ui-target-label');
+        const targetRpmUnitEl = __indivEl('ui-target-rpm-unit');
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
@@ -2554,8 +2562,8 @@ function updateTargetPower() {
     console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
     
     // TARGET 라벨 업데이트 로직
-    const targetLabelEl = document.getElementById('ui-target-label');
-    const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+    const targetLabelEl = __indivEl('ui-target-label');
+    const targetRpmUnitEl = __indivEl('ui-target-rpm-unit');
     
     if (targetType === 'dual') {
         let targetRpm = 0;
@@ -2668,7 +2676,7 @@ function updateTargetPower() {
  */
 function updateSpeedometerTargetForSegment(segmentIndex) {
     // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
@@ -2719,9 +2727,9 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
         const ftp = userFTP || window.currentUser?.ftp || 200;
         
         // 속도계 UI 요소 가져오기
-        const targetLabelEl = document.getElementById('ui-target-label');
-        const targetPowerEl = document.getElementById('ui-target-power');
-        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+        const targetLabelEl = __indivEl('ui-target-label');
+        const targetPowerEl = __indivEl('ui-target-power');
+        const targetRpmUnitEl = __indivEl('ui-target-rpm-unit');
         
         if (!targetPowerEl) {
             console.warn('[updateSpeedometerTargetForSegment] ui-target-power 요소를 찾을 수 없습니다.');
@@ -2930,12 +2938,12 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
  */
 function updateSpeedometerSegmentInfo() {
     // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
     
-    const segmentInfoEl = document.getElementById('segment-info');
+    const segmentInfoEl = __indivEl('segment-info');
     if (!segmentInfoEl) {
         console.warn('[updateSpeedometerSegmentInfo] segment-info 요소를 찾을 수 없습니다.');
         return;
@@ -3027,7 +3035,7 @@ function updateSpeedometerSegmentInfo() {
         
     } catch (error) {
         console.error('[updateSpeedometerSegmentInfo] 오류:', error);
-        const segmentInfoEl = document.getElementById('segment-info');
+        const segmentInfoEl = __indivEl('segment-info');
         if (segmentInfoEl) {
             segmentInfoEl.textContent = '준비 중';
             segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
@@ -3266,7 +3274,7 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
     if (typeof drawSegmentGraph === 'function') {
         // 컨테이너 크기가 확정된 후 그래프 그리기
         const drawGraph = () => {
-            const canvas = document.getElementById('individualSegmentGraph');
+            const canvas = __indivEl('individualSegmentGraph');
             if (!canvas) {
                 console.warn('[updateSegmentGraph] Canvas 요소를 찾을 수 없습니다.');
                 return;
@@ -3442,8 +3450,8 @@ function generateGaugeLabels() {
 
 // 속도계 눈금 및 레이블 업데이트 함수
 function updateGaugeTicksAndLabels() {
-    const ticksGroup = document.getElementById('gauge-ticks');
-    const labelsGroup = document.getElementById('gauge-labels');
+    const ticksGroup = __indivEl('gauge-ticks');
+    const labelsGroup = __indivEl('gauge-labels');
     
     if (!ticksGroup) {
         console.warn('[BluetoothIndividual] gauge-ticks 요소를 찾을 수 없습니다.');
@@ -3516,7 +3524,7 @@ function startGaugeAnimationLoop() {
         // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
         const angle = -90 + (ratio * 180);
         
-        const needle = document.getElementById('gauge-needle');
+        const needle = __indivEl('gauge-needle');
         if (needle) {
             // CSS Transition 간섭 제거하고 직접 제어
             needle.style.transition = 'none';
@@ -3542,15 +3550,15 @@ function startGaugeAnimationLoop() {
  * 저장 중 모달 표시 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
  */
 function showBluetoothTrainingResultModalSaving() {
-    const modal = document.getElementById('trainingResultModal');
+    const modal = __indivEl('trainingResultModal');
     if (!modal) {
         console.warn('[Bluetooth 개인 훈련] 훈련 결과 모달을 찾을 수 없습니다.');
         return;
     }
     
     // 저장 중 상태 표시
-    const savingStateEl = document.getElementById('bluetoothResultSavingState');
-    const resultContentEl = document.getElementById('bluetoothResultContent');
+    const savingStateEl = __indivEl('bluetoothResultSavingState');
+    const resultContentEl = __indivEl('bluetoothResultContent');
     
     if (savingStateEl) {
         savingStateEl.style.display = 'flex';
@@ -3560,7 +3568,7 @@ function showBluetoothTrainingResultModalSaving() {
     }
     
     // 모달 표시
-    modal.classList.remove('hidden');
+    modal.classList.remove(__indivHiddenClass);
     modal.style.display = 'flex';
     
     console.log('[Bluetooth 개인 훈련] 저장 중 모달 표시');
@@ -3571,14 +3579,14 @@ function showBluetoothTrainingResultModalSaving() {
  * 모바일 개인훈련 대시보드와 동일한 디자인 및 로직
  */
 function showBluetoothTrainingResultModal(status = null) {
-    const modal = document.getElementById('trainingResultModal');
+    const modal = __indivEl('trainingResultModal');
     if (!modal) {
         console.warn('[Bluetooth 개인 훈련] 훈련 결과 모달을 찾을 수 없습니다.');
         return;
     }
     
     // Bluetooth 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
@@ -3691,12 +3699,12 @@ function showBluetoothTrainingResultModal(status = null) {
     }
     
     // 결과값 표시
-    const durationEl = document.getElementById('result-duration');
-    const avgPowerEl = document.getElementById('result-avg-power');
-    const npEl = document.getElementById('result-np');
-    const tssEl = document.getElementById('result-tss');
-    const hrAvgEl = document.getElementById('result-hr-avg');
-    const caloriesEl = document.getElementById('result-calories');
+    const durationEl = __indivEl('result-duration');
+    const avgPowerEl = __indivEl('result-avg-power');
+    const npEl = __indivEl('result-np');
+    const tssEl = __indivEl('result-tss');
+    const hrAvgEl = __indivEl('result-hr-avg');
+    const caloriesEl = __indivEl('result-calories');
     
     if (durationEl) durationEl.textContent = `${duration_min}분`;
     if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
@@ -3706,9 +3714,9 @@ function showBluetoothTrainingResultModal(status = null) {
     if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
     
     // 마일리지 정보 표시 (주황색톤)
-    const accPointsEl = document.getElementById('result-acc-points');
-    const remPointsEl = document.getElementById('result-rem-points');
-    const earnedPointsEl = document.getElementById('result-earned-points');
+    const accPointsEl = __indivEl('result-acc-points');
+    const remPointsEl = __indivEl('result-rem-points');
+    const earnedPointsEl = __indivEl('result-earned-points');
     
     // 훈련 전 포인트 값 가져오기 (훈련 종료 전 저장된 값)
     const beforePoints = window.beforeTrainingPoints || null;
@@ -3760,8 +3768,8 @@ function showBluetoothTrainingResultModal(status = null) {
     console.log('[Bluetooth 개인 훈련] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories, mileageUpdate });
     
     // 저장 중 상태 숨기고 결과 표시
-    const savingStateEl = document.getElementById('bluetoothResultSavingState');
-    const resultContentEl = document.getElementById('bluetoothResultContent');
+    const savingStateEl = __indivEl('bluetoothResultSavingState');
+    const resultContentEl = __indivEl('bluetoothResultContent');
     
     if (savingStateEl) {
         savingStateEl.style.display = 'none';
@@ -3771,7 +3779,7 @@ function showBluetoothTrainingResultModal(status = null) {
     }
     
     // 모달 표시
-    modal.classList.remove('hidden');
+    modal.classList.remove(__indivHiddenClass);
     modal.style.display = 'flex';
     
     // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
@@ -3813,8 +3821,8 @@ function showBluetoothTrainingResultModal(status = null) {
  * 모바일 대시보드와 동일한 로직 적용
  */
 function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
-    const modal = document.getElementById('bluetoothMileageCelebrationModal');
-    const messageEl = document.getElementById('bluetooth-celebration-message');
+    const modal = __indivEl('bluetoothMileageCelebrationModal');
+    const messageEl = __indivEl('bluetooth-celebration-message');
     
     if (!modal || !messageEl) {
         console.warn('[Bluetooth 개인 훈련] 축하 오버레이 요소를 찾을 수 없습니다.');
@@ -3847,7 +3855,7 @@ function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
     
     // 오버레이 표시 (결과 모달 위에 표시)
     // hidden 클래스 제거 및 display 스타일 명시적 설정 (!important 우회)
-    modal.classList.remove('hidden');
+    modal.classList.remove(__indivHiddenClass);
     modal.style.display = 'flex'; // !important를 우회하기 위해 인라인 스타일로 명시적 설정
     modal.style.visibility = 'visible';
     modal.style.opacity = '1';
@@ -3867,9 +3875,9 @@ function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
  * 모바일 대시보드와 동일한 로직
  */
 function closeBluetoothMileageCelebration() {
-    const modal = document.getElementById('bluetoothMileageCelebrationModal');
+    const modal = __indivEl('bluetoothMileageCelebrationModal');
     if (modal) {
-        modal.classList.add('hidden');
+        modal.classList.add(__indivHiddenClass);
         modal.style.display = 'none';
         modal.style.visibility = 'hidden';
         modal.style.opacity = '0';
@@ -3886,7 +3894,7 @@ window.closeBluetoothMileageCelebration = closeBluetoothMileageCelebration;
  */
 function showTrainingResultModal(status = null) {
     // Bluetooth 개인 훈련 대시보드 화면인지 확인
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (isBluetoothIndividualScreen) {
         // Bluetooth 개인 훈련 대시보드에서는 새로운 함수 사용
         showBluetoothTrainingResultModal(status);
@@ -3900,9 +3908,9 @@ function showTrainingResultModal(status = null) {
  * 훈련 결과 팝업 닫기
  */
 function closeTrainingResultModal() {
-    const modal = document.getElementById('trainingResultModal');
+    const modal = __indivEl('trainingResultModal');
     if (modal) {
-        modal.classList.add('hidden');
+        modal.classList.add(__indivHiddenClass);
         modal.style.display = 'none';
         console.log('[Bluetooth 개인 훈련] 훈련 결과 모달 닫기');
     }
@@ -3922,24 +3930,24 @@ window.closeTrainingResultModal = closeTrainingResultModal;
  */
 function updateTargetPowerArc() {
     // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
     
     // 목표 파워값 가져오기
-    const targetPowerEl = document.getElementById('ui-target-power');
+    const targetPowerEl = __indivEl('ui-target-power');
     if (!targetPowerEl) return;
     
     const targetPower = Number(targetPowerEl.textContent) || 0;
     if (targetPower <= 0) {
         // 목표 파워가 없으면 원호 숨김
-        const targetArc = document.getElementById('gauge-target-arc');
+        const targetArc = __indivEl('gauge-target-arc');
         if (targetArc) {
             targetArc.style.display = 'none';
         }
         // 상한 원호도 숨김
-        const maxArc = document.getElementById('gauge-max-arc');
+        const maxArc = __indivEl('gauge-max-arc');
         if (maxArc) {
             maxArc.style.display = 'none';
         }
@@ -3947,7 +3955,7 @@ function updateTargetPowerArc() {
     }
     
     // LAP AVG 파워값 가져오기
-    const lapPowerEl = document.getElementById('ui-lap-power');
+    const lapPowerEl = __indivEl('ui-lap-power');
     const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
     
     // 세그먼트 달성도 계산 (LAP AVG / 목표 파워) - 하한값 기준
@@ -3969,11 +3977,11 @@ function updateTargetPowerArc() {
     
     // cadence_rpm 타입인 경우: 파워값이 없으므로 원호 표시하지 않음
     if (targetType === 'cadence_rpm') {
-        const targetArc = document.getElementById('gauge-target-arc');
+        const targetArc = __indivEl('gauge-target-arc');
         if (targetArc) {
             targetArc.style.display = 'none';
         }
-        const maxArc = document.getElementById('gauge-max-arc');
+        const maxArc = __indivEl('gauge-max-arc');
         if (maxArc) {
             maxArc.style.display = 'none';
         }
@@ -4006,13 +4014,13 @@ function updateTargetPowerArc() {
     const minPathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${minLargeArcFlag} 1 ${minEndX} ${minEndY}`;
     
     // 목표 파워 원호 요소 가져오기 또는 생성 (하한값)
-    let targetArc = document.getElementById('gauge-target-arc');
+    let targetArc = __indivEl('gauge-target-arc');
     if (!targetArc) {
         // SVG에 원호 요소 추가
-        const svg = document.querySelector('.gauge-container svg');
+        const svg = document.querySelector((__indivIdPrefix ? '.indiv-gauge-container' : '.gauge-container') + ' svg');
         if (svg) {
             targetArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            targetArc.id = 'gauge-target-arc';
+            targetArc.id = __indivIdPrefix + 'gauge-target-arc';
             targetArc.setAttribute('fill', 'none');
             targetArc.setAttribute('stroke-width', '12');
             targetArc.setAttribute('stroke-linecap', 'round');
@@ -4047,12 +4055,12 @@ function updateTargetPowerArc() {
         const maxPathData = `M ${minEndX} ${minEndY} A ${radius} ${radius} 0 ${maxLargeArcFlag} 1 ${maxEndX} ${maxEndY}`;
         
         // 상한값 원호 요소 가져오기 또는 생성
-        let maxArc = document.getElementById('gauge-max-arc');
+        let maxArc = __indivEl('gauge-max-arc');
         if (!maxArc) {
-            const svg = document.querySelector('.gauge-container svg');
+            const svg = document.querySelector((__indivIdPrefix ? '.indiv-gauge-container' : '.gauge-container') + ' svg');
             if (svg) {
                 maxArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                maxArc.id = 'gauge-max-arc';
+                maxArc.id = __indivIdPrefix + 'gauge-max-arc';
                 maxArc.setAttribute('fill', 'none');
                 maxArc.setAttribute('stroke-width', '12');
                 maxArc.setAttribute('stroke-linecap', 'round');
@@ -4073,7 +4081,7 @@ function updateTargetPowerArc() {
         maxArc.style.display = 'block';
     } else {
         // ftp_pctz가 아니거나 상한값이 없으면 상한 원호 숨김
-        const maxArc = document.getElementById('gauge-max-arc');
+        const maxArc = __indivEl('gauge-max-arc');
         if (maxArc) {
             maxArc.style.display = 'none';
         }
@@ -4217,8 +4225,8 @@ function getUserChallengeSync() {
 }
 
 function initializeIndividualIntensitySlider() {
-    const slider = document.getElementById('individualIntensityAdjustmentSlider');
-    const valueDisplay = document.getElementById('individualIntensityAdjustmentValue');
+    const slider = __indivEl('individualIntensityAdjustmentSlider');
+    const valueDisplay = __indivEl('individualIntensityAdjustmentValue');
     
     if (!slider || !valueDisplay) {
         console.warn('[Bluetooth 개인 훈련] 강도 조절 슬라이더 요소를 찾을 수 없습니다');
@@ -4323,7 +4331,7 @@ function updateIndividualIntensityAdjustment(sliderValue) {
  * 개인 훈련 대시보드 강도 조절 표시 업데이트
  */
 function updateIndividualIntensityDisplay(sliderValue) {
-    const valueDisplay = document.getElementById('individualIntensityAdjustmentValue');
+    const valueDisplay = __indivEl('individualIntensityAdjustmentValue');
     if (valueDisplay) {
         const sign = sliderValue >= 0 ? '+' : '';
         valueDisplay.textContent = `${sign}${sliderValue}%`;
@@ -4392,7 +4400,7 @@ function toggleBluetoothDropdown() {
         }
     }
     // [웹 화면] 기존 로직: 연결 버튼 클릭 시 드롭다운(메뉴 트리) 토글
-    const dropdown = document.getElementById('bluetoothDropdown');
+    const dropdown = __indivEl('bluetoothDropdown');
     if (!dropdown) {
         console.error('[BluetoothIndividual] bluetoothDropdown 요소를 찾을 수 없습니다.');
         return;
@@ -4412,8 +4420,8 @@ function toggleBluetoothDropdown() {
 
 // 드롭다운 외부 클릭 시 닫기
 function closeBluetoothDropdownOnOutsideClick(event) {
-    const dropdown = document.getElementById('bluetoothDropdown');
-    const button = document.getElementById('bluetoothConnectBtn');
+    const dropdown = __indivEl('bluetoothDropdown');
+    const button = __indivEl('bluetoothConnectBtn');
     if (dropdown && button && !dropdown.contains(event.target) && !button.contains(event.target)) {
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
@@ -4424,7 +4432,7 @@ function closeBluetoothDropdownOnOutsideClick(event) {
 var BLUETOOTH_INDIVIDUAL_SAVED_DEVICES_KEY = 'stelvio_saved_devices';
 
 function updateBluetoothIndividualDropdownWithSavedDevices() {
-    var dropdown = document.getElementById('bluetoothDropdown');
+    var dropdown = __indivEl('bluetoothDropdown');
     if (!dropdown) return;
 
     var getSavedDevicesByTypeFn = typeof getSavedDevicesByType === 'function'
@@ -4459,16 +4467,16 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
             case 'powerMeter': itemId = 'bluetoothPMItem'; break;
         }
 
-        const mainItem = document.getElementById(itemId);
+        const mainItem = __indivEl(itemId);
         if (!mainItem) return;
 
         const savedListId = 'bluetoothSaved' + deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + 'List';
-        const existingList = document.getElementById(savedListId);
+        const existingList = __indivEl(savedListId);
         if (existingList) existingList.remove();
 
         // 저장된 기기 목록 컨테이너 (구분선은 디바이스+저장 목록 아래에, 글자는 디바이스 텍스트 시작 위치에 맞춤)
         const savedListContainer = document.createElement('div');
-        savedListContainer.id = savedListId;
+        savedListContainer.id = __indivIdPrefix + savedListId;
         savedListContainer.style.cssText = 'padding-top: 4px; margin-top: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 8px; margin-bottom: 8px;';
 
         const header = document.createElement('div');
@@ -4530,7 +4538,7 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
 async function connectBluetoothDevice(deviceType, savedDeviceId) {
     console.log('[BluetoothIndividual] connectBluetoothDevice 호출됨:', deviceType, savedDeviceId || '(새 기기 검색)');
 
-    var dropdown = document.getElementById('bluetoothDropdown');
+    var dropdown = __indivEl('bluetoothDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
@@ -4617,13 +4625,13 @@ async function connectBluetoothDevice(deviceType, savedDeviceId) {
 
 // 블루투스 연결 상태 업데이트 함수
 function updateBluetoothConnectionStatus() {
-    const hrItem = document.getElementById('bluetoothHRItem');
-    const hrStatus = document.getElementById('heartRateStatus');
-    const trainerItem = document.getElementById('bluetoothTrainerItem');
-    const trainerStatus = document.getElementById('trainerStatus');
-    const pmItem = document.getElementById('bluetoothPMItem');
-    const pmStatus = document.getElementById('powerMeterStatus');
-    const connectBtn = document.getElementById('bluetoothConnectBtn');
+    const hrItem = __indivEl('bluetoothHRItem');
+    const hrStatus = __indivEl('heartRateStatus');
+    const trainerItem = __indivEl('bluetoothTrainerItem');
+    const trainerStatus = __indivEl('trainerStatus');
+    const pmItem = __indivEl('bluetoothPMItem');
+    const pmStatus = __indivEl('powerMeterStatus');
+    const connectBtn = __indivEl('bluetoothConnectBtn');
     
     // 이전 연결 상태 저장 (변경 감지용)
     const prevHRConnected = hrItem?.classList.contains('connected') || false;
@@ -4654,7 +4662,7 @@ function updateBluetoothConnectionStatus() {
         }
         
         // ERG 동작 메뉴 표시 (스마트 트레이너 연결 시)
-        const ergMenu = document.getElementById('bluetoothErgMenu');
+        const ergMenu = __indivEl('bluetoothErgMenu');
         if (ergMenu) {
             ergMenu.style.display = 'block';
         }
@@ -4671,7 +4679,7 @@ function updateBluetoothConnectionStatus() {
         }
         
         // ERG 동작 메뉴 숨김 (스마트 트레이너 미연결 시)
-        const ergMenu = document.getElementById('bluetoothErgMenu');
+        const ergMenu = __indivEl('bluetoothErgMenu');
         if (ergMenu) {
             ergMenu.style.display = 'none';
         }
@@ -4726,13 +4734,13 @@ function updateBluetoothConnectionStatus() {
  */
 function exitBluetoothIndividualTraining() {
     // Bluetooth 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
-    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
     if (!isBluetoothIndividualScreen) {
         return; // 다른 화면에서는 실행하지 않음
     }
     
     // 드롭다운 닫기
-    const dropdown = document.getElementById('bluetoothDropdown');
+    const dropdown = __indivEl('bluetoothDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
         document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
@@ -4858,8 +4866,8 @@ function initBluetoothIndividualErgController() {
     window.ergController.subscribe((state, key, value) => {
         if (key === 'enabled') {
             // ERG 모드 활성화/비활성화 시 UI 업데이트
-            const ergToggle = document.getElementById('bluetoothErgToggle');
-            const ergStatus = document.getElementById('bluetoothErgStatus');
+            const ergToggle = __indivEl('bluetoothErgToggle');
+            const ergStatus = __indivEl('bluetoothErgStatus');
             if (ergToggle) {
                 ergToggle.checked = value;
             }
@@ -4871,7 +4879,7 @@ function initBluetoothIndividualErgController() {
         }
         if (key === 'targetPower') {
             // 목표 파워 변경 시 UI 업데이트
-            const targetPowerInput = document.getElementById('bluetoothErgTargetPower');
+            const targetPowerInput = __indivEl('bluetoothErgTargetPower');
             if (targetPowerInput) {
                 targetPowerInput.value = Math.round(value);
             }
@@ -4909,7 +4917,7 @@ function initBluetoothIndividualErgController() {
     setInterval(checkTargetPowerChange, 1000);
 
     // ERG 토글 버튼 이벤트 리스너
-    const ergToggle = document.getElementById('bluetoothErgToggle');
+    const ergToggle = __indivEl('bluetoothErgToggle');
     if (ergToggle) {
         ergToggle.addEventListener('change', async (e) => {
             try {
@@ -4927,8 +4935,8 @@ function initBluetoothIndividualErgController() {
     }
 
     // 목표 파워 설정 버튼 이벤트 리스너
-    const ergSetBtn = document.getElementById('bluetoothErgSetBtn');
-    const ergTargetPowerInput = document.getElementById('bluetoothErgTargetPower');
+    const ergSetBtn = __indivEl('bluetoothErgSetBtn');
+    const ergTargetPowerInput = __indivEl('bluetoothErgTargetPower');
     if (ergSetBtn && ergTargetPowerInput) {
         ergSetBtn.addEventListener('click', () => {
             const targetPower = Number(ergTargetPowerInput.value) || 0;
@@ -4968,25 +4976,25 @@ function initBluetoothIndividualErgController() {
 
 // 페이지 로드 시 모든 모달 초기화 (숨김 상태로 확실히 설정)
 function initializeCelebrationModal() {
-    const celebrationModal = document.getElementById('bluetoothMileageCelebrationModal');
+    const celebrationModal = __indivEl('bluetoothMileageCelebrationModal');
     if (celebrationModal) {
-        celebrationModal.classList.add('hidden');
+        celebrationModal.classList.add(__indivHiddenClass);
         celebrationModal.style.display = 'none';
         console.log('[Bluetooth 개인 훈련] 축하 모달 초기화 완료 (숨김 상태)');
     }
     
     // 훈련 결과 모달도 초기화
-    const resultModal = document.getElementById('trainingResultModal');
+    const resultModal = __indivEl('trainingResultModal');
     if (resultModal) {
-        resultModal.classList.add('hidden');
+        resultModal.classList.add(__indivHiddenClass);
         resultModal.style.display = 'none';
         console.log('[Bluetooth 개인 훈련] 훈련 결과 모달 초기화 완료 (숨김 상태)');
     }
     
     // 카운트다운 오버레이도 초기화
-    const countdownOverlay = document.getElementById('countdownOverlay');
+    const countdownOverlay = __indivEl('countdownOverlay');
     if (countdownOverlay) {
-        countdownOverlay.classList.add('hidden');
+        countdownOverlay.classList.add(__indivHiddenClass);
         countdownOverlay.style.display = 'none';
         console.log('[Bluetooth 개인 훈련] 카운트다운 오버레이 초기화 완료 (숨김 상태)');
     }
@@ -5021,14 +5029,14 @@ function initializeUserInfo() {
         
         // 사용자 이름이 있으면 모든 관련 요소 업데이트
         if (userName && userName !== 'null' && userName !== 'undefined') {
-            const nameEl = document.getElementById('bluetooth-dashboard-user-name');
+            const nameEl = __indivEl('bluetooth-dashboard-user-name');
             if (nameEl) {
                 nameEl.textContent = userName;
                 console.log('[Bluetooth 개인 훈련] ✅ 좌측 사용자 이름 업데이트:', userName);
             }
             
             // bluetoothUserName 요소 업데이트 (있는 경우)
-            const userNameEl = document.getElementById('bluetoothUserName');
+            const userNameEl = __indivEl('bluetoothUserName');
             if (userNameEl) {
                 userNameEl.textContent = userName;
                 console.log('[Bluetooth 개인 훈련] ✅ bluetoothUserName 업데이트:', userName);
@@ -5051,7 +5059,7 @@ if (document.readyState === 'loading') {
         sendRequestAutoConnectIfInApp();
         
         // 연결 버튼 이벤트 리스너 확인 및 등록
-        const connectBtn = document.getElementById('bluetoothConnectBtn');
+        const connectBtn = __indivEl('bluetoothConnectBtn');
         if (connectBtn) {
             connectBtn.onclick = null;
             connectBtn.addEventListener('click', (e) => {
@@ -5064,7 +5072,7 @@ if (document.readyState === 'loading') {
             console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
         }
         // 좌측 상단 둥근네모(이름) 클릭 시 확인 후 베이스캠프로 이동·화면 닫기
-        const userNameWrap = document.getElementById('bluetooth-user-name-wrap');
+        const userNameWrap = __indivEl('bluetooth-user-name-wrap');
         if (userNameWrap) {
             userNameWrap.addEventListener('click', function (e) {
                 e.preventDefault();
@@ -5133,7 +5141,7 @@ if (document.readyState === 'loading') {
     // 앱 WebView일 때 자동 연결 요청 (앱이 기억한 기기로 연결)
     sendRequestAutoConnectIfInApp();
     
-    const connectBtn = document.getElementById('bluetoothConnectBtn');
+    const connectBtn = __indivEl('bluetoothConnectBtn');
     if (connectBtn) {
         connectBtn.onclick = null;
         connectBtn.addEventListener('click', (e) => {
@@ -5145,7 +5153,7 @@ if (document.readyState === 'loading') {
     } else {
         console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
     }
-    const userNameWrap = document.getElementById('bluetooth-user-name-wrap');
+    const userNameWrap = __indivEl('bluetooth-user-name-wrap');
     if (userNameWrap) {
         userNameWrap.addEventListener('click', function (e) {
             e.preventDefault();
@@ -5187,4 +5195,25 @@ if (document.readyState === 'loading') {
         setInterval(updateBluetoothConnectionStatus, 1000);
     }, 1000);
 }
-    
+
+// 통합 스크린(index.html)에서 사용: 훈련 종료 확인 팝업 (standalone은 HTML 인라인 스크립트에서 정의)
+if (typeof window.showStelvioExitConfirmPopup === 'undefined') {
+    window.showStelvioExitConfirmPopup = function (callback) {
+        window.__stelvioExitConfirmCallback = typeof callback === 'function' ? callback : function () {};
+        var modal = __indivEl('stelvioExitConfirmModal');
+        if (modal) {
+            modal.classList.remove(__indivIdPrefix ? 'indiv-hidden' : 'hidden');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    };
+    window.closeStelvioExitConfirmPopup = function () {
+        var modal = __indivEl('stelvioExitConfirmModal');
+        if (modal) {
+            modal.classList.add(__indivIdPrefix ? 'indiv-hidden' : 'hidden');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        window.__stelvioExitConfirmCallback = null;
+    };
+}
