@@ -845,6 +845,11 @@
       background: #fee2e2;
     }
 
+    /* StelvioWebview 영역 숨김 (iOS 개발 시 표시하려면 이 클래스 제거) */
+    .stelvio-webview-hidden {
+      display: none !important;
+    }
+
     #authStatus.info {
       color: #667eea;
       background: #eef2ff;
@@ -1406,7 +1411,7 @@
             <div class="auth-app-download-box">
               <p class="auth-app-download-title">STELVIO App Download</p>
               <div class="auth-app-download-icons">
-                <a href="https://appdistribution.firebase.dev/i/96a25d97d44564c5" id="authAppDownloadAndroid" class="auth-app-download-link" title="Android 앱 다운로드" target="_blank" rel="noopener">
+                <a href="https://firebasestorage.googleapis.com/v0/b/stelvio-ai.firebasestorage.app/o/app-release.apk?alt=media&token=db393f87-4858-44ba-89fb-404b146460c1" id="authAppDownloadAndroid" class="auth-app-download-link" title="Android 앱 다운로드" target="_blank" rel="noopener">
                   <img src="assets/img/android.png" alt="Android" class="auth-app-download-icon auth-app-download-icon-ref">
                 </a>
                 <a href="javascript:void(0)" id="authAppDownloadIos" class="auth-app-download-link" title="iOS 앱 다운로드" onclick="if(typeof showStelvioIosComingSoonPopup==='function')showStelvioIosComingSoonPopup(); return false;">
@@ -1422,8 +1427,8 @@
             </div>
           </div>
         </div>
-        <!-- 인증 카드 밖: StelvioWebview 등 -->
-        <div class="auth-below-card">
+        <!-- 인증 카드 밖: StelvioWebview 등 (iOS 개발 시 표시: 아래 div의 class에서 stelvio-webview-hidden 제거) -->
+        <div class="auth-below-card stelvio-webview-hidden" id="authBelowCardStelvioWebview">
             <!-- StelvioWebview 앱 연동: 스캔 버튼 -->
             <div class="auth-links" style="text-align: center; margin-top: 6px; margin-bottom: 0; padding: 0;">
               <button type="button" id="stelvioWebviewTestBtn" onclick="typeof testBridge === 'function' && testBridge(); return false;" style="background: none; border: none; color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; padding: 4px 0; font-family: inherit;">
@@ -1483,7 +1488,7 @@
             <div id="stelvioIosComingSoonModal" class="stelvio-coming-soon-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10003;">
               <div class="stelvio-coming-soon-overlay" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();"></div>
               <div class="stelvio-coming-soon-content">
-                <p class="stelvio-coming-soon-message">향후 구현 예정입니다</p>
+                <p class="stelvio-coming-soon-message">iOS App 구현 예정입니다.</p>
                 <button type="button" class="stelvio-coming-soon-btn" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();">확인</button>
               </div>
             </div>
