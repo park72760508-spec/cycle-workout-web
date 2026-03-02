@@ -164,6 +164,7 @@ function abortBluetoothIndividualAutoConnect() {
 
 var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS = [100, 300, 600, 1000, 2000];
 var _bluetoothIndividualAutoConnectRetryCount = 0;
+var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_SEND_DELAY_MS = 350;
 
 /** 페이지 로드 시 앱 WebView일 때만 자동 연결 요청. 웹 전용에서는 '연결중' 표시 및 요청 없음. */
 function sendRequestAutoConnectIfInApp() {
@@ -190,9 +191,40 @@ function sendRequestAutoConnectIfInApp() {
                 window._bluetoothIndividualAutoConnectTimeoutId = null;
                 if (window._bluetoothIndividualAutoConnectInProgress) clearBluetoothIndividualAutoConnect();
             }, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS);
-            var payload = { type: 'REQUEST_AUTO_CONNECT' };
-            window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-            if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] REQUEST_AUTO_CONNECT 발송 완료', payload);
+            function doSend() {
+                try {
+                    var payload = { type: 'REQUEST_AUTO_CONNECT' };
+                    if (window.StelvioDeviceBridgeStorage && typeof window.StelvioDeviceBridgeStorage.loadSavedDevices === 'function') {
+                        var saved = window.StelvioDeviceBridgeStorage.loadSavedDevices();
+                        if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
+                            payload.devices = {};
+                            var names = (typeof window.StelvioDeviceBridgeStorage.loadSavedDeviceNames === 'function')
+                                ? window.StelvioDeviceBridgeStorage.loadSavedDeviceNames() : {};
+                            var list = [];
+                            var keys = ['hr', 'power', 'trainer', 'speed'];
+                            for (var ki = 0; ki < keys.length; ki++) {
+                                var k = keys[ki];
+                                var id = saved[k];
+                                if (!id) continue;
+                                payload.devices[k] = id;
+                                if (k === 'trainer') payload.devices.smartrola = id;
+                                list.push({ deviceType: k, deviceId: id, deviceName: (names && names[k]) ? names[k] : '' });
+                            }
+                            if (list.length > 0) payload.devicesList = list;
+                            if (names && typeof names === 'object') payload.deviceNames = names;
+                        }
+                    }
+                    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+                    if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] REQUEST_AUTO_CONNECT 발송 완료', payload);
+                } catch (err) {
+                    if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendRequestAutoConnectIfInApp doSend failed', err);
+                }
+            }
+            if (BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_SEND_DELAY_MS > 0) {
+                setTimeout(doSend, BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_SEND_DELAY_MS);
+            } else {
+                doSend();
+            }
         } catch (e) {
             if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendRequestAutoConnectIfInApp failed', e);
         }

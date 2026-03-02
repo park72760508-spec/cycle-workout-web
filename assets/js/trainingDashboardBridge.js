@@ -24,6 +24,8 @@
   /** 브릿지 미주입 시 재시도 간격(ms). 앱에서 ReactNativeWebView가 늦게 들어올 수 있음 */
   var AUTO_CONNECT_RETRY_DELAYS_MS = [100, 300, 600, 1000, 2000];
   var _autoConnectRetryCount = 0;
+  /** REQUEST_AUTO_CONNECT 전송 전 대기(ms). 앱/WebView가 메시지 수신 준비될 시간 확보 */
+  var AUTO_CONNECT_SEND_DELAY_MS = 350;
 
   /** 파워/케이던스 소스 선택: 'powerMeter' | 'trainer' | null(미선택). 파워미터·스마트트레이너 동시 연결 시 팝업으로 선택 */
   var POWER_CADENCE_SOURCE_KEY = '_stelvioPowerCadenceSource';
@@ -66,12 +68,12 @@
   var speedUpdateHandlerRef = null;
   var heartRateUpdateHandlerRef = null;
 
-  /** deviceType(앱) → connectedDevices 키 (heartRate, trainer, powerMeter, speed). 다중 센서 개별 반영 */
+  /** deviceType(앱) → connectedDevices 키 (heartRate, trainer, powerMeter, speed). 다중 센서 개별 반영. smartrola → trainer 매핑 */
   function toConnectedDevicesKey(deviceType) {
     var t = String(deviceType || '').toLowerCase();
     if (t === 'hr' || t === 'heartrate') return 'heartRate';
     if (t === 'power' || t === 'powermeter') return 'powerMeter';
-    if (t === 'trainer') return 'trainer';
+    if (t === 'trainer' || t === 'smartrola') return 'trainer';
     if (t === 'speed') return 'speed';
     return deviceType;
   }
@@ -478,17 +480,48 @@
         return;
       }
       _autoConnectRetryCount = 0;
-      try {
-        var payload = { type: 'REQUEST_AUTO_CONNECT' };
-        global.ReactNativeWebView.postMessage(JSON.stringify(payload));
-        global[AUTO_CONNECT_SENT_KEY] = true;
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
+      function doSend() {
+        try {
+          var payload = { type: 'REQUEST_AUTO_CONNECT' };
+          if (global.StelvioDeviceBridgeStorage && typeof global.StelvioDeviceBridgeStorage.loadSavedDevices === 'function') {
+            var saved = global.StelvioDeviceBridgeStorage.loadSavedDevices();
+            if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
+              payload.devices = {};
+              var names = (typeof global.StelvioDeviceBridgeStorage.loadSavedDeviceNames === 'function')
+                ? global.StelvioDeviceBridgeStorage.loadSavedDeviceNames() : {};
+              var list = [];
+              var keys = ['hr', 'power', 'trainer', 'speed'];
+              for (var i = 0; i < keys.length; i++) {
+                var k = keys[i];
+                var id = saved[k];
+                if (!id) continue;
+                payload.devices[k] = id;
+                if (k === 'trainer') payload.devices.smartrola = id;
+                list.push({
+                  deviceType: k,
+                  deviceId: id,
+                  deviceName: (names && names[k]) ? names[k] : ''
+                });
+              }
+              if (list.length > 0) payload.devicesList = list;
+              if (names && typeof names === 'object') payload.deviceNames = names;
+            }
+          }
+          global.ReactNativeWebView.postMessage(JSON.stringify(payload));
+          global[AUTO_CONNECT_SENT_KEY] = true;
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
+          }
+        } catch (e) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[trainingDashboardBridge] REQUEST_AUTO_CONNECT postMessage failed', e);
+          }
         }
-      } catch (e) {
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[trainingDashboardBridge] REQUEST_AUTO_CONNECT postMessage failed', e);
-        }
+      }
+      if (AUTO_CONNECT_SEND_DELAY_MS > 0) {
+        setTimeout(doSend, AUTO_CONNECT_SEND_DELAY_MS);
+      } else {
+        doSend();
       }
     }
     tryPost();

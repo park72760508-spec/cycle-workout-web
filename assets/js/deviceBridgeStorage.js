@@ -71,13 +71,14 @@
     }
   }
 
-  // 앱에서 보낼 수 있는 deviceType → 저장 키 매핑 (요구 포맷 hr, power, trainer, speed)
+  // 앱에서 보낼 수 있는 deviceType → 저장 키 매핑 (요구 포맷 hr, power, trainer, speed). smartrola → trainer
   var DEVICE_TYPE_TO_KEY = {
     hr: 'hr',
     heartRate: 'hr',
     power: 'power',
     powerMeter: 'power',
     trainer: 'trainer',
+    smartrola: 'trainer',
     speed: 'speed'
   };
 
