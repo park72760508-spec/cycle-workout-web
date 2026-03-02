@@ -1356,7 +1356,8 @@ const trainingMetrics = {
   joules: 0,          // 누적 일(줄). 1초마다 W(=J/s)를 더해줌
   ra30: 0,            // 30초 롤링 평균 파워(근사: 1차 IIR)
   np4sum: 0,          // (ra30^4)의 누적 합
-  count: 0            // 표본 개수(초 단위)
+  count: 0,           // 표본 개수(초 단위)
+  distanceKm: 0       // 속도 적산 거리(km). 속도(km/h) * 시간(초)/3600
 };
 
 // 전역으로 노출 (resultManager.js에서 TSS 계산 시 사용)
@@ -2650,6 +2651,9 @@ function startSegmentLoop() {
    // (선택) 세그먼트 통계 캐시도 초기화
    window.segmentStats = {};
    
+  // 속도 적산 거리 초기화 (노트북 훈련 데이터 블럭)
+  if (window.trainingMetrics) window.trainingMetrics.distanceKm = 0;
+
   // ⬇️⬇️⬇️ 여기 "초기 상태 설정" 바로 아래에 추가 ⬇️⬇️⬇️
   // — 벽시계 기반 타이밍 상태(추가) —
   window.trainingState.workoutStartMs = Date.now(); // 훈련 시작 시각(ms)
@@ -3977,6 +3981,13 @@ window.updateTrainingDisplay = function () {
        cadenceElement.textContent = "0";
      }
    }
+
+  // 훈련 데이터 블럭 속도(km/h) 실시간 반영 — speedData 수신 시 즉시 표시
+  var speedValueEl = safeGetElement("speedValue");
+  if (speedValueEl && window.liveData) {
+    var speedKmh = window.liveData.speed;
+    speedValueEl.textContent = (speedKmh != null && !Number.isNaN(Number(speedKmh))) ? Number(speedKmh).toFixed(1) : "-";
+  }
 
   // 중앙 디스플레이에 펄스 애니메이션 추가
    // === 중앙 패널 네온 클래스 갱신 ===
@@ -5723,7 +5734,19 @@ function updateTrainingMetrics() {
     // TSS와 칼로리는 항상 표시 (칼로리 형식: 항목, 값, 단위)
     safeSetText("tssValue", TSS.toFixed(1));
     safeSetText("kcalValue", Math.round(kcal));
-    
+
+    // 속도(km/h): liveData.speed — 수신 시 실시간 반영, 1초 틱에서도 표시
+    var speedKmh = window.liveData && window.liveData.speed;
+    if (speedKmh != null && !Number.isNaN(Number(speedKmh))) {
+      safeSetText("speedValue", Number(speedKmh).toFixed(1));
+    } else {
+      safeSetText("speedValue", "-");
+    }
+
+    // 거리(km): 속도 적산 — 평로라 대회와 동일하게 속도(km/h)*시간으로 누적
+    trainingMetrics.distanceKm = (trainingMetrics.distanceKm || 0) + (Number(window.liveData?.speed) || 0) / 3600;
+    safeSetText("distanceValue", (trainingMetrics.distanceKm || 0).toFixed(2));
+
     // 엘리트/PRO 선수는 칼로리 밑에 NP, IF 표시
     if (isElite || isPRO) {
       // NP, IF 항목 표시
