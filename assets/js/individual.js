@@ -922,8 +922,8 @@ let lastCountdownValue = null;
 let startCountdownActive = false; // 시작 카운트다운 활성 상태
 let goDisplayTime = null; // GO!! 표시 시작 시간
 
-// Beep 사운드 (Web Audio)
-let __beepCtx = null;
+// Beep 사운드 (Web Audio) — window에 보관해 다른 스크립트와 전역 선언 충돌 방지
+if (typeof window.__beepCtx === 'undefined') window.__beepCtx = null;
 
 // 오디오 컨텍스트 초기화 함수
 async function ensureBeepContext() {
@@ -933,21 +933,21 @@ async function ensureBeepContext() {
             return false;
         }
 
-        if (!__beepCtx) {
-            __beepCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!window.__beepCtx) {
+            window.__beepCtx = new (window.AudioContext || window.webkitAudioContext)();
             console.log('[개인 훈련] New audio context created');
         }
         
-        if (__beepCtx.state === "suspended") {
-            await __beepCtx.resume();
+        if (window.__beepCtx.state === "suspended") {
+            await window.__beepCtx.resume();
             console.log('[개인 훈련] Audio context resumed');
         }
         
-        return __beepCtx.state === "running";
+        return window.__beepCtx.state === "running";
         
     } catch (error) {
         console.error('[개인 훈련] Audio context initialization failed:', error);
-        __beepCtx = null;
+        window.__beepCtx = null;
         return false;
     }
 }
@@ -963,17 +963,17 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
             return;
         }
 
-        const osc = __beepCtx.createOscillator();
-        const gain = __beepCtx.createGain();
+        const osc = window.__beepCtx.createOscillator();
+        const gain = window.__beepCtx.createGain();
         
         osc.type = type;
         osc.frequency.value = freq;
         gain.gain.value = volume;
 
         osc.connect(gain);
-        gain.connect(__beepCtx.destination);
+        gain.connect(window.__beepCtx.destination);
 
-        const now = __beepCtx.currentTime;
+        const now = window.__beepCtx.currentTime;
         
         // 볼륨 페이드 아웃 설정
         gain.gain.setValueAtTime(volume, now);

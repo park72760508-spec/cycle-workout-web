@@ -1794,7 +1794,7 @@ let startCountdownActive = false; // 시작 카운트다운 활성 상태
 let goDisplayTime = null; // GO!! 표시 시작 시간
 
 // Beep 사운드 (Web Audio)
-let __beepCtx = null;
+let __indivBeepCtx = null;
 
 // 오디오 컨텍스트 초기화 함수
 async function ensureBeepContext() {
@@ -1804,21 +1804,21 @@ async function ensureBeepContext() {
             return false;
         }
 
-        if (!__beepCtx) {
-            __beepCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!__indivBeepCtx) {
+            __indivBeepCtx = new (window.AudioContext || window.webkitAudioContext)();
             console.log('[Bluetooth 개인 훈련] New audio context created');
         }
         
-        if (__beepCtx.state === "suspended") {
-            await __beepCtx.resume();
+        if (__indivBeepCtx.state === "suspended") {
+            await __indivBeepCtx.resume();
             console.log('[Bluetooth 개인 훈련] Audio context resumed');
         }
         
-        return __beepCtx.state === "running";
+        return __indivBeepCtx.state === "running";
         
     } catch (error) {
         console.error('[Bluetooth 개인 훈련] Audio context initialization failed:', error);
-        __beepCtx = null;
+        __indivBeepCtx = null;
         return false;
     }
 }
@@ -1834,17 +1834,17 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
             return;
         }
 
-        const osc = __beepCtx.createOscillator();
-        const gain = __beepCtx.createGain();
+        const osc = __indivBeepCtx.createOscillator();
+        const gain = __indivBeepCtx.createGain();
         
         osc.type = type;
         osc.frequency.value = freq;
         gain.gain.value = volume;
 
         osc.connect(gain);
-        gain.connect(__beepCtx.destination);
+        gain.connect(__indivBeepCtx.destination);
 
-        const now = __beepCtx.currentTime;
+        const now = __indivBeepCtx.currentTime;
         
         // 볼륨 페이드 아웃 설정
         gain.gain.setValueAtTime(volume, now);
