@@ -10,6 +10,14 @@ var __indivHiddenClass = __indivIdPrefix ? 'indiv-hidden' : 'hidden';
 
 // Firebase status (updateTargetPower, updateSpeedometerSegmentInfo 등에서 사용, attachBluetoothIndividualFirebaseListeners 내부 리스너가 설정)
 var firebaseStatus = null;
+// 훈련 상태/세그먼트 추적 — attachBluetoothIndividualFirebaseListeners 내부 리스너가 설정, 전역 함수에서 참조
+var currentSegmentIndex = -1;
+var previousTrainingState = null;
+var lastWorkoutId = null;
+var bluetoothIndividualSegmentStartTime = null;
+var bluetoothIndividualSegmentElapsedTime = 0;
+var bluetoothIndividualTotalElapsedTime = 0;
+var bluetoothIndividualTrainingStartTime = null;
 
 // 화면 방향 고정 함수 (세로 모드)
 async function lockScreenOrientation() {
@@ -1238,17 +1246,8 @@ async function loadUserInfoAndUpdateName() {
     }
 }
 
-// 3. 훈련 상태 구독 (타이머, 세그먼트 정보) — firebaseStatus는 스크립트 상단에 선언됨
-let currentSegmentIndex = -1;
-let previousTrainingState = null; // 이전 훈련 상태 추적
-let lastWorkoutId = null; // 마지막 워크아웃 ID
+// 3. 훈련 상태 구독 (타이머, 세그먼트 정보) — firebaseStatus, currentSegmentIndex 등은 스크립트 상단에 선언됨
 window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
-
-// Bluetooth 개인훈련 대시보드 전용 세그먼트 경과 시간 추적 (다른 화면과 독립)
-let bluetoothIndividualSegmentStartTime = null; // 현재 세그먼트 시작 시간
-let bluetoothIndividualSegmentElapsedTime = 0; // 현재 세그먼트 경과 시간 (초)
-let bluetoothIndividualTotalElapsedTime = 0; // 전체 경과 시간 (초)
-let bluetoothIndividualTrainingStartTime = null; // 훈련 시작 시간
 
 /**
  * Workout ID를 가져오는 헬퍼 함수 (비동기)
