@@ -14534,6 +14534,8 @@ button[aria-disabled="true"] {
 
 /* Bluetooth Training Coach 대시보드 화면 - Indoor Training과 동일한 배경색 및 스타일 */
 #bluetoothTrainingCoachScreen {
+  display: flex;
+  flex-direction: column;
   background: #0a0e27;
   color: #fff;
   padding: 20px;
@@ -15392,6 +15394,7 @@ button[aria-disabled="true"] {
   visibility: visible !important;
   opacity: 1 !important;
   min-height: 200px !important; /* 최소 높이 보장 */
+  flex: 1 1 auto !important; /* 남은 공간 채우기 */
 }
 
 .speedometer-container {
