@@ -9650,24 +9650,24 @@
           
           // 직접 DOM 조작으로 화면 전환 (더 안정적)
           function directScreenSwitch() {
-            // 모든 화면 숨기기 (splashScreen 제외)
+            // authScreen 완전 숨김 (hideAuthScreen 우선 호출)
+            if (typeof window.hideAuthScreen === 'function') {
+              window.hideAuthScreen();
+            } else if (authScreen) {
+              authScreen.classList.remove('active');
+              authScreen.style.setProperty('display', 'none', 'important');
+              authScreen.style.setProperty('opacity', '0', 'important');
+              authScreen.style.setProperty('visibility', 'hidden', 'important');
+            }
+            // 나머지 화면 숨기기 (splashScreen, basecampScreen 제외)
             document.querySelectorAll('.screen').forEach(screen => {
               if (screen.id !== 'basecampScreen' && screen.id !== 'splashScreen') {
                 screen.classList.remove('active');
                 screen.style.display = 'none';
-                screen.style.opacity = '';
-                screen.style.visibility = '';
+                screen.style.opacity = '0';
+                screen.style.visibility = 'hidden';
               }
             });
-            
-            // authScreen 숨김
-            if (authScreen) {
-              authScreen.classList.remove('active');
-              authScreen.style.display = 'none';
-              authScreen.style.opacity = '';
-              authScreen.style.visibility = '';
-              console.log('✅ authScreen 숨김');
-            }
             
             // basecampScreen 표시
             basecampScreen.classList.add('active');
