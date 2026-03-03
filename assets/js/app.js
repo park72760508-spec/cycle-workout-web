@@ -3291,8 +3291,8 @@ if (!window.showScreen) {
       // 2) 대상 화면만 표시
       const el = safeGetElement(id);
       if (el) {
-        // flex 레이아웃이 필요한 화면
-        if (id === 'mobileDashboardScreen' || id === 'workoutScreen') {
+        // flex 레이아웃이 필요한 화면 (Coach 대시보드: 헤더·전광판·그리드·목록 세로 배치)
+        if (id === 'mobileDashboardScreen' || id === 'workoutScreen' || id === 'bluetoothTrainingCoachScreen') {
           el.style.display = "flex";
         } else {
           el.style.display = "block";

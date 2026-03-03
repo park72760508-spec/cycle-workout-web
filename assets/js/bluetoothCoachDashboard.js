@@ -2180,11 +2180,8 @@ window.updateBluetoothCoachTracksFromFirebase = async function updateBluetoothCo
     if (typeof showToast === 'function') {
       showToast(`${newMaxTracks}개 트랙으로 업데이트되었습니다.`);
     }
-  } else {
-    if (typeof showToast === 'function') {
-      showToast('트랙 구성이 변경되지 않았습니다.');
-    }
   }
+  /* 트랙 구성 변경 없을 때 토스트 생략 (초기 진입 시 혼동 방지) */
 };
 
 /**

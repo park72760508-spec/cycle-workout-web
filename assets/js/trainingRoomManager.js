@@ -2232,12 +2232,12 @@ function openCoachMode() {
     if (typeof showScreen === 'function') {
       showScreen('bluetoothTrainingCoachScreen');
       
-      // 블루투스 코치용 트랙 정보 로드 (필요 시)
+      // 블루투스 코치용 트랙 정보 로드 (initBluetoothCoachDashboard 완료 후 동기화)
       if (typeof updateBluetoothCoachTracksFromFirebase === 'function') {
         setTimeout(() => {
           console.log('[Coach Mode] 블루투스 코치 트랙 정보 로드 시작');
           updateBluetoothCoachTracksFromFirebase();
-        }, 300);
+        }, 800);
       }
     } else {
       console.error('[Coach Mode] showScreen 함수를 찾을 수 없습니다.');
@@ -3980,9 +3980,9 @@ function openCoachModeFromModal(event) {
         // [수정 요청 사항 반영] 블루투스 코치 스크린으로 이동
         showScreen('bluetoothTrainingCoachScreen');
         
-        // 블루투스 코치용 트랙 정보 로드 (필요 시)
+        // 블루투스 코치용 트랙 정보 로드 (initBluetoothCoachDashboard 완료 후 동기화)
         if (typeof updateBluetoothCoachTracksFromFirebase === 'function') {
-          setTimeout(() => updateBluetoothCoachTracksFromFirebase(), 300);
+          setTimeout(() => updateBluetoothCoachTracksFromFirebase(), 800);
         }
       } catch (error) {
         console.error('[Coach Modal] ❌ 화면 전환 오류:', error);
