@@ -33,8 +33,18 @@ try {
     auth = firebase.auth();
     window.auth = auth; // 전역 접근용
     
-    // Firestore 초기화
+    // Firestore 초기화 (WebChannel 400 오류 방지: Long Polling 강제)
     firestore = firebase.firestore();
+    try {
+        firestore.settings({ experimentalForceLongPolling: true });
+        console.log("🔥 Firestore Long Polling 적용 (WebChannel 400 방지)");
+    } catch (e) {
+        if (e.message && (e.message.indexOf('already been started') !== -1 || e.message.indexOf('settings can no longer be changed') !== -1)) {
+            console.warn("🔥 Firestore settings 이미 적용됨:", e.message);
+        } else {
+            console.warn("🔥 Firestore Long Polling 적용 실패:", e);
+        }
+    }
     window.firestore = firestore; // 전역 접근용
     
     console.log("🔥 Firebase(Realtime Database) 연결 성공!");
