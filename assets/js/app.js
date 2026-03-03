@@ -13044,6 +13044,41 @@ function closeSettingsModal() {
   }
 }
 
+// Gemini API 미등록 알림 팝업 (STELVIO 스타일)
+function showGeminiApiNotRegisteredModal() {
+  const modal = document.getElementById('geminiApiNotRegisteredModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+}
+
+function closeGeminiApiNotRegisteredModal() {
+  const modal = document.getElementById('geminiApiNotRegisteredModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+function openGeminiApiSettingsFromModal() {
+  closeGeminiApiNotRegisteredModal();
+  if (typeof openSettingsModal === 'function') {
+    openSettingsModal();
+    const apiKeyInput = document.getElementById('settingsGeminiApiKey');
+    if (apiKeyInput) {
+      setTimeout(function() {
+        apiKeyInput.focus();
+        apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  }
+}
+
+window.showGeminiApiNotRegisteredModal = showGeminiApiNotRegisteredModal;
+window.closeGeminiApiNotRegisteredModal = closeGeminiApiNotRegisteredModal;
+window.openGeminiApiSettingsFromModal = openGeminiApiSettingsFromModal;
+
 // Privacy Policy 모달 관련 함수
 async function openPrivacyPolicyModal() {
   const modal = document.getElementById('privacyPolicyModal');
