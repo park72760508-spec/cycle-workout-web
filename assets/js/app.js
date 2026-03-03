@@ -3297,6 +3297,8 @@ if (!window.showScreen) {
         } else {
           el.style.display = "block";
         }
+        el.style.visibility = "visible";
+        el.style.opacity = "1";
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
         
