@@ -11437,7 +11437,7 @@
       <div id="indiv-main-timer" class="indiv-timer" style="position: absolute; left: 50%; transform: translateX(-50%);">00:00:00</div>
       <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
         <div style="position: relative;">
-          <button type="button" id="indiv-bluetoothConnectBtn" class="indiv-bluetooth-connect-btn" aria-label="연결">
+          <button type="button" id="indiv-bluetoothConnectBtn" class="indiv-bluetooth-connect-btn" aria-label="연결" onclick="event.stopPropagation(); if(typeof window.toggleBluetoothIndividualConnectDropdown==='function'){window.toggleBluetoothIndividualConnectDropdown();}">
             <img src="assets/img/wifi2.png" alt="연결" class="indiv-bluetooth-icon" style="width: 16px; height: 16px;">
             <span>연결</span>
           </button>
@@ -11616,8 +11616,14 @@
     }
     function applyBluetoothTrainingVersionIntegrated() {
       var track = window.__bluetoothVersionChoiceBike;
+      var room = window.__bluetoothVersionChoiceRoom || '';
       if (track != null && track !== undefined) {
         window.__bluetoothIndividualTrackId = String(track);
+      }
+      // Firebase Realtime DB 단체 훈련: roomId를 SESSION_ID로 설정 (구버전과 동일)
+      if (room) {
+        window.SESSION_ID = String(room);
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('currentTrainingRoomId', room); } catch (e) {}
       }
       closeBluetoothTrainingVersionChoiceModal();
       if (typeof showScreen === 'function') showScreen('bluetoothIndividualScreen');
