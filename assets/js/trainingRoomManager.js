@@ -636,8 +636,28 @@ async function checkLoginAndRetry() {
 }
 window.checkLoginAndRetry = checkLoginAndRetry;
 
+/** Live Training Rooms 로딩 세대 ID (재진입 시 이전 로딩 결과 무시) */
+let __loadTrainingRoomsLoadId = 0;
+
+/**
+ * Promise에 타임아웃 적용 (무한 대기 방지)
+ * @param {Promise} promise - 원본 Promise
+ * @param {number} ms - 타임아웃(ms)
+ * @param {string} label - 오류 메시지용 라벨
+ * @returns {Promise}
+ */
+function promiseWithTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(label + ' 시간 초과 (' + ms + 'ms)')), ms)
+    )
+  ]);
+}
+
 /**
  * Training Room 목록 로드 — Active Defense: currentUser null이면 쿼리하지 않음, 권한 오류 시 토큰 강제 갱신
+ * 타임아웃·재진입 시 초기화 적용으로 무한 로딩 방지
  */
 async function loadTrainingRooms() {
   const listContainer = document.getElementById('trainingRoomList');
@@ -646,6 +666,10 @@ async function loadTrainingRooms() {
     console.error('[Training Room] 목록 컨테이너를 찾을 수 없습니다.');
     return;
   }
+
+  // 재진입 시 이전 로딩 결과 무시 (loadId로 세대 구분)
+  const loadId = ++__loadTrainingRoomsLoadId;
+  const isStale = () => loadId !== __loadTrainingRoomsLoadId;
   
   listContainer.innerHTML = `
     <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -661,6 +685,7 @@ async function loadTrainingRooms() {
 
     const currentUser = getCurrentUserForTrainingRooms();
     if (!currentUser) {
+      if (isStale()) return;
       console.warn('[Training Room] Gatekeeper: no currentUser after wait. Showing auth-wait UI.');
       listContainer.innerHTML = '';
       listContainer.innerHTML = `
@@ -776,9 +801,10 @@ async function loadTrainingRooms() {
       }
     }
 
+    const FETCH_ROOMS_TIMEOUT_MS = isTablet ? 20000 : 15000;
     let lastErr = null;
     try {
-      rooms = await fetchRooms();
+      rooms = await promiseWithTimeout(fetchRooms(), FETCH_ROOMS_TIMEOUT_MS, 'Training Room 목록 조회');
     } catch (firstErr) {
       lastErr = firstErr;
       if (isPermissionError(firstErr)) {
@@ -792,7 +818,7 @@ async function loadTrainingRooms() {
         }
         await new Promise(r => setTimeout(r, 1000));
         try {
-          rooms = await fetchRooms();
+          rooms = await promiseWithTimeout(fetchRooms(), FETCH_ROOMS_TIMEOUT_MS, 'Training Room 목록 재조회');
           lastErr = null;
         } catch (retryErr) {
           lastErr = retryErr;
@@ -808,7 +834,7 @@ async function loadTrainingRooms() {
             }
             await new Promise(r => setTimeout(r, 2000));
             try {
-              rooms = await fetchRooms();
+              rooms = await promiseWithTimeout(fetchRooms(), FETCH_ROOMS_TIMEOUT_MS, 'Training Room 목록 2차 재조회');
               lastErr = null;
             } catch (secondRetryErr) {
               lastErr = secondRetryErr;
@@ -820,17 +846,20 @@ async function loadTrainingRooms() {
     }
     
     console.log('[Training Room] ✅', rooms.length, '개 Room 로드 완료');
-    
+    if (isStale()) return;
+
+    const USERS_LIST_TIMEOUT_MS = 10000;
     let usersList = [];
     try {
-      usersList = await getUsersListWithCache();
+      usersList = await promiseWithTimeout(getUsersListWithCache(), USERS_LIST_TIMEOUT_MS, '사용자 목록 조회');
       console.log('[Training Room] ✅ 사용자 목록:', usersList.length, '명');
     } catch (userError) {
       console.warn('[Training Room] ⚠️ 사용자 목록 로드 실패 (계속 진행):', userError);
       if (Array.isArray(window.users) && window.users.length > 0) usersList = window.users;
       else if (Array.isArray(window.userProfiles) && window.userProfiles.length > 0) usersList = window.userProfiles;
     }
-    
+    if (isStale()) return;
+
     trainingRoomList = rooms;
     if (typeof sessionStorage !== 'undefined') {
       try {
@@ -839,7 +868,8 @@ async function loadTrainingRooms() {
         console.warn('[Training Room] 캐시 저장 실패:', cacheError);
       }
     }
-    
+    if (isStale()) return;
+
     if (rooms.length === 0) {
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
@@ -853,24 +883,32 @@ async function loadTrainingRooms() {
     console.log('[Training Room] ✅ 목록 로드 완료:', rooms.length, '개 Room,', usersList.length, '명 사용자');
     
   } catch (error) {
+    if (isStale()) return;
     console.error('[Training Room] ❌ 목록 로드 오류:', error);
     console.error('[Training Room] 오류 상세:', { message: error.message, code: error.code, stack: error.stack });
     
     const errorCode = error.code || 'unknown';
     const errorMessage = error.message || '알 수 없는 오류';
+    const isTimeout = String(errorMessage).includes('시간 초과');
     const isPermErr = errorCode === 'permission-denied' ||
       String(errorMessage).toLowerCase().includes('permission') ||
       String(errorMessage).toLowerCase().includes('권한');
     
+    const retryOnclick = isTimeout
+      ? 'if(typeof loadTrainingRooms==="function"){loadTrainingRooms();}'
+      : 'if(typeof checkLoginAndRetry==="function"){checkLoginAndRetry();}';
+    const retryLabel = isTimeout ? '다시 시도' : '로그인 상태 점검 및 재시도';
+    const retryMsg = isTimeout
+      ? '연결 시간이 초과되었습니다. 네트워크를 확인하고 다시 시도해주세요.'
+      : (isPermErr ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' : '네트워크 연결을 확인하고 다시 시도해주세요.');
+    
     listContainer.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
         <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
-        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">
-          ${isPermErr ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' : '네트워크 연결을 확인하고 다시 시도해주세요.'}
-        </p>
-        <button type="button" id="checkLoginAndRetryBtn" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">${retryMsg}</p>
+        <button type="button" id="checkLoginAndRetryBtn" onclick="${retryOnclick}" 
                 style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-          로그인 상태 점검 및 재시도
+          ${retryLabel}
         </button>
       </div>
     `;
@@ -4062,9 +4100,10 @@ const TRAINING_ROOMS_COLLECTION = 'training_rooms';
 const USERS_COLLECTION = 'users';
 
 /**
- * Firebase Auth 상태 대기 (모바일 최적화)
+ * Firebase Auth 상태 대기 (getGrade3UsersFromFirestore 전용 - 단순 버전)
+ * 주의: loadTrainingRooms 등은 상단의 waitForAuthReady(다중 Auth·타임아웃) 사용
  */
-async function waitForAuthReady(maxWaitMs = 3000) {
+async function waitForAuthReadyForGrade3(maxWaitMs = 3000) {
   return new Promise((resolve) => {
     const auth = window.authV9 || (window.firebase && window.firebase.auth ? window.firebase.auth() : null);
     
@@ -4074,21 +4113,18 @@ async function waitForAuthReady(maxWaitMs = 3000) {
       return;
     }
     
-    // 이미 로그인 상태가 확인되면 즉시 반환
     if (auth.currentUser) {
       resolve(true);
       return;
     }
     
-    // onAuthStateChanged로 상태 확인
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      unsubscribe();
+      if (typeof unsubscribe === 'function') unsubscribe();
       resolve(!!user);
     });
     
-    // 타임아웃 설정
     setTimeout(() => {
-      unsubscribe();
+      if (typeof unsubscribe === 'function') unsubscribe();
       resolve(false);
     }, maxWaitMs);
   });
@@ -4103,7 +4139,7 @@ async function getGrade3UsersFromFirestore() {
   try {
     // 모바일 환경에서 Auth 대기 (권한 오류 방지)
     if (isMobile) {
-      const authReady = await waitForAuthReady(3000);
+      const authReady = await waitForAuthReadyForGrade3(3000);
       if (!authReady) {
         console.warn('[Training Room] 모바일: Auth 준비 대기 시간 초과, 계속 진행');
       }
