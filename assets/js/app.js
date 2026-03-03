@@ -3314,6 +3314,7 @@ if (!window.showScreen) {
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
         if (id === 'mobileDashboardScreen') {
+          document.body.classList.remove('bluetooth-individual-screen-active');
           document.querySelectorAll(".screen").forEach(s => {
             if (s.id !== 'mobileDashboardScreen' && s.id !== 'splashScreen') {
               s.style.display = "none";
@@ -3327,6 +3328,11 @@ if (!window.showScreen) {
         // 모바일/블루투스 개인훈련 대시보드가 아닌 화면: body/document 스크롤 비활성화 → 화면 단위 스크롤만 사용 (Bluefy 등 당김 새로고침·줌 메뉴 방지)
         if (id !== 'mobileDashboardScreen') {
           document.body.classList.remove('mobile-dashboard-active');
+          if (id === 'bluetoothIndividualScreen') {
+            document.body.classList.add('bluetooth-individual-screen-active');
+          } else {
+            document.body.classList.remove('bluetooth-individual-screen-active');
+          }
           document.body.style.overflow = 'hidden';
           document.body.style.height = '100%';
           document.body.style.position = '';
