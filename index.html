@@ -1993,6 +1993,18 @@
     </div>
   </div>
 
+  <!-- Gemini API 미등록 알림 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) -->
+  <div id="geminiApiNotRegisteredModal" class="stelvio-coming-soon-modal gemini-api-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10020;">
+    <div class="stelvio-coming-soon-overlay gemini-api-overlay" onclick="if(typeof closeGeminiApiNotRegisteredModal==='function')closeGeminiApiNotRegisteredModal();"></div>
+    <div class="stelvio-coming-soon-content gemini-api-content">
+      <p class="stelvio-coming-soon-message gemini-api-message">⚠️ Gemini API 키가 없습니다. [설정]에서 키를 입력해주세요.</p>
+      <div class="gemini-api-buttons">
+        <button type="button" class="gemini-api-btn gemini-api-btn-ok stelvio-coming-soon-btn" onclick="if(typeof closeGeminiApiNotRegisteredModal==='function')closeGeminiApiNotRegisteredModal();">확인</button>
+        <button type="button" class="gemini-api-btn gemini-api-btn-register stelvio-coming-soon-btn" onclick="if(typeof openGeminiApiSettingsFromModal==='function')openGeminiApiSettingsFromModal();">API키 등록</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 기기 검색 모달 (deviceSettings.js에서 제어) -->
   <div id="deviceScanModal" class="modal-overlay device-scan-modal" style="display: none;" onclick="if(event.target === this) closeDeviceScanModal();">
     <div class="modal-content device-scan-modal-content" onclick="event.stopPropagation();">
@@ -13667,8 +13679,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
             if (!apiKey || !String(apiKey).trim()) {
               console.warn('[Mobile Debug] [AI] No API Key found on this device.');
-              // Show alert for missing API key
-              if (typeof alert === 'function') {
+              if (typeof showGeminiApiNotRegisteredModal === 'function') {
+                showGeminiApiNotRegisteredModal();
+              } else if (typeof alert === 'function') {
                 alert('⚠️ Gemini API 키가 없습니다. [설정]에서 키를 입력해주세요.');
               }
               setCoachData({
