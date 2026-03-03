@@ -217,10 +217,12 @@ body {
   /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
 }
 /* 인증 화면 활성 시: html/body 배경을 그라데이션으로 — 스크롤 시 하단 흰색바탕 노출 방지 (overscroll bounce 시 body 배경이 보임) */
+/* 바깥쪽 스크롤 제거: body/html overflow hidden → #authScreen 안에서만 스크롤 (스크롤바 1개만 표시) */
 html:has(#authScreen.active),
 body:has(#authScreen.active) {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
   background-attachment: fixed !important;
+  overflow: hidden !important;
 }
 h1,h2,h3,h4 { font-weight: 600; }
 
