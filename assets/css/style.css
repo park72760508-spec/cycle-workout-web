@@ -3334,17 +3334,103 @@ button[aria-disabled="true"] {
   box-shadow: 0 1px 2px rgba(102, 126, 234, 0.2);
 }
 
+/* 프로필 검색 섹션: 태블릿/PC 1행 배치 (이름·전화번호·검색 / 만료일 일괄 연장 [기간설정] 적용) */
+.profile-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.profile-search-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  flex: 1;
+  min-width: 200px;
+}
+.profile-search-field {
+  flex: 1;
+  min-width: 80px;
+}
+.profile-search-field label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+.profile-search-field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.profile-search-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #667eea;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.profile-bulk-expiry-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.profile-bulk-expiry-wrap label {
+  font-size: 12px;
+  color: #666;
+}
+.profile-bulk-expiry-wrap select {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 100px;
+}
+.profile-bulk-expiry-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #059669;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.profile-search-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #888;
+}
+.profile-search-user-count {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
 /* 사용자 목록 (범례와 함께 표시) */
 .user-list-with-legend {
-  width: 100%; /* 전체 너비 사용 (그리드가 자동으로 조정) */
+  width: 100%;
   flex-shrink: 0;
 }
 
+/* 프로필 카드목록: 태블릿/PC 1줄 2개씩 균등 분할 */
 #profileScreen #userList{
-  display:grid; 
-  grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
-  gap:12px; 
-  margin-bottom:16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
   width: 100%;
 }
 
@@ -3363,16 +3449,22 @@ button[aria-disabled="true"] {
   box-sizing: border-box;
 }
 
-/* 모바일 화면 대응 - 카드가 화면 너비에 맞게 조정 */
-@media (max-width: 640px) {
-  #profileScreen #userList{
-    grid-template-columns: 1fr; /* 모바일에서는 1열로 표시 */
+/* 모바일 화면 대응 - 카드 1열, 검색 섹션 세로 배치 */
+@media (max-width: 768px) {
+  #profileScreen #userList {
+    grid-template-columns: 1fr;
     gap: 12px;
   }
-  
-  #profileScreen .user-card{
-    width: 100%; /* 모바일에서는 전체 너비 사용 */
+  #profileScreen .user-card {
+    width: 100%;
     max-width: 100%;
+  }
+  .profile-search-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .profile-bulk-expiry-wrap {
+    margin-top: 4px;
   }
 }
 
@@ -7801,7 +7893,7 @@ button[aria-disabled="true"] {
 
 /* 기존 반응형 */
 @media (max-width: 768px) {
-  #profileScreen #userList { grid-template-columns: 1fr; }
+  /* #profileScreen #userList - 위 profile-search 모바일 블록에서 처리 */
   
   /* 모바일에서 범례는 위로 배치 */
   .challenge-legend-container {
