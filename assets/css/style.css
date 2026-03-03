@@ -8684,6 +8684,56 @@ button[aria-disabled="true"] {
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4) !important;
 }
 
+/* 센서 연결 초기화 확인 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
+.device-reset-confirm-modal:not(.hidden) {
+  display: flex !important;
+}
+.device-reset-confirm-content {
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.15);
+}
+.device-reset-confirm-message {
+  white-space: pre-line;
+  margin-bottom: 24px;
+}
+.device-reset-confirm-buttons {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+.device-reset-confirm-btn {
+  flex: 1;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: none;
+}
+.device-reset-confirm-cancel {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+.device-reset-confirm-cancel:hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
+}
+.device-reset-confirm-ok {
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+}
+.device-reset-confirm-ok:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+.device-reset-confirm-ok:active {
+  transform: translateY(0);
+}
+
 /* Device Settings 웹 사용자 안내 팝업: 화면 맨 앞·정중앙 표시 */
 .stelvio-device-settings-web-modal.hidden {
   display: none !important;
