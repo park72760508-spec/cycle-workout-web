@@ -14536,16 +14536,20 @@ button[aria-disabled="true"] {
 #bluetoothTrainingCoachScreen {
   display: flex;
   flex-direction: column;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 100 !important;
   background: #0a0e27;
   color: #fff;
   padding: 20px;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100vh;
-  max-height: 100dvh;
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.2);
