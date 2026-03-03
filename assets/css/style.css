@@ -8883,6 +8883,67 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
+/* 구독 만료 제한 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
+.expiry-restriction-modal:not(.hidden) {
+  display: flex !important;
+}
+.expiry-restriction-content {
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.15);
+  text-align: center;
+}
+.expiry-restriction-title {
+  margin: 0 0 16px 0;
+  font-size: 1.25em;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.3;
+}
+.expiry-restriction-message {
+  margin: 0 0 24px 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #4b5563;
+  line-height: 1.6;
+}
+.expiry-restriction-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.expiry-restriction-btn {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: none;
+}
+.expiry-restriction-btn-rest {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+.expiry-restriction-btn-rest:hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
+}
+.expiry-restriction-btn-extend {
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+}
+.expiry-restriction-btn-extend:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+.expiry-restriction-btn:active {
+  transform: translateY(0);
+}
+
 /* Device Settings 웹 사용자 안내 팝업: 화면 맨 앞·정중앙 표시 */
 .stelvio-device-settings-web-modal.hidden {
   display: none !important;
