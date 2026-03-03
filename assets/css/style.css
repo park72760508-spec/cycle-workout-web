@@ -18860,6 +18860,11 @@ body.mobile-dashboard-active {
 }
 
 /* ========== 블루투스 개인 훈련 통합 스크린 (indiv- 접두사, index.html SPA) ========== */
+/* Live Training Rooms 화면 활성 시 블루투스 개인 훈련 화면 하단 노출 방지 */
+#trainingRoomScreen.active ~ #bluetoothIndividualScreen {
+  display: none !important;
+  visibility: hidden !important;
+}
 #bluetoothIndividualScreen.indiv-screen-wrap {
   display: flex !important;
   font-family: 'Pretendard', sans-serif;
