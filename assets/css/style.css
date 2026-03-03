@@ -216,6 +216,12 @@ body {
   overflow-x: hidden;
   /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
 }
+/* 인증 화면 활성 시: html/body 배경을 그라데이션으로 — 스크롤 시 하단 흰색바탕 노출 방지 (overscroll bounce 시 body 배경이 보임) */
+html:has(#authScreen.active),
+body:has(#authScreen.active) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
+  background-attachment: fixed !important;
+}
 h1,h2,h3,h4 { font-weight: 600; }
 
 /* 공통 레이아웃/유틸 */
@@ -8457,16 +8463,31 @@ button[aria-disabled="true"] {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   min-height: 100vh;
-  display: flex;
+  min-height: 100dvh;
+  display: flex !important;
   align-items: center;
   justify-content: center;
   padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+/* 인증 화면 활성 시: 메인 블럭을 화면 정중앙(상하좌우)에 배치 */
+#authScreen.active {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .auth-main-container {
   max-width: 500px;
   width: 100%;
-  margin: 0 auto;
+  margin: auto; /* 상하좌우 중앙 정렬 */
+  flex-shrink: 0;
 }
 
 .auth-hero-section {
