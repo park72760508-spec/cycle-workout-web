@@ -88,12 +88,8 @@
     try {
       const appV9 = initializeApp(firebaseConfig, 'authV9');
       authV9 = getAuth(appV9);
-      if (isSamsungOrTabletForFirestore()) {
-        firestoreV9 = initializeFirestore(appV9, { experimentalForceLongPolling: true });
-        console.log('✅ Firebase v9 Firestore 초기화 (Long Polling 적용, 삼성/태블릿)');
-      } else {
-        firestoreV9 = getFirestore(appV9);
-      }
+      firestoreV9 = initializeFirestore(appV9, { experimentalForceLongPolling: true });
+      console.log('✅ Firebase v9 Firestore 초기화 (Long Polling 적용, WebChannel 400 방지)');
       window.authV9 = authV9;
       window.firestoreV9 = firestoreV9;
       try {
