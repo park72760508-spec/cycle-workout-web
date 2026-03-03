@@ -1981,6 +1981,18 @@
     </div>
   </div>
 
+  <!-- 센서 연결 초기화 확인 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) -->
+  <div id="deviceResetConfirmModal" class="stelvio-coming-soon-modal device-reset-confirm-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10015;">
+    <div class="stelvio-coming-soon-overlay device-reset-confirm-overlay" onclick="if(typeof closeDeviceResetConfirmModal==='function')closeDeviceResetConfirmModal();"></div>
+    <div class="stelvio-coming-soon-content device-reset-confirm-content">
+      <p class="stelvio-coming-soon-message device-reset-confirm-message">저장된 센서 연결 정보를 모두 초기화할까요?<br>다시 기기를 검색해 연결해야 합니다.</p>
+      <div class="device-reset-confirm-buttons">
+        <button type="button" class="device-reset-confirm-btn device-reset-confirm-cancel" onclick="if(typeof closeDeviceResetConfirmModal==='function')closeDeviceResetConfirmModal();">취소</button>
+        <button type="button" class="device-reset-confirm-btn device-reset-confirm-ok stelvio-coming-soon-btn" onclick="if(typeof confirmDeviceReset==='function')confirmDeviceReset();">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 기기 검색 모달 (deviceSettings.js에서 제어) -->
   <div id="deviceScanModal" class="modal-overlay device-scan-modal" style="display: none;" onclick="if(event.target === this) closeDeviceScanModal();">
     <div class="modal-content device-scan-modal-content" onclick="event.stopPropagation();">
