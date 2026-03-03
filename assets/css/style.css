@@ -8461,12 +8461,13 @@ button[aria-disabled="true"] {
    [PATCH] 메인 인증 화면 / 사용자 인증 로그인
 ========================================================== */
 
+/* display에 !important 사용 시 JS로 display:none 해도 CSS가 덮어써서 인증 화면이 사라지지 않음 → !important 제거 */
 #authScreen {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   min-height: 100vh;
   min-height: 100dvh;
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
@@ -8476,7 +8477,7 @@ button[aria-disabled="true"] {
 }
 /* 인증 화면 활성 시: 메인 블럭을 화면 정중앙(상하좌우)에 배치 */
 #authScreen.active {
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
   height: 100vh !important;
