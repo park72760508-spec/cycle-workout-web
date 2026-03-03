@@ -8826,6 +8826,57 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
+/* Gemini API 미등록 알림 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
+.gemini-api-modal:not(.hidden) {
+  display: flex !important;
+}
+.gemini-api-content {
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.15);
+}
+.gemini-api-message {
+  margin-bottom: 24px;
+}
+.gemini-api-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.gemini-api-btn {
+  width: 100%;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: none;
+}
+.gemini-api-btn-ok {
+  color: #fff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+}
+.gemini-api-btn-ok:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+.gemini-api-btn-register {
+  color: #fff;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
+  border: 1px solid rgba(5, 150, 105, 0.4);
+}
+.gemini-api-btn-register:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+}
+.gemini-api-btn:active {
+  transform: translateY(0);
+}
+
 /* Device Settings 웹 사용자 안내 팝업: 화면 맨 앞·정중앙 표시 */
 .stelvio-device-settings-web-modal.hidden {
   display: none !important;
