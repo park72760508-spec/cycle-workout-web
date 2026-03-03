@@ -5152,6 +5152,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnStartTrainingFromScreen = document.getElementById("btnStartTrainingFromScreen");
   if (btnStartTrainingFromScreen) {
     btnStartTrainingFromScreen.addEventListener("click", function () {
+      var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
+      if (typeof isUserExpired === 'function' && cu && isUserExpired(cu)) {
+        if (typeof showExpiryRestrictionModal === 'function') showExpiryRestrictionModal();
+        return;
+      }
       startWithCountdown(5);
     });
   }
@@ -16345,6 +16350,42 @@ function closeSubscribeOverlay() {
   }
 }
 
+/** 사용자 만료일 체크 (grade=2만 적용, 관리자 제외) */
+function isUserExpired(user) {
+  if (!user) return false;
+  var grade = String(user.grade || '2');
+  if (grade === '1') return false; // 관리자는 제한 없음
+  var exp = user.expiry_date;
+  if (!exp) return false;
+  var expiryDate = new Date(exp);
+  var today = new Date();
+  expiryDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return expiryDate.getTime() < today.getTime();
+}
+
+/** 구독 만료 제한 팝업 표시 */
+function showExpiryRestrictionModal() {
+  var modal = document.getElementById('expiryRestrictionModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+}
+
+/** 구독 만료 제한 팝업 닫기 */
+function closeExpiryRestrictionModal() {
+  var modal = document.getElementById('expiryRestrictionModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+window.isUserExpired = isUserExpired;
+window.showExpiryRestrictionModal = showExpiryRestrictionModal;
+window.closeExpiryRestrictionModal = closeExpiryRestrictionModal;
+
 /**
  * 모바일 대시보드 마스코트 펄스 애니메이션 시작
  */
@@ -17568,6 +17609,13 @@ function handleMobileToggle() {
     if (!window.currentWorkout) {
       // 워크아웃 미선택 시 팝업 표시
       alert('워크아웃을 선택한 후 훈련을 시작하세요');
+      return;
+    }
+    
+    // 구독 만료 사용자 제한
+    var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
+    if (typeof isUserExpired === 'function' && cu && isUserExpired(cu)) {
+      if (typeof showExpiryRestrictionModal === 'function') showExpiryRestrictionModal();
       return;
     }
     

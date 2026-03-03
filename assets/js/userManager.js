@@ -3456,8 +3456,14 @@ function showPerformanceDashboard(userId) {
     // 해당 사용자 정보를 가져와서 currentUser로 설정
     apiGetUser(userId).then(result => {
       if (result.success) {
-        window.currentUser = result.item;
-        localStorage.setItem('currentUser', JSON.stringify(result.item));
+        var user = result.item;
+        // 구독 만료 사용자 제한
+        if (typeof isUserExpired === 'function' && isUserExpired(user)) {
+          if (typeof showExpiryRestrictionModal === 'function') showExpiryRestrictionModal();
+          return;
+        }
+        window.currentUser = user;
+        localStorage.setItem('currentUser', JSON.stringify(user));
       }
       // 대시보드 화면 표시
       if (typeof showScreen === 'function') {
