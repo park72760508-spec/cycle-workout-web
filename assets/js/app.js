@@ -3306,6 +3306,21 @@ if (!window.showScreen) {
         el.style.visibility = "visible";
         el.style.opacity = "1";
         el.classList.add("active");
+        // 화면 전환 시 스크롤 위치 초기화 (프로필↔대시보드 전환 시 흰색 화면만 보이는 오류 방지)
+        function resetScrollForScreen() {
+          try {
+            el.scrollTop = 0;
+            if (id === 'performanceDashboardScreen') {
+              const container = document.getElementById('performance-dashboard-container');
+              if (container) container.scrollTop = 0;
+            }
+            window.scrollTo(0, 0);
+            if (document.documentElement) document.documentElement.scrollTop = 0;
+            if (document.body) document.body.scrollTop = 0;
+          } catch (scrollErr) { /* 무시 */ }
+        }
+        resetScrollForScreen();
+        requestAnimationFrame(function() { resetScrollForScreen(); });
         console.log(`Successfully switched to: ${id}`);
         
         // body 스크롤 잠금/고정 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤
@@ -3423,19 +3438,27 @@ if (!window.showScreen) {
           // ✅ 프로필 화면 진입 시 "새 사용자 추가" 카드 제거(간단)
           const addCard = document.getElementById('cardAddUser');
           if (addCard) addCard.remove();
+          // loadUsers DOM 갱신 후 스크롤 재초기화
+          try {
+            const profEl = document.getElementById('profileScreen');
+            if (profEl) profEl.scrollTop = 0;
+            window.scrollTo(0, 0);
+          } catch (e) {}
         }, 100);
       }
       
       // Performance Dashboard 화면 처리
       if (id === 'performanceDashboardScreen') {
-        // iframe이 로드되면 자동으로 대시보드가 표시됨
-        const iframe = document.getElementById('performanceDashboardFrame');
-        if (iframe) {
-          // iframe 로드 완료 대기 (필요시)
-          iframe.onload = function() {
-            console.log('Performance Dashboard loaded');
-          };
-        }
+        // React 마운트 후 스크롤 재초기화 (비동기 렌더 시 흰색 화면 방지)
+        setTimeout(function() {
+          try {
+            const el2 = document.getElementById('performanceDashboardScreen');
+            const container = document.getElementById('performance-dashboard-container');
+            if (el2) el2.scrollTop = 0;
+            if (container) container.scrollTop = 0;
+            window.scrollTo(0, 0);
+          } catch (e) {}
+        }, 300);
       }
 
       // Training Room 화면: 훈련방 목록 자동 로딩
@@ -6523,6 +6546,13 @@ function initializeCurrentScreen(screenId) {
       // 훈련 대시보드 브릿지: AUTO_CONNECT + deviceError/deviceConnected 리스너 (trainingDashboardBridge.js)
       if (window.StelvioTrainingDashboardBridge && typeof window.StelvioTrainingDashboardBridge.mount === 'function') {
         window.StelvioTrainingDashboardBridge.mount();
+      }
+      break;
+
+    case 'bluetoothIndividualScreen':
+      // 통합 블루투스 개인훈련 화면: 연결 버튼 드롭다운·Firebase 리스너 등 초기화 (모든 진입 경로에서 실행)
+      if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
+        window.initBluetoothIndividualIntegratedScreen();
       }
       break;
       

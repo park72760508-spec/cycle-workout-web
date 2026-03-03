@@ -446,9 +446,10 @@ function get3SecondAveragePowerIndividual() {
 // window.liveData는 bluetooth.js에서 업데이트됨 (power, heartRate, cadence)
 let firebaseDataUpdateInterval = null; // Firebase 전송 인터벌
 
-// Firebase에 데이터를 전송하는 함수
+// Firebase에 데이터를 전송하는 함수 (통합/구버전 공통: window.SESSION_ID 우선 사용)
 function sendDataToFirebase() {
-    if (!window.liveData || !SESSION_ID || !myTrackId) {
+    var sessionId = (typeof window !== 'undefined' && window.SESSION_ID) || SESSION_ID;
+    if (!window.liveData || !sessionId || !myTrackId) {
         return;
     }
     
@@ -542,7 +543,7 @@ function sendDataToFirebase() {
     }
     
     // Firebase에 업데이트 (merge: true로 기존 데이터 보존)
-    db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).update(dataToSend)
+    db.ref(`sessions/${sessionId}/users/${myTrackId}`).update(dataToSend)
         .then(() => {
             // Firebase 전송 성공 로그 (UI 업데이트는 startFirebaseDataTransmission의 setInterval에서 처리)
             // UI 업데이트는 주기적으로 window.liveData를 읽어서 처리하므로 여기서는 전송만 함
@@ -599,9 +600,10 @@ function stopFirebaseDataTransmission() {
     }
 }
 
-// Firebase에 디바이스 정보 업데이트
+// Firebase에 디바이스 정보 업데이트 (통합/구버전 공통: window.SESSION_ID 우선)
 function updateFirebaseDevices() {
-    if (!SESSION_ID || !myTrackId || !db) {
+    var sessionId = (typeof window !== 'undefined' && window.SESSION_ID) || SESSION_ID;
+    if (!sessionId || !myTrackId || !db) {
         console.warn('[BluetoothIndividual] Firebase 업데이트 실패: SESSION_ID 또는 myTrackId가 없습니다.');
         return;
     }
@@ -618,12 +620,12 @@ function updateFirebaseDevices() {
         smartTrainerId: smartTrainerId || null
     };
     
-    // devices 경로에 업데이트 (sessions/{SESSION_ID}/devices/{myTrackId})
-    const devicesRef = db.ref(`sessions/${SESSION_ID}/devices/${myTrackId}`);
+    // devices 경로에 업데이트 (sessions/{sessionId}/devices/{myTrackId})
+    const devicesRef = db.ref(`sessions/${sessionId}/devices/${myTrackId}`);
     devicesRef.update(devicesData)
         .then(() => {
             console.log('[BluetoothIndividual] ✅ Firebase 디바이스 정보 업데이트 성공:', {
-                path: `sessions/${SESSION_ID}/devices/${myTrackId}`,
+                path: `sessions/${sessionId}/devices/${myTrackId}`,
                 heartRateId,
                 powerMeterId,
                 smartTrainerId
@@ -634,7 +636,7 @@ function updateFirebaseDevices() {
         });
     
     // 하위 호환성을 위해 users 경로에도 업데이트 (기존 코드와의 호환성)
-    const usersDevicesRef = db.ref(`sessions/${SESSION_ID}/users/${myTrackId}/devices`);
+    const usersDevicesRef = db.ref(`sessions/${sessionId}/users/${myTrackId}/devices`);
     usersDevicesRef.update(devicesData)
         .then(() => {
             console.log('[BluetoothIndividual] ✅ Firebase users/devices 경로 업데이트 성공 (하위 호환성)');
@@ -1104,7 +1106,15 @@ let userDataLoaded = false;
 function attachBluetoothIndividualFirebaseListeners() {
     if (window.__bluetoothIndividualFirebaseListenersAttached) return;
     window.__bluetoothIndividualFirebaseListenersAttached = true;
-    db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => {
+    var sessionId = (typeof window !== 'undefined' && window.SESSION_ID)
+        || (typeof localStorage !== 'undefined' && localStorage.getItem('currentTrainingRoomId'))
+        || (typeof SESSION_ID !== 'undefined' ? SESSION_ID : '');
+    sessionId = sessionId ? String(sessionId) : '';
+    if (!sessionId) {
+        console.warn('[BluetoothIndividual] Firebase 리스너: SESSION_ID가 없어 리스너를 설정하지 않습니다.');
+        return;
+    }
+    db.ref(`sessions/${sessionId}/users/${myTrackId}`).once('value', (snapshot) => {
     const data = snapshot.val();
     
     if (data && !userDataLoaded) {
@@ -1212,8 +1222,8 @@ function attachBluetoothIndividualFirebaseListeners() {
 });
 
 // Firebase에서 사용자 정보 실시간 업데이트 감지 (추가 보강)
-// sessions/{SESSION_ID}/users/{myTrackId}의 변경사항을 실시간으로 감지
-db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).on('value', (snapshot) => {
+// sessions/{sessionId}/users/{myTrackId}의 변경사항을 실시간으로 감지
+db.ref(`sessions/${sessionId}/users/${myTrackId}`).on('value', (snapshot) => {
     const data = snapshot.val();
     if (data && data.userName) {
         // 사용자 이름이 업데이트되면 즉시 반영
@@ -1255,7 +1265,10 @@ async function getWorkoutId() {
     
     // 3순위: Firebase에서 직접 가져오기
     try {
-        const snapshot = await db.ref(`sessions/${SESSION_ID}/workoutId`).once('value');
+        const sid = (typeof window !== 'undefined' && window.SESSION_ID)
+            || (typeof localStorage !== 'undefined' && localStorage.getItem('currentTrainingRoomId'))
+            || (typeof SESSION_ID !== 'undefined' ? SESSION_ID : '');
+        const snapshot = await db.ref(`sessions/${sid}/workoutId`).once('value');
         const workoutId = snapshot.val();
         if (workoutId) {
             // 가져온 값 저장
@@ -1295,7 +1308,7 @@ function getWorkoutIdSync() {
 window.getWorkoutId = getWorkoutId;
 window.getWorkoutIdSync = getWorkoutIdSync;
 
-db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
+db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
         // Firebase status 저장 (updateTargetPower에서 사용)
@@ -1322,7 +1335,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         // 훈련 시작 감지 (idle/paused -> running)
         if (previousTrainingState !== 'running' && currentState === 'running') {
             // 워크아웃 ID 가져오기 (Firebase에서 또는 window.currentWorkout에서)
-            db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
+            db.ref(`sessions/${sessionId}/workoutId`).once('value', (workoutIdSnapshot) => {
                 const workoutId = workoutIdSnapshot.val();
                 if (workoutId) {
                     if (!window.currentWorkout) {
@@ -1539,7 +1552,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
 });
 
 // 4. 워크아웃 정보 구독 (세그먼트 그래프 표시용)
-db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
+db.ref(`sessions/${sessionId}/workoutPlan`).on('value', (snapshot) => {
     const segments = snapshot.val();
     if (segments && Array.isArray(segments) && segments.length > 0) {
         // 워크아웃 객체 생성
@@ -4818,11 +4831,14 @@ function goToBaseCampAndClose() {
 }
 window.goToBaseCampAndClose = goToBaseCampAndClose;
 
-// 전역 함수로 노출
+// 전역 함수로 노출 (app.js가 window.toggleBluetoothDropdown를 덮어쓰므로, 통합 화면은 toggleBluetoothIndividualConnectDropdown 사용)
 window.toggleBluetoothDropdown = toggleBluetoothDropdown;
-// 통합 화면 전용: 인라인 onclick에서 이 이름으로 호출 (app.js의 toggleBluetoothDropdown에 덮어쓰이지 않도록)
+// 통합 화면 전용: 클로저로 bluetoothIndividual 전용 토글 함수 고정 (app.js 덮어쓰기 영향 받지 않음)
+var _toggleBluetoothIndividualDropdownImpl = toggleBluetoothDropdown;
 window.toggleBluetoothIndividualConnectDropdown = function () {
-    toggleBluetoothDropdown();
+    if (typeof _toggleBluetoothIndividualDropdownImpl === 'function') {
+        _toggleBluetoothIndividualDropdownImpl();
+    }
 };
 window.connectBluetoothDevice = connectBluetoothDevice;
 window.exitBluetoothIndividualTraining = exitBluetoothIndividualTraining;
