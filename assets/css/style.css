@@ -18137,6 +18137,17 @@ body.mobile-dashboard-active {
   height: 100% !important;
 }
 
+/* 블루투스 개인훈련 신버전(SPA 통합): 구버전(bluetoothIndividual.html)과 동일한 스크롤/PTR 방지 */
+body.bluetooth-individual-screen-active {
+  overscroll-behavior-y: none !important;
+  overscroll-behavior: none !important;
+  touch-action: manipulation !important;
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* 모바일 대시보드 가로 모드 방지 */
 @media screen and (orientation: landscape) {
   #mobileDashboardScreen.active {
