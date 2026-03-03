@@ -5166,10 +5166,104 @@ function initializeBluetoothIndividualWakeLockForSPA() {
     console.log('[BluetoothIndividual] 화면 꺼짐 방지 초기화 완료 (SPA)');
 }
 
+/** SPA 전용: Pull-to-refresh 방지 (모바일 대시보드·구버전 bluetoothIndividual.html과 동일, iOS/Bluefy 강화) */
+function initializeBluetoothIndividualPullToRefreshPrevention() {
+    if (window.__bluetoothIndividualP2RInitialized) return;
+    window.__bluetoothIndividualP2RInitialized = true;
+    teardownBluetoothIndividualPullToRefreshPrevention();
+    var screenEl = document.getElementById('bluetoothIndividualScreen');
+    if (!screenEl) return;
+    function isIOS() { var ua = navigator.userAgent || ''; return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+    function isBluefy() { return /Bluefy/i.test(navigator.userAgent || ''); }
+    var isIOSDevice = isIOS();
+    var isBluefyApp = isBluefy();
+    var touchStartY = 0;
+    var lastScrollY = 0;
+    var isScrolling = false;
+    function isAtTop() {
+        return (window.scrollY === 0 || window.scrollY <= 1) &&
+            (screenEl.scrollTop === 0 || screenEl.scrollTop <= 1) &&
+            (document.documentElement.scrollTop === 0 || document.documentElement.scrollTop <= 1);
+    }
+    function touchStartHandler(e) {
+        if (e.touches && e.touches.length) {
+            touchStartY = e.touches[0].clientY;
+            lastScrollY = window.scrollY || screenEl.scrollTop || document.documentElement.scrollTop || 0;
+            isScrolling = false;
+        }
+    }
+    function touchMoveHandler(e) {
+        if (!e.touches || !e.touches.length) return;
+        var touchY = e.touches[0].clientY;
+        var deltaY = touchY - touchStartY;
+        var currentScrollY = window.scrollY || screenEl.scrollTop || document.documentElement.scrollTop || 0;
+        if (Math.abs(currentScrollY - lastScrollY) > 1) isScrolling = true;
+        lastScrollY = currentScrollY;
+        if (deltaY > 0) {
+            var threshold = (isIOSDevice || isBluefyApp) ? 3 : 10;
+            var shouldBlock = deltaY > threshold || ((isIOSDevice || isBluefyApp) && isAtTop());
+            if (shouldBlock) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        }
+    }
+    function touchEndHandler() { touchStartY = 0; lastScrollY = 0; isScrolling = false; }
+    function documentTouchMoveHandler(e) {
+        var target = e.target;
+        if (screenEl && (screenEl.contains(target) || target === screenEl)) {
+            var touchY = e.touches && e.touches[0] ? e.touches[0].clientY : 0;
+            var deltaY = touchY - touchStartY;
+            if (deltaY > 3 && (isIOSDevice || isBluefyApp)) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
+            }
+        }
+    }
+    function beforeUnloadHandler(e) {
+        if (window.currentTrainingState === 'running') {
+            e.preventDefault();
+            e.returnValue = '훈련이 진행 중입니다. 정말 나가시겠습니까?';
+            return e.returnValue;
+        }
+    }
+    screenEl.addEventListener('touchstart', touchStartHandler, { passive: true, capture: true });
+    screenEl.addEventListener('touchmove', touchMoveHandler, { passive: false, capture: true });
+    screenEl.addEventListener('touchend', touchEndHandler, { passive: true, capture: true });
+    document.addEventListener('touchmove', documentTouchMoveHandler, { passive: false, capture: true });
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+    window.__bluetoothIndividualP2RHandlers = {
+        touchStartHandler: touchStartHandler,
+        touchMoveHandler: touchMoveHandler,
+        touchEndHandler: touchEndHandler,
+        documentTouchMoveHandler: documentTouchMoveHandler,
+        beforeUnloadHandler: beforeUnloadHandler
+    };
+    console.log('[BluetoothIndividual] Pull-to-refresh 방지 초기화 (iOS/Bluefy 강화)', { isIOS: isIOSDevice, isBluefy: isBluefyApp });
+}
+function teardownBluetoothIndividualPullToRefreshPrevention() {
+    var screenEl = document.getElementById('bluetoothIndividualScreen');
+    var refs = window.__bluetoothIndividualP2RHandlers;
+    if (!refs || !screenEl) return;
+    screenEl.removeEventListener('touchstart', refs.touchStartHandler, { capture: true });
+    screenEl.removeEventListener('touchmove', refs.touchMoveHandler, { capture: true });
+    screenEl.removeEventListener('touchend', refs.touchEndHandler, { capture: true });
+    document.removeEventListener('touchmove', refs.documentTouchMoveHandler, { capture: true });
+    window.removeEventListener('beforeunload', refs.beforeUnloadHandler);
+    window.__bluetoothIndividualP2RHandlers = null;
+    window.__bluetoothIndividualP2RInitialized = false;
+    console.log('[BluetoothIndividual] Pull-to-refresh 방지 해제');
+}
+
 /** 통합 스크린(SPA) 전용: 화면이 열릴 때 한 번만 호출. Firebase 리스너 + 블루투스 대시보드 + UI 초기화 */
 function runBluetoothIndividualScreenInit() {
     initializeCelebrationModal();
     lockScreenOrientation();
+    initializeBluetoothIndividualPullToRefreshPrevention();
     sendRequestAutoConnectIfInApp();
     // 연결 버튼: 화면 컨테이너에 위임 처리해 항상 통합 화면 전용 토글 동작 (웹=드롭다운, 앱=Device Settings)
     var screenEl = document.getElementById('bluetoothIndividualScreen');
