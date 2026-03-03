@@ -260,6 +260,15 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         expiryDateAsDate.setMonth(expiryDateAsDate.getMonth() + 3);
       }
       
+      // 이미 만료된 사용자: 오늘 기준으로 연장. 미만료: 기존 만료일 기준
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const expiryStart = new Date(expiryDateAsDate);
+      expiryStart.setHours(0, 0, 0, 0);
+      if (expiryStart.getTime() < todayStart.getTime()) {
+        expiryDateAsDate = new Date(todayStart.getTime());
+      }
+      
       // 구독 연장 루프: rem_points가 500 이상인 경우
       // 500 포인트당 1일 연장, 연장한 만큼 rem_points에서 500씩 차감
       while (newRemPoints >= 500) {

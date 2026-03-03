@@ -164,13 +164,25 @@ async function updateUserMileage(userId, todayTss) {
     const newAccPoints = accPoints + todayTss;
     
     // 5단계: 만료일 연장 (500 포인트당 1일)
+    // 이미 만료된 사용자: 오늘 기준 + addDays 적용. 미만료: 기존 만료일 + addDays
     let newExpiryDate = expiryDate;
-    if (addDays > 0 && expiryDate) {
+    if (addDays > 0) {
       try {
-        const expiry = new Date(expiryDate);
-        expiry.setDate(expiry.getDate() + addDays);
-        newExpiryDate = expiry.toISOString().split('T')[0]; // YYYY-MM-DD 형식
-        console.log(`[updateUserMileage] 만료일 연장: ${expiryDate} → ${newExpiryDate} (${addDays}일)`);
+        let baseDate;
+        if (expiryDate) {
+          const expiry = new Date(expiryDate);
+          expiry.setHours(0, 0, 0, 0);
+          const todayStart = new Date(today);
+          todayStart.setHours(0, 0, 0, 0);
+          baseDate = expiry.getTime() < todayStart.getTime()
+            ? new Date(today.getTime())   // 만료됐으면 오늘 기준
+            : new Date(expiry.getTime()); // 미만료면 기존 만료일 기준
+        } else {
+          baseDate = new Date(today.getTime()); // 만료일 없으면 오늘 기준
+        }
+        baseDate.setDate(baseDate.getDate() + addDays);
+        newExpiryDate = baseDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        console.log(`[updateUserMileage] 만료일 연장: ${expiryDate || '(없음)'} → ${newExpiryDate} (${addDays}일)`);
       } catch (e) {
         console.error('만료일 계산 오류:', e);
         // 만료일 계산 실패 시 기존 값 유지
