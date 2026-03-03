@@ -874,17 +874,45 @@
   }
 
   /**
-   * 연결 초기화: 저장된 디바이스 정보(ID·이름)를 모두 삭제하고 카드를 "미연결"로 갱신.
-   * 센서 연결 화면·훈련 화면 연결 버튼 팝업 양쪽에서 사용 (동일 헤더 DOM).
+   * 연결 초기화 확인 팝업 닫기 (STELVIO 스타일)
    */
-  function resetDeviceSettingsSaved() {
-    if (typeof global.confirm === 'function' && !global.confirm('저장된 센서 연결 정보를 모두 초기화할까요?\n다시 기기를 검색해 연결해야 합니다.')) return;
+  function closeDeviceResetConfirmModal() {
+    var modal = document.getElementById('deviceResetConfirmModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+  }
+
+  /**
+   * 연결 초기화 확인 팝업에서 확인 클릭 시: 실제 초기화 실행 후 팝업 닫기
+   */
+  function confirmDeviceReset() {
+    closeDeviceResetConfirmModal();
     var api = global.StelvioDeviceBridgeStorage;
     if (api && typeof api.clearSavedDevices === 'function') api.clearSavedDevices();
     if (typeof global.StelvioDeviceSettings !== 'undefined' && typeof global.StelvioDeviceSettings.refreshDeviceSettingCards === 'function') {
       global.StelvioDeviceSettings.refreshDeviceSettingCards();
     }
   }
+
+  /**
+   * 연결 초기화: STELVIO 스타일 확인 팝업 표시 → 확인 시 저장된 디바이스 정보 삭제 및 카드 갱신.
+   * 센서 연결 화면·훈련 화면 연결 버튼 팝업 양쪽에서 사용 (동일 헤더 DOM).
+   */
+  function resetDeviceSettingsSaved() {
+    var modal = document.getElementById('deviceResetConfirmModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    } else {
+      if (typeof global.confirm === 'function' && !global.confirm('저장된 센서 연결 정보를 모두 초기화할까요?\n다시 기기를 검색해 연결해야 합니다.')) return;
+      confirmDeviceReset();
+    }
+  }
+
+  global.closeDeviceResetConfirmModal = closeDeviceResetConfirmModal;
+  global.confirmDeviceReset = confirmDeviceReset;
 
   global.StelvioDeviceSettings = {
     refreshDeviceSettingCards: refreshDeviceSettingCards,
