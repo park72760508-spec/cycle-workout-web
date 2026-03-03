@@ -839,11 +839,23 @@ async function updateUserMileageInFirestore(db, userId, todayTss) {
   const newRemPoints = calcPool % 500;
   const newAccPoints = accPoints + todayTss;
   let newExpiryDate = expiryDate;
-  if (addDays > 0 && expiryDate) {
+  // 이미 만료된 사용자: 오늘 기준 + addDays 적용. 미만료: 기존 만료일 + addDays
+  if (addDays > 0) {
     try {
-      const expiry = new Date(expiryDate);
-      expiry.setDate(expiry.getDate() + addDays);
-      newExpiryDate = expiry.toISOString().split("T")[0];
+      let baseDate;
+      if (expiryDate) {
+        const expiry = new Date(expiryDate);
+        expiry.setHours(0, 0, 0, 0);
+        const todayStart = new Date(today);
+        todayStart.setHours(0, 0, 0, 0);
+        baseDate = expiry.getTime() < todayStart.getTime()
+          ? new Date(today.getTime())
+          : new Date(expiry.getTime());
+      } else {
+        baseDate = new Date(today.getTime());
+      }
+      baseDate.setDate(baseDate.getDate() + addDays);
+      newExpiryDate = baseDate.toISOString().split("T")[0];
     } catch (e) { /* ignore */ }
   }
   const updateData = {
