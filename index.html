@@ -61,6 +61,7 @@
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
     import { getFirestore, initializeFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js';
+    import { getStorage, ref, getMetadata } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
     
     const firebaseConfig = window.__FIREBASE_CONFIG__ || {
       apiKey: "YOUR_FIREBASE_API_KEY",
@@ -106,6 +107,38 @@
       console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증·Firestore)');
     } catch (error) {
       console.error('❌ Firebase v9 초기화 실패:', error);
+    }
+    
+    // Firebase Storage app-release.apk 최종 수정일 → Last Updated 표시
+    window.updateAppDownloadLastUpdated = async function () {
+      const el = document.querySelector('.auth-app-download-updated');
+      if (!el) return;
+      try {
+        const { getApp } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+        let app;
+        try {
+          app = getApp('authV9');
+        } catch (_) {
+          return;
+        }
+        const storage = getStorage(app);
+        const fileRef = ref(storage, 'app-release.apk');
+        const meta = await getMetadata(fileRef);
+        if (meta && meta.updated) {
+          const d = new Date(meta.updated);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          el.textContent = 'Last Updated: ' + y + '.' + m + '.' + day;
+        }
+      } catch (e) {
+        console.warn('[App Download] Storage 메타데이터 조회 실패, 기본 날짜 유지:', e?.message || e);
+      }
+    };
+    if (typeof document !== 'undefined' && document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => window.updateAppDownloadLastUpdated?.());
+    } else {
+      setTimeout(() => window.updateAppDownloadLastUpdated?.(), 0);
     }
     
     // Strava 설정을 Firestore appConfig/strava에서 로드 (수동 config.local.js 대체)
