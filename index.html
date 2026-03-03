@@ -2228,44 +2228,8 @@
     </div>
     <p id="profileScreenSubtitle" class="subtitle" style="text-align: center; margin: 0; display: none;"></p>
     
-    
-    <div class="challenge-legend-container" style="padding-bottom: 8px;">
-      <!-- 미니 달력 블럭 제거 (JS는 훈련일지 등에서 사용하므로 유지) -->
-      <div id="profileMiniCalendarPlaceholder" style="display: none;">
-        <div class="mini-calendar-container" style="display: none;">
-          <!-- 달력 헤더 -->
-          <div class="mini-calendar-header">
-            <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigate('prev')" aria-label="이전 달">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span class="mini-calendar-month-year" id="miniCalendarMonthYear">2026년 1월</span>
-            <button class="mini-calendar-nav-btn" onclick="miniCalendarNavigate('next')" aria-label="다음 달">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          
-          <!-- 요일 헤더 -->
-          <div class="mini-calendar-weekdays">
-            <div class="mini-calendar-weekday">일</div>
-            <div class="mini-calendar-weekday">월</div>
-            <div class="mini-calendar-weekday">화</div>
-            <div class="mini-calendar-weekday">수</div>
-            <div class="mini-calendar-weekday">목</div>
-            <div class="mini-calendar-weekday">금</div>
-            <div class="mini-calendar-weekday">토</div>
-          </div>
-          
-          <!-- 달력 그리드 -->
-          <div class="mini-calendar-grid" id="miniCalendarGrid">
-            <!-- 달력 날짜들이 여기에 동적으로 생성됩니다 -->
-          </div>
-        </div>
-      </div>
-      
+    <!-- 이름·전화번호·만료일 연장 표시 블럭 (1개 블럭, 제목과 카드 사이) -->
+    <div class="profile-search-block-wrap">
       <!-- 관리자(grade=1) 전용: 사용자 검색 + 만료일 일괄 연장 (태블릿/PC: 1행 배치) -->
       <div id="profileSearchSection" class="profile-search-section" style="display: none; margin-bottom: 12px; padding: 14px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; width: 100%; box-sizing: border-box;">
         <div class="profile-search-row">
@@ -2303,10 +2267,11 @@
         <p class="profile-search-hint">이름·전화번호 없이 검색하면 전체 목록이 표시됩니다.</p>
         <p id="profileSearchUserCount" class="profile-search-user-count">등록된 사용자: 0명</p>
       </div>
-      
-      <div id="userList" class="user-list-with-legend">
-        <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
-      </div>
+    </div>
+    
+    <!-- 사용자 정보 카드 (1줄 2개) -->
+    <div id="userList" class="user-list-with-legend">
+      <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
     </div>
 
       <!-- 신규 사용자 추가 카드 비활성화 -->
