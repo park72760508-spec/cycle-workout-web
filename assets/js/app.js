@@ -3507,6 +3507,16 @@ if (!window.showScreen) {
       // Bluetooth Training Coach 화면 전환 시 초기화
       if (id === 'bluetoothTrainingCoachScreen') {
         console.log('🚀 [showScreen] Bluetooth Coach 화면 전환 감지');
+        if (el) {
+          el.style.position = 'fixed';
+          el.style.top = '0';
+          el.style.left = '0';
+          el.style.right = '0';
+          el.style.bottom = '0';
+          el.style.zIndex = '100';
+          el.style.width = '100%';
+          el.style.height = '100%';
+        }
         
         // 1. 기존 리스너 정리
         if (window.bluetoothCoachState && window.bluetoothCoachState.firebaseSubscriptions) {
@@ -6432,10 +6442,25 @@ window.showScreen = function(screenId) {
   // 선택된 화면만 표시
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
-    targetScreen.style.display = 'block';
+    // flex 레이아웃이 필요한 화면 (Coach 대시보드, 모바일 대시보드, 워크아웃 화면)
+    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen'];
+    targetScreen.style.display = flexScreens.includes(screenId) ? 'flex' : 'block';
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
     targetScreen.style.visibility = 'visible';
+
+    // bluetoothTrainingCoachScreen: 고정 위치·z-index로 화면 전체 덮기 (흰 화면 방지)
+    if (screenId === 'bluetoothTrainingCoachScreen') {
+      targetScreen.style.position = 'fixed';
+      targetScreen.style.top = '0';
+      targetScreen.style.left = '0';
+      targetScreen.style.right = '0';
+      targetScreen.style.bottom = '0';
+      targetScreen.style.zIndex = '100';
+      targetScreen.style.width = '100%';
+      targetScreen.style.height = '100%';
+      targetScreen.style.background = '#0a0e27';
+    }
 
     initializeCurrentScreen(screenId);
   }
