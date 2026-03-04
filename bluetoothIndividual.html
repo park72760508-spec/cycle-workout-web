@@ -15,6 +15,11 @@
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
     <script src="assets/js/firebaseConfig.js"></script>
     
+    <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    
     <!-- Google Apps Script URL 설정 -->
     <script>
         window.CONFIG = {
@@ -27,7 +32,7 @@
         body {
             background-color: #121212;
             color: #ffffff;
-            font-family: 'Pretendard', sans-serif;
+            font-family: "Noto Sans KR", "Pretendard", sans-serif;
             margin: 0;
             overflow: hidden; /* 스크롤 방지 */
             display: flex;
@@ -225,6 +230,9 @@
             aspect-ratio: 1/1;
             position: relative;
         }
+        .gauge-container svg text {
+            font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
+        }
 
         /* 통계 정보 (하단) - CADENCE, LAP AVG, HEART RATE 상하 여백 1/2 */
         .stats-footer {
@@ -239,9 +247,9 @@
             border-right: 1px solid #333;
         }
         .stat-box:last-child { border-right: none; }
-        .stat-label { font-size: 0.8em; color: #888; margin-bottom: 2.5px; }
-        .stat-value { font-size: 1.8em; font-weight: bold; }
-        .unit { font-size: 0.5em; color: #aaa; }
+        .stat-label { font-size: 0.8em; color: #888; margin-bottom: 2.5px; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
+        .stat-value { font-size: 1.8em; font-weight: bold; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
+        .unit { font-size: 0.5em; color: #aaa; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
 
         /* 색상 클래스 */
         .c-power { color: #fff; }
@@ -640,6 +648,7 @@
             color: #94a3b8;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-family: "Noto Sans KR", "Pretendard", sans-serif;
         }
 
         .individual-intensity-adjustment-value {
@@ -648,6 +657,7 @@
             color: #9ca3af;
             min-width: 45px;
             text-align: center;
+            font-family: "Noto Sans KR", "Pretendard", sans-serif;
         }
 
         .individual-intensity-adjustment-slider-wrapper {
@@ -664,6 +674,7 @@
             color: #64748b;
             min-width: 35px;
             text-align: center;
+            font-family: "Noto Sans KR", "Pretendard", sans-serif;
         }
 
         .individual-intensity-adjustment-slider {
