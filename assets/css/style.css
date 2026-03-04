@@ -14645,6 +14645,7 @@ button[aria-disabled="true"] {
 }
 
 /* Bluetooth Training Coach 대시보드 화면 - Indoor Training과 동일한 배경색 및 스타일 */
+/* 좌우 여백 완전 제거: 화면에 꽉 차게 */
 #bluetoothTrainingCoachScreen {
   display: flex;
   flex-direction: column;
@@ -14658,13 +14659,42 @@ button[aria-disabled="true"] {
   z-index: 100 !important;
   background: #0a0e27;
   color: #fff;
-  padding: 20px;
+  padding: 12px 0 !important; /* 좌우 여백 완전 제거 */
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.2);
+}
+
+#bluetoothTrainingCoachScreen .dashboard-header {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#bluetoothTrainingCoachScreen .scoreboard-display {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-radius: 0 !important;
+}
+
+#bluetoothTrainingCoachScreen .speedometer-grid,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+#bluetoothTrainingCoachScreen .speedometer-list-section {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  border-radius: 0 !important;
 }
 
 #bluetoothTrainingCoachScreen::-webkit-scrollbar {
