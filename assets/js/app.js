@@ -61,8 +61,13 @@
    ========================================================================== */
 (function setVisualViewportHeight() {
   function updateVvh() {
-    var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-    if (document.documentElement) document.documentElement.style.setProperty('--vvh', h + 'px');
+    var vv = window.visualViewport;
+    var h = vv ? vv.height : window.innerHeight;
+    /* iOS/Bluefy: 화면 확장 — layout/visual viewport 중 큰 값 사용 (하단 회색 바 제거) */
+    var inner = window.innerHeight || 0;
+    var docClient = document.documentElement ? document.documentElement.clientHeight : 0;
+    var h2 = Math.max(h, inner, docClient || 0);
+    if (document.documentElement) document.documentElement.style.setProperty('--vvh', h2 + 'px');
   }
   updateVvh();
   if (window.visualViewport) {
@@ -70,6 +75,7 @@
     window.visualViewport.addEventListener('scroll', updateVvh);
   }
   window.addEventListener('resize', updateVvh);
+  window.addEventListener('orientationchange', function() { setTimeout(updateVvh, 150); });
 })();
 
 // ... (여기서부터 원래 app.js의 코드가 시작됩니다) ...
@@ -6383,7 +6389,7 @@ if (typeof window.originalShowScreen === 'undefined') {
       
       // connectionScreen 특별 처리
       if (screenId === 'connectionScreen') {
-        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; background: #f6f8fa !important; padding: 20px !important;';
+        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; min-height: 100dvh !important; min-height: -webkit-fill-available !important; background: #f6f8fa !important; padding: 20px 20px 0 20px !important;';
         console.log('🔗 connectionScreen 특별 처리 적용');
       } else {
         targetScreen.style.display = 'block';
