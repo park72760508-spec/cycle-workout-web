@@ -273,6 +273,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 사용자 대시보드(성과 화면): 화면 자체는 스크롤 없음, 내부 #performance-dashboard-container만 스크롤 → 상단 락 방지 */
 /* 상단 빈화면 제거: .screen 기본 padding(20px) 제거 → 스피너/콘텐츠가 상단부터 표시 */
+/* 흰색 화면 덮임 방지: z-index로 다른 화면 위에 표시, 다른 screen은 대시보드 활성 시 완전 숨김 */
 #performanceDashboardScreen,
 #performanceDashboardScreen.active {
   padding: 0 !important;
@@ -288,6 +289,18 @@ h1,h2,h3,h4 { font-weight: 600; }
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box;
+  position: relative !important;
+  z-index: 1001 !important;
+}
+/* 대시보드 활성 시 다른 screen 완전 숨김 (흰색 화면 덮임 방지) - body 클래스로 제어 */
+body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#splashScreen) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
 }
 
 /* 스플래시 화면은 transition 제거로 깜빡임 방지 */
