@@ -3449,17 +3449,25 @@ if (!window.showScreen) {
       
       // Performance Dashboard 화면 처리
       if (id === 'performanceDashboardScreen') {
-        // 스크롤 상단 고정 (스피너/콘텐츠가 상단부터 보이도록)
-        [0, 100, 300, 500].forEach(function(delay) {
-          setTimeout(function() {
-            try {
-              const el2 = document.getElementById('performanceDashboardScreen');
-              const container = document.getElementById('performance-dashboard-container');
-              if (el2) el2.scrollTop = 0;
-              if (container) container.scrollTop = 0;
-              window.scrollTo(0, 0);
-            } catch (e) {}
-          }, delay);
+        // 스크롤 상단 고정 + 스피너 scrollIntoView (모바일에서 하단에 보이는 문제 해결)
+        function fixDashboardScroll() {
+          try {
+            const container = document.getElementById('performance-dashboard-container');
+            const loader = document.getElementById('dashboard-initial-loader');
+            if (container) {
+              container.scrollTop = 0;
+              container.scrollTo(0, 0);
+            }
+            if (loader) loader.scrollIntoView({ block: 'start', behavior: 'auto' });
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+          } catch (e) {}
+        }
+        fixDashboardScroll();
+        requestAnimationFrame(fixDashboardScroll);
+        [50, 150, 350, 600].forEach(function(delay) {
+          setTimeout(fixDashboardScroll, delay);
         });
       }
 
@@ -6782,6 +6790,11 @@ function initializeCurrentScreen(screenId) {
       break;
 
     case 'performanceDashboardScreen': {
+      // 스크롤 상단 고정 (모바일 하단 배치 문제 해결)
+      try {
+        var pdContainer = document.getElementById('performance-dashboard-container');
+        if (pdContainer) { pdContainer.scrollTop = 0; pdContainer.scrollTo(0, 0); }
+      } catch (e) {}
       // 대시보드는 index.html에 통합(No Iframe). performanceDashboard.html 삭제됨 — initPerformanceDashboard가 #dashboard-root에 React 렌더
       const iframe = document.getElementById('performanceDashboardFrame');
       const cu = window.currentUser || null;
