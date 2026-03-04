@@ -211,7 +211,7 @@ html, body {
 body {
   /* 한/영/숫자 통일: Noto Sans KR 우선 적용 (index.html에서 로드). 영문·숫자도 동일 폰트로 표시 */
   font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #f6f8fa;
+  background: #ffffff !important; /* 연한 회색 바 제거: body 기본 배경 흰색으로 통일 */
   color: #222;
   overflow-x: hidden;
   /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
@@ -263,7 +263,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 .screen {
   display: none;
   min-height: 100vh;
-  padding: 20px;
+  padding: 20px 20px 0 20px; /* 하단 패딩 영역 제거 */
+  background: #ffffff; /* 연한 회색 바 제거: 하단 패딩 영역 배경 흰색 */
   transition: opacity 0.3s ease;
   /* Pull-to-refresh 방지 (모든 화면, 스크롤은 유지) */
   overscroll-behavior-y: contain;
@@ -288,7 +289,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   touch-action: pan-y;
   overscroll-behavior-y: contain;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   box-sizing: border-box;
 }
 
@@ -469,7 +470,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overscroll-behavior: contain;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
@@ -1019,6 +1020,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background-attachment: fixed;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -1094,7 +1096,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overscroll-behavior-y: contain;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   box-sizing: border-box;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
@@ -8513,7 +8515,7 @@ button[aria-disabled="true"] {
   justify-content: center;
   padding: 20px;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   box-sizing: border-box;
 }
 /* 인증 화면 활성 시: 메인 블럭을 화면 정중앙(상하좌우)에 배치 */
@@ -17345,6 +17347,7 @@ line[id^="needle-"] {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); /* 베이스캠프와 동일한 배경 */
   background-attachment: fixed;
   padding: 20px;
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -18118,7 +18121,7 @@ line[id^="needle-"] {
   #trainingRoomScreen.active {
     padding: 10px !important;
     padding-top: calc(10px + env(safe-area-inset-top)) !important;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   }
 
   #trainingRoomScreen .connection-form-card {
@@ -18150,7 +18153,7 @@ line[id^="needle-"] {
   #trainingRoomScreen.active {
     padding: 8px !important;
     padding-top: calc(8px + env(safe-area-inset-top)) !important;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   }
 
   #trainingRoomScreen .connection-form-card {
