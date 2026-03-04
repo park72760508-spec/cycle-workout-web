@@ -3449,16 +3449,14 @@ if (!window.showScreen) {
       
       // Performance Dashboard 화면 처리
       if (id === 'performanceDashboardScreen') {
-        // 스크롤 상단 고정 + 스피너 scrollIntoView (모바일에서 하단에 보이는 문제 해결)
+        // 스크롤 상단 고정 (대시보드 본 화면만 표시, 빈화면 제거)
         function fixDashboardScroll() {
           try {
             const container = document.getElementById('performance-dashboard-container');
-            const loader = document.getElementById('dashboard-initial-loader');
             if (container) {
               container.scrollTop = 0;
               container.scrollTo(0, 0);
             }
-            if (loader) loader.scrollIntoView({ block: 'start', behavior: 'auto' });
             window.scrollTo(0, 0);
             document.documentElement.scrollTop = 0;
             document.body.scrollTop = 0;
