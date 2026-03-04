@@ -14659,6 +14659,7 @@ button[aria-disabled="true"] {
   z-index: 100 !important;
   background: #0a0e27;
   color: #fff;
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
   padding: 12px 0 !important; /* 좌우 여백 완전 제거 */
   overflow-y: auto;
   overflow-x: hidden;
@@ -14695,6 +14696,18 @@ button[aria-disabled="true"] {
   margin-left: 0 !important;
   margin-right: 0 !important;
   border-radius: 0 !important;
+}
+
+/* 블루투스 개인훈련 통합화면: TARGET, WATTS, CADENCE, rpm, LAP AVG, w, HEART RATE, bpm, % 한글 폰트 통일 */
+#bluetoothTrainingCoachScreen .scoreboard-label,
+#bluetoothTrainingCoachScreen .scoreboard-value,
+#bluetoothTrainingCoachScreen .digital-number,
+#bluetoothTrainingCoachScreen .speed-stat-label,
+#bluetoothTrainingCoachScreen .speed-stat-value,
+#bluetoothTrainingCoachScreen .speed-unit-bottom,
+#bluetoothTrainingCoachScreen .speed-unit-small,
+#bluetoothTrainingCoachScreen .speedometer-svg text {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
 }
 
 #bluetoothTrainingCoachScreen::-webkit-scrollbar {
@@ -18360,6 +18373,20 @@ body.bluetooth-individual-screen-active {
   z-index: 1;
 }
 
+/* 모바일 훈련화면: TARGET, WATTS, CADENCE, LAP AVG, HEART RATE, rpm, w, bpm, 목표값 조절 % 한글 폰트 통일 */
+#mobileDashboardScreen .mobile-stat-label,
+#mobileDashboardScreen .mobile-stat-value,
+#mobileDashboardScreen .mobile-stat-value .unit,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-label,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-value,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-min,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-max {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
+}
+#mobileDashboardScreen .mobile-gauge-container svg text {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
+}
+
 /* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
 .mobile-segment-graph-section {
   padding: 0 20px; /* 상하 패딩 제거, 좌우 패딩만 유지 */
@@ -19306,7 +19333,7 @@ body.bluetooth-individual-screen-active {
 }
 #bluetoothIndividualScreen.indiv-screen-wrap {
   display: flex !important;
-  font-family: 'Pretendard', sans-serif;
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
 }
 #bluetoothIndividualScreen .indiv-header {
   display: flex;
@@ -19430,9 +19457,9 @@ body.bluetooth-individual-screen-active {
   border-right: 1px solid #333;
 }
 #bluetoothIndividualScreen .indiv-stat-box:last-child { border-right: none; }
-#bluetoothIndividualScreen .indiv-stat-label { font-size: 0.8em; color: #888; margin-bottom: 2.5px; }
-#bluetoothIndividualScreen .indiv-stat-value { font-size: 1.8em; font-weight: bold; }
-#bluetoothIndividualScreen .indiv-unit { font-size: 0.5em; color: #aaa; }
+#bluetoothIndividualScreen .indiv-stat-label { font-size: 0.8em; color: #888; margin-bottom: 2.5px; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
+#bluetoothIndividualScreen .indiv-stat-value { font-size: 1.8em; font-weight: bold; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
+#bluetoothIndividualScreen .indiv-unit { font-size: 0.5em; color: #aaa; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
 #bluetoothIndividualScreen .indiv-c-cadence { color: #ff4444; }
 #bluetoothIndividualScreen .indiv-c-target { color: #ff8c00; }
 #bluetoothIndividualScreen .indiv-c-hr { color: #00d4aa; }
@@ -19450,6 +19477,7 @@ body.bluetooth-individual-screen-active {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
   font-size: 12px;
   color: #94a3b8;
   text-transform: uppercase;
@@ -19459,6 +19487,7 @@ body.bluetooth-individual-screen-active {
   font-size: 16px;
   font-weight: 700;
   color: #9ca3af;
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
   min-width: 45px;
   text-align: center;
 }
@@ -19478,6 +19507,13 @@ body.bluetooth-individual-screen-active {
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-min,
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-max {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif;
+}
+#bluetoothIndividualScreen .indiv-gauge-container svg text {
+  font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
 }
 #bluetoothIndividualScreen .indiv-countdown-overlay {
   position: fixed;
