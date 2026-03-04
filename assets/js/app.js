@@ -3306,6 +3306,12 @@ if (!window.showScreen) {
         el.style.visibility = "visible";
         el.style.opacity = "1";
         el.classList.add("active");
+        // 대시보드 화면: body에 클래스 추가 (다른 화면 완전 숨김 → 흰색 화면 덮임 방지)
+        if (id === 'performanceDashboardScreen') {
+          document.body.classList.add('performance-dashboard-active');
+        } else {
+          document.body.classList.remove('performance-dashboard-active');
+        }
         // 화면 전환 시 스크롤 위치 초기화 (프로필↔대시보드 전환 시 흰색 화면만 보이는 오류 방지)
         function resetScrollForScreen() {
           try {
