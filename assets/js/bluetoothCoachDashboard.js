@@ -24,7 +24,8 @@ window.bluetoothCoachState = {
   countdownTriggered: [], // 세그먼트별 카운트다운 트리거 상태
   _countdownFired: {}, // 세그먼트별 발화 기록
   _prevRemainMs: {}, // 세그먼트별 이전 남은 ms
-  gaugeAnimationFrameId: null // 게이지 애니메이션 루프 ID (중복 실행 방지용)
+  gaugeAnimationFrameId: null, // 게이지 애니메이션 루프 ID (중복 실행 방지용)
+  wakeLock: null // 화면 꺼짐 방지 (Screen Wake Lock API)
 };
 
 // 파워계 데이터 구조 (Indoor Training과 동일)
@@ -302,6 +303,18 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
     console.warn('[Bluetooth Coach] startGaugeAnimationLoop 함수가 없습니다.');
   }
   
+  // 화면 꺼짐 방지: visibilitychange 리스너 (통화/문자/SNS 복귀 시 재적용)
+  setupBluetoothCoachWakeLockVisibilityListener();
+  
+  // 세그먼트 그래프: 화면 진입 시 이미 선택된 워크아웃이 있으면 그래프 로딩 (다중 재시도로 로딩 보장)
+  if (window.bluetoothCoachState.currentWorkout && 
+      window.bluetoothCoachState.currentWorkout.segments && 
+      window.bluetoothCoachState.currentWorkout.segments.length > 0) {
+    [150, 400, 700, 1200].forEach(delay => {
+      setTimeout(() => updateWorkoutSegmentGraph(), delay);
+    });
+  }
+  
   // 2. 화면 리사이즈 대응: 대시보드가 켜진 상태에서 화면 회전 시 UI 안정성 확보
   if (!window.bluetoothCoachResizeHandler) {
     window.bluetoothCoachResizeHandler = function() {
@@ -413,10 +426,10 @@ function createBluetoothCoachPowerMeterGrid() {
     if (typeof initializeNeedles === 'function') {
       initializeNeedles();
     }
-    // 각 트랙의 바늘이 표시되도록 개별 확인
     window.bluetoothCoachState.powerMeters.forEach(pm => {
       ensureNeedleVisible(pm.id);
     });
+    updateBluetoothCoachSegmentInfoBar();
   }, 100);
 }
 
@@ -446,14 +459,16 @@ function createPowerMeterElement(powerMeter) {
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <span class="speedometer-user-name" id="user-icon-${powerMeter.id}" 
-            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 13px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
+            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 39px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
+      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: 39px !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
         <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
         <span class="status-dot disconnected" id="status-dot-${powerMeter.id}"></span>
         <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
       </div>
     </div>
+    <!-- 속도계 바로 위: 세그먼트 시간 mm:ss (폰트 3배 확대) -->
+    <div class="bluetooth-coach-segment-time-row" id="segment-time-${powerMeter.id}" style="text-align: center; margin-bottom: 4px; font-size: 96px; color: rgba(255,255,255,0.95); font-weight: 600;">00:00</div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
         <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
@@ -494,7 +509,7 @@ function createPowerMeterElement(powerMeter) {
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
-              font-size="43.2" 
+              font-size="130" 
               font-weight="700"
               id="current-power-value-${powerMeter.id}">-</text>
         
@@ -515,6 +530,8 @@ function createPowerMeterElement(powerMeter) {
               style="display: none;"></text>
         
       </svg>
+      <!-- 현재 파워값 아래 세그먼트 진행사항 (폰트 3배 확대) -->
+      <div class="bluetooth-coach-segment-progress-row" id="segment-progress-${powerMeter.id}" style="text-align: center; margin-top: 4px; font-size: 96px; color: rgba(255,255,255,0.95); font-weight: 600;">-/-</div>
     </div>
     <div class="speedometer-info disconnected">
       <div class="speed-display-left">
@@ -1830,6 +1847,7 @@ function updateTrainingStatus(status) {
           console.log('[Bluetooth Coach] Firebase status 업데이트 완료: finished');
           // 로컬 상태도 업데이트
           window.bluetoothCoachState.trainingState = 'finished';
+          releaseBluetoothCoachWakeLock();
         }).catch((error) => {
           console.error('[Bluetooth Coach] Firebase status 업데이트 실패:', error);
         });
@@ -1856,6 +1874,7 @@ function updateScoreboard() {
   
   // 현재 세그먼트 정보 업데이트
   updateCurrentSegmentInfo();
+  updateBluetoothCoachSegmentInfoBar();
 }
 
 /**
@@ -1979,27 +1998,26 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
     return;
   }
   
-  // 세그먼트가 있으면 표시
-  container.style.display = 'block';
+  // 세그먼트가 있으면 표시 (레이아웃 계산을 위해 먼저 표시)
+  container.style.display = 'flex';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+  container.style.visibility = 'visible';
+  container.style.opacity = '1';
   
-  // 세그먼트 그래프 그리기 (전광판 크기에 맞춤 - 랩카운트다운과 겹치지 않는 최대 크기)
-  setTimeout(() => {
+  // 세그먼트 그래프 그리기 (레이아웃 완료 대기 후 실행)
+  function drawBluetoothCoachSegmentGraph() {
+    const w = window.bluetoothCoachState?.currentWorkout;
+    const idx = window.bluetoothCoachState?.currentSegmentIndex ?? -1;
+    if (!w?.segments?.length) return;
+    
     const canvas = document.getElementById('bluetoothCoachSegmentGraphCanvas');
-    if (!canvas) {
-      console.warn('[Bluetooth Coach] 세그먼트 그래프 캔버스를 찾을 수 없습니다.');
-      return;
-    }
+    if (!canvas) return;
     
-    // 전광판 컨테이너 크기 확인
     const scoreboardContainer = container.closest('.scoreboard-display');
-    if (!scoreboardContainer) {
-      console.warn('[Bluetooth Coach] 전광판 컨테이너를 찾을 수 없습니다.');
-      return;
-    }
+    if (!scoreboardContainer) return;
     
-    // 전광판의 초기 높이를 저장 (세그먼트 그래프가 높이에 영향을 주지 않도록)
     if (!scoreboardContainer.dataset.initialHeight) {
-      // 세그먼트 그래프를 숨긴 상태에서 초기 높이 측정
       const originalDisplay = container.style.display;
       container.style.display = 'none';
       const initialRect = scoreboardContainer.getBoundingClientRect();
@@ -2008,21 +2026,22 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
     }
     
     const scoreboardRect = scoreboardContainer.getBoundingClientRect();
-    const scoreboardWidth = scoreboardRect.width;
-    // 초기 높이를 사용하여 세그먼트 그래프가 전광판 높이에 영향을 주지 않도록 함
-    const scoreboardHeight = parseFloat(scoreboardContainer.dataset.initialHeight) || scoreboardRect.height;
+    let scoreboardWidth = scoreboardRect.width;
+    let scoreboardHeight = parseFloat(scoreboardContainer.dataset.initialHeight) || scoreboardRect.height;
     
-    // 세그먼트 그래프 크기: 전광판 가로 길이의 1/3 범위에서 최대로 채우기
-    const targetWidthRatio = 1 / 3; // 전광판 가로 길이의 1/3
-    const marginFromRight = 20; // 전광판 오른쪽 끝과의 여백
+    // 레이아웃 미완료 시 폴백 (화면 전환 직후 0으로 나올 수 있음) - 그래프 로딩 보장
+    if (scoreboardWidth <= 0 || !scoreboardWidth) scoreboardWidth = Math.max(300, window.innerWidth * 0.35);
+    if (scoreboardHeight <= 0 || !scoreboardHeight) scoreboardHeight = Math.max(120, (window.innerHeight || 400) * 0.15);
+    
+    const targetWidthRatio = 1 / 3;
+    const marginFromRight = 20;
     const calculatedMaxWidth = scoreboardWidth * targetWidthRatio - marginFromRight;
-    const maxWidth = Math.max(250, calculatedMaxWidth); // 최소 250px 보장
+    const maxWidth = Math.max(250, calculatedMaxWidth);
     
-    // 전광판 높이를 넘지 않는 최대 높이 계산
-    const marginFromTop = 10; // 상단 여백
-    const marginFromBottom = 10; // 하단 여백
+    const marginFromTop = 10;
+    const marginFromBottom = 10;
     const availableHeight = scoreboardHeight - marginFromTop - marginFromBottom;
-    const maxHeight = Math.max(120, Math.min(availableHeight, scoreboardHeight - 20)); // 최소 120px, 최대는 전광판 높이 - 20px
+    const maxHeight = Math.max(120, Math.min(availableHeight, scoreboardHeight - 20));
     
     // 컨테이너 크기 설정 (전광판 높이를 절대 넘지 않도록)
     container.style.width = `${maxWidth}px`;
@@ -2047,13 +2066,11 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
     // drawSegmentGraphForScoreboard 함수는 window.indoorTrainingState를 참조하므로
     // Bluetooth Coach용으로 별도 함수를 만들거나, drawSegmentGraph를 사용
     if (typeof drawSegmentGraphForScoreboard === 'function') {
-      // 임시로 window.indoorTrainingState를 window.bluetoothCoachState로 교체하여 사용
-      // 단, window.trainingState는 절대 건드리지 않음 (Indoor Training과 분리)
       const originalIndoorState = window.indoorTrainingState;
       window.indoorTrainingState = window.bluetoothCoachState;
       
       try {
-        drawSegmentGraphForScoreboard(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas', maxWidth, maxHeight);
+        drawSegmentGraphForScoreboard(w.segments, idx, 'bluetoothCoachSegmentGraphCanvas', maxWidth, maxHeight);
       } finally {
         // 원래 상태 복원 (Indoor Training에 영향 없도록)
         if (originalIndoorState !== undefined) {
@@ -2063,10 +2080,8 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
         }
       }
     } else if (typeof drawSegmentGraph === 'function') {
-      // 기본 drawSegmentGraph 함수 사용하되, canvas 크기를 제한
-      // 경과시간 전달하여 마스코트 위치 계산
       const elapsedTime = window.bluetoothCoachState.totalElapsedTime || 0;
-      drawSegmentGraph(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas', elapsedTime);
+      drawSegmentGraph(w.segments, idx, 'bluetoothCoachSegmentGraphCanvas', elapsedTime);
       
       // Canvas 크기를 전광판에 맞게 조정
       canvas.style.maxWidth = `${maxWidth}px`;
@@ -2076,7 +2091,109 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
     } else {
       console.warn('[Bluetooth Coach] drawSegmentGraph 함수를 찾을 수 없습니다.');
     }
-  }, 100);
+  }
+  
+  // 레이아웃 완료 대기 후 그리기 (화면 전환 직후 0 크기 방지) - 그래프 로딩 보장
+  requestAnimationFrame(() => {
+    drawBluetoothCoachSegmentGraph();
+    setTimeout(drawBluetoothCoachSegmentGraph, 100);
+    setTimeout(drawBluetoothCoachSegmentGraph, 250);
+    setTimeout(drawBluetoothCoachSegmentGraph, 500);
+    setTimeout(drawBluetoothCoachSegmentGraph, 800);
+  });
+  
+  // 전역에 그리기 함수 저장 (ResizeObserver에서 호출)
+  window._bluetoothCoachDrawSegmentGraph = drawBluetoothCoachSegmentGraph;
+  
+  // ResizeObserver: 컨테이너 크기 변경 시 재그리기
+  if (!window.bluetoothCoachSegmentGraphResizeObserver) {
+    window.bluetoothCoachSegmentGraphResizeObserver = new ResizeObserver(() => {
+      if (typeof window._bluetoothCoachDrawSegmentGraph === 'function') {
+        window._bluetoothCoachDrawSegmentGraph();
+      }
+    });
+  }
+  const roTarget = container.closest('.scoreboard-display');
+  if (roTarget) {
+    try { window.bluetoothCoachSegmentGraphResizeObserver.unobserve(roTarget); } catch (_) {}
+    window.bluetoothCoachSegmentGraphResizeObserver.observe(roTarget);
+  }
+}
+
+/**
+ * 화면 꺼짐 방지 활성화 (Screen Wake Lock API)
+ * 훈련 시작 시 적용, 통화/문자/SNS 복귀 시 visibilitychange에서 재적용
+ */
+async function activateBluetoothCoachWakeLock() {
+  if (!('wakeLock' in navigator)) {
+    console.warn('[Bluetooth Coach WakeLock] Wake Lock API 미지원');
+    return;
+  }
+  if (!window.bluetoothCoachState) return;
+  try {
+    if (window.bluetoothCoachState.wakeLock) return;
+    window.bluetoothCoachState.wakeLock = await navigator.wakeLock.request('screen');
+    console.log('[Bluetooth Coach WakeLock] 화면 꺼짐 방지 활성화');
+    window.bluetoothCoachState.wakeLock.addEventListener('release', () => {
+      console.log('[Bluetooth Coach WakeLock] 시스템에 의해 해제됨');
+      window.bluetoothCoachState.wakeLock = null;
+    });
+  } catch (err) {
+    console.warn('[Bluetooth Coach WakeLock] 활성화 실패:', err);
+    window.bluetoothCoachState.wakeLock = null;
+  }
+}
+
+/**
+ * 화면 꺼짐 방지 해제
+ */
+async function releaseBluetoothCoachWakeLock() {
+  try {
+    if (window.bluetoothCoachState.wakeLock) {
+      await window.bluetoothCoachState.wakeLock.release();
+      console.log('[Bluetooth Coach WakeLock] 화면 꺼짐 방지 해제');
+    }
+  } catch (err) {
+    console.warn('[Bluetooth Coach WakeLock] 해제 실패:', err);
+  } finally {
+    window.bluetoothCoachState.wakeLock = null;
+  }
+}
+
+/**
+ * visibilitychange: 앱 복귀 시 (통화/문자/SNS 확인 후) 화면 꺼짐 방지 재적용
+ * 웹 화면에서 반드시 적용되어야 하는 기능 - Screen Wake Lock API 사용
+ */
+function setupBluetoothCoachWakeLockVisibilityListener() {
+  if (window._bluetoothCoachWakeLockVisibilitySetup) return;
+  window._bluetoothCoachWakeLockVisibilitySetup = true;
+  
+  function reapplyWakeLockIfNeeded() {
+    if (document.visibilityState !== 'visible') return;
+    const screenEl = document.getElementById('bluetoothTrainingCoachScreen');
+    if (!screenEl || window.getComputedStyle(screenEl).display === 'none') return;
+    if (window.bluetoothCoachState && window.bluetoothCoachState.trainingState === 'running') {
+      // 통화/문자/SNS에서 복귀 시 기존 wake lock은 브라우저가 해제함 → 재요청
+      if (window.bluetoothCoachState.wakeLock) return; // 이미 유효하면 스킵
+      activateBluetoothCoachWakeLock();
+    }
+  }
+  
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      // 백그라운드 전환 시 참조 정리 (브라우저가 자동 해제하므로 재요청 준비)
+      if (window.bluetoothCoachState?.wakeLock) {
+        window.bluetoothCoachState.wakeLock = null;
+      }
+    } else if (document.visibilityState === 'visible') {
+      // 복귀 시 약간의 지연 후 재적용 (브라우저 준비 대기)
+      setTimeout(reapplyWakeLockIfNeeded, 100);
+      setTimeout(reapplyWakeLockIfNeeded, 500);
+    }
+  });
+  
+  // focus 이벤트 백업 (일부 환경에서 visibilitychange 미동작 대비)
+  window.addEventListener('focus', reapplyWakeLockIfNeeded);
 }
 
 /**
@@ -2490,6 +2607,7 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
     
     // 세그먼트 정보 업데이트 (워크아웃 선택 시 첫 번째 세그먼트 표시)
     updateCurrentSegmentInfo();
+    updateBluetoothCoachSegmentInfoBar();
     const lapCountdownEl = document.getElementById('bluetoothCoachLapCountdown');
     if (lapCountdownEl) {
       lapCountdownEl.textContent = '00:00';
@@ -2917,6 +3035,9 @@ function startBluetoothCoachTraining() {
   
   // 타이머 시작
   startBluetoothCoachTrainingTimer();
+  
+  // 화면 꺼짐 방지 (Screen Wake Lock API) - 훈련 시작 시 적용
+  activateBluetoothCoachWakeLock();
 }
 
 /**
@@ -2976,6 +3097,9 @@ function resumeBluetoothCoachTraining() {
  */
 function stopBluetoothCoachTraining() {
   window.bluetoothCoachState.trainingState = 'idle';
+  
+  // 화면 꺼짐 방지 해제
+  releaseBluetoothCoachWakeLock();
   
   // 활성 카운트다운 정지
   if (window.bluetoothCoachState.segmentCountdownActive) {
@@ -3245,6 +3369,7 @@ function startBluetoothCoachTrainingTimer() {
         if (currentIndex >= segments.length - 1) {
           // 워크아웃 종료
           window.bluetoothCoachState.trainingState = 'finished';
+          releaseBluetoothCoachWakeLock();
           
           // Firebase에 완료 상태 전송
           if (typeof db !== 'undefined') {
@@ -3553,11 +3678,51 @@ function stopBluetoothCoachSegmentCountdown() {
 }
 
 /**
+ * 세그먼트 정보 바 업데이트 (속도계 위: 세그먼트 시간 mm:ss, 세그먼트 진행사항)
+ */
+function updateBluetoothCoachSegmentInfoBar() {
+  const barEl = document.getElementById('bluetoothCoachSegmentInfoBar');
+  const timeEl = document.getElementById('bluetoothCoachSegmentTime');
+  const progressEl = document.getElementById('bluetoothCoachSegmentProgress');
+  
+  const w = window.bluetoothCoachState?.currentWorkout;
+  if (!w?.segments?.length) {
+    if (barEl) barEl.style.display = 'none';
+    return;
+  }
+  
+  if (barEl) barEl.style.display = 'block';
+  
+  const idx = Math.max(0, window.bluetoothCoachState?.currentSegmentIndex ?? 0);
+  const seg = w.segments[idx];
+  const total = w.segments.length;
+  
+  // 세그먼트 시간 mm:ss (현재 세그먼트 경과 시간)
+  const segElapsed = window.bluetoothCoachState?.segmentElapsedTime ?? 0;
+  const mm = Math.floor(segElapsed / 60);
+  const ss = Math.floor(segElapsed % 60);
+  const timeStr = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  if (timeEl) timeEl.textContent = timeStr;
+  
+  // 세그먼트 진행사항 (예: 3/12)
+  if (progressEl) progressEl.textContent = `${idx + 1}/${total}`;
+  
+  // 각 파워계: 속도계 위 세그먼트 시간 mm:ss, 아래 세그먼트 진행사항 업데이트
+  (window.bluetoothCoachState?.powerMeters || []).forEach(pm => {
+    const timeElPm = document.getElementById(`segment-time-${pm.id}`);
+    if (timeElPm) timeElPm.textContent = timeStr;
+    const progressElPm = document.getElementById(`segment-progress-${pm.id}`);
+    if (progressElPm) progressElPm.textContent = `${idx + 1}/${total}`;
+  });
+}
+
+/**
  * 랩 카운트다운 업데이트 (Indoor Training의 updateLapTime 참고)
  */
 function updateBluetoothCoachLapTime() {
   // 현재 세그먼트 정보 업데이트 (세그먼트 변경 시에도 반영)
   updateCurrentSegmentInfo();
+  updateBluetoothCoachSegmentInfoBar();
   
   if (!window.bluetoothCoachState.currentWorkout || !window.bluetoothCoachState.currentWorkout.segments) {
     // 워크아웃이 없으면 랩카운트다운을 00:00으로 표시
