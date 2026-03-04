@@ -758,14 +758,6 @@ function showAuthScreen() {
     authScreen.style.display = 'block';
     authScreen.style.opacity = '1';
     authScreen.style.visibility = 'visible';
-    // body/html 그라데이션 적용 (하단 회색바 제거 - iOS Bluefy, Android Chrome)
-    var authGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
-    document.body.style.setProperty('background', authGradient, 'important');
-    document.body.style.setProperty('background-attachment', 'fixed', 'important');
-    if (document.documentElement) {
-      document.documentElement.style.setProperty('background', authGradient, 'important');
-      document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
-    }
     /* body 스크롤 잠금 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤 */
     if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen') && window.__pullToRefreshBlockerCleanup) {
       window.__pullToRefreshBlockerCleanup();
@@ -3314,25 +3306,6 @@ if (!window.showScreen) {
         el.style.visibility = "visible";
         el.style.opacity = "1";
         el.classList.add("active");
-        // 인증/연결/베이스캠프 등 그라데이션 화면: body/html 그라데이션 적용 (하단 회색바 제거)
-        var gradientScreens = ['authScreen', 'connectionScreen', 'basecampScreen', 'deviceSettingScreen', 'myCareerScreen', 'userManualScreen'];
-        var authGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
-        if (gradientScreens.indexOf(id) >= 0) {
-          document.body.style.setProperty('background', authGradient, 'important');
-          document.body.style.setProperty('background-attachment', 'fixed', 'important');
-          if (document.documentElement) {
-            document.documentElement.style.setProperty('background', authGradient, 'important');
-            document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
-          }
-        } else {
-          // 그라데이션 화면이 아닐 때: 연한 배경 적용 (회색바 방지, #f6f8fa 대신 #f9fafb)
-          document.body.style.setProperty('background', '#f9fafb', 'important');
-          document.body.style.removeProperty('background-attachment');
-          if (document.documentElement) {
-            document.documentElement.style.setProperty('background', '#f9fafb', 'important');
-            document.documentElement.style.removeProperty('background-attachment');
-          }
-        }
         // 화면 전환 시 스크롤 위치 초기화 (프로필↔대시보드 전환 시 흰색 화면만 보이는 오류 방지)
         function resetScrollForScreen() {
           try {
@@ -5144,14 +5117,8 @@ document.addEventListener("DOMContentLoaded", () => {
             splashScreen.style.setProperty('transition', 'none', 'important');
             splashScreen.style.setProperty('background', 'transparent', 'important'); // 배경색 제거
             
-            // 인증 화면 표시 시 body/html 그라데이션 적용 (하단 회색바 제거 - iOS Bluefy, Android Chrome)
-            var authGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
-            document.body.style.setProperty('background', authGradient, 'important');
-            document.body.style.setProperty('background-attachment', 'fixed', 'important');
-            if (document.documentElement) {
-              document.documentElement.style.setProperty('background', authGradient, 'important');
-              document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
-            }
+            // body 배경색 원복 (원래 배경색으로 복원)
+            document.body.style.setProperty('background', '#f6f8fa', 'important');
             
             // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
             const splashContainer = document.querySelector('.splash-container');
@@ -5160,6 +5127,9 @@ document.addEventListener("DOMContentLoaded", () => {
               splashContainer.style.setProperty('opacity', '0', 'important');
               splashContainer.style.setProperty('visibility', 'hidden', 'important');
             }
+            
+            // body 배경색 원복 (원래 배경색으로 복원)
+            document.body.style.setProperty('background', '#f6f8fa', 'important');
           
           // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
           const authScreen = document.getElementById("authScreen");
@@ -5201,14 +5171,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 50); // 50ms마다 실행하여 정확히 4초(4000ms)에 100% 도달
   } else {
     // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
-    // 인증 화면 표시 시 body/html 그라데이션 적용 (하단 회색바 제거)
-    var authGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
-    document.body.style.setProperty('background', authGradient, 'important');
-    document.body.style.setProperty('background-attachment', 'fixed', 'important');
-    if (document.documentElement) {
-      document.documentElement.style.setProperty('background', authGradient, 'important');
-      document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
-    }
+    // body 배경색 원복 (원래 배경색으로 복원)
+    document.body.style.setProperty('background', '#f6f8fa', 'important');
     
     const authScreen = document.getElementById("authScreen");
     if (authScreen) {
@@ -6403,16 +6367,9 @@ if (typeof window.originalShowScreen === 'undefined') {
       
       targetScreen.classList.add('active');
       
-      // connectionScreen 특별 처리 (그라데이션 배경 - 회색바 방지)
+      // connectionScreen 특별 처리
       if (screenId === 'connectionScreen') {
-        var connGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
-        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; background: ' + connGradient + ' !important; background-attachment: fixed !important; padding: 20px !important;';
-        document.body.style.setProperty('background', connGradient, 'important');
-        document.body.style.setProperty('background-attachment', 'fixed', 'important');
-        if (document.documentElement) {
-          document.documentElement.style.setProperty('background', connGradient, 'important');
-          document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
-        }
+        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; background: #f6f8fa !important; padding: 20px !important;';
         console.log('🔗 connectionScreen 특별 처리 적용');
       } else {
         targetScreen.style.display = 'block';
