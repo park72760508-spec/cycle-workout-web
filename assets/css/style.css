@@ -204,14 +204,18 @@ input, button, select, textarea, .screen {
     font-size: 11px;
   }
 }
+/* 화면이 뷰포트 전체로 확장되도록 — 하단 구분 영역 없이 넓게 사용 */
 html, body { 
   height: 100%; 
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   -webkit-overflow-scrolling: touch;
 }
 body {
   /* 한/영/숫자 통일: Noto Sans KR 우선 적용 (index.html에서 로드). 영문·숫자도 동일 폰트로 표시 */
   font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #ffffff !important; /* 연한 회색 바 제거: body 기본 배경 흰색으로 통일 */
+  background: #f6f8fa;
   color: #222;
   overflow-x: hidden;
   /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
@@ -263,8 +267,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 .screen {
   display: none;
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   padding: 20px 20px 0 20px; /* 하단 패딩 영역 제거 */
-  background: #ffffff; /* 연한 회색 바 제거: 하단 패딩 영역 배경 흰색 */
   transition: opacity 0.3s ease;
   /* Pull-to-refresh 방지 (모든 화면, 스크롤은 유지) */
   overscroll-behavior-y: contain;
@@ -274,22 +279,21 @@ h1,h2,h3,h4 { font-weight: 600; }
 .screen.active { display: block; }
 
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
+/* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-/* 성과 대시보드는 스크롤을 #performance-dashboard-container만 쓰도록 제외 → 상단 락 방지 */
 .screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen) {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
-  height: 100vh !important;
-  height: 100dvh !important;
-  max-height: 100vh !important;
-  max-height: 100dvh !important;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* 화면 확장: 뷰포트 전체 채움 — 하단 구분 영역 없이 넓게 사용 */
+  /* --vvh: VisualViewport 기반 실제 보이는 높이 (app.js), 100dvh 폴백 */
+  height: var(--vvh, 100dvh) !important;
+  min-height: var(--vvh, 100dvh) !important;
+  min-height: -webkit-fill-available !important;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
   padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
+  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 — 화면 확장으로 채움 */
   box-sizing: border-box;
 }
 
