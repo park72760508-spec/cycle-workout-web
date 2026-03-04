@@ -11736,12 +11736,13 @@
   <script src="assets/js/trainingDashboardBridge.js"></script>
   
   <!-- Performance Dashboard 화면 (AI 분석 대시보드) - Direct Integration (No Iframe) -->
+  <!-- 모바일: 100dvh 사용(주소창 반영), 스피너/콘텐츠 상단 배치 보장 -->
   <div id="performanceDashboardScreen" class="screen" style="display: none; background: #f9fafb;">
-    <div style="position: relative; width: 100%; height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
+    <div id="performance-dashboard-wrapper" style="position: relative; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column;">
       <!-- Dashboard Root Container (scoped to prevent CSS conflicts) -->
-      <div id="performance-dashboard-container" style="width: 100%; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;">
-        <!-- 초기 로딩 스피너 (React 마운트 전 표시) -->
-        <div id="dashboard-initial-loader" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100vh; background: #f9fafb;">
+      <div id="performance-dashboard-container" style="width: 100%; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overflow-anchor: none;">
+        <!-- 초기 로딩 스피너 (React 마운트 전 표시) - 상단 고정, min-height로 뷰포트 채움 -->
+        <div id="dashboard-initial-loader" style="display: flex; align-items: center; justify-content: center; width: 100%; min-height: 100vh; min-height: 100dvh; flex-shrink: 0; background: #f9fafb;">
           <div style="text-align: center;">
             <div style="position: relative; width: 64px; height: 64px; margin: 0 auto 16px;">
               <div style="position: absolute; inset: 0; border-radius: 50%; border: 8px solid #bbf7d0;"></div>
@@ -14586,6 +14587,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (initialLoader) {
           initialLoader.style.display = 'none';
         }
+        // React 마운트 후 스크롤 상단 고정 (모바일 하단 배치 문제 해결)
+        var container = document.getElementById('performance-dashboard-container');
+        if (container) { container.scrollTop = 0; container.scrollTo(0, 0); }
         
         // 기존 인스턴스가 있으면 제거
         if (dashboardRootInstance) {
@@ -14635,6 +14639,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             dashboardRootInstance = ReactDOM.render(WrappedDashboard, rootElement);
           }
           clearTimeout(renderTimeout);
+          // React 마운트 후 스크롤 상단 고정 (모바일)
+          setTimeout(function() {
+            var c = document.getElementById('performance-dashboard-container');
+            if (c) { c.scrollTop = 0; c.scrollTo(0, 0); }
+          }, 100);
         } catch (renderError) {
           clearTimeout(renderTimeout);
           console.error('[Dashboard] Render error:', renderError);
@@ -14844,6 +14853,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
+          // 스크롤 상단 고정 (모바일 하단 배치 문제 해결)
+          var pdContainer = document.getElementById('performance-dashboard-container');
+          var pdLoader = document.getElementById('dashboard-initial-loader');
+          if (pdContainer) { pdContainer.scrollTop = 0; pdContainer.scrollTo(0, 0); }
+          if (pdLoader) pdLoader.scrollIntoView({ block: 'start', behavior: 'auto' });
           // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
           var root = document.getElementById('dashboard-root');
           var initialLoader = document.getElementById('dashboard-initial-loader');
@@ -14872,6 +14886,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <!-- Performance Dashboard: CSS Styles (Scoped) -->
   <style>
     /* 스크롤은 이 컨테이너만 사용 (상단 락 방지): flex 스크롤 영역 + 터치 스크롤 명시 */
+    /* overflow-anchor: none → 스크롤 앵커링 비활성화 (모바일에서 하단 배치 방지) */
     #performance-dashboard-container {
       -ms-overflow-style: none;
       scrollbar-width: none;
@@ -14879,6 +14894,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
       overscroll-behavior-y: contain;
+      overflow-anchor: none;
     }
     #performance-dashboard-container::-webkit-scrollbar {
       display: none;
