@@ -224,6 +224,27 @@ body:has(#authScreen.active) {
   background-attachment: fixed !important;
   overflow: hidden !important;
 }
+
+/* 베이스캠프 관련 화면 활성 시: html/body 배경을 그라데이션으로 — 위로 스크롤 시 하단 흰색 영역 노출 방지 */
+/* basecampScreen, deviceSettingScreen, userManualScreen, myCareerScreen, trainingRoomScreen, playerListScreen, bluetoothPlayerListScreen */
+html:has(#basecampScreen.active),
+html:has(#deviceSettingScreen.active),
+html:has(#userManualScreen.active),
+html:has(#myCareerScreen.active),
+html:has(#trainingRoomScreen.active),
+html:has(#playerListScreen.active),
+html:has(#bluetoothPlayerListScreen.active),
+body:has(#basecampScreen.active),
+body:has(#deviceSettingScreen.active),
+body:has(#userManualScreen.active),
+body:has(#myCareerScreen.active),
+body:has(#trainingRoomScreen.active),
+body:has(#playerListScreen.active),
+body:has(#bluetoothPlayerListScreen.active) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
+  background-attachment: fixed !important;
+  overflow: hidden !important;
+}
 h1,h2,h3,h4 { font-weight: 600; }
 
 /* 공통 레이아웃/유틸 */
@@ -490,6 +511,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
+  background-attachment: fixed !important;
 }
 #deviceSettingScreen .connection-main-container {
   min-height: 0;
