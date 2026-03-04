@@ -1436,17 +1436,17 @@
               사용자 등록
             </button>
             
-            <!-- 앱 설치 링크 박스 -->
-            <div class="auth-app-download-box">
+            <!-- 앱 설치 링크 박스: 전체 클릭 시 접속 기기 자동 판단 (Android→다운로드, iOS→팝업) -->
+            <div class="auth-app-download-box" id="authAppDownloadBox" role="button" tabindex="0" title="클릭 시 접속 기기에 맞게 자동 처리" onclick="if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event);" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event); }">
               <p class="auth-app-download-title">STELVIO App Download</p>
               <div class="auth-app-download-icons">
-                <a href="https://firebasestorage.googleapis.com/v0/b/stelvio-ai.firebasestorage.app/o/app-release.apk?alt=media&token=db393f87-4858-44ba-89fb-404b146460c1" id="authAppDownloadAndroid" class="auth-app-download-link" title="Android 앱 다운로드" target="_blank" rel="noopener">
+                <span class="auth-app-download-link" title="Android">
                   <img src="assets/img/android.png" alt="Android" class="auth-app-download-icon auth-app-download-icon-ref">
-                </a>
+                </span>
                 <span class="auth-app-download-divider" aria-hidden="true"></span>
-                <a href="javascript:void(0)" id="authAppDownloadIos" class="auth-app-download-link" title="iOS 앱 다운로드" onclick="if(typeof showStelvioIosComingSoonPopup==='function')showStelvioIosComingSoonPopup(); return false;">
+                <span class="auth-app-download-link" title="iOS">
                   <img src="assets/img/appl.png" alt="iOS" class="auth-app-download-icon auth-app-download-icon-ref">
-                </a>
+                </span>
               </div>
               <p class="auth-app-download-updated">Last Updated: 2026.03.03</p>
             </div>
@@ -10604,6 +10604,24 @@
         statusEl.style.display = 'block';
       }
     }
+    
+    /**
+     * STELVIO App Download 박스 클릭: 접속 기기 자동 판단 (Android→다운로드, iOS→팝업)
+     */
+    var ANDROID_APP_DOWNLOAD_URL = 'https://firebasestorage.googleapis.com/v0/b/stelvio-ai.firebasestorage.app/o/app-release.apk?alt=media&token=db393f87-4858-44ba-89fb-404b146460c1';
+    function handleAppDownloadClick(event) {
+      var ua = navigator.userAgent || '';
+      var isAndroid = /Android/i.test(ua);
+      var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isAndroid) {
+        window.open(ANDROID_APP_DOWNLOAD_URL, '_blank', 'noopener');
+      } else if (isIOS) {
+        if (typeof showStelvioIosComingSoonPopup === 'function') showStelvioIosComingSoonPopup();
+      } else {
+        window.open(ANDROID_APP_DOWNLOAD_URL, '_blank', 'noopener');
+      }
+    }
+    window.handleAppDownloadClick = handleAppDownloadClick;
     
     /**
      * iOS 앱 "향후 구현 예정" 팝업 표시/닫기
