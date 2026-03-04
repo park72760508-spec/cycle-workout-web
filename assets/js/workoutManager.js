@@ -771,6 +771,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   const ctx = canvas.getContext('2d');
   
+  /* 안드로이드 훈련화면(모바일, 블루투스 개인훈련, 블루투스 개인훈련 통합) 한글 폰트 통일 */
+  const isTrainingScreenCanvas = ['individualSegmentGraph', 'mobileIndividualSegmentGraph', 'bluetoothCoachSegmentGraphCanvas', 'segmentPreviewGraph'].includes(canvasId);
+  const textFontFamily = isTrainingScreenCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif';
+  
   // 배경 그리기
   if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경
@@ -946,7 +950,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드 및 Indoor Training, 훈련 준비 화면)
   if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     const rpm90Text = '90';
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = `bold 10px ${textFontFamily}`;
     const textMetrics = ctx.measureText(rpm90Text);
     const textWidth = textMetrics.width;
     const textHeight = 12;
@@ -1051,8 +1055,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
     ctx.fillStyle = '#f59e0b';
   }
-  // 개인 대시보드용 폰트 크기 조정
-  const ftpLabelFontSize = (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
+  // 개인 대시보드용 폰트 크기 조정 (한글 폰트 통일)
+  const ftpLabelFontSize = (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') ? `bold 8px ${textFontFamily}` : `bold 12px ${textFontFamily}`;
   ctx.font = ftpLabelFontSize;
   ctx.textAlign = 'right';
   // 개인훈련 대시보드 및 모바일 대시보드, 훈련 준비 화면에서는 FTP 라벨 텍스트 표시하지 않음
@@ -1116,9 +1120,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           ctx.closePath();
           ctx.fill();
           
-          // 검정색 폰트로 파워값 표시
+          // 검정색 폰트로 파워값 표시 (한글 폰트 통일)
           ctx.fillStyle = '#000000'; // 검정색
-          ctx.font = 'bold 9px sans-serif';
+          ctx.font = `bold 9px ${textFontFamily}`;
           ctx.textAlign = 'center';
           ctx.fillText(powerText, boxX + boxWidth / 2, boxY + boxHeight / 2 + 3);
         } else {
@@ -1129,7 +1133,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           } else {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
           }
-          ctx.font = '8px sans-serif';
+          ctx.font = `8px ${textFontFamily}`;
           ctx.textAlign = 'right';
           ctx.fillText(ftpRatio.toString(), padding.left - 10, y + 4);
         }
@@ -1180,7 +1184,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       } else {
         ctx.fillStyle = '#374151'; // 기타: 진한 회색
       }
-      const powerFontSize = '11px sans-serif';
+      const powerFontSize = `11px ${textFontFamily}`;
       ctx.font = powerFontSize;
       ctx.textAlign = 'right';
       ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
@@ -1675,9 +1679,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         ctx.lineTo(x + barWidth, rpmY);
         ctx.stroke();
         
-        // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단)
+        // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단, 한글 폰트 통일)
         ctx.fillStyle = '#FF3B30'; // 숫자 색상
-        ctx.font = 'bold 10px sans-serif'; // Medium 이상 두께
+        ctx.font = `bold 10px ${textFontFamily}`;
         ctx.textAlign = 'center';
         const labelY = rpmY - 5; // 점선 위에 표시
         ctx.fillText(`${Math.round(targetRpm)}`, x + barWidth / 2, labelY);
@@ -1960,8 +1964,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     }
   }
   
-  // 개인 대시보드 및 모바일 대시보드, 훈련 준비 화면: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') {
+  // 개인 대시보드 및 모바일 대시보드, 블루투스 개인훈련 통합, 훈련 준비 화면: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
+  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'bluetoothCoachSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     const totalMinutes = Math.round(totalSeconds / 60);
     const totalTimeText = `${totalMinutes}m`;
     
@@ -1983,8 +1987,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const newVerticalPadding = currentVerticalPadding * 0.7; // 30% 감소
     const adjustedBoxHeight = fontSize + (newVerticalPadding * 2); // 조정된 상자 높이
     
-    // 텍스트 크기 측정
-    ctx.font = `bold ${fontSize}px sans-serif`;
+    // 텍스트 크기 측정 (한글 폰트 통일)
+    ctx.font = `bold ${fontSize}px ${textFontFamily}`;
     const textMetrics = ctx.measureText(totalTimeText);
     const textWidth = textMetrics.width;
     const boxWidth = textWidth + boxPadding * 2;
@@ -2007,9 +2011,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.closePath();
     ctx.fill();
     
-    // 텍스트 표시
+    // 텍스트 표시 (한글 폰트 통일)
     ctx.fillStyle = '#000'; // 검정색 텍스트
-    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.font = `bold ${fontSize}px ${textFontFamily}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(totalTimeText, padding.left + chartWidth / 2, targetY);

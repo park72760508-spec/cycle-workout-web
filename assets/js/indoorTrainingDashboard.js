@@ -6701,6 +6701,10 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     
     const ctx = canvas.getContext('2d');
     
+    /* 블루투스 개인훈련 통합화면: 한글 폰트 통일 (안드로이드 휴대폰) */
+    const isBluetoothCoachCanvas = (canvasId === 'bluetoothCoachSegmentGraphCanvas');
+    const textFontFamily = isBluetoothCoachCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif';
+    
     // 배경 투명하게
     ctx.clearRect(0, 0, graphWidth, graphHeight);
     
@@ -6728,7 +6732,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         { value: 150, label: '1.5', isFTP: false },
         { value: 200, label: '2', isFTP: false }
     ];
-    ctx.font = '9px sans-serif';
+    ctx.font = `9px ${textFontFamily}`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     
@@ -6741,7 +6745,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         // FTP 라벨은 둥근네모상자(투명 주황색 바탕)로 표기 - 가운데 정렬
         if (isFTP) {
             // 텍스트 크기 측정
-            ctx.font = '9px sans-serif';
+            ctx.font = `9px ${textFontFamily}`;
             const textMetrics = ctx.measureText(label);
             const textWidth = textMetrics.width;
             const textHeight = 12; // 폰트 크기 기준 높이
@@ -6801,7 +6805,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
             
             // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 둥근 상자 표시
             const rpm90Text = '90';
-            ctx.font = 'bold 9px sans-serif'; // 전광판용 작은 크기
+            ctx.font = `bold 9px ${textFontFamily}`;
             const textMetrics = ctx.measureText(rpm90Text);
             const textWidth = textMetrics.width;
             const textHeight = 10;
@@ -6862,7 +6866,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     
     // Y축 라벨 아래에 "X 100%" 표기
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.font = '7px sans-serif';
+    ctx.font = `7px ${textFontFamily}`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     const x100LabelY = padding.top + chartHeight + 5; // X축 아래 5px
