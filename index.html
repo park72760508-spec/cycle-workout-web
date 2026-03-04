@@ -9784,6 +9784,14 @@
       authScreen.style.display = 'block';
       authScreen.style.visibility = 'visible';
       authScreen.style.opacity = '1';
+      // body/html 그라데이션 적용 (하단 회색바 제거 - iOS Bluefy, Android Chrome)
+      var authGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
+      document.body.style.setProperty('background', authGradient, 'important');
+      document.body.style.setProperty('background-attachment', 'fixed', 'important');
+      if (document.documentElement) {
+        document.documentElement.style.setProperty('background', authGradient, 'important');
+        document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
+      }
       window.scrollTo(0, 0);
     }
     
@@ -9965,6 +9973,14 @@
         authScreen.style.opacity = '1';
         authScreen.style.position = 'relative';
         authScreen.style.zIndex = '1000';
+        // body/html 그라데이션 적용 (하단 회색바 제거)
+        var authGradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
+        document.body.style.setProperty('background', authGradient, 'important');
+        document.body.style.setProperty('background-attachment', 'fixed', 'important');
+        if (document.documentElement) {
+          document.documentElement.style.setProperty('background', authGradient, 'important');
+          document.documentElement.style.setProperty('background-attachment', 'fixed', 'important');
+        }
         console.log('✅ 로그인 화면 표시 완료');
         
         // 스크롤을 맨 위로
