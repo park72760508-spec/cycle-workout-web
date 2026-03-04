@@ -5138,7 +5138,8 @@ document.addEventListener("DOMContentLoaded", () => {
             splashScreen.style.setProperty('background', 'transparent', 'important'); // 배경색 제거
             
             // body 배경색 원복 (원래 배경색으로 복원)
-            document.body.style.setProperty('background', '#f6f8fa', 'important');
+            document.body.style.setProperty('background-color', '#f6f8fa', 'important');
+            document.body.style.setProperty('background-attachment', 'fixed', 'important');
             
             // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
             const splashContainer = document.querySelector('.splash-container');
@@ -5149,7 +5150,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             
             // body 배경색 원복 (원래 배경색으로 복원)
-            document.body.style.setProperty('background', '#f6f8fa', 'important');
+            document.body.style.setProperty('background-color', '#f6f8fa', 'important');
+            document.body.style.setProperty('background-attachment', 'fixed', 'important');
           
           // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
           const authScreen = document.getElementById("authScreen");
@@ -5192,7 +5194,8 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
     // body 배경색 원복 (원래 배경색으로 복원)
-    document.body.style.setProperty('background', '#f6f8fa', 'important');
+    document.body.style.setProperty('background-color', '#f6f8fa', 'important');
+    document.body.style.setProperty('background-attachment', 'fixed', 'important');
     
     const authScreen = document.getElementById("authScreen");
     if (authScreen) {
@@ -6389,7 +6392,7 @@ if (typeof window.originalShowScreen === 'undefined') {
       
       // connectionScreen 특별 처리
       if (screenId === 'connectionScreen') {
-        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; min-height: 100dvh !important; min-height: -webkit-fill-available !important; background: #f6f8fa !important; padding: 20px 20px 0 20px !important;';
+        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; min-height: 100dvh !important; min-height: -webkit-fill-available !important; min-height: calc(100vh + env(safe-area-inset-bottom, 0px)) !important; background: #f6f8fa !important; padding: 20px 20px 0 20px !important;';
         console.log('🔗 connectionScreen 특별 처리 적용');
       } else {
         targetScreen.style.display = 'block';
