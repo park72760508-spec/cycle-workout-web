@@ -3449,16 +3449,18 @@ if (!window.showScreen) {
       
       // Performance Dashboard 화면 처리
       if (id === 'performanceDashboardScreen') {
-        // React 마운트 후 스크롤 재초기화 (비동기 렌더 시 흰색 화면 방지)
-        setTimeout(function() {
-          try {
-            const el2 = document.getElementById('performanceDashboardScreen');
-            const container = document.getElementById('performance-dashboard-container');
-            if (el2) el2.scrollTop = 0;
-            if (container) container.scrollTop = 0;
-            window.scrollTo(0, 0);
-          } catch (e) {}
-        }, 300);
+        // 스크롤 상단 고정 (스피너/콘텐츠가 상단부터 보이도록)
+        [0, 100, 300, 500].forEach(function(delay) {
+          setTimeout(function() {
+            try {
+              const el2 = document.getElementById('performanceDashboardScreen');
+              const container = document.getElementById('performance-dashboard-container');
+              if (el2) el2.scrollTop = 0;
+              if (container) container.scrollTop = 0;
+              window.scrollTo(0, 0);
+            } catch (e) {}
+          }, delay);
+        });
       }
 
       // Training Room 화면: 훈련방 목록 자동 로딩
