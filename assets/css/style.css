@@ -211,7 +211,7 @@ html, body {
 body {
   /* 한/영/숫자 통일: Noto Sans KR 우선 적용 (index.html에서 로드). 영문·숫자도 동일 폰트로 표시 */
   font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #f9fafb; /* 회색바 방지: #f6f8fa → #f9fafb (연한 톤) */
+  background: #f6f8fa;
   color: #222;
   overflow-x: hidden;
   /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
