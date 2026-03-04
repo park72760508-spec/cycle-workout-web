@@ -14706,7 +14706,7 @@ button[aria-disabled="true"] {
   margin-bottom: 4px !important;
 }
 
-/* 블루투스 개인훈련 통합화면: TARGET, WATTS, CADENCE, rpm, LAP AVG, w, HEART RATE, bpm, % 한글 폰트 통일 */
+/* 블루투스 개인훈련 통합화면: TARGET, WATTS, CADENCE, rpm, LAP AVG, w, HEART RATE, bpm, % 한글 폰트 통일 + 폰트 3배 확대 */
 #bluetoothTrainingCoachScreen .scoreboard-label,
 #bluetoothTrainingCoachScreen .scoreboard-value,
 #bluetoothTrainingCoachScreen .digital-number,
@@ -14717,6 +14717,17 @@ button[aria-disabled="true"] {
 #bluetoothTrainingCoachScreen .speedometer-svg text {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
 }
+/* 폰트 3배 확대: 전광판, 속도계 관련 텍스트 */
+#bluetoothTrainingCoachScreen .scoreboard-label { font-size: 2.25rem !important; }
+#bluetoothTrainingCoachScreen .scoreboard-value,
+#bluetoothTrainingCoachScreen .digital-number { font-size: 3rem !important; }
+#bluetoothTrainingCoachScreen .speed-stat-value,
+#bluetoothTrainingCoachScreen .speed-value,
+#bluetoothTrainingCoachScreen .distance-value { font-size: 2.25rem !important; }
+#bluetoothTrainingCoachScreen .speed-unit-bottom,
+#bluetoothTrainingCoachScreen .speed-unit-small { font-size: 1.5rem !important; }
+#bluetoothTrainingCoachScreen .bluetooth-coach-segment-time-row,
+#bluetoothTrainingCoachScreen .bluetooth-coach-segment-progress-row { font-size: 6rem !important; }
 
 #bluetoothTrainingCoachScreen::-webkit-scrollbar {
   width: 10px;
