@@ -14644,8 +14644,7 @@ button[aria-disabled="true"] {
   overflow-y: auto;
 }
 
-/* Bluetooth Training Coach 대시보드 화면 - Indoor Training과 동일한 배경색 및 스타일 */
-/* 좌우 여백 완전 제거: 화면에 꽉 차게 */
+/* Bluetooth Training Coach 대시보드 화면 - 구버전(안정화)과 동일: 상/하/좌/우 여백 완전 제거, 화면 꽉 차게 */
 #bluetoothTrainingCoachScreen {
   display: flex;
   flex-direction: column;
@@ -14660,7 +14659,8 @@ button[aria-disabled="true"] {
   background: #0a0e27;
   color: #fff;
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
-  padding: 12px 0 !important; /* 좌우 여백 완전 제거 */
+  padding: 0 !important;
+  margin: 0 !important;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -14670,32 +14670,40 @@ button[aria-disabled="true"] {
 }
 
 #bluetoothTrainingCoachScreen .dashboard-header {
-  padding-left: 0;
-  padding-right: 0;
+  padding: 4px !important;
+  margin: 0 !important;
+  margin-bottom: 4px !important;
 }
 
 #bluetoothTrainingCoachScreen .scoreboard-display {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  padding: 4px 0 !important;
+  margin: 0 !important;
+  margin-bottom: 4px !important;
   border-radius: 0 !important;
 }
 
 #bluetoothTrainingCoachScreen .speedometer-grid,
 #bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  margin-bottom: 4px !important;
+  gap: 4px !important;
+}
+
+#bluetoothTrainingCoachScreen .speedometer-container {
+  padding: 4px !important;
+  border-radius: 4px !important;
 }
 
 #bluetoothTrainingCoachScreen .speedometer-list-section {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
+  padding: 4px 0 !important;
+  margin: 0 !important;
   border-radius: 0 !important;
+}
+
+#bluetoothTrainingCoachScreen .list-header {
+  padding: 0 4px !important;
+  margin-bottom: 4px !important;
 }
 
 /* 블루투스 개인훈련 통합화면: TARGET, WATTS, CADENCE, rpm, LAP AVG, w, HEART RATE, bpm, % 한글 폰트 통일 */
