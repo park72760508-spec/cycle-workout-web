@@ -14721,6 +14721,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         targetScreen.style.opacity = '1';
         targetScreen.style.visibility = 'visible';
         
+        // 대시보드: body 클래스 추가 (흰색 화면 덮임 방지), 그 외: 제거
+        if (screenId === 'performanceDashboardScreen') {
+          document.body.classList.add('performance-dashboard-active');
+          var c = document.getElementById('performance-dashboard-container');
+          if (c) { c.scrollTop = 0; c.scrollTo(0, 0); }
+        } else {
+          document.body.classList.remove('performance-dashboard-active');
+        }
+        
         // 스크롤을 맨 위로
         window.scrollTo(0, 0);
         
@@ -14853,6 +14862,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         
         // Performance Dashboard 화면인 경우 초기화
         if (screenId === 'performanceDashboardScreen') {
+          // 흰색 화면 덮임 방지: 다른 screen 완전 숨김
+          document.body.classList.add('performance-dashboard-active');
           // 스크롤 상단 고정 (대시보드 본 화면만 표시)
           var pdContainer = document.getElementById('performance-dashboard-container');
           if (pdContainer) { pdContainer.scrollTop = 0; pdContainer.scrollTo(0, 0); }
@@ -14871,7 +14882,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             initPerformanceDashboard();
           }
         } else {
-          // 다른 화면으로 전환 시 건강 체크 중지
+          // 다른 화면으로 전환 시: body 클래스 제거, 건강 체크 중지
+          document.body.classList.remove('performance-dashboard-active');
           stopDashboardHealthCheck();
         }
       };
