@@ -7446,8 +7446,8 @@
         try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
       })();
       
-      // 🔒 구독 만료 사용자 제한: 전월(<) 이동 시
-      if (direction === 'prev' && currentUser && typeof isUserExpired === 'function' && isUserExpired(currentUser)) {
+      // 🔒 구독 만료 사용자 제한: 이전달(<)·다음달(>) 이동 시
+      if (currentUser && typeof isUserExpired === 'function' && isUserExpired(currentUser)) {
         if (typeof showExpiryRestrictionModal === 'function') showExpiryRestrictionModal();
         return;
       }
