@@ -593,8 +593,19 @@ function startFirebaseDataTransmission() {
         
         updateDashboard(); // data 파라미터 없이 호출하면 window.liveData를 읽음
         
-        // 랩카운트다운 업데이트 (로컬 시간 추적 사용) - Bluetooth 개인훈련 대시보드 전용
+        // 경과시간 동기화 (마스코트·세그먼트 타이머 실시간 반영)
+        if (firebaseStatus && firebaseStatus.elapsedTime !== undefined) {
+            window.lastElapsedTime = firebaseStatus.elapsedTime;
+        }
+        
+        // 랩카운트다운 업데이트 (경과시간과 동일하게 실시간 동기화)
         updateLapTime(firebaseStatus);
+        
+        // 세그먼트 그래프 마스코트 실시간 동기화 (경과시간과 동일)
+        if (window.currentTrainingState === 'running' && window.currentWorkout?.segments) {
+            const segIdx = (firebaseStatus && firebaseStatus.segmentIndex !== undefined) ? firebaseStatus.segmentIndex : currentSegmentIndex;
+            updateSegmentGraph(window.currentWorkout.segments, segIdx);
+        }
         
         // 2. Firebase에 데이터 전송
         sendDataToFirebase();
@@ -1526,7 +1537,7 @@ db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
             if (segmentInfoEl) {
                 segmentInfoEl.textContent = '훈련 완료';
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', __indivIdPrefix ? '27' : '5.4'); // 통합: 3배 확대
+                segmentInfoEl.setAttribute('font-size', __indivIdPrefix ? '9' : '5.4'); // 통합: 1/3 축소
             }
             // 경과시간은 마지막 값 유지, 카운트다운은 00:00으로 표시
             const lapTimeEl = __indivEl('ui-lap-time');
@@ -1923,7 +1934,7 @@ function updateLapTime(status = null) {
     // 훈련방의 세그먼트 남은 시간 값 사용 (5,4,3,2,1,0 카운트다운과는 별개)
     let countdownValue = null;
     
-    // 훈련 중일 때: 세그먼트 남은 시간 우선 사용
+    // 훈련 중일 때: 경과시간(elapsedTime)과 동일하게 실시간 동기화 — Firebase status.elapsedTime 우선 사용
     if (status.state === 'running') {
         // 1순위: segmentRemainingSec (훈련방에서 계산된 세그먼트 남은 시간)
         if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null && Number.isFinite(status.segmentRemainingSec)) {
@@ -1933,93 +1944,55 @@ function updateLapTime(status = null) {
         else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(status.segmentRemainingTime)) {
             countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
         }
-        // 3순위: 로컬에서 계산 (Bluetooth 개인훈련 대시보드 전용)
+        // 3순위: elapsedTime 기반 계산 (경과시간과 동일한 실시간 동기화)
+        else if (window.currentWorkout && window.currentWorkout.segments && status.elapsedTime !== undefined) {
+            const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex;
+            const seg = window.currentWorkout.segments[segIndex];
+            if (seg && segIndex >= 0) {
+                const segDuration = seg.duration_sec || seg.duration || 0;
+                let prevSegmentsTime = 0;
+                for (let i = 0; i < segIndex; i++) {
+                    const prevSeg = window.currentWorkout.segments[i];
+                    if (prevSeg) prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
+                }
+                const segElapsed = Math.max(0, status.elapsedTime - prevSegmentsTime);
+                bluetoothIndividualSegmentElapsedTime = segElapsed;
+                countdownValue = Math.max(0, segDuration - segElapsed);
+                if (countdownValue === 0 && segElapsed >= segDuration) {
+                    const hasNextSegment = (segIndex + 1) < window.currentWorkout.segments.length;
+                    if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
+                        countdownValue = null;
+                    }
+                }
+            }
+        }
+        // 4순위: segmentElapsedSec / segmentElapsedTime / segmentStartTime
         else if (window.currentWorkout && window.currentWorkout.segments) {
             const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex;
             const seg = window.currentWorkout.segments[segIndex];
-            
             if (seg && segIndex >= 0) {
                 const segDuration = seg.duration_sec || seg.duration || 0;
-                
-                // 로컬 세그먼트 경과 시간 사용
-                if (bluetoothIndividualSegmentStartTime && segIndex >= 0) {
+                if (status.segmentElapsedSec !== undefined && Number.isFinite(status.segmentElapsedSec)) {
+                    const elapsed = Math.floor(status.segmentElapsedSec);
+                    countdownValue = Math.max(0, segDuration - elapsed);
+                } else if (status.segmentElapsedTime !== undefined && Number.isFinite(status.segmentElapsedTime)) {
+                    const elapsed = Math.floor(status.segmentElapsedTime);
+                    countdownValue = Math.max(0, segDuration - elapsed);
+                } else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
+                    const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
+                    countdownValue = Math.max(0, segDuration - segElapsed);
+                }
+                // 5순위: 로컬 fallback (Firebase 데이터 없을 때만)
+                else if (bluetoothIndividualSegmentStartTime && segIndex >= 0) {
                     const now = Date.now();
                     const elapsed = Math.floor((now - bluetoothIndividualSegmentStartTime) / 1000);
                     bluetoothIndividualSegmentElapsedTime = elapsed;
                     countdownValue = Math.max(0, segDuration - elapsed);
-                    
-                    // 세그먼트가 완료되었고 다음 세그먼트로 넘어가지 않았을 때는 null로 설정
-                    if (countdownValue === 0 && elapsed >= segDuration) {
-                        // 다음 세그먼트가 있는지 확인
-                        const nextSegmentIndex = segIndex + 1;
-                        const hasNextSegment = nextSegmentIndex < window.currentWorkout.segments.length;
-                        // 다음 세그먼트가 없거나 아직 시작되지 않았으면 null로 설정하여 카운트다운 숨김
-                        if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
-                            countdownValue = null;
-                        }
-                    }
                 }
-                // segmentElapsedSec가 있으면 사용
-                else if (status.segmentElapsedSec !== undefined && Number.isFinite(status.segmentElapsedSec)) {
-                    const elapsed = Math.floor(status.segmentElapsedSec);
-                    countdownValue = Math.max(0, segDuration - elapsed);
-                    
-                    // 세그먼트가 완료되었을 때 처리
-                    if (countdownValue === 0 && elapsed >= segDuration) {
-                        const nextSegmentIndex = segIndex + 1;
-                        const hasNextSegment = nextSegmentIndex < window.currentWorkout.segments.length;
-                        if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
-                            countdownValue = null;
-                        }
-                    }
-                }
-                // segmentElapsedTime이 있으면 사용
-                else if (status.segmentElapsedTime !== undefined && Number.isFinite(status.segmentElapsedTime)) {
-                    const elapsed = Math.floor(status.segmentElapsedTime);
-                    countdownValue = Math.max(0, segDuration - elapsed);
-                    
-                    // 세그먼트가 완료되었을 때 처리
-                    if (countdownValue === 0 && elapsed >= segDuration) {
-                        const nextSegmentIndex = segIndex + 1;
-                        const hasNextSegment = nextSegmentIndex < window.currentWorkout.segments.length;
-                        if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
-                            countdownValue = null;
-                        }
-                    }
-                }
-                // elapsedTime과 segmentStartTime으로 계산
-                else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
-                    const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
-                    countdownValue = Math.max(0, segDuration - segElapsed);
-                    
-                    // 세그먼트가 완료되었을 때 처리
-                    if (countdownValue === 0 && segElapsed >= segDuration) {
-                        const nextSegmentIndex = segIndex + 1;
-                        const hasNextSegment = nextSegmentIndex < window.currentWorkout.segments.length;
-                        if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
-                            countdownValue = null;
-                        }
-                    }
-                }
-                // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
-                else if (status.elapsedTime !== undefined) {
-                    let prevSegmentsTime = 0;
-                    for (let i = 0; i < segIndex; i++) {
-                        const prevSeg = window.currentWorkout.segments[i];
-                        if (prevSeg) {
-                            prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
-                        }
-                    }
-                    const segElapsed = Math.max(0, status.elapsedTime - prevSegmentsTime);
-                    countdownValue = Math.max(0, segDuration - segElapsed);
-                    
-                    // 세그먼트가 완료되었을 때 처리
-                    if (countdownValue === 0 && segElapsed >= segDuration) {
-                        const nextSegmentIndex = segIndex + 1;
-                        const hasNextSegment = nextSegmentIndex < window.currentWorkout.segments.length;
-                        if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
-                            countdownValue = null;
-                        }
+                if (countdownValue !== null && countdownValue === 0) {
+                    const hasNextSegment = (segIndex + 1) < window.currentWorkout.segments.length;
+                    if (!hasNextSegment || (status.segmentIndex !== undefined && status.segmentIndex === segIndex)) {
+                        countdownValue = null;
                     }
                 }
             }
@@ -2979,8 +2952,8 @@ function updateSpeedometerSegmentInfo() {
         console.warn('[updateSpeedometerSegmentInfo] segment-info 요소를 찾을 수 없습니다.');
         return;
     }
-    // 통합 블루투스 개인훈련: 세그먼트 표시 3배 확대 (27px)
-    const segmentInfoFontSize = __indivIdPrefix ? '27' : '5.4';
+    // 통합 블루투스 개인훈련: 세그먼트 표시 1/3 축소 (27→9)
+    const segmentInfoFontSize = __indivIdPrefix ? '9' : '5.4';
 
     try {
         // 현재 상태 확인
