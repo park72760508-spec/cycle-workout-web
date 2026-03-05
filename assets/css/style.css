@@ -18583,6 +18583,15 @@ body.bluetooth-individual-screen-active {
 ========================================================== */
 
 /* 속도계 컨테이너 크기 보정 */
+/* 속도계 + 세그먼트 정보 래퍼: 실행 버튼과 하단 정보 영역 사이 '준비 중' 중앙 배치 */
+.mobile-gauge-segment-wrap {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* 모바일 대시보드 메인 콘텐츠 (속도계 영역) */
 .mobile-main-content {
   flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 */
@@ -18604,7 +18613,7 @@ body.bluetooth-individual-screen-active {
   position: relative;
   margin: 0;
   padding: 0;
-  margin-bottom: -30px; /* 세그먼트 정보를 Y 좌표 환산 230 위치로 이동 (260 - 30 = 230) */
+  flex-shrink: 0; /* 속도계 비율 유지 */
 }
 
 /* ----- 노트북 훈련 대시보드용 파워 속도계 (#trainingScreen 전용, 모바일과 격리) ----- */
@@ -18712,15 +18721,12 @@ body.bluetooth-individual-screen-active {
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
-#mobile-segment-info {
+/* 모바일 대시보드 세그먼트 정보: 실행 버튼과 하단 정보 영역(CADENCE 등) 사이 중앙 배치 */
+#mobile-segment-info.mobile-segment-info-centered {
   text-align: center;
   font-size: 0.9em;
   color: #ccc;
-  margin-top: 0px; /* Y 좌표 환산 230px 위치로 조정 */
-  margin-bottom: 0px; /* Y 좌표 환산 230px 위치로 조정 */
-  padding: 0 10px;
-  min-height: 20px; /* 최소 높이 보장 */
+  padding: 0;
 }
 
 /* 모바일 대시보드 블루투스 연결 버튼 (독립적 구동) */
