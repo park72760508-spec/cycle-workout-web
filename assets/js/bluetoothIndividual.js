@@ -1764,11 +1764,12 @@ function updateDashboard(data = null) {
 
 function updateTimer(status) {
     const timerEl = __indivEl('main-timer');
+    if (!timerEl) return;
     
     if (status.state === 'running') {
-        // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확)
-        const totalSeconds = status.elapsedTime || 0;
-        timerEl.innerText = formatTimerDisplay(totalSeconds); // mm:ss 형식
+        // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확) — 항상 mm:ss 형식 (hh:mm:ss 금지)
+        const totalSeconds = Number(status.elapsedTime) || 0;
+        timerEl.innerText = formatTimerDisplay(totalSeconds);
         timerEl.style.color = '#00d4aa'; // 실행중 색상
         
         // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
@@ -1795,7 +1796,7 @@ function updateTimer(status) {
     } else if (status.state === 'paused') {
         timerEl.style.color = '#ffaa00'; // 일시정지 색상
     } else {
-        timerEl.innerText = "00:00";
+        timerEl.innerText = '00:00'; // mm:ss 형식 유지
         timerEl.style.color = '#fff';
         
         // 훈련이 종료되거나 시작 전이면 마스코트를 0 위치로
@@ -1937,12 +1938,12 @@ function updateLapTime(status = null) {
     // 훈련 중일 때: 경과시간(elapsedTime)과 동일하게 실시간 동기화 — Firebase status.elapsedTime 우선 사용
     if (status.state === 'running') {
         // 1순위: segmentRemainingSec (훈련방에서 계산된 세그먼트 남은 시간)
-        if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null && Number.isFinite(status.segmentRemainingSec)) {
-            countdownValue = Math.max(0, Math.floor(status.segmentRemainingSec));
+        if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null && Number.isFinite(Number(status.segmentRemainingSec))) {
+            countdownValue = Math.max(0, Math.floor(Number(status.segmentRemainingSec)));
         }
         // 2순위: segmentRemainingTime (다른 필드명)
-        else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(status.segmentRemainingTime)) {
-            countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
+        else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(Number(status.segmentRemainingTime))) {
+            countdownValue = Math.max(0, Math.floor(Number(status.segmentRemainingTime)));
         }
         // 3순위: elapsedTime 기반 계산 (경과시간과 동일한 실시간 동기화)
         else if (window.currentWorkout && window.currentWorkout.segments && status.elapsedTime !== undefined) {
@@ -1999,15 +2000,15 @@ function updateLapTime(status = null) {
         }
     }
     // 훈련 시작 전: countdownRemainingSec (전체 훈련 시작 카운트다운)
-    else if (status.countdownRemainingSec !== undefined && status.countdownRemainingSec !== null && Number.isFinite(status.countdownRemainingSec)) {
-        countdownValue = Math.max(0, Math.floor(status.countdownRemainingSec));
+    else if (status.countdownRemainingSec !== undefined && status.countdownRemainingSec !== null && Number.isFinite(Number(status.countdownRemainingSec))) {
+        countdownValue = Math.max(0, Math.floor(Number(status.countdownRemainingSec)));
     }
     
-    // 카운트다운 값 표시
+    // 카운트다운 값 표시 — 항상 mm:ss 형식 (hh:mm:ss 금지)
     if (countdownValue !== null && countdownValue >= 0) {
-        lapTimeEl.textContent = formatTime(countdownValue);
-        // 10초 이하면 빨간색, 그 외는 청록색
-        lapTimeEl.setAttribute('fill', countdownValue <= 10 ? '#ff4444' : '#00d4aa');
+        const sec = Number(countdownValue);
+        lapTimeEl.textContent = formatTime(sec);
+        lapTimeEl.setAttribute('fill', sec <= 10 ? '#ff4444' : '#00d4aa');
     } else {
         lapTimeEl.textContent = '00:00';
         lapTimeEl.setAttribute('fill', '#00d4aa');
