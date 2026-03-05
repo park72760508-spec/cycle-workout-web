@@ -1766,7 +1766,7 @@ function updateTimer(status) {
     if (status.state === 'running') {
         // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확)
         const totalSeconds = status.elapsedTime || 0;
-        timerEl.innerText = formatTimerDisplay(totalSeconds); // 1시간 미만: mm:ss, 이상: hh:mm:ss
+        timerEl.innerText = formatTimerDisplay(totalSeconds); // mm:ss 형식
         timerEl.style.color = '#00d4aa'; // 실행중 색상
         
         // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
@@ -1820,12 +1820,9 @@ function formatHMS(totalSeconds) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// 통합 블루투스 개인훈련 전용: 1시간 미만이면 mm:ss, 이상이면 hh:mm:ss
+// 통합 블루투스 개인훈련 전용: 항상 mm:ss 형식 (경과시간 표시)
 function formatTimerDisplay(totalSeconds) {
-    if (totalSeconds < 3600) {
-        return formatTime(Math.floor(totalSeconds));
-    }
-    return formatHMS(totalSeconds);
+    return formatTime(Math.floor(totalSeconds || 0));
 }
 
 // 5초 카운트다운 상태 관리
