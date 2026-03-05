@@ -636,6 +636,29 @@ async function checkLoginAndRetry() {
 }
 window.checkLoginAndRetry = checkLoginAndRetry;
 
+/**
+ * Live Training Rooms 목록 불러오기 재시도 (타임아웃/네트워크 오류 시)
+ * - 초기화 및 리셋 후 loadTrainingRooms 호출
+ */
+function retryTrainingRoomList() {
+  const listContainer = document.getElementById('trainingRoomList');
+  if (!listContainer) return;
+  if (typeof loadTrainingRooms === 'function') {
+    loadTrainingRooms();
+  }
+}
+window.retryTrainingRoomList = retryTrainingRoomList;
+
+/**
+ * Live Training Rooms 목록 불러오기 재시도 (권한 오류 시 - 로그인 점검)
+ */
+function retryTrainingRoomListWithAuth() {
+  if (typeof checkLoginAndRetry === 'function') {
+    checkLoginAndRetry();
+  }
+}
+window.retryTrainingRoomListWithAuth = retryTrainingRoomListWithAuth;
+
 /** Live Training Rooms 로딩 세대 ID (재진입 시 이전 로딩 결과 무시) */
 let __loadTrainingRoomsLoadId = 0;
 
@@ -691,8 +714,7 @@ async function loadTrainingRooms() {
       listContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
           <p style="color: #666; font-size: 15px; margin-bottom: 16px;">보안 인증을 대기 중입니다...</p>
-          <button type="button" id="checkLoginAndRetryBtn" onclick="if(typeof checkLoginAndRetry==='function'){checkLoginAndRetry();}" 
-                  style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+          <button type="button" id="checkLoginAndRetryBtn" class="stelvio-coming-soon-btn training-room-retry-btn" onclick="retryTrainingRoomListWithAuth()">
             로그인 복구 및 재시도
           </button>
         </div>
@@ -894,20 +916,17 @@ async function loadTrainingRooms() {
       String(errorMessage).toLowerCase().includes('permission') ||
       String(errorMessage).toLowerCase().includes('권한');
     
-    const retryOnclick = isTimeout
-      ? 'if(typeof loadTrainingRooms==="function"){loadTrainingRooms();}'
-      : 'if(typeof checkLoginAndRetry==="function"){checkLoginAndRetry();}';
+    const retryOnclick = isTimeout ? 'retryTrainingRoomList()' : 'retryTrainingRoomListWithAuth()';
     const retryLabel = isTimeout ? '다시 시도' : '로그인 상태 점검 및 재시도';
     const retryMsg = isTimeout
       ? '연결 시간이 초과되었습니다. 네트워크를 확인하고 다시 시도해주세요.'
       : (isPermErr ? '권한 오류가 발생했습니다. 로그인 상태를 확인해주세요.' : '네트워크 연결을 확인하고 다시 시도해주세요.');
     
     listContainer.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+      <div class="training-room-list-error-wrap" style="grid-column: 1 / -1; text-align: center; padding: 40px;">
         <p style="color: #dc3545; margin-bottom: 10px; font-weight: 600;">Training Room 목록을 불러올 수 없습니다</p>
-        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">${retryMsg}</p>
-        <button type="button" id="checkLoginAndRetryBtn" onclick="${retryOnclick}" 
-                style="padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+        <p style="color: #666; font-size: 14px; margin-bottom: 24px;">${retryMsg}</p>
+        <button type="button" id="checkLoginAndRetryBtn" class="stelvio-coming-soon-btn training-room-retry-btn" onclick="${retryOnclick}">
           ${retryLabel}
         </button>
       </div>
