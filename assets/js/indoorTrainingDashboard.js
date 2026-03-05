@@ -6701,9 +6701,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     
     const ctx = canvas.getContext('2d');
     
-    /* 블루투스 개인훈련 통합화면: 한글 폰트 통일 (안드로이드 휴대폰) */
-    const isBluetoothCoachCanvas = (canvasId === 'bluetoothCoachSegmentGraphCanvas');
-    const textFontFamily = isBluetoothCoachCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif';
+    const textFontFamily = 'sans-serif';
     
     // 배경 투명하게
     ctx.clearRect(0, 0, graphWidth, graphHeight);

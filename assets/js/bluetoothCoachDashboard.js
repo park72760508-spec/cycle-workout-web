@@ -2831,7 +2831,7 @@ function startBluetoothCoachTrainingWithCountdown() {
     align-items: center;
     justify-content: center;
     z-index: 10000;
-    font-family: "Pretendard", "Noto Sans KR", sans-serif;
+    font-family: sans-serif;
   `;
   
   const countdownText = document.createElement('div');

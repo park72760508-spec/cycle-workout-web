@@ -771,8 +771,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   const ctx = canvas.getContext('2d');
   
-  /* 안드로이드 훈련화면(모바일, 블루투스 개인훈련, 블루투스 개인훈련 통합) 한글 폰트 통일 */
-  const isTrainingScreenCanvas = ['individualSegmentGraph', 'mobileIndividualSegmentGraph', 'bluetoothCoachSegmentGraphCanvas', 'segmentPreviewGraph'].includes(canvasId);
+  /* 안드로이드 훈련화면(모바일, 블루투스 개인훈련) 한글 폰트 통일 (블루투스 Coach 통합화면 제외) */
+  const isTrainingScreenCanvas = ['individualSegmentGraph', 'mobileIndividualSegmentGraph', 'segmentPreviewGraph'].includes(canvasId);
   const textFontFamily = isTrainingScreenCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif';
   
   // 배경 그리기
