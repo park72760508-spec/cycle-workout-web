@@ -14711,18 +14711,6 @@ button[aria-disabled="true"] {
   margin-bottom: 4px !important;
 }
 
-/* 블루투스 개인훈련 통합화면: TARGET, WATTS, CADENCE, rpm, LAP AVG, w, HEART RATE, bpm, % 한글 폰트 통일 */
-#bluetoothTrainingCoachScreen .scoreboard-label,
-#bluetoothTrainingCoachScreen .scoreboard-value,
-#bluetoothTrainingCoachScreen .digital-number,
-#bluetoothTrainingCoachScreen .speed-stat-label,
-#bluetoothTrainingCoachScreen .speed-stat-value,
-#bluetoothTrainingCoachScreen .speed-unit-bottom,
-#bluetoothTrainingCoachScreen .speed-unit-small,
-#bluetoothTrainingCoachScreen .speedometer-svg text {
-  font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
-}
-
 #bluetoothTrainingCoachScreen::-webkit-scrollbar {
   width: 10px;
 }
