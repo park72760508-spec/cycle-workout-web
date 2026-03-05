@@ -459,16 +459,14 @@ function createPowerMeterElement(powerMeter) {
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <span class="speedometer-user-name" id="user-icon-${powerMeter.id}" 
-            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 39px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: 39px !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
+            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 13px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
+      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: 13px !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
         <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
         <span class="status-dot disconnected" id="status-dot-${powerMeter.id}"></span>
         <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
       </div>
     </div>
-    <!-- 속도계 바로 위: 세그먼트 시간 mm:ss -->
-    <div class="bluetooth-coach-segment-time-row" id="segment-time-${powerMeter.id}" style="text-align: center; margin-bottom: 4px; font-size: 42px; color: rgba(255,255,255,0.95); font-weight: 600;">00:00</div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
         <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
@@ -509,7 +507,7 @@ function createPowerMeterElement(powerMeter) {
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
-              font-size="130" 
+              font-size="43" 
               font-weight="700"
               id="current-power-value-${powerMeter.id}">-</text>
         
@@ -531,7 +529,7 @@ function createPowerMeterElement(powerMeter) {
         
       </svg>
       <!-- 현재 파워값 아래 세그먼트 진행사항 -->
-      <div class="bluetooth-coach-segment-progress-row" id="segment-progress-${powerMeter.id}" style="text-align: center; margin-top: 4px; font-size: 42px; color: rgba(255,255,255,0.95); font-weight: 600;">-/-</div>
+      <div class="bluetooth-coach-segment-progress-row" id="segment-progress-${powerMeter.id}" style="text-align: center; margin-top: 4px; font-size: 14px; color: rgba(255,255,255,0.95); font-weight: 600;">-/-</div>
     </div>
     <div class="speedometer-info disconnected">
       <div class="speed-display-left">
