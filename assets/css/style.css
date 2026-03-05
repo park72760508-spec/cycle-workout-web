@@ -18583,15 +18583,19 @@ body.bluetooth-individual-screen-active {
 ========================================================== */
 
 /* 속도계 컨테이너 크기 보정 */
-/* 속도계 + 세그먼트 정보 래퍼: 실행 버튼 하단에 '준비 중' 밀착, 화면 크기에 따라 함께 축소 */
+/* 속도계 + 세그먼트 정보 래퍼: position: relative(오버레이 기준점), 속도계 중앙 정렬 */
 .mobile-gauge-segment-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
   flex-shrink: 1;
   min-height: 0;
   width: 100%;
   max-height: 100%;
+  padding: 8px 0;
+  gap: 0;
 }
 
 /* 모바일 대시보드 메인 콘텐츠 (속도계 영역) */
@@ -18608,10 +18612,11 @@ body.bluetooth-individual-screen-active {
   margin: 0;
 }
 
+/* 속도계 컨테이너: Lap Time + 게이지 + 실행 버튼, 세로 Flex 정렬, 중앙 정렬 */
 .mobile-gauge-container {
   width: 100%; /* 화면 크기에 맞게 확대/축소 */
   max-width: 100%;
-  max-height: 100%; /* 공간 부족 시 축소하여 '준비 중'과 함께 보이도록 */
+  max-height: 100%; /* 공간 부족 시 축소 */
   /* SVG viewBox(-15 0 230 260) 비율에 맞춤 */
   aspect-ratio: 230 / 260; 
   position: relative;
@@ -18619,6 +18624,10 @@ body.bluetooth-individual-screen-active {
   padding: 0;
   flex-shrink: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 /* ----- 노트북 훈련 대시보드용 파워 속도계 (#trainingScreen 전용, 모바일과 격리) ----- */
@@ -18726,14 +18735,23 @@ body.bluetooth-individual-screen-active {
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* 모바일 대시보드 세그먼트 정보: 실행 버튼 하단에 밀착 배치 */
-#mobile-segment-info.mobile-segment-info-centered {
-  flex-shrink: 0;
-  margin-top: 4px;
-  padding: 2px 0;
+/* 모바일 대시보드 세그먼트 정보: 자유 배치 오버레이 (레이아웃 흐름에서 분리) */
+/* 위치 미세 조정: top(예: -10px, 0, 20px), left(예: 50%, 10px) 값 변경 */
+#mobile-segment-info.mobile-segment-info-overlay {
+  position: absolute;
+  top: 0; /* 워크아웃 그래프 하단 라인 중간 지점 (조정 가능) */
+  left: 50%;
+  transform: translate(-50%, -50%); /* 수평 중앙, 세로는 top 기준 */
+  z-index: 10;
+  pointer-events: none; /* 드래그 등 필요 시 pointer-events: auto로 변경 */
   text-align: center;
   font-size: 0.9em;
   color: #ccc;
+  padding: 4px 12px;
+  background: rgba(0, 0, 0, 0.4); /* 반투명 배경으로 시인성 확보 */
+  border-radius: 4px;
+  white-space: nowrap;
+  min-width: 60px;
 }
 
 /* 모바일 대시보드 블루투스 연결 버튼 (독립적 구동) */
