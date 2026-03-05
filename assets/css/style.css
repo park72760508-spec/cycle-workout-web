@@ -18217,6 +18217,15 @@ line[id^="needle-"] {
   background: rgba(0, 212, 170, 0.7);
 }
 
+/* Live Training Rooms 목록 오류 시 다시 시도 버튼 (iOS 안내 팝업 디자인) */
+.training-room-retry-btn {
+  max-width: 280px;
+  margin: 0 auto;
+  display: inline-block !important;
+  width: auto !important;
+  min-width: 120px;
+}
+
 /* ========== 모바일 최적화 (Training Room 화면) ========== */
 @media (max-width: 768px) {
   #trainingRoomScreen.active {
