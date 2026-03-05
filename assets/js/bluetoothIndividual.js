@@ -1526,7 +1526,7 @@ db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
             if (segmentInfoEl) {
                 segmentInfoEl.textContent = '훈련 완료';
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', '5.4'); // 60% 축소
+                segmentInfoEl.setAttribute('font-size', __indivIdPrefix ? '27' : '5.4'); // 통합: 3배 확대
             }
             // 경과시간은 마지막 값 유지, 카운트다운은 00:00으로 표시
             const lapTimeEl = __indivEl('ui-lap-time');
@@ -1755,7 +1755,7 @@ function updateTimer(status) {
     if (status.state === 'running') {
         // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확)
         const totalSeconds = status.elapsedTime || 0;
-        timerEl.innerText = formatHMS(totalSeconds); // hh:mm:ss 형식
+        timerEl.innerText = formatTimerDisplay(totalSeconds); // 1시간 미만: mm:ss, 이상: hh:mm:ss
         timerEl.style.color = '#00d4aa'; // 실행중 색상
         
         // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
@@ -1782,7 +1782,7 @@ function updateTimer(status) {
     } else if (status.state === 'paused') {
         timerEl.style.color = '#ffaa00'; // 일시정지 색상
     } else {
-        timerEl.innerText = "00:00:00";
+        timerEl.innerText = "00:00";
         timerEl.style.color = '#fff';
         
         // 훈련이 종료되거나 시작 전이면 마스코트를 0 위치로
@@ -1807,6 +1807,14 @@ function formatHMS(totalSeconds) {
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = Math.floor(totalSeconds % 60);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// 통합 블루투스 개인훈련 전용: 1시간 미만이면 mm:ss, 이상이면 hh:mm:ss
+function formatTimerDisplay(totalSeconds) {
+    if (totalSeconds < 3600) {
+        return formatTime(Math.floor(totalSeconds));
+    }
+    return formatHMS(totalSeconds);
 }
 
 // 5초 카운트다운 상태 관리
@@ -2971,8 +2979,8 @@ function updateSpeedometerSegmentInfo() {
         console.warn('[updateSpeedometerSegmentInfo] segment-info 요소를 찾을 수 없습니다.');
         return;
     }
-    // 폰트 크기를 60%로 축소 (기본 9 * 0.6 = 5.4) — try/catch 모두에서 사용
-    const segmentInfoFontSize = '5.4';
+    // 통합 블루투스 개인훈련: 세그먼트 표시 3배 확대 (27px)
+    const segmentInfoFontSize = __indivIdPrefix ? '27' : '5.4';
 
     try {
         // 현재 상태 확인
@@ -5178,8 +5186,9 @@ function initializeBluetoothIndividualWakeLockForSPA() {
         }
     }
     document.addEventListener('visibilitychange', function () {
+        // 통화·문자·카톡 등으로 이탈 후 복귀 시 화면꺼짐 방지 재설정 (브라우저가 백그라운드 시 lock 해제함)
         if (document.visibilityState === 'visible' && window.currentTrainingState === 'running') {
-            if (wakeLockSupported && !wakeLock) requestWakeLock();
+            requestWakeLock();
             if (wakeLockVideo && wakeLockVideo.paused) wakeLockVideo.play().catch(function () {});
         }
     });

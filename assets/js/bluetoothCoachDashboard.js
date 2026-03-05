@@ -1088,10 +1088,7 @@ async function loadInitialUserDataForTracks() {
               // 사용자 이름 UI 업데이트 (화면이름, 스크린ID 포함)
               const userNameEl = document.getElementById(`user-icon-${trackId}`);
               if (userNameEl && powerMeter.userName) {
-                var displayText = powerMeter.userName;
-                if (powerMeter.screenName) displayText += ' (' + powerMeter.screenName + ')';
-                if (powerMeter.screenId) displayText += ' [' + powerMeter.screenId + ']';
-                userNameEl.textContent = displayText;
+                userNameEl.textContent = powerMeter.userName;
                 userNameEl.style.display = 'inline-block';
               }
             }
@@ -1118,10 +1115,7 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   if (userData.screenName) powerMeter.screenName = userData.screenName;
   const userNameEl = document.getElementById(`user-icon-${trackId}`);
   if (userNameEl && powerMeter.userName) {
-    var displayText = powerMeter.userName;
-    if (powerMeter.screenName) displayText += ' (' + powerMeter.screenName + ')';
-    if (powerMeter.screenId) displayText += ' [' + powerMeter.screenId + ']';
-    userNameEl.textContent = displayText;
+    userNameEl.textContent = powerMeter.userName;
     userNameEl.style.display = 'inline-block';
   }
   
