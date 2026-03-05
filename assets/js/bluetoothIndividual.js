@@ -1807,10 +1807,11 @@ function updateTimer(status) {
     }
 }
 
-// 시간 포맷: 초 → "mm:ss"
+// 시간 포맷: 초 → "mm:ss" (Lap 타이머·카운트다운 등 항상 00:00 형식)
 function formatTime(seconds) {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
+    const sec = Math.max(0, Math.floor(seconds || 0));
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
 }
 
