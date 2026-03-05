@@ -4388,13 +4388,20 @@ function toggleBluetoothDropdown() {
     if (window._bluetoothIndividualAutoConnectInProgress && (window.ReactNativeWebView || (window.opener && !window.opener.closed))) {
         abortBluetoothIndividualAutoConnect();
     }
-    // [통합 SPA] index.html bluetoothIndividualScreen에서는 앱이어도 항상 드롭다운 오버레이만 표시
-    // (앱이 OPEN_DEVICE_SETTINGS 수신 시 WebView를 초기로딩 화면으로 이동시키는 문제 방지)
-    if (__indivIdPrefix) {
-        /* 통합 모드: 아래 드롭다운 로직으로 진행 */
-    } else if (isAppEnvironmentNow()) {
-        // [standalone 앱] 연결 클릭 시 자동연결 중단 후 Device Settings 오버레이만 표시
+    // [앱] 모바일 훈련화면과 동일: 연결 클릭 시 Device Settings 오버레이 팝업 (화면 이탈 없음)
+    if (isAppEnvironmentNow()) {
         if (typeof window.abortAutoConnect === 'function') window.abortAutoConnect();
+        // 모바일 훈련화면 앱 환경과 동일: openDeviceSettingPopup → deviceSettingOverlay 오버레이 표시
+        if (typeof window.openDeviceSettingPopup === 'function') {
+            window.openDeviceSettingPopup();
+            return;
+        }
+        // [통합 SPA] openDeviceSettingPopup 없을 때: iframe 오버레이 fallback (postMessage는 화면 이탈 유발하므로 사용 안 함)
+        if (__indivIdPrefix) {
+            openDeviceSettingsOverlayOnly();
+            return;
+        }
+        // [standalone 앱] opener 또는 postMessage + iframe
         if (window.opener && !window.opener.closed && typeof window.opener.openDeviceSettingPopup === 'function') {
             window.opener.openDeviceSettingPopup();
             return;
