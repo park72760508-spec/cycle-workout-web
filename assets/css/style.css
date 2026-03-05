@@ -19004,6 +19004,8 @@ body.bluetooth-individual-screen-active {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
   overscroll-behavior: none;
+  margin-bottom: 0;
+  padding-bottom: 0; /* 맨 마지막 카드 하단 여백 최소화 */
 }
 
 /* Live Training Session: 트랙 카드가 내용 높이만큼 늘어나 버튼이 잘리지 않도록 */
