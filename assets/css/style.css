@@ -8814,7 +8814,7 @@ button[aria-disabled="true"] {
   min-height: 2.7em;
 }
 
-/* iOS 앱 향후 구현 예정 팝업 (STELVIO 디자인) */
+/* iOS 앱 Bluefy 안내 팝업 (STELVIO 디자인) */
 .stelvio-coming-soon-modal.hidden {
   display: none !important;
 }
@@ -8859,6 +8859,11 @@ button[aria-disabled="true"] {
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+}
+.stelvio-coming-soon-btn-link {
+  text-decoration: none;
+  text-align: center;
+  box-sizing: border-box;
 }
 .stelvio-coming-soon-btn:hover {
   transform: translateY(-1px);
