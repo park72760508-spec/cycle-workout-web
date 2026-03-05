@@ -18388,41 +18388,41 @@ body.bluetooth-individual-screen-active {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
 }
 
-/* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
+/* 모바일 대시보드 세그먼트 그래프 섹션: 상단 문구 가려지지 않도록 */
 .mobile-segment-graph-section {
-  padding: 0; /* 좌/우 여백 0 - 속도계 화면 크기에 맞게 확대/축소 */
+  padding: 0;
   background-color: #1a1a1a;
   border-bottom: 1px solid #333;
   display: flex;
   justify-content: center;
-  align-items: center; /* 그래프를 세로 중앙에 배치 */
-  flex: 0.36 0.36 0; /* flex 10% 축소: 0.4 * 0.9 = 0.36 */
-  min-height: 72px; /* 최소 높이 10% 축소: 80px * 0.9 = 72px */
+  align-items: stretch;
+  flex: 0.36 0.36 0;
+  min-height: 90px; /* 상단 문구가 가려지지 않도록 높이 확대 */
   position: relative;
-  overflow: hidden; /* 넘치는 내용 숨김 */
-  z-index: 1; /* 연결 버튼 메뉴가 앞에 표시되도록 낮은 z-index 설정 */
+  overflow: visible;
+  z-index: 2; /* 맨 앞에 표시 */
 }
 
 /* 모바일 환경 최적화 */
 @media (max-height: 800px) {
   .mobile-segment-graph-section {
-    min-height: 65px; /* 10% 축소: 72px * 0.9 = 65px */
+    min-height: 80px;
   }
 }
 
 @media (max-height: 600px) {
   .mobile-segment-graph-section {
-    min-height: 54px; /* 10% 축소: 60px * 0.9 = 54px */
+    min-height: 70px;
   }
 }
 
 .mobile-segment-graph-container {
-  width: 100%; /* 좌/우 여백 0 - 화면 크기에 맞게 확대/축소 */
+  width: 100%;
   max-width: none;
-  height: 95% !important; /* 그래프 블럭의 95% 높이 */
+  height: 100% !important; /* 상단 가려짐 방지: 100% 사용 */
   position: relative;
   display: flex;
-  align-items: center; /* Canvas를 컨테이너 중앙에 배치 */
+  align-items: center;
   justify-content: center;
 }
 
@@ -18583,19 +18583,21 @@ body.bluetooth-individual-screen-active {
 ========================================================== */
 
 /* 속도계 컨테이너 크기 보정 */
-/* 속도계 + 세그먼트 정보 래퍼: position: relative(오버레이 기준점), 속도계 중앙 정렬 */
+/* 속도계 + 세그먼트 정보 래퍼: 속도계 가로 최대 확장 (화면 양끝까지) */
 .mobile-gauge-segment-wrap {
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: center;
+  align-items: stretch;
   flex-shrink: 1;
   min-height: 0;
   width: 100%;
+  max-width: 100%;
   max-height: 100%;
-  padding: 8px 0;
+  padding: 0;
   gap: 0;
+  box-sizing: border-box;
 }
 
 /* 모바일 대시보드 메인 콘텐츠 (속도계 영역) */
@@ -18612,22 +18614,27 @@ body.bluetooth-individual-screen-active {
   margin: 0;
 }
 
-/* 속도계 컨테이너: Lap Time + 게이지 + 실행 버튼, 세로 Flex 정렬, 중앙 정렬 */
+/* 속도계 컨테이너: 양쪽 숫자가 화면 양끝까지 확장 */
 .mobile-gauge-container {
-  width: 100%; /* 화면 크기에 맞게 확대/축소 */
+  width: 100%;
   max-width: 100%;
-  max-height: 100%; /* 공간 부족 시 축소 */
-  /* SVG viewBox(-15 0 230 260) 비율에 맞춤 */
   aspect-ratio: 230 / 260; 
   position: relative;
   margin: 0;
   padding: 0;
   flex-shrink: 1;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  box-sizing: border-box;
+}
+/* 속도계 SVG: 화면 가로 전체 사용 (양쪽 숫자 양끝까지) */
+#mobileDashboardScreen .mobile-gauge-container svg {
+  width: 100%;
+  height: 100%;
 }
 
 /* ----- 노트북 훈련 대시보드용 파워 속도계 (#trainingScreen 전용, 모바일과 격리) ----- */
@@ -18735,23 +18742,14 @@ body.bluetooth-individual-screen-active {
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* 모바일 대시보드 세그먼트 정보: 자유 배치 오버레이 (레이아웃 흐름에서 분리) */
-/* 위치 미세 조정: top(예: -10px, 0, 20px), left(예: 50%, 10px) 값 변경 */
+/* 모바일 대시보드 세그먼트 정보: 실행 버튼 하단에 밀착 배치 */
 #mobile-segment-info.mobile-segment-info-overlay {
-  position: absolute;
-  top: 0; /* 워크아웃 그래프 하단 라인 중간 지점 (조정 가능) */
-  left: 50%;
-  transform: translate(-50%, -50%); /* 수평 중앙, 세로는 top 기준 */
-  z-index: 10;
-  pointer-events: none; /* 드래그 등 필요 시 pointer-events: auto로 변경 */
+  flex-shrink: 0;
+  margin-top: 4px;
+  padding: 2px 0;
   text-align: center;
   font-size: 0.9em;
   color: #ccc;
-  padding: 4px 12px;
-  background: rgba(0, 0, 0, 0.4); /* 반투명 배경으로 시인성 확보 */
-  border-radius: 4px;
-  white-space: nowrap;
-  min-width: 60px;
 }
 
 /* 모바일 대시보드 블루투스 연결 버튼 (독립적 구동) */
