@@ -528,8 +528,6 @@ function createPowerMeterElement(powerMeter) {
               style="display: none;"></text>
         
       </svg>
-      <!-- 현재 파워값 아래 세그먼트 진행사항 -->
-      <div class="bluetooth-coach-segment-progress-row" id="segment-progress-${powerMeter.id}" style="text-align: center; margin-top: 4px; font-size: 14px; color: rgba(255,255,255,0.95); font-weight: 600;">-/-</div>
     </div>
     <div class="speedometer-info disconnected">
       <div class="speed-display-left">
