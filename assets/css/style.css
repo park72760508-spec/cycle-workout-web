@@ -18583,28 +18583,38 @@ body.bluetooth-individual-screen-active {
 ========================================================== */
 
 /* 속도계 컨테이너 크기 보정 */
-/* 모바일 대시보드 메인 콘텐츠 (속도계 영역) */
+/* 모바일 대시보드 메인 콘텐츠 (속도계 영역) - 화면 꽉 차게 */
 .mobile-main-content {
   flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 */
   display: flex;
-  flex-direction: column; /* 세로 방향 배치 (속도계 + 세그먼트 정보) */
+  flex-direction: column;
   justify-content: center;
-  align-items: stretch; /* 속도계가 화면 전체 너비 사용 */
+  align-items: stretch;
   position: relative;
-  min-height: 0; /* flex 아이템이 축소 가능하도록 설정 */
-  overflow: hidden; /* 넘치는 내용 숨김 */
-  padding: 0; /* 좌/우 여백 0 */
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
   margin: 0;
+  width: 100%;
+}
+
+/* mobile-gauge-segment-wrap: Lap 타이머 + 속도계 + 실행 버튼 래퍼 */
+.mobile-gauge-segment-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
 }
 
 .mobile-gauge-container {
   width: 100%; /* 화면 크기에 맞게 확대/축소 */
-  /* SVG viewBox(-15 0 230 260) 비율에 맞춤 */
-  aspect-ratio: 230 / 260; 
+  aspect-ratio: 230 / 260;
   position: relative;
   margin: 0;
   padding: 0;
-  margin-bottom: -30px; /* 세그먼트 정보를 Y 좌표 환산 230 위치로 이동 (260 - 30 = 230) */
 }
 
 /* ----- 노트북 훈련 대시보드용 파워 속도계 (#trainingScreen 전용, 모바일과 격리) ----- */
@@ -18712,15 +18722,20 @@ body.bluetooth-individual-screen-active {
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
-#mobile-segment-info {
+/* 모바일 대시보드 세그먼트 정보 (자유 배치 오버레이) */
+#mobile-segment-info.mobile-segment-info,
+.mobile-segment-info {
+  position: absolute;
+  bottom: 4px; /* 워크아웃 그래프 하단 라인 위에 배치 */
+  left: 0;
+  right: 0;
+  z-index: 10; /* 그래프 앞에 표시 (가려지지 않음) */
   text-align: center;
   font-size: 0.9em;
   color: #ccc;
-  margin-top: 0px; /* Y 좌표 환산 230px 위치로 조정 */
-  margin-bottom: 0px; /* Y 좌표 환산 230px 위치로 조정 */
   padding: 0 10px;
-  min-height: 20px; /* 최소 높이 보장 */
+  min-height: 20px;
+  pointer-events: none; /* 그래프 클릭 통과 */
 }
 
 /* 모바일 대시보드 블루투스 연결 버튼 (독립적 구동) */
