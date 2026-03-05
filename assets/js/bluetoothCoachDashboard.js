@@ -467,8 +467,8 @@ function createPowerMeterElement(powerMeter) {
         <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
       </div>
     </div>
-    <!-- 속도계 바로 위: 세그먼트 시간 mm:ss (폰트 3배 확대) -->
-    <div class="bluetooth-coach-segment-time-row" id="segment-time-${powerMeter.id}" style="text-align: center; margin-bottom: 4px; font-size: 96px; color: rgba(255,255,255,0.95); font-weight: 600;">00:00</div>
+    <!-- 속도계 바로 위: 세그먼트 시간 mm:ss -->
+    <div class="bluetooth-coach-segment-time-row" id="segment-time-${powerMeter.id}" style="text-align: center; margin-bottom: 4px; font-size: 42px; color: rgba(255,255,255,0.95); font-weight: 600;">00:00</div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
         <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
@@ -530,8 +530,8 @@ function createPowerMeterElement(powerMeter) {
               style="display: none;"></text>
         
       </svg>
-      <!-- 현재 파워값 아래 세그먼트 진행사항 (폰트 3배 확대) -->
-      <div class="bluetooth-coach-segment-progress-row" id="segment-progress-${powerMeter.id}" style="text-align: center; margin-top: 4px; font-size: 96px; color: rgba(255,255,255,0.95); font-weight: 600;">-/-</div>
+      <!-- 현재 파워값 아래 세그먼트 진행사항 -->
+      <div class="bluetooth-coach-segment-progress-row" id="segment-progress-${powerMeter.id}" style="text-align: center; margin-top: 4px; font-size: 42px; color: rgba(255,255,255,0.95); font-weight: 600;">-/-</div>
     </div>
     <div class="speedometer-info disconnected">
       <div class="speed-display-left">
