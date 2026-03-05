@@ -18390,7 +18390,7 @@ body.bluetooth-individual-screen-active {
 
 /* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
 .mobile-segment-graph-section {
-  padding: 0 20px; /* 상하 패딩 제거, 좌우 패딩만 유지 */
+  padding: 0; /* 좌/우 여백 0 - 속도계 화면 크기에 맞게 확대/축소 */
   background-color: #1a1a1a;
   border-bottom: 1px solid #333;
   display: flex;
@@ -18417,8 +18417,8 @@ body.bluetooth-individual-screen-active {
 }
 
 .mobile-segment-graph-container {
-  width: 98%; /* 그래프 블럭의 98% 너비 */
-  max-width: 600px;
+  width: 100%; /* 좌/우 여백 0 - 화면 크기에 맞게 확대/축소 */
+  max-width: none;
   height: 95% !important; /* 그래프 블럭의 95% 높이 */
   position: relative;
   display: flex;
@@ -18589,20 +18589,21 @@ body.bluetooth-individual-screen-active {
   display: flex;
   flex-direction: column; /* 세로 방향 배치 (속도계 + 세그먼트 정보) */
   justify-content: center;
-  align-items: center;
+  align-items: stretch; /* 속도계가 화면 전체 너비 사용 */
   position: relative;
   min-height: 0; /* flex 아이템이 축소 가능하도록 설정 */
   overflow: hidden; /* 넘치는 내용 숨김 */
-  padding: 10px 0; /* 상하 여백 추가 */
+  padding: 0; /* 좌/우 여백 0 */
+  margin: 0;
 }
 
 .mobile-gauge-container {
-  width: 90vw;
-  max-width: 500px;
+  width: 100%; /* 화면 크기에 맞게 확대/축소 */
   /* SVG viewBox(-15 0 230 260) 비율에 맞춤 */
   aspect-ratio: 230 / 260; 
   position: relative;
-  margin: 0 auto;
+  margin: 0;
+  padding: 0;
   margin-bottom: -30px; /* 세그먼트 정보를 Y 좌표 환산 230 위치로 이동 (260 - 30 = 230) */
 }
 
