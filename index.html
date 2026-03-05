@@ -3926,8 +3926,8 @@
 
     <!-- 메인 콘텐츠 (속도계) -->
     <div class="mobile-main-content" style="flex: 1 1 0; display: flex; flex-direction: column; justify-content: center; align-items: stretch; position: relative; min-height: 0; overflow: hidden; padding: 0; margin: 0;">
-      <div class="mobile-gauge-segment-wrap" style="flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-        <div class="mobile-gauge-container" style="width: 100%; aspect-ratio: 230/260; position: relative; margin: 0; padding: 0; flex-shrink: 0;">
+      <div class="mobile-gauge-segment-wrap" style="flex: 0 1 auto; display: flex; flex-direction: column; align-items: center; min-height: 0; width: 100%; max-height: 100%;">
+        <div class="mobile-gauge-container" style="width: 100%; aspect-ratio: 230/260; position: relative; margin: 0; padding: 0; flex-shrink: 1; min-height: 0;">
         <svg viewBox="-15 0 230 260" style="width:100%; height:100%;">
           
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
@@ -3974,8 +3974,8 @@
         
         </svg>
         </div>
-        <!-- 세그먼트 정보: 실행 버튼과 하단 정보 영역 사이 중앙 배치 -->
-        <div id="mobile-segment-info" class="mobile-segment-info-centered" style="flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-height: 0; text-align: center; font-size: 0.9em; color: #ccc; padding: 0;">준비 중</div>
+        <!-- 세그먼트 정보: 실행 버튼 하단에 밀착 배치 -->
+        <div id="mobile-segment-info" class="mobile-segment-info-centered" style="flex-shrink: 0; margin-top: 4px; padding: 2px 0; text-align: center; font-size: 0.9em; color: #ccc;">준비 중</div>
       </div>
     </div>
 
