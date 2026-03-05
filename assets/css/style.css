@@ -19335,12 +19335,16 @@ body.bluetooth-individual-screen-active {
 #bluetoothIndividualScreen.indiv-screen-wrap {
   display: flex !important;
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100%;
+  box-sizing: border-box;
 }
 #bluetoothIndividualScreen .indiv-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
+  padding: 10px 0;
   background-color: #1e1e1e;
   border-bottom: 1px solid #333;
   position: relative;
@@ -19411,7 +19415,7 @@ body.bluetooth-individual-screen-active {
 }
 #bluetoothIndividualScreen .indiv-bluetooth-dropdown-item-exit:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 #bluetoothIndividualScreen .indiv-segment-graph-section {
-  padding: 0 20px;
+  padding: 0;
   background-color: #1a1a1a;
   border-bottom: 1px solid #333;
   display: flex;
@@ -19422,8 +19426,8 @@ body.bluetooth-individual-screen-active {
   overflow: hidden;
 }
 #bluetoothIndividualScreen .indiv-segment-graph-container {
-  width: 98%;
-  max-width: 600px;
+  width: 100%;
+  max-width: 100%;
   height: 95% !important;
   position: relative;
   display: flex;
@@ -19440,8 +19444,8 @@ body.bluetooth-individual-screen-active {
   overflow: hidden;
 }
 #bluetoothIndividualScreen .indiv-gauge-container {
-  width: 90vw;
-  max-width: 500px;
+  width: 100%;
+  max-width: 100%;
   aspect-ratio: 1/1;
   position: relative;
 }
@@ -19469,7 +19473,7 @@ body.bluetooth-individual-screen-active {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 12px 0;
   background: rgba(26, 29, 41, 0.6);
   border-top: 1px solid #333;
   flex-shrink: 0;
