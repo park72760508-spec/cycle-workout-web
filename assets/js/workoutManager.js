@@ -688,10 +688,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   
+  // 통합 블루투스 개인훈련(indiv-individualSegmentGraph) = individualSegmentGraph와 동일 처리
+  const isIndividualDashboardCanvas = canvasId === 'individualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph';
+  
   // 사용자 FTP 가져오기
   // 개인 대시보드의 경우 individual.js의 userFTP 변수 사용
   let ftp = 200;
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
+  if (isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
     // individual.js 등에서 설정된 userFTP 사용 (훈련 스케줄 상세 포함)
     ftp = Number(window.userFTP) || Number(window.mobileUserFTP) || Number(window.currentUser?.ftp) || 200;
   } else {
@@ -719,7 +722,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     graphHeight = Math.max(100, Math.round(200 * (3 / 5)));
     graphWidth = Math.max(320, Math.min(500, totalSeconds * 2));
     padding = { top: 16, right: 20, bottom: 24, left: 35 };
-  } else if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph') {
+  } else if (isIndividualDashboardCanvas) {
     // 개인 대시보드용: 컨테이너 높이에 맞춰 동적으로 설정 (모바일 대시보드도 동일)
     const container = canvas.parentElement;
     let containerHeight = 100; // 기본값
@@ -751,7 +754,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // individualSegmentGraph와 mobileIndividualSegmentGraph는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음
     if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
       padding = { top: 20, right: 60, bottom: 50, left: 70 }; // Indoor Training: 오른쪽 패딩 증가 (Y축 표시용)
-    } else if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') {
+    } else if (isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph') {
       padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드 및 훈련 준비 화면: 오른쪽 패딩 기본값
     } else {
       padding = { top: 20, right: 40, bottom: 50, left: 70 };
@@ -772,11 +775,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const ctx = canvas.getContext('2d');
   
   /* 안드로이드 훈련화면(모바일, 블루투스 개인훈련) 한글 폰트 통일 (블루투스 Coach 통합화면 제외) */
-  const isTrainingScreenCanvas = ['individualSegmentGraph', 'mobileIndividualSegmentGraph', 'segmentPreviewGraph'].includes(canvasId);
+  const isTrainingScreenCanvas = isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph';
   const textFontFamily = isTrainingScreenCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif';
   
   // 배경 그리기
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
+  if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(0, 0, graphWidth, graphHeight);
@@ -801,7 +804,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 축 그리기 (부드러운 색상)
   ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
+  if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
   } else if (canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
     ctx.strokeStyle = '#E5E7EB'; // 훈련 준비 / 훈련 스케줄 상세: 연한 회색 가이드선
@@ -847,7 +850,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   maxRpm = Math.max(120, Math.min(200, maxRpm));
   
   // 디버깅: RPM 값이 있는 세그먼트 확인
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     console.log('[drawSegmentGraph] 전체 세그먼트 분석 시작:', {
       totalSegments: segments.length,
       canvasId
@@ -913,7 +916,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.strokeStyle = 'rgba(249, 115, 22, 0.35)'; // 흐릿한 주황색
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]); // 점선
-  } else if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph') {
+  } else if (isIndividualDashboardCanvas) {
     // 개인 대시보드 및 모바일 대시보드: 흰색 얇은 실선, 투명도 50%
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
@@ -948,7 +951,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.shadowColor = 'transparent';
   
   // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드 및 Indoor Training, 훈련 준비 화면)
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  if (isIndividualDashboardCanvas || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     const rpm90Text = '90';
     ctx.font = `bold 10px ${textFontFamily}`;
     const textMetrics = ctx.measureText(rpm90Text);
@@ -1020,7 +1023,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // FTP 라벨 (부드러운 배경)
   // trainingSegmentGraph일 때는 RPM 값도 함께 표시
   let labelText = `FTP ${ftp}W`;
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     // 세그먼트 중 RPM 값이 있는 경우 기본 RPM 값 표시 (가장 많이 사용되는 값 또는 평균)
     const rpmValues = segments.map(seg => getSegmentRpmForPreview(seg)).filter(rpm => rpm > 0);
     if (rpmValues.length > 0) {
@@ -1035,9 +1038,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const labelX = padding.left - 10 - labelWidth;
   const labelY = ftpY - labelHeight / 2;
   
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     // 훈련 화면 및 개인 대시보드: 밝은 배경과 텍스트
-    if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph') {
+    if (isIndividualDashboardCanvas) {
       // 개인훈련 대시보드 및 모바일 대시보드: 빨강색 네모 상자 제거, 텍스트만 표시
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 흰색 텍스트 (배경 없음)
     } else if (canvasId === 'segmentPreviewGraph') {
@@ -1056,16 +1059,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fillStyle = '#f59e0b';
   }
   // 개인 대시보드용 폰트 크기 조정 (한글 폰트 통일)
-  const ftpLabelFontSize = (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') ? `bold 8px ${textFontFamily}` : `bold 12px ${textFontFamily}`;
+  const ftpLabelFontSize = (isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph') ? `bold 8px ${textFontFamily}` : `bold 12px ${textFontFamily}`;
   ctx.font = ftpLabelFontSize;
   ctx.textAlign = 'right';
   // 개인훈련 대시보드 및 모바일 대시보드, 훈련 준비 화면에서는 FTP 라벨 텍스트 표시하지 않음
-  if (canvasId !== 'individualSegmentGraph' && canvasId !== 'mobileIndividualSegmentGraph' && canvasId !== 'segmentPreviewGraph') {
+  if (!isIndividualDashboardCanvas && canvasId !== 'segmentPreviewGraph') {
     ctx.fillText(labelText, padding.left - 10, ftpY + 4);
   }
   
   // 세로축 눈금 (파워)
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  if (isIndividualDashboardCanvas || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     // 개인 대시보드 및 Indoor Training: 특정 FTP 백분율 값들 표시 (0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5)
     const ftpPercentValues = [0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5];
     
@@ -1583,7 +1586,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // dual 또는 cadence_rpm 타입일 때 RPM 점선 표시
     
     // 디버깅: 모든 세그먼트의 targetType 확인
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+    if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
       console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} targetType 확인:`, {
         index: index + 1,
         targetType,
@@ -1594,7 +1597,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       });
     }
     
-    if ((targetType === 'dual' || targetType === 'cadence_rpm') && (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph')) {
+    if ((targetType === 'dual' || targetType === 'cadence_rpm') && (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph')) {
       console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 시작:`, {
         index: index + 1,
         targetType,
@@ -1630,7 +1633,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       
       // Indoor Training 및 개인훈련 대시보드, 훈련 준비 화면: 스케일링 공식 사용하므로 maxRpm 불필요
       // 기타 화면: maxRpm 필요
-      const shouldDrawRpm = (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') 
+      const shouldDrawRpm = (isIndividualDashboardCanvas || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') 
         ? targetRpm > 0 
         : (targetRpm > 0 && maxRpm > 0);
       
@@ -1646,7 +1649,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         // RPM 값에 해당하는 Y 위치 계산
         // 개인훈련 대시보드 및 모바일 대시보드, Indoor Training, 훈련 준비 화면: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
         let rpmY;
-        if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+        if (isIndividualDashboardCanvas || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
           // RPM_scaled = (RPM_real / 90) * 100
           // 기준값 90을 기준으로 위 아래에 바로 표시
           // 예: 110 RPM → FTP 122% 높이 (110/90*100 = 122.2%)
@@ -1700,7 +1703,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   });
   
   // 가로축 시간 표시 (개인 대시보드 및 모바일 대시보드, 훈련 준비 화면은 제거)
-  if (canvasId !== 'individualSegmentGraph' && canvasId !== 'mobileIndividualSegmentGraph' && canvasId !== 'segmentPreviewGraph') {
+  if (!isIndividualDashboardCanvas && canvasId !== 'segmentPreviewGraph') {
     const timeSteps = Math.min(10, Math.max(5, Math.floor(totalSeconds / 60))); // 1분 단위 또는 최대 10개
     for (let i = 0; i <= timeSteps; i++) {
       const time = (totalSeconds * i) / timeSteps;
@@ -1777,7 +1780,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   }
   
   // 개인 대시보드 및 모바일 대시보드, Bluetooth Coach 대시보드 마스코트 그리기
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'bluetoothCoachSegmentGraphCanvas') {
+  if (isIndividualDashboardCanvas || canvasId === 'bluetoothCoachSegmentGraphCanvas') {
     // 경과시간 가져오기 (함수 파라미터 또는 전역 변수)
     let currentElapsedTime = 0;
     if (canvasId === 'bluetoothCoachSegmentGraphCanvas') {
@@ -1849,7 +1852,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   }
   
   // 축 라벨 (개인 대시보드 및 모바일 대시보드, 훈련 준비 화면은 제거)
-  if (canvasId !== 'individualSegmentGraph' && canvasId !== 'mobileIndividualSegmentGraph' && canvasId !== 'segmentPreviewGraph') {
+  if (!isIndividualDashboardCanvas && canvasId !== 'segmentPreviewGraph') {
     // 개인 대시보드가 아닌 경우에만 축 라벨 표시
     if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
@@ -1965,7 +1968,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   }
   
   // 개인 대시보드 및 모바일 대시보드, 블루투스 개인훈련 통합, 훈련 준비 화면: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'bluetoothCoachSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  if (isIndividualDashboardCanvas || canvasId === 'bluetoothCoachSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     const totalMinutes = Math.round(totalSeconds / 60);
     const totalTimeText = `${totalMinutes}m`;
     

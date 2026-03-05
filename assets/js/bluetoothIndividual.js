@@ -3315,9 +3315,10 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
                 return;
             }
             
-            // 그래프 그리기 (경과시간 전달)
+            // 그래프 그리기 (경과시간 전달) — 통합 화면은 canvas.id가 'indiv-individualSegmentGraph'
             const elapsedTime = window.lastElapsedTime || 0;
-            drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
+            const canvasId = canvas.id || 'individualSegmentGraph';
+            drawSegmentGraph(segments, currentSegmentIndex, canvasId, elapsedTime);
             
             // 펄스 애니메이션을 위한 주기적 그래프 재그리기 (훈련 중일 때만)
             // drawGraph가 실행된 후에 펄스 애니메이션 시작 여부 확인
@@ -3339,7 +3340,7 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
                             // currentSegmentIndex를 동적으로 가져오기 (상태에서)
                             const status = window.trainingResults?.getCurrentSessionData?.();
                             const dynamicSegmentIndex = (status && status.segmentIndex !== undefined) ? status.segmentIndex : currentSegmentIndex;
-                            drawSegmentGraph(window.currentWorkout.segments, dynamicSegmentIndex, 'individualSegmentGraph', elapsedTime);
+                            drawSegmentGraph(window.currentWorkout.segments, dynamicSegmentIndex, canvasId, elapsedTime);
                         } else {
                             // 훈련이 종료되면 애니메이션 중지
                             if (mascotAnimationInterval) {
