@@ -1515,12 +1515,12 @@
             </div>
           </div>
             
-            <!-- iOS 앱 향후 구현 예정 팝업 -->
+            <!-- iOS 앱 Bluefy 안내 팝업 -->
             <div id="stelvioIosComingSoonModal" class="stelvio-coming-soon-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10003;">
               <div class="stelvio-coming-soon-overlay" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();"></div>
               <div class="stelvio-coming-soon-content">
-                <p class="stelvio-coming-soon-message">iOS App 구현 예정입니다.</p>
-                <button type="button" class="stelvio-coming-soon-btn" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();">확인</button>
+                <p class="stelvio-coming-soon-message">iOS 앱은 열심히 준비 중이에요!<br>아이폰에서는 정식 앱 출시 전까지 'Bluefy' 앱을 통해 STELVIO를 먼저 이용하실 수 있습니다.<br>지금 바로 설치하러 가볼까요?</p>
+                <a href="https://apps.apple.com/kr/app/bluefy-web-ble-browser/id1492822055" target="_blank" rel="noopener noreferrer" class="stelvio-coming-soon-btn stelvio-coming-soon-btn-link" onclick="if(typeof closeStelvioIosComingSoonPopup==='function')closeStelvioIosComingSoonPopup();">Bluefy 설치하고 시작하기 &gt;</a>
               </div>
             </div>
             
@@ -10624,7 +10624,7 @@
     window.handleAppDownloadClick = handleAppDownloadClick;
     
     /**
-     * iOS 앱 "향후 구현 예정" 팝업 표시/닫기
+     * iOS 앱 Bluefy 안내 팝업 표시/닫기
      */
     function showStelvioIosComingSoonPopup() {
       var modal = document.getElementById('stelvioIosComingSoonModal');
