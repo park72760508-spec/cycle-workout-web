@@ -18932,7 +18932,7 @@ body.bluetooth-individual-screen-active {
   min-height: -webkit-fill-available;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
-  padding: 20px;
+  padding: 20px 20px 0 20px; /* 하단 여백 제거 */
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -18981,9 +18981,8 @@ body.bluetooth-individual-screen-active {
   background-color: #ffffff !important;
   border-radius: 12px;
   padding: 15px;
-  /* 상단 여백(15px)과 동일하게 하단만 여백 유지 */
-  margin-bottom: 20px;
-  padding-bottom: 20px;
+  margin-bottom: 0;
+  padding-bottom: 0;
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
