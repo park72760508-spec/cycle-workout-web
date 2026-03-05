@@ -54,6 +54,8 @@ if (typeof PowerMeterData === 'undefined') {
       this.userId = null;
       this.userFTP = null;
       this.userName = null;
+      this.screenId = null;
+      this.screenName = null;
       this.userWeight = null;
       this.targetPower = 0;
       this.displayPower = 0;
@@ -1069,6 +1071,8 @@ async function loadInitialUserDataForTracks() {
               // 사용자 정보 업데이트
               if (userData.userId) powerMeter.userId = userData.userId;
               if (userData.userName) powerMeter.userName = userData.userName;
+              if (userData.screenId) powerMeter.screenId = userData.screenId;
+              if (userData.screenName) powerMeter.screenName = userData.screenName;
               if (userData.weight) powerMeter.userWeight = userData.weight;
               
               // FTP 적용
@@ -1081,10 +1085,13 @@ async function loadInitialUserDataForTracks() {
                 }
               }
               
-              // 사용자 이름 UI 업데이트
-              const userNameEl = document.getElementById(`user-name-${trackId}`);
-              if (userNameEl && userData.userName) {
-                userNameEl.textContent = userData.userName;
+              // 사용자 이름 UI 업데이트 (화면이름, 스크린ID 포함)
+              const userNameEl = document.getElementById(`user-icon-${trackId}`);
+              if (userNameEl && powerMeter.userName) {
+                var displayText = powerMeter.userName;
+                if (powerMeter.screenName) displayText += ' (' + powerMeter.screenName + ')';
+                if (powerMeter.screenId) displayText += ' [' + powerMeter.screenId + ']';
+                userNameEl.textContent = displayText;
                 userNameEl.style.display = 'inline-block';
               }
             }
@@ -1106,13 +1113,16 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   
   // 사용자 정보 업데이트
   if (userData.userId) powerMeter.userId = userData.userId;
-  if (userData.userName) {
-    powerMeter.userName = userData.userName;
-    const userNameEl = document.getElementById(`user-icon-${trackId}`);
-    if (userNameEl) {
-      userNameEl.textContent = userData.userName;
-      userNameEl.style.display = 'inline-block';
-    }
+  if (userData.userName) powerMeter.userName = userData.userName;
+  if (userData.screenId) powerMeter.screenId = userData.screenId;
+  if (userData.screenName) powerMeter.screenName = userData.screenName;
+  const userNameEl = document.getElementById(`user-icon-${trackId}`);
+  if (userNameEl && powerMeter.userName) {
+    var displayText = powerMeter.userName;
+    if (powerMeter.screenName) displayText += ' (' + powerMeter.screenName + ')';
+    if (powerMeter.screenId) displayText += ' [' + powerMeter.screenId + ']';
+    userNameEl.textContent = displayText;
+    userNameEl.style.display = 'inline-block';
   }
   
   // FTP 변경 감지를 위해 이전 값 저장 (업데이트 전에)
@@ -1706,10 +1716,12 @@ function resetPowerMeterData(trackId) {
   powerMeter.connected = false;
   powerMeter.userId = null;
   powerMeter.userName = null;
+  powerMeter.screenId = null;
+  powerMeter.screenName = null;
   powerMeter.userFTP = null;
   
   // UI 초기화
-  const userNameEl = document.getElementById(`user-name-${trackId}`);
+  const userNameEl = document.getElementById(`user-icon-${trackId}`);
   if (userNameEl) {
     userNameEl.style.display = 'none';
   }

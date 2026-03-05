@@ -541,6 +541,18 @@ function sendDataToFirebase() {
     if (currentUserInfo.weight !== null && currentUserInfo.weight !== undefined) {
         dataToSend.weight = currentUserInfo.weight;
     }
+    // 클라이언트 화면 구분 (Coach 대시보드 표시용)
+    var screenInfo = (function() {
+        if (typeof window !== 'undefined' && window.location && window.location.pathname && String(window.location.pathname).indexOf('bluetoothIndividual.html') >= 0) {
+            return { screenId: 'bluetoothIndividual.html', screenName: '구 블루투스 개인훈련 대시보드' };
+        }
+        if (typeof __indivIdPrefix === 'string' && __indivIdPrefix === 'indiv-') {
+            return { screenId: 'bluetoothIndividualScreen', screenName: '통합 블루투스 개인훈련' };
+        }
+        return { screenId: 'bluetoothIndividual', screenName: '블루투스 개인훈련' };
+    })();
+    dataToSend.screenId = screenInfo.screenId;
+    dataToSend.screenName = screenInfo.screenName;
     
     // Firebase에 업데이트 (merge: true로 기존 데이터 보존)
     db.ref(`sessions/${sessionId}/users/${myTrackId}`).update(dataToSend)
