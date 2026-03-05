@@ -6481,6 +6481,12 @@ window.showScreen = function(screenId) {
     }
     console.log('[훈련일지] 화면 이탈 - fetch 카운트/플래그 초기화');
   }
+  // 통합 블루투스 개인훈련 화면 이탈 시 화면 꺼짐 방지 해제 (모바일 대시보드와 동일)
+  if (currentActive && currentActive.id === 'bluetoothIndividualScreen' && screenId !== 'bluetoothIndividualScreen') {
+    if (typeof window.wakeLockControl !== 'undefined' && typeof window.wakeLockControl.release === 'function') {
+      window.wakeLockControl.release();
+    }
+  }
   
   // 모든 화면 숨기기 (스플래시 화면 제외)
   document.querySelectorAll('.screen').forEach(screen => {
@@ -6573,10 +6579,17 @@ function initializeCurrentScreen(screenId) {
       break;
 
     case 'bluetoothIndividualScreen':
-      // 통합 블루투스 개인훈련 화면: 연결 버튼 드롭다운·Firebase 리스너 등 초기화 (모든 진입 경로에서 실행)
+      // 통합 블루투스 개인훈련 화면: 연결 버튼 드롭다운·Firebase 리스너·화면 꺼짐 방지 등 초기화
       if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
         window.initBluetoothIndividualIntegratedScreen();
       }
+      // 화면 복귀 시 이미 훈련 중이면 화면 꺼짐 방지 재요청 (모바일 대시보드와 동일)
+      setTimeout(function () {
+        var s = window.currentTrainingState;
+        if ((s === 'running' || s === 'countdown') && typeof window.wakeLockControl !== 'undefined' && window.wakeLockControl.request) {
+          window.wakeLockControl.request();
+        }
+      }, 400);
       break;
       
     case 'aiScheduleScreen':
