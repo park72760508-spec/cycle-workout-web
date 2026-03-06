@@ -842,9 +842,9 @@
                 <!-- 속도계 센서 오버레이: 위쪽 반원(∩), 일렉트릭 블루 -->
                 <path id="gauge-speed-arc" d="M 180 140 A 80 80 0 0 0 20 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
                 <circle id="gauge-speed-dot" cx="100" cy="140" r="4" fill="#4da6ff" style="display: none;"/>
-                <!-- 속도값 원형 표시 (원호 중앙) -->
-                <circle id="gauge-speed-value-bg" cx="100" cy="72" r="18" fill="#0066b3" style="display: none;"/>
-                <text id="gauge-speed-value" x="100" y="72" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="11" font-weight="bold" style="display: none;">0</text>
+                <!-- 속도값 표시: 원호 시작점(우측) 작은 원에 속도 정수 표기 -->
+                <circle id="gauge-speed-start-bg" cx="180" cy="140" r="14" fill="#0066b3" style="display: none;"/>
+                <text id="gauge-speed-start-value" x="180" y="140" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="9" font-weight="bold" style="display: none;">0</text>
                 <!-- 눈금 그룹 (JavaScript로 동적 생성) -->
                 <g id="gauge-ticks"></g>
                 <!-- 레이블 그룹 (JavaScript로 동적 생성) -->
