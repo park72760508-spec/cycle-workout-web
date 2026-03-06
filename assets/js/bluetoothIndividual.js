@@ -3504,7 +3504,7 @@ function updateGaugeTicksAndLabels() {
     }
 }
 
-/** 속도계 센서 눈금 레이블 (0~120 km/h, 안쪽, TARGET 스타일 상속) */
+/** 속도계 센서 눈금 레이블 (0~120 km/h, 위쪽 반원 안쪽, TARGET 스타일) */
 function generateIndivSpeedLabels() {
     const centerX = 100;
     const centerY = 140;
@@ -3512,8 +3512,9 @@ function generateIndivSpeedLabels() {
     const speedValues = [0, 20, 40, 60, 80, 100, 120];
     var html = '';
     speedValues.forEach(function (val, i) {
-        const angle = (i / 6) * 180; // 우측(0) → 좌측(120)
-        const rad = (angle * Math.PI) / 180;
+        // 위쪽 반원: 우측(3시,0°) → 12시(270°) → 좌측(9시,180°)
+        const angleDeg = 360 - (i / 6) * 180;
+        const rad = (angleDeg * Math.PI) / 180;
         const x = centerX + innerLabelRadius * Math.cos(rad);
         const y = centerY + innerLabelRadius * Math.sin(rad);
         html += '<text x="' + x + '" y="' + y + '" text-anchor="middle" dominant-baseline="middle" fill="#888" font-size="6">' + val + '</text>';

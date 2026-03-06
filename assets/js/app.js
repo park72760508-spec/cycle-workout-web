@@ -15240,16 +15240,17 @@ function generateMobileGaugeLabels() {
   return labelsHTML;
 }
 
-/** 속도계 센서 눈금 레이블 (0~120 km/h, 안쪽 배치, TARGET 스타일 상속) */
+/** 속도계 센서 눈금 레이블 (0~120 km/h, 위쪽 반원 안쪽, TARGET 스타일) */
 function generateMobileSpeedLabels() {
   const centerX = 100;
   const centerY = 140;
-  const innerLabelRadius = 60; // 반원 안쪽
+  const innerLabelRadius = 60; // 위쪽 반원 안쪽 곡선
   const speedValues = [0, 20, 40, 60, 80, 100, 120];
   let html = '';
   speedValues.forEach((val, i) => {
-    const angle = (i / 6) * 180; // 우측(0) → 좌측(120)
-    const rad = (angle * Math.PI) / 180;
+    // 위쪽 반원: 우측(3시,0°) → 12시(270°) → 좌측(9시,180°), angle = 360 - (val/120)*180
+    const angleDeg = 360 - (i / 6) * 180;
+    const rad = (angleDeg * Math.PI) / 180;
     const x = centerX + innerLabelRadius * Math.cos(rad);
     const y = centerY + innerLabelRadius * Math.sin(rad);
     html += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#888" font-size="6">${val}</text>`;
