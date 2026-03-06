@@ -15272,41 +15272,32 @@ function generateMobileSpeedLabels() {
   return html;
 }
 
-/** 모바일 속도계 원호 업데이트 (0~120 km/h, 우측→좌측 채우기, 끝점 Dot, 시작점 원에 속도 정수) */
+/** 모바일 속도계 원호 업데이트 (0~120 km/h, 우측→좌측 채우기, 끝점 Dot + 속도값) */
 function updateMobileSpeedArc() {
   const arc = safeGetElement('mobile-gauge-speed-arc');
   const dot = safeGetElement('mobile-gauge-speed-dot');
-  const startBg = safeGetElement('mobile-gauge-speed-start-bg');
-  const startValue = safeGetElement('mobile-gauge-speed-start-value');
+  const dotValue = safeGetElement('mobile-gauge-speed-dot-value');
   if (!arc) return;
   const speedKmh = Number(window.liveData?.speed);
-  if (speedKmh == null || Number.isNaN(speedKmh) || speedKmh < 0) {
-    arc.style.strokeDashoffset = '251.33';
-    if (dot) dot.style.display = 'none';
-    if (startBg) startBg.style.display = 'none';
-    if (startValue) startValue.style.display = 'none';
-    return;
-  }
+  const hasValidSpeed = speedKmh != null && !Number.isNaN(speedKmh) && speedKmh >= 0;
+  const displaySpeed = hasValidSpeed ? speedKmh : 0;
   const totalLen = Math.PI * 80;
-  const ratio = Math.min(Math.max(speedKmh / 120, 0), 1);
+  const ratio = hasValidSpeed ? Math.min(Math.max(speedKmh / 120, 0), 1) : 0;
   const filledLen = totalLen * ratio;
   arc.style.strokeDasharray = `${totalLen} ${totalLen}`;
   arc.style.strokeDashoffset = String(totalLen - filledLen);
-  if (dot) {
-    if (ratio <= 0) {
-      dot.style.display = 'none';
-    } else {
-      const angleDeg = 360 - ratio * 180;
-      const rad = (angleDeg * Math.PI) / 180;
-      dot.setAttribute('cx', 100 + 80 * Math.cos(rad));
-      dot.setAttribute('cy', 140 + 80 * Math.sin(rad));
-      dot.style.display = '';
-    }
-  }
-  if (startBg) startBg.style.display = '';
-  if (startValue) {
-    startValue.textContent = String(Math.round(speedKmh));
-    startValue.style.display = '';
+  if (dot && dotValue) {
+    const angleDeg = 360 - ratio * 180;
+    const rad = (angleDeg * Math.PI) / 180;
+    const cx = 100 + 80 * Math.cos(rad);
+    const cy = 140 + 80 * Math.sin(rad);
+    dot.setAttribute('cx', cx);
+    dot.setAttribute('cy', cy);
+    dot.style.display = '';
+    dotValue.setAttribute('x', cx);
+    dotValue.setAttribute('y', cy);
+    dotValue.textContent = String(Math.round(displaySpeed));
+    dotValue.style.display = '';
   }
 }
 
