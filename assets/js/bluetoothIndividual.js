@@ -1808,15 +1808,16 @@ function updateTimer(status) {
     }
 }
 
-// 시간 포맷: 초 → "mm:ss" (Lap 타이머·카운트다운 등 항상 00:00 형식)
-function formatTime(seconds) {
+// 통합 블루투스 개인훈련 전용: mm:ss 형식 (indiv-ui-lap-time, indiv-main-timer 항상 00:00 유지)
+// ※ 전역 formatTime은 rollerRaceDashboard.js 등에서 hh:mm:ss로 덮어쓰므로, 이 모듈 전용 함수 사용
+function formatIndivMMSS(seconds) {
     const sec = Math.max(0, Math.floor(seconds || 0));
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
     const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
 }
 
-// 시간 포맷: 초 → "hh:mm:ss"
+// 시간 포맷: 초 → "hh:mm:ss" (다른 모듈용, bluetoothIndividual 내부에서는 사용 안 함)
 function formatHMS(totalSeconds) {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
@@ -1824,9 +1825,9 @@ function formatHMS(totalSeconds) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// 통합 블루투스 개인훈련 전용: 항상 mm:ss 형식 (경과시간 표시)
+// 통합 블루투스 개인훈련 전용: 항상 mm:ss 형식 (경과시간·랩타임 표시)
 function formatTimerDisplay(totalSeconds) {
-    return formatTime(Math.floor(totalSeconds || 0));
+    return formatIndivMMSS(Math.floor(totalSeconds || 0));
 }
 
 // 5초 카운트다운 상태 관리
@@ -2007,7 +2008,7 @@ function updateLapTime(status = null) {
     // 카운트다운 값 표시 — 항상 mm:ss 형식 (hh:mm:ss 금지)
     if (countdownValue !== null && countdownValue >= 0) {
         const sec = Number(countdownValue);
-        lapTimeEl.textContent = formatTime(sec);
+        lapTimeEl.textContent = formatIndivMMSS(sec);
         lapTimeEl.setAttribute('fill', sec <= 10 ? '#ff4444' : '#00d4aa');
     } else {
         lapTimeEl.textContent = '00:00';
