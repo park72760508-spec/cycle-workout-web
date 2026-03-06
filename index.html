@@ -3594,6 +3594,11 @@
         <span>파워미터</span>
         <span class="status" id="trainingScreenPowerMeterStatus">미연결</span>
       </div>
+      <div id="trainingScreenBluetoothSpeedItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('speed')">
+        <img src="assets/img/s(01).png" alt="속도계 센서">
+        <span>속도계 센서</span>
+        <span class="status" id="trainingScreenSpeedStatus">미연결</span>
+      </div>
       <!-- 종료 메뉴 (노트북/태블릿 훈련 화면 → 훈련 준비 화면 이동) -->
       <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitLaptopTrainingToReady()">
         <img src="assets/img/logout.png" alt="종료">
@@ -3905,6 +3910,11 @@
               <img src="assets/img/power_i.png" alt="파워미터">
               <span>파워미터</span>
               <span class="status" id="mobilePowerMeterStatus">미연결</span>
+            </div>
+            <div id="mobileBluetoothSpeedItem" class="mobile-bluetooth-dropdown-item" onclick="connectMobileBluetoothDevice('speed')">
+              <img src="assets/img/s(01).png" alt="속도계 센서">
+              <span>속도계 센서</span>
+              <span class="status" id="mobileSpeedStatus">미연결</span>
             </div>
             <!-- 종료 메뉴 (모바일 개인 훈련 대시보드 전용, 독립적 구동) -->
             <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitMobileIndividualTraining()">
@@ -11493,6 +11503,11 @@
               <img src="assets/img/power_i.png" alt="파워미터">
               <span>파워미터</span>
               <span class="indiv-status" id="indiv-powerMeterStatus">미연결</span>
+            </div>
+            <div id="indiv-bluetoothSpeedItem" class="indiv-bluetooth-dropdown-item" onclick="connectBluetoothDevice('speed')">
+              <img src="assets/img/s(01).png" alt="속도계 센서">
+              <span>속도계 센서</span>
+              <span class="indiv-status" id="indiv-speedStatus">미연결</span>
             </div>
             <div class="indiv-bluetooth-dropdown-item indiv-bluetooth-dropdown-item-exit" onclick="exitBluetoothIndividualTraining()">
               <img src="assets/img/logout.png" alt="종료">
