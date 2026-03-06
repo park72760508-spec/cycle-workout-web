@@ -742,6 +742,7 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
     const characteristic = await service.getCharacteristic(0x2A5B);
     await characteristic.startNotifications();
     characteristic.addEventListener('characteristicvaluechanged', handleSpeedSensorData);
+    window._lastSpeedUpdateTime = 0;
     window.connectedDevices.speed = { name: device.name || saved.name, device, server, characteristic };
     window.isSensorConnected = true;
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}
@@ -1102,9 +1103,13 @@ function handleSpeedSensorData(event) {
         const speedKmh = (revDiff * WHEEL_CIRCUMFERENCE_M / timeInSeconds) * 3.6;
         if (speedKmh > 0 && speedKmh <= 150) {
           window.liveData.speed = Math.round(speedKmh * 10) / 10;
+          window._lastSpeedUpdateTime = Date.now();
           if (typeof notifyChildWindows === 'function') notifyChildWindows('speed', window.liveData.speed);
         }
       }
+    } else if (lastData && lastWheelEventTime === lastData.lastWheelEventTime) {
+      window.liveData.speed = 0;
+      window._lastSpeedUpdateTime = Date.now();
     }
     window._lastWheelData['speed'] = { cumulativeWheelRevolutions, lastWheelEventTime };
   }
@@ -1320,6 +1325,7 @@ async function connectSpeedometer(isNewSearch) {
       var characteristic = await service.getCharacteristic(0x2A5B);
       await characteristic.startNotifications();
       characteristic.addEventListener('characteristicvaluechanged', handleSpeedSensorData);
+      window._lastSpeedUpdateTime = 0;
       window.connectedDevices.speed = { name: device.name || saved.name, device, server, characteristic };
       window.isSensorConnected = true;
       try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}
@@ -1336,6 +1342,7 @@ async function connectSpeedometer(isNewSearch) {
     var characteristic = await service.getCharacteristic(0x2A5B);
     await characteristic.startNotifications();
     characteristic.addEventListener('characteristicvaluechanged', handleSpeedSensorData);
+    window._lastSpeedUpdateTime = 0;
     window.connectedDevices.speed = { name: device.name, device, server, characteristic };
     window.isSensorConnected = true;
     try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}

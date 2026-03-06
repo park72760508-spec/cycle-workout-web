@@ -3541,7 +3541,14 @@ function updateIndivSpeedArc() {
     var dot = __indivEl('gauge-speed-dot');
     var dotValue = __indivEl('gauge-speed-dot-value');
     if (!arc) return;
+    var SPEED_STALE_MS = 2500;
     var speedKmh = Number(window.liveData && window.liveData.speed);
+    var lastUpdate = window._lastSpeedUpdateTime;
+    var isStale = speedKmh > 0 && (!lastUpdate || (Date.now() - lastUpdate) > SPEED_STALE_MS);
+    if (isStale) {
+        speedKmh = 0;
+        if (window.liveData) window.liveData.speed = 0;
+    }
     var hasValidSpeed = speedKmh != null && !Number.isNaN(speedKmh) && speedKmh >= 0;
     var displaySpeed = hasValidSpeed ? speedKmh : 0;
     var totalLen = Math.PI * 80;

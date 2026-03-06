@@ -15278,7 +15278,14 @@ function updateMobileSpeedArc() {
   const dot = safeGetElement('mobile-gauge-speed-dot');
   const dotValue = safeGetElement('mobile-gauge-speed-dot-value');
   if (!arc) return;
-  const speedKmh = Number(window.liveData?.speed);
+  const SPEED_STALE_MS = 2500;
+  let speedKmh = Number(window.liveData?.speed);
+  const lastUpdate = window._lastSpeedUpdateTime;
+  const isStale = speedKmh > 0 && (!lastUpdate || (Date.now() - lastUpdate) > SPEED_STALE_MS);
+  if (isStale) {
+    speedKmh = 0;
+    if (window.liveData) window.liveData.speed = 0;
+  }
   const hasValidSpeed = speedKmh != null && !Number.isNaN(speedKmh) && speedKmh >= 0;
   const displaySpeed = hasValidSpeed ? speedKmh : 0;
   const totalLen = Math.PI * 80;

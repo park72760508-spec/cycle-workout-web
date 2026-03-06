@@ -214,6 +214,8 @@
     }
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     global.liveData.speed = speedKmh;
+    global._lastSpeedUpdateTime = Date.now();
+    if (typeof window !== 'undefined') window._lastSpeedUpdateTime = global._lastSpeedUpdateTime;
     applyLiveDataToScreen();
   }
 
@@ -243,6 +245,8 @@
           var speedKmh = (revDiff * DEFAULT_WHEEL_CIRCUMFERENCE_MM * 1024 * 3.6) / (timeDiff * 1000);
           if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
           global.liveData.speed = Math.min(speedKmh, 999);
+          global._lastSpeedUpdateTime = Date.now();
+          if (typeof window !== 'undefined') window._lastSpeedUpdateTime = global._lastSpeedUpdateTime;
           applyLiveDataToScreen();
         }
       }
@@ -773,7 +777,11 @@
     }
     if (detail.speed != null && !Number.isNaN(Number(detail.speed))) {
       var s = Number(detail.speed);
-      if (s >= 0 && s < 1000) global.liveData.speed = s;
+      if (s >= 0 && s < 1000) {
+        global.liveData.speed = s;
+        global._lastSpeedUpdateTime = Date.now();
+        if (typeof window !== 'undefined') window._lastSpeedUpdateTime = global._lastSpeedUpdateTime;
+      }
       changed = true;
     }
     if (changed) applyLiveDataToScreen();
@@ -788,6 +796,8 @@
     if (speedKmh < 0 || speedKmh >= 1000) return;
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     global.liveData.speed = Math.min(speedKmh, 999);
+    global._lastSpeedUpdateTime = Date.now();
+    if (typeof window !== 'undefined') window._lastSpeedUpdateTime = global._lastSpeedUpdateTime;
     if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('speed', speedKmh);
     applyLiveDataToScreen();
   }
