@@ -43,11 +43,18 @@ window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targe
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null, speed: null };
 window._lastCadenceUpdateTime = {};
 window._lastCrankData = {};
+window._lastPowerUpdateTime = 0;
+window._lastHeartRateUpdateTime = 0;
+window._lastSpeedUpdateTime = window._lastSpeedUpdateTime || 0;
 
 // ---------- 환경 감지: 앱(WebView) vs 순수 웹 브라우저 (투 트랙 분기) ----------
+// window.StelvioInApp: 앱 단 선제 주입 플래그 (ReactNativeWebView 생성 지연 시 판별용)
 function isAppEnvironment() {
   try {
-    return !!(typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function');
+    return !!(
+      typeof window !== 'undefined' &&
+      (window.ReactNativeWebView || window.StelvioInApp)
+    );
   } catch (e) {
     return false;
   }
@@ -1005,6 +1012,7 @@ function handleTrainerData(e) {
       // 파워미터가 연결되어 있으면 트레이너 파워 값 무시 (파워미터 우선)
       if (!window.connectedDevices?.powerMeter) {
         window.liveData.power = p;
+        window._lastPowerUpdateTime = Date.now();
         // ★ 3-Second Power Buffer Logic (Preserved)
         if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(p);
         if(window.ergController) window.ergController.updatePower(p);
@@ -1023,6 +1031,7 @@ function handlePowerMeterData(event) {
   const instPower = dv.getInt16(off, true); off += 2;
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
+    window._lastPowerUpdateTime = Date.now();
     // ★ 3-Second Power Buffer Logic (Preserved)
     if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(instPower);
     if(window.ergController) window.ergController.updatePower(instPower);
@@ -1393,8 +1402,44 @@ function handleHeartRateData(event) {
   const flags = dv.getUint8(0);
   const hr = (flags & 0x01) ? dv.getUint16(1, true) : dv.getUint8(1);
   window.liveData.heartRate = hr;
+  window._lastHeartRateUpdateTime = Date.now();
   notifyChildWindows('heartRate', hr);
 }
+
+/** 디바이스 타입별 liveData 0 리셋 (연결 해제/데이터 미송출 시 훈련화면 0 표시) */
+function resetLiveDataForDevice(type) {
+  if (!window.liveData) window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0, speed: 0 };
+  var t = String(type || '').toLowerCase();
+  if (t === 'heartrate' || t === 'hr') {
+    window.liveData.heartRate = 0;
+    notifyChildWindows('heartRate', 0);
+  } else if (t === 'powermeter' || t === 'power') {
+    window.liveData.power = 0;
+    window.liveData.cadence = 0;
+    notifyChildWindows('power', 0);
+    notifyChildWindows('cadence', 0);
+  } else if (t === 'trainer') {
+    window.liveData.power = 0;
+    window.liveData.cadence = 0;
+    window.liveData.speed = 0;
+    notifyChildWindows('power', 0);
+    notifyChildWindows('cadence', 0);
+    notifyChildWindows('speed', 0);
+  } else if (t === 'speed') {
+    window.liveData.speed = 0;
+    window.liveData.cadence = 0;
+    window._lastSpeedUpdateTime = 0;
+    notifyChildWindows('speed', 0);
+    notifyChildWindows('cadence', 0);
+  }
+  try { window.dispatchEvent(new CustomEvent('stelvio-live-data-reset', { detail: { deviceType: type } })); } catch (e) {}
+  if (typeof window.updateTrainingDisplay === 'function') window.updateTrainingDisplay();
+  if (typeof window.updateMobileDashboardData === 'function') window.updateMobileDashboardData();
+  if (typeof window.updateDashboard === 'function') window.updateDashboard();
+  if (typeof window.updateIndivSpeedArc === 'function') window.updateIndivSpeedArc();
+  if (typeof window.updateMobileSpeedArc === 'function') window.updateMobileSpeedArc();
+}
+window.resetLiveDataForDevice = window.resetLiveDataForDevice || resetLiveDataForDevice;
 
 function handleDisconnect(type, device) {
   // device가 null이거나 undefined인 경우 강제 해제 (기존 연결 해제 시)
@@ -1406,6 +1451,7 @@ function handleDisconnect(type, device) {
     // device가 일치하지 않아도 기존 연결이 있으면 해제 (안전장치)
     window.connectedDevices[type] = null;
   }
+  resetLiveDataForDevice(type);
   
   if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
   const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter || window.connectedDevices?.speed);
@@ -1444,6 +1490,17 @@ function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex) {
   if (!connectById) return;
   if (attemptIndex >= WEB_RECONNECT_BACKOFF_MS.length) {
     if (window._stelvioReconnectScheduled) window._stelvioReconnectScheduled[deviceType] = false;
+    console.warn('[bluetooth] 최대 재연결 시도 횟수 초과. 연결 실패.');
+    try {
+      if (typeof showToast === 'function') {
+        showToast('기기를 찾을 수 없습니다. 스마트로라(또는 센서)의 전원을 확인하고 수동으로 다시 연결해 주세요.');
+      } else {
+        alert('기기를 찾을 수 없습니다. 스마트로라(또는 센서)의 전원을 확인하고 수동으로 다시 연결해 주세요.');
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new CustomEvent('bleReconnectFailed', { detail: { message: '기기 전원 및 연결 상태를 확인해 주세요.', deviceType: deviceType } }));
+    } catch (evErr) {}
     return;
   }
   var delay = WEB_RECONNECT_BACKOFF_MS[attemptIndex];
@@ -1545,13 +1602,45 @@ window.addEventListener("beforeunload", () => {
   } catch (e) {}
 });
 
-// 4. Safety: Reset cadence to 0 if data stops (timeout)
-const CADENCE_TIMEOUT_MS = 3000;
-setInterval(() => {
-  const times = window._lastCadenceUpdateTime || {};
-  const lastUpdate = Object.keys(times).length ? Math.max(...Object.values(times)) : 0;
-  if (lastUpdate && (Date.now() - lastUpdate > CADENCE_TIMEOUT_MS)) {
+// 4. Safety: 데이터 미송출 시 0 리셋 (power, heartRate, cadence, speed - 3초 타임아웃)
+const DATA_STALE_TIMEOUT_MS = 3000;
+setInterval(function () {
+  if (!window.liveData) return;
+  var now = Date.now();
+  var changed = false;
+  var times = window._lastCadenceUpdateTime || {};
+  var lastCadence = Object.keys(times).length ? Math.max.apply(null, Object.values(times)) : 0;
+  if (lastCadence && (now - lastCadence > DATA_STALE_TIMEOUT_MS)) {
     window.liveData.cadence = 0;
     notifyChildWindows('cadence', 0);
+    changed = true;
+  }
+  var lastPower = window._lastPowerUpdateTime || 0;
+  if (lastPower && (now - lastPower > DATA_STALE_TIMEOUT_MS)) {
+    window.liveData.power = 0;
+    notifyChildWindows('power', 0);
+    window._lastPowerUpdateTime = 0;
+    changed = true;
+  }
+  var lastHr = window._lastHeartRateUpdateTime || 0;
+  if (lastHr && (now - lastHr > DATA_STALE_TIMEOUT_MS)) {
+    window.liveData.heartRate = 0;
+    notifyChildWindows('heartRate', 0);
+    window._lastHeartRateUpdateTime = 0;
+    changed = true;
+  }
+  var lastSpeed = window._lastSpeedUpdateTime || 0;
+  if (lastSpeed && (now - lastSpeed > DATA_STALE_TIMEOUT_MS)) {
+    window.liveData.speed = 0;
+    window._lastSpeedUpdateTime = 0;
+    notifyChildWindows('speed', 0);
+    changed = true;
+  }
+  if (changed) {
+    if (typeof window.updateTrainingDisplay === 'function') window.updateTrainingDisplay();
+    if (typeof window.updateMobileDashboardData === 'function') window.updateMobileDashboardData();
+    if (typeof window.updateDashboard === 'function') window.updateDashboard();
+    if (typeof window.updateIndivSpeedArc === 'function') window.updateIndivSpeedArc();
+    if (typeof window.updateMobileSpeedArc === 'function') window.updateMobileSpeedArc();
   }
 }, 1000);

@@ -103,10 +103,10 @@ window._bluetoothIndividualAutoConnectInProgress = false;
 window._bluetoothIndividualAutoConnectTimeoutId = null;
 var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS = 20000;
 
-/** 앱 WebView 여부 (모바일 훈련화면과 동일 판단). 웹 전용이면 연결 버튼은 드롭다운, 앱이면 부모 창 Device Settings 팝업 */
+/** 앱 WebView 여부 (모바일 훈련화면과 동일 판단). StelvioInApp: 앱 단 선제 주입 플래그 */
 function isAppEnvironmentNow() {
     try {
-        return !!(typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function');
+        return !!(typeof window !== 'undefined' && (window.ReactNativeWebView || window.StelvioInApp));
     } catch (e) {
         return false;
     }
@@ -4984,6 +4984,10 @@ window.updateBluetoothIndividualDropdownWithSavedDevices = updateBluetoothIndivi
 
 // 모바일과 동일: 연결 성공 시 대시보드 UI 즉시 갱신 (bluetooth.js의 stelvio-bluetooth-connected 수신)
 if (typeof window.addEventListener === 'function') {
+    window.addEventListener('stelvio-live-data-reset', function () {
+        if (typeof updateDashboard === 'function') updateDashboard();
+        if (typeof updateIndivSpeedArc === 'function') updateIndivSpeedArc();
+    });
     window.addEventListener('stelvio-bluetooth-connected', function () {
         if (typeof updateBluetoothConnectionStatus === 'function') updateBluetoothConnectionStatus();
         if (typeof updateBluetoothIndividualDropdownWithSavedDevices === 'function') updateBluetoothIndividualDropdownWithSavedDevices();
