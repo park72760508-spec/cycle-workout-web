@@ -2311,8 +2311,7 @@ function updateTargetPower() {
                 // 기존 내용 삭제
                 targetLabelEl.textContent = '';
                 targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
-                targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
-                targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93'); // 고정: 폰트 6, y 93
                 
                 // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
                 const rpmNumber = Math.round(targetRpm);
@@ -2334,7 +2333,7 @@ function updateTargetPower() {
                 if (targetLabelEl) {
                     targetLabelEl.textContent = 'TARGET';
                     targetLabelEl.setAttribute('fill', '#888');
-                    targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
+                    targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
                 }
                 if (targetRpmUnitEl) {
                     targetRpmUnitEl.style.display = 'none';
@@ -2351,6 +2350,7 @@ function updateTargetPower() {
                 if (targetLabelEl) {
                     targetLabelEl.textContent = 'CADENCE';
                     targetLabelEl.setAttribute('fill', '#888');
+                    targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
                 }
                 if (targetRpmUnitEl) {
                     targetRpmUnitEl.style.display = 'none';
@@ -2361,6 +2361,7 @@ function updateTargetPower() {
                 if (targetLabelEl) {
                     targetLabelEl.textContent = 'TARGET';
                     targetLabelEl.setAttribute('fill', '#888');
+                    targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
                 }
                 if (targetRpmUnitEl) {
                     targetRpmUnitEl.style.display = 'none';
@@ -2373,6 +2374,7 @@ function updateTargetPower() {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
                 targetLabelEl.setAttribute('fill', '#888');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
@@ -2384,6 +2386,7 @@ function updateTargetPower() {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
                 targetLabelEl.setAttribute('fill', '#888');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
@@ -2433,6 +2436,7 @@ function updateTargetPower() {
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
         }
         if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -2452,6 +2456,7 @@ function updateTargetPower() {
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
         }
         if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -2585,8 +2590,7 @@ function updateTargetPower() {
             // 기존 내용 삭제
             targetLabelEl.textContent = '';
             targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
-            targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
-            targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93'); // 고정: 폰트 6, y 93
             
             // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
             const rpmNumber = Math.round(targetRpm);
@@ -2607,7 +2611,7 @@ function updateTargetPower() {
         } else if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
-            targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
             }
@@ -2625,6 +2629,7 @@ function updateTargetPower() {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'CADENCE';
                 targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             // RPM 단위 숨김
             if (targetRpmUnitEl) {
@@ -2637,6 +2642,7 @@ function updateTargetPower() {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
                 targetLabelEl.setAttribute('fill', '#888');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
@@ -2649,6 +2655,7 @@ function updateTargetPower() {
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
         }
         if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -2660,6 +2667,7 @@ function updateTargetPower() {
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
         }
         if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -2753,6 +2761,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'CADENCE';
                 targetLabelEl.setAttribute('fill', '#888');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
@@ -2789,8 +2798,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             if (targetRpm > 0 && targetLabelEl) {
                 targetLabelEl.textContent = '';
                 targetLabelEl.setAttribute('fill', '#ef4444');
-                targetLabelEl.setAttribute('font-size', '10');
-                targetLabelEl.setAttribute('y', '90');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93'); // 고정
                 
                 // 기존 tspan 제거
                 while (targetLabelEl.firstChild) {
@@ -2811,7 +2819,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
                 if (targetLabelEl) {
                     targetLabelEl.textContent = 'TARGET';
                     targetLabelEl.setAttribute('fill', '#888');
-                    targetLabelEl.setAttribute('font-size', '6');
+                    targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
                 }
             }
             
@@ -2870,6 +2878,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
                 targetLabelEl.setAttribute('fill', '#888');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
@@ -2901,6 +2910,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
                 targetLabelEl.setAttribute('fill', '#888');
+                targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
             }
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';

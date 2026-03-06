@@ -6576,6 +6576,13 @@ function initializeCurrentScreen(screenId) {
       if (window.StelvioTrainingDashboardBridge && typeof window.StelvioTrainingDashboardBridge.mount === 'function') {
         window.StelvioTrainingDashboardBridge.mount();
       }
+      // 모바일 훈련화면: TARGET 라벨 폰트·위치 고정 (초기 로딩 시 적용)
+      if (screenId === 'mobileDashboardScreen') {
+        setTimeout(function () {
+          var el = document.getElementById('mobile-ui-target-label');
+          if (el) { el.setAttribute('font-size', '6'); el.setAttribute('y', '93'); }
+        }, 0);
+      }
       break;
 
     case 'bluetoothIndividualScreen':
@@ -6583,6 +6590,11 @@ function initializeCurrentScreen(screenId) {
       if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
         window.initBluetoothIndividualIntegratedScreen();
       }
+      // TARGET 라벨 폰트·위치 고정 (초기 로딩 시 적용)
+      setTimeout(function () {
+        var el = document.getElementById('indiv-ui-target-label');
+        if (el) { el.setAttribute('font-size', '6'); el.setAttribute('y', '93'); }
+      }, 0);
       // 화면 복귀 시 이미 훈련 중이면 화면 꺼짐 방지 재요청 (모바일 대시보드와 동일)
       setTimeout(function () {
         var s = window.currentTrainingState;
@@ -15846,8 +15858,7 @@ function updateMobileTargetPower() {
           // 기존 내용 삭제
           targetLabelEl.textContent = '';
           targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
-          targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
-          targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+          targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93'); // 고정: 폰트 6, y 93
           
           // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
           const rpmNumber = Math.round(targetRpm);
@@ -15869,7 +15880,7 @@ function updateMobileTargetPower() {
           if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
-            targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
           }
           if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -15886,6 +15897,7 @@ function updateMobileTargetPower() {
           if (targetLabelEl) {
             targetLabelEl.textContent = 'CADENCE';
             targetLabelEl.setAttribute('fill', '#888');
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
           }
           if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -15896,6 +15908,7 @@ function updateMobileTargetPower() {
           if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
+            targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
           }
           if (targetRpmUnitEl) {
             targetRpmUnitEl.style.display = 'none';
@@ -15908,6 +15921,7 @@ function updateMobileTargetPower() {
         if (targetLabelEl) {
           targetLabelEl.textContent = 'TARGET';
           targetLabelEl.setAttribute('fill', '#888');
+          targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
         }
         if (targetRpmUnitEl) {
           targetRpmUnitEl.style.display = 'none';
@@ -15919,6 +15933,7 @@ function updateMobileTargetPower() {
         if (targetLabelEl) {
           targetLabelEl.textContent = 'TARGET';
           targetLabelEl.setAttribute('fill', '#888');
+          targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
         }
         if (targetRpmUnitEl) {
           targetRpmUnitEl.style.display = 'none';
@@ -15944,6 +15959,7 @@ function updateMobileTargetPower() {
     if (targetLabelEl) {
       targetLabelEl.textContent = 'TARGET';
       targetLabelEl.setAttribute('fill', '#888');
+      targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
     }
     if (targetRpmUnitEl) {
       targetRpmUnitEl.style.display = 'none';
@@ -15961,6 +15977,7 @@ function updateMobileTargetPower() {
     if (targetLabelEl) {
       targetLabelEl.textContent = 'TARGET';
       targetLabelEl.setAttribute('fill', '#888');
+      targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
     }
     if (targetRpmUnitEl) {
       targetRpmUnitEl.style.display = 'none';
@@ -16085,8 +16102,7 @@ function updateMobileTargetPower() {
       // 기존 내용 삭제
       targetLabelEl.textContent = '';
       targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
-      targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
-      targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+      targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93'); // 고정: 폰트 6, y 93
       
       // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
       const rpmNumber = Math.round(targetRpm);
@@ -16107,7 +16123,7 @@ function updateMobileTargetPower() {
     } else if (targetLabelEl) {
       targetLabelEl.textContent = 'TARGET';
       targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
-      targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
+      targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
       if (targetRpmUnitEl) {
         targetRpmUnitEl.style.display = 'none';
       }
@@ -16125,6 +16141,7 @@ function updateMobileTargetPower() {
       if (targetLabelEl) {
         targetLabelEl.textContent = 'CADENCE';
         targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+        targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
       }
       // RPM 단위 숨김
       if (targetRpmUnitEl) {
@@ -16137,6 +16154,7 @@ function updateMobileTargetPower() {
       if (targetLabelEl) {
         targetLabelEl.textContent = 'TARGET';
         targetLabelEl.setAttribute('fill', '#888');
+        targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
       }
       if (targetRpmUnitEl) {
         targetRpmUnitEl.style.display = 'none';
@@ -16149,6 +16167,7 @@ function updateMobileTargetPower() {
     if (targetLabelEl) {
       targetLabelEl.textContent = 'TARGET';
       targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+      targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
     }
     if (targetRpmUnitEl) {
       targetRpmUnitEl.style.display = 'none';
@@ -16160,6 +16179,7 @@ function updateMobileTargetPower() {
     if (targetLabelEl) {
       targetLabelEl.textContent = 'TARGET';
       targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+      targetLabelEl.setAttribute('font-size', '6'); targetLabelEl.setAttribute('y', '93');
     }
     if (targetRpmUnitEl) {
       targetRpmUnitEl.style.display = 'none';
