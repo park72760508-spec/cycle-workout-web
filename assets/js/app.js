@@ -4050,11 +4050,11 @@ window.updateTrainingDisplay = function () {
      }
    }
 
-  // 훈련 데이터 블럭 속도(km/h) 실시간 반영 — speedData 수신 시 즉시 표시
+  // 훈련 데이터 블럭 속도(km/h) 실시간 반영 — 연결 해제/데이터 미송출 시 0 표시
   var speedValueEl = safeGetElement("speedValue");
   if (speedValueEl && window.liveData) {
     var speedKmh = window.liveData.speed;
-    speedValueEl.textContent = (speedKmh != null && !Number.isNaN(Number(speedKmh))) ? Number(speedKmh).toFixed(1) : "-";
+    speedValueEl.textContent = (speedKmh != null && !Number.isNaN(Number(speedKmh))) ? Number(speedKmh).toFixed(1) : "0";
   }
 
   // 중앙 디스플레이에 펄스 애니메이션 추가
@@ -5811,12 +5811,12 @@ function updateTrainingMetrics() {
     safeSetText("tssValue", TSS.toFixed(1));
     safeSetText("kcalValue", Math.round(kcal));
 
-    // 속도(km/h): liveData.speed — 수신 시 실시간 반영, 1초 틱에서도 표시
+    // 속도(km/h): liveData.speed — 연결 해제/데이터 미송출 시 0 표시
     var speedKmh = window.liveData && window.liveData.speed;
     if (speedKmh != null && !Number.isNaN(Number(speedKmh))) {
       safeSetText("speedValue", Number(speedKmh).toFixed(1));
     } else {
-      safeSetText("speedValue", "-");
+      safeSetText("speedValue", "0");
     }
 
     // 거리(km): 속도 적산 — 평로라 대회와 동일하게 속도(km/h)*시간으로 누적
@@ -15278,7 +15278,7 @@ function updateMobileSpeedArc() {
   const dot = safeGetElement('mobile-gauge-speed-dot');
   const dotValue = safeGetElement('mobile-gauge-speed-dot-value');
   if (!arc) return;
-  const SPEED_STALE_MS = 2500;
+  const SPEED_STALE_MS = 1000;  // 페달 멈춤 시 파워처럼 1초 내 0 표시
   let speedKmh = Number(window.liveData?.speed);
   const lastUpdate = window._lastSpeedUpdateTime;
   const isStale = speedKmh > 0 && (!lastUpdate || (Date.now() - lastUpdate) > SPEED_STALE_MS);
@@ -17032,6 +17032,7 @@ function startMobileWorkout() {
   mts._prevRemainMs = {};
   mts._lastProcessedSegIndex = 0;
   mts.segmentPowerHistory = []; // 세그먼트별 파워 히스토리 (랩 평균 파워 계산용)
+  mts.distanceKm = 0; // 속도 적산 거리 초기화 (연속 훈련 시 이전 값 제거)
 
   // 훈련 세션 시작 (개인훈련 대시보드와 동일한 로직)
   const currentUser = window.currentUser || null;

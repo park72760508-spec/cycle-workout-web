@@ -1602,15 +1602,18 @@ window.addEventListener("beforeunload", () => {
   } catch (e) {}
 });
 
-// 4. Safety: 데이터 미송출 시 0 리셋 (power, heartRate, cadence, speed - 3초 타임아웃)
-const DATA_STALE_TIMEOUT_MS = 3000;
+// 4. Safety: 데이터 미송출 시 0 리셋
+// - cadence/speed: 페달 멈춤 시 파워처럼 즉시 0 반영 (1초 타임아웃, 회전 이벤트 없으면 0)
+// - power/hr: 연결 해제 시 3초 타임아웃 (디바이스가 0 전송하므로 보통 즉시 반영)
+const CADENCE_SPEED_STALE_MS = 1000;  // 페달 멈춤 → 1초 내 0 표시 (파워와 유사한 반응)
+const DATA_STALE_TIMEOUT_MS = 3000;   // 연결 해제 감지용
 setInterval(function () {
   if (!window.liveData) return;
   var now = Date.now();
   var changed = false;
   var times = window._lastCadenceUpdateTime || {};
   var lastCadence = Object.keys(times).length ? Math.max.apply(null, Object.values(times)) : 0;
-  if (lastCadence && (now - lastCadence > DATA_STALE_TIMEOUT_MS)) {
+  if (lastCadence && (now - lastCadence > CADENCE_SPEED_STALE_MS)) {
     window.liveData.cadence = 0;
     notifyChildWindows('cadence', 0);
     changed = true;
@@ -1630,7 +1633,7 @@ setInterval(function () {
     changed = true;
   }
   var lastSpeed = window._lastSpeedUpdateTime || 0;
-  if (lastSpeed && (now - lastSpeed > DATA_STALE_TIMEOUT_MS)) {
+  if (lastSpeed && (now - lastSpeed > CADENCE_SPEED_STALE_MS)) {
     window.liveData.speed = 0;
     window._lastSpeedUpdateTime = 0;
     notifyChildWindows('speed', 0);
