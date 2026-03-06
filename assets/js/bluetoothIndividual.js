@@ -3496,6 +3496,45 @@ function updateGaugeTicksAndLabels() {
         labelsGroup.style.visibility = '';
         labelsGroup.style.opacity = '';
     }
+    
+    // 속도계 센서 눈금 레이블 (0~120 km/h, 안쪽, TARGET 스타일)
+    const speedLabelsGroup = __indivEl('gauge-speed-labels');
+    if (speedLabelsGroup) {
+        speedLabelsGroup.innerHTML = generateIndivSpeedLabels();
+    }
+}
+
+/** 속도계 센서 눈금 레이블 (0~120 km/h, 안쪽, TARGET 스타일 상속) */
+function generateIndivSpeedLabels() {
+    const centerX = 100;
+    const centerY = 140;
+    const innerLabelRadius = 60;
+    const speedValues = [0, 20, 40, 60, 80, 100, 120];
+    var html = '';
+    speedValues.forEach(function (val, i) {
+        const angle = (i / 6) * 180; // 우측(0) → 좌측(120)
+        const rad = (angle * Math.PI) / 180;
+        const x = centerX + innerLabelRadius * Math.cos(rad);
+        const y = centerY + innerLabelRadius * Math.sin(rad);
+        html += '<text x="' + x + '" y="' + y + '" text-anchor="middle" dominant-baseline="middle" fill="#888" font-size="6">' + val + '</text>';
+    });
+    return html;
+}
+
+/** 블루투스 개인훈련 속도계 원호 업데이트 (0~120 km/h, 우측→좌측) */
+function updateIndivSpeedArc() {
+    var arc = __indivEl('gauge-speed-arc');
+    if (!arc) return;
+    var speedKmh = Number(window.liveData && window.liveData.speed);
+    if (speedKmh == null || Number.isNaN(speedKmh) || speedKmh < 0) {
+        arc.style.strokeDashoffset = '251.33';
+        return;
+    }
+    var totalLen = Math.PI * 80;
+    var ratio = Math.min(Math.max(speedKmh / 120, 0), 1);
+    var filledLen = totalLen * ratio;
+    arc.style.strokeDasharray = totalLen + ' ' + totalLen;
+    arc.style.strokeDashoffset = String(totalLen - filledLen);
 }
 
 /**
@@ -3538,6 +3577,24 @@ function startGaugeAnimationLoop() {
         
         // 4. 목표 파워 원호 업데이트
         updateTargetPowerArc();
+        
+        // 5. 속도계 센서 원호 업데이트 (liveData.speed → 0~120 km/h)
+        updateIndivSpeedArc();
+        
+        // 6. 속도 적산 거리 (km)
+        var speedKmh = Number(window.liveData && window.liveData.speed);
+        if (speedKmh != null && !Number.isNaN(speedKmh) && speedKmh >= 0) {
+            var now = Date.now() / 1000;
+            if (window._indivLastSpeedUpdateTime != null) {
+                var dt = now - window._indivLastSpeedUpdateTime;
+                if (dt > 0 && dt < 10) {
+                    window._indivDistanceKm = (window._indivDistanceKm || 0) + speedKmh * (dt / 3600);
+                }
+            }
+            window._indivLastSpeedUpdateTime = now;
+        } else {
+            window._indivLastSpeedUpdateTime = null;
+        }
         
         // 다음 프레임 요청
         gaugeAnimationFrameId = requestAnimationFrame(loop);

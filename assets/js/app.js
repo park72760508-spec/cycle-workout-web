@@ -14779,6 +14779,9 @@ function initializeLaptopTrainingWakeLock() {
   console.log('[Laptop Training] 화면 꺼짐 방지 초기화 완료');
 }
 
+/** 모바일 대시보드 속도 적산용: 마지막 업데이트 시각 */
+let mobileLastSpeedUpdateTime = null;
+
 /**
  * 모바일 대시보드 블루투스 데이터 업데이트
  * window.liveData에서 데이터를 읽어서 화면에 표시
@@ -14791,6 +14794,23 @@ function startMobileDashboardDataUpdate() {
         (!mobileScreen.classList.contains('active') && 
          window.getComputedStyle(mobileScreen).display === 'none')) {
       return;
+    }
+
+    // 속도계 센서: 누적 거리 산출 (liveData.speed → km 적산)
+    const speedKmh = Number(window.liveData?.speed);
+    if (speedKmh != null && !Number.isNaN(speedKmh) && speedKmh >= 0) {
+      const now = Date.now() / 1000;
+      if (mobileLastSpeedUpdateTime != null) {
+        const dt = now - mobileLastSpeedUpdateTime;
+        if (dt > 0 && dt < 10) {
+          const mts = window.mobileTrainingState || {};
+          mts.distanceKm = (mts.distanceKm || 0) + speedKmh * (dt / 3600);
+          window.mobileTrainingState = mts;
+        }
+      }
+      mobileLastSpeedUpdateTime = now;
+    } else {
+      mobileLastSpeedUpdateTime = null;
     }
 
     // ErgController에 케이던스 업데이트 (Edge AI 분석용)
@@ -15220,12 +15240,46 @@ function generateMobileGaugeLabels() {
   return labelsHTML;
 }
 
+/** 속도계 센서 눈금 레이블 (0~120 km/h, 안쪽 배치, TARGET 스타일 상속) */
+function generateMobileSpeedLabels() {
+  const centerX = 100;
+  const centerY = 140;
+  const innerLabelRadius = 60; // 반원 안쪽
+  const speedValues = [0, 20, 40, 60, 80, 100, 120];
+  let html = '';
+  speedValues.forEach((val, i) => {
+    const angle = (i / 6) * 180; // 우측(0) → 좌측(120)
+    const rad = (angle * Math.PI) / 180;
+    const x = centerX + innerLabelRadius * Math.cos(rad);
+    const y = centerY + innerLabelRadius * Math.sin(rad);
+    html += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#888" font-size="6">${val}</text>`;
+  });
+  return html;
+}
+
+/** 모바일 속도계 원호 업데이트 (0~120 km/h, 우측→좌측 채우기) */
+function updateMobileSpeedArc() {
+  const arc = safeGetElement('mobile-gauge-speed-arc');
+  if (!arc) return;
+  const speedKmh = Number(window.liveData?.speed);
+  if (speedKmh == null || Number.isNaN(speedKmh) || speedKmh < 0) {
+    arc.style.strokeDashoffset = '251.33';
+    return;
+  }
+  const totalLen = Math.PI * 80;
+  const ratio = Math.min(Math.max(speedKmh / 120, 0), 1);
+  const filledLen = totalLen * ratio;
+  arc.style.strokeDasharray = `${totalLen} ${totalLen}`;
+  arc.style.strokeDashoffset = String(totalLen - filledLen);
+}
+
 /**
  * 모바일 속도계 초기화
  */
 function initializeMobileGauge() {
   const ticksGroup = safeGetElement('mobile-gauge-ticks');
   const labelsGroup = safeGetElement('mobile-gauge-labels');
+  const speedLabelsGroup = safeGetElement('mobile-gauge-speed-labels');
   
   if (!ticksGroup || !labelsGroup) {
     console.warn('[Mobile Dashboard] 속도계 그룹 요소를 찾을 수 없습니다.');
@@ -15243,6 +15297,7 @@ function initializeMobileGauge() {
   // 눈금 및 레이블 생성
   ticksGroup.innerHTML = generateMobileGaugeTicks();
   labelsGroup.innerHTML = generateMobileGaugeLabels();
+  if (speedLabelsGroup) speedLabelsGroup.innerHTML = generateMobileSpeedLabels();
   
   // 바늘 애니메이션 루프 시작
   startMobileGaugeAnimationLoop();
@@ -15299,6 +15354,11 @@ function startMobileGaugeAnimationLoop() {
     // 4. 목표 파워 원호 업데이트 (개인훈련 대시보드와 동일)
     if (typeof updateMobileTargetPowerArc === 'function') {
       updateMobileTargetPowerArc();
+    }
+    
+    // 5. 속도계 센서 원호 업데이트 (liveData.speed → 0~120 km/h)
+    if (typeof updateMobileSpeedArc === 'function') {
+      updateMobileSpeedArc();
     }
     
     // 다음 프레임 요청
