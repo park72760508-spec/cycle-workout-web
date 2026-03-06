@@ -15253,7 +15253,7 @@ function generateMobileSpeedLabels() {
     const rad = (angleDeg * Math.PI) / 180;
     const x = centerX + innerLabelRadius * Math.cos(rad);
     const y = centerY + innerLabelRadius * Math.sin(rad);
-    const labelText = val === 60 ? '60 km/h' : String(val);
+    const labelText = val === 0 ? '0 km/h' : String(val);
     html += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#4da6ff" font-size="6">${labelText}</text>`;
   });
   return html;
