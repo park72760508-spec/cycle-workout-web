@@ -4543,11 +4543,12 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
         };
     }
 
-    var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+    var deviceTypes = ['trainer', 'heartRate', 'powerMeter', 'speed'];
     const deviceTypeLabels = {
         trainer: '스마트 트레이너',
         heartRate: '심박계',
-        powerMeter: '파워미터'
+        powerMeter: '파워미터',
+        speed: '속도계 센서'
     };
 
     deviceTypes.forEach(deviceType => {
@@ -4559,6 +4560,7 @@ function updateBluetoothIndividualDropdownWithSavedDevices() {
             case 'trainer': itemId = 'bluetoothTrainerItem'; break;
             case 'heartRate': itemId = 'bluetoothHRItem'; break;
             case 'powerMeter': itemId = 'bluetoothPMItem'; break;
+            case 'speed': itemId = 'bluetoothSpeedItem'; break;
         }
 
         const mainItem = __indivEl(itemId);
@@ -4693,10 +4695,10 @@ async function connectBluetoothDevice(deviceType, savedDeviceId) {
     }
 
     // 새 기기 검색: 신규 검색 의도로 연결 함수에 true 전달 (Phase 1/1b 건너뛰고 즉시 전체 검색창 오픈)
-    var connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+    var connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : deviceType === 'speed' ? window.connectSpeedometer : null;
     if (!connectFunction || typeof connectFunction !== 'function') {
         await new Promise(function (r) { setTimeout(r, 300); });
-        connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+        connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : deviceType === 'speed' ? window.connectSpeedometer : null;
     }
     if (!connectFunction || typeof connectFunction !== 'function') {
         console.error('[BluetoothIndividual] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
@@ -4725,12 +4727,15 @@ function updateBluetoothConnectionStatus() {
     const trainerStatus = __indivEl('trainerStatus');
     const pmItem = __indivEl('bluetoothPMItem');
     const pmStatus = __indivEl('powerMeterStatus');
+    const speedItem = __indivEl('bluetoothSpeedItem');
+    const speedStatus = __indivEl('speedStatus');
     const connectBtn = __indivEl('bluetoothConnectBtn');
     
     // 이전 연결 상태 저장 (변경 감지용)
     const prevHRConnected = hrItem?.classList.contains('connected') || false;
     const prevTrainerConnected = trainerItem?.classList.contains('connected') || false;
     const prevPMConnected = pmItem?.classList.contains('connected') || false;
+    const prevSpeedConnected = speedItem?.classList.contains('connected') || false;
     
     // 심박계 상태
     if (window.connectedDevices?.heartRate) {
@@ -4799,9 +4804,24 @@ function updateBluetoothConnectionStatus() {
         }
     }
     
+    // 속도계 센서 상태
+    if (window.connectedDevices?.speed) {
+        if (speedItem) speedItem.classList.add('connected');
+        if (speedStatus) {
+            speedStatus.textContent = '연결됨';
+            speedStatus.style.color = '#00d4aa';
+        }
+    } else {
+        if (speedItem) speedItem.classList.remove('connected');
+        if (speedStatus) {
+            speedStatus.textContent = (window._stelvioDisconnectedTypes && window._stelvioDisconnectedTypes.speed) ? '연결해제' : '미연결';
+            speedStatus.style.color = '#888';
+        }
+    }
+    
     // 연결 버튼 상태 업데이트 (연결된 디바이스가 하나라도 있으면)
     if (connectBtn) {
-        if (window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter) {
+        if (window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter || window.connectedDevices?.speed) {
             connectBtn.classList.add('has-connection');
         } else {
             connectBtn.classList.remove('has-connection');
@@ -4812,10 +4832,12 @@ function updateBluetoothConnectionStatus() {
     const currentHRConnected = window.connectedDevices?.heartRate ? true : false;
     const currentTrainerConnected = window.connectedDevices?.trainer ? true : false;
     const currentPMConnected = window.connectedDevices?.powerMeter ? true : false;
+    const currentSpeedConnected = window.connectedDevices?.speed ? true : false;
     
     if (prevHRConnected !== currentHRConnected || 
         prevTrainerConnected !== currentTrainerConnected || 
-        prevPMConnected !== currentPMConnected) {
+        prevPMConnected !== currentPMConnected ||
+        prevSpeedConnected !== currentSpeedConnected) {
         // 연결 상태가 변경되었으므로 Firebase 업데이트
         updateFirebaseDevices();
     }

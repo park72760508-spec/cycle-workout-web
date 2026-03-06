@@ -18346,6 +18346,28 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       if (typeof showToast === 'function') {
         showToast(`✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결 성공`);
       }
+    } else if (deviceType === 'speed') {
+      const CSC_SERVICE = '00001816-0000-1000-8000-00805f9b34fb';
+      const service = await server.getPrimaryService(CSC_SERVICE);
+      const characteristic = await service.getCharacteristic(0x2A5B);
+      await characteristic.startNotifications();
+      const speedHandler = typeof handleSpeedSensorData === 'function' ? handleSpeedSensorData : (typeof window.handleSpeedSensorData === 'function' ? window.handleSpeedSensorData : null);
+      if (speedHandler) {
+        characteristic.addEventListener('characteristicvaluechanged', speedHandler);
+      }
+      const saved = (typeof loadSavedDevices === 'function' ? loadSavedDevices() : window.loadSavedDevices ? window.loadSavedDevices() : []).find(d => d.deviceId === deviceId && d.deviceType === 'speed');
+      window.connectedDevices.speed = { name: device.name || saved?.name || '알 수 없는 기기', device, server, characteristic };
+      window.isSensorConnected = true;
+      try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}
+      const disconnectHandler = typeof handleDisconnect === 'function' ? handleDisconnect : (typeof window.handleDisconnect === 'function' ? window.handleDisconnect : null);
+      if (disconnectHandler) device.addEventListener('gattserverdisconnected', () => disconnectHandler('speed', device));
+      if (saved && (typeof saveDevice === 'function' || typeof window.saveDevice === 'function')) {
+        const saveFn = typeof saveDevice === 'function' ? saveDevice : window.saveDevice;
+        saveFn(deviceId, device.name || saved.name, 'speed', saved.nickname);
+      }
+      if (typeof updateDevicesList === 'function') updateDevicesList();
+      if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+      if (typeof showToast === 'function') showToast(`✅ ${saved?.nickname || device.name || '알 수 없는 기기'} 연결 성공`);
     }
     
     // 연결 성공 후 상태 업데이트
@@ -18368,6 +18390,7 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       const connectFunction = deviceType === 'trainer' ? window.connectTrainer 
         : deviceType === 'heartRate' ? window.connectHeartRate 
         : deviceType === 'powerMeter' ? window.connectPowerMeter 
+        : deviceType === 'speed' ? window.connectSpeedometer 
         : null;
       
       if (connectFunction && typeof connectFunction === 'function') {
@@ -18410,6 +18433,9 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
     case 'powerMeter':
       connectFunction = window.connectPowerMeter;
       break;
+    case 'speed':
+      connectFunction = window.connectSpeedometer;
+      break;
     default:
       console.error('[Mobile Dashboard] 알 수 없는 디바이스 타입:', deviceType);
       return;
@@ -18417,7 +18443,7 @@ async function connectMobileBluetoothDevice(deviceType, savedDeviceId) {
   
   if (!connectFunction || typeof connectFunction !== 'function') {
     await new Promise(function (r) { setTimeout(r, 300); });
-    connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : null;
+    connectFunction = deviceType === 'trainer' ? window.connectTrainer : deviceType === 'heartRate' ? window.connectHeartRate : deviceType === 'powerMeter' ? window.connectPowerMeter : deviceType === 'speed' ? window.connectSpeedometer : null;
   }
   if (!connectFunction || typeof connectFunction !== 'function') {
     console.error('[Mobile Dashboard] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
@@ -18528,11 +18554,12 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
     };
   }
 
-  var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
+  var deviceTypes = ['trainer', 'heartRate', 'powerMeter', 'speed'];
   var deviceTypeLabels = {
     trainer: '스마트 트레이너',
     heartRate: '심박계',
-    powerMeter: '파워미터'
+    powerMeter: '파워미터',
+    speed: '속도계 센서'
   };
 
   deviceTypes.forEach(function (deviceType) {
@@ -18550,6 +18577,9 @@ function updateMobileBluetoothDropdownWithSavedDevices() {
         break;
       case 'powerMeter':
         itemId = 'mobileBluetoothPMItem';
+        break;
+      case 'speed':
+        itemId = 'mobileBluetoothSpeedItem';
         break;
     }
     
@@ -18648,8 +18678,8 @@ function updateTrainingScreenBluetoothDropdownWithSavedDevices() {
       } catch (e) { return []; }
     };
   }
-  var deviceTypes = ['trainer', 'heartRate', 'powerMeter'];
-  var deviceTypeLabels = { trainer: '스마트 트레이너', heartRate: '심박계', powerMeter: '파워미터' };
+  var deviceTypes = ['trainer', 'heartRate', 'powerMeter', 'speed'];
+  var deviceTypeLabels = { trainer: '스마트 트레이너', heartRate: '심박계', powerMeter: '파워미터', speed: '속도계 센서' };
   deviceTypes.forEach(function (deviceType) {
     var savedDevices = getSavedDevicesByTypeFn(deviceType);
     if (savedDevices.length === 0) return;
@@ -18657,6 +18687,7 @@ function updateTrainingScreenBluetoothDropdownWithSavedDevices() {
     if (deviceType === 'trainer') itemId = 'trainingScreenBluetoothTrainerItem';
     else if (deviceType === 'heartRate') itemId = 'trainingScreenBluetoothHRItem';
     else if (deviceType === 'powerMeter') itemId = 'trainingScreenBluetoothPMItem';
+    else if (deviceType === 'speed') itemId = 'trainingScreenBluetoothSpeedItem';
     var mainItem = document.getElementById(itemId);
     if (!mainItem) return;
     var savedListId = 'trainingScreenBluetoothSaved' + deviceType.charAt(0).toUpperCase() + deviceType.slice(1) + 'List';
@@ -18720,6 +18751,8 @@ function updateMobileBluetoothConnectionStatus() {
   var trainerStatus = document.getElementById('mobileTrainerStatus');
   var pmItem = document.getElementById('mobileBluetoothPMItem');
   var pmStatus = document.getElementById('mobilePowerMeterStatus');
+  var speedItem = document.getElementById('mobileBluetoothSpeedItem');
+  var speedStatus = document.getElementById('mobileSpeedStatus');
   var connectBtn = document.getElementById('mobileBluetoothConnectBtn');
   
   // 저장된 기기 목록 업데이트 (모바일 + 훈련 화면 드롭다운 즉시 반영)
@@ -18738,10 +18771,12 @@ function updateMobileBluetoothConnectionStatus() {
   var hasHr = !!window.connectedDevices?.heartRate;
   var hasTrainer = !!window.connectedDevices?.trainer;
   var hasPm = !!window.connectedDevices?.powerMeter;
+  var hasSpeed = !!window.connectedDevices?.speed;
 
   setStatus(hrItem, hrStatus, hasHr, 'heartRate');
   setStatus(trainerItem, trainerStatus, hasTrainer, 'trainer');
   setStatus(pmItem, pmStatus, hasPm, 'powerMeter');
+  setStatus(speedItem, speedStatus, hasSpeed, 'speed');
 
   var mobileErgMenu = document.getElementById('mobileBluetoothErgMenu');
   if (mobileErgMenu) mobileErgMenu.style.display = hasTrainer ? 'block' : 'none';
@@ -18750,7 +18785,7 @@ function updateMobileBluetoothConnectionStatus() {
   }
 
   if (connectBtn) {
-    var any = hasHr || hasTrainer || hasPm;
+    var any = hasHr || hasTrainer || hasPm || hasSpeed;
     connectBtn.classList.toggle('has-connection', !!any);
     if (!any) connectBtn.classList.remove('erg-mode-active');
   }
@@ -18762,6 +18797,8 @@ function updateMobileBluetoothConnectionStatus() {
   var tsTrainerStatus = document.getElementById('trainingScreenTrainerStatus');
   var tsPmItem = document.getElementById('trainingScreenBluetoothPMItem');
   var tsPmStatus = document.getElementById('trainingScreenPowerMeterStatus');
+  var tsSpeedItem = document.getElementById('trainingScreenBluetoothSpeedItem');
+  var tsSpeedStatus = document.getElementById('trainingScreenSpeedStatus');
   var tsConnectBtn = document.getElementById('trainingScreenBluetoothConnectBtn');
   var tsErgMenu = document.getElementById('trainingScreenBluetoothErgMenu');
   var tsErgStatus = document.getElementById('trainingScreenBluetoothErgStatus');
@@ -18771,6 +18808,7 @@ function updateMobileBluetoothConnectionStatus() {
   setStatus(tsHrItem, tsHrStatus, hasHr, 'heartRate');
   setStatus(tsTrainerItem, tsTrainerStatus, hasTrainer, 'trainer');
   setStatus(tsPmItem, tsPmStatus, hasPm, 'powerMeter');
+  setStatus(tsSpeedItem, tsSpeedStatus, hasSpeed, 'speed');
   if (tsErgMenu) tsErgMenu.style.display = hasTrainer ? 'block' : 'none';
   if (hasTrainer && window.ergController) {
     if (tsErgToggle) tsErgToggle.checked = window.ergController.state.enabled;
@@ -18781,12 +18819,12 @@ function updateMobileBluetoothConnectionStatus() {
     if (tsErgTarget) tsErgTarget.value = Math.round(window.ergController.state.targetPower || 0);
   }
   if (tsConnectBtn) {
-    var anyTs = hasHr || hasTrainer || hasPm;
+    var anyTs = hasHr || hasTrainer || hasPm || hasSpeed;
     tsConnectBtn.classList.toggle('has-connection', !!anyTs);
     if (!anyTs) tsConnectBtn.classList.remove('erg-mode-active');
   }
 
-  var anyConnected = hasHr || hasTrainer || hasPm;
+  var anyConnected = hasHr || hasTrainer || hasPm || hasSpeed;
   if (window.isSensorConnected !== anyConnected) {
     window.isSensorConnected = anyConnected;
     console.log('[Mobile Debug] [BLE] Global Flag SET: isSensorConnected =', anyConnected);

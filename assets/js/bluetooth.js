@@ -39,8 +39,8 @@ const COMPREHENSIVE_ERG_OPTIONAL_SERVICES = [
 ];
 
 // Global State
-window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
-window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
+window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0, speed: 0 };
+window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null, speed: null };
 window._lastCadenceUpdateTime = {};
 window._lastCrankData = {};
 
@@ -52,6 +52,7 @@ function _stelvioBluetoothStub() {
 if (typeof window.connectTrainer !== 'function') window.connectTrainer = _stelvioBluetoothStub;
 if (typeof window.connectHeartRate !== 'function') window.connectHeartRate = _stelvioBluetoothStub;
 if (typeof window.connectPowerMeter !== 'function') window.connectPowerMeter = _stelvioBluetoothStub;
+if (typeof window.connectSpeedometer !== 'function') window.connectSpeedometer = _stelvioBluetoothStub;
 
 // ========== Smart Pairing: 기기 저장 및 관리 ==========
 const STORAGE_KEY = 'stelvio_saved_devices';
@@ -253,6 +254,8 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         optionalServices = [UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE, UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE, 'device_information', 'battery_service'];
       } else if (deviceType === 'powerMeter') {
         optionalServices = [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
+      } else if (deviceType === 'speed') {
+        optionalServices = [UUIDS.CSC_SERVICE];
       } else {
         optionalServices = [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
       }
@@ -277,6 +280,9 @@ async function requestDeviceWithSavedInfo(deviceId, deviceType, savedDeviceName)
         filters.push({ services: [UUIDS.CPS_SERVICE] });
         filters.push({ services: [UUIDS.CSC_SERVICE] });
         optionalServices = [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
+      } else if (deviceType === 'speed') {
+        filters.push({ services: [UUIDS.CSC_SERVICE] });
+        optionalServices = [UUIDS.CSC_SERVICE];
       }
     }
     
@@ -312,6 +318,9 @@ function getOptionalServicesForType(deviceType) {
     });
     return list;
   }
+  if (deviceType === 'speed') {
+    return [UUIDS.CSC_SERVICE];
+  }
   return [UUIDS.HR_SERVICE, UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE];
 }
 
@@ -326,6 +335,11 @@ function getStrictFiltersForType(deviceType) {
   if (deviceType === 'powerMeter') {
     return [
       { services: [UUIDS.CPS_SERVICE] },
+      { services: [UUIDS.CSC_SERVICE] }
+    ];
+  }
+  if (deviceType === 'speed') {
+    return [
       { services: [UUIDS.CSC_SERVICE] }
     ];
   }
@@ -723,6 +737,23 @@ async function connectToSavedDeviceById(deviceId, deviceType) {
     return { device, server };
   }
 
+  if (deviceType === 'speed') {
+    const service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+    const characteristic = await service.getCharacteristic(0x2A5B);
+    await characteristic.startNotifications();
+    characteristic.addEventListener('characteristicvaluechanged', handleSpeedSensorData);
+    window.connectedDevices.speed = { name: device.name || saved.name, device, server, characteristic };
+    window.isSensorConnected = true;
+    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}
+    device.addEventListener('gattserverdisconnected', () => handleDisconnect('speed', device));
+    saveDevice(saved.deviceId, device.name || saved.name, 'speed', saved.nickname);
+    if (typeof updateDevicesList === 'function') updateDevicesList();
+    if (typeof notifyBluetoothConnected === 'function') notifyBluetoothConnected('speed');
+    if (typeof showConnectionStatus === 'function') showConnectionStatus(false);
+    if (typeof showToast === 'function') showToast('✅ ' + (saved.nickname || device.name || saved.name) + ' 연결 성공');
+    return { device, server };
+  }
+
   return null;
 }
 
@@ -1051,6 +1082,35 @@ function handleCSCData(event) {
 }
 window.handleCSCData = window.handleCSCData || handleCSCData;
 
+// 속도계 센서(CSC) 전용 데이터 파서 — 휠 회전 데이터로 속도(km/h) 계산
+const WHEEL_CIRCUMFERENCE_M = 2.1; // 700c 기본값
+window._lastWheelData = window._lastWheelData || {};
+function handleSpeedSensorData(event) {
+  const dv = event.target.value;
+  let off = 0;
+  const flags = dv.getUint8(off); off += 1;
+  if (flags & 0x01) {
+    const cumulativeWheelRevolutions = dv.getUint32(off, true); off += 4;
+    const lastWheelEventTime = dv.getUint16(off, true); off += 2;
+    const lastData = window._lastWheelData['speed'];
+    if (lastData && lastWheelEventTime !== lastData.lastWheelEventTime) {
+      let timeDiff = lastWheelEventTime - lastData.lastWheelEventTime;
+      if (timeDiff < 0) timeDiff += 65536;
+      const revDiff = cumulativeWheelRevolutions - lastData.cumulativeWheelRevolutions;
+      if (timeDiff > 0 && revDiff > 0) {
+        const timeInSeconds = timeDiff / 1024.0;
+        const speedKmh = (revDiff * WHEEL_CIRCUMFERENCE_M / timeInSeconds) * 3.6;
+        if (speedKmh > 0 && speedKmh <= 150) {
+          window.liveData.speed = Math.round(speedKmh * 10) / 10;
+          if (typeof notifyChildWindows === 'function') notifyChildWindows('speed', window.liveData.speed);
+        }
+      }
+    }
+    window._lastWheelData['speed'] = { cumulativeWheelRevolutions, lastWheelEventTime };
+  }
+}
+window.handleSpeedSensorData = window.handleSpeedSensorData || handleSpeedSensorData;
+
 // (Helper functions for HR/PM connection are kept standard)
 async function connectHeartRate(isNewSearch) {
   if (typeof isNewSearch === 'undefined') isNewSearch = false;
@@ -1235,6 +1295,78 @@ async function connectPowerMeter(isNewSearch) {
   }
 }
 
+async function connectSpeedometer(isNewSearch) {
+  if (typeof isNewSearch === 'undefined') isNewSearch = false;
+  try {
+    showConnectionStatus(true);
+    if (window.connectedDevices?.speed) {
+      try {
+        const oldDevice = window.connectedDevices.speed.device;
+        if (oldDevice?.gatt?.connected) await oldDevice.gatt.disconnect();
+        handleDisconnect('speed', oldDevice);
+        await new Promise(r => setTimeout(r, 100));
+      } catch (e) {
+        window.connectedDevices.speed = null;
+        handleDisconnect('speed', null);
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+    var hybrid = await requestDeviceHybrid('speed', isNewSearch);
+    var device = hybrid.device;
+    var server = hybrid.server;
+    if (hybrid.fromReconnect && server && hybrid.saved) {
+      var saved = hybrid.saved;
+      var service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+      var characteristic = await service.getCharacteristic(0x2A5B);
+      await characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', handleSpeedSensorData);
+      window.connectedDevices.speed = { name: device.name || saved.name, device, server, characteristic };
+      window.isSensorConnected = true;
+      try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}
+      device.addEventListener('gattserverdisconnected', () => handleDisconnect('speed', device));
+      saveDevice(saved.deviceId, device.name || saved.name, 'speed', saved.nickname);
+      updateDevicesList();
+      notifyBluetoothConnected('speed');
+      showConnectionStatus(false);
+      showToast('✅ ' + (saved.nickname || device.name || saved.name) + ' 연결 성공');
+      return;
+    }
+    server = await device.gatt.connect();
+    var service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+    var characteristic = await service.getCharacteristic(0x2A5B);
+    await characteristic.startNotifications();
+    characteristic.addEventListener('characteristicvaluechanged', handleSpeedSensorData);
+    window.connectedDevices.speed = { name: device.name, device, server, characteristic };
+    window.isSensorConnected = true;
+    try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: true, deviceType: 'speed' } })); } catch (e) {}
+    device.addEventListener('gattserverdisconnected', () => handleDisconnect('speed', device));
+    var deviceName = device.name || '알 수 없는 기기';
+    var saved = loadSavedDevices().find(d => String(d.deviceId) === String(device.id) && String(d.deviceType) === 'speed');
+    if (!saved) {
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-show-new-device-save-modal', { detail: { deviceId: device.id, deviceName: deviceName, deviceType: 'speed' } }));
+      } catch (evErr) {
+        if (typeof showConfirmDeviceNameModal === 'function') showConfirmDeviceNameModal(deviceName, (nameToSave) => {
+          saveDevice(device.id, nameToSave, 'speed', nameToSave);
+          if (typeof showToast === 'function') showToast('✅ ' + nameToSave + ' 저장 완료');
+        });
+      }
+    } else {
+      saveDevice(device.id, deviceName, 'speed', saved.name || deviceName);
+    }
+    updateDevicesList();
+    notifyBluetoothConnected('speed');
+    showConnectionStatus(false);
+    showToast('✅ ' + deviceName + ' 연결 성공');
+  } catch (err) {
+    showConnectionStatus(false);
+    if (err.name !== 'NotFoundError' && err.name !== 'SecurityError') {
+      if (typeof showToast === 'function') showToast('속도계 센서 연결 실패: ' + (err.message || '알 수 없는 오류'));
+      else alert('속도계 센서 오류: ' + err.message);
+    }
+  }
+}
+
 function handleHeartRateData(event) {
   const dv = event.target.value;
   const flags = dv.getUint8(0);
@@ -1255,7 +1387,7 @@ function handleDisconnect(type, device) {
   }
   
   if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
-  const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+  const anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter || window.connectedDevices?.speed);
   window.isSensorConnected = anyConnected;
   try { window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } })); } catch (e) {}
 
@@ -1283,6 +1415,7 @@ function notifyChildWindows(field, value) {
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
 window.connectHeartRate = connectHeartRate;
+window.connectSpeedometer = connectSpeedometer;
 window.setTargetPower = function(targetWatts) {
     if (window.ergController) window.ergController.setTargetPower(targetWatts);
 };

@@ -54,6 +54,10 @@
       { item: 'trainingScreenBluetoothPMItem', status: 'trainingScreenPowerMeterStatus' },
       { item: 'mobileBluetoothPMItem', status: 'mobilePowerMeterStatus' }
     ],
+    speed: [
+      { item: 'trainingScreenBluetoothSpeedItem', status: 'trainingScreenSpeedStatus' },
+      { item: 'mobileBluetoothSpeedItem', status: 'mobileSpeedStatus' }
+    ],
     trainer: [
       { item: 'trainingScreenBluetoothTrainerItem', status: 'trainingScreenTrainerStatus' },
       { item: 'mobileBluetoothTrainerItem', status: 'mobileTrainerStatus' }
