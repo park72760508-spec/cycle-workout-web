@@ -15272,19 +15272,19 @@ function generateMobileSpeedLabels() {
   return html;
 }
 
-/** 모바일 속도계 원호 업데이트 (0~120 km/h, 우측→좌측 채우기, 끝점 Dot, 속도값 원형) */
+/** 모바일 속도계 원호 업데이트 (0~120 km/h, 우측→좌측 채우기, 끝점 Dot, 시작점 원에 속도 정수) */
 function updateMobileSpeedArc() {
   const arc = safeGetElement('mobile-gauge-speed-arc');
   const dot = safeGetElement('mobile-gauge-speed-dot');
-  const speedBg = safeGetElement('mobile-gauge-speed-value-bg');
-  const speedText = safeGetElement('mobile-gauge-speed-value');
+  const startBg = safeGetElement('mobile-gauge-speed-start-bg');
+  const startValue = safeGetElement('mobile-gauge-speed-start-value');
   if (!arc) return;
   const speedKmh = Number(window.liveData?.speed);
   if (speedKmh == null || Number.isNaN(speedKmh) || speedKmh < 0) {
     arc.style.strokeDashoffset = '251.33';
     if (dot) dot.style.display = 'none';
-    if (speedBg) speedBg.style.display = 'none';
-    if (speedText) speedText.style.display = 'none';
+    if (startBg) startBg.style.display = 'none';
+    if (startValue) startValue.style.display = 'none';
     return;
   }
   const totalLen = Math.PI * 80;
@@ -15303,10 +15303,10 @@ function updateMobileSpeedArc() {
       dot.style.display = '';
     }
   }
-  if (speedBg) { speedBg.style.display = ''; }
-  if (speedText) {
-    speedText.textContent = speedKmh >= 100 ? speedKmh.toFixed(0) : speedKmh.toFixed(1);
-    speedText.style.display = '';
+  if (startBg) startBg.style.display = '';
+  if (startValue) {
+    startValue.textContent = String(Math.round(speedKmh));
+    startValue.style.display = '';
   }
 }
 
