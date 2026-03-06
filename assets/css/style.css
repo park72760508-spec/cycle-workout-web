@@ -19358,8 +19358,11 @@ body.bluetooth-individual-screen-active {
   display: none !important;
   visibility: hidden !important;
 }
-#bluetoothIndividualScreen.indiv-screen-wrap {
+/* display:flex는 active일 때만 적용 — 비활성 시 showScreen의 display:none이 덮어쓰이지 않도록 (오버레이 방지) */
+#bluetoothIndividualScreen.indiv-screen-wrap.active {
   display: flex !important;
+}
+#bluetoothIndividualScreen.indiv-screen-wrap {
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
   margin: 0 !important;
   padding: 0 !important;
