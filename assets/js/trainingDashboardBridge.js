@@ -13,7 +13,7 @@
   var isAppEnvironment = !!(typeof global !== 'undefined' && global.ReactNativeWebView);
   function isAppEnvironmentNow() {
     try {
-      return !!(typeof global !== 'undefined' && global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function');
+      return !!(typeof global !== 'undefined' && (global.ReactNativeWebView || global.StelvioInApp));
     } catch (e) {
       return false;
     }
@@ -124,15 +124,15 @@
   }
 
   /**
-   * liveData 반영 후 기존 화면 업데이트 경로 호출 (재사용)
+   * liveData 반영 후 기존 화면 업데이트 경로 호출 (훈련화면, 모바일대시보드, bluetoothIndividual)
    */
   function applyLiveDataToScreen() {
     try {
-      if (typeof global.updateTrainingDisplay === 'function') {
-        global.updateTrainingDisplay();
-      }
+      if (typeof global.updateTrainingDisplay === 'function') global.updateTrainingDisplay();
+      if (typeof global.updateMobileDashboardData === 'function') global.updateMobileDashboardData();
+      if (typeof global.updateDashboard === 'function') global.updateDashboard();
     } catch (err) {
-      if (console && console.warn) console.warn('[trainingDashboardBridge] updateTrainingDisplay failed', err);
+      if (console && console.warn) console.warn('[trainingDashboardBridge] applyLiveDataToScreen failed', err);
     }
   }
 
@@ -155,6 +155,7 @@
     if (Number.isNaN(instPower)) return;
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     global.liveData.power = instPower;
+    global._lastPowerUpdateTime = Date.now();
     if (typeof global.addPowerToBuffer === 'function') global.addPowerToBuffer(instPower);
     if (global.ergController && typeof global.ergController.updatePower === 'function') {
       global.ergController.updatePower(instPower);
@@ -179,6 +180,8 @@
           var cadence = Math.round((revDiff / timeInSeconds) * 60);
           if (cadence > 0 && cadence <= 250) {
             global.liveData.cadence = cadence;
+            if (!global._lastCadenceUpdateTime) global._lastCadenceUpdateTime = {};
+            global._lastCadenceUpdateTime[deviceKey] = Date.now();
             if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', cadence);
           }
         }
@@ -209,6 +212,8 @@
       if (usePowerCadence) {
         if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
         global.liveData.cadence = rpm;
+        if (!global._lastCadenceUpdateTime) global._lastCadenceUpdateTime = {};
+        global._lastCadenceUpdateTime.trainer = Date.now();
         if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', rpm);
       }
     }
@@ -220,6 +225,7 @@
       if (!Number.isNaN(p) && usePowerCadence) {
         if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
         global.liveData.power = p;
+        global._lastPowerUpdateTime = Date.now();
         if (typeof global.addPowerToBuffer === 'function') global.addPowerToBuffer(p);
         if (global.ergController && typeof global.ergController.updatePower === 'function') {
           global.ergController.updatePower(p);
@@ -283,6 +289,8 @@
           var cadence = Math.round((revDiff / timeInSeconds) * 60);
           if (cadence > 0 && cadence <= 250 && global.liveData) {
             global.liveData.cadence = cadence;
+            if (!global._lastCadenceUpdateTime) global._lastCadenceUpdateTime = {};
+            global._lastCadenceUpdateTime.speedSensor = Date.now();
             if (typeof global.notifyChildWindows === 'function') global.notifyChildWindows('cadence', cadence);
             applyLiveDataToScreen();
           }
@@ -319,6 +327,9 @@
   }
 
   function closeDeviceSettingPopup() {
+    if (isAppEnvironmentNow() && typeof safePostToNative === 'function') {
+      safePostToNative({ type: 'ABORT_AUTO_CONNECT' });
+    }
     var overlay = document.getElementById('deviceSettingOverlay');
     var popupContent = document.getElementById('deviceSettingPopupContent');
     var screenEl = document.getElementById('deviceSettingScreen');
@@ -596,9 +607,12 @@
     }
   }
 
-  /** 디바운스 후 실제 연결 해제 적용: connectedDevices 갱신, UI, 전역 플래그, 이벤트 */
+  /** 디바운스 후 실제 연결 해제 적용: connectedDevices 갱신, liveData 0 리셋, UI, 전역 플래그, 이벤트 */
   function applyDisconnect(key, deviceType) {
     if (global.connectedDevices && key) global.connectedDevices[key] = null;
+    if (typeof global.resetLiveDataForDevice === 'function') {
+      try { global.resetLiveDataForDevice(key); } catch (e) {}
+    }
     if (key === 'powerMeter' || key === 'trainer') {
       if (!global.connectedDevices.powerMeter && !global.connectedDevices.trainer) {
         global[POWER_CADENCE_SOURCE_KEY] = null;
@@ -856,6 +870,7 @@
     if (bpm == null || Number.isNaN(bpm)) return;
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     global.liveData.heartRate = bpm;
+    global._lastHeartRateUpdateTime = Date.now();
     if (global.ergController && typeof global.ergController.updateHeartRate === 'function') {
       try { global.ergController.updateHeartRate(bpm); } catch (err) {}
     }
