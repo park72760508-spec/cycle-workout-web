@@ -3440,14 +3440,15 @@ function generateGaugeLabels() {
         
         // FTP 값을 곱한 값 계산 (정수만 표기)
         const value = Math.round(userFTP * item.mult);
+        const labelText = value === 0 ? '0 w' : String(value);
         
-        // 레이블 생성 (정수값만 표기)
+        // 레이블 생성 (정수값만 표기, 9시 방향 0 → 0 w)
         labelsHTML += `<text x="${x}" y="${y}" 
                              text-anchor="middle" 
                              dominant-baseline="middle"
                              fill="${item.color}" 
                              font-size="10" 
-                             font-weight="600">${value}</text>`;
+                             font-weight="600">${labelText}</text>`;
     });
     
     return labelsHTML;
@@ -3518,7 +3519,7 @@ function generateIndivSpeedLabels() {
         const x = centerX + innerLabelRadius * Math.cos(rad);
         const y = centerY + innerLabelRadius * Math.sin(rad);
         const labelText = val === 0 ? '0 km/h' : String(val);
-        html += '<text x="' + x + '" y="' + y + '" text-anchor="middle" dominant-baseline="middle" fill="#4da6ff" font-size="6">' + labelText + '</text>';
+        html += '<text x="' + x + '" y="' + y + '" text-anchor="middle" dominant-baseline="middle" fill="#4595e6" font-size="6">' + labelText + '</text>';
     });
     return html;
 }
