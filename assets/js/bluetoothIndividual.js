@@ -3518,18 +3518,20 @@ function generateIndivSpeedLabels() {
         const x = centerX + innerLabelRadius * Math.cos(rad);
         const y = centerY + innerLabelRadius * Math.sin(rad);
         const labelText = val === 60 ? '60 km/h' : String(val);
-        html += '<text x="' + x + '" y="' + y + '" text-anchor="middle" dominant-baseline="middle" fill="#888" font-size="6">' + labelText + '</text>';
+        html += '<text x="' + x + '" y="' + y + '" text-anchor="middle" dominant-baseline="middle" fill="#4da6ff" font-size="6">' + labelText + '</text>';
     });
     return html;
 }
 
-/** 블루투스 개인훈련 속도계 원호 업데이트 (0~120 km/h, 우측→좌측) */
+/** 블루투스 개인훈련 속도계 원호 업데이트 (0~120 km/h, 우측→좌측, 끝점 Dot) */
 function updateIndivSpeedArc() {
     var arc = __indivEl('gauge-speed-arc');
+    var dot = __indivEl('gauge-speed-dot');
     if (!arc) return;
     var speedKmh = Number(window.liveData && window.liveData.speed);
     if (speedKmh == null || Number.isNaN(speedKmh) || speedKmh < 0) {
         arc.style.strokeDashoffset = '251.33';
+        if (dot) dot.style.display = 'none';
         return;
     }
     var totalLen = Math.PI * 80;
@@ -3537,6 +3539,17 @@ function updateIndivSpeedArc() {
     var filledLen = totalLen * ratio;
     arc.style.strokeDasharray = totalLen + ' ' + totalLen;
     arc.style.strokeDashoffset = String(totalLen - filledLen);
+    if (dot) {
+        if (ratio <= 0) {
+            dot.style.display = 'none';
+        } else {
+            var angleDeg = 360 - ratio * 180;
+            var rad = (angleDeg * Math.PI) / 180;
+            dot.setAttribute('cx', 100 + 80 * Math.cos(rad));
+            dot.setAttribute('cy', 140 + 80 * Math.sin(rad));
+            dot.style.display = '';
+        }
+    }
 }
 
 /**
