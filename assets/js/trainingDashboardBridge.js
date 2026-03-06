@@ -10,9 +10,24 @@
   'use strict';
 
   /** 스크립트 로드 시점 값. 앱에서는 WebView 주입이 늦을 수 있으므로 런타임에 재확인 */
-  var isAppEnvironment = !!global.ReactNativeWebView;
+  var isAppEnvironment = !!(typeof global !== 'undefined' && global.ReactNativeWebView);
   function isAppEnvironmentNow() {
-    return !!(global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function');
+    try {
+      return !!(typeof global !== 'undefined' && global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function');
+    } catch (e) {
+      return false;
+    }
+  }
+  /** 웹 환경에서 Native 전용 객체 호출 방지: 앱 환경에서만 postMessage 실행 */
+  function safePostToNative(messageObj) {
+    try {
+      if (typeof global === 'undefined' || !global.ReactNativeWebView || typeof global.ReactNativeWebView.postMessage !== 'function') return false;
+      global.ReactNativeWebView.postMessage(JSON.stringify(messageObj));
+      return true;
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[trainingDashboardBridge] Native postMessage failed', e);
+      return false;
+    }
   }
 
   var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen'];
@@ -446,9 +461,7 @@
       console.log('[trainingDashboardBridge] AUTO_CONNECT aborted by user');
     }
     try {
-      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
-        global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ABORT_AUTO_CONNECT' }));
-      }
+      safePostToNative({ type: 'ABORT_AUTO_CONNECT' });
     } catch (e) {}
     clearAutoConnectInProgress();
   }
@@ -471,7 +484,7 @@
     }, AUTO_CONNECT_TIMEOUT_MS);
 
     function tryPost() {
-      var post = global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function';
+      var post = isAppEnvironmentNow();
       if (!post) {
         var idx = _autoConnectRetryCount;
         if (idx < AUTO_CONNECT_RETRY_DELAYS_MS.length) {
@@ -516,10 +529,11 @@
               if (names && typeof names === 'object') payload.deviceNames = names;
             }
           }
-          global.ReactNativeWebView.postMessage(JSON.stringify(payload));
-          global[AUTO_CONNECT_SENT_KEY] = true;
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
+          if (safePostToNative(payload)) {
+            global[AUTO_CONNECT_SENT_KEY] = true;
+            if (typeof console !== 'undefined' && console.log) {
+              console.log('[trainingDashboardBridge] REQUEST_AUTO_CONNECT 발송됨', payload);
+            }
           }
         } catch (e) {
           if (typeof console !== 'undefined' && console.warn) {

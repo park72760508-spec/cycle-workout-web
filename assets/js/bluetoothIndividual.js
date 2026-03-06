@@ -105,7 +105,22 @@ var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_TIMEOUT_MS = 20000;
 
 /** 앱 WebView 여부 (모바일 훈련화면과 동일 판단). 웹 전용이면 연결 버튼은 드롭다운, 앱이면 부모 창 Device Settings 팝업 */
 function isAppEnvironmentNow() {
-    return !!(window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function');
+    try {
+        return !!(typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function');
+    } catch (e) {
+        return false;
+    }
+}
+/** 웹 환경에서 Native 전용 객체 호출 방지: 앱 환경에서만 postMessage 실행 */
+function safePostToNative(messageObj) {
+    try {
+        if (typeof window === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') return false;
+        window.ReactNativeWebView.postMessage(JSON.stringify(messageObj));
+        return true;
+    } catch (e) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] Native postMessage failed', e);
+        return false;
+    }
 }
 
 function setBluetoothIndividualConnectButtonLabel(connecting) {
@@ -155,9 +170,7 @@ function abortBluetoothIndividualAutoConnect() {
     if (!window._bluetoothIndividualAutoConnectInProgress) return;
     if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] auto-connect aborted by user');
     try {
-        if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ABORT_AUTO_CONNECT' }));
-        }
+        safePostToNative({ type: 'ABORT_AUTO_CONNECT' });
     } catch (e) {}
     clearBluetoothIndividualAutoConnect();
 }
@@ -170,7 +183,7 @@ var BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_SEND_DELAY_MS = 350;
 function sendRequestAutoConnectIfInApp() {
     function tryPost() {
         try {
-            if (typeof window.ReactNativeWebView === 'undefined' || !window.ReactNativeWebView || typeof window.ReactNativeWebView.postMessage !== 'function') {
+            if (!isAppEnvironmentNow()) {
                 var idx = _bluetoothIndividualAutoConnectRetryCount;
                 if (idx < BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS.length) {
                     var delay = BLUETOOTH_INDIVIDUAL_AUTO_CONNECT_RETRY_MS[idx];
@@ -214,7 +227,7 @@ function sendRequestAutoConnectIfInApp() {
                             if (names && typeof names === 'object') payload.deviceNames = names;
                         }
                     }
-                    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+                    safePostToNative(payload);
                     if (typeof console !== 'undefined' && console.log) console.log('[BluetoothIndividual] REQUEST_AUTO_CONNECT 발송 완료', payload);
                 } catch (err) {
                     if (typeof console !== 'undefined' && console.warn) console.warn('[BluetoothIndividual] sendRequestAutoConnectIfInApp doSend failed', err);
@@ -1477,6 +1490,7 @@ db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
         if (previousTrainingState !== 'running' && currentState === 'running') {
             bluetoothIndividualTrainingStartTime = Date.now();
             bluetoothIndividualTotalElapsedTime = 0;
+            window._indivDistanceKm = 0;
             if (currentSegmentIndex >= 0) {
                 bluetoothIndividualSegmentStartTime = Date.now();
                 bluetoothIndividualSegmentElapsedTime = 0;

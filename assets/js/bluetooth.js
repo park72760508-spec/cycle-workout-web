@@ -44,6 +44,20 @@ window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter
 window._lastCadenceUpdateTime = {};
 window._lastCrankData = {};
 
+// ---------- 환경 감지: 앱(WebView) vs 순수 웹 브라우저 (투 트랙 분기) ----------
+function isAppEnvironment() {
+  try {
+    return !!(typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function');
+  } catch (e) {
+    return false;
+  }
+}
+function isWebEnvironment() {
+  return !isAppEnvironment();
+}
+window.isAppEnvironment = window.isAppEnvironment || isAppEnvironment;
+window.isWebEnvironment = window.isWebEnvironment || isWebEnvironment;
+
 // 모바일에서 스크립트 로드 실패 시 안내용 스텁 (실제 구현은 아래에서 덮어씀)
 function _stelvioBluetoothStub() {
   var msg = '블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해 주세요.';
@@ -494,25 +508,25 @@ function notifyBluetoothConnected(deviceType) {
 // 저장된 디바이스 전용 검색 타임아웃 (ms). 이 시간 내 미발견 시 일반 검색으로 전환 (하이브리드)
 // BLE 발견은 보통 5~15초 내 완료되므로 20초로 설정 (확장성: 블루투스 개인훈련 대시보드에서도 동일 상수 사용)
 const SAVED_DEVICE_SEARCH_TIMEOUT_MS = 20000;
-const SAVED_DEVICE_POLL_INTERVAL_MS = 2000;
 window.SAVED_DEVICE_SEARCH_TIMEOUT_MS = SAVED_DEVICE_SEARCH_TIMEOUT_MS;
 
-// 저장된 디바이스만 검색: getDevices() 1회 시도 후, 미발견 시 폴링으로 타임아웃까지 대기. 타임아웃 시 일반 검색 폴백용 플래그 반환
+// 저장된 디바이스 재연결: 1회 시도 후 실패 시 지수 백오프(1s→2s→4s→8s)로 최대 4회 재시도. 무한 폴링 제거.
 // 반환: { success: true, result: { device, server } } 또는 { success: false, fallback: 'general' }
+var EXPONENTIAL_BACKOFF_MS = [1000, 2000, 4000, 8000];
+var MAX_RECONNECT_ATTEMPTS = 5; // 1회 즉시 + 4회 백오프
 async function tryReconnectToSavedDeviceWithPolling(deviceId, deviceType) {
   const idStr = String(deviceId);
   const reconnectFn = typeof reconnectToSavedDevice === 'function' ? reconnectToSavedDevice : (window.reconnectToSavedDevice || null);
   if (!reconnectFn) return { success: false, fallback: 'general' };
 
-  let result = await reconnectFn(idStr, deviceType);
-  if (result) return { success: true, result };
-
   if (!navigator.bluetooth || !('getDevices' in navigator.bluetooth))
     return { success: false, fallback: 'general' };
 
-  const deadline = Date.now() + SAVED_DEVICE_SEARCH_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    await new Promise(function (r) { setTimeout(r, SAVED_DEVICE_POLL_INTERVAL_MS); });
+  let result = await reconnectFn(idStr, deviceType);
+  if (result) return { success: true, result };
+
+  for (var i = 0; i < EXPONENTIAL_BACKOFF_MS.length && i < MAX_RECONNECT_ATTEMPTS - 1; i++) {
+    await new Promise(function (r) { setTimeout(r, EXPONENTIAL_BACKOFF_MS[i]); });
     result = await reconnectFn(idStr, deviceType);
     if (result) return { success: true, result };
   }
@@ -1409,6 +1423,42 @@ function handleDisconnect(type, device) {
   } catch (evErr) {}
 
   updateDevicesList();
+
+  // [웹 전용] gattserverdisconnected 기반 자동 재연결: 저장된 기기가 있으면 지수 백오프(1s→2s→4s→8s)로 재시도
+  if (isWebEnvironment()) {
+    var savedList = getSavedDevicesByType(type);
+    if (savedList.length > 0 && (!window._stelvioReconnectScheduled || !window._stelvioReconnectScheduled[type])) {
+      if (!window._stelvioReconnectScheduled) window._stelvioReconnectScheduled = {};
+      window._stelvioReconnectScheduled[type] = true;
+      var saved = savedList[0];
+      scheduleWebReconnectWithBackoff(type, saved.deviceId, 0);
+    }
+  }
+}
+
+// 웹 환경 전용: 지수 백오프(1s→2s→4s→8s)로 끊김 후 자동 재연결. requestDevice 호출 없음(사용자 제스처 불필요).
+var WEB_RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000];
+function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex) {
+  if (!isWebEnvironment() || isAppEnvironment()) return;
+  var connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (window.connectToSavedDeviceById || null);
+  if (!connectById) return;
+  if (attemptIndex >= WEB_RECONNECT_BACKOFF_MS.length) {
+    if (window._stelvioReconnectScheduled) window._stelvioReconnectScheduled[deviceType] = false;
+    return;
+  }
+  var delay = WEB_RECONNECT_BACKOFF_MS[attemptIndex];
+  setTimeout(function () {
+    reconnectToSavedDevice(deviceId, deviceType).then(function (result) {
+      if (result && result.device && result.server) {
+        if (window._stelvioReconnectScheduled) window._stelvioReconnectScheduled[deviceType] = false;
+        connectById(deviceId, deviceType).catch(function () {});
+      } else {
+        scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex + 1);
+      }
+    }).catch(function () {
+      scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex + 1);
+    });
+  }, delay);
 }
 
 function notifyChildWindows(field, value) {

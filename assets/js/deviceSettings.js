@@ -12,7 +12,18 @@
 (function (global) {
   'use strict';
 
-  var isAppEnvironment = !!global.ReactNativeWebView;
+  var isAppEnvironment = !!(typeof global !== 'undefined' && global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function');
+  /** 웹 환경에서 Native 전용 객체 호출 방지: 앱 환경에서만 postMessage 실행 */
+  function safePostToNative(messageObj) {
+    try {
+      if (typeof global === 'undefined' || !global.ReactNativeWebView || typeof global.ReactNativeWebView.postMessage !== 'function') return false;
+      global.ReactNativeWebView.postMessage(JSON.stringify(messageObj));
+      return true;
+    } catch (e) {
+      if (console && console.warn) console.warn('[deviceSettings] Native postMessage failed', e);
+      return false;
+    }
+  }
 
   var MODAL_ID = 'deviceScanModal';
   var LIST_ID = 'deviceScanList';
@@ -207,17 +218,8 @@
     addedDeviceIds.clear();
     if (list) list.innerHTML = '';
     try {
-      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
-        global.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'START_SCAN',
-          deviceType: savedTargetType,
-          allowReplace: true
-        }));
-        global.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'REQUEST_KNOWN_DEVICES',
-          deviceType: savedTargetType
-        }));
-      }
+      safePostToNative({ type: 'START_SCAN', deviceType: savedTargetType, allowReplace: true });
+      safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: savedTargetType });
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] 재검색 START_SCAN failed', e);
     }
@@ -253,17 +255,8 @@
     }
     if (rescanWrap) rescanWrap.style.display = 'none';
     try {
-      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
-        global.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'START_SCAN',
-          deviceType: deviceType,
-          allowReplace: true
-        }));
-        global.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'REQUEST_KNOWN_DEVICES',
-          deviceType: deviceType
-        }));
-      }
+      safePostToNative({ type: 'START_SCAN', deviceType: deviceType, allowReplace: true });
+      safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: deviceType });
     } catch (e) {
       if (console && console.warn) console.warn('[deviceSettings] START_SCAN postMessage failed', e);
     }
@@ -313,14 +306,8 @@
         setCardSaved(typeToConnect, id, displayName);
         showDeviceScanConnecting(displayName);
         try {
-          if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
-            global.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'CONNECT_DEVICE',
-              deviceId: id,
-              deviceType: typeToConnect,
-              deviceName: displayName,
-              replaceDevice: true
-            }));
+          if (!safePostToNative({ type: 'CONNECT_DEVICE', deviceId: id, deviceType: typeToConnect, deviceName: displayName, replaceDevice: true })) {
+            throw new Error('Native bridge unavailable');
           }
         } catch (err) {
           if (console && console.warn) console.warn('[deviceSettings] CONNECT_DEVICE postMessage failed', err);
@@ -510,14 +497,8 @@
       setCardSaved(deviceTypeToConnect, deviceId, deviceName);
       showDeviceScanConnecting(deviceName);
       try {
-        if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
-          global.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'CONNECT_DEVICE',
-            deviceId: deviceId,
-            deviceType: deviceTypeToConnect,
-            deviceName: deviceName,
-            replaceDevice: true
-          }));
+        if (!safePostToNative({ type: 'CONNECT_DEVICE', deviceId: deviceId, deviceType: deviceTypeToConnect, deviceName: deviceName, replaceDevice: true })) {
+          throw new Error('Native bridge unavailable');
         }
       } catch (err) {
         if (console && console.warn) console.warn('[deviceSettings] CONNECT_DEVICE postMessage failed', err);
