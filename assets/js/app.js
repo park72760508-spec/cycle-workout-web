@@ -15514,6 +15514,9 @@ function updateMobileTargetPowerArc() {
   targetArc.setAttribute('stroke', arcColor);
   targetArc.style.display = 'block';
   
+  // 목표 파워값 색상: 원호가 녹색(민트)이면 Lap 타임 색상, 주황이면 원래 주황색
+  targetPowerEl.setAttribute('fill', achievementRatio >= 0.985 ? '#00d4aa' : '#ff8c00');
+  
   // ftp_pctz 타입인 경우 상한값 원호 추가 (모바일 전용 상태 우선 사용)
   const mts = window.mobileTrainingState || {};
   const maxPowerValue = mts.currentSegmentMaxPower || window.currentSegmentMaxPower;
