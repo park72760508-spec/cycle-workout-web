@@ -1361,6 +1361,7 @@ if (STRAVA_CLIENT_SECRET) {
 exports.manualStravaSyncWithMmp = onRequest(
   manualStravaSyncWithMmpOptions,
   async (req, res) => {
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", req.query?.months || req.body?.months);
     if (req.method === "OPTIONS") {
       res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
       res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -1377,7 +1378,11 @@ exports.manualStravaSyncWithMmp = onRequest(
     res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
+    if (!uid) {
+      console.warn("[manualStravaSyncWithMmp] 인증 실패: Authorization Bearer 토큰 없음 또는 유효하지 않음");
+      return;
+    }
+    console.log("[manualStravaSyncWithMmp] 인증 성공, userId:", uid);
 
     const months = Math.min(6, Math.max(1, parseInt(req.query.months || req.body?.months || "1", 10) || 1));
     const db = admin.firestore();
