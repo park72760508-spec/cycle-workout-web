@@ -636,7 +636,7 @@ async function fetchStravaStreams(accessToken, activityId) {
  * watts 배열: 인덱스 1초당 1개 값. seconds 구간의 최대 평균 파워 반환.
  */
 function calculateMaxAveragePower(wattsArray, seconds) {
-  if (!Array.isArray(wattsArray) || wattsArray.length < seconds) return null;
+  if (!wattsArray || wattsArray.length < seconds) return 0;
   const arr = wattsArray;
   const len = arr.length;
   let sum = 0;
