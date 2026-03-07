@@ -1187,6 +1187,93 @@ async function syncStravaData(startDate = null, endDate = null, opts = {}) {
 }
 
 /**
+ * MMP 포함 서버 동기화 (manualStravaSyncWithMmp Cloud Function 호출)
+ * - 과거 1~6개월 Strava 활동 + 5/10/30분 파워(MMP) 계산·저장
+ * - Firebase 로그인 필요 (Authorization Bearer 토큰)
+ * @param {number} [months=1] - 동기화할 개월 수 (1~6)
+ */
+async function syncStravaDataWithMmp(months = 1) {
+  const monthsVal = Math.min(6, Math.max(1, parseInt(months, 10) || 1));
+  const btn = document.getElementById('btnStravaSyncWithMmp');
+  const originalText = btn ? btn.textContent : 'MMP 포함 동기화';
+  const progressOverlay = document.getElementById('stravaSyncProgressOverlay');
+  const progressText = document.getElementById('stravaSyncProgressText');
+
+  function showProgress(msg) {
+    if (progressText) progressText.textContent = msg || '준비 중...';
+    if (progressOverlay) {
+      progressOverlay.classList.remove('hidden');
+      progressOverlay.style.display = 'flex';
+    }
+  }
+  function hideProgress() {
+    if (progressOverlay) {
+      progressOverlay.classList.add('hidden');
+      progressOverlay.style.display = 'none';
+    }
+  }
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ 동기화 중...';
+    }
+    closeStravaSyncModal();
+    showProgress(`MMP 포함 동기화 중 (${monthsVal}개월)...`);
+
+    const auth = window.authV9 || window.auth || window.firebase?.auth?.();
+    const currentUser = auth?.currentUser;
+    if (!currentUser) {
+      throw new Error('로그인이 필요합니다. Firebase Auth로 로그인 후 다시 시도해 주세요.');
+    }
+    const idToken = await currentUser.getIdToken();
+
+    const url = `https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?months=${monthsVal}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    if (!data.success) {
+      throw new Error(data.error || '동기화 실패');
+    }
+
+    const { processedCount = 0, updatedCount = 0, createdCount = 0, hasMore } = data;
+    let message = `✅ MMP 포함 동기화 완료: 처리 ${processedCount}건 (신규 ${createdCount}, 업데이트 ${updatedCount})`;
+    if (hasMore) {
+      message += '. 일부 활동이 남아있을 수 있습니다. 다시 실행해 보세요.';
+    }
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, 'success');
+    } else {
+      alert(message);
+    }
+    if (typeof window.loadTrainingJournalCalendar === 'function') {
+      try { window.loadTrainingJournalCalendar(); } catch (e) {}
+    }
+    return data;
+  } catch (err) {
+    const msg = err.message || '알 수 없는 오류';
+    if (typeof window.showToast === 'function') {
+      window.showToast(`❌ MMP 동기화 실패: ${msg}`, 'error');
+    } else {
+      alert(`❌ MMP 동기화 실패: ${msg}`);
+    }
+    return { success: false, error: msg };
+  } finally {
+    hideProgress();
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
+
+/**
  * Strava 동기화 날짜 선택 모달 열기
  */
 function openStravaSyncModal() {
@@ -1439,3 +1526,4 @@ window.clearStravaSyncMonthRange = clearStravaSyncMonthRange;
 window.startStravaSyncToday = startStravaSyncToday;
 window.startStravaSyncTodayAll = startStravaSyncTodayAll;
 window.confirmStravaSync = confirmStravaSync;
+window.syncStravaDataWithMmp = syncStravaDataWithMmp;
