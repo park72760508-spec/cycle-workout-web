@@ -378,6 +378,7 @@ exports.exchangeStravaCode = onRequest(
       const accessToken = tokenData.access_token || "";
       const refreshToken = tokenData.refresh_token || "";
       const expiresAt = tokenData.expires_at != null ? Number(tokenData.expires_at) : 0;
+      const athleteId = tokenData.athlete != null && tokenData.athlete.id != null ? Number(tokenData.athlete.id) : null;
 
       if (!accessToken || !refreshToken) {
         throw new HttpsError(
@@ -392,11 +393,13 @@ exports.exchangeStravaCode = onRequest(
         throw new HttpsError("not-found", "해당 사용자를 찾을 수 없습니다.");
       }
 
-      await userRef.update({
+      const updateData = {
         strava_access_token: accessToken,
         strava_refresh_token: refreshToken,
         strava_expires_at: expiresAt,
-      });
+      };
+      if (athleteId != null) updateData.strava_athlete_id = athleteId;
+      await userRef.update(updateData);
 
       res.status(200).json({ success: true });
     } catch (err) {
@@ -610,6 +613,159 @@ async function fetchStravaActivityDetail(accessToken, activityId) {
   } catch (e) {
     return { success: false, error: e.message || "Request failed" };
   }
+}
+
+/** Strava Streams API 호출 (watts, time). 파워미터가 없으면 watts가 없을 수 있음. */
+async function fetchStravaStreams(accessToken, activityId) {
+  const url = `https://www.strava.com/api/v3/activities/${activityId}/streams/time,watts`;
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return { success: false, watts: null };
+    const streams = await res.json().catch(() => []);
+    if (!Array.isArray(streams)) return { success: false, watts: null };
+    const wattsStream = streams.find((s) => s && s.type === "watts" && Array.isArray(s.data));
+    const watts = wattsStream ? wattsStream.data : null;
+    return { success: true, watts };
+  } catch (e) {
+    return { success: false, watts: null };
+  }
+}
+
+/**
+ * O(N) 슬라이딩 윈도우로 최대 평균 파워(MMP) 계산.
+ * watts 배열: 인덱스 1초당 1개 값. seconds 구간의 최대 평균 파워 반환.
+ */
+function calculateMaxAveragePower(wattsArray, seconds) {
+  if (!Array.isArray(wattsArray) || wattsArray.length < seconds) return null;
+  const arr = wattsArray;
+  const len = arr.length;
+  let sum = 0;
+  for (let i = 0; i < seconds; i++) sum += Number(arr[i]) || 0;
+  let maxAvg = sum / seconds;
+  for (let i = seconds; i < len; i++) {
+    sum -= Number(arr[i - seconds]) || 0;
+    sum += Number(arr[i]) || 0;
+    const avg = sum / seconds;
+    if (avg > maxAvg) maxAvg = avg;
+  }
+  return Math.round(maxAvg);
+}
+
+/**
+ * Strava Webhook 활동 생성 이벤트 처리 (비동기 호출용).
+ * owner_id(Strava athlete ID)로 유저 조회 → Activity 상세 + Streams 병렬 호출 → MMP 계산 → TSS/포인트 정산 → 저장.
+ */
+async function processStravaActivity(db, ownerId, objectId) {
+  const ownerIdNum = Number(ownerId);
+  const activityId = String(objectId);
+  if (!ownerIdNum || !activityId) {
+    console.warn("[processStravaActivity] owner_id 또는 object_id 없음:", { ownerId, objectId });
+    return;
+  }
+  const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
+  if (usersSnap.empty) {
+    console.warn("[processStravaActivity] strava_athlete_id=", ownerIdNum, "에 해당하는 유저 없음");
+    return;
+  }
+  const userDoc = usersSnap.docs[0];
+  const userId = userDoc.id;
+  const userData = userDoc.data();
+  const ftp = Number(userData.ftp) || 0;
+
+  let accessToken;
+  try {
+    const tokenResult = await refreshStravaTokenForUser(db, userId);
+    accessToken = tokenResult.accessToken;
+  } catch (e) {
+    console.error("[processStravaActivity] 토큰 갱신 실패:", userId, e.message);
+    return;
+  }
+
+  const [detailRes, streamsRes] = await Promise.all([
+    fetchStravaActivityDetail(accessToken, activityId),
+    fetchStravaStreams(accessToken, activityId),
+  ]);
+
+  if (!detailRes.success || !detailRes.activity) {
+    console.warn("[processStravaActivity] 활동 상세 조회 실패:", activityId, detailRes.error);
+    return;
+  }
+
+  const activity = detailRes.activity;
+  const mapped = mapStravaActivityToLogSchema(activity, userId, ftp);
+
+  let max5minWatts = null;
+  let max10minWatts = null;
+  let max30minWatts = null;
+  if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
+    const watts = streamsRes.watts;
+    max5minWatts = calculateMaxAveragePower(watts, 300);
+    max10minWatts = calculateMaxAveragePower(watts, 600);
+    max30minWatts = calculateMaxAveragePower(watts, 1800);
+  }
+
+  const tssAppliedAt = new Date().toISOString();
+  const logDoc = {
+    activity_id: mapped.activity_id,
+    user_id: mapped.user_id,
+    source: mapped.source,
+    date: mapped.date,
+    title: mapped.title,
+    distance_km: mapped.distance_km,
+    duration_sec: mapped.duration_sec,
+    time: mapped.time,
+    avg_cadence: mapped.avg_cadence,
+    avg_hr: mapped.avg_hr,
+    max_hr: mapped.max_hr,
+    avg_watts: mapped.avg_watts,
+    max_watts: mapped.max_watts,
+    weighted_watts: mapped.weighted_watts,
+    kilojoules: mapped.kilojoules,
+    elevation_gain: mapped.elevation_gain,
+    rpe: mapped.rpe,
+    ftp_at_time: mapped.ftp_at_time,
+    if: mapped.if,
+    tss: mapped.tss,
+    efficiency_factor: mapped.efficiency_factor,
+    time_in_zones: mapped.time_in_zones,
+    earned_points: mapped.earned_points,
+    workout_id: mapped.workout_id,
+    tss_applied: true,
+    tss_applied_at: tssAppliedAt,
+    created_at: mapped.created_at,
+  };
+  if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
+  if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
+  if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
+
+  const existingIds = await getExistingStravaActivityIds(db, userId);
+  const isNew = !existingIds.has(activityId);
+
+  const logsRef = db.collection("users").doc(userId).collection("logs");
+  await logsRef.doc(activityId).set(logDoc, { merge: true });
+
+  let userTss = 0;
+  if (isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
+    const dateStr = mapped.date || "";
+    const stelvioDates = await getStelvioLogDates(db, userId);
+    if (stelvioDates.has(dateStr)) {
+      const stelvioPoints = await getStelvioPointsForDate(db, userId, dateStr);
+      const diff = Math.max(0, (mapped.tss || 0) - (stelvioPoints || 0));
+      userTss = diff;
+    } else {
+      userTss = mapped.tss || 0;
+    }
+  }
+
+  if (userTss > 0) {
+    try {
+      await updateUserMileageInFirestore(db, userId, userTss);
+    } catch (e) {
+      console.error("[processStravaActivity] 포인트 업데이트 실패:", userId, e.message);
+    }
+  }
+
+  console.log("[processStravaActivity] 완료:", { userId, activityId, isNew, userTss, max5minWatts, max10minWatts, max30minWatts });
 }
 
 /**
@@ -1519,6 +1675,9 @@ exports.confirmFtp = onRequest(
   }
 );
 
+// ---------- Strava Webhook 비동기 처리 (processStravaActivity는 lib에서 호출) ----------
+exports.processStravaActivity = processStravaActivity;
+
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
 const fs = require("fs");
@@ -1531,6 +1690,9 @@ if (fs.existsSync(libPath)) {
     }
     if (naverSubscription && naverSubscription.naverSubscriptionSyncTest) {
       exports.naverSubscriptionSyncTest = naverSubscription.naverSubscriptionSyncTest;
+    }
+    if (naverSubscription && naverSubscription.stravaWebhook) {
+      exports.stravaWebhook = naverSubscription.stravaWebhook;
     }
   } catch (e) {
     console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
