@@ -1301,6 +1301,211 @@ exports.migrateStravaAthleteIds = onRequest(
   }
 );
 
+/** Strava API Rate Limit: 15분당 100회. 85회에서 중단하여 여유 확보. */
+const STRAVA_API_CALL_LIMIT = 85;
+
+/**
+ * 수동 Strava 동기화 (과거 1~6개월, MMP 포함).
+ * months 파라미터로 기간 설정. DB 존재 시 파워만 업데이트, 미존재 시 전체 생성+TSS 정산.
+ * Rate Limit: 활동당 1초 대기, API 85회 도달 시 중단, hasMore 반환.
+ */
+const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 540 };
+if (STRAVA_CLIENT_SECRET) {
+  manualStravaSyncWithMmpOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.manualStravaSyncWithMmp = onRequest(
+  manualStravaSyncWithMmpOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.set("Access-Control-Max-Age", "3600");
+      res.status(204).send("");
+      return;
+    }
+    const origin = req.headers.origin;
+    if (origin && CORS_ORIGINS.some((o) => (typeof o === "string" ? origin === o : o.test(origin)))) {
+      res.set("Access-Control-Allow-Origin", origin);
+    }
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+
+    const months = Math.min(6, Math.max(1, parseInt(req.query.months || req.body?.months || "1", 10) || 1));
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      res.status(404).json({ success: false, error: "사용자를 찾을 수 없습니다." });
+      return;
+    }
+    const userData = userSnap.data();
+    const ftp = Number(userData.ftp) || 0;
+
+    const now = new Date();
+    const beforeUnix = Math.floor(now.getTime() / 1000);
+    const afterDate = new Date(now);
+    afterDate.setMonth(afterDate.getMonth() - months);
+    const afterUnix = Math.floor(afterDate.getTime() / 1000);
+
+    let accessToken;
+    try {
+      const tokenResult = await refreshStravaTokenForUser(db, uid);
+      accessToken = tokenResult.accessToken;
+    } catch (e) {
+      res.status(500).json({ success: false, error: `토큰 갱신 실패: ${e.message}` });
+      return;
+    }
+
+    let apiCallCount = 1;
+    const allActivities = [];
+    let page = 1;
+    while (apiCallCount < STRAVA_API_CALL_LIMIT) {
+      const actRes = await fetch(
+        `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=200&page=${page}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      apiCallCount += 1;
+      if (!actRes.ok) {
+        res.status(500).json({ success: false, error: `활동 조회 실패: ${actRes.status}` });
+        return;
+      }
+      const pageActivities = await actRes.json().catch(() => []);
+      if (!Array.isArray(pageActivities) || pageActivities.length === 0) break;
+      allActivities.push(...pageActivities);
+      if (pageActivities.length < 200) break;
+      page += 1;
+    }
+
+    const logsRef = db.collection("users").doc(uid).collection("logs");
+    const stelvioDates = await getStelvioLogDates(db, uid);
+    const stelvioDateStravaTssAccumulator = new Map();
+    let processedCount = 0;
+    let updatedCount = 0;
+    let createdCount = 0;
+    let userTss = 0;
+
+    for (const act of allActivities) {
+      if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
+      const actId = String(act.id);
+      const logDocRef = logsRef.doc(actId);
+      const logSnap = await logDocRef.get();
+      const exists = logSnap.exists;
+
+      if (exists) {
+        if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
+        const streamsRes = await fetchStravaStreams(accessToken, actId);
+        apiCallCount += 1;
+        if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
+          const watts = streamsRes.watts;
+          await logDocRef.update({
+            max_5min_watts: calculateMaxAveragePower(watts, 300),
+            max_10min_watts: calculateMaxAveragePower(watts, 600),
+            max_30min_watts: calculateMaxAveragePower(watts, 1800),
+          });
+          updatedCount += 1;
+        }
+        processedCount += 1;
+      } else {
+        if (apiCallCount >= STRAVA_API_CALL_LIMIT - 1) break;
+        const detailRes = await fetchStravaActivityDetail(accessToken, actId);
+        apiCallCount += 1;
+        if (!detailRes.success || !detailRes.activity) {
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+        const streamsRes = await fetchStravaStreams(accessToken, actId);
+        apiCallCount += 1;
+        const activity = detailRes.activity;
+        const mapped = mapStravaActivityToLogSchema(activity, uid, ftp);
+        let max5minWatts = null;
+        let max10minWatts = null;
+        let max30minWatts = null;
+        if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
+          const watts = streamsRes.watts;
+          max5minWatts = calculateMaxAveragePower(watts, 300);
+          max10minWatts = calculateMaxAveragePower(watts, 600);
+          max30minWatts = calculateMaxAveragePower(watts, 1800);
+        }
+        const tssAppliedAt = new Date().toISOString();
+        const logDoc = {
+          activity_id: mapped.activity_id,
+          user_id: mapped.user_id,
+          source: mapped.source,
+          date: mapped.date,
+          title: mapped.title,
+          distance_km: mapped.distance_km,
+          duration_sec: mapped.duration_sec,
+          time: mapped.time,
+          avg_cadence: mapped.avg_cadence,
+          avg_hr: mapped.avg_hr,
+          max_hr: mapped.max_hr,
+          avg_watts: mapped.avg_watts,
+          max_watts: mapped.max_watts,
+          weighted_watts: mapped.weighted_watts,
+          kilojoules: mapped.kilojoules,
+          elevation_gain: mapped.elevation_gain,
+          rpe: mapped.rpe,
+          ftp_at_time: mapped.ftp_at_time,
+          if: mapped.if,
+          tss: mapped.tss,
+          efficiency_factor: mapped.efficiency_factor,
+          time_in_zones: mapped.time_in_zones,
+          earned_points: mapped.earned_points,
+          workout_id: mapped.workout_id,
+          tss_applied: true,
+          tss_applied_at: tssAppliedAt,
+          created_at: mapped.created_at,
+        };
+        if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
+        if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
+        if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
+        await logDocRef.set(logDoc, { merge: true });
+        createdCount += 1;
+        processedCount += 1;
+        const dateStr = mapped.date || "";
+        const activityTss = mapped.tss || 0;
+        const distanceKm = mapped.distance_km || 0;
+        if (activityTss > 0 && distanceKm !== 0) {
+          if (stelvioDates.has(dateStr)) {
+            const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
+            stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
+          } else {
+            userTss += activityTss;
+          }
+        }
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    for (const [dateStr, stravaSum] of stelvioDateStravaTssAccumulator) {
+      const stelvioPoints = await getStelvioPointsForDate(db, uid, dateStr);
+      const diff = Math.max(0, (stravaSum || 0) - (stelvioPoints || 0));
+      if (diff > 0) userTss += diff;
+    }
+    if (userTss > 0) {
+      try {
+        await updateUserMileageInFirestore(db, uid, userTss);
+      } catch (e) {
+        console.warn("[manualStravaSyncWithMmp] 포인트 업데이트 실패:", e.message);
+      }
+    }
+
+    const hasMore = apiCallCount >= STRAVA_API_CALL_LIMIT;
+    res.status(200).json({
+      success: true,
+      processedCount,
+      updatedCount,
+      createdCount,
+      hasMore,
+      apiCallCount,
+    });
+  }
+);
+
 /** 스케줄 실행 시 1000명 대비: 인원 > 100이면 청크 URL로 팬아웃, 아니면 in-process 병렬 처리 */
 async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
   const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
