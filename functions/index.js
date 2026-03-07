@@ -1061,6 +1061,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const activities = await actRes.json().catch(() => []);
+  const actCount = Array.isArray(activities) ? activities.length : 0;
+  console.log(`[stravaSync] userId=${userId} athlete_id=${userData.strava_athlete_id || "?"} activities=${actCount} status=${actRes.status}`);
   if (!actRes.ok) {
     return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${actRes.status}` };
   }
@@ -1424,6 +1426,9 @@ exports.manualStravaSyncWithMmp = onRequest(
         return;
       }
       const pageActivities = await actRes.json().catch(() => []);
+      if (page === 1) {
+        console.log(`[manualStravaSyncWithMmp] userId=${uid} athlete_id=${userData.strava_athlete_id || "?"} 1st_page_activities=${Array.isArray(pageActivities) ? pageActivities.length : 0} status=${actRes.status}`);
+      }
       if (!Array.isArray(pageActivities) || pageActivities.length === 0) break;
       allActivities.push(...pageActivities);
       if (pageActivities.length < 200) break;
@@ -1886,11 +1891,13 @@ exports.getFtpSuggestion = onRequest(
       const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
       if (!dateStr) return;
       const tss = Number(d.tss) || 0;
-      const np = Number(d.np) || Number(d.avg_power) || 0;
+      const np = Number(d.np) || Number(d.avg_power) || Number(d.weighted_watts) || 0;
       const durationMin = Number(d.duration_min) || Math.round(Number(d.duration_sec || 0) / 60) || 0;
+      const max30minWatts = Number(d.max_30min_watts) || 0;
       const isStrava = String(d.source || "").toLowerCase() === "strava";
-      if (!byDate[dateStr]) byDate[dateStr] = { tss: 0, np: 0, durationMin: 0, isStrava: false };
+      if (!byDate[dateStr]) byDate[dateStr] = { tss: 0, np: 0, durationMin: 0, max_30min_watts: 0, isStrava: false };
       const row = byDate[dateStr];
+      row.max_30min_watts = Math.max(row.max_30min_watts || 0, max30minWatts);
       if (isStrava && row.tss === 0) {
         row.tss = tss;
         row.np = np;
@@ -1909,6 +1916,7 @@ exports.getFtpSuggestion = onRequest(
     let last30Tss = 0;
     let last42Tss = 0;
     let lastTrainingDateStr = null;
+    let bestMmp30ForFtp = 0;
     let bestNpForFtp = 0;
 
     sortedDates.forEach((dateStr) => {
@@ -1922,11 +1930,18 @@ exports.getFtpSuggestion = onRequest(
         if (daysAgo <= 7) last7Tss += tss;
       }
       if (tss > 0) lastTrainingDateStr = dateStr;
+      if (dateStr >= start30Str) {
+        const mmp30 = Number(row.max_30min_watts) || 0;
+        if (mmp30 > bestMmp30ForFtp) bestMmp30ForFtp = mmp30;
+      }
       if (row.durationMin >= 15 && row.np > 0 && dateStr >= start30Str) {
         const estimatedFtp = Math.round(row.np * 0.95);
         if (estimatedFtp > bestNpForFtp) bestNpForFtp = estimatedFtp;
       }
     });
+
+    const candidateFtp = Math.round(Math.max(bestMmp30ForFtp, bestNpForFtp));
+    const upgradeSource = bestMmp30ForFtp >= bestNpForFtp ? "MMP30" : "NP";
 
     const daysSinceLastTraining = lastTrainingDateStr
       ? Math.floor((new Date(todayStr) - new Date(lastTrainingDateStr)) / 86400000)
@@ -1936,13 +1951,17 @@ exports.getFtpSuggestion = onRequest(
     let suggestionType = null;
     let suggestedFtp = previousFtp;
     let message = "제안 없음";
+    let upgradeSourceOut = undefined;
 
-    if (bestNpForFtp >= previousFtp * 1.02 && bestNpForFtp > previousFtp) {
+    if (candidateFtp >= previousFtp * 1.02 && candidateFtp > previousFtp) {
       hasSuggestion = true;
       suggestionType = "UPGRADE";
-      suggestedFtp = Math.min(bestNpForFtp, previousFtp + 30);
+      suggestedFtp = Math.min(candidateFtp, previousFtp + 30);
       suggestedFtp = Math.round(suggestedFtp);
-      message = "최근 고강도 훈련(NP 기반)으로 상승 제안";
+      upgradeSourceOut = upgradeSource;
+      message = upgradeSource === "MMP30"
+        ? "최근 고강도 훈련(30분 MMP 기반)으로 상승 제안"
+        : "최근 고강도 훈련(NP 기반)으로 상승 제안";
     } else if (daysSinceLastTraining >= 14 || (last7Tss < 20 && last42Tss < 150)) {
       const decayed = Math.round(previousFtp * 0.9);
       if (decayed < previousFtp && decayed >= 100) {
@@ -1953,14 +1972,16 @@ exports.getFtpSuggestion = onRequest(
       }
     }
 
-    res.status(200).json({
+    const json = {
       hasSuggestion: !!hasSuggestion,
       suggestionType: suggestionType || undefined,
       previousFtp,
       suggestedFtp,
       message,
       userName,
-    });
+    };
+    if (upgradeSourceOut) json.upgradeSource = upgradeSourceOut;
+    res.status(200).json(json);
   }
 );
 
