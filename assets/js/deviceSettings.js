@@ -12,7 +12,15 @@
 (function (global) {
   'use strict';
 
-  var isAppEnvironment = !!(typeof global !== 'undefined' && global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function');
+  var isAppEnvironment = !!(typeof global !== 'undefined' && (global.ReactNativeWebView || global.StelvioInApp));
+  /** 앱 환경 여부 (런타임, StelvioInApp 선제 주입 대응) */
+  function isAppEnvironmentNow() {
+    try {
+      return !!(typeof global !== 'undefined' && (global.ReactNativeWebView || global.StelvioInApp));
+    } catch (e) {
+      return false;
+    }
+  }
   /** 웹 환경에서 Native 전용 객체 호출 방지: 앱 환경에서만 postMessage 실행 */
   function safePostToNative(messageObj) {
     try {
@@ -188,12 +196,14 @@
     var titleEl = document.getElementById(TITLE_ID);
     var hint = document.getElementById(HINT_ID);
     var rescanWrap = document.getElementById(RESCAN_WRAP_ID);
+    var modal = document.getElementById(MODAL_ID);
     if (titleEl) titleEl.textContent = '기기 검색 완료';
     if (hint) {
       hint.textContent = '검색된 기기를 탭하면 연결합니다. 원하는 기기가 없으면 재검색을 눌러주세요.';
       hint.style.display = '';
     }
     if (rescanWrap) rescanWrap.style.display = 'flex';
+    if (modal) modal.classList.add('device-scan-state-complete');
   }
 
   /**
@@ -215,6 +225,8 @@
       hint.style.display = '';
     }
     if (rescanWrap) rescanWrap.style.display = 'none';
+    var modal = document.getElementById(MODAL_ID);
+    if (modal) modal.classList.remove('device-scan-state-complete');
     addedDeviceIds.clear();
     if (list) list.innerHTML = '';
     try {
@@ -246,6 +258,7 @@
     if (modal) {
       modal.style.display = 'flex';
       modal.classList.remove('hidden');
+      modal.classList.remove('device-scan-state-complete');
     }
     if (titleEl) titleEl.textContent = '기기 검색 중...';
     if (list) list.innerHTML = '';
@@ -337,6 +350,9 @@
    * 모달 닫기, 리스트 비우기, 연결 중 UI 숨김
    */
   function closeDeviceScanModal() {
+    if (isAppEnvironmentNow() && typeof safePostToNative === 'function') {
+      safePostToNative({ type: 'ABORT_AUTO_CONNECT' });
+    }
     if (_connectFallbackTimeoutId) {
       clearTimeout(_connectFallbackTimeoutId);
       _connectFallbackTimeoutId = null;
