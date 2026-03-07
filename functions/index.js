@@ -931,6 +931,22 @@ async function getExistingStravaActivityIds(db, userId) {
   return ids;
 }
 
+/** 기존 Strava 로그 조회 (activity_id → { ref, data }). MMP 보완용. */
+async function getExistingStravaLogsMap(db, userId) {
+  const ids = new Set();
+  const docMap = new Map();
+  const snapshot = await db.collection("users").doc(userId).collection("logs").where("source", "==", "strava").get();
+  snapshot.docs.forEach((doc) => {
+    const data = doc.data();
+    const actId = data.activity_id ? String(data.activity_id) : null;
+    if (actId) {
+      ids.add(actId);
+      docMap.set(actId, { ref: doc.ref, data });
+    }
+  });
+  return { ids, docMap };
+}
+
 async function refreshStravaTokenForUser(db, userId) {
   const userRef = db.collection("users").doc(userId);
   const userSnap = await userRef.get();
@@ -1030,7 +1046,7 @@ const STRAVA_SYNC_CONCURRENCY = 10;      // 청크 내 동시 처리 사용자 �
 const STRAVA_SYNC_CHUNK_THRESHOLD = 100; // 이 인원 초과 시 청크 팬아웃 사용
 const INTERNAL_SYNC_SECRET = "stelvio-internal-sync-v1"; // 청크 HTTP 인증 (필요 시 Secret으로 교체)
 
-/** 단일 사용자 Strava 동기화 (병렬 배치용) */
+/** 단일 사용자 Strava 동기화 (병렬 배치용). Webhook 실패 보완: MMP(5/10/30분 파워) 없으면 Streams로 보완. */
 async function processOneUserStravaSync(db, userId, userData, { afterUnix, beforeUnix }) {
   const ftp = Number(userData.ftp) || 0;
   let accessToken;
@@ -1048,7 +1064,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   if (!actRes.ok) {
     return { userId, processed: 0, newActivities: 0, userTss: 0, error: `활동 조회 실패: ${actRes.status}` };
   }
-  const existingIds = await getExistingStravaActivityIds(db, userId);
+  const { ids: existingIds, docMap: existingDocMap } = await getExistingStravaLogsMap(db, userId);
   const stelvioDates = await getStelvioLogDates(db, userId);
   const logsRef = db.collection("users").doc(userId).collection("logs");
   /** 같은 날 Stelvio가 있는 날짜별 Strava TSS 합산 → 차액만 추가 적립 */
@@ -1057,11 +1073,37 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   let newActivities = 0;
   for (const act of Array.isArray(activities) ? activities : []) {
     const actId = String(act.id);
-    if (existingIds.has(actId)) continue;
+    if (existingIds.has(actId)) {
+      const entry = existingDocMap.get(actId);
+      const d = entry ? entry.data : {};
+      const needsMmp = d.max_5min_watts == null || d.max_10min_watts == null || d.max_30min_watts == null;
+      if (needsMmp && entry) {
+        const streamsRes = await fetchStravaStreams(accessToken, actId);
+        if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
+          const watts = streamsRes.watts;
+          await entry.ref.update({
+            max_5min_watts: calculateMaxAveragePower(watts, 300),
+            max_10min_watts: calculateMaxAveragePower(watts, 600),
+            max_30min_watts: calculateMaxAveragePower(watts, 1800),
+          });
+        }
+      }
+      continue;
+    }
     let detailedActivity = act;
     const detailRes = await fetchStravaActivityDetail(accessToken, actId);
     if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
     const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
+    const streamsRes = await fetchStravaStreams(accessToken, actId);
+    let max5minWatts = null;
+    let max10minWatts = null;
+    let max30minWatts = null;
+    if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
+      const watts = streamsRes.watts;
+      max5minWatts = calculateMaxAveragePower(watts, 300);
+      max10minWatts = calculateMaxAveragePower(watts, 600);
+      max30minWatts = calculateMaxAveragePower(watts, 1800);
+    }
     const dateStr = mapped.date || "";
     const activityTss = mapped.tss || 0;
     const distanceKm = mapped.distance_km || 0;
@@ -1095,7 +1137,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       tss_applied_at: tssAppliedAt,
       created_at: mapped.created_at,
     };
-    await logsRef.add(logDoc);
+    if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
+    if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
+    if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
+    await logsRef.doc(actId).set(logDoc, { merge: true });
     existingIds.add(actId);
     newActivities += 1;
     if (stelvioDates.has(dateStr)) {
@@ -1391,24 +1436,35 @@ exports.manualStravaSyncWithMmp = onRequest(
     for (const act of allActivities) {
       if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
       const actId = String(act.id);
-      const logDocRef = logsRef.doc(actId);
-      const logSnap = await logDocRef.get();
+      let logDocRef = logsRef.doc(actId);
+      let logSnap = await logDocRef.get();
+      if (!logSnap.exists) {
+        const qSnap = await logsRef.where("activity_id", "==", actId).limit(1).get();
+        if (!qSnap.empty) {
+          logDocRef = qSnap.docs[0].ref;
+          logSnap = qSnap.docs[0];
+        }
+      }
       const exists = logSnap.exists;
 
       if (exists) {
-        if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
-        const streamsRes = await fetchStravaStreams(accessToken, actId);
-        apiCallCount += 1;
-        if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
-          const watts = streamsRes.watts;
-          await logDocRef.update({
-            max_5min_watts: calculateMaxAveragePower(watts, 300),
-            max_10min_watts: calculateMaxAveragePower(watts, 600),
-            max_30min_watts: calculateMaxAveragePower(watts, 1800),
-          });
-          updatedCount += 1;
+        const existingData = logSnap.data();
+        const needsMmp = existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_30min_watts == null;
+        if (needsMmp) {
+          if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
+          const streamsRes = await fetchStravaStreams(accessToken, actId);
+          apiCallCount += 1;
+          if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
+            const watts = streamsRes.watts;
+            await logDocRef.update({
+              max_5min_watts: calculateMaxAveragePower(watts, 300),
+              max_10min_watts: calculateMaxAveragePower(watts, 600),
+              max_30min_watts: calculateMaxAveragePower(watts, 1800),
+            });
+            updatedCount += 1;
+          }
+          processedCount += 1;
         }
-        processedCount += 1;
       } else {
         if (apiCallCount >= STRAVA_API_CALL_LIMIT - 1) break;
         const detailRes = await fetchStravaActivityDetail(accessToken, actId);
