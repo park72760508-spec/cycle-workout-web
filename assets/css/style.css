@@ -4138,6 +4138,9 @@ button[aria-disabled="true"] {
   padding: 0 16px 16px;
   min-height: 200px;
   position: relative;
+  /* 스크롤 상단 Lock 방지 (모바일/노트북 터치) */
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }
 
 /* 상태 A: 카테고리 뷰 */
@@ -5932,6 +5935,16 @@ button[aria-disabled="true"] {
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  /* 스크롤 Lock 방지: .modal의 touch-action:none 오버라이드 */
+  touch-action: pan-y !important;
+}
+
+/* 워크아웃 선택 모달 스크롤 영역: 상단에서 Lock 방지 (모바일/노트북 터치 스크롤) */
+#workoutSelectionModal .workout-selection-modal-scroll,
+#workoutSelectionModal #workoutSelectionModalScroll {
+  touch-action: pan-y !important; /* 세로 스크롤 허용, Lock 해제 */
+  overscroll-behavior-y: contain !important; /* none 대신 contain: 경계에서 스크롤 고정 방지 */
   -webkit-overflow-scrolling: touch;
 }
 
