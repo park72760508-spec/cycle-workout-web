@@ -15278,7 +15278,7 @@ function updateMobileSpeedArc() {
   const dot = safeGetElement('mobile-gauge-speed-dot');
   const dotValue = safeGetElement('mobile-gauge-speed-dot-value');
   if (!arc) return;
-  const SPEED_STALE_MS = 1000;  // 페달 멈춤 시 파워처럼 1초 내 0 표시
+  const SPEED_STALE_MS = 5000;  // 속도 수초 이상 없을 때 0 (깜빡임 방지)
   let speedKmh = Number(window.liveData?.speed);
   const lastUpdate = window._lastSpeedUpdateTime;
   const isStale = speedKmh > 0 && (!lastUpdate || (Date.now() - lastUpdate) > SPEED_STALE_MS);

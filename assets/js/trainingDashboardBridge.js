@@ -156,6 +156,7 @@
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     global.liveData.power = instPower;
     global._lastPowerUpdateTime = Date.now();
+    if (instPower > 0) global._lastPowerNonZeroTime = Date.now();
     if (typeof global.addPowerToBuffer === 'function') global.addPowerToBuffer(instPower);
     if (global.ergController && typeof global.ergController.updatePower === 'function') {
       global.ergController.updatePower(instPower);
@@ -226,6 +227,7 @@
         if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
         global.liveData.power = p;
         global._lastPowerUpdateTime = Date.now();
+        if (p > 0) global._lastPowerNonZeroTime = Date.now();
         if (typeof global.addPowerToBuffer === 'function') global.addPowerToBuffer(p);
         if (global.ergController && typeof global.ergController.updatePower === 'function') {
           global.ergController.updatePower(p);

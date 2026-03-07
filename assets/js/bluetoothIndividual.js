@@ -3555,7 +3555,7 @@ function updateIndivSpeedArc() {
     var dot = __indivEl('gauge-speed-dot');
     var dotValue = __indivEl('gauge-speed-dot-value');
     if (!arc) return;
-    var SPEED_STALE_MS = 1000;  // 페달 멈춤 시 파워처럼 1초 내 0 표시
+    var SPEED_STALE_MS = 5000;  // 속도 수초 이상 없을 때 0 (깜빡임 방지)
     var speedKmh = Number(window.liveData && window.liveData.speed);
     var lastUpdate = window._lastSpeedUpdateTime;
     var isStale = speedKmh > 0 && (!lastUpdate || (Date.now() - lastUpdate) > SPEED_STALE_MS);

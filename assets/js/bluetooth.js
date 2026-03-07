@@ -46,6 +46,7 @@ window._lastCrankData = {};
 window._lastPowerUpdateTime = 0;
 window._lastHeartRateUpdateTime = 0;
 window._lastSpeedUpdateTime = window._lastSpeedUpdateTime || 0;
+window._lastPowerNonZeroTime = window._lastPowerNonZeroTime || Date.now();  // 케이던스 0 조건: 파워 0 유지 5초
 
 // ---------- 환경 감지: 앱(WebView) vs 순수 웹 브라우저 (투 트랙 분기) ----------
 // window.StelvioInApp: 앱 단 선제 주입 플래그 (ReactNativeWebView 생성 지연 시 판별용)
@@ -1013,6 +1014,7 @@ function handleTrainerData(e) {
       if (!window.connectedDevices?.powerMeter) {
         window.liveData.power = p;
         window._lastPowerUpdateTime = Date.now();
+        if (p > 0) window._lastPowerNonZeroTime = Date.now();
         // ★ 3-Second Power Buffer Logic (Preserved)
         if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(p);
         if(window.ergController) window.ergController.updatePower(p);
@@ -1032,6 +1034,7 @@ function handlePowerMeterData(event) {
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
     window._lastPowerUpdateTime = Date.now();
+    if (instPower > 0) window._lastPowerNonZeroTime = Date.now();
     // ★ 3-Second Power Buffer Logic (Preserved)
     if (typeof window.addPowerToBuffer === 'function') window.addPowerToBuffer(instPower);
     if(window.ergController) window.ergController.updatePower(instPower);
@@ -1603,17 +1606,26 @@ window.addEventListener("beforeunload", () => {
 });
 
 // 4. Safety: 데이터 미송출 시 0 리셋
-// - cadence/speed: 페달 멈춤 시 파워처럼 즉시 0 반영 (1초 타임아웃, 회전 이벤트 없으면 0)
-// - power/hr: 연결 해제 시 3초 타임아웃 (디바이스가 0 전송하므로 보통 즉시 반영)
-const CADENCE_SPEED_STALE_MS = 1000;  // 페달 멈춤 → 1초 내 0 표시 (파워와 유사한 반응)
+// - speed: 수초 이상 미수신 시 0 (깜빡임 방지, 5초)
+// - cadence: 파워값이 0으로 5초 이상 유지 시 0 표시
+// - power/hr: 연결 해제 시 3초 타임아웃
+const SPEED_STALE_MS = 5000;          // 속도 수초 이상 없을 때 0 (깜빡임 방지)
+const CADENCE_WHEN_POWER_ZERO_MS = 5000;  // 파워 0 유지 5초 이상 시 케이던스 0
 const DATA_STALE_TIMEOUT_MS = 3000;   // 연결 해제 감지용
 setInterval(function () {
   if (!window.liveData) return;
   var now = Date.now();
   var changed = false;
+  var powerNow = Number(window.liveData.power) || 0;
+  var hasPowerSource = !!(window.connectedDevices?.powerMeter || window.connectedDevices?.trainer);
+  if (powerNow > 0) window._lastPowerNonZeroTime = now;
+  var powerZeroDuration = now - (window._lastPowerNonZeroTime || now);
   var times = window._lastCadenceUpdateTime || {};
   var lastCadence = Object.keys(times).length ? Math.max.apply(null, Object.values(times)) : 0;
-  if (lastCadence && (now - lastCadence > CADENCE_SPEED_STALE_MS)) {
+  var cadenceStaleDuration = lastCadence ? (now - lastCadence) : 0;
+  var shouldResetCadence = (hasPowerSource && powerZeroDuration >= CADENCE_WHEN_POWER_ZERO_MS) ||
+    (!hasPowerSource && cadenceStaleDuration >= CADENCE_WHEN_POWER_ZERO_MS);
+  if (shouldResetCadence && window.liveData.cadence !== 0) {
     window.liveData.cadence = 0;
     notifyChildWindows('cadence', 0);
     changed = true;
@@ -1633,7 +1645,7 @@ setInterval(function () {
     changed = true;
   }
   var lastSpeed = window._lastSpeedUpdateTime || 0;
-  if (lastSpeed && (now - lastSpeed > CADENCE_SPEED_STALE_MS)) {
+  if (lastSpeed && (now - lastSpeed > SPEED_STALE_MS)) {
     window.liveData.speed = 0;
     window._lastSpeedUpdateTime = 0;
     notifyChildWindows('speed', 0);
