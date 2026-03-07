@@ -3549,7 +3549,7 @@ function generateIndivSpeedLabels() {
     return html;
 }
 
-/** 블루투스 개인훈련 속도계 원호 업데이트 (0~120 km/h, 우측→좌측, 끝점 Dot + 속도값) */
+/** 블루투스 개인훈련 속도계 원호 업데이트 (0~120 km/h, 우측→좌측, 끝점 Dot + 속도값) — 모바일 updateMobileSpeedArc와 동일 로직 */
 function updateIndivSpeedArc() {
     var arc = __indivEl('gauge-speed-arc');
     var dot = __indivEl('gauge-speed-dot');
@@ -3584,6 +3584,7 @@ function updateIndivSpeedArc() {
         dotValue.style.display = '';
     }
 }
+window.updateIndivSpeedArc = updateIndivSpeedArc;
 
 /**
  * [가민 스타일] 게이지 애니메이션 루프 (60FPS 보간 이동)

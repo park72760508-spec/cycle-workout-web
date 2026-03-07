@@ -131,6 +131,9 @@
       if (typeof global.updateTrainingDisplay === 'function') global.updateTrainingDisplay();
       if (typeof global.updateMobileDashboardData === 'function') global.updateMobileDashboardData();
       if (typeof global.updateDashboard === 'function') global.updateDashboard();
+      // 속도계 원호: liveData.speed 반영 (모바일·bluetoothIndividualScreen 동일 적용)
+      if (typeof global.updateMobileSpeedArc === 'function') global.updateMobileSpeedArc();
+      if (typeof global.updateIndivSpeedArc === 'function') global.updateIndivSpeedArc();
     } catch (err) {
       if (console && console.warn) console.warn('[trainingDashboardBridge] applyLiveDataToScreen failed', err);
     }

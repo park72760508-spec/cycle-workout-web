@@ -6578,6 +6578,7 @@ function initializeCurrentScreen(screenId) {
       }
       // 모바일 훈련화면: TARGET 라벨 폰트·위치 고정 (초기 로딩 시 적용)
       if (screenId === 'mobileDashboardScreen') {
+        if (typeof window.updateMobileSpeedArc === 'function') window.updateMobileSpeedArc();
         setTimeout(function () {
           var el = document.getElementById('mobile-ui-target-label');
           if (el) { el.setAttribute('font-size', '6'); el.setAttribute('y', '93'); }
@@ -6590,6 +6591,8 @@ function initializeCurrentScreen(screenId) {
       if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
         window.initBluetoothIndividualIntegratedScreen();
       }
+      // 속도계 원호 즉시 갱신 (liveData.speed 반영)
+      if (typeof window.updateIndivSpeedArc === 'function') window.updateIndivSpeedArc();
       // TARGET 라벨 폰트·위치 고정 (초기 로딩 시 적용)
       setTimeout(function () {
         var el = document.getElementById('indiv-ui-target-label');

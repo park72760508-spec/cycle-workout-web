@@ -1131,11 +1131,15 @@ function handleSpeedSensorData(event) {
           window.liveData.speed = Math.round(speedKmh * 10) / 10;
           window._lastSpeedUpdateTime = Date.now();
           if (typeof notifyChildWindows === 'function') notifyChildWindows('speed', window.liveData.speed);
+          if (typeof window.updateMobileSpeedArc === 'function') window.updateMobileSpeedArc();
+          if (typeof window.updateIndivSpeedArc === 'function') window.updateIndivSpeedArc();
         }
       }
     } else if (lastData && lastWheelEventTime === lastData.lastWheelEventTime) {
       window.liveData.speed = 0;
       window._lastSpeedUpdateTime = Date.now();
+      if (typeof window.updateMobileSpeedArc === 'function') window.updateMobileSpeedArc();
+      if (typeof window.updateIndivSpeedArc === 'function') window.updateIndivSpeedArc();
     }
     window._lastWheelData['speed'] = { cumulativeWheelRevolutions, lastWheelEventTime };
   }
