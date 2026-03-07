@@ -655,6 +655,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   border-bottom: 1px solid #e5e7eb;
 }
 .device-scan-modal-title { margin: 0; font-size: 1.1em; color: #1f2937; }
+/* 기기 검색 완료 시: STELVIO 스타일 제목 (보라 그라데이션, iOS 안내 팝업) */
+.device-scan-modal.device-scan-state-complete .device-scan-modal-title {
+  color: #667eea;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+}
 .device-scan-modal-body { padding: 16px; max-height: 60vh; overflow-y: auto; }
 .device-scan-modal-hint {
   font-size: 12px;
@@ -694,6 +703,23 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 .device-scan-rescan-btn {
   min-width: 120px;
+}
+/* 기기 검색 완료 시: STELVIO 스타일 버튼 (보라 그라데이션, 둥근 모서리, 연한 보라 테두리/그림자) */
+.device-scan-modal.device-scan-state-complete .device-scan-rescan-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2) !important;
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(118, 75, 162, 0.25);
+  color: #fff !important;
+  font-weight: 600;
+  padding: 10px 20px;
+  transition: box-shadow 0.2s, transform 0.1s;
+}
+.device-scan-modal.device-scan-state-complete .device-scan-rescan-btn:hover {
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.35);
+}
+.device-scan-modal.device-scan-state-complete .device-scan-rescan-btn:active {
+  transform: scale(0.98);
 }
 
 /* 기기 검색 모달: 디바이스 선택 후 연결 중 표시 (녹색 원 스피너 + 기기명 연결 중.....) */
