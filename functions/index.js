@@ -1229,6 +1229,78 @@ exports.runStravaSyncChunk = onRequest(
   }
 );
 
+/**
+ * Strava Athlete ID 마이그레이션 (1회성).
+ * strava_refresh_token은 있으나 strava_athlete_id가 없는 유저에 대해 /athlete API로 ID 조회 후 업데이트.
+ * Rate Limit 방어: 순차 처리 + 유저당 500ms 대기.
+ */
+const migrateStravaAthleteIdsOptions = { cors: false, timeoutSeconds: 540 };
+if (STRAVA_CLIENT_SECRET) {
+  migrateStravaAthleteIdsOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.migrateStravaAthleteIds = onRequest(
+  migrateStravaAthleteIdsOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    const secret = req.headers["x-internal-secret"] || req.query.secret;
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      res.status(403).json({ success: false, error: "Forbidden" });
+      return;
+    }
+    const db = admin.firestore();
+    const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+    const candidates = [];
+    for (const doc of usersSnap.docs) {
+      const data = doc.data();
+      if (data.strava_athlete_id == null || data.strava_athlete_id === undefined) {
+        candidates.push({ userId: doc.id, data });
+      }
+    }
+    const total = candidates.length;
+    let successCount = 0;
+    let failCount = 0;
+    for (const { userId, data } of candidates) {
+      try {
+        const tokenResult = await refreshStravaTokenForUser(db, userId);
+        const accessToken = tokenResult.accessToken;
+        const athleteRes = await fetch("https://www.strava.com/api/v3/athlete", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!athleteRes.ok) {
+          failCount += 1;
+          console.warn("[migrateStravaAthleteIds] /athlete 실패:", userId, athleteRes.status);
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        const athlete = await athleteRes.json().catch(() => ({}));
+        const athleteId = athlete && athlete.id != null ? Number(athlete.id) : null;
+        if (athleteId == null) {
+          failCount += 1;
+          console.warn("[migrateStravaAthleteIds] athlete.id 없음:", userId);
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        await db.collection("users").doc(userId).update({ strava_athlete_id: athleteId });
+        successCount += 1;
+        console.log("[migrateStravaAthleteIds] 성공:", userId, "→", athleteId);
+      } catch (e) {
+        failCount += 1;
+        console.warn("[migrateStravaAthleteIds] 실패:", userId, e.message);
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    res.status(200).json({
+      success: true,
+      total,
+      successCount,
+      failCount,
+    });
+  }
+);
+
 /** 스케줄 실행 시 1000명 대비: 인원 > 100이면 청크 URL로 팬아웃, 아니면 in-process 병렬 처리 */
 async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
   const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
