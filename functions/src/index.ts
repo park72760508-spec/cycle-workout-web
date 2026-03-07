@@ -46,6 +46,14 @@ const smtpPort = defineInt("SMTP_PORT", { default: 465 });
 const adminEmail = defineString("ADMIN_EMAIL", { default: "stelvio.ai.kr@gmail.com" });
 const smtpPassSecret = defineSecret("SMTP_PASS");
 
+// Strava Webhook: 웹훅 등록 시 hub.verify_token 검증용 (.env 또는 Firebase 파라미터)
+const stravaWebhookVerifyToken = defineString("STRAVA_WEBHOOK_VERIFY_TOKEN", {
+  default: "STELVIO_SECURE_TOKEN_2026",
+});
+
+// Strava Webhook: processStravaActivity에서 토큰 갱신 시 STRAVA_CLIENT_SECRET 필요
+const stravaClientSecret = defineSecret("STRAVA_CLIENT_SECRET");
+
 /** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
 function injectSmtpEnv(): void {
   try {
@@ -508,5 +516,78 @@ export const naverSubscriptionSyncTest = onRequest(
         error: (err as Error).message,
       });
     }
+  }
+);
+
+/** Strava Webhook: index.js의 processStravaActivity 호출 (순환 참조 방지를 위해 런타임 require) */
+async function processStravaActivityAsync(
+  db: admin.firestore.Firestore,
+  ownerId: number,
+  objectId: number
+): Promise<void> {
+  const mainModule = require("../index.js");
+  await mainModule.processStravaActivity(db, ownerId, objectId);
+}
+
+/**
+ * Strava Webhook 수신 엔드포인트 (GET: 등록 인증, POST: 이벤트 수신)
+ * - 경로: /api/strava/webhook (Firebase Hosting rewrite 시) 또는 Cloud Functions URL
+ * - Strava가 2초 이내 200 응답을 요구하므로, POST 시 즉시 200 반환 후 비동기 처리
+ */
+export const stravaWebhook = onRequest(
+  {
+    region: "asia-northeast3",
+    cors: false,
+    secrets: [stravaClientSecret],
+  },
+  async (req, res) => {
+    if (req.method === "GET") {
+      // Strava 웹훅 등록 인증: hub.mode=subscribe, hub.verify_token 일치 시 hub.challenge 에코
+      const hubMode = req.query["hub.mode"] as string | undefined;
+      const hubVerifyToken = req.query["hub.verify_token"] as string | undefined;
+      const hubChallenge = req.query["hub.challenge"] as string | undefined;
+
+      const expectedToken = stravaWebhookVerifyToken.value() || process.env.STRAVA_WEBHOOK_VERIFY_TOKEN || "";
+
+      if (
+        hubMode === "subscribe" &&
+        hubVerifyToken != null &&
+        hubVerifyToken === expectedToken &&
+        typeof hubChallenge === "string"
+      ) {
+        res.status(200).json({ "hub.challenge": hubChallenge });
+      } else {
+        res.status(403).send("Forbidden");
+      }
+      return;
+    }
+
+    if (req.method === "POST") {
+      // Strava 이벤트 수신: 2초 이내 200 응답 필수 → 즉시 응답 후 비동기 처리
+      res.status(200).send("EVENT_RECEIVED");
+
+      const body = req.body;
+      const aspectType = body?.aspect_type;
+      const objectType = body?.object_type;
+      const ownerId = body?.owner_id;
+      const objectId = body?.object_id;
+
+      if (
+        aspectType === "create" &&
+        objectType === "activity" &&
+        ownerId != null &&
+        objectId != null
+      ) {
+        // 비동기 처리: await 없이 백그라운드에서 실행 (2초 제한 회피)
+        processStravaActivityAsync(db, ownerId, objectId).catch((err) => {
+          console.error("[Strava Webhook] processStravaActivity 실패:", err);
+        });
+      } else {
+        console.log("[Strava Webhook] POST (미처리):", { aspectType, objectType, ownerId, objectId });
+      }
+      return;
+    }
+
+    res.status(405).send("Method Not Allowed");
   }
 );
