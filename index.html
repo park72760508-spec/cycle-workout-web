@@ -6497,12 +6497,32 @@
           <span class="training-detail-value">${log.avg_hr ? log.avg_hr.toFixed(0) + ' bpm' : '-'}</span>
         </div>
         <div class="training-detail-item">
+          <span class="training-detail-label">최대 심박</span>
+          <span class="training-detail-value">${log.max_hr ? log.max_hr.toFixed(0) + ' bpm' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
           <span class="training-detail-label">평균 파워</span>
           <span class="training-detail-value">${log.avg_watts ? log.avg_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">NP (Normalized Power)</span>
           <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(5분)</span>
+          <span class="training-detail-value">${log.max_5min_watts ? log.max_5min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(10분)</span>
+          <span class="training-detail-value">${log.max_10min_watts ? log.max_10min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(30분)</span>
+          <span class="training-detail-value">${log.max_30min_watts ? log.max_30min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">최대 파워</span>
+          <span class="training-detail-value">${log.max_watts ? log.max_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
       `;
       
@@ -7779,12 +7799,32 @@
           <span class="training-detail-value">${log.avg_hr ? log.avg_hr.toFixed(0) + ' bpm' : '-'}</span>
         </div>
         <div class="training-detail-item">
+          <span class="training-detail-label">최대 심박</span>
+          <span class="training-detail-value">${log.max_hr ? log.max_hr.toFixed(0) + ' bpm' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
           <span class="training-detail-label">평균 파워</span>
           <span class="training-detail-value">${log.avg_watts ? log.avg_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">NP (Normalized Power)</span>
           <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(5분)</span>
+          <span class="training-detail-value">${log.max_5min_watts ? log.max_5min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(10분)</span>
+          <span class="training-detail-value">${log.max_10min_watts ? log.max_10min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(30분)</span>
+          <span class="training-detail-value">${log.max_30min_watts ? log.max_30min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">최대 파워</span>
+          <span class="training-detail-value">${log.max_watts ? log.max_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
       `;
       
