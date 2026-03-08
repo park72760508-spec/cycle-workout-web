@@ -3510,6 +3510,31 @@ button[aria-disabled="true"] {
   text-align: center;
 }
 
+/* STELVIO 랭킹 보드: 버튼만 STELVIO 스타일, 순위/카드/배너 등 나머지는 원래 스타일 */
+#stelvioRankingBoardModal .stelvio-motivation-banner {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  box-shadow: none;
+}
+#stelvioRankingBoardModal .stelvio-ranking-spinner {
+  border-top-color: #00d4aa;
+  border-right-color: #00a88a;
+}
+#stelvioRankingBoardModal .stelvio-category-card {
+  border: 2px solid #e5e7eb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+#stelvioRankingBoardModal .stelvio-category-header {
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+#stelvioRankingBoardModal .stelvio-rank-row.stelvio-rank-current {
+  background: linear-gradient(90deg, rgba(0, 212, 170, 0.08) 0%, transparent 100%);
+}
+#stelvioRankingBoardModal .stelvio-rank-wkg {
+  color: #1e40af;
+}
+
 .training-detail-footer {
   padding: 16px 20px;
   border-top: 1px solid rgba(0, 212, 170, 0.3);
