@@ -5,7 +5,7 @@
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const functions = require("firebase-functions");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -2217,17 +2217,17 @@ exports.getPeakPowerRanking = onRequest(
   }
 );
 
-/** 사용자 로그 생성/갱신 시 연간 최고 기록(yearly_peaks) 업서트. 검증 실패 시 suspicious_power_records에 Pending 저장 */
-exports.onUserLogWritten = onDocumentWritten(
-  { document: "users/{userId}/logs/{logId}", timeoutSeconds: 120 },
-  async (event) => {
-    const snap = event.data?.after;
+/** 사용자 로그 생성/갱신 시 연간 최고 기록(yearly_peaks) 업서트. 검증 실패 시 suspicious_power_records에 Pending 저장.
+ *  1st gen 트리거 사용 (Eventarc 권한 이슈 회피) */
+exports.onUserLogWritten = functions
+  .runWith({ timeoutSeconds: 120 })
+  .firestore.document("users/{userId}/logs/{logId}")
+  .onWrite(async (change, context) => {
+    const snap = change.after;
     if (!snap || !snap.exists) return;
     const logData = snap.data();
-    const path = snap.ref.path;
-    const parts = path.split("/");
-    const userId = parts[1];
-    const logId = parts[3];
+    const userId = context.params.userId;
+    const logId = context.params.logId;
     if (!userId || !logId) return;
     const db = admin.firestore();
     const userSnap = await db.collection("users").doc(userId).get();
@@ -2238,8 +2238,7 @@ exports.onUserLogWritten = onDocumentWritten(
     } catch (e) {
       console.warn("[onUserLogWritten] upsertYearlyPeakFromLog 실패:", userId, logId, e.message);
     }
-  }
-);
+  });
 
 /** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출). year 파라미터로 대상 연도 지정 */
 exports.backfillYearlyPeaks = onRequest(
