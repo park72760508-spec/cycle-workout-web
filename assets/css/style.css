@@ -8853,7 +8853,7 @@ button[aria-disabled="true"] {
 }
 /* 인증 화면 활성 시: 메인 블럭을 화면 정중앙(상하좌우)에 배치 */
 #authScreen.active {
-  display: flex;
+  display: flex !important; /* JS 인라인 display:block 덮어써서 세로 중앙 정렬 유지 */
   align-items: center;
   justify-content: center;
   min-height: 100vh;
