@@ -3448,6 +3448,12 @@ button[aria-disabled="true"] {
   color: #1f2937;
   font-size: 0.9rem;
 }
+.stelvio-rank-global {
+  font-weight: 500;
+  font-size: 0.8em;
+  color: #6b7280;
+  margin-left: 4px;
+}
 .stelvio-rank-wkg {
   font-weight: 700;
   color: #ff6b35;
