@@ -118,6 +118,36 @@ function calculateTimeInZones(powerData, ftp) {
   return zones;
 }
 
+/** 2200W 초과 스파이크 보간 임계치 (Andrew Coggan World Class, 기계적 센서 오류 필터) */
+const POWER_SPIKE_THRESHOLD_W = 2200;
+
+/**
+ * 1초 단위 Raw Data에서 2200W 초과 스파이크를 직전 3초·직후 3초 평균으로 대체 (5~60분 MMP 계산 전 적용)
+ * @param {number[]} rawDataArray - 1초당 1개 파워 값 배열
+ * @returns {number[]} 스파이크 보간된 배열 (원본 변경 없음)
+ */
+function smoothPowerSpikes(rawDataArray) {
+  if (!rawDataArray || rawDataArray.length === 0) return rawDataArray;
+  const arr = rawDataArray.map((v) => Number(v) || 0);
+  const len = arr.length;
+  for (let i = 0; i < len; i++) {
+    if (arr[i] <= POWER_SPIKE_THRESHOLD_W) continue;
+    const before = [];
+    for (let b = 1; b <= 3; b++) {
+      if (i - b >= 0) before.push(arr[i - b]);
+    }
+    const after = [];
+    for (let a = 1; a <= 3; a++) {
+      if (i + a < len) after.push(arr[i + a]);
+    }
+    const combined = [...before, ...after];
+    arr[i] = combined.length > 0
+      ? Math.round(combined.reduce((s, v) => s + v, 0) / combined.length)
+      : POWER_SPIKE_THRESHOLD_W;
+  }
+  return arr;
+}
+
 /**
  * 슬라이딩 윈도우로 최대 평균 파워(MMP) 계산
  * @param {Array} wattsArray - 1초당 1개 파워 값 배열
@@ -343,10 +373,11 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
             z7_neuromuscular: 0
           };
 
-      // MMP 계산 (powerData가 있으면 5/10/20/30/40/60분 피크 파워)
-      const wattsArray = trainingData.powerData && trainingData.powerData.length > 0
+      // MMP 계산 (powerData가 있으면 5/10/20/30/40/60분 피크 파워, 스파이크 보간 적용)
+      const rawWatts = trainingData.powerData && trainingData.powerData.length > 0
         ? trainingData.powerData.map((d) => Number(d.v) || 0)
         : null;
+      const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
       const max5minWatts = wattsArray && wattsArray.length >= 300 ? calculateMaxAveragePower(wattsArray, 300) : null;
       const max10minWatts = wattsArray && wattsArray.length >= 600 ? calculateMaxAveragePower(wattsArray, 600) : null;
       const max20minWatts = wattsArray && wattsArray.length >= 1200 ? calculateMaxAveragePower(wattsArray, 1200) : null;
