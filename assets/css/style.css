@@ -3315,12 +3315,14 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 0; /* 이미지 좌우 여백 없음 */
+  margin-bottom: calc((10px + 1em + 10px) / 5); /* 버튼 외부 아래 여백 = 버튼 높이의 1/5 */
 }
 .stelvio-ranking-btn-logo {
   margin: 0;
   padding: 0;
   display: block;
+  flex-shrink: 0;
 }
 .stelvio-purple-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
