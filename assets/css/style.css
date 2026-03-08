@@ -3301,13 +3301,13 @@ button[aria-disabled="true"] {
   color: #4c51bf;
 }
 
-/* STELVIO 랭킹 보드 진입 버튼 - 보라 그라데이션 */
+/* STELVIO 랭킹 보드 진입 버튼 - 사용자 인증 시작하기 버튼과 동일한 테두리 디자인 */
 .stelvio-ranking-board-entry-btn {
   width: 100%;
-  max-width: 280px;
+  max-width: 276px;
   padding: 10px 12px;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   font-size: 1rem;
   font-weight: bold;
   cursor: pointer;
@@ -3315,17 +3315,22 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 0;
+}
+.stelvio-ranking-btn-logo {
+  margin: 0;
+  padding: 0;
+  display: block;
 }
 .stelvio-purple-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
   color: #fff !important;
-  border: 2px solid rgba(118, 75, 162, 0.4) !important;
-  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4) !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
 }
 .stelvio-purple-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
 }
 .stelvio-ranking-board-entry-btn:active {
   transform: translateY(0);
@@ -3346,7 +3351,7 @@ button[aria-disabled="true"] {
 }
 .stelvio-duration-tab {
   padding: 8px 12px;
-  border: 2px solid #e5e7eb;
+  border: none;
   background: #fff;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -3354,15 +3359,17 @@ button[aria-disabled="true"] {
   cursor: pointer;
   color: #6b7280;
   transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .stelvio-duration-tab:hover {
-  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
   color: #667eea;
 }
 .stelvio-duration-tab.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: rgba(102, 126, 234, 0.6);
+  border: none;
   color: #fff;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 .stelvio-filter-row {
   display: flex;
@@ -3383,22 +3390,24 @@ button[aria-disabled="true"] {
 }
 .stelvio-toggle-btn {
   padding: 6px 12px;
-  border: 2px solid #e5e7eb;
+  border: none;
   background: #fff;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.85rem;
   cursor: pointer;
   color: #6b7280;
   transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .stelvio-toggle-btn:hover {
-  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
   color: #667eea;
 }
 .stelvio-toggle-btn.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: rgba(102, 126, 234, 0.6);
+  border: none;
   color: #fff;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 .stelvio-motivation-banner {
   padding: 14px 16px;
