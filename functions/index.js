@@ -2061,18 +2061,25 @@ exports.getPeakPowerRanking = onRequest(
   }
 );
 
-/** 월간 랭킹 확정 (매월 말일 21:00 Asia/Seoul) */
+/** 월간 랭킹 확정 (매월 말일 23:00 Asia/Seoul) - Cloud Scheduler는 L(말일) 미지원 → 매일 23시 실행 후 말일만 처리 */
 const finalizeMonthlyPeakOptions = {
-  schedule: "0 21 L * *",
+  schedule: "0 23 * * *",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 540,
 };
 exports.finalizeMonthlyPeakRanking = onSchedule(
   finalizeMonthlyPeakOptions,
   async (event) => {
-    const db = admin.firestore();
     const now = new Date();
-    const { startStr, endStr } = getMonthRangeSeoul(now.getFullYear(), now.getMonth() + 1);
+    const seoulDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+    const today = seoulDate.getDate();
+    const lastDay = new Date(seoulDate.getFullYear(), seoulDate.getMonth() + 1, 0).getDate();
+    if (today !== lastDay) {
+      console.log("[finalizeMonthlyPeakRanking] 오늘은 말일이 아님, 스킵", { today, lastDay });
+      return;
+    }
+    const db = admin.firestore();
+    const { startStr, endStr } = getMonthRangeSeoul(seoulDate.getFullYear(), seoulDate.getMonth() + 1);
     const points = [100, 50, 30];
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
@@ -2099,9 +2106,9 @@ exports.finalizeMonthlyPeakRanking = onSchedule(
   }
 );
 
-/** 연간 랭킹 확정 (매년 12월 31일 21:00 Asia/Seoul) */
+/** 연간 랭킹 확정 (매년 12월 31일 23:00 Asia/Seoul) */
 const finalizeYearlyPeakOptions = {
-  schedule: "0 21 31 12 *",
+  schedule: "0 23 31 12 *",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 540,
 };
