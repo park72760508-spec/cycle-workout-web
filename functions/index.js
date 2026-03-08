@@ -2010,7 +2010,7 @@ function getYearRangeSeoul(year) {
   return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
 }
 
-/** 생년월일 기준 연령대: Bianco(≤39), Rosa(40~49), Infinito(≥50) */
+/** 생년월일 기준 연령대: Bianco(≤39), Rosa(40~49), Infinito(≥50) - 일반부용 */
 function getAgeCategory(birthYear) {
   if (birthYear == null || birthYear === "") return null;
   const y = Number(birthYear);
@@ -2020,6 +2020,14 @@ function getAgeCategory(birthYear) {
   if (age <= 39) return "Bianco";
   if (age <= 49) return "Rosa";
   return "Infinito";
+}
+
+/** challenge 기준 리그 분류: Elite/PRO → Assoluto(선수부), Fitness/GranFondo/Racing → Bianco/Rosa/Infinito(일반부) */
+function getLeagueCategory(challenge, birthYear) {
+  const ch = String(challenge || "").trim();
+  if (ch === "Elite" || ch === "PRO") return "Assoluto";
+  const ageCat = getAgeCategory(birthYear);
+  return ageCat; // Bianco, Rosa, Infinito
 }
 
 /** 연간 구간 여부 (YYYY-01-01 ~ YYYY-12-31) */
@@ -2041,6 +2049,7 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
 
   if (isYearlyRange(startStr, endStr)) {
     const year = startStr.substring(0, 4);
+    // yearly_peaks: 해당 연도 1/1~12/31 구간 내 로그 기반 누적 최고치. 현재 연도는 "현재일까지" 누적 반영됨
     const yearlySnap = await db.collection("users").doc(userId).collection("yearly_peaks").doc(year).get();
     if (!yearlySnap.exists) return null;
     const d = yearlySnap.data();
@@ -2088,8 +2097,9 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
           if (match !== g) return null;
         }
         const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
-        const ageCategory = getAgeCategory(birthYear);
-        if (!ageCategory) return null;
+        const challenge = data.challenge || "Fitness";
+        const leagueCategory = getLeagueCategory(challenge, birthYear);
+        if (!leagueCategory) return null;
         const peak = await getPeakPowerForUser(db, userId, data, startStr, endStr, durationType);
         if (!peak || peak.wkg <= 0) return null;
         return {
@@ -2098,7 +2108,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
           wkg: peak.wkg,
           watts: peak.watts,
           weightKg: peak.weightKg,
-          ageCategory,
+          ageCategory: leagueCategory,
           gender,
         };
       })
@@ -2107,7 +2117,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   }
   entries.sort((a, b) => b.wkg - a.wkg);
   const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
-  const byCategory = { Bianco: [], Rosa: [], Infinito: [] };
+  const byCategory = { Bianco: [], Rosa: [], Infinito: [], Assoluto: [] };
   withRank.forEach((e) => {
     if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
   });
@@ -2167,7 +2177,7 @@ exports.getPeakPowerRanking = onRequest(
         let out = { success: true, byCategory: data.byCategory, startStr, endStr, period, durationType, gender, cached: true };
         if (uid) {
           const cat = data.byCategory;
-          const cats = ["Bianco", "Rosa", "Infinito"];
+          const cats = ["Assoluto", "Bianco", "Rosa", "Infinito"];
           let current = null, nextUser = null;
           for (const c of cats) {
             const arr = cat?.[c] || [];
@@ -2197,7 +2207,7 @@ exports.getPeakPowerRanking = onRequest(
 
     let out = { success: true, byCategory, startStr, endStr, period, durationType, gender };
     if (uid) {
-      const cats = ["Bianco", "Rosa", "Infinito"];
+      const cats = ["Assoluto", "Bianco", "Rosa", "Infinito"];
       let current = null, nextUser = null;
       for (const c of cats) {
         const arr = byCategory[c] || [];
@@ -2350,7 +2360,7 @@ exports.finalizeMonthlyPeakRanking = onSchedule(
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
         const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-        for (const cat of ["Bianco", "Rosa", "Infinito"]) {
+        for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito"]) {
           const arr = byCategory[cat] || [];
           const top3 = arr.slice(0, 3);
           for (let i = 0; i < top3.length; i++) {
@@ -2388,7 +2398,7 @@ exports.finalizeYearlyPeakRanking = onSchedule(
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
         const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-        for (const cat of ["Bianco", "Rosa", "Infinito"]) {
+        for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito"]) {
           const arr = byCategory[cat] || [];
           const top3 = arr.slice(0, 3);
           for (let i = 0; i < top3.length; i++) {
