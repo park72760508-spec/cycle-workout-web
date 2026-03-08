@@ -701,7 +701,7 @@ async function processStravaActivity(db, ownerId, objectId) {
   let max40minWatts = null;
   let max60minWatts = null;
   if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
-    const watts = streamsRes.watts;
+    const watts = smoothPowerSpikes(streamsRes.watts);
     max5minWatts = calculateMaxAveragePower(watts, 300);
     max10minWatts = calculateMaxAveragePower(watts, 600);
     max20minWatts = calculateMaxAveragePower(watts, 1200);
@@ -1091,7 +1091,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if (needsMmp && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
-          const watts = streamsRes.watts;
+          const watts = smoothPowerSpikes(streamsRes.watts);
           await entry.ref.update({
             max_5min_watts: calculateMaxAveragePower(watts, 300),
             max_10min_watts: calculateMaxAveragePower(watts, 600),
@@ -1116,7 +1116,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     let max40minWatts = null;
     let max60minWatts = null;
     if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
-      const watts = streamsRes.watts;
+      const watts = smoothPowerSpikes(streamsRes.watts);
       max5minWatts = calculateMaxAveragePower(watts, 300);
       max10minWatts = calculateMaxAveragePower(watts, 600);
       max20minWatts = calculateMaxAveragePower(watts, 1200);
@@ -1485,7 +1485,8 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
-          const wattsArray = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
+          const rawWatts = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
+          const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
           console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Watts Array Length:`, wattsArray?.length || 0);
           if (wattsArray && wattsArray.length > 0) {
             const mmp5 = calculateMaxAveragePower(wattsArray, 300);
@@ -1519,7 +1520,8 @@ exports.manualStravaSyncWithMmp = onRequest(
         apiCallCount += 1;
         const activity = detailRes.activity;
         const mapped = mapStravaActivityToLogSchema(activity, uid, ftp);
-        const wattsArray = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
+        const rawWatts = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
+        const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
         console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Watts Array Length:`, wattsArray?.length || 0);
         let max5minWatts = null;
         let max10minWatts = null;
@@ -1860,6 +1862,61 @@ const DURATION_FIELDS = {
   max: "max_watts",
 };
 
+/** Andrew Coggan World Class 한계치 - 초과 시 센서 오류(이상치)로 간주. W/kg OR 절대 W 중 하나라도 초과하면 제외 */
+const PEAK_POWER_LIMITS = {
+  max: { wkg: 25.0, watts: 2200 },
+  "5min": { wkg: 8.0, watts: 700 },
+  "10min": { wkg: 7.0, watts: 600 },
+  "20min": { wkg: 6.5, watts: 550 },
+  "40min": { wkg: 6.0, watts: 500 },
+  "60min": { wkg: 5.8, watts: 450 },
+};
+
+const POWER_SPIKE_THRESHOLD_W = 2200;
+
+/**
+ * 1초 단위 Raw Data에서 2200W 초과 스파이크를 직전 3초·직후 3초 평균으로 대체 (5~60분 MMP 계산 전 적용)
+ * @param {number[]} rawDataArray - 1초당 1개 파워 값 배열
+ * @returns {number[]} 스파이크 보간된 배열 (원본 변경 없음)
+ */
+function smoothPowerSpikes(rawDataArray) {
+  if (!rawDataArray || rawDataArray.length === 0) return rawDataArray;
+  const arr = rawDataArray.map((v) => Number(v) || 0);
+  const len = arr.length;
+  for (let i = 0; i < len; i++) {
+    if (arr[i] <= POWER_SPIKE_THRESHOLD_W) continue;
+    const before = [];
+    for (let b = 1; b <= 3; b++) {
+      if (i - b >= 0) before.push(arr[i - b]);
+    }
+    const after = [];
+    for (let a = 1; a <= 3; a++) {
+      if (i + a < len) after.push(arr[i + a]);
+    }
+    const combined = [...before, ...after];
+    arr[i] = combined.length > 0
+      ? Math.round(combined.reduce((s, v) => s + v, 0) / combined.length)
+      : POWER_SPIKE_THRESHOLD_W;
+  }
+  return arr;
+}
+
+/**
+ * 피크 파워 기록 검증 (World Class 한계치 초과 시 false)
+ * @param {string} durationType - "5min"|"10min"|"20min"|"40min"|"60min"|"max"
+ * @param {number} watts - 절대 파워 (W)
+ * @param {number} weightKg - 체중 (kg), Floor 45 적용 후
+ * @returns {boolean} true=유효, false=이상치
+ */
+function validatePeakPowerRecord(durationType, watts, weightKg) {
+  const limit = PEAK_POWER_LIMITS[durationType];
+  if (!limit || !weightKg || weightKg <= 0) return true;
+  const wkg = watts / weightKg;
+  if (wkg > limit.wkg) return false;
+  if (watts > limit.watts) return false;
+  return true;
+}
+
 /** Asia/Seoul 기준 월간 구간 (YYYY-MM-DD) */
 function getMonthRangeSeoul(year, month) {
   const y = year != null ? year : new Date().getFullYear();
@@ -1890,12 +1947,13 @@ function getAgeCategory(birthYear) {
   return "Infinito";
 }
 
-/** 사용자별 해당 기간 내 최고 피크 파워(W) 및 W/kg */
+/** 사용자별 해당 기간 내 최고 피크 파워(W) 및 W/kg. Weight Floor 45kg, validatePeakPowerRecord 적용 */
 async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durationType) {
   const field = DURATION_FIELDS[durationType];
   if (!field) return null;
-  const weightKg = Number(userData.weight || userData.weightKg || 0);
-  if (weightKg <= 0) return null;
+  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  if (rawWeight <= 0) return null;
+  const weightKg = Math.max(rawWeight, 45);
   const snapshot = await db.collection("users").doc(userId).collection("logs")
     .where("date", ">=", startStr)
     .where("date", "<=", endStr)
@@ -1904,6 +1962,8 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
     const watts = Number(d[field]) || 0;
+    if (watts <= 0) return;
+    if (!validatePeakPowerRecord(durationType, watts, weightKg)) return;
     if (watts > maxWatts) maxWatts = watts;
   });
   if (maxWatts <= 0) return null;
