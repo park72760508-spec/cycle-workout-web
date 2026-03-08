@@ -6728,7 +6728,7 @@
     }
 
     function renderStelvioRankingError(msg) {
-      ['Assoluto', 'Bianco', 'Rosa', 'Infinito'].forEach(function(cat) {
+      ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'].forEach(function(cat) {
         var el = document.getElementById('stelvio' + cat + 'List');
         if (el) el.innerHTML = '<p class="stelvio-ranking-empty">' + msg + '</p>';
       });
@@ -6736,7 +6736,7 @@
 
     function renderStelvioRankingCategories(byCategory, currentUserId) {
       var medals = ['🥇', '🥈', '🥉'];
-      var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito'];
+      var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       cats.forEach(function(cat) {
         var arr = byCategory[cat] || [];
         var el = document.getElementById('stelvio' + cat + 'List');
@@ -15252,7 +15252,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-ranking-spinner"></div>
           <p>랭킹 불러오는 중...</p>
         </div>
-        <!-- Assoluto(선수부) / Bianco / Rosa / Infinito(일반부) 카드 -->
+        <!-- Assoluto(선수부) / Bianco / Rosa / Infinito / Leggenda(일반부) 카드 -->
         <div id="stelvioRankingContent" class="stelvio-ranking-content">
           <div class="stelvio-category-card" data-category="Assoluto">
             <div class="stelvio-category-header"><span class="stelvio-category-crown">👑</span> Assoluto (Elite/Pro 선수부)</div>
@@ -15267,8 +15267,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div class="stelvio-category-body" id="stelvioRosaList"></div>
           </div>
           <div class="stelvio-category-card" data-category="Infinito">
-            <div class="stelvio-category-header"><span class="stelvio-category-crown">👑</span> Infinito (50세 이상)</div>
+            <div class="stelvio-category-header"><span class="stelvio-category-crown">👑</span> Infinito (50대)</div>
             <div class="stelvio-category-body" id="stelvioInfinitoList"></div>
+          </div>
+          <div class="stelvio-category-card" data-category="Leggenda">
+            <div class="stelvio-category-header"><span class="stelvio-category-crown">👑</span> Leggenda (60세 이상)</div>
+            <div class="stelvio-category-body" id="stelvioLeggendaList"></div>
           </div>
         </div>
       </div>
