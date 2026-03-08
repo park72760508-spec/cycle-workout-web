@@ -8907,7 +8907,7 @@ button[aria-disabled="true"] {
     padding: 24px;              /* 기존 40px 35px → 모바일 24px로 다운 */
   }
   #authScreen .auth-form-card {
-    padding: 24px;              /* 인증 카드 하단 여백 = 상단 여백 (24px) */
+    padding: 12px 20px;         /* 인증 화면 한 화면 표시용 컴팩트 */
   }
   .auth-hero-icon {
     padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
@@ -9002,12 +9002,12 @@ button[aria-disabled="true"] {
   text-align: center;
 }
 
-/* 인증 카드: 하단 여백을 상단과 동일하게 (40px) */
+/* 인증 카드: 한 화면에 보이도록 여백 최적화 */
 #authScreen .auth-form-card {
-  padding-top: 40px;
-  padding-bottom: 40px;
-  padding-left: 35px;
-  padding-right: 35px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  padding-left: 24px;
+  padding-right: 24px;
 }
 #authScreen .auth-form-card .phone-auth-section {
   margin-bottom: 0;
@@ -9015,7 +9015,7 @@ button[aria-disabled="true"] {
 
 /* 인증 카드 아래 영역 (StelvioWebview·기기 목록·심박수 등은 카드 밖에 표시) */
 #authScreen .auth-below-card {
-  margin-top: 16px;
+  margin-top: 8px;
   padding: 0 8px;
   text-align: center;
 }
@@ -9033,8 +9033,48 @@ button[aria-disabled="true"] {
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
 }
 
+/* STELVIO App Download 상단 배치 (인증 화면) */
+#authScreen .auth-app-download-box-top {
+  margin-top: 0;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+}
+#authScreen .auth-app-download-box-top .auth-app-download-title {
+  margin-bottom: 8px;
+}
+#authScreen .auth-app-download-box-top .auth-app-download-updated {
+  margin-top: 6px;
+}
+
 .auth-form-header {
-  margin-bottom: 35px;
+  margin-bottom: 20px;
+}
+#authScreen .auth-form-header {
+  margin-bottom: 12px;
+}
+#authScreen .auth-form-header h3 {
+  margin-bottom: 0;
+}
+/* 인증 화면 한 화면 표시: 폼 영역 여백 최소화 */
+#authScreen .phone-auth-section {
+  margin-top: 0;
+  margin-bottom: 0;
+  gap: 12px;
+}
+#authScreen .auth-submit-btn {
+  margin-top: 4px;
+}
+#authScreen .auth-register-btn {
+  margin-top: 8px;
+}
+#authScreen .auth-input-group {
+  gap: 6px;
+}
+#authScreen .auth-input-group input {
+  padding: 10px 14px;
+}
+#authScreen .auth-links {
+  margin-top: 2px !important;
 }
 
 .form-icon {
@@ -9655,10 +9695,10 @@ button[aria-disabled="true"] {
     margin: 15px;
   }
   #authScreen .auth-form-card {
-    padding-top: 30px;
-    padding-bottom: 30px;
-    padding-left: 25px;
-    padding-right: 25px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    padding-left: 20px;
+    padding-right: 20px;
   }
   
   .phone-input {
