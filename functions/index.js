@@ -1850,6 +1850,293 @@ exports.finalizeWeeklyRanking = onSchedule(
   }
 );
 
+// ---------- STELVIO 랭킹 보드 (피크 파워 W/kg 기반) ----------
+const DURATION_FIELDS = {
+  "5min": "max_5min_watts",
+  "10min": "max_10min_watts",
+  "20min": "max_20min_watts",
+  "40min": "max_40min_watts",
+  "60min": "max_60min_watts",
+  max: "max_watts",
+};
+
+/** Asia/Seoul 기준 월간 구간 (YYYY-MM-DD) */
+function getMonthRangeSeoul(year, month) {
+  const y = year != null ? year : new Date().getFullYear();
+  const m = month != null ? month : new Date().getMonth() + 1;
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${y}-${pad(m)}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const endStr = `${y}-${pad(m)}-${pad(lastDay)}`;
+  return { startStr, endStr };
+}
+
+/** Asia/Seoul 기준 연간 구간 (YYYY-MM-DD) */
+function getYearRangeSeoul(year) {
+  const y = year != null ? year : new Date().getFullYear();
+  const pad = (n) => String(n).padStart(2, "0");
+  return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
+}
+
+/** 생년월일 기준 연령대: Bianco(≤39), Rosa(40~49), Infinito(≥50) */
+function getAgeCategory(birthYear) {
+  if (birthYear == null || birthYear === "") return null;
+  const y = Number(birthYear);
+  if (isNaN(y)) return null;
+  const thisYear = new Date().getFullYear();
+  const age = thisYear - y;
+  if (age <= 39) return "Bianco";
+  if (age <= 49) return "Rosa";
+  return "Infinito";
+}
+
+/** 사용자별 해당 기간 내 최고 피크 파워(W) 및 W/kg */
+async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durationType) {
+  const field = DURATION_FIELDS[durationType];
+  if (!field) return null;
+  const weightKg = Number(userData.weight || userData.weightKg || 0);
+  if (weightKg <= 0) return null;
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  let maxWatts = 0;
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    const watts = Number(d[field]) || 0;
+    if (watts > maxWatts) maxWatts = watts;
+  });
+  if (maxWatts <= 0) return null;
+  const wkg = Math.round((maxWatts / weightKg) * 100) / 100;
+  return { watts: maxWatts, wkg, weightKg };
+}
+
+const PEAK_POWER_BATCH_SIZE = 50;
+
+/** 피크 파워 랭킹 엔트리 (기간·종목·성별·연령대별) */
+async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter) {
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs;
+  const entries = [];
+  for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
+    const batch = docs.slice(i, i + PEAK_POWER_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (doc) => {
+        const userId = doc.id;
+        const data = doc.data();
+        const name = data.name || "(이름 없음)";
+        const gender = String(data.gender || data.sex || "").toLowerCase();
+        if (genderFilter && genderFilter !== "all") {
+          const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+          const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
+          if (match !== g) return null;
+        }
+        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+        const ageCategory = getAgeCategory(birthYear);
+        if (!ageCategory) return null;
+        const peak = await getPeakPowerForUser(db, userId, data, startStr, endStr, durationType);
+        if (!peak || peak.wkg <= 0) return null;
+        return {
+          userId,
+          name,
+          wkg: peak.wkg,
+          watts: peak.watts,
+          weightKg: peak.weightKg,
+          ageCategory,
+          gender,
+        };
+      })
+    );
+    results.forEach((r) => { if (r) entries.push(r); });
+  }
+  entries.sort((a, b) => b.wkg - a.wkg);
+  const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+  const byCategory = { Bianco: [], Rosa: [], Infinito: [] };
+  withRank.forEach((e) => {
+    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+  });
+  return { entries: withRank, byCategory };
+}
+
+/** 동기부여 메시지 생성 */
+function buildMotivationMessage(currentUser, nextUser) {
+  if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
+  const diffWkg = nextUser.wkg - currentUser.wkg;
+  if (diffWkg <= 0) return null;
+  const weightKg = Number(currentUser.weightKg) || 0;
+  if (weightKg <= 0) return null;
+  const requiredWatts = Math.ceil(diffWkg * weightKg);
+  const targetWatts = (currentUser.watts || 0) + requiredWatts;
+  return `${currentUser.name}님 현재 ${currentUser.rank}위! 앞선 사용자와의 차이는 ${diffWkg.toFixed(2)} W/kg로, ${requiredWatts}W 향상 시키면(목표 파워: ${targetWatts}W) 추월할 수 있습니다. 도전해 보세요!`;
+}
+
+const PEAK_RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** 피크 파워 랭킹 API */
+exports.getPeakPowerRanking = onRequest(
+  { cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", "*");
+    const period = req.query.period || "monthly";
+    const durationType = req.query.duration || "5min";
+    const gender = req.query.gender || "all";
+    const uid = req.query.uid || null;
+    const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+    const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
+
+    let startStr, endStr;
+    if (period === "yearly") {
+      const r = getYearRangeSeoul(year);
+      startStr = r.startStr;
+      endStr = r.endStr;
+    } else {
+      const r = getMonthRangeSeoul(year, month);
+      startStr = r.startStr;
+      endStr = r.endStr;
+    }
+
+    const db = admin.firestore();
+    const cacheKey = `peakRanking_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
+    const cacheRef = db.collection("cache").doc(cacheKey);
+    const cacheSnap = await cacheRef.get();
+    const nowMs = Date.now();
+    if (cacheSnap.exists) {
+      const data = cacheSnap.data();
+      const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+      if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
+        let out = { success: true, byCategory: data.byCategory, startStr, endStr, period, durationType, gender, cached: true };
+        if (uid) {
+          const cat = data.byCategory;
+          const cats = ["Bianco", "Rosa", "Infinito"];
+          let current = null, nextUser = null;
+          for (const c of cats) {
+            const arr = cat?.[c] || [];
+            const idx = arr.findIndex((e) => e.userId === uid);
+            if (idx >= 0) {
+              current = arr[idx];
+              nextUser = idx > 0 ? arr[idx - 1] : null;
+              break;
+            }
+          }
+          if (current) {
+            out.currentUser = current;
+            out.motivationMessage = buildMotivationMessage(current, nextUser);
+          }
+        }
+        return res.status(200).json(out);
+      }
+    }
+
+    const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+    await cacheRef.set({
+      byCategory,
+      startStr,
+      endStr,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    let out = { success: true, byCategory, startStr, endStr, period, durationType, gender };
+    if (uid) {
+      const cats = ["Bianco", "Rosa", "Infinito"];
+      let current = null, nextUser = null;
+      for (const c of cats) {
+        const arr = byCategory[c] || [];
+        const idx = arr.findIndex((e) => e.userId === uid);
+        if (idx >= 0) {
+          current = arr[idx];
+          nextUser = idx > 0 ? arr[idx - 1] : null;
+          break;
+        }
+      }
+      if (current) {
+        out.currentUser = current;
+        out.motivationMessage = buildMotivationMessage(current, nextUser);
+      }
+    }
+    res.status(200).json(out);
+  }
+);
+
+/** 월간 랭킹 확정 (매월 말일 21:00 Asia/Seoul) */
+const finalizeMonthlyPeakOptions = {
+  schedule: "0 21 L * *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 540,
+};
+exports.finalizeMonthlyPeakRanking = onSchedule(
+  finalizeMonthlyPeakOptions,
+  async (event) => {
+    const db = admin.firestore();
+    const now = new Date();
+    const { startStr, endStr } = getMonthRangeSeoul(now.getFullYear(), now.getMonth() + 1);
+    const points = [100, 50, 30];
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      for (const gender of ["all", "M", "F"]) {
+        const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+        for (const cat of ["Bianco", "Rosa", "Infinito"]) {
+          const arr = byCategory[cat] || [];
+          const top3 = arr.slice(0, 3);
+          for (let i = 0; i < top3.length; i++) {
+            const u = top3[i];
+            const userRef = db.collection("users").doc(u.userId);
+            const snap = await userRef.get();
+            if (!snap.exists) continue;
+            const data = snap.data();
+            const add = points[i];
+            const rem = Number(data.rem_points || 0) + add;
+            const acc = Number(data.acc_points || 0) + add;
+            await userRef.update({ rem_points: rem, acc_points: acc });
+            console.log("[finalizeMonthlyPeakRanking]", durationType, gender, cat, (i + 1) + "등", u.name, "+" + add + "SP");
+          }
+        }
+      }
+    }
+    console.log("[finalizeMonthlyPeakRanking] 완료", { startStr, endStr });
+  }
+);
+
+/** 연간 랭킹 확정 (매년 12월 31일 21:00 Asia/Seoul) */
+const finalizeYearlyPeakOptions = {
+  schedule: "0 21 31 12 *",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 540,
+};
+exports.finalizeYearlyPeakRanking = onSchedule(
+  finalizeYearlyPeakOptions,
+  async (event) => {
+    const db = admin.firestore();
+    const year = new Date().getFullYear();
+    const { startStr, endStr } = getYearRangeSeoul(year);
+    const points = [100, 50, 30];
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      for (const gender of ["all", "M", "F"]) {
+        const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+        for (const cat of ["Bianco", "Rosa", "Infinito"]) {
+          const arr = byCategory[cat] || [];
+          const top3 = arr.slice(0, 3);
+          for (let i = 0; i < top3.length; i++) {
+            const u = top3[i];
+            const userRef = db.collection("users").doc(u.userId);
+            const snap = await userRef.get();
+            if (!snap.exists) continue;
+            const data = snap.data();
+            const add = points[i];
+            const rem = Number(data.rem_points || 0) + add;
+            const acc = Number(data.acc_points || 0) + add;
+            await userRef.update({ rem_points: rem, acc_points: acc });
+            console.log("[finalizeYearlyPeakRanking]", durationType, gender, cat, (i + 1) + "등", u.name, "+" + add + "SP");
+          }
+        }
+      }
+    }
+    console.log("[finalizeYearlyPeakRanking] 완료", { startStr, endStr });
+  }
+);
+
 // ---------- STELVIO AI 사용자 선택형 FTP 갱신: 제안 API (계산만, DB 미수정) ----------
 /** Firebase ID 토큰 검증 헬퍼 */
 async function getUidFromRequest(req, res) {
