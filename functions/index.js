@@ -2010,7 +2010,7 @@ function getYearRangeSeoul(year) {
   return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
 }
 
-/** 생년월일 기준 연령대: Bianco(≤39), Rosa(40~49), Infinito(≥50) - 일반부용 */
+/** 생년월일 기준 연령대: Bianco(≤39), Rosa(40~49), Infinito(50~59), Leggenda(≥60) - 일반부용 */
 function getAgeCategory(birthYear) {
   if (birthYear == null || birthYear === "") return null;
   const y = Number(birthYear);
@@ -2019,15 +2019,16 @@ function getAgeCategory(birthYear) {
   const age = thisYear - y;
   if (age <= 39) return "Bianco";
   if (age <= 49) return "Rosa";
-  return "Infinito";
+  if (age <= 59) return "Infinito";
+  return "Leggenda";
 }
 
-/** challenge 기준 리그 분류: Elite/PRO → Assoluto(선수부), Fitness/GranFondo/Racing → Bianco/Rosa/Infinito(일반부) */
+/** challenge 기준 리그 분류: Elite/PRO → Assoluto(선수부), Fitness/GranFondo/Racing → Bianco/Rosa/Infinito/Leggenda(일반부) */
 function getLeagueCategory(challenge, birthYear) {
   const ch = String(challenge || "").trim();
   if (ch === "Elite" || ch === "PRO") return "Assoluto";
   const ageCat = getAgeCategory(birthYear);
-  return ageCat; // Bianco, Rosa, Infinito
+  return ageCat; // Bianco, Rosa, Infinito, Leggenda
 }
 
 /** 연간 구간 여부 (YYYY-01-01 ~ YYYY-12-31) */
@@ -2152,7 +2153,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   }
   entries.sort((a, b) => b.wkg - a.wkg);
   const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
-  const byCategory = { Bianco: [], Rosa: [], Infinito: [], Assoluto: [] };
+  const byCategory = { Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
   withRank.forEach((e) => {
     if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
   });
@@ -2212,7 +2213,7 @@ exports.getPeakPowerRanking = onRequest(
         let out = { success: true, byCategory: data.byCategory, startStr, endStr, period, durationType, gender, cached: true };
         if (uid) {
           const cat = data.byCategory;
-          const cats = ["Assoluto", "Bianco", "Rosa", "Infinito"];
+          const cats = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
           let current = null, nextUser = null;
           for (const c of cats) {
             const arr = cat?.[c] || [];
@@ -2242,7 +2243,7 @@ exports.getPeakPowerRanking = onRequest(
 
     let out = { success: true, byCategory, startStr, endStr, period, durationType, gender };
     if (uid) {
-      const cats = ["Assoluto", "Bianco", "Rosa", "Infinito"];
+      const cats = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
       let current = null, nextUser = null;
       for (const c of cats) {
         const arr = byCategory[c] || [];
@@ -2395,7 +2396,7 @@ exports.finalizeMonthlyPeakRanking = onSchedule(
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
         const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-        for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito"]) {
+        for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"]) {
           const arr = byCategory[cat] || [];
           const top3 = arr.slice(0, 3);
           for (let i = 0; i < top3.length; i++) {
@@ -2433,7 +2434,7 @@ exports.finalizeYearlyPeakRanking = onSchedule(
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       for (const gender of ["all", "M", "F"]) {
         const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-        for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito"]) {
+        for (const cat of ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"]) {
           const arr = byCategory[cat] || [];
           const top3 = arr.slice(0, 3);
           for (let i = 0; i < top3.length; i++) {
