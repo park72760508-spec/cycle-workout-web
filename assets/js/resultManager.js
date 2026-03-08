@@ -414,6 +414,12 @@ async function saveTrainingResult(extra = {}) {
           const workoutTitle = window.currentWorkout?.title || window.currentWorkout?.name || null;
           const workoutId = window.currentWorkout?.id || trainingResult.workoutId || extra.workoutId || null;
           
+          // 거리(km): 스마트로라·속도계 센서 연결 시 속도 적산 거리 (모바일/통합 블루투스/노트북)
+          const rawDistance = extra.distance_km ?? window.mobileTrainingState?.distanceKm ?? window._indivDistanceKm ?? window.trainingMetrics?.distanceKm ?? null;
+          const distanceKm = (rawDistance != null && !Number.isNaN(Number(rawDistance)) && Number(rawDistance) >= 0)
+            ? Math.round(Number(rawDistance) * 100) / 100
+            : null;
+          
           const trainingData = {
             // 필수 필드
             duration: totalSeconds,
@@ -423,7 +429,7 @@ async function saveTrainingResult(extra = {}) {
             // 기본 정보
             workout_id: workoutId ? String(workoutId) : null,
             title: workoutTitle,
-            distance_km: null, // GPS 데이터가 있으면 추가 가능
+            distance_km: distanceKm,
             elevation_gain: null, // GPS 데이터가 있으면 추가 가능
             
             // 파워 & 부하

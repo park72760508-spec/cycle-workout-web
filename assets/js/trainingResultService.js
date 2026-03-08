@@ -119,6 +119,28 @@ function calculateTimeInZones(powerData, ftp) {
 }
 
 /**
+ * 슬라이딩 윈도우로 최대 평균 파워(MMP) 계산
+ * @param {Array} wattsArray - 1초당 1개 파워 값 배열
+ * @param {number} seconds - 구간(초)
+ * @returns {number} 최대 평균 파워 (정수)
+ */
+function calculateMaxAveragePower(wattsArray, seconds) {
+  if (!wattsArray || wattsArray.length < seconds) return 0;
+  const arr = wattsArray;
+  const len = arr.length;
+  let sum = 0;
+  for (let i = 0; i < seconds; i++) sum += Number(arr[i]) || 0;
+  let maxAvg = sum / seconds;
+  for (let i = seconds; i < len; i++) {
+    sum -= Number(arr[i - seconds]) || 0;
+    sum += Number(arr[i]) || 0;
+    const avg = sum / seconds;
+    if (avg > maxAvg) maxAvg = avg;
+  }
+  return Math.round(maxAvg);
+}
+
+/**
  * 훈련 세션 저장 및 보상 처리
  * Firestore Transaction을 사용하여 데이터 무결성 보장
  * 
@@ -320,6 +342,17 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
             z6_anaerobic: 0,
             z7_neuromuscular: 0
           };
+
+      // MMP 계산 (powerData가 있으면 5/10/20/30/40/60분 피크 파워)
+      const wattsArray = trainingData.powerData && trainingData.powerData.length > 0
+        ? trainingData.powerData.map((d) => Number(d.v) || 0)
+        : null;
+      const max5minWatts = wattsArray && wattsArray.length >= 300 ? calculateMaxAveragePower(wattsArray, 300) : null;
+      const max10minWatts = wattsArray && wattsArray.length >= 600 ? calculateMaxAveragePower(wattsArray, 600) : null;
+      const max20minWatts = wattsArray && wattsArray.length >= 1200 ? calculateMaxAveragePower(wattsArray, 1200) : null;
+      const max30minWatts = wattsArray && wattsArray.length >= 1800 ? calculateMaxAveragePower(wattsArray, 1800) : null;
+      const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
+      const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
       
       // date 필드: "YYYY-MM-DD" 형식 문자열 (훈련일지 달력 등 조회용)
       const now = new Date();
@@ -354,6 +387,14 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         
         // 케이던스 (Technique)
         avg_cadence: trainingData.avg_cadence || null,
+        
+        // MMP (피크 파워)
+        ...(max5minWatts != null && { max_5min_watts: max5minWatts }),
+        ...(max10minWatts != null && { max_10min_watts: max10minWatts }),
+        ...(max20minWatts != null && { max_20min_watts: max20minWatts }),
+        ...(max30minWatts != null && { max_30min_watts: max30minWatts }),
+        ...(max40minWatts != null && { max_40min_watts: max40minWatts }),
+        ...(max60minWatts != null && { max_60min_watts: max60minWatts }),
         
         // 존 분포 (Zone Distribution)
         time_in_zones: timeInZones,
