@@ -3281,10 +3281,51 @@ button[aria-disabled="true"] {
   color: #1e40af;
 }
 
-/* STELVIO 랭킹 보드 진입 버튼 */
-.stelvio-ranking-board-entry-btn:hover {
+/* STELVIO iOS 스타일 팝업 (주간 TOP10, 랭킹 보드) */
+.stelvio-ios-popup {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+.stelvio-ios-modal-content {
+  border-radius: 16px !important;
+  border: 1px solid rgba(102, 126, 234, 0.35) !important;
+  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.25), 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+  overflow: hidden;
+}
+.stelvio-ios-modal-content .training-detail-header {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.04) 100%);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+}
+.stelvio-ios-modal-content .training-detail-title {
+  color: #4c51bf;
+}
+
+/* STELVIO 랭킹 보드 진입 버튼 - 보라 그라데이션 */
+.stelvio-ranking-board-entry-btn {
+  width: 100%;
+  max-width: 280px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.stelvio-purple-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #fff !important;
+  border: 2px solid rgba(118, 75, 162, 0.4) !important;
+  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4) !important;
+}
+.stelvio-purple-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 107, 53, 0.5);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5) !important;
 }
 .stelvio-ranking-board-entry-btn:active {
   transform: translateY(0);
@@ -3315,12 +3356,12 @@ button[aria-disabled="true"] {
   transition: all 0.2s;
 }
 .stelvio-duration-tab:hover {
-  border-color: #ff6b35;
-  color: #ff6b35;
+  border-color: #667eea;
+  color: #667eea;
 }
 .stelvio-duration-tab.active {
-  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
-  border-color: #ff6b35;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: rgba(102, 126, 234, 0.6);
   color: #fff;
 }
 .stelvio-filter-row {
@@ -3351,21 +3392,21 @@ button[aria-disabled="true"] {
   transition: all 0.2s;
 }
 .stelvio-toggle-btn:hover {
-  border-color: #ff6b35;
-  color: #ff6b35;
+  border-color: #667eea;
+  color: #667eea;
 }
 .stelvio-toggle-btn.active {
-  background: #ff6b35;
-  border-color: #ff6b35;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: rgba(102, 126, 234, 0.6);
   color: #fff;
 }
 .stelvio-motivation-banner {
   padding: 14px 16px;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(247, 147, 30, 0.15) 100%);
-  border: 2px solid rgba(255, 107, 53, 0.5);
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+  border: 2px solid rgba(102, 126, 234, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
 }
 .stelvio-motivation-text {
   margin: 0;
@@ -3391,7 +3432,7 @@ button[aria-disabled="true"] {
   width: 40px;
   height: 40px;
   border: 4px solid #e5e7eb;
-  border-top-color: #ff6b35;
+  border-top-color: #667eea;
   border-radius: 50%;
   animation: weekly-top10-spin 0.8s linear infinite;
 }
@@ -3400,16 +3441,18 @@ button[aria-disabled="true"] {
 }
 .stelvio-category-card {
   margin-bottom: 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
+  border: 2px solid rgba(102, 126, 234, 0.25);
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.08);
 }
 .stelvio-category-header {
   padding: 10px 14px;
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.06) 100%);
   font-weight: 700;
   font-size: 0.95rem;
   color: #1f2937;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.15);
 }
 .stelvio-category-body {
   padding: 8px 14px 12px;
@@ -3424,8 +3467,8 @@ button[aria-disabled="true"] {
   border-bottom: none;
 }
 .stelvio-rank-row.stelvio-rank-current {
-  background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
-  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, transparent 100%);
+  border-radius: 8px;
   margin: 2px -4px;
   padding: 10px 4px;
 }
@@ -3456,7 +3499,7 @@ button[aria-disabled="true"] {
 }
 .stelvio-rank-wkg {
   font-weight: 700;
-  color: #ff6b35;
+  color: #764ba2;
   font-size: 0.9rem;
 }
 .stelvio-ranking-empty {
