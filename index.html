@@ -6618,8 +6618,7 @@
           modal.classList.add('hidden');
           return;
         }
-        var rankImages = ['assets/img/first.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
-        var rankAlts = ['1위', '2위', '3위'];
+        var medals = ['🥇', '🥈', '🥉'];
         var html = '';
         list.forEach(function(item, idx) {
           var rank = item.rank || (idx + 1);
@@ -6627,7 +6626,7 @@
           var tss = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
           html += '<div class="weekly-rank-item">';
           if (rank <= 3) {
-            html += '<span class="weekly-rank-medal"><img src="' + rankImages[rank - 1] + '" alt="' + rankAlts[rank - 1] + '" style="width:28px;height:28px;object-fit:contain;" /></span>';
+            html += '<span class="weekly-rank-medal">' + medals[rank - 1] + '</span>';
           }
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
           html += '<span class="weekly-rank-name">' + name + '</span>';
@@ -6746,8 +6745,7 @@
     }
 
     function renderStelvioRankingCategories(byCategory, currentUserId) {
-      var rankImages = ['assets/img/first.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
-      var rankAlts = ['1위', '2위', '3위'];
+      var medals = ['🥇', '🥈', '🥉'];
       var cats = ['Bianco', 'Rosa', 'Infinito'];
       cats.forEach(function(cat) {
         var arr = byCategory[cat] || [];
@@ -6766,7 +6764,7 @@
           var isCurrent = currentUserId && item.userId === currentUserId;
           var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '');
           html += '<div class="' + rowClass + '">';
-          if (categoryRank <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankImages[categoryRank - 1] + '" alt="' + rankAlts[categoryRank - 1] + '" style="width:24px;height:24px;object-fit:contain;" /></span>';
+          if (categoryRank <= 3) html += '<span class="stelvio-rank-crown">' + medals[categoryRank - 1] + '</span>';
           html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
           html += '<span class="stelvio-rank-name">' + name + '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span></span>';
           html += '<span class="stelvio-rank-wkg">' + wkg + ' W/kg</span>';
@@ -15215,7 +15213,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <!-- 랭킹 목록이 여기에 동적으로 표시됩니다 -->
       </div>
       <div class="training-detail-strava-footer" style="display: flex; flex-direction: column; align-items: center; padding: 0 16px;">
-        <button type="button" class="stelvio-ranking-board-entry-btn" onclick="closeWeeklyTop10Modal(); openStelvioRankingBoardModal();" style="width: 100%; max-width: 280px; padding: 12px 20px; background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <button type="button" class="stelvio-ranking-board-entry-btn" onclick="closeWeeklyTop10Modal(); openStelvioRankingBoardModal();" style="width: 100%; max-width: 280px; padding: 10px 12px; background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); color: #fff; border: none; border-radius: 10px; font-size: 1rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 4px;">
           <img src="assets/img/stelvio_w.png" alt="" class="stelvio-ranking-btn-logo" style="height: 28px; width: auto;" />
           STELVIO 랭킹 보드
         </button>
