@@ -1375,20 +1375,6 @@
     <div class="auth-main-container">
       <div class="auth-form-container">
         <div class="auth-form-card">
-          <!-- STELVIO App Download 블럭 (동영상 제거 후 상단 배치) -->
-          <div class="auth-app-download-box auth-app-download-box-top" id="authAppDownloadBox" role="button" tabindex="0" title="클릭 시 접속 기기에 맞게 자동 처리" onclick="if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event);" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event); }">
-            <p class="auth-app-download-title">STELVIO App Download</p>
-            <div class="auth-app-download-icons">
-              <span class="auth-app-download-link" title="Android">
-                <img src="assets/img/android.png" alt="Android" class="auth-app-download-icon auth-app-download-icon-ref">
-              </span>
-              <span class="auth-app-download-divider" aria-hidden="true"></span>
-              <span class="auth-app-download-link" title="iOS">
-                <img src="assets/img/appl.png" alt="iOS" class="auth-app-download-icon auth-app-download-icon-ref">
-              </span>
-            </div>
-            <p class="auth-app-download-updated">Last Updated: 2026.03.03</p>
-          </div>
           <div class="auth-form-header">
             <h3>사용자 인증</h3>
           </div>
@@ -1441,6 +1427,20 @@
               <a href="#" id="forgotPasswordLink" style="color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; display: inline-block; padding: 4px 0;">
                 비밀번호 재설정
               </a>
+            </div>
+            <!-- STELVIO App Download 블럭 (비밀번호 재설정 밑 배치) -->
+            <div class="auth-app-download-box" id="authAppDownloadBox" role="button" tabindex="0" title="클릭 시 접속 기기에 맞게 자동 처리" onclick="if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event);" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event); }">
+              <p class="auth-app-download-title">STELVIO App Download</p>
+              <div class="auth-app-download-icons">
+                <span class="auth-app-download-link" title="Android">
+                  <img src="assets/img/android.png" alt="Android" class="auth-app-download-icon auth-app-download-icon-ref">
+                </span>
+                <span class="auth-app-download-divider" aria-hidden="true"></span>
+                <span class="auth-app-download-link" title="iOS">
+                  <img src="assets/img/appl.png" alt="iOS" class="auth-app-download-icon auth-app-download-icon-ref">
+                </span>
+              </div>
+              <p class="auth-app-download-updated">Last Updated: 2026.03.03</p>
             </div>
           </div>
         </div>
