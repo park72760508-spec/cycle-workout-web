@@ -696,12 +696,18 @@ async function processStravaActivity(db, ownerId, objectId) {
 
   let max5minWatts = null;
   let max10minWatts = null;
+  let max20minWatts = null;
   let max30minWatts = null;
+  let max40minWatts = null;
+  let max60minWatts = null;
   if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
     const watts = streamsRes.watts;
     max5minWatts = calculateMaxAveragePower(watts, 300);
     max10minWatts = calculateMaxAveragePower(watts, 600);
+    max20minWatts = calculateMaxAveragePower(watts, 1200);
     max30minWatts = calculateMaxAveragePower(watts, 1800);
+    max40minWatts = calculateMaxAveragePower(watts, 2400);
+    max60minWatts = calculateMaxAveragePower(watts, 3600);
   }
 
   const tssAppliedAt = new Date().toISOString();
@@ -736,7 +742,10 @@ async function processStravaActivity(db, ownerId, objectId) {
   };
   if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
   if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
+  if (max20minWatts != null) logDoc.max_20min_watts = max20minWatts;
   if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
+  if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
+  if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
 
   const existingIds = await getExistingStravaActivityIds(db, userId);
   const isNew = !existingIds.has(activityId);
@@ -1078,7 +1087,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (existingIds.has(actId)) {
       const entry = existingDocMap.get(actId);
       const d = entry ? entry.data : {};
-      const needsMmp = d.max_5min_watts == null || d.max_10min_watts == null || d.max_30min_watts == null;
+      const needsMmp = d.max_5min_watts == null || d.max_10min_watts == null || d.max_20min_watts == null || d.max_30min_watts == null || d.max_40min_watts == null || d.max_60min_watts == null;
       if (needsMmp && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
@@ -1086,7 +1095,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           await entry.ref.update({
             max_5min_watts: calculateMaxAveragePower(watts, 300),
             max_10min_watts: calculateMaxAveragePower(watts, 600),
+            max_20min_watts: calculateMaxAveragePower(watts, 1200),
             max_30min_watts: calculateMaxAveragePower(watts, 1800),
+            max_40min_watts: calculateMaxAveragePower(watts, 2400),
+            max_60min_watts: calculateMaxAveragePower(watts, 3600),
           });
         }
       }
@@ -1099,12 +1111,18 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     const streamsRes = await fetchStravaStreams(accessToken, actId);
     let max5minWatts = null;
     let max10minWatts = null;
+    let max20minWatts = null;
     let max30minWatts = null;
+    let max40minWatts = null;
+    let max60minWatts = null;
     if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
       const watts = streamsRes.watts;
       max5minWatts = calculateMaxAveragePower(watts, 300);
       max10minWatts = calculateMaxAveragePower(watts, 600);
+      max20minWatts = calculateMaxAveragePower(watts, 1200);
       max30minWatts = calculateMaxAveragePower(watts, 1800);
+      max40minWatts = calculateMaxAveragePower(watts, 2400);
+      max60minWatts = calculateMaxAveragePower(watts, 3600);
     }
     const dateStr = mapped.date || "";
     const activityTss = mapped.tss || 0;
@@ -1141,7 +1159,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     };
     if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
     if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
+    if (max20minWatts != null) logDoc.max_20min_watts = max20minWatts;
     if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
+    if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
+    if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
     await logsRef.doc(actId).set(logDoc, { merge: true });
     existingIds.add(actId);
     newActivities += 1;
@@ -1459,7 +1480,7 @@ exports.manualStravaSyncWithMmp = onRequest(
 
       if (exists) {
         const existingData = logSnap.data();
-        const needsMmp = existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_30min_watts == null;
+        const needsMmp = existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_20min_watts == null || existingData.max_30min_watts == null || existingData.max_40min_watts == null || existingData.max_60min_watts == null;
         if (needsMmp) {
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const streamsRes = await fetchStravaStreams(accessToken, actId);
@@ -1469,12 +1490,18 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (wattsArray && wattsArray.length > 0) {
             const mmp5 = calculateMaxAveragePower(wattsArray, 300);
             const mmp10 = calculateMaxAveragePower(wattsArray, 600);
+            const mmp20 = calculateMaxAveragePower(wattsArray, 1200);
             const mmp30 = calculateMaxAveragePower(wattsArray, 1800);
-            console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 5m=${mmp5}, 10m=${mmp10}, 30m=${mmp30}`);
+            const mmp40 = calculateMaxAveragePower(wattsArray, 2400);
+            const mmp60 = calculateMaxAveragePower(wattsArray, 3600);
+            console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 5m=${mmp5}, 10m=${mmp10}, 20m=${mmp20}, 30m=${mmp30}, 40m=${mmp40}, 60m=${mmp60}`);
             await logDocRef.update({
               max_5min_watts: mmp5,
               max_10min_watts: mmp10,
+              max_20min_watts: mmp20,
               max_30min_watts: mmp30,
+              max_40min_watts: mmp40,
+              max_60min_watts: mmp60,
             });
             updatedCount += 1;
           }
@@ -1496,12 +1523,18 @@ exports.manualStravaSyncWithMmp = onRequest(
         console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Watts Array Length:`, wattsArray?.length || 0);
         let max5minWatts = null;
         let max10minWatts = null;
+        let max20minWatts = null;
         let max30minWatts = null;
+        let max40minWatts = null;
+        let max60minWatts = null;
         if (wattsArray && wattsArray.length > 0) {
           max5minWatts = calculateMaxAveragePower(wattsArray, 300);
           max10minWatts = calculateMaxAveragePower(wattsArray, 600);
+          max20minWatts = calculateMaxAveragePower(wattsArray, 1200);
           max30minWatts = calculateMaxAveragePower(wattsArray, 1800);
-          console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 5m=${max5minWatts}, 10m=${max10minWatts}, 30m=${max30minWatts}`);
+          max40minWatts = calculateMaxAveragePower(wattsArray, 2400);
+          max60minWatts = calculateMaxAveragePower(wattsArray, 3600);
+          console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 5m=${max5minWatts}, 10m=${max10minWatts}, 20m=${max20minWatts}, 30m=${max30minWatts}, 40m=${max40minWatts}, 60m=${max60minWatts}`);
         }
         const tssAppliedAt = new Date().toISOString();
         const logDoc = {
@@ -1534,7 +1567,10 @@ exports.manualStravaSyncWithMmp = onRequest(
           created_at: mapped.created_at,
           max_5min_watts: max5minWatts,
           max_10min_watts: max10minWatts,
+          max_20min_watts: max20minWatts,
           max_30min_watts: max30minWatts,
+          max_40min_watts: max40minWatts,
+          max_60min_watts: max60minWatts,
         };
         await logDocRef.set(logDoc, { merge: true });
         createdCount += 1;
