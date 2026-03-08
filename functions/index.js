@@ -5,6 +5,7 @@
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -1917,6 +1918,80 @@ function validatePeakPowerRecord(durationType, watts, weightKg) {
   return true;
 }
 
+/** 의심 기록을 suspicious_power_records에 Pending으로 저장 */
+async function saveSuspiciousPowerRecord(db, { userId, year, date, durationType, watts, wkg, weightKg, source, activityId, logId }) {
+  try {
+    await db.collection("suspicious_power_records").add({
+      userId,
+      year,
+      date: date || null,
+      durationType,
+      watts,
+      wkg,
+      weightKg,
+      source: source || "unknown",
+      activity_id: activityId || null,
+      log_id: logId || null,
+      status: "pending",
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn("[saveSuspiciousPowerRecord] 저장 실패:", e.message);
+  }
+}
+
+/** 로그의 피크 파워를 검증 후 연간 최고 기록에 업서트. 무효 시 suspicious_power_records에 Pending 저장 */
+async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
+  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  if (rawWeight <= 0) return;
+  const weightKg = Math.max(rawWeight, 45);
+  const dateStr = logData.date || "";
+  const year = dateStr ? parseInt(dateStr.substring(0, 4), 10) : new Date().getFullYear();
+  if (isNaN(year)) return;
+  const source = String(logData.source || "stelvio").toLowerCase();
+
+  const validRecords = {};
+  for (const [durationType, field] of Object.entries(DURATION_FIELDS)) {
+    const watts = Number(logData[field]) || 0;
+    if (watts <= 0) continue;
+    const valid = validatePeakPowerRecord(durationType, watts, weightKg);
+    if (!valid) {
+      const wkg = Math.round((watts / weightKg) * 100) / 100;
+      await saveSuspiciousPowerRecord(db, {
+        userId,
+        year,
+        date: dateStr,
+        durationType,
+        watts,
+        wkg,
+        weightKg,
+        source,
+        activityId: logData.activity_id || null,
+        logId,
+      });
+      continue;
+    }
+    const wkg = Math.round((watts / weightKg) * 100) / 100;
+    validRecords[field] = { watts, wkg };
+  }
+  if (Object.keys(validRecords).length === 0) return;
+
+  const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(String(year));
+  const snap = await yearlyRef.get();
+  const current = snap.exists ? snap.data() : {};
+  const merged = { year, weight_kg: weightKg, updated_at: admin.firestore.FieldValue.serverTimestamp() };
+  let changed = false;
+  for (const [field, { watts, wkg }] of Object.entries(validRecords)) {
+    const prevWatts = Number(current[field]) || 0;
+    if (watts > prevWatts) {
+      merged[field] = watts;
+      merged[field.replace("_watts", "_wkg")] = wkg;
+      changed = true;
+    }
+  }
+  if (changed) await yearlyRef.set(merged, { merge: true });
+}
+
 /** Asia/Seoul 기준 월간 구간 (YYYY-MM-DD) */
 function getMonthRangeSeoul(year, month) {
   const y = year != null ? year : new Date().getFullYear();
@@ -1947,13 +2022,34 @@ function getAgeCategory(birthYear) {
   return "Infinito";
 }
 
-/** 사용자별 해당 기간 내 최고 피크 파워(W) 및 W/kg. Weight Floor 45kg, validatePeakPowerRecord 적용 */
+/** 연간 구간 여부 (YYYY-01-01 ~ YYYY-12-31) */
+function isYearlyRange(startStr, endStr) {
+  if (!startStr || !endStr) return false;
+  const m = startStr.match(/^(\d{4})-01-01$/);
+  const m2 = endStr.match(/^(\d{4})-12-31$/);
+  return m && m2 && m[1] === m2[1];
+}
+
+/** 사용자별 해당 기간 내 최고 피크 파워(W) 및 W/kg. Weight Floor 45kg, validatePeakPowerRecord 적용.
+ *  연간(명예의 전당)일 때는 yearly_peaks에서 조회(사전 집계 데이터, 서버 부하 최소화) */
 async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durationType) {
   const field = DURATION_FIELDS[durationType];
   if (!field) return null;
   const rawWeight = Number(userData.weight || userData.weightKg || 0);
   if (rawWeight <= 0) return null;
   const weightKg = Math.max(rawWeight, 45);
+
+  if (isYearlyRange(startStr, endStr)) {
+    const year = startStr.substring(0, 4);
+    const yearlySnap = await db.collection("users").doc(userId).collection("yearly_peaks").doc(year).get();
+    if (!yearlySnap.exists) return null;
+    const d = yearlySnap.data();
+    const watts = Number(d[field]) || 0;
+    const wkgVal = Number(d[field.replace("_watts", "_wkg")]) || (watts > 0 ? Math.round((watts / weightKg) * 100) / 100 : 0);
+    if (watts <= 0 || wkgVal <= 0) return null;
+    return { watts, wkg: wkgVal, weightKg };
+  }
+
   const snapshot = await db.collection("users").doc(userId).collection("logs")
     .where("date", ">=", startStr)
     .where("date", "<=", endStr)
@@ -2118,6 +2214,117 @@ exports.getPeakPowerRanking = onRequest(
       }
     }
     res.status(200).json(out);
+  }
+);
+
+/** 사용자 로그 생성/갱신 시 연간 최고 기록(yearly_peaks) 업서트. 검증 실패 시 suspicious_power_records에 Pending 저장 */
+exports.onUserLogWritten = onDocumentWritten(
+  { document: "users/{userId}/logs/{logId}", timeoutSeconds: 120 },
+  async (event) => {
+    const snap = event.data?.after;
+    if (!snap || !snap.exists) return;
+    const logData = snap.data();
+    const path = snap.ref.path;
+    const parts = path.split("/");
+    const userId = parts[1];
+    const logId = parts[3];
+    if (!userId || !logId) return;
+    const db = admin.firestore();
+    const userSnap = await db.collection("users").doc(userId).get();
+    if (!userSnap.exists) return;
+    const userData = userSnap.data();
+    try {
+      await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
+    } catch (e) {
+      console.warn("[onUserLogWritten] upsertYearlyPeakFromLog 실패:", userId, logId, e.message);
+    }
+  }
+);
+
+/** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출). year 파라미터로 대상 연도 지정 */
+exports.backfillYearlyPeaks = onRequest(
+  { cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", "*");
+    const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+    if (isNaN(year) || year < 2020 || year > 2100) {
+      return res.status(400).json({ success: false, error: "year 파라미터 필요 (2020~2100)" });
+    }
+    const { startStr, endStr } = getYearRangeSeoul(year);
+    const db = admin.firestore();
+    const usersSnap = await db.collection("users").get();
+    let processed = 0;
+    let updated = 0;
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      const logsSnap = await db.collection("users").doc(userId).collection("logs")
+        .where("date", ">=", startStr)
+        .where("date", "<=", endStr)
+        .get();
+      for (const logDoc of logsSnap.docs) {
+        processed++;
+        try {
+          await upsertYearlyPeakFromLog(db, userId, userData, logDoc.data(), logDoc.id);
+          updated++;
+        } catch (e) {
+          console.warn("[backfillYearlyPeaks]", userId, logDoc.id, e.message);
+        }
+      }
+    }
+    res.status(200).json({ success: true, year, startStr, endStr, processed, updated });
+  }
+);
+
+/** 의심 기록(Pending) 승인 → yearly_peaks에 반영. recordId: suspicious_power_records 문서 ID */
+exports.approveSuspiciousPowerRecord = onRequest(
+  { cors: true, timeoutSeconds: 60 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", "*");
+    const recordId = req.query.recordId || req.body?.recordId;
+    if (!recordId) {
+      return res.status(400).json({ success: false, error: "recordId 필요" });
+    }
+    const db = admin.firestore();
+    const recRef = db.collection("suspicious_power_records").doc(recordId);
+    const recSnap = await recRef.get();
+    if (!recSnap.exists) {
+      return res.status(404).json({ success: false, error: "기록 없음" });
+    }
+    const rec = recSnap.data();
+    if (rec.status !== "pending") {
+      return res.status(400).json({ success: false, error: "이미 처리됨" });
+    }
+    const { userId, year, durationType, watts, wkg, weightKg } = rec;
+    const field = DURATION_FIELDS[durationType];
+    if (!field) {
+      return res.status(400).json({ success: false, error: "잘못된 durationType" });
+    }
+    const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(String(year));
+    const yearlySnap = await yearlyRef.get();
+    const current = yearlySnap.exists ? yearlySnap.data() : {};
+    const prevWatts = Number(current[field]) || 0;
+    if (watts <= prevWatts) {
+      await recRef.update({ status: "rejected", updated_at: admin.firestore.FieldValue.serverTimestamp() });
+      return res.status(200).json({ success: true, message: "기존 기록이 더 높아 반영하지 않음" });
+    }
+    await yearlyRef.set({
+      [field]: watts,
+      [field.replace("_watts", "_wkg")]: wkg,
+      year,
+      weight_kg: weightKg,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await recRef.update({ status: "approved", updated_at: admin.firestore.FieldValue.serverTimestamp() });
+    res.status(200).json({ success: true, message: "승인 완료" });
   }
 );
 
