@@ -8870,6 +8870,10 @@ button[aria-disabled="true"] {
   margin: auto; /* 상하좌우 중앙 정렬 */
   flex-shrink: 0;
 }
+/* 사용자 인증 화면: 상하 중앙 배치 */
+#authScreen .auth-main-container {
+  align-self: center;
+}
 
 .auth-hero-section {
   text-align: center;
@@ -9033,16 +9037,16 @@ button[aria-disabled="true"] {
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
 }
 
-/* STELVIO App Download 상단 배치 (인증 화면) */
-#authScreen .auth-app-download-box-top {
-  margin-top: 0;
-  margin-bottom: 12px;
+/* STELVIO App Download (비밀번호 재설정 밑 배치) */
+#authScreen .phone-auth-section .auth-app-download-box {
+  margin-top: 10px;
+  margin-bottom: 0;
   padding: 10px 14px;
 }
-#authScreen .auth-app-download-box-top .auth-app-download-title {
+#authScreen .phone-auth-section .auth-app-download-box .auth-app-download-title {
   margin-bottom: 8px;
 }
-#authScreen .auth-app-download-box-top .auth-app-download-updated {
+#authScreen .phone-auth-section .auth-app-download-box .auth-app-download-updated {
   margin-top: 6px;
 }
 
