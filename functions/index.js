@@ -2039,7 +2039,8 @@ function isYearlyRange(startStr, endStr) {
 }
 
 /** 사용자별 해당 기간 내 최고 피크 파워(W) 및 W/kg. Weight Floor 45kg, validatePeakPowerRecord 적용.
- *  연간(명예의 전당)일 때는 yearly_peaks에서 조회(사전 집계 데이터, 서버 부하 최소화) */
+ *  연간(명예의 전당)일 때는 yearly_peaks에서 조회(사전 집계 데이터, 서버 부하 최소화)
+ *  보안: 현재 연도는 yearly_peaks와 logs를 재검증하여 yearly_peaks 누락 시 logs 최대치 반영 */
 async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durationType) {
   const field = DURATION_FIELDS[durationType];
   if (!field) return null;
@@ -2049,12 +2050,46 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
 
   if (isYearlyRange(startStr, endStr)) {
     const year = startStr.substring(0, 4);
-    // yearly_peaks: 해당 연도 1/1~12/31 구간 내 로그 기반 누적 최고치. 현재 연도는 "현재일까지" 누적 반영됨
-    const yearlySnap = await db.collection("users").doc(userId).collection("yearly_peaks").doc(year).get();
-    if (!yearlySnap.exists) return null;
-    const d = yearlySnap.data();
-    const watts = Number(d[field]) || 0;
-    const wkgVal = Number(d[field.replace("_watts", "_wkg")]) || (watts > 0 ? Math.round((watts / weightKg) * 100) / 100 : 0);
+    const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(year);
+    const yearlySnap = await yearlyRef.get();
+    let watts = 0;
+    let wkgVal = 0;
+    if (yearlySnap.exists) {
+      const d = yearlySnap.data();
+      watts = Number(d[field]) || 0;
+      wkgVal = Number(d[field.replace("_watts", "_wkg")]) || (watts > 0 ? Math.round((watts / weightKg) * 100) / 100 : 0);
+    }
+    // 보안: 현재 연도는 logs와 재검증 (onUserLogWritten 누락·트리거 배포 전 로그 등 방지)
+    const isCurrentYear = year === String(new Date().getFullYear());
+    if (isCurrentYear) {
+      const logsSnap = await db.collection("users").doc(userId).collection("logs")
+        .where("date", ">=", startStr)
+        .where("date", "<=", endStr)
+        .get();
+      let maxWattsFromLogs = 0;
+      logsSnap.docs.forEach((doc) => {
+        const d = doc.data();
+        const w = Number(d[field]) || 0;
+        if (w > 0 && validatePeakPowerRecord(durationType, w, weightKg) && w > maxWattsFromLogs) maxWattsFromLogs = w;
+      });
+      if (maxWattsFromLogs > watts) {
+        watts = maxWattsFromLogs;
+        wkgVal = Math.round((maxWattsFromLogs / weightKg) * 100) / 100;
+        // yearly_peaks 보정 (향후 조회 시 로그 스캔 불필요)
+        try {
+          const wkgField = field.replace("_watts", "_wkg");
+          await yearlyRef.set({
+            year: parseInt(year, 10),
+            [field]: watts,
+            [wkgField]: wkgVal,
+            weight_kg: weightKg,
+            updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        } catch (e) {
+          console.warn("[getPeakPowerForUser] yearly_peaks 보정 실패:", userId, year, e.message);
+        }
+      }
+    }
     if (watts <= 0 || wkgVal <= 0) return null;
     return { watts, wkg: wkgVal, weightKg };
   }
