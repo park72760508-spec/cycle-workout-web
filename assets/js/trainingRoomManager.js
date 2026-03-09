@@ -1079,8 +1079,9 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
         <div class="training-room-content">
           <div class="training-room-name-section" style="display: flex; align-items: center; gap: 8px;">
             ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
-            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0;">
+            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
               ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
+              ${hasPassword ? '<img src="assets/img/lock2.png" alt="비밀번호" class="training-room-lock-icon" style="flex-shrink: 0;" />' : ''}
             </div>
             <div class="training-room-actions" onclick="event.stopPropagation();" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
               ${canEdit ? `
@@ -1092,9 +1093,6 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
               <button type="button" class="training-room-delete-btn" onclick="deleteTrainingRoom('${room.id}')" aria-label="삭제" title="삭제">
                 <img src="assets/img/delete2.png" alt="삭제" style="width: 20px; height: 20px; display: block;" />
               </button>
-              ` : ''}
-              ${hasPassword ? `
-              <img src="assets/img/lock2.png" alt="비밀번호" class="training-room-lock-icon" />
               ` : ''}
             </div>
           </div>
@@ -2569,12 +2567,10 @@ function renderTrainingRoomListForModal(rooms, users = []) {
         <div class="training-room-content">
           <div class="training-room-name-section" style="display: flex; align-items: center; gap: 8px;">
             ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
-            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0;">
+            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}" style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;">
               ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
+              ${hasPassword ? '<img src="assets/img/lock2.png" alt="비밀번호" class="training-room-lock-icon" style="flex-shrink: 0;" />' : ''}
             </div>
-            ${hasPassword ? `
-              <img src="assets/img/lock2.png" alt="비밀번호" class="training-room-lock-icon" />
-            ` : ''}
           </div>
           <div class="training-room-coach-section">
             <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
