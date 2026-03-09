@@ -864,27 +864,10 @@ function initAuthStateListener() {
               // 플래그 리셋 (한 번만 실행되도록)
               isLoginJustCompleted = false;
             } else {
-              // 페이지 로드 시 인증 상태 복원인 경우 (또는 토큰 갱신 시 재호출됨 — 토큰 갱신 시에는 화면 전환 금지)
-              if (window.__authRestoreBasecampDone) {
-                return; // 이미 이번 페이지 세션에서 베이스캠프 전환을 한 번 수행함 (토큰 갱신 시 재호출 방지)
-              }
-              const hasContact = userData.contact && userData.contact.trim() !== '';
-              const hasFTP = userData.ftp && userData.ftp > 0;
-              const hasWeight = userData.weight && userData.weight > 0;
-              const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
-              
-              const hasBirthYear = userData.birth_year != null || userData.birthYear != null;
-              const hasGender = (userData.gender === '남' || userData.gender === '여') || (userData.sex === '남' || userData.sex === '여');
-              const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasBirthYear || !hasGender || !hasChallenge;
-              
-              if (!needsInfo) {
-                // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동 (최초 1회만)
-                window.__authRestoreBasecampDone = true;
-                setTimeout(() => {
-                  switchToBasecampScreen();
-                }, 300);
-              }
-              // needsInfo가 true여도 페이지 로드 시에는 모달을 표시하지 않음
+              // 🔒 보안: 페이지 로드 시 인증 복원(삼성 태블릿 등) — 베이스캠프 자동 전환 금지
+              // 반드시 사용자가 인증 화면에서 로그인(시작하기)을 거쳐야 베이스캠프 진입
+              // 공용 기기·삼성 갤럭시 태블릿에서 이전 사용자 계정 자동 로그인 방지
+              console.log('[Auth] 인증 상태 복원됨 — 베이스캠프 자동 전환 생략 (사용자 인증 필수)');
             }
           }
         } else {
