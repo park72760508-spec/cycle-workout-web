@@ -3543,6 +3543,13 @@ button[aria-disabled="true"] {
   color: #ff6b35;
 }
 
+/* STELVIO 랭킹 보드: 상단 끝에서 스크롤 Lock 방지 (모바일/터치) */
+#stelvioRankingBoardModal .stelvio-ranking-modal-content {
+  touch-action: pan-y !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch;
+}
+
 .training-detail-footer {
   padding: 16px 20px;
   border-top: 1px solid rgba(0, 212, 170, 0.3);
