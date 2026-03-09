@@ -13045,6 +13045,22 @@ function closeSettingsModal() {
   }
 }
 
+function openStravaSignupGuideModal() {
+  const modal = document.getElementById('stravaSignupGuideModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  }
+}
+
+function closeStravaSignupGuideModal() {
+  const modal = document.getElementById('stravaSignupGuideModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
 // Gemini API 미등록 알림 팝업 (STELVIO 스타일)
 function showGeminiApiNotRegisteredModal() {
   const modal = document.getElementById('geminiApiNotRegisteredModal');
@@ -13252,6 +13268,8 @@ function saveGeminiApiKeyFromSettings() {
 
 window.openSettingsModal = openSettingsModal;
 window.closeSettingsModal = closeSettingsModal;
+window.openStravaSignupGuideModal = openStravaSignupGuideModal;
+window.closeStravaSignupGuideModal = closeStravaSignupGuideModal;
 window.resetApiKeyFromSettings = resetApiKeyFromSettings;
 window.testGeminiApiKeyFromSettings = testGeminiApiKeyFromSettings;
 window.saveGeminiApiKeyFromSettings = saveGeminiApiKeyFromSettings;
