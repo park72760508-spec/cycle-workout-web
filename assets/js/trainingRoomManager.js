@@ -199,21 +199,21 @@ async function enforceAuthPersistence() {
     if (window.firebase && typeof window.firebase.auth === 'function') {
       const auth = window.firebase.auth();
       if (auth && typeof auth.setPersistence === 'function' && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
-        await auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
-        console.log('[Auth Ready] setPersistence(LOCAL) applied (compat)');
+        await auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION);
+        console.log('[Auth Ready] setPersistence(SESSION) applied (compat, 공용 기기 보안)');
       }
     }
   } catch (e) {
-    console.warn('[Auth Ready] setPersistence(LOCAL) failed (compat):', e?.message);
+    console.warn('[Auth Ready] setPersistence(SESSION) failed (compat):', e?.message);
   }
   try {
     if (window.authV9) {
-      const { setPersistence, browserLocalPersistence } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-      await setPersistence(window.authV9, browserLocalPersistence);
-      console.log('[Auth Ready] setPersistence(LOCAL) applied (v9)');
+      const { setPersistence, browserSessionPersistence } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+      await setPersistence(window.authV9, browserSessionPersistence);
+      console.log('[Auth Ready] setPersistence(SESSION) applied (v9, 공용 기기 보안)');
     }
   } catch (e) {
-    console.warn('[Auth Ready] setPersistence(LOCAL) failed (v9):', e?.message);
+    console.warn('[Auth Ready] setPersistence(SESSION) failed (v9):', e?.message);
   }
 }
 

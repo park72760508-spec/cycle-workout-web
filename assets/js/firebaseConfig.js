@@ -32,6 +32,12 @@ try {
     // Authentication 초기화
     auth = firebase.auth();
     window.auth = auth; // 전역 접근용
+    // 🔒 보안: SESSION persistence (공용 기기에서 이전 사용자 자동 로그인 방지)
+    auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(function() {
+      console.log('🔥 Firebase Auth: SESSION persistence 적용 (탭 종료 시 로그아웃)');
+    }).catch(function(e) {
+      console.warn('[Firebase] setPersistence(SESSION) 실패:', e?.message);
+    });
     
     // Firestore 초기화 (WebChannel 400 오류 방지: Long Polling 강제)
     firestore = firebase.firestore();
