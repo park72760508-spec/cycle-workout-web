@@ -1085,16 +1085,16 @@ function renderTrainingRoomList(rooms, users = [], db = null, useV9 = false) {
             <div class="training-room-actions" onclick="event.stopPropagation();" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
               ${canEdit ? `
               <button type="button" class="training-room-edit-btn" onclick="openTrainingRoomEditModal('${room.id}')" aria-label="수정" title="수정">
-                <img src="assets/img/check-ok.png" alt="수정" style="width: 20px; height: 20px; display: block;" />
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
               </button>
               ` : ''}
               ${canDelete ? `
               <button type="button" class="training-room-delete-btn" onclick="deleteTrainingRoom('${room.id}')" aria-label="삭제" title="삭제">
-                <span style="font-size: 20px; line-height: 1; color: #dc3545;">✕</span>
+                <img src="assets/img/delete2.png" alt="삭제" style="width: 20px; height: 20px; display: block;" />
               </button>
               ` : ''}
               ${hasPassword ? `
-              <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
+              <img src="assets/img/lock2.png" alt="비밀번호" class="training-room-lock-icon" />
               ` : ''}
             </div>
           </div>
@@ -1750,7 +1750,7 @@ async function showTrainingRoomPasswordModal(roomTitle, room = null) {
       <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h3 style="display: flex; align-items: center; gap: 8px;">
-            <img src="assets/img/lock.png" alt="비밀번호" style="width: 24px; height: 24px;" />
+            <img src="assets/img/lock2.png" alt="비밀번호" style="width: 24px; height: 24px;" />
             비밀번호 확인
           </h3>
           <button class="modal-close" onclick="this.closest('.modal').remove(); resolve(false);">✖</button>
@@ -2573,7 +2573,7 @@ function renderTrainingRoomListForModal(rooms, users = []) {
               ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
             </div>
             ${hasPassword ? `
-              <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
+              <img src="assets/img/lock2.png" alt="비밀번호" class="training-room-lock-icon" />
             ` : ''}
           </div>
           <div class="training-room-coach-section">
