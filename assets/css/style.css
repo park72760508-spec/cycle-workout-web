@@ -14120,6 +14120,20 @@ button[aria-disabled="true"] {
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
+/* 스트라바(Strava) 신규 가입 가이드 모달 */
+#stravaSignupGuideModal {
+  z-index: 10001; /* 환경설정 모달 위에 표시 */
+}
+.strava-signup-guide-modal {
+  max-height: 90vh !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.strava-signup-guide-body {
+  min-height: 0; /* flex 자식 스크롤을 위해 필요 */
+}
+
 #settingsModal .modal-header.settings-modal-header {
   padding: 24px;
   border-bottom: 1px solid #e5e7eb;
