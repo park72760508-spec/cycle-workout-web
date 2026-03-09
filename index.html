@@ -51,6 +51,8 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
     import { 
       getAuth, 
+      setPersistence,
+      browserSessionPersistence,
       signInWithEmailAndPassword, 
       createUserWithEmailAndPassword,
       updateProfile,
@@ -88,6 +90,10 @@
     try {
       const appV9 = initializeApp(firebaseConfig, 'authV9');
       authV9 = getAuth(appV9);
+      setPersistence(authV9, browserSessionPersistence).catch(function(e) {
+        console.warn('[Firebase v9] setPersistence(SESSION) 실패:', e?.message);
+      });
+      console.log('✅ Firebase v9 Auth: SESSION persistence 적용 (탭 종료 시 로그아웃, 공용 기기 보안)');
       firestoreV9 = initializeFirestore(appV9, { experimentalForceLongPolling: true });
       console.log('✅ Firebase v9 Firestore 초기화 (Long Polling 적용, WebChannel 400 방지)');
       window.authV9 = authV9;
