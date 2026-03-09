@@ -14179,6 +14179,24 @@ button[aria-disabled="true"] {
   padding: 24px;
 }
 
+/* 환경설정 블럭 구분 강화 (Gemini API, STRAVA, 사용자 메뉴얼, 스트라바 신규 가입) */
+#settingsModal .settings-block {
+  margin-top: 16px !important;
+  padding: 18px !important;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+#settingsModal .settings-block:first-child {
+  margin-top: 0 !important;
+}
+#settingsModal .settings-block:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
 #settingsModal .modal-footer {
   padding: 24px;
   border-top: 1px solid #e5e7eb;
