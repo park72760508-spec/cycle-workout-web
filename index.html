@@ -4963,6 +4963,90 @@
             </button>
           </div>
         </div>
+        <!-- 스트라바(Strava) 신규 가입 블럭 -->
+        <div class="card" style="margin-top: 16px; padding: 12px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
+            <img src="assets/img/strava2.png" alt="Strava" style="height: 1.5em; width: auto; vertical-align: middle;" />
+            <span style="font-size: 0.9em; font-weight: bold; color: inherit;">스트라바(Strava) 신규 가입</span>
+          </div>
+          <div style="display: flex; justify-content: center; align-items: center;">
+            <button type="button" class="btn stelvio-purple-btn" onclick="if(typeof openStravaSignupGuideModal==='function')openStravaSignupGuideModal();" style="min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border: none; border-radius: 8px;">
+              스트라바 신규 가입 가이드
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 스트라바(Strava) 신규 가입 가이드 모달 -->
+  <div id="stravaSignupGuideModal" class="modal-overlay hidden" style="display: none;" onclick="if(event.target === this) closeStravaSignupGuideModal();">
+    <div class="modal-content strava-signup-guide-modal" style="max-width: 90%; width: 800px; max-height: 90vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
+      <div class="modal-header" style="flex-shrink: 0;">
+        <span style="width: 40px; flex-shrink: 0;" aria-hidden="true"></span>
+        <h2 style="font-size: 1em;">🚴‍♂️ 스트라바(Strava) 신규 가입 가이드</h2>
+        <button class="modal-close" onclick="closeStravaSignupGuideModal()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="strava-signup-guide-body" style="overflow-y: auto; flex: 1; padding: 20px; touch-action: pan-y; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;">
+        <div style="max-width: 800px; margin: 0 auto; font-family: 'Pretendard', 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;">
+          <p style="font-size: 15px; margin-bottom: 24px;">현재 스트라바의 한국 스토어 서비스 제한으로 인해 일반적인 앱 검색 및 신규 가입이 어려운 상태입니다. <strong>STELVIO AI의 원활한 훈련 기록 연동</strong>을 위해, 아래의 우회 가입 및 설치 방법을 단계별로 안내해 드립니다. 천천히 따라 해 주시면 정상적으로 훈련을 시작하실 수 있습니다.</p>
+
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #1e293b; margin-top: 0;">1. [공통] 스트라바 웹사이트 회원가입 (VPN 필요)</h3>
+            <p style="font-size: 14px;">한국 IP로는 가입 접근이 차단될 수 있으므로, 최초 1회 가입 시에만 VPN(가상사설망) 우회가 필요합니다.</p>
+            <ul style="font-size: 14px; color: #475569;">
+              <li style="margin-bottom: 8px;"><strong>추천 무료 VPN (PC/모바일 모두 사용 가능):</strong>
+                <ul style="margin-top: 4px;">
+                  <li><a href="https://protonvpn.com/" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none;">ProtonVPN</a> (광고가 없고 안전한 무료 버전 제공)</li>
+                  <li><a href="https://www.tunnelbear.com/" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none;">TunnelBear</a></li>
+                </ul>
+              </li>
+              <li><strong>가입 절차:</strong>
+                <ol style="margin-top: 4px;">
+                  <li>VPN 프로그램을 설치하고 실행하여 접속 위치를 <strong>미국</strong> 또는 <strong>일본</strong>으로 설정합니다.</li>
+                  <li>스트라바 공식 웹사이트(<a href="https://www.strava.com" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none;">strava.com</a>)에 접속합니다.</li>
+                  <li>이메일을 사용하여 신규 가입을 진행합니다. (프로필상의 거주 국가도 우회한 국가로 동일하게 설정해 주세요.)</li>
+                  <li>가입이 완료되면 VPN은 바로 종료하셔도 됩니다.</li>
+                </ol>
+              </li>
+            </ul>
+          </div>
+
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #1e293b; margin-top: 0;">2. [안드로이드 기기] 스트라바 앱 설치</h3>
+            <p style="font-size: 14px;">안드로이드 사용자는 구글 플레이스토어 대신, 안전성이 검증된 해외 스토어에서 설치 파일(APK)을 직접 다운로드해야 합니다.</p>
+            <ul style="font-size: 14px; color: #475569;">
+              <li style="margin-bottom: 8px;"><strong>다운로드 링크 (APKMirror 공식 페이지):</strong><br>
+                <a href="https://www.apkmirror.com/apk/strava-inc/strava-running-and-cycling-gps/" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none; word-break: break-all;">https://www.apkmirror.com/apk/strava-inc/strava-running-and-cycling-gps/</a>
+              </li>
+              <li><strong>설치 절차:</strong>
+                <ol style="margin-top: 4px;">
+                  <li>스마트폰 브라우저에서 위 링크에 접속합니다.</li>
+                  <li>목록에서 가장 위에 있는 <strong>최신 버전(Latest Version)</strong>의 우측 다운로드 아이콘(⬇️)을 누릅니다.</li>
+                  <li>다음 화면에서 <strong>'Download APK'</strong> 버튼을 눌러 파일을 스마트폰에 저장합니다.</li>
+                  <li>다운로드된 파일을 실행합니다. '출처를 알 수 없는 앱 설치' 경고가 나타나면 <strong>허용</strong>을 눌러 기기에 설치를 완료해 주세요.</li>
+                </ol>
+              </li>
+            </ul>
+          </div>
+
+          <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #1e293b; margin-top: 0;">3. [아이폰 / iOS] 스트라바 앱 설치</h3>
+            <p style="font-size: 14px;">아이폰은 외부 파일 직접 설치가 불가능하므로, 앱스토어의 국가 설정을 잠시 해외로 변경하여 다운로드해야 합니다.</p>
+            <ul style="font-size: 14px; color: #475569;">
+              <li><strong>설치 절차:</strong>
+                <ol style="margin-top: 4px;">
+                  <li>아이폰의 <strong>App Store</strong> 앱을 엽니다.</li>
+                  <li>우측 상단의 <strong>내 프로필 사진</strong>을 누른 후, 상단의 <strong>내 계정(이름/이메일)</strong>을 한 번 더 누릅니다.</li>
+                  <li><strong>'국가/지역'</strong> ➡️ <strong>'국가 또는 지역 변경'</strong>을 선택합니다.</li>
+                  <li>국가를 <strong>미국(United States)</strong>으로 변경합니다. (결제 수단은 'None'으로 체크하시고, 주소는 구글맵 등에서 임의의 미국 주소나 배송대행지 주소를 입력하시면 됩니다.)</li>
+                  <li>앱스토어 검색창에 <strong>'Strava'</strong>를 검색하여 앱을 다운로드합니다.</li>
+                  <li>설치가 완료되면 다시 동일한 경로로 들어가 국가를 <strong>'대한민국'</strong>으로 원상 복구하시면 평소처럼 사용 가능합니다.</li>
+                </ol>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
