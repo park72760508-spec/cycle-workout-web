@@ -3626,11 +3626,21 @@ button[aria-disabled="true"] {
 }
 .stelvio-rank-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   font-weight: 600;
   color: #1f2937;
   font-size: 0.9rem;
 }
+.stelvio-rank-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 .stelvio-rank-global {
+  flex-shrink: 0;
   font-weight: 500;
   font-size: 0.8em;
   color: #6b7280;
