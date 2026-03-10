@@ -2160,25 +2160,24 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   return { entries: withRank, byCategory };
 }
 
-/** 사용자별 최근 7일(오늘 포함) TSS 합산 */
-async function getWeeklyTssForUser(db, userId, endDateStr) {
-  if (!userId || !endDateStr) return 0;
-  const end = new Date(endDateStr + "T23:59:59.999Z");
-  const start = new Date(end);
-  start.setDate(start.getDate() - 6);
+/** 훈련일지 5주차 구간 (오늘-6일 ~ 오늘, Asia/Seoul) — Weekly TSS Load와 동일 */
+function getWeek5RangeSeoul(todayStr) {
   const pad = (n) => String(n).padStart(2, "0");
+  let y, m, d;
+  if (todayStr && /^\d{4}-\d{2}-\d{2}$/.test(todayStr)) {
+    const parts = todayStr.split("-").map(Number);
+    y = parts[0]; m = parts[1]; d = parts[2];
+  } else {
+    const now = new Date();
+    const koreaStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    [y, m, d] = koreaStr.split("-").map(Number);
+  }
+  const today = new Date(y, m - 1, d);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 6);
   const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-  const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
-  const snap = await db.collection("users").doc(userId).collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
-  let total = 0;
-  snap.docs.forEach((doc) => {
-    const d = doc.data();
-    total += Number(d.tss) || 0;
-  });
-  return Math.round(total);
+  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  return { startStr, endStr };
 }
 
 /** 추월하기 분석: TSS 차이 및 목표 파워(W) 향상치 계산 (시스템 계산, AI 의존 없음) */
@@ -2346,9 +2345,8 @@ exports.getOvertakeAnalysis = onRequest(
     }
 
     const db = admin.firestore();
-    const today = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const todayStr = req.query.today || req.body?.today || null;
+    const { startStr: week5StartStr, endStr: week5EndStr } = getWeek5RangeSeoul(todayStr);
 
     const results = [];
 
@@ -2384,8 +2382,8 @@ exports.getOvertakeAnalysis = onRequest(
         continue;
       }
 
-      const myWeeklyTss = await getWeeklyTssForUser(db, uid, todayStr);
-      const rivalWeeklyTss = rival ? await getWeeklyTssForUser(db, rival.userId, todayStr) : 0;
+      const myWeeklyTss = Math.round(await getWeeklyTssForUser(db, uid, week5StartStr, week5EndStr));
+      const rivalWeeklyTss = rival ? Math.round(await getWeeklyTssForUser(db, rival.userId, week5StartStr, week5EndStr)) : 0;
 
       const myData = { ...current, weeklyTss: myWeeklyTss };
       const rivalData = rival ? { ...rival, weeklyTss: rivalWeeklyTss } : null;
@@ -2433,6 +2431,7 @@ exports.getOvertakeAnalysis = onRequest(
       period,
       startStr,
       endStr,
+      week5TssRange: { startStr: week5StartStr, endStr: week5EndStr },
       items: results,
     });
   }
