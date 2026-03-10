@@ -3375,16 +3375,13 @@ button[aria-disabled="true"] {
   right: 0;
   bottom: 0;
   background: rgba(255, 255, 255, 0.92);
-  z-index: 10;
+  z-index: 100;
 }
 .stelvio-overtake-loading.hidden {
   display: none !important;
 }
 .stelvio-overtake-loading:not(.hidden) {
   display: flex !important;
-}
-#stelvioRankingBoardModal .stelvio-ranking-body {
-  position: relative;
 }
 .stelvio-overtake-loading-text {
   margin: 0;
@@ -3466,6 +3463,9 @@ button[aria-disabled="true"] {
 /* STELVIO 랭킹 보드 모달 */
 .stelvio-ranking-modal-content {
   padding-bottom: 24px;
+}
+.stelvio-ranking-modal-content-relative {
+  position: relative;
 }
 .stelvio-ranking-body {
   padding: 0 16px 16px;
