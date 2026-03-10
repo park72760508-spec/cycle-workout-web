@@ -9561,48 +9561,67 @@
           if (chartDailyVo2Instance.current) { chartDailyVo2Instance.current.destroy(); chartDailyVo2Instance.current = null; }
           var data = weeklyVo2TrendData;
           var vo2Data = data.map(function(d) { return d.vo2; });
+          var hasDataFlags = data.map(function(d) { return d.hasData === true; });
           var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
           var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
           var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
-          var yMin = Math.max(20, Math.floor(dataMin - 3));
-          var yMax = Math.min(100, Math.ceil(dataMax + 3));
+          var yMin = Math.max(20, Math.floor(dataMin - 5));
+          var yMax = Math.min(100, Math.ceil(dataMax + 5));
           var vo2LabelPlugin = {
             id: 'vo2WeeklyValueLabels',
-            afterDraw: function(chart) {
+            afterDatasetsDraw: function(chart) {
               var meta = chart.getDatasetMeta(0);
               if (!meta || !meta.data || meta.data.length === 0) return;
               var dataset = chart.data && chart.data.datasets && chart.data.datasets[0];
               var values = dataset && dataset.data ? dataset.data : [];
+              var hasData = dataset && dataset._hasData;
               chart.ctx.save();
               chart.ctx.font = '11px sans-serif';
               chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
               chart.ctx.textAlign = 'center';
-              meta.data.forEach(function(bar, i) {
-                if (!bar || bar.x == null || bar.y == null) return;
+              meta.data.forEach(function(point, i) {
+                if (!point || point.x == null || point.y == null) return;
+                if (hasData && hasData[i] === false) return;
                 var value = values[i];
                 if (value == null || isNaN(value)) return;
-                chart.ctx.fillText(String(Math.round(value)), bar.x, bar.y - 4);
+                var y = point.y - 10;
+                if (y < 0) y = point.y + 16;
+                chart.ctx.fillText(String(Math.round(value)), point.x, y);
               });
               chart.ctx.restore();
             }
           };
           chartDailyVo2Instance.current = new ChartLib(ctx, {
-            type: 'bar',
+            type: 'line',
             data: {
               labels: data.map(function(d) { return d.label; }),
               datasets: [{
                 label: 'VO₂max (ml/kg/min)',
                 data: vo2Data,
-                backgroundColor: 'rgba(220, 38, 38, 0.6)',
+                _hasData: hasDataFlags,
                 borderColor: '#dc2626',
-                borderWidth: 1
+                borderWidth: 2,
+                backgroundColor: 'rgba(220, 38, 38, 0.12)',
+                tension: 0.5,
+                cubicInterpolationMode: 'default',
+                stepped: false,
+                fill: true,
+                spanGaps: true,
+                pointRadius: function(context) {
+                  var ds = context.dataset;
+                  var hasData = ds._hasData && ds._hasData[context.dataIndex];
+                  return hasData ? 5 : 0;
+                },
+                pointBackgroundColor: '#dc2626',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
               }]
             },
             options: {
               responsive: true,
               maintainAspectRatio: false,
               onClick: function(evt, elements) {
-                if (elements.length && typeof setSelectedWeeklyVo2Index === 'function') {
+                if (elements.length && elements[0] && typeof setSelectedWeeklyVo2Index === 'function') {
                   setSelectedWeeklyVo2Index(elements[0].index);
                 }
               },
@@ -9633,15 +9652,16 @@
               },
               scales: {
                 x: {
-                  grid: { display: false },
-                  ticks: { font: { size: 10 } }
+                  offset: false,
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280', maxRotation: 0, minRotation: 0 }
                 },
                 y: {
-                  beginAtZero: false,
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 5 },
                   min: yMin,
                   max: yMax,
-                  grid: { color: '#f3f4f6' },
-                  ticks: { font: { size: 10 } }
+                  beginAtZero: false
                 }
               }
             },
@@ -9850,9 +9870,14 @@
                         데이터가 없습니다
                       </div>
                     ) : (
-                      <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2 cursor-pointer" title="바를 클릭하면 해당 주의 기간과 평균 VO₂max를 볼 수 있습니다">
-                        <canvas ref={chartDailyVo2Ref}></canvas>
-                      </div>
+                      <>
+                        <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 p-2 cursor-pointer" title="포인트를 클릭하면 해당 주의 기간과 평균 VO₂max를 볼 수 있습니다">
+                          <canvas ref={chartDailyVo2Ref}></canvas>
+                        </div>
+                        <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
+                          Weekly TSS Load와 동일한 주간 구간, 주별 평균 VO₂max를 <strong>calculateStelvioVO2Max</strong>로 산출한 값입니다.
+                        </div>
+                      </>
                     )}
                   </div>
                   {/* Ride Style (VI Distribution) */}
