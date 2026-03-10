@@ -3438,7 +3438,7 @@ button[aria-disabled="true"] {
   line-height: 1.5;
 }
 .stelvio-overtake-report-card-comment {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #1f2937;
   line-height: 1.5;
   padding: 8px 0 0;
@@ -3446,7 +3446,6 @@ button[aria-disabled="true"] {
 }
 .stelvio-overtake-report-card-comment.stelvio-overtake-no-comment {
   color: #9ca3af;
-  font-size: 0.85rem;
 }
 .stelvio-overtake-report-footer {
   padding: 16px;
