@@ -9390,21 +9390,23 @@
               tss: Math.round(totalTss)
             };
           });
-          // 주별 평균 VO2: Weekly TSS 구간별로 일별 VO2 산출 후 평균
+          // 주별 평균 VO2: Weekly TSS 구간별로 일별 VO2 산출 후 평균. dailyVo2: 툴팁용 날짜별 VO2 목록
           var out = [];
           var pad2 = function(n) { return String(n).padStart(2, '0'); };
           (weeklyTSSData || []).forEach(function(w) {
             var startOnly = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate());
             var endOnly = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate());
             var vo2Vals = [];
+            var dailyVo2 = [];
             for (var d = new Date(startOnly); d <= endOnly; d.setDate(d.getDate() + 1)) {
               var dateStr = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+              var dateLabel = (d.getMonth() + 1) + '/' + d.getDate();
               var merged = mergedByDate[dateStr];
-              if (!merged) continue;
-              var vo2Val = (typeof window.calculateStelvioVO2Max === 'function' && merged)
+              var vo2Val = (merged && typeof window.calculateStelvioVO2Max === 'function')
                 ? window.calculateStelvioVO2Max(profile, [merged])
                 : null;
               if (vo2Val != null && !isNaN(vo2Val)) vo2Vals.push(vo2Val);
+              dailyVo2.push({ dateLabel: dateLabel, vo2: vo2Val });
             }
             var avgVo2 = vo2Vals.length > 0 ? vo2Vals.reduce(function(a, b) { return a + b; }, 0) / vo2Vals.length : null;
             var endLabel = (w.endDate.getMonth() + 1) + '/' + w.endDate.getDate();
@@ -9413,7 +9415,8 @@
               label: endLabel,
               dateRangeShort: w.dateRangeShort,
               vo2: avgVo2,
-              hasData: avgVo2 != null
+              hasData: avgVo2 != null,
+              dailyVo2: dailyVo2
             });
           });
           return out;
@@ -9641,10 +9644,12 @@
                       if (!context || !context.length) return '';
                       var ctx = context[0];
                       var d = data[ctx.dataIndex];
-                      var v = ctx.parsed && ctx.parsed.y != null ? ctx.parsed.y : (ctx.raw != null ? ctx.raw : null);
-                      if (v == null || isNaN(v)) return 'VO₂max: 데이터 없음';
-                      var period = d && d.dateRangeShort ? d.dateRangeShort : '';
-                      return (period ? '기간 : ' + period + ', ' : '') + '평균 VO₂max : ' + Math.round(Number(v)) + ' ml/kg/min';
+                      if (!d || !d.dailyVo2 || !d.dailyVo2.length) return '';
+                      var parts = d.dailyVo2.map(function(item) {
+                        var val = item.vo2 != null && !isNaN(item.vo2) ? Math.round(item.vo2) : '-';
+                        return item.dateLabel + '(' + val + ')';
+                      });
+                      return parts.join(', ');
                     },
                     label: function() { return ''; }
                   }
