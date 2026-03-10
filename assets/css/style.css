@@ -3424,6 +3424,16 @@ button[aria-disabled="true"] {
   padding-bottom: 6px;
   border-bottom: 1px solid rgba(255, 107, 53, 0.2);
 }
+.stelvio-overtake-badge-3pct {
+  font-size: 0.7em;
+  font-weight: 600;
+  padding: 2px 6px;
+  margin-left: 6px;
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.2) 0%, rgba(0, 168, 138, 0.2) 100%);
+  color: #00a88a;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 212, 170, 0.4);
+}
 .stelvio-overtake-report-card-stats {
   font-size: 0.85rem;
   color: #4b5563;
