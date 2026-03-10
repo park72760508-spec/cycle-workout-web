@@ -3444,6 +3444,10 @@ button[aria-disabled="true"] {
   padding: 8px 0 0;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
+.stelvio-overtake-report-card-comment.stelvio-overtake-no-comment {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
 .stelvio-overtake-report-footer {
   padding: 16px;
   border-top: 1px solid #e5e7eb;
