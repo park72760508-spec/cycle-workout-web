@@ -6875,7 +6875,7 @@
         var items = data.items;
         var apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
         var comments = {};
-        if (apiKey && items.some(function(i){ return i.hasRival; })) {
+        if (apiKey && items.length > 0) {
           try {
             comments = await callGeminiOvertakeAnalysis(items, apiKey);
           } catch (e) {
@@ -6902,24 +6902,36 @@
       var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
-      var prompt = '당신은 실내 사이클링 코치입니다. 아래는 사용자가 랭킹에서 바로 앞 순위자와 비교한 **시스템이 이미 정확히 계산한 수치**입니다.\n\n' +
+      var prompt = '당신은 실내 사이클링 코치입니다. 아래는 **시스템이 이미 정확히 계산한 수치**입니다.\n\n' +
         '## 제공된 계산값 (절대 임의로 계산하거나 변경하지 말 것)\n' +
         JSON.stringify(items.map(function(i){
-          return {
+          var o = {
             category: i.categoryLabel,
             myPower: i.myPower,
-            rivalPower: i.rivalPower,
+            myWkg: i.myWkg,
             myTSS: i.myTSS,
-            rivalTSS: i.rivalTSS,
-            tssDiff: i.tssDiff,
-            targetPowerIncrease: i.targetPowerIncrease,
             hasRival: i.hasRival
           };
+          if (i.hasRival) {
+            o.rivalPower = i.rivalPower;
+            o.rivalTSS = i.rivalTSS;
+            o.tssDiff = i.tssDiff;
+            o.targetPowerIncrease = i.targetPowerIncrease;
+          } else if (i.selfImprovement3Pct) {
+            o.selfImprovement3Pct = true;
+            o.targetPower = i.targetPower;
+            o.targetPowerIncrease = i.targetPowerIncrease;
+            o.targetWkg3Pct = i.targetWkg3Pct;
+            o.targetTSS3Pct = i.targetTSS3Pct;
+            o.tssIncrease3Pct = i.tssIncrease3Pct;
+          }
+          return o;
         }), null, 2) + '\n\n' +
         '## 요청\n' +
         '각 항목(5분, 10분, 20분, 40분, 60분, Max)별로 다음을 작성해 주세요:\n' +
-        '1. 동기부여가 되는 짧은 분석 코멘트 (1~2문장)\n' +
-        '2. 보강해야 할 훈련 포인트 (1문장)\n\n' +
+        '- hasRival=true: 앞 순위자 추월을 위한 동기부여 코멘트 + 보강 훈련 포인트\n' +
+        '- hasRival=false, selfImprovement3Pct=true: 1위 유지·자기기록 갱신을 위한 3% 향상 목표 동기부여 + 구체적 훈련 포인트. (예: 목표 파워/W/kg/TSS 수치 인용, 고강도 인터벌 비율, 주간 TSS 증량, 회복 훈련 균형, 다른 구간 대비 상대적 약점 보강 등)\n' +
+        '- myPower=0 등 데이터 없음: 해당 구간 훈련을 시작해 보라는 격려\n\n' +
         '수치는 제공된 값을 그대로 인용하고, 임의로 계산하거나 변경하지 마세요. JSON 배열로만 응답하세요. 형식: [{"category":"5분","comment":"...","tip":"..."}, ...]';
       var res = await fetch(url, {
         method: 'POST',
@@ -6954,13 +6966,22 @@
           stats.push('앞 순위: ' + item.rivalPower + 'W (' + (item.rivalWkg || 0).toFixed(2) + ' W/kg)');
           stats.push('주간 TSS: 나 ' + item.myTSS + ' vs 앞 ' + item.rivalTSS + ' (차이 ' + (item.tssDiff >= 0 ? '+' : '') + item.tssDiff + ')');
           if (item.targetPowerIncrease > 0) stats.push('목표 향상: +' + item.targetPowerIncrease + 'W');
+        } else if (item.selfImprovement3Pct && (item.myPower > 0 || item.myTSS > 0)) {
+          stats.push('내 파워: ' + item.myPower + 'W (' + (item.myWkg || 0).toFixed(2) + ' W/kg)');
+          stats.push('주간 TSS: ' + item.myTSS);
+          stats.push('1위 유지 · 3% 향상 목표');
+          if (item.targetPowerIncrease > 0) stats.push('목표 파워: ' + item.targetPower + 'W (+' + item.targetPowerIncrease + 'W)');
+          if (item.targetWkg3Pct != null) stats.push('목표 W/kg: ' + item.targetWkg3Pct.toFixed(2));
+          if (item.targetTSS3Pct != null && item.myTSS > 0) stats.push('목표 주간 TSS: ' + item.targetTSS3Pct + ' (+' + item.tssIncrease3Pct + ')');
         } else {
           stats.push('내 파워: ' + item.myPower + 'W');
           stats.push('주간 TSS: ' + item.myTSS);
-          stats.push('(앞 순위자 없음)');
+          stats.push(item.myPower > 0 || item.myTSS > 0 ? '(1위 · 앞 순위자 없음)' : '(해당 구간 랭킹 없음)');
         }
         html += '<div class="stelvio-overtake-report-card">';
-        html += '<div class="stelvio-overtake-report-card-header">' + (item.categoryLabel || item.category) + '</div>';
+        var headerText = (item.categoryLabel || item.category);
+        if (item.selfImprovement3Pct) headerText += ' <span class="stelvio-overtake-badge-3pct">3% 자기 향상 목표</span>';
+        html += '<div class="stelvio-overtake-report-card-header">' + headerText + '</div>';
         html += '<div class="stelvio-overtake-report-card-stats">' + stats.join(' · ') + '</div>';
         if (comment || tip) {
           html += '<div class="stelvio-overtake-report-card-comment">' + (comment ? comment + (tip ? '<br><strong>훈련 포인트:</strong> ' + tip : '') : tip) + '</div>';
