@@ -9051,7 +9051,7 @@
           var currentYear = today.getFullYear();
           var currentMonthNum = today.getMonth() + 1;
           var isCurrentMonth = (year === currentYear && monthNum === currentMonthNum);
-          var logsForVo2 = isCurrentMonth ? allLogs : logs;
+          var logsForVo2 = Array.isArray(isCurrentMonth ? allLogs : logs) ? (isCurrentMonth ? allLogs : logs) : [];
           function toVo2Shape(log) {
             var d = log.date;
             var dateStr = (typeof d === 'string' && d.length >= 10) ? d.slice(0, 10) : (d && d.toISOString ? d.toISOString().slice(0, 10) : null);
@@ -9102,7 +9102,7 @@
           });
           var out = [];
           var pad2 = function(n) { return String(n).padStart(2, '0'); };
-          weeklyTSSData.forEach(function(w) {
+          (weeklyTSSData || []).forEach(function(w) {
             var startOnly = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate());
             var endOnly = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate());
             var vo2Vals = [];
