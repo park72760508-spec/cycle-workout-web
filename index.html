@@ -6953,11 +6953,16 @@
         if (c.content && c.content.parts && c.content.parts[0]) text = c.content.parts[0].text || '';
       }
       if (!text || !text.trim()) throw new Error('AI 응답 없음');
-      var jsonStr = text.replace(/^[\s\S]*?```(?:json)?\s*/, '').replace(/\s*```[\s\S]*$/, '').trim();
-      var match = jsonStr.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error('AI 응답에서 JSON 배열을 찾을 수 없음');
-      var arr;
-      try { arr = JSON.parse(match[0]); } catch (e) { throw new Error('JSON 파싱 실패: ' + e.message); }
+      var arr = null;
+      var extractStrategies = [
+        function() { var s = text.replace(/^[\s\S]*?```(?:json)?\s*/, '').replace(/\s*```[\s\S]*$/, '').trim(); var m = s.match(/\[[\s\S]*\]/); return m ? JSON.parse(m[0]) : null; },
+        function() { var m = text.match(/\[[\s\S]*\]/); return m ? JSON.parse(m[0]) : null; },
+        function() { var idx = text.indexOf('['); if (idx >= 0) { var sub = text.slice(idx); var depth = 0, end = -1; for (var i = 0; i < sub.length; i++) { if (sub[i] === '[') depth++; else if (sub[i] === ']') { depth--; if (depth === 0) { end = i; break; } } } if (end >= 0) return JSON.parse(sub.slice(0, end + 1)); } return null; },
+        function() { var s = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim(); var m = s.match(/\[[\s\S]*\]/); return m ? JSON.parse(m[0]) : null; }
+      ];
+      for (var i = 0; i < extractStrategies.length; i++) {
+        try { arr = extractStrategies[i](); if (Array.isArray(arr)) break; } catch (e) { arr = null; }
+      }
       if (!Array.isArray(arr)) arr = [];
       var categoryMap = { '5분': '5분', '10분': '10분', '20분': '20분', '40분': '40분', '60분': '60분', 'Max': 'Max', 'max': 'Max' };
       var out = {};
@@ -6996,9 +7001,9 @@
           var parts = [];
           if (item.targetPowerIncrease > 0 && item.targetPower) parts.push('타겟 목표: ' + item.targetPower + 'W(+' + item.targetPowerIncrease + 'W)');
           else if (item.targetPowerIncrease > 0) parts.push('타겟 목표: ' + (item.myPower + item.targetPowerIncrease) + 'W(+' + item.targetPowerIncrease + 'W)');
-          if (item.targetWkg3Pct != null) parts.push('목표 W/kg: ' + item.targetWkg3Pct.toFixed(2));
-          if (item.targetTSS3Pct != null && item.myTSS > 0) parts.push('목표 주간 TSS: ' + item.targetTSS3Pct);
-          line3 = parts.join(' · ');
+          if (item.targetWkg3Pct != null) parts.push('W/kg: ' + item.targetWkg3Pct.toFixed(2));
+          if (item.targetTSS3Pct != null && item.myTSS > 0) parts.push('주간 TSS: ' + item.targetTSS3Pct);
+          line3 = parts.join(' / ');
         } else {
           line1 = '내 파워: ' + item.myPower + 'W / 주간 TSS(5주차): ' + item.myTSS;
           line2 = item.myPower > 0 || item.myTSS > 0 ? '(1위 · 앞 순위자 없음)' : '(해당 구간 랭킹 없음)';
@@ -7007,7 +7012,7 @@
         var headerText = (item.categoryLabel || item.category);
         if (item.selfImprovement3Pct) headerText += ' <span class="stelvio-overtake-badge-3pct">3% 자기 향상 목표</span>';
         html += '<div class="stelvio-overtake-report-card-header">' + headerText + '</div>';
-        var statsLines = [line1, line2, line3].filter(Boolean).map(function(l){ return '· ' + l; });
+        var statsLines = [line1, line2, line3].filter(Boolean).map(function(l){ return '·' + (l ? ' ' + l.trim() : ''); });
         html += '<div class="stelvio-overtake-report-card-stats">' + statsLines.join('<br>') + '</div>';
         if (fullComment) {
           html += '<div class="stelvio-overtake-report-card-comment">' + fullComment.replace(/\n/g, '<br>') + '</div>';
