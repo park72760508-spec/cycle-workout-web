@@ -7002,7 +7002,8 @@
         var headerText = (item.categoryLabel || item.category);
         if (item.selfImprovement3Pct) headerText += ' <span class="stelvio-overtake-badge-3pct">3% 자기 향상 목표</span>';
         html += '<div class="stelvio-overtake-report-card-header">' + headerText + '</div>';
-        html += '<div class="stelvio-overtake-report-card-stats">' + line1 + (line2 ? '<br>' + line2 : '') + (line3 ? '<br>' + line3 : '') + '</div>';
+        var statsLines = [line1, line2, line3].filter(Boolean).map(function(l){ return '· ' + l; });
+        html += '<div class="stelvio-overtake-report-card-stats">' + statsLines.join('<br>') + '</div>';
         if (fullComment) {
           html += '<div class="stelvio-overtake-report-card-comment">' + fullComment.replace(/\n/g, '<br>') + '</div>';
         } else {
