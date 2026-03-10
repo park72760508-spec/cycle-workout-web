@@ -15187,11 +15187,11 @@ function updateMobileSpeedArc() {
     const cy = 140 + 80 * Math.sin(rad);
     dot.setAttribute('cx', cx);
     dot.setAttribute('cy', cy);
-    dot.style.display = '';
     dotValue.setAttribute('x', cx);
     dotValue.setAttribute('y', cy);
     dotValue.textContent = String(Math.round(displaySpeed));
-    dotValue.style.display = '';
+    dot.style.display = 'block';
+    dotValue.style.display = 'block';
   }
 }
 
