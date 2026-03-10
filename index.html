@@ -15465,10 +15465,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
 
   <!-- STELVIO 랭킹 보드 모달 (버튼만 STELVIO 스타일, 나머지 원래 스타일) -->
   <div id="stelvioRankingBoardModal" class="training-detail-modal hidden" onclick="if(event.target === this) closeStelvioRankingBoardModal();">
-    <div class="training-detail-modal-content stelvio-ranking-modal-content" onclick="event.stopPropagation();" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
+    <div class="training-detail-modal-content stelvio-ranking-modal-content stelvio-ranking-modal-content-relative" onclick="event.stopPropagation();" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
       <div class="training-detail-header">
         <h3 class="training-detail-title">STELVIO 랭킹 보드</h3>
         <button class="training-detail-close" onclick="closeStelvioRankingBoardModal()" aria-label="닫기">✖</button>
+      </div>
+      <!-- 추월하기 분석 로딩: 모달 보이는 영역 중앙 고정 -->
+      <div id="stelvioOvertakeLoading" class="stelvio-overtake-loading hidden">
+        <div class="stelvio-overtake-spinner weekly-top10-spinner" role="img" aria-label="분석 중"></div>
+        <p class="stelvio-overtake-loading-text">추월하기 분석 중...</p>
       </div>
       <div class="stelvio-ranking-body">
         <!-- 종목 탭 -->
@@ -15500,11 +15505,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <!-- 동기부여 배너 -->
         <div id="stelvioMotivationBanner" class="stelvio-motivation-banner hidden">
           <p id="stelvioMotivationText" class="stelvio-motivation-text"></p>
-        </div>
-        <!-- 추월하기 분석 로딩 (큰 녹색 원 스피너) -->
-        <div id="stelvioOvertakeLoading" class="stelvio-overtake-loading hidden">
-          <div class="stelvio-overtake-spinner weekly-top10-spinner" role="img" aria-label="분석 중"></div>
-          <p class="stelvio-overtake-loading-text">추월하기 분석 중...</p>
         </div>
         <!-- 로딩 -->
         <div id="stelvioRankingLoading" class="stelvio-ranking-loading hidden">
