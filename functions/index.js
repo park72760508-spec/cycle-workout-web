@@ -2160,6 +2160,49 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   return { entries: withRank, byCategory };
 }
 
+/** 사용자별 최근 7일(오늘 포함) TSS 합산 */
+async function getWeeklyTssForUser(db, userId, endDateStr) {
+  if (!userId || !endDateStr) return 0;
+  const end = new Date(endDateStr + "T23:59:59.999Z");
+  const start = new Date(end);
+  start.setDate(start.getDate() - 6);
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const endStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+  const snap = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  let total = 0;
+  snap.docs.forEach((doc) => {
+    const d = doc.data();
+    total += Number(d.tss) || 0;
+  });
+  return Math.round(total);
+}
+
+/** 추월하기 분석: TSS 차이 및 목표 파워(W) 향상치 계산 (시스템 계산, AI 의존 없음) */
+function computeOvertakeMetrics(myData, rivalData, myWeightKg) {
+  const myWkg = Number(myData?.wkg) || 0;
+  const rivalWkg = Number(rivalData?.wkg) || 0;
+  const myTSS = Number(myData?.weeklyTss) ?? 0;
+  const rivalTSS = Number(rivalData?.weeklyTss) ?? 0;
+  const weightKg = Math.max(Number(myWeightKg) || 0, 45);
+  const diffWkg = Math.max(0, rivalWkg - myWkg);
+  const targetPowerIncrease = Math.ceil(diffWkg * weightKg);
+  const tssDiff = rivalTSS - myTSS;
+  return {
+    myPower: Number(myData?.watts) || 0,
+    rivalPower: Number(rivalData?.watts) || 0,
+    myWkg,
+    rivalWkg,
+    myTSS,
+    rivalTSS,
+    tssDiff,
+    targetPowerIncrease,
+  };
+}
+
 /** 동기부여 메시지 생성 */
 function buildMotivationMessage(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
@@ -2260,6 +2303,138 @@ exports.getPeakPowerRanking = onRequest(
       }
     }
     res.status(200).json(out);
+  }
+);
+
+const DURATION_LABELS = {
+  "5min": "5분",
+  "10min": "10분",
+  "20min": "20분",
+  "40min": "40분",
+  "60min": "60분",
+  max: "Max",
+};
+
+/** 추월하기 분석 API: 바로 앞 순위자와 TSS·W/kg 비교, 목표 파워(W) 향상치 산출 */
+exports.getOvertakeAnalysis = onRequest(
+  { cors: true, timeoutSeconds: 120 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", "*");
+    const uid = req.query.uid || req.body?.uid || null;
+    const period = req.query.period || req.body?.period || "monthly";
+    const gender = req.query.gender || req.body?.gender || "all";
+
+    if (!uid) {
+      return res.status(400).json({ success: false, error: "uid 필수" });
+    }
+
+    const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+    const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
+    let startStr, endStr;
+    if (period === "yearly") {
+      const r = getYearRangeSeoul(year);
+      startStr = r.startStr;
+      endStr = r.endStr;
+    } else {
+      const r = getMonthRangeSeoul(year, month);
+      startStr = r.startStr;
+      endStr = r.endStr;
+    }
+
+    const db = admin.firestore();
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+    const results = [];
+
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+      const cats = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+      let current = null;
+      let rival = null;
+      for (const c of cats) {
+        const arr = byCategory[c] || [];
+        const idx = arr.findIndex((e) => e.userId === uid);
+        if (idx >= 0) {
+          current = arr[idx];
+          rival = idx > 0 ? arr[idx - 1] : null;
+          break;
+        }
+      }
+
+      if (!current) {
+        results.push({
+          category: durationType,
+          categoryLabel: DURATION_LABELS[durationType] || durationType,
+          hasRival: false,
+          myPower: 0,
+          rivalPower: 0,
+          myWkg: 0,
+          rivalWkg: 0,
+          myTSS: 0,
+          rivalTSS: 0,
+          tssDiff: 0,
+          targetPowerIncrease: 0,
+        });
+        continue;
+      }
+
+      const myWeeklyTss = await getWeeklyTssForUser(db, uid, todayStr);
+      const rivalWeeklyTss = rival ? await getWeeklyTssForUser(db, rival.userId, todayStr) : 0;
+
+      const myData = { ...current, weeklyTss: myWeeklyTss };
+      const rivalData = rival ? { ...rival, weeklyTss: rivalWeeklyTss } : null;
+
+      let metrics;
+      if (rivalData) {
+        metrics = computeOvertakeMetrics(myData, rivalData, current.weightKg);
+      } else {
+        const myPower = current.watts || 0;
+        const myWkg = current.wkg || 0;
+        const myTSS = myWeeklyTss;
+        const targetPower3Pct = Math.ceil(myPower * 0.03);
+        const targetPower = myPower + targetPower3Pct;
+        const targetWkg3Pct = Math.round(myWkg * 1.03 * 100) / 100;
+        const targetTSS3Pct = Math.ceil(myTSS * 1.03);
+        const tssIncrease3Pct = targetTSS3Pct - myTSS;
+        metrics = {
+          myPower,
+          rivalPower: 0,
+          myWkg,
+          rivalWkg: 0,
+          myTSS,
+          rivalTSS: 0,
+          tssDiff: 0,
+          targetPowerIncrease: targetPower3Pct,
+          selfImprovement3Pct: true,
+          targetPower,
+          targetWkg3Pct,
+          targetTSS3Pct,
+          tssIncrease3Pct,
+        };
+      }
+
+      results.push({
+        category: durationType,
+        categoryLabel: DURATION_LABELS[durationType] || durationType,
+        hasRival: !!rival,
+        rivalName: rival ? rival.name : null,
+        ...metrics,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      period,
+      startStr,
+      endStr,
+      items: results,
+    });
   }
 );
 
