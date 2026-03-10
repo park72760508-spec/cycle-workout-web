@@ -9043,91 +9043,6 @@
           return out;
         }, [year, monthNum, logs, userProfile]);
 
-        /** Weekly VO2 Trend: Weekly TSS Load와 동일한 주간 구간 적용. X축은 해당 주의 마지막 날짜로 표기. */
-        const weeklyVo2TrendData = React.useMemo(function() {
-          var profile = userProfile || {};
-          var now = new Date();
-          var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          var currentYear = today.getFullYear();
-          var currentMonthNum = today.getMonth() + 1;
-          var isCurrentMonth = (year === currentYear && monthNum === currentMonthNum);
-          var logsForVo2 = Array.isArray(isCurrentMonth ? allLogs : logs) ? (isCurrentMonth ? allLogs : logs) : [];
-          function toVo2Shape(log) {
-            var d = log.date;
-            var dateStr = (typeof d === 'string' && d.length >= 10) ? d.slice(0, 10) : (d && d.toISOString ? d.toISOString().slice(0, 10) : null);
-            if (!dateStr) return null;
-            var durMin = parseDurationToMinutes(log.duration);
-            var sec = Math.round(durMin * 60);
-            return {
-              date: dateStr,
-              duration_sec: sec,
-              duration_min: Math.round(durMin),
-              weighted_watts: Number(log.NP ?? log.normPower ?? log.avgPower ?? 0),
-              np: Number(log.NP ?? log.normPower ?? log.avgPower ?? 0),
-              avg_hr: Number(log.avgHeartRate ?? log.avg_hr ?? 0),
-              tss: Number(log.TSS ?? log.tss ?? 0)
-            };
-          }
-          var byDateVo2 = {};
-          logsForVo2.forEach(function(log) {
-            var s = toVo2Shape(log);
-            if (!s) return;
-            if (!byDateVo2[s.date]) byDateVo2[s.date] = [];
-            byDateVo2[s.date].push({ log: log, vo2Shape: s });
-          });
-          var mergedByDate = {};
-          Object.keys(byDateVo2).sort().forEach(function(dateKey) {
-            var arr = byDateVo2[dateKey];
-            var strava = arr.filter(function(x) { return String((x.log && x.log.source) || '').toLowerCase() === 'strava'; });
-            var stelvio = arr.filter(function(x) { return String((x.log && x.log.source) || '').toLowerCase() !== 'strava'; });
-            var chosen = strava.length > 0 ? strava : stelvio;
-            if (chosen.length === 0) return;
-            var totalSec = 0, totalTss = 0, sumNpSec = 0, sumHrSec = 0;
-            chosen.forEach(function(x) {
-              var s = x.vo2Shape;
-              totalSec += s.duration_sec;
-              totalTss += s.tss;
-              sumNpSec += (s.np || s.weighted_watts || 0) * s.duration_sec;
-              sumHrSec += (s.avg_hr || 0) * s.duration_sec;
-            });
-            mergedByDate[dateKey] = {
-              date: dateKey,
-              duration_sec: Math.round(totalSec),
-              duration_min: Math.round(totalSec / 60),
-              weighted_watts: totalSec > 0 ? Math.round(sumNpSec / totalSec) : 0,
-              np: totalSec > 0 ? Math.round(sumNpSec / totalSec) : 0,
-              avg_hr: totalSec > 0 ? Math.round(sumHrSec / totalSec) : 0,
-              tss: Math.round(totalTss)
-            };
-          });
-          var out = [];
-          var pad2 = function(n) { return String(n).padStart(2, '0'); };
-          (weeklyTSSData || []).forEach(function(w) {
-            var startOnly = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate());
-            var endOnly = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate());
-            var vo2Vals = [];
-            for (var d = new Date(startOnly); d <= endOnly; d.setDate(d.getDate() + 1)) {
-              var dateStr = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-              var merged = mergedByDate[dateStr];
-              if (!merged) continue;
-              var vo2Val = (typeof window.calculateStelvioVO2Max === 'function' && merged)
-                ? window.calculateStelvioVO2Max(profile, [merged])
-                : null;
-              if (vo2Val != null && !isNaN(vo2Val)) vo2Vals.push(vo2Val);
-            }
-            var avgVo2 = vo2Vals.length > 0 ? vo2Vals.reduce(function(a, b) { return a + b; }, 0) / vo2Vals.length : null;
-            var endLabel = (w.endDate.getMonth() + 1) + '/' + w.endDate.getDate();
-            out.push({
-              week: w.week,
-              label: endLabel,
-              dateRangeShort: w.dateRangeShort,
-              vo2: avgVo2,
-              hasData: avgVo2 != null
-            });
-          });
-          return out;
-        }, [weeklyTSSData, allLogs, logs, year, monthNum, userProfile]);
-
         const chartDataByDate = React.useMemo(function() {
           const byDate = {};
           enrichedLogs.forEach(function(log) {
@@ -9383,7 +9298,126 @@
           }
           
           return sorted;
-        }, [allLogs]);
+        }, [allLogs, logs, year, monthNum]);
+
+        /** Weekly VO2 Trend: Daily VO2와 동일한 로직(Strava 우선·duration 가중평균) + Weekly TSS Load와 동일한 주간 구간. X축은 해당 주의 마지막 날짜. */
+        const weeklyVo2TrendData = React.useMemo(function() {
+          var profile = userProfile || {};
+          var now = new Date();
+          var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          var currentYear = today.getFullYear();
+          var currentMonthNum = today.getMonth() + 1;
+          var isCurrentMonth = (year === currentYear && monthNum === currentMonthNum);
+          // Weekly TSS와 동일한 로그 필터: 현재월=34일 전~오늘, 다른 달=해당 월
+          var logsForVo2 = (function() {
+            if (isCurrentMonth) {
+              var startDateForFilter = new Date(today);
+              startDateForFilter.setDate(today.getDate() - 34);
+              return (allLogs || []).filter(function(log) {
+                var d = log.date || '';
+                if (d.length < 10) return false;
+                var dateParts = d.split('-');
+                if (dateParts.length < 3) return false;
+                var logYear = parseInt(dateParts[0], 10);
+                var logMonth = parseInt(dateParts[1], 10);
+                var logDay = parseInt(dateParts[2], 10);
+                var logDate = new Date(logYear, logMonth - 1, logDay);
+                var logDateOnly = new Date(logDate.getFullYear(), logDate.getMonth(), logDate.getDate());
+                var startOnly = new Date(startDateForFilter.getFullYear(), startDateForFilter.getMonth(), startDateForFilter.getDate());
+                var endOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                return logDateOnly >= startOnly && logDateOnly <= endOnly;
+              });
+            } else {
+              return (logs || []).filter(function(log) {
+                var d = log.date || '';
+                if (d.length < 10) return false;
+                var dateParts = d.split('-');
+                if (dateParts.length < 3) return false;
+                var logYear = parseInt(dateParts[0], 10);
+                var logMonth = parseInt(dateParts[1], 10);
+                return logYear === year && logMonth === monthNum;
+              });
+            }
+          })();
+          // Daily VO2와 동일: toVo2Shape
+          function toVo2Shape(log) {
+            var d = log.date;
+            var dateStr = (typeof d === 'string' && d.length >= 10) ? d.slice(0, 10) : (d && d.toISOString ? d.toISOString().slice(0, 10) : null);
+            if (!dateStr) return null;
+            var durMin = parseDurationToMinutes(log.duration);
+            var sec = Math.round(durMin * 60);
+            return {
+              date: dateStr,
+              duration_sec: sec,
+              duration_min: Math.round(durMin),
+              weighted_watts: Number(log.NP ?? log.normPower ?? log.avgPower ?? 0),
+              np: Number(log.NP ?? log.normPower ?? log.avgPower ?? 0),
+              avg_hr: Number(log.avgHeartRate ?? log.avg_hr ?? 0),
+              tss: Number(log.TSS ?? log.tss ?? 0)
+            };
+          }
+          // Daily VO2와 동일: 날짜별 그룹화
+          var byDateVo2 = {};
+          logsForVo2.forEach(function(log) {
+            var s = toVo2Shape(log);
+            if (!s) return;
+            if (!byDateVo2[s.date]) byDateVo2[s.date] = [];
+            byDateVo2[s.date].push({ log: log, vo2Shape: s });
+          });
+          // Daily VO2와 동일: Strava 우선 + duration 가중평균
+          var mergedByDate = {};
+          Object.keys(byDateVo2).sort().forEach(function(dateKey) {
+            var arr = byDateVo2[dateKey];
+            var strava = arr.filter(function(x) { return String((x.log && x.log.source) || '').toLowerCase() === 'strava'; });
+            var stelvio = arr.filter(function(x) { return String((x.log && x.log.source) || '').toLowerCase() !== 'strava'; });
+            var chosen = strava.length > 0 ? strava : stelvio;
+            if (chosen.length === 0) return;
+            var totalSec = 0, totalTss = 0, sumNpSec = 0, sumHrSec = 0;
+            chosen.forEach(function(x) {
+              var s = x.vo2Shape;
+              totalSec += s.duration_sec;
+              totalTss += s.tss;
+              sumNpSec += (s.np || s.weighted_watts || 0) * s.duration_sec;
+              sumHrSec += (s.avg_hr || 0) * s.duration_sec;
+            });
+            mergedByDate[dateKey] = {
+              date: dateKey,
+              duration_sec: Math.round(totalSec),
+              duration_min: Math.round(totalSec / 60),
+              weighted_watts: totalSec > 0 ? Math.round(sumNpSec / totalSec) : 0,
+              np: totalSec > 0 ? Math.round(sumNpSec / totalSec) : 0,
+              avg_hr: totalSec > 0 ? Math.round(sumHrSec / totalSec) : 0,
+              tss: Math.round(totalTss)
+            };
+          });
+          // 주별 평균 VO2: Weekly TSS 구간별로 일별 VO2 산출 후 평균
+          var out = [];
+          var pad2 = function(n) { return String(n).padStart(2, '0'); };
+          (weeklyTSSData || []).forEach(function(w) {
+            var startOnly = new Date(w.startDate.getFullYear(), w.startDate.getMonth(), w.startDate.getDate());
+            var endOnly = new Date(w.endDate.getFullYear(), w.endDate.getMonth(), w.endDate.getDate());
+            var vo2Vals = [];
+            for (var d = new Date(startOnly); d <= endOnly; d.setDate(d.getDate() + 1)) {
+              var dateStr = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+              var merged = mergedByDate[dateStr];
+              if (!merged) continue;
+              var vo2Val = (typeof window.calculateStelvioVO2Max === 'function' && merged)
+                ? window.calculateStelvioVO2Max(profile, [merged])
+                : null;
+              if (vo2Val != null && !isNaN(vo2Val)) vo2Vals.push(vo2Val);
+            }
+            var avgVo2 = vo2Vals.length > 0 ? vo2Vals.reduce(function(a, b) { return a + b; }, 0) / vo2Vals.length : null;
+            var endLabel = (w.endDate.getMonth() + 1) + '/' + w.endDate.getDate();
+            out.push({
+              week: w.week,
+              label: endLabel,
+              dateRangeShort: w.dateRangeShort,
+              vo2: avgVo2,
+              hasData: avgVo2 != null
+            });
+          });
+          return out;
+        }, [weeklyTSSData, allLogs, logs, year, monthNum, userProfile]);
 
         const viDistribution = React.useMemo(function() {
           var steady = 0, normal = 0, punchy = 0;
