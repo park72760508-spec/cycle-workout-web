@@ -30,7 +30,7 @@
     }
   }
 
-  var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen'];
+  var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen', 'bluetoothIndividualScreen'];
   var AUTO_CONNECT_SENT_KEY = '_stelvioTrainingAutoConnectSent';
   /** 자동 연결 진행 중 플래그 — 사용자 수동 클릭 시 중단(Abort)용 */
   var AUTO_CONNECT_IN_PROGRESS_KEY = '_stelvioAutoConnectInProgress';
@@ -71,7 +71,8 @@
     ],
     speed: [
       { item: 'trainingScreenBluetoothSpeedItem', status: 'trainingScreenSpeedStatus' },
-      { item: 'mobileBluetoothSpeedItem', status: 'mobileSpeedStatus' }
+      { item: 'mobileBluetoothSpeedItem', status: 'mobileSpeedStatus' },
+      { item: 'indiv-bluetoothSpeedItem', status: 'indiv-speedStatus' }
     ],
     trainer: [
       { item: 'trainingScreenBluetoothTrainerItem', status: 'trainingScreenTrainerStatus' },
@@ -1019,6 +1020,9 @@
         teardownTrainingDashboardBridge();
       }
       original(screenId, skipHistory);
+      if (screenId === 'bluetoothIndividualScreen' && typeof global.startGaugeAnimationLoop === 'function') {
+        global.startGaugeAnimationLoop();
+      }
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();
         sendRequestAutoConnect();

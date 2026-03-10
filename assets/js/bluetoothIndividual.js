@@ -3596,6 +3596,17 @@ function startGaugeAnimationLoop() {
     if (gaugeAnimationFrameId !== null) return;
     
     const loop = () => {
+        // SPA 모드: 모바일 개인훈련과 동일, bluetoothIndividualScreen 비활성(display:none) 시 루프 중지
+        if (__indivIdPrefix) {
+            var indivScreen = document.getElementById('bluetoothIndividualScreen');
+            if (indivScreen) {
+                var style = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(indivScreen) : null;
+                if (style && style.display === 'none') {
+                    gaugeAnimationFrameId = null;
+                    return;
+                }
+            }
+        }
         // 1. 목표값(currentPowerValue)과 현재표시값(displayPower)의 차이 계산
         const target = currentPowerValue || 0;
         const current = displayPower || 0;
@@ -3652,6 +3663,7 @@ function startGaugeAnimationLoop() {
     // 루프 시작
     gaugeAnimationFrameId = requestAnimationFrame(loop);
 }
+window.startGaugeAnimationLoop = startGaugeAnimationLoop;
 
 /**
  * 훈련 결과 팝업 표시
