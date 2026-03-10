@@ -6851,6 +6851,150 @@
     }
 
     /**
+     * 추월하기 분석: API 호출 → AI 코멘트 생성 → 리포트 모달 표시
+     */
+    async function handleStelvioOvertakeClick() {
+      var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
+      if (!uid) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+      var loadingEl = document.getElementById('stelvioOvertakeLoading');
+      var contentEl = document.getElementById('stelvioRankingContent');
+      if (loadingEl) loadingEl.classList.remove('hidden');
+      if (contentEl) contentEl.style.opacity = '0.5';
+      try {
+        var params = new URLSearchParams({ uid: uid, period: stelvioRankingState.period, gender: stelvioRankingState.gender });
+        var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getOvertakeAnalysis?' + params.toString();
+        var res = await fetch(url, { method: 'GET', mode: 'cors' });
+        var data = await res.json().catch(function() { return { success: false }; });
+        if (!data.success || !data.items) {
+          alert('추월하기 분석을 불러올 수 없습니다.');
+          return;
+        }
+        var items = data.items;
+        var apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+        var comments = {};
+        if (apiKey && items.some(function(i){ return i.hasRival; })) {
+          try {
+            comments = await callGeminiOvertakeAnalysis(items, apiKey);
+          } catch (e) {
+            console.warn('[Overtake] AI 코멘트 생성 실패:', e);
+          }
+        }
+        renderStelvioOvertakeReport(items, comments);
+        closeStelvioRankingBoardModal();
+        openStelvioOvertakeReportModal();
+      } catch (e) {
+        console.warn('[Overtake] 분석 실패:', e);
+        alert('추월하기 분석에 실패했습니다. 나중에 다시 시도해 주세요.');
+      } finally {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (contentEl) contentEl.style.opacity = '1';
+      }
+    }
+    window.handleStelvioOvertakeClick = handleStelvioOvertakeClick;
+
+    /**
+     * Gemini API로 추월하기 분석 코멘트 생성 (시스템 계산값 기반, 수치 변경 금지)
+     */
+    async function callGeminiOvertakeAnalysis(items, apiKey) {
+      var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
+      var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
+      var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
+      var prompt = '당신은 실내 사이클링 코치입니다. 아래는 사용자가 랭킹에서 바로 앞 순위자와 비교한 **시스템이 이미 정확히 계산한 수치**입니다.\n\n' +
+        '## 제공된 계산값 (절대 임의로 계산하거나 변경하지 말 것)\n' +
+        JSON.stringify(items.map(function(i){
+          return {
+            category: i.categoryLabel,
+            myPower: i.myPower,
+            rivalPower: i.rivalPower,
+            myTSS: i.myTSS,
+            rivalTSS: i.rivalTSS,
+            tssDiff: i.tssDiff,
+            targetPowerIncrease: i.targetPowerIncrease,
+            hasRival: i.hasRival
+          };
+        }), null, 2) + '\n\n' +
+        '## 요청\n' +
+        '각 항목(5분, 10분, 20분, 40분, 60분, Max)별로 다음을 작성해 주세요:\n' +
+        '1. 동기부여가 되는 짧은 분석 코멘트 (1~2문장)\n' +
+        '2. 보강해야 할 훈련 포인트 (1문장)\n\n' +
+        '수치는 제공된 값을 그대로 인용하고, 임의로 계산하거나 변경하지 마세요. JSON 배열로만 응답하세요. 형식: [{"category":"5분","comment":"...","tip":"..."}, ...]';
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+        })
+      });
+      var json = await res.json();
+      if (json.error) throw new Error(json.error.message || 'Gemini API 오류');
+      var text = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts && json.candidates[0].content.parts[0]) ? json.candidates[0].content.parts[0].text : '';
+      if (!text) throw new Error('AI 응답 없음');
+      var match = text.match(/\[[\s\S]*\]/);
+      var arr = match ? JSON.parse(match[0]) : [];
+      var out = {};
+      arr.forEach(function(a){ if (a && a.category) out[a.category] = { comment: a.comment || '', tip: a.tip || '' }; });
+      return out;
+    }
+
+    function renderStelvioOvertakeReport(items, comments) {
+      var body = document.getElementById('stelvioOvertakeReportBody');
+      if (!body) return;
+      var html = '';
+      items.forEach(function(item) {
+        var c = comments[item.categoryLabel] || {};
+        var comment = (c.comment || '').trim();
+        var tip = (c.tip || '').trim();
+        var stats = [];
+        if (item.hasRival) {
+          stats.push('내 파워: ' + item.myPower + 'W (' + (item.myWkg || 0).toFixed(2) + ' W/kg)');
+          stats.push('앞 순위: ' + item.rivalPower + 'W (' + (item.rivalWkg || 0).toFixed(2) + ' W/kg)');
+          stats.push('주간 TSS: 나 ' + item.myTSS + ' vs 앞 ' + item.rivalTSS + ' (차이 ' + (item.tssDiff >= 0 ? '+' : '') + item.tssDiff + ')');
+          if (item.targetPowerIncrease > 0) stats.push('목표 향상: +' + item.targetPowerIncrease + 'W');
+        } else {
+          stats.push('내 파워: ' + item.myPower + 'W');
+          stats.push('주간 TSS: ' + item.myTSS);
+          stats.push('(앞 순위자 없음)');
+        }
+        html += '<div class="stelvio-overtake-report-card">';
+        html += '<div class="stelvio-overtake-report-card-header">' + (item.categoryLabel || item.category) + '</div>';
+        html += '<div class="stelvio-overtake-report-card-stats">' + stats.join(' · ') + '</div>';
+        if (comment || tip) {
+          html += '<div class="stelvio-overtake-report-card-comment">' + (comment ? comment + (tip ? '<br><strong>훈련 포인트:</strong> ' + tip : '') : tip) + '</div>';
+        }
+        html += '</div>';
+      });
+      body.innerHTML = html;
+    }
+
+    function openStelvioOvertakeReportModal() {
+      var m = document.getElementById('stelvioOvertakeReportModal');
+      if (m) m.classList.remove('hidden');
+    }
+    function closeStelvioOvertakeReportModal() {
+      var m = document.getElementById('stelvioOvertakeReportModal');
+      if (m) m.classList.add('hidden');
+    }
+    window.closeStelvioOvertakeReportModal = closeStelvioOvertakeReportModal;
+
+    function handleStelvioOvertakeRecommendClick() {
+      closeStelvioOvertakeReportModal();
+      var todayStr = new Date().toISOString().slice(0, 10);
+      var currentUser = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
+      var apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+      if (typeof window.showScreen === 'function') window.showScreen('workoutScreen');
+      if (typeof window.workoutViewInit === 'function') setTimeout(window.workoutViewInit, 150);
+      if (typeof window.showWorkoutRecommendationModal === 'function' && typeof window.analyzeAndRecommendWorkouts === 'function') {
+        window.showWorkoutRecommendationModal();
+        window.analyzeAndRecommendWorkouts(todayStr, currentUser, apiKey).catch(function(e){ console.warn('[Overtake] AI 추천 실패:', e); });
+      }
+    }
+    window.handleStelvioOvertakeRecommendClick = handleStelvioOvertakeRecommendClick;
+
+    /**
      * 프로필 화면 진입 시 달력 초기화
      */
     async function initMiniCalendar(userId) {
@@ -15328,10 +15472,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <button type="button" class="stelvio-toggle-btn active" data-period="monthly">월간</button>
             <button type="button" class="stelvio-toggle-btn" data-period="yearly">명예의 전당</button>
           </div>
+          <button type="button" class="stelvio-overtake-btn stelvio-orange-btn" id="stelvioOvertakeBtn" onclick="if(typeof handleStelvioOvertakeClick==='function')handleStelvioOvertakeClick();" title="바로 앞 순위자와 비교 분석">
+            추월하기
+          </button>
         </div>
         <!-- 동기부여 배너 -->
         <div id="stelvioMotivationBanner" class="stelvio-motivation-banner hidden">
           <p id="stelvioMotivationText" class="stelvio-motivation-text"></p>
+        </div>
+        <!-- 추월하기 분석 로딩 (큰 녹색 원 스피너) -->
+        <div id="stelvioOvertakeLoading" class="stelvio-overtake-loading hidden">
+          <div class="stelvio-overtake-spinner weekly-top10-spinner" role="img" aria-label="분석 중"></div>
+          <p class="stelvio-overtake-loading-text">추월하기 분석 중...</p>
         </div>
         <!-- 로딩 -->
         <div id="stelvioRankingLoading" class="stelvio-ranking-loading hidden">
@@ -15361,6 +15513,24 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div class="stelvio-category-body" id="stelvioLeggendaList"></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 추월하기 분석 리포트 모달 -->
+  <div id="stelvioOvertakeReportModal" class="training-detail-modal stelvio-ios-popup hidden" onclick="if(event.target === this) closeStelvioOvertakeReportModal();">
+    <div class="training-detail-modal-content stelvio-ranking-modal-content stelvio-overtake-report-content" onclick="event.stopPropagation();" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
+      <div class="training-detail-header">
+        <h3 class="training-detail-title">추월하기 분석 리포트</h3>
+        <button class="training-detail-close" onclick="closeStelvioOvertakeReportModal()" aria-label="닫기">✖</button>
+      </div>
+      <div id="stelvioOvertakeReportBody" class="stelvio-overtake-report-body">
+        <!-- 항목별 카드가 동적 삽입됨 -->
+      </div>
+      <div class="stelvio-overtake-report-footer">
+        <button type="button" class="stelvio-overtake-recommend-btn stelvio-orange-btn" onclick="handleStelvioOvertakeRecommendClick();">
+          추월하기 훈련 추천
+        </button>
       </div>
     </div>
   </div>
