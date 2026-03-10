@@ -9633,20 +9633,20 @@
                   borderWidth: 1,
                   cornerRadius: 8,
                   padding: 12,
+                  displayColors: false,
                   titleFont: { size: 13, weight: 'bold' },
                   bodyFont: { size: 12 },
                   callbacks: {
                     title: function(context) {
-                      if (context && context.length > 0 && context[0].label) return context[0].label;
-                      return '';
-                    },
-                    label: function(context) {
-                      var d = data[context.dataIndex];
-                      var v = context.parsed.y;
+                      if (!context || !context.length) return '';
+                      var ctx = context[0];
+                      var d = data[ctx.dataIndex];
+                      var v = ctx.parsed && ctx.parsed.y != null ? ctx.parsed.y : (ctx.raw != null ? ctx.raw : null);
                       if (v == null || isNaN(v)) return 'VO₂max: 데이터 없음';
                       var period = d && d.dateRangeShort ? d.dateRangeShort : '';
-                      return (period ? '기간: ' + period + ', ' : '') + '평균 VO₂max: ' + Math.round(Number(v)) + ' ml/kg/min';
-                    }
+                      return (period ? '기간 : ' + period + ', ' : '') + '평균 VO₂max : ' + Math.round(Number(v)) + ' ml/kg/min';
+                    },
+                    label: function() { return ''; }
                   }
                 }
               },
@@ -9861,9 +9861,9 @@
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">Weekly VO₂max Trend</h4>
                     {selectedWeeklyVo2Index != null && weeklyVo2TrendData[selectedWeeklyVo2Index] && (
-                      <div className="mb-2 rounded-lg border border-white/10 bg-black/75 backdrop-blur-md px-3 py-2.5 text-sm text-gray-200 shadow-xl">
+                      <p className="text-sm text-gray-500 mb-2">
                         기간 : {weeklyVo2TrendData[selectedWeeklyVo2Index].dateRangeShort || ''}, 평균 VO₂max : {weeklyVo2TrendData[selectedWeeklyVo2Index].vo2 != null ? Math.round(Number(weeklyVo2TrendData[selectedWeeklyVo2Index].vo2)) + ' ml/kg/min' : '–'}
-                      </div>
+                      </p>
                     )}
                     {(!weeklyVo2TrendData || weeklyVo2TrendData.length === 0 || weeklyVo2TrendData.every(function(d) { return d.vo2 == null; })) ? (
                       <div className="h-[200px] rounded-xl bg-gray-50/50 border border-gray-100 flex items-center justify-center text-gray-400 text-sm">
