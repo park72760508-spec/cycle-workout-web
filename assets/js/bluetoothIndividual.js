@@ -3580,8 +3580,6 @@ function updateIndivSpeedArc() {
         dotValue.setAttribute('x', cx);
         dotValue.setAttribute('y', cy);
         dotValue.textContent = String(Math.round(displaySpeed));
-        dot.style.display = 'block';
-        dotValue.style.display = 'block';
     }
 }
 window.updateIndivSpeedArc = updateIndivSpeedArc;
@@ -3594,6 +3592,8 @@ window.updateIndivSpeedArc = updateIndivSpeedArc;
 function startGaugeAnimationLoop() {
     // 이미 실행 중이면 중복 실행 방지
     if (gaugeAnimationFrameId !== null) return;
+    
+    updateIndivSpeedArc();
     
     const loop = () => {
         // SPA 모드: 모바일 개인훈련과 동일, bluetoothIndividualScreen 비활성(display:none) 시 루프 중지
@@ -5478,6 +5478,7 @@ function runBluetoothIndividualScreenInit() {
     setTimeout(() => loadUserInfoAndUpdateName(), 3000);
     setTimeout(() => {
         updateGaugeTicksAndLabels();
+        if (typeof updateIndivSpeedArc === 'function') updateIndivSpeedArc();
         console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료');
     }, 100);
     startGaugeAnimationLoop();

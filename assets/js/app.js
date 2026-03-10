@@ -15190,8 +15190,6 @@ function updateMobileSpeedArc() {
     dotValue.setAttribute('x', cx);
     dotValue.setAttribute('y', cy);
     dotValue.textContent = String(Math.round(displaySpeed));
-    dot.style.display = 'block';
-    dotValue.style.display = 'block';
   }
 }
 
@@ -15220,6 +15218,9 @@ function initializeMobileGauge() {
   ticksGroup.innerHTML = generateMobileGaugeTicks();
   labelsGroup.innerHTML = generateMobileGaugeLabels();
   if (speedLabelsGroup) speedLabelsGroup.innerHTML = generateMobileSpeedLabels();
+  
+  // Dot·속도값 즉시 표시 (로딩 시 3시 위치, 애니메이션 루프 대기 없이)
+  if (typeof updateMobileSpeedArc === 'function') updateMobileSpeedArc();
   
   // 바늘 애니메이션 루프 시작
   startMobileGaugeAnimationLoop();
