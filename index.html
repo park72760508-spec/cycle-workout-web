@@ -6832,17 +6832,19 @@
           return;
         }
         var html = '';
+        var maxNameLen = 12;
         arr.forEach(function(item, idx) {
           var categoryRank = idx + 1;
           var globalRank = item.rank || categoryRank;
-          var name = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
           var wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
           var isCurrent = currentUserId && item.userId === currentUserId;
           var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '');
           html += '<div class="' + rowClass + '">';
           if (categoryRank <= 3) html += '<span class="stelvio-rank-crown">' + medals[categoryRank - 1] + '</span>';
           html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
-          html += '<span class="stelvio-rank-name">' + name + '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span></span>';
+          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span><span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span></span>';
           html += '<span class="stelvio-rank-wkg">' + wkg + ' W/kg</span>';
           html += '</div>';
         });
