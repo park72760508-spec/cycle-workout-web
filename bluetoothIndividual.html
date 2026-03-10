@@ -846,9 +846,6 @@
                 <!-- 레이블 그룹 (JavaScript로 동적 생성) -->
                 <g id="gauge-labels"></g>
                 <g id="gauge-speed-labels"></g>
-                <!-- Dot·속도값: 눈금 뒤에 배치하여 앞에 표시 -->
-                <circle id="gauge-speed-dot" cx="100" cy="140" r="4" fill="#4da6ff" style="display: none;"/>
-                <text id="gauge-speed-dot-value" x="100" y="140" text-anchor="middle" dominant-baseline="middle" fill="#000000" font-size="5" font-weight="bold" style="display: none;">0</text>
                 
                 <!-- 랩카운트다운 (속도계 상단) -->
                 <text x="100" y="0" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
@@ -868,6 +865,9 @@
                     <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
                     <circle cx="0" cy="0" r="6" fill="#fff"/>
                 </g>
+                <!-- Dot·속도값: 바늘 위에 배치 (display:block으로 표시, updateIndivSpeedArc에서 갱신) -->
+                <circle id="gauge-speed-dot" cx="100" cy="140" r="4" fill="#4da6ff" style="display: none;"/>
+                <text id="gauge-speed-dot-value" x="100" y="140" text-anchor="middle" dominant-baseline="middle" fill="#000000" font-size="5" font-weight="bold" style="display: none;">0</text>
             </svg>
         </div>
     </div>
