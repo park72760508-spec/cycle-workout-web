@@ -6874,7 +6874,8 @@
           return;
         }
         var items = data.items;
-        var apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+        var apiKey = (typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null) || (document.getElementById('settingsGeminiApiKey') && document.getElementById('settingsGeminiApiKey').value) || '';
+        apiKey = (apiKey || '').trim();
         var comments = {};
         if (apiKey && items.length > 0) {
           try {
@@ -6929,32 +6930,45 @@
           return o;
         }), null, 2) + '\n\n' +
         '## 요청\n' +
-        '각 항목(5분, 10분, 20분, 40분, 60분, Max)별로 **제공된 수치를 그대로 인용하여** 2~5줄 분량의 핵심 코멘트를 작성해 주세요:\n' +
-        '- hasRival=true: 앞 순위자와의 파워/TSS 차이를 언급하며 추월을 위한 동기부여(1~2줄) + 구체적 보강 훈련 포인트(1~2줄)\n' +
-        '- hasRival=false, selfImprovement3Pct=true: 목표 파워/W/kg/TSS 수치를 인용하여 1위 유지·자기기록 갱신 동기부여(1~2줄) + 고강도 인터벌·주간 TSS 증량·회복 균형 등 구체적 훈련 포인트(1~2줄)\n' +
-        '- myPower=0 등 데이터 없음: 해당 구간 훈련 시작 격려(1~2줄)\n\n' +
-        '수치는 절대 임의로 계산·변경하지 말고 제공된 값만 사용하세요. JSON 배열로만 응답하세요. 형식: [{"category":"5분","comment":"2~5줄 코멘트(수치 인용 포함)"}, ...]';
+        '각 항목(5분, 10분, 20분, 40분, 60분, Max)별로 **제공된 수치를 그대로 인용하여** 2~5줄 분량의 핵심 코멘트를 작성해 주세요.\n' +
+        'category 필드에는 반드시 "5분", "10분", "20분", "40분", "60분", "Max" 중 하나를 정확히 사용하세요.\n' +
+        'comment 필드에 2~5줄 코멘트를 넣으세요. 수치는 제공된 값만 사용하세요.\n\n' +
+        '반드시 JSON 배열만 응답하세요. 다른 텍스트 없이 [ 로 시작해서 ] 로 끝나는 배열만 출력하세요.\n' +
+        '형식: [{"category":"5분","comment":"코멘트 내용"},{"category":"10분","comment":"코멘트 내용"},...]';
       var res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
         })
       });
       var json = await res.json();
       if (json.error) throw new Error(json.error.message || 'Gemini API 오류');
-      var text = (json.candidates && json.candidates[0] && json.candidates[0].content && json.candidates[0].content.parts && json.candidates[0].content.parts[0]) ? json.candidates[0].content.parts[0].text : '';
-      if (!text) throw new Error('AI 응답 없음');
-      var match = text.match(/\[[\s\S]*\]/);
-      var arr = match ? JSON.parse(match[0]) : [];
+      var text = '';
+      if (json.candidates && json.candidates[0]) {
+        var c = json.candidates[0];
+        var reason = c.finishReason || '';
+        if (reason === 'SAFETY' || reason === 'RECITATION') throw new Error('AI 응답이 안전 정책으로 제한되었습니다.');
+        if (c.content && c.content.parts && c.content.parts[0]) text = c.content.parts[0].text || '';
+      }
+      if (!text || !text.trim()) throw new Error('AI 응답 없음');
+      var jsonStr = text.replace(/^[\s\S]*?```(?:json)?\s*/, '').replace(/\s*```[\s\S]*$/, '').trim();
+      var match = jsonStr.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error('AI 응답에서 JSON 배열을 찾을 수 없음');
+      var arr;
+      try { arr = JSON.parse(match[0]); } catch (e) { throw new Error('JSON 파싱 실패: ' + e.message); }
+      if (!Array.isArray(arr)) arr = [];
+      var categoryMap = { '5분': '5분', '10분': '10분', '20분': '20분', '40분': '40분', '60분': '60분', 'Max': 'Max', 'max': 'Max' };
       var out = {};
       arr.forEach(function(a){
-        if (a && a.category) {
-          var comment = (a.comment || '').trim();
-          var tip = (a.tip || '').trim();
-          out[a.category] = { comment: comment, tip: tip, fullComment: (comment + (tip ? '\n' + tip : '')).trim() };
-        }
+        if (!a || !a.category) return;
+        var cat = String(a.category).trim();
+        var key = categoryMap[cat] || cat;
+        var comment = (a.comment || '').trim();
+        var tip = (a.tip || '').trim();
+        var fullComment = (comment + (tip ? '\n' + tip : '')).trim();
+        if (fullComment) out[key] = { comment: comment, tip: tip, fullComment: fullComment };
       });
       return out;
     }
@@ -6964,34 +6978,35 @@
       if (!body) return;
       var html = '';
       items.forEach(function(item) {
-        var c = comments[item.categoryLabel] || {};
+        var c = comments[item.categoryLabel] || comments[item.category] || {};
         var fullComment = (c.fullComment || c.comment || '').trim();
         if (!fullComment && (c.tip || '').trim()) fullComment = (c.tip || '').trim();
-        var stats = [];
+        var line1 = '', line2 = '', line3 = '';
         if (item.hasRival) {
-          stats.push('내 파워: ' + item.myPower + 'W (' + (item.myWkg || 0).toFixed(2) + ' W/kg)');
-          stats.push('앞 순위: ' + item.rivalPower + 'W (' + (item.rivalWkg || 0).toFixed(2) + ' W/kg)');
-          stats.push('주간 TSS(5주차): 나 ' + item.myTSS + ' vs 앞 ' + item.rivalTSS + ' (차이 ' + (item.tssDiff >= 0 ? '+' : '') + item.tssDiff + ')');
-          if (item.targetPowerIncrease > 0) stats.push('목표 향상: +' + item.targetPowerIncrease + 'W');
+          line1 = '내 파워: ' + item.myPower + 'W (' + (item.myWkg || 0).toFixed(2) + ' W/kg) · 앞 순위: ' + item.rivalPower + 'W (' + (item.rivalWkg || 0).toFixed(2) + ' W/kg)';
+          line2 = '주간 TSS(5주차): 나 ' + item.myTSS + ' vs 앞 ' + item.rivalTSS + ' (차이 ' + (item.tssDiff >= 0 ? '+' : '') + item.tssDiff + ')';
+          line3 = item.targetPowerIncrease > 0 ? '타겟 목표: +' + item.targetPowerIncrease + 'W' : '';
         } else if (item.selfImprovement3Pct && (item.myPower > 0 || item.myTSS > 0)) {
-          stats.push('내 파워: ' + item.myPower + 'W (' + (item.myWkg || 0).toFixed(2) + ' W/kg)');
-          stats.push('주간 TSS(5주차): ' + item.myTSS);
-          stats.push('1위 유지 · 3% 향상 목표');
-          if (item.targetPowerIncrease > 0) stats.push('목표 파워: ' + item.targetPower + 'W (+' + item.targetPowerIncrease + 'W)');
-          if (item.targetWkg3Pct != null) stats.push('목표 W/kg: ' + item.targetWkg3Pct.toFixed(2));
-          if (item.targetTSS3Pct != null && item.myTSS > 0) stats.push('목표 주간 TSS: ' + item.targetTSS3Pct + ' (+' + item.tssIncrease3Pct + ')');
+          line1 = '내 파워: ' + item.myPower + 'W (' + (item.myWkg || 0).toFixed(2) + ' W/kg) · 주간 TSS(5주차): ' + item.myTSS;
+          line2 = '1위 유지 · 3% 향상 목표';
+          var parts = [];
+          if (item.targetPowerIncrease > 0) parts.push('타겟 목표: +' + item.targetPowerIncrease + 'W');
+          if (item.targetWkg3Pct != null) parts.push('목표 W/kg: ' + item.targetWkg3Pct.toFixed(2));
+          if (item.targetTSS3Pct != null && item.myTSS > 0) parts.push('목표 주간 TSS: ' + item.targetTSS3Pct);
+          line3 = parts.join(' · ');
         } else {
-          stats.push('내 파워: ' + item.myPower + 'W');
-          stats.push('주간 TSS(5주차): ' + item.myTSS);
-          stats.push(item.myPower > 0 || item.myTSS > 0 ? '(1위 · 앞 순위자 없음)' : '(해당 구간 랭킹 없음)');
+          line1 = '내 파워: ' + item.myPower + 'W · 주간 TSS(5주차): ' + item.myTSS;
+          line2 = item.myPower > 0 || item.myTSS > 0 ? '(1위 · 앞 순위자 없음)' : '(해당 구간 랭킹 없음)';
         }
         html += '<div class="stelvio-overtake-report-card">';
         var headerText = (item.categoryLabel || item.category);
         if (item.selfImprovement3Pct) headerText += ' <span class="stelvio-overtake-badge-3pct">3% 자기 향상 목표</span>';
         html += '<div class="stelvio-overtake-report-card-header">' + headerText + '</div>';
-        html += '<div class="stelvio-overtake-report-card-stats">' + stats.join(' · ') + '</div>';
+        html += '<div class="stelvio-overtake-report-card-stats">' + line1 + (line2 ? '<br>' + line2 : '') + (line3 ? '<br>' + line3 : '') + '</div>';
         if (fullComment) {
           html += '<div class="stelvio-overtake-report-card-comment">' + fullComment.replace(/\n/g, '<br>') + '</div>';
+        } else {
+          html += '<div class="stelvio-overtake-report-card-comment stelvio-overtake-no-comment">AI 분석을 받으려면 환경 설정에서 Gemini API 키를 입력해 주세요.</div>';
         }
         html += '</div>';
       });
