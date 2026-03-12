@@ -13033,6 +13033,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     window.callGeminiCoach = callGeminiCoach;
   </script>
   
+  <!-- 라이더 파워 프로필 세부 트렌드 차트 (훈련 트렌드 위 배치) -->
+  <script src="assets/js/RiderPowerProfileTrendCharts.jsx" type="text/babel"></script>
+  
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
@@ -15292,6 +15295,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </div>
             
             <RiderDashboardProfile userProfile={userProfile} />
+            
+            {window.RiderPowerProfileTrendCharts && React.createElement(window.RiderPowerProfileTrendCharts, { DashboardCard, userProfile })}
             
             {logsLoading ? (
               <DashboardCard title="훈련 트렌드 (최근 1개월)">
