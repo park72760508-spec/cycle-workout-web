@@ -6585,6 +6585,10 @@
           <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
         <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(1분)</span>
+          <span class="training-detail-value">${log.max_1min_watts ? log.max_1min_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(5분)</span>
           <span class="training-detail-value">${log.max_5min_watts ? log.max_5min_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
@@ -6936,8 +6940,8 @@
           return o;
         }), null, 2) + '\n\n' +
         '## 요청\n' +
-        '각 항목(5분, 10분, 20분, 40분, 60분, Max)별로 **제공된 수치를 그대로 인용하여** 2~5줄 분량의 핵심 코멘트를 작성해 주세요.\n' +
-        'category 필드에는 반드시 "5분", "10분", "20분", "40분", "60분", "Max" 중 하나를 정확히 사용하세요.\n' +
+        '각 항목(1분, 5분, 10분, 20분, 40분, 60분, Max)별로 **제공된 수치를 그대로 인용하여** 2~5줄 분량의 핵심 코멘트를 작성해 주세요.\n' +
+        'category 필드에는 반드시 "1분", "5분", "10분", "20분", "40분", "60분", "Max" 중 하나를 정확히 사용하세요.\n' +
         'comment 필드에 2~5줄 코멘트를 넣으세요. 수치는 제공된 값만 사용하세요.\n\n' +
         '반드시 JSON 배열만 응답하세요. 다른 텍스트 없이 [ 로 시작해서 ] 로 끝나는 배열만 출력하세요.\n' +
         '형식: [{"category":"5분","comment":"코멘트 내용"},{"category":"10분","comment":"코멘트 내용"},...]';
@@ -6975,7 +6979,7 @@
             try { arr = extractStrategies[i](); if (Array.isArray(arr)) break; } catch (e) { arr = null; }
           }
           if (!Array.isArray(arr)) arr = [];
-          var categoryMap = { '5분': '5분', '10분': '10분', '20분': '20분', '40분': '40분', '60분': '60분', 'Max': 'Max', 'max': 'Max' };
+          var categoryMap = { '1분': '1분', '5분': '5분', '10분': '10분', '20분': '20분', '40분': '40분', '60분': '60분', 'Max': 'Max', 'max': 'Max' };
           var out = {};
           arr.forEach(function(a){
             if (!a || !a.category) return;
@@ -8236,6 +8240,10 @@
         <div class="training-detail-item">
           <span class="training-detail-label">NP (Normalized Power)</span>
           <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
+        </div>
+        <div class="training-detail-item">
+          <span class="training-detail-label">피크 파워(1분)</span>
+          <span class="training-detail-value">${log.max_1min_watts ? log.max_1min_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(5분)</span>
@@ -15671,6 +15679,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       <div class="stelvio-ranking-body">
         <!-- 종목 탭 -->
         <div class="stelvio-duration-tabs" id="stelvioDurationTabs">
+          <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
           <button type="button" class="stelvio-duration-tab active" data-duration="5min">5분</button>
           <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
           <button type="button" class="stelvio-duration-tab" data-duration="20min">20분</button>
