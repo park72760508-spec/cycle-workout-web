@@ -5343,12 +5343,6 @@
           return;
         }
         
-        // 🔒 구독 만료 사용자 제한
-        if (typeof isUserExpired === 'function' && isUserExpired(currentUser)) {
-          if (typeof showExpiryRestrictionModal === 'function') showExpiryRestrictionModal();
-          return;
-        }
-        
         // 진행 중 플래그 설정
         window.__aiRecommendationInProgress = true;
         
