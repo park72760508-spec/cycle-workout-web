@@ -18,7 +18,7 @@ const NORM = {
  * @param {Array} logs - 훈련 로그 배열
  * @param {string} fromDate - YYYY-MM-DD
  * @param {string} toDate - YYYY-MM-DD
- * @returns {{ max_watts, max_1min_watts, max_5min_watts, max_20min_watts }}
+ * @returns {{ max_watts, max_1min_watts, max_5min_watts, max_20min_watts, max_60min_watts }}
  */
 function aggregateMMPFromLogs(logs, fromDate, toDate) {
   const inRange = (dateStr) => dateStr && dateStr >= fromDate && dateStr <= toDate;
@@ -30,21 +30,58 @@ function aggregateMMPFromLogs(logs, fromDate, toDate) {
     return null;
   };
 
-  let max_watts = 0, max_1min = 0, max_5min = 0, max_20min = 0;
+  let max_watts = 0, max_1min = 0, max_5min = 0, max_10min = 0, max_20min = 0, max_40min = 0, max_60min = 0;
   logs.forEach((log) => {
     const ds = parseDate(log.date);
     if (!inRange(ds)) return;
     const mw = Number(log.max_watts) || 0;
     const m1 = Number(log.max_1min_watts) || 0;
     const m5 = Number(log.max_5min_watts) || 0;
+    const m10 = Number(log.max_10min_watts) || 0;
     const m20 = Number(log.max_20min_watts) || 0;
+    const m40 = Number(log.max_40min_watts) || 0;
+    const m60 = Number(log.max_60min_watts) || 0;
     if (mw > max_watts) max_watts = mw;
     if (m1 > max_1min) max_1min = m1;
     if (m5 > max_5min) max_5min = m5;
+    if (m10 > max_10min) max_10min = m10;
     if (m20 > max_20min) max_20min = m20;
+    if (m40 > max_40min) max_40min = m40;
+    if (m60 > max_60min) max_60min = m60;
   });
 
-  return { max_watts, max_1min_watts: max_1min, max_5min_watts: max_5min, max_20min_watts: max_20min };
+  return { max_watts, max_1min_watts: max_1min, max_5min_watts: max_5min, max_10min_watts: max_10min, max_20min_watts: max_20min, max_40min_watts: max_40min, max_60min_watts: max_60min };
+}
+
+/**
+ * 최근 N주간 주별 MMP 집계 (파워 프로필 트렌드 차트용)
+ * @param {Array} logs - 훈련 로그 배열
+ * @param {number} numWeeks - 주 수 (기본 4)
+ * @returns {Array<{ week, name, max_watts, max_1min_watts, max_5min_watts, max_20min_watts, max_60min_watts }>}
+ */
+function getWeeklyMMPFromLogs(logs, numWeeks) {
+  numWeeks = numWeeks || 4;
+  const today = new Date();
+  const out = [];
+  for (let w = numWeeks - 1; w >= 0; w--) {
+    const end = new Date(today);
+    end.setDate(today.getDate() - w * 7);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 6);
+    const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+    const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+    const agg = aggregateMMPFromLogs(logs, startStr, endStr);
+    out.push({
+      week: numWeeks - w,
+      name: (numWeeks - w) + '주차',
+      max_watts: agg.max_watts,
+      max_1min_watts: agg.max_1min_watts,
+      max_5min_watts: agg.max_5min_watts,
+      max_20min_watts: agg.max_20min_watts,
+      max_60min_watts: agg.max_60min_watts
+    });
+  }
+  return out;
 }
 
 /**
@@ -181,6 +218,7 @@ const FALLBACK_AI_COMMENT = '현재 AI 분석 서버가 혼잡하여 코멘트�
 if (typeof window !== 'undefined') {
   window.calculateRiderScores = calculateRiderScores;
   window.aggregateMMPFromLogs = aggregateMMPFromLogs;
+  window.getWeeklyMMPFromLogs = getWeeklyMMPFromLogs;
   window.fetchAIProfileAnalysis = fetchAIProfileAnalysis;
   window.FALLBACK_AI_COMMENT = FALLBACK_AI_COMMENT;
 }
