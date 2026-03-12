@@ -373,11 +373,12 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
             z7_neuromuscular: 0
           };
 
-      // MMP 계산 (powerData가 있으면 5/10/20/30/40/60분 피크 파워, 스파이크 보간 적용)
+      // MMP 계산 (powerData가 있으면 1/5/10/20/30/40/60분 피크 파워, 스파이크 보간 적용)
       const rawWatts = trainingData.powerData && trainingData.powerData.length > 0
         ? trainingData.powerData.map((d) => Number(d.v) || 0)
         : null;
       const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
+      const max1minWatts = wattsArray && wattsArray.length >= 60 ? calculateMaxAveragePower(wattsArray, 60) : null;
       const max5minWatts = wattsArray && wattsArray.length >= 300 ? calculateMaxAveragePower(wattsArray, 300) : null;
       const max10minWatts = wattsArray && wattsArray.length >= 600 ? calculateMaxAveragePower(wattsArray, 600) : null;
       const max20minWatts = wattsArray && wattsArray.length >= 1200 ? calculateMaxAveragePower(wattsArray, 1200) : null;
@@ -420,6 +421,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         avg_cadence: trainingData.avg_cadence || null,
         
         // MMP (피크 파워)
+        ...(max1minWatts != null && { max_1min_watts: max1minWatts }),
         ...(max5minWatts != null && { max_5min_watts: max5minWatts }),
         ...(max10minWatts != null && { max_10min_watts: max10minWatts }),
         ...(max20minWatts != null && { max_20min_watts: max20minWatts }),
