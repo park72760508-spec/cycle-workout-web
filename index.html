@@ -813,17 +813,33 @@
       margin-bottom: 4px;
     }
     
-    /* 사용자 등록 링크: 글자에만 클릭 적용 */
-    .auth-register-link {
+    /* 시작하기 버튼 하단 ~ 사용자 등록 ~ 비밀번호 재설정: 동일 간격 */
+    .auth-below-submit-links {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    /* 사용자 등록, 비밀번호 재설정: 동일 폰트 크기 14px */
+    .auth-register-link,
+    .auth-forgot-link {
       color: #667eea;
       text-decoration: none;
       font-size: 14px;
       cursor: pointer;
       display: inline-block;
-      padding: 4px 0;
+      padding: 0;
     }
-    .auth-register-link:hover {
+    .auth-register-link {
+      font-weight: 600;
+    }
+    .auth-register-link:hover,
+    .auth-forgot-link:hover {
       text-decoration: underline;
+    }
+    .auth-forgot-link {
+      color: #2e74e8;
     }
     /* 회원가입 모드일 때 사용자 등록 링크 숨김 */
     .phone-auth-section.signup-mode .auth-register-wrap {
@@ -1440,16 +1456,12 @@
               시작하기
             </button>
             
-            <!-- 사용자 등록 링크 (글자에만 클릭 적용) -->
-            <div class="auth-links auth-register-wrap" style="text-align: center; margin-top: 4px; margin-bottom: 4px;">
-              <a href="#" id="authRegisterBtn" class="auth-register-link">사용자 등록</a>
-            </div>
-            
-            <!-- 비밀번호 재설정 링크 -->
-            <div class="auth-links" style="text-align: center; margin-top: 4px; margin-bottom: 0; padding: 0;">
-              <a href="#" id="forgotPasswordLink" style="color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; display: inline-block; padding: 4px 0;">
-                비밀번호 재설정
-              </a>
+            <!-- 사용자 등록, 비밀번호 재설정 (동일 간격) -->
+            <div class="auth-below-submit-links">
+              <div class="auth-register-wrap">
+                <a href="#" id="authRegisterBtn" class="auth-register-link">사용자 등록</a>
+              </div>
+              <a href="#" id="forgotPasswordLink" class="auth-forgot-link">비밀번호 재설정</a>
             </div>
             <!-- STELVIO App Download 블럭 (비밀번호 재설정 밑 배치) -->
             <div class="auth-app-download-box" id="authAppDownloadBox" role="button" tabindex="0" title="클릭 시 접속 기기에 맞게 자동 처리" onclick="if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event);" onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); if(typeof handleAppDownloadClick==='function')handleAppDownloadClick(event); }">
