@@ -45,6 +45,11 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Recharts는 PropTypes 사용 → React 18에는 없으므로 prop-types 패키지로 보완 -->
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script>
+    if (window.React && window.PropTypes) { window.React.PropTypes = window.PropTypes; }
+  </script>
   <script src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
   <script src="assets/js/useRiderAnalysis.js"></script>
   
