@@ -1334,32 +1334,21 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 .basecamp-btn-career-logo {
-  background-image: none !important;
-  background-color: transparent !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  padding: 12px !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(09).png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 95% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
 }
 
 .basecamp-btn-career-logo img {
-  width: 105% !important;
-  height: auto !important;
-  object-fit: contain !important;
-  max-height: 90px !important;
+  display: none !important;
 }
 
 .basecamp-btn-career-logo span {
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
-  font-size: 12px !important;
-  color: #374151 !important;
-  font-weight: 500 !important;
-  line-height: 1.2 !important;
-  text-align: center !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
