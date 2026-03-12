@@ -15296,7 +15296,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             <RiderDashboardProfile userProfile={userProfile} />
             
-            {window.RiderPowerProfileTrendCharts && React.createElement(window.RiderPowerProfileTrendCharts, { DashboardCard, userProfile })}
+            {window.RiderPowerProfileTrendCharts && React.createElement(window.RiderPowerProfileTrendCharts, { DashboardCard, userProfile, recentLogs })}
             
             {logsLoading ? (
               <DashboardCard title="훈련 트렌드 (최근 1개월)">
