@@ -998,9 +998,18 @@ async function apiGetUsers() {
     let currentUserDoc;
     let currentUserData = userData; // 기본값으로 userData 사용
     
+    // authV9.currentUser가 없고 auth(compat)에 사용자가 있으면 v8 firestore 사용 (권한 오류 방지)
+    // 로그인 직후 auth state listener가 authV9 동기화 전에 fire될 수 있음
+    const authV9HasUser = !!(window.authV9 && window.authV9.currentUser);
+    const authCompatHasUser = !!(window.auth && window.auth.currentUser);
+    const useV8Firestore = !authV9HasUser && authCompatHasUser && window.firestore;
+    if (useV8Firestore) {
+      console.log('[apiGetUsers] ℹ️ authV9 미동기화 → v8 firestore 사용 (Missing permissions 방지)');
+    }
+    
     try {
-      // firestoreV9 사용 (authV9와 동일한 앱 인스턴스)
-      if (window.firestoreV9) {
+      // firestoreV9 사용 (authV9에 사용자 있을 때만, 그렇지 않으면 v8 사용)
+      if (window.firestoreV9 && !useV8Firestore) {
         let firestoreModule;
         try {
           firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
@@ -1091,8 +1100,8 @@ async function apiGetUsers() {
     if (userGrade === '1') {
       console.log('[apiGetUsers] 🔑 관리자 권한 확인됨 - 전체 사용자 목록 조회 시작');
       try {
-        // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
-        if (window.firestoreV9) {
+        // firestoreV9 사용 (authV9에 사용자 있을 때만)
+        if (window.firestoreV9 && !useV8Firestore) {
           let firestoreModule;
           try {
             firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
