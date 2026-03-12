@@ -6820,6 +6820,8 @@
     function renderStelvioRankingCategories(byCategory, currentUserId) {
       var medals = ['🥇', '🥈', '🥉'];
       var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
+      var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
       cats.forEach(function(cat) {
         var arr = byCategory[cat] || [];
         var el = document.getElementById('stelvio' + cat + 'List');
@@ -6828,10 +6830,19 @@
           el.innerHTML = '<p class="stelvio-ranking-empty">해당 카테고리에 랭킹이 없습니다.</p>';
           return;
         }
+        var userIdx = -1;
+        if (isExpired) {
+          userIdx = currentUserId ? arr.findIndex(function(item) { return item.userId === currentUserId; }) : -1;
+          if (userIdx >= 0 && userIdx >= 3) {
+            arr = arr.slice(0, 3).concat([arr[userIdx]]);
+          } else {
+            arr = arr.slice(0, 3);
+          }
+        }
         var html = '';
         var maxNameLen = 12;
         arr.forEach(function(item, idx) {
-          var categoryRank = idx + 1;
+          var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
           var globalRank = item.rank || categoryRank;
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
@@ -6856,6 +6867,11 @@
       var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
       if (!uid) {
         alert('로그인이 필요합니다.');
+        return;
+      }
+      var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
+      if (typeof isUserExpired === 'function' && cu && isUserExpired(cu)) {
+        if (typeof showExpiryRestrictionModal === 'function') showExpiryRestrictionModal();
         return;
       }
       var loadingEl = document.getElementById('stelvioOvertakeLoading');
