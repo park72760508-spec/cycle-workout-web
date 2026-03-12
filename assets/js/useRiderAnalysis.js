@@ -99,8 +99,14 @@ async function fetchAIProfileAnalysis(scores, options = {}) {
   }
 
   const { RSPT, TSPT, PCH, CLMB, TTST, ALLR } = scores;
-  const systemPrompt = '당신은 전문 사이클링 코치입니다. 주어진 6가지 파워 프로필 점수(0~10점)를 바탕으로 라이더의 현재 강점과 보완해야 할 점을 분석해 주세요. 전문 용어를 최소화하고 누구나 이해하기 쉽게 작성하세요. 너무 장황하지 않게 3~4문장으로 간결하게 요약하세요.';
-  const userPrompt = `현재 내 사이클링 점수는 RSPT: ${RSPT}, TSPT: ${TSPT}, PCH: ${PCH}, CLMB: ${CLMB}, TTST: ${TTST}, ALLR: ${ALLR} 입니다. 코멘트 부탁합니다.`;
+  const systemPrompt = `당신은 전문 사이클링 코치입니다. 주어진 6가지 파워 프로필 점수(0~10점)를 바탕으로 라이더의 현재 강점과 보완해야 할 점을 **반드시 완전한 문장으로** 분석해 주세요.
+
+[필수 규칙]
+- 응답은 반드시 3~4문장으로 완성하세요. 문장을 중간에 끊지 마세요.
+- 강점 1~2문장, 보완점 1~2문장을 구체적으로 제시하세요.
+- 전문 용어를 최소화하고 누구나 이해하기 쉽게 작성하세요.
+- 예리하고 실용적인 조언으로 사용자가 만족할 수 있도록 작성하세요.`;
+  const userPrompt = `현재 내 사이클링 점수는 RSPT(로드 스프린트): ${RSPT}, TSPT(트랙 스프린트): ${TSPT}, PCH(펀처): ${PCH}, CLMB(클라이머): ${CLMB}, TTST(타임 트라이얼): ${TTST}, ALLR(올라운더): ${ALLR} 입니다. 강점과 보완점을 분석해 주세요.`;
 
   const modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
   const apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
@@ -111,7 +117,7 @@ async function fetchAIProfileAnalysis(scores, options = {}) {
       { role: 'user', parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }
     ],
     generationConfig: {
-      maxOutputTokens: 500,
+      maxOutputTokens: 1024,
       temperature: 0.3,
       topP: 0.95,
       topK: 40
@@ -144,11 +150,20 @@ async function fetchAIProfileAnalysis(scores, options = {}) {
       }
 
       const data = await res.json();
-      if (!data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        throw new Error('Gemini API 응답에 텍스트가 없습니다.');
+      const candidate = data?.candidates?.[0];
+      if (!candidate?.content?.parts?.length) {
+        throw new Error('Gemini API 응답에 content가 없습니다.');
       }
-
-      return data.candidates[0].content.parts[0].text.trim();
+      const parts = candidate.content.parts;
+      let fullText = '';
+      for (let i = 0; i < parts.length; i++) {
+        const t = parts[i]?.text;
+        if (t && typeof t === 'string') fullText += t;
+      }
+      if (!fullText.trim()) {
+        throw new Error('Gemini API 응답이 비어있습니다.');
+      }
+      return fullText.trim();
     } catch (err) {
       lastErr = err;
       if (attempt < maxRetries) {
