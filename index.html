@@ -813,6 +813,23 @@
       margin-bottom: 4px;
     }
     
+    /* 사용자 등록 버튼: 테두리 제거, 글자만 표시 */
+    #authRegisterBtn.auth-register-btn {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 12px 0;
+      margin-top: 12px;
+    }
+    #authRegisterBtn.auth-register-btn:hover:not(:disabled) {
+      background: transparent;
+      transform: none;
+      box-shadow: none;
+    }
+    #authRegisterBtn.auth-register-btn:active:not(:disabled) {
+      transform: none;
+    }
+    
     .auth-register-btn:hover:not(:disabled) {
       background: #f3f4f6;
       transform: translateY(-1px);
