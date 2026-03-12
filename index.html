@@ -13476,13 +13476,25 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var cap = capabilityScores || {};
       var tend = tendencyScores || capabilityScores || {};
       var radarData = [
-        { subject: 'RSPT', 역량: cap.RSPT || 0, 성향: tend.RSPT || 0, fullMark: 10 },
-        { subject: 'TSPT', 역량: cap.TSPT || 0, 성향: tend.TSPT || 0, fullMark: 10 },
-        { subject: 'PCH', 역량: cap.PCH || 0, 성향: tend.PCH || 0, fullMark: 10 },
-        { subject: 'CLMB', 역량: cap.CLMB || 0, 성향: tend.CLMB || 0, fullMark: 10 },
-        { subject: 'TTST', 역량: cap.TTST || 0, 성향: tend.TTST || 0, fullMark: 10 },
-        { subject: 'ALLR', 역량: cap.ALLR || 0, 성향: tend.ALLR || 0, fullMark: 10 }
+        { subject: 'RSPT', subjectKr: '로드 스프린트', 역량: cap.RSPT || 0, 성향: tend.RSPT || 0, fullMark: 10 },
+        { subject: 'TSPT', subjectKr: '트랙 스프린트', 역량: cap.TSPT || 0, 성향: tend.TSPT || 0, fullMark: 10 },
+        { subject: 'PCH', subjectKr: '펀처', 역량: cap.PCH || 0, 성향: tend.PCH || 0, fullMark: 10 },
+        { subject: 'CLMB', subjectKr: '클라이머', 역량: cap.CLMB || 0, 성향: tend.CLMB || 0, fullMark: 10 },
+        { subject: 'TTST', subjectKr: '타임 트라이얼', 역량: cap.TTST || 0, 성향: tend.TTST || 0, fullMark: 10 },
+        { subject: 'ALLR', subjectKr: '올라운더', 역량: cap.ALLR || 0, 성향: tend.ALLR || 0, fullMark: 10 }
       ];
+      function RadarAxisTick(props) {
+        var p = (props && props.payload) || {};
+        var value = (typeof p === 'object' && p.value) || '';
+        var item = radarData.find(function(d) { return d.subject === value; });
+        var kr = item ? item.subjectKr : '';
+        var x = (props && props.x) != null ? props.x : 0;
+        var y = (props && props.y) != null ? props.y : 0;
+        return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')', className: 'recharts-polar-angle-axis-tick' },
+          React.createElement('text', { textAnchor: 'middle', x: 0, y: 0, dy: -6, fontSize: 11, fontWeight: 600, fill: '#374151' }, value),
+          React.createElement('text', { textAnchor: 'middle', x: 0, y: 0, dy: 6, fontSize: 9, fill: '#6b7280' }, '(' + kr + ')')
+        );
+      }
       
       if (!userProfile || !userProfile.weight || userProfile.weight <= 0) {
         return (
@@ -13515,7 +13527,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart data={radarData}>
                     <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
+                    <PolarAngleAxis dataKey="subject" tick={RadarAxisTick} />
                     <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 10 }} />
                     <Radar name="역량 (최근 4주)" dataKey="역량" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} strokeWidth={2} />
                     <Radar name="성향 (최근 1년)" dataKey="성향" stroke="#eab308" fill="#eab308" fillOpacity={0.25} strokeWidth={1.5} />
@@ -13527,7 +13539,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">Recharts 로드 실패</div>
             )}
           </DashboardCard>
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" style={{ backgroundColor: 'rgba(249, 250, 251, 0.95)' }}>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" style={{ backgroundColor: 'rgba(249, 250, 251, 0.95)', minHeight: '80px' }}>
             <div className="flex items-center gap-2 mb-3">
               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">AI</span>
               <span className="text-sm font-semibold text-gray-700">AI Coach</span>
@@ -13535,7 +13547,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             {aiLoading ? (
               <div className="flex items-center gap-2 text-gray-500 text-sm">로딩 중...</div>
             ) : (
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{aiComment}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ overflow: 'visible', wordBreak: 'keep-all' }}>{aiComment}</p>
             )}
           </div>
         </div>
