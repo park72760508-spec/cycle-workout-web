@@ -181,8 +181,8 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
   if (!Recharts || !data || data.length === 0) {
     return (
       <DashboardCard>
-        <div className="mb-1">
-          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+        <div className="mb-1 min-w-0">
+          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>{title}</h3>
         </div>
         <div className="h-[min(140px,31.5vw)] sm:h-[140px] flex items-center justify-center text-gray-400 text-sm">
           데이터 없음
@@ -195,12 +195,12 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
 
   return (
     <DashboardCard>
-      <div className="mb-1">
-        <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      <div className="mb-1 min-w-0">
+        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>{title}</h3>
       </div>
-      <div className="h-[min(140px,31.5vw)] sm:h-[140px]">
+      <div className="h-[min(140px,31.5vw)] sm:h-[140px] -mx-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={cid + '-fillMy'} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4} />
@@ -216,8 +216,8 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#6b7280" />
-            <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#6b7280" />
+            <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
             <Area type="monotone" dataKey="shortTermGoal" stroke="rgba(249,115,22,0.6)" fill={'url(#' + cid + '-fillShort)'} strokeWidth={2} name="단기 목표" dot={false} connectNulls />
             {hasLongTerm && <Area type="monotone" dataKey="longTermGoal" stroke="rgba(239,68,68,0.6)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillLong)'} strokeWidth={2} name="장기 목표" dot={false} connectNulls />}
             <Area type="monotone" dataKey="myPower" stroke="#3B82F6" fill={'url(#' + cid + '-fillMy)'} strokeWidth={2.5} name="나의 달성도" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls />
@@ -243,8 +243,8 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
   if (!Recharts || !data.length) {
     return (
       <DashboardCard>
-        <div className="mb-1">
-          <h3 className="text-sm font-semibold text-gray-800">ALLR - 전 구간 파워 커브</h3>
+        <div className="mb-1 min-w-0">
+          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>ALLR - 전 구간 파워 커브</h3>
         </div>
         <div className="h-[min(140px,31.5vw)] sm:h-[140px] flex items-center justify-center text-gray-400 text-sm">데이터 없음</div>
       </DashboardCard>
@@ -255,12 +255,12 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
 
   return (
     <DashboardCard>
-      <div className="mb-1">
-        <h3 className="text-sm font-semibold text-gray-800">ALLR - 전 구간 파워 커브</h3>
+      <div className="mb-1 min-w-0">
+        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>ALLR - 전 구간 파워 커브</h3>
       </div>
-      <div className="h-[min(140px,31.5vw)] sm:h-[140px]">
+      <div className="h-[min(140px,31.5vw)] sm:h-[140px] -mx-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={cid + '-fillCurve'} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4} />
@@ -272,8 +272,8 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="duration" tick={{ fontSize: 11 }} stroke="#6b7280" />
-            <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            <XAxis dataKey="duration" tick={{ fontSize: 10 }} stroke="#6b7280" />
+            <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
             {hasTarget && (
               <Area type="monotone" dataKey="targetPower" stroke="rgba(239,68,68,0.5)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillTarget)'} strokeWidth={2} name="목표 (ALLR 최고)" dot={false} connectNulls />
             )}
