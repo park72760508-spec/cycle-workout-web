@@ -1746,14 +1746,75 @@ if (typeof window !== 'undefined') {
 // ========== 사용자 목록 로드 및 렌더링 ==========
 
 /**
+ * FTP 기준 파워 영역대 계산 (사용자 예시: FTP 200W)
+ * Zone 1~7: 회색, 파랑, 초록, 노랑, 주황, 빨강, 보라
+ */
+function getFtpPowerZones(ftp) {
+  const f = Number(ftp) || 0;
+  if (f <= 0) return null;
+  return [
+    { zone: 1, label: 'Z1', min: 0, max: Math.max(0, Math.floor(f * 0.55) - 1), color: '#9ca3af', desc: '회복' },
+    { zone: 2, label: 'Z2', min: Math.ceil(f * 0.56), max: Math.floor(f * 0.75), color: '#3b82f6', desc: '장거리' },
+    { zone: 3, label: 'Z3', min: Math.ceil(f * 0.76), max: Math.floor(f * 0.90), color: '#22c55e', desc: '템포' },
+    { zone: 4, label: 'Z4', min: Math.ceil(f * 0.91), max: Math.floor(f * 1.05), color: '#eab308', desc: 'FTP' },
+    { zone: 5, label: 'Z5', min: Math.ceil(f * 1.06), max: Math.floor(f * 1.20), color: '#f97316', desc: 'VO2max' },
+    { zone: 6, label: 'Z6', min: Math.ceil(f * 1.21), max: Math.floor(f * 1.50), color: '#ef4444', desc: '무산소' },
+    { zone: 7, label: 'Z7', min: Math.ceil(f * 1.51), max: null, color: '#a855f7', desc: '스프린트' }
+  ];
+}
+
+/**
+ * 최대 심박수 기준 심박 영역대 (50~100%)
+ * Zone 1~5: 회색, 파랑, 초록, 주황, 빨강
+ */
+function getHrZones(maxHr) {
+  const m = Number(maxHr) || 0;
+  if (m <= 0) return null;
+  return [
+    { zone: 1, pct: '50~60%', min: Math.round(m * 0.50), max: Math.round(m * 0.60), color: '#9ca3af', desc: '회복' },
+    { zone: 2, pct: '60~70%', min: Math.round(m * 0.60), max: Math.round(m * 0.70), color: '#3b82f6', desc: '지구력' },
+    { zone: 3, pct: '70~80%', min: Math.round(m * 0.70), max: Math.round(m * 0.80), color: '#22c55e', desc: '유산소' },
+    { zone: 4, pct: '80~90%', min: Math.round(m * 0.80), max: Math.round(m * 0.90), color: '#f97316', desc: '역치' },
+    { zone: 5, pct: '90~100%', min: Math.round(m * 0.90), max: m, color: '#ef4444', desc: '최대' }
+  ];
+}
+
+/**
+ * 훈련 로그에서 최대 심박수 추출 (오늘 기준 최대 1년)
+ */
+async function fetchMaxHrFromLogs(userId) {
+  if (!userId || typeof window.getUserTrainingLogs !== 'function') return null;
+  try {
+    const logs = await window.getUserTrainingLogs(userId, { limit: 400 });
+    const today = new Date();
+    const oneYearAgo = new Date(today);
+    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    let maxHr = 0;
+    logs.forEach(log => {
+      const d = log.date && (log.date.toDate ? log.date.toDate() : new Date(log.date));
+      if (d && !isNaN(d.getTime()) && d >= oneYearAgo && d <= today) {
+        const hr = Number(log.max_hr);
+        if (hr > 0 && hr > maxHr) maxHr = hr;
+      }
+    });
+    return maxHr > 0 ? maxHr : null;
+  } catch (e) {
+    console.warn('[UserManager] fetchMaxHrFromLogs 실패:', userId, e);
+    return null;
+  }
+}
+
+/**
  * 프로필 화면 사용자 카드 목록 렌더링 (loadUsers / searchProfileUsers 공용)
  * @param {Array} usersToRender - 렌더할 사용자 배열
  * @param {string} viewerGrade - 뷰어 등급
  * @param {string|null} viewerId - 뷰어 ID
+ * @param {Object} [maxHrByUser] - userId -> maxHr 맵 (훈련로그 기반, 비동기 채움)
  */
-function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
+function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUser) {
   const userList = document.getElementById('userList');
   if (!userList) return;
+  const maxHrMap = maxHrByUser || {};
   let hasAiKey = false;
   try {
     const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
@@ -1765,6 +1826,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
     return false;
   };
   const canDeleteFor = (u) => (viewerGrade === '1');
+  const showDashboardBtn = (viewerGrade === '1'); // grade=1만 대시보드 버튼 표시
   const sorted = [...usersToRender].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
   userList.innerHTML = sorted.map(user => {
     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
@@ -1792,6 +1854,21 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
     const aiDot = hasAiKey ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
+
+    const ftpZones = getFtpPowerZones(user.ftp);
+    const maxHr = maxHrMap[user.id];
+    const hrZones = getHrZones(maxHr);
+
+    const ftpZonesHtml = ftpZones
+      ? `<div class="profile-zone-section"><div class="profile-zone-title">⚡ FTP 파워 영역 (${user.ftp || 0}W)</div><div class="profile-zone-chips">${ftpZones.map(z => `<span class="profile-zone-chip" style="background:${z.color}20;color:${z.color};border:1px solid ${z.color}40" title="${z.desc}">${z.label} ${z.min}~${z.max || '↑'}W</span>`).join('')}</div></div>`
+      : '';
+
+    const hrZonesHtml = hrZones
+      ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역 (Max HR ${maxHr} bpm)</div><div class="profile-zone-chips">${hrZones.map(z => `<span class="profile-zone-chip" style="background:${z.color}20;color:${z.color};border:1px solid ${z.color}40" title="${z.desc}">${z.pct} ${z.min}~${z.max}</span>`).join('')}</div></div>`
+      : maxHr === undefined
+        ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역</div><div class="profile-hr-loading">로딩 중...</div></div>`
+        : '';
+
     return `
       <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
         <div class="user-header">
@@ -1809,17 +1886,31 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
             </div>
           </div>
           <div class="user-actions" onclick="event.stopPropagation();">
-            <button class="btn-dashboard" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>
-            ${canEdit ? `<button class="btn-edit" onclick="editUser('${user.id}')" title="수정">✏️</button><button class="btn-delete ${deleteButtonClass}" onclick="deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}>🗑️</button>` : ''}
+            ${showDashboardBtn ? `<button class="btn-dashboard" onclick="event.stopPropagation();showPerformanceDashboard('${user.id}')" title="대시보드 보기">📊 대시보드</button>` : ''}
+            ${canEdit ? `<button class="btn-edit" onclick="event.stopPropagation();editUser('${user.id}')" title="수정"><img src="assets/img/edit2.png" alt="수정" style="width:20px;height:20px;display:block;" /></button><button class="btn-delete ${deleteButtonClass}" onclick="event.stopPropagation();deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}><img src="assets/img/delete2.png" alt="삭제" style="width:20px;height:20px;display:block;" /></button>` : ''}
           </div>
         </div>
         <div class="user-details">
           <div class="user-stats"><span class="stat">FTP: ${user.ftp || '-'}W</span><span class="stat">체중: ${user.weight || '-'}kg</span><span class="stat">W/kg: ${wkg}</span></div>
           <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
+          ${ftpZonesHtml}${hrZonesHtml}
         </div>
       </div>
     `;
   }).join('');
+}
+
+/**
+ * 프로필 화면: 사용자별 Max HR 비동기 조회 후 카드 재렌더링
+ */
+async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId) {
+  const maxHrByUser = {};
+  const promises = usersToRender.map(async (u) => {
+    const hr = await fetchMaxHrFromLogs(u.id);
+    if (hr != null) maxHrByUser[u.id] = hr;
+  });
+  await Promise.all(promises);
+  renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUser);
 }
 
 /**
@@ -1849,12 +1940,16 @@ function searchProfileUsers() {
     });
   }
   renderProfileUserCards(filtered, ctx.viewerGrade, ctx.viewerId);
+  if (filtered.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
+    window.refreshProfileMaxHrAndRerender(filtered, ctx.viewerGrade, ctx.viewerId).catch(() => {});
+  }
   if (typeof showToast === 'function') {
     showToast(nameQuery || contactDigits ? `검색 결과 ${filtered.length}명` : `전체 ${filtered.length}명`);
   }
 }
 
 window.searchProfileUsers = searchProfileUsers;
+window.refreshProfileMaxHrAndRerender = refreshProfileMaxHrAndRerender;
 
 /**
  * 날짜에 N개월 더한 YYYY-MM-DD 반환
@@ -2054,6 +2149,9 @@ async function loadUsers() {
     }
 
     renderProfileUserCards(visibleUsers, viewerGrade, viewerId);
+    if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
+      window.refreshProfileMaxHrAndRerender(visibleUsers, viewerGrade, viewerId).catch(() => {});
+    }
 
     const profileScreen = document.getElementById('profileScreen');
     const isProfileScreenActive = profileScreen && profileScreen.classList.contains('active');
