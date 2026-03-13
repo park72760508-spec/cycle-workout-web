@@ -749,11 +749,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   color: #1f2937;
 }
 
-/* 베이스캠프 컨테이너 z-index 조정 + [인증 화면 공통] flex 자식 min-height: 0 → 스크롤이 #basecampScreen 안에서만 발생, body 스크롤 방지 */
+/* 베이스캠프 컨테이너 - 가로 화면에서 콘텐츠 축소 없이 스크롤 */
 #basecampScreen .connection-main-container {
   position: relative;
   z-index: 1;
   min-height: 0;
+  flex-shrink: 0;
 }
 #basecampScreen.active > .connection-main-container {
   min-height: 0;
@@ -794,17 +795,18 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 버튼 그리드 반응형 (화면 비율에 따라 크기 조정, 휴대폰 화면 벗어나지 않음) */
+/* Choose Your Path: 가로 화면에서 버튼 축소 없음, 세로 블럭 길어져 스크롤로 확인 */
 #basecampScreen .connection-device-section .grid-2.mb-15 {
+  --basecamp-cell: calc((100vw - 80px - 3.75px) / 2);
   width: 100% !important;
-  max-width: min(100%, calc(95vh - 280px)) !important;
-  aspect-ratio: 1 !important;
+  max-width: 100% !important;
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
   gap: 3.75px !important;
   margin: 0 auto !important;
   box-sizing: border-box !important;
+  justify-content: center;
 }
 
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn {
@@ -1202,6 +1204,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   position: relative;
   z-index: 1;
   min-height: 0;
+  flex-shrink: 0;
 }
 #myCareerScreen.active > .connection-main-container {
   min-height: 0;
@@ -1214,24 +1217,23 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overflow-x: hidden;
 }
 
-/* Manage Your Career 화면 - 블럭 크기 유기적 조정 */
+/* Manage Your Career 화면 - 제목/하단 공백 최소화, 버튼 겹침 방지, 가로 화면에서 스크롤 */
 #myCareerScreen .connection-form-card {
-  padding-bottom: 8px !important;
-  max-height: 95vh !important;
-  overflow: hidden;
+  padding: 12px 15px 4px 15px !important;
+  max-height: none !important;
+  overflow: visible;
   display: flex !important;
   flex-direction: column !important;
 }
 
 #myCareerScreen .connection-form-card .connection-header {
-  margin-bottom: 8px !important;
+  margin-bottom: 0 !important;
   flex-shrink: 0;
 }
 
 #myCareerScreen .connection-device-section {
   margin-bottom: 0 !important;
-  padding-top: 8px !important;
-  padding-bottom: 12px !important;
+  padding: 4px 15px 4px 15px !important;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1242,21 +1244,20 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important;
 }
 
-/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 상하 버튼 간격 유지, 가로·세로 80% 균일 축소 */
+/* My Career 8버튼 그리드 - 가로 화면에서 버튼 축소 없음, 세로 블럭 길어져 스크롤로 확인 */
 .my-career-grid-8 {
-  --my-career-cell: min(calc((100vw - 80px - 3.75px) / 2), calc((95vh - 140px - 18px) / 4));
+  --my-career-gap-row: 10px;
+  --my-career-cell: calc(((100vw - 80px - 3.75px) / 2) * 0.8);
   display: grid;
   grid-template-columns: repeat(2, var(--my-career-cell));
   grid-template-rows: repeat(4, var(--my-career-cell));
   column-gap: 3.75px;
-  row-gap: 6px;
+  row-gap: var(--my-career-gap-row);
   max-width: 100%;
   width: fit-content;
   margin: 0 auto;
   justify-content: center;
   box-sizing: border-box;
-  transform: scale(0.8);
-  transform-origin: center center;
 }
 
 #myCareerScreen .connection-device-section {
