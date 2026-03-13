@@ -2307,25 +2307,6 @@
       <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
     </div>
 
-    <!-- 월간 훈련 이력 미니 달력 (프로필 선택 화면) -->
-    <div class="card mini-calendar-profile-card" style="margin-top: 16px;">
-      <div class="mini-calendar-container">
-        <div class="mini-calendar-header">
-          <button class="mini-calendar-nav-btn" onclick="typeof miniCalendarNavigate==='function'&&miniCalendarNavigate('prev')" aria-label="이전 달">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          </button>
-          <span class="mini-calendar-month-year" id="miniCalendarMonthYear">-</span>
-          <button class="mini-calendar-nav-btn" onclick="typeof miniCalendarNavigate==='function'&&miniCalendarNavigate('next')" aria-label="다음 달">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-          </button>
-        </div>
-        <div class="mini-calendar-weekdays">
-          <div class="mini-calendar-weekday">일</div><div class="mini-calendar-weekday">월</div><div class="mini-calendar-weekday">화</div><div class="mini-calendar-weekday">수</div><div class="mini-calendar-weekday">목</div><div class="mini-calendar-weekday">금</div><div class="mini-calendar-weekday">토</div>
-        </div>
-        <div class="mini-calendar-grid" id="miniCalendarGrid"></div>
-      </div>
-    </div>
-
       <!-- 신규 사용자 추가 카드 비활성화 -->
       <div class="card hidden" id="cardAddUser" aria-hidden="true">
         <div class="text-center">
@@ -7150,18 +7131,7 @@
     if (typeof originalLoadUsers === 'function') {
       window.loadUsers = async function(...args) {
         const result = originalLoadUsers.apply(this, args);
-        
-        // 프로필 화면이 활성화되어 있고 현재 사용자가 있으면 달력 초기화
-        const profileScreen = document.getElementById('profileScreen');
-        if (profileScreen && profileScreen.classList.contains('active')) {
-          const currentUser = window.currentUser;
-          if (currentUser && currentUser.id) {
-            setTimeout(() => {
-              initMiniCalendar(currentUser.id);
-            }, 300); // loadUsers 완료 후 약간의 지연
-          }
-        }
-        
+        // 프로필 선택 화면 미니달력 제거됨 - initMiniCalendar 호출 생략
         return result;
       };
     }
@@ -15696,16 +15666,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           directScreenSwitch(screenId);
         }
         
-        // Profile Screen인 경우 달력 초기화
-        if (screenId === 'profileScreen') {
-          setTimeout(function() {
-            var currentUser = window.currentUser;
-            if (currentUser && currentUser.id && typeof window.initMiniCalendar === 'function') {
-              window.initMiniCalendar(currentUser.id);
-            }
-          }, 300);
-        }
-        
+        // Profile Screen: 미니달력 제거됨 - initMiniCalendar 호출 생략
         // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (인증 완료 후 Choose Your Path 진입 시에만 노출). 블루투스 연결버튼→센서연결만 띄우는 흐름에서는 TOP10 표시 안 함.
         if (screenId === 'basecampScreen') {
           function tryShowWeeklyTop10() {
