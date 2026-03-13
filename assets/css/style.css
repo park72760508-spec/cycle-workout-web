@@ -797,7 +797,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /* Choose Your Path: 가로 화면에서 버튼 축소 없음, 세로 블럭 길어져 스크롤로 확인 */
 #basecampScreen .connection-device-section .grid-2.mb-15 {
-  --basecamp-cell: calc((100vw - 80px - 3.75px) / 2);
+  --basecamp-cell: calc(((100vw - 80px - 3.75px) / 2) * 0.75);
   width: 100% !important;
   max-width: 100% !important;
   display: grid !important;
@@ -1247,7 +1247,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 /* My Career 8버튼 그리드 - 가로 화면에서 버튼 축소 없음, 세로 블럭 길어져 스크롤로 확인 */
 .my-career-grid-8 {
   --my-career-gap-row: 10px;
-  --my-career-cell: calc(((100vw - 80px - 3.75px) / 2) * 0.8);
+  --my-career-cell: calc(((100vw - 80px - 3.75px) / 2) * 0.75);
   display: grid;
   grid-template-columns: repeat(2, var(--my-career-cell));
   grid-template-rows: repeat(4, var(--my-career-cell));
