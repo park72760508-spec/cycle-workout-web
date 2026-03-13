@@ -1899,23 +1899,17 @@
                 <span>센서 연결 (Device Settings)</span>
               </button>
             </div>
-            <!-- 로그인 상태 바 + STELVIO 랭킹 보드 (버튼 4개 하단, 내용 중앙 정렬) -->
+            <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 Welcome 사용자명님 + 로그아웃 -->
             <div id="authBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
               <div id="authBarLeft" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
                 <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
                 <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
               </div>
               <div id="authBarRight" style="display: none; align-items: center; justify-content: space-between; width: 100%;">
-                <div style="flex: 1;"></div>
-                <button type="button" id="btnRankingBoard" onclick="if(typeof fetchAndShowWeeklyTop10Modal === 'function') fetchAndShowWeeklyTop10Modal();" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 17px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">
-                  <img src="assets/img/ranking.png" alt="" style="width: 24px; height: 24px; object-fit: contain;" onerror="this.style.display='none'">
-                  <span>STELVIO 랭킹 보드</span>
+                <span id="authBarWelcome" style="flex: 1; font-size: 17px; font-weight: 600; color: #0369a1;">Welcome 사용자명님</span>
+                <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
+                  <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
                 </button>
-                <div style="flex: 1; display: flex; justify-content: flex-end;">
-                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
-                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -10535,17 +10529,26 @@
     }
     
     /**
-     * auth 바 UI 갱신: 로그인 시 Welcome + 로그아웃, 비로그인 시 로그인 버튼 + 안내
+     * auth 바 UI 갱신: 로그인 시 Welcome 사용자명님 + 로그아웃, 비로그인 시 로그인 버튼 + 안내
      */
     function updateAuthBarUI(user) {
       const left = document.getElementById('authBarLeft');
       const right = document.getElementById('authBarRight');
       const warning = document.getElementById('authBarWarning');
+      const welcomeEl = document.getElementById('authBarWelcome');
       if (!left || !right) return;
       if (user && user.email) {
         left.style.display = 'none';
         right.style.display = 'flex';
         if (warning) warning.style.display = 'none';
+        var userName = '사용자';
+        try {
+          var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (cu && cu.name) userName = cu.name;
+          else if (user.displayName) userName = user.displayName;
+          else if (user.email) userName = user.email.split('@')[0];
+        } catch (e) {}
+        if (welcomeEl) welcomeEl.textContent = 'Welcome ' + userName + '님';
       } else {
         left.style.display = 'flex';
         right.style.display = 'none';
@@ -15667,8 +15670,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         
         // Profile Screen: 미니달력 제거됨 - initMiniCalendar 호출 생략
-        // Choose Your Path(베이스캠프) 입장 시 주간 마일리지 TOP10 팝업 표시 (인증 완료 후 Choose Your Path 진입 시에만 노출). 블루투스 연결버튼→센서연결만 띄우는 흐름에서는 TOP10 표시 안 함.
+        // Choose Your Path(베이스캠프) 입장 시 Welcome 문구 갱신 + 주간 마일리지 TOP10 팝업 표시
         if (screenId === 'basecampScreen') {
+          var a = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+          if (typeof updateAuthBarUI === 'function' && a && a.currentUser) updateAuthBarUI(a.currentUser);
           function tryShowWeeklyTop10() {
             if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return false;
             if (window.__showScreenRedirectedToAuth === true) return false;
