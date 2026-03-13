@@ -15073,10 +15073,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all"
                 onClick={function() {
                   if (typeof showScreen === 'function') {
-                    showScreen('profileScreen');
-                    if (typeof window.loadUsers === 'function') {
-                      setTimeout(function() { window.loadUsers(); }, 200);
-                    }
+                    showScreen('myCareerScreen');
                   }
                 }}
                 aria-label="뒤로 가기"
