@@ -9310,10 +9310,11 @@
               // 바 클릭 시 표시용 짧은 날짜 (예: 1/1~1/7)
               var dateRangeShort = (range.start.getMonth() + 1) + '/' + range.start.getDate() + '~' + (range.end.getMonth() + 1) + '/' + range.end.getDate();
               
+              var endLabel = (range.end.getMonth() + 1) + '/' + range.end.getDate();
               byWeek[key] = { 
                 week: week, 
                 weekKey: key,
-                label: week + '주', 
+                label: endLabel, 
                 startDate: range.start,
                 endDate: range.end,
                 dateRange: dateRange,
@@ -9349,10 +9350,11 @@
                 dateRange = startYear + '-' + startMonth + '-' + startDay + ' ~ ' + endMonth + '-' + endDay;
               }
               var dateRangeShort = (range.start.getMonth() + 1) + '/' + range.start.getDate() + '~' + (range.end.getMonth() + 1) + '/' + range.end.getDate();
+              var endLabel = (range.end.getMonth() + 1) + '/' + range.end.getDate();
               sorted.push({
                 week: i,
                 weekKey: key,
-                label: i + '주',
+                label: endLabel,
                 startDate: range.start,
                 endDate: range.end,
                 dateRange: dateRange,
