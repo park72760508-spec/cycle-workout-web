@@ -1229,9 +1229,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
 }
 
-/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 화면 95% 이내, 스크롤 없이 배치 */
+/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 화면 95% 이내, 스크롤 없이 배치, 가로·세로 80% 균일 축소 */
 .my-career-grid-8 {
-  --my-career-cell: min(calc(((100vw - 80px - 3.75px) / 2) * 0.8), calc(((95vh - 160px - 11.25px) / 4) * 0.8));
+  --my-career-cell: min(calc((100vw - 80px - 3.75px) / 2), calc((95vh - 160px - 11.25px) / 4));
   display: grid;
   grid-template-columns: repeat(2, var(--my-career-cell));
   grid-template-rows: repeat(4, var(--my-career-cell));
@@ -1241,6 +1241,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin: 0 auto;
   justify-content: center;
   box-sizing: border-box;
+  transform: scale(0.8);
+  transform-origin: center center;
 }
 
 #myCareerScreen .connection-device-section {
