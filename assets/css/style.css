@@ -1415,12 +1415,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background-image: url('../img/SUBSCRIBE.png') !important;
 }
 
-.basecamp-btn-career-settings {
-  background-image: url('../img/SETTINGS2.png') !important;
+.basecamp-btn-career-ranking {
+  background-image: url('../img/RANKING1.png') !important;
 }
 
-.basecamp-btn-career-manual {
-  background-image: url('../img/MANUAL.png') !important;
+.basecamp-btn-career-settings {
+  background-image: url('../img/SETTINGS2.png') !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
