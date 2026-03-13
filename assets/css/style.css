@@ -1180,8 +1180,29 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important; /* 기본 20px 제거 */
 }
 
-#myCareerScreen .connection-device-section .grid-2.mb-15 {
+#myCareerScreen .connection-device-section .my-career-grid-8.mb-15 {
   margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
+}
+
+/* My Career 8버튼 그리드 (4x2, 정사각형) */
+.my-career-grid-8 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3.75px;
+}
+
+.basecamp-btn-career {
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0 !important;
+  background-size: 95% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.basecamp-btn-career span {
+  display: none !important;
 }
 
 /* Manage Your Career 화면 하단 버튼 영역 안전거리 확보 */
@@ -1292,63 +1313,37 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   display: none !important;
 }
 
-/* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
-.basecamp-btn-career-schedule {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+/* MY CAREER 각 버튼별 배경 이미지 */
+.basecamp-btn-career-workout {
+  background-image: url('../img/WORKOUT.png') !important;
 }
 
 .basecamp-btn-career-journal {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(06).png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+  background-image: url('../img/LOGS.png') !important;
 }
 
-.basecamp-btn-career-workout {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(07).png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+.basecamp-btn-career-schedule {
+  background-image: url('../img/SCHEDULE.png') !important;
+}
+
+.basecamp-btn-career-dashboard {
+  background-image: url('../img/DASHBOARD.png') !important;
 }
 
 .basecamp-btn-career-profile {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(08).png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+  background-image: url('../img/INFO.png') !important;
 }
 
 .basecamp-btn-career-subscribe {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(09).png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+  background-image: url('../img/SUBSCRIBE.png') !important;
 }
 
-.basecamp-btn-career-logo {
-  background-image: url('../img/STELVIO AI.png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+.basecamp-btn-career-settings {
+  background-image: url('../img/SETTINGS2.png') !important;
 }
 
-.basecamp-btn-career-logo img {
-  display: none !important;
-}
-
-.basecamp-btn-career-logo span {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+.basecamp-btn-career-manual {
+  background-image: url('../img/MANUAL.png') !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
