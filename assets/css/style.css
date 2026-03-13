@@ -1235,9 +1235,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overflow: visible;
 }
 
-/* My Career 8버튼 그리드 - Choose Your Path와 동일: 90% 비율, gap 3.75px, cell=(90%-3.75px)/2 */
+/* My Career 8버튼 그리드 - 휴대폰·태블릿·PC 동일 적용: 90% 비율, gap 3.75px (connection-main-container max-width:500px 반영) */
 #myCareerScreen .connection-device-section.basecamp-device-section .my-career-grid-8 {
-  --my-career-cell: calc(((100vw - 80px) * 0.9 - 3.75px) / 2);
+  --my-career-cell: min(
+    calc(((100vw - 80px) * 0.9 - 3.75px) / 2),
+    calc(((378px - 3.75px) / 2))
+  );
   display: grid !important;
   grid-template-columns: repeat(2, var(--my-career-cell)) !important;
   grid-template-rows: repeat(4, var(--my-career-cell)) !important;
