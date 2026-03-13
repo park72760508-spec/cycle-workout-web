@@ -795,16 +795,16 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 가로 화면에서 버튼 축소 없음, 세로 블럭 길어져 스크롤로 확인 */
+/* Choose Your Path: 컨테이너 좌우 5% 여백, 90% 채우는 비율, 버튼 간격 3.75px 유지 */
 #basecampScreen .connection-device-section .grid-2.mb-15 {
-  --basecamp-cell: calc(((100vw - 80px - 3.75px) / 2) * 0.75);
-  width: 100% !important;
-  max-width: 100% !important;
+  --basecamp-cell: calc(((100vw - 80px) * 0.9 - 3.75px) / 2);
+  width: 90% !important;
+  max-width: 90% !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
   grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
   gap: 3.75px !important;
-  margin: 0 auto !important;
+  margin: 0 5% !important;
   box-sizing: border-box !important;
   justify-content: center;
 }
@@ -1244,18 +1244,18 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important;
 }
 
-/* My Career 8버튼 그리드 - 가로 화면에서 버튼 축소 없음, 세로 블럭 길어져 스크롤로 확인 */
+/* My Career 8버튼 그리드 - 컨테이너 좌우 5% 여백, 90% 채우는 비율, 간격 유지(열 3.75px, 행 10px) */
 .my-career-grid-8 {
   --my-career-gap-row: 10px;
-  --my-career-cell: calc(((100vw - 80px - 3.75px) / 2) * 0.75);
+  --my-career-cell: calc(((100vw - 80px) * 0.9 - 3.75px) / 2);
   display: grid;
   grid-template-columns: repeat(2, var(--my-career-cell));
   grid-template-rows: repeat(4, var(--my-career-cell));
   column-gap: 3.75px;
   row-gap: var(--my-career-gap-row);
-  max-width: 100%;
-  width: fit-content;
-  margin: 0 auto;
+  width: 90%;
+  max-width: 90%;
+  margin: 0 5%;
   justify-content: center;
   box-sizing: border-box;
 }
