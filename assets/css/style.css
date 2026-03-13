@@ -4179,6 +4179,56 @@ button[aria-disabled="true"] {
 }
 #profileScreen .user-card .user-meta{ color:var(--text-muted); font-size:13px; }
 
+/* 프로필 카드: 수정/삭제 버튼 (이미지 버튼) */
+#profileScreen .user-card .btn-edit,
+#profileScreen .user-card .btn-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+#profileScreen .user-card .btn-edit:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+#profileScreen .user-card .btn-delete:hover:not(.disabled):not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* 프로필 카드: FTP 파워 영역 / 심박 영역 */
+#profileScreen .user-card .profile-zone-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+#profileScreen .user-card .profile-zone-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+#profileScreen .user-card .profile-zone-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+#profileScreen .user-card .profile-zone-chip {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+#profileScreen .user-card .profile-hr-loading {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* 삭제 버튼 비활성화 스타일 */
 #profileScreen .btn-delete.disabled,
 #profileScreen .btn-delete:disabled {
