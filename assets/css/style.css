@@ -832,6 +832,14 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
+/* Choose Your Path: authBar(랭킹 보드·로그아웃 박스) = 상단 2열 버튼 그리드와 동일한 폭(90%, 좌우 5%) */
+#basecampScreen .connection-device-section #authBar {
+  width: 90% !important;
+  margin-left: 5% !important;
+  margin-right: 5% !important;
+  box-sizing: border-box !important;
+}
+
 /* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
 #basecampScreen .connection-device-section,
 #basecampScreen .connection-main-container {
