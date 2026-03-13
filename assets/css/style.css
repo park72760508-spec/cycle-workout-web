@@ -1233,7 +1233,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 /* My Career: Choose Your Path와 동일한 배치·비율 로직 (basecamp-device-section 좌우 5%, 90% 비율, gap 3.75px) */
 #myCareerScreen .connection-device-section.basecamp-device-section {
   margin-bottom: 0 !important;
-  padding: 4px 15px 4px 15px !important;
+  padding: 4px 15px 8px 15px !important; /* 하단 여백 2배(4px→8px): 마지막 2버튼 아래 공간 확장 */
   flex: 1;
   min-height: 0;
   display: flex;
