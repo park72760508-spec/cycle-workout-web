@@ -185,7 +185,7 @@ function PowerProfileWeekTrendChart({ title, description, data, DashboardCard })
           <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
           <p className="text-xs text-gray-500 mt-0.5">{description}</p>
         </div>
-        <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
+        <div className="h-[min(200px,45vw)] sm:h-[200px] flex items-center justify-center text-gray-400 text-sm">
           데이터 없음
         </div>
       </DashboardCard>
@@ -200,7 +200,7 @@ function PowerProfileWeekTrendChart({ title, description, data, DashboardCard })
         <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
         <p className="text-xs text-gray-500 mt-0.5">{description}</p>
       </div>
-      <div className="h-[200px]">
+      <div className="h-[min(200px,45vw)] sm:h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
@@ -249,7 +249,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
           <h3 className="text-sm font-semibold text-gray-800">ALLR - 전 구간 파워 커브</h3>
           <p className="text-xs text-gray-500 mt-0.5">5분~60분 구간의 완만한 유지 여부 확인 (단위: W)</p>
         </div>
-        <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">데이터 없음</div>
+        <div className="h-[min(200px,45vw)] sm:h-[200px] flex items-center justify-center text-gray-400 text-sm">데이터 없음</div>
       </DashboardCard>
     );
   }
@@ -262,7 +262,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
         <h3 className="text-sm font-semibold text-gray-800">ALLR - 전 구간 파워 커브</h3>
         <p className="text-xs text-gray-500 mt-0.5">5분~60분 구간의 완만한 유지 여부 확인. 목표: 카테고리 내 ALLR 최고 사용자 (1위 구간은 본인+3%) (단위: W)</p>
       </div>
-      <div className="h-[200px]">
+      <div className="h-[min(200px,45vw)] sm:h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
@@ -338,7 +338,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (앞선 순위자)</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {[1, 2, 3, 4, 5, 6].map(function(i) {
             return (
               <Card key={i}>
@@ -364,23 +364,23 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (앞선 순위자)</span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="min-w-0">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="min-w-0 overflow-hidden">
           <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <PowerProfileWeekTrendChart title="TSPT - Max 파워 (1~5초)" description="순수한 신경근 파워와 최대 근력이 폭발하는 지점" data={chartData.TSPT} DashboardCard={Card} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <PowerProfileWeekTrendChart title="RSPT - 1분 파워" description="무산소 용량의 한계치, 롱 스프린트 능력 지표" data={chartData.RSPT} DashboardCard={Card} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <PowerProfileWeekTrendChart title="PCH - 5분 파워" description="VO2 Max 구간, 짧고 강한 언덕 어택 특화" data={chartData.PCH} DashboardCard={Card} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <PowerProfileWeekTrendChart title="CLMB - 20분 파워" description="젖산 역치와 VO2 Max의 혼합 구간, 클라이머의 핵심 지표" data={chartData.CLMB} DashboardCard={Card} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 overflow-hidden">
           <PowerProfileWeekTrendChart title="TTST - 60분 파워" description="순수 젖산 역치(FTP) 구간, 1시간 꾸준한 파워 유지 능력" data={chartData.TTST} DashboardCard={Card} />
         </div>
       </div>
