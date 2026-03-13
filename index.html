@@ -15043,25 +15043,32 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         return badges[grade] || '⭐ Member';
       };
       
-      /** W/kg 기반 등급 (엘리트/고급/중급/입문/초급) - 표시등 색상 및 스텔비오 스타일 */
+      /** W/kg 기반 등급 (엘리트/고급/중급/입문/초급) - 표시등 linear-gradient 및 스텔비오 스타일 */
       const getWkgGradeInfo = (wkg) => {
         const v = Number(wkg) || 0;
-        if (v >= 4.0) return { grade: 'elite', label: '엘리트', color: '#ef4444', isStelvioStyle: false };
-        if (v >= 3.5) return { grade: 'advanced', label: '고급', color: '#f97316', isStelvioStyle: false };
-        if (v >= 3.0) return { grade: 'intermediate', label: '중급', color: null, isStelvioStyle: true };
-        if (v >= 2.2) return { grade: 'beginner', label: '입문', color: '#84cc16', isStelvioStyle: false };
-        return { grade: 'novice', label: '초급', color: '#eab308', isStelvioStyle: false };
+        if (v >= 4.0) return { grade: 'elite', label: '엘리트', gradient: 'linear-gradient(to bottom right, #f87171, #dc2626)', glowColor: 'rgba(239,68,68,0.5)' };
+        if (v >= 3.5) return { grade: 'advanced', label: '고급', gradient: 'linear-gradient(to bottom right, #fb923c, #ea580c)', glowColor: 'rgba(249,115,22,0.5)' };
+        if (v >= 3.0) return { grade: 'intermediate', label: '중급', gradient: 'linear-gradient(to bottom right, #3b82f6, #9333ea)', glowColor: 'rgba(147,51,234,0.5)' };
+        if (v >= 2.2) return { grade: 'beginner', label: '입문', gradient: 'linear-gradient(to bottom right, #a3e635, #65a30d)', glowColor: 'rgba(132,204,22,0.5)' };
+        return { grade: 'novice', label: '초급', gradient: 'linear-gradient(to bottom right, #fde047, #ca8a04)', glowColor: 'rgba(234,179,8,0.5)' };
       };
       
-      /** W/kg 표시등 (스텔비오 스타일: rounded-full + 은은한 글로우, 중급은 보라 그라데이션) */
-      const WkgGradeIndicator = ({ wkg, size }) => {
+      /** W/kg 표시등 (스텔비오 스타일: rounded-full + linear-gradient + 은은한 글로우). letter 있으면 원 안에 첫글자 표시 */
+      const WkgGradeIndicator = ({ wkg, size, letter }) => {
         const info = getWkgGradeInfo(wkg);
         const s = size || 10;
-        const baseStyle = { width: s + 'px', height: s + 'px', borderRadius: '50%', boxShadow: '0 0 6px 1px ' + (info.isStelvioStyle ? 'rgba(147,51,234,0.5)' : info.color + '99') };
-        const style = info.isStelvioStyle
-          ? { ...baseStyle, background: 'linear-gradient(to bottom right, #3b82f6, #9333ea)' }
-          : { ...baseStyle, backgroundColor: info.color };
-        return React.createElement('div', { className: 'rounded-full flex-shrink-0', style: style, title: info.label + ' (' + (wkg || 0) + ' W/kg)' });
+        const style = {
+          width: s + 'px',
+          height: s + 'px',
+          borderRadius: '50%',
+          background: info.gradient,
+          boxShadow: '0 0 6px 1px ' + info.glowColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        };
+        const inner = letter ? React.createElement('span', { className: 'text-white font-bold', style: { fontSize: Math.max(14, s * 0.5) + 'px', textShadow: '0 1px 2px rgba(0,0,0,0.3)' } }, letter) : null;
+        return React.createElement('div', { className: 'rounded-full flex-shrink-0', style: style, title: info.label + ' (' + (wkg || 0) + ' W/kg)' }, inner);
       };
       
       if (loading) {
@@ -15136,10 +15143,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 </svg>
               </button>
               <div className="flex items-center gap-3 flex-1 justify-center">
-                <WkgGradeIndicator wkg={stats.wkg} size={12} />
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
-                  {userProfile?.name?.charAt(0) || 'U'}
-                </div>
+                <WkgGradeIndicator wkg={stats.wkg} size={40} letter={userProfile?.name?.charAt(0) || 'U'} />
                 <div>
                   <div className="font-semibold text-gray-900">{userProfile?.name || '사용자'}</div>
                   <div className="text-xs text-gray-500">{getGradeBadge(userProfile?.grade)}</div>
