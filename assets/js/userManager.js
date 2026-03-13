@@ -1780,28 +1780,57 @@ function getHrZones(maxHr) {
 }
 
 /**
- * 훈련 로그에서 최대 심박수 추출 (오늘 기준 최대 1년)
+ * yearly_peaks에서 최대 심박수 조회 (오늘 기준 최대 1년 = 당해+전년)
+ * MMP 업데이트 시 max_hr도 yearly_peaks에 반영되므로 로그 스캔 없이 효율적 조회
+ * yearly_peaks에 없으면 훈련 로그에서 폴백 (기존 데이터/백필 전)
  */
-async function fetchMaxHrFromLogs(userId) {
-  if (!userId || typeof window.getUserTrainingLogs !== 'function') return null;
-  try {
-    const logs = await window.getUserTrainingLogs(userId, { limit: 400 });
-    const today = new Date();
-    const oneYearAgo = new Date(today);
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
-    let maxHr = 0;
-    logs.forEach(log => {
-      const d = log.date && (log.date.toDate ? log.date.toDate() : new Date(log.date));
-      if (d && !isNaN(d.getTime()) && d >= oneYearAgo && d <= today) {
-        const hr = Number(log.max_hr);
-        if (hr > 0 && hr > maxHr) maxHr = hr;
+async function fetchMaxHrFromYearlyPeaks(userId) {
+  if (!userId) return null;
+  if (window.firestoreV9) {
+    try {
+      const { getDoc, doc } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const db = window.firestoreV9;
+      const thisYear = new Date().getFullYear();
+      const prevYear = thisYear - 1;
+      const [curSnap, prevSnap] = await Promise.all([
+        getDoc(doc(db, 'users', userId, 'yearly_peaks', String(thisYear))),
+        getDoc(doc(db, 'users', userId, 'yearly_peaks', String(prevYear)))
+      ]);
+      let maxHr = 0;
+      if (curSnap.exists) {
+        const hr = Number(curSnap.data().max_hr) || 0;
+        if (hr > maxHr) maxHr = hr;
       }
-    });
-    return maxHr > 0 ? maxHr : null;
-  } catch (e) {
-    console.warn('[UserManager] fetchMaxHrFromLogs 실패:', userId, e);
-    return null;
+      if (prevSnap.exists) {
+        const hr = Number(prevSnap.data().max_hr) || 0;
+        if (hr > maxHr) maxHr = hr;
+      }
+      if (maxHr > 0) return maxHr;
+    } catch (e) {
+      console.warn('[UserManager] fetchMaxHrFromYearlyPeaks 실패:', userId, e);
+    }
   }
+  // yearly_peaks에 없거나 firestoreV9 없을 때: 훈련 로그에서 폴백
+  if (typeof window.getUserTrainingLogs === 'function') {
+    try {
+      const logs = await window.getUserTrainingLogs(userId, { limit: 400 });
+      const today = new Date();
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+      let maxHr = 0;
+      logs.forEach(log => {
+        const d = log.date && (log.date.toDate ? log.date.toDate() : new Date(log.date));
+        if (d && !isNaN(d.getTime()) && d >= oneYearAgo && d <= today) {
+          const hr = Number(log.max_hr);
+          if (hr > 0 && hr > maxHr) maxHr = hr;
+        }
+      });
+      return maxHr > 0 ? maxHr : null;
+    } catch (e) {
+      console.warn('[UserManager] fetchMaxHrFromLogs 폴백 실패:', userId, e);
+    }
+  }
+  return null;
 }
 
 /**
@@ -1902,11 +1931,12 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
 
 /**
  * 프로필 화면: 사용자별 Max HR 비동기 조회 후 카드 재렌더링
+ * yearly_peaks에서 조회 (MMP 업데이트 시 max_hr도 반영됨, 로그 스캔 대비 효율적)
  */
 async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId) {
   const maxHrByUser = {};
   const promises = usersToRender.map(async (u) => {
-    const hr = await fetchMaxHrFromLogs(u.id);
+    const hr = await fetchMaxHrFromYearlyPeaks(u.id);
     if (hr != null) maxHrByUser[u.id] = hr;
   });
   await Promise.all(promises);
