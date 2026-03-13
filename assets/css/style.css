@@ -795,11 +795,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 컨테이너 좌우 5% 여백, 90% 채우는 비율, 버튼 간격 3.75px 유지 */
-#basecampScreen .connection-device-section .grid-2.mb-15 {
-  --basecamp-cell: calc(((100vw - 80px) * 0.9 - 3.75px) / 2);
+/* Choose Your Path: basecamp-device-section 좌우 5% 여백 유지, 4개 버튼 90% 비율 적용, 간격 3.75px 유지 */
+#basecampScreen .connection-device-section.basecamp-device-section .grid-2.mb-15 {
+  --basecamp-cell: calc((100% - 3.75px) / 2);
   width: 90% !important;
   max-width: 90% !important;
+  aspect-ratio: 1 !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
   grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
