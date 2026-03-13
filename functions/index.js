@@ -1988,7 +1988,6 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
     const wkg = Math.round((watts / weightKg) * 100) / 100;
     validRecords[field] = { watts, wkg };
   }
-  if (Object.keys(validRecords).length === 0) return;
 
   const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(String(year));
   const snap = await yearlyRef.get();
@@ -2003,8 +2002,8 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
       changed = true;
     }
   }
-  // max_hr: 훈련 로그의 최대 심박수를 yearly_peaks에 반영 (프로필 선택 화면 등에서 효율적 조회용)
-  const logMaxHr = Number(logData.max_hr) || 0;
+  // max_hr: 훈련 로그의 최대 심박수를 yearly_peaks에 반영 (max_hr 또는 max_heartrate 필드 지원)
+  const logMaxHr = Number(logData.max_hr ?? logData.max_heartrate) || 0;
   if (logMaxHr > 0) {
     const prevMaxHr = Number(current.max_hr) || 0;
     if (logMaxHr > prevMaxHr) {
