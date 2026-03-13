@@ -1184,10 +1184,10 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
 }
 
-/* My Career 8버튼 그리드 (4x2, 정사각형) */
+/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) */
 .my-career-grid-8 {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 3.75px;
 }
 
@@ -1335,7 +1335,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 .basecamp-btn-career-subscribe {
-  background-image: url('../img/SUBSCRIBE.png') !important;
+  background-image: url('../img/SCHEDULE.png') !important;
 }
 
 .basecamp-btn-career-settings {
