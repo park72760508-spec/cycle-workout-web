@@ -2232,28 +2232,15 @@
           </div>
 
           <div class="connection-device-section basecamp-device-section">
-            <div class="grid-2 mb-15" style="gap: 3.75px;">
-              <!-- 1줄: 워크아웃, 훈련 일지 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }">
-                <span>워크아웃</span>
-              </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }">
-                <span>훈련 일지</span>
-              </button>
-              <!-- 2줄: 훈련 스케줄, 사용자 정보 -->
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('aiScheduleScreen'); if (typeof loadAIScheduleScreen === 'function') { setTimeout(loadAIScheduleScreen, 200); } }">
-                <span>훈련 스케줄</span>
-              </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }">
-                <span>사용자 정보</span>
-              </button>
-              <!-- 3줄: 구독하기, STELVIO 로고 -->
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career-subscribe" id="btnCareerSubscribe">
-                <span>구독하기</span>
-              </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-logo" id="btnCareerLogo" onclick="openSettingsModal()">
-                <span>환경설정</span>
-              </button>
+            <div class="my-career-grid-8 mb-15">
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }" title="워크아웃"></button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="훈련 일지"></button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('aiScheduleScreen'); if (typeof loadAIScheduleScreen === 'function') { setTimeout(loadAIScheduleScreen, 200); } }" title="훈련 스케줄"></button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-dashboard" id="btnCareerDashboard" onclick="if (typeof showScreen === 'function') { showScreen('performanceDashboardScreen'); }" title="대시보드"></button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }" title="사용자 정보"></button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-subscribe" id="btnCareerSubscribe" title="구독하기"></button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-settings" id="btnCareerLogo" onclick="if (typeof openSettingsModal === 'function') openSettingsModal();" title="환경설정"></button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-manual" id="btnCareerManual" onclick="if (typeof openSettingsModal === 'function') openSettingsModal();" title="사용자 메뉴얼"></button>
             </div>
           </div>
         </div>
