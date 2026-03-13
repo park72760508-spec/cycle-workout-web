@@ -1899,14 +1899,17 @@
                 <span>센서 연결 (Device Settings)</span>
               </button>
             </div>
-            <!-- 전화번호 로그인 상태 바 (버튼 4개 하단, 내용 중앙 정렬) -->
+            <!-- 로그인 상태 바 + STELVIO 랭킹 보드 (버튼 4개 하단, 내용 중앙 정렬) -->
             <div id="authBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
               <div id="authBarLeft" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
                 <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
                 <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
               </div>
               <div id="authBarRight" style="display: none; align-items: center; justify-content: center; gap: 8px; width: 100%;">
-                <span id="authBarWelcome" style="font-size: 14px; font-weight: 600; color: #0369a1;"></span>
+                <button type="button" id="btnRankingBoard" onclick="if(typeof fetchAndShowWeeklyTop10Modal === 'function') fetchAndShowWeeklyTop10Modal();" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">
+                  <img src="assets/img/ranking.png" alt="" style="width: 24px; height: 24px; object-fit: contain;" onerror="this.style.display='none'">
+                  <span>STELVIO 랭킹 보드</span>
+                </button>
                 <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
                   <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
                 </button>
@@ -10575,19 +10578,15 @@
     function updateAuthBarUI(user) {
       const left = document.getElementById('authBarLeft');
       const right = document.getElementById('authBarRight');
-      const welcome = document.getElementById('authBarWelcome');
       const warning = document.getElementById('authBarWarning');
       if (!left || !right) return;
       if (user && user.email) {
-        var phone = user.email.replace(/@stelvio\.ai$/, '').replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
         left.style.display = 'none';
         right.style.display = 'flex';
-        if (welcome) welcome.textContent = 'Welcome ' + phone;
         if (warning) warning.style.display = 'none';
       } else {
         left.style.display = 'flex';
         right.style.display = 'none';
-        if (welcome) welcome.textContent = '';
         if (warning) { warning.style.display = 'inline'; warning.textContent = '로그인 시 워크아웃이 Realtime DB에 저장됩니다.'; }
       }
     }
