@@ -1214,28 +1214,42 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overflow-x: hidden;
 }
 
-/* Manage Your Career 화면 하단 여백 조정 */
+/* Manage Your Career 화면 - 블럭 크기 유기적 조정 */
 #myCareerScreen .connection-form-card {
-  padding-bottom: 8px !important; /* 하단 여백 최소화 */
+  padding-bottom: 8px !important;
   max-height: 95vh !important;
   overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#myCareerScreen .connection-form-card .connection-header {
+  margin-bottom: 8px !important;
+  flex-shrink: 0;
 }
 
 #myCareerScreen .connection-device-section {
-  margin-bottom: 0 !important; /* 기본 20px 제거 */
+  margin-bottom: 0 !important;
+  padding-top: 8px !important;
+  padding-bottom: 12px !important;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 #myCareerScreen .connection-device-section .my-career-grid-8.mb-15 {
-  margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
+  margin-bottom: 0 !important;
 }
 
-/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 화면 95% 이내, 스크롤 없이 배치, 가로·세로 80% 균일 축소 */
+/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 상하 버튼 간격 유지, 가로·세로 80% 균일 축소 */
 .my-career-grid-8 {
-  --my-career-cell: min(calc((100vw - 80px - 3.75px) / 2), calc((95vh - 160px - 11.25px) / 4));
+  --my-career-cell: min(calc((100vw - 80px - 3.75px) / 2), calc((95vh - 140px - 18px) / 4));
   display: grid;
   grid-template-columns: repeat(2, var(--my-career-cell));
   grid-template-rows: repeat(4, var(--my-career-cell));
-  gap: 3.75px;
+  column-gap: 3.75px;
+  row-gap: 6px;
   max-width: 100%;
   width: fit-content;
   margin: 0 auto;
