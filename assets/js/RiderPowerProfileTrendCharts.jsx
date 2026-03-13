@@ -25,10 +25,11 @@ function nextChartId() { return 'pp-' + (++_chartId); }
 
 /**
  * STELVIO 랭킹 API에서 카테고리별 1등(장기목표) 및 나의 바로 앞선 경쟁자(단기목표) 조회
+ * ALLR 목표용으로 10min, 40min 포함
  */
 async function fetchRankingGoals(userId, userWeight) {
-  var goals = { max: {}, '1min': {}, '5min': {}, '20min': {}, '60min': {} };
-  var durations = ['max', '1min', '5min', '20min', '60min'];
+  var goals = { max: {}, '1min': {}, '5min': {}, '10min': {}, '20min': {}, '40min': {}, '60min': {} };
+  var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
   var params = new URLSearchParams({ period: 'monthly', gender: 'all' });
   if (userId) params.set('uid', userId);
 
@@ -96,24 +97,44 @@ function buildChartData(weeklyMMP, goals, durationKey) {
   });
 }
 
+/** 파워 커브 X축 순서 */
+var CURVE_DURATIONS = [
+  { key: '5s', apiKey: 'max' },
+  { key: '1분', apiKey: '1min' },
+  { key: '5분', apiKey: '5min' },
+  { key: '10분', apiKey: '10min' },
+  { key: '20분', apiKey: '20min' },
+  { key: '40분', apiKey: '40min' },
+  { key: '60분', apiKey: '60min' }
+];
+
 /**
  * 로그에서 파워 커브 데이터 생성 (최근 1개월 전체 MMP)
+ * goals에서 카테고리 1등(ALLR 최고) 파워 커브를 targetPower로 병합
  */
-function buildPowerCurveData(logs, userWeight) {
-  if (!logs || logs.length === 0) return [];
-  var agg = window.aggregateMMPFromLogs ? window.aggregateMMPFromLogs(logs, getDateStr(-30), getDateStr(0)) : {};
+function buildPowerCurveData(logs, goals) {
+  var agg = (logs && logs.length > 0 && window.aggregateMMPFromLogs)
+    ? window.aggregateMMPFromLogs(logs, getDateStr(-30), getDateStr(0))
+    : {};
   var m60 = agg.max_60min_watts || 0;
   var m20 = agg.max_20min_watts || 0;
-  var base = [
-    { duration: '5s', power: agg.max_watts || 0 },
-    { duration: '1분', power: agg.max_1min_watts || 0 },
-    { duration: '5분', power: agg.max_5min_watts || 0 },
-    { duration: '10분', power: agg.max_10min_watts || 0 },
-    { duration: '20분', power: m20 },
-    { duration: '40분', power: agg.max_40min_watts || 0 },
-    { duration: '60분', power: m60 || (m20 > 0 ? Math.round(m20 * 0.95) : 0) }
-  ];
-  return base.filter(function(r) { return r.power > 0; }).map(function(r) { return { duration: r.duration, name: r.duration, power: Math.round(r.power) }; });
+  var fieldMap = { max: 'max_watts', '1min': 'max_1min_watts', '5min': 'max_5min_watts', '10min': 'max_10min_watts', '20min': 'max_20min_watts', '40min': 'max_40min_watts', '60min': 'max_60min_watts' };
+
+  return CURVE_DURATIONS.map(function(d) {
+    var myPower = Number(agg[fieldMap[d.apiKey]]) || 0;
+    if (d.apiKey === '60min' && !myPower && m20 > 0) myPower = Math.round(m20 * 0.95);
+    var g = goals[d.apiKey] || {};
+    var targetPower = g.longTerm || 0;
+    if (!targetPower && (d.apiKey === '10min' || d.apiKey === '40min')) {
+      var g5 = goals['5min'] || {};
+      var g20 = goals['20min'] || {};
+      var g40 = goals['40min'] || {};
+      var g60 = goals['60min'] || {};
+      if (d.apiKey === '10min') targetPower = Math.round(((g5.longTerm || 0) + (g20.longTerm || 0)) / 2);
+      if (d.apiKey === '40min') targetPower = Math.round(((g20.longTerm || 0) + (g60.longTerm || 0)) / 2);
+    }
+    return { duration: d.key, name: d.key, power: Math.round(myPower), targetPower: targetPower };
+  }).filter(function(r) { return r.power > 0 || r.targetPower > 0; });
 }
 
 function getDateStr(offsetDays) {
@@ -202,6 +223,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var Tooltip = Recharts && Recharts.Tooltip;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
+  var Legend = Recharts && Recharts.Legend;
   var cid = nextChartId();
   var data = powerCurveData || [];
 
@@ -218,12 +240,13 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
   }
 
   var formatW = function(v) { return (v != null && !isNaN(v) ? Math.round(v) + 'W' : '-'); };
+  var hasTarget = data.some(function(r) { return (r.targetPower || 0) > 0; });
 
   return (
     <DashboardCard>
       <div className="mb-2">
         <h3 className="text-sm font-semibold text-gray-800">ALLR - 전 구간 파워 커브</h3>
-        <p className="text-xs text-gray-500 mt-0.5">5분~60분 구간의 완만한 유지 여부 확인. 최근 1개월 Overall Power Curve (단위: W)</p>
+        <p className="text-xs text-gray-500 mt-0.5">5분~60분 구간의 완만한 유지 여부 확인. 목표: 카테고리 내 ALLR 최고 사용자 (단위: W)</p>
       </div>
       <div className="h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -233,12 +256,23 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
                 <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4} />
                 <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
               </linearGradient>
+              <linearGradient id={cid + '-fillTarget'} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#EF4444" stopOpacity={0.12} />
+                <stop offset="100%" stopColor="#EF4444" stopOpacity={0} />
+              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="duration" tick={{ fontSize: 11 }} stroke="#6b7280" />
             <YAxis tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
             <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb' }} formatter={function(v) { return [formatW(v), '']; }} labelFormatter={function(l) { return '시간: ' + l; }} />
-            <Area type="monotone" dataKey="power" stroke="#3B82F6" fill={'url(#' + cid + '-fillCurve)'} strokeWidth={2.5} name="파워" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls />
+            {hasTarget && (
+              <Area type="monotone" dataKey="targetPower" stroke="rgba(239,68,68,0.5)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillTarget)'} strokeWidth={2} name="목표 (ALLR 최고)" dot={false} connectNulls />
+            )}
+            <Legend wrapperStyle={{ fontSize: 10 }} formatter={function(value) {
+              var colors = { '나의 파워': '#3B82F6', '목표 (ALLR 최고)': 'rgba(239,68,68,0.7)' };
+              return <span style={{ color: colors[value] || '#374151' }}>{value}</span>;
+            }} />
+            <Area type="monotone" dataKey="power" stroke="#3B82F6" fill={'url(#' + cid + '-fillCurve)'} strokeWidth={2.5} name="나의 파워" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -284,7 +318,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
     TTST: buildChartData(weeklyMMP, goals, 'TTST')
   };
 
-  var powerCurveData = buildPowerCurveData(logs, userWeight);
+  var powerCurveData = buildPowerCurveData(logs, goals);
 
   if (loading && Object.keys(goals).length === 0) {
     return (
