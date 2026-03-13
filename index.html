@@ -2314,6 +2314,25 @@
       <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
     </div>
 
+    <!-- 월간 훈련 이력 미니 달력 (프로필 선택 화면) -->
+    <div class="card mini-calendar-profile-card" style="margin-top: 16px;">
+      <div class="mini-calendar-container">
+        <div class="mini-calendar-header">
+          <button class="mini-calendar-nav-btn" onclick="typeof miniCalendarNavigate==='function'&&miniCalendarNavigate('prev')" aria-label="이전 달">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="mini-calendar-month-year" id="miniCalendarMonthYear">-</span>
+          <button class="mini-calendar-nav-btn" onclick="typeof miniCalendarNavigate==='function'&&miniCalendarNavigate('next')" aria-label="다음 달">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+        <div class="mini-calendar-weekdays">
+          <div class="mini-calendar-weekday">일</div><div class="mini-calendar-weekday">월</div><div class="mini-calendar-weekday">화</div><div class="mini-calendar-weekday">수</div><div class="mini-calendar-weekday">목</div><div class="mini-calendar-weekday">금</div><div class="mini-calendar-weekday">토</div>
+        </div>
+        <div class="mini-calendar-grid" id="miniCalendarGrid"></div>
+      </div>
+    </div>
+
       <!-- 신규 사용자 추가 카드 비활성화 -->
       <div class="card hidden" id="cardAddUser" aria-hidden="true">
         <div class="text-center">
@@ -13033,7 +13052,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     window.callGeminiCoach = callGeminiCoach;
   </script>
   
-  <!-- 라이더 파워 프로필 세부 트렌드 차트 (훈련 트렌드 위 배치) -->
+  <!-- STELVIO 파워 매트릭스 (Power Matrix) 차트 (훈련 트렌드 위 배치) -->
   <script src="assets/js/RiderPowerProfileTrendCharts.jsx" type="text/babel"></script>
   
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
@@ -13355,7 +13374,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // 라이더 파워 프로필 레이더 차트 + AI 코치 코멘트 (Training Trend 위 배치)
+    // STELVIO 헥사곤 레이더 차트 + AI 코치 코멘트 (Training Trend 위 배치)
     function RiderDashboardProfile({ userProfile }) {
       const [riderLogs, setRiderLogs] = useState([]);
       const [riderLoading, setRiderLoading] = useState(true);
@@ -13482,7 +13501,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       
       if (!userProfile || !userProfile.weight || userProfile.weight <= 0) {
         return (
-          <DashboardCard title="라이더 파워 프로필">
+          <DashboardCard title="STELVIO 헥사곤 (STELVIO Hexagon)">
             <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
               체중 정보를 입력해 주세요
             </div>
@@ -13492,7 +13511,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       
       if (riderLoading) {
         return (
-          <DashboardCard title="라이더 파워 프로필">
+          <DashboardCard title="STELVIO 헥사곤 (STELVIO Hexagon)">
             <div className="h-[220px] flex items-center justify-center">
               <div className="text-center">
                 <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
@@ -13505,7 +13524,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       
       return (
         <div className="space-y-4">
-          <DashboardCard title="라이더 파워 프로필">
+          <DashboardCard title="STELVIO 헥사곤 (STELVIO Hexagon)">
             {RadarChart ? (
               <div className="h-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
