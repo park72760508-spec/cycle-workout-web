@@ -1231,7 +1231,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 화면 95% 이내, 스크롤 없이 배치 */
 .my-career-grid-8 {
-  --my-career-cell: min(calc(((100vw - 80px - 3.75px) / 2) * 0.9), calc(((95vh - 160px - 11.25px) / 4) * 0.9));
+  --my-career-cell: min(calc(((100vw - 80px - 3.75px) / 2) * 0.8), calc(((95vh - 160px - 11.25px) / 4) * 0.8));
   display: grid;
   grid-template-columns: repeat(2, var(--my-career-cell));
   grid-template-rows: repeat(4, var(--my-career-cell));
