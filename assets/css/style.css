@@ -989,17 +989,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
-#myCareerScreen .basecamp-btn span {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  color: #1A5276 !important;
-  text-shadow: none !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  position: relative;
-  z-index: 2;
-}
+/* My Career 8버튼은 라벨 없음 - basecamp-btn-career span { display:none } 적용 */
 
 /* MY CAREER 화면 내부 버튼 오버레이 조정 (텍스트 가독성 향상) */
 #myCareerScreen .basecamp-btn-career::before {
@@ -1232,7 +1222,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-shrink: 0;
 }
 
-/* My Career: 블럭(connection-device-section) - 그리드 중앙 정렬 */
+/* My Career: Choose Your Path와 동일한 배치·비율 로직 (basecamp-device-section 좌우 5%, 90% 비율, gap 3.75px) */
 #myCareerScreen .connection-device-section.basecamp-device-section {
   margin-bottom: 0 !important;
   padding: 4px 15px 4px 15px !important;
@@ -1245,15 +1235,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overflow: visible;
 }
 
-/* My Career 8버튼 그리드 - 블럭 좌우 5% 여백, 버튼 90% 범위, 간격 유지(열 3.75px, 행 10px) */
+/* My Career 8버튼 그리드 - Choose Your Path와 동일: 90% 비율, gap 3.75px, cell=(90%-3.75px)/2 */
 #myCareerScreen .connection-device-section.basecamp-device-section .my-career-grid-8 {
-  --my-career-gap-row: 10px;
   --my-career-cell: calc(((100vw - 80px) * 0.9 - 3.75px) / 2);
   display: grid !important;
   grid-template-columns: repeat(2, var(--my-career-cell)) !important;
   grid-template-rows: repeat(4, var(--my-career-cell)) !important;
-  column-gap: 3.75px !important;
-  row-gap: var(--my-career-gap-row) !important;
+  gap: 3.75px !important;
   width: 90% !important;
   max-width: 90% !important;
   margin: 0 5% !important;
