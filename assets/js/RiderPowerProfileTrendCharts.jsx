@@ -11,14 +11,6 @@
 const { useState, useEffect } = React;
 
 const RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
-const DURATION_MAP = {
-  TSPT: 'max',
-  RSPT: '1min',
-  PCH: '5min',
-  CLMB: '20min',
-  TTST: '60min'
-};
-
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
 let _chartId = 0;
 function nextChartId() { return 'pp-' + (++_chartId); }
@@ -82,38 +74,6 @@ async function fetchRankingGoals(userId, userWeight) {
     }
   }
   return goals;
-}
-
-/**
- * 주간 MMP + 랭킹 목표로 차트 데이터 생성
- * 1등일 때: longTermGoal=null, shortTermGoal=나의4주최고*1.03
- */
-function buildChartData(weeklyMMP, goals, durationKey) {
-  var apiKey = DURATION_MAP[durationKey];
-  var fieldMap = { max: 'max_watts', '1min': 'max_1min_watts', '5min': 'max_5min_watts', '20min': 'max_20min_watts', '60min': 'max_60min_watts' };
-  var field = fieldMap[apiKey] || 'max_watts';
-  var g = goals[apiKey] || {};
-  var longTerm = g.longTerm;
-  var shortTerm = g.shortTerm || 0;
-  var isFirst = g.isFirst;
-
-  var rows = (weeklyMMP || []).map(function(row) {
-    var myPower = Number(row[field]) || 0;
-    return { week: row.week, name: row.name, myPower: myPower };
-  });
-  var myMax = rows.length > 0 ? Math.max.apply(null, rows.map(function(r) { return r.myPower; })) : 0;
-  if (isFirst && myMax > 0) {
-    shortTerm = Math.round(myMax * 1.03);
-  }
-  return rows.map(function(row) {
-    return {
-      week: row.week,
-      name: row.name,
-      myPower: row.myPower,
-      longTermGoal: longTerm,
-      shortTermGoal: shortTerm
-    };
-  });
 }
 
 /** 파워 커브 X축 순서 */
@@ -180,69 +140,6 @@ function buildMonthPowerCurveData(weeklyMMP) {
   });
 }
 
-// ========== 주간 트렌드 차트 (TSPT, RSPT, PCH, CLMB, TTST) ==========
-function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
-  var Recharts = window.Recharts;
-  var AreaChart = Recharts && Recharts.AreaChart;
-  var Area = Recharts && Recharts.Area;
-  var XAxis = Recharts && Recharts.XAxis;
-  var YAxis = Recharts && Recharts.YAxis;
-  var CartesianGrid = Recharts && Recharts.CartesianGrid;
-  var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
-  var LabelList = Recharts && Recharts.LabelList;
-  var cid = nextChartId();
-  var labelFontSize = 10;
-
-  if (!Recharts || !data || data.length === 0) {
-    return (
-      <DashboardCard>
-        <div className="mb-1 min-w-0">
-          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>{title}</h3>
-        </div>
-        <div className="h-[min(140px,31.5vw)] sm:h-[140px] flex items-center justify-center text-gray-400 text-sm">
-          데이터 없음
-        </div>
-      </DashboardCard>
-    );
-  }
-
-  var hasLongTerm = data.some(function(r) { return (r.longTermGoal || 0) > 0; });
-
-  return (
-    <DashboardCard>
-      <div className="mb-1 min-w-0">
-        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>{title}</h3>
-      </div>
-      <div className="h-[min(140px,31.5vw)] sm:h-[140px] -mx-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={cid + '-fillMy'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4} />
-                <stop offset="100%" stopColor="#3B82F6" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fillLong'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#EF4444" stopOpacity={0.12} />
-                <stop offset="100%" stopColor="#EF4444" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fillShort'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#F97316" stopOpacity={0.08} />
-                <stop offset="100%" stopColor="#F97316" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
-            <Area type="monotone" dataKey="shortTermGoal" stroke="rgba(249,115,22,0.6)" fill={'url(#' + cid + '-fillShort)'} strokeWidth={2} name="단기 목표 (1개월)" dot={false} connectNulls />
-            {hasLongTerm && <Area type="monotone" dataKey="longTermGoal" stroke="rgba(239,68,68,0.6)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillLong)'} strokeWidth={2} name="장기 목표 (1년)" dot={false} connectNulls />}
-            <Area type="monotone" dataKey="myPower" stroke="#3B82F6" fill={'url(#' + cid + '-fillMy)'} strokeWidth={2.5} name="나의 달성도" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls>{LabelList ? <LabelList dataKey="myPower" position="top" fill="rgba(59,130,246,0.7)" fontSize={labelFontSize} /> : null}</Area>
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </DashboardCard>
-  );
-}
-
 // ========== 파워 커브 차트 (ALLR - Duration 기반) ==========
 function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) {
   var Recharts = window.Recharts;
@@ -290,7 +187,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) 
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="duration" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
             {hasTarget && (
               <Area type="monotone" dataKey="targetPower" stroke="rgba(239,68,68,0.5)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillTarget)'} strokeWidth={2} name="목표 (ALLR 최고)" dot={false} connectNulls />
             )}
@@ -361,7 +258,7 @@ function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidt
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
             {Tooltip ? <Tooltip formatter={function(v) { return v + ' W'; }} contentStyle={{ fontSize: 12 }} labelFormatter={function(label) { return label; }} /> : null}
             <Area type="monotone" dataKey="power1min" stroke="#ef4444" fill={'url(#' + cid + '-fill1min)'} strokeWidth={2} name="1분 파워" dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 1 }} connectNulls />
             <Area type="monotone" dataKey="power5min" stroke="#f97316" fill={'url(#' + cid + '-fill5min)'} strokeWidth={2} name="5분 파워" dot={{ r: 3, fill: '#f97316', stroke: '#fff', strokeWidth: 1 }} connectNulls />
@@ -401,16 +298,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   }, [userId, userWeight]);
 
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
-  var getWeeklyMMP = window.getWeeklyMMPFromLogs;
-  var weeklyMMP = getWeeklyMMP ? getWeeklyMMP(logs, 4) : [];
-
-  var chartData = {
-    RSPT: buildChartData(weeklyMMP, goals, 'RSPT'),
-    PCH: buildChartData(weeklyMMP, goals, 'PCH'),
-    CLMB: buildChartData(weeklyMMP, goals, 'CLMB'),
-    TTST: buildChartData(weeklyMMP, goals, 'TTST')
-  };
-
   var powerCurveData = buildPowerCurveData(logs, goals);
   var getIntervalMMP = window.getIntervalMMPFromLogs;
   var intervalMMP = getIntervalMMP ? getIntervalMMP(logs, 30, 7) : [];
@@ -428,17 +315,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
         <div className="space-y-4">
           <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
           <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          {[1, 2, 3, 4].map(function(i) {
-            return (
-              <Card key={i}>
-                <div className="h-[200px] flex items-center justify-center">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              </Card>
-            );
-          })}
-          </div>
         </div>
       </div>
     );
@@ -462,18 +338,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
         <div className="min-w-0 overflow-hidden col-span-2">
           <PowerProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} isFullWidth />
         </div>
-        <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="1분 파워(RSPT)" data={chartData.RSPT} DashboardCard={Card} />
-        </div>
-        <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="5분 파워(PCH)" data={chartData.PCH} DashboardCard={Card} />
-        </div>
-        <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="20분 파워(CLMB)" data={chartData.CLMB} DashboardCard={Card} />
-        </div>
-        <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="60분 파워(TTST)" data={chartData.TTST} DashboardCard={Card} />
-        </div>
       </div>
     </div>
   );
@@ -481,7 +345,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
 
 if (typeof window !== 'undefined') {
   window.RiderPowerProfileTrendCharts = RiderPowerProfileTrendCharts;
-  window.PowerProfileWeekTrendChart = PowerProfileWeekTrendChart;
   window.PowerProfileCurveChart = PowerProfileCurveChart;
   window.PowerProfileMonthCurveChart = PowerProfileMonthCurveChart;
 }
