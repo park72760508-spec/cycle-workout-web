@@ -1245,7 +1245,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important;
 }
 
-/* My Career 8버튼 그리드 - basecamp-device-section 좌우 5% 여백 유지, 8개 버튼 90% 비율 적용, 간격 유지(열 3.75px, 행 10px) */
+/* My Career 8버튼 그리드 - 블럭 좌우 5% 여백, 버튼 90% 범위, 간격 유지(열 3.75px, 행 10px) */
 #myCareerScreen .connection-device-section.basecamp-device-section .my-career-grid-8 {
   --my-career-gap-row: 10px;
   --my-career-cell: calc(((100vw - 80px) * 0.9 - 3.75px) / 2);
@@ -1262,7 +1262,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 
-#myCareerScreen .connection-device-section {
+#myCareerScreen .connection-device-section.basecamp-device-section {
   overflow: visible;
 }
 
