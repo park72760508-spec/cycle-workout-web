@@ -525,6 +525,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-shadow: 0 25px 80px rgba(34, 197, 94, 0.2);
   position: relative;
   z-index: 1;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* ========== 센서 연결 (Device Settings) 화면 ========== */
@@ -760,6 +762,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #basecampScreen .connection-form-container {
   position: relative;
   z-index: 1;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* 베이스캠프 헤더 숨김 (배경 이미지로 대체) */
@@ -782,10 +786,47 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   border-radius: 12px;
   padding: 15px;
   margin-bottom: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Choose Your Path: 버튼 그리드 반응형 (화면 비율에 따라 크기 조정, 휴대폰 화면 벗어나지 않음) */
+#basecampScreen .connection-device-section .grid-2.mb-15 {
+  width: 100% !important;
+  max-width: min(100%, calc(95vh - 280px)) !important;
+  aspect-ratio: 1 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+  gap: 3.75px !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
+}
+
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  aspect-ratio: 1 !important;
+  box-sizing: border-box !important;
+}
+
+/* MY CAREER 버튼 = DEVICE SETTINGS 버튼과 동일한 크기·반응형 적용 (Choose Your Path) */
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-career,
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  aspect-ratio: 1 !important;
+  box-sizing: border-box !important;
 }
 
 /* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
@@ -1169,11 +1210,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #myCareerScreen .connection-form-container {
   position: relative;
   z-index: 1;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Manage Your Career 화면 하단 여백 조정 */
 #myCareerScreen .connection-form-card {
   padding-bottom: 8px !important; /* 하단 여백 최소화 */
+  max-height: 95vh !important;
+  overflow: hidden;
 }
 
 #myCareerScreen .connection-device-section {
@@ -1184,14 +1229,28 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
 }
 
-/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) */
+/* My Career 8버튼 그리드 (2열 x 4줄, 정사각형) - 화면 95% 이내, 스크롤 없이 배치 */
 .my-career-grid-8 {
+  --my-career-cell: min(calc((100vw - 80px - 3.75px) / 2), calc((95vh - 160px - 11.25px) / 4));
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, var(--my-career-cell));
+  grid-template-rows: repeat(4, var(--my-career-cell));
   gap: 3.75px;
+  max-width: 100%;
+  width: fit-content;
+  margin: 0 auto;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
+#myCareerScreen .connection-device-section {
+  overflow: visible;
+}
+
+
 .basecamp-btn-career {
+  width: 100% !important;
+  height: 100% !important;
   aspect-ratio: 1;
   min-height: 0;
   padding: 0 !important;
@@ -1199,6 +1258,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background-position: center center !important;
   background-repeat: no-repeat !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  box-sizing: border-box !important;
 }
 
 .basecamp-btn-career span {
