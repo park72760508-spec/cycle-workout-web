@@ -220,8 +220,8 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#6b7280" />
             <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
-            <Area type="monotone" dataKey="shortTermGoal" stroke="rgba(249,115,22,0.6)" fill={'url(#' + cid + '-fillShort)'} strokeWidth={2} name="단기 목표" dot={false} connectNulls />
-            {hasLongTerm && <Area type="monotone" dataKey="longTermGoal" stroke="rgba(239,68,68,0.6)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillLong)'} strokeWidth={2} name="장기 목표" dot={false} connectNulls />}
+            <Area type="monotone" dataKey="shortTermGoal" stroke="rgba(249,115,22,0.6)" fill={'url(#' + cid + '-fillShort)'} strokeWidth={2} name="단기 목표 (1개월)" dot={false} connectNulls />
+            {hasLongTerm && <Area type="monotone" dataKey="longTermGoal" stroke="rgba(239,68,68,0.6)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillLong)'} strokeWidth={2} name="장기 목표 (1년)" dot={false} connectNulls />}
             <Area type="monotone" dataKey="myPower" stroke="#3B82F6" fill={'url(#' + cid + '-fillMy)'} strokeWidth={2.5} name="나의 달성도" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls>{LabelList ? <LabelList dataKey="myPower" position="top" fill="rgba(59,130,246,0.7)" fontSize={labelFontSize} /> : null}</Area>
           </AreaChart>
         </ResponsiveContainer>
@@ -231,7 +231,7 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
 }
 
 // ========== 파워 커브 차트 (ALLR - Duration 기반) ==========
-function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
+function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) {
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
   var Area = Recharts && Recharts.Area;
@@ -248,9 +248,9 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>ALLR - 전 구간 파워 커브</h3>
+          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>전 구간 파워 커브(ALLR)</h3>
         </div>
-        <div className="h-[min(140px,31.5vw)] sm:h-[140px] flex items-center justify-center text-gray-400 text-sm">데이터 없음</div>
+        <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
     );
   }
@@ -260,9 +260,9 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>ALLR - 전 구간 파워 커브</h3>
+        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>전 구간 파워 커브(ALLR)</h3>
       </div>
-      <div className="h-[min(140px,31.5vw)] sm:h-[140px] -mx-2">
+      <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>
@@ -320,7 +320,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   var weeklyMMP = getWeeklyMMP ? getWeeklyMMP(logs, 4) : [];
 
   var chartData = {
-    TSPT: buildChartData(weeklyMMP, goals, 'TSPT'),
     RSPT: buildChartData(weeklyMMP, goals, 'RSPT'),
     PCH: buildChartData(weeklyMMP, goals, 'PCH'),
     CLMB: buildChartData(weeklyMMP, goals, 'CLMB'),
@@ -335,11 +334,13 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
         <h2 className="text-base font-semibold text-gray-800 px-1">파워 매트릭스 (Power Matrix)</h2>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (앞선 순위자)</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1년)</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (1개월)</span>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          {[1, 2, 3, 4, 5, 6].map(function(i) {
+        <div className="space-y-4">
+          <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          {[1, 2, 3, 4].map(function(i) {
             return (
               <Card key={i}>
                 <div className="h-[200px] flex items-center justify-center">
@@ -348,6 +349,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
               </Card>
             );
           })}
+          </div>
         </div>
       </div>
     );
@@ -361,27 +363,24 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
       </h2>
       <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (앞선 순위자)</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1년)</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (1개월)</span>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="min-w-0 overflow-hidden">
-          <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} />
+        <div className="min-w-0 overflow-hidden col-span-2">
+          <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} isFullWidth />
         </div>
         <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="TSPT - Max 파워 (1~5초)" data={chartData.TSPT} DashboardCard={Card} />
+          <PowerProfileWeekTrendChart title="1분 파워(RSPT)" data={chartData.RSPT} DashboardCard={Card} />
         </div>
         <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="RSPT - 1분 파워" data={chartData.RSPT} DashboardCard={Card} />
+          <PowerProfileWeekTrendChart title="5분 파워(PCH)" data={chartData.PCH} DashboardCard={Card} />
         </div>
         <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="PCH - 5분 파워" data={chartData.PCH} DashboardCard={Card} />
+          <PowerProfileWeekTrendChart title="20분 파워(CLMB)" data={chartData.CLMB} DashboardCard={Card} />
         </div>
         <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="CLMB - 20분 파워" data={chartData.CLMB} DashboardCard={Card} />
-        </div>
-        <div className="min-w-0 overflow-hidden">
-          <PowerProfileWeekTrendChart title="TTST - 60분 파워" data={chartData.TTST} DashboardCard={Card} />
+          <PowerProfileWeekTrendChart title="60분 파워(TTST)" data={chartData.TTST} DashboardCard={Card} />
         </div>
       </div>
     </div>
