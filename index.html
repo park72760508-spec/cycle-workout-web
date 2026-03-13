@@ -1906,10 +1906,13 @@
                 <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
               </div>
               <div id="authBarRight" style="display: none; align-items: center; justify-content: space-between; width: 100%;">
-                <span id="authBarWelcome" style="flex: 1; font-size: 17px; font-weight: 600; color: #0369a1;">Welcome 사용자명님</span>
-                <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
-                  <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
-                </button>
+                <div style="flex: 1;"></div>
+                <span id="authBarWelcome" style="flex: 0; text-align: center; font-size: 17px; font-weight: 600; color: #0369a1;">Welcome 사용자명님</span>
+                <div style="flex: 1; display: flex; justify-content: flex-end;">
+                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
+                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
