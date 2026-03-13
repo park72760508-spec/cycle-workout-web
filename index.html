@@ -13077,6 +13077,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   
   <!-- 파워 매트릭스 (Power Matrix) 차트 (훈련 트렌드 위 배치) -->
   <script src="assets/js/RiderPowerProfileTrendCharts.jsx" type="text/babel"></script>
+  <!-- 심박 매트릭스 (Heart Rate Matrix) 차트 (훈련 트렌드 위 배치) -->
+  <script src="assets/js/RiderHeartRateProfileTrendCharts.jsx" type="text/babel"></script>
   
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
   <script type="text/babel">
@@ -15343,6 +15345,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <RiderDashboardProfile userProfile={userProfile} />
             
             {window.RiderPowerProfileTrendCharts && React.createElement(window.RiderPowerProfileTrendCharts, { DashboardCard, userProfile, recentLogs })}
+            
+            {window.RiderHeartRateProfileTrendCharts && React.createElement(window.RiderHeartRateProfileTrendCharts, { DashboardCard, userProfile, recentLogs })}
             
             {logsLoading ? (
               <DashboardCard title="훈련 트렌드 (최근 1개월)">
