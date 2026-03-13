@@ -119,14 +119,14 @@ function RiderDashboardProfile({ userProfile, DashboardCard }) {
 
   if (!userProfile?.weight || userProfile.weight <= 0) {
     return (
-      <DashboardCard title="라이더 파워 프로필">
+      <DashboardCard title="STELVIO 헥사곤 (STELVIO Hexagon)">
         <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">체중 정보를 입력해 주세요</div>
       </DashboardCard>
     );
   }
   if (riderLoading) {
     return (
-      <DashboardCard title="라이더 파워 프로필">
+      <DashboardCard title="STELVIO 헥사곤 (STELVIO Hexagon)">
         <div className="h-[220px] flex items-center justify-center">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
@@ -138,7 +138,7 @@ function RiderDashboardProfile({ userProfile, DashboardCard }) {
   }
   return (
     <div className="space-y-4">
-      <DashboardCard title="라이더 파워 프로필">
+      <DashboardCard title="STELVIO 헥사곤 (STELVIO Hexagon)">
         {RadarChart ? (
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">

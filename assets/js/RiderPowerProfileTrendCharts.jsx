@@ -1,5 +1,5 @@
 /**
- * RiderPowerProfileTrendCharts - 라이더 파워 프로필 세부 트렌드 분석 그래프
+ * RiderPowerProfileTrendCharts - STELVIO 파워 매트릭스 (Power Matrix) 분석 그래프
  * '훈련 트렌드 (최근 1개월)' 섹션 바로 위에 배치
  * 6개 그래프: TSPT, RSPT, PCH, CLMB, TTST, ALLR
  * 목표값: STELVIO 랭킹 보드 카테고리별 1등(장기), 나의 바로 앞선 경쟁자(단기)
@@ -143,14 +143,19 @@ function buildPowerCurveData(logs, goals) {
     var myPower = Number(agg[fieldMap[d.apiKey]]) || 0;
     if (d.apiKey === '60min' && !myPower && m20 > 0) myPower = Math.round(m20 * 0.95);
     var g = goals[d.apiKey] || {};
-    var targetPower = g.longTerm || 0;
-    if (!targetPower && (d.apiKey === '10min' || d.apiKey === '40min')) {
-      var g5 = goals['5min'] || {};
-      var g20 = goals['20min'] || {};
-      var g40 = goals['40min'] || {};
-      var g60 = goals['60min'] || {};
-      if (d.apiKey === '10min') targetPower = Math.round(((g5.longTerm || 0) + (g20.longTerm || 0)) / 2);
-      if (d.apiKey === '40min') targetPower = Math.round(((g20.longTerm || 0) + (g60.longTerm || 0)) / 2);
+    var targetPower = 0;
+    if (g.isFirst && myPower > 0) {
+      targetPower = Math.round(myPower * 1.03);
+    } else {
+      targetPower = g.longTerm || 0;
+      if (!targetPower && (d.apiKey === '10min' || d.apiKey === '40min')) {
+        var g5 = goals['5min'] || {};
+        var g20 = goals['20min'] || {};
+        var g40 = goals['40min'] || {};
+        var g60 = goals['60min'] || {};
+        if (d.apiKey === '10min') targetPower = Math.round(((g5.longTerm || 0) + (g20.longTerm || 0)) / 2);
+        if (d.apiKey === '40min') targetPower = Math.round(((g20.longTerm || 0) + (g60.longTerm || 0)) / 2);
+      }
     }
     return { duration: d.key, name: d.key, power: Math.round(myPower), targetPower: targetPower };
   }).filter(function(r) { return r.power > 0 || r.targetPower > 0; });
@@ -255,7 +260,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
     <DashboardCard>
       <div className="mb-2">
         <h3 className="text-sm font-semibold text-gray-800">ALLR - 전 구간 파워 커브</h3>
-        <p className="text-xs text-gray-500 mt-0.5">5분~60분 구간의 완만한 유지 여부 확인. 목표: 카테고리 내 ALLR 최고 사용자 (단위: W)</p>
+        <p className="text-xs text-gray-500 mt-0.5">5분~60분 구간의 완만한 유지 여부 확인. 목표: 카테고리 내 ALLR 최고 사용자 (1위 구간은 본인+3%) (단위: W)</p>
       </div>
       <div className="h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -327,7 +332,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   if (loading && Object.keys(goals).length === 0) {
     return (
       <div className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-800 px-1">라이더 파워 프로필 세부 트렌드</h2>
+        <h2 className="text-base font-semibold text-gray-800 px-1">STELVIO 파워 매트릭스 (Power Matrix)</h2>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
@@ -352,7 +357,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold text-gray-800 px-1">
-        라이더 파워 프로필 세부 트렌드
+        STELVIO 파워 매트릭스 (Power Matrix)
         {userWeight > 0 ? <span className="text-xs font-normal text-gray-500 ml-2">(체중 {userWeight}kg 기준)</span> : null}
       </h2>
       <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
