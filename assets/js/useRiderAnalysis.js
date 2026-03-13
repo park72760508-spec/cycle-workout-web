@@ -71,8 +71,7 @@ function getWeeklyMMPFromLogs(logs, numWeeks) {
     const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
     const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
     const agg = aggregateMMPFromLogs(logs, startStr, endStr);
-    const fmt = (d) => (d.getMonth() + 1) + '/' + d.getDate();
-    const name = fmt(start) + '~' + fmt(end);
+    const name = (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       week: numWeeks - w,
       name: name,
