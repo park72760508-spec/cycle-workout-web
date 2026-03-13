@@ -366,6 +366,9 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="min-w-0">
+          <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} />
+        </div>
+        <div className="min-w-0">
           <PowerProfileWeekTrendChart title="TSPT - Max 파워 (1~5초)" description="순수한 신경근 파워와 최대 근력이 폭발하는 지점" data={chartData.TSPT} DashboardCard={Card} />
         </div>
         <div className="min-w-0">
@@ -379,9 +382,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
         </div>
         <div className="min-w-0">
           <PowerProfileWeekTrendChart title="TTST - 60분 파워" description="순수 젖산 역치(FTP) 구간, 1시간 꾸준한 파워 유지 능력" data={chartData.TTST} DashboardCard={Card} />
-        </div>
-        <div className="min-w-0">
-          <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} />
         </div>
       </div>
     </div>
