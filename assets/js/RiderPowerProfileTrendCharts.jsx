@@ -1,5 +1,5 @@
 /**
- * RiderPowerProfileTrendCharts - STELVIO 파워 매트릭스 (Power Matrix) 분석 그래프
+ * RiderPowerProfileTrendCharts - 파워 매트릭스 (Power Matrix) 분석 그래프
  * '훈련 트렌드 (최근 1개월)' 섹션 바로 위에 배치
  * 6개 그래프: TSPT, RSPT, PCH, CLMB, TTST, ALLR
  * 목표값: STELVIO 랭킹 보드 카테고리별 1등(장기), 나의 바로 앞선 경쟁자(단기)
@@ -332,12 +332,11 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   if (loading && Object.keys(goals).length === 0) {
     return (
       <div className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-800 px-1">STELVIO 파워 매트릭스 (Power Matrix)</h2>
+        <h2 className="text-base font-semibold text-gray-800 px-1">파워 매트릭스 (Power Matrix)</h2>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (앞선 순위자)</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.5 }} />목표 ALLR</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[1, 2, 3, 4, 5, 6].map(function(i) {
@@ -357,14 +356,13 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   return (
     <div className="space-y-4">
       <h2 className="text-base font-semibold text-gray-800 px-1">
-        STELVIO 파워 매트릭스 (Power Matrix)
+        파워 매트릭스 (Power Matrix)
         {userWeight > 0 ? <span className="text-xs font-normal text-gray-500 ml-2">(체중 {userWeight}kg 기준)</span> : null}
       </h2>
       <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />장기 목표 (1등)</span>
         <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (앞선 순위자)</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.5 }} />목표 ALLR</span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="min-w-0">
