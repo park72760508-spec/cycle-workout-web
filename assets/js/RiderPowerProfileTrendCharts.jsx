@@ -167,6 +167,19 @@ function getDateStr(offsetDays) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+/** 최근 1개월 주별 파워 데이터 (1분/5분/20분/60분) - 4선 그래프용 */
+function buildMonthPowerCurveData(weeklyMMP) {
+  return (weeklyMMP || []).map(function(row) {
+    return {
+      name: row.name,
+      power1min: Number(row.max_1min_watts) || 0,
+      power5min: Number(row.max_5min_watts) || 0,
+      power20min: Number(row.max_20min_watts) || 0,
+      power60min: Number(row.max_60min_watts) || 0
+    };
+  });
+}
+
 // ========== 주간 트렌드 차트 (TSPT, RSPT, PCH, CLMB, TTST) ==========
 function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
   var Recharts = window.Recharts;
@@ -289,6 +302,78 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) 
   );
 }
 
+// ========== 최근 1개월 파워 그래프 (1분/5분/20분/60분 4선) ==========
+function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidth }) {
+  var Recharts = window.Recharts;
+  var AreaChart = Recharts && Recharts.AreaChart;
+  var Area = Recharts && Recharts.Area;
+  var XAxis = Recharts && Recharts.XAxis;
+  var YAxis = Recharts && Recharts.YAxis;
+  var CartesianGrid = Recharts && Recharts.CartesianGrid;
+  var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
+  var Tooltip = Recharts && Recharts.Tooltip;
+  var cid = nextChartId();
+  var data = monthCurveData || [];
+  var hasData = data.length > 0 && data.some(function(r) { return (r.power1min || r.power5min || r.power20min || r.power60min) > 0; });
+
+  if (!Recharts || !hasData) {
+    return (
+      <DashboardCard>
+        <div className="mb-1 min-w-0">
+          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>최근 1개월 파워 그래프</h3>
+        </div>
+        <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
+      </DashboardCard>
+    );
+  }
+
+  return (
+    <DashboardCard>
+      <div className="mb-1 min-w-0">
+        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>최근 1개월 파워 그래프</h3>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />1분</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f97316' }} />5분</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#3b82f6' }} />20분</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />60분</span>
+        </div>
+      </div>
+      <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={cid + '-fill1min'} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={cid + '-fill5min'} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={cid + '-fill20min'} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={cid + '-fill60min'} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
+            <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            {Tooltip ? <Tooltip formatter={function(v) { return v + ' W'; }} contentStyle={{ fontSize: 12 }} labelFormatter={function(label) { return label; }} /> : null}
+            <Area type="monotone" dataKey="power1min" stroke="#ef4444" fill={'url(#' + cid + '-fill1min)'} strokeWidth={2} name="1분 파워" dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 1 }} connectNulls />
+            <Area type="monotone" dataKey="power5min" stroke="#f97316" fill={'url(#' + cid + '-fill5min)'} strokeWidth={2} name="5분 파워" dot={{ r: 3, fill: '#f97316', stroke: '#fff', strokeWidth: 1 }} connectNulls />
+            <Area type="monotone" dataKey="power20min" stroke="#3b82f6" fill={'url(#' + cid + '-fill20min)'} strokeWidth={2} name="20분 파워" dot={{ r: 3, fill: '#3b82f6', stroke: '#fff', strokeWidth: 1 }} connectNulls />
+            <Area type="monotone" dataKey="power60min" stroke="#22c55e" fill={'url(#' + cid + '-fill60min)'} strokeWidth={2} name="60분 파워" dot={{ r: 3, fill: '#22c55e', stroke: '#fff', strokeWidth: 1 }} connectNulls />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </DashboardCard>
+  );
+}
+
 // ========== 메인 컴포넌트 ==========
 function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }) {
   var Card = DashboardCard || function(props) { return <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">{props.children}</div>; };
@@ -327,6 +412,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   };
 
   var powerCurveData = buildPowerCurveData(logs, goals);
+  var monthCurveData = buildMonthPowerCurveData(weeklyMMP);
 
   if (loading && Object.keys(goals).length === 0) {
     return (
@@ -338,6 +424,7 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-orange-500" style={{ opacity: 0.8 }} />단기 목표 (1개월)</span>
         </div>
         <div className="space-y-4">
+          <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
           <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {[1, 2, 3, 4].map(function(i) {
@@ -370,6 +457,9 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
         <div className="min-w-0 overflow-hidden col-span-2">
           <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} isFullWidth />
         </div>
+        <div className="min-w-0 overflow-hidden col-span-2">
+          <PowerProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} isFullWidth />
+        </div>
         <div className="min-w-0 overflow-hidden">
           <PowerProfileWeekTrendChart title="1분 파워(RSPT)" data={chartData.RSPT} DashboardCard={Card} />
         </div>
@@ -391,4 +481,5 @@ if (typeof window !== 'undefined') {
   window.RiderPowerProfileTrendCharts = RiderPowerProfileTrendCharts;
   window.PowerProfileWeekTrendChart = PowerProfileWeekTrendChart;
   window.PowerProfileCurveChart = PowerProfileCurveChart;
+  window.PowerProfileMonthCurveChart = PowerProfileMonthCurveChart;
 }
