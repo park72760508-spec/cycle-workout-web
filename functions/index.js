@@ -2003,6 +2003,15 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
       changed = true;
     }
   }
+  // max_hr: 훈련 로그의 최대 심박수를 yearly_peaks에 반영 (프로필 선택 화면 등에서 효율적 조회용)
+  const logMaxHr = Number(logData.max_hr) || 0;
+  if (logMaxHr > 0) {
+    const prevMaxHr = Number(current.max_hr) || 0;
+    if (logMaxHr > prevMaxHr) {
+      merged.max_hr = logMaxHr;
+      changed = true;
+    }
+  }
   if (changed) await yearlyRef.set(merged, { merge: true });
 }
 
@@ -2082,24 +2091,34 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
         .where("date", "<=", endStr)
         .get();
       let maxWattsFromLogs = 0;
+      let maxHrFromLogs = 0;
       logsSnap.docs.forEach((doc) => {
         const d = doc.data();
         const w = Number(d[field]) || 0;
         if (w > 0 && validatePeakPowerRecord(durationType, w, weightKg) && w > maxWattsFromLogs) maxWattsFromLogs = w;
+        const hr = Number(d.max_hr) || 0;
+        if (hr > 0 && hr > maxHrFromLogs) maxHrFromLogs = hr;
       });
-      if (maxWattsFromLogs > watts) {
+      const currentMaxHr = yearlySnap.exists ? Number(yearlySnap.data().max_hr) || 0 : 0;
+      const shouldUpdateMaxHr = maxHrFromLogs > currentMaxHr;
+      const powerNeedsCorrection = maxWattsFromLogs > watts;
+      if (powerNeedsCorrection) {
         watts = maxWattsFromLogs;
         wkgVal = Math.round((maxWattsFromLogs / weightKg) * 100) / 100;
-        // yearly_peaks 보정 (향후 조회 시 로그 스캔 불필요)
+      }
+      if (powerNeedsCorrection || shouldUpdateMaxHr) {
+        // yearly_peaks 보정 (향후 조회 시 로그 스캔 불필요, max_hr 포함)
         try {
           const wkgField = field.replace("_watts", "_wkg");
-          await yearlyRef.set({
+          const updateData = {
             year: parseInt(year, 10),
             [field]: watts,
             [wkgField]: wkgVal,
             weight_kg: weightKg,
             updated_at: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
+          };
+          if (shouldUpdateMaxHr) updateData.max_hr = maxHrFromLogs;
+          await yearlyRef.set(updateData, { merge: true });
         } catch (e) {
           console.warn("[getPeakPowerForUser] yearly_peaks 보정 실패:", userId, year, e.message);
         }
