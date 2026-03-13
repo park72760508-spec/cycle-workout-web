@@ -412,7 +412,9 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   };
 
   var powerCurveData = buildPowerCurveData(logs, goals);
-  var monthCurveData = buildMonthPowerCurveData(weeklyMMP);
+  var getIntervalMMP = window.getIntervalMMPFromLogs;
+  var intervalMMP = getIntervalMMP ? getIntervalMMP(logs, 30, 7) : [];
+  var monthCurveData = buildMonthPowerCurveData(intervalMMP);
 
   if (loading && Object.keys(goals).length === 0) {
     return (

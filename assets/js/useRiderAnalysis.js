@@ -86,6 +86,40 @@ function getWeeklyMMPFromLogs(logs, numWeeks) {
 }
 
 /**
+ * 최근 N일간 구간별 MMP 집계 (최근 1개월 파워 그래프용, 7등분 ≈ 3~4일 주기)
+ * @param {Array} logs - 훈련 로그 배열
+ * @param {number} numDays - 총 일수 (기본 30)
+ * @param {number} numIntervals - 구간 수 (기본 7)
+ * @returns {Array<{ name, max_watts, max_1min_watts, max_5min_watts, max_20min_watts, max_60min_watts }>}
+ */
+function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
+  numDays = numDays || 30;
+  numIntervals = numIntervals || 7;
+  const intervalDays = Math.floor(numDays / numIntervals);
+  const today = new Date();
+  const out = [];
+  for (let i = numIntervals - 1; i >= 0; i--) {
+    const end = new Date(today);
+    end.setDate(today.getDate() - i * intervalDays);
+    const start = new Date(end);
+    start.setDate(end.getDate() - intervalDays + 1);
+    const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+    const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+    const agg = aggregateMMPFromLogs(logs, startStr, endStr);
+    const name = (end.getMonth() + 1) + '/' + end.getDate();
+    out.push({
+      name: name,
+      max_watts: agg.max_watts,
+      max_1min_watts: agg.max_1min_watts,
+      max_5min_watts: agg.max_5min_watts,
+      max_20min_watts: agg.max_20min_watts,
+      max_60min_watts: agg.max_60min_watts
+    });
+  }
+  return out;
+}
+
+/**
  * 6가지 파워 프로필 점수 계산 (0~10점, Math.min 적용)
  * @param {number} userWeight - kg
  * @param {number} userFTP - W
@@ -220,6 +254,7 @@ if (typeof window !== 'undefined') {
   window.calculateRiderScores = calculateRiderScores;
   window.aggregateMMPFromLogs = aggregateMMPFromLogs;
   window.getWeeklyMMPFromLogs = getWeeklyMMPFromLogs;
+  window.getIntervalMMPFromLogs = getIntervalMMPFromLogs;
   window.fetchAIProfileAnalysis = fetchAIProfileAnalysis;
   window.FALLBACK_AI_COMMENT = FALLBACK_AI_COMMENT;
 }
