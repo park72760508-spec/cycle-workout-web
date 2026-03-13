@@ -176,7 +176,9 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
   var YAxis = Recharts && Recharts.YAxis;
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
+  var LabelList = Recharts && Recharts.LabelList;
   var cid = nextChartId();
+  var labelFontSize = 10;
 
   if (!Recharts || !data || data.length === 0) {
     return (
@@ -220,7 +222,7 @@ function PowerProfileWeekTrendChart({ title, data, DashboardCard }) {
             <YAxis width={32} tick={{ fontSize: 7 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
             <Area type="monotone" dataKey="shortTermGoal" stroke="rgba(249,115,22,0.6)" fill={'url(#' + cid + '-fillShort)'} strokeWidth={2} name="단기 목표" dot={false} connectNulls />
             {hasLongTerm && <Area type="monotone" dataKey="longTermGoal" stroke="rgba(239,68,68,0.6)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillLong)'} strokeWidth={2} name="장기 목표" dot={false} connectNulls />}
-            <Area type="monotone" dataKey="myPower" stroke="#3B82F6" fill={'url(#' + cid + '-fillMy)'} strokeWidth={2.5} name="나의 달성도" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls />
+            <Area type="monotone" dataKey="myPower" stroke="#3B82F6" fill={'url(#' + cid + '-fillMy)'} strokeWidth={2.5} name="나의 달성도" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls>{LabelList ? <LabelList dataKey="myPower" position="top" fill="rgba(59,130,246,0.7)" fontSize={labelFontSize} /> : null}</Area>
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -237,8 +239,10 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
   var YAxis = Recharts && Recharts.YAxis;
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
+  var LabelList = Recharts && Recharts.LabelList;
   var cid = nextChartId();
   var data = powerCurveData || [];
+  var labelFontSize = 10;
 
   if (!Recharts || !data.length) {
     return (
@@ -277,7 +281,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData }) {
             {hasTarget && (
               <Area type="monotone" dataKey="targetPower" stroke="rgba(239,68,68,0.5)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillTarget)'} strokeWidth={2} name="목표 (ALLR 최고)" dot={false} connectNulls />
             )}
-            <Area type="monotone" dataKey="power" stroke="#3B82F6" fill={'url(#' + cid + '-fillCurve)'} strokeWidth={2.5} name="나의 파워" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls />
+            <Area type="monotone" dataKey="power" stroke="#3B82F6" fill={'url(#' + cid + '-fillCurve)'} strokeWidth={2.5} name="나의 파워" dot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }} connectNulls>{LabelList ? <LabelList dataKey="power" position="top" fill="rgba(59,130,246,0.7)" fontSize={labelFontSize} /> : null}</Area>
           </AreaChart>
         </ResponsiveContainer>
       </div>
