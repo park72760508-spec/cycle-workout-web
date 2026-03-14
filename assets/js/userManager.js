@@ -1780,6 +1780,86 @@ function getHrZones(maxHr) {
 }
 
 /**
+ * 프로필 선택 화면: FTP 파워 영역 / 심박 영역 상세 테이블 렌더링
+ * @param {number} [ftp=200] - 사용자 FTP (W)
+ * @param {number} [maxHr=190] - 사용자 최대 심박수 (bpm)
+ */
+function renderProfileZoneTables(ftp, maxHr) {
+  const f = Number(ftp) || 200;
+  const m = Number(maxHr) || 190;
+  const container = document.getElementById('profileZoneTablesContent');
+  if (!container) return;
+
+  const ftpZones = [
+    { label: 'Z1', pct: '55% 미만', min: null, max: Math.floor(f * 0.55), color: '#9ca3af', desc: '리커버리 라이딩, 젖산 분해 및 피로도 회복 촉진' },
+    { label: 'Z2', pct: '56% ~ 75%', min: Math.ceil(f * 0.56), max: Math.floor(f * 0.75), color: '#3b82f6', desc: '유산소 베이스 구축, 장거리 체력 배양 (인도어 훈련의 핵심)' },
+    { label: 'Z3', pct: '76% ~ 90%', min: Math.ceil(f * 0.76), max: Math.floor(f * 0.90), color: '#22c55e', desc: '근지구력 향상, 묵직하고 리듬감 있는 주행 유지' },
+    { label: 'Z4', pct: '91% ~ 105%', min: Math.ceil(f * 0.91), max: Math.floor(f * 1.05), color: '#eab308', desc: 'FTP(역치 파워) 직접 향상, 고통스러운 젖산 역치 훈련' },
+    { label: 'Z5', pct: '106% ~ 120%', min: Math.ceil(f * 1.06), max: Math.floor(f * 1.20), color: '#f97316', desc: '최대 산소 섭취량(VO2 Max) 확장, 3~8분 길이의 업힐 어택' },
+    { label: 'Z6', pct: '121% ~ 150%', min: Math.ceil(f * 1.21), max: Math.floor(f * 1.50), color: '#ef4444', desc: '무산소 용량 확장, 짧은 급경사 및 펠로톤 펀치력 향상' },
+    { label: 'Z7', pct: '150% 이상', min: Math.ceil(f * 1.51), max: null, color: '#a855f7', desc: '신경근 파워, 폭발적인 가속력 및 결승선 스프린트' }
+  ];
+
+  const hrZones = [
+    { label: 'Z1', pct: '50% ~ 60%', min: Math.round(m * 0.50), max: Math.round(m * 0.60), color: '#9ca3af', desc: '가벼운 워밍업/쿨다운, 피로 회복. 편안한 상태.' },
+    { label: 'Z2', pct: '60% ~ 70%', min: Math.round(m * 0.60), max: Math.round(m * 0.70), color: '#3b82f6', desc: '기초 유산소 능력 향상, 체지방 연소 최적화 (LSD 훈련)' },
+    { label: 'Z3', pct: '70% ~ 80%', min: Math.round(m * 0.70), max: Math.round(m * 0.80), color: '#22c55e', desc: '심폐 지구력 강화, 근기능 및 혈액 순환 향상' },
+    { label: 'Z4', pct: '80% ~ 90%', min: Math.round(m * 0.80), max: Math.round(m * 0.90), color: '#f97316', desc: '무산소 역치 증가, 고강도 지속 능력 향상' },
+    { label: 'Z5', pct: '90% ~ 100%', min: Math.round(m * 0.90), max: m, color: '#ef4444', desc: '무산소 능력, 최대 스피드 및 파워 향상. 한계 상태.' }
+  ];
+
+  const fmtFtpVal = (z) => {
+    if (z.min == null && z.max != null) return '&lt; ' + z.max + 'W';
+    if (z.min != null && z.max == null) return z.min + 'W 이상';
+    return z.min + ' ~ ' + z.max + 'W';
+  };
+  const fmtHrVal = (z) => z.min + ' ~ ' + z.max + ' bpm';
+
+  const ftpRows = ftpZones.map(z => `
+    <tr>
+      <td><span class="profile-zone-badge" style="background:${z.color};color:#000">${z.label}</span></td>
+      <td>${z.pct}</td>
+      <td>${fmtFtpVal(z)}</td>
+      <td>${z.desc}</td>
+    </tr>
+  `).join('');
+
+  const hrRows = hrZones.map(z => `
+    <tr>
+      <td><span class="profile-zone-badge" style="background:${z.color};color:#000">${z.label}</span></td>
+      <td>${z.pct}</td>
+      <td>${fmtHrVal(z)}</td>
+      <td>${z.desc}</td>
+    </tr>
+  `).join('');
+
+  container.innerHTML = `
+    <div class="profile-zone-table-block">
+      <div class="profile-zone-table-header">사용자 FTP: ${f}W</div>
+      <table class="profile-zone-table">
+        <thead><tr><th>구분</th><th>범위(%)</th><th>값</th><th>내용</th></tr></thead>
+        <tbody>${ftpRows}</tbody>
+      </table>
+      <p class="profile-zone-caption">💡 스윗 스팟 (Sweet Spot): 88% ~ 93% 구간. 훈련 피로도 대비 FTP 향상 효과가 가장 뛰어난 가성비 최고의 훈련 구간.</p>
+    </div>
+    <div class="profile-zone-table-block">
+      <div class="profile-zone-table-header">사용자 최대 심박수: ${m} bpm</div>
+      <table class="profile-zone-table">
+        <thead><tr><th>구분</th><th>범위(%)</th><th>값</th><th>내용</th></tr></thead>
+        <tbody>${hrRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/** 프로필 Zone 테이블 값 갱신 (prop/상태 전달용) */
+window.updateProfileZoneTables = function(ftp, maxHr) {
+  if (typeof renderProfileZoneTables === 'function') {
+    renderProfileZoneTables(ftp, maxHr);
+  }
+};
+
+/**
  * yearly_peaks에서 최대 심박수 조회 (오늘 기준 최대 1년 = 당해+전년)
  * - users/{userId}/yearly_peaks/{year} 문서 2개만 조회 (당해·전년) → 로그 스캔 없이 경량
  * - max_hr는 onUserLogWritten 트리거·backfillYearlyPeaks로 yearly_peaks에 반영됨
@@ -2159,6 +2239,11 @@ async function loadUsers() {
     }
 
     renderProfileUserCards(visibleUsers, viewerGrade, viewerId);
+    var defaultFtp = visibleUsers.length > 0 ? (Number(visibleUsers[0].ftp) || 200) : 200;
+    var defaultMaxHr = 190; /* 더미 기본값, updateProfileZoneTables(ftp, maxHr)로 갱신 가능 */
+    if (typeof renderProfileZoneTables === 'function') {
+      renderProfileZoneTables(defaultFtp, defaultMaxHr);
+    }
     if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
       window.refreshProfileMaxHrAndRerender(visibleUsers, viewerGrade, viewerId).catch(() => {});
     }
