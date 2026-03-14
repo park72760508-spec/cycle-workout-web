@@ -1780,17 +1780,18 @@ function getHrZones(maxHr) {
 }
 
 /**
- * 프로필 선택 화면: FTP 파워 영역 / 심박 영역 상세 테이블 렌더링
- * @param {number} [ftp=200] - 사용자 FTP (W)
- * @param {number} [maxHr=190] - 사용자 최대 심박수 (bpm)
+ * FTP/심박 Zone 테이블 HTML 생성 (카드용·상단 참고용 공통)
+ * @param {number} ftp - 사용자 FTP (W)
+ * @param {number} maxHr - 사용자 최대 심박수 (bpm)
+ * @param {{ compact?: boolean }} opts - compact: true면 스윗스팟 캡션 생략
+ * @returns {{ ftpHtml: string, hrHtml: string }}
  */
-function renderProfileZoneTables(ftp, maxHr) {
-  const f = Number(ftp) || 200;
-  const m = Number(maxHr) || 190;
-  const container = document.getElementById('profileZoneTablesContent');
-  if (!container) return;
+function buildProfileZoneTableHtml(ftp, maxHr, opts) {
+  const f = Number(ftp) || 0;
+  const m = Number(maxHr) || 0;
+  const compact = opts && opts.compact;
 
-  const ftpZones = [
+  const ftpZones = f > 0 ? [
     { label: 'Z1', pct: '55% 미만', min: null, max: Math.floor(f * 0.55), color: '#9ca3af', desc: '리커버리 라이딩, 젖산 분해 및 피로도 회복 촉진' },
     { label: 'Z2', pct: '56% ~ 75%', min: Math.ceil(f * 0.56), max: Math.floor(f * 0.75), color: '#3b82f6', desc: '유산소 베이스 구축, 장거리 체력 배양 (인도어 훈련의 핵심)' },
     { label: 'Z3', pct: '76% ~ 90%', min: Math.ceil(f * 0.76), max: Math.floor(f * 0.90), color: '#22c55e', desc: '근지구력 향상, 묵직하고 리듬감 있는 주행 유지' },
@@ -1798,15 +1799,15 @@ function renderProfileZoneTables(ftp, maxHr) {
     { label: 'Z5', pct: '106% ~ 120%', min: Math.ceil(f * 1.06), max: Math.floor(f * 1.20), color: '#f97316', desc: '최대 산소 섭취량(VO2 Max) 확장, 3~8분 길이의 업힐 어택' },
     { label: 'Z6', pct: '121% ~ 150%', min: Math.ceil(f * 1.21), max: Math.floor(f * 1.50), color: '#ef4444', desc: '무산소 용량 확장, 짧은 급경사 및 펠로톤 펀치력 향상' },
     { label: 'Z7', pct: '150% 이상', min: Math.ceil(f * 1.51), max: null, color: '#a855f7', desc: '신경근 파워, 폭발적인 가속력 및 결승선 스프린트' }
-  ];
+  ] : [];
 
-  const hrZones = [
+  const hrZones = m > 0 ? [
     { label: 'Z1', pct: '50% ~ 60%', min: Math.round(m * 0.50), max: Math.round(m * 0.60), color: '#9ca3af', desc: '가벼운 워밍업/쿨다운, 피로 회복. 편안한 상태.' },
     { label: 'Z2', pct: '60% ~ 70%', min: Math.round(m * 0.60), max: Math.round(m * 0.70), color: '#3b82f6', desc: '기초 유산소 능력 향상, 체지방 연소 최적화 (LSD 훈련)' },
     { label: 'Z3', pct: '70% ~ 80%', min: Math.round(m * 0.70), max: Math.round(m * 0.80), color: '#22c55e', desc: '심폐 지구력 강화, 근기능 및 혈액 순환 향상' },
     { label: 'Z4', pct: '80% ~ 90%', min: Math.round(m * 0.80), max: Math.round(m * 0.90), color: '#f97316', desc: '무산소 역치 증가, 고강도 지속 능력 향상' },
     { label: 'Z5', pct: '90% ~ 100%', min: Math.round(m * 0.90), max: m, color: '#ef4444', desc: '무산소 능력, 최대 스피드 및 파워 향상. 한계 상태.' }
-  ];
+  ] : [];
 
   const fmtFtpVal = (z) => {
     if (z.min == null && z.max != null) return '&lt; ' + z.max + 'W';
@@ -1833,23 +1834,44 @@ function renderProfileZoneTables(ftp, maxHr) {
     </tr>
   `).join('');
 
-  container.innerHTML = `
-    <div class="profile-zone-table-block">
+  const sweetSpotCaption = compact ? '' : '<p class="profile-zone-caption">💡 스윗 스팟 (Sweet Spot): 88% ~ 93% 구간. 훈련 피로도 대비 FTP 향상 효과가 가장 뛰어난 가성비 최고의 훈련 구간.</p>';
+
+  const ftpHtml = f > 0 ? `
+    <div class="profile-zone-table-block profile-zone-table-in-card">
       <div class="profile-zone-table-header">사용자 FTP: ${f}W</div>
       <table class="profile-zone-table">
         <thead><tr><th>구분</th><th>범위(%)</th><th>값</th><th>내용</th></tr></thead>
         <tbody>${ftpRows}</tbody>
       </table>
-      <p class="profile-zone-caption">💡 스윗 스팟 (Sweet Spot): 88% ~ 93% 구간. 훈련 피로도 대비 FTP 향상 효과가 가장 뛰어난 가성비 최고의 훈련 구간.</p>
+      ${sweetSpotCaption}
     </div>
-    <div class="profile-zone-table-block">
+  ` : '';
+
+  const hrHtml = m > 0 ? `
+    <div class="profile-zone-table-block profile-zone-table-in-card">
       <div class="profile-zone-table-header">사용자 최대 심박수: ${m} bpm</div>
       <table class="profile-zone-table">
         <thead><tr><th>구분</th><th>범위(%)</th><th>값</th><th>내용</th></tr></thead>
         <tbody>${hrRows}</tbody>
       </table>
     </div>
-  `;
+  ` : '';
+
+  return { ftpHtml, hrHtml };
+}
+
+/**
+ * 프로필 선택 화면: FTP 파워 영역 / 심박 영역 상세 테이블 렌더링 (상단 참고용)
+ * @param {number} [ftp=200] - 사용자 FTP (W)
+ * @param {number} [maxHr=190] - 사용자 최대 심박수 (bpm)
+ */
+function renderProfileZoneTables(ftp, maxHr) {
+  const f = Number(ftp) || 200;
+  const m = Number(maxHr) || 190;
+  const container = document.getElementById('profileZoneTablesContent');
+  if (!container) return;
+  const { ftpHtml, hrHtml } = buildProfileZoneTableHtml(f, m, { compact: false });
+  container.innerHTML = ftpHtml + hrHtml;
 }
 
 /** 프로필 Zone 테이블 값 갱신 (prop/상태 전달용) */
@@ -1944,19 +1966,15 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const aiDot = hasAiKey ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
 
-    const ftpZones = getFtpPowerZones(user.ftp);
     const maxHr = maxHrMap[user.id];
-    const hrZones = getHrZones(maxHr);
+    const userFtp = Number(user.ftp) || 0;
+    const userMaxHr = maxHr != null ? Number(maxHr) : 0;
+    const { ftpHtml, hrHtml } = buildProfileZoneTableHtml(userFtp, userMaxHr, { compact: true });
 
-    const ftpZonesHtml = ftpZones
-      ? `<div class="profile-zone-section"><div class="profile-zone-title">⚡ FTP 파워 영역 (${user.ftp || 0}W)</div><div class="profile-zone-chips">${ftpZones.map(z => `<span class="profile-zone-chip" style="background:${z.color}20;color:${z.color};border:1px solid ${z.color}40" title="${z.desc}">${z.label} ${z.min}~${z.max || '↑'}W</span>`).join('')}</div></div>`
-      : '';
-
-    const hrZonesHtml = hrZones
-      ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역 (Max HR ${maxHr} bpm)</div><div class="profile-zone-chips">${hrZones.map(z => `<span class="profile-zone-chip" style="background:${z.color}20;color:${z.color};border:1px solid ${z.color}40" title="${z.desc}">${z.pct} ${z.min}~${z.max}</span>`).join('')}</div></div>`
-      : maxHr === undefined
-        ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역</div><div class="profile-hr-loading">로딩 중...</div></div>`
-        : '';
+    const ftpZonesHtml = userFtp > 0 ? ftpHtml : '';
+    const hrZonesHtml = maxHr === undefined
+      ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역</div><div class="profile-hr-loading">로딩 중...</div></div>`
+      : userMaxHr > 0 ? hrHtml : '';
 
     return `
       <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
