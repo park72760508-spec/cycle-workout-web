@@ -158,7 +158,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) 
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="text-xs font-semibold text-gray-800 truncate">전 구간 파워 커브(ALLR)</h3>
+          <h3 className="text-sm font-semibold text-gray-800 truncate">전 구간 파워 커브</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -170,7 +170,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) 
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="text-xs font-semibold text-gray-800 truncate">전 구간 파워 커브(ALLR)</h3>
+        <h3 className="text-sm font-semibold text-gray-800 truncate">전 구간 파워 커브</h3>
       </div>
       <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -217,7 +217,7 @@ function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidt
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="text-xs font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
+          <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -227,7 +227,7 @@ function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidt
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="text-xs font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
+        <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />1분</span>
           <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f97316' }} />5분</span>
