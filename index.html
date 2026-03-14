@@ -13085,6 +13085,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/RiderPowerProfileTrendCharts.jsx" type="text/babel"></script>
   <!-- 심박 매트릭스 차트 (훈련 트렌드 위 배치) -->
   <script src="assets/js/RiderHeartRateProfileTrendCharts.jsx" type="text/babel"></script>
+  <!-- 존별 누적 시간 차트 (최근 1개월 심박 그래프 아래 배치) -->
+  <script src="assets/js/RiderTimeInZonesCharts.jsx" type="text/babel"></script>
   
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
   <script type="text/babel">
@@ -15401,6 +15403,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             {window.RiderPowerProfileTrendCharts && React.createElement(window.RiderPowerProfileTrendCharts, { DashboardCard, userProfile, recentLogs })}
             
             {window.RiderHeartRateProfileTrendCharts && React.createElement(window.RiderHeartRateProfileTrendCharts, { DashboardCard, userProfile, recentLogs })}
+            
+            {window.RiderTimeInZonesCharts && React.createElement(window.RiderTimeInZonesCharts, { DashboardCard, userProfile, recentLogs })}
             
             {logsLoading ? (
               <DashboardCard title="VO₂max 트렌드 (6개월)">
