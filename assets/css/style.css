@@ -3210,7 +3210,7 @@ button[aria-disabled="true"] {
 .training-detail-time-in-zones-wrap {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #e5e7eb; /* 최대 파워 바로 아래 구분선 유지 */
   min-width: 0;
 }
 
