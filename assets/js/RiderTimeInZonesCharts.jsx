@@ -70,11 +70,10 @@ function formatSeconds(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-/** Y축용: 단위(h/m) 포함 표시 */
-function formatTimeForAxis(sec, unit) {
-  if (!sec || sec < 0) return unit === 'h' ? '0h' : '0m';
-  if (unit === 'h') return String(Math.floor(sec / 3600)) + 'h';
-  return String(Math.floor(sec / 60)) + 'm';
+/** Y축용: 분(min)으로 세밀하게 표시 */
+function formatMinutesForAxis(sec) {
+  if (!sec || sec < 0) return '0';
+  return String(Math.floor(sec / 60));
 }
 
 /** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
@@ -140,7 +139,7 @@ function generateHRZoneAnalysisComment(data) {
 }
 
 // ========== 파워 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z0~Z7) ==========
-function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, periodLabel, hideComments, yAxisUnit }) {
+function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, periodLabel, hideComment, titleClassName }) {
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -160,7 +159,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">파워 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
+          <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>파워 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -180,7 +179,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="text-sm font-semibold text-gray-800 truncate">파워 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
+        <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>파워 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -195,7 +194,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
-            <YAxis type="number" tickFormatter={function(v) { return formatTimeForAxis(v, yAxisUnit || 'h'); }} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
+            <YAxis type="number" tickFormatter={formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -205,17 +204,17 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {!hideComments ? (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{generatePowerZoneAnalysisComment(powerData)}</p>
-        </div>
-      ) : null}
+      {!hideComment && (
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{generatePowerZoneAnalysisComment(powerData)}</p>
+      </div>
+      )}
     </DashboardCard>
   );
 }
 
 // ========== 심박 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z1~Z5) ==========
-function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodLabel, hideComments, yAxisUnit }) {
+function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodLabel, hideComment, titleClassName }) {
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -234,7 +233,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">심박 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
+          <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>심박 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -254,7 +253,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="text-sm font-semibold text-gray-800 truncate">심박 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
+        <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>심박 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -269,7 +268,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
-            <YAxis type="number" tickFormatter={function(v) { return formatTimeForAxis(v, yAxisUnit || 'h'); }} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
+            <YAxis type="number" tickFormatter={formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -279,64 +278,12 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {!hideComments ? (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{generateHRZoneAnalysisComment(hrData)}</p>
-        </div>
-      ) : null}
+      {!hideComment && (
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{generateHRZoneAnalysisComment(hrData)}</p>
+      </div>
+      )}
     </DashboardCard>
-  );
-}
-
-/** 라이딩 일지용: 현재월(선택월) 기준 존별 누적 시간 - 코멘트 제거, 제목 폰트 Weekly TSS Load와 동일 */
-function JournalTimeInZonesCharts({ currentMonth, monthlyLogs, userProfile }) {
-  var Card = function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); };
-  var logs = Array.isArray(monthlyLogs) ? monthlyLogs : [];
-  var dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
-  var year = dateObj.getFullYear();
-  var monthNum = dateObj.getMonth() + 1;
-  var pad2 = function(n) { return String(n).padStart(2, '0'); };
-  var now = new Date();
-  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  var isCurrentMonth = (year === today.getFullYear() && monthNum === today.getMonth() + 1);
-  var fromStr, toStr, periodLabel;
-  if (isCurrentMonth) {
-    fromStr = year + '-' + pad2(monthNum) + '-01';
-    toStr = today.getFullYear() + '-' + pad2(today.getMonth() + 1) + '-' + pad2(today.getDate());
-    periodLabel = '현재월 누적';
-  } else {
-    fromStr = year + '-' + pad2(monthNum) + '-01';
-    var lastDay = new Date(year, monthNum, 0).getDate();
-    toStr = year + '-' + pad2(monthNum) + '-' + pad2(lastDay);
-    periodLabel = year + '년 ' + monthNum + '월';
-  }
-  var agg = (typeof window.aggregateTimeInZonesFromLogs === 'function')
-    ? window.aggregateTimeInZonesFromLogs(logs, fromStr, toStr)
-    : { power: {}, hr: {} };
-  var powerZones = agg.power || {};
-  var hrZones = agg.hr || {};
-  var powerData = ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].map(function(k) {
-    return { zone: k.toUpperCase(), seconds: Number(powerZones[k]) || 0 };
-  });
-  var hrData = ['z1', 'z2', 'z3', 'z4', 'z5'].map(function(k) {
-    return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
-  });
-  var ftp = Number(userProfile && userProfile.ftp) || 0;
-  var maxHr = Number(userProfile && userProfile.max_hr) || 0;
-  if (!maxHr && typeof window.aggregateHRFromLogs === 'function') {
-    var hrAgg = window.aggregateHRFromLogs(logs, fromStr, toStr);
-    maxHr = hrAgg.max_hr || 190;
-  }
-  if (!maxHr) maxHr = 190;
-  var hasPower = powerData.some(function(d) { return d.seconds > 0; });
-  var hasHr = hrData.some(function(d) { return d.seconds > 0; });
-  if (!hasPower && !hasHr) return null;
-  return React.createElement('div', { className: 'mb-4' },
-    React.createElement('h4', { className: 'text-sm font-semibold text-gray-700 mb-2' }, '존별 누적 시간 (' + periodLabel + ')'),
-    React.createElement('div', { className: 'space-y-4' },
-      hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: periodLabel, hideComments: true, yAxisUnit: 'h' }) : null,
-      hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: periodLabel, hideComments: true, yAxisUnit: 'h' }) : null
-    )
   );
 }
 
@@ -383,10 +330,10 @@ function RiderTimeInZonesCharts({ DashboardCard, userProfile, recentLogs }) {
     </h2>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="min-w-0 overflow-hidden col-span-2">
-          <PowerTimeInZonesChart DashboardCard={Card} powerData={powerData} ftp={ftp} isFullWidth yAxisUnit="h" />
+          <PowerTimeInZonesChart DashboardCard={Card} powerData={powerData} ftp={ftp} isFullWidth />
         </div>
         <div className="min-w-0 overflow-hidden col-span-2">
-          <HRTimeInZonesChart DashboardCard={Card} hrData={hrData} maxHr={maxHr} isFullWidth yAxisUnit="h" />
+          <HRTimeInZonesChart DashboardCard={Card} hrData={hrData} maxHr={maxHr} isFullWidth />
         </div>
       </div>
     </div>
@@ -412,8 +359,8 @@ function DailyTimeInZonesCharts({ log, userProfile, DashboardCard }) {
   if (!hasPower && !hasHr) return null;
   return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4' },
     React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '일일 존별 누적 시간'),
-    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일', yAxisUnit: 'm' }) : null,
-    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일', yAxisUnit: 'm' }) : null
+    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일' }) : null,
+    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일' }) : null
   );
 }
 
@@ -428,11 +375,64 @@ function RenderDailyTimeInZonesCharts(container, log, userProfile) {
   );
 }
 
+/** 라이딩 일지용: 월별 누적 존별 시간 (코멘트 제거, 제목 폰트=Weekly TSS Load) */
+function JournalTimeInZonesCharts({ currentMonth, rawLogs, userProfile, DashboardCard }) {
+  var Card = DashboardCard || function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); };
+  var logs = Array.isArray(rawLogs) ? rawLogs : [];
+  var dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
+  var year = dateObj.getFullYear();
+  var monthNum = dateObj.getMonth() + 1;
+  var now = new Date();
+  var isCurrentMonth = (year === now.getFullYear() && monthNum === now.getMonth() + 1);
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+  var startStr, endStr, periodLabel;
+  if (isCurrentMonth) {
+    var endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var startDate = new Date(year, monthNum - 1, 1);
+    startStr = startDate.getFullYear() + '-' + pad(startDate.getMonth() + 1) + '-' + pad(startDate.getDate());
+    endStr = endDate.getFullYear() + '-' + pad(endDate.getMonth() + 1) + '-' + pad(endDate.getDate());
+    periodLabel = year + '년 ' + monthNum + '월 (누적)';
+  } else {
+    startStr = year + '-' + pad(monthNum) + '-01';
+    var lastDay = new Date(year, monthNum, 0).getDate();
+    endStr = year + '-' + pad(monthNum) + '-' + pad(lastDay);
+    periodLabel = year + '년 ' + monthNum + '월';
+  }
+  var agg = (typeof window.aggregateTimeInZonesFromLogs === 'function')
+    ? window.aggregateTimeInZonesFromLogs(logs, startStr, endStr)
+    : { power: {}, hr: {} };
+  var powerZones = agg.power || {};
+  var hrZones = agg.hr || {};
+  var powerData = ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].map(function(k) {
+    return { zone: k.toUpperCase(), seconds: Number(powerZones[k]) || 0 };
+  });
+  var hrData = ['z1', 'z2', 'z3', 'z4', 'z5'].map(function(k) {
+    return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
+  });
+  var ftp = Number(userProfile && userProfile.ftp) || 0;
+  var maxHr = Number(userProfile && userProfile.max_hr) || 0;
+  if (!maxHr && typeof window.aggregateHRFromLogs === 'function') {
+    var hrAgg = window.aggregateHRFromLogs(logs, startStr, endStr);
+    maxHr = hrAgg.max_hr || 190;
+  }
+  if (!maxHr) maxHr = 190;
+  var titleClass = 'text-sm font-semibold text-gray-700 mb-2';
+  var hasAny = powerData.some(function(d) { return d.seconds > 0; }) || hrData.some(function(d) { return d.seconds > 0; });
+  if (!hasAny) return null;
+  return React.createElement('div', { className: 'space-y-4 mb-4' },
+    React.createElement('h4', { className: titleClass }, '존별 누적 시간 (' + periodLabel + ')'),
+    React.createElement('div', { className: 'grid grid-cols-1 gap-3' },
+      React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: periodLabel, hideComment: true, titleClassName: titleClass }),
+      React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: periodLabel, hideComment: true, titleClassName: titleClass })
+    )
+  );
+}
+
 if (typeof window !== 'undefined') {
   window.RiderTimeInZonesCharts = RiderTimeInZonesCharts;
   window.PowerTimeInZonesChart = PowerTimeInZonesChart;
   window.HRTimeInZonesChart = HRTimeInZonesChart;
-  window.JournalTimeInZonesCharts = JournalTimeInZonesCharts;
   window.DailyTimeInZonesCharts = DailyTimeInZonesCharts;
   window.RenderDailyTimeInZonesCharts = RenderDailyTimeInZonesCharts;
+  window.JournalTimeInZonesCharts = JournalTimeInZonesCharts;
 }
