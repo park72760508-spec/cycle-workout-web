@@ -15357,6 +15357,21 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             {window.RiderHeartRateProfileTrendCharts && React.createElement(window.RiderHeartRateProfileTrendCharts, { DashboardCard, userProfile, recentLogs })}
             
             {logsLoading ? (
+              <DashboardCard title="VO₂max 트렌드 (6개월)">
+                <div className="h-[200px] flex items-center justify-center">
+                  <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <div className="text-sm text-gray-500">데이터 로딩 중...</div>
+                </div>
+              </DashboardCard>
+            ) : logsLoadError ? (
+              <DashboardCard title="VO₂max 트렌드 (6개월)">
+                <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm">로그 로드 실패</div>
+              </DashboardCard>
+            ) : (
+              <Vo2MaxTrendChart data={vo2TrendData} />
+            )}
+            
+            {logsLoading ? (
               <DashboardCard title="훈련 트렌드 (최근 1개월)">
                 <div className="h-[200px] flex items-center justify-center">
                   <div className="text-center">
@@ -15386,21 +15401,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               </DashboardCard>
             ) : (
               <TrainingTrendChart data={fitnessData} />
-            )}
-            
-            {logsLoading ? (
-              <DashboardCard title="VO₂max 트렌드 (6개월)">
-                <div className="h-[200px] flex items-center justify-center">
-                  <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <div className="text-sm text-gray-500">데이터 로딩 중...</div>
-                </div>
-              </DashboardCard>
-            ) : logsLoadError ? (
-              <DashboardCard title="VO₂max 트렌드 (6개월)">
-                <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm">로그 로드 실패</div>
-              </DashboardCard>
-            ) : (
-              <Vo2MaxTrendChart data={vo2TrendData} />
             )}
             
             <details className="rounded-xl border border-gray-200 bg-white overflow-hidden">
