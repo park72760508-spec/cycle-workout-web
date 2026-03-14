@@ -4588,11 +4588,11 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
         </svg>
       </button>
-      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 훈련일지</h1>
+      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="calendar-title-icon"> 라이딩 일지</h1>
       <span style="width: 2.5em; flex-shrink: 0;"></span>
     </div>
     <p class="subtitle" style="margin-top: 0; margin-bottom: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
-      <span>나의 훈련 이력을 확인하세요 <span id="journalSubtitleCount" aria-live="polite">( )</span></span>
+      <span>나의 라이딩 일지를 확인하세요 <span id="journalSubtitleCount" aria-live="polite">( )</span></span>
     </p>
     <script>
       (function() {
@@ -9863,7 +9863,7 @@
 
         const isCurrentMonth = (year === new Date().getFullYear() && monthNum === new Date().getMonth() + 1);
         const monthLabel = isCurrentMonth ? '오늘 기준 1개월간' : (year + '년 ' + monthNum + '월');
-        const titleText = '월간 훈련 분석 : ' + monthLabel;
+        const titleText = '월간 라이딩 분석 : ' + monthLabel;
         const isEmpty = logs.length === 0;
 
         return (
@@ -9920,7 +9920,7 @@
                   {/* Row 2: EF Trend */}
                   <div className="mb-4 relative">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <h4 className="text-sm font-semibold text-gray-700">EF (삼박대비 파워) Trend</h4>
+                      <h4 className="text-sm font-semibold text-gray-700">EF (심박대비 파워) Trend</h4>
                       <button
                         type="button"
                         className="inline-flex text-slate-400 hover:text-slate-600 transition-colors cursor-help focus:outline-none focus:ring-2 focus:ring-slate-300 rounded-full p-0.5"
