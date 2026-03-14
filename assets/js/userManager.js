@@ -1810,11 +1810,11 @@ function buildProfileZoneTableHtml(ftp, maxHr, opts) {
   ] : [];
 
   const fmtFtpVal = (z) => {
-    if (z.min == null && z.max != null) return '&lt; ' + z.max + 'W';
-    if (z.min != null && z.max == null) return z.min + 'W 이상';
-    return z.min + ' ~ ' + z.max + 'W';
+    if (z.min == null && z.max != null) return '&lt; ' + z.max;
+    if (z.min != null && z.max == null) return z.min + ' 이상';
+    return z.min + ' ~ ' + z.max;
   };
-  const fmtHrVal = (z) => z.min + ' ~ ' + z.max + ' bpm';
+  const fmtHrVal = (z) => z.min + ' ~ ' + z.max;
 
   const ftpRows = ftpZones.map(z => `
     <tr>
@@ -1840,7 +1840,7 @@ function buildProfileZoneTableHtml(ftp, maxHr, opts) {
     <div class="profile-zone-table-block profile-zone-table-in-card">
       <div class="profile-zone-table-header">사용자 FTP: ${f}W</div>
       <table class="profile-zone-table">
-        <thead><tr><th>구분</th><th>범위(%)</th><th>값</th><th>내용</th></tr></thead>
+        <thead><tr><th>구분</th><th>범위(%)</th><th>값(W)</th><th>내용</th></tr></thead>
         <tbody>${ftpRows}</tbody>
       </table>
       ${sweetSpotCaption}
@@ -1851,7 +1851,7 @@ function buildProfileZoneTableHtml(ftp, maxHr, opts) {
     <div class="profile-zone-table-block profile-zone-table-in-card">
       <div class="profile-zone-table-header">사용자 최대 심박수: ${m} bpm</div>
       <table class="profile-zone-table">
-        <thead><tr><th>구분</th><th>범위(%)</th><th>값</th><th>내용</th></tr></thead>
+        <thead><tr><th>구분</th><th>범위(%)</th><th>값(bpm)</th><th>내용</th></tr></thead>
         <tbody>${hrRows}</tbody>
       </table>
     </div>
