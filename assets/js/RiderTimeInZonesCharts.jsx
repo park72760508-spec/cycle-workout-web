@@ -320,7 +320,10 @@ function RiderTimeInZonesCharts({ DashboardCard, userProfile, recentLogs }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-gray-800 px-1">존별 누적 시간 (최근 1개월)</h2>
+      <h2 className="text-base font-semibold text-gray-800 px-1 flex items-center gap-2">
+      <span className="inline-flex w-5 h-5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }} aria-hidden />
+      존별 누적 시간 (최근 1개월)
+    </h2>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="min-w-0 overflow-hidden col-span-2">
           <PowerTimeInZonesChart DashboardCard={Card} powerData={powerData} ftp={ftp} isFullWidth />

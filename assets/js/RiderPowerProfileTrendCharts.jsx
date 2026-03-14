@@ -306,7 +306,10 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   if (loading && Object.keys(goals).length === 0) {
     return (
       <div className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-800 px-1">파워 매트릭스</h2>
+        <h2 className="text-base font-semibold text-gray-800 px-1 flex items-center gap-2">
+        <span className="inline-flex w-5 h-5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }} aria-hidden />
+        파워 매트릭스
+      </h2>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
           <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />타겟 목표</span>
@@ -321,7 +324,8 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-gray-800 px-1">
+      <h2 className="text-base font-semibold text-gray-800 px-1 flex items-center gap-2">
+        <span className="inline-flex w-5 h-5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }} aria-hidden />
         파워 매트릭스
         {userWeight > 0 ? <span className="text-xs font-normal text-gray-500 ml-2">(체중 {userWeight}kg 기준)</span> : null}
       </h2>
