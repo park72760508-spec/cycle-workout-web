@@ -76,7 +76,7 @@ function formatHoursOnly(sec) {
   return String(Math.floor(sec / 3600));
 }
 
-/** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) */
+/** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
 function generatePowerZoneAnalysisComment(data) {
   if (!data || !data.length) return '';
   var total = data.reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
@@ -96,10 +96,20 @@ function generatePowerZoneAnalysisComment(data) {
   if (z7 > 5) lines.push('• Z7(스프린트) 비율이 있어 무산소 능력 훈련이 이루어지고 있습니다.');
   if (recovery > 50 && intensity < 10) lines.push('• 저강도 위주 훈련으로, 고강도 구간 추가를 고려해 보세요.');
   if (lines.length === 0) lines.push('• 존 분포가 고르게 퍼져 있어 다양한 강도로 훈련하고 있습니다.');
-  return lines.slice(0, 10).join('\n');
+  var improvements = [];
+  if (z0 > 50) improvements.push('휴식(Z0) 비율을 줄이고 활성 회복(Z1~Z2)으로 전환해 보세요.');
+  if (endurance < 30 && intensity < 20) improvements.push('저강도 지구력(Z2~Z3) 훈련을 늘려 기초 체력을 쌓아 보세요.');
+  if (intensity < 10 && recovery < 60) improvements.push('고강도 구간(Z4~Z7)을 주 1~2회, 전체의 10~15% 수준으로 추가해 보세요.');
+  if (z4 + z5 < 5 && z6 + z7 > 15) improvements.push('FTP 구간(Z4~Z5) 훈련을 늘려 지속 가능한 고강도 능력을 키워 보세요.');
+  if (improvements.length > 0) {
+    lines.push('');
+    lines.push('【보완점】');
+    improvements.forEach(function(t) { lines.push('• ' + t); });
+  }
+  return lines.slice(0, 12).join('\n');
 }
 
-/** 심박존 데이터 기반 AI 분석 코멘트 (10줄 이내) */
+/** 심박존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
 function generateHRZoneAnalysisComment(data) {
   if (!data || !data.length) return '';
   var total = data.reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
@@ -115,7 +125,17 @@ function generateHRZoneAnalysisComment(data) {
   if (z5 > 10) lines.push('• 최대 심박 구간(Z5)이 포함되어 고강도 적응에 도움이 됩니다.');
   if (low > 70 && high < 10) lines.push('• 저강도 위주로, 고강도 구간을 점진적으로 늘려 보세요.');
   if (lines.length === 0) lines.push('• 심박 존 분포가 균형적입니다.');
-  return lines.slice(0, 10).join('\n');
+  var improvements = [];
+  if (z1 > 60) improvements.push('회복(Z1) 비율을 줄이고 Z2~Z3 유산소 구간을 늘려 보세요.');
+  if (z2 + z3 < 30) improvements.push('유산소 구간(Z2~Z3) 훈련을 늘려 지구력 기반을 다져 보세요.');
+  if (high < 5 && low > 50) improvements.push('역치·최대 구간(Z4~Z5)을 주 1회 정도 포함해 고강도 적응을 시도해 보세요.');
+  if (z5 > 25) improvements.push('Z5 비율이 높습니다. 회복일을 충분히 두고 과훈련을 주의하세요.');
+  if (improvements.length > 0) {
+    lines.push('');
+    lines.push('【보완점】');
+    improvements.forEach(function(t) { lines.push('• ' + t); });
+  }
+  return lines.slice(0, 12).join('\n');
 }
 
 // ========== 파워 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z0~Z7) ==========
@@ -176,7 +196,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
             }} height={36} />
             <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
-            <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 11, fill: '#374151' }}>
+            <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
               })}
@@ -248,7 +268,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
             }} height={36} />
             <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
-            <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 11, fill: '#374151' }}>
+            <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
               })}
