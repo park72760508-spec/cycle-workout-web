@@ -185,7 +185,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
+            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={2} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var idx = data.findIndex(function(d) { return d.name === payload.value; });
               var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
@@ -193,7 +193,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
                 React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
-            }} height={36} />
+            }} height={24} />
             <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
@@ -257,7 +257,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
+            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={2} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var idx = data.findIndex(function(d) { return d.name === payload.value; });
               var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
@@ -265,7 +265,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
                 React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
-            }} height={36} />
+            }} height={24} />
             <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
