@@ -172,11 +172,14 @@ Output Format (JSON Only):
   }
 
   var lastError = null;
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 5;
+  const RETRYABLE_STATUS = [429, 503, 500, 502]; // Rate limit, Service Unavailable, Server errors
 
   for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 1) {
-      await new Promise(function (r) { setTimeout(r, 1000 * (attempt - 1)); });
+      var backoffMs = Math.min(1000 * Math.pow(2, attempt - 2), 15000);
+      console.warn('[callGeminiCoach] 재시도 ' + attempt + '/' + MAX_RETRIES + ' (' + backoffMs + 'ms 대기)');
+      await new Promise(function (r) { setTimeout(r, backoffMs); });
     }
     try {
       var response = await fetch(apiUrl, {
@@ -195,7 +198,11 @@ Output Format (JSON Only):
           errorMessage = errorText;
         }
         lastError = new Error('Gemini API 오류: ' + errorMessage);
-        continue;
+        if (RETRYABLE_STATUS.indexOf(response.status) !== -1 && attempt < MAX_RETRIES) {
+          console.warn('[callGeminiCoach] 서버 과부하/일시 오류(' + response.status + '), 재시도 예정:', errorMessage);
+          continue;
+        }
+        break;
       }
 
       var data = await response.json();
@@ -248,6 +255,16 @@ Output Format (JSON Only):
       }
 
       if (responseWasTruncated || isCommentTruncated(result.coach_comment)) {
+        if (result.coach_comment && result.coach_comment.trim().length >= 30 && attempt >= MAX_RETRIES - 1) {
+          result.coach_comment = result.coach_comment.trim() + ' (응답이 길어 일부 잘렸을 수 있습니다.)';
+          return {
+            condition_score: conditionScoreForPrompt,
+            training_status: result.training_status || 'Building Base',
+            vo2max_estimate: calculatedVO2Max,
+            coach_comment: result.coach_comment,
+            recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
+          };
+        }
         lastError = new Error('응답이 잘렸거나 코멘트가 불완전합니다.');
         continue;
       }
@@ -279,11 +296,13 @@ Output Format (JSON Only):
   var fallbackVo2 = (typeof window.calculateStelvioVO2Max === 'function')
     ? window.calculateStelvioVO2Max(userProfile, recentLogs)
     : 40;
+  var conditionScoreFallback = conditionScoreForPrompt;
+  var dataRichFallback = userName + '님, 최근 7일 TSS ' + last7DaysTSS + '점, 주간 평균 ' + weeklyTSS + '점, 컨디션 ' + conditionScoreFallback + '점입니다. AI 분석이 일시적으로 지연되고 있습니다. 아래 \'다시 분석\' 버튼을 눌러 재시도해 주세요.';
   return {
-    condition_score: 50,
+    condition_score: conditionScoreFallback,
     training_status: 'Building Base',
     vo2max_estimate: fallbackVo2,
-    coach_comment: userName + '님, 분석이 완료되지 않았습니다. 잠시 후 다시 시도해주세요.',
+    coach_comment: dataRichFallback,
     recommended_workout: 'Active Recovery (Z1)',
     error_reason: '분석이 완료되지 않았습니다. "다시 분석"을 눌러 재시도해 주세요.'
   };
