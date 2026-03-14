@@ -70,10 +70,10 @@ function formatSeconds(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-/** Y축용: 시간(h)만 표시 */
-function formatHoursOnly(sec) {
+/** Y축용: 분(min)으로 세밀하게 표시 */
+function formatMinutesForAxis(sec) {
   if (!sec || sec < 0) return '0';
-  return String(Math.floor(sec / 3600));
+  return String(Math.floor(sec / 60));
 }
 
 /** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
@@ -139,7 +139,7 @@ function generateHRZoneAnalysisComment(data) {
 }
 
 // ========== 파워 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z0~Z7) ==========
-function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
+function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, periodLabel }) {
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -159,7 +159,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">파워 존별 누적 시간 (최근 1개월)</h3>
+          <h3 className="text-sm font-semibold text-gray-800 truncate">파워 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -179,7 +179,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="text-sm font-semibold text-gray-800 truncate">파워 존별 누적 시간 (최근 1개월)</h3>
+        <h3 className="text-sm font-semibold text-gray-800 truncate">파워 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -194,7 +194,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={24} />
-            <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
+            <YAxis type="number" tickFormatter={formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -212,7 +212,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
 }
 
 // ========== 심박 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z1~Z5) ==========
-function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
+function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodLabel }) {
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -231,7 +231,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">심박 존별 누적 시간 (최근 1개월)</h3>
+          <h3 className="text-sm font-semibold text-gray-800 truncate">심박 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -251,7 +251,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="text-sm font-semibold text-gray-800 truncate">심박 존별 누적 시간 (최근 1개월)</h3>
+        <h3 className="text-sm font-semibold text-gray-800 truncate">심박 존별 누적 시간 ({periodLabel || '최근 1개월'})</h3>
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -266,7 +266,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={24} />
-            <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
+            <YAxis type="number" tickFormatter={formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -336,8 +336,45 @@ function RiderTimeInZonesCharts({ DashboardCard, userProfile, recentLogs }) {
   );
 }
 
+/** 일일(당일) 존별 누적 시간 - 단일 로그용 (라이딩 상세 정보 모달) */
+function DailyTimeInZonesCharts({ log, userProfile, DashboardCard }) {
+  var Card = DashboardCard || function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); };
+  var tiz = log && log.time_in_zones;
+  var powerZones = (tiz && tiz.power) || {};
+  var hrZones = (tiz && tiz.hr) || {};
+  var powerData = ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].map(function(k) {
+    return { zone: k.toUpperCase(), seconds: Number(powerZones[k]) || 0 };
+  });
+  var hrData = ['z1', 'z2', 'z3', 'z4', 'z5'].map(function(k) {
+    return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
+  });
+  var ftp = Number(userProfile && userProfile.ftp) || 0;
+  var maxHr = Number(userProfile && userProfile.max_hr) || Number(log && log.max_hr) || 190;
+  var hasPower = powerData.some(function(d) { return d.seconds > 0; });
+  var hasHr = hrData.some(function(d) { return d.seconds > 0; });
+  if (!hasPower && !hasHr) return null;
+  return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4 mt-4 pt-4 border-t border-gray-200' },
+    React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '일일 존별 누적 시간'),
+    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일' }) : null,
+    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일' }) : null
+  );
+}
+
+/** 모달용: DOM 컨테이너에 일일 존별 그래프 렌더링 */
+function RenderDailyTimeInZonesCharts(container, log, userProfile) {
+  var ReactDOM = window.ReactDOM;
+  if (!container || !log || !window.React || !ReactDOM) return;
+  var DashboardCard = function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); };
+  ReactDOM.render(
+    React.createElement(DailyTimeInZonesCharts, { log: log, userProfile: userProfile || {}, DashboardCard: DashboardCard }),
+    container
+  );
+}
+
 if (typeof window !== 'undefined') {
   window.RiderTimeInZonesCharts = RiderTimeInZonesCharts;
   window.PowerTimeInZonesChart = PowerTimeInZonesChart;
   window.HRTimeInZonesChart = HRTimeInZonesChart;
+  window.DailyTimeInZonesCharts = DailyTimeInZonesCharts;
+  window.RenderDailyTimeInZonesCharts = RenderDailyTimeInZonesCharts;
 }
