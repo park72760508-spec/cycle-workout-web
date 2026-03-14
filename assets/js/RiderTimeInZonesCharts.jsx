@@ -7,9 +7,9 @@
 
 /* global React, Recharts */
 
-// 프로필 선택 화면과 동일한 존 색상 (투명색 적용)
+// 프로필 선택 화면과 동일한 존 색상 (투명색 적용) - Z0는 Z1과 구분되도록 흐릿한 회색
 const POWER_ZONE_COLORS = [
-  { z: 'Z0', color: 'rgba(156, 163, 175, 0.55)', label: 'Z0', pct: '0W' },
+  { z: 'Z0', color: 'rgba(156, 163, 175, 0.28)', label: 'Z0', pct: '0W' },
   { z: 'Z1', color: 'rgba(156, 163, 175, 0.55)', label: 'Z1', pct: '55% 미만' },
   { z: 'Z2', color: 'rgba(59, 130, 246, 0.55)', label: 'Z2', pct: '56~75%' },
   { z: 'Z3', color: 'rgba(34, 197, 94, 0.55)', label: 'Z3', pct: '76~90%' },
@@ -70,6 +70,54 @@ function formatSeconds(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
+/** Y축용: 시간(h)만 표시 */
+function formatHoursOnly(sec) {
+  if (!sec || sec < 0) return '0';
+  return String(Math.floor(sec / 3600));
+}
+
+/** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) */
+function generatePowerZoneAnalysisComment(data) {
+  if (!data || !data.length) return '';
+  var total = data.reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
+  if (total <= 0) return '';
+  var pcts = data.map(function(d, i) { return { zone: d.zone || 'Z' + i, pct: Math.round((d.seconds / total) * 100) }; });
+  var z0 = (pcts[0] && pcts[0].pct) || 0, z1 = (pcts[1] && pcts[1].pct) || 0, z2 = (pcts[2] && pcts[2].pct) || 0;
+  var z3 = (pcts[3] && pcts[3].pct) || 0, z4 = (pcts[4] && pcts[4].pct) || 0, z5 = (pcts[5] && pcts[5].pct) || 0;
+  var z6 = (pcts[6] && pcts[6].pct) || 0, z7 = (pcts[7] && pcts[7].pct) || 0;
+  var endurance = z2 + z3, intensity = z4 + z5 + z6 + z7, recovery = z0 + z1;
+  var lines = [];
+  if (z0 > 40) lines.push('• 휴식/코스팅(Z0) 비율이 높아 회복이 충분한 편입니다.');
+  else if (z0 > 20) lines.push('• Z0 비율이 적정 수준으로, 휴식과 운동이 균형을 이룹니다.');
+  if (endurance > 60) lines.push('• 저강도 지구력(Z2~Z3) 비중이 높아 기초 체력 강화에 유리합니다.');
+  else if (endurance > 40) lines.push('• Z2~Z3 비율이 적정으로, 지구력 유지에 도움이 됩니다.');
+  if (intensity > 30) lines.push('• 고강도 구간(Z4~Z7) 비율이 높아 FTP·VO2max 향상에 기여합니다.');
+  else if (intensity > 15) lines.push('• 고강도 구간이 적당히 포함되어 있습니다.');
+  if (z7 > 5) lines.push('• Z7(스프린트) 비율이 있어 무산소 능력 훈련이 이루어지고 있습니다.');
+  if (recovery > 50 && intensity < 10) lines.push('• 저강도 위주 훈련으로, 고강도 구간 추가를 고려해 보세요.');
+  if (lines.length === 0) lines.push('• 존 분포가 고르게 퍼져 있어 다양한 강도로 훈련하고 있습니다.');
+  return lines.slice(0, 10).join('\n');
+}
+
+/** 심박존 데이터 기반 AI 분석 코멘트 (10줄 이내) */
+function generateHRZoneAnalysisComment(data) {
+  if (!data || !data.length) return '';
+  var total = data.reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
+  if (total <= 0) return '';
+  var pcts = data.map(function(d, i) { return { zone: d.zone || 'Z' + (i + 1), pct: Math.round((d.seconds / total) * 100) }; });
+  var z1 = (pcts[0] && pcts[0].pct) || 0, z2 = (pcts[1] && pcts[1].pct) || 0, z3 = (pcts[2] && pcts[2].pct) || 0;
+  var z4 = (pcts[3] && pcts[3].pct) || 0, z5 = (pcts[4] && pcts[4].pct) || 0;
+  var low = z1 + z2, mid = z3, high = z4 + z5;
+  var lines = [];
+  if (z1 > 40) lines.push('• 회복 구간(Z1) 비율이 높아 심박 회복이 양호합니다.');
+  if (z2 + z3 > 60) lines.push('• 유산소 구간(Z2~Z3) 비중이 높아 지구력 훈련에 유리합니다.');
+  if (z4 > 20) lines.push('• 역치 구간(Z4) 비율이 있어 심박 역치 훈련이 이루어지고 있습니다.');
+  if (z5 > 10) lines.push('• 최대 심박 구간(Z5)이 포함되어 고강도 적응에 도움이 됩니다.');
+  if (low > 70 && high < 10) lines.push('• 저강도 위주로, 고강도 구간을 점진적으로 늘려 보세요.');
+  if (lines.length === 0) lines.push('• 심박 존 분포가 균형적입니다.');
+  return lines.slice(0, 10).join('\n');
+}
+
 // ========== 파워 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z0~Z7) ==========
 function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
   var Recharts = window.Recharts;
@@ -115,19 +163,18 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 28, right: 12, left: 8, bottom: 64 }}>
+          <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis type="category" dataKey="name" stroke="#6b7280" tick={function(props) {
+            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var idx = data.findIndex(function(d) { return d.name === payload.value; });
-              var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)', range: '' };
+              var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
               return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')' },
                 React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
-                React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label),
-                React.createElement('text', { x: 0, y: 14, textAnchor: 'middle', fontSize: 9, fill: '#6b7280' }, z.range)
+                React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
-            }} height={48} />
-            <YAxis type="number" tickFormatter={function(v) { return formatSeconds(v); }} stroke="#6b7280" tick={{ fontSize: 12 }} width={56} />
+            }} height={36} />
+            <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 11, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -136,6 +183,9 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth }) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+      </div>
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{generatePowerZoneAnalysisComment(powerData)}</p>
       </div>
     </DashboardCard>
   );
@@ -185,19 +235,18 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 28, right: 12, left: 8, bottom: 64 }}>
+          <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis type="category" dataKey="name" stroke="#6b7280" tick={function(props) {
+            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var idx = data.findIndex(function(d) { return d.name === payload.value; });
-              var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)', range: '' };
+              var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
               return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')' },
                 React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
-                React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label),
-                React.createElement('text', { x: 0, y: 14, textAnchor: 'middle', fontSize: 9, fill: '#6b7280' }, z.range)
+                React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
-            }} height={48} />
-            <YAxis type="number" tickFormatter={function(v) { return formatSeconds(v); }} stroke="#6b7280" tick={{ fontSize: 12 }} width={56} />
+            }} height={36} />
+            <YAxis type="number" tickFormatter={formatHoursOnly} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 11, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -206,6 +255,9 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth }) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+      </div>
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">{generateHRZoneAnalysisComment(hrData)}</p>
       </div>
     </DashboardCard>
   );
