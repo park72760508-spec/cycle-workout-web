@@ -1884,7 +1884,7 @@
           </div>
 
           <div class="connection-device-section basecamp-device-section">
-            <h3 class="mb-15 basecamp-status-bar">경로선택</h3>
+            <h3 class="mb-15 basecamp-status-bar">경로 선택</h3>
             <div class="grid-2 mb-15" style="gap: 3.75px;">
               <button class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
                 <span>INDOOR TRAINING</span>
@@ -1907,7 +1907,7 @@
               </div>
               <div id="authBarRight" style="display: none; align-items: center; justify-content: space-between; width: 100%;">
                 <div style="flex: 1;"></div>
-                <span id="authBarWelcome" style="flex: 0; text-align: center; font-size: 17px; font-weight: 600; color: #0369a1;">환영합니다. 사용자명님</span>
+                <div id="authBarWelcome" style="flex: 0; text-align: center; font-size: clamp(14px, 4vw, 17px); font-weight: 600; color: #0369a1; line-height: 1.4;"><span id="authBarWelcomeLine1">환영합니다.</span><br/><span id="authBarWelcomeLine2">사용자명님</span></div>
                 <div style="flex: 1; display: flex; justify-content: flex-end;">
                   <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
                     <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
@@ -10594,7 +10594,6 @@
       const left = document.getElementById('authBarLeft');
       const right = document.getElementById('authBarRight');
       const warning = document.getElementById('authBarWarning');
-      const welcomeEl = document.getElementById('authBarWelcome');
       if (!left || !right) return;
       if (user && user.email) {
         left.style.display = 'none';
@@ -10607,7 +10606,10 @@
           else if (user.displayName) userName = user.displayName;
           else if (user.email) userName = user.email.split('@')[0];
         } catch (e) {}
-        if (welcomeEl) welcomeEl.textContent = '환영합니다. ' + userName + '님';
+        var line1 = document.getElementById('authBarWelcomeLine1');
+        var line2 = document.getElementById('authBarWelcomeLine2');
+        if (line1) line1.textContent = '환영합니다.';
+        if (line2) line2.textContent = userName + '님';
       } else {
         left.style.display = 'flex';
         right.style.display = 'none';
