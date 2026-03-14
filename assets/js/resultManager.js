@@ -443,8 +443,9 @@ async function saveTrainingResult(extra = {}) {
             // 케이던스
             avg_cadence: avgCadence,
             
-            // 존 분포 계산용 (powerData 전달)
+            // 존 분포 계산용 (powerData, hrData 전달)
             powerData: session?.powerData || trainingResult.powerData || null,
+            hrData: session?.hrData || trainingResult.hrData || null,
             
             // 주관적 느낌 (RPE) - 사용자 입력 필요 시 추가
             rpe: null // 향후 사용자 입력으로 추가 가능

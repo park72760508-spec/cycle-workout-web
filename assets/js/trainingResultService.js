@@ -69,60 +69,86 @@ function addDaysToDate(currentDate, days) {
   return newDate;
 }
 
+/** 노이즈 필터 상수 */
+const POWER_SPIKE_THRESHOLD_W = 2000;
+const POWER_SPIKE_JUMP_W = 1000;
+const HR_MAX_BPM = 220;
+const DEFAULT_FTP_W = 150;
+const DEFAULT_MAX_HR = 190;
+
 /**
- * 파워 존 분포 계산 (FTP 기준)
- * 
- * @param {Array} powerData - 파워 데이터 배열 [{t: timestamp, v: power}, ...]
- * @param {number} ftp - Functional Threshold Power
- * @returns {Object} 존별 시간 분포 (초 단위)
+ * Coggan 7-Zone: 파워(W) → 존 인덱스 (0=Coasting, 1~7)
+ * Z0: 0W, Z1: <55%, Z2: 56-75%, Z3: 76-90%, Z4: 91-105%, Z5: 106-120%, Z6: 121-150%, Z7: >150%
  */
-function calculateTimeInZones(powerData, ftp) {
-  const zones = {
-    z1_recovery: 0,      // 0-55% FTP
-    z2_endurance: 0,     // 56-75% FTP
-    z3_tempo: 0,         // 76-90% FTP
-    z4_threshold: 0,     // 91-105% FTP
-    z5_vo2max: 0,        // 106-120% FTP
-    z6_anaerobic: 0,     // 121-150% FTP
-    z7_neuromuscular: 0  // >150% FTP
-  };
-  
-  if (!powerData || powerData.length === 0 || !ftp || ftp <= 0) {
-    return zones;
-  }
-  
-  // 각 샘플은 1초 간격으로 기록된 것으로 가정
-  powerData.forEach(data => {
-    const power = Number(data.v) || 0;
-    if (power <= 0) return;
-    
-    const ftpPercent = (power / ftp) * 100;
-    
-    if (ftpPercent <= 55) {
-      zones.z1_recovery += 1;
-    } else if (ftpPercent <= 75) {
-      zones.z2_endurance += 1;
-    } else if (ftpPercent <= 90) {
-      zones.z3_tempo += 1;
-    } else if (ftpPercent <= 105) {
-      zones.z4_threshold += 1;
-    } else if (ftpPercent <= 120) {
-      zones.z5_vo2max += 1;
-    } else if (ftpPercent <= 150) {
-      zones.z6_anaerobic += 1;
-    } else {
-      zones.z7_neuromuscular += 1;
-    }
+function getPowerZoneIndex(powerW, ftp) {
+  const p = Number(powerW) || 0;
+  if (p <= 0) return 0;
+  if (!ftp || ftp <= 0) return 1;
+  const pct = (p / ftp) * 100;
+  if (pct < 55) return 1;
+  if (pct <= 75) return 2;
+  if (pct <= 90) return 3;
+  if (pct <= 105) return 4;
+  if (pct <= 120) return 5;
+  if (pct <= 150) return 6;
+  return 7;
+}
+
+/**
+ * 심박 존: Max HR 기준 5존
+ * Z1: 50-60%, Z2: 60-70%, Z3: 70-80%, Z4: 80-90%, Z5: 90-100%
+ */
+function getHRZoneIndex(hrBpm, maxHr) {
+  const hr = Number(hrBpm) || 0;
+  if (hr <= 0 || !maxHr || maxHr <= 0) return null;
+  const pct = (hr / maxHr) * 100;
+  if (pct < 50) return null;
+  if (pct < 60) return 1;
+  if (pct < 70) return 2;
+  if (pct < 80) return 3;
+  if (pct < 90) return 4;
+  if (pct <= 100) return 5;
+  return null;
+}
+
+/**
+ * 파워 스트림에서 존별 누적 시간(초) 계산. 노이즈 필터 적용.
+ * @param {number[]} wattsArray - 1초당 1개 파워 값 배열 (노이즈 필터 적용됨)
+ * @param {number} ftp - Functional Threshold Power
+ * @returns {Object} { z0, z1, z2, z3, z4, z5, z6, z7 }
+ */
+function calculateTimeInPowerZones(wattsArray, ftp) {
+  const zones = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
+  if (!wattsArray || wattsArray.length === 0 || !ftp || ftp <= 0) return zones;
+  wattsArray.forEach((w) => {
+    const idx = getPowerZoneIndex(w, ftp);
+    zones[`z${idx}`] = (zones[`z${idx}`] || 0) + 1;
   });
-  
   return zones;
 }
 
-/** 2200W 초과 스파이크 보간 임계치 (Andrew Coggan World Class, 기계적 센서 오류 필터) */
-const POWER_SPIKE_THRESHOLD_W = 2200;
+/**
+ * 심박 스트림에서 존별 누적 시간(초) 계산. 220bpm 초과 무시.
+ * @param {Array} hrData - [{t, v}, ...] 또는 number[]
+ * @param {number} maxHr - 최대 심박수
+ * @returns {Object} { z1, z2, z3, z4, z5 }
+ */
+function calculateTimeInHRZones(hrData, maxHr) {
+  const zones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
+  if (!hrData || hrData.length === 0 || !maxHr || maxHr <= 0) return zones;
+  const arr = Array.isArray(hrData) && typeof hrData[0] === 'object' && hrData[0]?.v != null
+    ? hrData.map((d) => Number(d.v) || 0)
+    : hrData.map((v) => Number(v) || 0);
+  arr.forEach((hr) => {
+    if (hr <= 0 || hr > HR_MAX_BPM) return;
+    const idx = getHRZoneIndex(hr, maxHr);
+    if (idx != null) zones[`z${idx}`] = (zones[`z${idx}`] || 0) + 1;
+  });
+  return zones;
+}
 
 /**
- * 1초 단위 Raw Data에서 2200W 초과 스파이크를 직전 3초·직후 3초 평균으로 대체 (5~60분 MMP 계산 전 적용)
+ * 1초 단위 Raw Data에서 2000W 초과 스파이크 및 1초 만에 1000W 이상 튀는 값을 직전 3초·직후 3초 평균으로 대체
  * @param {number[]} rawDataArray - 1초당 1개 파워 값 배열
  * @returns {number[]} 스파이크 보간된 배열 (원본 변경 없음)
  */
@@ -131,7 +157,10 @@ function smoothPowerSpikes(rawDataArray) {
   const arr = rawDataArray.map((v) => Number(v) || 0);
   const len = arr.length;
   for (let i = 0; i < len; i++) {
-    if (arr[i] <= POWER_SPIKE_THRESHOLD_W) continue;
+    const prev = i > 0 ? arr[i - 1] : arr[i];
+    const isOverThreshold = arr[i] > POWER_SPIKE_THRESHOLD_W;
+    const isSpikeJump = i > 0 && Math.abs(arr[i] - prev) > POWER_SPIKE_JUMP_W;
+    if (!isOverThreshold && !isSpikeJump) continue;
     const before = [];
     for (let b = 1; b <= 3; b++) {
       if (i - b >= 0) before.push(arr[i - b]);
@@ -249,15 +278,26 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const currentAccPoints = Number(userData.acc_points || 0);
       const currentExpiryDate = userData.expiry_date;
       
+      // FTP Fallback: 프로필에 없으면 20분 MMP의 95% 또는 150W (TSS/존 계산에 사용)
+      const rawWattsForFtp = trainingData.powerData && trainingData.powerData.length > 0
+        ? trainingData.powerData.map((d) => Number(d.v) || 0)
+        : [];
+      const smoothedForFtp = rawWattsForFtp.length > 0 ? smoothPowerSpikes(rawWattsForFtp) : [];
+      const effectiveFTP = currentFTP > 0 ? currentFTP : (
+        smoothedForFtp.length >= 1200
+          ? Math.round(calculateMaxAveragePower(smoothedForFtp, 1200) * 0.95)
+          : DEFAULT_FTP_W
+      );
+      
       console.log('[saveTrainingSession] 사용자 현재 상태:', {
-        ftp: currentFTP,
+        ftp: effectiveFTP,
         rem_points: currentRemPoints,
         acc_points: currentAccPoints,
         expiry_date: currentExpiryDate?.toDate?.() || currentExpiryDate
       });
       
-      // 2. TSS 계산
-      const tss = calculateTSS(durationSec, np, currentFTP);
+      // 2. TSS 계산 (effectiveFTP 사용)
+      const tss = calculateTSS(durationSec, np, effectiveFTP);
       const earnedPoints = tss; // TSS가 획득 포인트 (정수로 반올림)
       
       console.log('[saveTrainingSession] TSS 계산 결과:', {
@@ -265,17 +305,17 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         earnedPoints,
         durationSec,
         np,
-        currentFTP,
-        intensityFactor: np / currentFTP,
-        formula: `(${durationSec} * ${np} * ${np / currentFTP}) / (${currentFTP} * 3600) * 100`,
-        calculatedValue: (durationSec * np * (np / currentFTP)) / (currentFTP * 3600) * 100
+        effectiveFTP,
+        intensityFactor: np / effectiveFTP,
+        formula: `(${durationSec} * ${np} * ${np / effectiveFTP}) / (${effectiveFTP} * 3600) * 100`,
+        calculatedValue: (durationSec * np * (np / effectiveFTP)) / (effectiveFTP * 3600) * 100
       });
       
       if (tss === 0) {
         console.warn('[saveTrainingSession] ⚠️ TSS가 0으로 계산되었습니다. 원인 확인:', {
           durationSec,
           np,
-          currentFTP,
+          effectiveFTP,
           reason: durationSec <= 0 ? 'duration이 0 이하' : (np <= 0 ? 'NP가 0 이하' : '알 수 없음')
         });
       }
@@ -352,32 +392,48 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       // 6. 훈련 로그 데이터 준비 및 트랜잭션 내에서 로그 저장 (권한 오류 시 포인트 중복 적립 방지)
       // 로그 쓰기가 실패하면 트랜잭션 전체 롤백 → 재시도 시 포인트 이중 적립 없음
       
-      // Intensity Factor 계산
-      const intensityFactor = np / currentFTP;
+      // Intensity Factor 계산 (effectiveFTP 사용)
+      const intensityFactor = np / effectiveFTP;
       
       // Efficiency Factor 계산 (NP / Avg HR)
       const efficiencyFactor = trainingData.avg_hr && trainingData.avg_hr > 0 
         ? (np / trainingData.avg_hr) 
         : null;
       
-      // 존 분포 계산 (powerData가 있으면)
-      const timeInZones = trainingData.powerData && trainingData.powerData.length > 0
-        ? calculateTimeInZones(trainingData.powerData, currentFTP)
-        : {
-            z1_recovery: 0,
-            z2_endurance: 0,
-            z3_tempo: 0,
-            z4_threshold: 0,
-            z5_vo2max: 0,
-            z6_anaerobic: 0,
-            z7_neuromuscular: 0
-          };
+      // Max HR: yearly_peaks/{year} → 스트림 최대값 → 기본 190
+      const now = new Date();
+      const dateStrForLog = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const year = now.getFullYear();
+      let maxHr = DEFAULT_MAX_HR;
+      try {
+        const yearlyPeakRef = doc(db, 'users', userId, 'yearly_peaks', String(year));
+        const yearlySnap = await transaction.get(yearlyPeakRef);
+        if (yearlySnap.exists()) {
+          const yp = yearlySnap.data();
+          const v = Number(yp?.max_hr ?? yp?.max_heartrate ?? 0);
+          if (v > 0) maxHr = v;
+        }
+      } catch (e) {
+        console.warn('[saveTrainingSession] yearly_peaks 조회 실패:', e.message);
+      }
+      if (trainingData.hrData && trainingData.hrData.length > 0) {
+        const fromStream = Math.max(...trainingData.hrData.map((d) => Number(d.v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM));
+        if (fromStream > 0 && (maxHr === DEFAULT_MAX_HR || fromStream > maxHr)) maxHr = fromStream;
+      }
+      
+      // 존 분포 계산 (Power: z0~z7, HR: z1~z5)
+      const powerZones = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
+      const hrZones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
+      if (rawWattsForFtp.length > 0) {
+        Object.assign(powerZones, calculateTimeInPowerZones(smoothedForFtp, effectiveFTP));
+      }
+      if (trainingData.hrData && trainingData.hrData.length > 0) {
+        Object.assign(hrZones, calculateTimeInHRZones(trainingData.hrData, maxHr));
+      }
+      const timeInZones = { power: powerZones, hr: hrZones };
 
       // MMP 계산 (powerData가 있으면 1/5/10/20/30/40/60분 피크 파워, 스파이크 보간 적용)
-      const rawWatts = trainingData.powerData && trainingData.powerData.length > 0
-        ? trainingData.powerData.map((d) => Number(d.v) || 0)
-        : null;
-      const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
+      const wattsArray = smoothedForFtp.length > 0 ? smoothedForFtp : null;
       const max1minWatts = wattsArray && wattsArray.length >= 60 ? calculateMaxAveragePower(wattsArray, 60) : null;
       const max5minWatts = wattsArray && wattsArray.length >= 300 ? calculateMaxAveragePower(wattsArray, 300) : null;
       const max10minWatts = wattsArray && wattsArray.length >= 600 ? calculateMaxAveragePower(wattsArray, 600) : null;
@@ -385,15 +441,11 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max30minWatts = wattsArray && wattsArray.length >= 1800 ? calculateMaxAveragePower(wattsArray, 1800) : null;
       const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
-      
-      // date 필드: "YYYY-MM-DD" 형식 문자열 (훈련일지 달력 등 조회용)
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
       const trainingLogData = {
         // 기본 정보
         userId: userId, // 쿼리 편의성을 위해 유지
-        date: dateStr,
+        date: dateStrForLog,
         earned_points: earnedPoints,
         workout_id: trainingData.workout_id || null,
         title: trainingData.title || null,
@@ -404,7 +456,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         elevation_gain: trainingData.elevation_gain || null,
         
         // 파워 & 부하 (Power & Load)
-        ftp_at_time: currentFTP, // 훈련 당시의 FTP (중요: FTP는 변하므로 기록)
+        ftp_at_time: effectiveFTP, // 훈련 당시의 FTP (Fallback: 20분 MMP 95% 또는 150W)
         avg_watts: avgWatts,
         weighted_watts: np, // NP (Normalized Power)
         max_watts: trainingData.max_watts || null,
