@@ -74,7 +74,7 @@ function HeartRateProfileCurveChart({ DashboardCard, heartRateCurveData, isFullW
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>전 구간 심박 커브</h3>
+          <h3 className="text-xs font-semibold text-gray-800 truncate">전 구간 심박 커브</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -84,7 +84,7 @@ function HeartRateProfileCurveChart({ DashboardCard, heartRateCurveData, isFullW
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>전 구간 심박 커브</h3>
+        <h3 className="text-xs font-semibold text-gray-800 truncate">전 구간 심박 커브</h3>
       </div>
       <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -124,7 +124,7 @@ function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFull
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
-          <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>최근 1개월 심박 그래프</h3>
+          <h3 className="text-xs font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -134,7 +134,7 @@ function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFull
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
-        <h3 className="font-semibold text-gray-800 truncate" style={{ fontSize: 'clamp(9px, 2.2vw, 13px)' }}>최근 1개월 심박 그래프</h3>
+        <h3 className="text-xs font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />1분</span>
           <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f97316' }} />5분</span>
@@ -190,7 +190,7 @@ function RiderHeartRateProfileTrendCharts({ DashboardCard, userProfile, recentLo
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-gray-800 px-1">심박 매트릭스 (Heart Rate Matrix)</h2>
+      <h2 className="text-base font-semibold text-gray-800 px-1">심박 매트릭스</h2>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="min-w-0 overflow-hidden col-span-2">
           <HeartRateProfileCurveChart DashboardCard={Card} heartRateCurveData={heartRateCurveData} isFullWidth />
