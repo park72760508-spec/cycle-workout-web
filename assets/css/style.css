@@ -4248,7 +4248,14 @@ button[aria-disabled="true"] {
     overflow-x: auto;
   }
   .profile-zone-table {
-    min-width: 400px;
+    min-width: 280px;
+  }
+  /* 휴대폰: 내용 컬럼 줄바꿈으로 전체 표시 */
+  .profile-zone-table td:nth-child(4) {
+    word-break: break-word;
+    font-size: 10px;
+    line-height: 1.4;
+    padding: 6px 8px;
   }
 }
 .profile-zone-table-block:last-child {
@@ -4271,8 +4278,8 @@ button[aria-disabled="true"] {
 .profile-zone-table td {
   padding: 10px 12px;
   border: 1px solid #e5e7eb;
-  text-align: left;
-  vertical-align: top;
+  text-align: center;
+  vertical-align: middle;
 }
 .profile-zone-table th {
   background: #f3f4f6;
@@ -4281,6 +4288,16 @@ button[aria-disabled="true"] {
 }
 .profile-zone-table td {
   color: #374151;
+}
+/* 내용 컬럼: 휴대폰에서 줄바꿈 적용, 글자 잘림 방지 */
+.profile-zone-table td:nth-child(4),
+.profile-zone-table th:nth-child(4) {
+  text-align: left;
+  word-wrap: break-word;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  white-space: normal;
+  min-width: 0;
 }
 .profile-zone-badge {
   display: inline-flex;
