@@ -97,7 +97,7 @@ function HeartRateProfileCurveChart({ DashboardCard, heartRateCurveData, isFullW
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="duration" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return v + ' bpm'; }} domain={['auto', 'auto']} />
+            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={['auto', 'auto']} />
             <Area type="monotone" dataKey="hr" stroke="#ec4899" fill={'url(#' + cid + '-fillCurve)'} strokeWidth={2.5} name="나의 심박" dot={{ r: 4, fill: '#ec4899', stroke: '#fff', strokeWidth: 1 }} activeDot={{ r: 5, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }} connectNulls>{LabelList ? <LabelList dataKey="hr" position="top" fill="rgba(236,72,153,0.7)" fontSize={labelFontSize} /> : null}</Area>
           </AreaChart>
         </ResponsiveContainer>
@@ -165,7 +165,7 @@ function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFull
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return v + ' bpm'; }} domain={['auto', 'auto']} />
+            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={['auto', 'auto']} />
             {Tooltip ? <Tooltip formatter={function(v) { return v + ' bpm'; }} contentStyle={{ fontSize: 12 }} labelFormatter={function(label) { return label; }} /> : null}
             <Area type="monotone" dataKey="hr1min" stroke="#ef4444" fill={'url(#' + cid + '-fill1min)'} strokeWidth={2} name="1분 심박" dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 1 }} connectNulls />
             <Area type="monotone" dataKey="hr5min" stroke="#f97316" fill={'url(#' + cid + '-fill5min)'} strokeWidth={2} name="5분 심박" dot={{ r: 3, fill: '#f97316', stroke: '#fff', strokeWidth: 1 }} connectNulls />

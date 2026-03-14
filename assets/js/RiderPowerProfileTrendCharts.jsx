@@ -187,7 +187,7 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) 
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="duration" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={['auto', 'auto']} />
             {hasTarget && (
               <Area type="monotone" dataKey="targetPower" stroke="rgba(239,68,68,0.5)" strokeDasharray="5 5" fill={'url(#' + cid + '-fillTarget)'} strokeWidth={2} name="목표 (ALLR 최고)" dot={false} connectNulls />
             )}
@@ -258,7 +258,7 @@ function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidt
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return v + 'W'; }} domain={['auto', 'auto']} />
+            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={['auto', 'auto']} />
             {Tooltip ? <Tooltip formatter={function(v) { return v + ' W'; }} contentStyle={{ fontSize: 12 }} labelFormatter={function(label) { return label; }} /> : null}
             <Area type="monotone" dataKey="power1min" stroke="#ef4444" fill={'url(#' + cid + '-fill1min)'} strokeWidth={2} name="1분 파워" dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 1 }} connectNulls />
             <Area type="monotone" dataKey="power5min" stroke="#f97316" fill={'url(#' + cid + '-fill5min)'} strokeWidth={2} name="5분 파워" dot={{ r: 3, fill: '#f97316', stroke: '#fff', strokeWidth: 1 }} connectNulls />
