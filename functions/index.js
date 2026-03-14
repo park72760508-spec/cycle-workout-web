@@ -737,6 +737,19 @@ async function processStravaActivity(db, ownerId, objectId) {
     ? calculateMaxHeartRatePeaks(streamsRes.heartrate)
     : null;
 
+  let timeInZones = null;
+  if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
+    const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
+    timeInZones = await calculateZoneTimesFromStreams({
+      wattsArray: streamsRes.watts || [],
+      hrArray: streamsRes.heartrate || [],
+      ftp: effectiveFtp,
+      userId,
+      db,
+      dateStr: mapped.date || "",
+    });
+  }
+
   const tssAppliedAt = new Date().toISOString();
   const logDoc = {
     activity_id: mapped.activity_id,
@@ -760,7 +773,7 @@ async function processStravaActivity(db, ownerId, objectId) {
     if: mapped.if,
     tss: mapped.tss,
     efficiency_factor: mapped.efficiency_factor,
-    time_in_zones: mapped.time_in_zones,
+    time_in_zones: timeInZones || mapped.time_in_zones,
     earned_points: mapped.earned_points,
     workout_id: mapped.workout_id,
     tss_applied: true,
@@ -1127,7 +1140,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const d = entry ? entry.data : {};
       const needsMmp = d.max_1min_watts == null || d.max_5min_watts == null || d.max_10min_watts == null || d.max_20min_watts == null || d.max_30min_watts == null || d.max_40min_watts == null || d.max_60min_watts == null;
       const needsHrPeaks = d.max_hr_5sec == null && d.max_hr_1min == null && d.max_hr_5min == null;
-      if ((needsMmp || needsHrPeaks) && entry) {
+      const needsTimeInZones = !d.time_in_zones || !d.time_in_zones.power;
+      if ((needsMmp || needsHrPeaks || needsTimeInZones) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
         if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
@@ -1150,6 +1164,18 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           if (hrPeaks.max_hr_40min != null) updateData.max_hr_40min = hrPeaks.max_hr_40min;
           if (hrPeaks.max_hr_60min != null) updateData.max_hr_60min = hrPeaks.max_hr_60min;
           if (hrPeaks.max_hr != null) updateData.max_hr = hrPeaks.max_hr;
+        }
+        if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
+          const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
+          const timeInZones = await calculateZoneTimesFromStreams({
+            wattsArray: streamsRes.watts || [],
+            hrArray: streamsRes.heartrate || [],
+            ftp: effectiveFtp,
+            userId,
+            db,
+            dateStr: d.date || "",
+          });
+          updateData.time_in_zones = timeInZones;
         }
         if (Object.keys(updateData).length > 0) await entry.ref.update(updateData);
       }
@@ -1178,6 +1204,18 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       max60minWatts = calculateMaxAveragePower(watts, 3600);
     }
     const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
+    let timeInZones = null;
+    if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
+      const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
+      timeInZones = await calculateZoneTimesFromStreams({
+        wattsArray: streamsRes.watts || [],
+        hrArray: streamsRes.heartrate || [],
+        ftp: effectiveFtp,
+        userId,
+        db,
+        dateStr: mapped.date || "",
+      });
+    }
     const dateStr = mapped.date || "";
     const activityTss = mapped.tss || 0;
     const distanceKm = mapped.distance_km || 0;
@@ -1204,7 +1242,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if: mapped.if,
       tss: mapped.tss,
       efficiency_factor: mapped.efficiency_factor,
-      time_in_zones: mapped.time_in_zones,
+      time_in_zones: timeInZones || mapped.time_in_zones,
       earned_points: mapped.earned_points,
       workout_id: mapped.workout_id,
       tss_applied: true,
@@ -1547,7 +1585,8 @@ exports.manualStravaSyncWithMmp = onRequest(
         const existingData = logSnap.data();
         const needsMmp = existingData.max_1min_watts == null || existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_20min_watts == null || existingData.max_30min_watts == null || existingData.max_40min_watts == null || existingData.max_60min_watts == null;
         const needsHrPeaks = existingData.max_hr_5sec == null && existingData.max_hr_1min == null && existingData.max_hr_5min == null;
-        if (needsMmp || needsHrPeaks) {
+        const needsTimeInZones = !existingData.time_in_zones || !existingData.time_in_zones.power;
+        if (needsMmp || needsHrPeaks || needsTimeInZones) {
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
@@ -1575,6 +1614,18 @@ exports.manualStravaSyncWithMmp = onRequest(
             if (hrPeaks.max_hr_40min != null) updateData.max_hr_40min = hrPeaks.max_hr_40min;
             if (hrPeaks.max_hr_60min != null) updateData.max_hr_60min = hrPeaks.max_hr_60min;
             if (hrPeaks.max_hr != null) updateData.max_hr = hrPeaks.max_hr;
+          }
+          if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
+            const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
+            const timeInZones = await calculateZoneTimesFromStreams({
+              wattsArray: streamsRes.watts || [],
+              hrArray: streamsRes.heartrate || [],
+              ftp: effectiveFtp,
+              userId: uid,
+              db,
+              dateStr: existingData.date || "",
+            });
+            updateData.time_in_zones = timeInZones;
           }
           if (Object.keys(updateData).length > 0) {
             await logDocRef.update(updateData);
@@ -1962,10 +2013,14 @@ const PEAK_POWER_LIMITS = {
   "60min": { wkg: 5.8, watts: 450 },
 };
 
-const POWER_SPIKE_THRESHOLD_W = 2200;
+const POWER_SPIKE_THRESHOLD_W = 2000;
+const POWER_SPIKE_JUMP_W = 1000;
+const HR_MAX_BPM = 220;
+const DEFAULT_FTP_W = 150;
+const DEFAULT_MAX_HR = 190;
 
 /**
- * 1초 단위 Raw Data에서 2200W 초과 스파이크를 직전 3초·직후 3초 평균으로 대체 (5~60분 MMP 계산 전 적용)
+ * 1초 단위 Raw Data에서 2000W 초과 스파이크 및 1초 만에 1000W 이상 튀는 값을 직전 3초·직후 3초 평균으로 대체
  * @param {number[]} rawDataArray - 1초당 1개 파워 값 배열
  * @returns {number[]} 스파이크 보간된 배열 (원본 변경 없음)
  */
@@ -1974,7 +2029,10 @@ function smoothPowerSpikes(rawDataArray) {
   const arr = rawDataArray.map((v) => Number(v) || 0);
   const len = arr.length;
   for (let i = 0; i < len; i++) {
-    if (arr[i] <= POWER_SPIKE_THRESHOLD_W) continue;
+    const prev = i > 0 ? arr[i - 1] : arr[i];
+    const isOverThreshold = arr[i] > POWER_SPIKE_THRESHOLD_W;
+    const isSpikeJump = i > 0 && Math.abs(arr[i] - prev) > POWER_SPIKE_JUMP_W;
+    if (!isOverThreshold && !isSpikeJump) continue;
     const before = [];
     for (let b = 1; b <= 3; b++) {
       if (i - b >= 0) before.push(arr[i - b]);
@@ -1989,6 +2047,160 @@ function smoothPowerSpikes(rawDataArray) {
       : POWER_SPIKE_THRESHOLD_W;
   }
   return arr;
+}
+
+/**
+ * users/yearly_peaks/{year}에서 max_hr 조회. 없으면 null.
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} userId
+ * @param {number|string} year - 라이딩 연도 (스트림 날짜에서 파싱)
+ * @returns {Promise<number|null>}
+ */
+async function getMaxHRForYear(db, userId, year) {
+  if (!db || !userId || year == null) return null;
+  try {
+    const yearStr = String(year);
+    const ref = db.collection("users").doc(userId).collection("yearly_peaks").doc(yearStr);
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    const data = snap.data();
+    const maxHr = data && (data.max_hr != null || data.max_heartrate != null)
+      ? Number(data.max_hr ?? data.max_heartrate)
+      : null;
+    return maxHr != null && maxHr > 0 ? maxHr : null;
+  } catch (e) {
+    console.warn("[getMaxHRForYear] 조회 실패:", userId, year, e.message);
+    return null;
+  }
+}
+
+/**
+ * FTP Fallback: 사용자 프로필 FTP 없으면 20분 MMP의 95% 또는 기본값 150W
+ * @param {Object} userData - users 문서 데이터
+ * @param {number[]} [wattsArray] - 파워 스트림 (20분 MMP 계산용)
+ * @returns {number} FTP (W)
+ */
+function getFTPWithFallback(userData, wattsArray) {
+  const ftp = Number(userData?.ftp) || 0;
+  if (ftp > 0) return ftp;
+  if (wattsArray && wattsArray.length >= 1200) {
+    const smoothed = smoothPowerSpikes(wattsArray);
+    const max20min = calculateMaxAveragePower(smoothed, 1200);
+    if (max20min > 0) return Math.round(max20min * 0.95);
+  }
+  return DEFAULT_FTP_W;
+}
+
+/**
+ * 심박 스트림 노이즈 필터: 220bpm 초과 무시 (null로 대체하여 해당 초는 HR 존 계산에서 제외)
+ * @param {number[]} hrArray
+ * @returns {number[]} 필터된 배열 (무효값은 -1로 표시하여 무시)
+ */
+function filterHRWithNoise(hrArray) {
+  if (!hrArray || hrArray.length === 0) return [];
+  return hrArray.map((v) => {
+    const n = Number(v) || 0;
+    if (n <= 0 || n > HR_MAX_BPM) return -1;
+    return n;
+  });
+}
+
+/**
+ * Coggan 7-Zone: 파워(W) → 존 인덱스 (0=Coasting, 1~7)
+ * Z0: 0W, Z1: <55%, Z2: 56-75%, Z3: 76-90%, Z4: 91-105%, Z5: 106-120%, Z6: 121-150%, Z7: >150%
+ */
+function getPowerZoneIndex(powerW, ftp) {
+  const p = Number(powerW) || 0;
+  if (p <= 0) return 0;
+  if (!ftp || ftp <= 0) return 1;
+  const pct = (p / ftp) * 100;
+  if (pct < 55) return 1;
+  if (pct <= 75) return 2;
+  if (pct <= 90) return 3;
+  if (pct <= 105) return 4;
+  if (pct <= 120) return 5;
+  if (pct <= 150) return 6;
+  return 7;
+}
+
+/**
+ * 심박 존: Max HR 기준 5존
+ * Z1: 50-60%, Z2: 60-70%, Z3: 70-80%, Z4: 80-90%, Z5: 90-100%
+ */
+function getHRZoneIndex(hrBpm, maxHr) {
+  const hr = Number(hrBpm) || 0;
+  if (hr <= 0 || !maxHr || maxHr <= 0) return null;
+  const pct = (hr / maxHr) * 100;
+  if (pct < 50) return null;
+  if (pct < 60) return 1;
+  if (pct < 70) return 2;
+  if (pct < 80) return 3;
+  if (pct < 90) return 4;
+  if (pct <= 100) return 5;
+  return null;
+}
+
+/**
+ * 파워 스트림에서 존별 누적 시간(초) 계산. 노이즈 필터 적용된 smoothPowerSpikes 결과 사용.
+ */
+function calculateTimeInPowerZones(wattsArray, ftp) {
+  const zones = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
+  if (!wattsArray || wattsArray.length === 0 || !ftp || ftp <= 0) return zones;
+  wattsArray.forEach((w) => {
+    const idx = getPowerZoneIndex(w, ftp);
+    zones[`z${idx}`] = (zones[`z${idx}`] || 0) + 1;
+  });
+  return zones;
+}
+
+/**
+ * 심박 스트림에서 존별 누적 시간(초) 계산. 220bpm 초과 무시.
+ */
+function calculateTimeInHRZones(hrArray, maxHr) {
+  const zones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
+  if (!hrArray || hrArray.length === 0 || !maxHr || maxHr <= 0) return zones;
+  const filtered = filterHRWithNoise(hrArray);
+  filtered.forEach((hr) => {
+    if (hr < 0) return;
+    const idx = getHRZoneIndex(hr, maxHr);
+    if (idx != null) zones[`z${idx}`] = (zones[`z${idx}`] || 0) + 1;
+  });
+  return zones;
+}
+
+/**
+ * 스트림 데이터로 Power/HR 존 시간 계산. dateStr에서 연도 파싱하여 max_hr 조회.
+ * @param {Object} opts - { wattsArray, hrArray, ftp, userId, db, dateStr }
+ * @returns {Promise<{ power: Object, hr: Object }>}
+ */
+async function calculateZoneTimesFromStreams(opts) {
+  const { wattsArray, hrArray, ftp, userId, db, dateStr } = opts;
+  const powerZones = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
+  const hrZones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
+
+  const effectiveFtp = ftp > 0 ? ftp : DEFAULT_FTP_W;
+  const smoothedWatts = wattsArray && wattsArray.length > 0 ? smoothPowerSpikes(wattsArray) : [];
+  if (smoothedWatts.length > 0) {
+    Object.assign(powerZones, calculateTimeInPowerZones(smoothedWatts, effectiveFtp));
+  }
+
+  let maxHr = DEFAULT_MAX_HR;
+  if (dateStr && userId && db) {
+    const year = parseInt(String(dateStr).substring(0, 4), 10);
+    if (!isNaN(year)) {
+      const fromDb = await getMaxHRForYear(db, userId, year);
+      if (fromDb != null && fromDb > 0) maxHr = fromDb;
+    }
+  }
+  if (hrArray && hrArray.length > 0) {
+    const fromStream = Math.max(...hrArray.map((v) => Number(v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM));
+    if (fromStream > 0 && (maxHr === DEFAULT_MAX_HR || fromStream > maxHr)) maxHr = fromStream;
+  }
+  if (hrArray && hrArray.length > 0) {
+    Object.assign(hrZones, calculateTimeInHRZones(hrArray, maxHr));
+  }
+
+  return { power: powerZones, hr: hrZones };
 }
 
 /**
