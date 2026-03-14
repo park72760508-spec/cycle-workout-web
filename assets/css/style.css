@@ -3207,6 +3207,17 @@ button[aria-disabled="true"] {
   font-weight: 600; /* 대시보드 추천 디자인: font-semibold */
 }
 
+.training-detail-time-in-zones-wrap {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  min-width: 0;
+}
+
+.training-detail-time-in-zones-wrap .training-detail-time-in-zones {
+  --tw-space-y-reverse: 0;
+}
+
 .training-detail-strava-footer {
   padding: 12px 20px;
   border-top: 1px solid #e5e7eb; /* 대시보드 추천 디자인: 연한 회색 구분선 */
