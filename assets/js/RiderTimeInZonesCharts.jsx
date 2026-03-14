@@ -185,7 +185,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 28 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={0} tick={function(props) {
+            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var idx = data.findIndex(function(d) { return d.name === payload.value; });
               var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
@@ -257,7 +257,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 28 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={0} tick={function(props) {
+            <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var idx = data.findIndex(function(d) { return d.name === payload.value; });
               var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
