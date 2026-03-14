@@ -1792,13 +1792,13 @@ function buildProfileZoneTableHtml(ftp, maxHr, opts) {
   const compact = opts && opts.compact;
 
   const ftpZones = f > 0 ? [
-    { label: 'Z1', pct: '55 미만%', min: null, max: Math.floor(f * 0.55), color: '#9ca3af', desc: '리커버리 라이딩, 젖산 분해 및 피로도 회복 촉진' },
+    { label: 'Z1', pct: '55% 미만', min: null, max: Math.floor(f * 0.55), color: '#9ca3af', desc: '리커버리 라이딩, 젖산 분해 및 피로도 회복 촉진' },
     { label: 'Z2', pct: '56 ~ 75%', min: Math.ceil(f * 0.56), max: Math.floor(f * 0.75), color: '#3b82f6', desc: '유산소 베이스 구축, 장거리 체력 배양 (인도어 훈련의 핵심)' },
     { label: 'Z3', pct: '76 ~ 90%', min: Math.ceil(f * 0.76), max: Math.floor(f * 0.90), color: '#22c55e', desc: '근지구력 향상, 묵직하고 리듬감 있는 주행 유지' },
     { label: 'Z4', pct: '91 ~ 105%', min: Math.ceil(f * 0.91), max: Math.floor(f * 1.05), color: '#eab308', desc: 'FTP(역치 파워) 직접 향상, 고통스러운 젖산 역치 훈련' },
     { label: 'Z5', pct: '106 ~ 120%', min: Math.ceil(f * 1.06), max: Math.floor(f * 1.20), color: '#f97316', desc: '최대 산소 섭취량(VO2 Max) 확장, 3~8분 길이의 업힐 어택' },
     { label: 'Z6', pct: '121 ~ 150%', min: Math.ceil(f * 1.21), max: Math.floor(f * 1.50), color: '#ef4444', desc: '무산소 용량 확장, 짧은 급경사 및 펠로톤 펀치력 향상' },
-    { label: 'Z7', pct: '150 이상%', min: Math.ceil(f * 1.51), max: null, color: '#a855f7', desc: '신경근 파워, 폭발적인 가속력 및 결승선 스프린트' }
+    { label: 'Z7', pct: '150% 이상', min: Math.ceil(f * 1.51), max: null, color: '#a855f7', desc: '신경근 파워, 폭발적인 가속력 및 결승선 스프린트' }
   ] : [];
 
   const hrZones = m > 0 ? [
