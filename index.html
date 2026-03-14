@@ -8852,7 +8852,34 @@
           var u = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
           return u ? { ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
         })();
-        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile);
+        var rawLogsTiz = (function() {
+          var tl = miniCalendarStateJournal.trainingLogs || {};
+          var pad = function(n) { return String(n).padStart(2, '0'); };
+          var y = miniCalendarStateJournal.currentYear, m = miniCalendarStateJournal.currentMonth + 1;
+          var now = new Date();
+          var isCur = (y === now.getFullYear() && m === now.getMonth() + 1);
+          var startStr, endStr;
+          if (isCur) {
+            var ed = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            var sd = new Date(y, m - 1, 1);
+            startStr = sd.getFullYear() + '-' + pad(sd.getMonth() + 1) + '-' + pad(sd.getDate());
+            endStr = ed.getFullYear() + '-' + pad(ed.getMonth() + 1) + '-' + pad(ed.getDate());
+          } else {
+            startStr = y + '-' + pad(m) + '-01';
+            endStr = y + '-' + pad(m) + '-' + pad(new Date(y, m, 0).getDate());
+          }
+          var out = [];
+          Object.keys(tl).forEach(function(dk) {
+            if (dk < startStr || dk > endStr) return;
+            var arr = tl[dk];
+            if (!Array.isArray(arr)) return;
+            arr.forEach(function(l) {
+              out.push(Object.assign({}, l, { date: l.date || l.completed_at || dk }));
+            });
+          });
+          return out;
+        })();
+        window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile, rawLogsTiz);
       }
       
       console.log('[MiniCalendarJournal] ========== 초기화 완료 ==========');
@@ -8915,7 +8942,34 @@
         var u = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
         return u ? { ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
       })();
-      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile);
+      var rawLogsTizUpdate = (function() {
+        var tl = miniCalendarStateJournal.trainingLogs || {};
+        var pad = function(n) { return String(n).padStart(2, '0'); };
+        var y = miniCalendarStateJournal.currentYear, m = miniCalendarStateJournal.currentMonth + 1;
+        var now = new Date();
+        var isCur = (y === now.getFullYear() && m === now.getMonth() + 1);
+        var startStr, endStr;
+        if (isCur) {
+          var ed = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          var sd = new Date(y, m - 1, 1);
+          startStr = sd.getFullYear() + '-' + pad(sd.getMonth() + 1) + '-' + pad(sd.getDate());
+          endStr = ed.getFullYear() + '-' + pad(ed.getMonth() + 1) + '-' + pad(ed.getDate());
+        } else {
+          startStr = y + '-' + pad(m) + '-01';
+          endStr = y + '-' + pad(m) + '-' + pad(new Date(y, m, 0).getDate());
+        }
+        var out = [];
+        Object.keys(tl).forEach(function(dk) {
+          if (dk < startStr || dk > endStr) return;
+          var arr = tl[dk];
+          if (!Array.isArray(arr)) return;
+          arr.forEach(function(l) {
+            out.push(Object.assign({}, l, { date: l.date || l.completed_at || dk }));
+          });
+        });
+        return out;
+      })();
+      window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile, rawLogsTizUpdate);
     }
 
     // 전역 함수로 노출
@@ -8988,7 +9042,7 @@
         return 'Normal';
       }
 
-      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile }) {
+      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile, rawLogsForTimeInZones }) {
         const chartEfRef = useRef(null);
         const chartEfInstance = useRef(null);
         const chartWeeklyTssRef = useRef(null);
@@ -9976,6 +10030,17 @@
                       <canvas ref={chartWeeklyTssRef}></canvas>
                     </div>
                   </div>
+                  {/* 존별 누적 시간 (월별 누적, 코멘트 제거) */}
+                  {window.JournalTimeInZonesCharts && (
+                    <div className="mb-4">
+                      {React.createElement(window.JournalTimeInZonesCharts, {
+                        currentMonth: currentMonth,
+                        rawLogs: rawLogsForTimeInZones || [],
+                        userProfile: userProfile || {},
+                        DashboardCard: function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); }
+                      })}
+                    </div>
+                  )}
                   {/* Weekly VO₂max Trend (Weekly TSS Load와 동일한 주간 구간, 해당 주의 마지막 날짜로 X축 표기) */}
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">Weekly VO₂max Trend</h4>
@@ -9999,8 +10064,6 @@
                       </>
                     )}
                   </div>
-                  {/* 존별 누적 시간 (현재월/선택월 기준) */}
-                  {window.JournalTimeInZonesCharts && React.createElement(window.JournalTimeInZonesCharts, { currentMonth: currentMonth, monthlyLogs: logs, userProfile: userProfile })}
                   {/* Ride Style (VI Distribution) */}
                   <div className="relative mb-4">
                     <div className="flex items-center gap-1.5 mb-1">
@@ -10060,7 +10123,7 @@
         );
       }
 
-      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile) {
+      function renderMonthlyAnalysisDashboard(currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile, rawLogsForTimeInZones) {
         const root = document.getElementById('monthly-analysis-dashboard-root');
         if (!root || typeof ReactDOM === 'undefined' || typeof React === 'undefined') return;
         const dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
@@ -10069,6 +10132,7 @@
         const allLogs = allTrainingLogs || monthlyLogs || [];
         const prevLogs = Array.isArray(prevMonthLogs) ? prevMonthLogs : [];
         const profile = userProfile || {};
+        const rawLogs = Array.isArray(rawLogsForTimeInZones) ? rawLogsForTimeInZones : [];
         
         const el = React.createElement(MonthlyTrainingAnalysisDashboard, {
           key: dateObj.getTime(),
@@ -10076,7 +10140,8 @@
           monthlyLogs: monthlyLogs || [],
           allTrainingLogs: allLogs,
           prevMonthLogs: prevLogs,
-          userProfile: profile
+          userProfile: profile,
+          rawLogsForTimeInZones: rawLogs
         });
         if (ReactDOM.createRoot) {
           if (!root._monthlyDashboardRoot) root._monthlyDashboardRoot = ReactDOM.createRoot(root);
