@@ -2257,11 +2257,6 @@ async function loadUsers() {
     }
 
     renderProfileUserCards(visibleUsers, viewerGrade, viewerId);
-    var defaultFtp = visibleUsers.length > 0 ? (Number(visibleUsers[0].ftp) || 200) : 200;
-    var defaultMaxHr = 190; /* 더미 기본값, updateProfileZoneTables(ftp, maxHr)로 갱신 가능 */
-    if (typeof renderProfileZoneTables === 'function') {
-      renderProfileZoneTables(defaultFtp, defaultMaxHr);
-    }
     if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
       window.refreshProfileMaxHrAndRerender(visibleUsers, viewerGrade, viewerId).catch(() => {});
     }
