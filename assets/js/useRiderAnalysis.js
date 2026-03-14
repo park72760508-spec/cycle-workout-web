@@ -96,6 +96,46 @@ function aggregateHRFromLogs(logs, fromDate, toDate) {
 }
 
 /**
+ * 최근 N일간 time_in_zones 집계 (파워 Z0~Z7, 심박 Z1~Z5)
+ * @param {Array} logs - 훈련 로그 배열
+ * @param {string} fromDate - YYYY-MM-DD
+ * @param {string} toDate - YYYY-MM-DD
+ * @returns {{ power: Object, hr: Object }}
+ */
+function aggregateTimeInZonesFromLogs(logs, fromDate, toDate) {
+  const inRange = (dateStr) => dateStr && dateStr >= fromDate && dateStr <= toDate;
+  const parseDate = (d) => {
+    if (!d) return null;
+    if (d.toDate && typeof d.toDate === 'function') return d.toDate().toISOString().slice(0, 10);
+    if (typeof d === 'string') return d.slice(0, 10);
+    if (d instanceof Date) return d.toISOString().slice(0, 10);
+    return null;
+  };
+
+  const power = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
+  const hr = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
+
+  (logs || []).forEach((log) => {
+    const ds = parseDate(log.date);
+    if (!inRange(ds)) return;
+    const tiz = log.time_in_zones;
+    if (!tiz) return;
+    if (tiz.power && typeof tiz.power === 'object') {
+      ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].forEach((k) => {
+        power[k] = (power[k] || 0) + (Number(tiz.power[k]) || 0);
+      });
+    }
+    if (tiz.hr && typeof tiz.hr === 'object') {
+      ['z1', 'z2', 'z3', 'z4', 'z5'].forEach((k) => {
+        hr[k] = (hr[k] || 0) + (Number(tiz.hr[k]) || 0);
+      });
+    }
+  });
+
+  return { power, hr };
+}
+
+/**
  * 최근 N주간 주별 MMP 집계 (파워 프로필 트렌드 차트용)
  * @param {Array} logs - 훈련 로그 배열
  * @param {number} numWeeks - 주 수 (기본 4)
@@ -331,6 +371,7 @@ if (typeof window !== 'undefined') {
   window.calculateRiderScores = calculateRiderScores;
   window.aggregateMMPFromLogs = aggregateMMPFromLogs;
   window.aggregateHRFromLogs = aggregateHRFromLogs;
+  window.aggregateTimeInZonesFromLogs = aggregateTimeInZonesFromLogs;
   window.getWeeklyMMPFromLogs = getWeeklyMMPFromLogs;
   window.getIntervalMMPFromLogs = getIntervalMMPFromLogs;
   window.getIntervalHRFromLogs = getIntervalHRFromLogs;
