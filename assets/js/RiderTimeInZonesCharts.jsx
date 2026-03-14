@@ -353,7 +353,7 @@ function DailyTimeInZonesCharts({ log, userProfile, DashboardCard }) {
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
-  return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4 mt-4 pt-4 border-t border-gray-200' },
+  return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4' },
     React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '일일 존별 누적 시간'),
     hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일' }) : null,
     hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일' }) : null
