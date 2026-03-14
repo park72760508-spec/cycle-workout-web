@@ -4229,6 +4229,81 @@ button[aria-disabled="true"] {
   color: var(--text-muted);
 }
 
+/* 프로필 선택 화면: FTP 파워 영역 / 심박 영역 상세 테이블 */
+.profile-zone-tables-wrap {
+  margin: 16px 0 20px 0;
+  padding: 0 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.profile-zone-table-block {
+  margin-bottom: 20px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  .profile-zone-table-block {
+    overflow-x: auto;
+  }
+  .profile-zone-table {
+    min-width: 400px;
+  }
+}
+.profile-zone-table-block:last-child {
+  margin-bottom: 0;
+}
+.profile-zone-table-header {
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #374151;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+.profile-zone-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.profile-zone-table th,
+.profile-zone-table td {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+}
+.profile-zone-table th {
+  background: #f3f4f6;
+  font-weight: 600;
+  color: #4b5563;
+}
+.profile-zone-table td {
+  color: #374151;
+}
+.profile-zone-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #000 !important;
+}
+.profile-zone-caption {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  line-height: 1.5;
+}
+
 /* 삭제 버튼 비활성화 스타일 */
 #profileScreen .btn-delete.disabled,
 #profileScreen .btn-delete:disabled {
