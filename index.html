@@ -6667,7 +6667,16 @@
           <span class="training-detail-label">최대 파워</span>
           <span class="training-detail-value">${log.max_watts ? log.max_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
+        ${log.time_in_zones ? '<div id="trainingDetailTimeInZones" class="training-detail-time-in-zones-wrap"></div>' : ''}
       `;
+      
+      // 일일 존별 누적 시간 그래프 (최대 파워 하단)
+      var tizContainer = document.getElementById('trainingDetailTimeInZones');
+      if (tizContainer && log.time_in_zones && typeof window.RenderDailyTimeInZonesCharts === 'function') {
+        var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
+        var up = { ftp: (cu && cu.ftp) || 200, max_hr: (log.max_hr || (cu && cu.max_hr)) || 190 };
+        window.RenderDailyTimeInZonesCharts(tizContainer, log, up);
+      }
       
       // Powered by Strava: source === "strava" 인 경우에만 푸터 표시
       const stravaFooter = document.getElementById('trainingDetailStravaFooter');
@@ -8357,7 +8366,16 @@
           <span class="training-detail-label">최대 파워</span>
           <span class="training-detail-value">${log.max_watts ? log.max_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
+        ${log.time_in_zones ? '<div id="trainingDetailTimeInZones" class="training-detail-time-in-zones-wrap"></div>' : ''}
       `;
+      
+      // 일일 존별 누적 시간 그래프 (최대 파워 하단)
+      var tizContainerJournal = document.getElementById('trainingDetailTimeInZones');
+      if (tizContainerJournal && log.time_in_zones && typeof window.RenderDailyTimeInZonesCharts === 'function') {
+        var cuJ = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
+        var upJ = { ftp: (cuJ && cuJ.ftp) || 200, max_hr: (log.max_hr || (cuJ && cuJ.max_hr)) || 190 };
+        window.RenderDailyTimeInZonesCharts(tizContainerJournal, log, upJ);
+      }
       
       // Powered by Strava: source === "strava" 인 경우에만 푸터 표시 (Stelvio 로그는 미표시)
       const stravaFooterJournal = document.getElementById('trainingDetailStravaFooter');
