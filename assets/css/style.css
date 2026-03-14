@@ -4304,6 +4304,34 @@ button[aria-disabled="true"] {
   line-height: 1.5;
 }
 
+/* 사용자 카드 내 Zone 테이블 (컴팩트) */
+#profileScreen .user-card .profile-zone-table-in-card {
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+#profileScreen .user-card .profile-zone-table-in-card:first-child {
+  margin-top: 0;
+}
+#profileScreen .user-card .profile-zone-table-in-card .profile-zone-table-header {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+#profileScreen .user-card .profile-zone-table-in-card .profile-zone-table th,
+#profileScreen .user-card .profile-zone-table-in-card .profile-zone-table td {
+  padding: 6px 8px;
+  font-size: 11px;
+}
+#profileScreen .user-card .profile-zone-table-in-card .profile-zone-badge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+#profileScreen .user-card .profile-zone-table-in-card .profile-zone-caption {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
 /* 삭제 버튼 비활성화 스타일 */
 #profileScreen .btn-delete.disabled,
 #profileScreen .btn-delete:disabled {
