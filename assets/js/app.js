@@ -6312,17 +6312,32 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
+function showMyCareerLoadingOverlay() {
+  var el = document.getElementById('myCareerLoadingOverlay');
+  if (el) { el.classList.remove('hidden'); el.style.display = 'flex'; }
+}
+function hideMyCareerLoadingOverlay() {
+  var el = document.getElementById('myCareerLoadingOverlay');
+  if (el) { el.classList.add('hidden'); el.style.display = 'none'; }
+}
+if (typeof window !== 'undefined') {
+  window.showMyCareerLoadingOverlay = showMyCareerLoadingOverlay;
+  window.hideMyCareerLoadingOverlay = hideMyCareerLoadingOverlay;
+}
+
 /**
  * 경로 선택 → 나의 기록(MY CAREER) 클릭 시:
  * - grade=1(관리자): 조건과 관계없이 항상 STRAVA 6개월 동기화 팝업 표시
  * - 그 외: STRAVA 연결됨 + 최근 1개월 이상 훈련로그 없음 + "다음부터 묻지 않음" 미체크 시 표시
  */
 async function handleMyCareerClick() {
+  showMyCareerLoadingOverlay();
   try {
     var user = window.currentUser || (function() {
       try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
     })();
     if (!user || !user.id) {
+      hideMyCareerLoadingOverlay();
       if (typeof showScreen === 'function') showScreen('myCareerScreen');
       return;
     }
@@ -6332,17 +6347,20 @@ async function handleMyCareerClick() {
     }
     var isAdmin = (grade === '1' || grade === 1);
     if (isAdmin) {
+      hideMyCareerLoadingOverlay();
       openStrava6MonthSyncPromptModal();
       return;
     }
     var isStravaConnected = !!(user.strava_refresh_token || user.strava_access_token);
     if (!isStravaConnected) {
+      hideMyCareerLoadingOverlay();
       if (typeof showScreen === 'function') showScreen('myCareerScreen');
       return;
     }
     var dontAskKey = 'strava_6month_sync_dont_ask_' + String(user.id);
     try {
       if (localStorage.getItem(dontAskKey) === '1') {
+        hideMyCareerLoadingOverlay();
         if (typeof showScreen === 'function') showScreen('myCareerScreen');
         return;
       }
@@ -6368,12 +6386,15 @@ async function handleMyCareerClick() {
       }
     }
     if (hasRecentLogs) {
+      hideMyCareerLoadingOverlay();
       if (typeof showScreen === 'function') showScreen('myCareerScreen');
       return;
     }
+    hideMyCareerLoadingOverlay();
     openStrava6MonthSyncPromptModal();
   } catch (e) {
     console.warn('[handleMyCareerClick] 오류:', e);
+    hideMyCareerLoadingOverlay();
     if (typeof showScreen === 'function') showScreen('myCareerScreen');
   }
 }
