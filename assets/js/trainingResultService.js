@@ -237,7 +237,10 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
     throw new Error('Firestore 인스턴스가 없습니다. window.firestoreV9를 확인하세요.');
   }
   
-  const { duration, weighted_watts, avg_watts } = trainingData;
+  var td = trainingData || {};
+  var duration = td.duration;
+  var weighted_watts = td.weighted_watts;
+  var avg_watts = td.avg_watts;
   const durationSec = Number(duration);
   // weighted_watts 0 허용 → TSS 0, earned_points 0으로 저장 (워크아웃만 구동된 경우)
   const np = trainingData.weighted_watts != null ? Number(trainingData.weighted_watts) : 0;
@@ -566,7 +569,9 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
   }
   
   try {
-    const { limit: limitValue = 50, startAfter: startAfterDoc = null } = options;
+    var opt = options || {};
+    var limitValue = opt.limit != null ? opt.limit : 50;
+    var startAfterDoc = opt.startAfter != null ? opt.startAfter : null;
     
     // users/{userId}/logs 서브컬렉션 참조
     const userLogsRef = collection(db, 'users', userId, 'logs');

@@ -208,8 +208,10 @@ async function enforceAuthPersistence() {
   }
   try {
     if (window.authV9) {
-      const { setPersistence, browserSessionPersistence } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-      await setPersistence(window.authV9, browserSessionPersistence);
+      var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+      var setPersistence = authMod && authMod.setPersistence;
+      var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
+      if (setPersistence && browserSessionPersistence) await setPersistence(window.authV9, browserSessionPersistence);
       console.log('[Auth Ready] setPersistence(SESSION) applied (v9, 공용 기기 보안)');
     }
   } catch (e) {
@@ -779,7 +781,9 @@ async function loadTrainingRooms() {
 
     const fetchRooms = async () => {
       if (useV9) {
-        const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        var collection = fsMod && fsMod.collection;
+        var getDocs = fsMod && fsMod.getDocs;
         const roomsRef = collection(db, TRAINING_ROOMS_COLLECTION);
         const querySnapshot = await getDocs(roomsRef);
         return querySnapshot.docs
@@ -1247,12 +1251,15 @@ async function resolveManagerName(db, useV9, userId, elementId) {
     
     if (useV9) {
       // Firebase v9 Modular SDK
-      const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var fsMod2 = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var getDoc = fsMod2 && fsMod2.getDoc;
+      var doc = fsMod2 && fsMod2.doc;
+      var collection = fsMod2 && fsMod2.collection;
       const usersRef = collection(db, 'users');
       const userDocRef = doc(usersRef, userIdStr);
       const docSnapshot = await getDoc(userDocRef);
       
-      if (docSnapshot.exists()) {
+      if (docSnapshot && (docSnapshot.exists === true || (typeof docSnapshot.exists === 'function' && docSnapshot.exists()))) {
         userData = docSnapshot.data();
       }
     } else {
@@ -1350,12 +1357,15 @@ async function updateManagerName(db, useV9, userId, roomId) {
     
     if (useV9) {
       // Firebase v9 Modular SDK
-      const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var fsMod3 = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var getDoc = fsMod3 && fsMod3.getDoc;
+      var doc = fsMod3 && fsMod3.doc;
+      var collection = fsMod3 && fsMod3.collection;
       const usersRef = collection(firestoreDb, 'users');
       const userDocRef = doc(usersRef, userIdStr);
       const docSnapshot = await getDoc(userDocRef);
       
-      if (docSnapshot.exists()) {
+      if (docSnapshot && (docSnapshot.exists === true || (typeof docSnapshot.exists === 'function' && docSnapshot.exists()))) {
         userData = docSnapshot.data();
         console.log('[ManagerFetch] 데이터 수신 성공 (v9) - roomId:', roomIdStr, ', userData:', userData);
       } else {
@@ -1924,13 +1934,15 @@ async function renderPlayerList() {
         
         // ✅ 성능 최적화: 병렬 처리 (Promise.all 사용)
         // users와 devices 정보를 동시에 가져오기
-        const [usersSnapshot, devicesSnapshot] = await Promise.all([
+        var allResults = await Promise.all([
           db.ref(`sessions/${sessionId}/users`).once('value'),
           db.ref(`sessions/${sessionId}/devices`).once('value')
         ]);
+        var usersSnapshot = allResults && allResults[0];
+        var devicesSnapshot = allResults && allResults[1];
         
-        const usersData = usersSnapshot.val() || {};
-        const devicesData = devicesSnapshot.val() || {};
+        const usersData = (usersSnapshot && usersSnapshot.val) ? usersSnapshot.val() : {};
+        const devicesData = (devicesSnapshot && devicesSnapshot.val) ? devicesSnapshot.val() : {};
         
         console.log('[Player List] Firebase users 데이터:', usersData);
         console.log('[Player List] Firebase devices 데이터:', devicesData);
@@ -6592,12 +6604,14 @@ async function fetchBluetoothTrackData(db, roomId) {
   const sessionId = roomId;
   const devicesRef = db.ref(`sessions/${sessionId}/devices`);
   const usersRef = db.ref(`sessions/${sessionId}/users`);
-  const [devicesSnapshot, usersSnapshot] = await Promise.all([
+  var trackResults = await Promise.all([
     devicesRef.once('value'),
     usersRef.once('value')
   ]);
-  const devicesData = devicesSnapshot.val() || {};
-  const usersData = usersSnapshot.val() || {};
+  var devicesSnapshot = trackResults && trackResults[0];
+  var usersSnapshot = trackResults && trackResults[1];
+  const devicesData = (devicesSnapshot && devicesSnapshot.val) ? devicesSnapshot.val() : {};
+  const usersData = (usersSnapshot && usersSnapshot.val) ? usersSnapshot.val() : {};
   let maxTrackNumber = 10;
   if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
     maxTrackNumber = devicesData.track;

@@ -1252,7 +1252,11 @@ async function syncStravaDataWithMmp(months = 1, options) {
       throw new Error(data.error || '동기화 실패');
     }
 
-    const { processedCount = 0, updatedCount = 0, createdCount = 0, hasMore } = data;
+    var procData = data || {};
+    var processedCount = procData.processedCount != null ? procData.processedCount : 0;
+    var updatedCount = procData.updatedCount != null ? procData.updatedCount : 0;
+    var createdCount = procData.createdCount != null ? procData.createdCount : 0;
+    var hasMore = procData.hasMore;
     let message = `✅ MMP 포함 동기화 완료: 처리 ${processedCount}건 (신규 ${createdCount}, 업데이트 ${updatedCount})`;
     if (hasMore) {
       message += '. 일부 활동이 남아있을 수 있습니다. 다시 실행해 보세요.';

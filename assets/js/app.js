@@ -1843,7 +1843,12 @@ function buildSegmentBar(){
       `;
     } else {
       // 그룹화된 세그먼트 (반복)
-      const { pattern, repeatCount, totalDuration, startIndex, endIndex } = item;
+      var it = item || {};
+      var pattern = it.pattern;
+      var repeatCount = it.repeatCount;
+      var totalDuration = it.totalDuration;
+      var startIndex = it.startIndex;
+      var endIndex = it.endIndex;
       const widthPct = (totalDuration / total) * 100;
       const mainType = normalizeType(pattern[0]);
       const timeMinutes = Math.round(totalDuration / 60);
@@ -10896,7 +10901,8 @@ async function exportAnalysisReport() {
   }
   
   const report = window.currentAnalysisReport;
-  const { jsPDF } = window.jspdf || window;
+  var jspdfObj = window.jspdf || window;
+  var jsPDF = jspdfObj ? jspdfObj.jsPDF : null;
   
   try {
     // 로딩 표시
@@ -18151,7 +18157,9 @@ async function connectMobileBluetoothDeviceToSaved(deviceId, deviceType) {
       return;
     }
 
-    const { device, server } = result;
+    var res = result || {};
+    var device = res.device;
+    var server = res.server;
     
     // 디바이스 타입별 연결 로직 실행
     if (deviceType === 'heartRate') {

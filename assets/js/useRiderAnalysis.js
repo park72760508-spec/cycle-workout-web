@@ -300,7 +300,13 @@ async function fetchAIProfileAnalysis(scores, options = {}) {
     throw new Error('Gemini API 키가 설정되지 않았습니다.');
   }
 
-  const { RSPT, TSPT, PCH, CLMB, TTST, ALLR } = scores;
+  var s = scores || {};
+  var RSPT = s.RSPT;
+  var TSPT = s.TSPT;
+  var PCH = s.PCH;
+  var CLMB = s.CLMB;
+  var TTST = s.TTST;
+  var ALLR = s.ALLR;
   const systemPrompt = `당신은 전문 사이클링 코치입니다. 주어진 6가지 파워 프로필 점수(0~10점)를 바탕으로 라이더의 현재 강점과 보완해야 할 점을 분석해 주세요.
 
 [필수 규칙]
