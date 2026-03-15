@@ -195,7 +195,7 @@ function PowerTimeInZonesChart(props) {
   var hasData = total > 0;
   var zoneRanges = getPowerZoneRanges(ftp);
 
-  var powerTitle = titleOverride || ('파워 존별 누적 시간 (' + (periodLabel || '최근 1개월') + ')');
+  var powerTitle = titleOverride || '파워 영역별 누적시간';
   if (!Recharts || !hasData) {
     return (
       <DashboardCard>
@@ -284,7 +284,7 @@ function HRTimeInZonesChart(props) {
   var hasData = total > 0;
   var zoneRanges = getHRZoneRanges(maxHr);
 
-  var hrTitle = titleOverride || ('심박 존별 누적 시간 (' + (periodLabel || '최근 1개월') + ')');
+  var hrTitle = titleOverride || '심박 영역별 누적시간';
   if (!Recharts || !hasData) {
     return (
       <DashboardCard>
@@ -411,7 +411,7 @@ function RiderTimeInZonesCharts(props) {
     <div className="space-y-4">
       <h2 className="text-base font-semibold text-gray-800 px-1 flex items-center gap-2">
       <span className="inline-flex w-5 h-5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }} aria-hidden />
-      존별 누적 시간 (최근 1개월)
+      영역별 누적시간(최근 1개월)
     </h2>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="min-w-0 overflow-hidden col-span-2">
