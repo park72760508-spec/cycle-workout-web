@@ -53,26 +53,10 @@
   <script src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
   <script src="assets/js/useRiderAnalysis.js"></script>
   
-  <!-- Firebase v9 Modular SDK (전화번호 인증용) -->
+  <!-- Firebase v9 Modular SDK (전화번호 인증용) - iPhone 8/Safari iOS 호환: 동적 import, 구조분해 제거 -->
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-    import { 
-      getAuth, 
-      setPersistence,
-      browserSessionPersistence,
-      signInWithEmailAndPassword, 
-      createUserWithEmailAndPassword,
-      updateProfile,
-      sendPasswordResetEmail,
-      updatePassword,
-      reauthenticateWithCredential,
-      EmailAuthProvider
-    } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
-    import { getFirestore, initializeFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js';
-    import { getStorage, ref, getMetadata } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
-    
-    const firebaseConfig = window.__FIREBASE_CONFIG__ || {
+    (async function initFirebaseV9() {
+      var firebaseConfig = (window.__FIREBASE_CONFIG__ && typeof window.__FIREBASE_CONFIG__ === 'object') ? window.__FIREBASE_CONFIG__ : {
       apiKey: "YOUR_FIREBASE_API_KEY",
       authDomain: "your-project.firebaseapp.com",
       projectId: "your-project",
@@ -80,90 +64,117 @@
       messagingSenderId: "000000000000",
       appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
     };
-    
-    function isSamsungOrTabletForFirestore() {
-      if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
-      const ua = String(navigator.userAgent).toLowerCase();
-      const plat = String(navigator.platform || '').toLowerCase();
-      if (/samsung|sm-t\d|sm-p\d|galaxy.*tab/i.test(ua)) return true;
-      if (plat.includes('linux arm') || plat.includes('android')) return true;
-      const w = typeof window !== 'undefined' && window.innerWidth;
-      if (w && w <= 2560 && (navigator.maxTouchPoints || 0) > 0) return true;
-      return false;
-    }
-    
-    let authV9;
-    let firestoreV9;
-    try {
-      const appV9 = initializeApp(firebaseConfig, 'authV9');
-      authV9 = getAuth(appV9);
-      setPersistence(authV9, browserSessionPersistence).catch(function(e) {
-        console.warn('[Firebase v9] setPersistence(SESSION) 실패:', e?.message);
-      });
-      console.log('✅ Firebase v9 Auth: SESSION persistence 적용 (탭 종료 시 로그아웃, 공용 기기 보안)');
-      firestoreV9 = initializeFirestore(appV9, { experimentalForceLongPolling: true });
-      console.log('✅ Firebase v9 Firestore 초기화 (Long Polling 적용, WebChannel 400 방지)');
-      window.authV9 = authV9;
-      window.firestoreV9 = firestoreV9;
+      var authV9 = null;
+      var firestoreV9 = null;
+      var firestoreMod = null;
+      var collectionFn, docFn, setDocFn, getDocFn;
       try {
-        const functionsV9 = getFunctions(appV9);
-        window.functionsV9 = functionsV9;
-        window.httpsCallableV9 = httpsCallable;
-        console.log('✅ Firebase v9 Functions 클라이언트 초기화 완료');
-      } catch (functionsErr) {
-        console.warn('Firebase Functions 클라이언트 미로드 (관리자 비밀번호 초기화는 Cloud Function 배포 후 사용):', functionsErr);
+        var appMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+        var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+        firestoreMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        var initApp = appMod && appMod.initializeApp;
+        var getAuthFn = authMod && authMod.getAuth;
+        var setPersistenceFn = authMod && authMod.setPersistence;
+        var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
+        var initFirestore = firestoreMod && firestoreMod.initializeFirestore;
+        if (typeof initApp !== 'function' || typeof getAuthFn !== 'function' || typeof initFirestore !== 'function') {
+          throw new Error('Firebase 모듈 로드 실패');
+        }
+        var appV9 = initApp(firebaseConfig, 'authV9');
+        authV9 = getAuthFn(appV9);
+        if (typeof setPersistenceFn === 'function' && browserSessionPersistence) {
+          setPersistenceFn(authV9, browserSessionPersistence).catch(function(e) {
+            console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
+          });
+        }
+        console.log('✅ Firebase v9 Auth 초기화');
+        firestoreV9 = initFirestore(appV9, { experimentalForceLongPolling: true });
+        console.log('✅ Firebase v9 Firestore 초기화');
+        window.authV9 = authV9;
+        window.firestoreV9 = firestoreV9;
+        if (authMod.signInWithEmailAndPassword) window.signInWithEmailAndPasswordV9 = authMod.signInWithEmailAndPassword;
+        if (authMod.createUserWithEmailAndPassword) window.createUserWithEmailAndPasswordV9 = authMod.createUserWithEmailAndPassword;
+        if (authMod.updateProfile) window.updateProfileV9 = authMod.updateProfile;
+        if (authMod.sendPasswordResetEmail) window.sendPasswordResetEmailV9 = authMod.sendPasswordResetEmail;
+        if (authMod.updatePassword) window.updatePasswordV9 = authMod.updatePassword;
+        if (authMod.reauthenticateWithCredential) window.reauthenticateWithCredentialV9 = authMod.reauthenticateWithCredential;
+        if (authMod.EmailAuthProvider) window.EmailAuthProviderV9 = authMod.EmailAuthProvider;
+        try {
+          var funcMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js');
+          if (funcMod && funcMod.getFunctions && funcMod.httpsCallable) {
+            window.functionsV9 = funcMod.getFunctions(appV9);
+            window.httpsCallableV9 = funcMod.httpsCallable;
+          }
+        } catch (fe) {
+          console.warn('Firebase Functions 미로드:', fe && fe.message);
+        }
+        console.log('✅ Firebase v9 SDK 초기화 완료');
+      } catch (error) {
+        console.error('❌ Firebase v9 초기화 실패:', error);
       }
-      console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증·Firestore)');
-    } catch (error) {
-      console.error('❌ Firebase v9 초기화 실패:', error);
-    }
+      if (firestoreMod) {
+        collectionFn = firestoreMod.collection;
+        docFn = firestoreMod.doc;
+        setDocFn = firestoreMod.setDoc;
+        getDocFn = firestoreMod.getDoc;
+      }
     
     // Firebase Storage app-release.apk 최종 수정일 → Last Updated 표시
     window.updateAppDownloadLastUpdated = async function () {
-      const el = document.querySelector('.auth-app-download-updated');
+      var el = document.querySelector('.auth-app-download-updated');
       if (!el) return;
       try {
         var firebaseAppMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+        var storageMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
         var getApp = firebaseAppMod && firebaseAppMod.getApp;
-        if (typeof getApp !== 'function') return;
-        let app;
+        var getStorageFn = storageMod && storageMod.getStorage;
+        var refFn = storageMod && storageMod.ref;
+        var getMetadataFn = storageMod && storageMod.getMetadata;
+        if (typeof getApp !== 'function' || typeof getStorageFn !== 'function') return;
+        var app;
         try {
           app = getApp('authV9');
         } catch (_) {
           return;
         }
-        const storage = getStorage(app);
-        const fileRef = ref(storage, 'app-release.apk');
-        const meta = await getMetadata(fileRef);
+        var storage = getStorageFn(app);
+        var fileRef = refFn(storage, 'app-release.apk');
+        var meta = await getMetadataFn(fileRef);
         if (meta && meta.updated) {
-          const d = new Date(meta.updated);
-          const y = d.getFullYear();
-          const m = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
+          var d = new Date(meta.updated);
+          var y = d.getFullYear();
+          var m = String(d.getMonth() + 1);
+          if (m.length < 2) m = '0' + m;
+          var day = String(d.getDate());
+          if (day.length < 2) day = '0' + day;
           el.textContent = 'Last Updated: ' + y + '.' + m + '.' + day;
         }
       } catch (e) {
-        console.warn('[App Download] Storage 메타데이터 조회 실패, 기본 날짜 유지:', e?.message || e);
+        console.warn('[App Download] Storage 메타데이터 조회 실패:', e && e.message ? e.message : e);
       }
     };
     if (typeof document !== 'undefined' && document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => window.updateAppDownloadLastUpdated?.());
+      document.addEventListener('DOMContentLoaded', function() {
+        if (typeof window.updateAppDownloadLastUpdated === 'function') window.updateAppDownloadLastUpdated();
+      });
     } else {
-      setTimeout(() => window.updateAppDownloadLastUpdated?.(), 0);
+      setTimeout(function() {
+        if (typeof window.updateAppDownloadLastUpdated === 'function') window.updateAppDownloadLastUpdated();
+      }, 0);
     }
     
     // Strava 설정을 Firestore appConfig/strava에서 로드 (수동 config.local.js 대체)
     window.loadStravaConfigFromFirestore = async function () {
-      if (!firestoreV9) return;
+      if (!firestoreV9 || !docFn || !getDocFn) return;
       try {
-        const appConfigRef = doc(firestoreV9, 'appConfig', 'strava');
-        const snap = await getDoc(appConfigRef);
-        if (snap.exists()) {
-          const d = snap.data();
-          if (d.strava_client_id) {
+        var appConfigRef = docFn(firestoreV9, 'appConfig', 'strava');
+        var snap = await getDocFn(appConfigRef);
+        if (snap && snap.exists && snap.exists()) {
+          var d = snap.data ? snap.data() : null;
+          if (d && d.strava_client_id) {
             window.STRAVA_CLIENT_ID = d.strava_client_id;
           }
-          if (d.strava_redirect_uri) {
+          if (d && d.strava_redirect_uri) {
             if (typeof window.CONFIG === 'undefined') window.CONFIG = {};
             window.CONFIG.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
             window.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
@@ -171,60 +182,52 @@
           console.log('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
         }
       } catch (e) {
-        console.warn('[Strava] appConfig/strava 로드 실패, config.local.js 사용:', e.message);
+        console.warn('[Strava] appConfig/strava 로드 실패:', e && e.message);
       }
     };
-    if (typeof firestoreV9 !== 'undefined') {
+    if (firestoreV9) {
       window.loadStravaConfigFromFirestore().catch(function () {});
     }
     
     // 전화번호를 @stelvio.ai 도메인을 붙인 가짜 이메일로 변환
     function phoneToEmail(phoneNumber) {
-      const cleaned = phoneNumber.replace(/\D/g, '');
-      return `${cleaned}@stelvio.ai`;
+      var cleaned = (phoneNumber || '').toString().replace(/\D/g, '');
+      return cleaned + '@stelvio.ai';
     }
     
     // 전화번호 포맷팅
     function formatPhoneNumber(value) {
-      const numbers = value.replace(/\D/g, '');
-      if (numbers.length <= 3) {
-        return numbers;
-      } else if (numbers.length <= 7) {
-        return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
-      } else if (numbers.length <= 11) {
-        return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7)}`;
-      } else {
-        return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
-      }
+      var numbers = (value || '').toString().replace(/\D/g, '');
+      if (numbers.length <= 3) return numbers;
+      if (numbers.length <= 7) return numbers.slice(0, 3) + '-' + numbers.slice(3);
+      if (numbers.length <= 11) return numbers.slice(0, 3) + '-' + numbers.slice(3, 7) + '-' + numbers.slice(7);
+      return numbers.slice(0, 3) + '-' + numbers.slice(3, 7) + '-' + numbers.slice(7, 11);
     }
     
     window.phoneToEmail = phoneToEmail;
     window.formatPhoneNumber = formatPhoneNumber;
-    window.signInWithEmailAndPasswordV9 = signInWithEmailAndPassword;
-    window.createUserWithEmailAndPasswordV9 = createUserWithEmailAndPassword;
-    window.updateProfileV9 = updateProfile;
-    window.sendPasswordResetEmailV9 = sendPasswordResetEmail;
-    window.updatePasswordV9 = updatePassword;
-    window.reauthenticateWithCredentialV9 = reauthenticateWithCredential;
-    window.EmailAuthProviderV9 = EmailAuthProvider;
 
-    window.saveNewUserToFirestore = async (uid, userData) => {
-      if (!firestoreV9) throw new Error('Firestore V9가 초기화되지 않았습니다.');
-      const usersRef = collection(firestoreV9, 'users');
-      const userDocRef = doc(usersRef, uid);
-      await setDoc(userDocRef, userData);
+    window.saveNewUserToFirestore = async function (uid, userData) {
+      if (!firestoreV9 || !collectionFn || !docFn || !setDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
+      var usersRef = collectionFn(firestoreV9, 'users');
+      var userDocRef = docFn(usersRef, uid);
+      await setDocFn(userDocRef, userData);
     };
 
-    window.getUserByUid = async (uid) => {
-      if (!firestoreV9) throw new Error('Firestore V9가 초기화되지 않았습니다.');
-      const usersRef = collection(firestoreV9, 'users');
-      const userDocRef = doc(usersRef, uid);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        return { id: uid, ...userDoc.data() };
+    window.getUserByUid = async function (uid) {
+      if (!firestoreV9 || !collectionFn || !docFn || !getDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
+      var usersRef = collectionFn(firestoreV9, 'users');
+      var userDocRef = docFn(usersRef, uid);
+      var userDoc = await getDocFn(userDocRef);
+      if (userDoc && userDoc.exists && userDoc.exists()) {
+        var data = userDoc.data ? userDoc.data() : {};
+        var out = { id: uid };
+        for (var k in data) { if (data.hasOwnProperty(k)) out[k] = data[k]; }
+        return out;
       }
       return null;
     };
+    })();
   </script>
   
   
@@ -10372,13 +10375,21 @@
             
             showAuthStatus('✅ 로그인 성공!', 'success');
             
-            // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱)
+            // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone 8: v9 비동기 초기화 대기
             try {
-              if (typeof window.getUserByUid !== 'function') {
-                throw new Error('getUserByUid 함수가 로드되지 않았습니다.');
+              var getUserByUidFn = window.getUserByUid;
+              if (typeof getUserByUidFn !== 'function') {
+                for (var waitCount = 0; waitCount < 15; waitCount++) {
+                  await new Promise(function(r) { setTimeout(r, 300); });
+                  getUserByUidFn = window.getUserByUid;
+                  if (typeof getUserByUidFn === 'function') break;
+                }
+              }
+              if (typeof getUserByUidFn !== 'function') {
+                throw new Error('시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.');
               }
               
-              const userData = await window.getUserByUid(user.uid);
+              var userData = await getUserByUidFn(user.uid);
               
               if (userData) {
                 window.currentUser = userData;
