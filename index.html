@@ -10387,34 +10387,33 @@
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
         
         try {
-            // 🔒 보안: auth와 authV9 모두 로그인 (authV9가 이전 사용자 상태를 유지하는 것을 방지)
-            const authV9 = window.authV9 || null;
+            // 🔒 Firebase v9/v8 분기: authV9가 undefined면 v9 호출 시 SDK 내부 구조분해 에러 발생 → v8 폴백
             var userCredential = null;
-            var authV9Credential = null;
+            var usedV9ForLogin = false;
             
-            // window.auth로 로그인 (v8 Compat). 저사양: userCredential null 체크
-            userCredential = await auth.signInWithEmailAndPassword(email, password);
+            if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
+              try {
+                userCredential = await window.signInWithEmailAndPasswordV9(window.authV9, email, password);
+                if (userCredential && userCredential.user) {
+                  usedV9ForLogin = true;
+                  console.log('✅ 로그인 성공 (authV9):', userCredential.user.uid);
+                  if (auth && typeof auth.signInWithEmailAndPassword === 'function') {
+                    try { await auth.signInWithEmailAndPassword(email, password); } catch (v8SyncErr) { console.warn('[Login] v8 동기화 실패 (무시):', v8SyncErr); }
+                  }
+                }
+              } catch (v9Err) {
+                console.warn('[Login] authV9 로그인 실패, v8 폴백 시도:', v9Err && v9Err.message);
+                userCredential = null;
+              }
+            }
+            if (!userCredential && auth && typeof auth.signInWithEmailAndPassword === 'function') {
+              userCredential = await auth.signInWithEmailAndPassword(email, password);
+              if (userCredential && userCredential.user) console.log('✅ 로그인 성공 (auth v8):', userCredential.user.uid);
+            }
             if (!userCredential || !userCredential.user) {
-              throw new Error('로그인 응답이 올바르지 않습니다. 잠시 후 다시 시도해주세요.');
+              throw new Error('인증 모듈이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
             }
             const user = userCredential.user;
-            
-            console.log('✅ 로그인 성공 (auth):', user.uid);
-            
-            // 🔒 보안: authV9도 함께 로그인 (동기화)
-            if (authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
-              try {
-                authV9Credential = await window.signInWithEmailAndPasswordV9(authV9, email, password);
-                if (authV9Credential && authV9Credential.user) {
-                  console.log('✅ 로그인 성공 (authV9):', authV9Credential.user.uid);
-                }
-              } catch (authV9Error) {
-                console.warn('[Login] authV9 로그인 실패 (무시하고 계속 진행):', authV9Error);
-                // authV9 로그인 실패해도 계속 진행 (auth는 성공했으므로)
-              }
-            } else {
-              console.warn('[Login] authV9 또는 signInWithEmailAndPasswordV9 함수를 찾을 수 없습니다.');
-            }
             
             showAuthStatus('✅ 로그인 성공!', 'success');
             
@@ -10445,7 +10444,7 @@
                   console.log('[Login] 로그인 성공 - 훈련일지 상태 초기화:', {
                     userId: userData.id,
                     previousUserId: window.miniCalendarStateJournal.currentUserId,
-                    authV9Synced: !!authV9Credential
+                    authV9Synced: usedV9ForLogin
                   });
                   window.miniCalendarStateJournal.trainingLogs = {};
                   window.miniCalendarStateJournal.currentUserId = null;
@@ -10629,10 +10628,11 @@
       } catch (error) {
         console.error('인증 오류:', error);
         var err = error || {};
-        var errorMessage = '알 수 없는 오류가 발생했습니다.';
+        var errMsg = String(err.message || '');
+        var errorMessage = '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
         switch (err.code) {
           case 'auth/invalid-login-credentials':
-            errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다. 다시 확인해주세요.';
+            errorMessage = '전화번호 또는 비밀번호가 올바르지 않습니다. 다시 확인해주세요.';
             break;
           case 'auth/wrong-password':
             errorMessage = '비밀번호가 올바르지 않습니다.';
@@ -10641,19 +10641,26 @@
             errorMessage = '전화번호 형식이 올바르지 않습니다.';
             break;
           case 'auth/weak-password':
-            errorMessage = '비밀번호는 최소 6자 이상이어야 합니다.';
+            errorMessage = '비밀번호는 6자 이상 입력해주세요.';
             break;
           case 'auth/email-already-in-use':
-            errorMessage = '이미 사용 중인 전화번호입니다.';
+            errorMessage = '이미 사용 중인 전화번호입니다. 로그인을 시도해주세요.';
             break;
           case 'auth/network-request-failed':
-            errorMessage = '네트워크 연결을 확인해주세요.';
+            errorMessage = '네트워크 연결을 확인한 뒤 다시 시도해주세요.';
             break;
           case 'auth/too-many-requests':
-            errorMessage = '너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.';
+            errorMessage = '시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.';
+            break;
+          case 'auth/user-not-found':
+            errorMessage = '등록된 계정이 없습니다. 사용자 등록을 먼저 진행해주세요.';
             break;
           default:
-            errorMessage = (err.message || '알 수 없는 오류');
+            if (errMsg.indexOf('destructur') !== -1 || errMsg.indexOf('Right side') !== -1 || errMsg.indexOf('준비되지 않았습니다') !== -1) {
+              errorMessage = '시스템이 아직 준비 중입니다. 잠시 후 다시 시도해주세요.';
+            } else if (errMsg && errMsg.length < 80 && !/^[a-z]+:\s*/.test(errMsg)) {
+              errorMessage = errMsg;
+            }
         }
         
         showAuthStatus('❌ ' + errorMessage, 'error');
@@ -10969,17 +10976,30 @@
       showRegisterStatus('계정을 생성하는 중...', 'info');
       
       try {
-        if (!window.authV9 || !window.phoneToEmail || typeof window.saveNewUserToFirestore !== 'function') {
+        if (!window.phoneToEmail || typeof window.saveNewUserToFirestore !== 'function') {
           throw new Error('Firebase 인증/Firestore 모듈이 로드되지 않았습니다.');
         }
         
-        const email = window.phoneToEmail(phone);
-        console.log('📝 회원가입 시작:', { email, name, ftp, weight, challenge });
+        var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+        var email = window.phoneToEmail(phone);
+        console.log('📝 회원가입 시작:', { email: email, name: name, ftp: ftp, weight: weight, challenge: challenge });
         
-        const userCredential = await window.createUserWithEmailAndPasswordV9(
-          window.authV9, email, password
-        );
-        const user = userCredential.user;
+        var userCredential = null;
+        if (window.authV9 && typeof window.createUserWithEmailAndPasswordV9 === 'function') {
+          try {
+            userCredential = await window.createUserWithEmailAndPasswordV9(window.authV9, email, password);
+          } catch (v9Err) {
+            console.warn('[Register] authV9 가입 실패, v8 폴백 시도:', v9Err && v9Err.message);
+            userCredential = null;
+          }
+        }
+        if (!userCredential && auth && typeof auth.createUserWithEmailAndPassword === 'function') {
+          userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        }
+        if (!userCredential || !userCredential.user) {
+          throw new Error('인증 모듈이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
+        }
+        var user = userCredential.user;
         console.log('✅ Firebase Authentication 계정 생성 완료:', user.uid);
         
         const now = new Date().toISOString();
@@ -11060,22 +11080,27 @@
       } catch (error) {
         console.error('❌ 회원가입 오류:', error);
         var err = error || {};
-        var errorMessage = '알 수 없는 오류가 발생했습니다.';
+        var errMsg = String(err.message || '');
+        var errorMessage = '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
         switch (err.code) {
           case 'auth/email-already-in-use':
-            errorMessage = '이미 사용 중인 전화번호입니다.';
+            errorMessage = '이미 사용 중인 전화번호입니다. 로그인을 시도해주세요.';
             break;
           case 'auth/weak-password':
-            errorMessage = '비밀번호는 최소 6자 이상이어야 합니다.';
+            errorMessage = '비밀번호는 6자 이상 입력해주세요.';
             break;
           case 'auth/invalid-email':
             errorMessage = '전화번호 형식이 올바르지 않습니다.';
             break;
           case 'auth/network-request-failed':
-            errorMessage = '네트워크 연결을 확인해주세요.';
+            errorMessage = '네트워크 연결을 확인한 뒤 다시 시도해주세요.';
             break;
           default:
-            errorMessage = (err.message || '알 수 없는 오류');
+            if (errMsg.indexOf('destructur') !== -1 || errMsg.indexOf('Right side') !== -1 || errMsg.indexOf('준비되지 않았습니다') !== -1) {
+              errorMessage = '시스템이 아직 준비 중입니다. 잠시 후 다시 시도해주세요.';
+            } else if (errMsg && errMsg.length < 80 && !/^[a-z]+:\s*/.test(errMsg)) {
+              errorMessage = errMsg;
+            }
         }
         
         showRegisterStatus('❌ ' + errorMessage, 'error');
