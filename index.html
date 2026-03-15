@@ -123,7 +123,9 @@
       const el = document.querySelector('.auth-app-download-updated');
       if (!el) return;
       try {
-        const { getApp } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+        var firebaseAppMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+        var getApp = firebaseAppMod && firebaseAppMod.getApp;
+        if (typeof getApp !== 'function') return;
         let app;
         try {
           app = getApp('authV9');
@@ -6225,10 +6227,20 @@
     (async function() {
       let saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange;
       try {
-        ({ saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange } = await import('./assets/js/trainingResultService.js'));
+        var mod = await import('./assets/js/trainingResultService.js');
+        if (mod && typeof mod === 'object') {
+          saveTrainingSession = mod.saveTrainingSession;
+          getUserTrainingLogs = mod.getUserTrainingLogs;
+          getTrainingLogsByDateRange = mod.getTrainingLogsByDateRange;
+        }
       } catch (e1) {
         try {
-          ({ saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange } = await import('./trainingResultService.js'));
+          var mod2 = await import('./trainingResultService.js');
+          if (mod2 && typeof mod2 === 'object') {
+            saveTrainingSession = mod2.saveTrainingSession;
+            getUserTrainingLogs = mod2.getUserTrainingLogs;
+            getTrainingLogsByDateRange = mod2.getTrainingLogsByDateRange;
+          }
           console.log('✅ 훈련 결과 저장 서비스 로드 (루트 경로)');
         } catch (e2) {
           console.error('❌ trainingResultService.js 로드 실패:', e1.message || e1, e2.message || e2);
@@ -7401,6 +7413,9 @@
      */
     async function fetchJournalLogsInline(db, uid, limitVal) {
       var mod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      if (!mod || typeof mod.collection !== 'function') {
+        throw new Error('Firestore 모듈 로드 실패. 잠시 후 다시 시도해주세요.');
+      }
       var ref = mod.collection(db, 'users', uid, 'logs');
       var limit = limitVal || 200;
       try {
@@ -10331,8 +10346,11 @@
             var userCredential = null;
             var authV9Credential = null;
             
-            // window.auth로 로그인 (v8 Compat)
+            // window.auth로 로그인 (v8 Compat). 저사양: userCredential null 체크
             userCredential = await auth.signInWithEmailAndPassword(email, password);
+            if (!userCredential || !userCredential.user) {
+              throw new Error('로그인 응답이 올바르지 않습니다. 잠시 후 다시 시도해주세요.');
+            }
             const user = userCredential.user;
             
             console.log('✅ 로그인 성공 (auth):', user.uid);
@@ -10341,7 +10359,9 @@
             if (authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
               try {
                 authV9Credential = await window.signInWithEmailAndPasswordV9(authV9, email, password);
-                console.log('✅ 로그인 성공 (authV9):', authV9Credential.user.uid);
+                if (authV9Credential && authV9Credential.user) {
+                  console.log('✅ 로그인 성공 (authV9):', authV9Credential.user.uid);
+                }
               } catch (authV9Error) {
                 console.warn('[Login] authV9 로그인 실패 (무시하고 계속 진행):', authV9Error);
                 // authV9 로그인 실패해도 계속 진행 (auth는 성공했으므로)
