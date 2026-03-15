@@ -1239,7 +1239,7 @@ async function syncStravaDataWithMmp(months = 1, options) {
     }
     const idToken = await currentUser.getIdToken();
 
-    const url = `https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?months=${monthsVal}`;
+    const url = `https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?months=${monthsVal}&forceRecalcTimeInZones=true`;
     const res = await fetch(url, {
       method: 'GET',
       headers: { Authorization: `Bearer ${idToken}` }
