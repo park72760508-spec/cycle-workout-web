@@ -1391,45 +1391,45 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* MY CAREER 각 버튼별 배경 이미지 */
-/* 나의 기록 화면 8개 버튼 - 이미지 크기 80% */
+/* 나의 기록 화면 8개 버튼 - 이미지 크기 70% */
 .basecamp-btn-career-workout {
   background-image: url('../img/WORKOUT.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-journal {
   background-image: url('../img/LOGS.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-schedule {
   background-image: url('../img/SCHEDULE.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-dashboard {
   background-image: url('../img/DASHBOARD.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-profile {
   background-image: url('../img/INFO.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-subscribe {
   background-image: url('../img/SUBSCRIBE.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-ranking {
   background-image: url('../img/RANKING1.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn-career-settings {
   background-image: url('../img/SETTINGS2.png') !important;
-  background-size: 80% !important;
+  background-size: 70% !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
