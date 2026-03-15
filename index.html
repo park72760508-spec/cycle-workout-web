@@ -6779,7 +6779,8 @@
 
     /**
      * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
-     * 로딩 시 녹색 큰 원 스피너 표시 → 조회 완료 시 랭킹 목록으로 교체. 훈련 기록 없으면 팝업 띄우지 않음.
+     * 로딩 시 녹색 큰 원 스피너 표시 → 조회 완료 시 랭킹 목록으로 교체.
+     * 새 주 시작 후 현재주 순위자가 없으면 전주 랭킹을 확정 도장과 함께 표시. 현재주 순위자가 있으면 전주는 표시하지 않음.
      * 매주 일요일 21시 순위 확정 이후에는 화면 중앙에 crop1.png 이미지 표시.
      */
     async function fetchAndShowWeeklyTop10Modal() {
@@ -6789,18 +6790,29 @@
       body.innerHTML = getWeeklyTop10LoadingHtml();
       modal.classList.remove('hidden');
       try {
-        const url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
-        const res = await fetch(url, { method: 'GET', mode: 'cors' });
-        const data = await res.json().catch(function() { return { success: false }; });
+        var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
+        var res = await fetch(url, { method: 'GET', mode: 'cors' });
+        var data = await res.json().catch(function() { return { success: false }; });
         if (!data.success || !Array.isArray(data.ranking)) {
           body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">데이터를 불러올 수 없습니다.</p>';
           return;
         }
         var list = data.ranking;
+        var showStamp = false;
+        var isPrevWeek = false;
         if (!list || list.length === 0) {
-          modal.classList.add('hidden');
-          if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
-          return;
+          res = await fetch(url + '?week=prev', { method: 'GET', mode: 'cors' });
+          data = await res.json().catch(function() { return { success: false }; });
+          if (!data.success || !Array.isArray(data.ranking) || data.ranking.length === 0) {
+            modal.classList.add('hidden');
+            if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
+            return;
+          }
+          list = data.ranking;
+          showStamp = true;
+          isPrevWeek = true;
+        } else {
+          showStamp = isWeeklyRankingFinalizedSeoul();
         }
         var medals = ['🥇', '🥈', '🥉'];
         var html = '';
@@ -6817,7 +6829,8 @@
           html += '<span class="weekly-rank-tss">' + tss + ' TSS</span>';
           html += '</div>';
         });
-        if (isWeeklyRankingFinalizedSeoul()) {
+        if (showStamp) {
+          if (isPrevWeek) html = '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 전주 확정 순위</p>' + html;
           html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html;
           html += '<div class="weekly-top10-stamp-overlay" style="position:absolute;left:0;top:0;right:0;bottom:0;display:flex;justify-content:center;align-items:center;pointer-events:none;">';
           html += '<img src="assets/img/crop1.png" alt="" class="weekly-top10-stamp-img" style="width:240px;height:auto;display:block;" />';
