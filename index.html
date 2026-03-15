@@ -4772,7 +4772,7 @@
   <!-- STRAVA 6개월 동기화 확인 모달 (경로 선택 → 나의 기록 클릭 시, 조건 충족 시 표시) -->
   <div id="strava6MonthSyncPromptModal" class="stelvio-coming-soon-modal stelvio-ios-popup hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10002; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);" onclick="if(event.target === this) closeStrava6MonthSyncPromptModal();">
     <div class="stelvio-coming-soon-content stelvio-ios-modal-content" style="min-width: 280px; max-width: 90%; margin: 16px;" onclick="event.stopPropagation();">
-      <p class="stelvio-coming-soon-message" style="margin-bottom: 8px;">STRAVA 최근 6개월 훈련 데이터를 가져올까요?</p>
+      <p class="stelvio-coming-soon-message" style="margin-bottom: 8px;">STRAVA 최근 6개월 라이딩 데이터를 가져올까요?</p>
       <p class="stelvio-coming-soon-message" style="font-size: 14px; font-weight: 500; color: #6b7280; margin-bottom: 20px;">(데이터 수집완료 시까지 잠시만 기다려 주세요)</p>
       <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 14px; color: #6b7280; cursor: pointer;">
         <input type="checkbox" id="strava6MonthSyncDontAskAgain" />
@@ -4790,7 +4790,7 @@
       <div class="ai-loading-spinner-bg"></div>
       <div class="ai-loading-spinner" style="border-top-color: #22c55e; box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.25);"></div>
     </div>
-    <p id="strava6MonthSyncOverlayText" style="margin-top: 24px; font-size: 1.1em; font-weight: 600; color: #22c55e;">STRAVA 훈련 데이터 수집 중.....</p>
+    <p id="strava6MonthSyncOverlayText" style="margin-top: 24px; font-size: 1.1em; font-weight: 600; color: #22c55e;">STRAVA 라이딩 데이터 수집 중...</p>
   </div>
   <!-- Strava 오늘 기록(ALL) 동기화 시 녹색 큰 원 스피너 -->
   <div id="stravaTodayAllOverlay" class="strava-today-all-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100002; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px);">
