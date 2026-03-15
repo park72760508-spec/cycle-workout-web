@@ -82,6 +82,31 @@ function formatHoursForAxis(sec) {
   return String(Math.floor(sec / 3600));
 }
 
+/** 커스텀 Tooltip: 마우스 오버한 막대의 값만 표시 (Recharts 기본 툴팁이 전체 합계/다른 막대 값을 보여주는 문제 방지) */
+function TimeInZonesTooltipContent(props) {
+  var active = props.active;
+  var payload = props.payload;
+  var label = props.label;
+  var zoneRanges = props.zoneRanges;
+  var data = props.data;
+  if (!active || !payload || !payload.length) return null;
+  var item = payload[0];
+  if (label && payload.length > 1) {
+    var match = payload.find(function(p) { return (p.payload && p.payload.name === label) || (p.name === label); });
+    if (match) item = match;
+  }
+  var value = item && (item.value != null ? item.value : (item.payload && item.payload.seconds));
+  if (value == null && item && item.payload) value = item.payload.seconds;
+  var sec = Number(value);
+  if (isNaN(sec) || sec < 0) sec = 0;
+  var idx = data && data.length ? data.findIndex(function(d) { return d.name === label; }) : -1;
+  var rangeStr = (zoneRanges && idx >= 0 && zoneRanges[idx]) ? zoneRanges[idx].range : '';
+  return React.createElement('div', { className: 'bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm' },
+    React.createElement('div', { className: 'font-semibold text-gray-800' }, (label || '') + (rangeStr ? ' ' + rangeStr : '')),
+    React.createElement('div', { className: 'text-gray-600' }, '시간: ' + formatSeconds(sec))
+  );
+}
+
 /** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
 function generatePowerZoneAnalysisComment(data) {
   if (!data || !data.length) return '';
@@ -212,7 +237,7 @@ function PowerTimeInZonesChart(props) {
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
+            {Tooltip ? React.createElement(Tooltip, { content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
@@ -299,7 +324,7 @@ function HRTimeInZonesChart(props) {
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
+            {Tooltip ? React.createElement(Tooltip, { content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
