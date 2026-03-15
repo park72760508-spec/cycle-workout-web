@@ -6418,7 +6418,7 @@ async function handleStrava6MonthSyncYes() {
     var opts = {
       overlayId: 'strava6MonthSyncOverlay',
       textId: 'strava6MonthSyncOverlayText',
-      progressMessage: 'STRAVA 훈련 데이터 수집 중.....'
+      progressMessage: 'STRAVA 라이딩 데이터 수집 중...'
     };
     await syncStravaDataWithMmp(6, opts);
   }
