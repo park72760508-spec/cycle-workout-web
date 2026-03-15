@@ -6799,6 +6799,7 @@
         var list = data.ranking;
         if (!list || list.length === 0) {
           modal.classList.add('hidden');
+          if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
           return;
         }
         var medals = ['🥇', '🥈', '🥉'];
