@@ -5593,7 +5593,10 @@
                 if (logsSnapshot && logsSnapshot.docs) {
                   logsSnapshot.docs.forEach(function(doc) {
                     try {
-                      logs.push({ id: doc.id, ...doc.data() });
+                      var docD = doc.data();
+                      var logObj = { id: doc.id };
+                      if (docD && typeof docD === 'object') { for (var k in docD) { if (docD.hasOwnProperty(k)) logObj[k] = docD[k]; } }
+                      logs.push(logObj);
                     } catch (docErr) {
                       console.warn('[AI] 문서 파싱 오류');
                     }
@@ -7449,14 +7452,14 @@
       try {
         var q = mod.query(ref, mod.orderBy('date', 'desc'), mod.limit(limit));
         var snap = await mod.getDocs(q);
-        return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+        return snap.docs.map(function(d) { var dd = d.data(); var o = { id: d.id }; if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } } return o; });
       } catch (e) {
         var needIndex = (e && e.code === 'failed-precondition') || (e && e.message && (e.message.indexOf('index') !== -1 || e.message.indexOf('INDEX') !== -1));
         if (needIndex) {
           try {
             var q2 = mod.query(ref, mod.limit(limit));
             var snap2 = await mod.getDocs(q2);
-            var list = snap2.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+            var list = snap2.docs.map(function(d) { var dd = d.data(); var o = { id: d.id }; if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } } return o; });
             list.sort(function(a, b) {
               var da = a.date && (a.date.toDate ? a.date.toDate() : new Date(a.date));
               var db = b.date && (b.date.toDate ? b.date.toDate() : new Date(b.date));
@@ -13609,7 +13612,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (raw.length === 0 && window.firestore) {
               try {
                 var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
-                snap.docs.forEach(function(d) { raw.push({ id: d.id, ...d.data() }); });
+                snap.docs.forEach(function(d) { var dd = d.data(); var o = { id: d.id }; if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } } raw.push(o); });
               } catch (e2) { raw = []; }
             }
             function parseDate(d) {
@@ -13974,7 +13977,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             var profileData = null;
             if (userDoc.exists) {
-              var userData = userDoc.data();
+              var rawDocData = userDoc.data() || {};
+              var userData = rawDocData;
               var ftp = Number(userData.ftp) || 0;
               var weight = Number(userData.weight) || 0;
               var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
@@ -14152,7 +14156,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (firestore) {
                 var userDoc = await firestore.collection('users').doc(userId).get();
                 if (userDoc.exists) {
-                  var userData = userDoc.data();
+                  var userData = userDoc.data() || {};
                   var ftp = Number(userData.ftp) || 0;
                   var weight = Number(userData.weight) || 0;
                   var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
@@ -14292,7 +14296,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   if (logsSnapshot && logsSnapshot.docs) {
                     logsSnapshot.docs.forEach(function(doc) {
                       try {
-                        raw.push({ id: doc.id, ...doc.data() });
+                        var docD2 = doc.data();
+                        var logObj2 = { id: doc.id };
+                        if (docD2 && typeof docD2 === 'object') { for (var k2 in docD2) { if (docD2.hasOwnProperty(k2)) logObj2[k2] = docD2[k2]; } }
+                        raw.push(logObj2);
                       } catch (docErr) {
                       console.warn('[AI] 문서 파싱 오류');
                     }
