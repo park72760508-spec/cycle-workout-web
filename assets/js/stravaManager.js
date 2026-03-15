@@ -1191,16 +1191,26 @@ async function syncStravaData(startDate = null, endDate = null, opts = {}) {
  * - 과거 1~6개월 Strava 활동 + 5/10/30분 파워(MMP) 계산·저장
  * - Firebase 로그인 필요 (Authorization Bearer 토큰)
  * @param {number} [months=1] - 동기화할 개월 수 (1~6)
+ * @param {Object} [options] - 선택 옵션
+ * @param {string} [options.overlayId] - 진행 오버레이 요소 ID (기본: stravaSyncProgressOverlay)
+ * @param {string} [options.textId] - 진행 텍스트 요소 ID (기본: stravaSyncProgressText)
+ * @param {string} [options.progressMessage] - 표시할 메시지 (기본: MMP 포함 동기화 중 (N개월)...)
  */
-async function syncStravaDataWithMmp(months = 1) {
-  const monthsVal = Math.min(6, Math.max(1, parseInt(months, 10) || 1));
-  const btn = document.getElementById('btnStravaSyncWithMmp');
-  const originalText = btn ? btn.textContent : 'MMP 포함 동기화';
-  const progressOverlay = document.getElementById('stravaSyncProgressOverlay');
-  const progressText = document.getElementById('stravaSyncProgressText');
+async function syncStravaDataWithMmp(months = 1, options) {
+  var opts = options || {};
+  var overlayId = opts.overlayId || 'stravaSyncProgressOverlay';
+  var textId = opts.textId || 'stravaSyncProgressText';
+  var progressMessage = opts.progressMessage;
+  var monthsVal = Math.min(6, Math.max(1, parseInt(months, 10) || 1));
+  var btn = document.getElementById('btnStravaSyncWithMmp');
+  var originalText = btn ? btn.textContent : 'MMP 포함 동기화';
+  var progressOverlay = document.getElementById(overlayId);
+  var progressText = document.getElementById(textId);
+  var defaultMsg = 'MMP 포함 동기화 중 (' + monthsVal + '개월)...';
+  var msg = (typeof progressMessage === 'string' && progressMessage) ? progressMessage : defaultMsg;
 
-  function showProgress(msg) {
-    if (progressText) progressText.textContent = msg || '준비 중...';
+  function showProgress(m) {
+    if (progressText) progressText.textContent = m || '준비 중...';
     if (progressOverlay) {
       progressOverlay.classList.remove('hidden');
       progressOverlay.style.display = 'flex';
@@ -1219,7 +1229,7 @@ async function syncStravaDataWithMmp(months = 1) {
       btn.textContent = '⏳ 동기화 중...';
     }
     closeStravaSyncModal();
-    showProgress(`MMP 포함 동기화 중 (${monthsVal}개월)...`);
+    showProgress(msg);
 
     const auth = window.authV9 || window.auth || window.firebase?.auth?.();
     const currentUser = auth?.currentUser;

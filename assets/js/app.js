@@ -6307,6 +6307,115 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
+/**
+ * 경로 선택 → 나의 기록(MY CAREER) 클릭 시:
+ * STRAVA 연결됨 + 최근 1개월 이상 훈련로그 없음 + "다음부터 묻지 않음" 미체크 시
+ * STRAVA 6개월 데이터 수집 확인 모달 표시
+ */
+async function handleMyCareerClick() {
+  try {
+    var user = window.currentUser || (function() {
+      try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
+    })();
+    if (!user || !user.id) {
+      if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      return;
+    }
+    var isStravaConnected = !!(user.strava_refresh_token || user.strava_access_token);
+    if (!isStravaConnected) {
+      if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      return;
+    }
+    var dontAskKey = 'strava_6month_sync_dont_ask_' + String(user.id);
+    try {
+      if (localStorage.getItem(dontAskKey) === '1') {
+        if (typeof showScreen === 'function') showScreen('myCareerScreen');
+        return;
+      }
+    } catch (e) {}
+    var hasRecentLogs = false;
+    if (typeof window.getUserTrainingLogs === 'function') {
+      try {
+        var logs = await window.getUserTrainingLogs(user.id, { limit: 50 });
+        logs = Array.isArray(logs) ? logs : [];
+        var today = new Date();
+        var oneMonthAgo = new Date(today);
+        oneMonthAgo.setDate(today.getDate() - 30);
+        var oneMonthStr = oneMonthAgo.getFullYear() + '-' + String(oneMonthAgo.getMonth() + 1).padStart(2, '0') + '-' + String(oneMonthAgo.getDate()).padStart(2, '0');
+        for (var i = 0; i < logs.length; i++) {
+          var d = logs[i].date;
+          var ds = null;
+          if (d && d.toDate && typeof d.toDate === 'function') ds = d.toDate().toISOString().slice(0, 10);
+          else if (typeof d === 'string') ds = d.slice(0, 10);
+          if (ds && ds >= oneMonthStr) { hasRecentLogs = true; break; }
+        }
+      } catch (e) {
+        console.warn('[handleMyCareerClick] 로그 조회 실패:', e);
+      }
+    }
+    if (hasRecentLogs) {
+      if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      return;
+    }
+    openStrava6MonthSyncPromptModal();
+  } catch (e) {
+    console.warn('[handleMyCareerClick] 오류:', e);
+    if (typeof showScreen === 'function') showScreen('myCareerScreen');
+  }
+}
+
+function openStrava6MonthSyncPromptModal() {
+  var modal = document.getElementById('strava6MonthSyncPromptModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    var cb = document.getElementById('strava6MonthSyncDontAskAgain');
+    if (cb) cb.checked = false;
+  } else {
+    if (typeof showScreen === 'function') showScreen('myCareerScreen');
+  }
+}
+
+function closeStrava6MonthSyncPromptModal() {
+  var modal = document.getElementById('strava6MonthSyncPromptModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+}
+
+function handleStrava6MonthSyncNo() {
+  var user = window.currentUser || (function() {
+    try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
+  })();
+  var cb = document.getElementById('strava6MonthSyncDontAskAgain');
+  if (user && user.id && cb && cb.checked) {
+    try { localStorage.setItem('strava_6month_sync_dont_ask_' + String(user.id), '1'); } catch (e) {}
+  }
+  closeStrava6MonthSyncPromptModal();
+  if (typeof showScreen === 'function') showScreen('myCareerScreen');
+}
+
+async function handleStrava6MonthSyncYes() {
+  var user = window.currentUser || (function() {
+    try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
+  })();
+  var cb = document.getElementById('strava6MonthSyncDontAskAgain');
+  if (user && user.id && cb && cb.checked) {
+    try { localStorage.setItem('strava_6month_sync_dont_ask_' + String(user.id), '1'); } catch (e) {}
+  }
+  closeStrava6MonthSyncPromptModal();
+  if (typeof syncStravaDataWithMmp === 'function') {
+    var opts = {
+      overlayId: 'strava6MonthSyncOverlay',
+      textId: 'strava6MonthSyncOverlayText',
+      progressMessage: 'STRAVA 훈련 데이터 수집 중.....'
+    };
+    await syncStravaDataWithMmp(6, opts);
+  }
+  if (typeof showScreen === 'function') showScreen('myCareerScreen');
+}
+
 window.showScreen = function(screenId) {
   console.log(`🔵 [Step 1] showScreen 함수 진입: '${screenId}'`);
   // TOP10 등 "인증 후에만 노출" 로직용: 리다이렉트 여부 플래그 (index.html 래퍼에서 사용)
