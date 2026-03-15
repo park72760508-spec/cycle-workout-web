@@ -6430,7 +6430,9 @@
         return;
       }
 
-      const { currentYear, currentMonth } = miniCalendarState;
+      var miniState = miniCalendarState || {};
+      var currentYear = miniState.currentYear != null ? miniState.currentYear : new Date().getFullYear();
+      var currentMonth = miniState.currentMonth != null ? miniState.currentMonth : new Date().getMonth();
       
       // 월/년 표시 업데이트
       monthYearEl.textContent = `${currentYear}년 ${currentMonth + 1}월`;
@@ -7753,7 +7755,9 @@
         // 달력만 렌더링하고 데이터는 표시하지 않음
       }
 
-      const { currentYear, currentMonth } = miniCalendarStateJournal;
+      var miniStateJ = miniCalendarStateJournal || {};
+      var currentYear = miniStateJ.currentYear != null ? miniStateJ.currentYear : new Date().getFullYear();
+      var currentMonth = miniStateJ.currentMonth != null ? miniStateJ.currentMonth : new Date().getMonth();
       
       // 월/년 표시 업데이트
       monthYearEl.textContent = `${currentYear}년 ${currentMonth + 1}월`;
@@ -9001,7 +9005,13 @@
   <!-- ========== Monthly Training Analysis Dashboard (React) ========== -->
   <script type="text/babel">
     (function() {
-      const { useState, useEffect, useRef } = React;
+      if (!window.React) {
+        console.warn("React is not loaded yet.");
+      }
+      var ReactObj = window.React || {};
+      var useState = ReactObj.useState || null;
+      var useEffect = ReactObj.useEffect || null;
+      var useRef = ReactObj.useRef || null;
       const ChartLib = typeof Chart !== 'undefined' ? Chart : null;
 
       /**
@@ -9060,7 +9070,14 @@
         return 'Normal';
       }
 
-      function MonthlyTrainingAnalysisDashboard({ currentMonth, monthlyLogs, allTrainingLogs, prevMonthLogs, userProfile, rawLogsForTimeInZones }) {
+      function MonthlyTrainingAnalysisDashboard(props) {
+        var p = props || {};
+        var currentMonth = p.currentMonth;
+        var monthlyLogs = p.monthlyLogs;
+        var allTrainingLogs = p.allTrainingLogs;
+        var prevMonthLogs = p.prevMonthLogs;
+        var userProfile = p.userProfile;
+        var rawLogsForTimeInZones = p.rawLogsForTimeInZones;
         const chartEfRef = useRef(null);
         const chartEfInstance = useRef(null);
         const chartWeeklyTssRef = useRef(null);
@@ -13207,7 +13224,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    if (!window.React) {
+      console.warn("React is not loaded yet.");
+    }
+    var ReactObj = window.React || {};
+    var useState = ReactObj.useState || null;
+    var useEffect = ReactObj.useEffect || null;
+    var useRef = ReactObj.useRef || null;
     
     // 포인트 포맷팅 유틸리티
     function formatPoints(points) {
@@ -13220,7 +13243,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     }
     
     // DashboardCard 컴포넌트
-    function DashboardCard({ title, children, className = "" }) {
+    function DashboardCard(props) {
+      var p = props || {};
+      var title = p.title;
+      var children = p.children;
+      var className = p.className != null ? p.className : "";
       return (
         <div className={`bg-white rounded-2xl p-4 shadow-sm border border-gray-100 ${className}`}>
           {title && (
@@ -13232,7 +13259,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     }
     
     // Training Trend Chart 컴포넌트
-    function TrainingTrendChart({ data }) {
+    function TrainingTrendChart(props) {
+      var p = props || {};
+      var data = p.data;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
       const [fitnessVisible, setFitnessVisible] = useState(true);
@@ -13414,7 +13443,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     }
     
     // VO2 Max 6개월 트렌드 차트 (현재월-5 ~ 현재월, calculateStelvioVO2Max 동일 산출)
-    function Vo2MaxTrendChart({ data }) {
+    function Vo2MaxTrendChart(props) {
+      var p = props || {};
+      var data = p.data;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
       useEffect(function() {
@@ -13525,7 +13556,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     }
     
     // STELVIO 헥사곤 레이더 차트 + AI 코치 코멘트 (Training Trend 위 배치)
-    function RiderDashboardProfile({ userProfile }) {
+    function RiderDashboardProfile(props) {
+      var p = props || {};
+      var userProfile = p.userProfile;
       const [riderLogs, setRiderLogs] = useState([]);
       const [riderLoading, setRiderLoading] = useState(true);
       const [capabilityScores, setCapabilityScores] = useState(null);
@@ -13717,7 +13750,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     }
     
     // Circular Progress 컴포넌트
-    function CircularProgress({ value, max = 100, size = 120, strokeWidth = 8 }) {
+    function CircularProgress(props) {
+      var p = props || {};
+      var value = p.value;
+      var max = p.max != null ? p.max : 100;
+      var size = p.size != null ? p.size : 120;
+      var strokeWidth = p.strokeWidth != null ? p.strokeWidth : 8;
       const percentage = Math.min((value / max) * 100, 100);
       const radius = (size - strokeWidth) / 2;
       const circumference = 2 * Math.PI * radius;
