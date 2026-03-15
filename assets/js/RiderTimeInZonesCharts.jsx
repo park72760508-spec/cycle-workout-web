@@ -419,11 +419,7 @@ function DailyTimeInZonesCharts(props) {
   var logYear = getYearFromLogDate(log && log.date);
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') {
-      setMaxHr(fallbackMaxHr);
-      return;
-    }
-    setMaxHr(fallbackMaxHr);
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
     window.fetchMaxHrForYear(userId, logYear).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
@@ -498,11 +494,7 @@ function JournalTimeInZonesCharts(props) {
   var setMaxHr = _useState[1];
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') {
-      setMaxHr(fallbackMaxHr);
-      return;
-    }
-    setMaxHr(fallbackMaxHr);
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
     window.fetchMaxHrForYear(userId, year).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
