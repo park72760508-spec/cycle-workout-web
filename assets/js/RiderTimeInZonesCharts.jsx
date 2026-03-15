@@ -90,19 +90,18 @@ function TimeInZonesTooltipContent(props) {
   var zoneRanges = props.zoneRanges;
   var data = props.data;
   if (!active || !payload || !payload.length) return null;
-  var item = payload[0];
-  if (label && payload.length > 1) {
-    var match = payload.find(function(p) { return (p.payload && p.payload.name === label) || (p.name === label); });
-    if (match) item = match;
-  }
-  var value = item && (item.value != null ? item.value : (item.payload && item.payload.seconds));
+  // label과 일치하는 payload 우선 선택 (막대-툴팁 값 일치 보장)
+  var item = (label && payload.find(function(p) { return (p.payload && p.payload.name === label) || (p.name === label); })) || payload[0];
+  // 막대 높이와 동일한 seconds 사용 (payload.seconds가 차트 data와 동일 소스)
+  var value = (item && item.payload && item.payload.seconds != null) ? item.payload.seconds : (item && item.value != null ? item.value : null);
   if (value == null && item && item.payload) value = item.payload.seconds;
   var sec = Number(value);
   if (isNaN(sec) || sec < 0) sec = 0;
-  var idx = data && data.length ? data.findIndex(function(d) { return d.name === label; }) : -1;
+  var displayLabel = label || (item && item.payload && item.payload.name) || '';
+  var idx = data && data.length ? data.findIndex(function(d) { return d.name === displayLabel; }) : -1;
   var rangeStr = (zoneRanges && idx >= 0 && zoneRanges[idx]) ? zoneRanges[idx].range : '';
   return React.createElement('div', { className: 'bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm' },
-    React.createElement('div', { className: 'font-semibold text-gray-800' }, (label || '') + (rangeStr ? ' ' + rangeStr : '')),
+    React.createElement('div', { className: 'font-semibold text-gray-800' }, (displayLabel || '') + (rangeStr ? ' ' + rangeStr : '')),
     React.createElement('div', { className: 'text-gray-600' }, '시간: ' + formatSeconds(sec))
   );
 }
@@ -229,15 +228,16 @@ function PowerTimeInZonesChart(props) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
-              var idx = data.findIndex(function(d) { return d.name === payload.value; });
-              var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
+              var cat = (payload && (payload.value ?? payload.name ?? (payload.payload && (payload.payload.value ?? payload.payload.name)))) || '';
+              var idx = data.findIndex(function(d) { return d.name === cat; });
+              var z = zoneRanges[idx] || { label: cat, color: 'rgba(156,163,175,0.55)' };
               return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')' },
                 React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            {Tooltip ? React.createElement(Tooltip, { content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
+            {Tooltip ? React.createElement(Tooltip, { shared: false, content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
@@ -316,15 +316,16 @@ function HRTimeInZonesChart(props) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
-              var idx = data.findIndex(function(d) { return d.name === payload.value; });
-              var z = zoneRanges[idx] || { label: payload.value, color: 'rgba(156,163,175,0.55)' };
+              var cat = (payload && (payload.value ?? payload.name ?? (payload.payload && (payload.payload.value ?? payload.payload.name)))) || '';
+              var idx = data.findIndex(function(d) { return d.name === cat; });
+              var z = zoneRanges[idx] || { label: cat, color: 'rgba(156,163,175,0.55)' };
               return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')' },
                 React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            {Tooltip ? React.createElement(Tooltip, { content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
+            {Tooltip ? React.createElement(Tooltip, { shared: false, content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
