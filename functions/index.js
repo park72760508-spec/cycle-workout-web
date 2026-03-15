@@ -2182,7 +2182,8 @@ function calculateTimeInHRZones(hrArray, maxHr) {
 }
 
 /**
- * 스트림 데이터로 Power/HR 존 시간 계산. dateStr에서 연도 파싱하여 max_hr 조회.
+ * 스트림 데이터로 Power/HR 존 시간 계산.
+ * yearly_peaks/{year} max_hr 존재 시 반드시 사용 (스트림 값으로 덮어쓰지 않음).
  * @param {Object} opts - { wattsArray, hrArray, ftp, userId, db, dateStr }
  * @returns {Promise<{ power: Object, hr: Object }>}
  */
