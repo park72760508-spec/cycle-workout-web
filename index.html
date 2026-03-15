@@ -6717,7 +6717,7 @@
       var tizContainer = document.getElementById('trainingDetailTimeInZones');
       if (tizContainer && log.time_in_zones && typeof window.RenderDailyTimeInZonesCharts === 'function') {
         var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
-        var up = { ftp: (cu && cu.ftp) || 200, max_hr: (log.max_hr || (cu && cu.max_hr)) || 190 };
+        var up = { id: cu && (cu.id || cu.uid), uid: cu && (cu.uid || cu.id), ftp: (cu && cu.ftp) || 200, max_hr: (cu && cu.max_hr) || 190 };
         window.RenderDailyTimeInZonesCharts(tizContainer, log, up);
       }
       
@@ -8421,7 +8421,7 @@
       var tizContainerJournal = document.getElementById('trainingDetailTimeInZones');
       if (tizContainerJournal && log.time_in_zones && typeof window.RenderDailyTimeInZonesCharts === 'function') {
         var cuJ = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; } })();
-        var upJ = { ftp: (cuJ && cuJ.ftp) || 200, max_hr: (log.max_hr || (cuJ && cuJ.max_hr)) || 190 };
+        var upJ = { id: cuJ && (cuJ.id || cuJ.uid), uid: cuJ && (cuJ.uid || cuJ.id), ftp: (cuJ && cuJ.ftp) || 200, max_hr: (cuJ && cuJ.max_hr) || 190 };
         window.RenderDailyTimeInZonesCharts(tizContainerJournal, log, upJ);
       }
       
@@ -8898,7 +8898,7 @@
         var prevMonthLogs = window.buildMonthlyLogsForDashboard ? window.buildMonthlyLogsForDashboard(prevYear, prevMonth1, miniCalendarStateJournal.trainingLogs) : [];
         var userProfile = (function() {
           var u = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
-          return u ? { ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
+          return u ? { id: u.id, uid: u.uid || u.id, ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
         })();
         var rawLogsTiz = (function() {
           var tl = miniCalendarStateJournal.trainingLogs || {};
@@ -8988,7 +8988,7 @@
       var prevMonthLogs = window.buildMonthlyLogsForDashboard ? window.buildMonthlyLogsForDashboard(prevYear, prevMonth1, miniCalendarStateJournal.trainingLogs) : [];
       var userProfile = (function() {
         var u = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
-        return u ? { ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
+        return u ? { id: u.id, uid: u.uid || u.id, ftp: u.ftp, weight: u.weight, max_hr: u.max_hr, age: u.age } : {};
       })();
       var rawLogsTizUpdate = (function() {
         var tl = miniCalendarStateJournal.trainingLogs || {};
