@@ -13633,6 +13633,51 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var yWattsMax = Math.ceil(wattsMax + 20);
         var yHrMin = Math.max(80, Math.floor(hrMin - 10));
         var yHrMax = Math.min(220, Math.ceil(hrMax + 10));
+        var prWattsIdx = -1, prHrIdx = -1;
+        var maxW = 0, maxH = 0;
+        wattsData.forEach(function(v, i) { if (v != null && v > maxW) { maxW = v; prWattsIdx = i; } });
+        hrData.forEach(function(v, i) { if (v != null && v > maxH) { maxH = v; prHrIdx = i; } });
+        var growthPrPlugin = {
+          id: 'growthPrLabels',
+          afterDatasetsDraw: function(chart) {
+            var ctx = chart.ctx;
+            ctx.save();
+            ctx.font = 'bold 8px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if (prWattsIdx >= 0) {
+              var meta0 = chart.getDatasetMeta(0);
+              var pt0 = meta0 && meta0.data && meta0.data[prWattsIdx];
+              if (pt0 && pt0.x != null && pt0.y != null) {
+                ctx.fillStyle = '#3b82f6';
+                ctx.beginPath();
+                ctx.arc(pt0.x, pt0.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.fillStyle = '#fff';
+                ctx.fillText('PR', pt0.x, pt0.y);
+              }
+            }
+            if (prHrIdx >= 0) {
+              var meta1 = chart.getDatasetMeta(1);
+              var pt1 = meta1 && meta1.data && meta1.data[prHrIdx];
+              if (pt1 && pt1.x != null && pt1.y != null) {
+                ctx.fillStyle = '#ec4899';
+                ctx.beginPath();
+                ctx.arc(pt1.x, pt1.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.fillStyle = '#fff';
+                ctx.fillText('PR', pt1.x, pt1.y);
+              }
+            }
+            ctx.restore();
+          }
+        };
         chartInstanceRef.current = new Chart(ctx, {
           type: 'line',
           data: {
@@ -13717,7 +13762,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 ticks: { font: { size: 11 }, color: '#6b7280', callback: function(v) { return v + ' bpm'; } }
               }
             }
-          }
+          },
+          plugins: [growthPrPlugin]
         });
         return function cleanup() {
           if (chartInstanceRef.current) {
