@@ -70,10 +70,16 @@ function formatSeconds(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-/** Y축용: 분(min)으로 세밀하게 표시 */
+/** Y축용: 분(min) 단위 표시 */
 function formatMinutesForAxis(sec) {
   if (!sec || sec < 0) return '0';
   return String(Math.floor(sec / 60));
+}
+
+/** Y축용: 시간(h) 단위 표시 */
+function formatHoursForAxis(sec) {
+  if (!sec || sec < 0) return '0';
+  return String(Math.floor(sec / 3600));
 }
 
 /** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
@@ -139,7 +145,7 @@ function generateHRZoneAnalysisComment(data) {
 }
 
 // ========== 파워 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z0~Z7) ==========
-function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, periodLabel, hideComment, titleClassName }) {
+function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, periodLabel, hideComment, titleClassName, yAxisUnit }) {
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -194,7 +200,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
-            <YAxis type="number" tickFormatter={formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
+            <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} label={{ value: yAxisUnit === 'h' ? '(h)' : '(m)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#6b7280' } }} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -214,7 +220,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
 }
 
 // ========== 심박 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z1~Z5) ==========
-function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodLabel, hideComment, titleClassName }) {
+function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodLabel, hideComment, titleClassName, yAxisUnit }) {
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -268,7 +274,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
-            <YAxis type="number" tickFormatter={formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} />
+            <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} label={{ value: yAxisUnit === 'h' ? '(h)' : '(m)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#6b7280' } }} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -330,10 +336,10 @@ function RiderTimeInZonesCharts({ DashboardCard, userProfile, recentLogs }) {
     </h2>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="min-w-0 overflow-hidden col-span-2">
-          <PowerTimeInZonesChart DashboardCard={Card} powerData={powerData} ftp={ftp} isFullWidth />
+          <PowerTimeInZonesChart DashboardCard={Card} powerData={powerData} ftp={ftp} isFullWidth yAxisUnit="h" />
         </div>
         <div className="min-w-0 overflow-hidden col-span-2">
-          <HRTimeInZonesChart DashboardCard={Card} hrData={hrData} maxHr={maxHr} isFullWidth />
+          <HRTimeInZonesChart DashboardCard={Card} hrData={hrData} maxHr={maxHr} isFullWidth yAxisUnit="h" />
         </div>
       </div>
     </div>
@@ -359,8 +365,8 @@ function DailyTimeInZonesCharts({ log, userProfile, DashboardCard }) {
   if (!hasPower && !hasHr) return null;
   return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4' },
     React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '일일 존별 누적 시간'),
-    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일' }) : null,
-    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일' }) : null
+    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일', yAxisUnit: 'm' }) : null,
+    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일', yAxisUnit: 'm' }) : null
   );
 }
 
@@ -422,8 +428,8 @@ function JournalTimeInZonesCharts({ currentMonth, rawLogs, userProfile, Dashboar
   return React.createElement('div', { className: 'space-y-4 mb-4' },
     React.createElement('h4', { className: titleClass }, '존별 누적 시간 (' + periodLabel + ')'),
     React.createElement('div', { className: 'grid grid-cols-1 gap-3' },
-      React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: periodLabel, hideComment: true, titleClassName: titleClass }),
-      React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: periodLabel, hideComment: true, titleClassName: titleClass })
+      React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: periodLabel, hideComment: true, titleClassName: titleClass, yAxisUnit: 'h' }),
+      React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: periodLabel, hideComment: true, titleClassName: titleClass, yAxisUnit: 'h' })
     )
   );
 }
