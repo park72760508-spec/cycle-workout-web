@@ -13623,6 +13623,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         var wattsData = data.map(function(d) { return d.max20minWatts; });
         var hrData = data.map(function(d) { return d.maxHr20min; });
+        var labels = data.map(function(d) { return d.dateLabel || d.monthLabel || ''; });
         var validWatts = wattsData.filter(function(v) { return v != null && !isNaN(v) && v > 0; });
         var validHr = hrData.filter(function(v) { return v != null && !isNaN(v) && v > 0; });
         var wattsMin = validWatts.length > 0 ? Math.min.apply(null, validWatts) : 0;
@@ -13642,13 +13643,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           afterDatasetsDraw: function(chart) {
             var ctx = chart.ctx;
             ctx.save();
-            ctx.font = 'bold 8px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
+            var sameIdx = (prWattsIdx >= 0 && prHrIdx >= 0 && prWattsIdx === prHrIdx);
             if (prWattsIdx >= 0) {
               var meta0 = chart.getDatasetMeta(0);
               var pt0 = meta0 && meta0.data && meta0.data[prWattsIdx];
               if (pt0 && pt0.x != null && pt0.y != null) {
+                var valStr = Math.round(maxW) + 'W';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillText(valStr, pt0.x, pt0.y - (sameIdx ? 24 : 20));
+                ctx.font = 'bold 8px sans-serif';
                 ctx.fillStyle = '#3b82f6';
                 ctx.beginPath();
                 ctx.arc(pt0.x, pt0.y, 12, 0, Math.PI * 2);
@@ -13664,6 +13670,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var meta1 = chart.getDatasetMeta(1);
               var pt1 = meta1 && meta1.data && meta1.data[prHrIdx];
               if (pt1 && pt1.x != null && pt1.y != null) {
+                var valStrHr = Math.round(maxH) + 'bpm';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillStyle = '#ec4899';
+                ctx.fillText(valStrHr, pt1.x, pt1.y - (sameIdx ? 16 : 20));
+                ctx.font = 'bold 8px sans-serif';
                 ctx.fillStyle = '#ec4899';
                 ctx.beginPath();
                 ctx.arc(pt1.x, pt1.y, 12, 0, Math.PI * 2);
@@ -13681,7 +13692,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         chartInstanceRef.current = new Chart(ctx, {
           type: 'line',
           data: {
-            labels: data.map(function(d) { return d.monthLabel; }),
+            labels: labels,
             datasets: [
               {
                 label: '20분 최대 파워 (W)',
@@ -13739,7 +13750,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             scales: {
               x: {
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280', maxRotation: 0, minRotation: 0 }
+                ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 45, minRotation: 0, maxTicksLimit: 12, autoSkip: true }
               },
               yWatts: {
                 type: 'linear',
@@ -13749,7 +13760,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 max: yWattsMax,
                 beginAtZero: false,
                 grid: { display: false },
-                ticks: { font: { size: 11 }, color: '#3b82f6', callback: function(v) { return v + ' W'; } }
+                ticks: { font: { size: 11 }, color: '#3b82f6', callback: function(v, i) { return i === 0 ? 'W' : String(v); } }
               },
               yHr: {
                 type: 'linear',
@@ -13759,7 +13770,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 max: yHrMax,
                 beginAtZero: false,
                 grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280', callback: function(v) { return v + ' bpm'; } }
+                ticks: { font: { size: 11 }, color: '#6b7280', callback: function(v, i) { return i === 0 ? 'bpm' : String(v); } }
               }
             }
           },
@@ -13788,7 +13799,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <canvas ref={chartRef}></canvas>
           </div>
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            월별 20분 최대 파워(W)와 20분 최대 심박(bpm)입니다. MMP 데이터가 있는 로그만 반영됩니다.
+            일별 20분 최대 파워(W)와 20분 최대 심박(bpm)입니다. PR은 해당 기간 최고 기록 지점에 표시됩니다.
           </div>
         </DashboardCard>
       );
@@ -14677,45 +14688,32 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             vo2TrendRows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
             if (isMounted) setVo2TrendData(vo2TrendRows);
 
-            // 나의 성장 트렌드 (6개월): 일단위 max_20min_watts, max_hr_20min → 월별 집계 (VO2max와 동일 X축)
+            // 나의 성장 트렌드 (6개월): 일단위 max_20min_watts, max_hr_20min (실제 PR 발생일 표시)
+            var byDateGrowth = {};
+            logs6Months.forEach(function(log) {
+              var dateStr = parseDateForDashboard(log.date);
+              if (!dateStr) return;
+              if (!byDateGrowth[dateStr]) byDateGrowth[dateStr] = { max20minWatts: 0, maxHr20min: 0 };
+              var w = Number(log.max_20min_watts) || 0;
+              var h = Number(log.max_hr_20min) || 0;
+              if (w > byDateGrowth[dateStr].max20minWatts) byDateGrowth[dateStr].max20minWatts = w;
+              if (h > byDateGrowth[dateStr].maxHr20min) byDateGrowth[dateStr].maxHr20min = h;
+            });
             var growthTrendRows = [];
-            for (var gOff = 5; gOff >= 0; gOff--) {
-              var gMonth = new Date(today.getFullYear(), today.getMonth() - gOff, 1);
-              var gy = gMonth.getFullYear();
-              var gm = gMonth.getMonth() + 1;
-              var gIsCurrent = (gOff === 0);
-              var gStartStr, gEndStr;
-              if (gIsCurrent) {
-                var gEndD = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                var gStartD = new Date(gEndD);
-                gStartD.setDate(gEndD.getDate() - 29);
-                gStartStr = gStartD.getFullYear() + '-' + pad2(gStartD.getMonth() + 1) + '-' + pad2(gStartD.getDate());
-                gEndStr = gEndD.getFullYear() + '-' + pad2(gEndD.getMonth() + 1) + '-' + pad2(gEndD.getDate());
-              } else {
-                gStartStr = gy + '-' + pad2(gm) + '-01';
-                gEndStr = gy + '-' + pad2(gm) + '-' + pad2(new Date(gy, gm, 0).getDate());
-              }
-              var inMonthLogs = logs6Months.filter(function(log) {
-                var dateStr = parseDateForDashboard(log.date);
-                return dateStr && dateStr >= gStartStr && dateStr <= gEndStr;
-              });
-              var maxWatts20 = 0, maxHr20 = 0;
-              inMonthLogs.forEach(function(log) {
-                var w = Number(log.max_20min_watts) || 0;
-                var h = Number(log.max_hr_20min) || 0;
-                if (w > maxWatts20) maxWatts20 = w;
-                if (h > maxHr20) maxHr20 = h;
-              });
-              var gMonthLabel = gm + '월';
-              if (gOff === 0) gMonthLabel = gm + '월(현재)';
+            var dCur = new Date(sixMonthsAgo.getTime());
+            dCur.setHours(0, 0, 0, 0);
+            var todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+            while (dCur.getTime() <= todayEnd.getTime()) {
+              var ds = dCur.getFullYear() + '-' + pad2(dCur.getMonth() + 1) + '-' + pad2(dCur.getDate());
+              var dayData = byDateGrowth[ds];
               growthTrendRows.push({
-                monthLabel: gMonthLabel,
-                sortKey: gy + '-' + pad2(gm),
-                max20minWatts: maxWatts20 || null,
-                maxHr20min: maxHr20 || null
+                dateLabel: (dCur.getMonth() + 1) + '/' + dCur.getDate(),
+                dateStr: ds,
+                max20minWatts: dayData && dayData.max20minWatts > 0 ? dayData.max20minWatts : null,
+                maxHr20min: dayData && dayData.maxHr20min > 0 ? dayData.maxHr20min : null
               });
+              dCur.setDate(dCur.getDate() + 1);
             }
-            growthTrendRows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
             if (isMounted) setGrowthTrendData(growthTrendRows);
 
             // Calculate weekly TSS — 훈련일지 5주차 구간(오늘-6일~오늘) + 날짜별 1개만 반영: 같은날 STRAVA+STELVIO 있으면 STRAVA, STELVIO만 있으면 STELVIO, STRAVA만 있으면 STRAVA
