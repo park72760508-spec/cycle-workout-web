@@ -236,6 +236,7 @@ function HRTimeInZonesChart(props) {
   var DashboardCard = p.DashboardCard;
   var hrData = p.hrData;
   var maxHr = p.maxHr;
+  var maxHrSourceCaption = p.maxHrSourceCaption;
   var isFullWidth = p.isFullWidth;
   var periodLabel = p.periodLabel;
   var hideComment = p.hideComment;
@@ -282,6 +283,7 @@ function HRTimeInZonesChart(props) {
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{hrTitle}</h3>
+        {maxHrSourceCaption ? React.createElement('p', { className: 'text-xs text-gray-500 mt-0.5' }, maxHrSourceCaption) : null}
       </div>
       <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
@@ -429,10 +431,11 @@ function DailyTimeInZonesCharts(props) {
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
+  var hrSourceCaption = (maxHr > 0 && logYear) ? '영역 기준: yearly_peaks/' + logYear + ' max_hr ' + maxHr + 'bpm' : null;
   return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4' },
     React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '영역별 누적 시간'),
     hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, yAxisUnit: 'm', titleOverride: '파워 영역 누적 시간' }) : null,
-    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, yAxisUnit: 'm', titleOverride: '심박 영역 누적 시간' }) : null
+    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, maxHrSourceCaption: hrSourceCaption, isFullWidth: true, yAxisUnit: 'm', titleOverride: '심박 영역 누적 시간' }) : null
   );
 }
 
@@ -507,11 +510,12 @@ function JournalTimeInZonesCharts(props) {
   var titleClass = 'text-sm font-semibold text-gray-700 mb-2';
   var hasAny = powerData.some(function(d) { return d.seconds > 0; }) || hrData.some(function(d) { return d.seconds > 0; });
   if (!hasAny) return null;
+  var hrSourceCaption = (maxHr > 0 && year) ? '영역 기준: yearly_peaks/' + year + ' max_hr ' + maxHr + 'bpm' : null;
   return React.createElement('div', { className: 'space-y-4 mb-4' },
     React.createElement('h4', { className: titleClass }, '영역별 누적시간(' + dateRangeShort + ')'),
     React.createElement('div', { className: 'grid grid-cols-1 gap-3' },
       React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, hideComment: true, titleClassName: titleClass, yAxisUnit: 'h', titleOverride: '파워 영역별 누적시간' }),
-      React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, hideComment: true, titleClassName: titleClass, yAxisUnit: 'h', titleOverride: '심박 영역별 누적시간' })
+      React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, maxHrSourceCaption: hrSourceCaption, isFullWidth: true, hideComment: true, titleClassName: titleClass, yAxisUnit: 'h', titleOverride: '심박 영역별 누적시간' })
     )
   );
 }
