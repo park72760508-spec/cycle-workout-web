@@ -70,15 +70,15 @@ function formatSeconds(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-/** Y축용: 분(min) 단위 표시 */
+/** Y축용: 분(min) - 0만 "0분", 나머지는 숫자만 */
 function formatMinutesForAxis(sec) {
-  if (!sec || sec < 0) return '0';
+  if (!sec || sec < 0) return '0분';
   return String(Math.floor(sec / 60));
 }
 
-/** Y축용: 시간(h) 단위 표시 */
+/** Y축용: 시간(h) - 0만 "0시간", 나머지는 숫자만 */
 function formatHoursForAxis(sec) {
-  if (!sec || sec < 0) return '0';
+  if (!sec || sec < 0) return '0시간';
   return String(Math.floor(sec / 3600));
 }
 
@@ -145,7 +145,17 @@ function generateHRZoneAnalysisComment(data) {
 }
 
 // ========== 파워 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z0~Z7) ==========
-function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, periodLabel, hideComment, titleClassName, yAxisUnit, titleOverride }) {
+function PowerTimeInZonesChart(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var powerData = p.powerData;
+  var ftp = p.ftp;
+  var isFullWidth = p.isFullWidth;
+  var periodLabel = p.periodLabel;
+  var hideComment = p.hideComment;
+  var titleClassName = p.titleClassName;
+  var yAxisUnit = p.yAxisUnit;
+  var titleOverride = p.titleOverride;
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -201,7 +211,7 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
-            <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} label={{ value: yAxisUnit === 'h' ? '(h)' : '(m)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#6b7280' } }} />
+            <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -221,7 +231,17 @@ function PowerTimeInZonesChart({ DashboardCard, powerData, ftp, isFullWidth, per
 }
 
 // ========== 심박 존별 누적 시간 막대 그래프 (Y축=시간, X축=Z1~Z5) ==========
-function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodLabel, hideComment, titleClassName, yAxisUnit, titleOverride }) {
+function HRTimeInZonesChart(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var hrData = p.hrData;
+  var maxHr = p.maxHr;
+  var isFullWidth = p.isFullWidth;
+  var periodLabel = p.periodLabel;
+  var hideComment = p.hideComment;
+  var titleClassName = p.titleClassName;
+  var yAxisUnit = p.yAxisUnit;
+  var titleOverride = p.titleOverride;
   var Recharts = window.Recharts;
   var BarChart = Recharts && Recharts.BarChart;
   var Bar = Recharts && Recharts.Bar;
@@ -276,7 +296,7 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
-            <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={40} label={{ value: yAxisUnit === 'h' ? '(h)' : '(m)', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#6b7280' } }} />
+            <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
             {Tooltip ? <Tooltip formatter={function(v) { return formatSeconds(v); }} contentStyle={{ fontSize: 12 }} labelFormatter={function(l) { return l + ' ' + (zoneRanges[data.findIndex(function(d) { return d.name === l; })] || {}).range; }} /> : null}
             <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
@@ -296,7 +316,11 @@ function HRTimeInZonesChart({ DashboardCard, hrData, maxHr, isFullWidth, periodL
 }
 
 // ========== 메인 컴포넌트 ==========
-function RiderTimeInZonesCharts({ DashboardCard, userProfile, recentLogs }) {
+function RiderTimeInZonesCharts(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var userProfile = p.userProfile;
+  var recentLogs = p.recentLogs;
   var Card = DashboardCard || function(props) { return <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">{props.children}</div>; };
 
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
@@ -349,7 +373,11 @@ function RiderTimeInZonesCharts({ DashboardCard, userProfile, recentLogs }) {
 }
 
 /** 일일(당일) 존별 누적 시간 - 단일 로그용 (라이딩 상세 정보 모달) */
-function DailyTimeInZonesCharts({ log, userProfile, DashboardCard }) {
+function DailyTimeInZonesCharts(props) {
+  var p = props || {};
+  var log = p.log;
+  var userProfile = p.userProfile;
+  var DashboardCard = p.DashboardCard;
   var Card = DashboardCard || function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); };
   var tiz = log && log.time_in_zones;
   var powerZones = (tiz && tiz.power) || {};
@@ -366,9 +394,9 @@ function DailyTimeInZonesCharts({ log, userProfile, DashboardCard }) {
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
   return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4' },
-    React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '일일 존별 누적 시간'),
-    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, periodLabel: '당일', yAxisUnit: 'm' }) : null,
-    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, periodLabel: '당일', yAxisUnit: 'm' }) : null
+    React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '영역별 누적 시간'),
+    hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, yAxisUnit: 'm', titleOverride: '파워 영역 누적 시간' }) : null,
+    hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, isFullWidth: true, yAxisUnit: 'm', titleOverride: '심박 영역 누적 시간' }) : null
   );
 }
 
@@ -384,7 +412,12 @@ function RenderDailyTimeInZonesCharts(container, log, userProfile) {
 }
 
 /** 라이딩 일지용: 월별 누적 존별 시간 (코멘트 제거, 제목 폰트=Weekly TSS Load) */
-function JournalTimeInZonesCharts({ currentMonth, rawLogs, userProfile, DashboardCard }) {
+function JournalTimeInZonesCharts(props) {
+  var p = props || {};
+  var currentMonth = p.currentMonth;
+  var rawLogs = p.rawLogs;
+  var userProfile = p.userProfile;
+  var DashboardCard = p.DashboardCard;
   var Card = DashboardCard || function(props) { return React.createElement('div', { className: 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100' }, props.children); };
   var logs = Array.isArray(rawLogs) ? rawLogs : [];
   var dateObj = currentMonth instanceof Date ? currentMonth : new Date(currentMonth);
