@@ -404,25 +404,31 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         ? (np / trainingData.avg_hr) 
         : null;
       
-      // Max HR: yearly_peaks/{year} → 스트림 최대값 → 기본 190
+      // Max HR: yearly_peaks/{year} 존재 시 반드시 사용, 없을 때만 스트림 최대값 → 기본 190
       const now = new Date();
       const dateStrForLog = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const year = now.getFullYear();
       let maxHr = DEFAULT_MAX_HR;
-      try {
-        const yearlyPeakRef = doc(db, 'users', userId, 'yearly_peaks', String(year));
-        const yearlySnap = await transaction.get(yearlyPeakRef);
-        if (yearlySnap.exists()) {
-          const yp = yearlySnap.data() || {};
-          const v = Number(yp?.max_hr ?? yp?.max_heartrate ?? 0);
-          if (v > 0) maxHr = v;
+      let usedYearlyPeaks = false;
+      if (userId) {
+        try {
+          const yearlyPeakRef = doc(db, 'users', userId, 'yearly_peaks', String(year));
+          const yearlySnap = await transaction.get(yearlyPeakRef);
+          if (yearlySnap.exists()) {
+            const yp = yearlySnap.data() || {};
+            const v = Number(yp?.max_hr ?? yp?.max_heartrate ?? 0);
+            if (v > 0) {
+              maxHr = v;
+              usedYearlyPeaks = true;
+            }
+          }
+        } catch (e) {
+          console.warn('[saveTrainingSession] yearly_peaks 조회 실패:', e.message);
         }
-      } catch (e) {
-        console.warn('[saveTrainingSession] yearly_peaks 조회 실패:', e.message);
       }
-      if (trainingData.hrData && trainingData.hrData.length > 0) {
+      if (!usedYearlyPeaks && trainingData.hrData && trainingData.hrData.length > 0) {
         const fromStream = Math.max(...trainingData.hrData.map((d) => Number(d.v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM));
-        if (fromStream > 0 && (maxHr === DEFAULT_MAX_HR || fromStream > maxHr)) maxHr = fromStream;
+        if (fromStream > 0) maxHr = fromStream;
       }
       
       // 존 분포 계산 (Power: z0~z7, HR: z1~z5)

@@ -149,8 +149,8 @@ async function saveTrainingResult(extra = {}) {
        }
      };
 
-     // 현재 사용자 ID 가져오기 (함수 시작 부분에서 정의)
-     const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
+     // 현재 사용자 ID 가져오기 (id/uid 모두 확인 - yearly_peaks 조회 등에 필요)
+     const currentUserId = trainingResult.userId || extra.userId || (window.currentUser && (window.currentUser.id || window.currentUser.uid)) || null;
      
      // 세션 통계 계산 (함수 시작 부분에서 정의)
      const stats = calculateSessionStats();
