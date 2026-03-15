@@ -1907,6 +1907,48 @@ window.updateProfileZoneTables = function(ftp, maxHr) {
 };
 
 /**
+ * yearly_peaks/{year}에서 해당 연도의 최대 심박수 조회
+ * - time_in_zones HR 존 표시 시 저장 기준과 동일한 yearly_peaks 사용
+ * @param {string} userId - 사용자 ID
+ * @param {number} year - 연도 (예: 2025)
+ * @returns {Promise<number|null>} max_hr 또는 null
+ */
+async function fetchMaxHrForYear(userId, year) {
+  if (!userId || !year) return null;
+  var db = window.firestoreV9 || (window.firestore && window.firestore);
+  if (!db) return null;
+  try {
+    var yearStr = String(year);
+    if (window.firestoreV9) {
+      var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var getDoc = fsMod && fsMod.getDoc;
+      var doc = fsMod && fsMod.doc;
+      if (!getDoc || !doc) return null;
+      var ref = doc(db, 'users', userId, 'yearly_peaks', yearStr);
+      var snap = await getDoc(ref);
+      if (snap && snap.exists) {
+        var d = snap.data() || {};
+        var hr = Number(d.max_hr ?? d.max_heartrate ?? 0);
+        return hr > 0 ? hr : null;
+      }
+      return null;
+    }
+    var docRef = db.collection('users').doc(userId).collection('yearly_peaks').doc(yearStr);
+    var docSnap = await docRef.get();
+    if (docSnap && docSnap.exists) {
+      var data = docSnap.data() || {};
+      var hr = Number(data.max_hr ?? data.max_heartrate ?? 0);
+      return hr > 0 ? hr : null;
+    }
+    return null;
+  } catch (e) {
+    console.warn('[UserManager] fetchMaxHrForYear 실패:', userId, year, e);
+    return null;
+  }
+}
+if (typeof window !== 'undefined') window.fetchMaxHrForYear = fetchMaxHrForYear;
+
+/**
  * yearly_peaks에서 최대 심박수 조회 (오늘 기준 최대 1년 = 당해+전년)
  * - users/{userId}/yearly_peaks/{year} 문서 2개만 조회 (당해·전년) → 로그 스캔 없이 경량
  * - max_hr는 onUserLogWritten 트리거·backfillYearlyPeaks로 yearly_peaks에 반영됨

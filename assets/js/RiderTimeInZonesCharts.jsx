@@ -315,6 +315,15 @@ function HRTimeInZonesChart(props) {
   );
 }
 
+/** log.date에서 연도 추출 (Timestamp/문자열/Date 지원) */
+function getYearFromLogDate(dateVal) {
+  if (!dateVal) return new Date().getFullYear();
+  if (dateVal.toDate && typeof dateVal.toDate === 'function') return dateVal.toDate().getFullYear();
+  if (dateVal instanceof Date) return dateVal.getFullYear();
+  if (typeof dateVal === 'string') return parseInt(dateVal.slice(0, 4), 10) || new Date().getFullYear();
+  return new Date().getFullYear();
+}
+
 // ========== 메인 컴포넌트 ==========
 function RiderTimeInZonesCharts(props) {
   var p = props || {};
@@ -347,12 +356,24 @@ function RiderTimeInZonesCharts(props) {
   });
 
   var ftp = Number(userProfile && userProfile.ftp) || 0;
-  var maxHr = Number(userProfile && userProfile.max_hr) || 0;
-  if (!maxHr && typeof window.aggregateHRFromLogs === 'function') {
+  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || 0;
+  if (!fallbackMaxHr && typeof window.aggregateHRFromLogs === 'function') {
     var hrAgg = window.aggregateHRFromLogs(logs, fromStr, toStr);
-    maxHr = hrAgg.max_hr || 190;
+    fallbackMaxHr = hrAgg.max_hr || 190;
   }
-  if (!maxHr) maxHr = 190;
+  if (!fallbackMaxHr) fallbackMaxHr = 190;
+
+  var _useState = React.useState(fallbackMaxHr);
+  var maxHr = _useState[0];
+  var setMaxHr = _useState[1];
+  React.useEffect(function() {
+    var userId = userProfile && (userProfile.id || userProfile.uid);
+    var year = today.getFullYear();
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    window.fetchMaxHrForYear(userId, year).then(function(hr) {
+      if (hr != null && hr > 0) setMaxHr(hr);
+    }).catch(function() {});
+  }, [userProfile && (userProfile.id || userProfile.uid)]);
 
   return (
     <div className="space-y-4">
@@ -389,7 +410,18 @@ function DailyTimeInZonesCharts(props) {
     return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
   });
   var ftp = Number(userProfile && userProfile.ftp) || 0;
-  var maxHr = Number(userProfile && userProfile.max_hr) || Number(log && log.max_hr) || 190;
+  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || Number(log && log.max_hr) || 190;
+  var _useState = React.useState(fallbackMaxHr);
+  var maxHr = _useState[0];
+  var setMaxHr = _useState[1];
+  var logYear = getYearFromLogDate(log && log.date);
+  React.useEffect(function() {
+    var userId = userProfile && (userProfile.id || userProfile.uid);
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    window.fetchMaxHrForYear(userId, logYear).then(function(hr) {
+      if (hr != null && hr > 0) setMaxHr(hr);
+    }).catch(function() {});
+  }, [userProfile && (userProfile.id || userProfile.uid), logYear]);
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
@@ -453,12 +485,22 @@ function JournalTimeInZonesCharts(props) {
     return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
   });
   var ftp = Number(userProfile && userProfile.ftp) || 0;
-  var maxHr = Number(userProfile && userProfile.max_hr) || 0;
-  if (!maxHr && typeof window.aggregateHRFromLogs === 'function') {
+  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || 0;
+  if (!fallbackMaxHr && typeof window.aggregateHRFromLogs === 'function') {
     var hrAgg = window.aggregateHRFromLogs(logs, startStr, endStr);
-    maxHr = hrAgg.max_hr || 190;
+    fallbackMaxHr = hrAgg.max_hr || 190;
   }
-  if (!maxHr) maxHr = 190;
+  if (!fallbackMaxHr) fallbackMaxHr = 190;
+  var _useState = React.useState(fallbackMaxHr);
+  var maxHr = _useState[0];
+  var setMaxHr = _useState[1];
+  React.useEffect(function() {
+    var userId = userProfile && (userProfile.id || userProfile.uid);
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    window.fetchMaxHrForYear(userId, year).then(function(hr) {
+      if (hr != null && hr > 0) setMaxHr(hr);
+    }).catch(function() {});
+  }, [userProfile && (userProfile.id || userProfile.uid), year]);
   var titleClass = 'text-sm font-semibold text-gray-700 mb-2';
   var hasAny = powerData.some(function(d) { return d.seconds > 0; }) || hrData.some(function(d) { return d.seconds > 0; });
   if (!hasAny) return null;
