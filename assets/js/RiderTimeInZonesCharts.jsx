@@ -70,16 +70,16 @@ function formatSeconds(sec) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-/** Y축용: 분(min) - 0만 "0분", 나머지는 숫자만 */
-function formatMinutesForAxis(sec) {
-  if (!sec || sec < 0) return '0분';
-  return String(Math.floor(sec / 60));
+/** Y축용: 분(min) - 데이터가 이미 분 단위로 들어옴 */
+function formatMinutesForAxis(val) {
+  if (!val || val < 0) return '0분';
+  return Math.round(val) + '분';
 }
 
-/** Y축용: 시간(h) - 0만 "0시간", 나머지는 숫자만 */
-function formatHoursForAxis(sec) {
-  if (!sec || sec < 0) return '0시간';
-  return String(Math.floor(sec / 3600));
+/** Y축용: 시간(h) - 데이터가 이미 시간 단위로 들어옴, 소수점 1자리까지 */
+function formatHoursForAxis(val) {
+  if (!val || val < 0) return '0시간';
+  return (val % 1 === 0 ? val : val.toFixed(1)) + '시간';
 }
 
 /** 커스텀 Tooltip: 마우스 오버한 막대의 값만 표시 (Recharts 기본 툴팁이 전체 합계/다른 막대 값을 보여주는 문제 방지) */
@@ -212,6 +212,8 @@ function PowerTimeInZonesChart(props) {
     return {
       name: d.zone,
       seconds: d.seconds,
+      minutes: d.seconds / 60,
+      hours: d.seconds / 3600,
       pct: total > 0 ? Math.round((d.seconds / total) * 100) : 0,
       color: range ? range.color : POWER_ZONE_COLORS[i].color
     };
@@ -238,7 +240,7 @@ function PowerTimeInZonesChart(props) {
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
             {Tooltip ? React.createElement(Tooltip, { shared: false, content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
-            <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
+            <Bar dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'} radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
               })}
@@ -299,6 +301,8 @@ function HRTimeInZonesChart(props) {
     return {
       name: d.zone,
       seconds: d.seconds,
+      minutes: d.seconds / 60,
+      hours: d.seconds / 3600,
       pct: total > 0 ? Math.round((d.seconds / total) * 100) : 0,
       color: range ? range.color : HR_ZONE_COLORS[i].color
     };
@@ -326,7 +330,7 @@ function HRTimeInZonesChart(props) {
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
             {Tooltip ? React.createElement(Tooltip, { shared: false, content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
-            <Bar dataKey="seconds" radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
+            <Bar dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'} radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
               })}
