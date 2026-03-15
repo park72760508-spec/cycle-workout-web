@@ -13826,15 +13826,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var isDataLoading = false; // 실제 데이터 로딩 진행 중인지 추적
         var loadingTimeout = null;
         
-        // 안전장치: 단계별 타임아웃 (실제 로딩 진행 중이면 더 길게)
+        // 안전장치: 단계별 타임아웃 (실제 로딩 진행 중이면 더 길게). 저사양: 20초/45초
+        var isLowSpecForProfile = (navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) || /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
         function createTimeout(isExtended) {
           if (loadingTimeout) {
             clearTimeout(loadingTimeout);
           }
-          var timeoutMs = isExtended ? 15000 : 8000; // 기본을 8초로 증가 (모바일 네트워크 지연 고려)
+          var baseMs = isLowSpecForProfile ? 20000 : 8000;
+          var extMs = isLowSpecForProfile ? 45000 : 15000;
+          var timeoutMs = isExtended ? extMs : baseMs;
           var message = isExtended ? 
-            '[Dashboard] Loading timeout (15s) - forcing loading false' :
-            '[Dashboard] Loading timeout (8s) - no data loading detected, forcing loading false';
+            '[Dashboard] Loading timeout (' + (extMs/1000) + 's) - forcing loading false' :
+            '[Dashboard] Loading timeout (' + (baseMs/1000) + 's) - no data loading detected, forcing loading false';
           
           loadingTimeout = setTimeout(function() {
             console.warn(message);
@@ -14898,6 +14901,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               }
             }
             var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+            var isLowSpecDevice = isMobileDevice || (navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+            var coachTimeoutMs = isLowSpecDevice ? 180000 : (isMobileDevice ? 120000 : 90000);
+            var coachOptions = { timeoutMs: 150000, maxRetries: isLowSpecDevice ? 6 : 5 };
             // 주간 목표 실적(최근 7일 TSS)과 코멘트 일치: 화면과 동일한 계산으로 산출해 코치에 전달
             function toDateStrForCoach(date) {
               if (!date) return null;
@@ -14932,23 +14938,24 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               sanitizedCount: cleanLogs.length,
               last7DaysTSSForComment: last7TSSForCoach,
               device: isMobileDevice ? 'mobile' : 'desktop',
+              lowSpec: isLowSpecDevice,
+              timeoutSec: Math.round(coachTimeoutMs / 1000),
               scope: logScope
             });
             
-            // [Mobile Bulletproof] 2. 타임아웃 래퍼 (90초, 5회 재시도·지수 백오프 고려)
+            // [저사양 휴대폰 대응] 타임아웃: 저사양 180초, 모바일 120초, PC 90초. 응답 도착 시 즉시 전환.
             currentTimeoutId = null;
-            var timeoutMs = 90000;
             var timeoutPromise = new Promise(function(_, reject) {
               currentTimeoutId = setTimeout(function() {
                 reject(new Error('네트워크 지연: 분석 시간이 초과되었습니다.'));
-              }, timeoutMs);
+              }, coachTimeoutMs);
             });
             
             if (typeof window.callGeminiCoach === 'function') {
               try {
-                // Call Gemini with sanitized logs + 주간 실적(최근 7일 TSS) 전달 → 코멘트와 화면 일치
+                // Call Gemini with sanitized logs + 주간 실적(최근 7일 TSS) 전달 → 코멘트와 화면 일치. 저사양: 1회당 150초, 최대 6회 재시도.
                 var analysis = await Promise.race([
-                  window.callGeminiCoach(userProfile, cleanLogs, last7TSSForCoach),
+                  window.callGeminiCoach(userProfile, cleanLogs, last7TSSForCoach, coachOptions),
                   timeoutPromise
                 ]);
                 
