@@ -267,6 +267,16 @@ function calculateRiderScores(userWeight, userFTP, mmp) {
   };
 }
 
+/** 저사양/모바일 감지: 타임아웃·재시도 연장용 */
+function isLowSpecOrMobileForAI() {
+  if (typeof navigator === 'undefined') return false;
+  var ua = navigator.userAgent || '';
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+  if (navigator.deviceMemory && navigator.deviceMemory <= 4) return true;
+  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) return true;
+  return false;
+}
+
 /**
  * AI 프로필 분석 코멘트 (Gemini API)
  * @param {Object} scores - { RSPT, TSPT, PCH, CLMB, TTST, ALLR }
@@ -274,8 +284,11 @@ function calculateRiderScores(userWeight, userFTP, mmp) {
  * @returns {Promise<string>} AI 코멘트 텍스트
  */
 async function fetchAIProfileAnalysis(scores, options = {}) {
-  const timeoutMs = options.timeoutMs || 10000;
-  const maxRetries = options.maxRetries ?? 2;
+  var isLowSpec = isLowSpecOrMobileForAI();
+  var defaultTimeout = isLowSpec ? 25000 : 10000;
+  var defaultRetries = isLowSpec ? 4 : 2;
+  const timeoutMs = options.timeoutMs != null ? options.timeoutMs : defaultTimeout;
+  const maxRetries = options.maxRetries != null ? options.maxRetries : defaultRetries;
 
   let apiKey;
   try {
@@ -356,7 +369,8 @@ async function fetchAIProfileAnalysis(scores, options = {}) {
     } catch (err) {
       lastErr = err;
       if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        var delayMs = isLowSpec ? 1500 * (attempt + 1) : 800 * (attempt + 1);
+        await new Promise((r) => setTimeout(r, delayMs));
       }
     }
   }

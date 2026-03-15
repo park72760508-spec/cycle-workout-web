@@ -90,7 +90,9 @@ function RiderDashboardProfile({ userProfile, DashboardCard }) {
     setAiLoading(true);
     (async () => {
       try {
-        const text = await (window.fetchAIProfileAnalysis || (() => { throw new Error('함수 없음'); }))(capabilityScores, { timeoutMs: 10000, maxRetries: 2 });
+        var isLowSpec = (navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) || /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+        var aiOpts = isLowSpec ? { timeoutMs: 25000, maxRetries: 4 } : { timeoutMs: 10000, maxRetries: 2 };
+        const text = await (window.fetchAIProfileAnalysis || (() => { throw new Error('함수 없음'); }))(capabilityScores, aiOpts);
         if (isMounted) setAiComment(text);
       } catch (e) {
         console.warn('[RiderProfile] AI 코멘트 실패:', e);

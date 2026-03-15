@@ -44,7 +44,23 @@ function oneLogPerDayPreferStravaForCoach(logs) {
   return result;
 }
 
-async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboard) {
+/** 저사양/모바일 감지: 타임아웃·재시도 연장용 */
+function isLowSpecOrMobile() {
+  if (typeof window !== 'undefined' && typeof window.isMobile === 'function' && window.isMobile()) return true;
+  var ua = (navigator && navigator.userAgent) || '';
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+  var mem = navigator.deviceMemory;
+  var cores = navigator.hardwareConcurrency;
+  if (typeof mem === 'number' && mem > 0 && mem <= 4) return true;
+  if (typeof cores === 'number' && cores > 0 && cores <= 4) return true;
+  return false;
+}
+
+async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboard, options) {
+  var opts = options || {};
+  var isLowSpec = isLowSpecOrMobile();
+  var timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : (isLowSpec ? 150000 : 60000);
+  var maxRetries = opts.maxRetries != null ? opts.maxRetries : (isLowSpec ? 6 : 5);
   const apiKey = localStorage.getItem('geminiApiKey');
   
   if (!apiKey) {
@@ -172,21 +188,32 @@ Output Format (JSON Only):
   }
 
   var lastError = null;
-  const MAX_RETRIES = 5;
-  const RETRYABLE_STATUS = [429, 503, 500, 502]; // Rate limit, Service Unavailable, Server errors
+  var RETRYABLE_STATUS = [429, 503, 500, 502]; // Rate limit, Service Unavailable, Server errors
+  var hasAbortController = typeof AbortController !== 'undefined';
 
-  for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  for (var attempt = 1; attempt <= maxRetries; attempt++) {
     if (attempt > 1) {
-      var backoffMs = Math.min(1000 * Math.pow(2, attempt - 2), 15000);
-      console.warn('[callGeminiCoach] 재시도 ' + attempt + '/' + MAX_RETRIES + ' (' + backoffMs + 'ms 대기)');
+      var backoffMs = Math.min(1500 * Math.pow(2, attempt - 2), 20000);
+      console.warn('[callGeminiCoach] 재시도 ' + attempt + '/' + maxRetries + ' (' + backoffMs + 'ms 대기, 저사양:' + isLowSpec + ')');
       await new Promise(function (r) { setTimeout(r, backoffMs); });
     }
     try {
-      var response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+      var controller = null;
+      var timeoutId = null;
+      var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) };
+      if (hasAbortController) {
+        controller = new AbortController();
+        timeoutId = setTimeout(function () {
+          if (controller) controller.abort();
+        }, timeoutMs);
+        fetchOptions.signal = controller.signal;
+      }
+      var response = await fetch(apiUrl, fetchOptions).catch(function (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (err && err.name === 'AbortError') throw new Error('요청 시간 초과 (' + Math.round(timeoutMs / 1000) + '초)');
+        throw err;
       });
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (!response.ok) {
         var errorText = await response.text();
@@ -198,7 +225,7 @@ Output Format (JSON Only):
           errorMessage = errorText;
         }
         lastError = new Error('Gemini API 오류: ' + errorMessage);
-        if (RETRYABLE_STATUS.indexOf(response.status) !== -1 && attempt < MAX_RETRIES) {
+        if (RETRYABLE_STATUS.indexOf(response.status) !== -1 && attempt < maxRetries) {
           console.warn('[callGeminiCoach] 서버 과부하/일시 오류(' + response.status + '), 재시도 예정:', errorMessage);
           continue;
         }
@@ -255,7 +282,7 @@ Output Format (JSON Only):
       }
 
       if (responseWasTruncated || isCommentTruncated(result.coach_comment)) {
-        if (result.coach_comment && result.coach_comment.trim().length >= 30 && attempt >= MAX_RETRIES - 1) {
+        if (result.coach_comment && result.coach_comment.trim().length >= 30 && attempt >= maxRetries - 1) {
           result.coach_comment = result.coach_comment.trim() + ' (응답이 길어 일부 잘렸을 수 있습니다.)';
           return {
             condition_score: conditionScoreForPrompt,
@@ -283,7 +310,7 @@ Output Format (JSON Only):
       };
     } catch (err) {
       lastError = err;
-      if (attempt < MAX_RETRIES) {
+      if (attempt < maxRetries) {
         continue;
       }
       break;
@@ -291,7 +318,7 @@ Output Format (JSON Only):
   }
 
   if (lastError) {
-    console.error('Gemini Coach API 오류 (재시도 ' + MAX_RETRIES + '회 후 실패):', lastError);
+    console.error('Gemini Coach API 오류 (재시도 ' + maxRetries + '회 후 실패):', lastError);
   }
   var fallbackVo2 = (typeof window.calculateStelvioVO2Max === 'function')
     ? window.calculateStelvioVO2Max(userProfile, recentLogs)
