@@ -410,14 +410,18 @@ function DailyTimeInZonesCharts(props) {
     return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
   });
   var ftp = Number(userProfile && userProfile.ftp) || 0;
-  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || Number(log && log.max_hr) || 190;
+  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || 190;
   var _useState = React.useState(fallbackMaxHr);
   var maxHr = _useState[0];
   var setMaxHr = _useState[1];
   var logYear = getYearFromLogDate(log && log.date);
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') {
+      setMaxHr(fallbackMaxHr);
+      return;
+    }
+    setMaxHr(fallbackMaxHr);
     window.fetchMaxHrForYear(userId, logYear).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
@@ -485,18 +489,17 @@ function JournalTimeInZonesCharts(props) {
     return { zone: k.toUpperCase(), seconds: Number(hrZones[k]) || 0 };
   });
   var ftp = Number(userProfile && userProfile.ftp) || 0;
-  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || 0;
-  if (!fallbackMaxHr && typeof window.aggregateHRFromLogs === 'function') {
-    var hrAgg = window.aggregateHRFromLogs(logs, startStr, endStr);
-    fallbackMaxHr = hrAgg.max_hr || 190;
-  }
-  if (!fallbackMaxHr) fallbackMaxHr = 190;
+  var fallbackMaxHr = Number(userProfile && userProfile.max_hr) || 190;
   var _useState = React.useState(fallbackMaxHr);
   var maxHr = _useState[0];
   var setMaxHr = _useState[1];
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    if (!userId || typeof window.fetchMaxHrForYear !== 'function') {
+      setMaxHr(fallbackMaxHr);
+      return;
+    }
+    setMaxHr(fallbackMaxHr);
     window.fetchMaxHrForYear(userId, year).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
