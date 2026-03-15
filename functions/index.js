@@ -1866,8 +1866,8 @@ exports.stravaSyncSunday = onSchedule(
 );
 
 // ---------- 주간 마일리지 TOP10 랭킹 (Choose Your Path 입장 시 팝업) ----------
-/** 현재 주 월요일 00:00 ~ 오늘 23:59 (Asia/Seoul) 날짜 문자열 반환 */
-function getWeekRangeSeoul() {
+/** 현재 주 월요일 00:00 ~ 오늘 23:59 (Asia/Seoul) 날짜 문자열 반환. weekOffset: 0=현재주, -1=전주 */
+function getWeekRangeSeoul(weekOffset = 0) {
   const now = new Date();
   const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const [y, m, d] = todayStr.split("-").map(Number);
@@ -1876,6 +1876,15 @@ function getWeekRangeSeoul() {
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const monday = new Date(today);
   monday.setDate(today.getDate() + mondayOffset);
+  if (weekOffset < 0) {
+    monday.setDate(monday.getDate() + weekOffset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const pad = (n) => String(n).padStart(2, "0");
+    const startStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+    const endStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`;
+    return { startStr, endStr };
+  }
   const pad = (n) => String(n).padStart(2, "0");
   const startStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
   const endStr = `${y}-${pad(m)}-${pad(d)}`;
@@ -1931,7 +1940,8 @@ async function getWeeklyRankingEntries(db, startStr, endStr) {
   return entries;
 }
 
-/** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 50명/배치, 1000명 대비 타임아웃 9분) */
+/** 주간 랭킹 TOP10 조회 (캐시 5분 + 병렬 50명/배치, 1000명 대비 타임아웃 9분)
+ * 쿼리: week=prev → 전주 랭킹 (새 주 시작 후 현재주 순위자 없을 때 사용) */
 exports.getWeeklyRanking = onRequest(
   { cors: true, timeoutSeconds: 540 },
   async (req, res) => {
@@ -1940,8 +1950,10 @@ exports.getWeeklyRanking = onRequest(
       return;
     }
     const db = admin.firestore();
-    const { startStr, endStr } = getWeekRangeSeoul();
-    const cacheRef = db.collection("cache").doc("weeklyRanking");
+    const weekParam = (req.query && req.query.week) || "";
+    const usePrevWeek = weekParam === "prev";
+    const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
+    const cacheRef = db.collection("cache").doc(usePrevWeek ? "weeklyRankingPrev" : "weeklyRanking");
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
     if (cacheSnap.exists) {
