@@ -6309,8 +6309,8 @@ if (typeof window.originalShowScreen === 'undefined') {
 
 /**
  * 경로 선택 → 나의 기록(MY CAREER) 클릭 시:
- * STRAVA 연결됨 + 최근 1개월 이상 훈련로그 없음 + "다음부터 묻지 않음" 미체크 시
- * STRAVA 6개월 데이터 수집 확인 모달 표시
+ * - grade=1(관리자): 조건과 관계없이 항상 STRAVA 6개월 동기화 팝업 표시
+ * - 그 외: STRAVA 연결됨 + 최근 1개월 이상 훈련로그 없음 + "다음부터 묻지 않음" 미체크 시 표시
  */
 async function handleMyCareerClick() {
   try {
@@ -6319,6 +6319,15 @@ async function handleMyCareerClick() {
     })();
     if (!user || !user.id) {
       if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      return;
+    }
+    var grade = user.grade;
+    if (grade == null && typeof getViewerGrade === 'function') {
+      grade = getViewerGrade();
+    }
+    var isAdmin = (grade === '1' || grade === 1);
+    if (isAdmin) {
+      openStrava6MonthSyncPromptModal();
       return;
     }
     var isStravaConnected = !!(user.strava_refresh_token || user.strava_access_token);
