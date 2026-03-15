@@ -1487,7 +1487,8 @@ if (STRAVA_CLIENT_SECRET) {
 exports.manualStravaSyncWithMmp = onRequest(
   manualStravaSyncWithMmpOptions,
   async (req, res) => {
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", req.query?.months || req.body?.months);
+    const forceRecalcTimeInZones = String(req.query?.forceRecalcTimeInZones || req.body?.forceRecalcTimeInZones || "").toLowerCase() === "true";
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", req.query?.months || req.body?.months, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
     if (req.method === "OPTIONS") {
       res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
       res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -1585,7 +1586,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         const existingData = logSnap.data();
         const needsMmp = existingData.max_1min_watts == null || existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_20min_watts == null || existingData.max_30min_watts == null || existingData.max_40min_watts == null || existingData.max_60min_watts == null;
         const needsHrPeaks = existingData.max_hr_5sec == null && existingData.max_hr_1min == null && existingData.max_hr_5min == null;
-        const needsTimeInZones = !existingData.time_in_zones || !existingData.time_in_zones.power;
+        const needsTimeInZones = forceRecalcTimeInZones || !existingData.time_in_zones || !existingData.time_in_zones.power;
         if (needsMmp || needsHrPeaks || needsTimeInZones) {
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const streamsRes = await fetchStravaStreams(accessToken, actId);
@@ -1666,6 +1667,18 @@ exports.manualStravaSyncWithMmp = onRequest(
           console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${max1minWatts}, 5m=${max5minWatts}, 10m=${max10minWatts}, 20m=${max20minWatts}, 30m=${max30minWatts}, 40m=${max40minWatts}, 60m=${max60minWatts}`);
         }
         const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
+        let timeInZones = mapped.time_in_zones;
+        if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
+          const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
+          timeInZones = await calculateZoneTimesFromStreams({
+            wattsArray: streamsRes.watts || [],
+            hrArray: streamsRes.heartrate || [],
+            ftp: effectiveFtp,
+            userId: uid,
+            db,
+            dateStr: mapped.date || "",
+          });
+        }
         const tssAppliedAt = new Date().toISOString();
         const logDoc = {
           activity_id: mapped.activity_id,
@@ -1689,7 +1702,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           if: mapped.if,
           tss: mapped.tss,
           efficiency_factor: mapped.efficiency_factor,
-          time_in_zones: mapped.time_in_zones,
+          time_in_zones: timeInZones,
           earned_points: mapped.earned_points,
           workout_id: mapped.workout_id,
           tss_applied: true,
@@ -2185,16 +2198,20 @@ async function calculateZoneTimesFromStreams(opts) {
   }
 
   let maxHr = DEFAULT_MAX_HR;
+  let usedYearlyPeaks = false;
   if (dateStr && userId && db) {
     const year = parseInt(String(dateStr).substring(0, 4), 10);
     if (!isNaN(year)) {
       const fromDb = await getMaxHRForYear(db, userId, year);
-      if (fromDb != null && fromDb > 0) maxHr = fromDb;
+      if (fromDb != null && fromDb > 0) {
+        maxHr = fromDb;
+        usedYearlyPeaks = true;
+      }
     }
   }
-  if (hrArray && hrArray.length > 0) {
+  if (!usedYearlyPeaks && hrArray && hrArray.length > 0) {
     const fromStream = Math.max(...hrArray.map((v) => Number(v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM));
-    if (fromStream > 0 && (maxHr === DEFAULT_MAX_HR || fromStream > maxHr)) maxHr = fromStream;
+    if (fromStream > 0) maxHr = fromStream;
   }
   if (hrArray && hrArray.length > 0) {
     Object.assign(hrZones, calculateTimeInHRZones(hrArray, maxHr));
