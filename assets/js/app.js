@@ -6312,6 +6312,39 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
+function showMyCareerLoadingOverlay() {
+  var el = document.getElementById('myCareerLoadingOverlay');
+  if (el) { el.classList.remove('hidden'); el.style.display = 'flex'; }
+}
+function hideMyCareerLoadingOverlay() {
+  var el = document.getElementById('myCareerLoadingOverlay');
+  if (el) { el.classList.add('hidden'); el.style.display = 'none'; }
+}
+function preloadMyCareerImages() {
+  var imgs = ['WORKOUT.png', 'LOGS.png', 'SCHEDULE.png', 'DASHBOARD.png', 'INFO.png', 'SUBSCRIBE.png', 'RANKING1.png', 'SETTINGS2.png'];
+  var path = window.location.pathname || '/';
+  var dir = path.substring(0, path.lastIndexOf('/') + 1) || '/';
+  var base = (window.location.origin || '') + dir + 'assets/img/';
+  var promises = imgs.map(function(src) {
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.onload = img.onerror = resolve;
+      img.src = base + src;
+    });
+  });
+  return Promise.race([Promise.all(promises), new Promise(function(r) { setTimeout(r, 5000); })]);
+}
+function showMyCareerScreenWithLoading() {
+  showMyCareerLoadingOverlay();
+  if (typeof showScreen === 'function') showScreen('myCareerScreen');
+  preloadMyCareerImages().then(hideMyCareerLoadingOverlay);
+}
+if (typeof window !== 'undefined') {
+  window.showMyCareerLoadingOverlay = showMyCareerLoadingOverlay;
+  window.hideMyCareerLoadingOverlay = hideMyCareerLoadingOverlay;
+  window.showMyCareerScreenWithLoading = showMyCareerScreenWithLoading;
+}
+
 /**
  * 경로 선택 → 나의 기록(MY CAREER) 클릭 시:
  * - grade=1(관리자): 조건과 관계없이 항상 STRAVA 6개월 동기화 팝업 표시
@@ -6323,7 +6356,7 @@ async function handleMyCareerClick() {
       try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
     })();
     if (!user || !user.id) {
-      if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      showMyCareerScreenWithLoading();
       return;
     }
     var grade = user.grade;
@@ -6337,13 +6370,13 @@ async function handleMyCareerClick() {
     }
     var isStravaConnected = !!(user.strava_refresh_token || user.strava_access_token);
     if (!isStravaConnected) {
-      if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      showMyCareerScreenWithLoading();
       return;
     }
     var dontAskKey = 'strava_6month_sync_dont_ask_' + String(user.id);
     try {
       if (localStorage.getItem(dontAskKey) === '1') {
-        if (typeof showScreen === 'function') showScreen('myCareerScreen');
+        showMyCareerScreenWithLoading();
         return;
       }
     } catch (e) {}
@@ -6368,13 +6401,13 @@ async function handleMyCareerClick() {
       }
     }
     if (hasRecentLogs) {
-      if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      showMyCareerScreenWithLoading();
       return;
     }
     openStrava6MonthSyncPromptModal();
   } catch (e) {
     console.warn('[handleMyCareerClick] 오류:', e);
-    if (typeof showScreen === 'function') showScreen('myCareerScreen');
+    showMyCareerScreenWithLoading();
   }
 }
 
