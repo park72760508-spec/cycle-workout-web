@@ -752,7 +752,9 @@ async function loadTrainingRooms() {
 
     if (isTablet && typeof waitForFirestore === 'function') {
       try {
-        const { db: tabletDb, useV9: tabletV9 } = await waitForFirestore(12000);
+        var wfResult = await waitForFirestore(12000);
+        var tabletDb = wfResult && wfResult.db;
+        var tabletV9 = wfResult && wfResult.useV9;
         if (tabletDb) {
           db = tabletDb;
           useV9 = tabletV9;
@@ -787,22 +789,22 @@ async function loadTrainingRooms() {
         const roomsRef = collection(db, TRAINING_ROOMS_COLLECTION);
         const querySnapshot = await getDocs(roomsRef);
         return querySnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            title: doc.data().title || doc.data().name,
-            _sourceCollection: 'training_rooms'
-          }))
+          .map(doc => {
+            var dd = doc.data() || {};
+            var o = { id: doc.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
+            if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+            return o;
+          })
           .filter(room => room.status !== 'inactive');
       } else {
         const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
         return querySnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            title: doc.data().title || doc.data().name,
-            _sourceCollection: 'training_rooms'
-          }))
+          .map(doc => {
+            var dd = doc.data() || {};
+            var o = { id: doc.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
+            if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+            return o;
+          })
           .filter(room => room.status !== 'inactive');
       }
     };
@@ -4195,20 +4197,22 @@ async function getGrade3UsersFromFirestore() {
     // Firestore 쿼리 실행
     if (useV9) {
       // Firebase v9 Modular SDK
-      const firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-      const collection = firestoreModule.collection;
-      const query = firestoreModule.query;
-      const where = firestoreModule.where;
-      const getDocs = firestoreModule.getDocs;
+      var firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var collection = firestoreModule && firestoreModule.collection;
+      var query = firestoreModule && firestoreModule.query;
+      var where = firestoreModule && firestoreModule.where;
+      var getDocs = firestoreModule && firestoreModule.getDocs;
       const usersRef = collection(db, USERS_COLLECTION);
       const q = query(usersRef, where('grade', '==', '3'));
       const snapshot = await getDocs(q);
       const users = [];
-      snapshot.forEach((doc) => {
-        users.push({
-          id: doc.id,
-          ...doc.data()
-        });
+      snapshot.forEach(function(doc) {
+        var d = doc.data();
+        var docObj = { id: doc.id };
+        if (d && typeof d === 'object') {
+          for (var key in d) { if (d.hasOwnProperty(key)) docObj[key] = d[key]; }
+        }
+        users.push(docObj);
       });
       console.log('[Training Room] Firestore(v9) users에서 grade=3 사용자', users.length, '명 로드');
       return users;
@@ -4219,10 +4223,10 @@ async function getGrade3UsersFromFirestore() {
         .get();
       const users = [];
       snapshot.forEach((doc) => {
-        users.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        var dd = doc.data();
+        var o = { id: doc.id };
+        if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+        users.push(o);
       });
       console.log('[Training Room] Firestore users에서 grade=3 사용자', users.length, '명 로드');
       return users;
@@ -4473,7 +4477,9 @@ async function openTrainingRoomEditModal(roomId) {
       let doc = await docRef.get();
       
       if (doc.exists) {
-        roomData = { id: doc.id, ...doc.data(), _sourceCollection: 'training_rooms' };
+        var docD = doc.data() || {};
+        roomData = { id: doc.id, _sourceCollection: 'training_rooms' };
+        if (docD && typeof docD === 'object') { for (var k in docD) { if (docD.hasOwnProperty(k)) roomData[k] = docD[k]; } }
         window._trainingRoomEditCollection = 'training_rooms';
         console.log('[Training Room] training_rooms에서 찾음:', roomData);
       }
@@ -4501,7 +4507,9 @@ async function openTrainingRoomEditModal(roomId) {
             const d = found.docs[0];
             window._trainingRoomEditId = d.id;
             window._trainingRoomEditCollection = TRAINING_ROOMS_COLLECTION;
-            roomData = { id: d.id, ...d.data(), _sourceCollection: 'training_rooms' };
+            var dData = d.data() || {};
+            roomData = { id: d.id, _sourceCollection: 'training_rooms' };
+            if (dData && typeof dData === 'object') { for (var k in dData) { if (dData.hasOwnProperty(k)) roomData[k] = dData[k]; } }
             console.log('[Training Room] GAS 방 → Firestore training_rooms 문서 ID로 매핑:', d.id);
           }
           // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
@@ -4707,7 +4715,7 @@ async function getNextTrainingRoomId() {
 
     let maxId = 0;
     snapshot.forEach(doc => {
-      const data = doc.data();
+      const data = doc.data() || {};
       const id = typeof data.id === 'number' ? data.id : parseInt(data.id, 10);
       if (!isNaN(id) && id > maxId) maxId = id;
     });
@@ -4763,13 +4771,13 @@ async function submitTrainingRoomCreate() {
         let doc = await docRef.get();
 
         if (doc.exists) {
-          roomData = doc.data();
+          roomData = doc.data() || {};
         } else {
           // 문서 ID로 못 찾으면 다른 컬렉션/문서 ID로 시도
           docRef = db.collection(TRAINING_ROOMS_COLLECTION).doc(String(editId));
           doc = await docRef.get();
           if (doc.exists) {
-            roomData = doc.data();
+            roomData = doc.data() || {};
             collectionName = TRAINING_ROOMS_COLLECTION;
           } else {
             // ✅ training_schedules 조회 제거 (더 이상 사용하지 않음)
@@ -4784,7 +4792,7 @@ async function submitTrainingRoomCreate() {
             if (!snap.empty) {
               doc = snap.docs[0];
               docRef = doc.ref;
-              roomData = doc.data();
+              roomData = doc.data() || {};
               collectionName = TRAINING_ROOMS_COLLECTION;
               window._trainingRoomEditId = doc.id;
             }
@@ -4873,7 +4881,7 @@ async function submitTrainingRoomCreate() {
           let snap = await firestoreDb.collection(TRAINING_ROOMS_COLLECTION).where('id', '==', numId).limit(1).get();
           if (!snap.empty) {
             const d = snap.docs[0];
-            const docData = d.data();
+            const docData = d.data() || {};
             const updateData = {
               title: title,
               track_count: trackCount,
@@ -4897,7 +4905,7 @@ async function submitTrainingRoomCreate() {
           return;
         }
       } else {
-        const docData = doc.data();
+        const docData = doc.data() || {};
         const updateData = {
           title: title,
           track_count: trackCount,
@@ -6666,7 +6674,10 @@ async function fetchBluetoothTrackData(db, roomId) {
  * @param {{tracks: Array, maxTrackNumber: number, roomId: string|null}} data
  */
 function renderBluetoothPlayerListToContainer(container, data) {
-  const { tracks, maxTrackNumber, roomId } = data;
+  var dataObj = data || {};
+  var tracks = dataObj.tracks;
+  var maxTrackNumber = dataObj.maxTrackNumber;
+  var roomId = dataObj.roomId;
   if (!container) return;
   let currentUserId = null;
   let userGrade = '2';

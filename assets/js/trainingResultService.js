@@ -273,7 +273,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         throw new Error(`사용자를 찾을 수 없습니다: ${userId}`);
       }
       
-      const userData = userDoc.data();
+      var rawUserData = userDoc.data() || {};
+      const userData = rawUserData;
       
       // 현재 값 가져오기 (기본값 설정)
       const currentFTP = userData.ftp || 200;
@@ -412,7 +413,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         const yearlyPeakRef = doc(db, 'users', userId, 'yearly_peaks', String(year));
         const yearlySnap = await transaction.get(yearlyPeakRef);
         if (yearlySnap.exists()) {
-          const yp = yearlySnap.data();
+          const yp = yearlySnap.data() || {};
           const v = Number(yp?.max_hr ?? yp?.max_heartrate ?? 0);
           if (v > 0) maxHr = v;
         }
@@ -588,10 +589,10 @@ export async function getUserTrainingLogs(userId, options = {}, firestoreInstanc
     const logs = [];
     
     querySnapshot.forEach((doc) => {
-      logs.push({
-        id: doc.id,
-        ...doc.data()
-      });
+      var dd = doc.data() || {};
+      var o = { id: doc.id };
+      if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+      logs.push(o);
     });
     
     console.log(`[getUserTrainingLogs] ${logs.length}개의 로그 조회 완료 (userId: ${userId})`);
@@ -656,8 +657,10 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
     console.log(`[getTrainingLogsByDateRange] Timestamp 쿼리 결과: ${snapTs.size}건`);
     snapTs.forEach((docSnap) => {
       seen.add(docSnap.id);
-      const data = docSnap.data();
-      logs.push({ id: docSnap.id, ...data });
+      var data = docSnap.data() || {};
+      var o = { id: docSnap.id };
+      if (data && typeof data === 'object') { for (var k in data) { if (data.hasOwnProperty(k)) o[k] = data[k]; } }
+      logs.push(o);
     });
   } catch (e) {
     console.warn('[getTrainingLogsByDateRange] Timestamp 범위 쿼리 실패 (무시):', e.message, e.code);
@@ -675,8 +678,10 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
     snapStr.forEach((docSnap) => {
       if (seen.has(docSnap.id)) return;
       seen.add(docSnap.id);
-      const data = docSnap.data();
-      logs.push({ id: docSnap.id, ...data });
+      var data = docSnap.data() || {};
+      var o = { id: docSnap.id };
+      if (data && typeof data === 'object') { for (var k in data) { if (data.hasOwnProperty(k)) o[k] = data[k]; } }
+      logs.push(o);
     });
   } catch (e) {
     console.warn('[getTrainingLogsByDateRange] 문자열 date 범위 쿼리 실패 (무시):', e.message, e.code);

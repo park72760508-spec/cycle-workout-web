@@ -808,7 +808,10 @@ function initializeBluetoothDashboard() {
                     
                     // 부모 창에서 liveData 업데이트 알림
                     if (event.data && event.data.type === 'bluetoothLiveDataUpdate') {
-                        const { heartRate, power, cadence } = event.data;
+                        const ed = event.data || {};
+                        const heartRate = ed.heartRate;
+                        const power = ed.power;
+                        const cadence = ed.cadence;
                         
                         if (!window.liveData) {
                             window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
@@ -1109,7 +1112,7 @@ async function loadUserInfoAndUpdateName() {
             if (window.firestore && window.firestore.collection) {
                 const userDoc = await window.firestore.collection('users').doc(currentUserIdForSession).get();
                 if (userDoc.exists) {
-                    const userData = userDoc.data();
+                    const userData = userDoc.data() || {};
                     if (userData && userData.name) {
                         userName = String(userData.name).trim();
                         window.currentUser = userData;

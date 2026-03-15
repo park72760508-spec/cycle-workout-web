@@ -2603,7 +2603,9 @@ async function connectIndividualBluetoothDeviceToSaved(deviceId, deviceType) {
       return;
     }
     
-    const { device, server } = result;
+    const r = result || {};
+    const device = r.device;
+    const server = r.server;
     
     // 디바이스 타입별 연결 처리
     if (deviceType === 'heartRate') {

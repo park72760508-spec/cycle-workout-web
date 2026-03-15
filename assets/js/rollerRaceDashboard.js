@@ -6011,7 +6011,8 @@ function generateRaceReportPDF() {
       return;
     }
     
-    const { jsPDF } = window.jspdf || window;
+    const jspdfMod = window.jspdf || window;
+    const jsPDF = jspdfMod && jspdfMod.jsPDF;
     
     // 순위별 데이터 정렬
     const settings = window.rollerRaceState.raceSettings || {};

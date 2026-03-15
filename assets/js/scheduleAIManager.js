@@ -366,7 +366,11 @@
       }
       if (!firestoreUser && window.firestore && window.firestore.collection) {
         var doc = await window.firestore.collection('users').doc(userId).get();
-        if (doc && doc.exists) firestoreUser = { id: userId, ...doc.data() };
+        if (doc && doc.exists) {
+          var docD = doc.data() || {};
+          firestoreUser = { id: userId };
+          if (docD && typeof docD === 'object') { for (var k in docD) { if (docD.hasOwnProperty(k)) firestoreUser[k] = docD[k]; } }
+        }
       }
     } catch (e) {
       console.warn('[loadUserForScheduleModal] Firestore 사용자 조회 실패:', e);

@@ -423,9 +423,12 @@ function isPatternMatch(pattern1, pattern2) {
  * 그룹화된 세그먼트 객체 생성
  */
 function createGroupedSegment(patternResult) {
-  const { pattern, repeatCount, totalDuration } = patternResult;
+  const pr = patternResult || {};
+  const pattern = pr.pattern;
+  const repeatCount = pr.repeatCount;
+  const totalDuration = pr.totalDuration;
   
-  const groupLabel = pattern[0].label || '반복 세그먼트';
+  const groupLabel = (pattern && pattern[0] && pattern[0].label) ? pattern[0].label : '반복 세그먼트';
   
   return {
     type: 'group',
@@ -433,9 +436,9 @@ function createGroupedSegment(patternResult) {
     pattern: pattern,
     repeatCount: repeatCount,
     totalDuration: totalDuration,
-    totalMinutes: Math.round(totalDuration / 60),
-    startIndex: patternResult.startIndex,
-    endIndex: patternResult.endIndex
+    totalMinutes: Math.round((totalDuration || 0) / 60),
+    startIndex: pr.startIndex,
+    endIndex: pr.endIndex
   };
 }
 
@@ -538,7 +541,11 @@ function createSingleSegmentPreview(segment) {
  * 그룹화된 세그먼트 프리뷰 생성
  */
 function createGroupedSegmentPreview(groupedItem) {
-  const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
+  const gi = groupedItem || {};
+  const groupLabel = gi.groupLabel;
+  const pattern = gi.pattern || [];
+  const repeatCount = gi.repeatCount;
+  const totalMinutes = gi.totalMinutes;
   
   const patternInfo = pattern.map(segment => {
     const totalSeconds = segment.duration_sec || 0;
@@ -2355,7 +2362,11 @@ function createSingleTrainingSegment(segment, isCurrent) {
  * 그룹화된 훈련 세그먼트 생성
  */
 function createGroupedTrainingSegment(groupedItem, isCurrent, groupProgress) {
-  const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
+  const gi2 = groupedItem || {};
+  const groupLabel = gi2.groupLabel;
+  const pattern = gi2.pattern || [];
+  const repeatCount = gi2.repeatCount;
+  const totalMinutes = gi2.totalMinutes;
   
   const patternInfo = pattern.map(segment => {
     const minutes = Math.floor((segment.duration_sec || 0) / 60);
@@ -2524,8 +2535,9 @@ function setWorkoutCache(workouts) {
     
     // 세그먼트가 포함된 워크아웃과 없는 워크아웃 분리
     const workoutsWithoutSegments = workouts.map(workout => {
-      // 세그먼트를 제외한 워크아웃 데이터만 저장 (용량 절약)
-      const { segments, ...workoutWithoutSegments } = workout;
+      var w = workout || {};
+      var workoutWithoutSegments = {};
+      for (var k in w) { if (w.hasOwnProperty(k) && k !== 'segments') workoutWithoutSegments[k] = w[k]; }
       return workoutWithoutSegments;
     });
     

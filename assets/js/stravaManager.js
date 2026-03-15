@@ -431,7 +431,8 @@ async function fetchAndProcessStravaData(options = {}) {
           };
         }
 
-        const userData = userDoc.data();
+        var rawUserDoc = userDoc.data() || {};
+        const userData = rawUserDoc;
         const refreshToken = userData.strava_refresh_token;
         
         if (!refreshToken || refreshToken === '' || refreshToken === null) {
@@ -476,7 +477,7 @@ async function fetchAndProcessStravaData(options = {}) {
               .where('source', '==', 'strava')
               .get();
             logsSnapshot.docs.forEach(doc => {
-              const data = doc.data();
+              const data = doc.data() || {};
               if (data.activity_id) {
                 existingIds.add(String(data.activity_id));
               }

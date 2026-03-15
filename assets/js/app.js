@@ -7125,11 +7125,11 @@ function oneLogPerDayPreferStravaFallback(logs) {
 
       var logs = [];
       snapshot.forEach(function(doc) {
-        var d = doc.data();
+        var d = doc.data() || {};
         if (d.date && d.date < dateStr) return;
         var sec = Number(d.duration_sec ?? d.time ?? 0) || 0;
         if (sec < 60) return;
-        logs.push({
+        var logObj = {
           id: doc.id,
           date: d.date,
           completed_at: (d.date || '') + 'T12:00:00.000Z',
@@ -7139,9 +7139,10 @@ function oneLogPerDayPreferStravaFallback(logs) {
           np: Math.round(d.weighted_watts || d.avg_watts || 0),
           tss: Math.round(d.tss || 0),
           hr_avg: Math.round(d.avg_hr || 0),
-          source: d.source || '',
-          ...d
-        });
+          source: d.source || ''
+        };
+        if (d && typeof d === 'object') { for (var k in d) { if (d.hasOwnProperty(k)) logObj[k] = d[k]; } }
+        logs.push(logObj);
       });
       logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
       // 훈련 횟수·TSS: 같은 날 Strava 있으면 Strava만, 없으면 Stelvio만 (TSS 규칙과 동일)
@@ -8698,13 +8699,13 @@ async function loadTrainingJournalCalendar(direction) {
             snapshot = await logsRef.limit(100).get();
           }
           snapshot.docs.forEach(function(doc) {
-            const d = doc.data();
+            const d = doc.data() || {};
             const dateStr = d.date;
             if (!dateStr || dateStr < startDateStr || dateStr > endDateStr) return;
             const sec = Number(d.duration_sec ?? d.time ?? d.duration ?? 0);
             if (sec < MIN_DURATION_SEC) return;
             if (!resultsByDate[dateStr]) resultsByDate[dateStr] = [];
-            resultsByDate[dateStr].push({ id: doc.id, ...d });
+            var itemObj = { id: doc.id }; if (d && typeof d === 'object') { for (var k in d) { if (d.hasOwnProperty(k)) itemObj[k] = d[k]; } } resultsByDate[dateStr].push(itemObj);
           });
         }
       }

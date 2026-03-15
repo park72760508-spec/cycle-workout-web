@@ -110,7 +110,8 @@ async function updateUserMileage(userId, todayTss) {
       return { success: false, error: 'User not found' };
     }
     
-    const userData = userDoc.data();
+    var rawData = userDoc.data() || {};
+    const userData = rawData;
     
     // 기존 값 가져오기
     let accPoints = Number(userData.acc_points || 0);
@@ -507,7 +508,11 @@ async function signInWithGoogle() {
         lastLogin: firebase.firestore.FieldValue.serverTimestamp()
       });
       
-      const userData = { id: user.uid, ...userDoc.data() };
+      var docData = userDoc.data() || {};
+      const userData = { id: user.uid };
+      if (docData && typeof docData === 'object') {
+        for (var k in docData) { if (docData.hasOwnProperty(k)) userData[k] = docData[k]; }
+      }
       
       // 전역 상태 업데이트
       window.currentUser = userData;
@@ -664,7 +669,11 @@ function initAuthStateListener() {
           lastLogin: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        const userData = { id: result.user.uid, ...userDoc.data() };
+        var docData2 = userDoc.data() || {};
+        const userData = { id: result.user.uid };
+        if (docData2 && typeof docData2 === 'object') {
+          for (var k2 in docData2) { if (docData2.hasOwnProperty(k2)) userData[k2] = docData2[k2]; }
+        }
         
         // 전역 상태 업데이트
         window.currentUser = userData;
@@ -787,7 +796,11 @@ function initAuthStateListener() {
           // compat auth + compat firestore 사용
           const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
           if (userDoc.exists) {
-            userData = { id: firebaseUser.uid, ...userDoc.data() };
+            var docData3 = userDoc.data() || {};
+            userData = { id: firebaseUser.uid };
+            if (docData3 && typeof docData3 === 'object') {
+              for (var k3 in docData3) { if (docData3.hasOwnProperty(k3)) userData[k3] = docData3[k3]; }
+            }
           }
         }
         
@@ -1036,7 +1049,7 @@ async function apiGetUsers() {
         
         if (userDocSnap.exists()) {
           // Firestore에서 조회한 데이터가 더 최신이므로 우선 사용
-          currentUserData = userDocSnap.data();
+          currentUserData = userDocSnap.data() || {};
           currentUserDoc = { exists: true, data: () => currentUserData };
         } else if (userData) {
           // Firestore 문서가 없지만 userData가 있으면 userData 사용
@@ -1057,7 +1070,7 @@ async function apiGetUsers() {
         
         if (currentUserDoc.exists) {
           // Firestore에서 조회한 데이터가 더 최신이므로 우선 사용
-          currentUserData = currentUserDoc.data();
+          currentUserData = currentUserDoc.data() || {};
         } else if (userData) {
           // Firestore 문서가 없지만 userData가 있으면 userData 사용
           console.log('[apiGetUsers] ℹ️ Firestore 문서가 없지만 localStorage에 사용자 정보가 있습니다.');
@@ -1123,10 +1136,10 @@ async function apiGetUsers() {
           const users = [];
           
           usersSnapshot.forEach(doc => {
-            users.push({
-              id: doc.id,
-              ...doc.data()
-            });
+            var dd = doc.data() || {};
+            var o = { id: doc.id };
+            if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+            users.push(o);
           });
           
           console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestoreV9):', { 
@@ -1141,10 +1154,10 @@ async function apiGetUsers() {
           const users = [];
           
           usersSnapshot.forEach(doc => {
-            users.push({
-              id: doc.id,
-              ...doc.data()
-            });
+            var dd = doc.data() || {};
+            var o = { id: doc.id };
+            if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+            users.push(o);
           });
           
           console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestore v8):', { 
@@ -1158,24 +1171,18 @@ async function apiGetUsers() {
         // 전체 목록 조회 실패 시 자신의 문서만 반환
         console.error('[apiGetUsers] ❌ 전체 사용자 목록 조회 실패:', listError);
         console.warn('⚠️ 전체 사용자 목록 조회 실패, 자신의 문서만 반환:', listError.message);
-        return { 
-          success: true, 
-          items: [{
-            id: userIdToCheck,
-            ...currentUserData
-          }]
-        };
+        var curData = currentUserData || {};
+        var curObj = { id: userIdToCheck };
+        if (curData && typeof curData === 'object') { for (var k in curData) { if (curData.hasOwnProperty(k)) curObj[k] = curData[k]; } }
+        return { success: true, items: [curObj] };
       }
     } else {
       // 일반 사용자는 자신의 문서만 반환
       console.log('[apiGetUsers] 👤 일반 사용자 - 자신의 문서만 반환');
-      return { 
-        success: true, 
-        items: [{
-          id: userIdToCheck,
-          ...currentUserData
-        }]
-      };
+      var curData2 = currentUserData || {};
+      var curObj2 = { id: userIdToCheck };
+      if (curData2 && typeof curData2 === 'object') { for (var k in curData2) { if (curData2.hasOwnProperty(k)) curObj2[k] = curData2[k]; } }
+      return { success: true, items: [curObj2] };
     }
   } catch (error) {
     console.error('❌ 사용자 목록 조회 실패:', error);
@@ -1220,10 +1227,9 @@ async function apiGetUser(id) {
         return { success: false, error: 'User not found' };
       }
       
-      const userData = {
-        id: userDocSnap.id,
-        ...userDocSnap.data()
-      };
+      var snapData = userDocSnap.data() || {};
+      var userData = { id: userDocSnap.id };
+      if (snapData && typeof snapData === 'object') { for (var k in snapData) { if (snapData.hasOwnProperty(k)) userData[k] = snapData[k]; } }
       
       return { success: true, item: userData };
     } else {
@@ -1234,10 +1240,9 @@ async function apiGetUser(id) {
         return { success: false, error: 'User not found' };
       }
       
-      const userData = {
-        id: userDoc.id,
-        ...userDoc.data()
-      };
+      var udData = userDoc.data() || {};
+      var userData = { id: userDoc.id };
+      if (udData && typeof udData === 'object') { for (var k in udData) { if (udData.hasOwnProperty(k)) userData[k] = udData[k]; } }
       
       return { success: true, item: userData };
     }
@@ -1888,7 +1893,9 @@ function renderProfileZoneTables(ftp, maxHr) {
   const m = Number(maxHr) || 190;
   const container = document.getElementById('profileZoneTablesContent');
   if (!container) return;
-  const { ftpHtml, hrHtml } = buildProfileZoneTableHtml(f, m, { compact: false });
+  var zoneResult = buildProfileZoneTableHtml(f, m, { compact: false });
+  var ftpHtml = zoneResult ? zoneResult.ftpHtml : '';
+  var hrHtml = zoneResult ? zoneResult.hrHtml : '';
   container.innerHTML = ftpHtml + hrHtml;
 }
 
@@ -1921,12 +1928,12 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
     var prevSnap = promiseResults && promiseResults[1];
     let maxHr = 0;
     if (curSnap && curSnap.exists) {
-      const d = curSnap.data();
+      const d = curSnap.data() || {};
       const hr = (d && d != null) ? (Number(d.max_hr) || 0) : 0;
       if (hr > maxHr) maxHr = hr;
     }
     if (prevSnap && prevSnap.exists) {
-      const d = prevSnap.data();
+      const d = prevSnap.data() || {};
       const hr = (d && d != null) ? (Number(d.max_hr) || 0) : 0;
       if (hr > maxHr) maxHr = hr;
     }
@@ -1991,7 +1998,9 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const maxHr = maxHrMap[user.id];
     const userFtp = Number(user.ftp) || 0;
     const userMaxHr = maxHr != null ? Number(maxHr) : 0;
-    const { ftpHtml, hrHtml } = buildProfileZoneTableHtml(userFtp, userMaxHr, { compact: true });
+    var zoneResult2 = buildProfileZoneTableHtml(userFtp, userMaxHr, { compact: true });
+    var ftpHtml = zoneResult2 ? zoneResult2.ftpHtml : '';
+    var hrHtml = zoneResult2 ? zoneResult2.hrHtml : '';
 
     const ftpZonesHtml = userFtp > 0 ? ftpHtml : '';
     const hrZonesHtml = maxHr === undefined
@@ -3759,7 +3768,7 @@ async function findUserByPhone(phoneNumber) {
     let foundUser = null;
     
     for (const doc of usersSnapshot.docs) {
-      const docData = doc.data();
+      const docData = doc.data() || {};
       const docContact = docData.contact || '';
       
       // DB의 contact 필드를 "010-1234-5678" 형식으로 변환
@@ -3767,7 +3776,9 @@ async function findUserByPhone(phoneNumber) {
       
       // 형식화된 전화번호로 비교
       if (formattedDocContact === formattedPhone) {
-        foundUser = { id: doc.id, ...docData };
+        var foundObj = { id: doc.id };
+        if (docData && typeof docData === 'object') { for (var k in docData) { if (docData.hasOwnProperty(k)) foundObj[k] = docData[k]; } }
+        foundUser = foundObj;
         console.log('✅ 전화번호로 사용자 찾음:', {
           name: foundUser.name,
           contact: foundUser.contact,

@@ -7,9 +7,15 @@
 
 /* global React, useState, useEffect, window */
 
-const { useState, useEffect } = React;
+if (!window.React) { console.warn('React not loaded'); }
+var ReactObj = window.React || {};
+var useState = ReactObj.useState || null;
+var useEffect = ReactObj.useEffect || null;
 
-function RiderDashboardProfile({ userProfile, DashboardCard }) {
+function RiderDashboardProfile(props) {
+  var p = props || {};
+  var userProfile = p.userProfile;
+  var DashboardCard = p.DashboardCard;
   const [riderLogs, setRiderLogs] = useState([]);
   const [riderLoading, setRiderLoading] = useState(true);
   const [capabilityScores, setCapabilityScores] = useState(null);
@@ -44,7 +50,12 @@ function RiderDashboardProfile({ userProfile, DashboardCard }) {
               .orderBy('date', 'desc')
               .limit(400)
               .get();
-            snap.docs.forEach((d) => raw.push({ id: d.id, ...d.data() }));
+            snap.docs.forEach((d) => {
+              const dd = d.data();
+              const o = { id: d.id };
+              if (dd && typeof dd === 'object') { for (const k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+              raw.push(o);
+            });
           } catch (e2) {
             raw = [];
           }
@@ -107,7 +118,14 @@ function RiderDashboardProfile({ userProfile, DashboardCard }) {
   }, [capabilityScores]);
 
   const Recharts = window.Recharts;
-  const { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } = Recharts || {};
+  var rc = Recharts || {};
+  var RadarChart = rc.RadarChart;
+  var Radar = rc.Radar;
+  var PolarGrid = rc.PolarGrid;
+  var PolarAngleAxis = rc.PolarAngleAxis;
+  var PolarRadiusAxis = rc.PolarRadiusAxis;
+  var ResponsiveContainer = rc.ResponsiveContainer;
+  var Legend = rc.Legend;
   const cap = capabilityScores || {};
   const tend = tendencyScores || capabilityScores || {};
   const radarData = [

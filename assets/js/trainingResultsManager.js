@@ -63,7 +63,7 @@ async function saveScheduleResultToFirebase(data) {
         .get();
       
       if (!querySnapshot.empty) {
-        existingResult = querySnapshot.docs[0].data();
+        existingResult = querySnapshot.docs[0].data() || {};
         existingDocId = querySnapshot.docs[0].id;
       }
     } else {
@@ -79,7 +79,7 @@ async function saveScheduleResultToFirebase(data) {
         .get();
       
       if (!querySnapshot.empty) {
-        existingResult = querySnapshot.docs[0].data();
+        existingResult = querySnapshot.docs[0].data() || {};
         existingDocId = querySnapshot.docs[0].id;
       }
     }
@@ -185,6 +185,32 @@ async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
 }
 
 /**
+ * 해당 날짜의 Stelvio(앱) 적립 포인트 합계 조회 (users/{userId}/logs 기준)
+ * Strava 동기화 시 같은 날 Stelvio 포인트가 있으면 Strava TSS 합계와의 차액만 추가 적립할 때 사용.
+ * @param {string} userId - 사용자 ID
+ * @param {string} dateStr - 'YYYY-MM-DD' 형식 날짜
+ * @returns {Promise<number>} 해당 날짜 Stelvio 로그의 earned_points(또는 tss) 합계
+ */
+async function getStelvioPointsForDate(userId, dateStr) {
+  try {
+    if (!window.firestore || !userId || !dateStr) return 0;
+    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+    const snapshot = await userLogsRef.where('date', '==', dateStr).get();
+    let sum = 0;
+    snapshot.docs.forEach(docSnap => {
+      const log = docSnap.data() || {};
+      if (log.source === 'strava') return;
+      const pts = Number(log.earned_points ?? log.tss ?? 0) || 0;
+      sum += pts;
+    });
+    return sum;
+  } catch (error) {
+    console.warn('[getStelvioPointsForDate] 조회 실패:', dateStr, error);
+    return 0;
+  }
+}
+
+/**
  * 스텔비오(앱) 훈련이 기록된 날짜 목록 조회 (users/{userId}/logs 기준)
  * Strava 동기화 시 같은 날 스텔비오 로그가 있으면 TSS 중복 적립 방지용.
  * @param {string} userId - 사용자 ID
@@ -197,7 +223,7 @@ async function getStelvioLogDatesFromUserLogs(userId) {
     const snapshot = await userLogsRef.get();
     const dates = new Set();
     snapshot.docs.forEach(docSnap => {
-      const log = docSnap.data();
+      const log = docSnap.data() || {};
       if (log.source === 'strava') return;
       let dateStr = '';
       if (log.date) {
@@ -387,7 +413,7 @@ async function getExistingStravaActivityIds() {
         
         // 전체 문서에서 activity_id 필드만 추출
         logsSnapshot.docs.forEach(doc => {
-          const data = doc.data();
+          const data = doc.data() || {};
           if (data.activity_id) {
             existingIds.add(String(data.activity_id));
           }
@@ -441,7 +467,7 @@ async function getUnappliedStravaActivities(userId, userCreatedDate = '') {
     const unappliedActivities = new Map();
     
     logsSnapshot.docs.forEach(doc => {
-      const data = doc.data();
+      const data = doc.data() || {};
       const activityId = data.activity_id;
       const tssApplied = data.tss_applied === true;
       const activityDate = data.date || '';
@@ -519,6 +545,7 @@ window.saveTrainingResultToFirebase = saveTrainingResultToFirebase;
 window.saveScheduleResultToFirebase = saveScheduleResultToFirebase;
 window.getTrainingResultsFromFirebase = getTrainingResultsFromFirebase;
 window.getStelvioLogDatesFromUserLogs = getStelvioLogDatesFromUserLogs;
+window.getStelvioPointsForDate = getStelvioPointsForDate;
 window.saveStravaActivityToFirebase = saveStravaActivityToFirebase;
 window.getExistingStravaActivityIds = getExistingStravaActivityIds;
 window.getUnappliedStravaActivities = getUnappliedStravaActivities;

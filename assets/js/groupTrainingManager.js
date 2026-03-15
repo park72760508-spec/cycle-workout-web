@@ -4631,7 +4631,10 @@ async function checkAndPlayAudioChunkFromRoom(room) {
  */
 async function playAudioChunk(audioChunkData) {
   try {
-    const { audioData, chunkId, timestamp } = audioChunkData;
+    const acd = audioChunkData || {};
+    const audioData = acd.audioData;
+    const chunkId = acd.chunkId;
+    const timestamp = acd.timestamp;
     
     if (!audioData) {
       return;
@@ -6190,7 +6193,13 @@ function renderWaitingHeaderSegmentTable() {
     }
 
     const tableRows = orderedSegments.map((item, orderIdx) => {
-      const { seg, originalIndex, label, type, ftp, durationStr } = item;
+      const it = item || {};
+      const seg = it.seg;
+      const originalIndex = it.originalIndex;
+      const label = it.label;
+      const type = it.type;
+      const ftp = it.ftp;
+      const durationStr = it.durationStr;
       // 현재 세그먼트인지 확인 (active 클래스 대신 current-segment 클래스 사용)
       const isHighlighted = highlightedSegmentIndex >= 0 && originalIndex === highlightedSegmentIndex;
       const rowClass = isHighlighted ? 'current-segment-row' : '';
