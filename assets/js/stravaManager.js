@@ -653,6 +653,10 @@ async function fetchAndProcessStravaData(options = {}) {
           };
         }
 
+        // 사용자 몸무게 추가 (weight 필드)
+        const userWeight = Number(userData.weight ?? userData.weightKg ?? 0);
+        if (userWeight > 0) mappedActivity.weight = userWeight;
+
         // Firebase에 저장
         if (typeof window.saveStravaActivityToFirebase === 'function') {
           try {

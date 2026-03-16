@@ -452,6 +452,9 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
 
+      const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
+        ? Number(userData.weight ?? userData.weightKg)
+        : null;
       const trainingLogData = {
         // 기본 정보
         userId: userId, // 쿼리 편의성을 위해 유지
@@ -464,6 +467,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         duration_sec: durationSec,
         distance_km: trainingData.distance_km || null,
         elevation_gain: trainingData.elevation_gain || null,
+        weight: userWeight,
         
         // 파워 & 부하 (Power & Load)
         ftp_at_time: effectiveFTP, // 훈련 당시의 FTP (Fallback: 20분 MMP 95% 또는 150W)

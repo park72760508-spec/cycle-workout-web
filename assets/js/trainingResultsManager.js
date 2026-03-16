@@ -320,6 +320,7 @@ async function saveStravaActivityToFirebase(activity) {
       kilojoules: activity.kilojoules !== null && activity.kilojoules !== undefined ? Number(activity.kilojoules) : null,
       elevation_gain: activity.elevation_gain !== null && activity.elevation_gain !== undefined ? Number(activity.elevation_gain) : null,
       rpe: activity.rpe !== null && activity.rpe !== undefined ? Number(activity.rpe) : null,
+      weight: (activity.weight != null && Number(activity.weight) > 0) ? Number(activity.weight) : null,
       
       // 계산된 필드
       ftp_at_time: activity.ftp_at_time !== null && activity.ftp_at_time !== undefined ? Number(activity.ftp_at_time) : null,
