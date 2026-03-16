@@ -168,8 +168,10 @@ Output Format (JSON Only):
   let modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
   let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
 
-  // API 호출 (최대 3회 재시도)
-  const apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+  // [저사양/안드로이드 대응] 스트리밍(SSE) 우선: 연결 유지로 OS 네트워크 끊김 방지
+  const useStreaming = opts.useStreaming !== false;
+  const streamApiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:streamGenerateContent?alt=sse&key=${apiKey}`;
+  const restApiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
   const requestBody = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
@@ -179,6 +181,7 @@ Output Format (JSON Only):
       topK: 40
     }
   };
+  const onChunk = opts.onChunk || null;
 
   function isCommentTruncated(str) {
     if (!str || typeof str !== 'string') return true;
@@ -200,42 +203,159 @@ Output Format (JSON Only):
     try {
       var controller = null;
       var timeoutId = null;
-      var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) };
-      if (hasAbortController) {
-        controller = new AbortController();
-        timeoutId = setTimeout(function () {
-          if (controller) controller.abort();
-        }, timeoutMs);
-        fetchOptions.signal = controller.signal;
-      }
-      var response = await fetch(apiUrl, fetchOptions).catch(function (err) {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (err && err.name === 'AbortError') throw new Error('요청 시간 초과 (' + Math.round(timeoutMs / 1000) + '초)');
-        throw err;
-      });
-      if (timeoutId) clearTimeout(timeoutId);
+      var responseText = '';
+      var usedStreaming = false;
+      var candidate = null;
 
-      if (!response.ok) {
-        var errorText = await response.text();
-        var errorMessage = '';
+      function buildFetchOptions() {
+        var opt = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) };
+        if (hasAbortController) {
+          controller = new AbortController();
+          timeoutId = setTimeout(function () {
+            if (controller) controller.abort();
+          }, timeoutMs);
+          opt.signal = controller.signal;
+          if (opts.signal && opts.signal.aborted) {
+            controller.abort();
+          } else if (opts.signal) {
+            opts.signal.addEventListener('abort', function () {
+              if (controller) controller.abort();
+            });
+          }
+        }
+        return opt;
+      }
+
+      // 1) 스트리밍 시도 (저사양/안드로이드: 연결 유지로 타임아웃 방지)
+      if (useStreaming && attempt === 1) {
         try {
-          var errorData = JSON.parse(errorText);
-          errorMessage = errorData.error?.message || errorText;
-        } catch (e) {
-          errorMessage = errorText;
+          var streamRes = await fetch(streamApiUrl, buildFetchOptions()).catch(function (err) {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (err && err.name === 'AbortError') {
+              var e = new Error('요청 시간 초과 (' + Math.round(timeoutMs / 1000) + '초). 네트워크가 불안정할 수 있습니다. 다시 시도해 주세요.');
+              e.code = 'TIMEOUT';
+              throw e;
+            }
+            if (err && (err.message || '').indexOf('Failed to fetch') !== -1) {
+              var ne = new Error('네트워크 오류: 연결이 끊어졌거나 서버에 도달할 수 없습니다.');
+              ne.code = 'NETWORK';
+              throw ne;
+            }
+            throw err;
+          });
+          if (timeoutId) clearTimeout(timeoutId);
+
+          if (streamRes.ok && streamRes.body) {
+            usedStreaming = true;
+            var reader = streamRes.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '';
+            var lastFinishReason = '';
+            while (true) {
+              var done = false;
+              var value = null;
+              try {
+                var result = await reader.read();
+                done = result.done;
+                value = result.value;
+              } catch (readErr) {
+                if (readErr && readErr.name === 'AbortError') {
+                  var te = new Error('요청 시간 초과 (' + Math.round(timeoutMs / 1000) + '초)');
+                  te.code = 'TIMEOUT';
+                  throw te;
+                }
+                throw readErr;
+              }
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              var lines = buffer.split(/\r?\n/);
+              buffer = lines.pop() || '';
+              for (var li = 0; li < lines.length; li++) {
+                var line = lines[li].trim();
+                if (line.startsWith('data: ')) {
+                  var jsonStr = line.slice(6);
+                  if (jsonStr === '[DONE]' || jsonStr === '') continue;
+                  try {
+                    var chunkData = JSON.parse(jsonStr);
+                    var cand = chunkData.candidates?.[0];
+                    if (cand && cand.finishReason) lastFinishReason = cand.finishReason;
+                    var delta = cand?.content?.parts?.[0]?.text || '';
+                    if (delta) {
+                      responseText += delta;
+                      if (typeof onChunk === 'function') onChunk(delta, responseText);
+                    }
+                  } catch (parseChunkErr) { /* ignore malformed chunk */ }
+                }
+              }
+            }
+            if (buffer.trim().startsWith('data: ')) {
+              try {
+                var tailJson = buffer.trim().slice(6);
+                if (tailJson && tailJson !== '[DONE]') {
+                  var tailData = JSON.parse(tailJson);
+                  var tailCand = tailData.candidates?.[0];
+                  if (tailCand && tailCand.finishReason) lastFinishReason = tailCand.finishReason;
+                  var tailDelta = tailCand?.content?.parts?.[0]?.text || '';
+                  if (tailDelta) {
+                    responseText += tailDelta;
+                    if (typeof onChunk === 'function') onChunk(tailDelta, responseText);
+                  }
+                }
+              } catch (e) { /* ignore */ }
+            }
+            candidate = { finishReason: lastFinishReason };
+          }
+        } catch (streamErr) {
+          if (streamErr.code === 'TIMEOUT' || streamErr.code === 'NETWORK') throw streamErr;
+          console.warn('[callGeminiCoach] 스트리밍 실패, REST 폴백:', streamErr && streamErr.message);
+          usedStreaming = false;
         }
-        lastError = new Error('Gemini API 오류: ' + errorMessage);
-        if (RETRYABLE_STATUS.indexOf(response.status) !== -1 && attempt < maxRetries) {
-          console.warn('[callGeminiCoach] 서버 과부하/일시 오류(' + response.status + '), 재시도 예정:', errorMessage);
-          continue;
-        }
-        break;
       }
 
-      var data = await response.json();
-      var candidate = data.candidates?.[0];
-      var responseText = candidate?.content?.parts?.[0]?.text || '';
-      var finishReason = candidate?.finishReason || candidate?.finish_reason || '';
+      // 2) REST 폴백 (스트리밍 미사용 또는 실패 시)
+      if (!usedStreaming) {
+        controller = null;
+        timeoutId = null;
+        var fetchOptions = buildFetchOptions();
+        var response = await fetch(restApiUrl, fetchOptions).catch(function (err) {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (err && err.name === 'AbortError') {
+            var e = new Error('요청 시간 초과 (' + Math.round(timeoutMs / 1000) + '초)');
+            e.code = 'TIMEOUT';
+            throw e;
+          }
+          if (err && (err.message || '').indexOf('Failed to fetch') !== -1) {
+            var ne = new Error('네트워크 오류: 연결이 끊어졌거나 서버에 도달할 수 없습니다.');
+            ne.code = 'NETWORK';
+            throw ne;
+          }
+          throw err;
+        });
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          var errorText = await response.text();
+          var errorMessage = '';
+          try {
+            var errorData = JSON.parse(errorText);
+            errorMessage = errorData.error?.message || errorText;
+          } catch (e) {
+            errorMessage = errorText;
+          }
+          lastError = new Error('Gemini API 오류: ' + errorMessage);
+          if (RETRYABLE_STATUS.indexOf(response.status) !== -1 && attempt < maxRetries) {
+            console.warn('[callGeminiCoach] 서버 과부하/일시 오류(' + response.status + '), 재시도 예정:', errorMessage);
+            continue;
+          }
+          break;
+        }
+
+        var data = await response.json();
+        var candidate = data.candidates?.[0];
+        responseText = candidate?.content?.parts?.[0]?.text || '';
+      }
+
+      var finishReason = (candidate && (candidate.finishReason || candidate.finish_reason)) || '';
       if (!responseText) {
         lastError = new Error('Gemini API 응답이 비어있습니다.');
         continue;
