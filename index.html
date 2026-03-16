@@ -1348,6 +1348,11 @@
     #trainingJournalScreen .journal-legend .legend-dot.indoor {
       background: rgba(34, 197, 94, 0.82);
     }
+    #trainingJournalScreen .journal-legend .legend-dot.pr {
+      background: transparent;
+      border: 1.5px solid #dc2626;
+      border-radius: 3px;
+    }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
@@ -4678,6 +4683,7 @@
         <div class="journal-legend" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; line-height: 1.2; color: #6b7280;">
           <span class="legend-row"><span class="legend-dot outdoor"></span><span>Outdoor</span></span>
           <span class="legend-row"><span class="legend-dot indoor"></span><span>Indoor</span></span>
+          <span class="legend-row"><span class="legend-dot pr"></span><span>PR</span></span>
         </div>
       </div>
     </div>
@@ -8381,13 +8387,15 @@
           }
         }
       }
-      function fmtPr(log, field, unit) {
-        var val = log[field];
-        var str = (val != null && !Number.isNaN(Number(val))) ? Number(val).toFixed(0) + unit : '-';
+      function labelWithPr(label, log, field) {
         if (yearlyPeaks && window.isPrField && window.isPrField(log, yearlyPeaks, field)) {
-          return '<span class="training-detail-pr-badge">PR</span> ' + str;
+          return label + ' <span class="training-detail-pr-badge">PR</span>';
         }
-        return str;
+        return label;
+      }
+      function fmtValue(log, field, unit) {
+        var val = log[field];
+        return (val != null && !Number.isNaN(Number(val))) ? Number(val).toFixed(0) + unit : '-';
       }
       
       // 날짜 포맷팅
@@ -8439,8 +8447,8 @@
           <span class="training-detail-value">${log.avg_hr ? log.avg_hr.toFixed(0) + ' bpm' : '-'}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">최대 심박</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_hr', ' bpm')}</span>
+          <span class="training-detail-label">${labelWithPr('최대 심박', log, 'max_hr')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_hr', ' bpm')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">최대 심박(5초)</span>
@@ -8479,36 +8487,36 @@
           <span class="training-detail-value">${log.weighted_watts ? log.weighted_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">피크 파워(1분)</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_1min_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('피크 파워(1분)', log, 'max_1min_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_1min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">피크 파워(5분)</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_5min_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('피크 파워(5분)', log, 'max_5min_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_5min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">피크 파워(10분)</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_10min_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('피크 파워(10분)', log, 'max_10min_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_10min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">피크 파워(20분)</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_20min_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('피크 파워(20분)', log, 'max_20min_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_20min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(30분)</span>
           <span class="training-detail-value">${log.max_30min_watts ? log.max_30min_watts.toFixed(0) + ' W' : '-'}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">피크 파워(40분)</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_40min_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('피크 파워(40분)', log, 'max_40min_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_40min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">피크 파워(60분)</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_60min_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('피크 파워(60분)', log, 'max_60min_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_60min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
-          <span class="training-detail-label">최대 파워</span>
-          <span class="training-detail-value">${fmtPr(log, 'max_watts', ' W')}</span>
+          <span class="training-detail-label">${labelWithPr('최대 파워', log, 'max_watts')}</span>
+          <span class="training-detail-value">${fmtValue(log, 'max_watts', ' W')}</span>
         </div>
         ${log.time_in_zones ? '<div id="trainingDetailTimeInZones" class="training-detail-time-in-zones-wrap"></div>' : ''}
       `;
