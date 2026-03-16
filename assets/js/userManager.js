@@ -1987,16 +1987,36 @@ if (typeof window !== 'undefined') window.fetchYearlyPeaksForYear = fetchYearlyP
 
 /** PR 적용 필드: yearly_peaks 키 → 로그 필드 매핑 */
 var PR_FIELDS = ['max_hr', 'max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
-if (typeof window !== 'undefined') window.PR_FIELDS = PR_FIELDS;
+/** W/kg 비교 대상 필드 (파워 계열: 몸무게 변동 시 절대값 비교 오류 방지) */
+var PR_WKG_FIELDS = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
+if (typeof window !== 'undefined') {
+  window.PR_FIELDS = PR_FIELDS;
+  window.PR_WKG_FIELDS = PR_WKG_FIELDS;
+}
+
+/** PR 비교용 몸무게(kg) 반환: log.weight 우선, 없으면 userWeight. 최소 45kg */
+function getWeightForPr(log, userWeight) {
+  var w = Number(log && log.weight) || Number(userWeight) || 0;
+  return w > 0 ? Math.max(w, 45) : 0;
+}
+
+/** W/kg 소수점 2자리 산출 (비교 키용) */
+function toWkg2Decimals(watts, weightKg) {
+  if (!weightKg || weightKg <= 0 || !watts || watts <= 0) return null;
+  return Math.round((watts / weightKg) * 100) / 100;
+}
 
 /**
  * 로그가 yearly_peaks 대비 PR(개인기록)을 1개 이상 갖는지 확인
+ * 파워 필드: W/kg(소수점 2자리)로 비교. log.weight 있으면 사용, 없으면 userWeight 사용
  * @param {Object} log - 훈련 로그
  * @param {Object} yearlyPeaks - yearly_peaks/{year} 문서
+ * @param {number} [userWeight] - 사용자 현재 몸무게(kg). log.weight 없을 때 사용
  * @returns {boolean}
  */
-function logHasAnyPr(log, yearlyPeaks) {
+function logHasAnyPr(log, yearlyPeaks, userWeight) {
   if (!log || !yearlyPeaks) return false;
+  var weightKg = getWeightForPr(log, userWeight);
   for (var i = 0; i < PR_FIELDS.length; i++) {
     var key = PR_FIELDS[i];
     var peakVal = yearlyPeaks[key];
@@ -2006,7 +2026,20 @@ function logHasAnyPr(log, yearlyPeaks) {
       logVal = log.max_heartrate;
     }
     if (logVal == null || logVal === '' || Number.isNaN(Number(logVal))) continue;
-    if (Math.round(Number(logVal)) === Math.round(Number(peakVal))) return true;
+    if (PR_WKG_FIELDS.indexOf(key) >= 0) {
+      if (weightKg <= 0) continue;
+      var logWkg = toWkg2Decimals(Number(logVal), weightKg);
+      if (logWkg == null) continue;
+      var peakWkg = yearlyPeaks[key.replace('_watts', '_wkg')];
+      if (peakWkg != null && peakWkg !== '' && !Number.isNaN(Number(peakWkg))) {
+        peakWkg = Math.round(Number(peakWkg) * 100) / 100;
+      } else {
+        peakWkg = toWkg2Decimals(Number(peakVal), weightKg);
+      }
+      if (peakWkg != null && logWkg === peakWkg) return true;
+    } else {
+      if (Math.round(Number(logVal)) === Math.round(Number(peakVal))) return true;
+    }
   }
   return false;
 }
@@ -2014,12 +2047,14 @@ if (typeof window !== 'undefined') window.logHasAnyPr = logHasAnyPr;
 
 /**
  * 특정 필드가 yearly_peaks와 일치하는지(PR인지) 확인
+ * 파워 필드: W/kg(소수점 2자리)로 비교. log.weight 있으면 사용, 없으면 userWeight 사용
  * @param {Object} log - 훈련 로그
  * @param {Object} yearlyPeaks - yearly_peaks/{year} 문서
  * @param {string} field - 필드명 (max_hr, max_1min_watts 등)
+ * @param {number} [userWeight] - 사용자 현재 몸무게(kg). log.weight 없을 때 사용
  * @returns {boolean}
  */
-function isPrField(log, yearlyPeaks, field) {
+function isPrField(log, yearlyPeaks, field, userWeight) {
   if (!log || !yearlyPeaks || !field) return false;
   var peakVal = yearlyPeaks[field];
   if (peakVal == null || peakVal === '' || Number.isNaN(Number(peakVal))) return false;
@@ -2028,6 +2063,19 @@ function isPrField(log, yearlyPeaks, field) {
     logVal = log.max_heartrate;
   }
   if (logVal == null || logVal === '' || Number.isNaN(Number(logVal))) return false;
+  if (PR_WKG_FIELDS.indexOf(field) >= 0) {
+    var weightKg = getWeightForPr(log, userWeight);
+    if (weightKg <= 0) return false;
+    var logWkg = toWkg2Decimals(Number(logVal), weightKg);
+    if (logWkg == null) return false;
+    var peakWkg = yearlyPeaks[field.replace('_watts', '_wkg')];
+    if (peakWkg != null && peakWkg !== '' && !Number.isNaN(Number(peakWkg))) {
+      peakWkg = Math.round(Number(peakWkg) * 100) / 100;
+    } else {
+      peakWkg = toWkg2Decimals(Number(peakVal), weightKg);
+    }
+    return peakWkg != null && logWkg === peakWkg;
+  }
   return Math.round(Number(logVal)) === Math.round(Number(peakVal));
 }
 if (typeof window !== 'undefined') window.isPrField = isPrField;
