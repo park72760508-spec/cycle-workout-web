@@ -3050,6 +3050,12 @@ button[aria-disabled="true"] {
   background: rgba(249, 115, 22, 0.25);
 }
 
+/* PR(개인기록) 날짜: 빨간 테두리, 배경색 유지 */
+#trainingJournalScreen .mini-calendar-day.journal-has-pr {
+  border: 2px solid #dc2626 !important;
+  box-shadow: 0 0 0 1px #dc2626;
+}
+
 .mini-calendar-day.has-indoor.has-outdoor.outdoor-weekday .day-number {
   color: #f97316;
 }
@@ -3214,6 +3220,23 @@ button[aria-disabled="true"] {
   font-size: 0.875rem; /* 대시보드 추천 디자인: text-xs */
   color: #1e40af; /* 대시보드 추천 디자인: text-blue-800 */
   font-weight: 600; /* 대시보드 추천 디자인: font-semibold */
+}
+
+/* PR(개인기록) 배지: 빨강 원 + 흰색 PR 텍스트 */
+.training-detail-pr-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  height: 1.25em;
+  padding: 0 6px;
+  margin-right: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: #dc2626;
+  border-radius: 9999px;
+  vertical-align: middle;
 }
 
 .training-detail-time-in-zones-wrap {
