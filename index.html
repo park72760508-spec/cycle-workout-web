@@ -7817,9 +7817,23 @@
           yearsToFetch.forEach(function(y, i) {
             if (peaks[i]) miniCalendarStateJournal.yearlyPeaksByYear[y] = peaks[i];
           });
+          if (window.DEBUG_MODE || yearsToFetch.some(function(y, i) { return !peaks[i]; })) {
+            var prFields = window.PR_FIELDS || ['max_hr', 'max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
+            var msg = yearsToFetch.map(function(y, i) {
+              return y + ': ' + (peaks[i] ? '있음(' + Object.keys(peaks[i]).filter(function(k) { return prFields.indexOf(k) >= 0; }).join(',') + ')' : '없음');
+            }).join(' | ');
+            console.log('[MiniCalendarJournal] yearly_peaks 조회 결과:', msg);
+            if (yearsToFetch.some(function(y, i) { return !peaks[i]; })) {
+              console.log('[MiniCalendarJournal] PR 미표시: yearly_peaks가 없는 연도가 있습니다. backfillYearlyPeaks?year=YYYY 실행 후 새로고침하세요.');
+            }
+          }
         } catch (e) {
           console.warn('[MiniCalendarJournal] yearly_peaks 조회 실패:', e);
         }
+      } else if (!uid) {
+        console.warn('[MiniCalendarJournal] PR 표시 불가: uid 없음 (currentUserId:', miniCalendarStateJournal.currentUserId, ', currentUserId:', currentUserId, ')');
+      } else if (typeof window.fetchYearlyPeaksForYear !== 'function') {
+        console.warn('[MiniCalendarJournal] PR 표시 불가: fetchYearlyPeaksForYear 함수 없음 (userManager.js 로드 확인)');
       }
       
       // 월/년 표시 업데이트
