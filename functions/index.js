@@ -2293,9 +2293,10 @@ async function saveSuspiciousPowerRecord(db, { userId, year, date, durationType,
   }
 }
 
-/** 로그의 피크 파워를 검증 후 연간 최고 기록에 업서트. 무효 시 suspicious_power_records에 Pending 저장 */
+/** 로그의 피크 파워를 검증 후 연간 최고 기록에 업서트. 무효 시 suspicious_power_records에 Pending 저장
+ * weight: log.weight 우선, 없으면 userData.weight 사용 (W/kg 산출 정확도) */
 async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
-  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  const rawWeight = Number(logData.weight || userData.weight || userData.weightKg || 0);
   if (rawWeight <= 0) return;
   const weightKg = Math.max(rawWeight, 45);
   const dateStr = logData.date || "";
