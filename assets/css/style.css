@@ -3222,7 +3222,7 @@ button[aria-disabled="true"] {
   font-weight: 600; /* 대시보드 추천 디자인: font-semibold */
 }
 
-/* PR(개인기록) 배지: 빨강 원 + 흰색 PR 텍스트 */
+/* PR(개인기록) 배지: 빨강 둥근네모, 바탕색 없음 */
 .training-detail-pr-badge {
   display: inline-flex;
   align-items: center;
@@ -3230,12 +3230,13 @@ button[aria-disabled="true"] {
   min-width: 1.5em;
   height: 1.25em;
   padding: 0 6px;
-  margin-right: 6px;
+  margin-left: 4px;
   font-size: 0.7rem;
   font-weight: 700;
-  color: #ffffff;
-  background: #dc2626;
-  border-radius: 9999px;
+  color: #dc2626;
+  background: transparent;
+  border: 1.5px solid #dc2626;
+  border-radius: 4px;
   vertical-align: middle;
 }
 
