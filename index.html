@@ -7281,7 +7281,8 @@
       currentYear: new Date().getFullYear(),
       currentMonth: new Date().getMonth(), // 0-11
       trainingLogs: {}, // 현재 사용자의 훈련 로그 (날짜별 그룹화)
-      currentUserId: null
+      currentUserId: null,
+      yearlyPeaksByYear: {} // PR 표시용: { year: yearly_peaks 문서 }
     };
     // 🔒 보안: window에 노출하여 로그아웃 시 초기화 가능하도록 함
     window.miniCalendarStateJournal = miniCalendarStateJournal;
@@ -7807,6 +7808,20 @@
       var currentYear = miniStateJ.currentYear != null ? miniStateJ.currentYear : new Date().getFullYear();
       var currentMonth = miniStateJ.currentMonth != null ? miniStateJ.currentMonth : new Date().getMonth();
       
+      // PR 표시용 yearly_peaks 조회 (현재 달력에 표시되는 연도들)
+      var uid = miniCalendarStateJournal.currentUserId || currentUserId;
+      if (uid && typeof window.fetchYearlyPeaksForYear === 'function') {
+        try {
+          var yearsToFetch = [currentYear - 1, currentYear, currentYear + 1];
+          var peaks = await Promise.all(yearsToFetch.map(function(y) { return window.fetchYearlyPeaksForYear(uid, y); }));
+          yearsToFetch.forEach(function(y, i) {
+            if (peaks[i]) miniCalendarStateJournal.yearlyPeaksByYear[y] = peaks[i];
+          });
+        } catch (e) {
+          console.warn('[MiniCalendarJournal] yearly_peaks 조회 실패:', e);
+        }
+      }
+      
       // 월/년 표시 업데이트
       monthYearEl.textContent = `${currentYear}년 ${currentMonth + 1}월`;
       
@@ -7886,6 +7901,13 @@
               className += ' outdoor-weekday';
             }
           }
+          if (window.logHasAnyPr) {
+            var year = parseInt(dateKey.substring(0, 4), 10);
+            var peaks = miniCalendarStateJournal.yearlyPeaksByYear[year];
+            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks); })) {
+              className += ' journal-has-pr';
+            }
+          }
           
           console.log(`[MiniCalendarJournal] ✅ 이전 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개 (INDOOR: ${hasIndoor}, OUTDOOR: ${hasOutdoor})`);
         }
@@ -7957,6 +7979,13 @@
               className += ' outdoor-weekday';
             }
           }
+          if (window.logHasAnyPr) {
+            var year = parseInt(dateKey.substring(0, 4), 10);
+            var peaks = miniCalendarStateJournal.yearlyPeaksByYear[year];
+            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks); })) {
+              className += ' journal-has-pr';
+            }
+          }
           
           console.log(`[MiniCalendarJournal] ✅ 현재 달 훈련 기록 발견: ${dateKey} - ${logsForDate.length}개 (INDOOR: ${hasIndoor}, OUTDOOR: ${hasOutdoor})`);
         } else {
@@ -8018,6 +8047,13 @@
               className += ' outdoor-holiday';
             } else {
               className += ' outdoor-weekday';
+            }
+          }
+          if (window.logHasAnyPr) {
+            var year = parseInt(dateKey.substring(0, 4), 10);
+            var peaks = miniCalendarStateJournal.yearlyPeaksByYear[year];
+            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks); })) {
+              className += ' journal-has-pr';
             }
           }
           
@@ -8316,6 +8352,30 @@
       const stravaLog = logs.find(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
       const log = stravaLog || logs[0];
       
+      // PR 표시용 yearly_peaks 조회
+      var logYear = null;
+      var yearlyPeaks = null;
+      var dateForYear = parseTrainingDate(log.date);
+      if (dateForYear) logYear = dateForYear.getFullYear();
+      if (logYear) {
+        yearlyPeaks = miniCalendarStateJournal.yearlyPeaksByYear[logYear];
+        if (!yearlyPeaks && typeof window.fetchYearlyPeaksForYear === 'function') {
+          var uid = miniCalendarStateJournal.currentUserId || (window.currentUser && (window.currentUser.id || window.currentUser.uid));
+          if (uid) {
+            yearlyPeaks = await window.fetchYearlyPeaksForYear(uid, logYear);
+            if (yearlyPeaks) miniCalendarStateJournal.yearlyPeaksByYear[logYear] = yearlyPeaks;
+          }
+        }
+      }
+      function fmtPr(log, field, unit) {
+        var val = log[field];
+        var str = (val != null && !Number.isNaN(Number(val))) ? Number(val).toFixed(0) + unit : '-';
+        if (yearlyPeaks && window.isPrField && window.isPrField(log, yearlyPeaks, field)) {
+          return '<span class="training-detail-pr-badge">PR</span> ' + str;
+        }
+        return str;
+      }
+      
       // 날짜 포맷팅
       const date = parseTrainingDate(log.date);
       const dateStr = date ? 
@@ -8366,7 +8426,7 @@
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">최대 심박</span>
-          <span class="training-detail-value">${log.max_hr ? log.max_hr.toFixed(0) + ' bpm' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_hr', ' bpm')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">최대 심박(5초)</span>
@@ -8406,19 +8466,19 @@
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(1분)</span>
-          <span class="training-detail-value">${log.max_1min_watts ? log.max_1min_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_1min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(5분)</span>
-          <span class="training-detail-value">${log.max_5min_watts ? log.max_5min_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_5min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(10분)</span>
-          <span class="training-detail-value">${log.max_10min_watts ? log.max_10min_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_10min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(20분)</span>
-          <span class="training-detail-value">${log.max_20min_watts ? log.max_20min_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_20min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(30분)</span>
@@ -8426,15 +8486,15 @@
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(40분)</span>
-          <span class="training-detail-value">${log.max_40min_watts ? log.max_40min_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_40min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">피크 파워(60분)</span>
-          <span class="training-detail-value">${log.max_60min_watts ? log.max_60min_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_60min_watts', ' W')}</span>
         </div>
         <div class="training-detail-item">
           <span class="training-detail-label">최대 파워</span>
-          <span class="training-detail-value">${log.max_watts ? log.max_watts.toFixed(0) + ' W' : '-'}</span>
+          <span class="training-detail-value">${fmtPr(log, 'max_watts', ' W')}</span>
         </div>
         ${log.time_in_zones ? '<div id="trainingDetailTimeInZones" class="training-detail-time-in-zones-wrap"></div>' : ''}
       `;
