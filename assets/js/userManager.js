@@ -1949,6 +1949,90 @@ async function fetchMaxHrForYear(userId, year) {
 if (typeof window !== 'undefined') window.fetchMaxHrForYear = fetchMaxHrForYear;
 
 /**
+ * yearly_peaks/{year} 전체 문서 조회 (PR 표시용)
+ * @param {string} userId - 사용자 ID
+ * @param {number|string} year - 연도 (예: 2025)
+ * @returns {Promise<Object|null>} yearly_peaks 문서 데이터 또는 null
+ */
+async function fetchYearlyPeaksForYear(userId, year) {
+  if (!userId || year == null) return null;
+  var db = window.firestoreV9 || (window.firestore && window.firestore);
+  if (!db) return null;
+  try {
+    var yearStr = String(year);
+    if (window.firestoreV9) {
+      var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      var getDoc = fsMod && fsMod.getDoc;
+      var doc = fsMod && fsMod.doc;
+      if (!getDoc || !doc) return null;
+      var ref = doc(db, 'users', userId, 'yearly_peaks', yearStr);
+      var snap = await getDoc(ref);
+      if (snap && snap.exists) {
+        return snap.data() || null;
+      }
+      return null;
+    }
+    var docRef = db.collection('users').doc(userId).collection('yearly_peaks').doc(yearStr);
+    var docSnap = await docRef.get();
+    if (docSnap && docSnap.exists) {
+      return docSnap.data() || null;
+    }
+    return null;
+  } catch (e) {
+    console.warn('[UserManager] fetchYearlyPeaksForYear 실패:', userId, year, e);
+    return null;
+  }
+}
+if (typeof window !== 'undefined') window.fetchYearlyPeaksForYear = fetchYearlyPeaksForYear;
+
+/** PR 적용 필드: yearly_peaks 키 → 로그 필드 매핑 */
+var PR_FIELDS = ['max_hr', 'max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
+if (typeof window !== 'undefined') window.PR_FIELDS = PR_FIELDS;
+
+/**
+ * 로그가 yearly_peaks 대비 PR(개인기록)을 1개 이상 갖는지 확인
+ * @param {Object} log - 훈련 로그
+ * @param {Object} yearlyPeaks - yearly_peaks/{year} 문서
+ * @returns {boolean}
+ */
+function logHasAnyPr(log, yearlyPeaks) {
+  if (!log || !yearlyPeaks) return false;
+  for (var i = 0; i < PR_FIELDS.length; i++) {
+    var key = PR_FIELDS[i];
+    var peakVal = yearlyPeaks[key];
+    if (peakVal == null || peakVal === '' || Number.isNaN(Number(peakVal))) continue;
+    var logVal = log[key];
+    if (key === 'max_hr' && (logVal == null || logVal === '' || Number.isNaN(Number(logVal)))) {
+      logVal = log.max_heartrate;
+    }
+    if (logVal == null || logVal === '' || Number.isNaN(Number(logVal))) continue;
+    if (Math.round(Number(logVal)) === Math.round(Number(peakVal))) return true;
+  }
+  return false;
+}
+if (typeof window !== 'undefined') window.logHasAnyPr = logHasAnyPr;
+
+/**
+ * 특정 필드가 yearly_peaks와 일치하는지(PR인지) 확인
+ * @param {Object} log - 훈련 로그
+ * @param {Object} yearlyPeaks - yearly_peaks/{year} 문서
+ * @param {string} field - 필드명 (max_hr, max_1min_watts 등)
+ * @returns {boolean}
+ */
+function isPrField(log, yearlyPeaks, field) {
+  if (!log || !yearlyPeaks || !field) return false;
+  var peakVal = yearlyPeaks[field];
+  if (peakVal == null || peakVal === '' || Number.isNaN(Number(peakVal))) return false;
+  var logVal = log[field];
+  if (field === 'max_hr' && (logVal == null || logVal === '' || Number.isNaN(Number(logVal)))) {
+    logVal = log.max_heartrate;
+  }
+  if (logVal == null || logVal === '' || Number.isNaN(Number(logVal))) return false;
+  return Math.round(Number(logVal)) === Math.round(Number(peakVal));
+}
+if (typeof window !== 'undefined') window.isPrField = isPrField;
+
+/**
  * yearly_peaks에서 최대 심박수 조회 (오늘 기준 최대 1년 = 당해+전년)
  * - users/{userId}/yearly_peaks/{year} 문서 2개만 조회 (당해·전년) → 로그 스캔 없이 경량
  * - max_hr는 onUserLogWritten 트리거·backfillYearlyPeaks로 yearly_peaks에 반영됨
