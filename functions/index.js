@@ -751,6 +751,9 @@ async function processStravaActivity(db, ownerId, objectId) {
   }
 
   const tssAppliedAt = new Date().toISOString();
+  const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
+    ? Number(userData.weight ?? userData.weightKg)
+    : null;
   const logDoc = {
     activity_id: mapped.activity_id,
     user_id: mapped.user_id,
@@ -780,6 +783,7 @@ async function processStravaActivity(db, ownerId, objectId) {
     tss_applied_at: tssAppliedAt,
     created_at: mapped.created_at,
   };
+  if (userWeight != null) logDoc.weight = userWeight;
   if (max1minWatts != null) logDoc.max_1min_watts = max1minWatts;
   if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
   if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
@@ -1141,9 +1145,14 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const needsMmp = d.max_1min_watts == null || d.max_5min_watts == null || d.max_10min_watts == null || d.max_20min_watts == null || d.max_30min_watts == null || d.max_40min_watts == null || d.max_60min_watts == null;
       const needsHrPeaks = d.max_hr_5sec == null && d.max_hr_1min == null && d.max_hr_5min == null;
       const needsTimeInZones = !d.time_in_zones || !d.time_in_zones.power;
-      if ((needsMmp || needsHrPeaks || needsTimeInZones) && entry) {
+      const needsWeight = d.weight == null;
+      if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
+        const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
+          ? Number(userData.weight ?? userData.weightKg)
+          : null;
+        if (needsWeight && userWeight != null) updateData.weight = userWeight;
         if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
           const watts = smoothPowerSpikes(streamsRes.watts);
           updateData.max_1min_watts = calculateMaxAveragePower(watts, 60);
@@ -1220,6 +1229,9 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     const activityTss = mapped.tss || 0;
     const distanceKm = mapped.distance_km || 0;
     const tssAppliedAt = new Date().toISOString();
+    const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
+      ? Number(userData.weight ?? userData.weightKg)
+      : null;
     const logDoc = {
       activity_id: mapped.activity_id,
       user_id: mapped.user_id,
@@ -1249,6 +1261,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       tss_applied_at: tssAppliedAt,
       created_at: mapped.created_at,
     };
+    if (userWeight != null) logDoc.weight = userWeight;
     if (max1minWatts != null) logDoc.max_1min_watts = max1minWatts;
     if (max5minWatts != null) logDoc.max_5min_watts = max5minWatts;
     if (max10minWatts != null) logDoc.max_10min_watts = max10minWatts;
@@ -1587,11 +1600,16 @@ exports.manualStravaSyncWithMmp = onRequest(
         const needsMmp = existingData.max_1min_watts == null || existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_20min_watts == null || existingData.max_30min_watts == null || existingData.max_40min_watts == null || existingData.max_60min_watts == null;
         const needsHrPeaks = existingData.max_hr_5sec == null && existingData.max_hr_1min == null && existingData.max_hr_5min == null;
         const needsTimeInZones = forceRecalcTimeInZones || !existingData.time_in_zones || !existingData.time_in_zones.power;
-        if (needsMmp || needsHrPeaks || needsTimeInZones) {
+        const needsWeight = existingData.weight == null;
+        if (needsMmp || needsHrPeaks || needsTimeInZones || needsWeight) {
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
           const updateData = {};
+          const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
+            ? Number(userData.weight ?? userData.weightKg)
+            : null;
+          if (needsWeight && userWeight != null) updateData.weight = userWeight;
           const rawWatts = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
           const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
           console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Watts Array Length:`, wattsArray?.length || 0);
@@ -1680,6 +1698,9 @@ exports.manualStravaSyncWithMmp = onRequest(
           });
         }
         const tssAppliedAt = new Date().toISOString();
+        const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
+          ? Number(userData.weight ?? userData.weightKg)
+          : null;
         const logDoc = {
           activity_id: mapped.activity_id,
           user_id: mapped.user_id,
@@ -1726,6 +1747,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
           if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
         }
+        if (userWeight != null) logDoc.weight = userWeight;
         await logDocRef.set(logDoc, { merge: true });
         createdCount += 1;
         processedCount += 1;
@@ -2809,6 +2831,44 @@ exports.onUserLogWritten = functions
       console.warn("[onUserLogWritten] upsertYearlyPeakFromLog 실패:", userId, logId, e.message);
     }
   });
+
+/** 기존 로그에 사용자 현재 몸무게(weight) 일괄 적용. weight 필드가 없거나 사용자 몸무게로 갱신 */
+exports.backfillWeightToLogs = onRequest(
+  { cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", "*");
+    const db = admin.firestore();
+    const usersSnap = await db.collection("users").get();
+    let processedUsers = 0;
+    let updatedLogs = 0;
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      const userWeight = Number(userData.weight ?? userData.weightKg ?? 0);
+      if (userWeight <= 0) continue;
+      processedUsers++;
+      const logsSnap = await db.collection("users").doc(userId).collection("logs").get();
+      let batch = db.batch();
+      let batchCount = 0;
+      for (const logDoc of logsSnap.docs) {
+        batch.update(logDoc.ref, { weight: userWeight });
+        batchCount++;
+        updatedLogs++;
+        if (batchCount >= 500) {
+          await batch.commit();
+          batch = db.batch();
+          batchCount = 0;
+        }
+      }
+      if (batchCount > 0) await batch.commit();
+    }
+    res.status(200).json({ success: true, processedUsers, updatedLogs });
+  }
+);
 
 /** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출). year 파라미터로 대상 연도 지정 */
 exports.backfillYearlyPeaks = onRequest(
