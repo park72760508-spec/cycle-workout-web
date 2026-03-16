@@ -13424,6 +13424,165 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
+    // 년간 파워PR 그래프용 존 색상 (max=Z1, 1분=Z2, ..., 60분=Z7)
+    var YEARLY_PR_ZONE_COLORS = [
+      'rgba(156, 163, 175, 0.7)',   // Max = Z1
+      'rgba(59, 130, 246, 0.7)',    // 1분 = Z2
+      'rgba(34, 197, 94, 0.7)',     // 5분 = Z3
+      'rgba(234, 179, 8, 0.7)',     // 10분 = Z4
+      'rgba(249, 115, 22, 0.7)',   // 20분 = Z5
+      'rgba(239, 68, 68, 0.7)',     // 40분 = Z6
+      'rgba(168, 85, 247, 0.7)'     // 60분 = Z7
+    ];
+    
+    // 년간 파워PR 그래프 (2026년 yearly_peaks 기반, 달성일 매칭)
+    function YearlyPowerPrChart(props) {
+      var p = props || {};
+      var data = p.data;
+      var userWeight = p.userWeight || 0;
+      const chartRef = useRef(null);
+      const chartInstanceRef = useRef(null);
+      
+      useEffect(function() {
+        if (!data || data.length === 0) return;
+        var ctx = chartRef.current && chartRef.current.getContext('2d');
+        if (!ctx || typeof Chart === 'undefined') return;
+        if (chartInstanceRef.current) {
+          chartInstanceRef.current.destroy();
+          chartInstanceRef.current = null;
+        }
+        var labels = data.map(function(d) { return d.label; });
+        var wattsData = data.map(function(d) { return d.watts || 0; });
+        var maxWatts = Math.max.apply(null, wattsData.filter(function(w) { return w > 0; })) || 300;
+        var yMax = Math.ceil(maxWatts * 1.15 / 50) * 50 || 350;
+        var prValuePlugin = {
+          id: 'prBarLabels',
+          afterDatasetsDraw: function(chart) {
+            var meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data || meta.data.length === 0) return;
+            chart.ctx.save();
+            chart.ctx.font = '11px sans-serif';
+            chart.ctx.textAlign = 'center';
+            meta.data.forEach(function(bar, i) {
+              if (!bar || bar.x == null || bar.y == null) return;
+              var d = data[i];
+              if (!d) return;
+              if (d.wkg != null && d.wkg > 0) {
+                chart.ctx.fillStyle = '#374151';
+                chart.ctx.fillText(d.wkg.toFixed(2) + ' W/kg', bar.x, bar.y - 6);
+              }
+            });
+            chart.ctx.restore();
+          }
+        };
+        chartInstanceRef.current = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: '파워 (W)',
+              data: wattsData,
+              backgroundColor: data.map(function(d, i) { return YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)'; }),
+              borderColor: data.map(function(d, i) {
+                var c = YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+                return c.replace('0.7)', '1)').replace('0.55)', '1)');
+              }),
+              borderWidth: 1,
+              borderRadius: { topLeft: 6, topRight: 6 }
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 28, bottom: 4 } },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: function(ctx) {
+                    var i = ctx[0] && ctx[0].dataIndex;
+                    if (i != null && data[i]) return data[i].label + ' (' + (data[i].dateStr || '-') + ')';
+                    return '';
+                  },
+                  label: function(ctx) {
+                    var i = ctx.dataIndex;
+                    var d = data[i];
+                    if (!d) return '';
+                    var parts = ['파워: ' + (d.watts || 0) + ' W'];
+                    if (d.wkg > 0) parts.push('W/kg: ' + d.wkg.toFixed(2));
+                    if (d.dateStr) parts.push('달성: ' + d.dateStr);
+                    return parts;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: {
+                  font: { size: 10 },
+                  color: '#6b7280',
+                  maxRotation: 0,
+                  maxTicksLimit: 7,
+                  callback: function(val, idx) {
+                    var lab = (labels[idx] === 'Max' ? 'M' : labels[idx]) || '';
+                    var dt = (data[idx] && data[idx].dateStr) ? data[idx].dateStr : '-';
+                    return lab + '\n' + dt;
+                  }
+                }
+              },
+              y: {
+                beginAtZero: true,
+                max: yMax,
+                grid: { color: '#e5e7eb' },
+                ticks: {
+                  font: { size: 11 },
+                  color: '#6b7280',
+                  callback: function(v) {
+                    return v === 0 ? '0W' : (v + '');
+                  }
+                }
+              }
+            }
+          },
+          plugins: [prValuePlugin]
+        });
+        return function cleanup() {
+          if (chartInstanceRef.current) {
+            chartInstanceRef.current.destroy();
+            chartInstanceRef.current = null;
+          }
+        };
+      }, [data]);
+      
+      if (!data || data.length === 0 || !data.some(function(d) { return d && d.watts > 0; })) {
+        return (
+          React.createElement(DashboardCard, { title: '년간 파워PR 그래프' },
+            React.createElement('div', { className: 'h-[220px] flex items-center justify-center text-gray-400 text-sm' }, '데이터가 없습니다')
+          )
+        );
+      }
+      
+      return React.createElement(DashboardCard, { title: '년간 파워PR 그래프' },
+        React.createElement('div', { className: 'space-y-2' },
+          React.createElement('div', { className: 'flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mb-1 text-xs' },
+            ['Max', '1', '5', '10', '20', '40', '60'].map(function(lbl, i) {
+              return React.createElement('span', { key: i, className: 'inline-flex items-center gap-1' },
+                React.createElement('span', {
+                  className: 'inline-block w-3 h-3 rounded-full flex-shrink-0 border border-gray-200',
+                  style: { backgroundColor: YEARLY_PR_ZONE_COLORS[i] || '#9ca3af' }
+                }),
+                React.createElement('span', { className: 'text-gray-600 font-medium' }, lbl === 'Max' ? 'M' : lbl)
+              );
+            })
+          ),
+          React.createElement('div', { className: 'h-[200px]' },
+            React.createElement('canvas', { ref: chartRef })
+          )
+        )
+      );
+    }
+    
     // Training Trend Chart 컴포넌트
     function TrainingTrendChart(props) {
       var p = props || {};
@@ -14219,6 +14378,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const [fitnessData, setFitnessData] = useState([]);
       const [vo2TrendData, setVo2TrendData] = useState([]);
       const [growthTrendData, setGrowthTrendData] = useState([]);
+      const [yearlyPowerPrData, setYearlyPowerPrData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
       const [aiLoading, setAiLoading] = useState(false);
       const [streamingComment, setStreamingComment] = useState(null);
@@ -14830,6 +14990,64 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               dCur.setDate(dCur.getDate() + 1);
             }
             if (isMounted) setGrowthTrendData(growthTrendRows);
+
+            // 년간 파워PR 그래프 (2026년 yearly_peaks, 달성일 매칭)
+            var currentYear = today.getFullYear();
+            var yearStartStr = currentYear + '-01-01';
+            var yearEndStr = todayFormattedForFilter;
+            var logsThisYear = raw.filter(function(log) {
+              var dateStr = parseDateForDashboard(log.date);
+              return dateStr && dateStr >= yearStartStr && dateStr <= yearEndStr;
+            });
+            var prFieldsConfig = [
+              { field: 'max_watts', label: 'Max' },
+              { field: 'max_1min_watts', label: '1분' },
+              { field: 'max_5min_watts', label: '5분' },
+              { field: 'max_10min_watts', label: '10분' },
+              { field: 'max_20min_watts', label: '20분' },
+              { field: 'max_40min_watts', label: '40분' },
+              { field: 'max_60min_watts', label: '60분' }
+            ];
+            var userWeightForPr = Number(userProfile && (userProfile.weight || userProfile.weightKg)) || 0;
+            (async function() {
+              var peaks = null;
+              if (typeof window.fetchYearlyPeaksForYear === 'function' && userProfile && userProfile.id) {
+                try {
+                  peaks = await window.fetchYearlyPeaksForYear(userProfile.id, currentYear);
+                } catch (e) {
+                  console.warn('[Dashboard] yearly_peaks 조회 실패:', e);
+                }
+              }
+              var prRows = [];
+              for (var pi = 0; pi < prFieldsConfig.length; pi++) {
+                var cfg = prFieldsConfig[pi];
+                var peakWatts = peaks ? (Number(peaks[cfg.field]) || 0) : 0;
+                var peakWkg = peaks && peaks[cfg.field.replace('_watts', '_wkg')] != null
+                  ? Math.round(Number(peaks[cfg.field.replace('_watts', '_wkg')]) * 100) / 100
+                  : (userWeightForPr > 0 && peakWatts > 0 ? Math.round((peakWatts / userWeightForPr) * 100) / 100 : 0);
+                var achievedDate = null;
+                if (peakWatts > 0 && logsThisYear.length > 0) {
+                  for (var li = 0; li < logsThisYear.length; li++) {
+                    var log = logsThisYear[li];
+                    var logWatts = Number(log[cfg.field]) || 0;
+                    if (logWatts !== peakWatts) continue;
+                    var ds = parseDateForDashboard(log.date);
+                    if (ds) {
+                      var parts = ds.split('-');
+                      achievedDate = (parts[1] && parts[2]) ? parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10) : null;
+                      break;
+                    }
+                  }
+                }
+                prRows.push({
+                  label: cfg.label,
+                  watts: peakWatts,
+                  wkg: peakWkg > 0 ? peakWkg : null,
+                  dateStr: achievedDate || null
+                });
+              }
+              if (isMounted) setYearlyPowerPrData(prRows);
+            })();
 
             // Calculate weekly TSS — 훈련일지 5주차 구간(오늘-6일~오늘) + 날짜별 1개만 반영: 같은날 STRAVA+STELVIO 있으면 STRAVA, STELVIO만 있으면 STELVIO, STRAVA만 있으면 STRAVA
             var todayForWeekly = new Date();
@@ -16066,6 +16284,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               </DashboardCard>
             ) : (
               <TrainingTrendChart data={fitnessData} />
+            )}
+            
+            {logsLoading ? (
+              <DashboardCard title="년간 파워PR 그래프">
+                <div className="h-[220px] flex items-center justify-center">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <div className="text-sm text-gray-500">데이터 로딩 중...</div>
+                </div>
+              </DashboardCard>
+            ) : (
+              <YearlyPowerPrChart data={yearlyPowerPrData} userWeight={stats.weight || userProfile?.weight} />
             )}
             
             <details className="rounded-xl border border-gray-200 bg-white overflow-hidden">
