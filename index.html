@@ -7841,6 +7841,11 @@
       } else if (typeof window.fetchYearlyPeaksForYear !== 'function') {
         console.warn('[MiniCalendarJournal] PR 표시 불가: fetchYearlyPeaksForYear 함수 없음 (userManager.js 로드 확인)');
       }
+      var userWeightForPr = 0;
+      try {
+        var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        userWeightForPr = Number(cu && (cu.weight || cu.weightKg)) || 0;
+      } catch (e) {}
       
       // 월/년 표시 업데이트
       monthYearEl.textContent = `${currentYear}년 ${currentMonth + 1}월`;
@@ -7924,7 +7929,7 @@
           if (window.logHasAnyPr) {
             var year = parseInt(dateKey.substring(0, 4), 10);
             var peaks = miniCalendarStateJournal.yearlyPeaksByYear[year];
-            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks); })) {
+            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks, userWeightForPr); })) {
               className += ' journal-has-pr';
             }
           }
@@ -8002,7 +8007,7 @@
           if (window.logHasAnyPr) {
             var year = parseInt(dateKey.substring(0, 4), 10);
             var peaks = miniCalendarStateJournal.yearlyPeaksByYear[year];
-            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks); })) {
+            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks, userWeightForPr); })) {
               className += ' journal-has-pr';
             }
           }
@@ -8072,7 +8077,7 @@
           if (window.logHasAnyPr) {
             var year = parseInt(dateKey.substring(0, 4), 10);
             var peaks = miniCalendarStateJournal.yearlyPeaksByYear[year];
-            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks); })) {
+            if (peaks && logsForDate.some(function(l) { return window.logHasAnyPr(l, peaks, userWeightForPr); })) {
               className += ' journal-has-pr';
             }
           }
@@ -8387,8 +8392,13 @@
           }
         }
       }
+      var userWeightForDetail = 0;
+      try {
+        var cuDetail = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        userWeightForDetail = Number(cuDetail && (cuDetail.weight || cuDetail.weightKg)) || 0;
+      } catch (e) {}
       function labelWithPr(label, log, field) {
-        if (yearlyPeaks && window.isPrField && window.isPrField(log, yearlyPeaks, field)) {
+        if (yearlyPeaks && window.isPrField && window.isPrField(log, yearlyPeaks, field, userWeightForDetail)) {
           return label + ' <span class="training-detail-pr-badge">PR</span>';
         }
         return label;
