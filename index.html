@@ -14211,6 +14211,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const [growthTrendData, setGrowthTrendData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
       const [aiLoading, setAiLoading] = useState(false);
+      const [streamingComment, setStreamingComment] = useState(null);
       const retryLogsRef = useRef(null);
       const aiAnalysisInProgressRef = useRef(false);
       
@@ -15234,9 +15235,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             if (!isMounted) return;
             
-            // [Mobile Bulletproof] Mark analysis as in progress
+            // [Mobile Bulletproof] Mark analysis as in progress, AbortController로 중복 요청 제어
             aiAnalysisInProgressRef.current = true;
             setAiLoading(true);
+            setStreamingComment(null);
+            if (typeof AbortController !== 'undefined') {
+              abortController = new AbortController();
+            }
             
             // [1번·2번 통일] 로그 소스: getTrainingLogsByDateRange 우선 사용 (같은 API·정확히 30일: today-29~today)
             var cleanLogs = [];
@@ -15361,7 +15366,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
             var isLowSpecDevice = isMobileDevice || (navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
             var coachTimeoutMs = isLowSpecDevice ? 180000 : (isMobileDevice ? 120000 : 90000);
-            var coachOptions = { timeoutMs: 150000, maxRetries: isLowSpecDevice ? 6 : 5 };
+            var coachOptions = { 
+              timeoutMs: 180000, 
+              maxRetries: isLowSpecDevice ? 6 : 5, 
+              useStreaming: true,
+              signal: abortController && abortController.signal,
+              onChunk: function(delta, fullText) {
+                if (!isMounted) return;
+                try {
+                  var match = fullText.match(/"coach_comment"\s*:\s*"((?:[^"\\]|\\.)*)/);
+                  if (match && match[1]) {
+                    var partial = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                    if (partial.length > 5) setStreamingComment(partial);
+                  }
+                } catch (e) {}
+              }
+            };
             // 주간 목표 실적(최근 7일 TSS)과 코멘트 일치: 화면과 동일한 계산으로 산출해 코치에 전달
             function toDateStrForCoach(date) {
               if (!date) return null;
@@ -15444,6 +15464,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 
                 // 실패/폴백(일시적 오류, 분석 미완료, error_reason)인 경우 캐시하지 않음 → "다시 분석"으로 재시도 가능
                 var isFallback = !analysis || (analysis.coach_comment && (analysis.coach_comment.indexOf('일시적인 오류') !== -1 || analysis.coach_comment.indexOf('분석이 완료되지 않았습니다') !== -1 || analysis.coach_comment.indexOf('일시적으로 지연') !== -1)) || !!(analysis && analysis.error_reason);
+                setStreamingComment(null);
                 setCoachData(analysis);
                 setAiLoading(false);
                 if (!isFallback && analysis && !analysis.error_reason) {
@@ -15455,20 +15476,34 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }
               } catch (error) {
                 if (!isMounted) return;
+                if (error && error.name === 'AbortError') return;
+                setStreamingComment(null);
                 // Clear timeout on error
                 if (currentTimeoutId) {
                   clearTimeout(currentTimeoutId);
                   currentTimeoutId = null;
                 }
                 var errMsg = (error && error.message) ? error.message : '알 수 없는 오류';
+                var errCode = (error && error.code) ? error.code : '';
                 console.error('[AI Error]', error);
                 
-                // Handle timeout specifically
+                // 에러 유형별 분류 및 사용자 메시지 (Toast 표시)
                 var errorDisplay = errMsg;
-                if (errMsg.indexOf('네트워크 지연') !== -1 || errMsg.indexOf('시간이 초과') !== -1 || errMsg.indexOf('Network Timeout') !== -1) {
-                  errorDisplay = '네트워크 지연: 분석 시간이 초과되었습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.';
-                } else if (errMsg.indexOf('Failed to fetch') !== -1) {
-                  errorDisplay = '네트워크 오류: 인터넷 연결을 확인하거나, 방화벽이 API 요청을 차단했을 수 있습니다.';
+                if (errCode === 'TIMEOUT' || errMsg.indexOf('요청 시간 초과') !== -1 || errMsg.indexOf('네트워크 지연') !== -1 || errMsg.indexOf('시간이 초과') !== -1) {
+                  errorDisplay = '⏱️ 시간 초과: 분석이 너무 오래 걸렸습니다. 네트워크를 확인하고 "다시 분석"을 눌러 재시도해 주세요.';
+                  if (typeof showToast === 'function') showToast(errorDisplay, 'error');
+                } else if (errCode === 'NETWORK' || errMsg.indexOf('Failed to fetch') !== -1 || errMsg.indexOf('네트워크 오류') !== -1) {
+                  errorDisplay = '📡 네트워크 오류: 연결이 끊어졌습니다. 인터넷 연결을 확인하고 "다시 분석"을 눌러 주세요.';
+                  if (typeof showToast === 'function') showToast(errorDisplay, 'error');
+                } else if (errCode === 'ABORT' || (error && error.name === 'AbortError')) {
+                  errorDisplay = '🛑 요청이 취소되었습니다. "다시 분석"을 눌러 재시도해 주세요.';
+                  if (typeof showToast === 'function') showToast(errorDisplay, 'error');
+                } else if (errMsg.indexOf('API 키') !== -1 || errMsg.indexOf('geminiApiKey') !== -1) {
+                  errorDisplay = 'API 키가 없습니다. 설정 메뉴에서 Gemini API 키를 입력해 주세요.';
+                  if (typeof showToast === 'function') showToast('⚠️ Gemini API 키를 설정해 주세요.', 'warning');
+                } else {
+                  errorDisplay = errMsg || 'AI 분석 중 오류가 발생했습니다. "다시 분석"을 눌러 주세요.';
+                  if (typeof showToast === 'function') showToast('AI 분석 중 오류가 발생했습니다. "다시 분석"을 눌러 주세요.', 'error');
                 }
                 
                 var userNameFallback = (userProfile && userProfile.name || '사용자');
@@ -15818,7 +15853,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   </div>
                   <div className="bg-white/80 rounded-xl p-4 mb-3">
                     <p className="text-sm text-gray-800 leading-relaxed">
-                      {coachData.coach_comment}
+                      {streamingComment || coachData.coach_comment}
+                      {streamingComment && <span className="inline-block w-2 h-4 ml-0.5 bg-blue-500 animate-pulse" />}
                     </p>
                     {coachData.error_reason && (
                       <div className="mt-3 pt-3 border-t border-amber-200 space-y-1">
