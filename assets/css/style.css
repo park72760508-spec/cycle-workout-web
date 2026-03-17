@@ -5187,6 +5187,20 @@ button[aria-disabled="true"] {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
+/* ========== Android 전용: 워크아웃 목록 스크롤 제한 해제 (iPhone은 기존 유지) ========== */
+html.is-android #workoutScreen.screen.active { touch-action: auto !important; }
+html.is-android #workoutScreen .workout-view-container {
+  touch-action: auto !important;
+  overflow-y: scroll !important; /* Android WebView: auto 대신 scroll로 스크롤 강제 활성화 */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto; /* contain 제거 → 기본 스크롤 동작 허용 */
+}
+html.is-android #workoutScreen .workout-list { touch-action: auto !important; }
+html.is-android #workoutScreen .workout-card { touch-action: auto !important; }
+html.is-android #workoutScreen .workout-card__graph { touch-action: auto !important; }
+html.is-android #workoutScreen .workout-cards-grid { touch-action: auto !important; }
+html.is-android #workoutScreen .workout-list-view { touch-action: auto !important; }
+
 /* ========== 워크아웃 화면 모바일 반응형 (768px 이하) ========== */
 @media (max-width: 768px) {
   /* 워크아웃 화면: 리스트 뷰 시 헤더 패딩만 조정 (sticky/배경은 공통 규칙 유지) */
