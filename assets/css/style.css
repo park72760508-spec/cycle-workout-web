@@ -3714,12 +3714,28 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.08);
 }
 .stelvio-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   padding: 10px 14px;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.06) 100%);
   font-weight: 700;
   font-size: 0.95rem;
   color: #1f2937;
   border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+}
+.stelvio-category-header-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.stelvio-category-header-unit {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #764ba2;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 .stelvio-category-body {
   padding: 8px 14px 12px;
@@ -3804,6 +3820,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingBoardModal .stelvio-category-header {
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
+}
+#stelvioRankingBoardModal .stelvio-category-header-unit {
+  color: #ff6b35;
 }
 #stelvioRankingBoardModal .stelvio-rank-row.stelvio-rank-current {
   background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
