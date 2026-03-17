@@ -98,7 +98,7 @@ function calculateDynamicFtp(logs) {
   for (var i = 0; i < prRows.length; i++) {
     var row = prRows[i];
     if (row.power <= 0) {
-      details.push({ minutes: row.minutes, power: 0, eFtp: 0, weight: row.weight, timeDecay: 0, used: false });
+      details.push({ minutes: row.minutes, power: 0, eFtp: 0, eFtpFactor: row.eFtpFactor, weight: row.weight, timeDecay: 0, used: false });
       continue;
     }
     var eFtp = row.power * row.eFtpFactor;
@@ -112,6 +112,7 @@ function calculateDynamicFtp(logs) {
       power: row.power,
       dateStr: row.dateStr,
       eFtp: Math.round(eFtp * 10) / 10,
+      eFtpFactor: row.eFtpFactor,
       weight: row.weight,
       timeDecay: timeDecay,
       used: true
