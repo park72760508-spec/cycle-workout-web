@@ -40,6 +40,9 @@ const CORS_ORIGINS = [
   "http://127.0.0.1:8080",
 ];
 
+/** 1일 500 이상 TSS: 치팅으로 간주, 합산·포인트 적립 제외 (주간 TOP10, Strava 동기화 공통) */
+const TSS_PER_DAY_CHEAT_THRESHOLD = 500;
+
 // CORS 헤더 설정 헬퍼 (preflight 및 실제 응답에 사용)
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || "";
@@ -811,13 +814,18 @@ async function processStravaActivity(db, ownerId, objectId) {
   let userTss = 0;
   if (isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
     const dateStr = mapped.date || "";
-    const stelvioDates = await getStelvioLogDates(db, userId);
-    if (stelvioDates.has(dateStr)) {
-      const stelvioPoints = await getStelvioPointsForDate(db, userId, dateStr);
-      const diff = Math.max(0, (mapped.tss || 0) - (stelvioPoints || 0));
-      userTss = diff;
+    const dayTotal = await getTotalTssForDate(db, userId, dateStr);
+    if (dayTotal >= TSS_PER_DAY_CHEAT_THRESHOLD) {
+      userTss = 0; // 1일 500+ TSS 치팅: 포인트 적립 제외
     } else {
-      userTss = mapped.tss || 0;
+      const stelvioDates = await getStelvioLogDates(db, userId);
+      if (stelvioDates.has(dateStr)) {
+        const stelvioPoints = await getStelvioPointsForDate(db, userId, dateStr);
+        const diff = Math.max(0, (mapped.tss || 0) - (stelvioPoints || 0));
+        userTss = diff;
+      } else {
+        userTss = mapped.tss || 0;
+      }
     }
   }
 
@@ -964,6 +972,27 @@ async function getStelvioLogDates(db, userId) {
     if (dateStr) dates.add(dateStr);
   });
   return dates;
+}
+
+/** 해당 날짜의 1일 총 TSS (Strava 우선, 없으면 Stelvio). 500+ 치팅 제외 판단용. */
+async function getTotalTssForDate(db, userId, dateStr) {
+  if (!userId || !dateStr) return 0;
+  try {
+    const snapshot = await db.collection("users").doc(userId).collection("logs").where("date", "==", dateStr).get();
+    let strava = 0;
+    let stelvio = 0;
+    snapshot.docs.forEach((doc) => {
+      const d = doc.data();
+      const tss = Number(d.tss) || 0;
+      const isStrava = String(d.source || "").toLowerCase() === "strava";
+      if (isStrava) strava += tss;
+      else stelvio += tss;
+    });
+    return strava > 0 ? strava : stelvio;
+  } catch (e) {
+    console.warn("[getTotalTssForDate]", dateStr, e.message);
+    return 0;
+  }
 }
 
 /** 해당 날짜의 Stelvio(앱) 적립 포인트 합계 조회. 차액 적립 시 사용. */
@@ -1135,6 +1164,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
   const logsRef = db.collection("users").doc(userId).collection("logs");
   /** 같은 날 Stelvio가 있는 날짜별 Strava TSS 합산 → 차액만 추가 적립 */
   const stelvioDateStravaTssAccumulator = new Map();
+  /** Stelvio 없는 날짜별 Strava TSS 합산 (1일 500+ 치팅 제외용) */
+  const dateOnlyStravaTss = new Map();
   let userTss = 0;
   let newActivities = 0;
   for (const act of Array.isArray(activities) ? activities : []) {
@@ -1288,11 +1319,19 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
         stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
       }
     } else {
-      if (distanceKm !== 0) userTss += activityTss;
+      if (distanceKm !== 0) {
+        const prev = dateOnlyStravaTss.get(dateStr) || 0;
+        dateOnlyStravaTss.set(dateStr, prev + activityTss);
+      }
     }
+  }
+  for (const [dateStr, tss] of dateOnlyStravaTss) {
+    if (tss < TSS_PER_DAY_CHEAT_THRESHOLD) userTss += tss;
   }
   for (const [dateStr, stravaSum] of stelvioDateStravaTssAccumulator) {
     const stelvioPoints = await getStelvioPointsForDate(db, userId, dateStr);
+    const dayTotal = stelvioPoints + (stravaSum || 0);
+    if (dayTotal >= TSS_PER_DAY_CHEAT_THRESHOLD) continue; // 1일 500+ TSS 치팅: 포인트 적립 제외
     const diff = Math.max(0, (stravaSum || 0) - (stelvioPoints || 0));
     if (diff > 0) {
       userTss += diff;
@@ -1576,6 +1615,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     const logsRef = db.collection("users").doc(uid).collection("logs");
     const stelvioDates = await getStelvioLogDates(db, uid);
     const stelvioDateStravaTssAccumulator = new Map();
+    const dateOnlyStravaTss = new Map();
     let processedCount = 0;
     let updatedCount = 0;
     let createdCount = 0;
@@ -1759,15 +1799,21 @@ exports.manualStravaSyncWithMmp = onRequest(
             const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
             stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
           } else {
-            userTss += activityTss;
+            const prev = dateOnlyStravaTss.get(dateStr) || 0;
+            dateOnlyStravaTss.set(dateStr, prev + activityTss);
           }
         }
       }
       await new Promise((r) => setTimeout(r, 1000));
     }
 
+    for (const [dateStr, tss] of dateOnlyStravaTss) {
+      if (tss < TSS_PER_DAY_CHEAT_THRESHOLD) userTss += tss;
+    }
     for (const [dateStr, stravaSum] of stelvioDateStravaTssAccumulator) {
       const stelvioPoints = await getStelvioPointsForDate(db, uid, dateStr);
+      const dayTotal = stelvioPoints + (stravaSum || 0);
+      if (dayTotal >= TSS_PER_DAY_CHEAT_THRESHOLD) continue; // 1일 500+ TSS 치팅: 포인트 적립 제외
       const diff = Math.max(0, (stravaSum || 0) - (stelvioPoints || 0));
       if (diff > 0) userTss += diff;
     }
@@ -1930,7 +1976,6 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
     if (isStrava) byDate[dateStr].strava += tss;
     else byDate[dateStr].stelvio += tss;
   });
-  const TSS_PER_DAY_CHEAT_THRESHOLD = 500; // 1일 500 이상 TSS는 치팅으로 간주하여 합산 제외
   let total = 0;
   Object.keys(byDate).forEach((dateStr) => {
     const o = byDate[dateStr];
@@ -1939,6 +1984,31 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
     total += dayTss;
   });
   return total;
+}
+
+/** 해당 주간에 1일 500 이상 TSS가 있는지 여부 (포인트 적립 제외 판단용) */
+async function hasWeeklyTssCheatDay(db, userId, startStr, endStr) {
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  const byDate = {};
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
+    const tss = Number(d.tss) || 0;
+    const isStrava = String(d.source || "").toLowerCase() === "strava";
+    if (!byDate[dateStr]) byDate[dateStr] = { strava: 0, stelvio: 0 };
+    if (isStrava) byDate[dateStr].strava += tss;
+    else byDate[dateStr].stelvio += tss;
+  });
+  for (const dateStr of Object.keys(byDate)) {
+    const o = byDate[dateStr];
+    const dayTss = o.strava > 0 ? o.strava : o.stelvio;
+    if (dayTss >= TSS_PER_DAY_CHEAT_THRESHOLD) return true;
+  }
+  return false;
 }
 
 const WEEKLY_RANKING_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
@@ -2011,7 +2081,8 @@ exports.getWeeklyRanking = onRequest(
   }
 );
 
-/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (1000명 대비 타임아웃 9분) */
+/** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (1000명 대비 타임아웃 9분)
+ * 1일 500+ TSS 치팅: 합산 제외 + 포인트 적립 대상에서도 제외 (hasWeeklyTssCheatDay) */
 const finalizeWeeklyOptions = {
   schedule: "0 21 * * 0",
   timeZone: "Asia/Seoul",
@@ -2022,11 +2093,16 @@ exports.finalizeWeeklyRanking = onSchedule(
   async (event) => {
     const db = admin.firestore();
     const { startStr, endStr } = getWeekRangeSeoul();
-    const entries = await getWeeklyRankingEntries(db, startStr, endStr);
-    const top3 = entries.slice(0, 3);
+    const entries = await getWeeklyRankingEntries(db, startStr, endStr); // 500+ TSS/일 제외된 합산 기준
+    const pointRecipients = [];
+    for (const e of entries) {
+      if (pointRecipients.length >= 3) break;
+      const hasCheat = await hasWeeklyTssCheatDay(db, e.userId, startStr, endStr);
+      if (!hasCheat) pointRecipients.push({ ...e, rank: pointRecipients.length + 1 });
+    }
     const points = [100, 50, 30]; // 1등 100SP, 2등 50SP, 3등 30SP
-    for (let i = 0; i < top3.length; i++) {
-      const u = top3[i];
+    for (let i = 0; i < pointRecipients.length; i++) {
+      const u = pointRecipients[i];
       const userRef = db.collection("users").doc(u.userId);
       const snap = await userRef.get();
       if (!snap.exists) continue;
@@ -2037,7 +2113,7 @@ exports.finalizeWeeklyRanking = onSchedule(
       await userRef.update({ rem_points: rem, acc_points: acc });
       console.log("[finalizeWeeklyRanking] 포인트 지급:", (i + 1) + "등", u.name, "+" + add + "SP → rem_points:", rem, ", acc_points:", acc);
     }
-    console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, top3: top3.map((e) => e.name) });
+    console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, pointRecipients: pointRecipients.map((e) => e.name) });
   }
 );
 
