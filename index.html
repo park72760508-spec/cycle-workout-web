@@ -3089,9 +3089,13 @@
     <div class="modal-overlay" onclick="if(typeof closeScheduleCreateAIModal==='function')closeScheduleCreateAIModal()"></div>
     <div class="modal-content ai-schedule-modal-content">
       <div class="modal-header ai-schedule-modal-header" style="display: flex; align-items: center; justify-content: center; position: relative; padding: 15px 20px;">
-        <img src="assets/img/check.png" alt="스케줄 생성" class="ai-schedule-create-btn" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()" style="position: absolute; left: 20px; width: 24px; height: 24px; cursor: pointer; z-index: 10;" />
+        <button type="button" class="p-2 rounded-lg" onclick="closeScheduleCreateAIModal()" aria-label="닫기" style="position: absolute; left: 20px; width: 2.5em; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        </button>
         <h3 style="margin: 0; text-align: center; flex: 1;">AI 훈련 스케줄 생성</h3>
-        <button type="button" class="modal-close" onclick="closeScheduleCreateAIModal()" style="position: absolute; right: 20px;">&times;</button>
+        <button type="button" class="p-2 rounded-lg" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()" aria-label="스케줄 생성" style="position: absolute; right: 20px; width: 2.5em; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        </button>
       </div>
       <div class="modal-body ai-schedule-modal-body">
         <div class="form-group ai-schedule-form-group">
