@@ -14291,7 +14291,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">AI</span>
               <span className="text-sm font-semibold text-gray-700">AI Coach</span>
             </div>
-            {!aiComment && !aiLoading ? (
+            {aiLoading ? (
+              <div className="text-center py-8">
+                <div className="relative w-28 h-28 mx-auto mb-4">
+                  <div className="absolute inset-0 rounded-full" style={{ border: '8px solid #bbf7d0' }}></div>
+                  <div className="absolute inset-0 rounded-full border-t-transparent animate-spin" style={{ border: '8px solid #22c55e', borderTopColor: 'transparent' }}></div>
+                </div>
+                <div className="text-base font-semibold text-gray-800">AI 분석 중...</div>
+              </div>
+            ) : !aiComment ? (
               <div className="text-center py-4">
                 <button
                   type="button"
@@ -14299,11 +14307,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl min-h-[44px] cursor-pointer transition-opacity hover:opacity-90 active:opacity-80"
                   style={{ backgroundColor: 'rgba(34, 197, 94, 0.25)', color: '#166534' }}
                 >
-                  AI Coach 코맨트 분석하기
+                  AI 라이딩 인사이트 분석
                 </button>
               </div>
-            ) : aiLoading ? (
-              <div className="flex items-center gap-2 text-gray-500 text-sm">로딩 중...</div>
             ) : (
               <div>
                 <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ overflow: 'visible', wordBreak: 'keep-all' }}>{aiComment}</p>
@@ -14315,7 +14321,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl min-h-[44px] cursor-pointer transition-opacity hover:opacity-90 active:opacity-80"
                       style={{ backgroundColor: 'rgba(34, 197, 94, 0.25)', color: '#166534' }}
                     >
-                      AI Coach 코맨트 분석하기
+                      AI 라이딩 인사이트 분석
                     </button>
                   </div>
                 )}
