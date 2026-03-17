@@ -52,6 +52,7 @@
   </script>
   <script src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
   <script src="assets/js/useRiderAnalysis.js"></script>
+  <script src="assets/js/dynamicFtpCalculation.js"></script>
   
   <!-- Firebase v9 Modular SDK (전화번호 인증용) - iPhone 8/Safari iOS 호환: 동적 import, 구조분해 제거 -->
   <script type="module">
@@ -14386,6 +14387,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const [retryCoach, setRetryCoach] = useState(0);
       const [aiLoading, setAiLoading] = useState(false);
       const [streamingComment, setStreamingComment] = useState(null);
+      const [ftpCalcLoading, setFtpCalcLoading] = useState(false);
+      const [ftpModalOpen, setFtpModalOpen] = useState(false);
+      const [ftpCalcResult, setFtpCalcResult] = useState(null);
       const retryLogsRef = useRef(null);
       const aiAnalysisInProgressRef = useRef(false);
       
@@ -16219,6 +16223,126 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 )}
               </DashboardCard>
             </div>
+            
+            <DashboardCard title="나의 동적 FTP 산출" className="mt-3">
+              <ul className="text-xs text-gray-600 space-y-1.5 mb-4">
+                <li className="flex items-start gap-2">
+                  <span>⏱️</span>
+                  <span>6개 구간(1, 5, 10, 20, 40, 60분) PR 파워 데이터 종합</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span>⚖️</span>
+                  <span>구간별 생리학적 신뢰도 반영 (20분 파워 비중 최대)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span>📅</span>
+                  <span>최신 기록 우대 (오래된 기록일수록 반영 비율 감소)</span>
+                </li>
+              </ul>
+              <button
+                type="button"
+                onClick={async function() {
+                  if (ftpCalcLoading || !userProfile || !userProfile.id) return;
+                  setFtpCalcLoading(true);
+                  setFtpCalcResult(null);
+                  try {
+                    var logs = [];
+                    if (typeof window.getUserTrainingLogs === 'function') {
+                      logs = await window.getUserTrainingLogs(userProfile.id, { limit: 400 });
+                      logs = Array.isArray(logs) ? logs : [];
+                    }
+                    if (logs.length === 0 && window.firestore) {
+                      var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
+                      snap.docs.forEach(function(d) {
+                        var dd = d.data();
+                        var o = { id: d.id };
+                        if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+                        logs.push(o);
+                      });
+                    }
+                    var result = window.calculateDynamicFtp ? window.calculateDynamicFtp(logs) : { success: false, error: 'FTP 산출 함수를 불러올 수 없습니다.' };
+                    setFtpCalcResult(result);
+                    setFtpModalOpen(true);
+                  } catch (e) {
+                    setFtpCalcResult({ success: false, error: (e && e.message) || 'FTP 산출 중 오류가 발생했습니다.' });
+                    setFtpModalOpen(true);
+                  } finally {
+                    setFtpCalcLoading(false);
+                  }
+                }}
+                disabled={ftpCalcLoading}
+                className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base"
+              >
+                {ftpCalcLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    산출 중...
+                  </span>
+                ) : (
+                  'FTP 산출하기'
+                )}
+              </button>
+            </DashboardCard>
+            
+            {ftpModalOpen && ftpCalcResult && (
+              <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/50" onClick={function(e) { if (e.target === e.currentTarget) setFtpModalOpen(false); }}>
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={function(e) { e.stopPropagation(); }}>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">동적 FTP 산출 결과</h3>
+                  {ftpCalcResult.success ? (
+                    <>
+                      <p className="text-gray-700 mb-6">
+                        새롭게 산출된 예상 FTP는 <strong className="text-blue-600">{ftpCalcResult.newFtp}W</strong> 입니다. 이 값을 현재 나의 FTP로 업데이트 하시겠습니까?
+                      </p>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={function() { setFtpModalOpen(false); setFtpCalcResult(null); }}
+                          className="flex-1 py-2.5 px-4 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                        >
+                          취소
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async function() {
+                            if (!userProfile || !userProfile.id || !ftpCalcResult.newFtp) return;
+                            try {
+                              var res = await (window.apiUpdateUser || function() { return Promise.resolve({ success: false, error: '함수 없음' }); })(userProfile.id, { ftp: ftpCalcResult.newFtp });
+                              if (res && res.success) {
+                                setUserProfile(function(prev) { return prev ? { ...prev, ftp: ftpCalcResult.newFtp } : prev; });
+                                setStats(function(prev) { return { ...prev, ftp: ftpCalcResult.newFtp }; });
+                                setFtpModalOpen(false);
+                                setFtpCalcResult(null);
+                                var cur = window.currentUser;
+                                if (cur) { cur.ftp = ftpCalcResult.newFtp; try { localStorage.setItem('currentUser', JSON.stringify(cur)); } catch (e) {} }
+                                if (typeof showToast === 'function') showToast('성공적으로 반영되었습니다', 'success');
+                              } else {
+                                alert((res && res.error) || '업데이트에 실패했습니다.');
+                              }
+                            } catch (e) {
+                              alert((e && e.message) || '업데이트 중 오류가 발생했습니다.');
+                            }
+                          }}
+                          className="flex-1 py-2.5 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 active:scale-[0.98] transition-all"
+                        >
+                          FTP 업데이트
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-red-600 mb-6">{ftpCalcResult.error}</p>
+                      <button
+                        type="button"
+                        onClick={function() { setFtpModalOpen(false); setFtpCalcResult(null); }}
+                        className="w-full py-2.5 px-4 border border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                      >
+                        확인
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             
             <RiderDashboardProfile userProfile={userProfile} />
             
