@@ -17150,6 +17150,20 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       <button type="button" class="mobile-result-close-btn" id="btnSubscribeOverlayGo" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px; color: #000; font-size: 1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);">네이버 스토어로 가기</button>
     </div>
   </div>
+
+  <!-- grade=2 전용: 구독 서비스 오픈 예정 안내 팝업 (STELVIO 스타일) -->
+  <div id="subscribeComingSoonModal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10030; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(4px);" onclick="if(event.target===this&&typeof closeSubscribeComingSoonModal==='function')closeSubscribeComingSoonModal();">
+    <div style="position: relative; z-index: 1; padding: 28px 32px; min-width: 280px; max-width: 90%; background: rgba(255, 255, 255, 0.98); border-radius: 16px; border: 1px solid rgba(102, 126, 234, 0.25); box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.1); text-align: center;" onclick="event.stopPropagation();">
+      <h3 style="margin: 0 0 20px 0; font-size: 1.25em; font-weight: 700; color: #2d3748;">STELVIO 구독 서비스 오픈 예정 🚀</h3>
+      <p style="margin: 0 0 24px 0; font-size: 15px; font-weight: 500; color: #475569; line-height: 1.7;">
+        더욱 체계적이고 스마트한 트레이닝을 위한<br>
+        STELVIO 프리미엄 구독 서비스가 곧 시작됩니다.<br>
+        최고의 인도어 라이딩 경험을 준비 중이니 많은 기대 부탁드립니다!
+      </p>
+      <button type="button" id="btnSubscribeComingSoonOk" style="display: block; width: 100%; padding: 12px 24px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35); transition: transform 0.2s, box-shadow 0.2s;">확 인</button>
+    </div>
+  </div>
+
   <script>
   (function() {
     var SUBSCRIBE_URL = 'https://smartstore.naver.com/stelvioai/products/13108603139';
@@ -17165,13 +17179,39 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (m) m.classList.add('hidden');
       };
     }
+    function getGradeForSubscribe() {
+      if (typeof getViewerGrade === 'function') return String(getViewerGrade());
+      var cu = window.currentUser || null;
+      if (!cu) try { cu = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) {}
+      return cu && (cu.grade != null) ? String(cu.grade) : '2';
+    }
+    function openSubscribeComingSoonModal() {
+      var m = document.getElementById('subscribeComingSoonModal');
+      if (m) { m.style.display = 'flex'; m.classList.remove('hidden'); }
+    }
+    function closeSubscribeComingSoonModal() {
+      var m = document.getElementById('subscribeComingSoonModal');
+      if (m) { m.style.display = 'none'; m.classList.add('hidden'); }
+    }
+    window.closeSubscribeComingSoonModal = closeSubscribeComingSoonModal;
     function bindSubscribeButtons() {
       var btn = document.getElementById('btnCareerSubscribe');
       var goBtn = document.getElementById('btnSubscribeOverlayGo');
       var closeBtn = document.getElementById('btnSubscribeOverlayClose');
+      var comingSoonOk = document.getElementById('btnSubscribeComingSoonOk');
       if (btn) btn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); openSubscribeOverlay(); });
-      if (goBtn) goBtn.addEventListener('click', function() { closeSubscribeOverlay(); window.open(SUBSCRIBE_URL, '_blank'); });
+      if (goBtn) goBtn.addEventListener('click', function() {
+        var grade = getGradeForSubscribe();
+        if (grade === '1') {
+          closeSubscribeOverlay();
+          window.open(SUBSCRIBE_URL, '_blank');
+        } else {
+          closeSubscribeOverlay();
+          openSubscribeComingSoonModal();
+        }
+      });
       if (closeBtn) closeBtn.addEventListener('click', function() { closeSubscribeOverlay(); });
+      if (comingSoonOk) comingSoonOk.addEventListener('click', function() { closeSubscribeComingSoonModal(); });
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', bindSubscribeButtons);
