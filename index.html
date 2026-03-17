@@ -16272,7 +16272,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }}
                 disabled={ftpCalcLoading}
                 className={"w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none " + (ftpCalcLoading ? "opacity-70 cursor-not-allowed" : "cursor-pointer")}
-                style={{ background: 'linear-gradient(135deg, #2E74E8 0%, #1d5bb8 100%)', boxShadow: '0 2px 8px rgba(46, 116, 232, 0.35)' }}
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }}
               >
                 {ftpCalcLoading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -16287,8 +16287,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             {ftpModalOpen && ftpCalcResult && (
               <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }} onClick={function(e) { if (e.target === e.currentTarget) setFtpModalOpen(false); }}>
-                <div className="w-full max-w-md my-4" style={{ background: 'rgba(255,255,255,0.98)', borderRadius: '16px', border: '1px solid rgba(46, 116, 232, 0.25)', boxShadow: '0 16px 48px rgba(46, 116, 232, 0.2)', padding: '24px 28px', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
-                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#2d3748', borderBottom: '2px solid #2E74E8', paddingBottom: '10px' }}>동적 FTP 산출 결과</h3>
+                <div className="w-full max-w-md my-4" style={{ background: 'rgba(255,255,255,0.98)', borderRadius: '16px', border: '1px solid rgba(102, 126, 234, 0.25)', boxShadow: '0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.1)', padding: '24px 28px', maxHeight: '90vh', overflowY: 'auto' }} onClick={function(e) { e.stopPropagation(); }}>
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#2d3748', borderBottom: '2px solid #667eea', paddingBottom: '10px' }}>동적 FTP 산출 결과</h3>
                   {ftpCalcResult.success ? (
                     <>
                       <div className="mb-4 overflow-x-auto">
@@ -16311,12 +16311,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                               return (
                                 <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', opacity: row.used ? 1 : 0.5 }}>
                                   <td style={{ padding: '6px', color: '#334155' }}>{row.minutes}분</td>
-                                  <td style={{ padding: '6px', textAlign: 'right', color: row.used ? '#2E74E8' : '#94a3b8' }}>{row.power > 0 ? row.power : '-'}</td>
+                                  <td style={{ padding: '6px', textAlign: 'right', color: row.used ? '#667eea' : '#94a3b8' }}>{row.power > 0 ? row.power : '-'}</td>
                                   <td style={{ padding: '6px', textAlign: 'center', color: '#64748b', fontSize: '11px' }}>{dateFmt}</td>
                                   <td style={{ padding: '6px', textAlign: 'right', color: row.used ? '#334155' : '#94a3b8' }}>{row.used ? row.eFtp : '-'}</td>
                                   <td style={{ padding: '6px', textAlign: 'right', color: '#64748b' }}>{row.weight}</td>
                                   <td style={{ padding: '6px', textAlign: 'right', color: '#64748b' }}>{row.used ? row.timeDecay : '-'}</td>
-                                  <td style={{ padding: '6px', textAlign: 'right', color: row.used ? '#2E74E8' : '#94a3b8', fontWeight: 600 }}>{row.used ? appliedW.toFixed(2) : '-'}</td>
+                                  <td style={{ padding: '6px', textAlign: 'right', color: row.used ? '#667eea' : '#94a3b8', fontWeight: 600 }}>{row.used ? appliedW.toFixed(2) : '-'}</td>
                                 </tr>
                               );
                             })}
@@ -16325,7 +16325,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                         <p className="text-xs mt-2" style={{ color: '#94a3b8' }}>W: 신뢰도 가중치 · D: 시간감쇠(최신 우대) · W×D: 최종 적용 가중치</p>
                       </div>
                       <p className="text-sm mb-5" style={{ color: '#475569', lineHeight: 1.6 }}>
-                        새롭게 산출된 예상 FTP는 <strong style={{ color: '#2E74E8', fontSize: '1.1em' }}>{ftpCalcResult.newFtp}W</strong> 입니다. 이 값을 현재 나의 FTP로 업데이트 하시겠습니까?
+                        새롭게 산출된 예상 FTP는 <strong style={{ color: '#667eea', fontSize: '1.1em' }}>{ftpCalcResult.newFtp}W</strong> 입니다. 이 값을 현재 나의 FTP로 업데이트 하시겠습니까?
                       </p>
                       <div className="flex gap-3">
                         <button
@@ -16356,7 +16356,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                               alert((e && e.message) || '업데이트 중 오류가 발생했습니다.');
                             }
                           }}
-                          style={{ flex: 1, padding: '12px 20px', fontSize: '15px', fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg, #2E74E8 0%, #1d5bb8 100%)', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(46, 116, 232, 0.35)' }}
+                          style={{ flex: 1, padding: '12px 20px', fontSize: '15px', fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }}
                         >
                           FTP 업데이트
                         </button>
@@ -16368,7 +16368,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       <button
                         type="button"
                         onClick={function() { setFtpModalOpen(false); setFtpCalcResult(null); }}
-                        style={{ width: '100%', padding: '12px 24px', fontSize: '15px', fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg, #2E74E8 0%, #1d5bb8 100%)', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(46, 116, 232, 0.35)' }}
+                        style={{ width: '100%', padding: '12px 24px', fontSize: '15px', fontWeight: 600, color: '#fff', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }}
                       >
                         확인
                       </button>
