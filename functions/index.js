@@ -1930,10 +1930,13 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
     if (isStrava) byDate[dateStr].strava += tss;
     else byDate[dateStr].stelvio += tss;
   });
+  const TSS_PER_DAY_CHEAT_THRESHOLD = 500; // 1일 500 이상 TSS는 치팅으로 간주하여 합산 제외
   let total = 0;
   Object.keys(byDate).forEach((dateStr) => {
     const o = byDate[dateStr];
-    total += o.strava > 0 ? o.strava : o.stelvio;
+    const dayTss = o.strava > 0 ? o.strava : o.stelvio;
+    if (dayTss >= TSS_PER_DAY_CHEAT_THRESHOLD) return; // 해당 날짜 합산 제외
+    total += dayTss;
   });
   return total;
 }
