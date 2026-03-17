@@ -1615,4 +1615,53 @@ ${workoutsContext}
     }
   };
 
+  /**
+   * 훈련 스케줄 초기화 (Firebase RTDB 삭제 + 화면 재로딩)
+   */
+  window.resetAISchedule = async function () {
+    var userId = getUserIdForRTDB() || getUserId();
+    if (!userId) {
+      if (typeof showToast === 'function') showToast('사용자 정보를 찾을 수 없습니다.', 'error');
+      return;
+    }
+    try {
+      var db = getDb();
+      if (!db) throw new Error('Firebase Database를 사용할 수 없습니다.');
+      var ref = db.ref('users/' + userId + '/training_schedule');
+      await ref.set(null);
+      aiScheduleData = null;
+      try { localStorage.removeItem('aiScheduleFallback_' + userId); } catch (e) {}
+      if (typeof closeAIScheduleResetModal === 'function') closeAIScheduleResetModal();
+      if (typeof loadAIScheduleScreen === 'function') await loadAIScheduleScreen();
+      if (typeof showToast === 'function') showToast('훈련 스케줄이 초기화되었습니다.');
+    } catch (e) {
+      console.error('[AI스케줄] resetAISchedule 실패:', e);
+      if (typeof showToast === 'function') showToast('초기화에 실패했습니다. ' + (e.message || ''), 'error');
+    }
+  };
+
+  window.openAIScheduleResetModal = function () {
+    var m = document.getElementById('aiScheduleResetModal');
+    if (m) { m.style.display = 'flex'; m.classList.remove('hidden'); }
+  };
+
+  window.closeAIScheduleResetModal = function () {
+    var m = document.getElementById('aiScheduleResetModal');
+    if (m) { m.style.display = 'none'; m.classList.add('hidden'); }
+  };
+
+  function bindAIScheduleResetModal() {
+    var cancelBtn = document.getElementById('btnAIScheduleResetCancel');
+    var confirmBtn = document.getElementById('btnAIScheduleResetConfirm');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeAIScheduleResetModal);
+    if (confirmBtn) confirmBtn.addEventListener('click', function () {
+      if (typeof window.resetAISchedule === 'function') window.resetAISchedule();
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindAIScheduleResetModal);
+  } else {
+    bindAIScheduleResetModal();
+  }
+
 })();
