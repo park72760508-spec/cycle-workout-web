@@ -2882,9 +2882,14 @@
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
       </button>
       <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="schedule-title-icon"> 훈련 스케줄</h1>
-      <button type="button" class="p-2 rounded-lg" onclick="if(typeof openScheduleCreateAIModal==='function')openScheduleCreateAIModal()" aria-label="스케줄 작성" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-      </button>
+      <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+        <button type="button" class="p-2 rounded-lg" onclick="if(typeof openScheduleCreateAIModal==='function')openScheduleCreateAIModal()" aria-label="스케줄 작성" style="width: 2.5em; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        </button>
+        <button type="button" id="btnAIScheduleReset" class="p-2 rounded-lg" onclick="if(typeof openAIScheduleResetModal==='function')openAIScheduleResetModal()" aria-label="초기화" title="훈련 스케줄 초기화" style="width: 2.5em; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
+          <img src="assets/img/reset.png" alt="초기화" style="width: 24px; height: 24px; object-fit: contain;" />
+        </button>
+      </div>
     </div>
     <p class="subtitle" id="aiScheduleSubHeader" style="text-align: center; margin: 0 0 12px; color: #666; font-size: 0.9em;">스케줄을 생성해주세요</p>
     
@@ -2897,6 +2902,17 @@
     
     <div class="ai-schedule-logo-wrap">
       <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="ai-schedule-logo" />
+    </div>
+  </div>
+
+  <!-- 훈련 스케줄 초기화 확인 팝업 (STELVIO 스타일) -->
+  <div id="aiScheduleResetModal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10035; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(4px);" onclick="if(event.target===this&&typeof closeAIScheduleResetModal==='function')closeAIScheduleResetModal();">
+    <div style="position: relative; z-index: 1; padding: 28px 32px; min-width: 280px; max-width: 90%; background: rgba(255, 255, 255, 0.98); border-radius: 16px; border: 1px solid rgba(102, 126, 234, 0.25); box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.1); text-align: center;" onclick="event.stopPropagation();">
+      <p style="margin: 0 0 24px 0; font-size: 16px; font-weight: 600; color: #2d3748; line-height: 1.5;">훈련 스케줄을 초기화 하시겠습니까?</p>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <button type="button" id="btnAIScheduleResetCancel" style="flex: 1; padding: 12px 20px; font-size: 15px; font-weight: 600; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 10px; cursor: pointer;">취소</button>
+        <button type="button" id="btnAIScheduleResetConfirm" style="flex: 1; padding: 12px 20px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);">확인</button>
+      </div>
     </div>
   </div>
 
