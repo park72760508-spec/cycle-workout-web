@@ -3134,6 +3134,30 @@ button[aria-disabled="true"] {
   display: none !important;
 }
 
+/* 라이딩 상세 모달: 스크롤이 배경(라이딩 일지)으로 전달되지 않도록, 모달 내부만 스크롤 */
+/* 모달 열림 시 배경(라이딩 일지) 스크롤 차단 */
+body:has(#trainingDetailModal:not(.hidden)) {
+  overflow: hidden !important;
+}
+#trainingDetailModal:not(.hidden) {
+  overflow: hidden;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+#trainingDetailModal .training-detail-modal-content {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+}
+#trainingDetailModal .training-detail-body {
+  touch-action: pan-y !important;
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+}
+
 .training-detail-modal-content {
   position: relative;
   background: #ffffff; /* 대시보드 추천 디자인: 흰색 배경 */
@@ -5200,6 +5224,25 @@ html.is-android #workoutScreen .workout-card { touch-action: auto !important; }
 html.is-android #workoutScreen .workout-card__graph { touch-action: auto !important; }
 html.is-android #workoutScreen .workout-cards-grid { touch-action: auto !important; }
 html.is-android #workoutScreen .workout-list-view { touch-action: auto !important; }
+
+/* ========== Android: 라이딩 상세 정보 팝업 스크롤 제한 해제 (배경 일지 스크롤 방지) ========== */
+html.is-android #trainingDetailModal:not(.hidden) {
+  touch-action: auto !important;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+html.is-android #trainingDetailModal .training-detail-modal-content {
+  touch-action: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+html.is-android #trainingDetailModal .training-detail-body {
+  touch-action: auto !important;
+  overflow-y: scroll !important;
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* ========== 워크아웃 화면 모바일 반응형 (768px 이하) ========== */
 @media (max-width: 768px) {
