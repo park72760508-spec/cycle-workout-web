@@ -16060,19 +16060,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       
       return (
         <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 scrollbar-hide relative">
-          {/* AI 분석 중 오버레이 스피너 */}
-          {aiLoading && (
-            <div className="flex items-center justify-center bg-white" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', minHeight: '100vh', zIndex: 9999 }}>
-              <div className="text-center">
-                <div className="relative w-24 h-24 mx-auto mb-6">
-                  <div className="absolute inset-0 rounded-full" style={{ border: '8px solid #bbf7d0' }}></div>
-                  <div className="absolute inset-0 rounded-full border-t-transparent animate-spin" style={{ border: '8px solid #22c55e', borderTopColor: 'transparent' }}></div>
-                </div>
-                <div className="text-lg font-semibold text-gray-800 mb-2">AI 분석 중...</div>
-                <div className="text-sm text-gray-600">잠시만 기다려주세요</div>
-              </div>
-            </div>
-          )}
           <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3">
             <div className="flex items-center justify-between">
               <button
@@ -16137,7 +16124,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </div>
             
             <DashboardCard className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
-              {!coachData && logsLoaded && !logsLoading && !logsLoadError && recentLogs.length > 0 ? (
+              {aiLoading ? (
+                <div className="text-center py-8">
+                  <div className="relative w-28 h-28 mx-auto mb-4">
+                    <div className="absolute inset-0 rounded-full" style={{ border: '8px solid #bbf7d0' }}></div>
+                    <div className="absolute inset-0 rounded-full border-t-transparent animate-spin" style={{ border: '8px solid #22c55e', borderTopColor: 'transparent' }}></div>
+                  </div>
+                  <div className="text-base font-semibold text-gray-800">AI 분석 중...</div>
+                </div>
+              ) : !coachData && logsLoaded && !logsLoading && !logsLoadError && recentLogs.length > 0 ? (
                 <div className="text-center py-6">
                   <button
                     type="button"
