@@ -14114,6 +14114,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const [aiComment, setAiComment] = useState('');
       const [aiLoading, setAiLoading] = useState(false);
       const [aiError, setAiError] = useState(false);
+      const [runAICommentAnalysis, setRunAICommentAnalysis] = useState(false);
       
       useEffect(function fetchRiderLogs() {
         if (!userProfile || !userProfile.id) {
@@ -14174,7 +14175,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }, [userProfile]);
       
       useEffect(function fetchAIComment() {
-        if (!capabilityScores) return;
+        if (!capabilityScores || !runAICommentAnalysis) return;
         var isMounted = true;
         setAiLoading(true);
         setAiError(false);
@@ -14192,11 +14193,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               setAiError(true);
             }
           } finally {
-            if (isMounted) setAiLoading(false);
+            if (isMounted) {
+              setAiLoading(false);
+              setRunAICommentAnalysis(false);
+            }
           }
         })();
         return function() { isMounted = false; };
-      }, [capabilityScores]);
+      }, [capabilityScores, runAICommentAnalysis]);
       
       var Recharts = typeof window !== 'undefined' ? window.Recharts : null;
       var RadarChart = Recharts && Recharts.RadarChart;
@@ -14287,10 +14291,35 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-semibold">AI</span>
               <span className="text-sm font-semibold text-gray-700">AI Coach</span>
             </div>
-            {aiLoading ? (
+            {!aiComment && !aiLoading ? (
+              <div className="text-center py-4">
+                <button
+                  type="button"
+                  onClick={() => setRunAICommentAnalysis(true)}
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl min-h-[44px] cursor-pointer transition-opacity hover:opacity-90 active:opacity-80"
+                  style={{ backgroundColor: 'rgba(34, 197, 94, 0.25)', color: '#166534' }}
+                >
+                  AI Coach 코맨트 분석하기
+                </button>
+              </div>
+            ) : aiLoading ? (
               <div className="flex items-center gap-2 text-gray-500 text-sm">로딩 중...</div>
             ) : (
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ overflow: 'visible', wordBreak: 'keep-all' }}>{aiComment}</p>
+              <div>
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ overflow: 'visible', wordBreak: 'keep-all' }}>{aiComment}</p>
+                {aiError && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => { setAiComment(''); setRunAICommentAnalysis(true); }}
+                      className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl min-h-[44px] cursor-pointer transition-opacity hover:opacity-90 active:opacity-80"
+                      style={{ backgroundColor: 'rgba(34, 197, 94, 0.25)', color: '#166534' }}
+                    >
+                      AI Coach 코맨트 분석하기
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -14405,6 +14434,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const [growthTrendData, setGrowthTrendData] = useState([]);
       const [yearlyPowerPrData, setYearlyPowerPrData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
+      const [runConditionAnalysis, setRunConditionAnalysis] = useState(false);
       const [aiLoading, setAiLoading] = useState(false);
       const [streamingComment, setStreamingComment] = useState(null);
       const [ftpCalcLoading, setFtpCalcLoading] = useState(false);
@@ -15325,8 +15355,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             console.log('[Mobile Debug] [AI] Analysis already in progress, skipping...');
             return;
           }
-          if (coachData && !coachData.error_reason && retryCoach === 0) {
-            console.log('[Mobile Debug] [AI] Analysis result already exists, skipping...');
+          if (coachData && !coachData.error_reason && !runConditionAnalysis) {
             setAiLoading(false);
             return;
           }
@@ -15349,6 +15378,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               error_reason: logsLoadError
             });
             setAiLoading(false);
+            setRunConditionAnalysis(false);
             return;
           }
           
@@ -15723,6 +15753,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 setStreamingComment(null);
                 setCoachData(analysis);
                 setAiLoading(false);
+                setRunConditionAnalysis(false);
                 if (!isFallback && analysis && !analysis.error_reason) {
                   try {
                     localStorage.setItem(cacheKey, JSON.stringify({ data: analysis, timestamp: Date.now() }));
@@ -15786,6 +15817,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   recommended_workout: 'Active Recovery (Z1)',
                   error_reason: errorDisplay
                 });
+                setAiLoading(false);
+                setRunConditionAnalysis(false);
               }
             } else {
               if (!isMounted) return;
@@ -15797,6 +15830,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 recommended_workout: 'Active Recovery (Z1)',
                 error_reason: 'callGeminiCoach 함수를 찾을 수 없습니다.'
               });
+              setAiLoading(false);
+              setRunConditionAnalysis(false);
             }
           } catch (error) {
             if (!isMounted) return;
@@ -15840,6 +15875,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               recommended_workout: 'Active Recovery (Z1)',
               error_reason: errMsg
             });
+            setRunConditionAnalysis(false);
           } finally {
             // [Mobile Bulletproof] 3. ALWAYS Stop Spinner (무한 로딩 방지)
             // Clear timeout if still active
@@ -15850,12 +15886,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             aiAnalysisInProgressRef.current = false;
             if (isMounted) {
               setAiLoading(false);
+              setRunConditionAnalysis(false);
             }
           }
         }
         
         if (!userProfile) {
           setAiLoading(false);
+          setRunConditionAnalysis(false);
           return;
         }
         if (!logsLoaded || logsLoading) {
@@ -15875,9 +15913,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           return;
         }
         var logs = Array.isArray(recentLogs) ? recentLogs : [];
-        if (logs.length > 0) {
-          fetchCoachAnalysis();
-        } else {
+        if (logs.length === 0) {
           setCoachData({
             condition_score: 50,
             training_status: 'Building Base',
@@ -15887,7 +15923,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             error_reason: 'no_logs'
           });
           setAiLoading(false);
+          setRunConditionAnalysis(false);
+          return;
         }
+        if (!runConditionAnalysis) {
+          setAiLoading(false);
+          return;
+        }
+        fetchCoachAnalysis();
         
         return function cleanup() {
           isMounted = false;
@@ -15904,7 +15947,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             currentTimeoutId = null;
           }
         };
-      }, [userProfile, recentLogs, retryCoach, logsLoaded, logsLoading, logsLoadError]);
+      }, [userProfile, recentLogs, retryCoach, runConditionAnalysis, logsLoaded, logsLoading, logsLoadError]);
       
       // AI 페어링 표시등: API 키 등록 여부만 사용. 등록됨 → 초록(연결됨), 미등록 → 회색(연결 대기).
       useEffect(function apiKeyIndicatorEffect() {
@@ -16094,7 +16137,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </div>
             
             <DashboardCard className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
-              {coachData ? (
+              {!coachData && logsLoaded && !logsLoading && !logsLoadError && recentLogs.length > 0 ? (
+                <div className="text-center py-6">
+                  <button
+                    type="button"
+                    onClick={() => setRunConditionAnalysis(true)}
+                    className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl min-h-[44px] cursor-pointer transition-opacity hover:opacity-90 active:opacity-80"
+                    style={{ backgroundColor: 'rgba(34, 197, 94, 0.25)', color: '#166534' }}
+                  >
+                    컨디션 분석 하기
+                  </button>
+                </div>
+              ) : coachData ? (
                 <>
                   <div className="flex items-center justify-center mb-4">
                     <CircularProgress value={coachData.condition_score} />
@@ -16139,11 +16193,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                         type="button"
                         onClick={() => {
                           try {
-                            // v3 캐시 키 접두사로 해당 사용자 캐시 무효화 (재분석 시 캐시 미사용)
                             var prefix = 'coach_analysis_v3_' + (userProfile && userProfile.id) + '_';
                             Object.keys(localStorage).forEach(function(k) { if (k.indexOf(prefix) === 0) localStorage.removeItem(k); });
                           } catch (e) {}
-                          setRetryCoach(function(c) { return c + 1; });
+                          setRunConditionAnalysis(true);
                         }}
                         className="inline-block bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-amber-200 active:opacity-80 min-h-[44px]"
                       >
