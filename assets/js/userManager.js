@@ -23,6 +23,39 @@ function getViewerGrade() {
   return '2'; // 기본은 일반
 }
 
+/* ==========================================================
+   FTP 최소값: 몸무게의 1.8배 (사용자 등록 시)
+   - 최소값 = Math.round(weight * 1.8)
+   - 디폴트: 몸무게 입력 시 FTP에 1.8배 자동 입력
+   - 최소입력값 사용 시 확인 메시지 표시
+============================================================ */
+function getFtpMinFromWeight(weight) {
+  const w = parseFloat(weight);
+  if (!w || w <= 0) return 50;
+  return Math.max(50, Math.round(w * 1.8));
+}
+function syncFtpFromWeight(ftpId, weightId) {
+  const ftpEl = document.getElementById(ftpId);
+  const weightEl = document.getElementById(weightId);
+  if (!ftpEl || !weightEl) return;
+  const w = parseFloat(weightEl.value);
+  if (!w || w <= 0) return;
+  const minFtp = getFtpMinFromWeight(w);
+  ftpEl.setAttribute('min', String(minFtp));
+  if (!ftpEl.value || parseInt(ftpEl.value) < minFtp) {
+    ftpEl.value = String(minFtp);
+  }
+}
+function applyFtpMinFromWeight(ftp, weight) {
+  const minFtp = getFtpMinFromWeight(weight);
+  if (ftp < minFtp) return { ftp: minFtp, usedMin: true };
+  return { ftp: ftp, usedMin: false };
+}
+if (typeof window !== 'undefined') {
+  window.getFtpMinFromWeight = getFtpMinFromWeight;
+  window.syncFtpFromWeight = syncFtpFromWeight;
+  window.applyFtpMinFromWeight = applyFtpMinFromWeight;
+}
 
 /* ==========================================================
    사용자 관리 모듈 (userManager.js)
@@ -3015,11 +3048,21 @@ async function performUpdateFromModal() {
   const name = document.getElementById('editUserName')?.value.trim();
   const contactRaw = document.getElementById('editUserContact')?.value.trim();
   const contactDB  = formatPhoneForDB(contactRaw);
-  const ftp = parseInt(document.getElementById('editUserFTP')?.value);
+  let ftp = parseInt(document.getElementById('editUserFTP')?.value);
   const weight = parseFloat(document.getElementById('editUserWeight')?.value);
   const birthYear = parseInt(document.getElementById('editUserBirthYear')?.value);
   const gender = document.getElementById('editUserGender')?.value;
   const challenge = document.getElementById('editUserChallenge')?.value || 'Fitness';
+
+  // FTP 최소값 적용 (몸무게의 1.8배)
+  let ftpUsedMin = false;
+  if (weight && typeof getFtpMinFromWeight === 'function') {
+    const minFtp = getFtpMinFromWeight(weight);
+    if (ftp < minFtp) {
+      ftp = minFtp;
+      ftpUsedMin = true;
+    }
+  }
 
   if (!name || !ftp || !weight || !birthYear || !gender) {
     // 오버레이 숨기기
@@ -3071,6 +3114,9 @@ async function performUpdateFromModal() {
     }
 
     if (result.success) {
+      if (ftpUsedMin && typeof showToast === 'function') {
+        showToast('FTP가 최소입력값(몸무게의 1.8배)으로 설정되었습니다.');
+      }
       showToast('사용자 정보가 수정되었습니다.');
       closeEditUserModal();
       loadUsers();
@@ -3148,6 +3194,9 @@ function showCompleteUserInfoModal(userData) {
   }
   if (ftpEl) ftpEl.value = userData.ftp || '';
   if (weightEl) weightEl.value = userData.weight || '';
+  if (weightEl && weightEl.value && typeof syncFtpFromWeight === 'function') {
+    syncFtpFromWeight('completeUserFTP', 'completeUserWeight');
+  }
   if (birthYearEl) birthYearEl.value = userData.birth_year || userData.birthYear || '';
   if (genderEl) genderEl.value = userData.gender || userData.sex || '';
   if (challengeEl) challengeEl.value = userData.challenge || 'Fitness';
@@ -3244,12 +3293,19 @@ async function completeUserInfo() {
     showToast('성별을 선택해주세요.');
     return;
   }
-  if (!ftp || ftp < 50 || ftp > 600) {
-    showToast('올바른 FTP 값을 입력해주세요. (50-600W)');
-    return;
-  }
   if (!weight || weight < 30 || weight > 200) {
     showToast('올바른 체중을 입력해주세요. (30-200kg)');
+    return;
+  }
+  const minFtp = getFtpMinFromWeight(weight);
+  let ftpToUse = ftp;
+  let ftpUsedMin = false;
+  if (!ftpToUse || ftpToUse < minFtp) {
+    ftpToUse = minFtp;
+    ftpUsedMin = true;
+  }
+  if (ftpToUse > 600) {
+    showToast('FTP는 600 이하여야 합니다.');
     return;
   }
   if (!challenge) {
@@ -3270,7 +3326,7 @@ async function completeUserInfo() {
     // 사용자 정보 업데이트 (3개월 연장 + 나이·성별 포함)
     const updateData = {
       contact: contactDB,
-      ftp: ftp,
+      ftp: ftpToUse,
       weight: weight,
       birth_year: birthYear,
       gender: gender,
@@ -3306,6 +3362,9 @@ async function completeUserInfo() {
       
       // 환영 오버레이 표시 (백만킬로 아카데미 특별이벤트)
       setTimeout(() => {
+        if (ftpUsedMin) {
+          showToast('FTP가 최소입력값(몸무게의 1.8배)으로 설정되었습니다.');
+        }
         if (typeof showUserWelcomeModal === 'function') {
           showUserWelcomeModal(window.currentUser?.name || '사용자');
         } else {

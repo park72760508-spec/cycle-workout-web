@@ -7981,6 +7981,15 @@ async function handleNewUserSubmit(event) {
     challenge: document.getElementById('newUserChallenge')?.value || 'Fitness'
   };
   
+  // FTP 최소값 적용 (몸무게의 1.8배)
+  if (formData.weight && typeof getFtpMinFromWeight === 'function') {
+    const minFtp = getFtpMinFromWeight(formData.weight);
+    if (formData.ftp < minFtp) {
+      formData.ftp = minFtp;
+      formData.ftpUsedMin = true;
+    }
+  }
+  
   // 유효성 검사
   if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
     if (typeof showToast === 'function') {
@@ -8047,6 +8056,9 @@ async function handleNewUserSubmit(event) {
       
       // 성공 메시지
       if (typeof showToast === 'function') {
+        if (formData.ftpUsedMin) {
+          showToast('FTP가 최소입력값(몸무게의 1.8배)으로 설정되었습니다.');
+        }
         showToast(`${formData.name}님 등록 완료! 🎉`);
       }
       
