@@ -2604,7 +2604,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   }
   entries.sort((a, b) => b.wkg - a.wkg);
   const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
-  const byCategory = { Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  const byCategory = { Supremo: withRank.slice(0, 10), Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
   withRank.forEach((e) => {
     if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
   });
@@ -2706,7 +2706,7 @@ exports.getPeakPowerRanking = onRequest(
         let out = { success: true, byCategory: data.byCategory, startStr, endStr, period, durationType, gender, cached: true };
         if (uid) {
           const cat = data.byCategory;
-          const cats = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+          const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
           let current = null, nextUser = null;
           for (const c of cats) {
             const arr = cat?.[c] || [];
@@ -2736,7 +2736,7 @@ exports.getPeakPowerRanking = onRequest(
 
     let out = { success: true, byCategory, startStr, endStr, period, durationType, gender };
     if (uid) {
-      const cats = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+      const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
       let current = null, nextUser = null;
       for (const c of cats) {
         const arr = byCategory[c] || [];
@@ -2804,7 +2804,7 @@ exports.getOvertakeAnalysis = onRequest(
 
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-      const cats = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+      const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
       let current = null;
       let rival = null;
       for (const c of cats) {
