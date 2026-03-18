@@ -11700,13 +11700,47 @@ function showWorkoutRecommendationModal() {
       <div class="ai-loading-container">
         <div class="ai-workout-spinner-wrap">
           <div class="ai-workout-spinner"></div>
-          <span class="ai-workout-spinner-inner">분석중...</span>
+          <span class="ai-workout-spinner-inner">분석 중...</span>
         </div>
         <div class="ai-loading-text">
           <div class="ai-title">AI 퍼포먼스 분석 중...</div>
+          <div class="ai-status">
+            <span class="ai-status-item active">훈련 목적 분석 중</span>
+            <span class="ai-status-item">몸상태 데이터 처리 중</span>
+            <span class="ai-status-item">훈련 이력 패턴 분석 중</span>
+            <span class="ai-status-item">최적 카테고리 선정 중</span>
+            <span class="ai-status-item">워크아웃 프로그램 작성 중</span>
+          </div>
         </div>
       </div>
     `;
+    
+    // AI 상태 텍스트 순환 애니메이션
+    let statusIndex = 0;
+    const statusItems = document.querySelectorAll('#workoutRecommendationContent .ai-status-item');
+    if (statusItems.length > 0) {
+      const statusInterval = setInterval(() => {
+        statusItems.forEach((item, index) => {
+          item.classList.remove('active');
+          if (index === statusIndex) {
+            item.classList.add('active');
+          }
+        });
+        statusIndex = (statusIndex + 1) % statusItems.length;
+      }, 1500);
+      
+      // 모달이 닫히면 인터벌 정리
+      const cleanup = () => {
+        clearInterval(statusInterval);
+        modal.removeEventListener('click', cleanup);
+      };
+      
+      // 모달 닫기 버튼 클릭 시 정리
+      const closeBtn = modal.querySelector('.modal-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', cleanup);
+      }
+    }
   }
 }
 
