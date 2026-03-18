@@ -7022,7 +7022,7 @@
           html += '<div class="' + rowClass + '">';
           if (categoryRank <= 3) html += '<span class="stelvio-rank-crown">' + medals[categoryRank - 1] + '</span>';
           html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
-          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span><span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span></span>';
+          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span>' + (cat !== 'Supremo' ? '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span>' : '') + '</span>';
           html += '<span class="stelvio-rank-wkg">' + wkg + '</span>';
           html += '</div>';
         });
