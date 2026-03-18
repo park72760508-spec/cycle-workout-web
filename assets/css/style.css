@@ -15304,7 +15304,7 @@ html.is-android #trainingDetailModal .training-detail-body {
   font-size: 1.4em;
   font-weight: 700;
   color: #00d4aa;
-  margin: 0;
+  margin: 0 0 24px 0;
   text-shadow: 
     0 0 10px rgba(0, 212, 170, 0.5),
     0 0 20px rgba(0, 212, 170, 0.3);
