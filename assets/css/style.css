@@ -15240,6 +15240,40 @@ html.is-android #trainingDetailModal .training-detail-body {
   transform: rotate(90deg);
 }
 
+/* AI 워크아웃 추천: 큰 녹색 원 스피너 + 내부 "분석중..." */
+#workoutRecommendationModal .ai-workout-spinner-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#workoutRecommendationModal .ai-workout-spinner {
+  position: absolute;
+  inset: 0;
+  width: 120px;
+  height: 120px;
+  border: 6px solid rgba(0, 212, 170, 0.25);
+  border-top-color: #00d4aa;
+  border-right-color: #00a88a;
+  border-radius: 50%;
+  animation: aiWorkoutSpinnerSpin 0.85s linear infinite;
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.5), 0 0 40px rgba(0, 212, 170, 0.25);
+}
+#workoutRecommendationModal .ai-workout-spinner-inner {
+  position: relative;
+  z-index: 2;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #00d4aa;
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+@keyframes aiWorkoutSpinnerSpin {
+  to { transform: rotate(360deg); }
+}
+
 /* AI 로딩 컨테이너를 개인훈련 대시보드 스타일로 조정 (애니메이션 유지) */
 #workoutRecommendationModal .ai-loading-container {
   display: flex;
@@ -15266,11 +15300,11 @@ html.is-android #trainingDetailModal .training-detail-body {
   position: relative;
 }
 
-#workoutRecommendationModal .ai-title {
+#workoutRecommendationModal .ai-loading-text .ai-title {
   font-size: 1.4em;
   font-weight: 700;
   color: #00d4aa;
-  margin-bottom: 24px;
+  margin: 0;
   text-shadow: 
     0 0 10px rgba(0, 212, 170, 0.5),
     0 0 20px rgba(0, 212, 170, 0.3);
