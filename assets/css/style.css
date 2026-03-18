@@ -3429,19 +3429,24 @@ body:has(#trainingDetailModal:not(.hidden)) {
 /* STELVIO 랭킹 보드 진입 버튼 - 사용자 인증 시작하기 버튼과 동일한 테두리 디자인 */
 .stelvio-ranking-board-entry-btn {
   width: 100%;
-  max-width: 276px;
+  max-width: 320px;
   padding: 10px 12px;
   border: none;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0; /* 이미지 좌우 여백 없음 */
+  gap: 8px;
   margin-bottom: calc((10px + 1em + 10px) / 5); /* 버튼 외부 아래 여백 = 버튼 높이의 1/5 */
+}
+.stelvio-ranking-btn-left,
+.stelvio-ranking-btn-right {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .stelvio-ranking-btn-logo {
   margin: 0;
