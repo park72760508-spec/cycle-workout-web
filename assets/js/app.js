@@ -12960,6 +12960,7 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
           <div class="recommendation-reason-wrapper" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
             <p class="recommendation-reason" style="color: #ffffff; font-size: 0.665em; line-height: 1.7; margin: 0; word-break: break-word; white-space: pre-wrap;">${rec.reason || '추천 이유 없음'}</p>
           </div>
+          ${index < 3 ? `<div class="recommendation-graph recommendation-graph--schedule-detail" id="recommendation-graph-${workout.id}"></div>` : ''}
           ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.63em; line-height: 1.6; margin: 0 0 12px 0; word-break: break-word;">${workout.description}</p>` : ''}
           <div class="recommendation-action" style="display: flex; justify-content: center; width: 100%;">
             <button class="result-close-btn" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}" style="width: 100%; max-width: 200px; padding: 12px 20px; font-size: 1em; font-weight: bold; border-radius: 8px;">
@@ -12977,6 +12978,16 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   `;
   
   contentDiv.innerHTML = html;
+  
+  // 1~3순위 워크아웃 그래프 렌더 (훈련 스케줄 상세와 동일 디자인)
+  recommendations.slice(0, 3).forEach((rec, idx) => {
+    const workout = workoutMap[rec.workoutId];
+    if (!workout || !workout.segments || !Array.isArray(workout.segments) || workout.segments.length === 0) return;
+    const graphEl = document.getElementById('recommendation-graph-' + workout.id);
+    if (graphEl && typeof renderSegmentedWorkoutGraph === 'function') {
+      renderSegmentedWorkoutGraph(graphEl, workout.segments, { maxHeight: 160 });
+    }
+  });
 }
 
 // 추천된 워크아웃 선택
