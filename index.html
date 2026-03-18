@@ -6981,7 +6981,7 @@
     }
 
     function renderStelvioRankingError(msg) {
-      ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'].forEach(function(cat) {
+      ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'].forEach(function(cat) {
         var el = document.getElementById('stelvio' + cat + 'List');
         if (el) el.innerHTML = '<p class="stelvio-ranking-empty">' + msg + '</p>';
       });
@@ -6989,7 +6989,7 @@
 
     function renderStelvioRankingCategories(byCategory, currentUserId) {
       var medals = ['🥇', '🥈', '🥉'];
-      var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
       cats.forEach(function(cat) {
@@ -17161,8 +17161,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-ranking-spinner"></div>
           <p>랭킹 불러오는 중...</p>
         </div>
-        <!-- Assoluto(선수부) / Bianco / Rosa / Infinito / Leggenda(일반부) 카드 -->
+        <!-- Supremo(종합 TOP10) / Assoluto(선수부) / Bianco / Rosa / Infinito / Leggenda(일반부) 카드 -->
         <div id="stelvioRankingContent" class="stelvio-ranking-content">
+          <div class="stelvio-category-card" data-category="Supremo">
+            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Supremo (종합순위 Top10)</span><span class="stelvio-category-header-unit">W/kg</span></div>
+            <div class="stelvio-category-body" id="stelvioSupremoList"></div>
+          </div>
           <div class="stelvio-category-card" data-category="Assoluto">
             <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Assoluto (Elite/Pro 선수부)</span><span class="stelvio-category-header-unit">W/kg</span></div>
             <div class="stelvio-category-body" id="stelvioAssolutoList"></div>
