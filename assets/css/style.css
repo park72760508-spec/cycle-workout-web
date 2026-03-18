@@ -13149,6 +13149,28 @@ html.is-android #trainingDetailModal .training-detail-body {
   color: #c62828;
 }
 
+/* AI 추천 1~3순위: 훈련 스케줄 상세와 동일한 워크아웃 그래프 디자인 */
+#workoutRecommendationModal .recommendation-graph--schedule-detail {
+  margin: 12px 0 16px 0;
+  min-height: 140px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+}
+#workoutRecommendationModal .recommendation-graph--schedule-detail .segmented-workout-graph {
+  height: 140px;
+  min-height: 100px;
+}
+#workoutRecommendationModal .recommendation-graph--schedule-detail .segmented-workout-graph-empty {
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85em;
+}
+
 /* AI 추천 결과 화면 모바일 최적화: 휴대폰 시인성·크기 최적화 (폰트 비율 축소 대신 레이아웃·최소 크기 적용) */
 @media (max-width: 768px) {
   #workoutRecommendationModal .ai-workout-recommendation-content {
