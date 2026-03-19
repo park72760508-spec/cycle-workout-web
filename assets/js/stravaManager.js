@@ -4,6 +4,14 @@
    - 스트라바 활동 동기화
 ========================================================== */
 
+/** Strava API Rate Limit 방지를 위한 딜레이 (ms) */
+const STRAVA_SYNC_DELAY_MS = 1500;
+
+/** 딜레이 유틸리티 함수 (ms) */
+function sleep(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
 // Firestore users 컬렉션 참조
 function getUsersCollection() {
   if (!window.firestore) {
@@ -165,11 +173,12 @@ async function fetchStravaActivities(accessToken, perPage = 200, after = null, b
 
     if (!response.ok) {
       const errorText = await response.text();
+      const status = response.status;
       try {
         const errJson = JSON.parse(errorText);
-        return { success: false, error: errJson.message || `Strava activities error: ${response.status}` };
+        return { success: false, error: errJson.message || `Strava activities error: ${status}`, status: status };
       } catch (e) {
-        return { success: false, error: `Strava activities error: ${response.status} ${errorText}` };
+        return { success: false, error: `Strava activities error: ${status} ${errorText}`, status: status };
       }
     }
 
@@ -463,11 +472,12 @@ async function fetchAndProcessStravaData(options = {}) {
       }
     }
 
-    // 각 사용자별로 처리
+    // 각 사용자별로 순차 처리 (Rate Limit 방지: 병렬 대신 for...of)
     for (const userInfo of usersToProcess) {
       const userData = userInfo.data;
       const userId = userInfo.id;
-      
+
+      try {
       // 각 사용자별로 기존 활동 ID 목록 조회 (권한 오류 방지)
       let existingIds = new Set();
       try {
@@ -525,7 +535,7 @@ async function fetchAndProcessStravaData(options = {}) {
       let totalTss = 0;
       let newCount = 0;
 
-      // 토큰 갱신
+      // 토큰 갱신 (실패 시 해당 유저만 에러에 담고 다음 유저로)
       const tokenResult = await refreshStravaTokenForUser(userId, refreshToken);
       if (!tokenResult.success) {
         errors.push(`사용자 ${userId}: 토큰 갱신 실패 - ${tokenResult.error || ''}`);
@@ -542,6 +552,19 @@ async function fetchAndProcessStravaData(options = {}) {
         afterTimestamp,
         beforeTimestamp
       );
+
+      // 429 Rate Limit: 즉시 중단하고 사용자 메시지 반환
+      if (!actResult.success && (actResult.status === 429 || (actResult.error && String(actResult.error).includes('429')))) {
+        console.warn('[fetchAndProcessStravaData] 429 Rate Limit 감지, 동기화 중단');
+        return {
+          success: false,
+          error: 'API 호출 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
+          processed: processed,
+          newActivities: newActivitiesTotal,
+          totalTssByUser: totalTssByUser,
+          errors: errors
+        };
+      }
       if (!actResult.success) {
         errors.push(`사용자 ${userId}: 활동 조회 실패 - ${actResult.error || ''}`);
         continue;
@@ -834,6 +857,14 @@ async function fetchAndProcessStravaData(options = {}) {
       if (totalTss > 0) {
         totalTssByUser[userId] = (totalTssByUser[userId] || 0) + totalTss;
       }
+
+      } catch (userError) {
+        console.warn(`[fetchAndProcessStravaData] 사용자 ${userId} 처리 중 오류 (다음 유저로 진행):`, userError);
+        errors.push(`사용자 ${userId}: ${userError.message || userError}`);
+      }
+
+      // Rate Limit 방지: 다음 유저 요청 전 딜레이
+      await sleep(STRAVA_SYNC_DELAY_MS);
     }
 
     // 저장된 활동의 TSS만큼 포인트 적립 및 rem_points 500 이상 시 만료일 연장
