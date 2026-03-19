@@ -2370,7 +2370,7 @@ function validatePeakPowerRecord(durationType, watts, weightKg) {
 }
 
 /** 의심 기록을 suspicious_power_records에 Pending으로 저장 */
-async function saveSuspiciousPowerRecord(db, { userId, year, date, durationType, watts, wkg, weightKg, source, activityId, logId }) {
+async function saveSuspiciousPowerRecord(db, { userId, year, date, durationType, watts, wkg, weightKg, source, activityId, logId, activityType }) {
   try {
     await db.collection("suspicious_power_records").add({
       userId,
@@ -2381,6 +2381,7 @@ async function saveSuspiciousPowerRecord(db, { userId, year, date, durationType,
       wkg,
       weightKg,
       source: source || "unknown",
+      activity_type: activityType ?? null, // 로그분석 시 다른 데이터 유입 확인용
       activity_id: activityId || null,
       log_id: logId || null,
       status: "pending",
@@ -2421,6 +2422,7 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
         source,
         activityId: logData.activity_id || null,
         logId,
+        activityType: logData.activity_type ?? (source === "strava" ? "Unknown" : "Stelvio"),
       });
       continue;
     }
@@ -2428,10 +2430,17 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
     validRecords[field] = { watts, wkg };
   }
 
+  const activityTypeForMmp = String(logData.activity_type || (source === "strava" ? "Unknown" : "Stelvio")).trim() || null;
+
   const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(String(year));
   const snap = await yearlyRef.get();
   const current = snap.exists ? snap.data() : {};
-  const merged = { year, weight_kg: weightKg, updated_at: admin.firestore.FieldValue.serverTimestamp() };
+  const merged = {
+    year,
+    weight_kg: weightKg,
+    updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    activity_type: activityTypeForMmp, // 로그분석 시 다른 데이터 유입 확인용
+  };
   let changed = false;
   for (const [field, { watts, wkg }] of Object.entries(validRecords)) {
     const prevWatts = Number(current[field]) || 0;
@@ -2530,11 +2539,15 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
         .get();
       let maxWattsFromLogs = 0;
       let maxHrFromLogs = 0;
+      let contributingActivityType = null;
       logsSnap.docs.forEach((doc) => {
         const d = doc.data();
         if (!isCyclingForMmp(d)) return;
         const w = Number(d[field]) || 0;
-        if (w > 0 && validatePeakPowerRecord(durationType, w, weightKg) && w > maxWattsFromLogs) maxWattsFromLogs = w;
+        if (w > 0 && validatePeakPowerRecord(durationType, w, weightKg) && w > maxWattsFromLogs) {
+          maxWattsFromLogs = w;
+          contributingActivityType = d.activity_type ?? (String(d.source || "").toLowerCase() === "strava" ? "Unknown" : "Stelvio");
+        }
         const hr = Number(d.max_hr) || 0;
         if (hr > 0 && hr > maxHrFromLogs) maxHrFromLogs = hr;
       });
@@ -2555,6 +2568,7 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
             [wkgField]: wkgVal,
             weight_kg: weightKg,
             updated_at: admin.firestore.FieldValue.serverTimestamp(),
+            activity_type: contributingActivityType ?? null,
           };
           if (shouldUpdateMaxHr) updateData.max_hr = maxHrFromLogs;
           await yearlyRef.set(updateData, { merge: true });
@@ -3371,14 +3385,16 @@ exports.confirmFtp = onRequest(
 );
 
 // ---------- Strava activity_type 마이그레이션 (기존 로그에 activity_type 채우기) ----------
-/** Strava Rate Limit: 100 req/15min, 1000/day. 호출 간 1초 딜레이 (타임아웃 방지) */
+/** Strava Rate Limit: 100 req/15min, 1000/day. 호출 간 1초 딜레이 */
 const MIGRATION_API_DELAY_MS = 1000;
+/** 배치당 로그 수. hasMore 시 자동으로 다음 배치 호출(체이닝) */
+const MIGRATION_BATCH_SIZE = 30;
 
 /** 기존 Strava 로그에 activity_type 필드 채우기.
- *  GET/POST ?secret=INTERNAL_SYNC_SECRET&userId=선택&limit=20
- *  limit: 한 요청당 처리할 최대 로그 수 (기본 5). 타임아웃 방지용. 반복 호출로 전체 마이그레이션 */
+ *  한 번 호출하면 hasMore일 때 자동으로 다음 배치를 호출해 전체 마이그레이션 완료.
+ *  GET/POST ?secret=INTERNAL_SYNC_SECRET&userId=선택&noChain=1 (체이닝 비활성화) */
 exports.migrateStravaActivityType = onRequest(
-  { cors: true, timeoutSeconds: 60 },
+  { cors: true, timeoutSeconds: 120 },
   async (req, res) => {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
@@ -3390,8 +3406,9 @@ exports.migrateStravaActivityType = onRequest(
       return res.status(403).json({ success: false, error: "인증 필요" });
     }
     const targetUserId = (req.query.userId || req.body?.userId || "").trim() || null;
-    const limitParam = parseInt(req.query.limit || req.body?.limit || "5", 10);
-    const limit = isNaN(limitParam) || limitParam < 1 ? 5 : Math.min(limitParam, 50);
+    const noChain = req.query.noChain === "1" || req.body?.noChain === "1";
+    const limitParam = parseInt(req.query.limit || req.body?.limit || String(MIGRATION_BATCH_SIZE), 10);
+    const limit = isNaN(limitParam) || limitParam < 1 ? MIGRATION_BATCH_SIZE : Math.min(limitParam, 100);
 
     const db = admin.firestore();
     const userQuery = db.collection("users").where("strava_refresh_token", ">", "");
@@ -3456,13 +3473,33 @@ exports.migrateStravaActivityType = onRequest(
       if (totalUpdated >= limit) break; // 사용자 루프도 종료
     }
 
-    res.status(200).json({
+    const hasMore = totalUpdated >= limit;
+    const payload = {
       success: true,
       updated: totalUpdated,
       skipped: totalSkipped,
       errors: totalErrors,
-      hasMore: totalUpdated >= limit, // limit에 도달해 조기 종료됐으면 반복 호출 필요
-    });
+      hasMore,
+      chained: false,
+    };
+
+    // hasMore일 때 자동으로 다음 배치 호출 (체이닝)
+    if (hasMore && !noChain) {
+      try {
+        const protocol = req.headers["x-forwarded-proto"] || "https";
+        const host = req.headers.host || req.get?.("host");
+        const path = (req.url && req.url.split("?")[0]) || "/migrateStravaActivityType";
+        const params = new URLSearchParams({ secret, limit: String(limit) });
+        if (targetUserId) params.set("userId", targetUserId);
+        const nextUrl = `${protocol}://${host}${path}?${params.toString()}`;
+        fetch(nextUrl).catch((e) => console.warn("[migrateStravaActivityType] 체이닝 호출 실패:", e.message));
+        payload.chained = true;
+      } catch (e) {
+        console.warn("[migrateStravaActivityType] 체이닝 URL 생성 실패:", e.message);
+      }
+    }
+
+    res.status(200).json(payload);
   }
 );
 
