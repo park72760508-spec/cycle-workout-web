@@ -7227,14 +7227,15 @@
       var m = document.getElementById('stelvioOvertakeReportModal');
       if (m) m.classList.remove('hidden');
     }
-    function closeStelvioOvertakeReportModal() {
+    function closeStelvioOvertakeReportModal(showRankingBoard) {
       var m = document.getElementById('stelvioOvertakeReportModal');
       if (m) m.classList.add('hidden');
+      if (showRankingBoard !== false && typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
     }
     window.closeStelvioOvertakeReportModal = closeStelvioOvertakeReportModal;
 
     function handleStelvioOvertakeRecommendClick() {
-      closeStelvioOvertakeReportModal();
+      closeStelvioOvertakeReportModal(false);
       var todayStr = new Date().toISOString().slice(0, 10);
       var currentUser = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var apiKey = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
