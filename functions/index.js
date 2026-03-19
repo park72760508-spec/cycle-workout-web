@@ -619,51 +619,65 @@ function computeTssFromActivity(activity, ftp) {
   return Math.max(0, Math.round(tss * 100) / 100);
 }
 
-/** 429 시 Retry-After(또는 60초) 대기 */
+/** Strava API Rate Limit: 15분당 100회. 429 시 Retry-After(또는 60초) 대기, 최대 15분(900초)까지 대기 */
 async function waitForStravaRateLimit(res) {
   if (res.status !== 429) return;
   const retryAfter = parseInt(res.headers.get("retry-after") || "60", 10);
-  const waitMs = Math.min(retryAfter * 1000, 120000);
+  const waitMs = Math.min(retryAfter * 1000, 900000); // 최대 15분 (Strava 15분 단위 리셋)
+  console.log(`[Strava] 429 Rate Limit, ${waitMs / 1000}초 대기 후 재시도`);
   await new Promise((r) => setTimeout(r, waitMs));
 }
 
-/** Strava 상세 활동 API 호출 (수동 동기화와 동일한 상세 필드 확보). 429 시 1회 재시도 */
+/** Strava API 호출 간 딜레이 (Rate Limit 예방: 15분당 100회 → 9초 간격 필요) */
+const STRAVA_CALL_DELAY_MS = 9000;
+
+/** Strava 상세 활동 API 호출. 429 시 최대 5회 재시도 */
 async function fetchStravaActivityDetail(accessToken, activityId) {
   const url = `https://www.strava.com/api/v3/activities/${activityId}`;
-  try {
-    let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (res.status === 429) {
-      await waitForStravaRateLimit(res);
-      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const maxRetries = 5;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
+      let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (res.status === 429) {
+        await waitForStravaRateLimit(res);
+        continue;
+      }
+      if (!res.ok) return { success: false, error: `Strava ${res.status}` };
+      const activity = await res.json().catch(() => null);
+      return activity ? { success: true, activity } : { success: false, error: "Invalid response" };
+    } catch (e) {
+      if (attempt === maxRetries) return { success: false, error: e.message || "Request failed" };
     }
-    if (!res.ok) return { success: false, error: `Strava ${res.status}` };
-    const activity = await res.json().catch(() => null);
-    return activity ? { success: true, activity } : { success: false, error: "Invalid response" };
-  } catch (e) {
-    return { success: false, error: e.message || "Request failed" };
   }
+  return { success: false, error: "Strava 429 retries exhausted" };
 }
 
-/** Strava Streams API 호출 (watts, heartrate). 파워미터/심박계 없으면 해당 스트림이 없을 수 있음. 429 시 1회 재시도 */
+/** Strava Streams API 호출 (watts, heartrate). 429 시 최대 5회 재시도 */
 async function fetchStravaStreams(accessToken, activityId) {
   const url = `https://www.strava.com/api/v3/activities/${activityId}/streams/time,watts,heartrate`;
-  try {
-    let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (res.status === 429) {
-      await waitForStravaRateLimit(res);
-      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const maxRetries = 5;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
+      let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (res.status === 429) {
+        await waitForStravaRateLimit(res);
+        continue;
+      }
+      if (!res.ok) return { success: false, watts: null, heartrate: null };
+      const raw = await res.json().catch(() => null);
+      const streamArray = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
+      const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
+      const heartrateStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "heartrate");
+      const wattsArray = wattsStream && Array.isArray(wattsStream.data) ? wattsStream.data : null;
+      const heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
+      return { success: true, watts: wattsArray, heartrate: heartrateArray };
+    } catch (e) {
+      if (attempt === maxRetries) return { success: false, watts: null, heartrate: null };
     }
-    if (!res.ok) return { success: false, watts: null, heartrate: null };
-    const raw = await res.json().catch(() => null);
-    const streamArray = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
-    const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
-    const heartrateStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "heartrate");
-    const wattsArray = wattsStream && Array.isArray(wattsStream.data) ? wattsStream.data : null;
-    const heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
-    return { success: true, watts: wattsArray, heartrate: heartrateArray };
-  } catch (e) {
-    return { success: false, watts: null, heartrate: null };
   }
+  return { success: false, watts: null, heartrate: null };
 }
 
 /**
@@ -1573,7 +1587,7 @@ const STRAVA_API_CALL_LIMIT = 85;
  * months 파라미터로 기간 설정. DB 존재 시 파워만 업데이트, 미존재 시 전체 생성+TSS 정산.
  * Rate Limit: 활동당 1초 대기, API 85회 도달 시 중단, hasMore 반환.
  */
-const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 540, memory: "1GiB" };
+const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 3600, memory: "1GiB" };
 if (STRAVA_CLIENT_SECRET) {
   manualStravaSyncWithMmpOptions.secrets = [STRAVA_CLIENT_SECRET];
 }
@@ -1634,21 +1648,20 @@ exports.manualStravaSyncWithMmp = onRequest(
     let apiCallCount = 1;
     const allActivities = [];
     let page = 1;
-    const fetchActivitiesWithRetry = async (retriesLeft = 3) => {
+    const fetchActivitiesWithRetry = async (retriesLeft = 5) => {
       const actRes = await fetch(
         `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=200&page=${page}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       if (actRes.status === 429 && retriesLeft > 0) {
-        const retryAfter = parseInt(actRes.headers.get("retry-after") || "60", 10);
-        const waitMs = Math.min(retryAfter * 1000, 120000);
-        console.log(`[manualStravaSyncWithMmp] 429 Rate Limit, ${waitMs / 1000}초 후 재시도 (${retriesLeft}회 남음)`);
-        await new Promise((r) => setTimeout(r, waitMs));
+        await waitForStravaRateLimit(actRes);
+        console.log(`[manualStravaSyncWithMmp] 429 재시도 (${retriesLeft}회 남음)`);
         return fetchActivitiesWithRetry(retriesLeft - 1);
       }
       return actRes;
     };
     while (apiCallCount < STRAVA_API_CALL_LIMIT) {
+      if (page > 1) await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
       const actRes = await fetchActivitiesWithRetry();
       apiCallCount += 1;
       if (!actRes.ok) {
@@ -1702,6 +1715,7 @@ exports.manualStravaSyncWithMmp = onRequest(
             const at = String(act.sport_type || act.type || "").trim() || null;
             if (at) updateData.activity_type = at;
           }
+          await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
           const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
@@ -1752,12 +1766,14 @@ exports.manualStravaSyncWithMmp = onRequest(
         }
       } else {
         if (apiCallCount >= STRAVA_API_CALL_LIMIT - 1) break;
+        await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
         const detailRes = await fetchStravaActivityDetail(accessToken, actId);
         apiCallCount += 1;
         if (!detailRes.success || !detailRes.activity) {
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           continue;
         }
+        await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         apiCallCount += 1;
         const activity = detailRes.activity;
