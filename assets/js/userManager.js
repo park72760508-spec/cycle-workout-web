@@ -2172,7 +2172,11 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
     return false;
   };
-  const canDeleteFor = (u) => (viewerGrade === '1');
+  const canDeleteFor = (u) => {
+    if (viewerGrade === '1') return true;
+    if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
+    return false;
+  };
   const showDashboardBtn = (viewerGrade === '1'); // grade=1만 대시보드 버튼 표시
   const sorted = [...usersToRender].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
   userList.innerHTML = sorted.map(user => {
