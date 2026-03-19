@@ -4,8 +4,8 @@
  * @module dynamicFtpCalculation
  */
 
-/** FTP/MMP 산출에서 제외할 활동 타입 (Run, Swim, Walk, TrailRun) */
-var EXCLUDED_ACTIVITY_TYPES = { run: 1, swim: 1, walk: 1, trailrun: 1 };
+/** FTP/MMP 산출에서 제외할 활동 타입 (Run, Swim, Walk, TrailRun, WeightTraining) */
+var EXCLUDED_ACTIVITY_TYPES = { run: 1, swim: 1, walk: 1, trailrun: 1, weighttraining: 1 };
 
 /**
  * 로그가 사이클링(MMP/FTP 산출 대상)인지 판별
