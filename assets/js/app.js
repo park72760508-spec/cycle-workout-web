@@ -6999,6 +6999,14 @@ function initializeCurrentScreen(screenId) {
 }
 
 // ========== 일별 TSS 산출 규칙 (사용자 대시보드 AI 분석·모든 데이터 산출 기준) ==========
+// Run, Swim, Walk, TrailRun 제외 (TSS·포인트 산출에서 제외)
+function isCyclingForTss(log) {
+  var src = String(log.source || '').toLowerCase();
+  if (src !== 'strava') return true;
+  var type = String(log.activity_type || '').trim().toLowerCase();
+  if (!type) return true;
+  return ['run', 'swim', 'walk', 'trailrun'].indexOf(type) === -1;
+}
 // 같은 날 Strava 있으면 Strava만 합산, Strava 없으면 Stelvio만 사용. 같은 날 두 종류 있으면 Stelvio 제외.
 function buildHistoryWithTSSRuleByDate(logs) {
   if (!logs || !logs.length) return [];
@@ -7027,7 +7035,7 @@ function buildHistoryWithTSSRuleByDate(logs) {
   for (var j = 0; j < dates.length; j++) {
     var dateStr = dates[j];
     var arr = byDate[dateStr];
-    var stravaLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() === 'strava'; });
+    var stravaLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() === 'strava'; }).filter(isCyclingForTss);
     var stelvioLogs = arr.filter(function (l) { return String(l.source || '').toLowerCase() !== 'strava'; });
     var useStrava = stravaLogs.length > 0;
     var chosen = useStrava ? stravaLogs : stelvioLogs;
