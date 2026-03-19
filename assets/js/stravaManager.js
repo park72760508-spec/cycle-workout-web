@@ -1227,25 +1227,27 @@ async function syncStravaData(startDate = null, endDate = null, opts = {}) {
 
 /**
  * MMP 포함 서버 동기화 (manualStravaSyncWithMmp Cloud Function 호출)
- * - 과거 1~6개월 Strava 활동 + 5/10/30분 파워(MMP) 계산·저장
+ * - 과거 1~6개월 또는 N일 Strava 활동 + 5/10/30분 파워(MMP) 계산·저장
  * - Firebase 로그인 필요 (Authorization Bearer 토큰)
- * @param {number} [months=1] - 동기화할 개월 수 (1~6)
+ * @param {number} [months=1] - 동기화할 개월 수 (1~6). options.days 사용 시 무시
  * @param {Object} [options] - 선택 옵션
- * @param {string} [options.overlayId] - 진행 오버레이 요소 ID (기본: stravaSyncProgressOverlay)
- * @param {string} [options.textId] - 진행 텍스트 요소 ID (기본: stravaSyncProgressText)
- * @param {string} [options.progressMessage] - 표시할 메시지 (기본: MMP 포함 동기화 중 (N개월)...)
+ * @param {number} [options.days] - 동기화할 일 수 (예: 10 = 최근 10일). 지정 시 months 대신 사용
+ * @param {string} [options.overlayId] - 진행 오버레이 요소 ID
+ * @param {string} [options.textId] - 진행 텍스트 요소 ID
+ * @param {string} [options.progressMessage] - 표시할 메시지
  */
 async function syncStravaDataWithMmp(months = 1, options) {
   var opts = options || {};
   var overlayId = opts.overlayId || 'stravaSyncProgressOverlay';
   var textId = opts.textId || 'stravaSyncProgressText';
   var progressMessage = opts.progressMessage;
-  var monthsVal = Math.min(6, Math.max(1, parseInt(months, 10) || 1));
+  var daysVal = opts.days != null ? Math.max(1, parseInt(opts.days, 10) || 10) : null;
+  var monthsVal = daysVal == null ? Math.min(6, Math.max(1, parseInt(months, 10) || 1)) : 0;
   var btn = document.getElementById('btnStravaSyncWithMmp');
   var originalText = btn ? btn.textContent : 'MMP 포함 동기화';
   var progressOverlay = document.getElementById(overlayId);
   var progressText = document.getElementById(textId);
-  var defaultMsg = 'MMP 포함 동기화 중 (' + monthsVal + '개월)...';
+  var defaultMsg = daysVal ? 'MMP 포함 동기화 중 (최근 ' + daysVal + '일)...' : 'MMP 포함 동기화 중 (' + monthsVal + '개월)...';
   var msg = (typeof progressMessage === 'string' && progressMessage) ? progressMessage : defaultMsg;
 
   function showProgress(m) {
@@ -1277,7 +1279,12 @@ async function syncStravaDataWithMmp(months = 1, options) {
     }
     const idToken = await currentUser.getIdToken();
 
-    const url = `https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?months=${monthsVal}&forceRecalcTimeInZones=true`;
+    var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?forceRecalcTimeInZones=true';
+    if (daysVal) {
+      url += '&days=' + daysVal;
+    } else {
+      url += '&months=' + monthsVal;
+    }
     const res = await fetch(url, {
       method: 'GET',
       headers: { Authorization: `Bearer ${idToken}` }
@@ -1328,6 +1335,8 @@ async function syncStravaDataWithMmp(months = 1, options) {
 
 /**
  * Strava 동기화 날짜 선택 모달 열기
+ * grade=2,3: MMP 포함(최근 10일) 버튼만 표시, 나머지 숨김
+ * grade=1: 전체 UI 표시
  */
 function openStravaSyncModal() {
   const modal = document.getElementById('stravaSyncModal');
@@ -1335,14 +1344,42 @@ function openStravaSyncModal() {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 
-    // 관리자(grade=1)만 오늘 기록(ALL) 버튼 표시
+    let grade = '2';
+    try {
+      grade = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+    } catch (e) {}
+
+    const isGrade23 = (grade === '2' || grade === '3');
+
+    // grade=2,3: 기간 선택·다른 버튼 숨김, MMP(최근 10일)만 표시
+    const dateRangeSection = document.getElementById('stravaSyncDateRangeSection');
+    const descEl = document.getElementById('stravaSyncDesc');
     const btnTodayAll = document.getElementById('btnStravaSyncTodayAll');
-    if (btnTodayAll) {
-      try {
-        const grade = typeof getViewerGrade === 'function' ? getViewerGrade() : '';
-        btnTodayAll.style.display = grade === '1' ? '' : 'none';
-      } catch (e) {
-        btnTodayAll.style.display = 'none';
+    const btnToday = document.getElementById('btnStravaSyncToday');
+    const btnMmp = document.getElementById('btnStravaSyncWithMmp');
+    const btnConfirm = document.getElementById('btnStravaSyncConfirm');
+
+    if (isGrade23) {
+      if (dateRangeSection) dateRangeSection.style.display = 'none';
+      if (descEl) descEl.textContent = '최근 10일 Strava 라이딩 데이터를 MMP와 함께 가져옵니다.';
+      if (btnTodayAll) btnTodayAll.style.display = 'none';
+      if (btnToday) btnToday.style.display = 'none';
+      if (btnConfirm) btnConfirm.style.display = 'none';
+      if (btnMmp) {
+        btnMmp.style.display = '';
+        btnMmp.textContent = 'MMP 포함 (최근 10일)';
+        btnMmp.onclick = function () { if (typeof syncStravaDataWithMmp === 'function') syncStravaDataWithMmp(0, { days: 10 }); };
+      }
+    } else {
+      if (dateRangeSection) dateRangeSection.style.display = '';
+      if (descEl) descEl.textContent = '동기화할 기간을 선택하세요. 년/월을 선택하지 않으면 최근 30개의 활동을 가져옵니다.';
+      if (btnTodayAll) btnTodayAll.style.display = grade === '1' ? '' : 'none';
+      if (btnToday) btnToday.style.display = '';
+      if (btnConfirm) btnConfirm.style.display = '';
+      if (btnMmp) {
+        btnMmp.style.display = '';
+        btnMmp.textContent = 'MMP 포함 (6개월)';
+        btnMmp.onclick = function () { if (typeof syncStravaDataWithMmp === 'function') syncStravaDataWithMmp(6); };
       }
     }
 
