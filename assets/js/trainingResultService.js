@@ -458,6 +458,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const trainingLogData = {
         // 기본 정보
         userId: userId, // 쿼리 편의성을 위해 유지
+        source: "stelvio",
+        activity_type: "Stelvio", // 실내 사이클링, MMP/로그분석 시 구분용
         date: dateStrForLog,
         earned_points: earnedPoints,
         workout_id: trainingData.workout_id || null,
