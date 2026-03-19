@@ -1609,7 +1609,9 @@ exports.manualStravaSyncWithMmp = onRequest(
       return;
     }
     const forceRecalcTimeInZones = String(req.query?.forceRecalcTimeInZones || req.body?.forceRecalcTimeInZones || "").toLowerCase() === "true";
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", req.query?.months || req.body?.months, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
+    const daysParam = req.query?.days || req.body?.days;
+    const monthsParam = req.query?.months || req.body?.months;
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
 
     try {
     const uid = await getUidFromRequest(req, res);
@@ -1619,7 +1621,18 @@ exports.manualStravaSyncWithMmp = onRequest(
     }
     console.log("[manualStravaSyncWithMmp] 인증 성공, userId:", uid);
 
-    const months = Math.min(6, Math.max(1, parseInt(req.query.months || req.body?.months || "1", 10) || 1));
+    const now = new Date();
+    const beforeUnix = Math.floor(now.getTime() / 1000);
+    const afterDate = new Date(now);
+    if (daysParam != null && daysParam !== "") {
+      const days = Math.max(1, parseInt(daysParam, 10) || 10);
+      afterDate.setDate(afterDate.getDate() - days);
+    } else {
+      const months = Math.min(6, Math.max(1, parseInt(monthsParam || "1", 10) || 1));
+      afterDate.setMonth(afterDate.getMonth() - months);
+    }
+    const afterUnix = Math.floor(afterDate.getTime() / 1000);
+
     const db = admin.firestore();
     const userRef = db.collection("users").doc(uid);
     const userSnap = await userRef.get();
@@ -1629,12 +1642,6 @@ exports.manualStravaSyncWithMmp = onRequest(
     }
     const userData = userSnap.data();
     const ftp = Number(userData.ftp) || 0;
-
-    const now = new Date();
-    const beforeUnix = Math.floor(now.getTime() / 1000);
-    const afterDate = new Date(now);
-    afterDate.setMonth(afterDate.getMonth() - months);
-    const afterUnix = Math.floor(afterDate.getTime() / 1000);
 
     let accessToken;
     try {
