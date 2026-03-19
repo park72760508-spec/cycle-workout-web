@@ -43,17 +43,19 @@ const CORS_ORIGINS = [
 /** 1일 500 이상 TSS: 치팅으로 간주, 합산·포인트 적립 제외 (주간 TOP10, Strava 동기화 공통) */
 const TSS_PER_DAY_CHEAT_THRESHOLD = 500;
 
-/** MMP/FTP 계산에 포함할 Strava 활동 타입 (사이클링만). Run 등은 제외 */
+/** MMP/FTP 계산에 포함할 Strava 활동 타입 (사이클링만). Run 등은 제외
+ *  Unknown: API 조회 실패 시. 자전거일 가능성 높아 MMP 포함 (순위 누락 방지) */
 const CYCLING_ACTIVITY_TYPES = new Set([
-  "Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide",
+  "ride", "virtualride", "gravelride", "mountainbikeride", "ebikeride",
+  "handcycle", "velomobile", "unknown",
 ]);
 
 /** Strava 로그가 사이클링 활동인지 여부. source가 strava가 아니면 true(Stelvio 등) */
 function isCyclingForMmp(logData) {
   const source = String(logData.source || "").toLowerCase();
   if (source !== "strava") return true; // Stelvio 등: 항상 사이클링
-  const type = String(logData.activity_type || "").trim();
-  if (!type) return false; // Strava인데 activity_type 없음: 마이그레이션 전 → MMP 제외(안전)
+  const type = String(logData.activity_type || "").trim().toLowerCase();
+  if (!type) return false; // Strava인데 activity_type 없음: 마이그레이션 전 → MMP 제외
   return CYCLING_ACTIVITY_TYPES.has(type);
 }
 
@@ -3500,6 +3502,47 @@ exports.migrateStravaActivityType = onRequest(
     }
 
     res.status(200).json(payload);
+  }
+);
+
+/** 기존 Stelvio 로그에 source, activity_type 추가. ?secret=INTERNAL_SYNC_SECRET */
+exports.migrateStelvioLogActivityType = onRequest(
+  { cors: true, timeoutSeconds: 300 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    res.set("Access-Control-Allow-Origin", "*");
+    const secret = req.query.secret || req.body?.secret || "";
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      return res.status(403).json({ success: false, error: "인증 필요" });
+    }
+    const db = admin.firestore();
+    const usersSnap = await db.collection("users").get();
+    let updated = 0;
+    let batch = db.batch();
+    let batchCount = 0;
+    for (const userDoc of usersSnap.docs) {
+      const logsSnap = await db.collection("users").doc(userDoc.id).collection("logs").get();
+      for (const logDoc of logsSnap.docs) {
+        const d = logDoc.data();
+        const src = String(d.source || "").toLowerCase();
+        if (src === "strava") continue; // Strava는 migrateStravaActivityType에서 처리
+        const hasType = String(d.activity_type || "").trim();
+        if (hasType && src) continue; // 이미 있으면 스킵
+        batch.update(logDoc.ref, {
+          source: src || "stelvio",
+          activity_type: d.activity_type || "Stelvio",
+        });
+        updated++;
+        batchCount++;
+        if (batchCount >= 500) {
+          await batch.commit();
+          batch = db.batch();
+          batchCount = 0;
+        }
+      }
+    }
+    if (batchCount > 0) await batch.commit();
+    res.status(200).json({ success: true, updated });
   }
 );
 
