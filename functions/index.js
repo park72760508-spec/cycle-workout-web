@@ -43,8 +43,8 @@ const CORS_ORIGINS = [
 /** 1일 500 이상 TSS: 치팅으로 간주, 합산·포인트 적립 제외 (주간 TOP10, Strava 동기화 공통) */
 const TSS_PER_DAY_CHEAT_THRESHOLD = 500;
 
-/** Strava에서 MMP/수집 제외할 활동 타입. Run, Swim, Walk만 제외, 나머지는 모두 수집 */
-const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk"]);
+/** Strava에서 TSS·포인트·FTP·MMP 제외할 활동 타입. Run, Swim, Walk, TrailRun */
+const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk", "trailrun"]);
 
 /** Strava 로그가 MMP/수집 대상인지. source가 strava가 아니면 true(Stelvio 등).
  *  Strava: Run, Swim, Walk만 제외, 나머지(Ride, VirtualRide, Unknown 등) 모두 수집 */
@@ -826,7 +826,7 @@ async function processStravaActivity(db, ownerId, objectId) {
   await logsRef.doc(activityId).set(logDoc, { merge: true });
 
   let userTss = 0;
-  if (isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
+  if (isCyclingForMmp(mapped) && isNew && mapped.tss > 0 && (mapped.distance_km || 0) !== 0) {
     const dateStr = mapped.date || "";
     const dayTotal = await getTotalTssForDate(db, userId, dateStr);
     if (dayTotal >= TSS_PER_DAY_CHEAT_THRESHOLD) {
@@ -999,6 +999,7 @@ async function getTotalTssForDate(db, userId, dateStr) {
     let stelvio = 0;
     snapshot.docs.forEach((doc) => {
       const d = doc.data();
+      if (!isCyclingForMmp(d)) return; // Run, Swim, Walk, TrailRun 제외
       const tss = Number(d.tss) || 0;
       const isStrava = String(d.source || "").toLowerCase() === "strava";
       if (isStrava) strava += tss;
@@ -1335,15 +1336,17 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     await logsRef.doc(actId).set(logDoc, { merge: true });
     existingIds.add(actId);
     newActivities += 1;
-    if (stelvioDates.has(dateStr)) {
-      if (distanceKm !== 0) {
-        const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
-        stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
-      }
-    } else {
-      if (distanceKm !== 0) {
-        const prev = dateOnlyStravaTss.get(dateStr) || 0;
-        dateOnlyStravaTss.set(dateStr, prev + activityTss);
+    if (isCyclingForMmp(mapped)) {
+      if (stelvioDates.has(dateStr)) {
+        if (distanceKm !== 0) {
+          const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
+          stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
+        }
+      } else {
+        if (distanceKm !== 0) {
+          const prev = dateOnlyStravaTss.get(dateStr) || 0;
+          dateOnlyStravaTss.set(dateStr, prev + activityTss);
+        }
       }
     }
   }
@@ -1825,7 +1828,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         const dateStr = mapped.date || "";
         const activityTss = mapped.tss || 0;
         const distanceKm = mapped.distance_km || 0;
-        if (activityTss > 0 && distanceKm !== 0) {
+        if (isCyclingForMmp(mapped) && activityTss > 0 && distanceKm !== 0) {
           if (stelvioDates.has(dateStr)) {
             const prev = stelvioDateStravaTssAccumulator.get(dateStr) || 0;
             stelvioDateStravaTssAccumulator.set(dateStr, prev + activityTss);
@@ -1999,6 +2002,7 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
   const byDate = {};
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
+    if (!isCyclingForMmp(d)) return; // Run, Swim, Walk, TrailRun 제외
     const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
     if (!dateStr || dateStr < startStr || dateStr > endStr) return;
     const tss = Number(d.tss) || 0;
@@ -2026,6 +2030,7 @@ async function hasWeeklyTssCheatDay(db, userId, startStr, endStr) {
   const byDate = {};
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
+    if (!isCyclingForMmp(d)) return; // Run, Swim, Walk, TrailRun 제외
     const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
     if (!dateStr || dateStr < startStr || dateStr > endStr) return;
     const tss = Number(d.tss) || 0;
