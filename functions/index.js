@@ -619,11 +619,23 @@ function computeTssFromActivity(activity, ftp) {
   return Math.max(0, Math.round(tss * 100) / 100);
 }
 
-/** Strava 상세 활동 API 호출 (수동 동기화와 동일한 상세 필드 확보) */
+/** 429 시 Retry-After(또는 60초) 대기 */
+async function waitForStravaRateLimit(res) {
+  if (res.status !== 429) return;
+  const retryAfter = parseInt(res.headers.get("retry-after") || "60", 10);
+  const waitMs = Math.min(retryAfter * 1000, 120000);
+  await new Promise((r) => setTimeout(r, waitMs));
+}
+
+/** Strava 상세 활동 API 호출 (수동 동기화와 동일한 상세 필드 확보). 429 시 1회 재시도 */
 async function fetchStravaActivityDetail(accessToken, activityId) {
   const url = `https://www.strava.com/api/v3/activities/${activityId}`;
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (res.status === 429) {
+      await waitForStravaRateLimit(res);
+      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    }
     if (!res.ok) return { success: false, error: `Strava ${res.status}` };
     const activity = await res.json().catch(() => null);
     return activity ? { success: true, activity } : { success: false, error: "Invalid response" };
@@ -632,11 +644,15 @@ async function fetchStravaActivityDetail(accessToken, activityId) {
   }
 }
 
-/** Strava Streams API 호출 (watts, heartrate). 파워미터/심박계 없으면 해당 스트림이 없을 수 있음. */
+/** Strava Streams API 호출 (watts, heartrate). 파워미터/심박계 없으면 해당 스트림이 없을 수 있음. 429 시 1회 재시도 */
 async function fetchStravaStreams(accessToken, activityId) {
   const url = `https://www.strava.com/api/v3/activities/${activityId}/streams/time,watts,heartrate`;
   try {
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    let res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (res.status === 429) {
+      await waitForStravaRateLimit(res);
+      res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    }
     if (!res.ok) return { success: false, watts: null, heartrate: null };
     const raw = await res.json().catch(() => null);
     const streamArray = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
@@ -1617,11 +1633,22 @@ exports.manualStravaSyncWithMmp = onRequest(
     let apiCallCount = 1;
     const allActivities = [];
     let page = 1;
-    while (apiCallCount < STRAVA_API_CALL_LIMIT) {
+    const fetchActivitiesWithRetry = async (retriesLeft = 3) => {
       const actRes = await fetch(
         `https://www.strava.com/api/v3/athlete/activities?after=${afterUnix}&before=${beforeUnix}&per_page=200&page=${page}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
+      if (actRes.status === 429 && retriesLeft > 0) {
+        const retryAfter = parseInt(actRes.headers.get("retry-after") || "60", 10);
+        const waitMs = Math.min(retryAfter * 1000, 120000);
+        console.log(`[manualStravaSyncWithMmp] 429 Rate Limit, ${waitMs / 1000}초 후 재시도 (${retriesLeft}회 남음)`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        return fetchActivitiesWithRetry(retriesLeft - 1);
+      }
+      return actRes;
+    };
+    while (apiCallCount < STRAVA_API_CALL_LIMIT) {
+      const actRes = await fetchActivitiesWithRetry();
       apiCallCount += 1;
       if (!actRes.ok) {
         res.status(500).json({ success: false, error: `활동 조회 실패: ${actRes.status}` });
@@ -1671,11 +1698,8 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
           const updateData = {};
           if (needsActivityType) {
-            const detailRes = await fetchStravaActivityDetail(accessToken, actId);
-            apiCallCount += 1;
-            if (detailRes.success && detailRes.activity) {
-              updateData.activity_type = String(detailRes.activity.sport_type || detailRes.activity.type || "").trim() || null;
-            }
+            const at = String(act.sport_type || act.type || "").trim() || null;
+            if (at) updateData.activity_type = at;
           }
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
