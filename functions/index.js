@@ -1193,9 +1193,14 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       const needsHrPeaks = d.max_hr_5sec == null && d.max_hr_1min == null && d.max_hr_5min == null;
       const needsTimeInZones = !d.time_in_zones || !d.time_in_zones.power;
       const needsWeight = d.weight == null;
-      if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight) && entry) {
+      const needsActivityType = !String(d.activity_type || "").trim();
+      if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
+        if (needsActivityType) {
+          const at = String(act.sport_type || act.type || "").trim() || null;
+          if (at) updateData.activity_type = at;
+        }
         const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
           ? Number(userData.weight ?? userData.weightKg)
           : null;
@@ -1658,11 +1663,19 @@ exports.manualStravaSyncWithMmp = onRequest(
         const needsHrPeaks = existingData.max_hr_5sec == null && existingData.max_hr_1min == null && existingData.max_hr_5min == null;
         const needsTimeInZones = forceRecalcTimeInZones || !existingData.time_in_zones || !existingData.time_in_zones.power;
         const needsWeight = existingData.weight == null;
-        if (needsMmp || needsHrPeaks || needsTimeInZones || needsWeight) {
+        const needsActivityType = !String(existingData.activity_type || "").trim();
+        if (needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType) {
           if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
+          const updateData = {};
+          if (needsActivityType) {
+            const detailRes = await fetchStravaActivityDetail(accessToken, actId);
+            apiCallCount += 1;
+            if (detailRes.success && detailRes.activity) {
+              updateData.activity_type = String(detailRes.activity.sport_type || detailRes.activity.type || "").trim() || null;
+            }
+          }
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
-          const updateData = {};
           const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
             ? Number(userData.weight ?? userData.weightKg)
             : null;
@@ -3447,7 +3460,9 @@ exports.migrateStravaActivityType = onRequest(
 
       for (const logDoc of toUpdate) {
         if (totalUpdated >= limit) break; // limit 도달 시 조기 종료
-        const activityId = logDoc.data().activity_id || logDoc.id;
+        const data = logDoc.data();
+        let activityId = data.activity_id ? String(data.activity_id) : null;
+        if (!activityId) activityId = String(logDoc.id);
         if (!activityId) {
           totalSkipped++;
           continue;
@@ -3455,7 +3470,11 @@ exports.migrateStravaActivityType = onRequest(
         if (totalUpdated + totalErrors > 0 && MIGRATION_API_DELAY_MS > 0) {
           await new Promise((r) => setTimeout(r, MIGRATION_API_DELAY_MS));
         }
-        const result = await fetchStravaActivityDetail(accessToken, activityId);
+        let result = await fetchStravaActivityDetail(accessToken, activityId);
+        if (!result.success && data.activity_id !== logDoc.id && String(logDoc.id).match(/^\d+$/)) {
+          result = await fetchStravaActivityDetail(accessToken, String(logDoc.id));
+          if (result.success) activityId = String(logDoc.id);
+        }
         let activityType;
         if (!result.success || !result.activity) {
           console.warn("[migrateStravaActivityType] API 실패:", userId, activityId, result.error);
