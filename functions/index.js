@@ -43,20 +43,17 @@ const CORS_ORIGINS = [
 /** 1일 500 이상 TSS: 치팅으로 간주, 합산·포인트 적립 제외 (주간 TOP10, Strava 동기화 공통) */
 const TSS_PER_DAY_CHEAT_THRESHOLD = 500;
 
-/** MMP/FTP 계산에 포함할 Strava 활동 타입 (사이클링만). Run 등은 제외
- *  Unknown: API 조회 실패 시. 자전거일 가능성 높아 MMP 포함 (순위 누락 방지) */
-const CYCLING_ACTIVITY_TYPES = new Set([
-  "ride", "virtualride", "gravelride", "mountainbikeride", "ebikeride",
-  "handcycle", "velomobile", "unknown",
-]);
+/** Strava에서 MMP/수집 제외할 활동 타입. Run, Swim, Walk만 제외, 나머지는 모두 수집 */
+const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk"]);
 
-/** Strava 로그가 사이클링 활동인지 여부. source가 strava가 아니면 true(Stelvio 등) */
+/** Strava 로그가 MMP/수집 대상인지. source가 strava가 아니면 true(Stelvio 등).
+ *  Strava: Run, Swim, Walk만 제외, 나머지(Ride, VirtualRide, Unknown 등) 모두 수집 */
 function isCyclingForMmp(logData) {
   const source = String(logData.source || "").toLowerCase();
-  if (source !== "strava") return true; // Stelvio 등: 항상 사이클링
+  if (source !== "strava") return true; // Stelvio 등: 항상 수집
   const type = String(logData.activity_type || "").trim().toLowerCase();
-  if (!type) return false; // Strava인데 activity_type 없음: 마이그레이션 전 → MMP 제외
-  return CYCLING_ACTIVITY_TYPES.has(type);
+  if (!type) return true; // activity_type 없음: 수집 (마이그레이션 전 legacy 포함)
+  return !EXCLUDED_ACTIVITY_TYPES.has(type); // Run/Swim/Walk만 제외
 }
 
 // CORS 헤더 설정 헬퍼 (preflight 및 실제 응답에 사용)
