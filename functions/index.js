@@ -3003,6 +3003,85 @@ exports.backfillWeightToLogs = onRequest(
   }
 );
 
+/** yearly_peaks 재계산 (Run/Swim/Walk/TrailRun 제외). 기존 데이터 삭제 후 사이클링 로그만으로 재계산
+ *  ?year=2026&secret=INTERNAL_SYNC_SECRET (year 없으면 현재 연도)
+ *  ?all=1&secret=... → 2020~현재 연도 전체 실행 */
+exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
+  { cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    res.set("Access-Control-Allow-Origin", "*");
+    const secret = req.query.secret || req.body?.secret || "";
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      return res.status(403).json({ success: false, error: "인증 필요" });
+    }
+    const runAll = req.query.all === "1" || req.query.all === "true";
+    const currentYear = new Date().getFullYear();
+    const years = runAll
+      ? Array.from({ length: currentYear - 2020 + 1 }, (_, i) => 2020 + i)
+      : [req.query.year ? parseInt(req.query.year, 10) : currentYear];
+    if (!runAll && (isNaN(years[0]) || years[0] < 2020 || years[0] > 2100)) {
+      return res.status(400).json({ success: false, error: "year 파라미터 필요 (2020~2100)" });
+    }
+    const db = admin.firestore();
+    const usersSnap = await db.collection("users").get();
+    const results = {};
+    for (const year of years) {
+      const { startStr, endStr } = getYearRangeSeoul(year);
+      let usersUpdated = 0;
+      let usersDeleted = 0;
+      for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        const rawWeight = Number(userData.weight ?? userData.weightKg ?? 0);
+        if (rawWeight <= 0) continue;
+        const weightKg = Math.max(rawWeight, 45);
+        const logsSnap = await db.collection("users").doc(userId).collection("logs")
+          .where("date", ">=", startStr)
+          .where("date", "<=", endStr)
+          .get();
+        const cyclingLogs = logsSnap.docs.filter((d) => isCyclingForMmp(d.data()));
+        const maxByField = {};
+        let maxHr = 0;
+        let contributingActivityType = null;
+        for (const logDoc of cyclingLogs) {
+          const d = logDoc.data();
+          const logWeight = Number(d.weight || userData.weight || userData.weightKg || 0);
+          const w = logWeight > 0 ? Math.max(logWeight, 45) : weightKg;
+          for (const [durationType, field] of Object.entries(DURATION_FIELDS)) {
+            const watts = Number(d[field]) || 0;
+            if (watts <= 0) continue;
+            if (!validatePeakPowerRecord(durationType, watts, w)) continue;
+            const prev = maxByField[field] || 0;
+            if (watts > prev) {
+              maxByField[field] = watts;
+              contributingActivityType = d.activity_type ?? (String(d.source || "").toLowerCase() === "strava" ? "Unknown" : "Stelvio");
+            }
+          }
+          const hr = Number(d.max_hr ?? d.max_heartrate) || 0;
+          if (hr > maxHr) maxHr = hr;
+        }
+        const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(String(year));
+        if (Object.keys(maxByField).length === 0 && maxHr <= 0) {
+          await yearlyRef.delete();
+          usersDeleted++;
+          continue;
+        }
+        const merged = { year, weight_kg: weightKg, updated_at: admin.firestore.FieldValue.serverTimestamp(), activity_type: contributingActivityType ?? null };
+        for (const [field, watts] of Object.entries(maxByField)) {
+          merged[field] = watts;
+          merged[field.replace("_watts", "_wkg")] = Math.round((watts / weightKg) * 100) / 100;
+        }
+        if (maxHr > 0) merged.max_hr = maxHr;
+        await yearlyRef.set(merged, { merge: true });
+        usersUpdated++;
+      }
+      results[year] = { usersUpdated, usersDeleted };
+    }
+    res.status(200).json({ success: true, years, results });
+  }
+);
+
 /** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출). year 파라미터로 대상 연도 지정 */
 exports.backfillYearlyPeaks = onRequest(
   { cors: true, timeoutSeconds: 540 },
