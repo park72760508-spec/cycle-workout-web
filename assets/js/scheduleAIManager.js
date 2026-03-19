@@ -659,7 +659,10 @@
 
     var eventSpecificity = '';
     var g = String(eventGoal).toLowerCase();
-    if (g.indexOf('gran') >= 0 || g.indexOf('그란') >= 0 || eventDistance >= 100) {
+    var goalLower = String(goal || '').toLowerCase();
+    if (goalLower.indexOf('ironman') >= 0 || g.indexOf('ironman') >= 0 || g.indexOf('아이언맨') >= 0 || g.indexOf('철인') >= 0) {
+      eventSpecificity = '**Event Specificity (IRONMAN/철인3종):** Base&Endurance(60~70%), SweetSpot&Tempo(20~30%), VO2Max(5~10%). 안정적 파워 유지·근지구력 최우선. 스프린트·무산소(Zone6+) 제외.';
+    } else if (g.indexOf('gran') >= 0 || g.indexOf('그란') >= 0 || eventDistance >= 100) {
       eventSpecificity = '**Event Specificity (Gran Fondo/장거리):** Endurance, SweetSpot 비중을 높이고, 장거리 지속력을 강화하시오.';
     } else if (g.indexOf('race') >= 0 || g.indexOf('경기') >= 0 || g.indexOf('criterium') >= 0 || eventDistance < 80) {
       eventSpecificity = '**Event Specificity (Criterium/Race/단거리):** VO2Max, Anaerobic 비중을 높이고, 순간 파워 및 스프린트 능력을 강화하시오.';

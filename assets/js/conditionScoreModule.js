@@ -198,7 +198,7 @@
     } else if (challenge === 'Racing') {
       loadOptimalLow = 150;
       loadOptimalHigh = 500;
-    } else if (challenge === 'GranFondo') {
+    } else if (challenge === 'GranFondo' || challenge === 'IronMan') {
       loadOptimalLow = 120;
       loadOptimalHigh = 450;
     }
@@ -269,13 +269,30 @@
     return { score: score, details: details };
   }
 
+  /**
+   * VO2max 추정값 결정론적 산출 (동일 사용자·동일 FTP/체중 → 동일 값, 분석 시점에 따른 변동 제거)
+   * 파워 기반 추정: 5분 MMP(w/kg) ≈ FTP(w/kg)×1.25, VO2max ≈ 12×5min_wkg + 3.5 → 15×(FTP/weight)+3.5
+   * @param {Object} user - { ftp, weight } (weight 미입력 시 70kg 가정)
+   * @returns {number} 20~100 정수 (ml/kg/min)
+   */
+  function computeVo2maxEstimate(user) {
+    user = user || {};
+    var ftp = Number(user.ftp) || 200;
+    var weightKg = Number(user.weight) || 70;
+    if (weightKg <= 0) weightKg = 70;
+    var wkg = ftp / weightKg;
+    var vo2 = Math.round(15 * wkg + 3.5);
+    return Math.max(20, Math.min(100, vo2));
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, oneLogPerDayPreferStrava: oneLogPerDayPreferStrava, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
+    module.exports = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, oneLogPerDayPreferStrava: oneLogPerDayPreferStrava, computeVo2maxEstimate: computeVo2maxEstimate, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
   }
   if (typeof global !== 'undefined') {
     global.computeConditionScore = computeConditionScore;
     global.dedupeLogsForConditionScore = dedupeLogsForConditionScore;
     global.oneLogPerDayPreferStrava = oneLogPerDayPreferStrava;
-    global.StelvioConditionScore = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, oneLogPerDayPreferStrava: oneLogPerDayPreferStrava, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
+    global.computeVo2maxEstimate = computeVo2maxEstimate;
+    global.StelvioConditionScore = { computeConditionScore: computeConditionScore, dedupeLogsForConditionScore: dedupeLogsForConditionScore, oneLogPerDayPreferStrava: oneLogPerDayPreferStrava, computeVo2maxEstimate: computeVo2maxEstimate, MIN_SCORE: MIN_SCORE, MAX_SCORE: MAX_SCORE };
   }
 })(typeof window !== 'undefined' ? window : this);

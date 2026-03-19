@@ -10,6 +10,7 @@
 const TRAINING_LEVELS = {
   'Fitness':   { min: 150, max: 300,  desc: "건강 유지 및 기초 체력", target: 225 },
   'GranFondo': { min: 300, max: 500,  desc: "중장거리 완주 목표", target: 400 },
+  'IronMan':   { min: 300, max: 500,  desc: "풀거리 트라이애슬론 완주 목표", target: 400 },
   'Racing':    { min: 500, max: 700,  desc: "MCT/아마추어 레이스 입상권", target: 600 },
   'Elite':     { min: 700, max: 900,  desc: "최상위 동호인 및 선수 준비", target: 800 },
   'PRO':       { min: 900, max: 1200, desc: "프로 선수 레벨", target: 1050 }

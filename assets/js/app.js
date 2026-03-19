@@ -4574,6 +4574,7 @@ function renderUserInfo() {
     const challenge = String(u.challenge || 'Fitness').trim();
     let challengeImage = 'yellow.png';
     if (challenge === 'GranFondo') challengeImage = 'green.png';
+    else if (challenge === 'IronMan') challengeImage = 'green.png';
     else if (challenge === 'Racing') challengeImage = 'blue.png';
     else if (challenge === 'Elite') challengeImage = 'orenge.png';
     else if (challenge === 'PRO') challengeImage = 'red.png';
@@ -11146,7 +11147,7 @@ async function getUserChallenge() {
     if (normalized === 'elite') return 'Elite';
     if (normalized === 'pro') return 'PRO';
     // 원본 값이 이미 정규화되어 있으면 그대로 반환
-    if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+    if (['Fitness', 'GranFondo', 'IronMan', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
       return userChallenge;
     }
   }
@@ -11186,7 +11187,7 @@ function getUserChallengeSync() {
     if (normalized === 'racing') return 'Racing';
     if (normalized === 'elite') return 'Elite';
     if (normalized === 'pro') return 'PRO';
-    if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+    if (['Fitness', 'GranFondo', 'IronMan', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
       return userChallenge;
     }
   }
@@ -11261,6 +11262,8 @@ function updateRPEModalContent(modal, challenge) {
   // Challenge 타입별 이미지 가져오기
   let challengeImage = 'yellow.png'; // 기본값: Fitness
   if (challenge === 'GranFondo') {
+    challengeImage = 'green.png';
+  } else if (challenge === 'IronMan') {
     challengeImage = 'green.png';
   } else if (challenge === 'Racing') {
     challengeImage = 'blue.png';
@@ -12020,14 +12023,27 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     const isLiteWorkout = (w) => /\(lite\)/i.test(getWorkoutTitle(w));
     const challengeNormForLite = String(challenge || '').trim();
     const needLiteFirst = (challengeNormForLite === 'Fitness');
-    // Fitness만: 1순위용 Lite 소수(최대 5) + 2~3순위용 비-Lite 충분히 포함되도록 섞어서 15개 (GranFondo는 일반 배정)
-    const listForDetailFetch = needLiteFirst && availableWorkouts.length > 0
-      ? (function () {
-          const liteList = availableWorkouts.filter(function (w) { return isLiteWorkout(w); });
-          const nonLiteList = availableWorkouts.filter(function (w) { return !isLiteWorkout(w); });
-          return liteList.slice(0, 5).concat(nonLiteList).slice(0, 15);
-        })()
-      : availableWorkouts;
+    // IronMan: 스프린트·무산소 제외, Base/SS/Tempo/VO2Max 우선 (철인 3종 방법론)
+    const IRONMAN_PREFERRED_AUTHORS = ['Endurance', 'Tempo', 'Sweet Spot', 'SweetSpot', 'Threshold', 'VO2 Max', 'VO2Max', 'Active Recovery', 'Recovery'];
+    const isIronManSuitable = (w) => {
+      const author = String(w.author || '').trim();
+      const title = getWorkoutTitle(w);
+      if (/sprint|anaerobic|스프린트|무산소|zone\s*6|z6/i.test(title)) return false;
+      return IRONMAN_PREFERRED_AUTHORS.some(a => author.toLowerCase() === a.toLowerCase());
+    };
+    const isIronManExcluded = (w) => /sprint|anaerobic|스프린트|무산소|zone\s*6|z6/i.test(getWorkoutTitle(w));
+    // Fitness만: 1순위용 Lite 소수(최대 5) + 2~3순위용 비-Lite 충분히 포함되도록 섞어서 15개
+    // IronMan: 적합 워크아웃 우선, 부적합(스프린트 등) 제외
+    let listForDetailFetch = availableWorkouts;
+    if (needLiteFirst && availableWorkouts.length > 0) {
+      const liteList = availableWorkouts.filter(function (w) { return isLiteWorkout(w); });
+      const nonLiteList = availableWorkouts.filter(function (w) { return !isLiteWorkout(w); });
+      listForDetailFetch = liteList.slice(0, 5).concat(nonLiteList).slice(0, 15);
+    } else if (challengeNormForLite === 'IronMan' && availableWorkouts.length > 0) {
+      const suitable = availableWorkouts.filter(w => isIronManSuitable(w) && !isIronManExcluded(w));
+      const others = availableWorkouts.filter(w => !isIronManSuitable(w) && !isIronManExcluded(w));
+      listForDetailFetch = suitable.length > 0 ? suitable.concat(others).slice(0, 15) : availableWorkouts.filter(w => !isIronManExcluded(w)).slice(0, 15);
+    }
     const workoutIds = listForDetailFetch.slice(0, 15).map(w => w.id); // 최대 15개
     
     // 병렬 처리로 모든 워크아웃 상세 정보를 동시에 조회
@@ -12148,7 +12164,9 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
         ? '훈련 목적 Racing: 경기 성능 훈련에 가중.'
         : challenge === 'GranFondo'
           ? '훈련 목적 GranFondo: 장거리 지구력 훈련에 가중.'
-          : '훈련 목적 Fitness: 지속 가능한 중강도 훈련에 가중.';
+          : challenge === 'IronMan'
+            ? '훈련 목적 IronMan: 안정적 파워 유지·근지구력 중심. Base/Endurance 60~70%, SweetSpot/Tempo 20~30%, VO2Max 5~10%. 스프린트·무산소 제외.'
+            : '훈련 목적 Fitness: 지속 가능한 중강도 훈련에 가중.';
     
     const basisBlock = hasBasis ? `
 
@@ -12167,7 +12185,7 @@ ${basisBlock}
 - FTP: ${ftp}W
 - 체중: ${weight}kg
 - W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
-- ⚠️ **운동 목적: ${challenge}** (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
+- ⚠️ **운동 목적: ${challenge}** (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, IronMan: 아이언맨, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
   → **이 목적에 맞는 훈련만 추천해야 합니다. 목적과 무관한 훈련은 추천하지 마세요.**
 - **등급(grade): ${grade}** (1·3: 관리자/코치, 2: 일반) → 목적·등급에 따른 가중 적용.
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
@@ -12236,16 +12254,30 @@ ${challenge === 'GranFondo' ? `
 - 장거리 라이딩에 필요한 지구력과 회복 능력 향상을 위한 훈련을 추천하세요.
 - 일반 피트니스 목적의 저강도 훈련은 피하세요.
 ` : ''}
+${challenge === 'IronMan' ? `
+**IRONMAN(아이언맨) 목적 특별 지침 - 철인 3종 사이클 훈련 방법론:**
+아이언맨 180km 사이클 구간 완주 후 마라톤(Run)을 뛰어야 하므로, **안정적이고 일정한 파워 유지(Low Variability Index)**와 **근지구력 확보**가 최우선 목표입니다. 스프린트·잦은 인터벌·무산소(Zone 6 이상) 스프린트는 철인 훈련에 부적합하므로 추천에서 제외하세요.
+
+**주 단위 훈련 비중 배분:**
+1. **Base & Endurance (60~70%)** - 타겟: Zone 2 (FTP 55~75%)
+   - 지방 대사 효율을 높이기 위한 길고 지속적인 라이딩. 1~3시간 이상 파워의 변동 없이 꾸준히 밀어주는 훈련 중심.
+   - Endurance 카테고리 워크아웃을 우선 추천하세요.
+
+2. **Sweet Spot & Tempo (20~30%)** - 타겟: Zone 3 중상단 ~ Zone 4 하단 (FTP 75~93%)
+   - 근지구력 강화를 위해 15분~30분 단위의 긴 인터벌을 2~4세트 반복하는 워크아웃. 에어로바 포지션 유지 가정.
+   - SweetSpot, Tempo 카테고리 워크아웃을 우선 추천하세요.
+
+3. **VO2 Max (5~10%)** - 타겟: Zone 5 (FTP 106~120%)
+   - 짧은 시간(3~5분) 동안 심폐 한계를 자극하여 FTP 천장을 높이는 훈련. 무산소(Zone 6 이상) 스프린트는 철인 훈련에 부적합하므로 추천에서 제외.
+
+**추천 대상 카테고리:** Endurance, Tempo, SweetSpot, VO2Max (Zone 5 수준). **제외:** 스프린트·고강도 짧은 인터벌·무산소(Zone 6 이상) 워크아웃.
+` : ''}
 ${challenge === 'Fitness' ? `
 **일반 피트니스/다이어트 목적 특별 지침:**
 - 일반 피트니스/다이어트 목적의 사용자이므로 건강과 체중 관리에 초점을 맞춘 훈련을 추천하세요.
 - **입문자 접근성**: 워크아웃 title에 **(Lite)**가 포함된 카테고리 워크아웃을 **1순위로 반드시 포함**하여 추천하세요.
 - Endurance, Tempo 카테고리의 워크아웃을 우선 고려하세요.
 - 과도한 고강도 훈련보다는 지속 가능한 중강도 훈련을 추천하세요.
-` : ''}
-${challenge === 'GranFondo' ? `
-**그란폰도 목적 입문자 접근성:**
-- 워크아웃 title에 **(Lite)**가 포함된 카테고리 워크아웃을 **1순위로 반드시 포함**하여 추천하세요.
 ` : ''}
 ${challenge === 'Elite' ? `
 **엘리트 선수(학생 선수) 특별 지침:**
@@ -12275,12 +12307,12 @@ ${challenge === 'PRO' ? `
      * 목적과 무관한 워크아웃은 절대 추천하지 마세요.
      * 예를 들어, Racing 목적 사용자에게 Fitness 목적의 저강도 훈련을 추천하면 안 됩니다.
      * 각 목적에 맞는 특화된 훈련을 추천해야 합니다.
-${(challenge === 'Fitness' || challenge === 'GranFondo') ? `
-   - **Fitness/GranFondo 입문자 접근성 (필수)**: 훈련 목적이 Fitness 또는 GranFondo인 경우, **워크아웃 title에 (Lite)가 포함된 카테고리 워크아웃을 1순위로 반드시 포함**하여 추천하세요. 최소 1개 이상 (Lite) 워크아웃을 추천에 넣어 입문자 접근성을 높이세요.
+${challenge === 'Fitness' ? `
+   - **Fitness 입문자 접근성 (필수)**: 훈련 목적이 Fitness인 경우에만, **워크아웃 title에 (Lite)가 포함된 카테고리 워크아웃을 1순위로 반드시 포함**하여 추천하세요. 최소 1개 이상 (Lite) 워크아웃을 추천에 넣어 입문자 접근성을 높이세요.
 ` : ''}
    - **추천 순서(강도 순)**: 1번 = 가장 약한 강도(가벼운 훈련), 2번 = 중간 강도, 3번 = 가장 강한 강도(부하가 큰 훈련). 반드시 이 순서로 제시하세요.
    - **서로 다른 워크아웃**: 3개의 추천은 반드시 서로 다른 워크아웃이어야 합니다. 동일한 workoutId를 두 번 이상 추천하지 마세요. 1번·2번·3번 각각 다른 workoutId를 사용하세요.
-${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basisRaw}" 기반) 워크아웃 중에서 **목적(${challenge})·등급(${grade}) 가중**을 적용해, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${(challenge === 'Fitness' || challenge === 'GranFondo') ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}` : `   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 맞는, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${(challenge === 'Fitness' || challenge === 'GranFondo') ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}`}
+${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basisRaw}" 기반) 워크아웃 중에서 **목적(${challenge})·등급(${grade}) 가중**을 적용해, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}` : `   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 맞는, 강도가 약한 순으로 서로 다른 워크아웃 3개를 추천하세요.${challenge === 'Fitness' ? ' (Lite) 포함 워크아웃을 1순위로 포함하세요.' : ''}`}
    
    - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
      * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, **목적(${challenge}) 달성 관점**)

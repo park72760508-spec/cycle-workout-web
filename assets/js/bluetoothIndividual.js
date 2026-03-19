@@ -4305,7 +4305,7 @@ async function getUserChallenge() {
         if (normalized === 'elite') return 'Elite';
         if (normalized === 'pro') return 'PRO';
         // 원본 값이 이미 정규화되어 있으면 그대로 반환
-        if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+        if (['Fitness', 'GranFondo', 'IronMan', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
             return userChallenge;
         }
     }
@@ -4345,7 +4345,7 @@ function getUserChallengeSync() {
         if (normalized === 'racing') return 'Racing';
         if (normalized === 'elite') return 'Elite';
         if (normalized === 'pro') return 'PRO';
-        if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+        if (['Fitness', 'GranFondo', 'IronMan', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
             return userChallenge;
         }
     }
