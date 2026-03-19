@@ -43,6 +43,20 @@ const CORS_ORIGINS = [
 /** 1일 500 이상 TSS: 치팅으로 간주, 합산·포인트 적립 제외 (주간 TOP10, Strava 동기화 공통) */
 const TSS_PER_DAY_CHEAT_THRESHOLD = 500;
 
+/** MMP/FTP 계산에 포함할 Strava 활동 타입 (사이클링만). Run 등은 제외 */
+const CYCLING_ACTIVITY_TYPES = new Set([
+  "Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide",
+]);
+
+/** Strava 로그가 사이클링 활동인지 여부. source가 strava가 아니면 true(Stelvio 등) */
+function isCyclingForMmp(logData) {
+  const source = String(logData.source || "").toLowerCase();
+  if (source !== "strava") return true; // Stelvio 등: 항상 사이클링
+  const type = String(logData.activity_type || "").trim();
+  if (!type) return false; // Strava인데 activity_type 없음: 마이그레이션 전 → MMP 제외(안전)
+  return CYCLING_ACTIVITY_TYPES.has(type);
+}
+
 // CORS 헤더 설정 헬퍼 (preflight 및 실제 응답에 사용)
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || "";
@@ -761,6 +775,7 @@ async function processStravaActivity(db, ownerId, objectId) {
     activity_id: mapped.activity_id,
     user_id: mapped.user_id,
     source: mapped.source,
+    activity_type: mapped.activity_type ?? null,
     date: mapped.date,
     title: mapped.title,
     distance_km: mapped.distance_km,
@@ -883,10 +898,12 @@ function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
   let efficiencyFactor = null;
   if (np > 0 && avgHr != null && avgHr > 0) efficiencyFactor = Math.round((np / avgHr) * 100) / 100;
   const now = new Date().toISOString();
+  const activityType = String(activity.sport_type || activity.type || "").trim() || null;
   return {
     activity_id: String(activity.id || ""),
     user_id: userId,
     source: "strava",
+    activity_type: activityType,
     title,
     date: dateStr,
     distance_km: distanceKm,
@@ -1267,6 +1284,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       activity_id: mapped.activity_id,
       user_id: mapped.user_id,
       source: mapped.source,
+      activity_type: mapped.activity_type ?? null,
       date: mapped.date,
       title: mapped.title,
       distance_km: mapped.distance_km,
@@ -1745,6 +1763,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           activity_id: mapped.activity_id,
           user_id: mapped.user_id,
           source: mapped.source,
+          activity_type: mapped.activity_type ?? null,
           date: mapped.date,
           title: mapped.title,
           distance_km: mapped.distance_km,
@@ -2375,6 +2394,7 @@ async function saveSuspiciousPowerRecord(db, { userId, year, date, durationType,
 /** 로그의 피크 파워를 검증 후 연간 최고 기록에 업서트. 무효 시 suspicious_power_records에 Pending 저장
  * weight: log.weight 우선, 없으면 userData.weight 사용 (W/kg 산출 정확도) */
 async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
+  if (!isCyclingForMmp(logData)) return; // Run 등 비사이클링 Strava 로그는 MMP 제외
   const rawWeight = Number(logData.weight || userData.weight || userData.weightKg || 0);
   if (rawWeight <= 0) return;
   const weightKg = Math.max(rawWeight, 45);
@@ -2512,6 +2532,7 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
       let maxHrFromLogs = 0;
       logsSnap.docs.forEach((doc) => {
         const d = doc.data();
+        if (!isCyclingForMmp(d)) return;
         const w = Number(d[field]) || 0;
         if (w > 0 && validatePeakPowerRecord(durationType, w, weightKg) && w > maxWattsFromLogs) maxWattsFromLogs = w;
         const hr = Number(d.max_hr) || 0;
@@ -2553,6 +2574,7 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
   let maxWatts = 0;
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
+    if (!isCyclingForMmp(d)) return;
     const watts = Number(d[field]) || 0;
     if (watts <= 0) return;
     if (!validatePeakPowerRecord(durationType, watts, weightKg)) return;
@@ -3194,6 +3216,7 @@ exports.getFtpSuggestion = onRequest(
     const byDate = {};
     logsSnap.docs.forEach((doc) => {
       const d = doc.data();
+      if (!isCyclingForMmp(d)) return; // Run 등 비사이클링 Strava 로그는 FTP 제안에서 제외
       const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
       if (!dateStr) return;
       const tss = Number(d.tss) || 0;
@@ -3344,6 +3367,93 @@ exports.confirmFtp = onRequest(
     });
 
     res.status(200).json({ success: true, ftp: suggestedFtp });
+  }
+);
+
+// ---------- Strava activity_type 마이그레이션 (기존 로그에 activity_type 채우기) ----------
+/** Strava Rate Limit: 100 req/15min, 1000/day. 호출 간 1.5초 딜레이 권장 */
+const MIGRATION_API_DELAY_MS = 1500;
+
+/** 기존 Strava 로그에 activity_type 필드 채우기. GET/POST ?secret=INTERNAL_SYNC_SECRET&userId=선택 */
+exports.migrateStravaActivityType = onRequest(
+  { cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", "*");
+    const secret = req.query.secret || req.body?.secret || "";
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      return res.status(403).json({ success: false, error: "인증 필요" });
+    }
+    const targetUserId = (req.query.userId || req.body?.userId || "").trim() || null;
+
+    const db = admin.firestore();
+    const userQuery = db.collection("users").where("strava_refresh_token", ">", "");
+    const usersSnap = await (targetUserId
+      ? db.collection("users").doc(targetUserId).get().then((s) => ({ docs: s.exists ? [s] : [] }))
+      : userQuery.get());
+
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let totalErrors = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      let accessToken = userData.strava_access_token || "";
+      const expiresAt = Number(userData.strava_expires_at || 0);
+      const now = Math.floor(Date.now() / 1000);
+      if (!accessToken || expiresAt < now + 300) {
+        try {
+          const { accessToken: token } = await refreshStravaTokenForUser(db, userId);
+          accessToken = token;
+        } catch (e) {
+          console.warn("[migrateStravaActivityType] 토큰 갱신 실패:", userId, e.message);
+          totalErrors++;
+          continue;
+        }
+      }
+
+      const logsSnap = await db.collection("users").doc(userId).collection("logs")
+        .where("source", "==", "strava")
+        .get();
+
+      const toUpdate = logsSnap.docs.filter((d) => {
+        const t = String(d.data().activity_type || "").trim();
+        return !t;
+      });
+
+      for (const logDoc of toUpdate) {
+        const activityId = logDoc.data().activity_id || logDoc.id;
+        if (!activityId) {
+          totalSkipped++;
+          continue;
+        }
+        if (totalUpdated + totalErrors > 0 && MIGRATION_API_DELAY_MS > 0) {
+          await new Promise((r) => setTimeout(r, MIGRATION_API_DELAY_MS));
+        }
+        const result = await fetchStravaActivityDetail(accessToken, activityId);
+        if (!result.success || !result.activity) {
+          console.warn("[migrateStravaActivityType] API 실패:", userId, activityId, result.error);
+          totalErrors++;
+          continue;
+        }
+        const activityType = String(result.activity.sport_type || result.activity.type || "").trim() || null;
+        await db.collection("users").doc(userId).collection("logs").doc(logDoc.id).update({
+          activity_type: activityType,
+        });
+        totalUpdated++;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      updated: totalUpdated,
+      skipped: totalSkipped,
+      errors: totalErrors,
+    });
   }
 );
 
