@@ -3371,14 +3371,14 @@ exports.confirmFtp = onRequest(
 );
 
 // ---------- Strava activity_type 마이그레이션 (기존 로그에 activity_type 채우기) ----------
-/** Strava Rate Limit: 100 req/15min, 1000/day. 호출 간 1.5초 딜레이 권장 */
-const MIGRATION_API_DELAY_MS = 1500;
+/** Strava Rate Limit: 100 req/15min, 1000/day. 호출 간 1초 딜레이 (타임아웃 방지) */
+const MIGRATION_API_DELAY_MS = 1000;
 
 /** 기존 Strava 로그에 activity_type 필드 채우기.
  *  GET/POST ?secret=INTERNAL_SYNC_SECRET&userId=선택&limit=20
- *  limit: 한 요청당 처리할 최대 로그 수 (기본 20). 타임아웃 방지용. 반복 호출로 전체 마이그레이션 */
+ *  limit: 한 요청당 처리할 최대 로그 수 (기본 5). 타임아웃 방지용. 반복 호출로 전체 마이그레이션 */
 exports.migrateStravaActivityType = onRequest(
-  { cors: true, timeoutSeconds: 120 },
+  { cors: true, timeoutSeconds: 60 },
   async (req, res) => {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
@@ -3390,8 +3390,8 @@ exports.migrateStravaActivityType = onRequest(
       return res.status(403).json({ success: false, error: "인증 필요" });
     }
     const targetUserId = (req.query.userId || req.body?.userId || "").trim() || null;
-    const limitParam = parseInt(req.query.limit || req.body?.limit || "20", 10);
-    const limit = isNaN(limitParam) || limitParam < 1 ? 20 : Math.min(limitParam, 100);
+    const limitParam = parseInt(req.query.limit || req.body?.limit || "5", 10);
+    const limit = isNaN(limitParam) || limitParam < 1 ? 5 : Math.min(limitParam, 50);
 
     const db = admin.firestore();
     const userQuery = db.collection("users").where("strava_refresh_token", ">", "");
