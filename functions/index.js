@@ -3526,6 +3526,105 @@ exports.migrateStravaActivityType = onRequest(
   }
 );
 
+/** 전체 사용자 로그에 activity_type 채우기 (Strava+Stelvio 통합).
+ *  Strava: 토큰 있으면 API 조회, 없으면 Unknown. Stelvio: Stelvio.
+ *  ?secret=INTERNAL_SYNC_SECRET (선택: userId, limit, noChain) */
+exports.migrateAllLogsActivityType = onRequest(
+  { cors: true, timeoutSeconds: 300 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    res.set("Access-Control-Allow-Origin", "*");
+    const secret = req.query.secret || req.body?.secret || "";
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      return res.status(403).json({ success: false, error: "인증 필요" });
+    }
+    const targetUserId = (req.query.userId || req.body?.userId || "").trim() || null;
+    const limitParam = parseInt(req.query.limit || req.body?.limit || "100", 10);
+    const limit = isNaN(limitParam) || limitParam < 1 ? 100 : Math.min(limitParam, 500);
+    const noChain = req.query.noChain === "1" || req.body?.noChain === "1";
+
+    const db = admin.firestore();
+    const usersSnap = targetUserId
+      ? await db.collection("users").doc(targetUserId).get().then((s) => ({ docs: s.exists ? [s] : [] }))
+      : await db.collection("users").get();
+
+    let stravaUpdated = 0;
+    let stelvioUpdated = 0;
+    let stravaErrors = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+      const logsSnap = await db.collection("users").doc(userId).collection("logs").get();
+      const toUpdate = logsSnap.docs.filter((d) => !String(d.data().activity_type || "").trim());
+      if (toUpdate.length === 0) continue;
+
+      const hasStravaToken = !!(userData.strava_refresh_token && String(userData.strava_refresh_token).trim());
+      let accessToken = null;
+      if (hasStravaToken) {
+        try {
+          const { accessToken: token } = await refreshStravaTokenForUser(db, userId);
+          accessToken = token;
+        } catch (e) {
+          console.warn("[migrateAllLogsActivityType] 토큰 갱신 실패:", userId, e.message);
+        }
+      }
+
+      for (const logDoc of toUpdate) {
+        if (stravaUpdated + stelvioUpdated >= limit) break;
+        const d = logDoc.data();
+        const src = String(d.source || "").toLowerCase();
+        let activityType;
+
+        if (src === "strava") {
+          let activityId = d.activity_id ? String(d.activity_id) : String(logDoc.id);
+          if (accessToken && activityId) {
+            if (stravaUpdated + stravaErrors > 0 && MIGRATION_API_DELAY_MS > 0) {
+              await new Promise((r) => setTimeout(r, MIGRATION_API_DELAY_MS));
+            }
+            let result = await fetchStravaActivityDetail(accessToken, activityId);
+            if (!result.success && d.activity_id !== logDoc.id && String(logDoc.id).match(/^\d+$/)) {
+              result = await fetchStravaActivityDetail(accessToken, String(logDoc.id));
+            }
+            if (result.success && result.activity) {
+              activityType = String(result.activity.sport_type || result.activity.type || "").trim() || null;
+            }
+            if (!activityType) {
+              stravaErrors++;
+              activityType = "Unknown";
+            }
+          } else {
+            activityType = "Unknown";
+          }
+          await logDoc.ref.update({ activity_type: activityType });
+          stravaUpdated++;
+        } else {
+          activityType = d.activity_type || "Stelvio";
+          await logDoc.ref.update({ source: src || "stelvio", activity_type: activityType });
+          stelvioUpdated++;
+        }
+      }
+      if (stravaUpdated + stelvioUpdated >= limit) break;
+    }
+
+    const hasMore = stravaUpdated + stelvioUpdated >= limit;
+    const payload = { success: true, stravaUpdated, stelvioUpdated, stravaErrors, hasMore, chained: false };
+
+    if (hasMore && !noChain) {
+      try {
+        const protocol = req.headers["x-forwarded-proto"] || "https";
+        const host = req.headers.host || req.get?.("host");
+        const params = new URLSearchParams({ secret, limit: String(limit) });
+        if (targetUserId) params.set("userId", targetUserId);
+        const nextUrl = `${protocol}://${host}/?${params.toString()}`;
+        fetch(nextUrl).catch((e) => console.warn("[migrateAllLogsActivityType] 체이닝 실패:", e.message));
+        payload.chained = true;
+      } catch (e) { /* ignore */ }
+    }
+    res.status(200).json(payload);
+  }
+);
+
 /** 기존 Stelvio 로그에 source, activity_type 추가. ?secret=INTERNAL_SYNC_SECRET */
 exports.migrateStelvioLogActivityType = onRequest(
   { cors: true, timeoutSeconds: 300 },
