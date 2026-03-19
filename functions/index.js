@@ -3440,12 +3440,14 @@ exports.migrateStravaActivityType = onRequest(
           await new Promise((r) => setTimeout(r, MIGRATION_API_DELAY_MS));
         }
         const result = await fetchStravaActivityDetail(accessToken, activityId);
+        let activityType;
         if (!result.success || !result.activity) {
           console.warn("[migrateStravaActivityType] API 실패:", userId, activityId, result.error);
           totalErrors++;
-          continue;
+          activityType = "Unknown"; // 재시도 방지: 실패한 로그도 표시해 다음 실행에서 제외
+        } else {
+          activityType = String(result.activity.sport_type || result.activity.type || "").trim() || null;
         }
-        const activityType = String(result.activity.sport_type || result.activity.type || "").trim() || null;
         await db.collection("users").doc(userId).collection("logs").doc(logDoc.id).update({
           activity_type: activityType,
         });
