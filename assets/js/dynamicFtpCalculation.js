@@ -4,6 +4,22 @@
  * @module dynamicFtpCalculation
  */
 
+/** FTP/MMP 산출에서 제외할 활동 타입 (Run, Swim, Walk, TrailRun) */
+var EXCLUDED_ACTIVITY_TYPES = { run: 1, swim: 1, walk: 1, trailrun: 1 };
+
+/**
+ * 로그가 사이클링(MMP/FTP 산출 대상)인지 판별
+ * @param {Object} logData - 로그 객체
+ * @returns {boolean}
+ */
+function isCyclingForFtp(logData) {
+  var source = String(logData.source || '').toLowerCase();
+  if (source !== 'strava') return true;
+  var type = String(logData.activity_type || '').trim().toLowerCase();
+  if (!type) return true;
+  return !EXCLUDED_ACTIVITY_TYPES[type];
+}
+
 /** 구간별 설정: 분, 환산계수(eFTP), 신뢰도 가중치(W) */
 var INTERVAL_CONFIG = [
   { minutes: 1,  field: 'max_1min_watts',  eFtpFactor: 0.45, weight: 0.05 },
@@ -90,7 +106,11 @@ function calculateDynamicFtp(logs) {
   if (!Array.isArray(logs) || logs.length === 0) {
     return { success: false, error: '훈련 로그가 없습니다. 파워 데이터가 있는 훈련을 먼저 기록해 주세요.' };
   }
-  var prRows = getPrWithDatesFromLogs(logs);
+  var cyclingLogs = logs.filter(isCyclingForFtp);
+  if (cyclingLogs.length === 0) {
+    return { success: false, error: '사이클링 훈련 로그가 없습니다. Run/Swim/Walk/TrailRun은 FTP 산출에서 제외됩니다.' };
+  }
+  var prRows = getPrWithDatesFromLogs(cyclingLogs);
   var sumWeighted = 0;
   var sumWeights = 0;
   var usedCount = 0;
@@ -130,4 +150,6 @@ if (typeof window !== 'undefined') {
   window.getPrWithDatesFromLogs = getPrWithDatesFromLogs;
   window.getTimeDecayWeight = getTimeDecayWeight;
   window.INTERVAL_CONFIG = INTERVAL_CONFIG;
+  window.isCyclingForFtp = isCyclingForFtp;
+  window.EXCLUDED_ACTIVITY_TYPES_FTP = EXCLUDED_ACTIVITY_TYPES;
 }
