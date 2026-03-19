@@ -1573,7 +1573,7 @@ const STRAVA_API_CALL_LIMIT = 85;
  * months 파라미터로 기간 설정. DB 존재 시 파워만 업데이트, 미존재 시 전체 생성+TSS 정산.
  * Rate Limit: 활동당 1초 대기, API 85회 도달 시 중단, hasMore 반환.
  */
-const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 540 };
+const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 540, memory: "1GiB" };
 if (STRAVA_CLIENT_SECRET) {
   manualStravaSyncWithMmpOptions.secrets = [STRAVA_CLIENT_SECRET];
 }
