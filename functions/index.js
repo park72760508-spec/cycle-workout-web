@@ -43,11 +43,11 @@ const CORS_ORIGINS = [
 /** 1일 500 이상 TSS: 치팅으로 간주, 합산·포인트 적립 제외 (주간 TOP10, Strava 동기화 공통) */
 const TSS_PER_DAY_CHEAT_THRESHOLD = 500;
 
-/** Strava에서 TSS·포인트·FTP·MMP 제외할 활동 타입. Run, Swim, Walk, TrailRun */
-const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk", "trailrun"]);
+/** Strava에서 TSS·포인트·FTP·MMP 제외할 활동 타입. Run, Swim, Walk, TrailRun, WeightTraining */
+const EXCLUDED_ACTIVITY_TYPES = new Set(["run", "swim", "walk", "trailrun", "weighttraining"]);
 
 /** Strava 로그가 MMP/수집 대상인지. source가 strava가 아니면 true(Stelvio 등).
- *  Strava: Run, Swim, Walk만 제외, 나머지(Ride, VirtualRide, Unknown 등) 모두 수집 */
+ *  Strava: Run, Swim, Walk, TrailRun, WeightTraining 제외, 나머지(Ride, VirtualRide 등) 수집 */
 function isCyclingForMmp(logData) {
   const source = String(logData.source || "").toLowerCase();
   if (source !== "strava") return true; // Stelvio 등: 항상 수집
@@ -1577,26 +1577,27 @@ const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 540 };
 if (STRAVA_CLIENT_SECRET) {
   manualStravaSyncWithMmpOptions.secrets = [STRAVA_CLIENT_SECRET];
 }
+function setManualSyncCorsHeaders(req, res) {
+  const origin = req.headers.origin || "";
+  const allowed = CORS_ORIGINS.some((o) => (typeof o === "string" ? origin === o : o.test(origin)));
+  res.set("Access-Control-Allow-Origin", (allowed && origin) ? origin : "https://stelvio.ai.kr");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Max-Age", "3600");
+}
+
 exports.manualStravaSyncWithMmp = onRequest(
   manualStravaSyncWithMmpOptions,
   async (req, res) => {
-    const forceRecalcTimeInZones = String(req.query?.forceRecalcTimeInZones || req.body?.forceRecalcTimeInZones || "").toLowerCase() === "true";
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", req.query?.months || req.body?.months, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
+    setManualSyncCorsHeaders(req, res);
     if (req.method === "OPTIONS") {
-      res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
-      res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      res.set("Access-Control-Max-Age", "3600");
       res.status(204).send("");
       return;
     }
-    const origin = req.headers.origin;
-    if (origin && CORS_ORIGINS.some((o) => (typeof o === "string" ? origin === o : o.test(origin)))) {
-      res.set("Access-Control-Allow-Origin", origin);
-    }
-    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    const forceRecalcTimeInZones = String(req.query?.forceRecalcTimeInZones || req.body?.forceRecalcTimeInZones || "").toLowerCase() === "true";
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", req.query?.months || req.body?.months, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
 
+    try {
     const uid = await getUidFromRequest(req, res);
     if (!uid) {
       console.warn("[manualStravaSyncWithMmp] 인증 실패: Authorization Bearer 토큰 없음 또는 유효하지 않음");
@@ -1892,6 +1893,10 @@ exports.manualStravaSyncWithMmp = onRequest(
       hasMore,
       apiCallCount,
     });
+    } catch (err) {
+      console.error("[manualStravaSyncWithMmp] 오류:", err);
+      res.status(500).json({ success: false, error: err.message || "동기화 중 오류가 발생했습니다." });
+    }
   }
 );
 
