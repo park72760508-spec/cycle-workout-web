@@ -298,6 +298,7 @@ async function saveStravaActivityToFirebase(activity) {
       activity_id: activityId,
       user_id: userId,
       source: activity.source || 'strava',
+      activity_type: activity.activity_type || null,
       date: activity.date || '',
       title: String(activity.title || ''),
       

@@ -314,12 +314,14 @@ function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
   const source = 'strava';
   const earnedPoints = 0; // 비즈니스 로직이므로 일단 0
   const workoutId = null; // 워크아웃 매칭 로직은 추후 구현
+  const activityType = String(activity.sport_type || activity.type || '').trim() || null;
 
   // 변환된 데이터 반환
   return {
     activity_id: String(activity.id || ''),
     user_id: userId,
     source: source,
+    activity_type: activityType,
     title: title,
     date: dateStr,
     distance_km: distanceKm,
@@ -649,7 +651,8 @@ async function fetchAndProcessStravaData(options = {}) {
             duration_sec: movingTime,
             tss: tss,
             user_id: userId,
-            source: 'strava'
+            source: 'strava',
+            activity_type: String(detailedActivity.sport_type || detailedActivity.type || '').trim() || null
           };
         }
 
