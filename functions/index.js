@@ -3374,9 +3374,11 @@ exports.confirmFtp = onRequest(
 /** Strava Rate Limit: 100 req/15min, 1000/day. 호출 간 1.5초 딜레이 권장 */
 const MIGRATION_API_DELAY_MS = 1500;
 
-/** 기존 Strava 로그에 activity_type 필드 채우기. GET/POST ?secret=INTERNAL_SYNC_SECRET&userId=선택 */
+/** 기존 Strava 로그에 activity_type 필드 채우기.
+ *  GET/POST ?secret=INTERNAL_SYNC_SECRET&userId=선택&limit=20
+ *  limit: 한 요청당 처리할 최대 로그 수 (기본 20). 타임아웃 방지용. 반복 호출로 전체 마이그레이션 */
 exports.migrateStravaActivityType = onRequest(
-  { cors: true, timeoutSeconds: 540 },
+  { cors: true, timeoutSeconds: 120 },
   async (req, res) => {
     if (req.method === "OPTIONS") {
       res.status(204).send("");
@@ -3388,6 +3390,8 @@ exports.migrateStravaActivityType = onRequest(
       return res.status(403).json({ success: false, error: "인증 필요" });
     }
     const targetUserId = (req.query.userId || req.body?.userId || "").trim() || null;
+    const limitParam = parseInt(req.query.limit || req.body?.limit || "20", 10);
+    const limit = isNaN(limitParam) || limitParam < 1 ? 20 : Math.min(limitParam, 100);
 
     const db = admin.firestore();
     const userQuery = db.collection("users").where("strava_refresh_token", ">", "");
@@ -3426,6 +3430,7 @@ exports.migrateStravaActivityType = onRequest(
       });
 
       for (const logDoc of toUpdate) {
+        if (totalUpdated >= limit) break; // limit 도달 시 조기 종료
         const activityId = logDoc.data().activity_id || logDoc.id;
         if (!activityId) {
           totalSkipped++;
@@ -3446,6 +3451,7 @@ exports.migrateStravaActivityType = onRequest(
         });
         totalUpdated++;
       }
+      if (totalUpdated >= limit) break; // 사용자 루프도 종료
     }
 
     res.status(200).json({
@@ -3453,6 +3459,7 @@ exports.migrateStravaActivityType = onRequest(
       updated: totalUpdated,
       skipped: totalSkipped,
       errors: totalErrors,
+      hasMore: totalUpdated >= limit, // limit에 도달해 조기 종료됐으면 반복 호출 필요
     });
   }
 );
