@@ -6537,9 +6537,10 @@ function initializeCurrentScreen(screenId) {
       break;
       
     case 'basecampScreen':
-      if (typeof window.checkFtpSuggestionAndShow === 'function') {
-        setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
-      }
+      // [주석처리] 다른 FTP 감시 로직 비활성화 — 나의 기록 로딩 완료 후 동적 FTP 산출만 구동
+      // if (typeof window.checkFtpSuggestionAndShow === 'function') {
+      //   setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
+      // }
       break;
 
     case 'connectionScreen':
@@ -7843,9 +7844,10 @@ async function authenticatePhone() {
             window.__basecampShownAfterAuth = true;
             window.showScreen('basecampScreen');
             console.log('✅ 다음 화면 표시 완료: basecampScreen');
-            if (typeof window.checkFtpSuggestionAndShow === 'function') {
-              setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
-            }
+            // [주석처리] 다른 FTP 감시 로직 비활성화 — 나의 기록 로딩 완료 후 동적 FTP 산출만 구동
+            // if (typeof window.checkFtpSuggestionAndShow === 'function') {
+            //   setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
+            // }
             return;
           }
           // 1단계: 인증 화면 완전 숨김 후 모든 화면 숨기기
