@@ -6404,6 +6404,142 @@ function closeStrava6MonthSyncPromptModal() {
   }
 }
 
+// 동적 FTP 모달 10일 보이지 않음 (나의 기록 진입 시 자동 표시에만 적용, FTP 산출하기 버튼은 무관)
+var DYNAMIC_FTP_COOLDOWN_DAYS = 10;
+function getDynamicFtpCooldownKey(userId) {
+  return 'dynamic_ftp_modal_cooldown_until_' + String(userId || '');
+}
+function isDynamicFtpCooldownActive(userId) {
+  try {
+    var key = getDynamicFtpCooldownKey(userId);
+    var until = parseInt(localStorage.getItem(key) || '0', 10);
+    return until > Date.now();
+  } catch (e) { return false; }
+}
+function setDynamicFtpCooldown(userId) {
+  try {
+    var until = Date.now() + DYNAMIC_FTP_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+    localStorage.setItem(getDynamicFtpCooldownKey(userId), String(until));
+  } catch (e) {}
+}
+if (typeof window !== 'undefined') {
+  window.getDynamicFtpCooldownKey = getDynamicFtpCooldownKey;
+  window.isDynamicFtpCooldownActive = isDynamicFtpCooldownActive;
+  window.setDynamicFtpCooldown = setDynamicFtpCooldown;
+}
+
+function showDynamicFtpResultModalForMyCareer(result, userProfile) {
+  var modal = document.getElementById('dynamicFtpResultModal');
+  var content = document.getElementById('dynamicFtpResultContent');
+  var buttons = document.getElementById('dynamicFtpResultButtons');
+  var cb = document.getElementById('dynamicFtpDontShow10Days');
+  if (!modal || !content || !buttons) return;
+  if (cb) cb.checked = false;
+  if (result && result.success) {
+    var details = result.details || [];
+    var tableRows = details.map(function(row) {
+      var appliedW = (row.weight || 0) * (row.timeDecay || 0);
+      var dateFmt = row.dateStr ? row.dateStr.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3') : '-';
+      var opacity = row.used ? 1 : 0.5;
+      return '<tr style="border-bottom:1px solid #f1f5f9;opacity:' + opacity + '"><td style="padding:6px;color:#334155">' + row.minutes + '분</td><td style="padding:6px;text-align:right;color:' + (row.used ? '#667eea' : '#94a3b8') + '">' + (row.power > 0 ? row.power : '-') + '</td><td style="padding:6px;text-align:center;color:#64748b;font-size:11px">' + dateFmt + '</td><td style="padding:6px;text-align:right;color:' + (row.used ? '#334155' : '#94a3b8') + '">' + (row.used ? row.eFtp : '-') + '</td><td style="padding:6px;text-align:right;color:#64748b">' + row.weight + '</td><td style="padding:6px;text-align:right;color:#64748b">' + (row.used ? row.timeDecay : '-') + '</td><td style="padding:6px;text-align:right;color:' + (row.used ? '#667eea' : '#94a3b8') + ';font-weight:600">' + (row.used ? appliedW.toFixed(2) : '-') + '</td></tr>';
+    }).join('');
+    content.innerHTML = '<div class="mb-4 overflow-x-auto"><table class="w-full text-xs" style="border-collapse:collapse"><thead><tr style="border-bottom:2px solid #e2e8f0"><th style="padding:8px 6px;text-align:left;color:#64748b;font-weight:600">구간</th><th style="padding:8px 6px;text-align:right;color:#64748b;font-weight:600">PR(W)</th><th style="padding:8px 6px;text-align:center;color:#64748b;font-weight:600">달성일</th><th style="padding:8px 6px;text-align:right;color:#64748b;font-weight:600">eFTP</th><th style="padding:8px 6px;text-align:right;color:#64748b;font-weight:600">W</th><th style="padding:8px 6px;text-align:right;color:#64748b;font-weight:600">D</th><th style="padding:8px 6px;text-align:right;color:#64748b;font-weight:600">W×D</th></tr></thead><tbody>' + tableRows + '</tbody></table><p class="text-xs mt-2" style="color:#94a3b8">W: 신뢰도 가중치 · D: 시간감쇠(최신 우대) · W×D: 최종 적용 가중치</p></div><p class="text-sm mb-5" style="color:#475569;line-height:1.6">새롭게 산출된 예상 FTP는 <strong style="color:#667eea;font-size:1.1em">' + result.newFtp + 'W</strong> 입니다. 이 값을 현재 나의 FTP로 업데이트 하시겠습니까?</p>';
+    buttons.innerHTML = '<button type="button" onclick="closeDynamicFtpResultModalWithCooldown();" style="flex:1;padding:12px 20px;font-size:15px;font-weight:600;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer">취소</button><button type="button" onclick="handleDynamicFtpModalUpdate();" style="flex:1;padding:12px 20px;font-size:15px;font-weight:600;color:#fff;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;border-radius:10px;cursor:pointer;box-shadow:0 2px 8px rgba(102,126,234,0.35)">FTP 업데이트</button>';
+  } else {
+    content.innerHTML = '<p class="text-red-600 mb-5" style="font-size:15px;line-height:1.5">' + (result && result.error ? result.error : 'FTP 산출 중 오류가 발생했습니다.') + '</p>';
+    buttons.innerHTML = '<button type="button" onclick="closeDynamicFtpResultModalWithCooldown();" style="width:100%;padding:12px 24px;font-size:15px;font-weight:600;color:#fff;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;border-radius:10px;cursor:pointer;box-shadow:0 2px 8px rgba(102,126,234,0.35)">확인</button>';
+  }
+  var up = userProfile || window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+  window.__dynamicFtpModalUserProfile = up;
+  window.__dynamicFtpModalResult = result;
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+}
+
+function closeDynamicFtpResultModal() {
+  var modal = document.getElementById('dynamicFtpResultModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  window.__dynamicFtpModalUserProfile = null;
+  window.__dynamicFtpModalResult = null;
+}
+
+function closeDynamicFtpResultModalWithCooldown() {
+  var cb = document.getElementById('dynamicFtpDontShow10Days');
+  var up = window.__dynamicFtpModalUserProfile;
+  if (cb && cb.checked && up && up.id && typeof window.setDynamicFtpCooldown === 'function') {
+    window.setDynamicFtpCooldown(up.id);
+  }
+  closeDynamicFtpResultModal();
+}
+
+async function handleDynamicFtpModalUpdate() {
+  var up = window.__dynamicFtpModalUserProfile;
+  var result = window.__dynamicFtpModalResult;
+  if (!up || !up.id || !result || !result.newFtp) return;
+  try {
+    var res = await (window.apiUpdateUser || function() { return Promise.resolve({ success: false, error: '함수 없음' }); })(up.id, { ftp: result.newFtp });
+    if (res && res.success) {
+      var cb = document.getElementById('dynamicFtpDontShow10Days');
+      if (cb && cb.checked && typeof window.setDynamicFtpCooldown === 'function') {
+        window.setDynamicFtpCooldown(up.id);
+      }
+      var cur = window.currentUser;
+      if (cur) { cur.ftp = result.newFtp; try { localStorage.setItem('currentUser', JSON.stringify(cur)); } catch (e) {} }
+      if (typeof window.userFTP !== 'undefined') window.userFTP = result.newFtp;
+      if (typeof showToast === 'function') showToast('성공적으로 반영되었습니다', 'success');
+    } else {
+      alert((res && res.error) || '업데이트에 실패했습니다.');
+    }
+  } catch (e) {
+    alert((e && e.message) || '업데이트 중 오류가 발생했습니다.');
+  }
+  closeDynamicFtpResultModal();
+}
+
+function checkAndShowDynamicFtpForMyCareer() {
+  var user = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
+  if (!user || !user.id) return;
+  if (isDynamicFtpCooldownActive(user.id)) return;
+  if (typeof window.calculateDynamicFtp !== 'function') return;
+  (async function() {
+    try {
+      var logs = [];
+      if (typeof window.getUserTrainingLogs === 'function') {
+        logs = await window.getUserTrainingLogs(user.id, { limit: 400 });
+        logs = Array.isArray(logs) ? logs : [];
+      }
+      if (logs.length === 0 && window.firestore) {
+        var snap = await window.firestore.collection('users').doc(user.id).collection('logs').orderBy('date', 'desc').limit(400).get();
+        snap.docs.forEach(function(d) {
+          var dd = d.data();
+          var o = { id: d.id };
+          if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+          logs.push(o);
+        });
+      }
+      if (logs.length === 0) return;
+      var result = window.calculateDynamicFtp(logs);
+      if (!result || !result.success || result.newFtp == null) return;
+      var savedFtp = Number(user.ftp || 0) || 0;
+      if (result.newFtp === savedFtp) return;
+      showDynamicFtpResultModalForMyCareer(result, user);
+    } catch (e) {
+      console.warn('[MyCareer] 동적 FTP 산출 오류:', e);
+    }
+  })();
+}
+
+if (typeof window !== 'undefined') {
+  window.showDynamicFtpResultModalForMyCareer = showDynamicFtpResultModalForMyCareer;
+  window.closeDynamicFtpResultModal = closeDynamicFtpResultModal;
+  window.closeDynamicFtpResultModalWithCooldown = closeDynamicFtpResultModalWithCooldown;
+  window.handleDynamicFtpModalUpdate = handleDynamicFtpModalUpdate;
+  window.checkAndShowDynamicFtpForMyCareer = checkAndShowDynamicFtpForMyCareer;
+}
+
 function handleStrava6MonthSyncNo() {
   var user = window.currentUser || (function() {
     try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
@@ -6629,6 +6765,13 @@ function initializeCurrentScreen(screenId) {
         }
       };
       setTimeout(checkAndLoad, 100);
+      break;
+
+    case 'myCareerScreen':
+      // 나의 기록 화면 진입 시: 사용자 FTP ≠ 동적 FTP일 때만 모달 표시 (10일 보이지 않음 체크 시 중단)
+      if (typeof window.checkAndShowDynamicFtpForMyCareer === 'function') {
+        setTimeout(window.checkAndShowDynamicFtpForMyCareer, 500);
+      }
       break;
       
       case 'trainingJournalScreen':
