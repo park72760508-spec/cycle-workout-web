@@ -1435,6 +1435,7 @@ async function apiUpdateUser(id, userData) {
     if (userData.strava_access_token != null) updateData.strava_access_token = String(userData.strava_access_token);
     if (userData.strava_refresh_token != null) updateData.strava_refresh_token = String(userData.strava_refresh_token);
     if (userData.strava_expires_at != null) updateData.strava_expires_at = Number(userData.strava_expires_at);
+    if (userData.is_private != null) updateData.is_private = userData.is_private === true;
     
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
@@ -1463,6 +1464,32 @@ async function apiUpdateUser(id, userData) {
 }
 // 전역 노출 (즉시 사용 가능하도록)
 window.apiUpdateUser = window.apiUpdateUser || apiUpdateUser;
+
+/**
+ * 비공개 설정 토글 (프로필 선택 화면)
+ * @param {string} userId - 사용자 ID
+ * @param {boolean} isPrivate - true=비공개, false=공개
+ */
+async function toggleUserPrivacy(userId, isPrivate) {
+  if (!userId) return;
+  try {
+    const res = await apiUpdateUser(userId, { is_private: isPrivate });
+    if (res && res.success) {
+      if (window.currentUser && String(window.currentUser.id) === userId) {
+        window.currentUser.is_private = isPrivate;
+        try { localStorage.setItem('currentUser', JSON.stringify(window.currentUser)); } catch (e) {}
+      }
+      if (typeof loadUsers === 'function') await loadUsers();
+      if (typeof showToast === 'function') showToast(isPrivate ? '비공개로 설정되었습니다.' : '공개로 설정되었습니다.');
+    } else {
+      if (typeof showToast === 'function') showToast('설정 변경에 실패했습니다.', 'error');
+    }
+  } catch (e) {
+    console.warn('[toggleUserPrivacy] 실패:', e);
+    if (typeof showToast === 'function') showToast('설정 변경에 실패했습니다.', 'error');
+  }
+}
+window.toggleUserPrivacy = toggleUserPrivacy;
 
 /**
  * 사용자 삭제
@@ -2172,11 +2199,12 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
     return false;
   };
-  const canDeleteFor = (u) => {
+    const canDeleteFor = (u) => {
     if (viewerGrade === '1') return true;
     if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
     return false;
   };
+  const canTogglePrivacyFor = (u) => viewerId && String(u.id) === viewerId; // 본인만 비공개 설정
   const showDashboardBtn = (viewerGrade === '1'); // grade=1만 대시보드 버튼 표시
   const sorted = [...usersToRender].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
   userList.innerHTML = sorted.map(user => {
@@ -2195,6 +2223,8 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     }
     const canEdit = canEditFor(user);
     const canDelete = canDeleteFor(user);
+    const canTogglePrivacy = canTogglePrivacyFor(user);
+    const isPrivate = user.is_private === true;
     const deleteButtonDisabled = !canDelete ? 'disabled' : '';
     const deleteButtonClass = !canDelete ? 'disabled' : '';
     const challenge = String(user.challenge || 'Fitness').trim();
@@ -2242,6 +2272,15 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
         <div class="user-details">
           <div class="user-stats"><span class="stat">FTP: ${user.ftp || '-'}W</span><span class="stat">체중: ${user.weight || '-'}kg</span><span class="stat">W/kg: ${wkg}</span></div>
           <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
+          ${canTogglePrivacy ? `
+          <div class="user-privacy-toggle" onclick="event.stopPropagation();">
+            <label class="privacy-toggle-label">
+              <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
+              <span class="privacy-toggle-slider"></span>
+              <span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span>
+            </label>
+          </div>
+          ` : ''}
           ${ftpZonesHtml}${hrZonesHtml}
         </div>
       </div>
