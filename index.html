@@ -7022,7 +7022,7 @@
           } else {
             displayArr = arr.slice(0, 3);
           }
-        } else if (cat !== 'Supremo' && arr.length > 10 && (userIdx >= 10 || userIdx === -1)) {
+        } else if (cat !== 'Supremo' && arr.length > 10) {
           needExpand = true;
           expandLimit = stelvioRankingExpandState[cat] || 10;
           displayArr = arr.slice(0, expandLimit);
@@ -7066,7 +7066,7 @@
           html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span>';
           html += '<span class="stelvio-rank-wkg"></span>';
           html += '</div>';
-          if (expandLimit > 10) {
+          if (expandLimit > 10 && expandLimit >= arr.length) {
             html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingCollapse(\'' + cat + '\');" role="button" tabindex="0">';
             html += '<span class="stelvio-rank-crown"></span>';
             html += '<span class="stelvio-rank-pos"></span>';
