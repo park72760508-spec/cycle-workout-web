@@ -6865,6 +6865,9 @@
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
      */
     var stelvioRankingState = { duration: '5min', gender: 'all', period: 'monthly' };
+    var stelvioRankingByCategory = null;
+    var stelvioRankingExpandState = {};
+    var stelvioRankingCurrentUserId = null;
     function openStelvioRankingBoardModal() {
       var m = document.getElementById('stelvioRankingBoardModal');
       if (m) { m.classList.remove('hidden'); fetchStelvioPeakPowerRanking(); }
@@ -6939,6 +6942,9 @@
           document.getElementById('stelvioMotivationText').textContent = data.motivationMessage;
           banner.classList.remove('hidden');
         }
+        stelvioRankingByCategory = data.byCategory;
+        stelvioRankingExpandState = {};
+        stelvioRankingCurrentUserId = uid;
         renderStelvioRankingCategories(data.byCategory, uid);
       } catch (e) {
         console.warn('[StelvioRanking] 조회 실패:', e);
@@ -6956,6 +6962,15 @@
       });
     }
 
+    function handleStelvioRankingExpand(cat) {
+      var cur = stelvioRankingExpandState[cat] || 10;
+      stelvioRankingExpandState[cat] = cur < 20 ? 20 : cur + 20;
+      if (stelvioRankingByCategory) {
+        renderStelvioRankingCategories(stelvioRankingByCategory, stelvioRankingCurrentUserId);
+      }
+    }
+    window.handleStelvioRankingExpand = handleStelvioRankingExpand;
+
     function renderStelvioRankingCategories(byCategory, currentUserId) {
       var medals = ['🥇', '🥈', '🥉'];
       var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
@@ -6969,18 +6984,26 @@
           el.innerHTML = '<p class="stelvio-ranking-empty">해당 카테고리에 랭킹이 없습니다.</p>';
           return;
         }
-        var userIdx = -1;
-        if (isExpired) {
-          userIdx = currentUserId ? arr.findIndex(function(item) { return item.userId === currentUserId; }) : -1;
-          if (userIdx >= 0 && userIdx >= 3) {
-            arr = arr.slice(0, 3).concat([arr[userIdx]]);
-          } else {
-            arr = arr.slice(0, 3);
-          }
-        }
+        var userIdx = currentUserId ? arr.findIndex(function(item) { return item.userId === currentUserId; }) : -1;
         var html = '';
         var maxNameLen = 12;
-        arr.forEach(function(item, idx) {
+        var displayArr = arr;
+        var needExpand = false;
+        var expandLimit = 10;
+
+        if (isExpired) {
+          if (userIdx >= 0 && userIdx >= 3) {
+            displayArr = arr.slice(0, 3).concat([arr[userIdx]]);
+          } else {
+            displayArr = arr.slice(0, 3);
+          }
+        } else if (cat !== 'Supremo' && arr.length > 10 && (userIdx >= 10 || userIdx === -1)) {
+          needExpand = true;
+          expandLimit = stelvioRankingExpandState[cat] || 10;
+          displayArr = arr.slice(0, expandLimit);
+        }
+
+        displayArr.forEach(function(item, idx) {
           var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
           var globalRank = item.rank || categoryRank;
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -6995,6 +7018,22 @@
           html += '<span class="stelvio-rank-wkg">' + wkg + '</span>';
           html += '</div>';
         });
+
+        if (needExpand && arr.length > expandLimit) {
+          html += '<div class="stelvio-rank-row stelvio-rank-dots-row">';
+          html += '<span class="stelvio-rank-crown"></span>';
+          html += '<span class="stelvio-rank-pos"></span>';
+          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span>';
+          html += '<span class="stelvio-rank-wkg"></span>';
+          html += '</div>';
+          html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingExpand(\'' + cat + '\');" role="button" tabindex="0">';
+          html += '<span class="stelvio-rank-crown"></span>';
+          html += '<span class="stelvio-rank-pos"></span>';
+          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text stelvio-rank-expand-text">펼쳐보기</span></span>';
+          html += '<span class="stelvio-rank-wkg stelvio-rank-expand-plus">+</span>';
+          html += '</div>';
+        }
+
         el.innerHTML = html;
       });
     }
