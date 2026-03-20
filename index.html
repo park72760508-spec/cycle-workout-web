@@ -4770,15 +4770,15 @@
     <div class="strava-sync-spinner" style="width: 64px; height: 64px; border: 4px solid rgba(34, 197, 94, 0.3); border-top-color: #22c55e; border-radius: 50%; animation: stravaSyncSpin 0.9s linear infinite;"></div>
     <p id="stravaSyncProgressText" style="margin-top: 16px; font-size: 1.1em; font-weight: 600; color: #fff;">0 / 0</p>
   </div>
-  <!-- STRAVA 6개월 동기화 확인 모달 (경로 선택 → 나의 기록 클릭 시, grade=1 포함 조건 충족 시 표시) - Strava 동기화 모달과 동일 디자인 -->
+  <!-- STRAVA 7일 동기화 확인 모달 (경로 선택 → 나의 기록 클릭 시, 일반 사용자 조건 충족 시 표시, grade=1 관리자는 팝업 없이 바로 화면 이동) -->
   <div id="strava6MonthSyncPromptModal" class="modal stelvio-ios-popup hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10002; display: none; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);" onclick="if(event.target === this) closeStrava6MonthSyncPromptModal();">
     <div class="modal-content stelvio-ios-modal-content" style="background: white; border-radius: 16px; padding: 0; max-width: 420px; width: 90%; box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.1); margin: 16px;" onclick="event.stopPropagation();">
       <div class="modal-header strava-sync-modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #e5e7eb; background: white; border-radius: 16px 16px 0 0;">
-        <h3 style="margin: 0; font-size: 1.2em; font-weight: 600; color: #1f2937;">STRAVA 최근 6개월 라이딩</h3>
+        <h3 style="margin: 0; font-size: 1.2em; font-weight: 600; color: #1f2937;">STRAVA 최근 7일 라이딩</h3>
         <button type="button" onclick="closeStrava6MonthSyncPromptModal();" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;" aria-label="닫기">&times;</button>
       </div>
       <div style="padding: 24px;">
-        <p class="stelvio-coming-soon-message" style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #2d3748; line-height: 1.5;">최근 6개월 라이딩 데이터를 가져올까요?</p>
+        <p class="stelvio-coming-soon-message" style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #2d3748; line-height: 1.5;">최근 7일 라이딩 데이터를 가져올까요?</p>
         <p style="margin: 0 0 20px 0; font-size: 14px; font-weight: 500; color: #6b7280; line-height: 1.5;">(데이터 수집 완료 시까지 잠시만 기다려 주세요)</p>
         <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 14px; color: #6b7280; cursor: pointer;">
           <input type="checkbox" id="strava6MonthSyncDontAskAgain" />
