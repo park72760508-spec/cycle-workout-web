@@ -1729,8 +1729,10 @@ exports.manualStravaSyncWithMmp = onRequest(
 
       if (exists) {
         const existingData = logSnap.data();
-        const needsMmp = existingData.max_1min_watts == null || existingData.max_5min_watts == null || existingData.max_10min_watts == null || existingData.max_20min_watts == null || existingData.max_30min_watts == null || existingData.max_40min_watts == null || existingData.max_60min_watts == null;
-        const needsHrPeaks = existingData.max_hr_5sec == null && existingData.max_hr_1min == null && existingData.max_hr_5min == null;
+        const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts'];
+        const hrFields = ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min', 'max_hr'];
+        const needsMmp = powerFields.some((f) => existingData[f] == null || existingData[f] === undefined);
+        const needsHrPeaks = hrFields.some((f) => existingData[f] == null || existingData[f] === undefined);
         const needsTimeInZones = forceRecalcTimeInZones || !existingData.time_in_zones || !existingData.time_in_zones.power;
         const needsWeight = existingData.weight == null;
         const needsActivityType = !String(existingData.activity_type || "").trim();
