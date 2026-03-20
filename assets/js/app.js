@@ -6320,8 +6320,8 @@ if (typeof window !== 'undefined') {
 
 /**
  * 경로 선택 → 나의 기록(MY CAREER) 클릭 시:
- * - grade=1(관리자): 조건과 관계없이 항상 STRAVA 6개월 동기화 팝업 표시
- * - 그 외: STRAVA 연결됨 + 최근 1개월 이상 훈련로그 없음 + "다음부터 묻지 않음" 미체크 시 표시
+ * - grade=1(관리자): 팝업 없이 바로 나의 기록 화면으로 이동 (스피너 오버레이 적용)
+ * - 그 외: STRAVA 연결됨 + 최근 1개월 이상 훈련로그 없음 + "다음부터 묻지 않음" 미체크 시 STRAVA 7일 동기화 팝업 표시
  */
 async function handleMyCareerClick() {
   try {
@@ -6338,7 +6338,7 @@ async function handleMyCareerClick() {
     }
     var isAdmin = (grade === '1' || grade === 1);
     if (isAdmin) {
-      openStrava6MonthSyncPromptModal();
+      showMyCareerScreenWithLoading();
       return;
     }
     var isStravaConnected = !!(user.strava_refresh_token || user.strava_access_token);
@@ -6346,7 +6346,7 @@ async function handleMyCareerClick() {
       showMyCareerScreenWithLoading();
       return;
     }
-    var dontAskKey = 'strava_6month_sync_dont_ask_' + String(user.id);
+    var dontAskKey = 'strava_7day_sync_dont_ask_' + String(user.id);
     try {
       if (localStorage.getItem(dontAskKey) === '1') {
         showMyCareerScreenWithLoading();
@@ -6410,10 +6410,11 @@ function handleStrava6MonthSyncNo() {
   })();
   var cb = document.getElementById('strava6MonthSyncDontAskAgain');
   if (user && user.id && cb && cb.checked) {
-    try { localStorage.setItem('strava_6month_sync_dont_ask_' + String(user.id), '1'); } catch (e) {}
+    try { localStorage.setItem('strava_7day_sync_dont_ask_' + String(user.id), '1'); } catch (e) {}
   }
   closeStrava6MonthSyncPromptModal();
-  if (typeof showScreen === 'function') showScreen('myCareerScreen');
+  if (typeof showMyCareerScreenWithLoading === 'function') showMyCareerScreenWithLoading();
+  else if (typeof showScreen === 'function') showScreen('myCareerScreen');
 }
 
 async function handleStrava6MonthSyncYes() {
@@ -6422,7 +6423,7 @@ async function handleStrava6MonthSyncYes() {
   })();
   var cb = document.getElementById('strava6MonthSyncDontAskAgain');
   if (user && user.id && cb && cb.checked) {
-    try { localStorage.setItem('strava_6month_sync_dont_ask_' + String(user.id), '1'); } catch (e) {}
+    try { localStorage.setItem('strava_7day_sync_dont_ask_' + String(user.id), '1'); } catch (e) {}
   }
   closeStrava6MonthSyncPromptModal();
   if (typeof syncStravaDataWithMmp === 'function') {
@@ -6431,9 +6432,10 @@ async function handleStrava6MonthSyncYes() {
       textId: 'strava6MonthSyncOverlayText',
       progressMessage: 'STRAVA 라이딩 데이터 수집 중...'
     };
-    await syncStravaDataWithMmp(6, opts);
+    await syncStravaDataWithMmp(0, Object.assign({}, opts, { days: 7 }));
   }
-  if (typeof showScreen === 'function') showScreen('myCareerScreen');
+  if (typeof showMyCareerScreenWithLoading === 'function') showMyCareerScreenWithLoading();
+  else if (typeof showScreen === 'function') showScreen('myCareerScreen');
 }
 
 window.showScreen = function(screenId) {
