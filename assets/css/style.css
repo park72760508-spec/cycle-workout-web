@@ -3401,6 +3401,17 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 600;
   color: #1f2937;
 }
+.ranking-private-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 600;
+  border-radius: 6px;
+  vertical-align: middle;
+}
 .weekly-rank-tss {
   font-weight: 600;
   color: #1e40af;
@@ -4299,6 +4310,55 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0; /* 아이콘 크기 고정 */
 }
 #profileScreen .user-card .user-meta{ color:var(--text-muted); font-size:13px; }
+
+/* 프로필 카드: 비공개 토글 */
+#profileScreen .user-card .user-privacy-toggle {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+#profileScreen .user-card .privacy-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  user-select: none;
+}
+#profileScreen .user-card .privacy-toggle-input {
+  display: none;
+}
+#profileScreen .user-card .privacy-toggle-slider {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: #cbd5e1;
+  border-radius: 11px;
+  transition: background 0.2s;
+}
+#profileScreen .user-card .privacy-toggle-slider::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s;
+}
+#profileScreen .user-card .privacy-toggle-input:checked + .privacy-toggle-slider {
+  background: #ef4444;
+}
+#profileScreen .user-card .privacy-toggle-input:checked + .privacy-toggle-slider::after {
+  transform: translateX(18px);
+}
+#profileScreen .user-card .privacy-toggle-text {
+  font-weight: 500;
+  color: #374151;
+}
 
 /* 프로필 카드: 수정/삭제 버튼 (이미지 버튼) */
 #profileScreen .user-card .btn-edit,
