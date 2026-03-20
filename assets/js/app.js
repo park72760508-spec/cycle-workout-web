@@ -6500,18 +6500,32 @@ async function handleDynamicFtpModalUpdate() {
 }
 
 function checkAndShowDynamicFtpForMyCareer() {
+  console.log('[MyCareer/FTP] checkAndShowDynamicFtpForMyCareer 시작');
   var user = window.currentUser || (function() { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } })();
   var userId = user && (user.id || user.uid);
-  if (!user || !userId) return;
-  if (isDynamicFtpCooldownActive(userId)) return;
-  if (typeof window.calculateDynamicFtp !== 'function') return;
+  if (!user || !userId) {
+    console.log('[MyCareer/FTP] 중단: 사용자 없음 (user:', !!user, ', userId:', userId, ')');
+    return;
+  }
+  if (isDynamicFtpCooldownActive(userId)) {
+    console.log('[MyCareer/FTP] 중단: 10일 보이지 않음 쿨다운 중');
+    return;
+  }
+  if (typeof window.calculateDynamicFtp !== 'function') {
+    console.warn('[MyCareer/FTP] 중단: calculateDynamicFtp 함수 없음');
+    return;
+  }
+  console.log('[MyCareer/FTP] 조건 통과 - 비동기 FTP 산출 시작 (userId:', String(userId).slice(0, 8) + '...)');
   (async function() {
     try {
       // 1) getUserTrainingLogs·firestoreV9 대기 (최대 8초)
       var pollMs = 0;
       var maxPollMs = 8000;
       while (pollMs < maxPollMs) {
-        if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) break;
+        if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
+          console.log('[MyCareer/FTP] 의존성 준비됨 (대기', pollMs, 'ms)');
+          break;
+        }
         if (typeof window.ensureFirestoreV9ReadyForJournal === 'function' && !window.firestoreV9) {
           await window.ensureFirestoreV9ReadyForJournal(4000);
         }
@@ -6520,31 +6534,36 @@ function checkAndShowDynamicFtpForMyCareer() {
       }
       if (typeof window.getUserTrainingLogs !== 'function' || !window.firestoreV9) {
         if (window.firestore) {
-          // firestore compat 폴백: getUserTrainingLogs 없어도 compat로 시도
+          console.log('[MyCareer/FTP] firestore compat 폴백 사용 예정');
         } else {
-          console.warn('[MyCareer] 동적 FTP: getUserTrainingLogs 또는 firestoreV9 미준비');
+          console.warn('[MyCareer/FTP] 중단: getUserTrainingLogs 또는 firestoreV9 미준비 (getUserTrainingLogs:', typeof window.getUserTrainingLogs, ', firestoreV9:', !!window.firestoreV9, ')');
           return;
         }
       }
       var logs = [];
       if (typeof window.getUserTrainingLogs === 'function' && window.firestoreV9) {
         try {
+          console.log('[MyCareer/FTP] getUserTrainingLogs 호출 중...');
           logs = await window.getUserTrainingLogs(userId, { limit: 400 });
           logs = Array.isArray(logs) ? logs : [];
+          console.log('[MyCareer/FTP] 로그 조회 완료:', logs.length, '건');
         } catch (fetchErr) {
+          console.warn('[MyCareer/FTP] getUserTrainingLogs 1차 실패:', fetchErr && fetchErr.message);
           if (typeof window.ensureFirestoreV9ReadyForJournal === 'function') {
             await window.ensureFirestoreV9ReadyForJournal(3000);
             try {
               logs = await window.getUserTrainingLogs(userId, { limit: 400 });
               logs = Array.isArray(logs) ? logs : [];
+              console.log('[MyCareer/FTP] 재시도 후 로그:', logs.length, '건');
             } catch (e2) {
-              console.warn('[MyCareer] getUserTrainingLogs 재시도 실패:', e2);
+              console.warn('[MyCareer/FTP] getUserTrainingLogs 재시도 실패:', e2);
             }
           }
         }
       }
       if (logs.length === 0 && window.firestore) {
         try {
+          console.log('[MyCareer/FTP] Firestore compat 폴백으로 로그 조회...');
           var snap = await window.firestore.collection('users').doc(userId).collection('logs').orderBy('date', 'desc').limit(400).get();
           snap.docs.forEach(function(d) {
             var dd = d.data();
@@ -6552,18 +6571,29 @@ function checkAndShowDynamicFtpForMyCareer() {
             if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
             logs.push(o);
           });
+          console.log('[MyCareer/FTP] compat 로그:', logs.length, '건');
         } catch (e) {
-          console.warn('[MyCareer] Firestore compat 폴백 실패:', e);
+          console.warn('[MyCareer/FTP] Firestore compat 폴백 실패:', e);
         }
       }
-      if (logs.length === 0) return;
+      if (logs.length === 0) {
+        console.log('[MyCareer/FTP] 중단: 훈련 로그 없음');
+        return;
+      }
       var result = window.calculateDynamicFtp(logs);
-      if (!result || !result.success || result.newFtp == null) return;
+      if (!result || !result.success || result.newFtp == null) {
+        console.log('[MyCareer/FTP] 중단: FTP 산출 실패 또는 결과 없음 (success:', result && result.success, ', newFtp:', result && result.newFtp, ')');
+        return;
+      }
       var savedFtp = Number(user.ftp || 0) || 0;
-      if (result.newFtp === savedFtp) return;
+      if (result.newFtp === savedFtp) {
+        console.log('[MyCareer/FTP] 중단: FTP 동일 (저장:', savedFtp, ', 산출:', result.newFtp, ')');
+        return;
+      }
+      console.log('[MyCareer/FTP] 모달 표시 (저장 FTP:', savedFtp, '→ 산출 FTP:', result.newFtp, ')');
       showDynamicFtpResultModalForMyCareer(result, user);
     } catch (e) {
-      console.warn('[MyCareer] 동적 FTP 산출 오류:', e);
+      console.warn('[MyCareer/FTP] 동적 FTP 산출 오류:', e);
     }
   })();
 }
@@ -6806,8 +6836,11 @@ function initializeCurrentScreen(screenId) {
     case 'myCareerScreen':
       // 나의 기록 화면 진입 시: 사용자 FTP ≠ 동적 FTP일 때만 모달 표시 (10일 보이지 않음 체크 시 중단)
       // grade=1 관리자 포함, 의존성(getUserTrainingLogs·firestoreV9) 로드 대기 후 구동
+      console.log('[MyCareer] initializeCurrentScreen myCareerScreen - 동적 FTP 체크 예약 (1초 후)');
       if (typeof window.checkAndShowDynamicFtpForMyCareer === 'function') {
         setTimeout(window.checkAndShowDynamicFtpForMyCareer, 1000);
+      } else {
+        console.warn('[MyCareer] checkAndShowDynamicFtpForMyCareer 함수 없음');
       }
       break;
       
