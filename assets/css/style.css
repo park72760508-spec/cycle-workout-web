@@ -4345,7 +4345,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   position: relative;
   width: 40px;
   height: 22px;
-  background: #cbd5e1;
+  background: #22c55e;
   border-radius: 11px;
   transition: background 0.2s;
 }
