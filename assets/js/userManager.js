@@ -2270,17 +2270,21 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
           </div>
         </div>
         <div class="user-details">
-          <div class="user-stats"><span class="stat">FTP: ${user.ftp || '-'}W</span><span class="stat">체중: ${user.weight || '-'}kg</span><span class="stat">W/kg: ${wkg}</span></div>
-          <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
-          ${canTogglePrivacy ? `
-          <div class="user-privacy-toggle" onclick="event.stopPropagation();">
-            <label class="privacy-toggle-label">
-              <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
-              <span class="privacy-toggle-slider"></span>
-              <span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span>
-            </label>
+          <div class="user-stats">
+            <span class="stat">FTP: ${user.ftp || '-'}W</span>
+            <span class="stat">체중: ${user.weight || '-'}kg</span>
+            <span class="stat">W/kg: ${wkg}</span>
+            ${canTogglePrivacy ? `
+            <span class="user-privacy-toggle-inline" onclick="event.stopPropagation();">
+              <label class="privacy-toggle-label">
+                <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
+                <span class="privacy-toggle-slider"></span>
+                <span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span>
+              </label>
+            </span>
+            ` : ''}
           </div>
-          ` : ''}
+          <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
           ${ftpZonesHtml}${hrZonesHtml}
         </div>
       </div>
