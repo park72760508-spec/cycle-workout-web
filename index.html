@@ -6830,18 +6830,33 @@
           showStamp = isWeeklyRankingFinalizedSeoul();
         }
         var medals = ['🥇', '🥈', '🥉'];
+        var currentUserId = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
         var html = '';
         list.forEach(function(item, idx) {
           var rank = item.rank || (idx + 1);
-          var name = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          var tss = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
+          var isPrivate = item.is_private === true;
+          var isSelf = currentUserId && item.userId === currentUserId;
+          var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var name, tssStr;
+          if (isPrivate) {
+            if (isSelf) {
+              name = rawName + '<span class="ranking-private-badge">비공개</span>';
+              tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
+            } else {
+              name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
+              tssStr = '*** TSS';
+            }
+          } else {
+            name = rawName;
+            tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
+          }
           html += '<div class="weekly-rank-item">';
           if (rank <= 3) {
             html += '<span class="weekly-rank-medal">' + medals[rank - 1] + '</span>';
           }
           html += '<span class="weekly-rank-position">' + rank + '위</span>';
           html += '<span class="weekly-rank-name">' + name + '</span>';
-          html += '<span class="weekly-rank-tss">' + tss + ' TSS</span>';
+          html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
         });
         if (showStamp) {
@@ -7014,14 +7029,28 @@
           var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
           var globalRank = item.rank || categoryRank;
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          var name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
-          var wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
+          var isPrivate = item.is_private === true;
           var isCurrent = currentUserId && item.userId === currentUserId;
+          var name, wkg;
+          if (isPrivate) {
+            if (isCurrent) {
+              name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
+              wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
+            } else {
+              name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
+              wkg = '***';
+            }
+          } else {
+            name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
+            wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
+          }
+          var globalPart = cat !== 'Supremo' ? '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span>' : '';
+          var badgePart = (isPrivate && isCurrent) ? '<span class="ranking-private-badge">비공개</span>' : '';
           var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '');
           html += '<div class="' + rowClass + '">';
           if (categoryRank <= 3) html += '<span class="stelvio-rank-crown">' + medals[categoryRank - 1] + '</span>';
           html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
-          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span>' + (cat !== 'Supremo' ? '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span>' : '') + '</span>';
+          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span>' + globalPart + badgePart + '</span>';
           html += '<span class="stelvio-rank-wkg">' + wkg + '</span>';
           html += '</div>';
         });
