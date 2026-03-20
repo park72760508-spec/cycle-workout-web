@@ -17047,6 +17047,24 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }, 400);
         }
         
+        // 나의 기록: initializeCurrentScreen 호출 보장 (동적 FTP 자동 체크 포함)
+        if (screenId === 'myCareerScreen') {
+          console.log('[showScreen] myCareerScreen 감지 - initializeCurrentScreen 호출 시도');
+          setTimeout(function() {
+            if (typeof initializeCurrentScreen === 'function') {
+              console.log('[showScreen] ✅ myCareerScreen - initializeCurrentScreen 호출');
+              try {
+                initializeCurrentScreen(screenId);
+                console.log('[showScreen] ✅ myCareerScreen - initializeCurrentScreen 완료');
+              } catch (initError) {
+                console.error('[showScreen] ❌ myCareerScreen - initializeCurrentScreen 실패:', initError);
+              }
+            } else {
+              console.warn('[showScreen] ⚠️ myCareerScreen - initializeCurrentScreen 함수 없음');
+            }
+          }, 100);
+        }
+        
         // Training Journal: initializeCurrentScreen 호출 보장
         if (screenId === 'trainingJournalScreen') {
           console.log('[showScreen] trainingJournalScreen 감지 - initializeCurrentScreen 호출 시도');
