@@ -14529,6 +14529,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       const [ftpCalcResult, setFtpCalcResult] = useState(null);
       const retryLogsRef = useRef(null);
       const aiAnalysisInProgressRef = useRef(false);
+      const dynamicFtpCheckDoneRef = useRef(false);
       
       // 외부에서 강제 해제할 수 있도록 함수 등록
       useEffect(function() {
@@ -15425,6 +15426,27 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           isMounted = false;
         };
       }, [userProfile]);
+      
+      // 나의 기록 로딩 완료 후 동적 FTP 산출 구동 — 저장된 FTP와 다르면 결과 모달 표시
+      useEffect(function() {
+        if (dynamicFtpCheckDoneRef.current) return;
+        if (!logsLoaded || logsLoading || logsLoadError) return;
+        if (!userProfile || !userProfile.id) return;
+        var logs = Array.isArray(recentLogs) ? recentLogs : [];
+        if (logs.length === 0) return;
+        if (typeof window.calculateDynamicFtp !== 'function') return;
+        dynamicFtpCheckDoneRef.current = true;
+        try {
+          var result = window.calculateDynamicFtp(logs);
+          if (!result || !result.success || result.newFtp == null) return;
+          var savedFtp = Number(userProfile.ftp || window.currentUser?.ftp || 0) || 0;
+          if (result.newFtp === savedFtp) return;
+          setFtpCalcResult(result);
+          setFtpModalOpen(true);
+        } catch (e) {
+          console.warn('[Dashboard] 동적 FTP 산출 오류:', e);
+        }
+      }, [logsLoaded, logsLoading, logsLoadError, userProfile, recentLogs]);
       
       // [Decoupled] Gemini AI 코치 분석 — 로그만 의존. 센서(Bluetooth) 상태 무관.
       // STRICT: isSensorConnected / aiConnected 체크 금지. 로그 로드 후 즉시 실행.
@@ -16504,6 +16526,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                                 setFtpCalcResult(null);
                                 var cur = window.currentUser;
                                 if (cur) { cur.ftp = ftpCalcResult.newFtp; try { localStorage.setItem('currentUser', JSON.stringify(cur)); } catch (e) {} }
+                                if (typeof window.userFTP !== 'undefined') window.userFTP = ftpCalcResult.newFtp;
                                 if (typeof showToast === 'function') showToast('성공적으로 반영되었습니다', 'success');
                               } else {
                                 alert((res && res.error) || '업데이트에 실패했습니다.');
