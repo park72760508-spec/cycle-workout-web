@@ -2133,9 +2133,11 @@ async function getWeeklyRankingEntries(db, startStr, endStr) {
     const results = await Promise.all(
       batch.map(async (doc) => {
         const userId = doc.id;
-        const name = doc.data().name || "(이름 없음)";
+        const data = doc.data();
+        const name = data.name || "(이름 없음)";
         const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
-        return totalTss > 0 ? { userId, name, totalTss } : null;
+        const is_private = data.is_private === true;
+        return totalTss > 0 ? { userId, name, totalTss, is_private } : null;
       })
     );
     results.forEach((r) => { if (r) entries.push(r); });
@@ -2178,6 +2180,7 @@ exports.getWeeklyRanking = onRequest(
       userId: e.userId,
       name: e.name,
       totalTss: Math.round(e.totalTss * 100) / 100,
+      is_private: e.is_private === true,
     }));
     await cacheRef.set({
       ranking: top10,
@@ -2723,6 +2726,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
           weightKg: peak.weightKg,
           ageCategory: leagueCategory,
           gender,
+          is_private: data.is_private === true,
         };
       })
     );
