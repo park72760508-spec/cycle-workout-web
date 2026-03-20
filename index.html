@@ -6831,15 +6831,17 @@
         }
         var medals = ['🥇', '🥈', '🥉'];
         var currentUserId = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
+        var isAdmin = (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
         var html = '';
         list.forEach(function(item, idx) {
           var rank = item.rank || (idx + 1);
           var isPrivate = item.is_private === true;
           var isSelf = currentUserId && item.userId === currentUserId;
+          var canSeeFull = isSelf || isAdmin;
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var name, tssStr;
           if (isPrivate) {
-            if (isSelf) {
+            if (canSeeFull) {
               name = rawName + '<span class="ranking-private-badge">비공개</span>';
               tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
@@ -6998,6 +7000,7 @@
       var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
+      var isAdmin = (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
       cats.forEach(function(cat) {
         var arr = byCategory[cat] || [];
         var el = document.getElementById('stelvio' + cat + 'List');
@@ -7031,9 +7034,10 @@
           var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           var isPrivate = item.is_private === true;
           var isCurrent = currentUserId && item.userId === currentUserId;
+          var canSeeFull = isCurrent || isAdmin;
           var name, wkg;
           if (isPrivate) {
-            if (isCurrent) {
+            if (canSeeFull) {
               name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
               wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
             } else {
@@ -7045,7 +7049,7 @@
             wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
           }
           var globalPart = cat !== 'Supremo' ? '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span>' : '';
-          var badgePart = (isPrivate && isCurrent) ? '<span class="ranking-private-badge">비공개</span>' : '';
+          var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge">비공개</span>' : '';
           var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '');
           html += '<div class="' + rowClass + '">';
           if (categoryRank <= 3) html += '<span class="stelvio-rank-crown">' + medals[categoryRank - 1] + '</span>';
