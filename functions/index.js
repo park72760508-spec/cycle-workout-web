@@ -1611,7 +1611,9 @@ exports.manualStravaSyncWithMmp = onRequest(
     const forceRecalcTimeInZones = String(req.query?.forceRecalcTimeInZones || req.body?.forceRecalcTimeInZones || "").toLowerCase() === "true";
     const daysParam = req.query?.days || req.body?.days;
     const monthsParam = req.query?.months || req.body?.months;
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
+    const startDateParam = req.query?.startDate || req.body?.startDate;
+    const endDateParam = req.query?.endDate || req.body?.endDate;
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "startDate=", startDateParam, "endDate=", endDateParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
 
     try {
     const uid = await getUidFromRequest(req, res);
@@ -1621,17 +1623,34 @@ exports.manualStravaSyncWithMmp = onRequest(
     }
     console.log("[manualStravaSyncWithMmp] 인증 성공, userId:", uid);
 
-    const now = new Date();
-    const beforeUnix = Math.floor(now.getTime() / 1000);
-    const afterDate = new Date(now);
-    if (daysParam != null && daysParam !== "") {
-      const days = Math.max(1, parseInt(daysParam, 10) || 10);
-      afterDate.setDate(afterDate.getDate() - days);
+    let afterUnix;
+    let beforeUnix;
+    if (startDateParam && endDateParam && String(startDateParam).trim() && String(endDateParam).trim()) {
+      const start = new Date(String(startDateParam).trim() + "T00:00:00");
+      const end = new Date(String(endDateParam).trim() + "T23:59:59");
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        res.status(400).json({ success: false, error: "startDate 또는 endDate 형식이 올바르지 않습니다. (YYYY-MM-DD)" });
+        return;
+      }
+      if (start > end) {
+        res.status(400).json({ success: false, error: "시작일이 종료일보다 늦을 수 없습니다." });
+        return;
+      }
+      afterUnix = Math.floor(start.getTime() / 1000);
+      beforeUnix = Math.floor(end.getTime() / 1000);
     } else {
-      const months = Math.min(6, Math.max(1, parseInt(monthsParam || "1", 10) || 1));
-      afterDate.setMonth(afterDate.getMonth() - months);
+      const now = new Date();
+      beforeUnix = Math.floor(now.getTime() / 1000);
+      const afterDate = new Date(now);
+      if (daysParam != null && daysParam !== "") {
+        const days = Math.max(1, parseInt(daysParam, 10) || 10);
+        afterDate.setDate(afterDate.getDate() - days);
+      } else {
+        const months = Math.min(6, Math.max(1, parseInt(monthsParam || "1", 10) || 1));
+        afterDate.setMonth(afterDate.getMonth() - months);
+      }
+      afterUnix = Math.floor(afterDate.getTime() / 1000);
     }
-    const afterUnix = Math.floor(afterDate.getTime() / 1000);
 
     const db = admin.firestore();
     const userRef = db.collection("users").doc(uid);
