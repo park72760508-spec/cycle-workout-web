@@ -3807,6 +3807,31 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #6b7280;
   text-align: center;
 }
+.stelvio-rank-dots-row {
+  padding: 4px 0;
+  border-bottom: none;
+}
+.stelvio-rank-dots-row .stelvio-rank-name-text {
+  color: #9ca3af;
+  font-size: 0.85em;
+}
+.stelvio-rank-expand-row {
+  cursor: pointer;
+  padding: 10px 0;
+  transition: background 0.2s;
+}
+.stelvio-rank-expand-row:hover {
+  background: rgba(255, 107, 53, 0.08);
+}
+.stelvio-rank-expand-text {
+  color: #1f2937;
+  font-weight: 600;
+}
+.stelvio-rank-expand-plus {
+  color: #ff6b35 !important;
+  font-size: 1.2em;
+  font-weight: 700;
+}
 
 /* STELVIO 랭킹 보드: 버튼만 STELVIO 스타일, 순위/카드/배너 등 나머지는 원래 스타일 */
 #stelvioRankingBoardModal .stelvio-motivation-banner {
