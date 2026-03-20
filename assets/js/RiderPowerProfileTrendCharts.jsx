@@ -8,7 +8,12 @@
 
 /* global React, Recharts */
 
-const { useState, useEffect } = React;
+if (!window.React) {
+  console.warn("React is not loaded yet.");
+}
+var ReactObj = window.React || {};
+var useState = ReactObj.useState || null;
+var useEffect = ReactObj.useEffect || null;
 
 const RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
@@ -16,31 +21,21 @@ let _chartId = 0;
 function nextChartId() { return 'pp-' + (++_chartId); }
 
 /**
- * STELVIO 랭킹 API에서 카테고리별 1등(장기목표) 및 나의 바로 앞선 경쟁자(단기목표) 조회
- * W/kg 값을 사용자 체중으로 환산하여 절대 파워(W) 적용
- * 1등일 때: 단기목표만 표시 (본인 파워 * 1.03)
+ * 단일 duration에 대한 랭킹 API 조회 (병렬 호출용)
  */
-async function fetchRankingGoals(userId, userWeight) {
-  var goals = { max: {}, '1min': {}, '5min': {}, '10min': {}, '20min': {}, '40min': {}, '60min': {} };
-  var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
+function fetchRankingForDuration(dur, userId, w) {
   var params = new URLSearchParams({ period: 'monthly', gender: 'all' });
   if (userId) params.set('uid', userId);
-  var w = Number(userWeight) || 70;
-
-  for (var i = 0; i < durations.length; i++) {
-    var dur = durations[i];
-    params.set('duration', dur === 'max' ? 'max' : dur);
-    try {
-      var res = await fetch(RANKING_API + '?' + params.toString(), { method: 'GET', mode: 'cors' });
-      var data = await res.json().catch(function() { return {}; });
-      if (!data.success || !data.byCategory) continue;
-
+  params.set('duration', dur === 'max' ? 'max' : dur);
+  return fetch(RANKING_API + '?' + params.toString(), { method: 'GET', mode: 'cors' })
+    .then(function(res) { return res.json().catch(function() { return {}; }); })
+    .then(function(data) {
+      if (!data.success || !data.byCategory) return { dur: dur, goals: null };
       var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       var firstWkg = 0;
       var shortTermWkg = 0;
       var myIdx = -1;
       var myWatts = 0;
-
       for (var c = 0; c < cats.length; c++) {
         var arr = data.byCategory[cats[c]] || [];
         if (arr.length === 0) continue;
@@ -52,28 +47,42 @@ async function fetchRankingGoals(userId, userWeight) {
           shortTermWkg = idx > 0 ? (Number(arr[idx - 1].wkg) || 0) : 0;
           break;
         }
-        if (arr.length > 0 && firstWkg === 0) {
-          firstWkg = Number(arr[0].wkg) || 0;
-        }
+        if (arr.length > 0 && firstWkg === 0) firstWkg = Number(arr[0].wkg) || 0;
       }
+      var g = null;
       if (myIdx >= 0) {
         var longTerm = firstWkg > 0 ? Math.round(firstWkg * w) : 0;
         var shortTerm = 0;
         var isFirst = myIdx === 0;
-        if (isFirst) {
-          shortTerm = Math.round(myWatts * 1.03);
-        } else {
-          shortTerm = shortTermWkg > 0 ? Math.round(shortTermWkg * w) : Math.round(longTerm * 0.95);
-        }
-        goals[dur] = { longTerm: isFirst ? null : longTerm, shortTerm: shortTerm, myWatts: myWatts, isFirst: isFirst };
+        if (isFirst) shortTerm = Math.round(myWatts * 1.03);
+        else shortTerm = shortTermWkg > 0 ? Math.round(shortTermWkg * w) : Math.round(longTerm * 0.95);
+        g = { longTerm: isFirst ? null : longTerm, shortTerm: shortTerm, myWatts: myWatts, isFirst: isFirst };
       } else if (firstWkg > 0) {
-        goals[dur] = { longTerm: Math.round(firstWkg * w), shortTerm: Math.round(firstWkg * w * 0.95), myWatts: 0, isFirst: false };
+        g = { longTerm: Math.round(firstWkg * w), shortTerm: Math.round(firstWkg * w * 0.95), myWatts: 0, isFirst: false };
       }
-    } catch (e) {
+      return { dur: dur, goals: g };
+    })
+    .catch(function(e) {
       console.warn('[PowerProfileTrend] 랭킹 조회 실패:', dur, e);
-    }
-  }
-  return goals;
+      return { dur: dur, goals: null };
+    });
+}
+
+/**
+ * STELVIO 랭킹 API에서 카테고리별 1등(장기목표) 및 나의 바로 앞선 경쟁자(단기목표) 조회
+ * 7개 duration을 병렬로 조회하여 로딩 시간 최소화 (심박 매트릭스와 동일하게 즉시 렌더)
+ */
+function fetchRankingGoals(userId, userWeight) {
+  var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
+  var w = Number(userWeight) || 70;
+  var promises = durations.map(function(dur) { return fetchRankingForDuration(dur, userId, w); });
+  return Promise.all(promises).then(function(results) {
+    var goals = { max: {}, '1min': {}, '5min': {}, '10min': {}, '20min': {}, '40min': {}, '60min': {} };
+    results.forEach(function(r) {
+      if (r.goals) goals[r.dur] = r.goals;
+    });
+    return goals;
+  });
 }
 
 /** 파워 커브 X축 순서 */
@@ -141,7 +150,11 @@ function buildMonthPowerCurveData(weeklyMMP) {
 }
 
 // ========== 파워 커브 차트 (ALLR - Duration 기반) ==========
-function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) {
+function PowerProfileCurveChart(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var powerCurveData = p.powerCurveData;
+  var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
   var Area = Recharts && Recharts.Area;
@@ -200,7 +213,11 @@ function PowerProfileCurveChart({ DashboardCard, powerCurveData, isFullWidth }) 
 }
 
 // ========== 최근 1개월 파워 그래프 (1분/5분/20분/60분 4선) ==========
-function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidth }) {
+function PowerProfileMonthCurveChart(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var monthCurveData = p.monthCurveData;
+  var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
   var Area = Recharts && Recharts.Area;
@@ -272,27 +289,25 @@ function PowerProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidt
 }
 
 // ========== 메인 컴포넌트 ==========
-function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }) {
+// 심박 매트릭스와 동일: recentLogs 기반으로 즉시 렌더, goals는 비동기 로드 후 갱신
+function RiderPowerProfileTrendCharts(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var userProfile = p.userProfile;
+  var recentLogs = p.recentLogs;
   var Card = DashboardCard || function(props) { return <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">{props.children}</div>; };
   var userWeight = userProfile && Number(userProfile.weight);
   var userId = userProfile && userProfile.id;
 
   var [goals, setGoals] = useState({});
-  var [loading, setLoading] = useState(true);
 
   useEffect(function() {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+    if (!userId) return;
     var mounted = true;
-    setLoading(true);
     fetchRankingGoals(userId, userWeight).then(function(g) {
       if (mounted) setGoals(g);
     }).catch(function() {
       if (mounted) setGoals({});
-    }).finally(function() {
-      if (mounted) setLoading(false);
     });
     return function() { mounted = false; };
   }, [userId, userWeight]);
@@ -302,25 +317,6 @@ function RiderPowerProfileTrendCharts({ DashboardCard, userProfile, recentLogs }
   var getIntervalMMP = window.getIntervalMMPFromLogs;
   var intervalMMP = getIntervalMMP ? getIntervalMMP(logs, 30, 7) : [];
   var monthCurveData = buildMonthPowerCurveData(intervalMMP);
-
-  if (loading && Object.keys(goals).length === 0) {
-    return (
-      <div className="space-y-4">
-        <h2 className="text-base font-semibold text-gray-800 px-1 flex items-center gap-2">
-        <span className="inline-flex w-5 h-5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }} aria-hidden />
-        파워 매트릭스
-      </h2>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 items-center px-1 mb-2 text-xs text-gray-600">
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm bg-[#3B82F6]" />나의 달성도</span>
-          <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-1 rounded-sm border-2 border-red-500 border-dashed" style={{ backgroundColor: 'transparent', opacity: 0.7 }} />타겟 목표</span>
-        </div>
-        <div className="space-y-4">
-          <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
-          <Card><div className="h-[min(180px,45vw)] sm:h-[180px] flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" /></div></Card>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
