@@ -610,75 +610,88 @@ function formatHMS(totalSeconds) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-// [추가] 개인훈련 대시보드 전용 타이머 시작 함수
+// [추가] 개인훈련 대시보드 전용 타이머 시작 함수 (rAF + 절대 시간 기반, setInterval 배제)
 function startIndividualTrainingTimer() {
-    // 기존 타이머가 있으면 정지
+    if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('individual');
     if (individualTrainingTimerInterval) {
         clearInterval(individualTrainingTimerInterval);
         individualTrainingTimerInterval = null;
     }
     
-    // 훈련 시작 시간 기록
     if (!individualTrainingStartTime) {
         individualTrainingStartTime = Date.now();
     }
-    
-    // 세그먼트 시작 시간 기록
     if (!individualSegmentStartTime && currentSegmentIndex >= 0) {
         individualSegmentStartTime = Date.now();
     }
     
-    // 1초마다 UI 업데이트
-    individualTrainingTimerInterval = setInterval(() => {
-        // 개인훈련 대시보드 화면 체크
-        const individualScreen = document.getElementById('individualScreen');
-        const mobileScreen = document.getElementById('mobileDashboardScreen');
-        const isIndividualActive = individualScreen && 
-            (individualScreen.classList.contains('active') || 
-             window.getComputedStyle(individualScreen).display !== 'none');
-        const isMobileActive = mobileScreen && 
-            (mobileScreen.classList.contains('active') || 
-             window.getComputedStyle(mobileScreen).display !== 'none');
-        
-        // 개인훈련 대시보드 화면이 아니면 타이머 정지
-        if (!isIndividualActive && !isMobileActive) {
-            stopIndividualTrainingTimer();
-            return;
-        }
-        
-        // 훈련 중이 아니면 타이머 정지
-        if (window.currentTrainingState !== 'running') {
-            stopIndividualTrainingTimer();
-            return;
-        }
-        
-        // 로컬 경과 시간 계산
-        if (individualTrainingStartTime) {
-            const now = Date.now();
-            individualLocalElapsedTime = Math.floor((now - individualTrainingStartTime) / 1000);
-            
-            // 모바일 대시보드: 로컬 시간 기반 세그먼트 자동 전환
-            if (isMobileActive && window.currentWorkout && window.currentWorkout.segments) {
-                updateSegmentIndexByLocalTime(individualLocalElapsedTime);
-                // 모바일 대시보드 랩 카운트다운 업데이트
-                updateMobileLapTimeDisplay(individualLocalElapsedTime);
-            }
-            
-            // Firebase status가 없거나 오래된 경우 로컬 시간으로 UI 업데이트
-            const firebaseStatus = window.individualFirebaseStatus || null;
-            if (!firebaseStatus || !firebaseStatus.elapsedTime) {
-                // 로컬 시간으로 UI 업데이트
-                updateIndividualTimerDisplay(individualLocalElapsedTime);
-                updateIndividualLapTimeDisplay(individualLocalElapsedTime);
-            }
-        }
-    }, 1000); // 1초마다 실행
+    var screenId = document.getElementById('individualScreen') ? 'individualScreen' : 
+        (document.getElementById('mobileDashboardScreen') ? 'mobileDashboardScreen' : null);
     
-    console.log('[Individual] 로컬 타이머 시작');
+    if (typeof TrainingTimer !== 'undefined') {
+        TrainingTimer.start({
+            instanceId: 'individual',
+            screenId: screenId,
+            startMs: individualTrainingStartTime,
+            getPausedMs: function () { return 0; },
+            isActive: function () {
+                if (window.currentTrainingState !== 'running') return false;
+                var ind = document.getElementById('individualScreen');
+                var mob = document.getElementById('mobileDashboardScreen');
+                return (ind && (ind.classList.contains('active') || window.getComputedStyle(ind).display !== 'none')) ||
+                    (mob && (mob.classList.contains('active') || window.getComputedStyle(mob).display !== 'none'));
+            },
+            onTick: function (elapsedSec) {
+                individualLocalElapsedTime = elapsedSec;
+                var mob = document.getElementById('mobileDashboardScreen');
+                var isMobileActive = mob && (mob.classList.contains('active') || window.getComputedStyle(mob).display !== 'none');
+                if (isMobileActive && window.currentWorkout && window.currentWorkout.segments) {
+                    updateSegmentIndexByLocalTime(individualLocalElapsedTime);
+                    updateMobileLapTimeDisplay(individualLocalElapsedTime);
+                }
+                var firebaseStatus = window.individualFirebaseStatus || null;
+                if (!firebaseStatus || !firebaseStatus.elapsedTime) {
+                    updateIndividualTimerDisplay(individualLocalElapsedTime);
+                    updateIndividualLapTimeDisplay(individualLocalElapsedTime);
+                }
+            }
+        });
+    } else {
+        individualTrainingTimerInterval = setInterval(function () {
+            var ind = document.getElementById('individualScreen');
+            var mob = document.getElementById('mobileDashboardScreen');
+            var isIndividualActive = ind && (ind.classList.contains('active') || window.getComputedStyle(ind).display !== 'none');
+            var isMobileActive = mob && (mob.classList.contains('active') || window.getComputedStyle(mob).display !== 'none');
+            if (!isIndividualActive && !isMobileActive) {
+                stopIndividualTrainingTimer();
+                return;
+            }
+            if (window.currentTrainingState !== 'running') {
+                stopIndividualTrainingTimer();
+                return;
+            }
+            if (individualTrainingStartTime) {
+                var now = Date.now();
+                individualLocalElapsedTime = Math.floor((now - individualTrainingStartTime) / 1000);
+                if (isMobileActive && window.currentWorkout && window.currentWorkout.segments) {
+                    updateSegmentIndexByLocalTime(individualLocalElapsedTime);
+                    updateMobileLapTimeDisplay(individualLocalElapsedTime);
+                }
+                var firebaseStatus = window.individualFirebaseStatus || null;
+                if (!firebaseStatus || !firebaseStatus.elapsedTime) {
+                    updateIndividualTimerDisplay(individualLocalElapsedTime);
+                    updateIndividualLapTimeDisplay(individualLocalElapsedTime);
+                }
+            }
+        }, 1000);
+    }
+    
+    console.log('[Individual] 로컬 타이머 시작 (rAF 기반)');
 }
 
 // [추가] 개인훈련 대시보드 전용 타이머 정지 함수
 function stopIndividualTrainingTimer() {
+    if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('individual');
     if (individualTrainingTimerInterval) {
         clearInterval(individualTrainingTimerInterval);
         individualTrainingTimerInterval = null;

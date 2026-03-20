@@ -2716,70 +2716,42 @@ function startSegmentLoop() {
   console.log('[Timer] 타이머 시작', '총 시간:', window.trainingState.totalSec, '초');
   console.log('[Timer] workoutStartMs 설정:', window.trainingState.workoutStartMs);
 
-  // 기존 타이머 정리
+  // 기존 타이머 정리 (rAF 기반 TrainingTimer)
+  if (typeof TrainingTimer !== 'undefined') {
+    TrainingTimer.stop('trainingScreen');
+  }
   if (window.trainingState.timerId) {
     console.log('[Timer] 기존 타이머 정리:', window.trainingState.timerId);
-    clearInterval(window.trainingState.timerId);
+    window.trainingState.timerId = null;
   }
 
-  // 1초마다 실행되는 메인 루프
-  console.log('[Timer] setInterval 시작 전...');
-  window.trainingState.timerId = setInterval(() => {
-    // Indoor Training 화면에서만 동작하도록 체크
-    const trainingScreen = document.getElementById('trainingScreen');
-    const isIndoorTrainingActive = trainingScreen && 
-      (trainingScreen.classList.contains('active') || 
-       window.getComputedStyle(trainingScreen).display !== 'none');
-    
-    if (!isIndoorTrainingActive) {
-      // Indoor Training 화면이 아니면 타이머 정지 (Bluetooth Coach와 분리)
-      console.log('[Timer] Indoor Training 화면이 아니므로 타이머 정지');
-      if (window.trainingState.timerId) {
-        clearInterval(window.trainingState.timerId);
-        window.trainingState.timerId = null;
-      }
-      return;
-    }
-    
-    const ts = window.trainingState;
-    if (!ts) {
-      console.error('[Timer] trainingState가 없습니다!');
-      return;
-    }
-    
-    if (ts.paused) {
-      console.log('[Timer] 일시정지 중이므로 스킵');
-      return; // 일시정지 중이면 스킵
-    }
+  var ts = window.trainingState;
+  if (!ts.workoutStartMs) {
+    ts.workoutStartMs = Date.now();
+    ts.pauseAccumMs = 0;
+    ts.pausedAtMs = null;
+  }
 
-   // === 시간 진행(벽시계 기반) ===
-   const nowMs = Date.now();
-   
-   // workoutStartMs가 설정되지 않았으면 현재 시간으로 설정
-   if (!ts.workoutStartMs) {
-     console.warn('[Timer] workoutStartMs가 없어서 현재 시간으로 설정합니다.');
-     ts.workoutStartMs = nowMs;
-     ts.pauseAccumMs = 0;
-     ts.pausedAtMs = null;
-   }
-   
-   // 일시정지 누적 반영: pauseAccumMs + (일시정지 중이라면 지금까지 경과)
-   const pausedMs = ts.pauseAccumMs + (ts.pausedAtMs ? (nowMs - ts.pausedAtMs) : 0);
-   // 시작시각/일시정지 보정으로 경과초를 직접 계산
-   const newElapsedSec = Math.floor((nowMs - ts.workoutStartMs - pausedMs) / 1000);
-   
-   // 음수 방지
-   if (newElapsedSec < 0) {
-     console.warn('[Timer] 경과 시간이 음수입니다. workoutStartMs를 재설정합니다.');
-     ts.workoutStartMs = nowMs;
-     ts.pauseAccumMs = 0;
-     ts.elapsedSec = 0;
-   } else {
-     ts.elapsedSec = newElapsedSec;
-   }
-   
-   // 시간 경과 로그 (매 초마다)
-   console.log(`[Timer] 시간 경과: ${ts.elapsedSec}초, 세그먼트: ${ts.segIndex}, 세그 경과: ${ts.segElapsedSec}초, workoutStartMs: ${ts.workoutStartMs}, nowMs: ${nowMs}, 차이: ${nowMs - ts.workoutStartMs}ms`);
+  // rAF + 절대 시간 기반 타이머 (setInterval 배제, 메인 스레드 지연 시에도 정확)
+  console.log('[Timer] TrainingTimer(rAF) 시작...');
+  window.trainingState.timerId = 'trainingScreen';
+  if (typeof TrainingTimer !== 'undefined') {
+    TrainingTimer.start({
+      instanceId: 'trainingScreen',
+      screenId: 'trainingScreen',
+      startMs: ts.workoutStartMs,
+      getPausedMs: function () {
+        var t = window.trainingState;
+        return (t ? t.pauseAccumMs + (t.pausedAtMs ? (Date.now() - t.pausedAtMs) : 0) : 0);
+      },
+      isActive: function () {
+        var t = window.trainingState;
+        return !!(t && t.timerId);
+      },
+      onTick: function (elapsedSec) {
+        var ts = window.trainingState;
+        if (!ts) return;
+        ts.elapsedSec = elapsedSec;
    
    // 현재 세그 경과초 = 전체경과초 - 해당 세그 누적시작초
    const cumStart = getCumulativeStartSec(ts.segIndex);
@@ -2955,11 +2927,9 @@ function startSegmentLoop() {
     // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
 
     // 전체 종료 판단
-   // 전체 종료 판단
-   // 전체 종료 판단
    if (window.trainingState.elapsedSec >= window.trainingState.totalSec) {
      console.log('훈련 완료!');
-     clearInterval(window.trainingState.timerId);
+     if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('trainingScreen');
      window.trainingState.timerId = null;
    
      // 활성 카운트다운 정지
@@ -3113,14 +3083,16 @@ function startSegmentLoop() {
      ts._lastProcessedSegIndex = currentSegIndex;
    }
 
-  }, 1000);
+      }
+    });
+  }
 }
 
 // 6. stopSegmentLoop 함수 수정
 // 수정된 stopSegmentLoop 함수 (카운트다운도 함께 정지)
 function stopSegmentLoop() {
   if (window.trainingState.timerId) {
-    clearInterval(window.trainingState.timerId);
+    if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('trainingScreen');
     window.trainingState.timerId = null;
     console.log('세그먼트 루프 정지됨');
   }
@@ -17093,9 +17065,9 @@ function startMobileWorkout() {
   const mts = window.mobileTrainingState;
   const w = window.currentWorkout;
   
-  // 기존 타이머가 있으면 정리
+  // 기존 타이머 정리 (rAF 기반)
   if (mts.timerId) {
-    clearInterval(mts.timerId);
+    if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
     mts.timerId = null;
   }
   
@@ -17191,68 +17163,38 @@ function startMobileTrainingTimerLoop() {
   
   const mts = window.mobileTrainingState;
   
-  // 기존 타이머가 있으면 정리
-  if (mts.timerId) {
-    clearInterval(mts.timerId);
-    mts.timerId = null;
-  }
+  // 기존 타이머 정리 (rAF 기반 TrainingTimer)
+  if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
+  if (mts.timerId) mts.timerId = null;
   
   console.log('[Mobile Dashboard] 타이머 시작, 총 시간:', mts.totalSec, '초');
   
-  // 1초마다 실행되는 메인 루프
-  mts.timerId = setInterval(() => {
-    // 모바일 화면 체크
-    const mobileScreen = document.getElementById('mobileDashboardScreen');
-    const isMobileActive = mobileScreen && 
-      (mobileScreen.classList.contains('active') || 
-       window.getComputedStyle(mobileScreen).display !== 'none');
-    
-    if (!isMobileActive) {
-      // 모바일 화면이 아니면 타이머 정지
-      console.log('[Mobile Dashboard] 모바일 화면이 아니므로 타이머 정지');
-      if (mts.timerId) {
-        clearInterval(mts.timerId);
-        mts.timerId = null;
-      }
-      return;
-    }
-    
-    if (!mts) {
-      console.error('[Mobile Dashboard] mobileTrainingState가 없습니다!');
-      return;
-    }
-    
-    if (mts.paused) {
-      // 일시정지 중이면 pausedAtMs 업데이트만 하고 스킵
-      if (!mts.pausedAtMs) {
-        mts.pausedAtMs = Date.now();
-      }
-      return;
-    }
-    
-    // === 시간 진행(벽시계 기반) ===
-    const nowMs = Date.now();
-    
-    if (!mts.workoutStartMs) {
-      console.warn('[Mobile Dashboard] workoutStartMs가 없어서 현재 시간으로 설정합니다.');
-      mts.workoutStartMs = nowMs;
-      mts.pauseAccumMs = 0;
-      mts.pausedAtMs = null;
-    }
-    
-    // 일시정지 누적 반영
-    const pausedMs = mts.pauseAccumMs + (mts.pausedAtMs ? (nowMs - mts.pausedAtMs) : 0);
-    const newElapsedSec = Math.floor((nowMs - mts.workoutStartMs - pausedMs) / 1000);
-    
-    // 음수 방지
-    if (newElapsedSec < 0) {
-      console.warn('[Mobile Dashboard] 경과 시간이 음수입니다. workoutStartMs를 재설정합니다.');
-      mts.workoutStartMs = nowMs;
-      mts.pauseAccumMs = 0;
-      mts.elapsedSec = 0;
-    } else {
-      mts.elapsedSec = newElapsedSec;
-    }
+  if (!mts.workoutStartMs) {
+    mts.workoutStartMs = Date.now();
+    mts.pauseAccumMs = 0;
+    mts.pausedAtMs = null;
+  }
+  
+  mts.timerId = 'mobileDashboard';
+  if (typeof TrainingTimer !== 'undefined') {
+    TrainingTimer.start({
+      instanceId: 'mobileDashboard',
+      screenId: 'mobileDashboardScreen',
+      startMs: mts.workoutStartMs,
+      getPausedMs: function () {
+        var mt = window.mobileTrainingState;
+        if (!mt) return 0;
+        if (mt.paused && !mt.pausedAtMs) mt.pausedAtMs = Date.now();
+        return mt.pauseAccumMs + (mt.pausedAtMs ? (Date.now() - mt.pausedAtMs) : 0);
+      },
+      isActive: function () {
+        var mt = window.mobileTrainingState;
+        return !!(mt && mt.timerId);
+      },
+      onTick: function (elapsedSec) {
+        var mts = window.mobileTrainingState;
+        if (!mts) return;
+        mts.elapsedSec = elapsedSec;
     
     // 세그먼트 정보
     const currentSegIndex = mts.segIndex;
@@ -17362,7 +17304,7 @@ function startMobileTrainingTimerLoop() {
     // 전체 종료 판단
     if (mts.elapsedSec >= mts.totalSec) {
       console.log('[Mobile Dashboard] 훈련 완료!');
-      clearInterval(mts.timerId);
+      if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
       mts.timerId = null;
       
       // 카운트다운 오버레이 닫기
@@ -17609,7 +17551,9 @@ function startMobileTrainingTimerLoop() {
       mts._lastProcessedSegIndex = currentSegIndex;
     }
     
-  }, 1000); // 1초마다 실행
+      }
+    });
+  }
 }
 
 /**
@@ -18035,7 +17979,7 @@ function handleMobileStop() {
     // 모바일 전용 타이머 정지
     const mts = window.mobileTrainingState;
     if (mts && mts.timerId) {
-      clearInterval(mts.timerId);
+      if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
       mts.timerId = null;
     }
     
@@ -19024,7 +18968,7 @@ function exitMobileIndividualTraining() {
   if (isTrainingRunning) {
     // 훈련 중: 타이머 정지 → 경과시간 저장 → 결과 저장 후 종료
     if (mts.timerId) {
-      clearInterval(mts.timerId);
+      if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
       mts.timerId = null;
     }
     if (mts && mts.elapsedSec !== undefined) {

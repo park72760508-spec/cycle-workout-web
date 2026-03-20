@@ -578,62 +578,82 @@ function sendDataToFirebase() {
         });
 }
 
-// 주기적으로 Firebase에 데이터 전송 및 UI 업데이트 (1초마다)
+// 주기적으로 Firebase에 데이터 전송 및 UI 업데이트 (rAF + 절대 시간 기반, setInterval 배제)
 function startFirebaseDataTransmission() {
-    // 기존 인터벌이 있으면 제거
+    if (typeof TrainingTimer !== 'undefined') {
+        TrainingTimer.stop('bluetoothIndividual');
+    }
     if (firebaseDataUpdateInterval) {
         clearInterval(firebaseDataUpdateInterval);
+        firebaseDataUpdateInterval = null;
     }
     
-    // 1초마다 데이터 전송 및 UI 업데이트
-    firebaseDataUpdateInterval = setInterval(() => {
-        // 1. window.liveData에서 데이터를 읽어서 UI 업데이트 (Bluetooth 디바이스 값 표시)
-        // window.liveData 초기화 확인
-        if (!window.liveData) {
-            window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
-        }
-        
-        // 로컬 시간 추적 업데이트 (훈련 중일 때) - Bluetooth 개인훈련 대시보드 전용
-        if (window.currentTrainingState === 'running' && bluetoothIndividualTrainingStartTime) {
-            const now = Date.now();
-            bluetoothIndividualTotalElapsedTime = Math.floor((now - bluetoothIndividualTrainingStartTime) / 1000);
-            
-            // 세그먼트 경과 시간 업데이트
-            if (bluetoothIndividualSegmentStartTime && currentSegmentIndex >= 0) {
-                bluetoothIndividualSegmentElapsedTime = Math.floor((now - bluetoothIndividualSegmentStartTime) / 1000);
-            }
-        }
-        
-        updateDashboard(); // data 파라미터 없이 호출하면 window.liveData를 읽음
-        
-        // 경과시간 동기화 (마스코트·세그먼트 타이머 실시간 반영)
-        if (firebaseStatus && firebaseStatus.elapsedTime !== undefined) {
-            window.lastElapsedTime = firebaseStatus.elapsedTime;
-        }
-        
-        // 랩카운트다운 업데이트 (경과시간과 동일하게 실시간 동기화)
-        updateLapTime(firebaseStatus);
-        
-        // 세그먼트 그래프 마스코트 실시간 동기화 (경과시간과 동일)
-        if (window.currentTrainingState === 'running' && window.currentWorkout?.segments) {
-            const segIdx = (firebaseStatus && firebaseStatus.segmentIndex !== undefined) ? firebaseStatus.segmentIndex : currentSegmentIndex;
-            updateSegmentGraph(window.currentWorkout.segments, segIdx);
-        }
-        
-        // 2. Firebase에 데이터 전송
-        sendDataToFirebase();
-    }, 1000);
+    var startMs = bluetoothIndividualTrainingStartTime || Date.now();
+    var screenId = __indivIdPrefix ? 'bluetoothIndividualScreen' : null;
     
-    console.log('[BluetoothIndividual] Firebase 데이터 전송 및 UI 업데이트 시작 (1초마다)');
+    if (typeof TrainingTimer !== 'undefined') {
+        TrainingTimer.start({
+            instanceId: 'bluetoothIndividual',
+            screenId: screenId,
+            startMs: startMs,
+            getPausedMs: function () { return 0; },
+            isActive: function () { return true; },
+            onTick: function (elapsedSec) {
+                if (!window.liveData) {
+                    window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+                }
+                if (window.currentTrainingState === 'running' && bluetoothIndividualTrainingStartTime) {
+                    bluetoothIndividualTotalElapsedTime = elapsedSec;
+                    if (bluetoothIndividualSegmentStartTime && currentSegmentIndex >= 0) {
+                        bluetoothIndividualSegmentElapsedTime = Math.floor((Date.now() - bluetoothIndividualSegmentStartTime) / 1000);
+                    }
+                }
+                updateDashboard();
+                if (firebaseStatus && firebaseStatus.elapsedTime !== undefined) {
+                    window.lastElapsedTime = firebaseStatus.elapsedTime;
+                }
+                updateLapTime(firebaseStatus);
+                if (window.currentTrainingState === 'running' && window.currentWorkout && window.currentWorkout.segments) {
+                    var segIdx = (firebaseStatus && firebaseStatus.segmentIndex !== undefined) ? firebaseStatus.segmentIndex : currentSegmentIndex;
+                    updateSegmentGraph(window.currentWorkout.segments, segIdx);
+                }
+                sendDataToFirebase();
+            }
+        });
+    } else {
+        firebaseDataUpdateInterval = setInterval(function () {
+            if (!window.liveData) window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+            if (window.currentTrainingState === 'running' && bluetoothIndividualTrainingStartTime) {
+                var now = Date.now();
+                bluetoothIndividualTotalElapsedTime = Math.floor((now - bluetoothIndividualTrainingStartTime) / 1000);
+                if (bluetoothIndividualSegmentStartTime && currentSegmentIndex >= 0) {
+                    bluetoothIndividualSegmentElapsedTime = Math.floor((now - bluetoothIndividualSegmentStartTime) / 1000);
+                }
+            }
+            updateDashboard();
+            if (firebaseStatus && firebaseStatus.elapsedTime !== undefined) window.lastElapsedTime = firebaseStatus.elapsedTime;
+            updateLapTime(firebaseStatus);
+            if (window.currentTrainingState === 'running' && window.currentWorkout && window.currentWorkout.segments) {
+                var segIdx = (firebaseStatus && firebaseStatus.segmentIndex !== undefined) ? firebaseStatus.segmentIndex : currentSegmentIndex;
+                updateSegmentGraph(window.currentWorkout.segments, segIdx);
+            }
+            sendDataToFirebase();
+        }, 1000);
+    }
+    
+    console.log('[BluetoothIndividual] Firebase 데이터 전송 및 UI 업데이트 시작 (rAF 기반)');
 }
 
 // Firebase 데이터 전송 중지
 function stopFirebaseDataTransmission() {
+    if (typeof TrainingTimer !== 'undefined') {
+        TrainingTimer.stop('bluetoothIndividual');
+    }
     if (firebaseDataUpdateInterval) {
         clearInterval(firebaseDataUpdateInterval);
         firebaseDataUpdateInterval = null;
-        console.log('[BluetoothIndividual] Firebase 데이터 전송 중지');
     }
+    console.log('[BluetoothIndividual] Firebase 데이터 전송 중지');
 }
 
 // Firebase에 디바이스 정보 업데이트 (통합/구버전 공통: window.SESSION_ID 우선)
@@ -1493,6 +1513,7 @@ db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
         if (previousTrainingState !== 'running' && currentState === 'running') {
             bluetoothIndividualTrainingStartTime = Date.now();
             bluetoothIndividualTotalElapsedTime = 0;
+            if (typeof startFirebaseDataTransmission === 'function') startFirebaseDataTransmission();
             window._indivDistanceKm = 0;
             if (currentSegmentIndex >= 0) {
                 bluetoothIndividualSegmentStartTime = Date.now();
