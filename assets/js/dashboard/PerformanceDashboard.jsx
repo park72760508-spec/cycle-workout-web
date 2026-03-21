@@ -258,4 +258,5 @@
 
   window.PerformanceDashboardRefactored = PerformanceDashboard;
   window.PerformanceDashboard = PerformanceDashboard;
+  console.log('[Dashboard] 리팩터링된 PerformanceDashboard 로드 완료');
 })();
