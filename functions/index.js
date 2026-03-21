@@ -2157,12 +2157,14 @@ exports.getWeeklyRanking = onRequest(
     }
     const db = admin.firestore();
     const weekParam = (req.query && req.query.week) || "";
+    const userIdParam = (req.query && req.query.userId) || "";
     const usePrevWeek = weekParam === "prev";
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
     const cacheRef = db.collection("cache").doc(usePrevWeek ? "weeklyRankingPrev" : "weeklyRanking");
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
-    if (cacheSnap.exists) {
+    const skipCacheForMyRank = !!userIdParam;
+    if (!skipCacheForMyRank && cacheSnap.exists) {
       const data = cacheSnap.data();
       const cachedStart = data.startStr;
       const cachedEnd = data.endStr;
@@ -2188,8 +2190,22 @@ exports.getWeeklyRanking = onRequest(
       endStr,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    let myRank = null;
+    if (userIdParam) {
+      const userIdx = entries.findIndex((e) => e.userId === userIdParam);
+      if (userIdx >= 10) {
+        const e = entries[userIdx];
+        myRank = {
+          rank: userIdx + 1,
+          userId: e.userId,
+          name: e.name,
+          totalTss: Math.round(e.totalTss * 100) / 100,
+          is_private: e.is_private === true,
+        };
+      }
+    }
     res.set("Access-Control-Allow-Origin", "*");
-    res.status(200).json({ success: true, ranking: top10, startStr, endStr });
+    res.status(200).json({ success: true, ranking: top10, startStr, endStr, myRank: myRank || undefined });
   }
 );
 
