@@ -6856,7 +6856,7 @@
           var name, tssStr;
           if (isPrivate) {
             if (canSeeFull) {
-              name = rawName + (isAdmin ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '<span class="ranking-private-badge">비공개</span>');
+              name = rawName + '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
               tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
               name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
@@ -7063,7 +7063,7 @@
             wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
           }
           var globalPart = cat !== 'Supremo' ? '<span class="stelvio-rank-global">(전체 ' + globalRank + '위)</span>' : '';
-          var badgePart = (isPrivate && canSeeFull) ? (isAdmin ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '<span class="ranking-private-badge">비공개</span>') : '';
+          var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
           var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '');
           html += '<div class="' + rowClass + '">';
           if (categoryRank <= 3) html += '<span class="stelvio-rank-crown">' + medals[categoryRank - 1] + '</span>';
