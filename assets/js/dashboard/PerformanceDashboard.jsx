@@ -165,6 +165,7 @@
               streamingComment: streamingComment,
               runConditionAnalysis: runConditionAnalysis,
               setRunConditionAnalysis: setRunConditionAnalysis,
+              setRetryCoach: data.setRetryCoach,
               userProfile: userProfile,
               CircularProgress: CircularProgress
             })
