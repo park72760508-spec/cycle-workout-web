@@ -24,7 +24,8 @@
   var TABS = [
     { id: 'tendency', label: '나의 성향' },
     { id: 'training', label: '최근 훈련' },
-    { id: 'growth', label: '성장 추이' }
+    { id: 'growth', label: '성장 추이' },
+    { id: 'wkgGuide', label: 'W/kg · 등급 기준 안내' }
   ];
 
   function TabSkeleton() {
@@ -90,6 +91,7 @@
     var Vo2MaxTrendChart = window.Vo2MaxTrendChart;
     var GrowthTrendChart = window.GrowthTrendChart;
     var YearlyPowerPrChart = window.YearlyPowerPrChart;
+    var WkgGradeIndicator = window.WkgGradeIndicator;
 
     function renderTabContent() {
       if (showSkeleton) return React.createElement(TabSkeleton);
@@ -182,6 +184,94 @@
             data: yearlyPowerPrData,
             userWeight: userWeight
           })
+        );
+      }
+
+      if (activeIndex === 3) {
+        var wkgVal = stats.wkg != null ? (typeof stats.wkg === 'number' ? stats.wkg.toFixed(2) : stats.wkg) : '-';
+        return React.createElement(
+          'div',
+          { className: 'space-y-6' },
+          React.createElement(
+            'div',
+            { className: 'rounded-xl border border-gray-200 bg-white overflow-hidden' },
+            React.createElement('div', { className: 'px-4 pb-4 pt-1 space-y-4 text-xs text-gray-600 border-t-0' },
+              React.createElement('section', null,
+                React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 표시 기준'),
+                React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
+                  React.createElement('li', null, React.createElement('strong', null, '계산식'), ': W/kg = FTP(와트) ÷ 체중(kg) — 소수점 둘째자리'),
+                  React.createElement('li', null, '대시보드 "파워" 카드에 ', React.createElement('code', { className: 'bg-gray-100 px-1 rounded' }, wkgVal + ' W/kg'), ' 로 표시')
+                )
+              ),
+              React.createElement('section', null,
+                React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 기반 등급 (네온/패널용)'),
+                React.createElement('table', { className: 'w-full text-left border-collapse' },
+                  React.createElement('thead', null,
+                    React.createElement('tr', { className: 'border-b border-gray-200' },
+                      React.createElement('th', { className: 'py-1 pr-2' }, '등급'),
+                      React.createElement('th', { className: 'py-1' }, 'W/kg 기준'),
+                      React.createElement('th', { className: 'py-1 pl-2' }, '표시등')
+                    )
+                  ),
+                  React.createElement('tbody', null,
+                    React.createElement('tr', { className: 'border-b border-gray-100' },
+                      React.createElement('td', { className: 'py-1 pr-2' }, '엘리트'),
+                      React.createElement('td', null, '4.0 이상'),
+                      React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 4.5, size: 10 })) : null)
+                    ),
+                    React.createElement('tr', { className: 'border-b border-gray-100' },
+                      React.createElement('td', { className: 'py-1 pr-2' }, '고급'),
+                      React.createElement('td', null, '3.5 이상 ~ 4.0 미만'),
+                      React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 3.7, size: 10 })) : null)
+                    ),
+                    React.createElement('tr', { className: 'border-b border-gray-100' },
+                      React.createElement('td', { className: 'py-1 pr-2' }, '중급'),
+                      React.createElement('td', null, '3.0 이상 ~ 3.5 미만'),
+                      React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 3.2, size: 10 })) : null)
+                    ),
+                    React.createElement('tr', { className: 'border-b border-gray-100' },
+                      React.createElement('td', { className: 'py-1 pr-2' }, '입문'),
+                      React.createElement('td', null, '2.2 이상 ~ 3.0 미만'),
+                      React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 2.5, size: 10 })) : null)
+                    ),
+                    React.createElement('tr', null,
+                      React.createElement('td', { className: 'py-1 pr-2' }, '초급'),
+                      React.createElement('td', null, '2.2 미만'),
+                      React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 1.8, size: 10 })) : null)
+                    )
+                  )
+                )
+              ),
+              React.createElement('section', null,
+                React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, '훈련 등급(challenge) · 주간 목표 TSS'),
+                React.createElement('p', { className: 'mb-2' }, '회원가입/프로필에서 선택. 주간 목표 TSS · RPE 보정 · 목표 조절 범위에 사용'),
+                React.createElement('table', { className: 'w-full text-left border-collapse' },
+                  React.createElement('thead', null,
+                    React.createElement('tr', { className: 'border-b border-gray-200' },
+                      React.createElement('th', { className: 'py-1 pr-2' }, '등급'),
+                      React.createElement('th', { className: 'py-1' }, '설명'),
+                      React.createElement('th', { className: 'py-1' }, '목표 TSS')
+                    )
+                  ),
+                  React.createElement('tbody', null,
+                    React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'Fitness'), React.createElement('td', null, '건강 유지, 기초 체력'), React.createElement('td', null, '225')),
+                    React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'GranFondo'), React.createElement('td', null, '중장거리 완주'), React.createElement('td', null, '400')),
+                    React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'Racing'), React.createElement('td', null, 'MCT/아마 레이스 입상권'), React.createElement('td', null, '600')),
+                    React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'Elite'), React.createElement('td', null, '최상위 동호인, 선수 준비'), React.createElement('td', null, '800')),
+                    React.createElement('tr', null, React.createElement('td', { className: 'py-1 pr-2' }, 'PRO'), React.createElement('td', null, '프로 선수'), React.createElement('td', null, '1050'))
+                  )
+                )
+              ),
+              React.createElement('section', null,
+                React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, '권한 등급(grade)'),
+                React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
+                  React.createElement('li', null, React.createElement('strong', null, '1'), ': 💎 Diamond (관리자)'),
+                  React.createElement('li', null, React.createElement('strong', null, '2'), ': ⭐ Member (일반 회원)'),
+                  React.createElement('li', null, React.createElement('strong', null, '3'), ': 👑 Admin (코치/관리)')
+                )
+              )
+            )
+          )
         );
       }
 

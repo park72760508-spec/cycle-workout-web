@@ -91,11 +91,6 @@
     var logsLoading = p.logsLoading;
     var logsLoadError = p.logsLoadError;
     var retryLogsRef = p.retryLogsRef;
-    var ftpCalcLoading = p.ftpCalcLoading;
-    var setFtpCalcLoading = p.setFtpCalcLoading;
-    var setFtpModalOpen = p.setFtpModalOpen;
-    var setFtpCalcResult = p.setFtpCalcResult;
-    var userProfile = p.userProfile || {};
 
     var ftp = Number(stats.ftp) || 0;
     var wkg = stats.wkg != null ? Number(stats.wkg) : (stats.weight > 0 && ftp > 0 ? (ftp / stats.weight) : 0);
@@ -150,13 +145,6 @@
             )
           )
         ),
-        React.createElement('button', {
-          type: 'button',
-          onClick: handleFtpCalc,
-          disabled: ftpCalcLoading || !userProfile.id,
-          className: 'absolute top-3 right-3 px-3 py-1.5 text-xs font-semibold rounded-lg border-2 border-amber-200 text-amber-700 bg-amber-50/80 hover:bg-amber-100 hover:border-amber-300 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed',
-          title: '동적 FTP 산출'
-        }, ftpCalcLoading ? '산출 중...' : 'FTP 산출'),
         React.createElement('div', { className: 'space-y-3 pt-1' },
           React.createElement('div', { className: 'flex items-baseline gap-1' },
             React.createElement('span', { className: 'text-3xl font-bold text-gray-900 tabular-nums tracking-tight' }, ftp),
