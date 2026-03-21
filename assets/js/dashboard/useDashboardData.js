@@ -772,7 +772,9 @@
 
     return {
       userProfile,
+      setUserProfile,
       stats,
+      setStats,
       recentLogs,
       logsLoaded,
       logsLoading,
