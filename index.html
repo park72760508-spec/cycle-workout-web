@@ -6860,7 +6860,7 @@
               tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
             } else {
               name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
-              tssStr = '*** TSS';
+              tssStr = (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1) + ' TSS';
             }
           } else {
             name = rawName;
@@ -7056,7 +7056,7 @@
               wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
             } else {
               name = rawName.length >= 2 ? rawName.charAt(0) + '**' : '**';
-              wkg = '***';
+              wkg = (item.wkg != null ? Number(item.wkg) : 0).toFixed(2);
             }
           } else {
             name = rawName.length > maxNameLen ? rawName.substring(0, maxNameLen - 2) + '..' : rawName;
@@ -7074,12 +7074,29 @@
         });
 
         if (needExpand) {
+          var userRank = userIdx >= 0 ? (userIdx + 1) : 0;
+          var showPreview = (userIdx >= 0 && userRank > expandLimit);
           html += '<div class="stelvio-rank-row stelvio-rank-dots-row">';
           html += '<span class="stelvio-rank-crown"></span>';
           html += '<span class="stelvio-rank-pos"></span>';
           html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span>';
           html += '<span class="stelvio-rank-wkg"></span>';
           html += '</div>';
+          if (showPreview) {
+            var previewItem = arr[userIdx];
+            var previewRawName = (previewItem.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            var previewName = previewRawName.length > maxNameLen ? previewRawName.substring(0, maxNameLen - 2) + '..' : previewRawName;
+            var previewIsPrivate = previewItem.is_private === true;
+            var previewWkg = (previewItem.wkg != null ? Number(previewItem.wkg) : 0).toFixed(2);
+            var previewGlobalPart = cat !== 'Supremo' ? '<span class="stelvio-rank-global">(전체 ' + (previewItem.rank || userRank) + '위)</span>' : '';
+            var previewBadgePart = previewIsPrivate ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+            html += '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-preview-row">';
+            html += '<span class="stelvio-rank-crown"></span>';
+            html += '<span class="stelvio-rank-pos">' + userRank + '위</span>';
+            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + previewRawName + '">' + previewName + '</span>' + previewGlobalPart + previewBadgePart + '</span>';
+            html += '<span class="stelvio-rank-wkg">' + previewWkg + '</span>';
+            html += '</div>';
+          }
           if (expandLimit > 10 && expandLimit >= arr.length) {
             html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingCollapse(\'' + cat + '\');" role="button" tabindex="0">';
             html += '<span class="stelvio-rank-crown"></span>';
