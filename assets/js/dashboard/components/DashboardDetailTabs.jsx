@@ -286,7 +286,7 @@
       React.createElement(
         'div',
         {
-          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-2 overflow-x-auto scrollbar-hide',
+          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-1 overflow-x-auto scrollbar-hide',
           style: { scrollbarWidth: 'none', msOverflowStyle: 'none' }
         },
         TABS.map(function(tab, i) {
@@ -311,15 +311,12 @@
                   }
                 }, 50);
               },
-              className: 'flex-shrink-0 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm ' + (
+              className: 'flex-shrink-0 px-5 py-3.5 text-sm font-semibold transition-all duration-200 border-b-2 -mb-0.5 ' + (
                 isActive
-                  ? 'text-white border-none cursor-default'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/60 border border-transparent'
+                  ? 'border-[#667eea]'
+                  : 'text-gray-500 hover:text-gray-700 border-transparent'
               ),
-              style: isActive ? {
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
-              } : {}
+              style: isActive ? { color: '#667eea' } : {}
             },
             tab.label
           );
