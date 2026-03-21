@@ -239,6 +239,7 @@
               vo2TrendData: vo2TrendData,
               growthTrendData: growthTrendData,
               yearlyPowerPrData: yearlyPowerPrData,
+              stats: stats,
               logsLoading: logsLoading,
               logsLoadError: logsLoadError,
               retryLogsRef: retryLogsRef,
