@@ -13520,10 +13520,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <!-- 존별 누적 시간 차트 (최근 1개월 심박 그래프 아래 배치) -->
   <script src="assets/js/RiderTimeInZonesCharts.jsx" type="text/babel"></script>
   
-  <!-- Dashboard 리팩터링: useDashboardData + PerformanceDashboard (window.PerformanceDashboard로 등록) -->
-  <script src="assets/js/dashboard/useDashboardData.js"></script>
-  <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel"></script>
-  
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
   <script type="text/babel">
     if (!window.React) {
@@ -16877,8 +16873,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         
         // Error Boundary로 감싼 컴포넌트 렌더링
-        // window.PerformanceDashboard 우선 사용 (리팩터링 버전). 없으면 기존 로컬 PerformanceDashboard 사용
-        var DashboardComponent = (typeof window.PerformanceDashboard === 'function') ? window.PerformanceDashboard : PerformanceDashboard;
+        // 리팩터링 버전 우선: PerformanceDashboardRefactored 또는 window.PerformanceDashboard
+        var DashboardComponent = (typeof window.PerformanceDashboardRefactored === 'function')
+          ? window.PerformanceDashboardRefactored
+          : ((typeof window.PerformanceDashboard === 'function') ? window.PerformanceDashboard : PerformanceDashboard);
+        if (DashboardComponent === window.PerformanceDashboardRefactored || DashboardComponent === window.PerformanceDashboard) {
+          console.log('[Dashboard] 리팩터링된 대시보드 사용');
+        }
         var WrappedDashboard = React.createElement(DashboardErrorBoundary, null,
           React.createElement(DashboardComponent, null)
         );
@@ -17479,5 +17480,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/geminiCoachPrompt.js"></script>
   <script src="assets/js/vo2maxCalculator.js"></script>
   <script src="assets/js/dashboardCoach.js"></script>
+  <!-- Dashboard 리팩터링: 반드시 마지막에 로드하여 window.PerformanceDashboard 덮어쓰기 -->
+  <script src="assets/js/dashboard/useDashboardData.js"></script>
+  <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel"></script>
 </body>
 </html>
