@@ -111,8 +111,8 @@
           React.createElement('button', {
             type: 'button',
             onClick: function() { if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true); },
-            className: 'px-6 py-3.5 rounded-2xl font-semibold text-white transition-all active:scale-[0.98]',
-            style: { background: 'linear-gradient(135deg, #059669 0%, #0891b2 100%)', boxShadow: '0 4px 14px rgba(5, 150, 105, 0.35)' }
+            className: 'px-6 py-3.5 rounded-xl font-semibold text-white transition-all active:scale-[0.98] shadow-md hover:shadow-lg border-none cursor-pointer',
+            style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
           }, '컨디션 분석 하기')
         )
       );
@@ -128,13 +128,21 @@
       ? React.createElement(CircularProgress, { value: score, size: 140, strokeWidth: 10 })
       : React.createElement(HeroCircularProgress, { value: score, size: 140, strokeWidth: 10 });
 
+    var ftpCardTone = {
+      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      shadow: '0 4px 16px rgba(102, 126, 234, 0.25), 0 1px 3px rgba(0,0,0,0.04)',
+      border: '1px solid rgba(102, 126, 234, 0.2)',
+      accentBg: 'rgba(102, 126, 234, 0.08)'
+    };
+
     return React.createElement(
       'div',
       {
         className: 'rounded-2xl overflow-hidden shadow-lg border',
         style: {
-          background: 'linear-gradient(160deg, ' + colors.bg + ' 0%, rgba(255,255,255,0.98) 45%)',
-          borderColor: 'rgba(5, 150, 105, 0.2)'
+          background: 'linear-gradient(160deg, ' + ftpCardTone.accentBg + ' 0%, rgba(255,255,255,0.98) 45%)',
+          borderColor: ftpCardTone.border,
+          boxShadow: ftpCardTone.shadow
         }
       },
       React.createElement('div', { className: 'p-6 sm:p-8' },
@@ -156,11 +164,11 @@
             className: 'relative rounded-2xl p-5 mb-6',
             style: {
               background: 'rgba(248, 250, 252, 0.9)',
-              borderLeft: '4px solid ' + colors.fill,
+              borderLeft: '4px solid #667eea',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)'
             }
           },
-          React.createElement('div', { className: 'absolute top-4 left-4 text-2xl opacity-30', style: { color: colors.fill } }, '"'),
+          React.createElement('div', { className: 'absolute top-4 left-4 text-2xl opacity-30', style: { color: '#667eea' } }, '"'),
           React.createElement('p', {
             className: 'text-sm text-gray-800 leading-relaxed pl-2 pr-2 whitespace-pre-wrap',
             style: { fontFamily: 'inherit', lineHeight: 1.7 }
@@ -183,14 +191,17 @@
                 window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
               }
             },
-            className: 'flex-1 py-4 px-6 rounded-2xl font-semibold text-white text-center transition-all active:scale-[0.98] min-h-[52px] flex items-center justify-center gap-2',
+            className: 'flex-1 py-3.5 px-4 rounded-xl font-semibold text-white text-center transition-all active:scale-[0.98] min-h-[52px] flex items-center justify-center gap-2.5 shadow-md hover:shadow-lg border-none cursor-pointer',
             style: {
-              background: hasError ? 'linear-gradient(135deg, #64748b 0%, #475569 100%)' : 'linear-gradient(135deg, #059669 0%, #0891b2 100%)',
-              boxShadow: hasError ? '0 4px 12px rgba(100,116,139,0.25)' : '0 4px 20px rgba(5, 150, 105, 0.4)'
+              background: hasError ? 'linear-gradient(135deg, #64748b 0%, #475569 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              boxShadow: hasError ? '0 4px 12px rgba(100,116,139,0.25)' : '0 2px 8px rgba(102, 126, 234, 0.35)'
             }
           },
-            React.createElement('span', { className: 'text-lg' }, '🚴'),
-            React.createElement('span', null, '추천 워크아웃: ' + workoutType + ' 시작하기')
+            React.createElement('img', { src: 'assets/img/ai.gif', alt: 'AI', style: { height: '28px', width: 'auto', objectFit: 'contain', flexShrink: 0 } }),
+            React.createElement('span', { className: 'flex flex-col items-center leading-tight text-center' },
+              React.createElement('span', { className: 'text-sm' }, '추천 워크 아웃'),
+              React.createElement('span', { className: 'text-base font-bold' }, workoutType)
+            )
           ),
           hasError && React.createElement('button', {
             type: 'button',
