@@ -6898,7 +6898,7 @@
             mrName = mrRawName;
             mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
           }
-          html += '<div class="weekly-rank-item weekly-rank-item-self">';
+          html += '<div class="weekly-rank-item weekly-rank-item-self" id="weeklyTop10MyRankRow">';
           html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
           html += '<span class="weekly-rank-name">' + mrName + '</span>';
           html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
@@ -6912,6 +6912,16 @@
           html += '</div></div>';
         }
         body.innerHTML = html;
+        if (myRankData && myRankData.rank > 10) {
+          requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+              var el = document.getElementById('weeklyTop10MyRankRow');
+              if (el && typeof el.scrollIntoView === 'function') {
+                el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+              }
+            });
+          });
+        }
       } catch (e) {
         console.warn('[WeeklyTop10] 조회 실패:', e);
         body.innerHTML = '<p class="weekly-top10-loading-text" style="padding:24px;text-align:center;">연결에 실패했습니다. 나중에 다시 시도해 주세요.</p>';
