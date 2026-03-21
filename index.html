@@ -14526,6 +14526,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     // 전역으로 노출 (AI 추천 워크아웃에서 사용)
     window.sanitizeLogs = sanitizeLogs;
     
+    // 대시보드 탭용 차트/프로필 컴포넌트 전역 노출 (DashboardDetailTabs에서 사용)
+    window.TrainingTrendChart = TrainingTrendChart;
+    window.Vo2MaxTrendChart = Vo2MaxTrendChart;
+    window.GrowthTrendChart = GrowthTrendChart;
+    window.YearlyPowerPrChart = YearlyPowerPrChart;
+    window.RiderDashboardProfile = RiderDashboardProfile;
+    
     // ===== PerformanceDashboard Component (Direct Firebase Access - No Iframe) =====
     function PerformanceDashboard() {
       const [userProfile, setUserProfile] = useState(null);
@@ -17484,6 +17491,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboard/useDashboardData.js"></script>
   <script src="assets/js/dashboard/components/AICoachHeroCard.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel"></script>
+  <script src="assets/js/dashboard/components/DashboardDetailTabs.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel"></script>
 </body>
 </html>
