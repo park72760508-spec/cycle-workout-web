@@ -70,6 +70,7 @@
     var setShowSkeleton = _useState2[1];
 
     var tabReadyTimerRef = useRef(null);
+    var tabRefs = useRef([]);
 
     useEffect(function() {
       setShowSkeleton(true);
@@ -294,10 +295,22 @@
             'button',
             {
               key: tab.id,
+              ref: (function(idx) { return function(el) { if (tabRefs.current) tabRefs.current[idx] = el; }; })(i),
               type: 'button',
               role: 'tab',
               'aria-selected': isActive,
-              onClick: function() { setActiveIndex(i); },
+              onClick: function() {
+                setActiveIndex(i);
+                setTimeout(function() {
+                  var refs = tabRefs.current;
+                  if (!refs || !Array.isArray(refs)) return;
+                  var targetIdx = i <= 1 ? 0 : 3;
+                  var el = refs[targetIdx];
+                  if (el && typeof el.scrollIntoView === 'function') {
+                    el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
+                  }
+                }, 50);
+              },
               className: 'flex-shrink-0 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm ' + (
                 isActive
                   ? 'text-white border-none cursor-default'
