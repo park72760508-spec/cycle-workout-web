@@ -257,6 +257,7 @@
                     React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'Fitness'), React.createElement('td', null, '건강 유지, 기초 체력'), React.createElement('td', null, '225')),
                     React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'GranFondo'), React.createElement('td', null, '중장거리 완주'), React.createElement('td', null, '400')),
                     React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'Racing'), React.createElement('td', null, 'MCT/아마 레이스 입상권'), React.createElement('td', null, '600')),
+                    React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'IronMan'), React.createElement('td', null, '극한의 초장거리 지구력 한계 극복 및 철인 완주'), React.createElement('td', null, '700')),
                     React.createElement('tr', { className: 'border-b border-gray-100' }, React.createElement('td', { className: 'py-1 pr-2' }, 'Elite'), React.createElement('td', null, '최상위 동호인, 선수 준비'), React.createElement('td', null, '800')),
                     React.createElement('tr', null, React.createElement('td', { className: 'py-1 pr-2' }, 'PRO'), React.createElement('td', null, '프로 선수'), React.createElement('td', null, '1050'))
                   )
@@ -284,7 +285,7 @@
       React.createElement(
         'div',
         {
-          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-1 overflow-x-auto scrollbar-hide',
+          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-2 overflow-x-auto scrollbar-hide',
           style: { scrollbarWidth: 'none', msOverflowStyle: 'none' }
         },
         TABS.map(function(tab, i) {
@@ -297,11 +298,15 @@
               role: 'tab',
               'aria-selected': isActive,
               onClick: function() { setActiveIndex(i); },
-              className: 'flex-shrink-0 px-5 py-3.5 text-sm font-semibold transition-all duration-200 border-b-2 -mb-0.5 ' + (
+              className: 'flex-shrink-0 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm ' + (
                 isActive
-                  ? 'text-blue-600 border-blue-500'
-                  : 'text-gray-500 hover:text-gray-700 border-transparent'
-              )
+                  ? 'text-white border-none cursor-default'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/60 border border-transparent'
+              ),
+              style: isActive ? {
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)'
+              } : {}
             },
             tab.label
           );

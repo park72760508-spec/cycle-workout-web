@@ -197,7 +197,6 @@
               boxShadow: hasError ? '0 4px 12px rgba(100,116,139,0.25)' : '0 2px 8px rgba(102, 126, 234, 0.35)'
             }
           },
-            React.createElement('img', { src: 'assets/img/ai.gif', alt: 'AI', style: { height: '28px', width: 'auto', objectFit: 'contain', flexShrink: 0 } }),
             React.createElement('span', { className: 'flex flex-col items-center leading-tight text-center' },
               React.createElement('span', { className: 'text-sm' }, '추천 워크 아웃'),
               React.createElement('span', { className: 'text-base font-bold' }, workoutType)
