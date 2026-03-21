@@ -13520,6 +13520,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <!-- 존별 누적 시간 차트 (최근 1개월 심박 그래프 아래 배치) -->
   <script src="assets/js/RiderTimeInZonesCharts.jsx" type="text/babel"></script>
   
+  <!-- Dashboard 리팩터링: useDashboardData + PerformanceDashboard (window.PerformanceDashboard로 등록) -->
+  <script src="assets/js/dashboard/useDashboardData.js"></script>
+  <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel"></script>
+  
   <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
   <script type="text/babel">
     if (!window.React) {
@@ -16873,8 +16877,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         
         // Error Boundary로 감싼 컴포넌트 렌더링
+        // window.PerformanceDashboard 우선 사용 (리팩터링 버전). 없으면 기존 로컬 PerformanceDashboard 사용
+        var DashboardComponent = (typeof window.PerformanceDashboard === 'function') ? window.PerformanceDashboard : PerformanceDashboard;
         var WrappedDashboard = React.createElement(DashboardErrorBoundary, null,
-          React.createElement(PerformanceDashboard, null)
+          React.createElement(DashboardComponent, null)
         );
         
         // 새로 렌더링 (타임아웃 안전장치)
