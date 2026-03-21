@@ -7171,7 +7171,6 @@
           if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
           var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
           html += '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo">';
-          html += '<span class="stelvio-rank-crown"></span>';
           html += '<span class="stelvio-rank-pos">' + mr.rank + '위</span>';
           html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + mrRawName + '">' + mrName + '</span>' + mrBadgePart + '</span>';
           html += '<span class="stelvio-rank-wkg">' + mrWkg + '</span>';
