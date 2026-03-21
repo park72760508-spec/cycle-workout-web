@@ -3423,6 +3423,17 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #1e40af;
 }
 
+/* 주간 TOP10: 10위 밖 본인 순위 하이라이트 (랭킹보드 stelvio-rank-current와 동일) */
+.weekly-rank-item.weekly-rank-item-self {
+  background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
+  border-radius: 8px;
+  margin: 2px -4px;
+  padding: 10px 4px;
+  border-top: 1px dashed #e5e7eb !important;
+  margin-top: 8px !important;
+  padding-top: 10px !important;
+}
+
 /* STELVIO iOS 스타일 팝업 (주간 TOP10, 랭킹 보드) */
 .stelvio-ios-popup {
   backdrop-filter: blur(8px);
