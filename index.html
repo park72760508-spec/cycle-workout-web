@@ -6819,7 +6819,9 @@
       body.innerHTML = getWeeklyTop10LoadingHtml();
       modal.classList.remove('hidden');
       try {
+        var currentUserId = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
         var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking';
+        if (currentUserId) url += '?userId=' + encodeURIComponent(currentUserId);
         var res = await fetch(url, { method: 'GET', mode: 'cors' });
         var data = await res.json().catch(function() { return { success: false }; });
         if (!data.success || !Array.isArray(data.ranking)) {
@@ -6827,10 +6829,13 @@
           return;
         }
         var list = data.ranking;
+        var myRankData = data.myRank || null;
         var showStamp = false;
         var isPrevWeek = false;
         if (!list || list.length === 0) {
-          res = await fetch(url + '?week=prev', { method: 'GET', mode: 'cors' });
+          var prevUrl = 'https://us-central1-stelvio-ai.cloudfunctions.net/getWeeklyRanking?week=prev';
+          if (currentUserId) prevUrl += '&userId=' + encodeURIComponent(currentUserId);
+          res = await fetch(prevUrl, { method: 'GET', mode: 'cors' });
           data = await res.json().catch(function() { return { success: false }; });
           if (!data.success || !Array.isArray(data.ranking) || data.ranking.length === 0) {
             modal.classList.add('hidden');
@@ -6838,13 +6843,13 @@
             return;
           }
           list = data.ranking;
+          myRankData = data.myRank || null;
           showStamp = true;
           isPrevWeek = true;
         } else {
           showStamp = isWeeklyRankingFinalizedSeoul();
         }
         var medals = ['🥇', '🥈', '🥉'];
-        var currentUserId = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
         var isAdmin = (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
         var html = '';
         list.forEach(function(item, idx) {
@@ -6875,6 +6880,30 @@
           html += '<span class="weekly-rank-tss">' + tssStr + '</span>';
           html += '</div>';
         });
+        if (myRankData && myRankData.rank > 10) {
+          var mr = myRankData;
+          var mrIsPrivate = mr.is_private === true;
+          var mrCanSeeFull = currentUserId && mr.userId === currentUserId || isAdmin;
+          var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var mrName, mrTssStr;
+          if (mrIsPrivate) {
+            if (mrCanSeeFull) {
+              mrName = mrRawName + '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>';
+              mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
+            } else {
+              mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**';
+              mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
+            }
+          } else {
+            mrName = mrRawName;
+            mrTssStr = (mr.totalTss != null ? Number(mr.totalTss) : 0).toFixed(1) + ' TSS';
+          }
+          html += '<div class="weekly-rank-item weekly-rank-item-self">';
+          html += '<span class="weekly-rank-position">' + mr.rank + '위</span>';
+          html += '<span class="weekly-rank-name">' + mrName + '</span>';
+          html += '<span class="weekly-rank-tss">' + mrTssStr + '</span>';
+          html += '</div>';
+        }
         if (showStamp) {
           if (isPrevWeek) html = '<p class="weekly-top10-loading-text" style="margin-bottom:12px;font-size:12px;color:#6b7280;">※ 전주 확정 순위</p>' + html;
           html = '<div class="weekly-top10-body-inner" style="position:relative;">' + html;
