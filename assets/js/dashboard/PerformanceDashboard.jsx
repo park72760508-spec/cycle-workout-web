@@ -203,13 +203,6 @@
               logsLoading: logsLoading,
               logsLoadError: logsLoadError,
               retryLogsRef: retryLogsRef,
-              userProfile: userProfile,
-              ftpCalcLoading: ftpCalcLoading,
-              setFtpCalcLoading: setFtpCalcLoading,
-              ftpModalOpen: ftpModalOpen,
-              setFtpModalOpen: setFtpModalOpen,
-              ftpCalcResult: ftpCalcResult,
-              setFtpCalcResult: setFtpCalcResult,
               formatPoints: formatPoints,
               DashboardCard: DashboardCard
             })
@@ -229,6 +222,68 @@
               </div>
             </div>
           )}
+        </section>
+
+        {/* 나의 동적 FTP 산출 카드 (탭 위쪽, 기존 디자인) */}
+        <section className="px-4 pt-6">
+          {DashboardCard && React.createElement(DashboardCard, {
+            title: '나의 동적 FTP 산출',
+            className: 'mt-0'
+          }, React.createElement(React.Fragment, null,
+            React.createElement('ul', { className: 'text-xs text-gray-600 space-y-1.5 mb-4' },
+              React.createElement('li', { className: 'flex items-start gap-2' },
+                React.createElement('span', null, '⏱️'),
+                React.createElement('span', null, '6개 구간(1, 5, 10, 20, 40, 60분) PR 파워 데이터 종합')
+              ),
+              React.createElement('li', { className: 'flex items-start gap-2' },
+                React.createElement('span', null, '⚖️'),
+                React.createElement('span', null, '구간별 생리학적 신뢰도 반영 (20분 파워 비중 최대)')
+              ),
+              React.createElement('li', { className: 'flex items-start gap-2' },
+                React.createElement('span', null, '📅'),
+                React.createElement('span', null, '최신 기록 우대 (오래된 기록일수록 반영 비율 감소)')
+              )
+            ),
+            React.createElement('button', {
+              type: 'button',
+              onClick: async function() {
+                if (ftpCalcLoading || !userProfile || !userProfile.id) return;
+                setFtpCalcLoading(true);
+                setFtpCalcResult(null);
+                try {
+                  var logs = [];
+                  if (typeof window.getUserTrainingLogs === 'function') {
+                    logs = await window.getUserTrainingLogs(userProfile.id, { limit: 400 }) || [];
+                  }
+                  if (logs.length === 0 && window.firestore) {
+                    try {
+                      var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
+                      snap.docs.forEach(function(d) {
+                        var dd = d.data();
+                        var o = { id: d.id };
+                        if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
+                        logs.push(o);
+                      });
+                    } catch (e2) {}
+                  }
+                  var result = window.calculateDynamicFtp ? window.calculateDynamicFtp(logs) : { success: false, error: 'FTP 산출 함수를 불러올 수 없습니다.' };
+                  setFtpCalcResult(result);
+                  setFtpModalOpen(true);
+                } catch (e) {
+                  setFtpCalcResult({ success: false, error: (e && e.message) || 'FTP 산출 중 오류가 발생했습니다.' });
+                  setFtpModalOpen(true);
+                } finally {
+                  setFtpCalcLoading(false);
+                }
+              },
+              disabled: ftpCalcLoading,
+              className: ('w-full py-3.5 px-4 text-white font-semibold rounded-xl shadow-md hover:shadow-lg active:scale-[0.98] transition-all text-base border-none ') + (ftpCalcLoading ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'),
+              style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
+            }, ftpCalcLoading ? React.createElement('span', { className: 'flex items-center justify-center gap-2' },
+              React.createElement('span', { className: 'w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin' }),
+              '산출 중...'
+            ) : 'FTP 산출하기')
+          ))}
         </section>
 
         {/* Level 3: Deep Dive - DashboardDetailTabs */}
