@@ -3374,20 +3374,20 @@ body:has(#trainingDetailModal:not(.hidden)) {
   mix-blend-mode: multiply;
 }
 
-/* 주간 마일리지 TOP10 랭킹 행 */
+/* 주간 마일리지 TOP10 랭킹 행 (행높이 1/5 축소: 12px → 10px) */
 .weekly-rank-item {
   display: flex;
   align-items: center;
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid #e5e7eb;
 }
 .weekly-rank-item:last-child {
   border-bottom: none;
 }
 .weekly-rank-medal {
-  width: 28px;
-  height: 28px;
-  margin-right: 10px;
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
   flex-shrink: 0;
 }
 .weekly-rank-position {
@@ -3428,10 +3428,18 @@ body:has(#trainingDetailModal:not(.hidden)) {
   background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
   border-radius: 8px;
   margin: 2px -4px;
-  padding: 10px 4px;
+  padding: 8px 4px;
   border-top: 1px dashed #e5e7eb !important;
-  margin-top: 8px !important;
-  padding-top: 10px !important;
+  margin-top: 6px !important;
+  padding-top: 8px !important;
+}
+
+/* 주간 TOP10: 12위 이후일 때 중간 생략 표시 (....) */
+.weekly-rank-item.weekly-rank-ellipsis {
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 0.9em;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 /* STELVIO iOS 스타일 팝업 (주간 TOP10, 랭킹 보드) */
