@@ -3828,6 +3828,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 4px 0;
   border-bottom: none;
 }
+.stelvio-rank-preview-row {
+  font-style: normal;
+}
 .stelvio-rank-dots-row .stelvio-rank-name-text {
   color: #9ca3af;
   font-size: 0.85em;
