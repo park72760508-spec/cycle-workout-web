@@ -14533,6 +14533,40 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     window.YearlyPowerPrChart = YearlyPowerPrChart;
     window.RiderDashboardProfile = RiderDashboardProfile;
     
+    // W/kg 기반 등급 표시등 (리팩터링된 대시보드 헤더 아바타 및 등급 안내용)
+    function getWkgGradeInfo(wkg) {
+      var v = Number(wkg) || 0;
+      if (v >= 4.0) return { grade: 'elite', label: '엘리트', gradient: 'linear-gradient(to bottom right, #f87171, #dc2626)', glowColor: 'rgba(239,68,68,0.5)' };
+      if (v >= 3.5) return { grade: 'advanced', label: '고급', gradient: 'linear-gradient(to bottom right, #fb923c, #ea580c)', glowColor: 'rgba(249,115,22,0.5)' };
+      if (v >= 3.0) return { grade: 'intermediate', label: '중급', gradient: 'linear-gradient(to bottom right, #3b82f6, #9333ea)', glowColor: 'rgba(147,51,234,0.5)' };
+      if (v >= 2.2) return { grade: 'beginner', label: '입문', gradient: 'linear-gradient(to bottom right, #a3e635, #65a30d)', glowColor: 'rgba(132,204,22,0.5)' };
+      return { grade: 'novice', label: '초급', gradient: 'linear-gradient(to bottom right, #fde047, #ca8a04)', glowColor: 'rgba(234,179,8,0.5)' };
+    }
+    function WkgGradeIndicator(props) {
+      var p = props || {};
+      var wkg = p.wkg;
+      var size = p.size;
+      var letter = p.letter;
+      var info = getWkgGradeInfo(wkg);
+      var s = size || 10;
+      var style = {
+        width: s + 'px',
+        height: s + 'px',
+        borderRadius: '50%',
+        background: info.gradient,
+        boxShadow: '0 0 6px 1px ' + info.glowColor,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      };
+      var isMultiChar = letter && String(letter).length > 1;
+      var fontSize = isMultiChar ? Math.min(12, Math.floor(s * 0.35)) + 'px' : Math.max(14, s * 0.5) + 'px';
+      var inner = letter ? React.createElement('span', { className: 'text-white font-bold', style: { fontSize: fontSize, textShadow: '0 1px 2px rgba(0,0,0,0.3)' } }, letter) : null;
+      return React.createElement('div', { className: 'rounded-full flex-shrink-0', style: style, title: info.label + ' (' + (wkg || 0) + ' W/kg)' }, inner);
+    }
+    window.getWkgGradeInfo = getWkgGradeInfo;
+    window.WkgGradeIndicator = WkgGradeIndicator;
+    
     // ===== PerformanceDashboard Component (Direct Firebase Access - No Iframe) =====
     function PerformanceDashboard() {
       const [userProfile, setUserProfile] = useState(null);
