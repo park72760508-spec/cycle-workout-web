@@ -2850,6 +2850,7 @@ exports.getPeakPowerRanking = onRequest(
       const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
       if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
         let out = { success: true, byCategory: data.byCategory, startStr, endStr, period, durationType, gender, cached: true };
+        const entries = Array.isArray(data.entries) ? data.entries : [];
         if (uid) {
           const cat = data.byCategory;
           const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
@@ -2867,6 +2868,11 @@ exports.getPeakPowerRanking = onRequest(
             out.currentUser = current;
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
+          const globalIdx = entries.findIndex((e) => e.userId === uid);
+          if (globalIdx >= 10) {
+            const e = entries[globalIdx];
+            out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, wkg: e.wkg, is_private: e.is_private };
+          }
         }
         return res.status(200).json(out);
       }
@@ -2875,6 +2881,7 @@ exports.getPeakPowerRanking = onRequest(
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
     await cacheRef.set({
       byCategory,
+      entries,
       startStr,
       endStr,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2896,6 +2903,11 @@ exports.getPeakPowerRanking = onRequest(
       if (current) {
         out.currentUser = current;
         out.motivationMessage = buildMotivationMessage(current, nextUser);
+      }
+      const globalIdx = entries.findIndex((e) => e.userId === uid);
+      if (globalIdx >= 10) {
+        const e = entries[globalIdx];
+        out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, wkg: e.wkg, is_private: e.is_private };
       }
     }
     res.status(200).json(out);
