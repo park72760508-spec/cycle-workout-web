@@ -3847,6 +3847,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 4px 0;
   border-bottom: none;
 }
+/* Supremo 10위 밖 본인 순위 (주간 TOP10과 동일 스타일, 행높이·스크롤 제외) */
+.stelvio-rank-row.stelvio-rank-my-supremo {
+  border-top: 1px dashed #e5e7eb !important;
+  margin-top: 6px !important;
+  padding-top: 10px !important;
+}
 .stelvio-rank-preview-row {
   font-style: normal;
 }
