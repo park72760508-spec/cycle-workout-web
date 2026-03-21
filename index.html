@@ -6882,6 +6882,9 @@
         });
         if (myRankData && myRankData.rank > 10) {
           var mr = myRankData;
+          if (mr.rank >= 12) {
+            html += '<div class="weekly-rank-item weekly-rank-ellipsis">....</div>';
+          }
           var mrIsPrivate = mr.is_private === true;
           var mrCanSeeFull = currentUserId && mr.userId === currentUserId || isAdmin;
           var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
