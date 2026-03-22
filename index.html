@@ -6663,12 +6663,12 @@
             logsByDate[dateKey].push(log);
           }
         });
-        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+        // 같은 날 Strava와 Stelvio가 둘 다 있으면 Strava 우선, Stelvio만 있으면 Stelvio
         Object.keys(logsByDate).forEach(dateKey => {
           const arr = logsByDate[dateKey];
-          const hasStelvio = arr.some(log => log.source !== 'strava');
-          if (hasStelvio) {
-            logsByDate[dateKey] = arr.filter(log => log.source !== 'strava');
+          const hasStrava = arr.some(log => String(log.source || '').toLowerCase() === 'strava');
+          if (hasStrava) {
+            logsByDate[dateKey] = arr.filter(log => String(log.source || '').toLowerCase() === 'strava');
           }
         });
         return logsByDate;
@@ -7953,8 +7953,10 @@
       });
       Object.keys(logsByDate).forEach(function(dateKey) {
         var arr = logsByDate[dateKey];
-        var hasStelvio = arr.some(function(l) { return l.source !== 'strava'; });
-        if (hasStelvio) logsByDate[dateKey] = arr.filter(function(l) { return l.source !== 'strava'; });
+        var hasStrava = arr.some(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+        if (hasStrava) {
+          logsByDate[dateKey] = arr.filter(function(l) { return String(l.source || '').toLowerCase() === 'strava'; });
+        }
       });
       return logsByDate;
     }
