@@ -370,19 +370,36 @@
             if (h20 > byDateGrowth[ds].maxHr20min) byDateGrowth[ds].maxHr20min = h20;
           });
           var growthRows = [];
-          var dCur = new Date(sixMonthsAgo);
-          var todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-          while (dCur.getTime() <= todayEnd.getTime()) {
-            var ds = dCur.getFullYear() + '-' + pad2(dCur.getMonth() + 1) + '-' + pad2(dCur.getDate());
-            var dayData = byDateGrowth[ds];
-            growthRows.push({
-              dateLabel: (dCur.getMonth() + 1) + '/' + dCur.getDate(),
-              dateStr: ds,
-              max20minWatts: dayData && dayData.max20minWatts > 0 ? dayData.max20minWatts : null,
-              maxHr20min: dayData && dayData.maxHr20min > 0 ? dayData.maxHr20min : null
+          for (var mOff = 5; mOff >= 0; mOff--) {
+            var dMonth = new Date(today.getFullYear(), today.getMonth() - mOff, 1);
+            var y = dMonth.getFullYear();
+            var m = dMonth.getMonth() + 1;
+            var startStr = y + '-' + pad2(m) + '-01';
+            var endStr = y + '-' + pad2(m) + '-' + pad2(new Date(y, m, 0).getDate());
+            if (mOff === 0) {
+              var endD = new Date(today);
+              var startD = new Date(endD);
+              startD.setDate(endD.getDate() - 29);
+              startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
+              endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
+            }
+            var monthMaxWatts = 0, monthMaxHr = 0;
+            Object.keys(byDateGrowth).forEach(function(ds) {
+              if (ds < startStr || ds > endStr) return;
+              var d = byDateGrowth[ds];
+              if (d.max20minWatts > monthMaxWatts) monthMaxWatts = d.max20minWatts;
+              if (d.maxHr20min > monthMaxHr) monthMaxHr = d.maxHr20min;
             });
-            dCur.setDate(dCur.getDate() + 1);
+            var monthLabel = m + '월';
+            if (mOff === 0) monthLabel = m + '월(현재)';
+            growthRows.push({
+              monthLabel: monthLabel,
+              sortKey: y + '-' + pad2(m),
+              max20minWatts: monthMaxWatts > 0 ? monthMaxWatts : null,
+              maxHr20min: monthMaxHr > 0 ? monthMaxHr : null
+            });
           }
+          growthRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
           if (isMounted) setGrowthTrendData(growthRows);
 
           var byDateChart = {};
