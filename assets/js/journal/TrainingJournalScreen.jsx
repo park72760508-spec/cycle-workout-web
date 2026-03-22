@@ -97,7 +97,8 @@
         logs: logsForSelectedDate,
         selectedDate: selectedDate,
         yearlyPeaksByYear: data.yearlyPeaksByYear,
-        userWeightForPr: data.userWeightForPr
+        userWeightForPr: data.userWeightForPr,
+        userProfile: data.userProfile
       }) : null
     );
   }

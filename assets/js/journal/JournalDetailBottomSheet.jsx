@@ -63,6 +63,7 @@
     var sumNpSec = 0, sumApSec = 0, sumHrSec = 0;
     var maxHr = 0, maxHr5 = 0, maxHr1 = 0, maxHr5m = 0, maxHr10 = 0, maxHr20 = 0, maxHr40 = 0, maxHr60 = 0;
     var max1w = 0, max5w = 0, max10w = 0, max20w = 0, max30w = 0, max40w = 0, max60w = 0, maxW = 0;
+    var aggPower = {}, aggHr = {};
     for (var i = 0; i < logs.length; i++) {
       var l = logs[i];
       var s = Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
@@ -92,6 +93,19 @@
       max40w = Math.max(max40w, Number(l.max_40min_watts || 0));
       max60w = Math.max(max60w, Number(l.max_60min_watts || 0));
       maxW = Math.max(maxW, Number(l.max_watts || 0));
+      var tiz = l.time_in_zones;
+      if (tiz && tiz.power) {
+        ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].forEach(function(k) { aggPower[k] = (aggPower[k] || 0) + (Number(tiz.power[k]) || 0); });
+      }
+      if (tiz && tiz.hr) {
+        ['z1', 'z2', 'z3', 'z4', 'z5'].forEach(function(k) { aggHr[k] = (aggHr[k] || 0) + (Number(tiz.hr[k]) || 0); });
+      }
+    }
+    var mergedTiz = null;
+    if (Object.keys(aggPower).length > 0 || Object.keys(aggHr).length > 0) {
+      mergedTiz = { power: aggPower, hr: aggHr };
+    } else if (logs[0].time_in_zones) {
+      mergedTiz = logs[0].time_in_zones;
     }
     return {
       date: logs[0].date,
@@ -120,17 +134,19 @@
       max_40min_watts: max40w || null,
       max_60min_watts: max60w || null,
       max_watts: maxW || null,
-      time_in_zones: logs[0].time_in_zones,
+      time_in_zones: mergedTiz,
       source: logs[0].source
     };
   }
 
   function DetailRow(props) {
     return React.createElement('div', { className: 'journal-detail-row' },
-      React.createElement('span', { className: 'journal-detail-label' }, props.label),
+      React.createElement('span', { className: 'journal-detail-label' },
+        props.label,
+        props.isPr ? React.createElement('span', { className: 'training-detail-pr-badge', style: { marginLeft: 4 } }, 'PR') : null
+      ),
       React.createElement('span', { className: 'journal-detail-value-wrap' },
-        React.createElement('span', { className: 'journal-detail-value' }, props.value),
-        props.isPr ? React.createElement('span', { className: 'training-detail-pr-badge' }, 'PR') : null
+        React.createElement('span', { className: 'journal-detail-value' }, props.value)
       )
     );
   }
@@ -142,13 +158,24 @@
 
   function TabSummary(props) {
     var log = props.log;
+    var userProfile = props.userProfile || {};
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
-    return React.createElement('div', { className: 'journal-tab-content' },
+    var DailyCharts = window.DailyTimeInZonesCharts;
+    var up = { id: userProfile.id || userProfile.uid, uid: userProfile.uid || userProfile.id, ftp: Number(userProfile.ftp) || 200, max_hr: Number(userProfile.max_hr) || 190 };
+    var rows = [
       DetailRow({ label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-', isPr: false }),
       DetailRow({ label: '훈련시간', value: formatDuration(log.duration_sec), isPr: false }),
       DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false }),
       DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
       DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false })
+    ];
+    var tizEl = log.time_in_zones && DailyCharts
+      ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
+          React.createElement(DailyCharts, { log: log, userProfile: up })
+        )
+      : null;
+    return React.createElement('div', { className: 'journal-tab-content' },
+      rows.concat(tizEl ? [tizEl] : [])
     );
   }
 
@@ -242,7 +269,9 @@
         React.createElement('div', { className: 'journal-bottom-sheet-body' },
           tabs.map(function(t) {
             if (activeTab !== t.id) return null;
-            var p = t.id === 'summary' ? { log: merged } : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr };
+            var p = t.id === 'summary'
+              ? { log: merged, userProfile: props.userProfile || {} }
+              : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr };
             return React.createElement(t.C, Object.assign({ key: t.id }, p));
           })
         ),
