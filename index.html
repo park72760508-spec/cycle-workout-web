@@ -4931,41 +4931,38 @@
     <div id="monthly-analysis-dashboard-root" class="card monthly-analysis-dashboard-wrapper" style="margin-top: 16px;"></div>
   </div>
 
-  <!-- Strava 동기화 날짜 선택 모달: 스크롤은 전체 동작, 제목만 sticky로 상단 여백에 본문 노출 방지 -->
-  <div id="stravaSyncModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: flex-start; justify-content: center; z-index: 10000; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); overflow-y: auto; overscroll-behavior: contain; padding: 0;" onclick="if(event.target === this) closeStravaSyncModal();">
-    <div class="modal-content" id="stravaSyncModalContent" style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); margin: 16px auto;" onclick="event.stopPropagation();">
-      <div class="modal-header strava-sync-modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: white; z-index: 2; padding-bottom: 4px; border-radius: 16px 16px 0 0; margin-left: -24px; margin-right: -24px; margin-top: -24px; padding: 20px 24px 24px 24px;">
-        <h3 style="margin: 0; font-size: 1.3em; color: #1f2937;">Strava 동기화</h3>
+  <!-- Strava 동기화 모달 (grade=1 관리자용, STELVIO 디자인): MMP 수집만, 2개 버튼 -->
+  <div id="stravaSyncModal" class="modal stelvio-ios-popup hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: flex-start; justify-content: center; z-index: 10000; background: rgba(0, 0, 0, 0.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); overflow-y: auto; overscroll-behavior: contain; padding: 0;" onclick="if(event.target === this) closeStravaSyncModal();">
+    <div class="modal-content stelvio-ios-modal-content" id="stravaSyncModalContent" style="background: white; border-radius: 16px; padding: 24px; max-width: 500px; width: 90%; border: 1px solid rgba(102, 126, 234, 0.35); box-shadow: 0 12px 40px rgba(102, 126, 234, 0.25), 0 4px 16px rgba(0, 0, 0, 0.1); margin: 16px auto;" onclick="event.stopPropagation();">
+      <div class="modal-header strava-sync-modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(102, 126, 234, 0.2); background: linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.04) 100%); margin-left: -24px; margin-right: -24px; margin-top: -24px; padding: 20px 24px 24px 24px; border-radius: 16px 16px 0 0;">
+        <h3 style="margin: 0; font-size: 1.3em; font-weight: 600; color: #4c51bf;">Strava 동기화</h3>
         <button onclick="closeStravaSyncModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;">&times;</button>
       </div>
       <div class="modal-body strava-sync-modal-body" style="margin-bottom: 0;">
         <p id="stravaSyncDesc" style="margin: 0 0 20px 0; color: #6b7280; font-size: 0.95em;">동기화할 기간을 선택하세요. MMP 포함 Strava 로그를 일단위로 수집합니다.</p>
-        
-        <div id="stravaSyncDateRangeSection" style="margin-bottom: 0;">
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">시작일</label>
-          <input type="date" id="stravaSyncStartDate" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;" />
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">종료일</label>
-          <input type="date" id="stravaSyncEndDate" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;" />
-        </div>
-        
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <button onclick="setStravaSyncMonthRange('1month')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 1개월</button>
-          <button onclick="setStravaSyncMonthRange('3months')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 3개월</button>
-          <button onclick="setStravaSyncMonthRange('6months')" style="flex: 1; padding: 10px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #374151; transition: all 0.2s;">최근 6개월</button>
-        </div>
-        
-        <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
+        <div id="stravaSyncDateRangeSection" style="margin-bottom: 20px;">
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">시작일</label>
+            <input type="date" id="stravaSyncStartDate" style="width: 100%; padding: 12px; border: 2px solid rgba(102, 126, 234, 0.3); border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;" />
+          </div>
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #374151; font-size: 0.95em;">종료일</label>
+            <input type="date" id="stravaSyncEndDate" style="width: 100%; padding: 12px; border: 2px solid rgba(102, 126, 234, 0.3); border-radius: 8px; font-size: 14px; box-sizing: border-box; transition: border-color 0.2s; background: white; cursor: pointer;" />
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button onclick="setStravaSyncMonthRange('1month')" class="stelvio-sync-range-btn" style="flex: 1; padding: 10px; background: rgba(102, 126, 234, 0.08); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #4c51bf; transition: all 0.2s;">최근 1개월</button>
+            <button onclick="setStravaSyncMonthRange('3months')" class="stelvio-sync-range-btn" style="flex: 1; padding: 10px; background: rgba(102, 126, 234, 0.08); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #4c51bf; transition: all 0.2s;">최근 3개월</button>
+            <button onclick="setStravaSyncMonthRange('6months')" class="stelvio-sync-range-btn" style="flex: 1; padding: 10px; background: rgba(102, 126, 234, 0.08); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; cursor: pointer; font-size: 0.9em; color: #4c51bf; transition: all 0.2s;">최근 6개월</button>
+          </div>
+          <button onclick="clearStravaSyncMonthRange()" style="width: 100%; padding: 8px; background: transparent; border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; cursor: pointer; font-size: 0.85em; color: #6b7280; transition: all 0.2s;">기간 초기화</button>
         </div>
       </div>
-      <div class="modal-footer strava-sync-modal-footer" id="stravaSyncFooter" style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
-        <button id="btnStravaSyncTodayAll" type="button" onclick="if(typeof startStravaSyncTodayAll==='function'){startStravaSyncTodayAll();}" style="display: none; padding: 12px 24px; background: rgba(59, 130, 246, 0.25); border: 1px solid rgba(59, 130, 246, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #1d4ed8; transition: all 0.2s;">오늘 기록(ALL)</button>
-        <button id="btnStravaSyncToday" onclick="if(typeof startStravaSyncToday==='function'){startStravaSyncToday();}" style="padding: 12px 24px; background: rgba(34, 197, 94, 0.25); border: 1px solid rgba(34, 197, 94, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #15803d; transition: all 0.2s;">오늘 기록</button>
-        <button id="btnStravaSyncWithMmp" onclick="if(typeof syncStravaDataWithMmp==='function'){syncStravaDataWithMmp(6);}" style="padding: 12px 24px; background: rgba(139, 92, 246, 0.25); border: 1px solid rgba(139, 92, 246, 0.5); border-radius: 8px; cursor: pointer; font-weight: 600; color: #5b21b6; transition: all 0.2s;">MMP 포함 (6개월)</button>
-        <button id="btnStravaSyncConfirm" onclick="confirmStravaSync()" style="padding: 12px 24px; background: #fc4c02; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; transition: all 0.2s;">동기화 시작</button>
+      <div class="modal-footer strava-sync-modal-footer" id="stravaSyncFooter" style="display: flex; flex-direction: column; gap: 12px;">
+        <button id="btnStravaMmpAllUsers" type="button" class="stelvio-purple-btn" onclick="if(typeof syncStravaMmpAllUsers==='function'){syncStravaMmpAllUsers();}" style="width: 100%; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">모든 사용자(MMP)</button>
+        <div>
+          <button id="btnStravaMmpAdmin" type="button" class="stelvio-purple-btn" onclick="if(typeof syncStravaMmpAdminOnly==='function'){syncStravaMmpAdminOnly();}" style="width: 100%; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; color: white; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">관리자 MMP</button>
+          <p id="stravaMmpAdminHint" style="margin: 4px 0 0 0; font-size: 0.8em; color: #9ca3af;">&gt;&gt; 일반 사용자 MMP는 수집하지 않습니다.</p>
+        </div>
       </div>
       <div class="strava-sync-modal-logo" style="text-align: center; padding-top: 12px;">
         <img src="assets/img/api_strava.png" alt="Powered by Strava" style="height: 14px; width: auto; display: inline-block;" />
