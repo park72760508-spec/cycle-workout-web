@@ -35,10 +35,14 @@
     var logsForSelectedDate = data.logsForSelectedDate;
     var navigateMonth = data.navigateMonth;
     var openDetailSheet = data.openDetailSheet;
+    var closeDetailSheet = data.closeDetailSheet;
+    var detailSheetOpen = data.detailSheetOpen;
     var retryLoad = data.retryLoad;
 
     var CalendarWidget = window.JournalCalendarWidget;
     var DailySummary = window.JournalDailySummary;
+    var DetailBottomSheet = window.JournalDetailBottomSheet;
+    var MonthlyDashboard = window.JournalMonthlyDashboard;
 
     useLayoutEffect(function() {
       var container = document.getElementById('journal-react-root');
@@ -78,6 +82,18 @@
         selectedDate: selectedDate,
         logs: logsForSelectedDate,
         onShowDetail: openDetailSheet
+      }) : null,
+      MonthlyDashboard ? React.createElement(MonthlyDashboard, {
+        trainingLogs: trainingLogs,
+        currentYear: currentYear,
+        currentMonth: currentMonth,
+        userProfile: data.userProfile
+      }) : null,
+      DetailBottomSheet ? React.createElement(DetailBottomSheet, {
+        open: detailSheetOpen,
+        onClose: closeDetailSheet,
+        logs: logsForSelectedDate,
+        selectedDate: selectedDate
       }) : null
     );
   }
