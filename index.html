@@ -10612,35 +10612,7 @@
                 </div>
               ) : (
                 <>
-                  {/* Row 1: Summary Cards (Bento) - 총 TSS·총 거리 등 + VO₂max(빨강 톤) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                    <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-                      <div className="text-xs font-medium text-emerald-700 mb-0.5">총 TSS</div>
-                      <div className="text-xl font-bold text-emerald-800">{stats.totalTSS}</div>
-                    </div>
-                    <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                      <div className="text-xs font-medium text-blue-700 mb-0.5">총 거리</div>
-                      <div className="text-xl font-bold text-blue-800">{stats.totalDistance} km</div>
-                    </div>
-                    <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
-                      <div className="text-xs font-medium text-amber-700 mb-0.5">총 시간</div>
-                      <div className="text-xl font-bold text-amber-800">{stats.totalDurationFormatted}</div>
-                    </div>
-                    <div className="bg-violet-50 rounded-xl p-3 border border-violet-100">
-                      <div className="text-xs font-medium text-violet-700 mb-0.5">평균 EF</div>
-                      <div className="text-xl font-bold text-violet-800">{stats.avgEF}</div>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                      <div className="text-xs font-medium text-slate-700 mb-0.5">평균 VI</div>
-                      <div className="text-xl font-bold text-slate-800">{stats.avgVI}</div>
-                    </div>
-                    <div className="bg-red-50 rounded-xl p-3 border border-red-100">
-                      <div className="text-xs font-medium text-red-700 mb-0.5">VO₂max</div>
-                      <div className="text-xl font-bold text-red-800">
-                        {vo2Values.current != null ? <><span>{vo2Values.current}</span><span className="text-xs font-medium text-red-700">(ml/kg/min)</span></> : '–'}
-                      </div>
-                    </div>
-                  </div>
+                  {/* Row 1: EF Trend (요약 카드 중복 제거 - 상단 Bento에만 표시) */}
                   {/* Row 2: EF Trend */}
                   <div className="mb-4 relative">
                     <div className="flex items-center gap-1.5 mb-2">
@@ -10689,7 +10661,8 @@
                       })}
                     </div>
                   )}
-                  {/* Weekly VO₂max Trend (Weekly TSS Load와 동일한 주간 구간, 해당 주의 마지막 날짜로 X축 표기) */}
+                  {/* Weekly VO₂max Trend - 숨김 (상단 요약에 VO₂max 포함) */}
+                  {false && (
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">주간 VO₂max 추이</h4>
                     {selectedWeeklyVo2Index != null && weeklyVo2TrendData[selectedWeeklyVo2Index] && (
@@ -10712,7 +10685,9 @@
                       </>
                     )}
                   </div>
-                  {/* Ride Style (VI Distribution) */}
+                  )}
+                  {/* Ride Style (VI Distribution) - 숨김 */}
+                  {false && (
                   <div className="relative mb-4">
                     <div className="flex items-center gap-1.5 mb-1">
                       <h4 className="text-sm font-semibold text-gray-700">Ride Style (VI Distribution)</h4>
@@ -10738,7 +10713,9 @@
                       <canvas ref={chartViRef}></canvas>
                     </div>
                   </div>
-                  {/* Row 4: Power vs Cadence Scatter */}
+                  )}
+                  {/* Power vs Cadence Scatter - 숨김 */}
+                  {false && (
                   <div className="relative">
                     <div className="flex items-center gap-1.5 mb-1">
                       <h4 className="text-sm font-semibold text-gray-700">Power vs Cadence (Bubble size = TSS)</h4>
@@ -10764,6 +10741,7 @@
                       <canvas ref={chartScatterRef}></canvas>
                     </div>
                   </div>
+                  )}
                 </>
               )}
             </div>
