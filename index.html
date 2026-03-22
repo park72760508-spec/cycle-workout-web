@@ -1356,16 +1356,21 @@
       border: 1.5px solid #dc2626;
       border-radius: 3px;
     }
-    /* React Journal 리팩터링: Daily Summary 카드 */
+    /* React Journal 리팩터링: Daily Summary 카드 (STELVIO 주간 마일리지 TOP10 모달 스타일 적용) */
     #trainingJournalScreen .journal-daily-summary {
       margin-top: 16px;
       padding: 16px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.03) 100%);
-      border: 1px solid rgba(34, 197, 94, 0.2);
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.04) 100%);
+      border: 1px solid rgba(102, 126, 234, 0.35);
+      box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15), 0 4px 16px rgba(0, 0, 0, 0.05);
     }
-    #trainingJournalScreen .journal-daily-summary-header { margin-bottom: 12px; }
-    #trainingJournalScreen .journal-daily-summary-title { margin: 0; font-size: 1rem; font-weight: 600; color: #111827; }
+    #trainingJournalScreen .journal-daily-summary-header {
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+    }
+    #trainingJournalScreen .journal-daily-summary-title { margin: 0; font-size: 1rem; font-weight: 600; color: #4c51bf; }
     #trainingJournalScreen .journal-daily-summary-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -1375,19 +1380,14 @@
     #trainingJournalScreen .journal-summary-item { display: flex; justify-content: space-between; align-items: center; }
     #trainingJournalScreen .journal-summary-label { font-size: 13px; color: #6b7280; }
     #trainingJournalScreen .journal-summary-value { font-size: 14px; font-weight: 600; color: #111827; }
-    #trainingJournalScreen .journal-daily-summary-actions { text-align: center; }
-    #trainingJournalScreen .journal-btn-detail {
-      padding: 10px 20px;
-      background: #22c55e;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-      transition: background 0.2s;
+    #trainingJournalScreen .journal-daily-summary-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
-    #trainingJournalScreen .journal-btn-detail:hover { background: #16a34a; }
+    #trainingJournalScreen .journal-daily-summary .stelvio-ranking-board-entry-btn {
+      margin: 0;
+    }
     #trainingJournalScreen .journal-calendar-widget .journal-strava-legend-row {
       display: flex;
       align-items: center;
@@ -1424,12 +1424,14 @@
       font-weight: 500;
       cursor: pointer;
     }
-    /* Bottom Sheet */
+    /* Bottom Sheet (STELVIO iOS 스타일) */
     #trainingJournalScreen .journal-bottom-sheet-overlay {
       position: fixed;
       inset: 0;
       z-index: 9998;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -1445,11 +1447,14 @@
       display: flex;
       flex-direction: column;
       animation: journalSlideUp 0.3s ease;
+      border: 1px solid rgba(102, 126, 234, 0.35);
+      border-bottom: none;
+      box-shadow: 0 -12px 40px rgba(102, 126, 234, 0.25), 0 -4px 16px rgba(0, 0, 0, 0.1);
     }
     #trainingJournalScreen .journal-bottom-sheet-handle {
       width: 40px;
       height: 4px;
-      background: #d1d5db;
+      background: rgba(102, 126, 234, 0.4);
       border-radius: 2px;
       margin: 8px auto;
     }
@@ -1458,9 +1463,10 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 16px 12px;
-      border-bottom: 1px solid #e5e7eb;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.06) 0%, rgba(118, 75, 162, 0.04) 100%);
+      border-bottom: 1px solid rgba(102, 126, 234, 0.2);
     }
-    #trainingJournalScreen .journal-bottom-sheet-title { margin: 0; font-size: 1rem; font-weight: 600; }
+    #trainingJournalScreen .journal-bottom-sheet-title { margin: 0; font-size: 1rem; font-weight: 600; color: #4c51bf; }
     #trainingJournalScreen .journal-bottom-sheet-close {
       background: none;
       border: none;
@@ -1474,7 +1480,7 @@
       display: flex;
       gap: 4px;
       padding: 12px 16px;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 1px solid rgba(102, 126, 234, 0.2);
     }
     #trainingJournalScreen .journal-bottom-sheet-tab {
       flex: 1;
@@ -1486,8 +1492,13 @@
       font-weight: 500;
       cursor: pointer;
       color: #6b7280;
+      transition: all 0.2s ease;
     }
-    #trainingJournalScreen .journal-bottom-sheet-tab.active { background: #22c55e; color: white; }
+    #trainingJournalScreen .journal-bottom-sheet-tab.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
     #trainingJournalScreen .journal-bottom-sheet-body { padding: 16px; overflow-y: auto; flex: 1; }
     #trainingJournalScreen .journal-detail-row {
       display: flex;
