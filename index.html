@@ -1424,6 +1424,120 @@
       font-weight: 500;
       cursor: pointer;
     }
+    /* Bottom Sheet */
+    #trainingJournalScreen .journal-bottom-sheet-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      animation: journalFadeIn 0.2s ease;
+    }
+    #trainingJournalScreen .journal-bottom-sheet {
+      background: white;
+      border-radius: 16px 16px 0 0;
+      max-height: 85vh;
+      width: 100%;
+      max-width: 480px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      animation: journalSlideUp 0.3s ease;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-handle {
+      width: 40px;
+      height: 4px;
+      background: #d1d5db;
+      border-radius: 2px;
+      margin: 8px auto;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-title { margin: 0; font-size: 1rem; font-weight: 600; }
+    #trainingJournalScreen .journal-bottom-sheet-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #6b7280;
+    }
+    #trainingJournalScreen .journal-bottom-sheet-tab.active { background: #22c55e; color: white; }
+    #trainingJournalScreen .journal-bottom-sheet-body { padding: 16px; overflow-y: auto; flex: 1; }
+    #trainingJournalScreen .journal-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 14px;
+    }
+    #trainingJournalScreen .journal-detail-label { color: #6b7280; }
+    #trainingJournalScreen .journal-detail-value { font-weight: 600; }
+    #trainingJournalScreen .journal-bottom-sheet-footer { padding: 8px; text-align: center; }
+    /* Monthly Bento */
+    #trainingJournalScreen .journal-monthly-dashboard { margin-top: 20px; }
+    #trainingJournalScreen .journal-bento-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    #trainingJournalScreen .journal-bento-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #trainingJournalScreen .journal-bento-label { font-size: 12px; color: #64748b; }
+    #trainingJournalScreen .journal-bento-value { font-size: 18px; font-weight: 700; color: #0f172a; }
+    #trainingJournalScreen .journal-accordion-trigger {
+      width: 100%;
+      padding: 12px 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #475569;
+    }
+    #trainingJournalScreen .journal-accordion-hint {
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: center;
+      margin: 8px 0 0;
+    }
+    @keyframes journalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes journalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
@@ -9448,6 +9562,8 @@
   <script src="assets/js/journal/useJournalData.js"></script>
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel"></script>
   <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel"></script>
   <script>
     (function() {
@@ -9461,6 +9577,8 @@
         }
         if (legacyCard) legacyCard.style.display = 'none';
         root.style.display = 'block';
+        var monthlyRoot = document.getElementById('monthly-analysis-dashboard-root');
+        if (monthlyRoot) monthlyRoot.style.display = 'none';
         if (!root._journalRoot) {
           root._journalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
           if (root._journalRoot) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
