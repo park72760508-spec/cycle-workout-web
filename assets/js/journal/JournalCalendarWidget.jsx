@@ -59,6 +59,16 @@
     return false;
   }
 
+  function hasAnyPr(logs, year, yearlyPeaksByYear, userWeight) {
+    if (!logs || logs.length === 0 || !yearlyPeaksByYear || typeof window.logHasAnyPr !== 'function') return false;
+    var peaks = yearlyPeaksByYear[year];
+    if (!peaks) return false;
+    for (var i = 0; i < logs.length; i++) {
+      if (window.logHasAnyPr(logs[i], peaks, userWeight)) return true;
+    }
+    return false;
+  }
+
   function JournalCalendarWidget(props) {
     var trainingLogs = props.trainingLogs || {};
     var currentYear = props.currentYear;
@@ -66,6 +76,8 @@
     var onNavigate = props.onNavigate;
     var onDateSelect = props.onDateSelect;
     var selectedDate = props.selectedDate;
+    var yearlyPeaksByYear = props.yearlyPeaksByYear || {};
+    var userWeightForPr = props.userWeightForPr || 0;
 
     var year = currentYear;
     var month = currentMonth;
@@ -95,6 +107,8 @@
       if (hasTrain) {
         if (hi) cls += ' has-training has-indoor' + (sunOrHol ? ' indoor-holiday' : ' indoor-weekday');
         if (ho) cls += ' has-training has-outdoor' + (sunOrHol ? ' outdoor-holiday' : ' outdoor-weekday');
+        var prevYear = parseInt(prevKey.substring(0, 4), 10);
+        if (hasAnyPr(prevLogs, prevYear, yearlyPeaksByYear, userWeightForPr)) cls += ' journal-has-pr';
       }
       cells.push({
         key: 'prev-' + prevKey,
@@ -123,6 +137,8 @@
       if (hasTraining) {
         if (hasI) cls += ' has-training has-indoor' + (sunOrHol ? ' indoor-holiday' : ' indoor-weekday');
         if (hasO) cls += ' has-training has-outdoor' + (sunOrHol ? ' outdoor-holiday' : ' outdoor-weekday');
+        var cellYear = parseInt(dateKey.substring(0, 4), 10);
+        if (hasAnyPr(logs, cellYear, yearlyPeaksByYear, userWeightForPr)) cls += ' journal-has-pr';
       }
       if (dateKey === todayKey) cls += ' today';
       if (dateKey === selectedDate) cls += ' selected';
@@ -151,6 +167,8 @@
       if (hasTrain) {
         if (hi) cls += ' has-training has-indoor' + (sunOrHol ? ' indoor-holiday' : ' indoor-weekday');
         if (ho) cls += ' has-training has-outdoor' + (sunOrHol ? ' outdoor-holiday' : ' outdoor-weekday');
+        var nextYear = parseInt(nextKey.substring(0, 4), 10);
+        if (hasAnyPr(nextLogs, nextYear, yearlyPeaksByYear, userWeightForPr)) cls += ' journal-has-pr';
       }
       cells.push({
         key: 'next-' + nextKey,

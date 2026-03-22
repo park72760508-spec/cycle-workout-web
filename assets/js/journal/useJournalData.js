@@ -43,8 +43,8 @@
     var setError = _useState6[1];
 
     var _useState7 = useState({});
-    var yearlyPeaks = _useState7[0];
-    var setYearlyPeaks = _useState7[1];
+    var yearlyPeaksByYear = _useState7[0];
+    var setYearlyPeaksByYear = _useState7[1];
 
     var _useState8 = useState(null);
     var userProfile = _useState8[0];
@@ -189,6 +189,10 @@
       }
     }, []);
 
+    var userWeightForPr = userProfile && userProfile.weight != null ? Number(userProfile.weight) : (function() {
+      try { var cu = JSON.parse(localStorage.getItem('currentUser') || 'null'); return Number(cu && (cu.weight || cu.weightKg)) || 0; } catch(e) { return 0; }
+    })();
+
     return {
       selectedDate: selectedDate,
       setSelectedDate: setSelectedDate,
@@ -197,7 +201,8 @@
       currentMonth: currentMonth,
       loading: loading,
       error: error,
-      yearlyPeaks: yearlyPeaks,
+      yearlyPeaksByYear: yearlyPeaksByYear,
+      userWeightForPr: userWeightForPr,
       userProfile: userProfile,
       logsForSelectedDate: logsForSelectedDate,
       monthlyLogs: monthlyLogs,

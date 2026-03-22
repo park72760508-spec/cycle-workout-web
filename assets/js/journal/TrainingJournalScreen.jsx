@@ -76,7 +76,9 @@
         currentMonth: currentMonth,
         onNavigate: navigateMonth,
         onDateSelect: setSelectedDate,
-        selectedDate: selectedDate
+        selectedDate: selectedDate,
+        yearlyPeaksByYear: data.yearlyPeaksByYear,
+        userWeightForPr: data.userWeightForPr
       }) : null,
       DailySummary ? React.createElement(DailySummary, {
         selectedDate: selectedDate,
@@ -93,7 +95,9 @@
         open: detailSheetOpen,
         onClose: closeDetailSheet,
         logs: logsForSelectedDate,
-        selectedDate: selectedDate
+        selectedDate: selectedDate,
+        yearlyPeaksByYear: data.yearlyPeaksByYear,
+        userWeightForPr: data.userWeightForPr
       }) : null
     );
   }

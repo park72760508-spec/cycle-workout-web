@@ -128,52 +128,66 @@
   function DetailRow(props) {
     return React.createElement('div', { className: 'journal-detail-row' },
       React.createElement('span', { className: 'journal-detail-label' }, props.label),
-      React.createElement('span', { className: 'journal-detail-value' + (props.isPr ? ' journal-pr-badge' : '') }, props.value)
+      React.createElement('span', { className: 'journal-detail-value-wrap' },
+        React.createElement('span', { className: 'journal-detail-value' }, props.value),
+        props.isPr ? React.createElement('span', { className: 'training-detail-pr-badge' }, 'PR') : null
+      )
     );
+  }
+
+  function isPr(log, yearlyPeaks, field, userWeight) {
+    if (!log || !yearlyPeaks || typeof window.isPrField !== 'function') return false;
+    return window.isPrField(log, yearlyPeaks, field, userWeight);
   }
 
   function TabSummary(props) {
     var log = props.log;
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     return React.createElement('div', { className: 'journal-tab-content' },
-      DetailRow({ label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-' }),
-      DetailRow({ label: '훈련시간', value: formatDuration(log.duration_sec) }),
-      DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-' }),
-      DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-' }),
-      DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-' })
+      DetailRow({ label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-', isPr: false }),
+      DetailRow({ label: '훈련시간', value: formatDuration(log.duration_sec), isPr: false }),
+      DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false }),
+      DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
+      DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false })
     );
   }
 
   function TabPower(props) {
     var log = props.log;
+    var yearlyPeaks = props.yearlyPeaks;
+    var userWeight = props.userWeight || 0;
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
+    var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeight); };
     return React.createElement('div', { className: 'journal-tab-content' },
-      DetailRow({ label: '평균 파워', value: log.avg_watts != null && log.avg_watts > 0 ? Math.round(log.avg_watts) + ' W' : '-' }),
-      DetailRow({ label: 'NP', value: log.weighted_watts != null && log.weighted_watts > 0 ? Math.round(log.weighted_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(1분)', value: log.max_1min_watts != null && log.max_1min_watts > 0 ? Math.round(log.max_1min_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(5분)', value: log.max_5min_watts != null && log.max_5min_watts > 0 ? Math.round(log.max_5min_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(10분)', value: log.max_10min_watts != null && log.max_10min_watts > 0 ? Math.round(log.max_10min_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(20분)', value: log.max_20min_watts != null && log.max_20min_watts > 0 ? Math.round(log.max_20min_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(30분)', value: log.max_30min_watts != null && log.max_30min_watts > 0 ? Math.round(log.max_30min_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(40분)', value: log.max_40min_watts != null && log.max_40min_watts > 0 ? Math.round(log.max_40min_watts) + ' W' : '-' }),
-      DetailRow({ label: '피크 파워(60분)', value: log.max_60min_watts != null && log.max_60min_watts > 0 ? Math.round(log.max_60min_watts) + ' W' : '-' }),
-      DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-' })
+      DetailRow({ label: '평균 파워', value: log.avg_watts != null && log.avg_watts > 0 ? Math.round(log.avg_watts) + ' W' : '-', isPr: false }),
+      DetailRow({ label: 'NP', value: log.weighted_watts != null && log.weighted_watts > 0 ? Math.round(log.weighted_watts) + ' W' : '-', isPr: false }),
+      DetailRow({ label: '피크 파워(1분)', value: log.max_1min_watts != null && log.max_1min_watts > 0 ? Math.round(log.max_1min_watts) + ' W' : '-', isPr: pr('max_1min_watts') }),
+      DetailRow({ label: '피크 파워(5분)', value: log.max_5min_watts != null && log.max_5min_watts > 0 ? Math.round(log.max_5min_watts) + ' W' : '-', isPr: pr('max_5min_watts') }),
+      DetailRow({ label: '피크 파워(10분)', value: log.max_10min_watts != null && log.max_10min_watts > 0 ? Math.round(log.max_10min_watts) + ' W' : '-', isPr: pr('max_10min_watts') }),
+      DetailRow({ label: '피크 파워(20분)', value: log.max_20min_watts != null && log.max_20min_watts > 0 ? Math.round(log.max_20min_watts) + ' W' : '-', isPr: pr('max_20min_watts') }),
+      DetailRow({ label: '피크 파워(30분)', value: log.max_30min_watts != null && log.max_30min_watts > 0 ? Math.round(log.max_30min_watts) + ' W' : '-', isPr: pr('max_30min_watts') }),
+      DetailRow({ label: '피크 파워(40분)', value: log.max_40min_watts != null && log.max_40min_watts > 0 ? Math.round(log.max_40min_watts) + ' W' : '-', isPr: pr('max_40min_watts') }),
+      DetailRow({ label: '피크 파워(60분)', value: log.max_60min_watts != null && log.max_60min_watts > 0 ? Math.round(log.max_60min_watts) + ' W' : '-', isPr: pr('max_60min_watts') }),
+      DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-', isPr: pr('max_watts') })
     );
   }
 
   function TabHeartRate(props) {
     var log = props.log;
+    var yearlyPeaks = props.yearlyPeaks;
+    var userWeight = props.userWeight || 0;
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
+    var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeight); };
     return React.createElement('div', { className: 'journal-tab-content' },
-      DetailRow({ label: '평균 심박', value: log.avg_hr != null && log.avg_hr > 0 ? Math.round(log.avg_hr) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박', value: log.max_hr != null && log.max_hr > 0 ? Math.round(log.max_hr) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(5초)', value: log.max_hr_5sec != null && log.max_hr_5sec > 0 ? Math.round(log.max_hr_5sec) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(1분)', value: log.max_hr_1min != null && log.max_hr_1min > 0 ? Math.round(log.max_hr_1min) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(5분)', value: log.max_hr_5min != null && log.max_hr_5min > 0 ? Math.round(log.max_hr_5min) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(10분)', value: log.max_hr_10min != null && log.max_hr_10min > 0 ? Math.round(log.max_hr_10min) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(20분)', value: log.max_hr_20min != null && log.max_hr_20min > 0 ? Math.round(log.max_hr_20min) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(40분)', value: log.max_hr_40min != null && log.max_hr_40min > 0 ? Math.round(log.max_hr_40min) + ' bpm' : '-' }),
-      DetailRow({ label: '최대 심박(60분)', value: log.max_hr_60min != null && log.max_hr_60min > 0 ? Math.round(log.max_hr_60min) + ' bpm' : '-' })
+      DetailRow({ label: '평균 심박', value: log.avg_hr != null && log.avg_hr > 0 ? Math.round(log.avg_hr) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박', value: log.max_hr != null && log.max_hr > 0 ? Math.round(log.max_hr) + ' bpm' : '-', isPr: pr('max_hr') }),
+      DetailRow({ label: '최대 심박(5초)', value: log.max_hr_5sec != null && log.max_hr_5sec > 0 ? Math.round(log.max_hr_5sec) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박(1분)', value: log.max_hr_1min != null && log.max_hr_1min > 0 ? Math.round(log.max_hr_1min) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박(5분)', value: log.max_hr_5min != null && log.max_hr_5min > 0 ? Math.round(log.max_hr_5min) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박(10분)', value: log.max_hr_10min != null && log.max_hr_10min > 0 ? Math.round(log.max_hr_10min) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박(20분)', value: log.max_hr_20min != null && log.max_hr_20min > 0 ? Math.round(log.max_hr_20min) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박(40분)', value: log.max_hr_40min != null && log.max_hr_40min > 0 ? Math.round(log.max_hr_40min) + ' bpm' : '-', isPr: false }),
+      DetailRow({ label: '최대 심박(60분)', value: log.max_hr_60min != null && log.max_hr_60min > 0 ? Math.round(log.max_hr_60min) + ' bpm' : '-', isPr: false })
     );
   }
 
@@ -182,6 +196,8 @@
     var onClose = props.onClose;
     var logs = props.logs || [];
     var selectedDate = props.selectedDate;
+    var yearlyPeaksByYear = props.yearlyPeaksByYear || {};
+    var userWeightForPr = props.userWeightForPr || 0;
 
     var _useState = useState('summary');
     var activeTab = _useState[0];
@@ -190,6 +206,8 @@
     if (!open) return null;
 
     var merged = mergeLogsForDetail(logs);
+    var yearForPeaks = selectedDate && selectedDate.length >= 4 ? parseInt(selectedDate.substring(0, 4), 10) : new Date().getFullYear();
+    var yearlyPeaks = yearlyPeaksByYear[yearForPeaks] || null;
     var tabs = [
       { id: 'summary', label: 'Summary', C: TabSummary },
       { id: 'power', label: 'Power Profile', C: TabPower },
@@ -224,7 +242,8 @@
         React.createElement('div', { className: 'journal-bottom-sheet-body' },
           tabs.map(function(t) {
             if (activeTab !== t.id) return null;
-            return React.createElement(t.C, { key: t.id, log: merged });
+            var p = t.id === 'summary' ? { log: merged } : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr };
+            return React.createElement(t.C, Object.assign({ key: t.id }, p));
           })
         ),
         merged && String(merged.source || '').toLowerCase() === 'strava'
