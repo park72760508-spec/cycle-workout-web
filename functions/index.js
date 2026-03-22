@@ -718,6 +718,13 @@ function calculateMaxHeartRatePeaks(heartrateArray) {
   };
 }
 
+/** MMP/심박 필드가 비어있는지 (null, undefined, '', NaN) 체크. 값이 없으면 true */
+function isEmptyMmpValue(v) {
+  if (v == null || v === undefined || v === "") return true;
+  if (typeof v === "number" && isNaN(v)) return true;
+  return false;
+}
+
 /**
  * Strava Webhook 활동 생성 이벤트 처리 (비동기 호출용).
  * owner_id(Strava athlete ID)로 유저 조회 → Activity 상세 + Streams 병렬 호출 → MMP 계산 → TSS/포인트 정산 → 저장.
@@ -1640,7 +1647,8 @@ exports.manualStravaSyncWithMmp = onRequest(
       }
       const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
       if (targetUsersParam === "admin") {
-        userIdsToProcess = usersSnap.docs.filter((d) => String(d.data().grade ?? "2") === "1").map((d) => d.id);
+        userIdsToProcess = [uid];
+        console.log("[manualStravaSyncWithMmp] 관리자 MMP: 현재 로그인 관리자 1명 대상");
       } else {
         userIdsToProcess = usersSnap.docs.map((d) => d.id);
       }
@@ -1763,10 +1771,10 @@ exports.manualStravaSyncWithMmp = onRequest(
 
       if (exists) {
         const existingData = logSnap.data();
-        const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts'];
+        const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
         const hrFields = ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min', 'max_hr'];
-        const needsMmp = powerFields.some((f) => existingData[f] == null || existingData[f] === undefined);
-        const needsHrPeaks = hrFields.some((f) => existingData[f] == null || existingData[f] === undefined);
+        const needsMmp = powerFields.some((f) => isEmptyMmpValue(existingData[f]));
+        const needsHrPeaks = hrFields.some((f) => isEmptyMmpValue(existingData[f]));
         const needsTimeInZones = forceRecalcTimeInZones || !existingData.time_in_zones || !existingData.time_in_zones.power;
         const needsWeight = existingData.weight == null;
         const needsActivityType = !String(existingData.activity_type || "").trim();
@@ -1795,7 +1803,10 @@ exports.manualStravaSyncWithMmp = onRequest(
             updateData.max_30min_watts = calculateMaxAveragePower(wattsArray, 1800);
             updateData.max_40min_watts = calculateMaxAveragePower(wattsArray, 2400);
             updateData.max_60min_watts = calculateMaxAveragePower(wattsArray, 3600);
-            console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${updateData.max_1min_watts}, 5m=${updateData.max_5min_watts}, 10m=${updateData.max_10min_watts}, 20m=${updateData.max_20min_watts}, 30m=${updateData.max_30min_watts}, 40m=${updateData.max_40min_watts}, 60m=${updateData.max_60min_watts}`);
+            const streamMax = Math.max(...wattsArray.map((w) => Number(w) || 0));
+            if (streamMax > 0) updateData.max_watts = Math.round(streamMax);
+            else if (act.max_watts != null) updateData.max_watts = Number(act.max_watts);
+            console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${updateData.max_1min_watts}, 5m=${updateData.max_5min_watts}, 10m=${updateData.max_10min_watts}, 20m=${updateData.max_20min_watts}, 30m=${updateData.max_30min_watts}, 40m=${updateData.max_40min_watts}, 60m=${updateData.max_60min_watts}, max=${updateData.max_watts || "?"}`);
           }
           const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
           if (hrPeaks) {
@@ -1850,6 +1861,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         let max30minWatts = null;
         let max40minWatts = null;
         let max60minWatts = null;
+        let maxWattsFromStream = null;
         if (wattsArray && wattsArray.length > 0) {
           max1minWatts = calculateMaxAveragePower(wattsArray, 60);
           max5minWatts = calculateMaxAveragePower(wattsArray, 300);
@@ -1858,7 +1870,9 @@ exports.manualStravaSyncWithMmp = onRequest(
           max30minWatts = calculateMaxAveragePower(wattsArray, 1800);
           max40minWatts = calculateMaxAveragePower(wattsArray, 2400);
           max60minWatts = calculateMaxAveragePower(wattsArray, 3600);
-          console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${max1minWatts}, 5m=${max5minWatts}, 10m=${max10minWatts}, 20m=${max20minWatts}, 30m=${max30minWatts}, 40m=${max40minWatts}, 60m=${max60minWatts}`);
+          const streamMax = Math.max(...wattsArray.map((w) => Number(w) || 0));
+          if (streamMax > 0) maxWattsFromStream = Math.round(streamMax);
+          console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Calculated MMP: 1m=${max1minWatts}, 5m=${max5minWatts}, 10m=${max10minWatts}, 20m=${max20minWatts}, 30m=${max30minWatts}, 40m=${max40minWatts}, 60m=${max60minWatts}, max=${maxWattsFromStream}`);
         }
         const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
         let timeInZones = mapped.time_in_zones;
@@ -1891,7 +1905,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           avg_hr: mapped.avg_hr,
           max_hr: mapped.max_hr,
           avg_watts: mapped.avg_watts,
-          max_watts: mapped.max_watts,
+          max_watts: maxWattsFromStream ?? mapped.max_watts,
           weighted_watts: mapped.weighted_watts,
           kilojoules: mapped.kilojoules,
           elevation_gain: mapped.elevation_gain,
