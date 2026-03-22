@@ -6937,11 +6937,14 @@
     /**
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
      */
-    var stelvioRankingState = { duration: '5min', gender: 'all', period: 'monthly' };
+    var stelvioRankingState = { duration: '5min', gender: 'all', period: 'monthly', activeCategory: 'Supremo' };
     var stelvioRankingByCategory = null;
     var stelvioRankingExpandState = {};
     var stelvioRankingCurrentUserId = null;
     var stelvioMyRankSupremo = null;
+    var stelvioCurrentUser = null;
+    var STELVIO_DURATION_LABELS = { '1min': '1분', '5min': '5분', '10min': '10분', '20min': '20분', '40min': '40분', '60min': '60분', 'max': 'Max' };
+    var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     function openStelvioRankingBoardModal() {
       var m = document.getElementById('stelvioRankingBoardModal');
       if (m) { m.classList.remove('hidden'); fetchStelvioPeakPowerRanking(); }
@@ -6953,6 +6956,21 @@
     window.openStelvioRankingBoardModal = openStelvioRankingBoardModal;
     window.closeStelvioRankingBoardModal = closeStelvioRankingBoardModal;
 
+    function stelvioOnPeriodChange(val) {
+      stelvioRankingState.period = val;
+      var label = document.getElementById('stelvioPeriodLabel');
+      if (label) label.textContent = val === 'yearly' ? '명예의 전당' : '월간';
+      fetchStelvioPeakPowerRanking();
+    }
+    function stelvioOnGenderChange(val) {
+      stelvioRankingState.gender = val;
+      var label = document.getElementById('stelvioGenderLabel');
+      if (label) label.textContent = val === 'M' ? '남성' : (val === 'F' ? '여성' : '전체');
+      fetchStelvioPeakPowerRanking();
+    }
+    window.stelvioOnPeriodChange = stelvioOnPeriodChange;
+    window.stelvioOnGenderChange = stelvioOnGenderChange;
+
     function bindStelvioRankingEvents() {
       var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
       tabs.forEach(function(btn) {
@@ -6963,24 +6981,13 @@
           fetchStelvioPeakPowerRanking();
         };
       });
-      var genderBtns = document.querySelectorAll('.stelvio-gender-toggle .stelvio-toggle-btn');
-      genderBtns.forEach(function(btn) {
+      var catTabs = document.querySelectorAll('#stelvioCategoryTabs .stelvio-category-tab');
+      catTabs.forEach(function(btn) {
         btn.onclick = function() {
-          if (btn.closest('.stelvio-gender-toggle')) {
-            document.querySelectorAll('.stelvio-gender-toggle .stelvio-toggle-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            stelvioRankingState.gender = btn.getAttribute('data-gender');
-            fetchStelvioPeakPowerRanking();
-          }
-        };
-      });
-      var periodBtns = document.querySelectorAll('.stelvio-period-toggle .stelvio-toggle-btn');
-      periodBtns.forEach(function(btn) {
-        btn.onclick = function() {
-          document.querySelectorAll('.stelvio-period-toggle .stelvio-toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+          catTabs.forEach(function(b) { b.classList.remove('active'); });
           btn.classList.add('active');
-          stelvioRankingState.period = btn.getAttribute('data-period');
-          fetchStelvioPeakPowerRanking();
+          stelvioRankingState.activeCategory = btn.getAttribute('data-category');
+          renderStelvioActiveCategory();
         };
       });
     }
@@ -6993,10 +7000,8 @@
     async function fetchStelvioPeakPowerRanking() {
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
-      var banner = document.getElementById('stelvioMotivationBanner');
       if (loading) loading.classList.remove('hidden');
       if (content) content.style.opacity = '0.5';
-      banner.classList.add('hidden');
       var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
       var params = new URLSearchParams({
         period: stelvioRankingState.period,
@@ -7012,15 +7017,20 @@
           renderStelvioRankingError('데이터를 불러올 수 없습니다.');
           return;
         }
-        if (data.motivationMessage && banner) {
-          document.getElementById('stelvioMotivationText').textContent = data.motivationMessage;
-          banner.classList.remove('hidden');
-        }
         stelvioRankingByCategory = data.byCategory;
         stelvioRankingExpandState = {};
         stelvioRankingCurrentUserId = uid;
         stelvioMyRankSupremo = data.myRankSupremo || null;
-        renderStelvioRankingCategories(data.byCategory, uid, stelvioMyRankSupremo);
+        stelvioCurrentUser = data.currentUser || null;
+        if (stelvioCurrentUser && stelvioCurrentUser.ageCategory && STELVIO_CATEGORY_LABELS[stelvioCurrentUser.ageCategory]) {
+          stelvioRankingState.activeCategory = stelvioCurrentUser.ageCategory;
+          var catTabs = document.querySelectorAll('#stelvioCategoryTabs .stelvio-category-tab');
+          catTabs.forEach(function(b) {
+            if (b.getAttribute('data-category') === stelvioRankingState.activeCategory) { b.classList.add('active'); } else { b.classList.remove('active'); }
+          });
+        }
+        renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
+        renderStelvioActiveCategory();
       } catch (e) {
         console.warn('[StelvioRanking] 조회 실패:', e);
         renderStelvioRankingError('연결에 실패했습니다. 나중에 다시 시도해 주세요.');
@@ -7030,43 +7040,75 @@
       }
     }
 
+    function renderStelvioHeroCard(currentUser, myRankSupremo) {
+      var hero = document.getElementById('stelvioHeroCard');
+      var textEl = document.getElementById('stelvioHeroText');
+      if (!hero || !textEl) return;
+      var durLabel = STELVIO_DURATION_LABELS[stelvioRankingState.duration] || stelvioRankingState.duration;
+      var userName = (window.currentUser && window.currentUser.name) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.name ? u.name : null; } catch(e){ return null; } })() || '사용자';
+      var cu = currentUser || myRankSupremo;
+      if (!cu) {
+        hero.classList.add('hidden');
+        return;
+      }
+      hero.classList.remove('hidden');
+      var wkg = (cu.wkg != null ? Number(cu.wkg) : 0).toFixed(2);
+      var globalRank = cu.rank || 0;
+      var ageLabel = STELVIO_CATEGORY_LABELS[cu.ageCategory] || '';
+      var genderLabel = stelvioRankingState.gender === 'M' ? '남성' : (stelvioRankingState.gender === 'F' ? '여성' : '전체');
+      var categoryRank = 0;
+      if (stelvioRankingByCategory && cu.ageCategory && cu.userId) {
+        var arr = stelvioRankingByCategory[cu.ageCategory] || [];
+        var idx = arr.findIndex(function(e) { return e.userId === cu.userId; });
+        if (idx >= 0) categoryRank = idx + 1;
+      }
+      var msg;
+      if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
+        msg = userName + '님은 ' + durLabel + ' 평균파워 전체 ' + globalRank + '위(' + wkg + ' W/kg)입니다.';
+      } else {
+        var catPart = categoryRank > 0 ? ageLabel + ' ' + genderLabel + ' 중 ' + categoryRank + '위(' + wkg + ' W/kg)' : wkg + ' W/kg';
+        msg = userName + '님은 ' + durLabel + ' 평균파워 ' + catPart + ', 전체 ' + globalRank + '위입니다.';
+      }
+      textEl.textContent = msg;
+    }
+
+    function renderStelvioActiveCategory() {
+      if (!stelvioRankingByCategory) return;
+      var cat = stelvioRankingState.activeCategory;
+      var titleEl = document.getElementById('stelvioListCategoryTitle');
+      var bodyEl = document.getElementById('stelvioRankingListBody');
+      if (titleEl) titleEl.textContent = (STELVIO_CATEGORY_LABELS[cat] || cat) + ' 순위';
+      renderStelvioRankingOneCategory(cat, stelvioRankingByCategory, stelvioRankingCurrentUserId, stelvioMyRankSupremo, bodyEl);
+    }
+
     function renderStelvioRankingError(msg) {
-      ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'].forEach(function(cat) {
-        var el = document.getElementById('stelvio' + cat + 'List');
-        if (el) el.innerHTML = '<p class="stelvio-ranking-empty">' + msg + '</p>';
-      });
+      var body = document.getElementById('stelvioRankingListBody');
+      if (body) body.innerHTML = '<p class="stelvio-ranking-empty">' + msg + '</p>';
     }
 
     function handleStelvioRankingExpand(cat) {
       var cur = stelvioRankingExpandState[cat] || 10;
       stelvioRankingExpandState[cat] = cur < 20 ? 20 : cur + 20;
-      if (stelvioRankingByCategory) {
-        renderStelvioRankingCategories(stelvioRankingByCategory, stelvioRankingCurrentUserId, stelvioMyRankSupremo);
-      }
+      if (stelvioRankingByCategory) renderStelvioActiveCategory();
     }
     function handleStelvioRankingCollapse(cat) {
       stelvioRankingExpandState[cat] = 10;
-      if (stelvioRankingByCategory) {
-        renderStelvioRankingCategories(stelvioRankingByCategory, stelvioRankingCurrentUserId, stelvioMyRankSupremo);
-      }
+      if (stelvioRankingByCategory) renderStelvioActiveCategory();
     }
     window.handleStelvioRankingExpand = handleStelvioRankingExpand;
     window.handleStelvioRankingCollapse = handleStelvioRankingCollapse;
 
-    function renderStelvioRankingCategories(byCategory, currentUserId, myRankSupremo) {
+    function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
+      if (!bodyEl) return;
       var medals = ['🥇', '🥈', '🥉'];
-      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      var arr = byCategory[cat] || [];
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
       var isAdmin = (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
-      cats.forEach(function(cat) {
-        var arr = byCategory[cat] || [];
-        var el = document.getElementById('stelvio' + cat + 'List');
-        if (!el) return;
-        if (arr.length === 0 && !(cat === 'Supremo' && myRankSupremo)) {
-          el.innerHTML = '<p class="stelvio-ranking-empty">해당 카테고리에 랭킹이 없습니다.</p>';
-          return;
-        }
+      if (arr.length === 0 && !(cat === 'Supremo' && myRankSupremo)) {
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">해당 카테고리에 랭킹이 없습니다.</p>';
+        return;
+      }
         var userIdx = currentUserId ? arr.findIndex(function(item) { return item.userId === currentUserId; }) : -1;
         var html = '';
         var maxNameLen = 12;
@@ -7180,8 +7222,7 @@
           html += '</div>';
         }
 
-        el.innerHTML = html;
-      });
+      bodyEl.innerHTML = html;
     }
 
     /**
@@ -17367,7 +17408,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     </div>
   </div>
 
-  <!-- STELVIO 랭킹 보드 모달 (버튼만 STELVIO 스타일, 나머지 원래 스타일) -->
+  <!-- STELVIO 랭킹 보드 모달 (새 구조: Sticky필터 + Hero + 카테고리탭 + 랭킹리스트) -->
   <div id="stelvioRankingBoardModal" class="training-detail-modal hidden" onclick="if(event.target === this) closeStelvioRankingBoardModal();">
     <div class="training-detail-modal-content stelvio-ranking-modal-content stelvio-ranking-modal-content-relative" onclick="event.stopPropagation();" style="max-width: 480px; max-height: 90vh; overflow-y: auto;">
       <div class="training-detail-header">
@@ -17380,67 +17421,63 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <p class="stelvio-overtake-loading-text">추월하기 분석 중...</p>
       </div>
       <div class="stelvio-ranking-body">
-        <!-- 종목 탭 -->
-        <div class="stelvio-duration-tabs" id="stelvioDurationTabs">
-          <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
-          <button type="button" class="stelvio-duration-tab active" data-duration="5min">5분</button>
-          <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
-          <button type="button" class="stelvio-duration-tab" data-duration="20min">20분</button>
-          <button type="button" class="stelvio-duration-tab" data-duration="40min">40분</button>
-          <button type="button" class="stelvio-duration-tab" data-duration="60min">60분</button>
-          <button type="button" class="stelvio-duration-tab" data-duration="max">Max</button>
-        </div>
-        <!-- 성별 / 기간 선택 -->
-        <div class="stelvio-filter-row">
-          <div class="stelvio-gender-toggle">
-            <span class="stelvio-filter-label">성별</span>
-            <button type="button" class="stelvio-toggle-btn active" data-gender="all">전체</button>
-            <button type="button" class="stelvio-toggle-btn" data-gender="M">남</button>
-            <button type="button" class="stelvio-toggle-btn" data-gender="F">여</button>
+        <!-- ① 고정 필터 영역 (Sticky Header) -->
+        <div class="stelvio-ranking-sticky">
+          <div class="stelvio-duration-chips-wrap">
+            <div class="stelvio-duration-chips" id="stelvioDurationTabs">
+              <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
+              <button type="button" class="stelvio-duration-tab active" data-duration="5min">5분</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="20min">20분</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="40min">40분</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="60min">60분</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="max">Max</button>
+            </div>
           </div>
-          <div class="stelvio-period-toggle">
-            <span class="stelvio-filter-label">기간</span>
-            <button type="button" class="stelvio-toggle-btn active" data-period="monthly">월간</button>
-            <button type="button" class="stelvio-toggle-btn" data-period="yearly">명예의 전당</button>
+          <div class="stelvio-filter-bar">
+            <div class="stelvio-period-dropdown">
+              <span id="stelvioPeriodLabel" class="stelvio-dropdown-label">월간</span>
+              <span class="stelvio-dropdown-chevron">▾</span>
+              <select id="stelvioPeriodSelect" class="stelvio-dropdown-select" onchange="stelvioOnPeriodChange(this.value);">
+                <option value="monthly">월간</option>
+                <option value="yearly">명예의 전당</option>
+              </select>
+            </div>
+            <div class="stelvio-gender-dropdown">
+              <span id="stelvioGenderLabel" class="stelvio-dropdown-label">전체</span>
+              <span class="stelvio-dropdown-chevron">▾</span>
+              <select id="stelvioGenderSelect" class="stelvio-dropdown-select" onchange="stelvioOnGenderChange(this.value);">
+                <option value="all">전체</option>
+                <option value="M">남성</option>
+                <option value="F">여성</option>
+              </select>
+            </div>
+            <button type="button" class="stelvio-overtake-btn stelvio-orange-btn" id="stelvioOvertakeBtn" onclick="if(typeof handleStelvioOvertakeClick==='function')handleStelvioOvertakeClick();" title="바로 앞 순위자와 비교 분석">추월하기</button>
           </div>
-          <button type="button" class="stelvio-overtake-btn stelvio-orange-btn" id="stelvioOvertakeBtn" onclick="if(typeof handleStelvioOvertakeClick==='function')handleStelvioOvertakeClick();" title="바로 앞 순위자와 비교 분석">
-            추월하기
-          </button>
         </div>
-        <!-- 동기부여 배너 -->
-        <div id="stelvioMotivationBanner" class="stelvio-motivation-banner hidden">
-          <p id="stelvioMotivationText" class="stelvio-motivation-text"></p>
+        <!-- ② 내 랭킹 요약 Hero 카드 -->
+        <div id="stelvioHeroCard" class="stelvio-hero-card hidden">
+          <p id="stelvioHeroText" class="stelvio-hero-text"></p>
+        </div>
+        <!-- ③ 카테고리 탭 (가로 탭) -->
+        <div class="stelvio-category-tabs" id="stelvioCategoryTabs">
+          <button type="button" class="stelvio-category-tab active" data-category="Supremo">전체</button>
+          <button type="button" class="stelvio-category-tab" data-category="Assoluto">선수부</button>
+          <button type="button" class="stelvio-category-tab" data-category="Bianco">30대 이하</button>
+          <button type="button" class="stelvio-category-tab" data-category="Rosa">40대</button>
+          <button type="button" class="stelvio-category-tab" data-category="Infinito">50대</button>
+          <button type="button" class="stelvio-category-tab" data-category="Leggenda">60대 이상</button>
         </div>
         <!-- 로딩 -->
         <div id="stelvioRankingLoading" class="stelvio-ranking-loading hidden">
           <div class="stelvio-ranking-spinner"></div>
           <p>랭킹 불러오는 중...</p>
         </div>
-        <!-- Supremo(종합 TOP10) / Assoluto(선수부) / Bianco / Rosa / Infinito / Leggenda(일반부) 카드 -->
+        <!-- ④ 랭킹 리스트 영역 (선택된 카테고리만 표시) -->
         <div id="stelvioRankingContent" class="stelvio-ranking-content">
-          <div class="stelvio-category-card" data-category="Supremo">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Supremo (전체순위 Top10)</span><span class="stelvio-category-header-unit">W/kg</span></div>
-            <div class="stelvio-category-body" id="stelvioSupremoList"></div>
-          </div>
-          <div class="stelvio-category-card" data-category="Assoluto">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Assoluto (Elite/Pro 선수부)</span><span class="stelvio-category-header-unit">W/kg</span></div>
-            <div class="stelvio-category-body" id="stelvioAssolutoList"></div>
-          </div>
-          <div class="stelvio-category-card" data-category="Bianco">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Bianco (30대 이하)</span><span class="stelvio-category-header-unit">W/kg</span></div>
-            <div class="stelvio-category-body" id="stelvioBiancoList"></div>
-          </div>
-          <div class="stelvio-category-card" data-category="Rosa">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Rosa (40대)</span><span class="stelvio-category-header-unit">W/kg</span></div>
-            <div class="stelvio-category-body" id="stelvioRosaList"></div>
-          </div>
-          <div class="stelvio-category-card" data-category="Infinito">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Infinito (50대)</span><span class="stelvio-category-header-unit">W/kg</span></div>
-            <div class="stelvio-category-body" id="stelvioInfinitoList"></div>
-          </div>
-          <div class="stelvio-category-card" data-category="Leggenda">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title"><span class="stelvio-category-crown">👑</span> Leggenda (60대 이상)</span><span class="stelvio-category-header-unit">W/kg</span></div>
-            <div class="stelvio-category-body" id="stelvioLeggendaList"></div>
+          <div class="stelvio-category-card stelvio-ranking-list-card">
+            <div class="stelvio-category-header"><span class="stelvio-category-header-title" id="stelvioListCategoryTitle">전체순위</span><span class="stelvio-category-header-unit">W/kg</span></div>
+            <div class="stelvio-category-body" id="stelvioRankingListBody"></div>
           </div>
         </div>
       </div>
