@@ -1613,7 +1613,8 @@ exports.manualStravaSyncWithMmp = onRequest(
     const monthsParam = req.query?.months || req.body?.months;
     const startDateParam = req.query?.startDate || req.body?.startDate;
     const endDateParam = req.query?.endDate || req.body?.endDate;
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "startDate=", startDateParam, "endDate=", endDateParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
+    const targetUsersParam = String(req.query?.targetUsers || req.body?.targetUsers || "").toLowerCase();
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "startDate=", startDateParam, "endDate=", endDateParam, "targetUsers=", targetUsersParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
 
     try {
     const uid = await getUidFromRequest(req, res);
@@ -1622,6 +1623,29 @@ exports.manualStravaSyncWithMmp = onRequest(
       return;
     }
     console.log("[manualStravaSyncWithMmp] 인증 성공, userId:", uid);
+
+    const db = admin.firestore();
+    let userIdsToProcess = [uid];
+    if (targetUsersParam === "all" || targetUsersParam === "admin") {
+      if (!startDateParam || !endDateParam || !String(startDateParam).trim() || !String(endDateParam).trim()) {
+        res.status(400).json({ success: false, error: "targetUsers=all|admin 사용 시 startDate와 endDate가 필요합니다." });
+        return;
+      }
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const callerData = callerSnap.exists ? callerSnap.data() : {};
+      const callerGrade = String(callerData.grade ?? "2");
+      if (callerGrade !== "1") {
+        res.status(403).json({ success: false, error: "관리자(grade=1)만 사용할 수 있습니다." });
+        return;
+      }
+      const usersSnap = await db.collection("users").where("strava_refresh_token", "!=", "").get();
+      if (targetUsersParam === "admin") {
+        userIdsToProcess = usersSnap.docs.filter((d) => String(d.data().grade ?? "2") === "1").map((d) => d.id);
+      } else {
+        userIdsToProcess = usersSnap.docs.map((d) => d.id);
+      }
+      console.log("[manualStravaSyncWithMmp] targetUsers=" + targetUsersParam + ", 대상 " + userIdsToProcess.length + "명");
+    }
 
     let afterUnix;
     let beforeUnix;
@@ -1652,13 +1676,24 @@ exports.manualStravaSyncWithMmp = onRequest(
       afterUnix = Math.floor(afterDate.getTime() / 1000);
     }
 
-    const db = admin.firestore();
-    const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      res.status(404).json({ success: false, error: "사용자를 찾을 수 없습니다." });
-      return;
-    }
+    let totalProcessed = 0;
+    let totalUpdated = 0;
+    let totalCreated = 0;
+    let globalApiCallCount = 0;
+
+    for (const targetUid of userIdsToProcess) {
+      if (globalApiCallCount >= STRAVA_API_CALL_LIMIT) {
+        console.log("[manualStravaSyncWithMmp] API 한도 도달, 조기 종료");
+        break;
+      }
+      try {
+        const uid = targetUid;
+        const userRef = db.collection("users").doc(uid);
+        const userSnap = await userRef.get();
+        if (!userSnap.exists) {
+          console.warn("[manualStravaSyncWithMmp] 사용자 없음, 건너뜀:", uid);
+          continue;
+        }
     const userData = userSnap.data();
     const ftp = Number(userData.ftp) || 0;
 
@@ -1667,11 +1702,11 @@ exports.manualStravaSyncWithMmp = onRequest(
       const tokenResult = await refreshStravaTokenForUser(db, uid);
       accessToken = tokenResult.accessToken;
     } catch (e) {
-      res.status(500).json({ success: false, error: `토큰 갱신 실패: ${e.message}` });
-      return;
+      console.warn("[manualStravaSyncWithMmp] 토큰 갱신 실패, 건너뜀:", uid, e.message);
+      continue;
     }
 
-    let apiCallCount = 1;
+    let apiCallCount = globalApiCallCount;
     const allActivities = [];
     let page = 1;
     const fetchActivitiesWithRetry = async (retriesLeft = 5) => {
@@ -1691,8 +1726,7 @@ exports.manualStravaSyncWithMmp = onRequest(
       const actRes = await fetchActivitiesWithRetry();
       apiCallCount += 1;
       if (!actRes.ok) {
-        res.status(500).json({ success: false, error: `활동 조회 실패: ${actRes.status}` });
-        return;
+        throw new Error(`활동 조회 실패: ${actRes.status}`);
       }
       const pageActivities = await actRes.json().catch(() => []);
       if (page === 1) {
@@ -1928,14 +1962,23 @@ exports.manualStravaSyncWithMmp = onRequest(
       }
     }
 
-    const hasMore = apiCallCount >= STRAVA_API_CALL_LIMIT;
+    globalApiCallCount = apiCallCount;
+    totalProcessed += processedCount;
+    totalUpdated += updatedCount;
+    totalCreated += createdCount;
+    } catch (userErr) {
+      console.warn("[manualStravaSyncWithMmp] 사용자 처리 실패:", targetUid, userErr.message);
+    }
+    }
+
+    const hasMore = globalApiCallCount >= STRAVA_API_CALL_LIMIT;
     res.status(200).json({
       success: true,
-      processedCount,
-      updatedCount,
-      createdCount,
+      processedCount: totalProcessed,
+      updatedCount: totalUpdated,
+      createdCount: totalCreated,
       hasMore,
-      apiCallCount,
+      apiCallCount: globalApiCallCount,
     });
     } catch (err) {
       console.error("[manualStravaSyncWithMmp] 오류:", err);
