@@ -1241,11 +1241,13 @@ async function syncStravaDataWithMmp(months = 1, options) {
   var overlayId = opts.overlayId || 'stravaSyncProgressOverlay';
   var textId = opts.textId || 'stravaSyncProgressText';
   var progressMessage = opts.progressMessage;
+  var targetUsersVal = opts.targetUsers && String(opts.targetUsers).toLowerCase();
   var daysVal = opts.days != null ? Math.max(1, parseInt(opts.days, 10) || 10) : null;
   var startDateVal = opts.startDate && String(opts.startDate).trim();
   var endDateVal = opts.endDate && String(opts.endDate).trim();
   var monthsVal = (daysVal && daysVal > 0) ? 0 : (startDateVal && endDateVal ? 0 : Math.min(6, Math.max(1, parseInt(months, 10) || 1)));
-  var btn = document.getElementById('btnStravaSyncWithMmp');
+  var btnId = opts.btnId || 'btnStravaMmpAllUsers';
+  var btn = document.getElementById(btnId) || document.getElementById('btnStravaMmpAdmin');
   var originalText = btn ? btn.textContent : 'MMP 포함 동기화';
   var progressOverlay = document.getElementById(overlayId);
   var progressText = document.getElementById(textId);
@@ -1288,6 +1290,9 @@ async function syncStravaDataWithMmp(months = 1, options) {
       url += '&days=' + daysVal;
     } else {
       url += '&months=' + monthsVal;
+    }
+    if (targetUsersVal === 'all' || targetUsersVal === 'admin') {
+      url += '&targetUsers=' + encodeURIComponent(targetUsersVal);
     }
     const res = await fetch(url, {
       method: 'GET',
@@ -1339,8 +1344,8 @@ async function syncStravaDataWithMmp(months = 1, options) {
 
 /**
  * Strava 동기화 날짜 선택 모달 열기
- * grade=2,3: MMP 포함(최근 10일) 버튼만 표시, 나머지 숨김
- * grade=1: 전체 UI 표시
+ * grade=1: 관리자용 - 2개 버튼(모든 사용자 MMP, 관리자 MMP), 시작일/종료일 적용
+ * grade=2,3: MMP 포함(최근 10일) 버튼만, 기간 선택 숨김
  */
 function openStravaSyncModal() {
   const modal = document.getElementById('stravaSyncModal');
@@ -1348,43 +1353,34 @@ function openStravaSyncModal() {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 
-    let grade = '2';
+    var grade = '2';
     try {
       grade = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
     } catch (e) {}
 
-    const isGrade23 = (grade === '2' || grade === '3');
+    var isGrade1 = (grade === '1');
+    var dateRangeSection = document.getElementById('stravaSyncDateRangeSection');
+    var descEl = document.getElementById('stravaSyncDesc');
+    var btnAllUsers = document.getElementById('btnStravaMmpAllUsers');
+    var btnAdmin = document.getElementById('btnStravaMmpAdmin');
+    var adminHint = document.getElementById('stravaMmpAdminHint');
 
-    // grade=2,3: 기간 선택·다른 버튼 숨김, MMP(최근 10일)만 표시
-    const dateRangeSection = document.getElementById('stravaSyncDateRangeSection');
-    const descEl = document.getElementById('stravaSyncDesc');
-    const btnTodayAll = document.getElementById('btnStravaSyncTodayAll');
-    const btnToday = document.getElementById('btnStravaSyncToday');
-    const btnMmp = document.getElementById('btnStravaSyncWithMmp');
-    const btnConfirm = document.getElementById('btnStravaSyncConfirm');
-
-    if (isGrade23) {
-      if (dateRangeSection) dateRangeSection.style.display = 'none';
-      if (descEl) descEl.textContent = '최근 10일 Strava 라이딩 데이터를 MMP와 함께 가져옵니다.';
-      if (btnTodayAll) btnTodayAll.style.display = 'none';
-      if (btnToday) btnToday.style.display = 'none';
-      if (btnConfirm) btnConfirm.style.display = 'none';
-      if (btnMmp) {
-        btnMmp.style.display = '';
-        btnMmp.textContent = 'MMP 포함 (최근 10일)';
-        btnMmp.onclick = function () { if (typeof syncStravaDataWithMmp === 'function') syncStravaDataWithMmp(0, { days: 10 }); };
-      }
-    } else {
+    if (isGrade1) {
       if (dateRangeSection) dateRangeSection.style.display = '';
       if (descEl) descEl.textContent = '동기화할 기간을 선택하세요. MMP 포함 Strava 로그를 일단위로 수집합니다.';
-      if (btnTodayAll) btnTodayAll.style.display = grade === '1' ? '' : 'none';
-      if (btnToday) btnToday.style.display = '';
-      if (btnConfirm) btnConfirm.style.display = '';
-      if (btnMmp) {
-        btnMmp.style.display = '';
-        btnMmp.textContent = 'MMP 포함 (6개월)';
-        btnMmp.onclick = function () { if (typeof syncStravaDataWithMmp === 'function') syncStravaDataWithMmp(6); };
+      if (btnAllUsers) { btnAllUsers.style.display = ''; btnAllUsers.textContent = '모든 사용자(MMP)'; btnAllUsers.disabled = false; }
+      if (btnAdmin) { btnAdmin.style.display = ''; btnAdmin.textContent = '관리자 MMP'; btnAdmin.disabled = false; }
+      if (adminHint) adminHint.style.display = '';
+    } else {
+      if (dateRangeSection) dateRangeSection.style.display = 'none';
+      if (descEl) descEl.textContent = '최근 10일 Strava 라이딩 데이터를 MMP와 함께 가져옵니다.';
+      if (btnAllUsers) btnAllUsers.style.display = 'none';
+      if (btnAdmin) {
+        btnAdmin.style.display = '';
+        btnAdmin.textContent = 'MMP 포함 (최근 10일)';
+        btnAdmin.onclick = function () { if (typeof syncStravaDataWithMmp === 'function') syncStravaDataWithMmp(0, { days: 10 }); };
       }
+      if (adminHint) adminHint.style.display = 'none';
     }
 
     // 날짜 입력 초기화 (grade=1 관리자용)
@@ -1508,7 +1504,57 @@ function startStravaSyncTodayAll() {
 }
 
 /**
- * Strava 동기화 확인 및 실행 (grade=1 관리자용)
+ * 모든 사용자(MMP) 수집 (grade=1 관리자용)
+ * 시작일/종료일 기간 적용, Strava 인증 완료 모든 사용자 MMP 수집
+ */
+function syncStravaMmpAllUsers() {
+  var startEl = document.getElementById('stravaSyncStartDate');
+  var endEl = document.getElementById('stravaSyncEndDate');
+  if (!startEl || !endEl) {
+    (window.showToast || alert)('시작일과 종료일을 선택해 주세요.');
+    return;
+  }
+  var startStr = (startEl.value || '').trim();
+  var endStr = (endEl.value || '').trim();
+  if (!startStr || !endStr) {
+    (window.showToast || alert)('시작일과 종료일을 모두 선택해 주세요.');
+    return;
+  }
+  if (startStr > endStr) {
+    (window.showToast || alert)('시작일이 종료일보다 늦을 수 없습니다.');
+    return;
+  }
+  closeStravaSyncModal();
+  syncStravaDataWithMmp(0, { startDate: startStr, endDate: endStr, targetUsers: 'all', btnId: 'btnStravaMmpAllUsers' });
+}
+
+/**
+ * 관리자 MMP 수집 (grade=1 사용자만)
+ * 시작일/종료일 기간 적용, 일반 사용자 MMP는 수집하지 않음
+ */
+function syncStravaMmpAdminOnly() {
+  var startEl = document.getElementById('stravaSyncStartDate');
+  var endEl = document.getElementById('stravaSyncEndDate');
+  if (!startEl || !endEl) {
+    (window.showToast || alert)('시작일과 종료일을 선택해 주세요.');
+    return;
+  }
+  var startStr = (startEl.value || '').trim();
+  var endStr = (endEl.value || '').trim();
+  if (!startStr || !endStr) {
+    (window.showToast || alert)('시작일과 종료일을 모두 선택해 주세요.');
+    return;
+  }
+  if (startStr > endStr) {
+    (window.showToast || alert)('시작일이 종료일보다 늦을 수 없습니다.');
+    return;
+  }
+  closeStravaSyncModal();
+  syncStravaDataWithMmp(0, { startDate: startStr, endDate: endStr, targetUsers: 'admin', btnId: 'btnStravaMmpAdmin' });
+}
+
+/**
+ * Strava 동기화 확인 및 실행 (grade=1 관리자용, 레거시)
  * 동기화 시작 → MMP 로그 수집으로 동작
  */
 async function confirmStravaSync() {
