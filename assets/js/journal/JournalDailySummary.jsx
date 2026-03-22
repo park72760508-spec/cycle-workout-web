@@ -127,16 +127,7 @@
           className: 'stelvio-ranking-board-entry-btn stelvio-purple-btn',
           onClick: onShowDetail,
           'aria-label': '상세 기록 보기'
-        },
-          React.createElement('span', { className: 'stelvio-ranking-btn-left' }, '상세 기록'),
-          React.createElement('img', {
-            src: 'assets/img/stelvio_w.png',
-            alt: '',
-            className: 'stelvio-ranking-btn-logo',
-            style: { height: 28, width: 'auto', margin: 0 }
-          }),
-          React.createElement('span', { className: 'stelvio-ranking-btn-right' }, '보기')
-        )
+        }, '상세 기록 보기')
       )
     );
   }

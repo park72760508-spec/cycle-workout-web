@@ -177,6 +177,8 @@
     }, [accordionOpen]);
 
     var monthLabel = currentYear + '년 ' + (currentMonth + 1) + '월';
+    var now = new Date();
+    var isCurrentMonth = currentYear === now.getFullYear() && currentMonth === now.getMonth();
 
     return React.createElement('div', { className: 'journal-monthly-dashboard' },
       React.createElement('div', { className: 'journal-bento-grid' },
@@ -205,6 +207,7 @@
           React.createElement('span', { className: 'journal-bento-value' }, vo2Val != null ? vo2Val + ' ml/kg/min' : '–')
         )
       ),
+      isCurrentMonth ? React.createElement('p', { className: 'journal-bento-period-hint', style: { marginTop: 6, marginBottom: 0, fontSize: 12, color: '#9ca3af' } }, '* 오늘 기준 1개월간') : null,
       React.createElement('div', { className: 'journal-accordion' },
         React.createElement('button', {
           type: 'button',
