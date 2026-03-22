@@ -241,17 +241,30 @@
             }, React.createElement('span', { className: 'day-number' }, cell.day));
           })
         ),
-        React.createElement('div', { className: 'journal-strava-legend-row' },
-          React.createElement('button', {
-            type: 'button',
-            className: 'journal-strava-btn',
-            onClick: openStravaOrSettings,
-            'aria-label': 'Strava 동기화'
-          }, React.createElement('img', { src: 'assets/img/download%20STRAVA.png', alt: 'Strava', style: { height: 28, maxWidth: 140 } })),
-          React.createElement('div', { className: 'journal-legend' },
-            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot outdoor' }), 'Outdoor'),
-            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot indoor' }), 'Indoor'),
-            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot pr' }), 'PR')
+        React.createElement('div', {
+          className: 'journal-strava-legend-row',
+          style: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 10, position: 'relative' }
+        },
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 } },
+            React.createElement('button', {
+              type: 'button',
+              style: { background: 'none', border: '1px solid #e0e0e0', borderRadius: 6, padding: 4, cursor: 'pointer', display: 'inline-block', lineHeight: 0, boxSizing: 'border-box' },
+              onClick: openStravaOrSettings,
+              'aria-label': 'Strava 동기화',
+              title: 'Strava 동기화'
+            }, React.createElement('img', {
+              src: 'assets/img/download%20STRAVA.png',
+              alt: 'Connect with Strava',
+              style: { height: 30, width: 'auto', maxWidth: 160, display: 'block' }
+            }))
+          ),
+          React.createElement('div', {
+            className: 'journal-legend',
+            style: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 2, lineHeight: 1.2, color: '#6b7280' }
+          },
+            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot outdoor' }), React.createElement('span', null, 'Outdoor')),
+            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot indoor' }), React.createElement('span', null, 'Indoor')),
+            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot pr' }), React.createElement('span', null, 'PR'))
           )
         )
       )

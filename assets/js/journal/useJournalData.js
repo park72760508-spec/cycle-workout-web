@@ -83,6 +83,26 @@
       }
     }, []);
 
+    // PR 표시용 yearly_peaks 조회 (기존 renderMiniCalendarJournal 로직 이관)
+    useEffect(function loadYearlyPeaks() {
+      var userId = getCurrentUserId();
+      if (!userId || typeof window.fetchYearlyPeaksForYear !== 'function') return;
+      var yearsToFetch = [currentYear - 1, currentYear, currentYear + 1];
+      Promise.all(yearsToFetch.map(function(y) { return window.fetchYearlyPeaksForYear(userId, y); }))
+        .then(function(peaks) {
+          var next = {};
+          yearsToFetch.forEach(function(y, i) {
+            if (peaks[i]) next[y] = peaks[i];
+          });
+          setYearlyPeaksByYear(function(prev) {
+            var merged = Object.assign({}, prev);
+            Object.keys(next).forEach(function(k) { merged[k] = next[k]; });
+            return merged;
+          });
+        })
+        .catch(function(e) { console.warn('[useJournalData] yearly_peaks 조회 실패:', e); });
+    }, [currentYear]);
+
     // 훈련 로그 로드
     useEffect(function loadLogs() {
       var userId = getCurrentUserId();
