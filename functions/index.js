@@ -1227,8 +1227,10 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (existingIds.has(actId)) {
       const entry = existingDocMap.get(actId);
       const d = entry ? entry.data : {};
-      const needsMmp = d.max_1min_watts == null || d.max_5min_watts == null || d.max_10min_watts == null || d.max_20min_watts == null || d.max_30min_watts == null || d.max_40min_watts == null || d.max_60min_watts == null;
-      const needsHrPeaks = d.max_hr_5sec == null && d.max_hr_1min == null && d.max_hr_5min == null;
+      const powerFields = ['max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_30min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
+      const hrFields = ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min', 'max_hr'];
+      const needsMmp = powerFields.some((f) => isEmptyMmpValue(d[f]));
+      const needsHrPeaks = hrFields.some((f) => isEmptyMmpValue(d[f]));
       const needsTimeInZones = !d.time_in_zones || !d.time_in_zones.power;
       const needsWeight = d.weight == null;
       const needsActivityType = !String(d.activity_type || "").trim();
@@ -1252,6 +1254,9 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           updateData.max_30min_watts = calculateMaxAveragePower(watts, 1800);
           updateData.max_40min_watts = calculateMaxAveragePower(watts, 2400);
           updateData.max_60min_watts = calculateMaxAveragePower(watts, 3600);
+          const streamMax = Math.max(...watts.map((w) => Number(w) || 0));
+          if (streamMax > 0) updateData.max_watts = Math.round(streamMax);
+          else if (act.max_watts != null) updateData.max_watts = Number(act.max_watts);
         }
         const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
         if (hrPeaks) {
@@ -1292,6 +1297,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     let max30minWatts = null;
     let max40minWatts = null;
     let max60minWatts = null;
+    let maxWattsFromStream = null;
     if (streamsRes.success && Array.isArray(streamsRes.watts) && streamsRes.watts.length > 0) {
       const watts = smoothPowerSpikes(streamsRes.watts);
       max1minWatts = calculateMaxAveragePower(watts, 60);
@@ -1301,6 +1307,8 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       max30minWatts = calculateMaxAveragePower(watts, 1800);
       max40minWatts = calculateMaxAveragePower(watts, 2400);
       max60minWatts = calculateMaxAveragePower(watts, 3600);
+      const streamMax = Math.max(...watts.map((w) => Number(w) || 0));
+      if (streamMax > 0) maxWattsFromStream = Math.round(streamMax);
     }
     const hrPeaks = streamsRes.success && Array.isArray(streamsRes.heartrate) && streamsRes.heartrate.length > 0 ? calculateMaxHeartRatePeaks(streamsRes.heartrate) : null;
     let timeInZones = null;
@@ -1336,7 +1344,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       avg_hr: mapped.avg_hr,
       max_hr: mapped.max_hr,
       avg_watts: mapped.avg_watts,
-      max_watts: mapped.max_watts,
+      max_watts: maxWattsFromStream ?? mapped.max_watts,
       weighted_watts: mapped.weighted_watts,
       kilojoules: mapped.kilojoules,
       elevation_gain: mapped.elevation_gain,
