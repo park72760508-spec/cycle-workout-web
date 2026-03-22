@@ -6845,23 +6845,34 @@ function initializeCurrentScreen(screenId) {
       break;
       
       case 'trainingJournalScreen':
-      // 훈련일지 화면: 이전 실패 상태 초기화 후 미니 달력 로드
+      // 훈련일지 화면: React 리팩터링 우선, 없으면 레거시 미니 달력
       console.log('[Journal Init] ========== trainingJournalScreen 케이스 진입 ==========');
       if (typeof window !== 'undefined') {
         window.__journalInitInProgress = false;
         window.__journalFetchInProgress = false;
         window.__journalFetchCallCount = 0;
+        window.__journalEmptyRetryDone = false;
       }
       (function setJournalSubtitle(t) {
         if (typeof window.updateJournalSubtitle === 'function') window.updateJournalSubtitle(t);
         else { var el = document.getElementById('journalSubtitleCount'); if (el) el.textContent = t || '( )'; }
       })('( )');
-      // 로딩 중 문구 제거 (오버레이 스피너로 대체)
+      // React 리팩터링 버전 우선 사용 (로드 시점 보장을 위해 최대 2초간 재시도)
+      (function tryInitReactJournal(retryCount) {
+        retryCount = retryCount || 0;
+        if (typeof window.initTrainingJournalReact === 'function') {
+          console.log('[Journal Init] React 리팩터링 버전 사용 (initTrainingJournalReact)');
+          setTimeout(function() { window.initTrainingJournalReact(); }, 100);
+          return;
+        }
+        if (retryCount < 20) {
+          setTimeout(function() { tryInitReactJournal(retryCount + 1); }, 100);
+        } else {
+          console.warn('[Journal Init] initTrainingJournalReact 미로드, 레거시 사용');
+          (function runLegacy() {
       var journalGrid = document.getElementById('miniCalendarGridJournal');
-      if (journalGrid) {
-        journalGrid.innerHTML = ''; // 로딩 메시지 제거
-      }
-      console.log('훈련일지 화면 진입 - 미니 달력 로딩 시작');
+      if (journalGrid) journalGrid.innerHTML = '';
+      console.log('훈련일지 화면 진입 - 레거시 미니 달력 로딩');
       console.log('initMiniCalendarJournal 함수 확인:', typeof window.initMiniCalendarJournal);
       console.log('getUserTrainingLogs 함수 확인:', typeof window.getUserTrainingLogs);
       console.log('getTrainingLogsByDateRange 함수 확인:', typeof window.getTrainingLogsByDateRange);
@@ -7039,6 +7050,9 @@ function initializeCurrentScreen(screenId) {
       setTimeout(function () {
         if (typeof window.initMiniCalendarJournal !== 'function') checkAndInit(0);
       }, 250);
+          })();
+        }
+      })(0);
       break;
 
     case 'performanceDashboardScreen': {
