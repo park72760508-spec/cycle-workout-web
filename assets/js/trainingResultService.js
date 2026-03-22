@@ -200,6 +200,28 @@ function calculateMaxAveragePower(wattsArray, seconds) {
 }
 
 /**
+ * 심박 스트림 배열에서 구간별 최대 평균 심박 계산 (저장 시 1회만 실행, 훈련 루프 영향 없음)
+ * @param {number[]} heartrateArray - 1초당 1개 심박 값 배열
+ * @returns {Object|null} { max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min, max_hr } 또는 null
+ */
+function calculateMaxHeartRatePeaks(heartrateArray) {
+  if (!heartrateArray || heartrateArray.length === 0) return null;
+  const arr = heartrateArray.map((v) => Number(v) || 0);
+  const maxHr = Math.max(...arr);
+  if (maxHr <= 0) return null;
+  return {
+    max_hr_5sec: arr.length >= 5 ? Math.round(calculateMaxAveragePower(arr, 5)) : null,
+    max_hr_1min: arr.length >= 60 ? Math.round(calculateMaxAveragePower(arr, 60)) : null,
+    max_hr_5min: arr.length >= 300 ? Math.round(calculateMaxAveragePower(arr, 300)) : null,
+    max_hr_10min: arr.length >= 600 ? Math.round(calculateMaxAveragePower(arr, 600)) : null,
+    max_hr_20min: arr.length >= 1200 ? Math.round(calculateMaxAveragePower(arr, 1200)) : null,
+    max_hr_40min: arr.length >= 2400 ? Math.round(calculateMaxAveragePower(arr, 2400)) : null,
+    max_hr_60min: arr.length >= 3600 ? Math.round(calculateMaxAveragePower(arr, 3600)) : null,
+    max_hr: maxHr
+  };
+}
+
+/**
  * 훈련 세션 저장 및 보상 처리
  * Firestore Transaction을 사용하여 데이터 무결성 보장
  * 
@@ -452,6 +474,12 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
 
+      // 심박 피크 계산 (저장 시 1회만, 훈련 루프 영향 없음)
+      const hrValues = trainingData.hrData && trainingData.hrData.length > 0
+        ? trainingData.hrData.map((d) => Number(d.v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM)
+        : [];
+      const hrPeaks = hrValues.length > 0 ? calculateMaxHeartRatePeaks(hrValues) : null;
+
       const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
         ? Number(userData.weight ?? userData.weightKg)
         : null;
@@ -482,8 +510,16 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         
         // 심박 & 효율 (Heart Rate & Efficiency)
         avg_hr: trainingData.avg_hr || null,
-        max_hr: trainingData.max_hr || null,
+        max_hr: trainingData.max_hr || (hrPeaks ? hrPeaks.max_hr : null),
         efficiency_factor: efficiencyFactor ? Math.round(efficiencyFactor * 100) / 100 : null,
+        // 심박 피크 (5초, 1분, 5분, 10분, 20분, 40분, 60분)
+        ...(hrPeaks && hrPeaks.max_hr_5sec != null && { max_hr_5sec: hrPeaks.max_hr_5sec }),
+        ...(hrPeaks && hrPeaks.max_hr_1min != null && { max_hr_1min: hrPeaks.max_hr_1min }),
+        ...(hrPeaks && hrPeaks.max_hr_5min != null && { max_hr_5min: hrPeaks.max_hr_5min }),
+        ...(hrPeaks && hrPeaks.max_hr_10min != null && { max_hr_10min: hrPeaks.max_hr_10min }),
+        ...(hrPeaks && hrPeaks.max_hr_20min != null && { max_hr_20min: hrPeaks.max_hr_20min }),
+        ...(hrPeaks && hrPeaks.max_hr_40min != null && { max_hr_40min: hrPeaks.max_hr_40min }),
+        ...(hrPeaks && hrPeaks.max_hr_60min != null && { max_hr_60min: hrPeaks.max_hr_60min }),
         
         // 케이던스 (Technique)
         avg_cadence: trainingData.avg_cadence || null,
