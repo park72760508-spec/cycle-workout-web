@@ -1356,6 +1356,74 @@
       border: 1.5px solid #dc2626;
       border-radius: 3px;
     }
+    /* React Journal 리팩터링: Daily Summary 카드 */
+    #trainingJournalScreen .journal-daily-summary {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.03) 100%);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+    #trainingJournalScreen .journal-daily-summary-header { margin-bottom: 12px; }
+    #trainingJournalScreen .journal-daily-summary-title { margin: 0; font-size: 1rem; font-weight: 600; color: #111827; }
+    #trainingJournalScreen .journal-daily-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px 16px;
+      margin-bottom: 16px;
+    }
+    #trainingJournalScreen .journal-summary-item { display: flex; justify-content: space-between; align-items: center; }
+    #trainingJournalScreen .journal-summary-label { font-size: 13px; color: #6b7280; }
+    #trainingJournalScreen .journal-summary-value { font-size: 14px; font-weight: 600; color: #111827; }
+    #trainingJournalScreen .journal-daily-summary-actions { text-align: center; }
+    #trainingJournalScreen .journal-btn-detail {
+      padding: 10px 20px;
+      background: #22c55e;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #trainingJournalScreen .journal-btn-detail:hover { background: #16a34a; }
+    #trainingJournalScreen .journal-calendar-widget .journal-strava-legend-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+      position: relative;
+      gap: 12px;
+    }
+    #trainingJournalScreen .journal-calendar-widget .journal-legend { position: static; transform: none; }
+    #trainingJournalScreen .mini-calendar-day.selected { outline: 2px solid #22c55e; outline-offset: 2px; }
+    #trainingJournalScreen .journal-loading-wrap, #trainingJournalScreen .journal-error-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      gap: 16px;
+    }
+    #trainingJournalScreen .journal-loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(34, 197, 94, 0.2);
+      border-top-color: #22c55e;
+      border-radius: 50%;
+      animation: journalSpin 0.9s linear infinite;
+    }
+    #trainingJournalScreen .journal-loading-text, #trainingJournalScreen .journal-error-msg { font-size: 14px; color: #4b5563; }
+    #trainingJournalScreen .journal-retry-btn {
+      padding: 10px 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+    }
   </style>
 
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
@@ -4659,8 +4727,8 @@
       }
     </style>
     
-    <!-- 월간 훈련 이력 미니 달력 -->
-    <div class="card">
+    <!-- 월간 훈련 이력 미니 달력 (레거시 - React Journal 사용 시 숨김) -->
+    <div class="card" id="journal-legacy-calendar-card">
       <div class="mini-calendar-container">
         <!-- 달력 헤더 -->
         <div class="mini-calendar-header">
@@ -4718,6 +4786,9 @@
         </div>
       </div>
     </div>
+    
+    <!-- 라이딩 일지 React 리팩터링 (JournalCalendarWidget + JournalDailySummary) -->
+    <div id="journal-react-root" style="display: none; margin-top: 0;"></div>
     
     <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
     <div id="monthly-analysis-dashboard-root" class="card monthly-analysis-dashboard-wrapper" style="margin-top: 16px;"></div>
@@ -9362,12 +9433,44 @@
       window.renderMonthlyAnalysisDashboard(currentMonthDate, monthlyLogs, allLogs, prevMonthLogs, userProfile, rawLogsTizUpdate);
     }
 
-    // 전역 함수로 노출
+    // 전역 함수로 노출 (React Journal 리팩터링용 fetchTrainingLogsForCalendarJournal 추가)
     window.miniCalendarNavigateJournal = miniCalendarNavigateJournal;
     window.initMiniCalendarJournal = initMiniCalendarJournal;
     window.updateMonthlyAnalysisDashboardFromJournal = updateMonthlyAnalysisDashboardFromJournal;
+    if (typeof fetchTrainingLogsForCalendarJournal !== 'undefined') {
+      window.fetchTrainingLogsForCalendarJournal = fetchTrainingLogsForCalendarJournal;
+    }
     
     console.log('✅ 훈련일지 화면용 미니 달력 스크립트 로드 완료');
+  </script>
+  
+  <!-- ========== 라이딩 일지 React 리팩터링 (useJournalData + JournalCalendarWidget + JournalDailySummary) ========== -->
+  <script src="assets/js/journal/useJournalData.js"></script>
+  <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
+  <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel"></script>
+  <script>
+    (function() {
+      var journalReactRootInstance = null;
+      function initTrainingJournalReact() {
+        var root = document.getElementById('journal-react-root');
+        var legacyCard = document.getElementById('journal-legacy-calendar-card');
+        if (!root || typeof ReactDOM === 'undefined' || typeof window.TrainingJournalScreen !== 'function') {
+          console.warn('[Journal React] 마운트 불가 - root 또는 React/TrainingJournalScreen 없음');
+          return;
+        }
+        if (legacyCard) legacyCard.style.display = 'none';
+        root.style.display = 'block';
+        if (!root._journalRoot) {
+          root._journalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
+          if (root._journalRoot) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
+          else if (typeof ReactDOM.render === 'function') ReactDOM.render(React.createElement(window.TrainingJournalScreen), root);
+        } else {
+          if (root._journalRoot.render) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
+        }
+      }
+      window.initTrainingJournalReact = initTrainingJournalReact;
+    })();
   </script>
   
   <!-- ========== Monthly Training Analysis Dashboard (React) ========== -->
