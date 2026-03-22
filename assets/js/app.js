@@ -8966,12 +8966,12 @@ async function loadTrainingJournalCalendar(direction) {
           });
         }
       }
-      // 같은 날 Strava와 Stelvio가 둘 다 있으면 Stelvio 훈련 로그만 표시
+      // 같은 날 Strava와 Stelvio가 둘 다 있으면 Strava 우선, Stelvio만 있으면 Stelvio
       Object.keys(resultsByDate).forEach(function(dateStr) {
         const arr = resultsByDate[dateStr];
-        const hasStelvio = arr.some(function(item) { return item.source !== 'strava'; });
-        if (hasStelvio) {
-          resultsByDate[dateStr] = arr.filter(function(item) { return item.source !== 'strava'; });
+        const hasStrava = arr.some(function(item) { return String(item.source || '').toLowerCase() === 'strava'; });
+        if (hasStrava) {
+          resultsByDate[dateStr] = arr.filter(function(item) { return String(item.source || '').toLowerCase() === 'strava'; });
         }
       });
     } catch (error) {
