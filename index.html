@@ -14315,7 +14315,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <canvas ref={chartRef}></canvas>
           </div>
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            일별 20분 최대 파워(W)와 20분 최대 심박(bpm)입니다. PR은 해당 기간 최고 기록 지점에 표시됩니다.
+            월별 20분 최대 파워(W)와 20분 최대 심박(bpm)입니다. PR은 해당 기간 최고 기록 지점에 표시됩니다.
           </div>
         </DashboardCard>
       );
@@ -15287,7 +15287,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             vo2TrendRows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
             if (isMounted) setVo2TrendData(vo2TrendRows);
 
-            // 나의 성장 트렌드 (6개월): 일단위 max_20min_watts, max_hr_20min (실제 PR 발생일 표시)
+            // 나의 성장 트렌드 (6개월): 월단위 max_20min_watts, max_hr_20min (VO2max 트렌드와 동일 주기)
             var byDateGrowth = {};
             logs6Months.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
@@ -15299,20 +15299,36 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (h > byDateGrowth[dateStr].maxHr20min) byDateGrowth[dateStr].maxHr20min = h;
             });
             var growthTrendRows = [];
-            var dCur = new Date(sixMonthsAgo.getTime());
-            dCur.setHours(0, 0, 0, 0);
-            var todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-            while (dCur.getTime() <= todayEnd.getTime()) {
-              var ds = dCur.getFullYear() + '-' + pad2(dCur.getMonth() + 1) + '-' + pad2(dCur.getDate());
-              var dayData = byDateGrowth[ds];
-              growthTrendRows.push({
-                dateLabel: (dCur.getMonth() + 1) + '/' + dCur.getDate(),
-                dateStr: ds,
-                max20minWatts: dayData && dayData.max20minWatts > 0 ? dayData.max20minWatts : null,
-                maxHr20min: dayData && dayData.maxHr20min > 0 ? dayData.maxHr20min : null
+            for (var mOff = 5; mOff >= 0; mOff--) {
+              var dMonth = new Date(today.getFullYear(), today.getMonth() - mOff, 1);
+              var y = dMonth.getFullYear();
+              var m = dMonth.getMonth() + 1;
+              var startStr = y + '-' + pad2(m) + '-01';
+              var endStr = y + '-' + pad2(m) + '-' + pad2(new Date(y, m, 0).getDate());
+              if (mOff === 0) {
+                var endD = new Date(today);
+                var startD = new Date(endD);
+                startD.setDate(endD.getDate() - 29);
+                startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
+                endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
+              }
+              var monthMaxWatts = 0, monthMaxHr = 0;
+              Object.keys(byDateGrowth).forEach(function(ds) {
+                if (ds < startStr || ds > endStr) return;
+                var d = byDateGrowth[ds];
+                if (d.max20minWatts > monthMaxWatts) monthMaxWatts = d.max20minWatts;
+                if (d.maxHr20min > monthMaxHr) monthMaxHr = d.maxHr20min;
               });
-              dCur.setDate(dCur.getDate() + 1);
+              var monthLabel = m + '월';
+              if (mOff === 0) monthLabel = m + '월(현재)';
+              growthTrendRows.push({
+                monthLabel: monthLabel,
+                sortKey: y + '-' + pad2(m),
+                max20minWatts: monthMaxWatts > 0 ? monthMaxWatts : null,
+                maxHr20min: monthMaxHr > 0 ? monthMaxHr : null
+              });
             }
+            growthTrendRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
             if (isMounted) setGrowthTrendData(growthTrendRows);
 
             // 년간 파워PR 그래프 (2026년 yearly_peaks, 달성일 매칭)
