@@ -73,6 +73,8 @@ function addDaysToDate(currentDate, days) {
 const POWER_SPIKE_THRESHOLD_W = 2000;
 const POWER_SPIKE_JUMP_W = 1000;
 const HR_MAX_BPM = 220;
+/** 심박 스파이크: 1초 만에 25bpm 이상 튀는 값 → 인접 평균으로 대체 */
+const HR_SPIKE_JUMP_BPM = 25;
 const DEFAULT_FTP_W = 150;
 const DEFAULT_MAX_HR = 190;
 
@@ -178,6 +180,38 @@ function smoothPowerSpikes(rawDataArray) {
 }
 
 /**
+ * 심박 스트림에서 평균 대비 갑자기 튀는 값(스파이크) 제거 → 인접값 평균으로 대체
+ * - 1초 만에 HR_SPIKE_JUMP_BPM(25) 이상 변동 시 스파이크로 간주
+ * - 220bpm 초과도 스파이크로 간주
+ * @param {number[]} rawHrArray - 1초당 1개 심박 값 배열
+ * @returns {number[]} 스파이크 보간된 배열
+ */
+function smoothHeartRateSpikes(rawHrArray) {
+  if (!rawHrArray || rawHrArray.length === 0) return rawHrArray || [];
+  const arr = rawHrArray.map((v) => Number(v) || 0);
+  const len = arr.length;
+  for (let i = 0; i < len; i++) {
+    const prev = i > 0 ? arr[i - 1] : arr[i];
+    const isOverMax = arr[i] > HR_MAX_BPM;
+    const isSpikeJump = i > 0 && Math.abs(arr[i] - prev) > HR_SPIKE_JUMP_BPM;
+    if (!isOverMax && !isSpikeJump) continue;
+    const before = [];
+    for (let b = 1; b <= 3; b++) {
+      if (i - b >= 0 && arr[i - b] > 0 && arr[i - b] <= HR_MAX_BPM) before.push(arr[i - b]);
+    }
+    const after = [];
+    for (let a = 1; a <= 3; a++) {
+      if (i + a < len && arr[i + a] > 0 && arr[i + a] <= HR_MAX_BPM) after.push(arr[i + a]);
+    }
+    const combined = [...before, ...after];
+    arr[i] = combined.length > 0
+      ? Math.round(combined.reduce((s, v) => s + v, 0) / combined.length)
+      : (prev > 0 && prev <= HR_MAX_BPM ? prev : 0);
+  }
+  return arr;
+}
+
+/**
  * 슬라이딩 윈도우로 최대 평균 파워(MMP) 계산
  * @param {Array} wattsArray - 1초당 1개 파워 값 배열
  * @param {number} seconds - 구간(초)
@@ -201,16 +235,20 @@ function calculateMaxAveragePower(wattsArray, seconds) {
 
 /**
  * 심박 스트림 배열에서 구간별 최대 평균 심박 계산 (저장 시 1회만 실행, 훈련 루프 영향 없음)
+ * STELVIO: max_hr = 5초 롤링 평균의 최대 (스파이크 제거 후, 신뢰도 향상)
  * @param {number[]} heartrateArray - 1초당 1개 심박 값 배열
- * @returns {Object|null} { max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min, max_hr } 또는 null
+ * @returns {Object|null} { max_hr_5sec, max_hr_1min, ..., max_hr } 또는 null
  */
 function calculateMaxHeartRatePeaks(heartrateArray) {
   if (!heartrateArray || heartrateArray.length === 0) return null;
-  const arr = heartrateArray.map((v) => Number(v) || 0);
-  const maxHr = Math.max(...arr);
+  const raw = heartrateArray.map((v) => Number(v) || 0);
+  const arr = smoothHeartRateSpikes(raw);
+  const maxHr5sec = arr.length >= 5 ? Math.round(calculateMaxAveragePower(arr, 5)) : 0;
+  const maxHrInstant = arr.length > 0 ? Math.max(...arr.filter((v) => v > 0), 0) : 0;
+  const maxHr = maxHr5sec > 0 ? maxHr5sec : (maxHrInstant > 0 ? maxHrInstant : 0);
   if (maxHr <= 0) return null;
   return {
-    max_hr_5sec: arr.length >= 5 ? Math.round(calculateMaxAveragePower(arr, 5)) : null,
+    max_hr_5sec: arr.length >= 5 ? maxHr5sec : null,
     max_hr_1min: arr.length >= 60 ? Math.round(calculateMaxAveragePower(arr, 60)) : null,
     max_hr_5min: arr.length >= 300 ? Math.round(calculateMaxAveragePower(arr, 300)) : null,
     max_hr_10min: arr.length >= 600 ? Math.round(calculateMaxAveragePower(arr, 600)) : null,
