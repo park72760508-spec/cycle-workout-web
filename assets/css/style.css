@@ -4089,6 +4089,44 @@ body:has(#trainingDetailModal:not(.hidden)) {
   transform: translateY(0);
 }
 
+/* 전역 맨 위로 가기 플로팅 버튼 (라이딩 일지, 대시보드, 프로필, 워크아웃 화면) */
+.global-back-to-top-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(118, 75, 162, 0.3);
+  z-index: 9999;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s ease;
+}
+.global-back-to-top-btn.global-back-to-top-active {
+  display: flex;
+}
+.global-back-to-top-btn.global-back-to-top-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.global-back-to-top-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5), 0 4px 12px rgba(118, 75, 162, 0.35);
+}
+.global-back-to-top-btn:active {
+  transform: translateY(0);
+}
+
 .training-detail-footer {
   padding: 16px 20px;
   border-top: 1px solid rgba(0, 212, 170, 0.3);
