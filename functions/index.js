@@ -3310,9 +3310,9 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
 /** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출).
  *  ?year=2026 - 대상 연도
  *  ?userId=xxx - 특정 사용자만 처리 (선택)
+ *  ?rebuildMaxHr=1 - userId와 함께 사용 시, yearly_peaks의 max_hr를 로그 기반으로 재계산하여 덮어씀 (5초평균 우선, 날짜 포함)
  *  ?userLimit=30 - 요청당 처리 사용자 수 (기본 30, userId 없을 때만)
- *  ?startAfterUserId=xxx - 이전 응답의 lastUserId로 이어서 실행 (배치 연속 처리)
- *  max_hr: 로그에 max_hr_5sec 있으면 우선 사용 (5초 평균 최대) */
+ *  ?startAfterUserId=xxx - 이전 응답의 lastUserId로 이어서 실행 (배치 연속 처리) */
 exports.backfillYearlyPeaks = onRequest(
   { cors: true, timeoutSeconds: 540 },
   async (req, res) => {
@@ -3326,10 +3326,48 @@ exports.backfillYearlyPeaks = onRequest(
       return res.status(400).json({ success: false, error: "year 파라미터 필요 (2020~2100)" });
     }
     const userIdFilter = (req.query.userId || "").trim() || null;
+    const rebuildMaxHr = req.query.rebuildMaxHr === "1" || req.query.rebuildMaxHr === "true";
     const userLimit = Math.min(100, Math.max(1, parseInt(req.query.userLimit || "30", 10) || 30));
     const startAfterUserId = (req.query.startAfterUserId || "").trim() || null;
     const { startStr, endStr } = getYearRangeSeoul(year);
     const db = admin.firestore();
+
+    if (userIdFilter && rebuildMaxHr) {
+      const logsSnap = await db.collection("users").doc(userIdFilter).collection("logs")
+        .where("date", ">=", startStr)
+        .where("date", "<=", endStr)
+        .get();
+      let bestMaxHr = 0;
+      let bestDate = null;
+      logsSnap.docs.forEach((doc) => {
+        const d = doc.data();
+        if (!isCyclingForMmp(d)) return;
+        const hr = Number(d.max_hr_5sec ?? d.max_hr ?? d.max_heartrate) || 0;
+        if (hr > bestMaxHr) {
+          bestMaxHr = hr;
+          bestDate = (d.date && String(d.date).trim()) || null;
+        }
+      });
+      if (bestMaxHr > 0) {
+        const yearlyRef = db.collection("users").doc(userIdFilter).collection("yearly_peaks").doc(String(year));
+        await yearlyRef.set({
+          max_hr: bestMaxHr,
+          max_hr_date: bestDate || null,
+          year: parseInt(String(year), 10),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      return res.status(200).json({
+        success: true,
+        mode: "rebuildMaxHr",
+        year,
+        userId: userIdFilter,
+        max_hr: bestMaxHr,
+        max_hr_date: bestDate,
+        logsScanned: logsSnap.size,
+      });
+    }
+
     let usersSnap;
     if (userIdFilter) {
       const userDoc = await db.collection("users").doc(userIdFilter).get();
