@@ -701,12 +701,14 @@ function calculateMaxAveragePower(wattsArray, seconds) {
 }
 
 /** 심박 스트림 배열에서 구간별 최대 평균 심박 및 전체 최대 심박 계산 (MMP와 동일한 구간)
- *  max_hr: 5초 롤링 평균의 최대 (순간 스파이크 제거, 신뢰도 향상). 5초 미만이면 순간 최대 사용 */
+ *  - 스파이크 제거(smoothHeartRateSpikes) 후 5초 롤링 평균의 최대를 max_hr로 사용 (신뢰도 향상)
+ *  - 5초 미만이면 순간 최대 사용 */
 function calculateMaxHeartRatePeaks(heartrateArray) {
   if (!heartrateArray || heartrateArray.length === 0) return null;
-  const arr = heartrateArray.map((v) => Number(v) || 0);
+  const raw = heartrateArray.map((v) => Number(v) || 0);
+  const arr = smoothHeartRateSpikes(raw);
   const maxHr5sec = arr.length >= 5 ? Math.round(calculateMaxAveragePower(arr, 5)) : 0;
-  const maxHrInstant = Math.max(...arr);
+  const maxHrInstant = arr.length > 0 ? Math.max(...arr.filter((v) => v > 0)) : 0;
   const maxHr = maxHr5sec > 0 ? maxHr5sec : (maxHrInstant > 0 ? maxHrInstant : 0);
   if (maxHr <= 0) return null;
   return {
@@ -2338,6 +2340,8 @@ const PEAK_POWER_LIMITS = {
 const POWER_SPIKE_THRESHOLD_W = 2000;
 const POWER_SPIKE_JUMP_W = 1000;
 const HR_MAX_BPM = 220;
+/** 심박 스파이크: 1초 만에 HR_SPIKE_JUMP_BPM 이상 튀는 값 → 인접 평균으로 대체 */
+const HR_SPIKE_JUMP_BPM = 25;
 const DEFAULT_FTP_W = 150;
 const DEFAULT_MAX_HR = 190;
 
@@ -2367,6 +2371,38 @@ function smoothPowerSpikes(rawDataArray) {
     arr[i] = combined.length > 0
       ? Math.round(combined.reduce((s, v) => s + v, 0) / combined.length)
       : POWER_SPIKE_THRESHOLD_W;
+  }
+  return arr;
+}
+
+/**
+ * 심박 스트림에서 평균 대비 갑자기 튀는 값(스파이크) 제거 → 인접값 평균으로 대체
+ * - 1초 만에 HR_SPIKE_JUMP_BPM(25) 이상 변동 시 스파이크로 간주
+ * - 220bpm 초과도 스파이크로 간주
+ * @param {number[]} rawHrArray - 1초당 1개 심박 값 배열
+ * @returns {number[]} 스파이크 보간된 배열
+ */
+function smoothHeartRateSpikes(rawHrArray) {
+  if (!rawHrArray || rawHrArray.length === 0) return rawHrArray || [];
+  const arr = rawHrArray.map((v) => Number(v) || 0);
+  const len = arr.length;
+  for (let i = 0; i < len; i++) {
+    const prev = i > 0 ? arr[i - 1] : arr[i];
+    const isOverMax = arr[i] > HR_MAX_BPM;
+    const isSpikeJump = i > 0 && Math.abs(arr[i] - prev) > HR_SPIKE_JUMP_BPM;
+    if (!isOverMax && !isSpikeJump) continue;
+    const before = [];
+    for (let b = 1; b <= 3; b++) {
+      if (i - b >= 0 && arr[i - b] > 0 && arr[i - b] <= HR_MAX_BPM) before.push(arr[i - b]);
+    }
+    const after = [];
+    for (let a = 1; a <= 3; a++) {
+      if (i + a < len && arr[i + a] > 0 && arr[i + a] <= HR_MAX_BPM) after.push(arr[i + a]);
+    }
+    const combined = [...before, ...after];
+    arr[i] = combined.length > 0
+      ? Math.round(combined.reduce((s, v) => s + v, 0) / combined.length)
+      : (prev > 0 && prev <= HR_MAX_BPM ? prev : 0);
   }
   return arr;
 }
@@ -2627,9 +2663,9 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
       changed = true;
     }
   }
-  // max_hr: 훈련 로그의 최대 심박수를 yearly_peaks에 반영 (max_hr 또는 max_heartrate 필드 지원)
-  // max_hr_date: 해당 max_hr 달성일 (프로필 화면 표시용)
-  const logMaxHr = Number(logData.max_hr ?? logData.max_heartrate) || 0;
+  // max_hr: 5초 평균 최대 우선(max_hr_5sec), 없으면 max_hr/max_heartrate (프로필 화면 표시용)
+  // max_hr_date: 해당 max_hr 달성일
+  const logMaxHr = Number(logData.max_hr_5sec ?? logData.max_hr ?? logData.max_heartrate) || 0;
   if (logMaxHr > 0) {
     const prevMaxHr = Number(current.max_hr) || 0;
     if (logMaxHr > prevMaxHr) {
@@ -2728,7 +2764,7 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
           maxWattsFromLogs = w;
           contributingActivityType = d.activity_type ?? (String(d.source || "").toLowerCase() === "strava" ? "Unknown" : "Stelvio");
         }
-        const hr = Number(d.max_hr) || 0;
+        const hr = Number(d.max_hr_5sec ?? d.max_hr ?? d.max_heartrate) || 0;
         if (hr > 0 && hr > maxHrFromLogs) {
           maxHrFromLogs = hr;
           maxHrDateFromLogs = (d.date && String(d.date).trim()) || null;
@@ -3241,7 +3277,7 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
               contributingActivityType = d.activity_type ?? (String(d.source || "").toLowerCase() === "strava" ? "Unknown" : "Stelvio");
             }
           }
-          const hr = Number(d.max_hr ?? d.max_heartrate) || 0;
+          const hr = Number(d.max_hr_5sec ?? d.max_hr ?? d.max_heartrate) || 0;
           if (hr > maxHr) {
             maxHr = hr;
             maxHrDate = (d.date && String(d.date).trim()) || null;
@@ -3273,8 +3309,10 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
 
 /** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출).
  *  ?year=2026 - 대상 연도
- *  ?userLimit=30 - 요청당 처리 사용자 수 (기본 30, 타임아웃 방지용)
- *  ?startAfterUserId=xxx - 이전 응답의 lastUserId로 이어서 실행 (배치 연속 처리) */
+ *  ?userId=xxx - 특정 사용자만 처리 (선택)
+ *  ?userLimit=30 - 요청당 처리 사용자 수 (기본 30, userId 없을 때만)
+ *  ?startAfterUserId=xxx - 이전 응답의 lastUserId로 이어서 실행 (배치 연속 처리)
+ *  max_hr: 로그에 max_hr_5sec 있으면 우선 사용 (5초 평균 최대) */
 exports.backfillYearlyPeaks = onRequest(
   { cors: true, timeoutSeconds: 540 },
   async (req, res) => {
@@ -3287,16 +3325,23 @@ exports.backfillYearlyPeaks = onRequest(
     if (isNaN(year) || year < 2020 || year > 2100) {
       return res.status(400).json({ success: false, error: "year 파라미터 필요 (2020~2100)" });
     }
+    const userIdFilter = (req.query.userId || "").trim() || null;
     const userLimit = Math.min(100, Math.max(1, parseInt(req.query.userLimit || "30", 10) || 30));
     const startAfterUserId = (req.query.startAfterUserId || "").trim() || null;
     const { startStr, endStr } = getYearRangeSeoul(year);
     const db = admin.firestore();
-    let usersQuery = db.collection("users").orderBy(admin.firestore.FieldPath.documentId()).limit(userLimit);
-    if (startAfterUserId) {
-      const startDoc = await db.collection("users").doc(startAfterUserId).get();
-      if (startDoc.exists) usersQuery = usersQuery.startAfter(startDoc);
+    let usersSnap;
+    if (userIdFilter) {
+      const userDoc = await db.collection("users").doc(userIdFilter).get();
+      usersSnap = userDoc.exists ? { docs: [userDoc] } : { docs: [] };
+    } else {
+      let usersQuery = db.collection("users").orderBy(admin.firestore.FieldPath.documentId()).limit(userLimit);
+      if (startAfterUserId) {
+        const startDoc = await db.collection("users").doc(startAfterUserId).get();
+        if (startDoc.exists) usersQuery = usersQuery.startAfter(startDoc);
+      }
+      usersSnap = await usersQuery.get();
     }
-    const usersSnap = await usersQuery.get();
     let processed = 0;
     let updated = 0;
     let lastUserId = null;
