@@ -700,14 +700,17 @@ function calculateMaxAveragePower(wattsArray, seconds) {
   return Math.round(maxAvg);
 }
 
-/** 심박 스트림 배열에서 구간별 최대 평균 심박 및 전체 최대 심박 계산 (MMP와 동일한 구간) */
+/** 심박 스트림 배열에서 구간별 최대 평균 심박 및 전체 최대 심박 계산 (MMP와 동일한 구간)
+ *  max_hr: 5초 롤링 평균의 최대 (순간 스파이크 제거, 신뢰도 향상). 5초 미만이면 순간 최대 사용 */
 function calculateMaxHeartRatePeaks(heartrateArray) {
   if (!heartrateArray || heartrateArray.length === 0) return null;
   const arr = heartrateArray.map((v) => Number(v) || 0);
-  const maxHr = Math.max(...arr);
+  const maxHr5sec = arr.length >= 5 ? Math.round(calculateMaxAveragePower(arr, 5)) : 0;
+  const maxHrInstant = Math.max(...arr);
+  const maxHr = maxHr5sec > 0 ? maxHr5sec : (maxHrInstant > 0 ? maxHrInstant : 0);
   if (maxHr <= 0) return null;
   return {
-    max_hr_5sec: arr.length >= 5 ? Math.round(calculateMaxAveragePower(arr, 5)) : null,
+    max_hr_5sec: arr.length >= 5 ? maxHr5sec : null,
     max_hr_1min: arr.length >= 60 ? Math.round(calculateMaxAveragePower(arr, 60)) : null,
     max_hr_5min: arr.length >= 300 ? Math.round(calculateMaxAveragePower(arr, 300)) : null,
     max_hr_10min: arr.length >= 600 ? Math.round(calculateMaxAveragePower(arr, 600)) : null,
