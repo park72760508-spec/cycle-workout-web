@@ -579,23 +579,8 @@
         setRunConditionAnalysis(false);
         return;
       }
-      if (coachData && !coachData.error_reason && !runConditionAnalysis) {
-        setAiLoading(false);
-        return;
-      }
-      if (aiAnalysisInProgressRef.current) return;
 
-      aiAnalysisInProgressRef.current = true;
-      setAiLoading(true);
-      setStreamingComment(null);
-
-      var today = new Date();
-      var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-      var thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 29);
-      var thirtyStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
-
-      function parseDate(date) {
+      function parseDateForCoach(date) {
         if (!date) return null;
         var d = null;
         if (date.toDate && typeof date.toDate === 'function') d = date.toDate();
@@ -607,18 +592,21 @@
         if (!d || isNaN(d.getTime())) return null;
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       }
-
+      var today = new Date();
+      var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      var thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 29);
+      var thirtyStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
       var logsToSend = recentLogs.filter(function(log) {
-        var ds = parseDate(log.date);
+        var ds = parseDateForCoach(log.date);
         return ds && ds >= thirtyStr && ds <= todayStr;
-      }).sort(function(a, b) { return (parseDate(a.date) || '').localeCompare(parseDate(b.date) || ''); });
-
+      }).sort(function(a, b) { return (parseDateForCoach(a.date) || '').localeCompare(parseDateForCoach(b.date) || ''); });
       var start7 = new Date(today);
       start7.setDate(today.getDate() - 6);
       var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
       var byDate7 = {};
       logsToSend.forEach(function(log) {
-        var ds = parseDate(log.date);
+        var ds = parseDateForCoach(log.date);
         if (!ds || ds < start7Str || ds > todayStr) return;
         if (!byDate7[ds]) byDate7[ds] = { strava: [], stelvio: [] };
         var src = String(log.source || '').toLowerCase();
@@ -632,6 +620,28 @@
         else if (day.stelvio.length > 0) day.stelvio.forEach(function(t) { last7TSS += t; });
       });
       last7TSS = Math.round(last7TSS);
+      var logsSignature = typeof window.buildLogsSignatureForCache === 'function'
+        ? window.buildLogsSignatureForCache(logsToSend, last7TSS)
+        : (logsToSend.length + '_' + last7TSS);
+
+      /* 캐시 조회: 같은 날짜·같은 로그 상태이면 캐시 사용 (runConditionAnalysis가 true면 강제 재분석) */
+      if (!runConditionAnalysis && typeof window.getDashboardCoachCache === 'function') {
+        var cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
+        if (cached && cached.condition_score != null && !cached.error_reason) {
+          setCoachData(cached);
+          setAiLoading(false);
+          return;
+        }
+      }
+      if (coachData && !coachData.error_reason && !runConditionAnalysis) {
+        setAiLoading(false);
+        return;
+      }
+      if (aiAnalysisInProgressRef.current) return;
+
+      aiAnalysisInProgressRef.current = true;
+      setAiLoading(true);
+      setStreamingComment(null);
 
       (async function() {
         var cleanLogs = [];
@@ -769,6 +779,9 @@
 
           setCoachData(analysis);
           setStreamingComment(null);
+          if (analysis && !analysis.error_reason && typeof window.setDashboardCoachCache === 'function') {
+            window.setDashboardCoachCache(userProfile.id, todayStr, logsSignature, analysis);
+          }
         } catch (e) {
           console.error('[Dashboard] AI analysis error:', e);
           setCoachData({
