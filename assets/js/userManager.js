@@ -1866,13 +1866,20 @@ function getHrZones(maxHr) {
  * FTP/심박 Zone 테이블 HTML 생성 (카드용·상단 참고용 공통)
  * @param {number} ftp - 사용자 FTP (W)
  * @param {number} maxHr - 사용자 최대 심박수 (bpm)
- * @param {{ compact?: boolean }} opts - compact: true면 스윗스팟 캡션 생략
+ * @param {{ compact?: boolean, maxHrDate?: string }} opts - compact: true면 스윗스팟 캡션 생략, maxHrDate: YYYY-MM-DD
  * @returns {{ ftpHtml: string, hrHtml: string }}
  */
 function buildProfileZoneTableHtml(ftp, maxHr, opts) {
   const f = Number(ftp) || 0;
   const m = Number(maxHr) || 0;
   const compact = opts && opts.compact;
+  const maxHrDate = opts && opts.maxHrDate;
+  const dateFmt = maxHrDate ? (function(d) {
+    if (!d || typeof d !== 'string') return '';
+    var parts = d.trim().split(/[-/]/);
+    if (parts.length >= 3) return parts[0] + '.' + String(parts[1]).padStart(2, '0') + '.' + String(parts[2]).padStart(2, '0');
+    return d;
+  })(maxHrDate) : '';
 
   const ftpZones = f > 0 ? [
     { label: 'Z1', pct: '55% 미만', min: null, max: Math.floor(f * 0.55), color: '#9ca3af', desc: '리커버리 라이딩, 젖산 분해 및 피로도 회복 촉진' },
@@ -1932,7 +1939,7 @@ function buildProfileZoneTableHtml(ftp, maxHr, opts) {
 
   const hrHtml = m > 0 ? `
     <div class="profile-zone-table-block profile-zone-table-in-card">
-      <div class="profile-zone-table-header">사용자 최대 심박수: ${m} bpm</div>
+      <div class="profile-zone-table-header">사용자 최대 심박수: ${m} bpm${dateFmt ? ' (' + dateFmt + ')' : ''}</div>
       <table class="profile-zone-table">
         <thead><tr><th>구분</th><th>범위(%)</th><th>값(bpm)</th><th>내용</th></tr></thead>
         <tbody>${hrRows}</tbody>
@@ -2144,6 +2151,7 @@ if (typeof window !== 'undefined') window.isPrField = isPrField;
  * yearly_peaks에서 최대 심박수 조회 (오늘 기준 최대 1년 = 당해+전년)
  * - users/{userId}/yearly_peaks/{year} 문서 2개만 조회 (당해·전년) → 로그 스캔 없이 경량
  * - max_hr는 onUserLogWritten 트리거·backfillYearlyPeaks로 yearly_peaks에 반영됨
+ * @returns {{ maxHr: number, maxHrDate?: string }|null} maxHr과 max_hr_date(YYYY-MM-DD, 있으면)
  */
 async function fetchMaxHrFromYearlyPeaks(userId) {
   if (!userId || !window.firestoreV9) return null;
@@ -2160,18 +2168,20 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
     ]);
     var curSnap = promiseResults && promiseResults[0];
     var prevSnap = promiseResults && promiseResults[1];
-    let maxHr = 0;
-    if (curSnap && curSnap.exists) {
-      const d = curSnap.data() || {};
+    let bestHr = 0;
+    let bestDate = null;
+    const consider = (snap) => {
+      if (!snap || !snap.exists) return;
+      const d = snap.data() || {};
       const hr = (d && d != null) ? (Number(d.max_hr) || 0) : 0;
-      if (hr > maxHr) maxHr = hr;
-    }
-    if (prevSnap && prevSnap.exists) {
-      const d = prevSnap.data() || {};
-      const hr = (d && d != null) ? (Number(d.max_hr) || 0) : 0;
-      if (hr > maxHr) maxHr = hr;
-    }
-    return maxHr > 0 ? maxHr : null;
+      if (hr > bestHr) {
+        bestHr = hr;
+        bestDate = (d.max_hr_date && String(d.max_hr_date).trim()) || null;
+      }
+    };
+    consider(curSnap);
+    consider(prevSnap);
+    return bestHr > 0 ? { maxHr: bestHr, maxHrDate: bestDate } : null;
   } catch (e) {
     console.warn('[UserManager] fetchMaxHrFromYearlyPeaks 실패:', userId, e);
     return null;
@@ -2236,15 +2246,16 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const aiDot = hasAiKey ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
 
-    const maxHr = maxHrMap[user.id];
+    const maxHrEntry = maxHrMap[user.id];
     const userFtp = Number(user.ftp) || 0;
-    const userMaxHr = maxHr != null ? Number(maxHr) : 0;
-    var zoneResult2 = buildProfileZoneTableHtml(userFtp, userMaxHr, { compact: true });
+    const userMaxHr = maxHrEntry != null ? (typeof maxHrEntry === 'object' ? Number(maxHrEntry.maxHr) : Number(maxHrEntry)) : 0;
+    const maxHrDate = maxHrEntry && typeof maxHrEntry === 'object' ? maxHrEntry.maxHrDate : null;
+    var zoneResult2 = buildProfileZoneTableHtml(userFtp, userMaxHr, { compact: true, maxHrDate: maxHrDate });
     var ftpHtml = zoneResult2 ? zoneResult2.ftpHtml : '';
     var hrHtml = zoneResult2 ? zoneResult2.hrHtml : '';
 
     const ftpZonesHtml = userFtp > 0 ? ftpHtml : '';
-    const hrZonesHtml = maxHr === undefined
+    const hrZonesHtml = maxHrEntry === undefined
       ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역</div><div class="profile-hr-loading">로딩 중...</div></div>`
       : userMaxHr > 0 ? hrHtml : '';
 
@@ -2299,8 +2310,8 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
 async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId) {
   const maxHrByUser = {};
   const promises = usersToRender.map(async (u) => {
-    const hr = await fetchMaxHrFromYearlyPeaks(u.id);
-    if (hr != null) maxHrByUser[u.id] = hr;
+    const res = await fetchMaxHrFromYearlyPeaks(u.id);
+    if (res != null) maxHrByUser[u.id] = res;
   });
   await Promise.all(promises);
   renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUser);
