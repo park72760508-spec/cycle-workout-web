@@ -4000,9 +4000,35 @@ body:has(#trainingDetailModal:not(.hidden)) {
   cursor: pointer;
   padding: 10px 0;
   transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .stelvio-rank-expand-row:hover {
   background: rgba(255, 107, 53, 0.08);
+}
+.stelvio-rank-expand-left {
+  flex: 1;
+  min-width: 0;
+}
+.stelvio-rank-expand-center {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  color: #1f2937;
+}
+.stelvio-rank-expand-right {
+  flex: 1;
+  text-align: right;
+  font-weight: 700;
+  font-size: 1.2em;
+}
+.stelvio-rank-expand-right.stelvio-rank-expand-plus {
+  color: #ff6b35 !important;
+}
+.stelvio-rank-expand-right.stelvio-rank-expand-minus {
+  color: #ff6b35 !important;
 }
 .stelvio-rank-expand-text {
   color: #1f2937;
