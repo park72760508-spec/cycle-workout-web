@@ -3332,8 +3332,8 @@ exports.backfillYearlyPeaks = onRequest(
     const { startStr, endStr } = getYearRangeSeoul(year);
     const db = admin.firestore();
 
-    if (userIdFilter && rebuildMaxHr) {
-      const logsSnap = await db.collection("users").doc(userIdFilter).collection("logs")
+    const doRebuildMaxHrForUser = async (uid) => {
+      const logsSnap = await db.collection("users").doc(uid).collection("logs")
         .where("date", ">=", startStr)
         .where("date", "<=", endStr)
         .get();
@@ -3349,7 +3349,7 @@ exports.backfillYearlyPeaks = onRequest(
         }
       });
       if (bestMaxHr > 0) {
-        const yearlyRef = db.collection("users").doc(userIdFilter).collection("yearly_peaks").doc(String(year));
+        const yearlyRef = db.collection("users").doc(uid).collection("yearly_peaks").doc(String(year));
         await yearlyRef.set({
           max_hr: bestMaxHr,
           max_hr_date: bestDate || null,
@@ -3357,14 +3357,19 @@ exports.backfillYearlyPeaks = onRequest(
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
       }
+      return { bestMaxHr, bestDate, logsScanned: logsSnap.size };
+    };
+
+    if (userIdFilter && rebuildMaxHr) {
+      const result = await doRebuildMaxHrForUser(userIdFilter);
       return res.status(200).json({
         success: true,
         mode: "rebuildMaxHr",
         year,
         userId: userIdFilter,
-        max_hr: bestMaxHr,
-        max_hr_date: bestDate,
-        logsScanned: logsSnap.size,
+        max_hr: result.bestMaxHr,
+        max_hr_date: result.bestDate,
+        logsScanned: result.logsScanned,
       });
     }
 
@@ -3383,30 +3388,48 @@ exports.backfillYearlyPeaks = onRequest(
     let processed = 0;
     let updated = 0;
     let lastUserId = null;
-    for (const userDoc of usersSnap.docs) {
-      lastUserId = userDoc.id;
-      const userData = userDoc.data();
-      const logsSnap = await db.collection("users").doc(lastUserId).collection("logs")
-        .where("date", ">=", startStr)
-        .where("date", "<=", endStr)
-        .get();
-      for (const logDoc of logsSnap.docs) {
-        processed++;
+    if (rebuildMaxHr && !userIdFilter) {
+      for (const userDoc of usersSnap.docs) {
+        lastUserId = userDoc.id;
         try {
-          await upsertYearlyPeakFromLog(db, lastUserId, userData, logDoc.data(), logDoc.id);
-          updated++;
+          const r = await doRebuildMaxHrForUser(lastUserId);
+          processed++;
+          if (r.bestMaxHr > 0) updated++;
         } catch (e) {
-          console.warn("[backfillYearlyPeaks]", lastUserId, logDoc.id, e.message);
+          console.warn("[backfillYearlyPeaks] rebuildMaxHr", lastUserId, e.message);
+        }
+      }
+    } else {
+      for (const userDoc of usersSnap.docs) {
+        lastUserId = userDoc.id;
+        const userData = userDoc.data();
+        const logsSnap = await db.collection("users").doc(lastUserId).collection("logs")
+          .where("date", ">=", startStr)
+          .where("date", "<=", endStr)
+          .get();
+        for (const logDoc of logsSnap.docs) {
+          processed++;
+          try {
+            await upsertYearlyPeakFromLog(db, lastUserId, userData, logDoc.data(), logDoc.id);
+            updated++;
+          } catch (e) {
+            console.warn("[backfillYearlyPeaks]", lastUserId, logDoc.id, e.message);
+          }
         }
       }
     }
     const hasMore = usersSnap.docs.length >= userLimit;
+    let nextUrl = null;
+    if (hasMore && lastUserId) {
+      nextUrl = `?year=${year}&userLimit=${userLimit}&startAfterUserId=${encodeURIComponent(lastUserId)}`;
+      if (rebuildMaxHr && !userIdFilter) nextUrl += "&rebuildMaxHr=1";
+    }
     res.status(200).json({
-      success: true, year, startStr, endStr, processed, updated,
+      success: true,
+      ...(rebuildMaxHr && !userIdFilter && { mode: "rebuildMaxHr" }),
+      year, startStr, endStr, processed, updated,
       lastUserId, hasMore,
-      nextUrl: hasMore && lastUserId
-        ? `?year=${year}&userLimit=${userLimit}&startAfterUserId=${encodeURIComponent(lastUserId)}`
-        : null,
+      nextUrl,
     });
   }
 );
