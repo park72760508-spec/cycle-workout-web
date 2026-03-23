@@ -3268,7 +3268,10 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
   }
 );
 
-/** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출). year 파라미터로 대상 연도 지정 */
+/** 기존 로그 기반 연간 최고 기록 백필 (관리자 수동 호출).
+ *  ?year=2026 - 대상 연도
+ *  ?userLimit=30 - 요청당 처리 사용자 수 (기본 30, 타임아웃 방지용)
+ *  ?startAfterUserId=xxx - 이전 응답의 lastUserId로 이어서 실행 (배치 연속 처리) */
 exports.backfillYearlyPeaks = onRequest(
   { cors: true, timeoutSeconds: 540 },
   async (req, res) => {
@@ -3281,29 +3284,44 @@ exports.backfillYearlyPeaks = onRequest(
     if (isNaN(year) || year < 2020 || year > 2100) {
       return res.status(400).json({ success: false, error: "year 파라미터 필요 (2020~2100)" });
     }
+    const userLimit = Math.min(100, Math.max(1, parseInt(req.query.userLimit || "30", 10) || 30));
+    const startAfterUserId = (req.query.startAfterUserId || "").trim() || null;
     const { startStr, endStr } = getYearRangeSeoul(year);
     const db = admin.firestore();
-    const usersSnap = await db.collection("users").get();
+    let usersQuery = db.collection("users").orderBy(admin.firestore.FieldPath.documentId()).limit(userLimit);
+    if (startAfterUserId) {
+      const startDoc = await db.collection("users").doc(startAfterUserId).get();
+      if (startDoc.exists) usersQuery = usersQuery.startAfter(startDoc);
+    }
+    const usersSnap = await usersQuery.get();
     let processed = 0;
     let updated = 0;
+    let lastUserId = null;
     for (const userDoc of usersSnap.docs) {
-      const userId = userDoc.id;
+      lastUserId = userDoc.id;
       const userData = userDoc.data();
-      const logsSnap = await db.collection("users").doc(userId).collection("logs")
+      const logsSnap = await db.collection("users").doc(lastUserId).collection("logs")
         .where("date", ">=", startStr)
         .where("date", "<=", endStr)
         .get();
       for (const logDoc of logsSnap.docs) {
         processed++;
         try {
-          await upsertYearlyPeakFromLog(db, userId, userData, logDoc.data(), logDoc.id);
+          await upsertYearlyPeakFromLog(db, lastUserId, userData, logDoc.data(), logDoc.id);
           updated++;
         } catch (e) {
-          console.warn("[backfillYearlyPeaks]", userId, logDoc.id, e.message);
+          console.warn("[backfillYearlyPeaks]", lastUserId, logDoc.id, e.message);
         }
       }
     }
-    res.status(200).json({ success: true, year, startStr, endStr, processed, updated });
+    const hasMore = usersSnap.docs.length >= userLimit;
+    res.status(200).json({
+      success: true, year, startStr, endStr, processed, updated,
+      lastUserId, hasMore,
+      nextUrl: hasMore && lastUserId
+        ? `?year=${year}&userLimit=${userLimit}&startAfterUserId=${encodeURIComponent(lastUserId)}`
+        : null,
+    });
   }
 );
 
