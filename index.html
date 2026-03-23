@@ -7193,34 +7193,40 @@
     /* 전역 맨 위로 가기 (라이딩 일지, 대시보드, 프로필, 워크아웃 화면) */
     var globalBackToTopScrollHandler = null;
     var globalBackToTopScrollEl = null;
-    function initGlobalBackToTop(scrollEl) {
+    var globalBackToTopScrollEl2 = null;
+    function initGlobalBackToTop(scrollEl, scrollEl2) {
       var btn = document.getElementById('globalBackToTopBtn');
       if (!scrollEl || !btn) return;
       cleanupGlobalBackToTop();
       globalBackToTopScrollEl = scrollEl;
+      globalBackToTopScrollEl2 = scrollEl2 || null;
       btn.classList.add('global-back-to-top-active');
-      if (scrollEl.scrollTop >= 300) btn.classList.add('global-back-to-top-visible');
-      else btn.classList.remove('global-back-to-top-visible');
-      globalBackToTopScrollHandler = function() {
-        if (scrollEl.scrollTop >= 300) btn.classList.add('global-back-to-top-visible');
+      function updateVisible() {
+        var top1 = scrollEl.scrollTop || 0;
+        var top2 = (scrollEl2 && scrollEl2.scrollTop) || 0;
+        if (top1 >= 300 || top2 >= 300) btn.classList.add('global-back-to-top-visible');
         else btn.classList.remove('global-back-to-top-visible');
-      };
+      }
+      updateVisible();
+      globalBackToTopScrollHandler = updateVisible;
       scrollEl.addEventListener('scroll', globalBackToTopScrollHandler);
+      if (scrollEl2) scrollEl2.addEventListener('scroll', globalBackToTopScrollHandler);
     }
     function cleanupGlobalBackToTop() {
       var btn = document.getElementById('globalBackToTopBtn');
-      if (btn) {
-        btn.classList.remove('global-back-to-top-active', 'global-back-to-top-visible');
-      }
-      if (globalBackToTopScrollHandler && globalBackToTopScrollEl) {
-        globalBackToTopScrollEl.removeEventListener('scroll', globalBackToTopScrollHandler);
+      if (btn) btn.classList.remove('global-back-to-top-active', 'global-back-to-top-visible');
+      if (globalBackToTopScrollHandler) {
+        if (globalBackToTopScrollEl) globalBackToTopScrollEl.removeEventListener('scroll', globalBackToTopScrollHandler);
+        if (globalBackToTopScrollEl2) globalBackToTopScrollEl2.removeEventListener('scroll', globalBackToTopScrollHandler);
       }
       globalBackToTopScrollHandler = null;
       globalBackToTopScrollEl = null;
+      globalBackToTopScrollEl2 = null;
     }
     function handleGlobalBackToTop() {
-      var el = globalBackToTopScrollEl || document.getElementById('performance-dashboard-container') || document.getElementById('trainingJournalScreen') || document.getElementById('profileScreen') || document.getElementById('workoutViewContainer') || document.getElementById('trainingReadyScreen');
+      var el = globalBackToTopScrollEl || document.getElementById('performance-dashboard-container') || document.getElementById('trainingJournalScreen') || document.getElementById('profileScreen') || document.getElementById('workoutScreen') || document.getElementById('trainingReadyScreen');
       if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+      if (globalBackToTopScrollEl2) globalBackToTopScrollEl2.scrollTo({ top: 0, behavior: 'smooth' });
     }
     window.initGlobalBackToTop = initGlobalBackToTop;
     window.cleanupGlobalBackToTop = cleanupGlobalBackToTop;
@@ -17606,8 +17612,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var scrollEl = null;
           if (screenId === 'trainingJournalScreen') scrollEl = document.getElementById('trainingJournalScreen');
           else if (screenId === 'profileScreen') scrollEl = document.getElementById('profileScreen');
-          else if (screenId === 'workoutScreen') scrollEl = document.getElementById('workoutViewContainer');
-          else if (screenId === 'trainingReadyScreen') scrollEl = document.getElementById('trainingReadyScreen');
+          else if (screenId === 'workoutScreen') {
+            scrollEl = document.getElementById('workoutScreen');
+            var scrollEl2 = document.getElementById('workoutViewContainer');
+            if (scrollEl && typeof window.initGlobalBackToTop === 'function') window.initGlobalBackToTop(scrollEl, scrollEl2);
+            scrollEl = null;
+          } else if (screenId === 'trainingReadyScreen') scrollEl = document.getElementById('trainingReadyScreen');
           else if (screenId === 'performanceDashboardScreen') scrollEl = document.getElementById('performance-dashboard-container');
           if (scrollEl && typeof window.initGlobalBackToTop === 'function') window.initGlobalBackToTop(scrollEl);
         }, 150);
