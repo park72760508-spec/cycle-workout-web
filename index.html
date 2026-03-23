@@ -7405,6 +7405,7 @@
         var html = '';
         var maxNameLen = 12;
         var displayArr = arr;
+        var expandLimit = 10;
 
         if (isExpired) {
           if (userIdx >= 0 && userIdx >= 3) {
@@ -7413,8 +7414,8 @@
             displayArr = arr.slice(0, 3);
           }
         } else if (cat !== 'Supremo' && arr.length > 10) {
-          /* 전체(Supremo) 탭과 동일: 상위 10명만 표시, 12위 이상 시 dots + 본인 순위 행 */
-          displayArr = arr.slice(0, 10);
+          expandLimit = stelvioRankingExpandState[cat] || 10;
+          displayArr = arr.slice(0, expandLimit);
         }
 
         displayArr.forEach(function(item, idx) {
@@ -7447,6 +7448,20 @@
           html += '<span class="stelvio-rank-wkg">' + wkg + '</span>';
           html += '</div>';
         });
+
+        /* 비-Supremo 탭: 펼쳐보기 + / 접어보기 - 버튼 */
+        if (cat !== 'Supremo' && !isExpired && arr.length > 10) {
+          if (arr.length > expandLimit) {
+            html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingExpand(\'' + cat + '\')">';
+            html += '<span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span>';
+            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-expand-text"><span class="stelvio-rank-expand-plus">+</span> 펼쳐보기</span></span><span class="stelvio-rank-wkg"></span></div>';
+          }
+          if (expandLimit > 10) {
+            html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingCollapse(\'' + cat + '\')">';
+            html += '<span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span>';
+            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-expand-text"><span class="stelvio-rank-expand-minus">−</span> 접어보기</span></span><span class="stelvio-rank-wkg"></span></div>';
+          }
+        }
 
         /* 전체(Supremo) 탭과 동일: 선수부·30대이하·40대·50대·60대이상에서 12위 이상 시 dots + 본인 순위 표시 */
         if (cat !== 'Supremo' && userIdx >= 0 && (userIdx + 1) >= 12) {
