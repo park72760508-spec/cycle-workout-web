@@ -3087,12 +3087,25 @@ button[aria-disabled="true"] {
   border-color: rgba(64, 224, 208, 0.6);
 }
 
-/* 훈련일지·훈련 스케줄 공통: 오늘 날짜 = 폰트 크기에 맞춘 주황색 투명 원 */
+/* 훈련일지·훈련 스케줄 공통: 오늘 날짜 = 폰트 크기에 맞춘 둥근 원 (날짜만 감쌈) */
 #trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today::after,
+#trainingJournalScreen .journal-calendar-widget .mini-calendar-day.today::after,
 #aiScheduleScreen .mini-calendar-day.today::after {
   display: none;
 }
+/* 훈련일지: 오늘 날짜 = STELVIO 스타일 둥근 원 (날짜만 감쌈) */
 #trainingJournalScreen #miniCalendarGridJournal .mini-calendar-day.today .day-number,
+#trainingJournalScreen .journal-calendar-widget .mini-calendar-day.today .day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  min-height: 1.6em;
+  border-radius: 50%;
+  background: rgba(102, 126, 234, 0.25);
+  border: 1.5px solid rgba(102, 126, 234, 0.5);
+  box-sizing: border-box;
+}
 #aiScheduleScreen .mini-calendar-day.today .day-number {
   display: inline-flex;
   align-items: center;
