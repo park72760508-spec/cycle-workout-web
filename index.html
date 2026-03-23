@@ -5399,6 +5399,11 @@
         if (titleEl) { titleEl.textContent = '워크아웃'; }
         if (subtitleEl) { subtitleEl.textContent = '오늘의 훈련 프로그램을 선택하세요'; subtitleEl.style.display = ''; }
         if (headerEl) headerEl.classList.remove('workout-screen-header--list-view');
+        var wsc = document.getElementById('workoutScreen');
+        var wvc = document.getElementById('workoutViewContainer');
+        if (wsc) wsc.scrollTop = 0;
+        if (wvc) wvc.scrollTop = 0;
+        if (typeof window.refreshGlobalBackToTopState === 'function') window.refreshGlobalBackToTopState();
       }
 
       function workoutViewShowList(categoryId) {
@@ -5449,6 +5454,11 @@
         } else if (typeof loadWorkouts === 'function') {
           setTimeout(function() { loadWorkouts(categoryId); }, 100);
         }
+        var wsc = document.getElementById('workoutScreen');
+        var wvc = document.getElementById('workoutViewContainer');
+        if (wsc) wsc.scrollTop = 0;
+        if (wvc) wvc.scrollTop = 0;
+        if (typeof window.refreshGlobalBackToTopState === 'function') window.refreshGlobalBackToTopState();
       }
 
       function getCategoryWorkoutCount(workouts, categoryId) {
@@ -7228,9 +7238,13 @@
       if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
       if (globalBackToTopScrollEl2) globalBackToTopScrollEl2.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    function refreshGlobalBackToTopState() {
+      if (globalBackToTopScrollHandler) globalBackToTopScrollHandler();
+    }
     window.initGlobalBackToTop = initGlobalBackToTop;
     window.cleanupGlobalBackToTop = cleanupGlobalBackToTop;
     window.handleGlobalBackToTop = handleGlobalBackToTop;
+    window.refreshGlobalBackToTopState = refreshGlobalBackToTopState;
     window.openStelvioRankingBoardModal = openStelvioRankingBoardModal;
     window.closeStelvioRankingBoardModal = closeStelvioRankingBoardModal;
     window.handleStelvioBackToTop = handleStelvioBackToTop;
