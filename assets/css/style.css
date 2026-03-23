@@ -4054,6 +4054,41 @@ body:has(#trainingDetailModal:not(.hidden)) {
   -webkit-overflow-scrolling: touch;
 }
 
+/* STELVIO 랭킹 보드: 맨 위로 가기 플로팅 버튼 */
+.stelvio-back-to-top-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4), 0 2px 8px rgba(118, 75, 162, 0.3);
+  z-index: 10001;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.2s ease;
+}
+.stelvio-back-to-top-btn.stelvio-back-to-top-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.stelvio-back-to-top-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5), 0 4px 12px rgba(118, 75, 162, 0.35);
+}
+.stelvio-back-to-top-btn:active {
+  transform: translateY(0);
+}
+
 .training-detail-footer {
   padding: 16px 20px;
   border-top: 1px solid rgba(0, 212, 170, 0.3);
