@@ -7219,7 +7219,7 @@
       globalBackToTopScrollEl = null;
     }
     function handleGlobalBackToTop() {
-      var el = globalBackToTopScrollEl || document.getElementById('performance-dashboard-container') || document.getElementById('trainingJournalScreen') || document.getElementById('profileScreen') || document.getElementById('workoutViewContainer');
+      var el = globalBackToTopScrollEl || document.getElementById('performance-dashboard-container') || document.getElementById('trainingJournalScreen') || document.getElementById('profileScreen') || document.getElementById('workoutViewContainer') || document.getElementById('trainingReadyScreen');
       if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
     }
     window.initGlobalBackToTop = initGlobalBackToTop;
@@ -17607,6 +17607,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (screenId === 'trainingJournalScreen') scrollEl = document.getElementById('trainingJournalScreen');
           else if (screenId === 'profileScreen') scrollEl = document.getElementById('profileScreen');
           else if (screenId === 'workoutScreen') scrollEl = document.getElementById('workoutViewContainer');
+          else if (screenId === 'trainingReadyScreen') scrollEl = document.getElementById('trainingReadyScreen');
           else if (screenId === 'performanceDashboardScreen') scrollEl = document.getElementById('performance-dashboard-container');
           if (scrollEl && typeof window.initGlobalBackToTop === 'function') window.initGlobalBackToTop(scrollEl);
         }, 150);
