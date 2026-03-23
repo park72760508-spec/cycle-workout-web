@@ -7190,6 +7190,41 @@
       var scrollEl = m ? m.querySelector('.stelvio-ranking-modal-content') : null;
       if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    /* 전역 맨 위로 가기 (라이딩 일지, 대시보드, 프로필, 워크아웃 화면) */
+    var globalBackToTopScrollHandler = null;
+    var globalBackToTopScrollEl = null;
+    function initGlobalBackToTop(scrollEl) {
+      var btn = document.getElementById('globalBackToTopBtn');
+      if (!scrollEl || !btn) return;
+      cleanupGlobalBackToTop();
+      globalBackToTopScrollEl = scrollEl;
+      btn.classList.add('global-back-to-top-active');
+      if (scrollEl.scrollTop >= 300) btn.classList.add('global-back-to-top-visible');
+      else btn.classList.remove('global-back-to-top-visible');
+      globalBackToTopScrollHandler = function() {
+        if (scrollEl.scrollTop >= 300) btn.classList.add('global-back-to-top-visible');
+        else btn.classList.remove('global-back-to-top-visible');
+      };
+      scrollEl.addEventListener('scroll', globalBackToTopScrollHandler);
+    }
+    function cleanupGlobalBackToTop() {
+      var btn = document.getElementById('globalBackToTopBtn');
+      if (btn) {
+        btn.classList.remove('global-back-to-top-active', 'global-back-to-top-visible');
+      }
+      if (globalBackToTopScrollHandler && globalBackToTopScrollEl) {
+        globalBackToTopScrollEl.removeEventListener('scroll', globalBackToTopScrollHandler);
+      }
+      globalBackToTopScrollHandler = null;
+      globalBackToTopScrollEl = null;
+    }
+    function handleGlobalBackToTop() {
+      var el = globalBackToTopScrollEl || document.getElementById('performance-dashboard-container') || document.getElementById('trainingJournalScreen') || document.getElementById('profileScreen') || document.getElementById('workoutViewContainer');
+      if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    window.initGlobalBackToTop = initGlobalBackToTop;
+    window.cleanupGlobalBackToTop = cleanupGlobalBackToTop;
+    window.handleGlobalBackToTop = handleGlobalBackToTop;
     window.openStelvioRankingBoardModal = openStelvioRankingBoardModal;
     window.closeStelvioRankingBoardModal = closeStelvioRankingBoardModal;
     window.handleStelvioBackToTop = handleStelvioBackToTop;
@@ -17594,6 +17629,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           document.body.classList.remove('performance-dashboard-active');
           stopDashboardHealthCheck();
         }
+        
+        // 전역 맨 위로 가기: 대상 화면일 때 스크롤 리스너 등록, 그 외엔 제거
+        setTimeout(function() {
+          if (typeof window.cleanupGlobalBackToTop === 'function') window.cleanupGlobalBackToTop();
+          var scrollEl = null;
+          if (screenId === 'trainingJournalScreen') scrollEl = document.getElementById('trainingJournalScreen');
+          else if (screenId === 'profileScreen') scrollEl = document.getElementById('profileScreen');
+          else if (screenId === 'workoutScreen') scrollEl = document.getElementById('workoutViewContainer');
+          else if (screenId === 'performanceDashboardScreen') scrollEl = document.getElementById('performance-dashboard-container');
+          if (scrollEl && typeof window.initGlobalBackToTop === 'function') window.initGlobalBackToTop(scrollEl);
+        }, 150);
       };
       
       // 래핑 완료 플래그 설정
@@ -17775,6 +17821,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
     </button>
   </div>
+
+  <!-- 전역 맨 위로 가기 플로팅 버튼 (라이딩 일지, 대시보드, 프로필, 워크아웃 화면) -->
+  <button type="button" id="globalBackToTopBtn" class="global-back-to-top-btn" onclick="if(typeof handleGlobalBackToTop==='function')handleGlobalBackToTop();" aria-label="맨 위로 가기" title="맨 위로 가기">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+  </button>
 
   <!-- 추월하기 분석 리포트 모달 -->
   <div id="stelvioOvertakeReportModal" class="training-detail-modal stelvio-ios-popup hidden" onclick="if(event.target === this) closeStelvioOvertakeReportModal();">
