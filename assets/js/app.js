@@ -4546,7 +4546,7 @@ function renderUserInfo() {
     const challenge = String(u.challenge || 'Fitness').trim();
     let challengeImage = 'yellow.png';
     if (challenge === 'GranFondo') challengeImage = 'green.png';
-    else if (challenge === 'IronMan') challengeImage = 'green.png';
+    else if (challenge === 'IronMan') challengeImage = 'dgreen.png';
     else if (challenge === 'Racing') challengeImage = 'blue.png';
     else if (challenge === 'Elite') challengeImage = 'orenge.png';
     else if (challenge === 'PRO') challengeImage = 'red.png';
@@ -11467,7 +11467,7 @@ function updateRPEModalContent(modal, challenge) {
   if (challenge === 'GranFondo') {
     challengeImage = 'green.png';
   } else if (challenge === 'IronMan') {
-    challengeImage = 'green.png';
+    challengeImage = 'dgreen.png';
   } else if (challenge === 'Racing') {
     challengeImage = 'blue.png';
   } else if (challenge === 'Elite') {

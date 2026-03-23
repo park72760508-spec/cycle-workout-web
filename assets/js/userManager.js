@@ -2229,7 +2229,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const deleteButtonClass = !canDelete ? 'disabled' : '';
     const challenge = String(user.challenge || 'Fitness').trim();
     let challengeImage = 'yellow.png';
-    if (challenge === 'GranFondo') challengeImage = 'green.png'; else if (challenge === 'IronMan') challengeImage = 'green.png'; else if (challenge === 'Racing') challengeImage = 'blue.png'; else if (challenge === 'Elite') challengeImage = 'orenge.png'; else if (challenge === 'PRO') challengeImage = 'red.png';
+    if (challenge === 'GranFondo') challengeImage = 'green.png'; else if (challenge === 'IronMan') challengeImage = 'dgreen.png'; else if (challenge === 'Racing') challengeImage = 'blue.png'; else if (challenge === 'Elite') challengeImage = 'orenge.png'; else if (challenge === 'PRO') challengeImage = 'red.png';
     const accPoints = user.acc_points || 0;
     const remPoints = user.rem_points || 0;
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
