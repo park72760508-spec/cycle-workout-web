@@ -7464,7 +7464,7 @@
           if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
           var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
           html += '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo">';
-          html += '<span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos">' + (userIdx + 1) + '위</span>';
+          html += '<span class="stelvio-rank-pos">' + (userIdx + 1) + '위</span>';
           html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + mrRawName + '">' + mrName + '</span>' + mrBadgePart + '</span>';
           html += '<span class="stelvio-rank-wkg">' + mrWkg + '</span>';
           html += '</div>';
@@ -7480,7 +7480,6 @@
             html += '<span class="stelvio-rank-expand-left"></span><span class="stelvio-rank-expand-center">펼쳐보기</span><span class="stelvio-rank-expand-right stelvio-rank-expand-plus">+</span></div>';
           }
           if (showCollapse) {
-            html += '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">....</span></span><span class="stelvio-rank-wkg"></span></div>';
             html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingCollapse(\'' + cat + '\')">';
             html += '<span class="stelvio-rank-expand-left"></span><span class="stelvio-rank-expand-center">접어보기</span><span class="stelvio-rank-expand-right stelvio-rank-expand-minus">-</span></div>';
           }
