@@ -7385,8 +7385,6 @@
         var html = '';
         var maxNameLen = 12;
         var displayArr = arr;
-        var needExpand = false;
-        var expandLimit = 10;
 
         if (isExpired) {
           if (userIdx >= 0 && userIdx >= 3) {
@@ -7395,9 +7393,8 @@
             displayArr = arr.slice(0, 3);
           }
         } else if (cat !== 'Supremo' && arr.length > 10) {
-          needExpand = true;
-          expandLimit = stelvioRankingExpandState[cat] || 10;
-          displayArr = arr.slice(0, expandLimit);
+          /* 전체(Supremo) 탭과 동일: 상위 10명만 표시, 12위 이상 시 dots + 본인 순위 행 */
+          displayArr = arr.slice(0, 10);
         }
 
         displayArr.forEach(function(item, idx) {
@@ -7431,49 +7428,22 @@
           html += '</div>';
         });
 
-        if (needExpand) {
-          var userRank = userIdx >= 0 ? (userIdx + 1) : 0;
-          /* 전체(Supremo) 탭과 동일: 12위 이상일 때만 dots + 내 순위 행 표시 */
-          var showPreview = (userIdx >= 0 && userRank >= 12 && userRank > expandLimit);
-          var hasMoreToExpand = arr.length > expandLimit;
-          if (hasMoreToExpand) {
-            html += '<div class="stelvio-rank-row stelvio-rank-dots-row">';
-            html += '<span class="stelvio-rank-crown"></span>';
-            html += '<span class="stelvio-rank-pos"></span>';
-            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span>';
-            html += '<span class="stelvio-rank-wkg"></span>';
-            html += '</div>';
-          }
-          if (showPreview) {
-            var previewItem = arr[userIdx];
-            var previewRawName = (previewItem.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            var previewName = previewRawName.length > maxNameLen ? previewRawName.substring(0, maxNameLen - 2) + '..' : previewRawName;
-            var previewIsPrivate = previewItem.is_private === true;
-            var previewWkg = (previewItem.wkg != null ? Number(previewItem.wkg) : 0).toFixed(2);
-            var previewGlobalPart = '';
-            var previewBadgePart = previewIsPrivate ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-            html += '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-preview-row">';
-            html += '<span class="stelvio-rank-crown"></span>';
-            html += '<span class="stelvio-rank-pos">' + userRank + '위</span>';
-            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + previewRawName + '">' + previewName + '</span>' + previewGlobalPart + previewBadgePart + '</span>';
-            html += '<span class="stelvio-rank-wkg">' + previewWkg + '</span>';
-            html += '</div>';
-          }
-          if (expandLimit > 10 && expandLimit >= arr.length) {
-            html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingCollapse(\'' + cat + '\');" role="button" tabindex="0">';
-            html += '<span class="stelvio-rank-crown"></span>';
-            html += '<span class="stelvio-rank-pos"></span>';
-            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text stelvio-rank-expand-text">접어보기</span></span>';
-            html += '<span class="stelvio-rank-wkg stelvio-rank-expand-minus">−</span>';
-            html += '</div>';
-          } else if (arr.length > expandLimit) {
-            html += '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="handleStelvioRankingExpand(\'' + cat + '\');" role="button" tabindex="0">';
-            html += '<span class="stelvio-rank-crown"></span>';
-            html += '<span class="stelvio-rank-pos"></span>';
-            html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text stelvio-rank-expand-text">펼쳐보기</span></span>';
-            html += '<span class="stelvio-rank-wkg stelvio-rank-expand-plus">+</span>';
-            html += '</div>';
-          }
+        /* 전체(Supremo) 탭과 동일: 선수부·30대이하·40대·50대·60대이상에서 12위 이상 시 dots + 본인 순위 표시 */
+        if (cat !== 'Supremo' && userIdx >= 0 && (userIdx + 1) >= 12) {
+          html += '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">....</span></span><span class="stelvio-rank-wkg"></span></div>';
+          var mr = arr[userIdx];
+          var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          var mrName = mrRawName.length > maxNameLen ? mrRawName.substring(0, maxNameLen - 2) + '..' : mrRawName;
+          var mrWkg = (mr.wkg != null ? Number(mr.wkg) : 0).toFixed(2);
+          var mrIsPrivate = mr.is_private === true;
+          var mrCanSeeFull = currentUserId && mr.userId === currentUserId || isAdmin;
+          if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
+          var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+          html += '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo">';
+          html += '<span class="stelvio-rank-pos">' + (userIdx + 1) + '위</span>';
+          html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + mrRawName + '">' + mrName + '</span>' + mrBadgePart + '</span>';
+          html += '<span class="stelvio-rank-wkg">' + mrWkg + '</span>';
+          html += '</div>';
         }
 
         if (cat === 'Supremo' && myRankSupremo) {
