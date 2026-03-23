@@ -2625,11 +2625,13 @@ async function upsertYearlyPeakFromLog(db, userId, userData, logData, logId) {
     }
   }
   // max_hr: 훈련 로그의 최대 심박수를 yearly_peaks에 반영 (max_hr 또는 max_heartrate 필드 지원)
+  // max_hr_date: 해당 max_hr 달성일 (프로필 화면 표시용)
   const logMaxHr = Number(logData.max_hr ?? logData.max_heartrate) || 0;
   if (logMaxHr > 0) {
     const prevMaxHr = Number(current.max_hr) || 0;
     if (logMaxHr > prevMaxHr) {
       merged.max_hr = logMaxHr;
+      merged.max_hr_date = dateStr || null;
       changed = true;
     }
   }
@@ -2713,6 +2715,7 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
         .get();
       let maxWattsFromLogs = 0;
       let maxHrFromLogs = 0;
+      let maxHrDateFromLogs = null;
       let contributingActivityType = null;
       logsSnap.docs.forEach((doc) => {
         const d = doc.data();
@@ -2723,7 +2726,10 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
           contributingActivityType = d.activity_type ?? (String(d.source || "").toLowerCase() === "strava" ? "Unknown" : "Stelvio");
         }
         const hr = Number(d.max_hr) || 0;
-        if (hr > 0 && hr > maxHrFromLogs) maxHrFromLogs = hr;
+        if (hr > 0 && hr > maxHrFromLogs) {
+          maxHrFromLogs = hr;
+          maxHrDateFromLogs = (d.date && String(d.date).trim()) || null;
+        }
       });
       const currentMaxHr = yearlySnap.exists ? Number(yearlySnap.data().max_hr) || 0 : 0;
       const shouldUpdateMaxHr = maxHrFromLogs > currentMaxHr;
@@ -2744,7 +2750,10 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
             updated_at: admin.firestore.FieldValue.serverTimestamp(),
             activity_type: contributingActivityType ?? null,
           };
-          if (shouldUpdateMaxHr) updateData.max_hr = maxHrFromLogs;
+          if (shouldUpdateMaxHr) {
+            updateData.max_hr = maxHrFromLogs;
+            if (maxHrDateFromLogs) updateData.max_hr_date = maxHrDateFromLogs;
+          }
           await yearlyRef.set(updateData, { merge: true });
         } catch (e) {
           console.warn("[getPeakPowerForUser] yearly_peaks 보정 실패:", userId, year, e.message);
@@ -3213,6 +3222,7 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
         const cyclingLogs = logsSnap.docs.filter((d) => isCyclingForMmp(d.data()));
         const maxByField = {};
         let maxHr = 0;
+        let maxHrDate = null;
         let contributingActivityType = null;
         for (const logDoc of cyclingLogs) {
           const d = logDoc.data();
@@ -3229,7 +3239,10 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
             }
           }
           const hr = Number(d.max_hr ?? d.max_heartrate) || 0;
-          if (hr > maxHr) maxHr = hr;
+          if (hr > maxHr) {
+            maxHr = hr;
+            maxHrDate = (d.date && String(d.date).trim()) || null;
+          }
         }
         const yearlyRef = db.collection("users").doc(userId).collection("yearly_peaks").doc(String(year));
         if (Object.keys(maxByField).length === 0 && maxHr <= 0) {
@@ -3242,7 +3255,10 @@ exports.migrateYearlyPeaksExcludeRunSwimWalk = onRequest(
           merged[field] = watts;
           merged[field.replace("_watts", "_wkg")] = Math.round((watts / weightKg) * 100) / 100;
         }
-        if (maxHr > 0) merged.max_hr = maxHr;
+        if (maxHr > 0) {
+          merged.max_hr = maxHr;
+          if (maxHrDate) merged.max_hr_date = maxHrDate;
+        }
         await yearlyRef.set(merged, { merge: true });
         usersUpdated++;
       }
