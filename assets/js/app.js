@@ -12157,6 +12157,20 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       }
     }
     
+    // 3.5 캐시 조회: 같은 날짜·같은 로그·같은 컨디션이면 캐시 사용
+    const logsSignature = typeof window.buildLogsSignatureForCache === 'function'
+      ? window.buildLogsSignatureForCache(recentHistory)
+      : (recentHistory.length + '_' + Math.round((recentHistory || []).reduce(function(s, l) { return s + (Number(l.tss) || 0); }, 0)));
+    const conditionPart = (userConditionScore != null ? String(userConditionScore) : todayCondition) || '보통';
+    const workoutCacheKey = logsSignature + '_' + conditionPart;
+    if (typeof window.getDashboardWorkoutRecommendationCache === 'function') {
+      const cached = window.getDashboardWorkoutRecommendationCache(user.id, date, workoutCacheKey);
+      if (cached && cached.recommendationData && Array.isArray(cached.workoutDetails)) {
+        displayWorkoutRecommendations(cached.recommendationData, cached.workoutDetails, date);
+        return;
+      }
+    }
+    
     // 4. 워크아웃 목록 조회 (모든 카테고리)
     const categories = ['Endurance', 'Tempo', 'SweetSpot', 'Threshold', 'VO2Max', 'Recovery'];
     let availableWorkouts = [];
@@ -13019,7 +13033,10 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
       recommendationData.condition_score = csResult.score;
     }
     
-    // 8. 추천 워크아웃 표시
+    // 8. 캐시 저장 후 추천 워크아웃 표시
+    if (typeof window.setDashboardWorkoutRecommendationCache === 'function') {
+      window.setDashboardWorkoutRecommendationCache(user.id, date, workoutCacheKey, recommendationData, workoutDetails);
+    }
     displayWorkoutRecommendations(recommendationData, workoutDetails, date);
     
   } catch (error) {
