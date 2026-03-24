@@ -1356,6 +1356,14 @@
       border: 1.5px solid #dc2626;
       border-radius: 3px;
     }
+    /* 라이딩 일지 콘텐츠: 하단 버튼이 safe-area/뷰포트 엣지에 가리지 않도록 여백 확보 */
+    #trainingJournalScreen #journal-react-root,
+    #trainingJournalScreen .journal-screen-content {
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    }
+    #trainingJournalScreen #monthly-analysis-dashboard-root {
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    }
     /* React Journal 리팩터링: Daily Summary 카드 (STELVIO 주간 마일리지 TOP10 모달 스타일 적용) */
     #trainingJournalScreen .journal-daily-summary {
       margin-top: 16px;
@@ -1384,9 +1392,31 @@
       display: flex;
       justify-content: center;
       align-items: center;
+      position: relative;
+      z-index: 10;
+      padding: 8px 0;
+      margin-top: 4px;
     }
+    /* 상세 기록 보기 버튼: 하단 배치 시 터치 인식 개선 (min-height, touch-action, safe-area) */
     #trainingJournalScreen .journal-daily-summary .stelvio-ranking-board-entry-btn {
       margin: 0;
+      min-height: 48px;
+      padding: 14px 20px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      position: relative;
+      z-index: 2;
+      pointer-events: auto;
+      overflow: visible;
+    }
+    /* 확장된 터치 영역: 버튼 중앙 인식 미흡 문제 보완 (::before로 히트 영역 확대) */
+    #trainingJournalScreen .journal-daily-summary .stelvio-ranking-board-entry-btn::before,
+    #trainingJournalScreen .journal-accordion-trigger::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      z-index: 0;
     }
     #trainingJournalScreen .journal-calendar-widget .journal-strava-legend-row {
       display: flex;
@@ -1525,7 +1555,7 @@
       align-items: center;
     }
     /* Monthly Bento */
-    #trainingJournalScreen .journal-monthly-dashboard { margin-top: 20px; }
+    #trainingJournalScreen .journal-monthly-dashboard { margin-top: 20px; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
     #trainingJournalScreen .journal-bento-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -1543,9 +1573,15 @@
     }
     #trainingJournalScreen .journal-bento-label { font-size: 12px; color: #64748b; }
     #trainingJournalScreen .journal-bento-value { font-size: 18px; font-weight: 700; color: #0f172a; }
+    /* 분석 차트 펼치기/접기 버튼: 하단 배치 시 터치 인식 개선 */
+    #trainingJournalScreen .journal-accordion {
+      position: relative;
+      z-index: 10;
+    }
     #trainingJournalScreen .journal-accordion-trigger {
       width: 100%;
-      padding: 12px 16px;
+      min-height: 48px;
+      padding: 14px 20px;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       border-radius: 10px;
@@ -1553,6 +1589,13 @@
       font-weight: 500;
       cursor: pointer;
       color: #475569;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      position: relative;
+      z-index: 2;
+      pointer-events: auto;
+      overflow: visible;
     }
     #trainingJournalScreen .journal-accordion-hint {
       font-size: 12px;
