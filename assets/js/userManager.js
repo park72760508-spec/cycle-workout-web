@@ -2176,7 +2176,7 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
       const hr = (d && d != null) ? (Number(d.max_hr) || 0) : 0;
       if (hr > bestHr) {
         bestHr = hr;
-        bestDate = (d.max_hr_date && String(d.max_hr_date).trim()) || null;
+        bestDate = (d.max_hr_date && String(d.max_hr_date).trim()) || (d.year != null ? String(d.year) : null) || (snap.ref && snap.ref.id ? String(snap.ref.id) : null);
       }
     };
     consider(curSnap);
