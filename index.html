@@ -1356,13 +1356,22 @@
       border: 1.5px solid #dc2626;
       border-radius: 3px;
     }
-    /* 라이딩 일지 콘텐츠: 하단 버튼이 safe-area/뷰포트 엣지에 가리지 않도록 여백 확보 */
-    #trainingJournalScreen #journal-react-root,
-    #trainingJournalScreen .journal-screen-content {
+    /* 라이딩 일지 콘텐츠: 하단 버튼이 safe-area/뷰포트 엣지에 가리지 않도록 여백 확보 (접힌 상태에서만) */
+    #trainingJournalScreen #journal-react-root:not(:has(.journal-accordion-expanded)),
+    #trainingJournalScreen .journal-screen-content:not(:has(.journal-accordion-expanded)) {
       padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     }
+    /* 차트 펼침 시: 여백 제거하여 차트가 바로 아래 이어져 보이도록 */
+    #trainingJournalScreen #journal-react-root:has(.journal-accordion-expanded),
+    #trainingJournalScreen .journal-screen-content:has(.journal-accordion-expanded) {
+      padding-bottom: 0;
+    }
     #trainingJournalScreen #monthly-analysis-dashboard-root {
-      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    }
+    /* 차트 펼침 시: 펼치기 버튼과 차트 사이 간격 최소화 */
+    #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
+      margin-top: 8px;
     }
     /* React Journal 리팩터링: Daily Summary 카드 (STELVIO 주간 마일리지 TOP10 모달 스타일 적용) */
     #trainingJournalScreen .journal-daily-summary {
@@ -1554,8 +1563,9 @@
       justify-content: center;
       align-items: center;
     }
-    /* Monthly Bento */
-    #trainingJournalScreen .journal-monthly-dashboard { margin-top: 20px; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+    /* Monthly Bento (접힌 상태에서만 하단 여백, 펼침 시 차트와 자연스럽게 이어짐) */
+    #trainingJournalScreen .journal-monthly-dashboard:not(.journal-accordion-expanded) { margin-top: 20px; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+    #trainingJournalScreen .journal-monthly-dashboard.journal-accordion-expanded { margin-top: 20px; padding-bottom: 0; }
     #trainingJournalScreen .journal-bento-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
