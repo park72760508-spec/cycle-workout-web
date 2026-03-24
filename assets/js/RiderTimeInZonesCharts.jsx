@@ -448,12 +448,12 @@ function DailyTimeInZonesCharts(props) {
   var setMaxHr = _useState[1];
   var logYear = getYearFromLogDate(log && log.date);
   React.useEffect(function() {
-    var userId = userProfile && (userProfile.id || userProfile.uid);
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    var userId = (userProfile && (userProfile.id || userProfile.uid)) || (log && (log.user_id || log.userId));
+    if (!userId || !logYear || typeof window.fetchMaxHrForYear !== 'function') return;
     window.fetchMaxHrForYear(userId, logYear).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
-  }, [userProfile && (userProfile.id || userProfile.uid), logYear]);
+  }, [userProfile && (userProfile.id || userProfile.uid), log && (log.user_id || log.userId), logYear]);
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
