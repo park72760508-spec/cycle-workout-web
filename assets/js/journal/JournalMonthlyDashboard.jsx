@@ -180,7 +180,8 @@
     var now = new Date();
     var isCurrentMonth = currentYear === now.getFullYear() && currentMonth === now.getMonth();
 
-    return React.createElement('div', { className: 'journal-monthly-dashboard' },
+    var dashboardClass = 'journal-monthly-dashboard' + (accordionOpen ? ' journal-accordion-expanded' : '');
+    return React.createElement('div', { className: dashboardClass },
       React.createElement('div', { className: 'journal-bento-grid' },
         React.createElement('div', { className: 'journal-bento-card' },
           React.createElement('span', { className: 'journal-bento-label' }, '총 TSS'),
