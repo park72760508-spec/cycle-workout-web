@@ -75,7 +75,10 @@
         try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; }
       })();
       if (cu) {
+        var uid = cu.id != null ? cu.id : (cu.uid != null ? cu.uid : null);
         setUserProfile({
+          id: uid,
+          uid: uid,
           ftp: Number(cu.ftp || 200),
           weight: Number(cu.weight || cu.weightKg || 0),
           max_hr: Number(cu.max_hr || cu.maxHr || 190)
