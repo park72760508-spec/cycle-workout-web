@@ -1153,13 +1153,21 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 50;
 }
 
-/* 라이딩 일지: 상세 기록 보기 / 분석 차트 펼치기 버튼 터치 인식 개선 (하단 배치 시 중앙 클릭 미응답 대응) */
-#trainingJournalScreen #journal-react-root,
-#trainingJournalScreen .journal-screen-content {
+/* 라이딩 일지: 상세 기록 보기 / 분석 차트 펼치기 버튼 터치 인식 개선 (접힌 상태에서만 하단 여백) */
+#trainingJournalScreen #journal-react-root:not(:has(.journal-accordion-expanded)),
+#trainingJournalScreen .journal-screen-content:not(:has(.journal-accordion-expanded)) {
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
 }
+#trainingJournalScreen #journal-react-root:has(.journal-accordion-expanded),
+#trainingJournalScreen .journal-screen-content:has(.journal-accordion-expanded) {
+  padding-bottom: 0;
+}
+/* 차트 영역: 펼침 시 최소 여백만 유지 (차트가 버튼 바로 아래 이어짐) */
 #trainingJournalScreen #monthly-analysis-dashboard-root {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+#trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
+  margin-top: 8px;
 }
 #trainingJournalScreen .journal-daily-summary-actions {
   position: relative;
