@@ -451,7 +451,7 @@
 
   /**
    * 워크아웃 메타데이터 경량화 (Steps, Power Data 제외)
-   * 필드: id, title, category, duration_min, tss_predicted, target_level
+   * 필드: id, title, author(GAS 원본), category, duration_min, tss_predicted, target_level
    */
   function fetchLightweightWorkouts() {
     return new Promise(function (resolve) {
@@ -478,15 +478,24 @@
             'Anaerobic Capacity': 'Anaerobic',
             'Neuromuscular': 'Anaerobic'
           };
-          const items = result.items.slice(0, 30).map(function (w) {
+          var rawItems = Array.isArray(result.items) ? result.items : [];
+          var arFirst = rawItems.filter(function (w) {
+            return String(w.author || '').trim().toLowerCase() === 'active recovery';
+          });
+          var rest = rawItems.filter(function (w) {
+            return String(w.author || '').trim().toLowerCase() !== 'active recovery';
+          });
+          var mergedForCap = arFirst.concat(rest).slice(0, 30);
+          const items = mergedForCap.map(function (w) {
             var author = String(w.author || '').trim();
             var cat = authorToCategory[author] || (author || 'Endurance');
             var sec = Number(w.total_seconds) || 0;
-            var durMin = Math.round(sec / 60) || 60;
-            var tssPred = Math.round(durMin * 0.6) || 40;
+            var durMin = sec > 0 ? Math.round(sec / 60) : 0;
+            var tssPred = durMin > 0 ? Math.round(durMin * 0.6) || 40 : 40;
             return {
               id: w.id,
               title: w.title || '훈련',
+              author: author,
               category: cat,
               duration_min: durMin,
               tss_predicted: tssPred,
@@ -497,6 +506,39 @@
         })
         .catch(function () { resolve([]); });
     });
+  }
+
+  /** GAS 워크아웃 author 가 Active Recovery 인지 (테이퍼 전용 배정) */
+  function isAuthorActiveRecovery(w) {
+    if (!w) return false;
+    var a = String(w.author || '').trim().toLowerCase();
+    return a === 'active recovery';
+  }
+
+  /**
+   * 테이퍼: target 분(기본 45)에 가장 가까운 duration 의 워크아웃 선택. 동일 차이면 rotationIndex 로 순환.
+   */
+  function pickTaperActiveRecoveryWorkout(pool, targetMinutes, rotationIndex) {
+    if (!pool || pool.length === 0) return null;
+    var valid = pool.filter(function (w) {
+      return (Number(w.duration_min) || 0) > 0;
+    });
+    if (valid.length === 0) return null;
+    var target = typeof targetMinutes === 'number' && !isNaN(targetMinutes)
+      ? Math.max(25, Math.min(95, targetMinutes))
+      : 45;
+    var scored = valid.map(function (w) {
+      var d = Number(w.duration_min);
+      return { w: w, diff: Math.abs(d - target) };
+    });
+    scored.sort(function (a, b) {
+      if (a.diff !== b.diff) return a.diff - b.diff;
+      return String(a.w.id || '').localeCompare(String(b.w.id || ''));
+    });
+    var minDiff = scored[0].diff;
+    var ties = scored.filter(function (s) { return s.diff === minDiff; });
+    var ri = typeof rotationIndex === 'number' ? rotationIndex : 0;
+    return ties[ri % ties.length].w;
   }
 
   /**
@@ -1148,19 +1190,34 @@ ${workoutsContext}
         });
         if (recoveryWorkouts.length === 0) recoveryWorkouts = lightweightWorkouts;
 
-        /* 테이퍼 주간 전용: Active Recovery(Recovery 카테고리) + 30~90분 워크아웃만 사용 */
-        var activeRecoveryWorkouts = lightweightWorkouts.filter(function (w) {
-          var c = (w.category || '').toLowerCase();
+        /* 테이퍼: author 가 Active Recovery 인 워크아웃 우선, 길이는 목표 분(기본 45)에 최대한 근접 */
+        var activeRecoveryByAuthor = lightweightWorkouts.filter(isAuthorActiveRecovery);
+        var taperPool = activeRecoveryByAuthor.filter(function (w) {
           var d = Number(w.duration_min) || 0;
-          return c.indexOf('recovery') >= 0 && d >= 30 && d <= 90;
+          return d >= 30 && d <= 90;
         });
-        if (activeRecoveryWorkouts.length === 0) {
-          activeRecoveryWorkouts = lightweightWorkouts.filter(function (w) {
+        if (taperPool.length === 0) {
+          taperPool = activeRecoveryByAuthor.filter(function (w) {
+            return (Number(w.duration_min) || 0) > 0;
+          });
+        }
+        if (taperPool.length === 0) {
+          taperPool = activeRecoveryByAuthor;
+        }
+        if (taperPool.length === 0) {
+          taperPool = lightweightWorkouts.filter(function (w) {
+            var c = (w.category || '').toLowerCase();
+            var d = Number(w.duration_min) || 0;
+            return c.indexOf('recovery') >= 0 && d >= 30 && d <= 90;
+          });
+        }
+        if (taperPool.length === 0) {
+          taperPool = lightweightWorkouts.filter(function (w) {
             var c = (w.category || '').toLowerCase();
             return c.indexOf('recovery') >= 0;
           });
         }
-        if (activeRecoveryWorkouts.length === 0) activeRecoveryWorkouts = recoveryWorkouts;
+        if (taperPool.length === 0) taperPool = recoveryWorkouts;
 
         var addedThisMonth = 0;
         for (var j = 0; j < monthDates.length; j++) {
@@ -1172,12 +1229,16 @@ ${workoutsContext}
           var isEmpty = !wId && (!wName || wName === '훈련');
 
           if (td.taper || td.mustRecovery) {
-            /* 테이퍼/대회 2~3일 전: Active Recovery 풀에서만 배정, 실제 훈련시간·이름 그대로 사용 */
-            if (activeRecoveryWorkouts.length > 0) {
-              var ar = activeRecoveryWorkouts[j % activeRecoveryWorkouts.length];
+            /* 테이퍼/대회 2~3일 전: author Active Recovery 우선, 목표 분에 가장 가까운 duration 배정 */
+            if (taperPool.length > 0) {
+              var gDur = item && item.duration != null ? Number(item.duration) : NaN;
+              var targetMin = (gDur >= 30 && gDur <= 90 && !isNaN(gDur)) ? Math.round(gDur) : 45;
+              var ar = pickTaperActiveRecoveryWorkout(taperPool, targetMin, j);
+              if (!ar) ar = taperPool[j % taperPool.length];
               wName = ar.title || ar.name || 'Active Recovery';
               wId = ar.id || '';
-              var dur = Number(ar.duration_min) || 45;
+              var dur = Math.round(Number(ar.duration_min) || 0);
+              if (dur <= 0) dur = targetMin;
               var tss = Math.round(Number(ar.tss_predicted) || dur * 0.5);
               allDays[dateStr] = {
                 workoutName: wName,
@@ -1187,7 +1248,7 @@ ${workoutsContext}
                 type: td.type,
                 description: (td.mustRecovery ? '대회 2~3일 전 회복 훈련' : '대회 1주 전 테이퍼')
               };
-              scheduleLog('TAPER', dateStr + ' Active Recovery 배정: ' + wName + ' ' + dur + '분 (id:' + wId + ')', {});
+              scheduleLog('TAPER', dateStr + ' 테이퍼 배정 target=' + targetMin + '분 → ' + wName + ' ' + dur + '분 (id:' + wId + ')', {});
               addedThisMonth++;
               continue;
             }
