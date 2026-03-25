@@ -6315,18 +6315,17 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     if (seg.target_type === 'cadence_rpm') return Number(seg.target_value) || 0;
     return 0;
   }
-  
-  // FTP% → 막대 높이 비율 (55% = 15%, 150% = 100%, 선형 보간). 색상은 Zone 유지.
-  const FTP_HEIGHT_MIN = 55;
-  const FTP_HEIGHT_MAX = 150;
-  const BAR_HEIGHT_MIN_PCT = 15;
-  const BAR_HEIGHT_MAX_PCT = 100;
+
+  // FTP 100% 가이드선 세로 위치(컨테이너 하단 기준 %) — 막대는 이 높이에 대해 FTP% 비례 (예: 80% FTP → 가이드선의 80% 높이)
+  const zoneFtp100 = getZoneFromFtpPercentValue(100);
+  const ftpLineBottomPercent = (zoneFtp100 / 7) * 100;
+
   function ftpPercentToBarHeight(ftpPercent) {
-    if (ftpPercent == null || isNaN(ftpPercent)) return BAR_HEIGHT_MIN_PCT;
-    const pct = Number(ftpPercent);
-    if (pct <= FTP_HEIGHT_MIN) return BAR_HEIGHT_MIN_PCT;
-    if (pct >= FTP_HEIGHT_MAX) return BAR_HEIGHT_MAX_PCT;
-    return BAR_HEIGHT_MIN_PCT + (pct - FTP_HEIGHT_MIN) / (FTP_HEIGHT_MAX - FTP_HEIGHT_MIN) * (BAR_HEIGHT_MAX_PCT - BAR_HEIGHT_MIN_PCT);
+    if (ftpPercent == null || isNaN(ftpPercent)) return 0;
+    const pct = Math.max(0, Number(ftpPercent));
+    if (pct <= 0) return 0;
+    const h = (pct / 100) * ftpLineBottomPercent;
+    return Math.min(100, h);
   }
 
   // 세그먼트 데이터 생성
@@ -6378,10 +6377,6 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       bar.showRpmValue = false;
     }
   });
-
-  // FTP 100% 기준선 위치 (Zone 4 = 91~105% → 막대 높이 비율 4/7)
-  const zoneFtp100 = getZoneFromFtpPercentValue(100);
-  const ftpLineBottomPercent = (zoneFtp100 / 7) * 100;
 
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프" style="--ftp-line-bottom: ${ftpLineBottomPercent}%;">
