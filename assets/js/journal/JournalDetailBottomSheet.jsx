@@ -31,6 +31,84 @@
   /** journal-detail-value와 동일: 14px, font-weight 600 */
   var JOURNAL_PEAK_BAR_VALUE_FONT = '600 14px sans-serif';
 
+  /** Summary 파워 존 그래프(PowerTimeInZonesCharts) X축 Z0~Z7: fontSize 10, fontWeight 600, 원 r=10 */
+  var JOURNAL_PEAK_AXIS_LABEL_FONT = '600 10px sans-serif';
+  var JOURNAL_PEAK_AXIS_CIRCLE_R = 10;
+
+  var PR_BADGE_BG = '#dc2626';
+  var PR_BADGE_TEXT = '#ffffff';
+
+  function fillRoundRect(ctx, x, y, w, h, r, fillStyle) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+  }
+
+  /** 막대 상단: PR이면 빨간 둥근 배경 + 흰 글자, 아니면 회색 글자 */
+  function drawPeakBarTopValue(ctx, text, x, yMid, isPr) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
+    if (!isPr) {
+      ctx.fillStyle = '#374151';
+      ctx.fillText(text, x, yMid);
+      return;
+    }
+    var padX = 6;
+    var padY = 4;
+    var m = ctx.measureText(text);
+    var pillW = m.width + padX * 2;
+    var pillH = 20;
+    var r = 4;
+    fillRoundRect(ctx, x - pillW / 2, yMid - pillH / 2, pillW, pillH, r, PR_BADGE_BG);
+    ctx.fillStyle = PR_BADGE_TEXT;
+    ctx.fillText(text, x, yMid);
+  }
+
+  /** 단위(W|bpm) + PR 범례(값 PR 존재 시만) — Summary .training-detail-pr-badge 스타일 */
+  function drawUnitRowWithOptionalPrLegend(ctx, chartArea, unitStr, showPrLegend) {
+    var midX = (chartArea.left + chartArea.right) / 2;
+    var yRow = chartArea.top - 10;
+    ctx.save();
+    ctx.textBaseline = 'middle';
+    if (showPrLegend) {
+      ctx.font = '10px sans-serif';
+      var uw = ctx.measureText(unitStr).width;
+      ctx.font = 'bold 11px sans-serif';
+      var prW = ctx.measureText('PR').width + 12;
+      var gap = 8;
+      var total = uw + gap + prW;
+      var startX = midX - total / 2;
+      ctx.textAlign = 'left';
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#9ca3af';
+      ctx.fillText(unitStr, startX, yRow);
+      var bx = startX + uw + gap;
+      fillRoundRect(ctx, bx, yRow - 7, prW, 14, 4, PR_BADGE_BG);
+      ctx.fillStyle = PR_BADGE_TEXT;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('PR', bx + prW / 2, yRow);
+    } else {
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#9ca3af';
+      ctx.textAlign = 'center';
+      ctx.fillText(unitStr, midX, yRow);
+    }
+    ctx.restore();
+  }
+
   function borderRgbFromZone(i) {
     var c = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
     return c.replace('0.7)', '1)').replace('0.55)', '1)');
@@ -59,9 +137,17 @@
     ].join('|');
   }
 
-  function sessionHrChartKey(log) {
+  function sessionHrChartKey(log, yearlyPeaks, userWeight) {
     if (!log) return '';
+    var peakParts = [];
+    if (yearlyPeaks) {
+      ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min'].forEach(function(f) {
+        peakParts.push(yearlyPeaks[f]);
+      });
+    }
     return [
+      userWeight,
+      peakParts.join(','),
       log.avg_hr,
       log.max_hr_5sec,
       log.max_hr_1min,
@@ -116,12 +202,11 @@
         ? function(field) { return window.isPrField(log, yearlyPeaks, field, userWeight); }
         : function() { return false; };
 
+      var hasChartPr = rows.some(function(r) { return r.val > 0 && prFn(r.field); });
       var barBorderColors = rows.map(function(r, i) {
-        return prFn(r.field) ? 'rgba(234, 179, 8, 1)' : borderRgbFromZone(i);
+        return borderRgbFromZone(i);
       });
-      var barBorderWidths = rows.map(function(r, i) {
-        return prFn(r.field) ? 2 : 1;
-      });
+      var barBorderWidths = rows.map(function() { return 1; });
 
       var labels = rows.map(function(r) { return r.label; });
       var plugin = {
@@ -131,17 +216,20 @@
           if (!meta || !meta.data || meta.data.length === 0) return;
           var chartArea = chart.chartArea;
           var bottom = chartArea.bottom;
-          var radius = 10;
+          var radius = JOURNAL_PEAK_AXIS_CIRCLE_R;
           var circleY = bottom + radius + 4;
           chart.ctx.save();
-          chart.ctx.textAlign = 'center';
           meta.data.forEach(function(bar, i) {
             if (!bar || bar.x == null || bar.y == null) return;
             var row = rows[i];
             if (row.val > 0) {
-              chart.ctx.fillStyle = '#374151';
-              chart.ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
-              chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
+              drawPeakBarTopValue(
+                chart.ctx,
+                String(Math.round(row.val)),
+                bar.x,
+                bar.y - 12,
+                prFn(row.field)
+              );
             }
             var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
             chart.ctx.beginPath();
@@ -152,13 +240,13 @@
             chart.ctx.lineWidth = 1;
             chart.ctx.stroke();
             chart.ctx.fillStyle = '#1f2937';
-            chart.ctx.font = 'bold 8px sans-serif';
-            chart.ctx.fillText(row.shortLabel, bar.x, circleY + 3);
+            chart.ctx.font = JOURNAL_PEAK_AXIS_LABEL_FONT;
+            chart.ctx.textAlign = 'center';
+            chart.ctx.textBaseline = 'middle';
+            chart.ctx.fillText(row.shortLabel, bar.x, circleY);
           });
           if (chartArea) {
-            chart.ctx.font = '10px sans-serif';
-            chart.ctx.fillStyle = '#9ca3af';
-            chart.ctx.fillText('W', (chartArea.left + chartArea.right) / 2, chartArea.top - 6);
+            drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'W', hasChartPr);
           }
           chart.ctx.restore();
         }
@@ -198,7 +286,7 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          layout: { padding: { top: 36, bottom: 44 } },
+          layout: { padding: { top: 40, bottom: 48 } },
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -208,6 +296,7 @@
                   if (ctx.datasetIndex === 1) return '평균 파워: ' + Math.round(avgGuide) + ' W';
                   if (rows[i] && rows[i].val > 0) {
                     var parts = [rows[i].label + ': ' + Math.round(rows[i].val) + ' W'];
+                    if (prFn(rows[i].field)) parts.push('PR');
                     if (wKg > 0) parts.push('W/kg: ' + (Math.round((rows[i].val / wKg) * 100) / 100).toFixed(2));
                     return parts;
                   }
@@ -270,9 +359,11 @@
    */
   function JournalSessionHrPeakChart(props) {
     var log = props.log;
+    var yearlyPeaks = props.yearlyPeaks;
+    var userWeight = Number(props.userWeight) || 0;
     var chartRef = useRef(null);
     var chartInst = useRef(null);
-    var depKey = sessionHrChartKey(log);
+    var depKey = sessionHrChartKey(log, yearlyPeaks, userWeight);
 
     useEffect(function() {
       if (chartInst.current) {
@@ -283,18 +374,23 @@
       var ctx = chartRef.current && chartRef.current.getContext('2d');
       if (!ctx) return;
       var rows = [
-        { label: '5초', shortLabel: '5초', val: Number(log.max_hr_5sec) || 0 },
-        { label: '1분', shortLabel: '1분', val: Number(log.max_hr_1min) || 0 },
-        { label: '5분', shortLabel: '5분', val: Number(log.max_hr_5min) || 0 },
-        { label: '10분', shortLabel: '10', val: Number(log.max_hr_10min) || 0 },
-        { label: '20분', shortLabel: '20', val: Number(log.max_hr_20min) || 0 },
-        { label: '40분', shortLabel: '40', val: Number(log.max_hr_40min) || 0 },
-        { label: '60분', shortLabel: '60', val: Number(log.max_hr_60min) || 0 }
+        { label: '5초', shortLabel: '5초', field: 'max_hr_5sec', val: Number(log.max_hr_5sec) || 0 },
+        { label: '1분', shortLabel: '1분', field: 'max_hr_1min', val: Number(log.max_hr_1min) || 0 },
+        { label: '5분', shortLabel: '5분', field: 'max_hr_5min', val: Number(log.max_hr_5min) || 0 },
+        { label: '10분', shortLabel: '10', field: 'max_hr_10min', val: Number(log.max_hr_10min) || 0 },
+        { label: '20분', shortLabel: '20', field: 'max_hr_20min', val: Number(log.max_hr_20min) || 0 },
+        { label: '40분', shortLabel: '40', field: 'max_hr_40min', val: Number(log.max_hr_40min) || 0 },
+        { label: '60분', shortLabel: '60', field: 'max_hr_60min', val: Number(log.max_hr_60min) || 0 }
       ];
       var values = rows.map(function(r) { return r.val; });
       var avgGuide = Number(log.avg_hr) > 0 ? Number(log.avg_hr) : 0;
       var hasAnyBar = values.some(function(w) { return w > 0; });
       if (!hasAnyBar) return;
+
+      var prFn = typeof window.isPrField === 'function'
+        ? function(field) { return window.isPrField(log, yearlyPeaks, field, userWeight); }
+        : function() { return false; };
+      var hasChartPr = rows.some(function(r) { return r.val > 0 && prFn(r.field); });
 
       var numsForMax = values.slice();
       if (avgGuide > 0) numsForMax.push(avgGuide);
@@ -309,17 +405,20 @@
           if (!meta || !meta.data || meta.data.length === 0) return;
           var chartArea = chart.chartArea;
           var bottom = chartArea.bottom;
-          var radius = 10;
+          var radius = JOURNAL_PEAK_AXIS_CIRCLE_R;
           var circleY = bottom + radius + 4;
           chart.ctx.save();
-          chart.ctx.textAlign = 'center';
           meta.data.forEach(function(bar, i) {
             if (!bar || bar.x == null || bar.y == null) return;
             var row = rows[i];
             if (row.val > 0) {
-              chart.ctx.fillStyle = '#374151';
-              chart.ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
-              chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
+              drawPeakBarTopValue(
+                chart.ctx,
+                String(Math.round(row.val)),
+                bar.x,
+                bar.y - 12,
+                prFn(row.field)
+              );
             }
             var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
             chart.ctx.beginPath();
@@ -330,13 +429,13 @@
             chart.ctx.lineWidth = 1;
             chart.ctx.stroke();
             chart.ctx.fillStyle = '#1f2937';
-            chart.ctx.font = 'bold 8px sans-serif';
-            chart.ctx.fillText(row.shortLabel, bar.x, circleY + 3);
+            chart.ctx.font = JOURNAL_PEAK_AXIS_LABEL_FONT;
+            chart.ctx.textAlign = 'center';
+            chart.ctx.textBaseline = 'middle';
+            chart.ctx.fillText(row.shortLabel, bar.x, circleY);
           });
           if (chartArea) {
-            chart.ctx.font = '10px sans-serif';
-            chart.ctx.fillStyle = '#9ca3af';
-            chart.ctx.fillText('bpm', (chartArea.left + chartArea.right) / 2, chartArea.top - 6);
+            drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'bpm', hasChartPr);
           }
           chart.ctx.restore();
         }
@@ -376,7 +475,7 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          layout: { padding: { top: 36, bottom: 44 } },
+          layout: { padding: { top: 40, bottom: 48 } },
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -384,7 +483,10 @@
                 label: function(ctx) {
                   if (ctx.datasetIndex === 1) return '평균 심박: ' + Math.round(avgGuide) + ' bpm';
                   var i = ctx.dataIndex;
-                  if (rows[i] && rows[i].val > 0) return rows[i].label + ': ' + Math.round(rows[i].val) + ' bpm';
+                  if (rows[i] && rows[i].val > 0) {
+                    var line = rows[i].label + ': ' + Math.round(rows[i].val) + ' bpm';
+                    return prFn(rows[i].field) ? [line, 'PR'] : line;
+                  }
                   return rows[i] ? rows[i].label + ': —' : '';
                 }
               }
@@ -638,7 +740,11 @@
       DetailRow({ label: '최대 심박', value: log.max_hr != null && log.max_hr > 0 ? Math.round(log.max_hr) + ' bpm' : '-', isPr: pr('max_hr') }),
       React.createElement('div', { className: 'journal-peak-chart-section' },
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 최대 심박'),
-        React.createElement(JournalSessionHrPeakChart, { log: log })
+        React.createElement(JournalSessionHrPeakChart, {
+          log: log,
+          yearlyPeaks: yearlyPeaks,
+          userWeight: userWeightForPr
+        })
       )
     );
   }
