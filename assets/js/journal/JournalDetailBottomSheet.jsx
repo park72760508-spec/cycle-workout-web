@@ -76,35 +76,30 @@
     ctx.fillText(text, x, yMid);
   }
 
-  /** 단위(W|bpm) + PR 범례(값 PR 존재 시만) — Summary .training-detail-pr-badge 스타일 */
+  /**
+   * 단위(W|bpm) + PR 범례 — 차트 가로를 3등분: 가운데 1/3 중앙에 단위, 오른쪽 1/3 안에서 PR 우측 정렬
+   */
   function drawUnitRowWithOptionalPrLegend(ctx, chartArea, unitStr, showPrLegend) {
-    var midX = (chartArea.left + chartArea.right) / 2;
+    var left = chartArea.left;
+    var w = chartArea.right - chartArea.left;
+    var third = w / 3;
+    var unitCenterX = left + third + third / 2;
     var yRow = chartArea.top - 10;
     ctx.save();
     ctx.textBaseline = 'middle';
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#9ca3af';
+    ctx.textAlign = 'center';
+    ctx.fillText(unitStr, unitCenterX, yRow);
     if (showPrLegend) {
-      ctx.font = '10px sans-serif';
-      var uw = ctx.measureText(unitStr).width;
       ctx.font = 'bold 11px sans-serif';
       var prW = ctx.measureText('PR').width + 12;
-      var gap = 8;
-      var total = uw + gap + prW;
-      var startX = midX - total / 2;
-      ctx.textAlign = 'left';
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = '#9ca3af';
-      ctx.fillText(unitStr, startX, yRow);
-      var bx = startX + uw + gap;
-      fillRoundRect(ctx, bx, yRow - 7, prW, 14, 4, PR_BADGE_BG);
+      var badgeH = 14;
+      var bx = chartArea.right - prW;
+      fillRoundRect(ctx, bx, yRow - badgeH / 2, prW, badgeH, 4, PR_BADGE_BG);
       ctx.fillStyle = PR_BADGE_TEXT;
-      ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('PR', bx + prW / 2, yRow);
-    } else {
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = '#9ca3af';
-      ctx.textAlign = 'center';
-      ctx.fillText(unitStr, midX, yRow);
     }
     ctx.restore();
   }
