@@ -1,8 +1,9 @@
 /**
  * JournalDetailBottomSheet - 라이딩 상세 3탭 (Summary / Power Profile / Heart Rate)
  * 모바일 친화적 Bottom Sheet, 27개 항목 그룹화
+ * Power/HR 피크 막대: 대시보드 년간 파워PR 그래프(YearlyPowerPrChart) 색상·레이아웃 패턴
  */
-/* global React, useState */
+/* global React, useState, useRef, useEffect, Chart */
 
 (function() {
   'use strict';
@@ -11,6 +12,434 @@
 
   var ReactObj = window.React;
   var useState = ReactObj.useState;
+  var useRef = ReactObj.useRef;
+  var useEffect = ReactObj.useEffect;
+
+  /** YearlyPowerPrChart와 동일 존 색상 (막대 7개) */
+  var JOURNAL_PEAK_ZONE_COLORS = [
+    'rgba(156, 163, 175, 0.7)',
+    'rgba(59, 130, 246, 0.7)',
+    'rgba(34, 197, 94, 0.7)',
+    'rgba(234, 179, 8, 0.7)',
+    'rgba(249, 115, 22, 0.7)',
+    'rgba(239, 68, 68, 0.7)',
+    'rgba(168, 85, 247, 0.7)'
+  ];
+
+  var AVG_GUIDE_LINE = 'rgba(249, 115, 22, 0.45)';
+
+  function borderRgbFromZone(i) {
+    var c = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+    return c.replace('0.7)', '1)').replace('0.55)', '1)');
+  }
+
+  function sessionPowerChartKey(log, yearlyPeaks, userWeight) {
+    if (!log) return '';
+    var peakParts = [];
+    if (yearlyPeaks) {
+      ['max_watts', 'max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts'].forEach(function(f) {
+        peakParts.push(yearlyPeaks[f]);
+      });
+    }
+    var pk = peakParts.join(',');
+    return [
+      userWeight,
+      pk,
+      log.avg_watts,
+      log.max_watts,
+      log.max_1min_watts,
+      log.max_5min_watts,
+      log.max_10min_watts,
+      log.max_20min_watts,
+      log.max_40min_watts,
+      log.max_60min_watts
+    ].join('|');
+  }
+
+  function sessionHrChartKey(log) {
+    if (!log) return '';
+    return [
+      log.avg_hr,
+      log.max_hr_5sec,
+      log.max_hr_1min,
+      log.max_hr_5min,
+      log.max_hr_10min,
+      log.max_hr_20min,
+      log.max_hr_40min,
+      log.max_hr_60min
+    ].join('|');
+  }
+
+  /**
+   * 세션 파워 피크 막대 + 평균 파워 가이드(주황 실선)
+   */
+  function JournalSessionPowerPeakChart(props) {
+    var log = props.log;
+    var userWeight = Number(props.userWeight) || 0;
+    var yearlyPeaks = props.yearlyPeaks;
+    var chartRef = useRef(null);
+    var chartInst = useRef(null);
+    var depKey = sessionPowerChartKey(log, yearlyPeaks, userWeight);
+
+    useEffect(function() {
+      if (chartInst.current) {
+        chartInst.current.destroy();
+        chartInst.current = null;
+      }
+      if (!log || typeof Chart === 'undefined') return;
+      var ctx = chartRef.current && chartRef.current.getContext('2d');
+      if (!ctx) return;
+      var rows = [
+        { label: '최대 파워', shortLabel: 'M', field: 'max_watts', val: Number(log.max_watts) || 0 },
+        { label: '1분', shortLabel: '1분', field: 'max_1min_watts', val: Number(log.max_1min_watts) || 0 },
+        { label: '5분', shortLabel: '5분', field: 'max_5min_watts', val: Number(log.max_5min_watts) || 0 },
+        { label: '10분', shortLabel: '10', field: 'max_10min_watts', val: Number(log.max_10min_watts) || 0 },
+        { label: '20분', shortLabel: '20', field: 'max_20min_watts', val: Number(log.max_20min_watts) || 0 },
+        { label: '40분', shortLabel: '40', field: 'max_40min_watts', val: Number(log.max_40min_watts) || 0 },
+        { label: '60분', shortLabel: '60', field: 'max_60min_watts', val: Number(log.max_60min_watts) || 0 }
+      ];
+      var wattsValues = rows.map(function(r) { return r.val; });
+      var avgGuide = Number(log.avg_watts) > 0 ? Number(log.avg_watts) : 0;
+      var hasAnyBar = wattsValues.some(function(w) { return w > 0; });
+      if (!hasAnyBar) return;
+
+      var wKg = userWeight > 0 ? Math.max(userWeight, 45) : 0;
+      var numsForMax = wattsValues.slice();
+      if (avgGuide > 0) numsForMax.push(avgGuide);
+      var maxW = Math.max.apply(null, numsForMax.filter(function(n) { return n > 0; }));
+      var yMax = Math.ceil(maxW * 1.15 / 50) * 50 || 350;
+
+      var prFn = typeof window.isPrField === 'function'
+        ? function(field) { return window.isPrField(log, yearlyPeaks, field, userWeight); }
+        : function() { return false; };
+
+      var barBorderColors = rows.map(function(r, i) {
+        return prFn(r.field) ? 'rgba(234, 179, 8, 1)' : borderRgbFromZone(i);
+      });
+      var barBorderWidths = rows.map(function(r, i) {
+        return prFn(r.field) ? 2 : 1;
+      });
+
+      var labels = rows.map(function(r) { return r.label; });
+      var plugin = {
+        id: 'journalPowerPeakLabels',
+        afterDatasetsDraw: function(chart) {
+          var meta = chart.getDatasetMeta(0);
+          if (!meta || !meta.data || meta.data.length === 0) return;
+          var chartArea = chart.chartArea;
+          var bottom = chartArea.bottom;
+          var radius = 10;
+          var circleY = bottom + radius + 4;
+          chart.ctx.save();
+          chart.ctx.font = '11px sans-serif';
+          chart.ctx.textAlign = 'center';
+          meta.data.forEach(function(bar, i) {
+            if (!bar || bar.x == null || bar.y == null) return;
+            var row = rows[i];
+            if (row.val > 0) {
+              chart.ctx.fillStyle = '#374151';
+              if (wKg > 0) {
+                var wkg = Math.round((row.val / wKg) * 100) / 100;
+                chart.ctx.fillText(wkg.toFixed(2), bar.x, bar.y - 6);
+              } else {
+                chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
+              }
+            }
+            var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+            chart.ctx.beginPath();
+            chart.ctx.arc(bar.x, circleY, radius, 0, Math.PI * 2);
+            chart.ctx.fillStyle = color;
+            chart.ctx.fill();
+            chart.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            chart.ctx.lineWidth = 1;
+            chart.ctx.stroke();
+            chart.ctx.fillStyle = '#1f2937';
+            chart.ctx.font = 'bold 8px sans-serif';
+            chart.ctx.fillText(row.shortLabel, bar.x, circleY + 3);
+          });
+          if (chartArea) {
+            chart.ctx.font = '10px sans-serif';
+            chart.ctx.fillStyle = '#9ca3af';
+            chart.ctx.fillText(wKg > 0 ? 'W/kg' : 'W', (chartArea.left + chartArea.right) / 2, chartArea.top - 6);
+          }
+          chart.ctx.restore();
+        }
+      };
+
+      var datasets = [
+        {
+          type: 'bar',
+          label: '파워 (W)',
+          data: wattsValues,
+          backgroundColor: rows.map(function(d, i) { return JOURNAL_PEAK_ZONE_COLORS[i]; }),
+          borderColor: barBorderColors,
+          borderWidth: barBorderWidths,
+          borderRadius: { topLeft: 6, topRight: 6 },
+          order: 0
+        }
+      ];
+      if (avgGuide > 0) {
+        datasets.push({
+          type: 'line',
+          label: '평균 파워',
+          data: labels.map(function() { return avgGuide; }),
+          borderColor: AVG_GUIDE_LINE,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          hitRadius: 0,
+          fill: false,
+          order: 1,
+          tension: 0
+        });
+      }
+
+      chartInst.current = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 36, bottom: 44 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  var i = ctx.dataIndex;
+                  if (ctx.datasetIndex === 1) return '평균 파워: ' + Math.round(avgGuide) + ' W';
+                  if (rows[i] && rows[i].val > 0) {
+                    var parts = [rows[i].label + ': ' + Math.round(rows[i].val) + ' W'];
+                    if (wKg > 0) parts.push('W/kg: ' + (Math.round((rows[i].val / wKg) * 100) / 100).toFixed(2));
+                    return parts;
+                  }
+                  return rows[i] ? rows[i].label + ': —' : '';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              max: yMax,
+              grid: { color: '#e5e7eb' },
+              ticks: {
+                font: { size: 11 },
+                color: '#6b7280',
+                callback: function(v) {
+                  return v === 0 ? '0W' : String(v);
+                }
+              }
+            }
+          }
+        },
+        plugins: [plugin]
+      });
+
+      return function cleanup() {
+        if (chartInst.current) {
+          chartInst.current.destroy();
+          chartInst.current = null;
+        }
+      };
+    }, [depKey]);
+
+    if (!log) return null;
+    var wv = [
+      Number(log.max_watts) || 0,
+      Number(log.max_1min_watts) || 0,
+      Number(log.max_5min_watts) || 0,
+      Number(log.max_10min_watts) || 0,
+      Number(log.max_20min_watts) || 0,
+      Number(log.max_40min_watts) || 0,
+      Number(log.max_60min_watts) || 0
+    ];
+    if (!wv.some(function(x) { return x > 0; })) {
+      return React.createElement('div', { className: 'journal-peak-chart-empty' }, '피크 파워 데이터가 없습니다.');
+    }
+
+    return React.createElement('div', { className: 'journal-peak-chart-wrap' },
+      React.createElement('canvas', { ref: chartRef })
+    );
+  }
+
+  /**
+   * 세션 심박 피크 막대 + 평균 심박 가이드(주황 실선)
+   */
+  function JournalSessionHrPeakChart(props) {
+    var log = props.log;
+    var chartRef = useRef(null);
+    var chartInst = useRef(null);
+    var depKey = sessionHrChartKey(log);
+
+    useEffect(function() {
+      if (chartInst.current) {
+        chartInst.current.destroy();
+        chartInst.current = null;
+      }
+      if (!log || typeof Chart === 'undefined') return;
+      var ctx = chartRef.current && chartRef.current.getContext('2d');
+      if (!ctx) return;
+      var rows = [
+        { label: '5초', shortLabel: '5초', val: Number(log.max_hr_5sec) || 0 },
+        { label: '1분', shortLabel: '1분', val: Number(log.max_hr_1min) || 0 },
+        { label: '5분', shortLabel: '5분', val: Number(log.max_hr_5min) || 0 },
+        { label: '10분', shortLabel: '10', val: Number(log.max_hr_10min) || 0 },
+        { label: '20분', shortLabel: '20', val: Number(log.max_hr_20min) || 0 },
+        { label: '40분', shortLabel: '40', val: Number(log.max_hr_40min) || 0 },
+        { label: '60분', shortLabel: '60', val: Number(log.max_hr_60min) || 0 }
+      ];
+      var values = rows.map(function(r) { return r.val; });
+      var avgGuide = Number(log.avg_hr) > 0 ? Number(log.avg_hr) : 0;
+      var hasAnyBar = values.some(function(w) { return w > 0; });
+      if (!hasAnyBar) return;
+
+      var numsForMax = values.slice();
+      if (avgGuide > 0) numsForMax.push(avgGuide);
+      var maxH = Math.max.apply(null, numsForMax.filter(function(n) { return n > 0; }));
+      var yMax = Math.ceil(maxH * 1.12 / 5) * 5 || 200;
+
+      var labels = rows.map(function(r) { return r.label; });
+      var plugin = {
+        id: 'journalHrPeakLabels',
+        afterDatasetsDraw: function(chart) {
+          var meta = chart.getDatasetMeta(0);
+          if (!meta || !meta.data || meta.data.length === 0) return;
+          var chartArea = chart.chartArea;
+          var bottom = chartArea.bottom;
+          var radius = 10;
+          var circleY = bottom + radius + 4;
+          chart.ctx.save();
+          chart.ctx.font = '11px sans-serif';
+          chart.ctx.textAlign = 'center';
+          meta.data.forEach(function(bar, i) {
+            if (!bar || bar.x == null || bar.y == null) return;
+            var row = rows[i];
+            if (row.val > 0) {
+              chart.ctx.fillStyle = '#374151';
+              chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
+            }
+            var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+            chart.ctx.beginPath();
+            chart.ctx.arc(bar.x, circleY, radius, 0, Math.PI * 2);
+            chart.ctx.fillStyle = color;
+            chart.ctx.fill();
+            chart.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            chart.ctx.lineWidth = 1;
+            chart.ctx.stroke();
+            chart.ctx.fillStyle = '#1f2937';
+            chart.ctx.font = 'bold 8px sans-serif';
+            chart.ctx.fillText(row.shortLabel, bar.x, circleY + 3);
+          });
+          if (chartArea) {
+            chart.ctx.font = '10px sans-serif';
+            chart.ctx.fillStyle = '#9ca3af';
+            chart.ctx.fillText('bpm', (chartArea.left + chartArea.right) / 2, chartArea.top - 6);
+          }
+          chart.ctx.restore();
+        }
+      };
+
+      var datasets = [
+        {
+          type: 'bar',
+          label: '심박 (bpm)',
+          data: values,
+          backgroundColor: rows.map(function(d, i) { return JOURNAL_PEAK_ZONE_COLORS[i]; }),
+          borderColor: rows.map(function(d, i) { return borderRgbFromZone(i); }),
+          borderWidth: 1,
+          borderRadius: { topLeft: 6, topRight: 6 },
+          order: 0
+        }
+      ];
+      if (avgGuide > 0) {
+        datasets.push({
+          type: 'line',
+          label: '평균 심박',
+          data: labels.map(function() { return avgGuide; }),
+          borderColor: AVG_GUIDE_LINE,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          hitRadius: 0,
+          fill: false,
+          order: 1,
+          tension: 0
+        });
+      }
+
+      chartInst.current = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 36, bottom: 44 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  if (ctx.datasetIndex === 1) return '평균 심박: ' + Math.round(avgGuide) + ' bpm';
+                  var i = ctx.dataIndex;
+                  if (rows[i] && rows[i].val > 0) return rows[i].label + ': ' + Math.round(rows[i].val) + ' bpm';
+                  return rows[i] ? rows[i].label + ': —' : '';
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              max: yMax,
+              grid: { color: '#e5e7eb' },
+              ticks: {
+                font: { size: 11 },
+                color: '#6b7280',
+                callback: function(v) {
+                  return String(v);
+                }
+              }
+            }
+          }
+        },
+        plugins: [plugin]
+      });
+
+      return function cleanup() {
+        if (chartInst.current) {
+          chartInst.current.destroy();
+          chartInst.current = null;
+        }
+      };
+    }, [depKey]);
+
+    if (!log) return null;
+    var hv = [
+      Number(log.max_hr_5sec) || 0,
+      Number(log.max_hr_1min) || 0,
+      Number(log.max_hr_5min) || 0,
+      Number(log.max_hr_10min) || 0,
+      Number(log.max_hr_20min) || 0,
+      Number(log.max_hr_40min) || 0,
+      Number(log.max_hr_60min) || 0
+    ];
+    if (!hv.some(function(x) { return x > 0; })) {
+      return React.createElement('div', { className: 'journal-peak-chart-empty' }, '구간별 심박 데이터가 없습니다.');
+    }
+
+    return React.createElement('div', { className: 'journal-peak-chart-wrap' },
+      React.createElement('canvas', { ref: chartRef })
+    );
+  }
 
   function formatDuration(sec) {
     if (sec == null || sec === '' || Number.isNaN(Number(sec))) return '-';
@@ -188,33 +617,31 @@
     return React.createElement('div', { className: 'journal-tab-content' },
       DetailRow({ label: '평균 파워', value: log.avg_watts != null && log.avg_watts > 0 ? Math.round(log.avg_watts) + ' W' : '-', isPr: false }),
       DetailRow({ label: 'NP', value: log.weighted_watts != null && log.weighted_watts > 0 ? Math.round(log.weighted_watts) + ' W' : '-', isPr: false }),
-      DetailRow({ label: '피크 파워(1분)', value: log.max_1min_watts != null && log.max_1min_watts > 0 ? Math.round(log.max_1min_watts) + ' W' : '-', isPr: pr('max_1min_watts') }),
-      DetailRow({ label: '피크 파워(5분)', value: log.max_5min_watts != null && log.max_5min_watts > 0 ? Math.round(log.max_5min_watts) + ' W' : '-', isPr: pr('max_5min_watts') }),
-      DetailRow({ label: '피크 파워(10분)', value: log.max_10min_watts != null && log.max_10min_watts > 0 ? Math.round(log.max_10min_watts) + ' W' : '-', isPr: pr('max_10min_watts') }),
-      DetailRow({ label: '피크 파워(20분)', value: log.max_20min_watts != null && log.max_20min_watts > 0 ? Math.round(log.max_20min_watts) + ' W' : '-', isPr: pr('max_20min_watts') }),
-      DetailRow({ label: '피크 파워(30분)', value: log.max_30min_watts != null && log.max_30min_watts > 0 ? Math.round(log.max_30min_watts) + ' W' : '-', isPr: pr('max_30min_watts') }),
-      DetailRow({ label: '피크 파워(40분)', value: log.max_40min_watts != null && log.max_40min_watts > 0 ? Math.round(log.max_40min_watts) + ' W' : '-', isPr: pr('max_40min_watts') }),
-      DetailRow({ label: '피크 파워(60분)', value: log.max_60min_watts != null && log.max_60min_watts > 0 ? Math.round(log.max_60min_watts) + ' W' : '-', isPr: pr('max_60min_watts') }),
-      DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-', isPr: pr('max_watts') })
+      DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-', isPr: pr('max_watts') }),
+      React.createElement('div', { className: 'journal-peak-chart-section' },
+        React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 피크 파워'),
+        React.createElement(JournalSessionPowerPeakChart, {
+          log: log,
+          userWeight: userWeight,
+          yearlyPeaks: yearlyPeaks
+        })
+      )
     );
   }
 
   function TabHeartRate(props) {
     var log = props.log;
     var yearlyPeaks = props.yearlyPeaks;
-    var userWeight = props.userWeight || 0;
+    var userWeightForPr = props.userWeight || 0;
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
-    var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeight); };
+    var pr = function(field) { return isPr(log, yearlyPeaks, field, userWeightForPr); };
     return React.createElement('div', { className: 'journal-tab-content' },
       DetailRow({ label: '평균 심박', value: log.avg_hr != null && log.avg_hr > 0 ? Math.round(log.avg_hr) + ' bpm' : '-', isPr: false }),
       DetailRow({ label: '최대 심박', value: log.max_hr != null && log.max_hr > 0 ? Math.round(log.max_hr) + ' bpm' : '-', isPr: pr('max_hr') }),
-      DetailRow({ label: '최대 심박(5초)', value: log.max_hr_5sec != null && log.max_hr_5sec > 0 ? Math.round(log.max_hr_5sec) + ' bpm' : '-', isPr: false }),
-      DetailRow({ label: '최대 심박(1분)', value: log.max_hr_1min != null && log.max_hr_1min > 0 ? Math.round(log.max_hr_1min) + ' bpm' : '-', isPr: false }),
-      DetailRow({ label: '최대 심박(5분)', value: log.max_hr_5min != null && log.max_hr_5min > 0 ? Math.round(log.max_hr_5min) + ' bpm' : '-', isPr: false }),
-      DetailRow({ label: '최대 심박(10분)', value: log.max_hr_10min != null && log.max_hr_10min > 0 ? Math.round(log.max_hr_10min) + ' bpm' : '-', isPr: false }),
-      DetailRow({ label: '최대 심박(20분)', value: log.max_hr_20min != null && log.max_hr_20min > 0 ? Math.round(log.max_hr_20min) + ' bpm' : '-', isPr: false }),
-      DetailRow({ label: '최대 심박(40분)', value: log.max_hr_40min != null && log.max_hr_40min > 0 ? Math.round(log.max_hr_40min) + ' bpm' : '-', isPr: false }),
-      DetailRow({ label: '최대 심박(60분)', value: log.max_hr_60min != null && log.max_hr_60min > 0 ? Math.round(log.max_hr_60min) + ' bpm' : '-', isPr: false })
+      React.createElement('div', { className: 'journal-peak-chart-section' },
+        React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 최대 심박'),
+        React.createElement(JournalSessionHrPeakChart, { log: log })
+      )
     );
   }
 
