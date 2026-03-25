@@ -191,7 +191,7 @@
       var ctx = chartRef.current && chartRef.current.getContext('2d');
       if (!ctx) return;
       var rows = [
-        { label: '최대 파워', shortLabel: 'M', field: 'max_watts', val: Number(log.max_watts) || 0 },
+        { label: '최대 파워', shortLabel: 'Max', field: 'max_watts', val: Number(log.max_watts) || 0 },
         { label: '1분', shortLabel: '1분', field: 'max_1min_watts', val: Number(log.max_1min_watts) || 0 },
         { label: '5분', shortLabel: '5분', field: 'max_5min_watts', val: Number(log.max_5min_watts) || 0 },
         { label: '10분', shortLabel: '10', field: 'max_10min_watts', val: Number(log.max_10min_watts) || 0 },
