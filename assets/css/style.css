@@ -4933,7 +4933,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: var(--ftp-line-bottom, 57.14%); /* Zone 4 = FTP 91~105% → 4/7 ≈ 57.14% */
+  bottom: var(--ftp-line-bottom, 57.14%); /* FTP 100% 기준선(Zone4 상단 ≈ 4/7) — 막대 높이는 이 선에 대해 FTP% 비례 */
   height: 0;
   border-top: 1px dashed rgba(249, 115, 22, 0.35);
   pointer-events: none;
