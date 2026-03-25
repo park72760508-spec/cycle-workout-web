@@ -109,6 +109,21 @@
     return c.replace('0.7)', '1)').replace('0.55)', '1)');
   }
 
+  /**
+   * Heart Rate 막대 PR: 구간 필드 PR 또는
+   * 최대심박(max_hr) PR인데 5초 값이 최대심박과 동일한 경우 5초 막대에 PR 표시
+   */
+  function hrPeakBarIsPr(row, log, prFn) {
+    if (!row || !log || typeof prFn !== 'function') return false;
+    if (prFn(row.field)) return true;
+    if (row.field !== 'max_hr_5sec' || !(row.val > 0)) return false;
+    var maxHr = Number(log.max_hr) || 0;
+    var hr5 = Number(log.max_hr_5sec) || 0;
+    if (maxHr <= 0 || hr5 <= 0) return false;
+    if (Math.round(maxHr) !== Math.round(hr5)) return false;
+    return prFn('max_hr');
+  }
+
   function sessionPowerChartKey(log, yearlyPeaks, userWeight) {
     if (!log) return '';
     var peakParts = [];
@@ -136,6 +151,7 @@
     if (!log) return '';
     var peakParts = [];
     if (yearlyPeaks) {
+      peakParts.push(yearlyPeaks.max_hr);
       ['max_hr_5sec', 'max_hr_1min', 'max_hr_5min', 'max_hr_10min', 'max_hr_20min', 'max_hr_40min', 'max_hr_60min'].forEach(function(f) {
         peakParts.push(yearlyPeaks[f]);
       });
@@ -144,6 +160,7 @@
       userWeight,
       peakParts.join(','),
       log.avg_hr,
+      log.max_hr,
       log.max_hr_5sec,
       log.max_hr_1min,
       log.max_hr_5min,
@@ -385,7 +402,8 @@
       var prFn = typeof window.isPrField === 'function'
         ? function(field) { return window.isPrField(log, yearlyPeaks, field, userWeight); }
         : function() { return false; };
-      var hasChartPr = rows.some(function(r) { return r.val > 0 && prFn(r.field); });
+      var hrPeakPr = function(row) { return hrPeakBarIsPr(row, log, prFn); };
+      var hasChartPr = rows.some(function(r) { return r.val > 0 && hrPeakPr(r); });
 
       var numsForMax = values.slice();
       if (avgGuide > 0) numsForMax.push(avgGuide);
@@ -412,7 +430,7 @@
                 String(Math.round(row.val)),
                 bar.x,
                 bar.y - 12,
-                prFn(row.field)
+                hrPeakPr(row)
               );
             }
             var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
@@ -480,7 +498,7 @@
                   var i = ctx.dataIndex;
                   if (rows[i] && rows[i].val > 0) {
                     var line = rows[i].label + ': ' + Math.round(rows[i].val) + ' bpm';
-                    return prFn(rows[i].field) ? [line, 'PR'] : line;
+                    return hrPeakPr(rows[i]) ? [line, 'PR'] : line;
                   }
                   return rows[i] ? rows[i].label + ': —' : '';
                 }
