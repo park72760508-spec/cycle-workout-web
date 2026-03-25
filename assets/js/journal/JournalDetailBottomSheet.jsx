@@ -28,6 +28,9 @@
 
   var AVG_GUIDE_LINE = 'rgba(249, 115, 22, 0.45)';
 
+  /** journal-detail-value와 동일: 14px, font-weight 600 */
+  var JOURNAL_PEAK_BAR_VALUE_FONT = '600 14px sans-serif';
+
   function borderRgbFromZone(i) {
     var c = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
     return c.replace('0.7)', '1)').replace('0.55)', '1)');
@@ -131,19 +134,14 @@
           var radius = 10;
           var circleY = bottom + radius + 4;
           chart.ctx.save();
-          chart.ctx.font = '11px sans-serif';
           chart.ctx.textAlign = 'center';
           meta.data.forEach(function(bar, i) {
             if (!bar || bar.x == null || bar.y == null) return;
             var row = rows[i];
             if (row.val > 0) {
               chart.ctx.fillStyle = '#374151';
-              if (wKg > 0) {
-                var wkg = Math.round((row.val / wKg) * 100) / 100;
-                chart.ctx.fillText(wkg.toFixed(2), bar.x, bar.y - 6);
-              } else {
-                chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
-              }
+              chart.ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
+              chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
             }
             var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
             chart.ctx.beginPath();
@@ -160,7 +158,7 @@
           if (chartArea) {
             chart.ctx.font = '10px sans-serif';
             chart.ctx.fillStyle = '#9ca3af';
-            chart.ctx.fillText(wKg > 0 ? 'W/kg' : 'W', (chartArea.left + chartArea.right) / 2, chartArea.top - 6);
+            chart.ctx.fillText('W', (chartArea.left + chartArea.right) / 2, chartArea.top - 6);
           }
           chart.ctx.restore();
         }
@@ -314,13 +312,13 @@
           var radius = 10;
           var circleY = bottom + radius + 4;
           chart.ctx.save();
-          chart.ctx.font = '11px sans-serif';
           chart.ctx.textAlign = 'center';
           meta.data.forEach(function(bar, i) {
             if (!bar || bar.x == null || bar.y == null) return;
             var row = rows[i];
             if (row.val > 0) {
               chart.ctx.fillStyle = '#374151';
+              chart.ctx.font = JOURNAL_PEAK_BAR_VALUE_FONT;
               chart.ctx.fillText(String(Math.round(row.val)), bar.x, bar.y - 6);
             }
             var color = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
