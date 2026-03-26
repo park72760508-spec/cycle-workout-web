@@ -3428,6 +3428,23 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin: 0;
   line-height: 1.3;
 }
+.weekly-top10-dont-show-today {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #4b5563;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.3;
+}
+.weekly-top10-dont-show-today input {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: #7c3aed;
+}
 
 /* 주간 마일리지 TOP10 순위 확정 후 도장 오버레이 (순위표 정중앙, 1/4 크기, -45도 회전) */
 .weekly-top10-body-inner {
@@ -4297,6 +4314,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   }
   .weekly-top10-points {
     font-size: 0.7em; /* 기간 문구와 동일 */
+  }
+  .weekly-top10-dont-show-today {
+    font-size: 12px;
   }
 
   .training-detail-body {
