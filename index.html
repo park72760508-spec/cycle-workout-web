@@ -2535,7 +2535,7 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="훈련 일지"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('aiScheduleScreen'); if (typeof loadAIScheduleScreen === 'function') { setTimeout(loadAIScheduleScreen, 200); } }" title="훈련 스케줄"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-dashboard" id="btnCareerDashboard" onclick="if (typeof showScreen === 'function') { showScreen('performanceDashboardScreen'); }" title="대시보드"></button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-ranking" id="btnCareerRanking" onclick="if (typeof fetchAndShowWeeklyTop10Modal === 'function') fetchAndShowWeeklyTop10Modal();" title="랭킹보드"></button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-ranking" id="btnCareerRanking" onclick="if (typeof fetchAndShowWeeklyTop10Modal === 'function') fetchAndShowWeeklyTop10Modal(true);" title="랭킹보드"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }" title="사용자 정보"></button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-subscribe" id="btnCareerSubscribe" title="구독하기"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-settings" id="btnCareerLogo" onclick="if (typeof openSettingsModal === 'function') openSettingsModal();" title="환경설정"></button>
@@ -7069,6 +7069,10 @@
      * 주간 마일리지 TOP10 모달 닫기
      */
     function closeWeeklyTop10Modal() {
+      var cb = document.getElementById('weeklyTop10DontShowToday');
+      if (cb && cb.checked) {
+        setWeeklyTop10SuppressToday();
+      }
       const modal = document.getElementById('weeklyTop10Modal');
       if (modal) {
         modal.classList.add('hidden');
@@ -7101,16 +7105,46 @@
       }
     }
 
+    /** Asia/Seoul 기준 오늘 날짜 YYYY-MM-DD (오늘 그만 보기 판별용) */
+    function getSeoulDateStringYYYYMMDD() {
+      try {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      } catch (e) {
+        return new Date().toISOString().slice(0, 10);
+      }
+    }
+
+    var WEEKLY_TOP10_DONT_SHOW_LS = 'weeklyTop10DontShowDate';
+
+    function isWeeklyTop10SuppressActive() {
+      try {
+        var saved = localStorage.getItem(WEEKLY_TOP10_DONT_SHOW_LS);
+        return !!saved && saved === getSeoulDateStringYYYYMMDD();
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function setWeeklyTop10SuppressToday() {
+      try {
+        localStorage.setItem(WEEKLY_TOP10_DONT_SHOW_LS, getSeoulDateStringYYYYMMDD());
+      } catch (e) {}
+    }
+
     /**
      * 주간 마일리지 TOP10 조회 후 모달 표시 (Choose Your Path 입장 시 호출)
      * 로딩 시 녹색 큰 원 스피너 표시 → 조회 완료 시 랭킹 목록으로 교체.
      * 새 주 시작 후 현재주 순위자가 없으면 전주 랭킹을 확정 도장과 함께 표시. 현재주 순위자가 있으면 전주는 표시하지 않음.
      * 매주 일요일 21시 순위 확정 이후에는 화면 중앙에 crop1.png 이미지 표시.
+     * @param {boolean} [force] - true면 '오늘 그만 보기' 무시 (나의 기록 랭킹보드 버튼 등)
      */
-    async function fetchAndShowWeeklyTop10Modal() {
+    async function fetchAndShowWeeklyTop10Modal(force) {
+      if (!force && isWeeklyTop10SuppressActive()) return;
       const modal = document.getElementById('weeklyTop10Modal');
       const body = document.getElementById('weeklyTop10Body');
       if (!modal || !body) return;
+      var dontShowCb = document.getElementById('weeklyTop10DontShowToday');
+      if (dontShowCb) dontShowCb.checked = false;
       body.innerHTML = getWeeklyTop10LoadingHtml();
       modal.classList.remove('hidden');
       try {
@@ -17857,6 +17891,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <h3 class="training-detail-title">STELVIO 주간 마일리지 TOP10</h3>
           <p class="weekly-top10-period">기간 : 매주 월~일요일까지 (일요일 21시 순위 확정)</p>
           <p class="weekly-top10-points">*포인트 적립 : 1위(100SP), 2위(50SP), 3위(30SP)</p>
+          <label class="weekly-top10-dont-show-today" for="weeklyTop10DontShowToday">
+            <input type="checkbox" id="weeklyTop10DontShowToday" />
+            <span>오늘 그만 보기</span>
+          </label>
         </div>
         <button class="training-detail-close" onclick="closeWeeklyTop10Modal()" aria-label="닫기">✖</button>
       </div>
