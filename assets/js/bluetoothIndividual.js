@@ -5248,7 +5248,7 @@ function initializeUserInfo() {
 function initializeBluetoothIndividualWakeLockForSPA() {
     if (window.__bluetoothIndividualWakeLockInitialized) return;
     window.__bluetoothIndividualWakeLockInitialized = true;
-    var wakeLock = null;
+    var wlScreenRef = { wakeLock: null };
     var wakeLockVideo = null;
     var videoWakeLockInterval = null;
     var wakeLockCheckInterval = null;
@@ -5293,7 +5293,7 @@ function initializeBluetoothIndividualWakeLockForSPA() {
         if (wakeLockCheckInterval) return;
         wakeLockCheckInterval = setInterval(function () {
             if (document.visibilityState !== 'visible' || !isTrainingActive()) return;
-            var needReacquire = !wakeLock || (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended));
+            var needReacquire = !wlScreenRef.wakeLock || (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended));
             if (needReacquire) {
                 console.log('[BluetoothIndividual Wake Lock] 주기 체크: 재요청');
                 requestWakeLock();
@@ -5308,12 +5308,12 @@ function initializeBluetoothIndividualWakeLockForSPA() {
         }
         if (wakeLockSupported) {
             try {
-                if (wakeLock) return;
+                if (wlScreenRef.wakeLock) return;
                 navigator.wakeLock.request('screen').then(function (wl) {
-                    wakeLock = wl;
+                    wlScreenRef.wakeLock = wl;
                     console.log('[BluetoothIndividual Wake Lock] Screen Wake Lock 활성화');
                     wl.addEventListener('release', function () {
-                        wakeLock = null;
+                        wlScreenRef.wakeLock = null;
                         if (document.visibilityState === 'visible' && isTrainingActive()) requestWakeLock();
                     });
                     if ((isIOS() || isAndroid()) && !wakeLockVideo) startVideoWakeLock();
@@ -5332,8 +5332,19 @@ function initializeBluetoothIndividualWakeLockForSPA() {
     }
     function releaseWakeLock() {
         if (wakeLockCheckInterval) { clearInterval(wakeLockCheckInterval); wakeLockCheckInterval = null; }
-        if (wakeLock) {
-            wakeLock.release().then(function () { wakeLock = null; console.log('[BluetoothIndividual Wake Lock] 해제'); }).catch(function () { wakeLock = null; });
+        if (wlScreenRef.wakeLock) {
+            try {
+                if (typeof WakeLockManager !== 'undefined') {
+                    WakeLockManager.releaseScreenWakeLock(wlScreenRef, '[BluetoothIndividual Wake Lock]').catch(function (err) {
+                        console.warn('[BluetoothIndividual Wake Lock] 해제 실패:', err);
+                    });
+                } else {
+                    wlScreenRef.wakeLock.release().then(function () { wlScreenRef.wakeLock = null; console.log('[BluetoothIndividual Wake Lock] 해제'); }).catch(function () { wlScreenRef.wakeLock = null; });
+                }
+            } catch (e) {
+                console.warn('[BluetoothIndividual Wake Lock] 해제 예외:', e);
+                wlScreenRef.wakeLock = null;
+            }
         }
         if (videoWakeLockInterval) { clearInterval(videoWakeLockInterval); videoWakeLockInterval = null; }
         if (wakeLockVideo) {
@@ -5346,11 +5357,19 @@ function initializeBluetoothIndividualWakeLockForSPA() {
         }
     }
     document.addEventListener('visibilitychange', function () {
-        // 통화·문자·카톡 등으로 이탈 후 복귀 시 화면꺼짐 방지 재설정 (브라우저가 백그라운드 시 lock 해제함)
-        if (document.visibilityState === 'visible' && isTrainingActive()) {
-            requestWakeLock();
+        if (document.visibilityState !== 'visible' || !isTrainingActive()) return;
+        (async function () {
+            try {
+                var useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
+                if (useScreenApi && typeof WakeLockManager !== 'undefined') {
+                    await WakeLockManager.reacquireScreenWakeLockOnForeground(wlScreenRef, '[BluetoothIndividual Wake Lock]');
+                }
+                await Promise.resolve(requestWakeLock());
+            } catch (err) {
+                console.warn('[BluetoothIndividual Wake Lock] visibility 재획득 실패:', err);
+            }
             if (wakeLockVideo && wakeLockVideo.paused) wakeLockVideo.play().catch(function () {});
-        }
+        })();
     });
     var activateOnFirstInteraction = function () {
         if (isTrainingActive()) requestWakeLock();

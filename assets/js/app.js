@@ -844,48 +844,58 @@ function hideAllScreens() {
    Screen Wake Lock (화면 항상 켜짐)
    ================================ */
 const ScreenAwake = (() => {
-  let wakeLock = null;
+  const stateRef = { wakeLock: null };
 
   async function acquire() {
-    if (!('wakeLock' in navigator)) {
-      console.warn('[ScreenAwake] Wake Lock API not supported in this browser.');
-      return; // iOS 일부/구형 브라우저는 미지원
-    }
     try {
-      // 이미 있으면 재요청하지 않음
-      if (wakeLock) return;
-      wakeLock = await navigator.wakeLock.request('screen');
+      if (typeof WakeLockManager !== 'undefined') {
+        await WakeLockManager.requestScreenWakeLock(stateRef, '[ScreenAwake]');
+        return;
+      }
+      if (!('wakeLock' in navigator)) {
+        console.warn('[ScreenAwake] Wake Lock API not supported in this browser.');
+        return;
+      }
+      if (stateRef.wakeLock) return;
+      stateRef.wakeLock = await navigator.wakeLock.request('screen');
       console.log('[ScreenAwake] acquired');
-
-      // 시스템이 임의로 해제했을 때 플래그 정리
-      wakeLock.addEventListener('release', () => {
+      stateRef.wakeLock.addEventListener('release', () => {
         console.log('[ScreenAwake] released by system');
-        wakeLock = null;
+        stateRef.wakeLock = null;
       });
     } catch (err) {
       console.warn('[ScreenAwake] acquire failed:', err);
-      wakeLock = null;
+      stateRef.wakeLock = null;
     }
   }
 
   async function release() {
     try {
-      if (wakeLock) {
-        await wakeLock.release();
+      if (typeof WakeLockManager !== 'undefined') {
+        await WakeLockManager.releaseScreenWakeLock(stateRef, '[ScreenAwake]');
+        return;
+      }
+      if (stateRef.wakeLock) {
+        await stateRef.wakeLock.release();
         console.log('[ScreenAwake] released by app');
       }
     } catch (err) {
       console.warn('[ScreenAwake] release failed:', err);
     } finally {
-      wakeLock = null;
+      stateRef.wakeLock = null;
     }
   }
 
-  // 탭/앱이 다시 보이면(복귀) 필요 시 자동 재획득
   async function reAcquireIfNeeded() {
-    // 훈련 중인 상태에서만 재요청 (isRunning은 아래 훅에서 관리)
-    if (document.visibilityState === 'visible' && window?.trainingState?.isRunning) {
+    if (document.visibilityState !== 'visible' || !window?.trainingState?.isRunning) return;
+    try {
+      if (typeof WakeLockManager !== 'undefined') {
+        await WakeLockManager.reacquireScreenWakeLockOnForeground(stateRef, '[ScreenAwake]');
+        return;
+      }
       await acquire();
+    } catch (err) {
+      console.warn('[ScreenAwake] reAcquireIfNeeded failed:', err);
     }
   }
 
@@ -893,10 +903,6 @@ const ScreenAwake = (() => {
     document.addEventListener('visibilitychange', reAcquireIfNeeded);
     window.addEventListener('pageshow', reAcquireIfNeeded);
     window.addEventListener('focus', reAcquireIfNeeded);
-
-    ScreenAwake.init();
-
-    // 백그라운드/페이지 전환 시에는 안전하게 해제 (브라우저가 자동 해제해도 무방)
     window.addEventListener('pagehide', release);
   }
 
@@ -14832,13 +14838,24 @@ function initializeMobileDashboardWakeLock() {
       console.log('[Mobile Dashboard Wake Lock] 주기적 재요청 체크 중지');
     }
     if (wakeLockState.wakeLock !== null) {
-      wakeLockState.wakeLock.release().then(() => {
+      try {
+        if (typeof WakeLockManager !== 'undefined') {
+          WakeLockManager.releaseScreenWakeLock(wakeLockState, '[Mobile Dashboard Wake Lock]').catch(err => {
+            console.warn('[Mobile Dashboard Wake Lock] 해제 실패:', err);
+          });
+        } else {
+          wakeLockState.wakeLock.release().then(() => {
+            wakeLockState.wakeLock = null;
+            console.log('[Mobile Dashboard Wake Lock] Screen Wake Lock 해제됨');
+          }).catch(err => {
+            console.warn('[Mobile Dashboard Wake Lock] 해제 실패:', err);
+            wakeLockState.wakeLock = null;
+          });
+        }
+      } catch (err) {
+        console.warn('[Mobile Dashboard Wake Lock] 해제 예외:', err);
         wakeLockState.wakeLock = null;
-        console.log('[Mobile Dashboard Wake Lock] Screen Wake Lock 해제됨');
-      }).catch(err => {
-        console.warn('[Mobile Dashboard Wake Lock] 해제 실패:', err);
-        wakeLockState.wakeLock = null;
-      });
+      }
     }
     
     // 비디오 트릭 주기적 확인 중지
@@ -14867,23 +14884,24 @@ function initializeMobileDashboardWakeLock() {
     wakeLockState.isActive = false;
   }
   
-  // 페이지 가시성 변경 시 재요청 (훈련 진행 중일 때만)
+  // 페이지 가시성 변경 시 재요청 (Background → Foreground 시 Screen Wake Lock 재획득)
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible') {
-      // 훈련 진행 중일 때만 Wake Lock 재요청
-      const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
-      if (isTrainingRunning && wakeLockState.isActive) {
-        // 페이지가 다시 보이면 Wake Lock 재요청
-        if (wakeLockSupported && !wakeLockState.wakeLock) {
-          await requestWakeLock();
-        }
-        // 비디오 트릭도 재시작
-        if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
-          wakeLockState.wakeLockVideo.play().catch(err => {
-            console.warn('[Mobile Dashboard Video Wake Lock] 재시작 실패:', err);
-          });
-        }
+    if (document.visibilityState !== 'visible') return;
+    const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
+    if (!isTrainingRunning || !wakeLockState.isActive) return;
+    try {
+      const useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
+      if (useScreenApi && typeof WakeLockManager !== 'undefined') {
+        await WakeLockManager.reacquireScreenWakeLockOnForeground(wakeLockState, '[Mobile Dashboard Wake Lock]');
       }
+      await requestWakeLock();
+    } catch (err) {
+      console.warn('[Mobile Dashboard Wake Lock] visibility 재획득 실패:', err);
+    }
+    if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
+      wakeLockState.wakeLockVideo.play().catch(err => {
+        console.warn('[Mobile Dashboard Video Wake Lock] 재시작 실패:', err);
+      });
     }
   });
   
@@ -15053,12 +15071,23 @@ function initializeLaptopTrainingWakeLock() {
       wakeLockState.wakeLockCheckInterval = null;
     }
     if (wakeLockState.wakeLock) {
-      wakeLockState.wakeLock.release().then(function () {
+      try {
+        if (typeof WakeLockManager !== 'undefined') {
+          WakeLockManager.releaseScreenWakeLock(wakeLockState, '[Laptop Training Wake Lock]').catch(function (err) {
+            console.warn('[Laptop Training Wake Lock] 해제 실패:', err);
+          });
+        } else {
+          wakeLockState.wakeLock.release().then(function () {
+            wakeLockState.wakeLock = null;
+            console.log('[Laptop Training Wake Lock] Screen Wake Lock 해제됨');
+          }).catch(function () {
+            wakeLockState.wakeLock = null;
+          });
+        }
+      } catch (e) {
+        console.warn('[Laptop Training Wake Lock] 해제 예외:', e);
         wakeLockState.wakeLock = null;
-        console.log('[Laptop Training Wake Lock] Screen Wake Lock 해제됨');
-      }).catch(function (err) {
-        wakeLockState.wakeLock = null;
-      });
+      }
     }
     if (wakeLockState.videoWakeLockInterval) {
       clearInterval(wakeLockState.videoWakeLockInterval);
@@ -15083,12 +15112,20 @@ function initializeLaptopTrainingWakeLock() {
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') return;
     if (!isLaptopTrainingRunning() || !wakeLockState.isActive) return;
-    if (wakeLockSupported && !wakeLockState.wakeLock) {
-      requestWakeLock();
-    }
-    if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
-      wakeLockState.wakeLockVideo.play().catch(function () {});
-    }
+    (async function () {
+      try {
+        var useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
+        if (useScreenApi && typeof WakeLockManager !== 'undefined') {
+          await WakeLockManager.reacquireScreenWakeLockOnForeground(wakeLockState, '[Laptop Training Wake Lock]');
+        }
+        await Promise.resolve(requestWakeLock());
+      } catch (err) {
+        console.warn('[Laptop Training Wake Lock] visibility 재획득 실패:', err);
+      }
+      if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
+        wakeLockState.wakeLockVideo.play().catch(function () {});
+      }
+    })();
   });
 
   window.laptopTrainingWakeLockControl = {
