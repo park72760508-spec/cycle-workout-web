@@ -1436,6 +1436,7 @@ async function apiUpdateUser(id, userData) {
     if (userData.strava_refresh_token != null) updateData.strava_refresh_token = String(userData.strava_refresh_token);
     if (userData.strava_expires_at != null) updateData.strava_expires_at = Number(userData.strava_expires_at);
     if (userData.is_private != null) updateData.is_private = userData.is_private === true;
+    if (userData.gemini_api_registered != null) updateData.gemini_api_registered = userData.gemini_api_registered === true;
     
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
@@ -2189,6 +2190,44 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
 }
 
 /**
+ * 프로필 관리자 통계: A=Gemini API 등록(gemini_api_registered 또는 gemini_api_key), S=Strava 토큰 보유
+ */
+function userHasGeminiApiRegistered(u) {
+  if (!u || typeof u !== 'object') return false;
+  if (u.gemini_api_registered === true) return true;
+  const k = u.gemini_api_key != null ? String(u.gemini_api_key).trim() : '';
+  return k.length > 0;
+}
+
+function userHasStravaConnected(u) {
+  if (!u || typeof u !== 'object') return false;
+  const r = u.strava_refresh_token != null ? String(u.strava_refresh_token).trim() : '';
+  const a = u.strava_access_token != null ? String(u.strava_access_token).trim() : '';
+  return !!(r || a);
+}
+
+function countProfileIntegrationStats(users) {
+  if (!Array.isArray(users)) return { a: 0, s: 0 };
+  let a = 0;
+  let s = 0;
+  for (const u of users) {
+    if (userHasGeminiApiRegistered(u)) a++;
+    if (userHasStravaConnected(u)) s++;
+  }
+  return { a, s };
+}
+
+function setProfileSearchUserCountText(userArray) {
+  const el = document.getElementById('profileSearchUserCount');
+  if (!el || !Array.isArray(userArray)) return;
+  const st = countProfileIntegrationStats(userArray);
+  el.textContent = '등록된 사용자: ' + userArray.length + '명 (A:' + st.a + '명, S:' + st.s + '명)';
+}
+
+window.countProfileIntegrationStats = countProfileIntegrationStats;
+window.setProfileSearchUserCountText = setProfileSearchUserCountText;
+
+/**
  * 프로필 화면 사용자 카드 목록 렌더링 (loadUsers / searchProfileUsers 공용)
  * @param {Array} usersToRender - 렌더할 사용자 배열
  * @param {string} viewerGrade - 뷰어 등급
@@ -2199,10 +2238,10 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
   const userList = document.getElementById('userList');
   if (!userList) return;
   const maxHrMap = maxHrByUser || {};
-  let hasAiKey = false;
+  let hasAiKeyLocal = false;
   try {
     const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
-    hasAiKey = !!(key && String(key).trim());
+    hasAiKeyLocal = !!(key && String(key).trim());
   } catch (e) {}
   const canEditFor = (u) => {
     if (viewerGrade === '1') return true;
@@ -2243,7 +2282,8 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const accPoints = user.acc_points || 0;
     const remPoints = user.rem_points || 0;
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
-    const aiDot = hasAiKey ? 'background:#22c55e' : 'background:#d1d5db';
+    const hasAiForUser = hasAiKeyLocal || userHasGeminiApiRegistered(user);
+    const aiDot = hasAiForUser ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
 
     const maxHrEntry = maxHrMap[user.id];
@@ -2346,6 +2386,9 @@ function searchProfileUsers() {
   renderProfileUserCards(filtered, ctx.viewerGrade, ctx.viewerId);
   if (filtered.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
     window.refreshProfileMaxHrAndRerender(filtered, ctx.viewerGrade, ctx.viewerId).catch(() => {});
+  }
+  if (typeof setProfileSearchUserCountText === 'function') {
+    setProfileSearchUserCountText(filtered);
   }
   if (typeof showToast === 'function') {
     showToast(nameQuery || contactDigits ? `검색 결과 ${filtered.length}명` : `전체 ${filtered.length}명`);
@@ -2490,6 +2533,9 @@ async function loadUsers() {
           </div>
         </div>
       `;
+      if (typeof setProfileSearchUserCountText === 'function') {
+        setProfileSearchUserCountText([]);
+      }
       return;
     }
 
@@ -2543,8 +2589,9 @@ async function loadUsers() {
         const contactInput = document.getElementById('profileSearchContact');
         if (nameInput) nameInput.value = '';
         if (contactInput) contactInput.value = '';
-        const countEl = document.getElementById('profileSearchUserCount');
-        if (countEl) countEl.textContent = '등록된 사용자: ' + visibleUsers.length + '명';
+        if (typeof setProfileSearchUserCountText === 'function') {
+          setProfileSearchUserCountText(visibleUsers);
+        }
       } else {
         searchSection.style.display = 'none';
         window._profileScreenAllUsers = null;

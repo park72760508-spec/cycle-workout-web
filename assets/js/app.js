@@ -10966,6 +10966,21 @@ async function saveGeminiApiKey() {
     try {
       window.dispatchEvent(new CustomEvent('stelvio-gemini-apikey-changed', { detail: { hasKey: true } }));
     } catch (e) { console.warn('[saveGeminiApiKey] dispatchEvent failed:', e); }
+
+    try {
+      const profileId =
+        (window.currentUser && window.currentUser.id != null && String(window.currentUser.id)) ||
+        (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
+        (window.auth && window.auth.currentUser && window.auth.currentUser.uid && String(window.auth.currentUser.uid)) ||
+        null;
+      if (profileId && typeof apiUpdateUser === 'function') {
+        apiUpdateUser(profileId, { gemini_api_registered: true }).catch(function (e) {
+          console.warn('[saveGeminiApiKey] gemini_api_registered Firestore 저장 실패:', e);
+        });
+      }
+    } catch (e) {
+      console.warn('[saveGeminiApiKey] Firestore 동기화 예외:', e);
+    }
     
     if (typeof showToast === 'function') {
       showToast('API 키가 확인되고 저장되었습니다.', 'success');
