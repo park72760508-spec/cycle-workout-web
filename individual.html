@@ -791,11 +791,12 @@
     <script src="assets/js/workoutManager.js"></script>
     <script src="assets/js/resultManager.js"></script>
     <script src="assets/js/bluetooth.js"></script>
+    <script src="assets/js/wakeLockManager.js"></script>
     
     <!-- 화면 잠금 방지 스크립트 -->
     <script>
         // 화면 잠금 방지 (Screen Wake Lock API)
-        let wakeLock = null;
+        const wakeLockStateRef = { wakeLock: null };
         let wakeLockVideo = null;
         let videoWakeLockInterval = null;
         let wakeLockCheckInterval = null;
@@ -846,15 +847,15 @@
             if (wakeLockSupported) {
                 try {
                     // 이미 활성화되어 있으면 재요청하지 않음
-                    if (wakeLock) return;
+                    if (wakeLockStateRef.wakeLock) return;
                     
-                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLockStateRef.wakeLock = await navigator.wakeLock.request('screen');
                     console.log('[Screen Wake Lock] 화면 잠금 방지 활성화');
                     
                     // 시스템이 해제했을 때 플래그 정리
-                    wakeLock.addEventListener('release', () => {
+                    wakeLockStateRef.wakeLock.addEventListener('release', () => {
                         console.log('[Screen Wake Lock] 시스템에 의해 해제됨');
-                        wakeLock = null;
+                        wakeLockStateRef.wakeLock = null;
                         // 다시 요청 시도
                         if (document.visibilityState === 'visible') {
                             requestWakeLock();
@@ -967,14 +968,19 @@
                 wakeLockCheckInterval = null;
                 console.log('[Screen Wake Lock] 주기적 재요청 체크 중지');
             }
-            if (wakeLock !== null) {
-                wakeLock.release().then(() => {
-                    wakeLock = null;
-                    console.log('[Screen Wake Lock] 화면 잠금 방지 해제');
-                }).catch(err => {
-                    console.warn('[Screen Wake Lock] 해제 실패:', err);
-                    wakeLock = null;
-                });
+            if (wakeLockStateRef.wakeLock !== null) {
+                try {
+                    wakeLockStateRef.wakeLock.release().then(() => {
+                        wakeLockStateRef.wakeLock = null;
+                        console.log('[Screen Wake Lock] 화면 잠금 방지 해제');
+                    }).catch(err => {
+                        console.warn('[Screen Wake Lock] 해제 실패:', err);
+                        wakeLockStateRef.wakeLock = null;
+                    });
+                } catch (err) {
+                    console.warn('[Screen Wake Lock] 해제 예외:', err);
+                    wakeLockStateRef.wakeLock = null;
+                }
             }
             
             // 비디오 트릭 주기적 확인 중지
@@ -1006,7 +1012,7 @@
             if (wakeLockCheckInterval) return;
             wakeLockCheckInterval = setInterval(async () => {
                 if (document.visibilityState !== 'visible' || window.currentTrainingState !== 'running') return;
-                const needReacquire = !wakeLock || (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended));
+                const needReacquire = !wakeLockStateRef.wakeLock || (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended));
                 if (needReacquire) {
                     console.log('[Screen Wake Lock] 주기 체크: 화면 꺼짐 방지 재요청');
                     await requestWakeLock();
@@ -1015,23 +1021,24 @@
             console.log('[Screen Wake Lock] 주기적 재요청 체크 시작');
         }
 
-        // 페이지 가시성 변경 시 재요청 (훈련 진행 중일 때만)
+        // 페이지 가시성 변경 시 재요청 (훈련 진행 중일 때만) — Foreground 복귀 시 Screen Wake Lock 재획득
         document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible') {
-                // 훈련 진행 중일 때만 Wake Lock 재요청
-                const isTrainingRunning = window.currentTrainingState === 'running';
-                if (isTrainingRunning) {
-                    // 페이지가 다시 보이면 Wake Lock 재요청
-                    if (wakeLockSupported && !wakeLock) {
-                        await requestWakeLock();
-                    }
-                    // 비디오 트릭도 재시작
-                    if (wakeLockVideo && wakeLockVideo.paused) {
-                        wakeLockVideo.play().catch(err => {
-                            console.warn('[Video Wake Lock] 재시작 실패:', err);
-                        });
-                    }
+            if (document.visibilityState !== 'visible') return;
+            const isTrainingRunning = window.currentTrainingState === 'running';
+            if (!isTrainingRunning) return;
+            try {
+                const useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
+                if (useScreenApi && typeof window.WakeLockManager !== 'undefined') {
+                    await window.WakeLockManager.reacquireScreenWakeLockOnForeground(wakeLockStateRef, '[Individual Wake Lock]');
                 }
+                await requestWakeLock();
+            } catch (err) {
+                console.warn('[Individual Wake Lock] visibility 재획득 실패:', err);
+            }
+            if (wakeLockVideo && wakeLockVideo.paused) {
+                wakeLockVideo.play().catch(err => {
+                    console.warn('[Video Wake Lock] 재시작 실패:', err);
+                });
             }
         });
         
