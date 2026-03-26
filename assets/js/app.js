@@ -3216,6 +3216,13 @@ if (!window.showScreen) {
   window.showScreen = function(id, skipHistory) {
     try {
       console.log(`Switching to screen: ${id}`);
+      if (id === 'accessStatsScreen') {
+        var _ag = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+        if (_ag !== '1') {
+          if (typeof showToast === 'function') showToast('관리자만 이용할 수 있습니다.');
+          return;
+        }
+      }
       
       // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 다른 화면으로 이동할 때)
       if (!skipHistory) {
@@ -3317,6 +3324,18 @@ if (!window.showScreen) {
         resetScrollForScreen();
         requestAnimationFrame(function() { resetScrollForScreen(); });
         console.log(`Successfully switched to: ${id}`);
+        if (typeof window.stelvioAnalyticsOnScreenChange === 'function') {
+          try {
+            window.stelvioAnalyticsOnScreenChange(id);
+          } catch (e) {}
+        }
+        if (id === 'accessStatsScreen' && typeof window.renderAccessStatsView === 'function') {
+          setTimeout(function () {
+            try {
+              window.renderAccessStatsView();
+            } catch (e) {}
+          }, 0);
+        }
         
         // body 스크롤 잠금/고정 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤
         if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && window.__pullToRefreshBlockerCleanup) {
@@ -13477,6 +13496,11 @@ function openSettingsModal() {
     modal.style.display = 'flex';
     // 저장된 API 키 로드
     loadGeminiApiKeyToSettings();
+  }
+  const accessRow = document.getElementById('settingsAccessStatsRow');
+  if (accessRow) {
+    const g = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+    accessRow.style.display = g === '1' ? 'flex' : 'none';
   }
 }
 
