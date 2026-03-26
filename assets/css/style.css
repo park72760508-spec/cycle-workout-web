@@ -21162,4 +21162,150 @@ body.bluetooth-individual-screen-active {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
 }
 
+/* ========== 접속 통계 (관리자) ========== */
+#accessStatsScreen.active {
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  z-index: 1000 !important;
+}
+#accessStatsScreen .access-stats-card-outer {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 20px 28px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+}
+#accessStatsScreen .access-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+#accessStatsScreen .access-stats-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+#accessStatsScreen .access-stats-close {
+  border: none;
+  background: #f1f5f9;
+  color: #475569;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+#accessStatsScreen .access-stats-close:hover {
+  background: #e2e8f0;
+}
+#accessStatsScreen .access-stats-calendar-host {
+  margin-bottom: 16px;
+}
+#accessStatsScreen .access-stats-cal-wrap {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+}
+#accessStatsScreen .access-stats-cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+#accessStatsScreen .access-stats-cal-title {
+  font-weight: 600;
+  color: #334155;
+  font-size: 15px;
+}
+#accessStatsScreen .access-stats-cal-btn {
+  border: none;
+  background: #fff;
+  color: #475569;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+}
+#accessStatsScreen .access-stats-cal-btn:hover {
+  background: #f1f5f9;
+}
+#accessStatsScreen .access-stats-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+#accessStatsScreen .access-stats-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+#accessStatsScreen .access-stats-cal-cell {
+  min-height: 36px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  cursor: pointer;
+}
+#accessStatsScreen .access-stats-cal-cell:hover:not(.empty) {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+#accessStatsScreen .access-stats-cal-cell.selected {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-weight: 600;
+}
+#accessStatsScreen .access-stats-cal-cell.empty {
+  background: transparent;
+  cursor: default;
+}
+#accessStatsScreen .access-stats-body {
+  min-height: 120px;
+}
+#accessStatsScreen .access-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+#accessStatsScreen .access-stats-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+#accessStatsScreen .access-stats-card-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+#accessStatsScreen .access-stats-card-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
 
