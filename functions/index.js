@@ -2870,6 +2870,61 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   return { entries: withRank, byCategory };
 }
 
+/** 주간 TSS 랭킹 보드: 주간 마일리지 TOP10과 동일한 TSS 합산 규칙(getWeeklyTssForUser), 성별·리그 분류는 피크 파워와 동일 */
+async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilter) {
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs;
+  const entries = [];
+  for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
+    const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (doc) => {
+        const userId = doc.id;
+        const data = doc.data();
+        const name = data.name || "(이름 없음)";
+        const gender = String(data.gender || data.sex || "").toLowerCase();
+        if (genderFilter && genderFilter !== "all") {
+          const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+          const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
+          if (match !== g) return null;
+        }
+        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+        const challenge = data.challenge || "Fitness";
+        const leagueCategory = getLeagueCategory(challenge, birthYear);
+        if (!leagueCategory) return null;
+        const totalTssRaw = await getWeeklyTssForUser(db, userId, startStr, endStr);
+        if (totalTssRaw <= 0) return null;
+        const totalTss = Math.round(totalTssRaw * 100) / 100;
+        return {
+          userId,
+          name,
+          totalTss,
+          ageCategory: leagueCategory,
+          gender,
+          is_private: data.is_private === true,
+        };
+      })
+    );
+    results.forEach((r) => { if (r) entries.push(r); });
+  }
+  entries.sort((a, b) => b.totalTss - a.totalTss);
+  const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+  const byCategory = { Supremo: withRank.slice(0, 10), Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  withRank.forEach((e) => {
+    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+  });
+  return { entries: withRank, byCategory };
+}
+
+/** 동기부여 메시지 (주간 TSS 랭킹) */
+function buildMotivationMessageTss(currentUser, nextUser) {
+  if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
+  const diffTss = Number(nextUser.totalTss) - Number(currentUser.totalTss);
+  if (diffTss <= 0) return null;
+  const need = Math.ceil(diffTss);
+  return `${currentUser.name}님 현재 ${currentUser.rank}위! 앞선 사용자와의 차이는 ${diffTss.toFixed(1)} TSS입니다. 주간 합계를 ${need} TSS 이상 더 올리면 추월할 수 있습니다. 도전해 보세요!`;
+}
+
 /** 훈련일지 5주차 구간 (오늘-6일 ~ 오늘, Asia/Seoul) — Weekly TSS Load와 동일 */
 function getWeek5RangeSeoul(todayStr) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -2915,6 +2970,9 @@ function computeOvertakeMetrics(myData, rivalData, myWeightKg) {
 /** 동기부여 메시지 생성 */
 function buildMotivationMessage(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
+  if (currentUser.totalTss != null && nextUser.totalTss != null) {
+    return buildMotivationMessageTss(currentUser, nextUser);
+  }
   const diffWkg = nextUser.wkg - currentUser.wkg;
   if (diffWkg <= 0) return null;
   const weightKg = Number(currentUser.weightKg) || 0;
@@ -2942,6 +3000,92 @@ exports.getPeakPowerRanking = onRequest(
     const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
     const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
 
+    const db = admin.firestore();
+
+    /** 주간 TSS 랭킹 탭: 기간은 주간 마일리지 TOP10과 동일(월~오늘), 월간/명예 필터 미적용 */
+    if (durationType === "tss") {
+      const { startStr, endStr } = getWeekRangeSeoul();
+      const cacheKey = `peakRanking_weekly_tss_${gender}_${startStr}_${endStr}`;
+      const cacheRef = db.collection("cache").doc(cacheKey);
+      const cacheSnap = await cacheRef.get();
+      const nowMs = Date.now();
+      if (cacheSnap.exists) {
+        const data = cacheSnap.data();
+        const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+        if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
+          let out = {
+            success: true,
+            byCategory: data.byCategory,
+            startStr,
+            endStr,
+            period: "weekly",
+            durationType: "tss",
+            gender,
+            cached: true,
+          };
+          const entries = Array.isArray(data.entries) ? data.entries : [];
+          if (uid) {
+            const cat = data.byCategory;
+            const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+            let current = null; let nextUser = null;
+            for (const c of cats) {
+              const arr = cat?.[c] || [];
+              const idx = arr.findIndex((e) => e.userId === uid);
+              if (idx >= 0) {
+                current = arr[idx];
+                nextUser = idx > 0 ? arr[idx - 1] : null;
+                break;
+              }
+            }
+            if (current) {
+              out.currentUser = current;
+              out.motivationMessage = buildMotivationMessage(current, nextUser);
+            }
+            const globalIdx = entries.findIndex((e) => e.userId === uid);
+            if (globalIdx >= 10) {
+              const e = entries[globalIdx];
+              out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, totalTss: e.totalTss, is_private: e.is_private };
+            }
+          }
+          return res.status(200).json(out);
+        }
+      }
+
+      const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
+      await cacheRef.set({
+        byCategory,
+        entries,
+        startStr,
+        endStr,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      let out = { success: true, byCategory, startStr, endStr, period: "weekly", durationType: "tss", gender };
+      if (uid) {
+        const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
+        let current = null; let nextUser = null;
+        for (const c of cats) {
+          const arr = byCategory[c] || [];
+          const idx = arr.findIndex((e) => e.userId === uid);
+          if (idx >= 0) {
+            current = arr[idx];
+            nextUser = idx > 0 ? arr[idx - 1] : null;
+            break;
+          }
+        }
+        if (current) {
+          out.currentUser = current;
+          out.motivationMessage = buildMotivationMessage(current, nextUser);
+        }
+        const globalIdx = entries.findIndex((e) => e.userId === uid);
+        if (globalIdx >= 10) {
+          const e = entries[globalIdx];
+          out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, totalTss: e.totalTss, is_private: e.is_private };
+        }
+      }
+      return res.status(200).json(out);
+    }
+
     let startStr, endStr;
     if (period === "yearly") {
       const r = getYearRangeSeoul(year);
@@ -2953,7 +3097,6 @@ exports.getPeakPowerRanking = onRequest(
       endStr = r.endStr;
     }
 
-    const db = admin.firestore();
     const cacheKey = `peakRanking_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
     const cacheRef = db.collection("cache").doc(cacheKey);
     const cacheSnap = await cacheRef.get();
