@@ -1,6 +1,13 @@
 /**
- * VO2max 연령·성별 참고 기준 (ACSM / Cooper Institute 계열 일반 성인 자료를 참고한 추정치)
- * ml/kg/min — 의학적 진단이 아닌 트레이닝·대시보드 참고용입니다.
+ * VO2max 연령·성별 참고 + STELVIO 공통 VO₂max 산출 (vo2maxCalculator.js)
+ *
+ * calculateStelvioVO2Max — 260327_V1 원본과 동일 계열:
+ * ACSM VO₂ = (W×10.8/체중)+7, FTP→MAP(=FTP×1.18) 베이스라인, 세션별 HR 보정 후
+ * (세션 평균×0.7)+(베이스라인×0.3), 20~100 정수.
+ * (프로필·FTP·체중 기반 결정론적 산출 — AI 미사용)
+ *
+ * 참고: conditionScoreModule의 computeVo2maxEstimate는 FTP·체중만으로 15×(FTP/w)+3.5 로
+ * 대시보드 코치 fallback 등에 사용되며, 본 함수와는 식이 다릅니다.
  */
 (function (global) {
   'use strict';
@@ -209,114 +216,135 @@
   global.getVo2maxReferenceAverageMlKg = getReferenceAverageMlKg;
   global.getStelvioUserAvgVo2maxMlKg = getStelvioUserAvgVo2maxMlKg;
 
-  /** "1:30:00", "45:00", 숫자(분) 등 → 분 */
-  function coerceDurationToMinutes(duration) {
-    if (duration == null) return 0;
-    if (typeof duration === 'number' && isFinite(duration) && duration >= 0) return duration;
-    var s = String(duration).trim();
-    if (!s) return 0;
-    var parts = s.split(':').map(function (p) {
-      return parseFloat(p, 10);
-    });
-    if (parts.some(function (x) {
-      return isNaN(x);
-    })) return 0;
-    if (parts.length === 3) return parts[0] * 60 + parts[1] + parts[2] / 60;
-    if (parts.length === 2) return parts[0] + parts[1] / 60;
-    var n = parseFloat(s, 10);
-    return isFinite(n) ? n : 0;
+  // --- STELVIO VO2 Max (260327_V1 원본 로직) ---------------------------------
+
+  var MIN_DURATION_SEC = 20 * 60;
+  var MIN_AVG_HR = 110;
+  var MIN_AVG_POWER_W = 100;
+  var WEIGHT_TRAINING = 0.7;
+  var WEIGHT_BASELINE = 0.3;
+  var MAP_FTP_RATIO = 1.18;
+  var VO2_MIN = 20;
+  var VO2_MAX = 100;
+  var FALLBACK_MAX_HR = 190;
+
+  function tanakaMaxHR(age) {
+    var a = Number(age);
+    if (isNaN(a) || a < 10 || a > 120) return FALLBACK_MAX_HR;
+    var hr = 208 - 0.7 * a;
+    return Math.max(80, Math.min(220, Math.round(hr)));
+  }
+
+  function getMaxHR(userProfile) {
+    userProfile = userProfile || {};
+    var maxHr = Number(userProfile.max_hr);
+    if (!isNaN(maxHr) && maxHr >= 80 && maxHr <= 220) return Math.round(maxHr);
+    return tanakaMaxHR(Number(userProfile.age));
+  }
+
+  function v1GetDurationSec(log) {
+    if (!log) return 0;
+    var min = Number(log.duration_min);
+    if (!isNaN(min) && min > 0) return min * 60;
+    var sec = Number(log.duration_sec || log.time || log.duration || 0);
+    return isNaN(sec) ? 0 : Math.max(0, sec);
+  }
+
+  function v1GetWatts(log) {
+    if (!log) return 0;
+    var w = Number(log.weighted_watts || log.np || log.avg_watts || log.avg_power || 0);
+    return isNaN(w) ? 0 : Math.max(0, w);
+  }
+
+  function v1GetAvgHR(log) {
+    if (!log) return 0;
+    var hr = Number(log.avg_hr || log.hr_avg || 0);
+    return isNaN(hr) ? 0 : Math.max(0, hr);
+  }
+
+  function acsmVO2(powerW, weightKg) {
+    if (!weightKg || weightKg <= 0) return 0;
+    return (powerW * 10.8 / weightKg) + 7;
+  }
+
+  function baselineVO2FromFTP(ftp, weightKg) {
+    if (!weightKg || weightKg <= 0) return 0;
+    var map = Number(ftp) * MAP_FTP_RATIO;
+    return acsmVO2(map, weightKg);
+  }
+
+  function sessionVO2Estimate(powerW, weightKg, maxHR, avgHR) {
+    var base = acsmVO2(powerW, weightKg);
+    if (!avgHR || avgHR < 1 || !maxHR || maxHR < 1) return base;
+    return base * (maxHR / avgHR);
+  }
+
+  function filterAndEstimateSessions(recentLogs, weightKg, maxHR) {
+    if (!Array.isArray(recentLogs) || !weightKg || weightKg <= 0) return [];
+    var out = [];
+    for (var i = 0; i < recentLogs.length; i++) {
+      var log = recentLogs[i];
+      var sec = v1GetDurationSec(log);
+      var watts = v1GetWatts(log);
+      var avgHr = v1GetAvgHR(log);
+      if (sec < MIN_DURATION_SEC || avgHr < MIN_AVG_HR || watts < MIN_AVG_POWER_W) continue;
+      var vo2 = sessionVO2Estimate(watts, weightKg, maxHR, avgHr);
+      if (vo2 > 0 && isFinite(vo2)) out.push(vo2);
+    }
+    return out;
   }
 
   /**
-   * 로그 1건에서 지속시간(초) 추출 (일별 합산·세션 로그 공통)
+   * STELVIO VO₂max (V1): 유효 세션이 있으면 (세션 VO₂ 평균×0.7)+(FTP·MAP 베이스라인×0.3), 없으면 베이스라인만.
+   * @param {Object} userProfile - weight, ftp, max_hr?, age?
+   * @param {Array} recentLogs - 세션 또는 일별 합산 행 (duration_sec|duration_min|…, weighted_watts|np|…, avg_hr|…)
+   * @returns {number} 20~100 정수 (항상 반환)
    */
-  function parseLogDurationSec(row) {
-    if (!row || typeof row !== 'object') return 0;
-    var sec = Number(row.duration_sec);
-    if (isFinite(sec) && sec > 0) return sec;
-    var t = Number(row.time);
-    if (isFinite(t) && t > 0) return t;
-    var dm = Number(row.duration_min);
-    if (isFinite(dm) && dm > 0) return Math.round(dm * 60);
-    if (row.duration != null) {
-      var minFromStr = typeof global.parseDurationToMinutes === 'function'
-        ? global.parseDurationToMinutes(row.duration)
-        : coerceDurationToMinutes(row.duration);
-      if (isFinite(minFromStr) && minFromStr > 0) return Math.round(minFromStr * 60);
+  function calculateStelvioVO2Max(userProfile, recentLogs) {
+    userProfile = userProfile || {};
+    var weightKg = Number(userProfile.weight);
+    if (isNaN(weightKg) || weightKg <= 0) weightKg = 70;
+    var ftp = Number(userProfile.ftp);
+    if (isNaN(ftp) || ftp < 0) ftp = 200;
+
+    var maxHR = getMaxHR(userProfile);
+    var baseline = baselineVO2FromFTP(ftp, weightKg);
+
+    var sessionVO2s = filterAndEstimateSessions(recentLogs || [], weightKg, maxHR);
+
+    var finalVO2;
+    if (sessionVO2s.length > 0) {
+      var sum = 0;
+      for (var j = 0; j < sessionVO2s.length; j++) sum += sessionVO2s[j];
+      var meanSession = sum / sessionVO2s.length;
+      finalVO2 = meanSession * WEIGHT_TRAINING + baseline * WEIGHT_BASELINE;
+    } else {
+      finalVO2 = baseline;
     }
-    return 0;
+
+    var rounded = Math.round(finalVO2);
+    return Math.max(VO2_MIN, Math.min(VO2_MAX, rounded));
   }
 
-  /**
-   * NP/평균파워 후보 필드 통합
-   */
-  function parseLogNpWatts(row) {
-    if (!row || typeof row !== 'object') return 0;
-    var v = Number(
-      row.np != null
-        ? row.np
-        : row.weighted_watts != null
-          ? row.weighted_watts
-          : row.normPower != null
-            ? row.normPower
-            : row.NP != null
-              ? row.NP
-              : row.avg_watts != null
-                ? row.avg_watts
-                : row.avgPower != null
-                  ? row.avgPower
-                  : row.avg_power != null
-                    ? row.avg_power
-                    : 0
-    );
-    return isFinite(v) && v > 0 ? v : 0;
-  }
-
-  function clampVo2MlKg(n) {
-    return Math.max(20, Math.min(100, Math.round(Number(n))));
-  }
-
-  /**
-   * STELVIO 대시보드·코치용 VO₂max 추정 (ml/kg/min, 정수).
-   * conditionScoreModule의 computeVo2maxEstimate와 동일 계열: VO₂max ≈ 15×(w/kg)+3.5 (파워·체중 기반).
-   *
-   * @param {Object|null} profile - ftp, weight 등
-   * @param {Array<Object>} logs - (1) 월별 일자 합산 배열 또는 (2) 세션 로그 배열. 빈 배열이면 null.
-   * @returns {number|null} 훈련이 없거나 파워로 산출 불가하면 null (월별 트렌드에서 0 처리)
-   */
-  function calculateStelvioVO2Max(profile, logs) {
-    profile = profile && typeof profile === 'object' ? profile : {};
-    if (!Array.isArray(logs) || logs.length === 0) {
-      return null;
-    }
-    var wKg = Number(profile.weight) || 0;
-    if (wKg <= 0) wKg = 70;
-
-    var totalSec = 0;
-    var sumNpSec = 0;
-    var i;
-    for (i = 0; i < logs.length; i++) {
-      var row = logs[i];
-      var sec = parseLogDurationSec(row);
-      var np = parseLogNpWatts(row);
-      if (sec <= 0) continue;
-      totalSec += sec;
-      sumNpSec += np * sec;
-    }
-
-    if (totalSec < 60) {
-      return null;
-    }
-
-    var avgNp = sumNpSec / totalSec;
-    if (!isFinite(avgNp) || avgNp <= 0) {
-      return null;
-    }
-
-    return clampVo2MlKg(15 * (avgNp / wKg) + 3.5);
-  }
-
-  global.parseLogDurationSecForVO2 = parseLogDurationSec;
-  global.parseLogNpWattsForVO2 = parseLogNpWatts;
   global.calculateStelvioVO2Max = calculateStelvioVO2Max;
+  global.getStelvioVO2MaxHR = getMaxHR;
+  global.tanakaMaxHR = tanakaMaxHR;
+  global.baselineVO2FromFTP = baselineVO2FromFTP;
+  global.acsmVO2 = acsmVO2;
+  global.StelvioVO2Max = {
+    calculate: calculateStelvioVO2Max,
+    getMaxHR: getMaxHR,
+    tanakaMaxHR: tanakaMaxHR,
+    baselineVO2FromFTP: baselineVO2FromFTP,
+    acsmVO2: acsmVO2
+  };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    var ex = module.exports;
+    ex.calculateStelvioVO2Max = calculateStelvioVO2Max;
+    ex.getMaxHR = getMaxHR;
+    ex.tanakaMaxHR = tanakaMaxHR;
+    ex.baselineVO2FromFTP = baselineVO2FromFTP;
+    ex.acsmVO2 = acsmVO2;
+  }
 })(typeof window !== 'undefined' ? window : this);
