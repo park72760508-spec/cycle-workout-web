@@ -115,7 +115,14 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
   }
 
   // VO2 Max: STELVIO 자체 산출값으로 확정 — 대시보드 표시 및 AI 코멘트에 동일 값 반영
-  var calculatedVO2Max = typeof window.calculateStelvioVO2Max === 'function' ? window.calculateStelvioVO2Max(userProfile, recentLogs) : 40;
+  var vo2FromLogs =
+    typeof window.calculateStelvioVO2Max === 'function' ? window.calculateStelvioVO2Max(userProfile, recentLogs) : null;
+  var calculatedVO2Max =
+    vo2FromLogs != null
+      ? vo2FromLogs
+      : typeof window.computeVo2maxEstimate === 'function'
+        ? window.computeVo2maxEstimate(userProfile)
+        : 40;
 
   // 시스템 프롬프트 가져오기
   const systemPrompt = window.GEMINI_COACH_SYSTEM_PROMPT || `
@@ -440,9 +447,13 @@ Output Format (JSON Only):
   if (lastError) {
     console.error('Gemini Coach API 오류 (재시도 ' + maxRetries + '회 후 실패):', lastError);
   }
-  var fallbackVo2 = (typeof window.calculateStelvioVO2Max === 'function')
-    ? window.calculateStelvioVO2Max(userProfile, recentLogs)
-    : 40;
+  var vo2Fb = typeof window.calculateStelvioVO2Max === 'function' ? window.calculateStelvioVO2Max(userProfile, recentLogs) : null;
+  var fallbackVo2 =
+    vo2Fb != null
+      ? vo2Fb
+      : typeof window.computeVo2maxEstimate === 'function'
+        ? window.computeVo2maxEstimate(userProfile)
+        : 40;
   var conditionScoreFallback = conditionScoreForPrompt;
   var dataRichFallback = userName + '님, 최근 7일 TSS ' + last7DaysTSS + '점, 주간 평균 ' + weeklyTSS + '점, 컨디션 ' + conditionScoreFallback + '점입니다. AI 분석이 일시적으로 지연되고 있습니다. 아래 \'다시 분석\' 버튼을 눌러 재시도해 주세요.';
   return {

@@ -174,4 +174,115 @@
   global.evaluateVO2maxLevel = evaluateVO2maxLevel;
   global.resolveProfileAgeGenderForVO2 = resolveProfileAgeGenderForVO2;
   global.getVo2maxReferenceAverageMlKg = getReferenceAverageMlKg;
+
+  /** "1:30:00", "45:00", 숫자(분) 등 → 분 */
+  function coerceDurationToMinutes(duration) {
+    if (duration == null) return 0;
+    if (typeof duration === 'number' && isFinite(duration) && duration >= 0) return duration;
+    var s = String(duration).trim();
+    if (!s) return 0;
+    var parts = s.split(':').map(function (p) {
+      return parseFloat(p, 10);
+    });
+    if (parts.some(function (x) {
+      return isNaN(x);
+    })) return 0;
+    if (parts.length === 3) return parts[0] * 60 + parts[1] + parts[2] / 60;
+    if (parts.length === 2) return parts[0] + parts[1] / 60;
+    var n = parseFloat(s, 10);
+    return isFinite(n) ? n : 0;
+  }
+
+  /**
+   * 로그 1건에서 지속시간(초) 추출 (일별 합산·세션 로그 공통)
+   */
+  function parseLogDurationSec(row) {
+    if (!row || typeof row !== 'object') return 0;
+    var sec = Number(row.duration_sec);
+    if (isFinite(sec) && sec > 0) return sec;
+    var t = Number(row.time);
+    if (isFinite(t) && t > 0) return t;
+    var dm = Number(row.duration_min);
+    if (isFinite(dm) && dm > 0) return Math.round(dm * 60);
+    if (row.duration != null) {
+      var minFromStr = typeof global.parseDurationToMinutes === 'function'
+        ? global.parseDurationToMinutes(row.duration)
+        : coerceDurationToMinutes(row.duration);
+      if (isFinite(minFromStr) && minFromStr > 0) return Math.round(minFromStr * 60);
+    }
+    return 0;
+  }
+
+  /**
+   * NP/평균파워 후보 필드 통합
+   */
+  function parseLogNpWatts(row) {
+    if (!row || typeof row !== 'object') return 0;
+    var v = Number(
+      row.np != null
+        ? row.np
+        : row.weighted_watts != null
+          ? row.weighted_watts
+          : row.normPower != null
+            ? row.normPower
+            : row.NP != null
+              ? row.NP
+              : row.avg_watts != null
+                ? row.avg_watts
+                : row.avgPower != null
+                  ? row.avgPower
+                  : row.avg_power != null
+                    ? row.avg_power
+                    : 0
+    );
+    return isFinite(v) && v > 0 ? v : 0;
+  }
+
+  function clampVo2MlKg(n) {
+    return Math.max(20, Math.min(100, Math.round(Number(n))));
+  }
+
+  /**
+   * STELVIO 대시보드·코치용 VO₂max 추정 (ml/kg/min, 정수).
+   * conditionScoreModule의 computeVo2maxEstimate와 동일 계열: VO₂max ≈ 15×(w/kg)+3.5 (파워·체중 기반).
+   *
+   * @param {Object|null} profile - ftp, weight 등
+   * @param {Array<Object>} logs - (1) 월별 일자 합산 배열 또는 (2) 세션 로그 배열. 빈 배열이면 null.
+   * @returns {number|null} 훈련이 없거나 파워로 산출 불가하면 null (월별 트렌드에서 0 처리)
+   */
+  function calculateStelvioVO2Max(profile, logs) {
+    profile = profile && typeof profile === 'object' ? profile : {};
+    if (!Array.isArray(logs) || logs.length === 0) {
+      return null;
+    }
+    var wKg = Number(profile.weight) || 0;
+    if (wKg <= 0) wKg = 70;
+
+    var totalSec = 0;
+    var sumNpSec = 0;
+    var i;
+    for (i = 0; i < logs.length; i++) {
+      var row = logs[i];
+      var sec = parseLogDurationSec(row);
+      var np = parseLogNpWatts(row);
+      if (sec <= 0) continue;
+      totalSec += sec;
+      sumNpSec += np * sec;
+    }
+
+    if (totalSec < 60) {
+      return null;
+    }
+
+    var avgNp = sumNpSec / totalSec;
+    if (!isFinite(avgNp) || avgNp <= 0) {
+      return null;
+    }
+
+    return clampVo2MlKg(15 * (avgNp / wKg) + 3.5);
+  }
+
+  global.parseLogDurationSecForVO2 = parseLogDurationSec;
+  global.parseLogNpWattsForVO2 = parseLogNpWatts;
+  global.calculateStelvioVO2Max = calculateStelvioVO2Max;
 })(typeof window !== 'undefined' ? window : this);
