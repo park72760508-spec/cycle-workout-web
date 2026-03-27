@@ -173,7 +173,7 @@
             DashboardCard,
             { title: '나의 성장 트렌드 (6개월)' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
-          ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData }),
+          ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData, userProfile: userProfile }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: '년간 파워PR 그래프' },
