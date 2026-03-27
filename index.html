@@ -14700,7 +14700,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // 나의 성장 트렌드 (6개월): 구간 선택(M~60분) · 좌측 통합 Y축(bpm 하단·W 상단) · Stelvio 참고선
+    // 나의 성장 트렌드: 구간 선택(M~60분) · 좌측 통합 Y축 · Stelvio 참고선(연령대 4구간)
     function growthTrendGetWattAt(d, slot) {
       if (!d) return null;
       if (d.growthWattsSlots && d.growthWattsSlots[slot] != null && d.growthWattsSlots[slot] > 0) return d.growthWattsSlots[slot];
@@ -14744,7 +14744,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var ref =
             typeof window.getGrowthStelvioReferencePowerHr === 'function'
               ? window.getGrowthStelvioReferencePowerHr(slot, userProfile || null)
-              : { watts: 200, hr: 150, cohortAvgWkg: 4.5, cohortAvgPeakHrBpm: 165 };
+              : { watts: 200, hr: 150, cohortAvgWkg: 4.5, cohortAvgPeakHrBpm: 165, growthAgeBracket: '40s' };
           var validW = wattsData.filter(function (v) {
             return v != null && !isNaN(v) && v > 0;
           });
@@ -14929,16 +14929,46 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       if (ds.indexOf('심박') >= 0 && ds.indexOf('참고') < 0) return ds + ': ' + Math.round(v) + ' bpm';
                       if (ds.indexOf('참고 파워') >= 0) {
                         var wkg = ref.cohortAvgWkg != null ? ref.cohortAvgWkg : '—';
+                        var ab = ref.growthAgeBracket || '';
+                        var abLab =
+                          ab === 'u40'
+                            ? '30대 이하'
+                            : ab === '40s'
+                              ? '40대'
+                              : ab === '50s'
+                                ? '50대'
+                                : ab === '60p'
+                                  ? '60대 이상'
+                                  : '';
                         return (
                           '참고 파워: ' +
                           Math.round(v) +
-                          ' W (동일 연령·성별 평균 ' +
+                          ' W (' +
+                          (abLab ? abLab + '·' : '') +
+                          '성별 평균 ' +
                           wkg +
                           ' W/kg × 체중)'
                         );
                       }
                       if (ds.indexOf('참고 심박') >= 0) {
-                        return '참고 심박: ' + Math.round(v) + ' bpm (동일 코호트 피크 심박 평균)';
+                        var ab2 = ref.growthAgeBracket || '';
+                        var abLab2 =
+                          ab2 === 'u40'
+                            ? '30대 이하'
+                            : ab2 === '40s'
+                              ? '40대'
+                              : ab2 === '50s'
+                                ? '50대'
+                                : ab2 === '60p'
+                                  ? '60대 이상'
+                                  : '';
+                        return (
+                          '참고 심박: ' +
+                          Math.round(v) +
+                          ' bpm (' +
+                          (abLab2 ? abLab2 + '·' : '') +
+                          '성별 피크 심박 평균)'
+                        );
                       }
                       return ds + ': ' + Math.round(v);
                     }
@@ -14993,7 +15023,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         });
       if (!data || data.length === 0 || !hasAny) {
         return (
-          <DashboardCard title="나의 성장 트렌드 (6개월)">
+          <DashboardCard title="나의 성장 트렌드">
             <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
               데이터가 없습니다
             </div>
@@ -15002,10 +15032,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }
       var selLab = GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
       return (
-        <DashboardCard title="나의 성장 트렌드 (6개월)">
-          <p className="text-xs text-gray-500 mb-2 px-1">
-            구간을 선택하면 해당 시간의 월별 최대 파워·심박 추이를 표시합니다. (초기: 20분)
-          </p>
+        <DashboardCard title="나의 성장 트렌드">
           <div className="flex flex-wrap justify-center gap-1.5 mb-2 px-1">
             {GROWTH_PR_CIRCLE_LABELS.map(function (lab, i) {
               var active = selectedSlot === i;
@@ -15051,8 +15078,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </span>
           </div>
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            참고 파워는 동일 연령·성별 Stelvio 사용자의 구간별 <strong>피크 W/kg 평균</strong>에 <strong>내 체중</strong>을 곱한 절대값(W)입니다. 참고 심박은 동일 코호트
-            <strong>피크 심박(bpm) 평균</strong>입니다. 그래프의 PR은 6개월 중 해당 구간 최고 파워·심박 지점입니다.
+            참고 파워는 <strong>30대 이하·40대·50대·60대 이상</strong> 연령대·성별 Stelvio 사용자의 구간별 <strong>피크 W/kg 평균</strong>에 <strong>내 체중</strong>을 곱한 값(W)입니다. 참고 심박도 동일
+            <strong>연령대·성별 피크 심박(bpm) 평균</strong>입니다. 그래프의 PR은 6개월 중 해당 시간 구간의 최고 파워·심박 지점입니다.
           </div>
         </DashboardCard>
       );
@@ -16042,7 +16069,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             vo2TrendRows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
             if (isMounted) setVo2TrendData(vo2TrendRows);
 
-            // 나의 성장 트렌드 (6개월): 월단위 max_20min_watts, max_hr_20min (VO2max 트렌드와 동일 주기)
+            // 나의 성장 트렌드: 월단위 PR 슬롯·max_20min 등 (VO2max 트렌드와 동일 주기)
             var GROWTH_SLOT_FIELDS_DASH = [
               { w: 'max_watts', h: 'max_hr' },
               { w: 'max_1min_watts', h: 'max_hr_1min' },
@@ -17557,14 +17584,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             {window.RiderTimeInZonesCharts && React.createElement(window.RiderTimeInZonesCharts, { DashboardCard, userProfile, recentLogs })}
             
             {logsLoading ? (
-              <DashboardCard title="나의 성장 트렌드 (6개월)">
+              <DashboardCard title="나의 성장 트렌드">
                 <div className="h-[200px] flex items-center justify-center">
                   <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                   <div className="text-sm text-gray-500">데이터 로딩 중...</div>
                 </div>
               </DashboardCard>
             ) : logsLoadError ? (
-              <DashboardCard title="나의 성장 트렌드 (6개월)">
+              <DashboardCard title="나의 성장 트렌드">
                 <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm">로그 로드 실패</div>
               </DashboardCard>
             ) : (
