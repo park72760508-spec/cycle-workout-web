@@ -14376,49 +14376,24 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // VO₂max 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + Stelvio 전연령 평균(녹색 점선) + Stelvio 연령 평균(주황 점선, 연령·성별)
+    // VO₂max 트렌드: 월별 나의 VO₂max(빨강 면·선) + Stelvio 전체 사용자 평균(녹색 점선, 연령·성별 구분 없음)
     function Vo2MaxTrendChart(props) {
       var p = props || {};
       var data = p.data;
       var userProfile = p.userProfile;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
-      const [stelvioRolling, setStelvioRolling] = useState(null);
-      const [stelvioRollingAllAges, setStelvioRollingAllAges] = useState(null);
-      var pr =
-        typeof window.resolveProfileAgeGenderForVO2 === 'function'
-          ? window.resolveProfileAgeGenderForVO2(userProfile || null)
-          : {
-              age: 35,
-              gender: '남',
-              genderKey: 'male',
-              ageBracket: '30-39',
-              isDefaultFallback: true,
-              missingAge: true,
-              missingGender: true
-            };
+      const [stelvioRollingGlobal, setStelvioRollingGlobal] = useState(null);
       useEffect(
         function () {
-          if (typeof window.fetchStelvioRollingVo2Stats !== 'function') {
-            setStelvioRolling(null);
-            setStelvioRollingAllAges(null);
+          if (typeof window.fetchStelvioRollingVo2StatsGlobal !== 'function') {
+            setStelvioRollingGlobal(null);
             return;
           }
-          var prLocal =
-            typeof window.resolveProfileAgeGenderForVO2 === 'function'
-              ? window.resolveProfileAgeGenderForVO2(userProfile || null)
-              : pr;
           var cancelled = false;
-          window.fetchStelvioRollingVo2Stats(prLocal.genderKey, prLocal.ageBracket).then(function (row) {
-            if (!cancelled) setStelvioRolling(row);
+          window.fetchStelvioRollingVo2StatsGlobal().then(function (row) {
+            if (!cancelled) setStelvioRollingGlobal(row);
           });
-          if (typeof window.fetchStelvioRollingVo2StatsAllAges === 'function') {
-            window.fetchStelvioRollingVo2StatsAllAges(prLocal.genderKey).then(function (row) {
-              if (!cancelled) setStelvioRollingAllAges(row);
-            });
-          } else {
-            setStelvioRollingAllAges(null);
-          }
           return function () {
             cancelled = true;
           };
@@ -14442,38 +14417,26 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           });
           var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
           var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
-          var prLocal =
-            typeof window.resolveProfileAgeGenderForVO2 === 'function'
-              ? window.resolveProfileAgeGenderForVO2(userProfile || null)
-              : pr;
-          var greenAllAgesY =
-            stelvioRollingAllAges && typeof stelvioRollingAllAges.avgMlKg === 'number' && isFinite(stelvioRollingAllAges.avgMlKg)
-              ? stelvioRollingAllAges.avgMlKg
-              : typeof window.getStelvioUserAvgVo2maxAllAgesMlKg === 'function'
-                ? window.getStelvioUserAvgVo2maxAllAgesMlKg(prLocal.genderKey)
+          var greenGlobalY =
+            stelvioRollingGlobal && typeof stelvioRollingGlobal.avgMlKg === 'number' && isFinite(stelvioRollingGlobal.avgMlKg)
+              ? stelvioRollingGlobal.avgMlKg
+              : typeof window.getStelvioUserAvgVo2maxGlobalMlKg === 'function'
+                ? window.getStelvioUserAvgVo2maxGlobalMlKg()
                 : 44;
-          var stelvioY =
-            stelvioRolling && typeof stelvioRolling.avgMlKg === 'number' && isFinite(stelvioRolling.avgMlKg)
-              ? stelvioRolling.avgMlKg
-              : typeof window.getStelvioUserAvgVo2maxMlKg === 'function'
-                ? window.getStelvioUserAvgVo2maxMlKg(prLocal.genderKey, prLocal.ageBracket)
-                : 47;
-          var yMin = Math.max(20, Math.floor(Math.min(dataMin, greenAllAgesY, stelvioY) - 5));
-          var yMax = Math.min(100, Math.ceil(Math.max(dataMax, greenAllAgesY, stelvioY) + 5));
+          var yMin = Math.max(20, Math.floor(Math.min(dataMin, greenGlobalY) - 5));
+          var yMax = Math.min(100, Math.ceil(Math.max(dataMax, greenGlobalY) + 5));
           var n = data.length;
-          var lineStelvioAllAges = [];
-          var lineStelvio = [];
+          var lineStelvioGlobal = [];
           var i;
           for (i = 0; i < n; i++) {
-            lineStelvioAllAges.push(greenAllAgesY);
-            lineStelvio.push(stelvioY);
+            lineStelvioGlobal.push(greenGlobalY);
           }
           var vo2LabelPlugin = {
             id: 'vo2ValueLabels',
             afterDatasetsDraw: function (chart) {
-              var meta = chart.getDatasetMeta(2);
+              var meta = chart.getDatasetMeta(1);
               if (!meta || !meta.data || meta.data.length === 0) return;
-              var dataset = chart.data && chart.data.datasets && chart.data.datasets[2];
+              var dataset = chart.data && chart.data.datasets && chart.data.datasets[1];
               var values = dataset && dataset.data ? dataset.data : [];
               chart.ctx.save();
               chart.ctx.font = '11px sans-serif';
@@ -14498,25 +14461,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               }),
               datasets: [
                 {
-                  order: 2,
-                  label: 'Stelvio 전연령 평균 VO₂max',
-                  data: lineStelvioAllAges,
+                  order: 1,
+                  label: 'Stelvio 전체 평균 VO₂max',
+                  data: lineStelvioGlobal,
                   borderColor: '#16a34a',
                   borderWidth: 2,
                   borderDash: [6, 4],
-                  backgroundColor: 'transparent',
-                  tension: 0,
-                  fill: false,
-                  pointRadius: 0,
-                  pointHoverRadius: 0
-                },
-                {
-                  order: 1,
-                  label: 'Stelvio 연령 평균 (연령·성별)',
-                  data: lineStelvio,
-                  borderColor: '#ea580c',
-                  borderWidth: 2,
-                  borderDash: [4, 4],
                   backgroundColor: 'transparent',
                   tension: 0,
                   fill: false,
@@ -14565,7 +14515,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       for (di = 0; di < datasets.length; di++) {
                         var ds = datasets[di];
                         var hidden = typeof chart.isDatasetVisible === 'function' ? !chart.isDatasetVisible(di) : false;
-                        if (di === 2) {
+                        if (di === 1) {
                           out.push({
                             text: ds.label || '',
                             fontColor: legColor,
@@ -14620,7 +14570,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data, userProfile, stelvioRolling, stelvioRollingAllAges]
+        [data, userProfile, stelvioRollingGlobal]
       );
       if (!data || data.length === 0) {
         return (
@@ -14636,35 +14586,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
-          {stelvioRollingAllAges && stelvioRollingAllAges.userCount > 0 ? (
+          {stelvioRollingGlobal && stelvioRollingGlobal.userCount > 0 ? (
             <div className="mt-1 px-2 text-[11px] text-slate-600">
-              Stelvio 전연령 평균(녹색)은 동일 성별 전 연령대 사용자{' '}
-              <strong className="text-slate-800">{stelvioRollingAllAges.userCount}명</strong>의 최근 6개월 월별 VO₂
-              산술평균을 모은 값입니다.
-            </div>
-          ) : null}
-          {stelvioRolling && stelvioRolling.userCount > 0 ? (
-            <div className="mt-1 px-2 text-[11px] text-slate-600">
-              Stelvio 연령 평균(주황)은 동일 연령·성별 사용자{' '}
-              <strong className="text-slate-800">{stelvioRolling.userCount}명</strong>의 최근 6개월 월별 VO₂
-              산술평균을 모은 값입니다.
-            </div>
-          ) : null}
-          {pr.isDefaultFallback ? (
-            <div className="mt-1 px-2 text-xs text-amber-800">
-              프로필에서 연령/성별을 설정하면 가이드 라인이 더 정확해집니다.
-              {pr.missingAge && pr.missingGender
-                ? ' (현재는 30대 남성 기준)'
-                : pr.missingAge
-                  ? ' (연령 미입력 시 기본 연령대 기준)'
-                  : ' (성별 미입력 시 남성 기준)'}
+              녹색 점선은 연령·성별 구분 없이 Stelvio 전체 사용자{' '}
+              <strong className="text-slate-800">{stelvioRollingGlobal.userCount}명</strong>의 최근 6개월 월별 VO₂
+              산술평균입니다.
             </div>
           ) : null}
         </DashboardCard>
       );
     }
     
-    // 나의 성장 트렌드: 구간 선택(M~60분) · 좌측 통합 Y축 · Stelvio 참고선(연령대 4구간)
+    // 나의 성장 트렌드: 구간 선택(Max~60분) · 좌측 통합 Y축 · 참고선: 전 성별·연령 코호트 피크 평균
     function growthTrendGetWattAt(d, slot) {
       if (!d) return null;
       if (d.growthWattsSlots && d.growthWattsSlots[slot] != null && d.growthWattsSlots[slot] > 0) return d.growthWattsSlots[slot];
@@ -14708,7 +14641,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var ref =
             typeof window.getGrowthStelvioReferencePowerHr === 'function'
               ? window.getGrowthStelvioReferencePowerHr(slot, userProfile || null)
-              : { watts: 200, hr: 150, cohortAvgWkg: 4.5, cohortAvgPeakHrBpm: 165, growthAgeBracket: '40s' };
+              : { watts: 200, hr: 150, cohortAvgWkg: 4.5, cohortAvgPeakHrBpm: 165, growthAgeBracket: 'global' };
           var validW = wattsData.filter(function (v) {
             return v != null && !isNaN(v) && v > 0;
           });
@@ -14817,7 +14750,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: '전체 평균 파워',
+                  label: '전체 사용자 맥스 평균 파워',
                   data: refWArr,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -14831,7 +14764,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 2,
-                  label: '전체 평균 심박',
+                  label: '전체 사용자 맥스 평균 심박',
                   data: refHArr,
                   borderColor: '#ea580c',
                   borderWidth: 2,
@@ -14976,11 +14909,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </span>
             <span className="inline-flex items-center gap-1 text-green-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-green-600"></span>
-              전체 평균 파워
+              전체 사용자 맥스 평균 파워
             </span>
             <span className="inline-flex items-center gap-1 text-orange-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
-              전체 평균 심박
+              전체 사용자 맥스 평균 심박
             </span>
           </div>
         </DashboardCard>
