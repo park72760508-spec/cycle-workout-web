@@ -6985,8 +6985,8 @@ function handlePlayerEnterClick(event, trackNumber, roomId) {
 }
 
 /**
- * Bluetooth 입장 버튼 클릭 핸들러 (로딩 애니메이션 적용, Bluetooth Join Session 전용, 독립적 구동)
- * 클릭 시 [훈련 화면 버전 선택] 모달 표시 → 구 버전(bluetoothIndividual.html) / 신 버전(SPA 통합 스크린) 선택
+ * Bluetooth 입장 버튼 클릭 핸들러 (Live Training Session Enter)
+ * 신 버전(SPA 통합 모듈 bluetoothIndividualScreen)으로 즉시 진입
  */
 function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   const button = event?.target?.closest('a.player-enter-btn');
@@ -7012,17 +7012,17 @@ function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
     registerCelebrationModal.style.display = 'none';
   }
   
-  // 훈련 화면 버전 선택 모달 표시 (구 버전 / 신 버전 통합)
-  if (typeof window.openBluetoothTrainingVersionChoiceModal === 'function') {
-    window.openBluetoothTrainingVersionChoiceModal(trackNumber, roomId || '');
-  } else {
-    // 폴백: 모달 미정의 시 기존처럼 구 버전으로 이동
-    var url = (button && button.href) ? button.href : ('bluetoothIndividual.html?bike=' + encodeURIComponent(trackNumber) + (roomId ? '&room=' + encodeURIComponent(roomId) : ''));
-    if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
-      window.location.href = url;
-    } else {
-      window.open(url, '_blank');
-    }
+  var room = roomId || '';
+  if (trackNumber != null && trackNumber !== undefined) {
+    window.__bluetoothIndividualTrackId = String(trackNumber);
+  }
+  if (room) {
+    window.SESSION_ID = String(room);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('currentTrainingRoomId', room); } catch (e) {}
+  }
+  if (typeof showScreen === 'function') showScreen('bluetoothIndividualScreen');
+  if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
+    window.initBluetoothIndividualIntegratedScreen();
   }
   
   return false;
