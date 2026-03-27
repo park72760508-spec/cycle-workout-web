@@ -41,6 +41,16 @@
   var flushTimer = null;
   var isFlushing = false;
   var docListenerBound = false;
+  /** index.html과 동일한 Firestore 모듈 버전 (v9 인스턴스와 토큰 일치) */
+  var FIRESTORE_MOD_URL = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+  var firestoreModPromise = null;
+
+  function getFirestoreMod() {
+    if (!firestoreModPromise) {
+      firestoreModPromise = import(FIRESTORE_MOD_URL);
+    }
+    return firestoreModPromise;
+  }
 
   var TRACKED_SCREENS = {
     basecampScreen: true,
@@ -80,14 +90,18 @@
     return y + '-' + m + '-' + day;
   }
 
-  function getFirestore() {
+  function getFirestoreCompat() {
     return global.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
   }
 
+  /** 전화번호 로그인 등은 authV9에만 세션이 있음 — compat만 보면 null */
   function getAuthUser() {
     try {
+      if (global.authV9 && global.authV9.currentUser) return global.authV9.currentUser;
       if (global.auth && global.auth.currentUser) return global.auth.currentUser;
-      if (typeof firebase !== 'undefined' && firebase.auth) return firebase.auth().currentUser;
+      if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+        return firebase.auth().currentUser;
+      }
     } catch (e) {}
     return null;
   }
@@ -170,12 +184,99 @@
     } catch (e) {}
   }
 
+  function mergeToFlushBack(toFlush) {
+    for (var dk in toFlush) {
+      var bb = toFlush[dk];
+      if (!bb) continue;
+      var ss = bb.screens || {};
+      var cc = bb.clicks || {};
+      for (var k in ss) addToPending(dk, 'screens', k, ss[k]);
+      for (var k2 in cc) addToPending(dk, 'clicks', k2, cc[k2]);
+    }
+  }
+
+  function flushFirestoreV9Modular() {
+    if (isFlushing) return;
+    if (pendingIsEmpty()) return;
+    var user = global.authV9 && global.authV9.currentUser;
+    var db = global.firestoreV9;
+    if (!user || !db) {
+      persistPendingToStorage();
+      return;
+    }
+
+    isFlushing = true;
+    var toFlush = pendingBuckets;
+    clearPendingBuckets();
+
+    getFirestoreMod()
+      .then(function (mod) {
+        var batch = mod.writeBatch(db);
+        var ops = 0;
+        for (var dateKey in toFlush) {
+          var b = toFlush[dateKey];
+          if (!b) continue;
+          var ref = mod.doc(db, COLLECTION, dateKey);
+          var screens = b.screens || {};
+          var clicks = b.clicks || {};
+          var upd = {
+            date: dateKey,
+            updatedAt: mod.serverTimestamp(),
+            lastWriterUid: user.uid
+          };
+          var hasAny = false;
+          for (var sk in screens) {
+            if (!screens[sk]) continue;
+            upd['screens.' + sk] = mod.increment(screens[sk]);
+            hasAny = true;
+          }
+          for (var ck in clicks) {
+            if (!clicks[ck]) continue;
+            upd['buttonClicks.' + ck] = mod.increment(clicks[ck]);
+            hasAny = true;
+          }
+          if (hasAny) {
+            batch.set(ref, upd, { merge: true });
+            ops++;
+          }
+        }
+        if (ops === 0) {
+          isFlushing = false;
+          return;
+        }
+        return batch.commit();
+      })
+      .then(function () {
+        isFlushing = false;
+      })
+      .catch(function (err) {
+        console.warn('[StelvioAnalytics] v9 flush 실패:', err && err.message);
+        isFlushing = false;
+        mergeToFlushBack(toFlush);
+        persistPendingToStorage();
+      });
+  }
+
   function flushPendingToFirestore(reason) {
     if (isFlushing) return;
     if (pendingIsEmpty()) return;
-    var fs = getFirestore();
     var user = getAuthUser();
-    if (!fs || !user) {
+    if (!user) {
+      persistPendingToStorage();
+      return;
+    }
+
+    if (global.authV9 && global.authV9.currentUser) {
+      if (!global.firestoreV9) {
+        persistPendingToStorage();
+        return;
+      }
+      flushFirestoreV9Modular();
+      return;
+    }
+
+    var fs = getFirestoreCompat();
+    if (!fs) {
       persistPendingToStorage();
       return;
     }
@@ -230,35 +331,59 @@
         .catch(function (err) {
           console.warn('[StelvioAnalytics] flush 실패:', err && err.message);
           isFlushing = false;
-          for (var dk in toFlush) {
-            var bb = toFlush[dk];
-            if (!bb) continue;
-            var ss = bb.screens || {};
-            var cc = bb.clicks || {};
-            for (var k in ss) addToPending(dk, 'screens', k, ss[k]);
-            for (var k2 in cc) addToPending(dk, 'clicks', k2, cc[k2]);
-          }
+          mergeToFlushBack(toFlush);
           persistPendingToStorage();
         });
     } catch (e) {
       console.warn('[StelvioAnalytics] batch 오류:', e);
       isFlushing = false;
-      for (var dk2 in toFlush) {
-        var bb2 = toFlush[dk2];
-        if (!bb2) continue;
-        var ss2 = bb2.screens || {};
-        var cc2 = bb2.clicks || {};
-        for (var k3 in ss2) addToPending(dk2, 'screens', k3, ss2[k3]);
-        for (var k4 in cc2) addToPending(dk2, 'clicks', k4, cc2[k4]);
-      }
+      mergeToFlushBack(toFlush);
       persistPendingToStorage();
     }
   }
 
+  function ensureBasecampUniqueV9() {
+    var user = global.authV9 && global.authV9.currentUser;
+    var db = global.firestoreV9;
+    if (!user || !db) return;
+    var dateKey = getLocalDateKey();
+    var uid = user.uid;
+    getFirestoreMod()
+      .then(function (mod) {
+        var uniqRef = mod.doc(db, COLLECTION, dateKey, 'bc_uniq', uid);
+        var parentRef = mod.doc(db, COLLECTION, dateKey);
+        return mod.runTransaction(db, function (transaction) {
+          return transaction.get(uniqRef).then(function (uniqSnap) {
+            if (uniqSnap.exists()) return;
+            transaction.set(uniqRef, { v: 1, at: mod.serverTimestamp() });
+            transaction.set(
+              parentRef,
+              {
+                date: dateKey,
+                updatedAt: mod.serverTimestamp(),
+                basecamp_unique: mod.increment(1)
+              },
+              { merge: true }
+            );
+          });
+        });
+      })
+      .catch(function (e) {
+        console.warn('[StelvioAnalytics] basecamp unique v9:', e && e.message);
+      });
+  }
+
   function ensureBasecampUniqueForUser() {
-    var fs = getFirestore();
     var user = getAuthUser();
-    if (!fs || !user) return;
+    if (!user) return;
+
+    if (global.authV9 && global.authV9.currentUser && global.firestoreV9) {
+      ensureBasecampUniqueV9();
+      return;
+    }
+
+    var fs = getFirestoreCompat();
+    if (!fs) return;
 
     var dateKey = getLocalDateKey();
     var uid = user.uid;
@@ -367,6 +492,14 @@
     loadPendingFromStorage();
     bindLifecycle();
     flushPendingToFirestore('init');
+    global.addEventListener('stelvio-auth-ready', function () {
+      global.setTimeout(function () {
+        if (typeof global.refreshSettingsModalAdminExtras === 'function') {
+          global.refreshSettingsModalAdminExtras();
+        }
+        flushPendingToFirestore('auth-ready');
+      }, 400);
+    });
   }
 
   if (global.document.readyState === 'loading') {
@@ -484,11 +617,35 @@
   }
 
   function fetchAccessStatsForDate(dateStr) {
-    var fs = getFirestore();
     var body = global.document.getElementById('accessStatsBody');
-    if (!fs || !body) return;
+    if (!body) return;
     body.innerHTML =
       '<div style="text-align:center;padding:24px;color:#64748b;">불러오는 중…</div>';
+
+    if (global.authV9 && global.authV9.currentUser && global.firestoreV9) {
+      getFirestoreMod()
+        .then(function (mod) {
+          return mod.getDoc(mod.doc(global.firestoreV9, COLLECTION, dateStr));
+        })
+        .then(function (snap) {
+          var d = snap.exists() ? snap.data() : {};
+          renderAccessStatsCards(dateStr, d || {});
+        })
+        .catch(function (e) {
+          body.innerHTML =
+            '<div style="text-align:center;padding:24px;color:#dc2626;">통계를 불러오지 못했습니다. (' +
+            (e && e.message ? e.message : '오류') +
+            ')</div>';
+        });
+      return;
+    }
+
+    var fs = getFirestoreCompat();
+    if (!fs) {
+      body.innerHTML =
+        '<div style="text-align:center;padding:24px;color:#dc2626;">Firestore가 준비되지 않았습니다.</div>';
+      return;
+    }
     fs.collection(COLLECTION)
       .doc(dateStr)
       .get()
