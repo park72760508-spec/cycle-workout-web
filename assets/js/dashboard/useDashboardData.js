@@ -519,6 +519,9 @@
           }
           vo2Rows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
           if (isMounted) setVo2TrendData(vo2Rows);
+          if (isMounted && userProfile && typeof window.persistVo2DemographicSampleAsync === 'function') {
+            window.persistVo2DemographicSampleAsync(userProfile, vo2Rows).catch(function() {});
+          }
 
           var currentYear = today.getFullYear();
           var yearStart = currentYear + '-01-01';
