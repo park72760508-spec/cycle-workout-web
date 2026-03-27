@@ -6604,6 +6604,18 @@ window.showScreen = function(screenId) {
     return; // 화면 전환 자체를 차단
   }
 
+  if (screenId === 'accessStatsScreen') {
+    var _ag = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2');
+    var _adminOk =
+      typeof window.isStelvioAdminGrade === 'function'
+        ? window.isStelvioAdminGrade(_ag)
+        : String(_ag).trim() === '1' || Number(_ag) === 1;
+    if (!_adminOk) {
+      if (typeof showToast === 'function') showToast('관리자만 이용할 수 있습니다.');
+      return;
+    }
+  }
+
   // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트 (태블릿 등에서 TOP10 인증 전 노출 방지)
   if (!isAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen' && screenId !== 'splashScreen') {
     console.log('⚠️ 인증되지 않은 상태 - 인증 화면으로 리다이렉트');
@@ -6660,6 +6672,18 @@ window.showScreen = function(screenId) {
     }
 
     initializeCurrentScreen(screenId);
+    if (typeof window.stelvioAnalyticsOnScreenChange === 'function') {
+      try {
+        window.stelvioAnalyticsOnScreenChange(screenId);
+      } catch (e) {}
+    }
+    if (screenId === 'accessStatsScreen' && typeof window.renderAccessStatsView === 'function') {
+      setTimeout(function () {
+        try {
+          window.renderAccessStatsView();
+        } catch (e) {}
+      }, 0);
+    }
   }
 };
 
@@ -13405,6 +13429,38 @@ window.testGeminiApiKey = testGeminiApiKey;
 window.closeTrainingAnalysisModal = closeTrainingAnalysisModal;
 
 // 환경 설정 팝업 관련 함수
+/** 관리자(grade=1)일 때만 📊 시스템 접속 통계 버튼을 동적 생성 (중복 방지) */
+function ensureStelvioAdminAccessStatsButton() {
+  const host = document.getElementById('settingsAdminDynamicStatsHost');
+  const accessRow = document.getElementById('settingsAccessStatsRow');
+  if (!host) return;
+  const g = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+  const isAdmin =
+    typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g);
+  const existing = document.getElementById('stelvioDynamicAccessStatsBtn');
+  if (!isAdmin) {
+    host.style.display = 'none';
+    if (existing) existing.remove();
+    return;
+  }
+  if (accessRow) accessRow.style.display = 'none';
+  host.style.display = 'flex';
+  if (existing) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'stelvioDynamicAccessStatsBtn';
+  btn.textContent = '📊 시스템 접속 통계';
+  btn.className = 'btn stelvio-purple-btn';
+  btn.setAttribute('data-analytics-id', 'settings_dynamic_open_access_stats');
+  btn.style.cssText =
+    'min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border: none; border-radius: 8px;';
+  btn.onclick = function () {
+    if (typeof openAccessStatsScreen === 'function') openAccessStatsScreen();
+  };
+  host.appendChild(btn);
+}
+window.ensureStelvioAdminAccessStatsButton = ensureStelvioAdminAccessStatsButton;
+
 function openSettingsModal() {
   const modal = document.getElementById('settingsModal');
   if (modal) {
@@ -13421,6 +13477,7 @@ function openSettingsModal() {
         : String(g).trim() === '1' || Number(g) === 1;
     accessRow.style.display = showAccess ? 'flex' : 'none';
   }
+  ensureStelvioAdminAccessStatsButton();
 }
 /** 환경설정을 DOM만 열고 openSettingsModal을 건너뛴 경우 — 접속통계 행 표시 동기화 */
 function refreshSettingsModalAdminExtras() {
@@ -13439,6 +13496,7 @@ function refreshSettingsModalAdminExtras() {
           : String(g).trim() === '1' || Number(g) === 1;
       accessRow.style.display = showAccess ? 'flex' : 'none';
     }
+    ensureStelvioAdminAccessStatsButton();
   } catch (e) {}
 }
 window.refreshSettingsModalAdminExtras = refreshSettingsModalAdminExtras;
@@ -17070,6 +17128,12 @@ if (typeof showScreen === 'function') {
     // 원래 showScreen 함수 호출
     return originalShowScreen.call(this, id, skipHistory);
   };
+}
+
+// scheduleManager가 먼저 등록한 showScheduleScreen이 window.originalShowScreen에 남으면
+// index.html의 showScreen 래퍼가 6583 구현(분석·initializeCurrentScreen)을 건너뜀 — 최종 체인으로 동기화
+if (typeof window !== 'undefined') {
+  window.originalShowScreen = window.showScreen;
 }
 
 // 전역 함수로 등록

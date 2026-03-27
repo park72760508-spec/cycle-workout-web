@@ -211,6 +211,10 @@
 
     getFirestoreMod()
       .then(function (mod) {
+        if (!mod || typeof mod.writeBatch !== 'function' || !global.firestoreV9) {
+          throw new Error('Firestore modular SDK 또는 인스턴스 미준비');
+        }
+        db = global.firestoreV9;
         var batch = mod.writeBatch(db);
         var ops = 0;
         for (var dateKey in toFlush) {
@@ -241,8 +245,7 @@
           }
         }
         if (ops === 0) {
-          isFlushing = false;
-          return;
+          return Promise.resolve();
         }
         return batch.commit();
       })
@@ -250,7 +253,7 @@
         isFlushing = false;
       })
       .catch(function (err) {
-        console.warn('[StelvioAnalytics] v9 flush 실패:', err && err.message);
+        console.error('[Analytics DB 전송 실패]:', err && err.message ? err.message : err);
         isFlushing = false;
         mergeToFlushBack(toFlush);
         persistPendingToStorage();
@@ -271,7 +274,12 @@
         persistPendingToStorage();
         return;
       }
-      flushFirestoreV9Modular();
+      try {
+        flushFirestoreV9Modular();
+      } catch (err) {
+        console.error('[Analytics DB 전송 실패]:', err && err.message ? err.message : err);
+        persistPendingToStorage();
+      }
       return;
     }
 
@@ -329,13 +337,13 @@
           isFlushing = false;
         })
         .catch(function (err) {
-          console.warn('[StelvioAnalytics] flush 실패:', err && err.message);
+          console.error('[Analytics DB 전송 실패]:', err && err.message ? err.message : err);
           isFlushing = false;
           mergeToFlushBack(toFlush);
           persistPendingToStorage();
         });
     } catch (e) {
-      console.warn('[StelvioAnalytics] batch 오류:', e);
+      console.error('[Analytics DB 전송 실패]:', e && e.message ? e.message : e);
       isFlushing = false;
       mergeToFlushBack(toFlush);
       persistPendingToStorage();
@@ -369,7 +377,7 @@
         });
       })
       .catch(function (e) {
-        console.warn('[StelvioAnalytics] basecamp unique v9:', e && e.message);
+        console.error('[Analytics DB 전송 실패]:', e && e.message ? e.message : e);
       });
   }
 
@@ -407,7 +415,7 @@
         });
       })
       .catch(function (e) {
-        console.warn('[StelvioAnalytics] basecamp unique:', e && e.message);
+        console.error('[Analytics DB 전송 실패]:', e && e.message ? e.message : e);
       });
   }
 
@@ -496,6 +504,9 @@
       global.setTimeout(function () {
         if (typeof global.refreshSettingsModalAdminExtras === 'function') {
           global.refreshSettingsModalAdminExtras();
+        }
+        if (typeof global.ensureStelvioAdminAccessStatsButton === 'function') {
+          global.ensureStelvioAdminAccessStatsButton();
         }
         flushPendingToFirestore('auth-ready');
       }, 400);
