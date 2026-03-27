@@ -935,6 +935,11 @@ function initAuthStateListener() {
                 console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
               }
             }
+            if (typeof window.syncGeminiApiRegistrationFromLocalStorage === 'function') {
+              try {
+                window.syncGeminiApiRegistrationFromLocalStorage();
+              } catch (_) {}
+            }
           }
           
           // callback.html에서는 화면 전환 및 모달 표시 건너뛰기 (위에서 이미 선언된 isCallbackPage 사용)
@@ -1493,7 +1498,8 @@ async function apiUpdateUser(id, userData) {
     if (userData.strava_expires_at != null) updateData.strava_expires_at = Number(userData.strava_expires_at);
     if (userData.is_private != null) updateData.is_private = userData.is_private === true;
     if (userData.gemini_api_registered != null) updateData.gemini_api_registered = userData.gemini_api_registered === true;
-    
+    if (userData.API_sts != null) updateData.API_sts = userData.API_sts === true;
+
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
     if (window.firestoreV9) {
@@ -2246,10 +2252,12 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
 }
 
 /**
- * 프로필 관리자 통계: A=Gemini API 등록(gemini_api_registered 또는 gemini_api_key), S=Strava 토큰 보유
+ * 프로필 관리자 통계: A=Gemini API 등록(API_sts / gemini_api_registered / gemini_api_key), S=Strava 토큰 보유
  */
 function userHasGeminiApiRegistered(u) {
   if (!u || typeof u !== 'object') return false;
+  var sts = u.API_sts;
+  if (sts === true || sts === 'true' || sts === 1 || sts === '1') return true;
   var reg = u.gemini_api_registered;
   if (reg === true || reg === 'true' || reg === 1 || reg === '1') return true;
   const k = u.gemini_api_key != null ? String(u.gemini_api_key).trim() : '';
@@ -2761,6 +2769,16 @@ async function loadUsers() {
     if (typeof window.refreshSettingsModalAdminExtras === 'function') {
       try {
         window.refreshSettingsModalAdminExtras();
+      } catch (_) {}
+    }
+    if (typeof window.syncGeminiApiRegistrationFromLocalStorage === 'function') {
+      try {
+        window.syncGeminiApiRegistrationFromLocalStorage();
+      } catch (_) {}
+    }
+    if (typeof window.updateSettingsGeminiApiStatusLine === 'function') {
+      try {
+        window.updateSettingsGeminiApiStatusLine();
       } catch (_) {}
     }
 

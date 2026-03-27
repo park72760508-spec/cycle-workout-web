@@ -10932,8 +10932,8 @@ async function saveGeminiApiKey() {
         (window.auth && window.auth.currentUser && window.auth.currentUser.uid && String(window.auth.currentUser.uid)) ||
         null;
       if (profileId && typeof apiUpdateUser === 'function') {
-        apiUpdateUser(profileId, { gemini_api_registered: true }).catch(function (e) {
-          console.warn('[saveGeminiApiKey] gemini_api_registered Firestore 저장 실패:', e);
+        apiUpdateUser(profileId, { gemini_api_registered: true, API_sts: true }).catch(function (e) {
+          console.warn('[saveGeminiApiKey] API_sts / gemini_api_registered Firestore 저장 실패:', e);
         });
       }
     } catch (e) {
@@ -10945,6 +10945,7 @@ async function saveGeminiApiKey() {
     } else {
       alert('API 키가 확인되고 저장되었습니다.');
     }
+    if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
     
   } catch (error) {
     console.error('API 키 검증 오류:', error);
@@ -13497,6 +13498,7 @@ function refreshSettingsModalAdminExtras() {
       accessRow.style.display = showAccess ? 'flex' : 'none';
     }
     ensureStelvioAdminAccessStatsButton();
+    if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
   } catch (e) {}
 }
 window.refreshSettingsModalAdminExtras = refreshSettingsModalAdminExtras;
@@ -13613,6 +13615,52 @@ function closePrivacyPolicyModal() {
 window.openPrivacyPolicyModal = openPrivacyPolicyModal;
 window.closePrivacyPolicyModal = closePrivacyPolicyModal;
 
+/** 로컬에 키가 있으면 Firestore users/{uid}에 API_sts·gemini_api_registered 동기화 (다른 기기에서만 서버 등록된 경우와 무관) */
+function syncGeminiApiRegistrationFromLocalStorage() {
+  try {
+    const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+    if (!key || !String(key).trim()) return;
+    const uid =
+      (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
+      (window.auth && window.auth.currentUser && window.auth.currentUser.uid && String(window.auth.currentUser.uid)) ||
+      (window.currentUser && window.currentUser.id != null && String(window.currentUser.id)) ||
+      null;
+    if (!uid || typeof apiUpdateUser !== 'function') return;
+    apiUpdateUser(uid, { API_sts: true, gemini_api_registered: true }).catch(function () {});
+  } catch (e) {}
+}
+window.syncGeminiApiRegistrationFromLocalStorage = syncGeminiApiRegistrationFromLocalStorage;
+
+/** 환경설정: 이 기기 저장 여부 + 서버(API_sts) 등록 여부 안내 */
+function updateSettingsGeminiApiStatusLine() {
+  const el = document.getElementById('settingsGeminiApiStatusLine');
+  if (!el) return;
+  let localHas = false;
+  try {
+    const k = localStorage.getItem('geminiApiKey');
+    localHas = !!(k && String(k).trim());
+  } catch (e) {}
+  const uid =
+    (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
+    (window.currentUser && window.currentUser.id != null && String(window.currentUser.id)) ||
+    null;
+  let cu = window.currentUser || null;
+  if (uid && window.users && Array.isArray(window.users)) {
+    const row = window.users.find(function (u) {
+      return u && String(u.id) === String(uid);
+    });
+    if (row) cu = Object.assign({}, cu || {}, row);
+  }
+  const server =
+    cu && typeof userHasGeminiApiRegistered === 'function' && userHasGeminiApiRegistered(cu);
+  const parts = [];
+  parts.push(localHas ? '이 기기에 키가 저장되어 있습니다.' : '이 기기에 저장된 키가 없습니다.');
+  parts.push(server ? '서버 등록: 등록됨 (API_sts).' : '서버 등록: 미등록 — 저장 시 서버에 반영됩니다.');
+  el.textContent = parts.join(' ');
+  el.style.color = server ? '#15803d' : '#64748b';
+}
+window.updateSettingsGeminiApiStatusLine = updateSettingsGeminiApiStatusLine;
+
 function loadGeminiApiKeyToSettings() {
   const apiKey = localStorage.getItem('geminiApiKey');
   const apiKeyInput = document.getElementById('settingsGeminiApiKey');
@@ -13623,6 +13671,7 @@ function loadGeminiApiKeyToSettings() {
       apiKeyInput.disabled = true;
     }
   }
+  if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
 }
 
 function resetApiKeyFromSettings() {
@@ -13716,6 +13765,14 @@ function saveGeminiApiKeyFromSettings() {
     try {
       window.dispatchEvent(new CustomEvent('stelvio-gemini-apikey-changed', { detail: { hasKey: true } }));
     } catch (e) { console.warn('[saveGeminiApiKeyFromSettings] dispatchEvent failed:', e); }
+    const profileIdFs =
+      (window.currentUser && window.currentUser.id != null && String(window.currentUser.id)) ||
+      (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid && String(window.authV9.currentUser.uid)) ||
+      null;
+    if (profileIdFs && typeof apiUpdateUser === 'function') {
+      apiUpdateUser(profileIdFs, { API_sts: true, gemini_api_registered: true }).catch(function () {});
+    }
+    if (typeof updateSettingsGeminiApiStatusLine === 'function') updateSettingsGeminiApiStatusLine();
     alert('API 키가 저장되었습니다.');
   }
   
