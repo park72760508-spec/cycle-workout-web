@@ -2367,6 +2367,23 @@
     </div>
   </div>
 
+  <!-- 접속 통계 (관리자 grade=1 전용) -->
+  <div id="accessStatsScreen" class="screen" style="display: none;">
+    <div class="basecamp-background-image"></div>
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card access-stats-card-outer">
+          <div class="access-stats-header">
+            <h3 class="access-stats-title">접속 통계</h3>
+            <button type="button" class="access-stats-close" onclick="if(typeof closeAccessStatsScreen==='function')closeAccessStatsScreen();" aria-label="닫기">✕</button>
+          </div>
+          <div id="accessStatsCalendarHost" class="access-stats-calendar-host"></div>
+          <div id="accessStatsBody" class="access-stats-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 사용자 메뉴얼 화면 -->
   <div id="userManualScreen" class="screen">
     <!-- 배경 이미지 -->
@@ -2596,7 +2613,7 @@
           </div>
         </div>
         <p class="profile-search-hint">이름·전화번호 없이 검색하면 전체 목록이 표시됩니다.</p>
-        <p id="profileSearchUserCount" class="profile-search-user-count">등록된 사용자: 0명</p>
+        <p id="profileSearchUserCount" class="profile-search-user-count">등록된 사용자: 0명 (A:0명, S:0명)</p>
       </div>
     </div>
     
@@ -5339,6 +5356,13 @@
               YouTube 영상
             </a>
           </div>
+          <div id="settingsAccessStatsRow" style="display: none; justify-content: center; align-items: center; margin-top: 12px;">
+            <button type="button" id="btnAccessStatsSettings" class="btn stelvio-purple-btn" data-analytics-id="settings_open_access_stats" onclick="if(typeof openAccessStatsScreen==='function')openAccessStatsScreen();" style="min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border: none; border-radius: 8px;">
+              접속 통계 보기
+            </button>
+          </div>
+          <!-- 관리자 전용: JS로 📊 시스템 접속 통계 버튼 동적 삽입 (settingsAdminDynamicStatsHost) -->
+          <div id="settingsAdminDynamicStatsHost" style="display: none; justify-content: center; align-items: center; margin-top: 12px; flex-wrap: wrap;"></div>
         </div>
         <!-- 스트라바(Strava) 신규 가입 블럭 -->
         <div class="card settings-block">
@@ -5736,11 +5760,22 @@
             // API 키가 없으면 팝업 오버레이로 환경설정 모달 표시
             console.log('[AI] API키 없음');
             
-            // 환경설정 모달 열기
-            var settingsModal = document.getElementById('settingsModal');
+            // 환경설정 모달 열기 (openSettingsModal로 통일 — 관리자 전용 행·API 키 로드 반영)
+            var settingsModal = null;
+            if (typeof openSettingsModal === 'function') {
+              openSettingsModal();
+              settingsModal = document.getElementById('settingsModal');
+            } else {
+              settingsModal = document.getElementById('settingsModal');
+              if (settingsModal) {
+                settingsModal.style.display = 'flex';
+                settingsModal.classList.remove('hidden');
+              }
+            }
+            if (typeof refreshSettingsModalAdminExtras === 'function') {
+              refreshSettingsModalAdminExtras();
+            }
             if (settingsModal) {
-              settingsModal.style.display = 'flex';
-              settingsModal.classList.remove('hidden');
               
               // API 키 입력 필드에 포커스
               setTimeout(function() {
@@ -7283,6 +7318,7 @@
         stelvioApplyDurationModeUi();
         fetchStelvioPeakPowerRanking();
         stelvioInitBackToTopButton();
+        if (typeof stelvioAnalyticsRecordRankingModal === 'function') stelvioAnalyticsRecordRankingModal();
       }
     }
     function closeStelvioRankingBoardModal() {
@@ -12485,6 +12521,7 @@
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
   <script src="assets/js/app.js"></script>
+  <script src="assets/js/stelvioAnalytics.js"></script>
 
   
   <!-- ========== Indoor Race/Training 선택 모달 ========== -->
