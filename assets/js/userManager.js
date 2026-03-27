@@ -23,12 +23,42 @@ function getViewerGrade() {
   return '2'; // 기본은 일반
 }
 
-/** 로그인 계정 등급 — 프로필 선택으로 currentUser가 다른 사용자로 바뀌어도 관리자 전용 메뉴는 로그인(authUser) 기준 */
+/** 로그인 계정 등급 — 프로필 선택으로 currentUser가 다른 사용자로 바뀌어도 관리자 전용 메뉴는 로그인 계정 기준 */
 function getLoginUserGrade() {
   try {
     if (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) return '1';
     const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
     if (authUser && authUser.grade != null) return String(authUser.grade);
+
+    var uid = null;
+    try {
+      if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        uid = String(window.auth.currentUser.uid);
+      } else if (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
+        uid = String(window.authV9.currentUser.uid);
+      }
+    } catch (e) {}
+    if (!uid && authUser && authUser.id != null) uid = String(authUser.id);
+
+    try {
+      const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (uid && viewer && String(viewer.id) === uid && viewer.grade != null) {
+        return String(viewer.grade);
+      }
+    } catch (e) {}
+
+    if (uid && Array.isArray(window.users)) {
+      const hit = window.users.find(function (u) {
+        return u && String(u.id) === uid;
+      });
+      if (hit && hit.grade != null) return String(hit.grade);
+    }
+    if (uid && Array.isArray(window.userProfiles)) {
+      const hit2 = window.userProfiles.find(function (u) {
+        return u && String(u.id) === uid;
+      });
+      if (hit2 && hit2.grade != null) return String(hit2.grade);
+    }
   } catch (e) {}
   return typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
 }
@@ -2688,7 +2718,12 @@ async function loadUsers() {
 
     window.users = users;
     window.userProfiles = users;
-    
+    if (typeof window.refreshSettingsModalAdminExtras === 'function') {
+      try {
+        window.refreshSettingsModalAdminExtras();
+      } catch (_) {}
+    }
+
     console.log('[loadUsers] ✅ 사용자 목록 렌더링 완료:', { 
       totalUsers: users.length,
       visibleUsers: visibleUsers.length,

@@ -13414,6 +13414,22 @@ function openSettingsModal() {
     accessRow.style.display = g === '1' ? 'flex' : 'none';
   }
 }
+/** 환경설정을 DOM만 열고 openSettingsModal을 건너뛴 경우 — 접속통계 행 표시 동기화 */
+function refreshSettingsModalAdminExtras() {
+  try {
+    const modal = document.getElementById('settingsModal');
+    if (!modal) return;
+    const disp = modal.style.display;
+    const cs = window.getComputedStyle(modal);
+    if ((disp === 'none' || !disp) && cs.display === 'none') return;
+    const accessRow = document.getElementById('settingsAccessStatsRow');
+    if (accessRow) {
+      const g = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
+      accessRow.style.display = g === '1' ? 'flex' : 'none';
+    }
+  } catch (e) {}
+}
+window.refreshSettingsModalAdminExtras = refreshSettingsModalAdminExtras;
 
 function closeSettingsModal() {
   const modal = document.getElementById('settingsModal');
