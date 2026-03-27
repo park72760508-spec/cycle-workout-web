@@ -25,7 +25,7 @@
  *   },
  *   "meta": { "schemaVersion": 1 }
  * }
- * - basecamp_unique: 일별 베이스캠프 "계정당 1회" 집계(서브컬렉션 bc_uniq/{uid}와 동기화)
+ * - basecamp_unique: 일별 베이스캠프 "계정당 1회" 집계(서브컬렉션 bc_uniq/{uid} 또는 bc_uniq/{uid(표시명)}와 동기화)
  * - screens.*: 화면(또는 모달) 진입 횟수(중복 허용)
  * - buttonClicks.*: data-analytics-id 기준 누적 클릭
  */
@@ -109,6 +109,34 @@
   function sanitizeClickId(id) {
     if (!id || typeof id !== 'string') return '';
     return id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+  }
+
+  /** Firestore 문서 ID에 넣을 표시명(경로·괄호 충돌 제거) */
+  function sanitizeDisplayNameForDocId(name) {
+    if (!name || typeof name !== 'string') return '';
+    return name
+      .trim()
+      .replace(/[\r\n\/\\]/g, '')
+      .replace(/\)/g, '')
+      .slice(0, 80);
+  }
+
+  function getDisplayNameForBcUniq(user) {
+    if (!user) return '';
+    if (user.displayName && String(user.displayName).trim()) return String(user.displayName).trim();
+    if (user.email && typeof user.email === 'string') {
+      var at = user.email.indexOf('@');
+      if (at > 0) return user.email.slice(0, at);
+    }
+    return '';
+  }
+
+  /** bc_uniq 문서 ID: 표시명이 있으면 uid(이름), 없으면 uid만 (기존 데이터와 호환) */
+  function getBcUniqDocId(user) {
+    if (!user || !user.uid) return '';
+    var name = sanitizeDisplayNameForDocId(getDisplayNameForBcUniq(user));
+    if (!name) return user.uid;
+    return user.uid + '(' + name + ')';
   }
 
   function addToPending(dateKey, kind, key, n) {
@@ -364,14 +392,16 @@
     if (!user || !db) return;
     var dateKey = getLocalDateKey();
     var uid = user.uid;
+    var docId = getBcUniqDocId(user);
+    if (!docId) return;
     getFirestoreMod()
       .then(function (mod) {
-        var uniqRef = mod.doc(db, COLLECTION, dateKey, 'bc_uniq', uid);
+        var legacyRef = mod.doc(db, COLLECTION, dateKey, 'bc_uniq', uid);
+        var targetRef = mod.doc(db, COLLECTION, dateKey, 'bc_uniq', docId);
         var parentRef = mod.doc(db, COLLECTION, dateKey);
         return mod.runTransaction(db, function (transaction) {
-          return transaction.get(uniqRef).then(function (uniqSnap) {
-            if (uniqSnap.exists()) return;
-            transaction.set(uniqRef, { v: 1, at: mod.serverTimestamp() });
+          function applyIfNew() {
+            transaction.set(targetRef, { v: 1, at: mod.serverTimestamp() });
             transaction.set(
               parentRef,
               {
@@ -381,6 +411,16 @@
               },
               { merge: true }
             );
+          }
+          if (docId === uid) {
+            return transaction.get(legacyRef).then(function (legacySnap) {
+              if (legacySnap.exists()) return;
+              applyIfNew();
+            });
+          }
+          return Promise.all([transaction.get(legacyRef), transaction.get(targetRef)]).then(function (snaps) {
+            if (snaps[0].exists() || snaps[1].exists()) return;
+            applyIfNew();
           });
         });
       })
@@ -403,23 +443,42 @@
 
     var dateKey = getLocalDateKey();
     var uid = user.uid;
-    var uniqRef = fs.collection(COLLECTION).doc(dateKey).collection('bc_uniq').doc(uid);
+    var docId = getBcUniqDocId(user);
+    if (!docId) return;
+    var legacyRef = fs.collection(COLLECTION).doc(dateKey).collection('bc_uniq').doc(uid);
+    var targetRef = fs.collection(COLLECTION).doc(dateKey).collection('bc_uniq').doc(docId);
     var parentRef = fs.collection(COLLECTION).doc(dateKey);
 
     return fs
       .runTransaction(function (tx) {
-        return tx.get(uniqRef).then(function (snap) {
-          if (snap.exists) return null;
-          tx.set(uniqRef, { v: 1, at: firebase.firestore.FieldValue.serverTimestamp() });
-          tx.set(
-            parentRef,
-            {
-              date: dateKey,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              basecamp_unique: firebase.firestore.FieldValue.increment(1)
-            },
-            { merge: true }
-          );
+        return tx.get(legacyRef).then(function (legacySnap) {
+          if (docId === uid) {
+            if (legacySnap.exists) return null;
+            tx.set(targetRef, { v: 1, at: firebase.firestore.FieldValue.serverTimestamp() });
+            tx.set(
+              parentRef,
+              {
+                date: dateKey,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                basecamp_unique: firebase.firestore.FieldValue.increment(1)
+              },
+              { merge: true }
+            );
+            return null;
+          }
+          return tx.get(targetRef).then(function (targetSnap) {
+            if (legacySnap.exists || targetSnap.exists) return null;
+            tx.set(targetRef, { v: 1, at: firebase.firestore.FieldValue.serverTimestamp() });
+            tx.set(
+              parentRef,
+              {
+                date: dateKey,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                basecamp_unique: firebase.firestore.FieldValue.increment(1)
+              },
+              { merge: true }
+            );
+          });
         });
       })
       .catch(function (e) {
