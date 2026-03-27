@@ -139,6 +139,47 @@
   }
 
   /**
+   * Stelvio 동일 성별·전 연령대 롤링 평균 (stats_vo2_stelvio_rolling: male_all | female_all)
+   * @returns {Promise<{ avgMlKg: number, userCount: number }|null>}
+   */
+  function fetchStelvioRollingVo2StatsAllAges(genderKey) {
+    var db = global.firestoreV9;
+    if (!db || !genderKey) return Promise.resolve(null);
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        var key = (genderKey === 'female' ? 'female' : 'male') + '_all';
+        return mod.getDoc(mod.doc(db, 'stats_vo2_stelvio_rolling', key));
+      })
+      .then(function (snap) {
+        if (!docSnapExists(snap)) return null;
+        var d = snap.data();
+        if (!d || d.minSamplesMet !== true) return null;
+        var avg = Number(d.avgMlKg);
+        if (!isFinite(avg) || avg < 15 || avg > 110) return null;
+        return {
+          avgMlKg: Math.round(avg * 10) / 10,
+          userCount: Math.max(0, Math.floor(Number(d.userCount) || 0))
+        };
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  /** 집계 없을 때: STELVIO_USER_AVG_VO2MAX_MLKG 연령대별 값의 산술평균 (동일 성별·전 연령대 참고) */
+  function getStelvioUserAvgVo2maxAllAgesMlKg(genderKey) {
+    var g = genderKey === 'female' ? 'female' : 'male';
+    var t = STELVIO_USER_AVG_VO2MAX_MLKG[g];
+    var brackets = ['20-29', '30-39', '40-49', '50-59', '60+'];
+    var sum = 0;
+    var i;
+    for (i = 0; i < brackets.length; i++) {
+      sum += t[brackets[i]] != null ? Number(t[brackets[i]]) : 0;
+    }
+    return Math.round((sum / brackets.length) * 10) / 10;
+  }
+
+  /**
    * 대시보드 VO₂ 트렌드와 동일한 6개월 월별 VO₂의 산술평균을 기여(본인 문서만 갱신).
    * @param {Object} userProfile
    * @param {Array<{ vo2: number }>} vo2Rows
@@ -292,6 +333,8 @@
   global.getVo2maxReferenceAverageMlKg = getReferenceAverageMlKg;
   global.getStelvioUserAvgVo2maxMlKg = getStelvioUserAvgVo2maxMlKg;
   global.fetchStelvioRollingVo2Stats = fetchStelvioRollingVo2Stats;
+  global.fetchStelvioRollingVo2StatsAllAges = fetchStelvioRollingVo2StatsAllAges;
+  global.getStelvioUserAvgVo2maxAllAgesMlKg = getStelvioUserAvgVo2maxAllAgesMlKg;
   global.persistVo2DemographicSampleAsync = persistVo2DemographicSampleAsync;
 
   // --- STELVIO VO2 Max (260327_V1 원본 로직) ---------------------------------
