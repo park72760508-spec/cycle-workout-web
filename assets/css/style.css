@@ -21267,14 +21267,28 @@ body.bluetooth-individual-screen-active {
   font-size: 14px;
   cursor: pointer;
 }
-#accessStatsScreen .access-stats-cal-cell:hover:not(.empty) {
+#accessStatsScreen .access-stats-cal-cell:hover:not(.empty):not(.selected) {
   border-color: #c7d2fe;
   background: #eef2ff;
 }
-#accessStatsScreen .access-stats-cal-cell.selected {
+/* 선택된 날짜: 호버/포커스/클릭 시에도 스텔비오 진한 보라 그라데이션 유지 (연한 보라로 덮이지 않음) */
+#accessStatsScreen .access-stats-cal-cell.selected,
+#accessStatsScreen .access-stats-cal-cell.selected:hover:not(.empty),
+#accessStatsScreen .access-stats-cal-cell.selected:focus,
+#accessStatsScreen .access-stats-cal-cell.selected:focus-visible,
+#accessStatsScreen .access-stats-cal-cell.selected:active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
   font-weight: 600;
+  border-color: rgba(102, 126, 234, 0.45);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+}
+#accessStatsScreen .access-stats-cal-cell.selected:focus {
+  outline: none;
+}
+#accessStatsScreen .access-stats-cal-cell.selected:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
 }
 #accessStatsScreen .access-stats-cal-cell.empty {
   background: transparent;
@@ -21285,8 +21299,13 @@ body.bluetooth-individual-screen-active {
 }
 #accessStatsScreen .access-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
+  align-items: stretch;
+}
+/* 1행: 접속자 수만 전체 너비 */
+#accessStatsScreen .access-stats-card--span-full {
+  grid-column: 1 / -1;
 }
 #accessStatsScreen .access-stats-card {
   background: #fff;
@@ -21294,6 +21313,7 @@ body.bluetooth-individual-screen-active {
   border-radius: 10px;
   padding: 12px 14px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  min-width: 0;
 }
 #accessStatsScreen .access-stats-card-label {
   font-size: 12px;
