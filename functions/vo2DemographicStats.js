@@ -22,6 +22,8 @@ function emptyBuckets() {
  */
 async function rebuildVo2StelvioRollingStats(db) {
   const bucket = emptyBuckets();
+  /** 동일 성별·전 연령대 합산 (문서 ID: male_all, female_all — 대시보드 VO₂ 녹색 가이드) */
+  const allGender = { male: { sum: 0, count: 0 }, female: { sum: 0, count: 0 } };
   const col = db.collection("vo2_demographic_samples");
   let lastDoc = null;
   const pageSize = 400;
@@ -43,6 +45,8 @@ async function rebuildVo2StelvioRollingStats(db) {
       if (!bucket[key]) return;
       bucket[key].sum += v;
       bucket[key].count += 1;
+      allGender[gk].sum += v;
+      allGender[gk].count += 1;
     });
 
     lastDoc = snap.docs[snap.docs.length - 1];
@@ -76,6 +80,38 @@ async function rebuildVo2StelvioRollingStats(db) {
           userCount: count,
           minSamplesMet: false,
           source: "vo2_demographic_samples",
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+  }
+
+  for (const gk of ["male", "female"]) {
+    const ag = allGender[gk];
+    const ref = statsCol.doc(`${gk}_all`);
+    if (ag.count >= MIN_SAMPLES) {
+      batch.set(
+        ref,
+        {
+          avgMlKg: Math.round((ag.sum / ag.count) * 10) / 10,
+          userCount: ag.count,
+          minSamplesMet: true,
+          source: "vo2_demographic_samples",
+          scope: "all_ages_same_gender",
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    } else {
+      batch.set(
+        ref,
+        {
+          avgMlKg: null,
+          userCount: ag.count,
+          minSamplesMet: false,
+          source: "vo2_demographic_samples",
+          scope: "all_ages_same_gender",
           updatedAt: now,
         },
         { merge: true }
