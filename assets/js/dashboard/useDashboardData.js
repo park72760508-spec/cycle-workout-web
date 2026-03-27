@@ -356,6 +356,18 @@
             });
           }
 
+          var GROWTH_SLOT_FIELDS = [
+            { w: 'max_watts', h: 'max_hr' },
+            { w: 'max_1min_watts', h: 'max_hr_1min' },
+            { w: 'max_5min_watts', h: 'max_hr_5min' },
+            { w: 'max_10min_watts', h: 'max_hr_10min' },
+            { w: 'max_20min_watts', h: 'max_hr_20min' },
+            { w: 'max_40min_watts', h: 'max_hr_40min' },
+            { w: 'max_60min_watts', h: 'max_hr_60min' }
+          ];
+          function emptyGrowthDay() {
+            return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
+          }
           var byDateGrowth = {};
           raw.filter(function(log) {
             var ds = parseDate(log.date);
@@ -363,11 +375,17 @@
           }).forEach(function(log) {
             var ds = parseDate(log.date);
             if (!ds) return;
-            if (!byDateGrowth[ds]) byDateGrowth[ds] = { max20minWatts: 0, maxHr20min: 0 };
-            var w20 = Number(log.max_20min_watts) || 0;
-            var h20 = Number(log.max_hr_20min) || 0;
-            if (w20 > byDateGrowth[ds].max20minWatts) byDateGrowth[ds].max20minWatts = w20;
-            if (h20 > byDateGrowth[ds].maxHr20min) byDateGrowth[ds].maxHr20min = h20;
+            if (!byDateGrowth[ds]) byDateGrowth[ds] = emptyGrowthDay();
+            var d = byDateGrowth[ds];
+            var si;
+            for (si = 0; si < GROWTH_SLOT_FIELDS.length; si++) {
+              var wf = GROWTH_SLOT_FIELDS[si].w;
+              var hf = GROWTH_SLOT_FIELDS[si].h;
+              var wv = Number(log[wf]) || 0;
+              var hv = Number(log[hf]) || 0;
+              if (wv > d.w[si]) d.w[si] = wv;
+              if (hv > d.h[si]) d.h[si] = hv;
+            }
           });
           var growthRows = [];
           for (var mOff = 5; mOff >= 0; mOff--) {
@@ -383,20 +401,26 @@
               startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
               endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
             }
-            var monthMaxWatts = 0, monthMaxHr = 0;
+            var monthW = [0, 0, 0, 0, 0, 0, 0];
+            var monthH = [0, 0, 0, 0, 0, 0, 0];
             Object.keys(byDateGrowth).forEach(function(ds) {
               if (ds < startStr || ds > endStr) return;
-              var d = byDateGrowth[ds];
-              if (d.max20minWatts > monthMaxWatts) monthMaxWatts = d.max20minWatts;
-              if (d.maxHr20min > monthMaxHr) monthMaxHr = d.maxHr20min;
+              var day = byDateGrowth[ds];
+              var si2;
+              for (si2 = 0; si2 < 7; si2++) {
+                if (day.w[si2] > monthW[si2]) monthW[si2] = day.w[si2];
+                if (day.h[si2] > monthH[si2]) monthH[si2] = day.h[si2];
+              }
             });
             var monthLabel = m + '월';
             if (mOff === 0) monthLabel = m + '월(현재)';
             growthRows.push({
               monthLabel: monthLabel,
               sortKey: y + '-' + pad2(m),
-              max20minWatts: monthMaxWatts > 0 ? monthMaxWatts : null,
-              maxHr20min: monthMaxHr > 0 ? monthMaxHr : null
+              growthWattsSlots: monthW.map(function(v) { return v > 0 ? v : null; }),
+              growthHrSlots: monthH.map(function(v) { return v > 0 ? v : null; }),
+              max20minWatts: monthW[4] > 0 ? monthW[4] : null,
+              maxHr20min: monthH[4] > 0 ? monthH[4] : null
             });
           }
           growthRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
