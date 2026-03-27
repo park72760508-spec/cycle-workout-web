@@ -25,8 +25,70 @@
     { id: 'tendency', label: '나의 성향' },
     { id: 'training', label: '최근 훈련' },
     { id: 'growth', label: '성장 추이' },
-    { id: 'wkgGuide', label: 'W/kg · 등급 기준 안내' }
+    { id: 'wkgGuide', label: '나의 라이딩 지표' }
   ];
+
+  /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「나의 라이딩 지표」탭 상단 */
+  function RidingMetricsZoneTables(props) {
+    var userProfile = props.userProfile;
+    var stats = props.stats || {};
+    var _hr = useState(undefined);
+    var hrPeak = _hr[0];
+    var setHrPeak = _hr[1];
+
+    useEffect(
+      function () {
+        if (!userProfile || !userProfile.id) {
+          setHrPeak(null);
+          return;
+        }
+        var ph = Number(userProfile.max_hr);
+        if (ph >= 50 && ph <= 230) {
+          setHrPeak({ maxHr: ph, maxHrDate: null });
+          return;
+        }
+        setHrPeak(undefined);
+        if (typeof window.fetchMaxHrFromYearlyPeaks === 'function') {
+          window.fetchMaxHrFromYearlyPeaks(userProfile.id).then(function (res) {
+            setHrPeak(res != null ? res : { maxHr: 0 });
+          }).catch(function () {
+            setHrPeak({ maxHr: 0 });
+          });
+        } else {
+          setHrPeak({ maxHr: 0 });
+        }
+      },
+      [userProfile]
+    );
+
+    var ftp = Number(stats.ftp) || (userProfile && Number(userProfile.ftp)) || 0;
+    var build = typeof window.buildProfileZoneTableHtml === 'function' ? window.buildProfileZoneTableHtml : null;
+    if (!build) return null;
+
+    var maxHrNum = 0;
+    var maxHrDate = undefined;
+    if (hrPeak && typeof hrPeak === 'object' && hrPeak.maxHr != null) {
+      maxHrNum = Number(hrPeak.maxHr) || 0;
+      maxHrDate = hrPeak.maxHrDate;
+    }
+    var z = build(ftp, hrPeak === undefined ? 0 : maxHrNum, { compact: false, maxHrDate: maxHrDate });
+    var ftpHtml = z && z.ftpHtml ? z.ftpHtml : '';
+    var hrHtml = '';
+    if (hrPeak === undefined) {
+      hrHtml =
+        '<div class="profile-zone-table-block profile-zone-table-in-card"><div class="profile-zone-table-header">심박 영역</div><div class="profile-hr-loading" style="padding:12px 14px;text-align:center;color:#6b7280">최대 심박을 불러오는 중...</div></div>';
+    } else {
+      hrHtml = z && z.hrHtml ? z.hrHtml : '';
+    }
+    var html = '';
+    if (ftpHtml) html += ftpHtml;
+    html += hrHtml;
+    if (!html) return null;
+    return React.createElement('div', {
+      className: 'dashboard-riding-metrics-zones profile-zone-tables-wrap',
+      dangerouslySetInnerHTML: { __html: html }
+    });
+  }
 
   function TabSkeleton() {
     return React.createElement(
@@ -197,6 +259,7 @@
             'div',
             { className: 'rounded-xl border border-gray-200 bg-white overflow-hidden' },
             React.createElement('div', { className: 'px-4 pb-4 pt-1 space-y-4 text-xs text-gray-600 border-t-0' },
+              React.createElement(RidingMetricsZoneTables, { userProfile: userProfile, stats: stats }),
               React.createElement('section', null,
                 React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 표시 기준'),
                 React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
