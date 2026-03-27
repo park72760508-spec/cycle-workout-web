@@ -166,6 +166,33 @@
       });
   }
 
+  /**
+   * 연령·성별 미구분 Stelvio 전체 사용자 롤링 평균 (stats_vo2_stelvio_rolling: all_all)
+   * @returns {Promise<{ avgMlKg: number, userCount: number }|null>}
+   */
+  function fetchStelvioRollingVo2StatsGlobal() {
+    var db = global.firestoreV9;
+    if (!db) return Promise.resolve(null);
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        return mod.getDoc(mod.doc(db, 'stats_vo2_stelvio_rolling', 'all_all'));
+      })
+      .then(function (snap) {
+        if (!docSnapExists(snap)) return null;
+        var d = snap.data();
+        if (!d || d.minSamplesMet !== true) return null;
+        var avg = Number(d.avgMlKg);
+        if (!isFinite(avg) || avg < 15 || avg > 110) return null;
+        return {
+          avgMlKg: Math.round(avg * 10) / 10,
+          userCount: Math.max(0, Math.floor(Number(d.userCount) || 0))
+        };
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
   /** 집계 없을 때: STELVIO_USER_AVG_VO2MAX_MLKG 연령대별 값의 산술평균 (동일 성별·전 연령대 참고) */
   function getStelvioUserAvgVo2maxAllAgesMlKg(genderKey) {
     var g = genderKey === 'female' ? 'female' : 'male';
@@ -177,6 +204,13 @@
       sum += t[brackets[i]] != null ? Number(t[brackets[i]]) : 0;
     }
     return Math.round((sum / brackets.length) * 10) / 10;
+  }
+
+  /** 집계 없을 때: 남·여 전 연령대 참고값의 산술 평균 (연령·성별 구분 없음 폴백) */
+  function getStelvioUserAvgVo2maxGlobalMlKg() {
+    var m = getStelvioUserAvgVo2maxAllAgesMlKg('male');
+    var f = getStelvioUserAvgVo2maxAllAgesMlKg('female');
+    return Math.round(((m + f) / 2) * 10) / 10;
   }
 
   /**
@@ -334,7 +368,9 @@
   global.getStelvioUserAvgVo2maxMlKg = getStelvioUserAvgVo2maxMlKg;
   global.fetchStelvioRollingVo2Stats = fetchStelvioRollingVo2Stats;
   global.fetchStelvioRollingVo2StatsAllAges = fetchStelvioRollingVo2StatsAllAges;
+  global.fetchStelvioRollingVo2StatsGlobal = fetchStelvioRollingVo2StatsGlobal;
   global.getStelvioUserAvgVo2maxAllAgesMlKg = getStelvioUserAvgVo2maxAllAgesMlKg;
+  global.getStelvioUserAvgVo2maxGlobalMlKg = getStelvioUserAvgVo2maxGlobalMlKg;
   global.persistVo2DemographicSampleAsync = persistVo2DemographicSampleAsync;
 
   // --- STELVIO VO2 Max (260327_V1 원본 로직) ---------------------------------
@@ -470,8 +506,7 @@
   }
 
   /**
-   * 성장 트렌드 참고선: Stelvio **연령대(30대 이하·40·50·60대 이상)·성별** 피크 W/kg 평균 × 체중 → W,
-   * 심박은 동일 코호트 피크 심박(bpm) 평균.
+   * 성장 트렌드 참고선: 아래 표에서 **전 성별·전 연령대** 피크 W/kg·HR의 산술평균(슬롯별) × 체중 → W
    * 키: u40=만 39세 이하, 40s=40–49, 50s=50–59, 60p=60세 이상
    */
   var STELVIO_COHORT_AVG_PEAK_WKG = {
@@ -522,27 +557,62 @@
     return t['40s'] || t.u40;
   }
 
+  var GROWTH_COHORT_BRACKETS = ['u40', '40s', '50s', '60p'];
+  var GROWTH_COHORT_GENDERS = ['male', 'female'];
+
+  function getGlobalAvgPeakWkgForSlot(slotIndex) {
+    var idx = Math.max(0, Math.min(6, Number(slotIndex) || 0));
+    var sum = 0;
+    var n = 0;
+    var gi, bi, row, v;
+    for (gi = 0; gi < GROWTH_COHORT_GENDERS.length; gi++) {
+      var t = STELVIO_COHORT_AVG_PEAK_WKG[GROWTH_COHORT_GENDERS[gi]];
+      if (!t) continue;
+      for (bi = 0; bi < GROWTH_COHORT_BRACKETS.length; bi++) {
+        row = t[GROWTH_COHORT_BRACKETS[bi]];
+        if (!row) continue;
+        v = row[idx];
+        if (v != null && isFinite(Number(v))) {
+          sum += Number(v);
+          n++;
+        }
+      }
+    }
+    return n > 0 ? sum / n : 4.0;
+  }
+
+  function getGlobalAvgPeakHrForSlot(slotIndex) {
+    var idx = Math.max(0, Math.min(6, Number(slotIndex) || 0));
+    var sum = 0;
+    var n = 0;
+    var gi, bi, row, v;
+    for (gi = 0; gi < GROWTH_COHORT_GENDERS.length; gi++) {
+      var t = STELVIO_COHORT_AVG_PEAK_HR_BPM[GROWTH_COHORT_GENDERS[gi]];
+      if (!t) continue;
+      for (bi = 0; bi < GROWTH_COHORT_BRACKETS.length; bi++) {
+        row = t[GROWTH_COHORT_BRACKETS[bi]];
+        if (!row) continue;
+        v = row[idx];
+        if (v != null && isFinite(Number(v))) {
+          sum += Number(v);
+          n++;
+        }
+      }
+    }
+    return n > 0 ? sum / n : 165;
+  }
+
   /**
    * @returns {{ watts: number, hr: number, cohortAvgWkg: number, cohortAvgPeakHrBpm: number, growthAgeBracket: string }}
    */
   function getGrowthStelvioReferencePowerHr(slotIndex, userProfile) {
     userProfile = userProfile || {};
     var idx = Math.max(0, Math.min(6, Number(slotIndex) || 0));
-    var pr = typeof resolveProfileAgeGenderForVO2 === 'function'
-      ? resolveProfileAgeGenderForVO2(userProfile)
-      : { genderKey: 'male', age: 35 };
-    var gk = pr.genderKey === 'female' ? 'female' : 'male';
-    var growthBracket = getGrowthAgeBracket(pr.age != null ? pr.age : 35);
     var weightKg = Number(userProfile.weight);
     if (isNaN(weightKg) || weightKg <= 0) weightKg = 70;
 
-    var rowWkg = getCohortRow(STELVIO_COHORT_AVG_PEAK_WKG, gk, growthBracket);
-    var rowHr = getCohortRow(STELVIO_COHORT_AVG_PEAK_HR_BPM, gk, growthBracket);
-    if (!rowWkg) rowWkg = STELVIO_COHORT_AVG_PEAK_WKG.male['40s'];
-    if (!rowHr) rowHr = STELVIO_COHORT_AVG_PEAK_HR_BPM.male['40s'];
-
-    var avgWkg = rowWkg[idx] != null ? Number(rowWkg[idx]) : 4.0;
-    var avgPeakHr = rowHr[idx] != null ? Number(rowHr[idx]) : 165;
+    var avgWkg = getGlobalAvgPeakWkgForSlot(idx);
+    var avgPeakHr = getGlobalAvgPeakHrForSlot(idx);
 
     var refW = Math.round(avgWkg * weightKg);
     var refHr = Math.round(avgPeakHr);
@@ -554,7 +624,7 @@
       hr: refHr,
       cohortAvgWkg: Math.round(avgWkg * 100) / 100,
       cohortAvgPeakHrBpm: refHr,
-      growthAgeBracket: growthBracket
+      growthAgeBracket: 'global'
     };
   }
 
