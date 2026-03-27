@@ -347,4 +347,32 @@
     ex.baselineVO2FromFTP = baselineVO2FromFTP;
     ex.acsmVO2 = acsmVO2;
   }
+
+  /**
+   * 성장 트렌드: 구간별(년간 PR과 동일 7슬롯) Stelvio 연령·성별 참고 PR (FTP·예측 MaxHR 기반)
+   * slotIndex 0=M … 6=60분 — 녹색=파워(W), 주황=심박(bpm)
+   */
+  var GROWTH_REF_FTP_MULT = [2.35, 1.5, 1.34, 1.2, 1.06, 0.96, 0.84];
+  var GROWTH_REF_HR_FRAC = [0.9, 0.94, 0.92, 0.89, 0.87, 0.84, 0.81];
+
+  function getGrowthStelvioReferencePowerHr(slotIndex, userProfile) {
+    userProfile = userProfile || {};
+    var ftp = Number(userProfile.ftp);
+    if (isNaN(ftp) || ftp < 1) ftp = 200;
+    var idx = Math.max(0, Math.min(6, Number(slotIndex) || 0));
+    var pr = typeof resolveProfileAgeGenderForVO2 === 'function'
+      ? resolveProfileAgeGenderForVO2(userProfile)
+      : { age: 35 };
+    var age = pr.age != null ? Number(pr.age) : 35;
+    var ageFactor = age >= 55 ? 0.9 : age >= 45 ? 0.95 : 1;
+    var maxHR = getMaxHR(userProfile);
+    var refW = Math.round(ftp * GROWTH_REF_FTP_MULT[idx] * ageFactor);
+    var refHr = Math.round(maxHR * GROWTH_REF_HR_FRAC[idx]);
+    refW = Math.max(50, Math.min(2000, refW));
+    refHr = Math.max(70, Math.min(220, refHr));
+    return { watts: refW, hr: refHr };
+  }
+
+  global.getGrowthStelvioReferencePowerHr = getGrowthStelvioReferencePowerHr;
+  global.GROWTH_PR_SLOT_COUNT = 7;
 })(typeof window !== 'undefined' ? window : this);
