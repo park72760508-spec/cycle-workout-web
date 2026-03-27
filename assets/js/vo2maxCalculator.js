@@ -349,70 +349,76 @@
   }
 
   /**
-   * 성장 트렌드 참고선: Stelvio 연령·성별 **피크 W/kg 평균**(구간별) × 사용자 체중 → W,
-   * 심박은 동일 코호트 **피크 심박(bpm) 평균** 테이블(구간별).
-   * (일반 성인·트레이닝 앱 사용자 특성을 반영한 대표값, ml/kg·bpm)
+   * 성장 트렌드 참고선: Stelvio **연령대(30대 이하·40·50·60대 이상)·성별** 피크 W/kg 평균 × 체중 → W,
+   * 심박은 동일 코호트 피크 심박(bpm) 평균.
+   * 키: u40=만 39세 이하, 40s=40–49, 50s=50–59, 60p=60세 이상
    */
   var STELVIO_COHORT_AVG_PEAK_WKG = {
     male: {
-      '20-29': [12.5, 6.8, 6.0, 5.35, 4.65, 4.05, 3.45],
-      '30-39': [11.5, 6.4, 5.65, 5.0, 4.35, 3.8, 3.25],
-      '40-49': [10.5, 6.0, 5.3, 4.7, 4.05, 3.55, 3.05],
-      '50-59': [9.5, 5.5, 4.85, 4.3, 3.75, 3.25, 2.8],
-      '60+': [8.2, 5.0, 4.4, 3.9, 3.4, 2.95, 2.55]
+      u40: [12.0, 6.6, 5.83, 5.18, 4.5, 3.93, 3.35],
+      '40s': [10.5, 6.0, 5.3, 4.7, 4.05, 3.55, 3.05],
+      '50s': [9.5, 5.5, 4.85, 4.3, 3.75, 3.25, 2.8],
+      '60p': [8.2, 5.0, 4.4, 3.9, 3.4, 2.95, 2.55]
     },
     female: {
-      '20-29': [10.2, 5.5, 4.85, 4.3, 3.75, 3.25, 2.8],
-      '30-39': [9.5, 5.2, 4.55, 4.05, 3.5, 3.05, 2.65],
-      '40-49': [8.6, 4.85, 4.25, 3.8, 3.3, 2.85, 2.45],
-      '50-59': [7.8, 4.45, 3.95, 3.5, 3.05, 2.65, 2.25],
-      '60+': [6.8, 4.0, 3.55, 3.15, 2.75, 2.4, 2.05]
+      u40: [9.85, 5.35, 4.7, 4.18, 3.63, 3.15, 2.73],
+      '40s': [8.6, 4.85, 4.25, 3.8, 3.3, 2.85, 2.45],
+      '50s': [7.8, 4.45, 3.95, 3.5, 3.05, 2.65, 2.25],
+      '60p': [6.8, 4.0, 3.55, 3.15, 2.75, 2.4, 2.05]
     }
   };
 
   var STELVIO_COHORT_AVG_PEAK_HR_BPM = {
     male: {
-      '20-29': [198, 194, 189, 183, 176, 168, 158],
-      '30-39': [195, 191, 186, 180, 173, 165, 155],
-      '40-49': [192, 188, 182, 176, 169, 161, 152],
-      '50-59': [188, 184, 178, 172, 165, 157, 148],
-      '60+': [182, 178, 172, 166, 159, 152, 143]
+      u40: [197, 193, 188, 182, 175, 167, 157],
+      '40s': [192, 188, 182, 176, 169, 161, 152],
+      '50s': [188, 184, 178, 172, 165, 157, 148],
+      '60p': [182, 178, 172, 166, 159, 152, 143]
     },
     female: {
-      '20-29': [192, 188, 183, 177, 170, 162, 153],
-      '30-39': [189, 185, 180, 174, 167, 159, 150],
-      '40-49': [186, 182, 176, 170, 163, 155, 146],
-      '50-59': [182, 178, 172, 166, 159, 151, 142],
-      '60+': [176, 172, 166, 160, 153, 146, 137]
+      u40: [191, 187, 182, 176, 169, 161, 152],
+      '40s': [186, 182, 176, 170, 163, 155, 146],
+      '50s': [182, 178, 172, 166, 159, 151, 142],
+      '60p': [176, 172, 166, 160, 153, 146, 137]
     }
   };
 
-  function getCohortRow(table, genderKey, ageBracket) {
+  /** 30대 이하(≤39) / 40대 / 50대 / 60대 이상 */
+  function getGrowthAgeBracket(age) {
+    var a = Number(age);
+    if (isNaN(a) || a < 0) return '40s';
+    if (a < 40) return 'u40';
+    if (a < 50) return '40s';
+    if (a < 60) return '50s';
+    return '60p';
+  }
+
+  function getCohortRow(table, genderKey, growthAgeBracket) {
     var g = genderKey === 'female' ? 'female' : 'male';
     var t = table[g];
     if (!t) return null;
-    if (t[ageBracket]) return t[ageBracket];
-    return t['30-39'] || t['40-49'] || t['20-29'];
+    if (t[growthAgeBracket]) return t[growthAgeBracket];
+    return t['40s'] || t.u40;
   }
 
   /**
-   * @returns {{ watts: number, hr: number, cohortAvgWkg: number, cohortAvgPeakHrBpm: number }}
+   * @returns {{ watts: number, hr: number, cohortAvgWkg: number, cohortAvgPeakHrBpm: number, growthAgeBracket: string }}
    */
   function getGrowthStelvioReferencePowerHr(slotIndex, userProfile) {
     userProfile = userProfile || {};
     var idx = Math.max(0, Math.min(6, Number(slotIndex) || 0));
     var pr = typeof resolveProfileAgeGenderForVO2 === 'function'
       ? resolveProfileAgeGenderForVO2(userProfile)
-      : { genderKey: 'male', ageBracket: '30-39' };
+      : { genderKey: 'male', age: 35 };
     var gk = pr.genderKey === 'female' ? 'female' : 'male';
-    var bracket = pr.ageBracket || '30-39';
+    var growthBracket = getGrowthAgeBracket(pr.age != null ? pr.age : 35);
     var weightKg = Number(userProfile.weight);
     if (isNaN(weightKg) || weightKg <= 0) weightKg = 70;
 
-    var rowWkg = getCohortRow(STELVIO_COHORT_AVG_PEAK_WKG, gk, bracket);
-    var rowHr = getCohortRow(STELVIO_COHORT_AVG_PEAK_HR_BPM, gk, bracket);
-    if (!rowWkg) rowWkg = STELVIO_COHORT_AVG_PEAK_WKG.male['30-39'];
-    if (!rowHr) rowHr = STELVIO_COHORT_AVG_PEAK_HR_BPM.male['30-39'];
+    var rowWkg = getCohortRow(STELVIO_COHORT_AVG_PEAK_WKG, gk, growthBracket);
+    var rowHr = getCohortRow(STELVIO_COHORT_AVG_PEAK_HR_BPM, gk, growthBracket);
+    if (!rowWkg) rowWkg = STELVIO_COHORT_AVG_PEAK_WKG.male['40s'];
+    if (!rowHr) rowHr = STELVIO_COHORT_AVG_PEAK_HR_BPM.male['40s'];
 
     var avgWkg = rowWkg[idx] != null ? Number(rowWkg[idx]) : 4.0;
     var avgPeakHr = rowHr[idx] != null ? Number(rowHr[idx]) : 165;
@@ -426,12 +432,14 @@
       watts: refW,
       hr: refHr,
       cohortAvgWkg: Math.round(avgWkg * 100) / 100,
-      cohortAvgPeakHrBpm: refHr
+      cohortAvgPeakHrBpm: refHr,
+      growthAgeBracket: growthBracket
     };
   }
 
   global.STELVIO_COHORT_AVG_PEAK_WKG = STELVIO_COHORT_AVG_PEAK_WKG;
   global.STELVIO_COHORT_AVG_PEAK_HR_BPM = STELVIO_COHORT_AVG_PEAK_HR_BPM;
+  global.getGrowthAgeBracket = getGrowthAgeBracket;
   global.getGrowthStelvioReferencePowerHr = getGrowthStelvioReferencePowerHr;
   global.GROWTH_PR_SLOT_COUNT = 7;
 })(typeof window !== 'undefined' ? window : this);
