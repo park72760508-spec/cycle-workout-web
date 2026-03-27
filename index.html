@@ -14744,7 +14744,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var ref =
             typeof window.getGrowthStelvioReferencePowerHr === 'function'
               ? window.getGrowthStelvioReferencePowerHr(slot, userProfile || null)
-              : { watts: 200, hr: 150 };
+              : { watts: 200, hr: 150, cohortAvgWkg: 4.5, cohortAvgPeakHrBpm: 165 };
           var validW = wattsData.filter(function (v) {
             return v != null && !isNaN(v) && v > 0;
           });
@@ -14772,6 +14772,80 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             refWArr.push(ref.watts);
             refHArr.push(ref.hr);
           }
+          var growthPrPlugin = {
+            id: 'growthTrendPrMarkers',
+            afterDatasetsDraw: function (chart) {
+              var d = chart.data;
+              if (!d || !d.datasets || d.datasets.length < 4) return;
+              var hrDs = d.datasets[2];
+              var wDs = d.datasets[3];
+              var hrData = hrDs && hrDs.data ? hrDs.data : [];
+              var wData = wDs && wDs.data ? wDs.data : [];
+              var metaHr = chart.getDatasetMeta(2);
+              var metaW = chart.getDatasetMeta(3);
+              var prWIdx = -1;
+              var prHIdx = -1;
+              var maxW = 0;
+              var maxH = 0;
+              var ii;
+              for (ii = 0; ii < wData.length; ii++) {
+                var vw = wData[ii];
+                if (vw != null && !isNaN(vw) && vw > maxW) {
+                  maxW = vw;
+                  prWIdx = ii;
+                }
+              }
+              for (ii = 0; ii < hrData.length; ii++) {
+                var vh = hrData[ii];
+                if (vh != null && !isNaN(vh) && vh > maxH) {
+                  maxH = vh;
+                  prHIdx = ii;
+                }
+              }
+              var c = chart.ctx;
+              c.save();
+              c.textAlign = 'center';
+              c.textBaseline = 'middle';
+              var sameIdx = prWIdx >= 0 && prHIdx >= 0 && prWIdx === prHIdx;
+              if (prWIdx >= 0 && metaW && metaW.data && metaW.data[prWIdx]) {
+                var ptW = metaW.data[prWIdx];
+                if (ptW && ptW.x != null && ptW.y != null) {
+                  c.font = 'bold 9px sans-serif';
+                  c.fillStyle = '#1d4ed8';
+                  c.fillText(Math.round(maxW) + ' W', ptW.x, ptW.y - (sameIdx ? 26 : 20));
+                  c.font = 'bold 8px sans-serif';
+                  c.fillStyle = '#3b82f6';
+                  c.beginPath();
+                  c.arc(ptW.x, ptW.y, 11, 0, Math.PI * 2);
+                  c.fill();
+                  c.strokeStyle = 'rgba(255,255,255,0.95)';
+                  c.lineWidth = 1.5;
+                  c.stroke();
+                  c.fillStyle = '#fff';
+                  c.fillText('PR', ptW.x, ptW.y);
+                }
+              }
+              if (prHIdx >= 0 && metaHr && metaHr.data && metaHr.data[prHIdx]) {
+                var ptH = metaHr.data[prHIdx];
+                if (ptH && ptH.x != null && ptH.y != null) {
+                  c.font = 'bold 9px sans-serif';
+                  c.fillStyle = '#be185d';
+                  c.fillText(Math.round(maxH) + ' bpm', ptH.x, ptH.y - (sameIdx ? 14 : 20));
+                  c.font = 'bold 8px sans-serif';
+                  c.fillStyle = '#ec4899';
+                  c.beginPath();
+                  c.arc(ptH.x, ptH.y, 11, 0, Math.PI * 2);
+                  c.fill();
+                  c.strokeStyle = 'rgba(255,255,255,0.95)';
+                  c.lineWidth = 1.5;
+                  c.stroke();
+                  c.fillStyle = '#fff';
+                  c.fillText('PR', ptH.x, ptH.y);
+                }
+              }
+              c.restore();
+            }
+          };
           chartInstanceRef.current = new Chart(ctx, {
             type: 'line',
             data: {
@@ -14779,7 +14853,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: 'Stelvio 참고 파워',
+                  label: '참고 파워 (평균 W/kg×체중)',
                   data: refWArr,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -14793,7 +14867,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 2,
-                  label: 'Stelvio 참고 심박',
+                  label: '참고 심박 (피크 평균)',
                   data: refHArr,
                   borderColor: '#ea580c',
                   borderWidth: 2,
@@ -14853,8 +14927,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       if (v == null || isNaN(v)) return ds + ': —';
                       if (ds.indexOf('파워') >= 0 && ds.indexOf('참고') < 0) return ds + ': ' + Math.round(v) + ' W';
                       if (ds.indexOf('심박') >= 0 && ds.indexOf('참고') < 0) return ds + ': ' + Math.round(v) + ' bpm';
-                      if (ds.indexOf('참고 파워') >= 0) return ds + ': ' + Math.round(v) + ' W';
-                      if (ds.indexOf('참고 심박') >= 0) return ds + ': ' + Math.round(v) + ' bpm';
+                      if (ds.indexOf('참고 파워') >= 0) {
+                        var wkg = ref.cohortAvgWkg != null ? ref.cohortAvgWkg : '—';
+                        return (
+                          '참고 파워: ' +
+                          Math.round(v) +
+                          ' W (동일 연령·성별 평균 ' +
+                          wkg +
+                          ' W/kg × 체중)'
+                        );
+                      }
+                      if (ds.indexOf('참고 심박') >= 0) {
+                        return '참고 심박: ' + Math.round(v) + ' bpm (동일 코호트 피크 심박 평균)';
+                      }
                       return ds + ': ' + Math.round(v);
                     }
                   }
@@ -14888,7 +14973,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }
               }
             },
-            plugins: []
+            plugins: [growthPrPlugin]
           });
           return function cleanup() {
             if (chartInstanceRef.current) {
@@ -14958,15 +15043,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </span>
             <span className="inline-flex items-center gap-1 text-green-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-green-600"></span>
-              참고 파워
+              참고 파워 (평균 W/kg×체중)
             </span>
             <span className="inline-flex items-center gap-1 text-orange-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
-              참고 심박
+              참고 심박 (피크 평균)
             </span>
           </div>
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            Y축은 심박·파워를 동일 스케일에 표시합니다(하단 근처: bpm, 상단 근처: W). 점선은 프로필 FTP·예측 MaxHR 기반 Stelvio 참고값입니다.
+            참고 파워는 동일 연령·성별 Stelvio 사용자의 구간별 <strong>피크 W/kg 평균</strong>에 <strong>내 체중</strong>을 곱한 절대값(W)입니다. 참고 심박은 동일 코호트
+            <strong>피크 심박(bpm) 평균</strong>입니다. 그래프의 PR은 6개월 중 해당 구간 최고 파워·심박 지점입니다.
           </div>
         </DashboardCard>
       );
