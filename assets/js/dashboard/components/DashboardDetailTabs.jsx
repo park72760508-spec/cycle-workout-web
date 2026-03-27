@@ -152,16 +152,16 @@
           { className: 'space-y-6' },
           logsLoading ? React.createElement(
             DashboardCard,
-            { title: 'VO₂max 트렌드 (6개월)' },
+            { title: 'VO₂max 트렌드' },
             React.createElement('div', { className: 'h-[200px] flex flex-col items-center justify-center' },
               React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
               React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
             )
           ) : logsLoadError ? React.createElement(
             DashboardCard,
-            { title: 'VO₂max 트렌드 (6개월)' },
+            { title: 'VO₂max 트렌드' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
-          ) : Vo2MaxTrendChart && React.createElement(Vo2MaxTrendChart, { data: vo2TrendData }),
+          ) : Vo2MaxTrendChart && React.createElement(Vo2MaxTrendChart, { data: vo2TrendData, userProfile: userProfile }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: '나의 성장 트렌드 (6개월)' },
