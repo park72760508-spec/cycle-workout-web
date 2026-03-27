@@ -14162,6 +14162,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       'rgba(239, 68, 68, 0.7)',     // 40분 = Z6
       'rgba(168, 85, 247, 0.7)'     // 60분 = Z7
     ];
+    var GROWTH_PR_CIRCLE_LABELS = ['M', '1분', '5분', '10', '20', '40', '60'];
     
     // 년간 파워PR 그래프 (2026년 yearly_peaks 기반, 달성일 매칭)
     function YearlyPowerPrChart(props) {
@@ -14499,7 +14500,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // VO₂max 6개월 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + 학술 평균(녹색 점선) + Stelvio 사용자 평균(주황 점선)
+    // VO₂max 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + 학술 평균(녹색 점선) + Stelvio 사용자 평균(주황 점선)
     function Vo2MaxTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -14669,7 +14670,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
       if (!data || data.length === 0) {
         return (
-          <DashboardCard title="VO₂max 트렌드 (6개월)">
+          <DashboardCard title="VO₂max 트렌드">
             <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
               데이터가 없습니다
             </div>
@@ -14677,7 +14678,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         );
       }
       return (
-        <DashboardCard title="VO₂max 트렌드 (6개월)">
+        <DashboardCard title="VO₂max 트렌드">
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
@@ -14699,183 +14700,212 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // 나의 성장 트렌드 (6개월): max_20min_watts(파랑), max_hr_20min(분홍), 부드러운 선, 점 표시 없음
+    // 나의 성장 트렌드 (6개월): 구간 선택(M~60분) · 좌측 통합 Y축(bpm 하단·W 상단) · Stelvio 참고선
+    function growthTrendGetWattAt(d, slot) {
+      if (!d) return null;
+      if (d.growthWattsSlots && d.growthWattsSlots[slot] != null && d.growthWattsSlots[slot] > 0) return d.growthWattsSlots[slot];
+      if (slot === 4 && d.max20minWatts != null && d.max20minWatts > 0) return d.max20minWatts;
+      return null;
+    }
+    function growthTrendGetHrAt(d, slot) {
+      if (!d) return null;
+      if (d.growthHrSlots && d.growthHrSlots[slot] != null && d.growthHrSlots[slot] > 0) return d.growthHrSlots[slot];
+      if (slot === 4 && d.maxHr20min != null && d.maxHr20min > 0) return d.maxHr20min;
+      return null;
+    }
     function GrowthTrendChart(props) {
       var p = props || {};
       var data = p.data;
+      var userProfile = p.userProfile;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
-      useEffect(function() {
-        if (!data || data.length === 0) return;
-        var ctx = chartRef.current && chartRef.current.getContext('2d');
-        if (!ctx || typeof Chart === 'undefined') return;
-        if (chartInstanceRef.current) {
-          chartInstanceRef.current.destroy();
-          chartInstanceRef.current = null;
-        }
-        var wattsData = data.map(function(d) { return d.max20minWatts; });
-        var hrData = data.map(function(d) { return d.maxHr20min; });
-        var labels = data.map(function(d) { return d.dateLabel || d.monthLabel || ''; });
-        var validWatts = wattsData.filter(function(v) { return v != null && !isNaN(v) && v > 0; });
-        var validHr = hrData.filter(function(v) { return v != null && !isNaN(v) && v > 0; });
-        var wattsMin = validWatts.length > 0 ? Math.min.apply(null, validWatts) : 0;
-        var wattsMax = validWatts.length > 0 ? Math.max.apply(null, validWatts) : 200;
-        var hrMin = validHr.length > 0 ? Math.min.apply(null, validHr) : 100;
-        var hrMax = validHr.length > 0 ? Math.max.apply(null, validHr) : 180;
-        var yWattsMin = Math.max(0, Math.floor(wattsMin - 20));
-        var yWattsMax = Math.ceil(wattsMax + 20);
-        var yHrMin = Math.max(80, Math.floor(hrMin - 10));
-        var yHrMax = Math.min(220, Math.ceil(hrMax + 10));
-        var prWattsIdx = -1, prHrIdx = -1;
-        var maxW = 0, maxH = 0;
-        wattsData.forEach(function(v, i) { if (v != null && v > maxW) { maxW = v; prWattsIdx = i; } });
-        hrData.forEach(function(v, i) { if (v != null && v > maxH) { maxH = v; prHrIdx = i; } });
-        var growthPrPlugin = {
-          id: 'growthPrLabels',
-          afterDatasetsDraw: function(chart) {
-            var ctx = chart.ctx;
-            ctx.save();
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            var sameIdx = (prWattsIdx >= 0 && prHrIdx >= 0 && prWattsIdx === prHrIdx);
-            if (prWattsIdx >= 0) {
-              var meta0 = chart.getDatasetMeta(0);
-              var pt0 = meta0 && meta0.data && meta0.data[prWattsIdx];
-              if (pt0 && pt0.x != null && pt0.y != null) {
-                var valStr = Math.round(maxW) + 'W';
-                ctx.font = 'bold 9px sans-serif';
-                ctx.fillStyle = '#3b82f6';
-                ctx.fillText(valStr, pt0.x, pt0.y - (sameIdx ? 24 : 20));
-                ctx.font = 'bold 8px sans-serif';
-                ctx.fillStyle = '#3b82f6';
-                ctx.beginPath();
-                ctx.arc(pt0.x, pt0.y, 12, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                ctx.fillStyle = '#fff';
-                ctx.fillText('PR', pt0.x, pt0.y);
-              }
-            }
-            if (prHrIdx >= 0) {
-              var meta1 = chart.getDatasetMeta(1);
-              var pt1 = meta1 && meta1.data && meta1.data[prHrIdx];
-              if (pt1 && pt1.x != null && pt1.y != null) {
-                var valStrHr = Math.round(maxH) + 'bpm';
-                ctx.font = 'bold 9px sans-serif';
-                ctx.fillStyle = '#ec4899';
-                ctx.fillText(valStrHr, pt1.x, pt1.y - (sameIdx ? 16 : 20));
-                ctx.font = 'bold 8px sans-serif';
-                ctx.fillStyle = '#ec4899';
-                ctx.beginPath();
-                ctx.arc(pt1.x, pt1.y, 12, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                ctx.fillStyle = '#fff';
-                ctx.fillText('PR', pt1.x, pt1.y);
-              }
-            }
-            ctx.restore();
-          }
-        };
-        chartInstanceRef.current = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: '20분 최대 파워 (W)',
-                data: wattsData,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                borderWidth: 2,
-                tension: 0.5,
-                fill: true,
-                spanGaps: true,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                yAxisID: 'yWatts'
-              },
-              {
-                label: '20분 최대 심박 (bpm)',
-                data: hrData,
-                borderColor: '#ec4899',
-                backgroundColor: 'rgba(236, 72, 153, 0.12)',
-                borderWidth: 2,
-                tension: 0.5,
-                fill: true,
-                spanGaps: true,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                yAxisID: 'yHr'
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-              legend: {
-                display: true,
-                position: 'top',
-                labels: { font: { size: 11 }, color: '#6b7280', usePointStyle: true }
-              },
-              tooltip: {
-                enabled: true,
-                callbacks: {
-                  title: function(items) { return items[0] && items[0].label ? items[0].label : ''; },
-                  label: function(ctx) {
-                    if (ctx.dataset.yAxisID === 'yWatts') {
-                      var v = ctx.raw;
-                      return v != null ? '20분 최대 파워: ' + Math.round(v) + ' W' : '데이터 없음';
-                    }
-                    var v = ctx.raw;
-                    return v != null ? '20분 최대 심박: ' + Math.round(v) + ' bpm' : '데이터 없음';
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 45, minRotation: 0, maxTicksLimit: 12, autoSkip: true }
-              },
-              yWatts: {
-                type: 'linear',
-                position: 'right',
-                display: true,
-                min: yWattsMin,
-                max: yWattsMax,
-                beginAtZero: false,
-                grid: { display: false },
-                ticks: { font: { size: 11 }, color: '#3b82f6', callback: function(v, i) { return i === 0 ? 'W' : String(v); } }
-              },
-              yHr: {
-                type: 'linear',
-                position: 'left',
-                display: true,
-                min: yHrMin,
-                max: yHrMax,
-                beginAtZero: false,
-                grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280', callback: function(v, i) { return i === 0 ? 'bpm' : String(v); } }
-              }
-            }
-          },
-          plugins: [growthPrPlugin]
-        });
-        return function cleanup() {
+      var _slotState = useState(4);
+      var selectedSlot = _slotState[0];
+      var setSelectedSlot = _slotState[1];
+      useEffect(
+        function () {
+          if (!data || data.length === 0) return;
+          var ctx = chartRef.current && chartRef.current.getContext('2d');
+          if (!ctx || typeof Chart === 'undefined') return;
           if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
             chartInstanceRef.current = null;
           }
-        };
-      }, [data]);
-      var hasAny = data && data.some(function(d) { return (d.max20minWatts != null && d.max20minWatts > 0) || (d.maxHr20min != null && d.maxHr20min > 0); });
+          var slot = selectedSlot;
+          var labels = data.map(function (d) {
+            return d.dateLabel || d.monthLabel || '';
+          });
+          var wattsData = data.map(function (d) {
+            return growthTrendGetWattAt(d, slot);
+          });
+          var hrData = data.map(function (d) {
+            return growthTrendGetHrAt(d, slot);
+          });
+          var ref =
+            typeof window.getGrowthStelvioReferencePowerHr === 'function'
+              ? window.getGrowthStelvioReferencePowerHr(slot, userProfile || null)
+              : { watts: 200, hr: 150 };
+          var validW = wattsData.filter(function (v) {
+            return v != null && !isNaN(v) && v > 0;
+          });
+          var validH = hrData.filter(function (v) {
+            return v != null && !isNaN(v) && v > 0;
+          });
+          var cand = [ref.watts, ref.hr];
+          validW.forEach(function (v) {
+            cand.push(v);
+          });
+          validH.forEach(function (v) {
+            cand.push(v);
+          });
+          var yDomainMin = Math.min.apply(null, cand) - 10;
+          var yDomainMax = Math.max.apply(null, cand) + 25;
+          if (yDomainMax <= yDomainMin) {
+            yDomainMin = 0;
+            yDomainMax = 400;
+          }
+          var n = labels.length;
+          var refWArr = [];
+          var refHArr = [];
+          var ri;
+          for (ri = 0; ri < n; ri++) {
+            refWArr.push(ref.watts);
+            refHArr.push(ref.hr);
+          }
+          chartInstanceRef.current = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  order: 1,
+                  label: 'Stelvio 참고 파워',
+                  data: refWArr,
+                  borderColor: '#16a34a',
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  backgroundColor: 'transparent',
+                  tension: 0,
+                  fill: false,
+                  pointRadius: 0,
+                  spanGaps: true,
+                  yAxisID: 'yUnified'
+                },
+                {
+                  order: 2,
+                  label: 'Stelvio 참고 심박',
+                  data: refHArr,
+                  borderColor: '#ea580c',
+                  borderWidth: 2,
+                  borderDash: [4, 4],
+                  backgroundColor: 'transparent',
+                  tension: 0,
+                  fill: false,
+                  pointRadius: 0,
+                  spanGaps: true,
+                  yAxisID: 'yUnified'
+                },
+                {
+                  order: 3,
+                  label: '심박 (bpm)',
+                  data: hrData,
+                  borderColor: '#ec4899',
+                  backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                  borderWidth: 2,
+                  tension: 0.45,
+                  fill: true,
+                  spanGaps: true,
+                  pointRadius: 3,
+                  pointHoverRadius: 5,
+                  yAxisID: 'yUnified'
+                },
+                {
+                  order: 4,
+                  label: '파워 (W)',
+                  data: wattsData,
+                  borderColor: '#3b82f6',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  borderWidth: 2,
+                  tension: 0.45,
+                  fill: true,
+                  spanGaps: true,
+                  pointRadius: 3,
+                  pointHoverRadius: 5,
+                  yAxisID: 'yUnified'
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  enabled: true,
+                  callbacks: {
+                    title: function (items) {
+                      return items[0] && items[0].label ? items[0].label : '';
+                    },
+                    label: function (ctx) {
+                      var ds = ctx.dataset.label || '';
+                      var v = ctx.raw;
+                      if (v == null || isNaN(v)) return ds + ': —';
+                      if (ds.indexOf('파워') >= 0 && ds.indexOf('참고') < 0) return ds + ': ' + Math.round(v) + ' W';
+                      if (ds.indexOf('심박') >= 0 && ds.indexOf('참고') < 0) return ds + ': ' + Math.round(v) + ' bpm';
+                      if (ds.indexOf('참고 파워') >= 0) return ds + ': ' + Math.round(v) + ' W';
+                      if (ds.indexOf('참고 심박') >= 0) return ds + ': ' + Math.round(v) + ' bpm';
+                      return ds + ': ' + Math.round(v);
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 10 }, color: '#6b7280', maxRotation: 45, minRotation: 0, maxTicksLimit: 12, autoSkip: true }
+                },
+                yUnified: {
+                  type: 'linear',
+                  position: 'left',
+                  display: true,
+                  min: yDomainMin,
+                  max: yDomainMax,
+                  beginAtZero: false,
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: {
+                    font: { size: 10 },
+                    color: '#6b7280',
+                    maxTicksLimit: 6,
+                    callback: function (value, index, ticks) {
+                      var tlen = ticks && ticks.length ? ticks.length : 0;
+                      if (tlen === 0) return value;
+                      if (index === 0) return Math.round(value) + ' bpm';
+                      if (index === tlen - 1) return Math.round(value) + ' W';
+                      return Math.round(value);
+                    }
+                  }
+                }
+              }
+            },
+            plugins: []
+          });
+          return function cleanup() {
+            if (chartInstanceRef.current) {
+              chartInstanceRef.current.destroy();
+              chartInstanceRef.current = null;
+            }
+          };
+        },
+        [data, userProfile, selectedSlot]
+      );
+      var hasAny =
+        data &&
+        data.some(function (d) {
+          if (d.growthWattsSlots && d.growthWattsSlots.some(function (v) { return v != null && v > 0; })) return true;
+          if (d.growthHrSlots && d.growthHrSlots.some(function (v) { return v != null && v > 0; })) return true;
+          return (d.max20minWatts != null && d.max20minWatts > 0) || (d.maxHr20min != null && d.maxHr20min > 0);
+        });
       if (!data || data.length === 0 || !hasAny) {
         return (
           <DashboardCard title="나의 성장 트렌드 (6개월)">
@@ -14885,13 +14915,58 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           </DashboardCard>
         );
       }
+      var selLab = GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
       return (
         <DashboardCard title="나의 성장 트렌드 (6개월)">
+          <p className="text-xs text-gray-500 mb-2 px-1">
+            구간을 선택하면 해당 시간의 월별 최대 파워·심박 추이를 표시합니다. (초기: 20분)
+          </p>
+          <div className="flex flex-wrap justify-center gap-1.5 mb-2 px-1">
+            {GROWTH_PR_CIRCLE_LABELS.map(function (lab, i) {
+              var active = selectedSlot === i;
+              var bg = YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={function () {
+                    setSelectedSlot(i);
+                  }}
+                  className={
+                    'relative flex items-center justify-center rounded-full w-9 h-9 text-[10px] font-bold text-gray-800 shadow-sm border transition ' +
+                    (active ? 'ring-2 ring-blue-600 ring-offset-2 border-blue-500' : 'border-gray-200 hover:border-gray-400')
+                  }
+                  style={{ backgroundColor: bg.replace('0.7)', '0.95)').replace('0.55)', '0.95)') }}
+                  title={lab + ' 구간'}
+                >
+                  {lab}
+                </button>
+              );
+            })}
+          </div>
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-600 px-2">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+              파워 ({selLab} 최대)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-pink-500" style={{ backgroundColor: '#ec4899' }}></span>
+              심박 ({selLab} 최대)
+            </span>
+            <span className="inline-flex items-center gap-1 text-green-700">
+              <span className="inline-block w-4 border-t-2 border-dashed border-green-600"></span>
+              참고 파워
+            </span>
+            <span className="inline-flex items-center gap-1 text-orange-700">
+              <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
+              참고 심박
+            </span>
+          </div>
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            월별 20분 최대 파워(W)와 20분 최대 심박(bpm)입니다. PR은 해당 기간 최고 기록 지점에 표시됩니다.
+            Y축은 심박·파워를 동일 스케일에 표시합니다(하단 근처: bpm, 상단 근처: W). 점선은 프로필 FTP·예측 MaxHR 기반 Stelvio 참고값입니다.
           </div>
         </DashboardCard>
       );
@@ -15882,15 +15957,33 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (isMounted) setVo2TrendData(vo2TrendRows);
 
             // 나의 성장 트렌드 (6개월): 월단위 max_20min_watts, max_hr_20min (VO2max 트렌드와 동일 주기)
+            var GROWTH_SLOT_FIELDS_DASH = [
+              { w: 'max_watts', h: 'max_hr' },
+              { w: 'max_1min_watts', h: 'max_hr_1min' },
+              { w: 'max_5min_watts', h: 'max_hr_5min' },
+              { w: 'max_10min_watts', h: 'max_hr_10min' },
+              { w: 'max_20min_watts', h: 'max_hr_20min' },
+              { w: 'max_40min_watts', h: 'max_hr_40min' },
+              { w: 'max_60min_watts', h: 'max_hr_60min' }
+            ];
+            function emptyGrowthDayDash() {
+              return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
+            }
             var byDateGrowth = {};
             logs6Months.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr) return;
-              if (!byDateGrowth[dateStr]) byDateGrowth[dateStr] = { max20minWatts: 0, maxHr20min: 0 };
-              var w = Number(log.max_20min_watts) || 0;
-              var h = Number(log.max_hr_20min) || 0;
-              if (w > byDateGrowth[dateStr].max20minWatts) byDateGrowth[dateStr].max20minWatts = w;
-              if (h > byDateGrowth[dateStr].maxHr20min) byDateGrowth[dateStr].maxHr20min = h;
+              if (!byDateGrowth[dateStr]) byDateGrowth[dateStr] = emptyGrowthDayDash();
+              var dg = byDateGrowth[dateStr];
+              var gsi;
+              for (gsi = 0; gsi < GROWTH_SLOT_FIELDS_DASH.length; gsi++) {
+                var wf = GROWTH_SLOT_FIELDS_DASH[gsi].w;
+                var hf = GROWTH_SLOT_FIELDS_DASH[gsi].h;
+                var wv = Number(log[wf]) || 0;
+                var hv = Number(log[hf]) || 0;
+                if (wv > dg.w[gsi]) dg.w[gsi] = wv;
+                if (hv > dg.h[gsi]) dg.h[gsi] = hv;
+              }
             });
             var growthTrendRows = [];
             for (var mOff = 5; mOff >= 0; mOff--) {
@@ -15906,20 +15999,26 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
                 endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
               }
-              var monthMaxWatts = 0, monthMaxHr = 0;
+              var monthW = [0, 0, 0, 0, 0, 0, 0];
+              var monthH = [0, 0, 0, 0, 0, 0, 0];
               Object.keys(byDateGrowth).forEach(function(ds) {
                 if (ds < startStr || ds > endStr) return;
-                var d = byDateGrowth[ds];
-                if (d.max20minWatts > monthMaxWatts) monthMaxWatts = d.max20minWatts;
-                if (d.maxHr20min > monthMaxHr) monthMaxHr = d.maxHr20min;
+                var day = byDateGrowth[ds];
+                var si3;
+                for (si3 = 0; si3 < 7; si3++) {
+                  if (day.w[si3] > monthW[si3]) monthW[si3] = day.w[si3];
+                  if (day.h[si3] > monthH[si3]) monthH[si3] = day.h[si3];
+                }
               });
               var monthLabel = m + '월';
               if (mOff === 0) monthLabel = m + '월(현재)';
               growthTrendRows.push({
                 monthLabel: monthLabel,
                 sortKey: y + '-' + pad2(m),
-                max20minWatts: monthMaxWatts > 0 ? monthMaxWatts : null,
-                maxHr20min: monthMaxHr > 0 ? monthMaxHr : null
+                growthWattsSlots: monthW.map(function(v) { return v > 0 ? v : null; }),
+                growthHrSlots: monthH.map(function(v) { return v > 0 ? v : null; }),
+                max20minWatts: monthW[4] > 0 ? monthW[4] : null,
+                maxHr20min: monthH[4] > 0 ? monthH[4] : null
               });
             }
             growthTrendRows.sort(function(a, b) { return (a.sortKey || '').localeCompare(b.sortKey || ''); });
@@ -17383,18 +17482,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm">로그 로드 실패</div>
               </DashboardCard>
             ) : (
-              <GrowthTrendChart data={growthTrendData} />
+              <GrowthTrendChart data={growthTrendData} userProfile={userProfile} />
             )}
             
             {logsLoading ? (
-              <DashboardCard title="VO₂max 트렌드 (6개월)">
+              <DashboardCard title="VO₂max 트렌드">
                 <div className="h-[200px] flex items-center justify-center">
                   <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                   <div className="text-sm text-gray-500">데이터 로딩 중...</div>
                 </div>
               </DashboardCard>
             ) : logsLoadError ? (
-              <DashboardCard title="VO₂max 트렌드 (6개월)">
+              <DashboardCard title="VO₂max 트렌드">
                 <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm">로그 로드 실패</div>
               </DashboardCard>
             ) : (
