@@ -90,12 +90,88 @@
     return t[ageBracket];
   }
 
-  /** Stelvio 사용자 연령·성별 평균 (주황 가이드 라인) */
+  /** Stelvio 사용자 연령·성별 평균 (주황 가이드 라인) — 실제 집계 없을 때 폴백 */
   function getStelvioUserAvgVo2maxMlKg(genderKey, ageBracket) {
     var g = genderKey === 'female' ? 'female' : 'male';
     var t = STELVIO_USER_AVG_VO2MAX_MLKG[g];
     if (!t || t[ageBracket] == null) return g === 'female' ? 39.5 : 47.0;
     return t[ageBracket];
+  }
+
+  var FIRESTORE_MOD_VO2_STATS = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+  var firestoreModVo2StatsPromise = null;
+  function getFirestoreModVo2Stats() {
+    if (!firestoreModVo2StatsPromise) firestoreModVo2StatsPromise = import(FIRESTORE_MOD_VO2_STATS);
+    return firestoreModVo2StatsPromise;
+  }
+
+  function docSnapExists(snap) {
+    if (!snap) return false;
+    return typeof snap.exists === 'function' ? snap.exists() : snap.exists === true;
+  }
+
+  /**
+   * Cloud Function이 vo2_demographic_samples를 집계한 stats_vo2_stelvio_rolling 문서 조회.
+   * @returns {Promise<{ avgMlKg: number, userCount: number }|null>}
+   */
+  function fetchStelvioRollingVo2Stats(genderKey, ageBracket) {
+    var db = global.firestoreV9;
+    if (!db || !genderKey || !ageBracket) return Promise.resolve(null);
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        var key = (genderKey === 'female' ? 'female' : 'male') + '_' + ageBracket;
+        return mod.getDoc(mod.doc(db, 'stats_vo2_stelvio_rolling', key));
+      })
+      .then(function (snap) {
+        if (!docSnapExists(snap)) return null;
+        var d = snap.data();
+        if (!d || d.minSamplesMet !== true) return null;
+        var avg = Number(d.avgMlKg);
+        if (!isFinite(avg) || avg < 15 || avg > 110) return null;
+        return {
+          avgMlKg: Math.round(avg * 10) / 10,
+          userCount: Math.max(0, Math.floor(Number(d.userCount) || 0))
+        };
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  /**
+   * 대시보드 VO₂ 트렌드와 동일한 6개월 월별 VO₂의 산술평균을 기여(본인 문서만 갱신).
+   * @param {Object} userProfile
+   * @param {Array<{ vo2: number }>} vo2Rows
+   * @returns {Promise<void>}
+   */
+  function persistVo2DemographicSampleAsync(userProfile, vo2Rows) {
+    var uid = userProfile && userProfile.id;
+    var db = global.firestoreV9;
+    if (!uid || !db || !Array.isArray(vo2Rows) || vo2Rows.length === 0) return Promise.resolve();
+    var pr = resolveProfileAgeGenderForVO2(userProfile);
+    var vals = [];
+    for (var i = 0; i < vo2Rows.length; i++) {
+      var v = Number(vo2Rows[i].vo2);
+      if (isFinite(v) && v > 0) vals.push(v);
+    }
+    if (vals.length === 0) return Promise.resolve();
+    var avgSix = vals.reduce(function (a, b) {
+      return a + b;
+    }, 0) / vals.length;
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        return mod.setDoc(
+          mod.doc(db, 'vo2_demographic_samples', uid),
+          {
+            genderKey: pr.genderKey,
+            ageBracket: pr.ageBracket,
+            avgSixMonthVo2: Math.round(avgSix * 10) / 10,
+            updatedAt: mod.serverTimestamp()
+          },
+          { merge: true }
+        );
+      })
+      .catch(function () {});
   }
 
   /**
@@ -215,6 +291,8 @@
   global.resolveProfileAgeGenderForVO2 = resolveProfileAgeGenderForVO2;
   global.getVo2maxReferenceAverageMlKg = getReferenceAverageMlKg;
   global.getStelvioUserAvgVo2maxMlKg = getStelvioUserAvgVo2maxMlKg;
+  global.fetchStelvioRollingVo2Stats = fetchStelvioRollingVo2Stats;
+  global.persistVo2DemographicSampleAsync = persistVo2DemographicSampleAsync;
 
   // --- STELVIO VO2 Max (260327_V1 원본 로직) ---------------------------------
 
