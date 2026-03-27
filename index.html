@@ -14094,7 +14094,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       'rgba(239, 68, 68, 0.7)',     // 40분 = Z6
       'rgba(168, 85, 247, 0.7)'     // 60분 = Z7
     ];
-    var GROWTH_PR_CIRCLE_LABELS = ['M', '1분', '5분', '10', '20', '40', '60'];
+    var GROWTH_PR_CIRCLE_LABELS = ['Max', '1분', '5분', '10', '20', '40', '60'];
     
     // 년간 파워PR 그래프 (2026년 yearly_peaks 기반, 달성일 매칭)
     function YearlyPowerPrChart(props) {
@@ -14116,7 +14116,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var wattsData = data.map(function(d) { return d.watts || 0; });
         var maxWatts = Math.max.apply(null, wattsData.filter(function(w) { return w > 0; })) || 300;
         var yMax = Math.ceil(maxWatts * 1.15 / 50) * 50 || 350;
-        var legendInCircle = ['M', '1분', '5분', '10', '20', '40', '60'];
+        var legendInCircle = ['Max', '1분', '5분', '10', '20', '40', '60'];
         var prValuePlugin = {
           id: 'prBarLabels',
           afterDatasetsDraw: function(chart) {
@@ -14124,7 +14124,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (!meta || !meta.data || meta.data.length === 0) return;
             var chartArea = chart.chartArea;
             var bottom = chartArea.bottom;
-            var radius = 10;
+            var radius = 12;
             var circleY = bottom + radius + 4;
             var dateY = circleY + radius + 12;
             chart.ctx.save();
@@ -14148,7 +14148,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               chart.ctx.lineWidth = 1;
               chart.ctx.stroke();
               chart.ctx.fillStyle = '#1f2937';
-              chart.ctx.font = 'bold 8px sans-serif';
+              chart.ctx.font = 'bold 10px sans-serif';
               chart.ctx.fillText(lab, bar.x, circleY + 3);
               chart.ctx.fillStyle = '#6b7280';
               chart.ctx.font = '11px sans-serif';
@@ -14182,7 +14182,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            layout: { padding: { top: 36, bottom: 44 } },
+            layout: { padding: { top: 36, bottom: 50 } },
             plugins: {
               legend: { display: false },
               tooltip: { enabled: false }
@@ -14525,7 +14525,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 0,
-                  label: '나의 추정 VO₂max',
+                  label: '나의 VO₂max',
                   data: vo2Data,
                   borderColor: '#dc2626',
                   borderWidth: 2,
@@ -14817,7 +14817,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: '연령대 평균 파워',
+                  label: '전체 평균 파워',
                   data: refWArr,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -14831,7 +14831,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 2,
-                  label: '연령대 평균 심박',
+                  label: '전체 평균 심박',
                   data: refHArr,
                   borderColor: '#ea580c',
                   borderWidth: 2,
@@ -14951,7 +14951,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     setSelectedSlot(i);
                   }}
                   className={
-                    'relative flex items-center justify-center rounded-full w-9 h-9 text-[10px] font-bold text-gray-800 shadow-sm border transition ' +
+                    'relative flex items-center justify-center rounded-full min-w-[2.35rem] h-9 px-0.5 text-[9px] font-bold text-gray-800 shadow-sm border transition ' +
                     (active ? 'ring-2 ring-blue-600 ring-offset-2 border-blue-500' : 'border-gray-200 hover:border-gray-400')
                   }
                   style={{ backgroundColor: bg.replace('0.7)', '0.95)').replace('0.55)', '0.95)') }}
@@ -14976,11 +14976,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </span>
             <span className="inline-flex items-center gap-1 text-green-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-green-600"></span>
-              연령대 평균 파워
+              전체 평균 파워
             </span>
             <span className="inline-flex items-center gap-1 text-orange-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
-              연령대 평균 심박
+              전체 평균 심박
             </span>
           </div>
         </DashboardCard>
