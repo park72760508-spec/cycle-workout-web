@@ -313,6 +313,48 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-sizing: border-box;
 }
 
+/*
+ * iOS/Bluefy: 워크아웃·훈련 스케줄·프로필 — 상단 당김 시 새로고침/줌 메뉴 노출 방지 (라이딩 일지와 동일한 체감)
+ * - 워크아웃: .screen.active의 display:block이 .workout-screen-dark의 flex를 덮어 이중 스크롤 발생 → 바깥 #workoutScreen은 숨기고 .workout-view-container만 스크롤
+ * - 스케줄/프로필: overscroll-behavior none으로 뷰포트(브라우저)로 체인 차단
+ */
+#workoutScreen.screen.active {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  min-height: -webkit-fill-available !important;
+  box-sizing: border-box;
+}
+#workoutScreen.screen.active .workout-view-container {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y;
+}
+
+#aiScheduleScreen.screen.active,
+#scheduleListScreen.screen.active,
+#profileScreen.screen.active {
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+}
+
+/* 프로필에서 구독 만료 안내 팝업 표시 중 — 배경/문서로 오버스크롤 전달 차단 */
+#expiryRestrictionModal:not(.hidden) {
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+  touch-action: manipulation;
+}
+
 /* 사용자 대시보드(성과 화면): 화면 자체는 스크롤 없음, 내부 #performance-dashboard-container만 스크롤 → 상단 락 방지 */
 /* 상단 빈화면 제거: .screen 기본 padding(20px) 제거 → 스피너/콘텐츠가 상단부터 표시 */
 /* 흰색 화면 덮임 방지: z-index로 다른 화면 위에 표시, 다른 screen은 대시보드 활성 시 완전 숨김 */
