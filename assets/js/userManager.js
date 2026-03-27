@@ -2205,7 +2205,8 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
  */
 function userHasGeminiApiRegistered(u) {
   if (!u || typeof u !== 'object') return false;
-  if (u.gemini_api_registered === true) return true;
+  var reg = u.gemini_api_registered;
+  if (reg === true || reg === 'true' || reg === 1 || reg === '1') return true;
   const k = u.gemini_api_key != null ? String(u.gemini_api_key).trim() : '';
   return k.length > 0;
 }
@@ -2237,6 +2238,7 @@ function setProfileSearchUserCountText(userArray) {
 
 window.countProfileIntegrationStats = countProfileIntegrationStats;
 window.setProfileSearchUserCountText = setProfileSearchUserCountText;
+window.userHasGeminiApiRegistered = userHasGeminiApiRegistered;
 
 /**
  * 프로필 화면 사용자 카드 목록 렌더링 (loadUsers / searchProfileUsers 공용)
@@ -2254,6 +2256,9 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
     hasAiKeyLocal = !!(key && String(key).trim());
   } catch (e) {}
+  /** 로그인 계정이 관리자면 표시등은 Firestore(사용자별 등록)만 반영 — 기기 로컬 키만으로 전원 녹색 처리 방지, (A:n명) 집계와 일치 */
+  const loginGradeForAiDot =
+    typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
   const canEditFor = (u) => {
     if (viewerGrade === '1') return true;
     if (viewerGrade === '2' || viewerGrade === '3') return viewerId && String(u.id) === viewerId;
@@ -2293,7 +2298,10 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const accPoints = user.acc_points || 0;
     const remPoints = user.rem_points || 0;
     const hasStrava = !!(user.strava_refresh_token || user.strava_access_token);
-    const hasAiForUser = hasAiKeyLocal || userHasGeminiApiRegistered(user);
+    const hasAiForUser =
+      loginGradeForAiDot === '1'
+        ? userHasGeminiApiRegistered(user)
+        : hasAiKeyLocal || userHasGeminiApiRegistered(user);
     const aiDot = hasAiForUser ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
 
@@ -2547,6 +2555,17 @@ async function loadUsers() {
       if (typeof setProfileSearchUserCountText === 'function') {
         setProfileSearchUserCountText([]);
       }
+      const profileSubtitleEmpty = document.getElementById('profileScreenSubtitle');
+      if (profileSubtitleEmpty) {
+        const subG = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
+        if (subG === '1') {
+          profileSubtitleEmpty.textContent = '현재 가입자 수 : 0 명';
+          profileSubtitleEmpty.style.display = '';
+        } else {
+          profileSubtitleEmpty.textContent = '';
+          profileSubtitleEmpty.style.display = 'none';
+        }
+      }
       return;
     }
 
@@ -2611,6 +2630,17 @@ async function loadUsers() {
     }
 
     renderProfileUserCards(visibleUsers, viewerGrade, viewerId);
+    const profileSubtitle = document.getElementById('profileScreenSubtitle');
+    if (profileSubtitle) {
+      const subGrade = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
+      if (subGrade === '1') {
+        profileSubtitle.textContent = '현재 가입자 수 : ' + visibleUsers.length + ' 명';
+        profileSubtitle.style.display = '';
+      } else {
+        profileSubtitle.textContent = '';
+        profileSubtitle.style.display = 'none';
+      }
+    }
     if (visibleUsers.length > 0 && typeof window.refreshProfileMaxHrAndRerender === 'function') {
       window.refreshProfileMaxHrAndRerender(visibleUsers, viewerGrade, viewerId).catch(() => {});
     }
