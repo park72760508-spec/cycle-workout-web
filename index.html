@@ -14607,7 +14607,51 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 legend: {
                   display: true,
                   position: 'bottom',
-                  labels: { boxWidth: 10, font: { size: 9 }, color: '#475569' }
+                  labels: {
+                    usePointStyle: true,
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    padding: 10,
+                    font: { size: 9 },
+                    color: '#475569',
+                    generateLabels: function (chart) {
+                      var datasets = chart.data.datasets;
+                      if (!datasets || !datasets.length) return [];
+                      var legColor = '#475569';
+                      var out = [];
+                      var di;
+                      for (di = 0; di < datasets.length; di++) {
+                        var ds = datasets[di];
+                        var hidden = typeof chart.isDatasetVisible === 'function' ? !chart.isDatasetVisible(di) : false;
+                        if (di === 2) {
+                          out.push({
+                            text: ds.label || '',
+                            fontColor: legColor,
+                            fillStyle: ds.pointBackgroundColor || '#dc2626',
+                            strokeStyle: ds.pointBorderColor || '#ffffff',
+                            lineWidth: ds.pointBorderWidth != null ? ds.pointBorderWidth : 2,
+                            lineDash: [],
+                            pointStyle: 'circle',
+                            hidden: hidden,
+                            datasetIndex: di
+                          });
+                        } else {
+                          out.push({
+                            text: ds.label || '',
+                            fontColor: legColor,
+                            fillStyle: ds.borderColor,
+                            strokeStyle: ds.borderColor,
+                            lineWidth: ds.borderWidth != null ? ds.borderWidth : 2,
+                            lineDash: ds.borderDash && ds.borderDash.length ? ds.borderDash.slice() : [],
+                            pointStyle: 'line',
+                            hidden: hidden,
+                            datasetIndex: di
+                          });
+                        }
+                      }
+                      return out;
+                    }
+                  }
                 },
                 tooltip: { enabled: false }
               },
@@ -14667,10 +14711,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   : ' (성별 미입력 시 남성 기준)'}
             </div>
           ) : null}
-          <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            현재월은 오늘 기준 30일, 이전 달은 해당 월 1일~말일 기준으로 <strong>calculateStelvioVO2Max</strong>로 산출된 값입니다.
-            녹색 점선은 일반 성인(학술) 연령·성별 평균, 주황 점선은 Stelvio 사용자 연령·성별 참고 평균입니다.
-          </div>
         </DashboardCard>
       );
     }
@@ -14993,10 +15033,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
               참고 심박 (피크 평균)
             </span>
-          </div>
-          <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
-            참고 파워는 <strong>30대 이하·40대·50대·60대 이상</strong> 연령대·성별 Stelvio 사용자의 구간별 <strong>피크 W/kg 평균</strong>에 <strong>내 체중</strong>을 곱한 값(W)입니다. 참고 심박도 동일
-            <strong>연령대·성별 피크 심박(bpm) 평균</strong>입니다. 그래프의 PR은 6개월 중 해당 시간 구간의 최고 파워·심박 지점입니다.
           </div>
         </DashboardCard>
       );
