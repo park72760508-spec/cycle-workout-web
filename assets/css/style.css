@@ -10226,27 +10226,6 @@ html.is-android #trainingDetailModal .training-detail-body {
   transform: translateY(0);
 }
 
-/* 훈련 화면 버전 선택 모달 (iOS 안내 팝업과 동일 디자인) */
-.stelvio-version-choice-modal:not(.hidden) {
-  display: flex !important;
-}
-.stelvio-version-choice-content {
-  min-width: 280px;
-}
-.stelvio-version-choice-content .stelvio-version-choice-btn {
-  margin-bottom: 10px;
-}
-.stelvio-version-choice-content .stelvio-version-choice-btn:last-of-type {
-  margin-bottom: 0;
-}
-.stelvio-version-choice-btn-secondary {
-  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%) !important;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35) !important;
-}
-.stelvio-version-choice-btn-secondary:hover {
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4) !important;
-}
-
 /* 센서 연결 초기화 확인 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
 .device-reset-confirm-modal:not(.hidden) {
   display: flex !important;
