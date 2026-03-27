@@ -1,0 +1,90 @@
+/**
+ * vo2_demographic_samples → stats_vo2_stelvio_rolling 집계
+ * 대시보드와 동일: 사용자별 최근 6개월 월별 VO₂(추정)의 산술평균(avgSixMonthVo2)을 연령대·성별 버킷별로 평균.
+ */
+const admin = require("firebase-admin");
+
+const BRACKETS = ["20-29", "30-39", "40-49", "50-59", "60+"];
+const MIN_SAMPLES = 5;
+
+function emptyBuckets() {
+  const b = {};
+  for (const g of ["male", "female"]) {
+    for (const ab of BRACKETS) {
+      b[`${g}_${ab}`] = { sum: 0, count: 0 };
+    }
+  }
+  return b;
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ */
+async function rebuildVo2StelvioRollingStats(db) {
+  const bucket = emptyBuckets();
+  const col = db.collection("vo2_demographic_samples");
+  let lastDoc = null;
+  const pageSize = 400;
+
+  for (;;) {
+    let q = col.orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
+    if (lastDoc) q = q.startAfter(lastDoc);
+    const snap = await q.get();
+    if (snap.empty) break;
+
+    snap.docs.forEach((doc) => {
+      const d = doc.data() || {};
+      const gk = d.genderKey === "female" ? "female" : "male";
+      const ab = String(d.ageBracket || "").trim();
+      if (!BRACKETS.includes(ab)) return;
+      const v = Number(d.avgSixMonthVo2);
+      if (!Number.isFinite(v) || v < 15 || v > 110) return;
+      const key = `${gk}_${ab}`;
+      if (!bucket[key]) return;
+      bucket[key].sum += v;
+      bucket[key].count += 1;
+    });
+
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (snap.size < pageSize) break;
+  }
+
+  const batch = db.batch();
+  const statsCol = db.collection("stats_vo2_stelvio_rolling");
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  for (const key of Object.keys(bucket)) {
+    const { sum, count } = bucket[key];
+    const ref = statsCol.doc(key);
+    if (count >= MIN_SAMPLES) {
+      batch.set(
+        ref,
+        {
+          avgMlKg: Math.round((sum / count) * 10) / 10,
+          userCount: count,
+          minSamplesMet: true,
+          source: "vo2_demographic_samples",
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    } else {
+      batch.set(
+        ref,
+        {
+          avgMlKg: null,
+          userCount: count,
+          minSamplesMet: false,
+          source: "vo2_demographic_samples",
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+  }
+
+  await batch.commit();
+  return { buckets: Object.keys(bucket).length };
+}
+
+module.exports = { rebuildVo2StelvioRollingStats, MIN_SAMPLES, BRACKETS };

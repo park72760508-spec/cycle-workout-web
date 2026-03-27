@@ -4204,6 +4204,27 @@ exports.migrateStelvioLogActivityType = onRequest(
 // ---------- Strava Webhook 비동기 처리 (processStravaActivity는 lib에서 호출) ----------
 exports.processStravaActivity = processStravaActivity;
 
+// ---------- VO₂max 연령·성별 Stelvio 실제 평균 집계 (샘플 기여 → 일별 롤링 통계) ----------
+const { rebuildVo2StelvioRollingStats } = require("./vo2DemographicStats");
+exports.rebuildVo2StelvioRollingStats = onSchedule(
+  {
+    schedule: "0 4 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "512MiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      const r = await rebuildVo2StelvioRollingStats(db);
+      console.log("[rebuildVo2StelvioRollingStats] ok", r);
+    } catch (e) {
+      console.error("[rebuildVo2StelvioRollingStats]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
 const fs = require("fs");
