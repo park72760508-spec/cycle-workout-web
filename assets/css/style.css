@@ -4768,6 +4768,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   max-width: 100%;
   box-sizing: border-box;
 }
+/* 대시보드「나의 라이딩 지표」탭: 동일 존 테이블 (프로필 카드에서 이동) */
+#performance-dashboard-container .dashboard-riding-metrics-zones.profile-zone-tables-wrap {
+  margin: 0 0 12px 0;
+  padding: 0;
+  width: 100%;
+}
 .profile-zone-table-block {
   margin-bottom: 20px;
   background: #fff;
