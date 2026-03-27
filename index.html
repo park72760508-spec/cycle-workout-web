@@ -13204,20 +13204,6 @@
     </div>
   </div>
 
-  <!-- ========== 훈련 화면 버전 선택 모달 (Live Training Session Enter 클릭 시, iOS 안내 팝업 동일 디자인) ========== -->
-  <div id="bluetoothTrainingVersionChoiceModal" class="stelvio-coming-soon-modal stelvio-version-choice-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10010;">
-    <div class="stelvio-coming-soon-overlay" onclick="if(typeof closeBluetoothTrainingVersionChoiceModal === 'function') closeBluetoothTrainingVersionChoiceModal();"></div>
-    <div class="stelvio-coming-soon-content stelvio-version-choice-content">
-      <p class="stelvio-coming-soon-message" style="margin-bottom: 20px;">훈련 화면 버전 선택</p>
-      <button type="button" class="stelvio-coming-soon-btn stelvio-version-choice-btn" onclick="if(typeof applyBluetoothTrainingVersionLegacy === 'function') applyBluetoothTrainingVersionLegacy();">
-        구 버전 (안정화 버전)
-      </button>
-      <button type="button" class="stelvio-coming-soon-btn stelvio-version-choice-btn stelvio-version-choice-btn-secondary" onclick="if(typeof applyBluetoothTrainingVersionIntegrated === 'function') applyBluetoothTrainingVersionIntegrated();">
-        신 버전 (통합 모듈 Beta)
-      </button>
-    </div>
-  </div>
-
   <!-- ========== 블루투스 개인 훈련 통합 스크린 (SPA, bluetoothIndividual.html body 통합, ID/class는 indiv- 접두사) ========== -->
   <div id="bluetoothIndividualScreen" class="screen indiv-screen-wrap" style="display: none; background-color: #121212; color: #fff; flex-direction: column; height: 100%; overflow: hidden;">
     <div id="indiv-header" class="indiv-header">
@@ -13383,61 +13369,6 @@
       </div>
     </div>
   </div>
-
-  <script>
-  (function() {
-    function openBluetoothTrainingVersionChoiceModal(trackNumber, roomId) {
-      window.__bluetoothVersionChoiceBike = trackNumber;
-      window.__bluetoothVersionChoiceRoom = roomId || '';
-      var modal = document.getElementById('bluetoothTrainingVersionChoiceModal');
-      if (modal) {
-        modal.classList.remove('hidden');
-        modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-      }
-    }
-    function closeBluetoothTrainingVersionChoiceModal() {
-      var modal = document.getElementById('bluetoothTrainingVersionChoiceModal');
-      if (modal) {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
-        document.body.style.overflow = '';
-      }
-    }
-    function applyBluetoothTrainingVersionLegacy() {
-      var bike = window.__bluetoothVersionChoiceBike;
-      var room = window.__bluetoothVersionChoiceRoom || '';
-      closeBluetoothTrainingVersionChoiceModal();
-      var url = 'bluetoothIndividual.html?bike=' + encodeURIComponent(bike) + (room ? '&room=' + encodeURIComponent(room) : '');
-      if (typeof window.ReactNativeWebView !== 'undefined' && window.ReactNativeWebView != null) {
-        window.location.href = url;
-      } else {
-        window.open(url, '_blank');
-      }
-    }
-    function applyBluetoothTrainingVersionIntegrated() {
-      var track = window.__bluetoothVersionChoiceBike;
-      var room = window.__bluetoothVersionChoiceRoom || '';
-      if (track != null && track !== undefined) {
-        window.__bluetoothIndividualTrackId = String(track);
-      }
-      // Firebase Realtime DB 단체 훈련: roomId를 SESSION_ID로 설정 (구버전과 동일)
-      if (room) {
-        window.SESSION_ID = String(room);
-        try { if (typeof localStorage !== 'undefined') localStorage.setItem('currentTrainingRoomId', room); } catch (e) {}
-      }
-      closeBluetoothTrainingVersionChoiceModal();
-      if (typeof showScreen === 'function') showScreen('bluetoothIndividualScreen');
-      if (typeof window.initBluetoothIndividualIntegratedScreen === 'function') {
-        window.initBluetoothIndividualIntegratedScreen();
-      }
-    }
-    window.openBluetoothTrainingVersionChoiceModal = openBluetoothTrainingVersionChoiceModal;
-    window.closeBluetoothTrainingVersionChoiceModal = closeBluetoothTrainingVersionChoiceModal;
-    window.applyBluetoothTrainingVersionLegacy = applyBluetoothTrainingVersionLegacy;
-    window.applyBluetoothTrainingVersionIntegrated = applyBluetoothTrainingVersionIntegrated;
-  })();
-  </script>
 
   <!-- ========== Bluetooth Training Coach 대시보드 화면 ========== -->
   <div id="bluetoothTrainingCoachScreen" class="screen">
