@@ -111,13 +111,13 @@
     return id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
   }
 
-  /** Firestore 문서 ID에 넣을 표시명(경로·괄호 충돌 제거) */
+  /** Firestore 문서 ID에 넣을 표시명(경로·괄호 충돌 제거 — '(' 도 제거해 split 기반 규칙과 일치) */
   function sanitizeDisplayNameForDocId(name) {
     if (!name || typeof name !== 'string') return '';
     return name
       .trim()
       .replace(/[\r\n\/\\]/g, '')
-      .replace(/\)/g, '')
+      .replace(/[()]/g, '')
       .slice(0, 80);
   }
 
