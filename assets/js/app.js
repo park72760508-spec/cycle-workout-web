@@ -3217,7 +3217,7 @@ if (!window.showScreen) {
     try {
       console.log(`Switching to screen: ${id}`);
       if (id === 'accessStatsScreen') {
-        var _ag = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+        var _ag = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2');
         if (_ag !== '1') {
           if (typeof showToast === 'function') showToast('관리자만 이용할 수 있습니다.');
           return;
@@ -13499,7 +13499,7 @@ function openSettingsModal() {
   }
   const accessRow = document.getElementById('settingsAccessStatsRow');
   if (accessRow) {
-    const g = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+    const g = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2');
     accessRow.style.display = g === '1' ? 'flex' : 'none';
   }
 }

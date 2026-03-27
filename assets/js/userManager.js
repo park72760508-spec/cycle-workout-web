@@ -23,6 +23,17 @@ function getViewerGrade() {
   return '2'; // 기본은 일반
 }
 
+/** 로그인 계정 등급 — 프로필 선택으로 currentUser가 다른 사용자로 바뀌어도 관리자 전용 메뉴는 로그인(authUser) 기준 */
+function getLoginUserGrade() {
+  try {
+    if (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) return '1';
+    const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+    if (authUser && authUser.grade != null) return String(authUser.grade);
+  } catch (e) {}
+  return typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
+}
+if (typeof window !== 'undefined') window.getLoginUserGrade = getLoginUserGrade;
+
 /* ==========================================================
    FTP 최소값: 몸무게의 1.8배 (사용자 등록 시)
    - 최소값 = Math.round(weight * 1.8)

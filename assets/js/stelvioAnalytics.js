@@ -377,7 +377,12 @@
 
   /** 관리자 전용: 접속 통계 화면 열기 */
   global.openAccessStatsScreen = function () {
-    var g = typeof global.getViewerGrade === 'function' ? String(global.getViewerGrade()) : '2';
+    var g =
+      typeof global.getLoginUserGrade === 'function'
+        ? String(global.getLoginUserGrade())
+        : typeof global.getViewerGrade === 'function'
+          ? String(global.getViewerGrade())
+          : '2';
     if (g !== '1') {
       if (typeof global.showToast === 'function') global.showToast('관리자만 이용할 수 있습니다.');
       else alert('관리자만 이용할 수 있습니다.');
