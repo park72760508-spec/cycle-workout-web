@@ -12509,6 +12509,7 @@
 <script>window.__bluetoothIndividualIdPrefix = 'indiv-';</script>
 <!-- 공통 타이머 모듈 (절대 시간 + rAF 기반, setInterval 배제) -->
 <script src="assets/js/trainingTimerModule.js"></script>
+<script src="assets/js/stelvioWakeLock.js"></script>
 <script src="assets/js/wakeLockManager.js"></script>
 <script src="assets/js/bluetoothIndividual.js"></script>
 <!-- Bluetooth Training 모듈 -->
@@ -14500,13 +14501,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // VO₂max 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + 학술 평균(녹색 점선) + Stelvio 사용자 평균(주황 점선)
+    // VO₂max 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + 학술 평균(녹색 점선) + Stelvio 사용자 평균(주황 점선, 실제 집계 시 Firestore 롤링 평균)
     function Vo2MaxTrendChart(props) {
       var p = props || {};
       var data = p.data;
       var userProfile = p.userProfile;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
+      const [stelvioRolling, setStelvioRolling] = useState(null);
       var pr =
         typeof window.resolveProfileAgeGenderForVO2 === 'function'
           ? window.resolveProfileAgeGenderForVO2(userProfile || null)
@@ -14519,6 +14521,26 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               missingAge: true,
               missingGender: true
             };
+      useEffect(
+        function () {
+          if (typeof window.fetchStelvioRollingVo2Stats !== 'function') {
+            setStelvioRolling(null);
+            return;
+          }
+          var prLocal =
+            typeof window.resolveProfileAgeGenderForVO2 === 'function'
+              ? window.resolveProfileAgeGenderForVO2(userProfile || null)
+              : pr;
+          var cancelled = false;
+          window.fetchStelvioRollingVo2Stats(prLocal.genderKey, prLocal.ageBracket).then(function (row) {
+            if (!cancelled) setStelvioRolling(row);
+          });
+          return function () {
+            cancelled = true;
+          };
+        },
+        [userProfile]
+      );
       useEffect(
         function () {
           if (!data || data.length === 0) return;
@@ -14545,9 +14567,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               ? window.getVo2maxReferenceAverageMlKg(prLocal.genderKey, prLocal.ageBracket)
               : 44;
           var stelvioY =
-            typeof window.getStelvioUserAvgVo2maxMlKg === 'function'
-              ? window.getStelvioUserAvgVo2maxMlKg(prLocal.genderKey, prLocal.ageBracket)
-              : 47;
+            stelvioRolling && typeof stelvioRolling.avgMlKg === 'number' && isFinite(stelvioRolling.avgMlKg)
+              ? stelvioRolling.avgMlKg
+              : typeof window.getStelvioUserAvgVo2maxMlKg === 'function'
+                ? window.getStelvioUserAvgVo2maxMlKg(prLocal.genderKey, prLocal.ageBracket)
+                : 47;
           var yMin = Math.max(20, Math.floor(Math.min(dataMin, academicY, stelvioY) - 5));
           var yMax = Math.min(100, Math.ceil(Math.max(dataMax, academicY, stelvioY) + 5));
           var n = data.length;
@@ -14666,7 +14690,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data, userProfile]
+        [data, userProfile, stelvioRolling]
       );
       if (!data || data.length === 0) {
         return (
@@ -14682,6 +14706,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
+          {stelvioRolling && stelvioRolling.userCount > 0 ? (
+            <div className="mt-1 px-2 text-[11px] text-slate-600">
+              Stelvio 사용자 평균(주황)은 동일 연령·성별 사용자{' '}
+              <strong className="text-slate-800">{stelvioRolling.userCount}명</strong>의 최근 6개월 월별 VO₂
+              산술평균을 모은 값입니다.
+            </div>
+          ) : null}
           {pr.isDefaultFallback ? (
             <div className="mt-1 px-2 text-xs text-amber-800">
               프로필에서 연령/성별을 설정하면 가이드 라인이 더 정확해집니다.
@@ -16068,6 +16099,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
             vo2TrendRows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
             if (isMounted) setVo2TrendData(vo2TrendRows);
+            if (isMounted && userProfile && typeof window.persistVo2DemographicSampleAsync === 'function') {
+              window.persistVo2DemographicSampleAsync(userProfile, vo2TrendRows).catch(function() {});
+            }
 
             // 나의 성장 트렌드: 월단위 PR 슬롯·max_20min 등 (VO2max 트렌드와 동일 주기)
             var GROWTH_SLOT_FIELDS_DASH = [
