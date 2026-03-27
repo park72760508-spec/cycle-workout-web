@@ -4816,6 +4816,43 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 0;
   width: 100%;
 }
+/* 라이딩 지표 탭: FTP/심박 존 테이블을 카드 밖 상단에 두었을 때 — 내용 열 확장, 범위·값 열 축소 */
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone.profile-zone-tables-wrap {
+  margin: 0 0 16px 0;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
+  table-layout: fixed;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(2),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(2) {
+  width: 12%;
+  max-width: 76px;
+  padding: 10px 6px;
+  box-sizing: border-box;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(3),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(3) {
+  width: 14%;
+  max-width: 88px;
+  padding: 10px 6px;
+  box-sizing: border-box;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(1),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1) {
+  width: 18%;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(4),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
+  width: auto;
+  min-width: 46%;
+  padding: 10px 14px;
+}
+@media (max-width: 600px) {
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
 .profile-zone-table-block {
   margin-bottom: 20px;
   background: #fff;
