@@ -61,15 +61,6 @@ function getHRZoneRanges(maxHr) {
   ];
 }
 
-function formatSeconds(sec) {
-  if (!sec || sec < 0) return '0:00';
-  var h = Math.floor(sec / 3600);
-  var m = Math.floor((sec % 3600) / 60);
-  var s = Math.floor(sec % 60);
-  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-  return m + ':' + String(s).padStart(2, '0');
-}
-
 /** Y축용: 분(min) - 데이터가 이미 분 단위로 들어옴 */
 function formatMinutesForAxis(val) {
   if (!val || val < 0) return '0분';
@@ -80,30 +71,6 @@ function formatMinutesForAxis(val) {
 function formatHoursForAxis(val) {
   if (!val || val < 0) return '0시간';
   return (val % 1 === 0 ? val : val.toFixed(1)) + '시간';
-}
-
-/** 커스텀 Tooltip: 마우스 오버한 막대의 값만 표시 (Recharts 기본 툴팁이 전체 합계/다른 막대 값을 보여주는 문제 방지) */
-function TimeInZonesTooltipContent(props) {
-  var active = props.active;
-  var payload = props.payload;
-  var label = props.label;
-  var zoneRanges = props.zoneRanges;
-  var data = props.data;
-  if (!active || !payload || !payload.length) return null;
-  // label과 일치하는 payload 우선 선택 (막대-툴팁 값 일치 보장)
-  var item = (label && payload.find(function(p) { return (p.payload && p.payload.name === label) || (p.name === label); })) || payload[0];
-  // 막대 높이와 동일한 seconds 사용 (payload.seconds가 차트 data와 동일 소스)
-  var value = (item && item.payload && item.payload.seconds != null) ? item.payload.seconds : (item && item.value != null ? item.value : null);
-  if (value == null && item && item.payload) value = item.payload.seconds;
-  var sec = Number(value);
-  if (isNaN(sec) || sec < 0) sec = 0;
-  var displayLabel = label || (item && item.payload && item.payload.name) || '';
-  var idx = data && data.length ? data.findIndex(function(d) { return d.name === displayLabel; }) : -1;
-  var rangeStr = (zoneRanges && idx >= 0 && zoneRanges[idx]) ? zoneRanges[idx].range : '';
-  return React.createElement('div', { className: 'bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm' },
-    React.createElement('div', { className: 'font-semibold text-gray-800' }, (displayLabel || '') + (rangeStr ? ' ' + rangeStr : '')),
-    React.createElement('div', { className: 'text-gray-600' }, '시간: ' + formatSeconds(sec))
-  );
 }
 
 /** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
@@ -188,8 +155,6 @@ function PowerTimeInZonesChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var Cell = Recharts && Recharts.Cell;
-  var LabelList = Recharts && Recharts.LabelList;
-  var Tooltip = Recharts && Recharts.Tooltip;
 
   var total = (powerData || []).reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
   var hasData = total > 0;
@@ -239,7 +204,6 @@ function PowerTimeInZonesChart(props) {
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            {Tooltip ? React.createElement(Tooltip, { shared: false, content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
             <Bar dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'} radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
@@ -278,7 +242,6 @@ function HRTimeInZonesChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var Cell = Recharts && Recharts.Cell;
-  var Tooltip = Recharts && Recharts.Tooltip;
 
   var total = (hrData || []).reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
   var hasData = total > 0;
@@ -329,7 +292,6 @@ function HRTimeInZonesChart(props) {
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            {Tooltip ? React.createElement(Tooltip, { shared: false, content: React.createElement(TimeInZonesTooltipContent, { zoneRanges: zoneRanges, data: data }), contentStyle: { fontSize: 12 } }) : null}
             <Bar dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'} radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
               {data.map(function(entry, i) {
                 return <Cell key={i} fill={entry.color} />;
