@@ -5,7 +5,10 @@
 (function (global) {
   'use strict';
 
-  /** 연령대별·성별 일반 성인 집단 평균에 가까운 참고값 (가로 기준선용) */
+  /**
+   * 학술 문헌·일반 성인 집단(ACS/Cooper 계열) 연령·성별 평균 — 가이드 라인 녹색
+   * ml/kg/min
+   */
   var VO2MAX_POPULATION_AVERAGE_MLKG = {
     male: {
       '20-29': 47.5,
@@ -20,6 +23,27 @@
       '40-49': 33.5,
       '50-59': 30.5,
       '60+': 27.5
+    }
+  };
+
+  /**
+   * Stelvio 앱 사용자 집단(연령·성별) 참고 평균 — 가이드 라인 주황
+   * 실제 집계가 연결되기 전까지 대표값(사이클 앱 사용자 특성 반영, 학술 평균보다 소폭 높게 설정)
+   */
+  var STELVIO_USER_AVG_VO2MAX_MLKG = {
+    male: {
+      '20-29': 50.5,
+      '30-39': 47.0,
+      '40-49': 43.5,
+      '50-59': 39.5,
+      '60+': 35.5
+    },
+    female: {
+      '20-29': 42.5,
+      '30-39': 39.5,
+      '40-49': 36.0,
+      '50-59': 32.5,
+      '60+': 29.0
     }
   };
 
@@ -56,6 +80,14 @@
     var g = genderKey === 'female' ? 'female' : 'male';
     var t = VO2MAX_POPULATION_AVERAGE_MLKG[g];
     if (!t || t[ageBracket] == null) return g === 'female' ? 36.5 : 44.0;
+    return t[ageBracket];
+  }
+
+  /** Stelvio 사용자 연령·성별 평균 (주황 가이드 라인) */
+  function getStelvioUserAvgVo2maxMlKg(genderKey, ageBracket) {
+    var g = genderKey === 'female' ? 'female' : 'male';
+    var t = STELVIO_USER_AVG_VO2MAX_MLKG[g];
+    if (!t || t[ageBracket] == null) return g === 'female' ? 39.5 : 47.0;
     return t[ageBracket];
   }
 
@@ -169,11 +201,13 @@
   }
 
   global.VO2MAX_POPULATION_AVERAGE_MLKG = VO2MAX_POPULATION_AVERAGE_MLKG;
+  global.STELVIO_USER_AVG_VO2MAX_MLKG = STELVIO_USER_AVG_VO2MAX_MLKG;
   global.getVo2maxAgeBracket = getAgeBracket;
   global.normalizeGenderForVO2 = normalizeGender;
   global.evaluateVO2maxLevel = evaluateVO2maxLevel;
   global.resolveProfileAgeGenderForVO2 = resolveProfileAgeGenderForVO2;
   global.getVo2maxReferenceAverageMlKg = getReferenceAverageMlKg;
+  global.getStelvioUserAvgVo2maxMlKg = getStelvioUserAvgVo2maxMlKg;
 
   /** "1:30:00", "45:00", 숫자(분) 등 → 분 */
   function coerceDurationToMinutes(duration) {
