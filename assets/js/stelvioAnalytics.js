@@ -228,17 +228,21 @@
             updatedAt: mod.serverTimestamp(),
             lastWriterUid: user.uid
           };
+          var screensObj = {};
+          var clicksObj = {};
           var hasAny = false;
           for (var sk in screens) {
             if (!screens[sk]) continue;
-            upd['screens.' + sk] = mod.increment(screens[sk]);
+            screensObj[sk] = mod.increment(screens[sk]);
             hasAny = true;
           }
           for (var ck in clicks) {
             if (!clicks[ck]) continue;
-            upd['buttonClicks.' + ck] = mod.increment(clicks[ck]);
+            clicksObj[ck] = mod.increment(clicks[ck]);
             hasAny = true;
           }
+          if (hasAny && Object.keys(screensObj).length) upd.screens = screensObj;
+          if (hasAny && Object.keys(clicksObj).length) upd.buttonClicks = clicksObj;
           if (hasAny) {
             batch.set(ref, upd, { merge: true });
             ops++;
@@ -302,24 +306,28 @@
         var b = toFlush[dateKey];
         if (!b) continue;
         var ref = fs.collection(COLLECTION).doc(dateKey);
+        var screens = b.screens || {};
+        var clicks = b.clicks || {};
         var upd = {
           date: dateKey,
           updatedAt: FieldValue.serverTimestamp(),
           lastWriterUid: user.uid
         };
-        var screens = b.screens || {};
-        var clicks = b.clicks || {};
+        var screensObj = {};
+        var clicksObj = {};
         var hasAny = false;
         for (var sk in screens) {
           if (!screens[sk]) continue;
-          upd['screens.' + sk] = FieldValue.increment(screens[sk]);
+          screensObj[sk] = FieldValue.increment(screens[sk]);
           hasAny = true;
         }
         for (var ck in clicks) {
           if (!clicks[ck]) continue;
-          upd['buttonClicks.' + ck] = FieldValue.increment(clicks[ck]);
+          clicksObj[ck] = FieldValue.increment(clicks[ck]);
           hasAny = true;
         }
+        if (hasAny && Object.keys(screensObj).length) upd.screens = screensObj;
+        if (hasAny && Object.keys(clicksObj).length) upd.buttonClicks = clicksObj;
         if (hasAny) {
           batch.set(ref, upd, { merge: true });
           ops++;
@@ -579,11 +587,53 @@
     return cells;
   }
 
+  /**
+   * 중첩 screens/buttonClicks와, 예전 Flat 필드명(screens.xxx, buttonClicks.xxx)을 함께 병합
+   */
+  function normalizeAnalyticsDailyDoc(data) {
+    data = data || {};
+    var screens = {};
+    var buttonClicks = {};
+    if (data.screens && typeof data.screens === 'object') {
+      for (var sk in data.screens) {
+        if (data.screens[sk] != null && data.screens[sk] !== '') screens[sk] = data.screens[sk];
+      }
+    }
+    if (data.buttonClicks && typeof data.buttonClicks === 'object') {
+      for (var ck in data.buttonClicks) {
+        if (data.buttonClicks[ck] != null && data.buttonClicks[ck] !== '') {
+          buttonClicks[ck] = data.buttonClicks[ck];
+        }
+      }
+    }
+    var keys = Object.keys(data);
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k === 'screens' || k === 'buttonClicks') continue;
+      if (k.indexOf('screens.') === 0) {
+        var sub = k.slice('screens.'.length);
+        if (sub) {
+          var v = data[k];
+          screens[sub] = screens[sub] != null ? Number(screens[sub]) + Number(v) : v;
+        }
+      } else if (k.indexOf('buttonClicks.') === 0) {
+        var sub2 = k.slice('buttonClicks.'.length);
+        if (sub2) {
+          var v2 = data[k];
+          buttonClicks[sub2] = buttonClicks[sub2] != null ? Number(buttonClicks[sub2]) + Number(v2) : v2;
+        }
+      }
+    }
+    return { screens: screens, buttonClicks: buttonClicks, basecamp_unique: data.basecamp_unique };
+  }
+
   function renderAccessStatsCards(dateStr, data) {
     var body = global.document.getElementById('accessStatsBody');
     if (!body) return;
     var labels = global.STELVIO_ANALYTICS_LABELS || {};
-    var screens = (data && data.screens) || {};
+    var norm = normalizeAnalyticsDailyDoc(data);
+    var screens = norm.screens || {};
     var bu =
       data && typeof data.basecamp_unique === 'number' ? data.basecamp_unique : '—';
 
