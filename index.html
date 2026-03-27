@@ -47,6 +47,7 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="assets/js/vo2maxCalculator.js"></script>
   <!-- Recharts는 PropTypes 사용 → React 18에는 없으므로 prop-types 패키지로 보완 -->
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script>
@@ -5324,6 +5325,7 @@
                 저장
               </button>
             </div>
+            <p id="settingsGeminiApiStatusLine" style="font-size: 12px; color: #64748b; margin: 10px 0 0 0; line-height: 1.45;"></p>
           </div>
         </div>
         <!-- CONNECT WITH STRAVA 블럭 (문구 + 버튼) -->
@@ -14497,98 +14499,174 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // VO2 Max 6개월 트렌드 차트 (현재월-5 ~ 현재월, calculateStelvioVO2Max 동일 산출)
+    // VO₂max 6개월 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + 학술 평균(녹색 점선) + Stelvio 사용자 평균(주황 점선)
     function Vo2MaxTrendChart(props) {
       var p = props || {};
       var data = p.data;
+      var userProfile = p.userProfile;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
-      useEffect(function() {
-        if (!data || data.length === 0) return;
-        var ctx = chartRef.current && chartRef.current.getContext('2d');
-        if (!ctx || typeof Chart === 'undefined') return;
-        if (chartInstanceRef.current) {
-          chartInstanceRef.current.destroy();
-          chartInstanceRef.current = null;
-        }
-        var vo2Data = data.map(function(d) { return d.vo2; });
-        var validVo2 = vo2Data.filter(function(v) { return typeof v === 'number' && !isNaN(v) && v > 0; });
-        var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
-        var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
-        var yMin = Math.max(20, Math.floor(dataMin - 5));
-        var yMax = Math.min(100, Math.ceil(dataMax + 5));
-        var vo2LabelPlugin = {
-          id: 'vo2ValueLabels',
-          afterDatasetsDraw: function(chart) {
-            var meta = chart.getDatasetMeta(0);
-            if (!meta || !meta.data || meta.data.length === 0) return;
-            var dataset = chart.data && chart.data.datasets && chart.data.datasets[0];
-            var values = dataset && dataset.data ? dataset.data : [];
-            chart.ctx.save();
-            chart.ctx.font = '11px sans-serif';
-            chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
-            chart.ctx.textAlign = 'center';
-            meta.data.forEach(function(point, i) {
-              if (!point || point.x == null || point.y == null) return;
-              var value = values[i];
-              if (value == null || isNaN(value)) return;
-              var y = point.y - 10;
-              if (y < 0) y = point.y + 16;
-              chart.ctx.fillText(String(Math.round(value)), point.x, y);
-            });
-            chart.ctx.restore();
-          }
-        };
-        chartInstanceRef.current = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: data.map(function(d) { return d.monthLabel; }),
-            datasets: [{
-              label: 'VO₂max (ml/kg/min)',
-              data: vo2Data,
-              borderColor: '#dc2626',
-              borderWidth: 2,
-              backgroundColor: 'rgba(220, 38, 38, 0.12)',
-              tension: 0.5,
-              cubicInterpolationMode: 'default',
-              stepped: false,
-              fill: true,
-              pointRadius: 5,
-              pointBackgroundColor: '#dc2626',
-              pointBorderColor: '#fff',
-              pointBorderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: { enabled: false }
-            },
-            scales: {
-              x: {
-                grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280', maxRotation: 0, minRotation: 0 }
-              },
-              y: {
-                grid: { display: true, color: '#e5e7eb', drawBorder: false },
-                ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 5 },
-                min: yMin,
-                max: yMax,
-                beginAtZero: false
-              }
-            }
-          },
-          plugins: [vo2LabelPlugin]
-        });
-        return function cleanup() {
+      var pr =
+        typeof window.resolveProfileAgeGenderForVO2 === 'function'
+          ? window.resolveProfileAgeGenderForVO2(userProfile || null)
+          : {
+              age: 35,
+              gender: '남',
+              genderKey: 'male',
+              ageBracket: '30-39',
+              isDefaultFallback: true,
+              missingAge: true,
+              missingGender: true
+            };
+      useEffect(
+        function () {
+          if (!data || data.length === 0) return;
+          var ctx = chartRef.current && chartRef.current.getContext('2d');
+          if (!ctx || typeof Chart === 'undefined') return;
           if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
             chartInstanceRef.current = null;
           }
-        };
-      }, [data]);
+          var vo2Data = data.map(function (d) {
+            return d.vo2;
+          });
+          var validVo2 = vo2Data.filter(function (v) {
+            return typeof v === 'number' && !isNaN(v) && v > 0;
+          });
+          var dataMin = validVo2.length > 0 ? Math.min.apply(null, validVo2) : 50;
+          var dataMax = validVo2.length > 0 ? Math.max.apply(null, validVo2) : 60;
+          var prLocal =
+            typeof window.resolveProfileAgeGenderForVO2 === 'function'
+              ? window.resolveProfileAgeGenderForVO2(userProfile || null)
+              : pr;
+          var academicY =
+            typeof window.getVo2maxReferenceAverageMlKg === 'function'
+              ? window.getVo2maxReferenceAverageMlKg(prLocal.genderKey, prLocal.ageBracket)
+              : 44;
+          var stelvioY =
+            typeof window.getStelvioUserAvgVo2maxMlKg === 'function'
+              ? window.getStelvioUserAvgVo2maxMlKg(prLocal.genderKey, prLocal.ageBracket)
+              : 47;
+          var yMin = Math.max(20, Math.floor(Math.min(dataMin, academicY, stelvioY) - 5));
+          var yMax = Math.min(100, Math.ceil(Math.max(dataMax, academicY, stelvioY) + 5));
+          var n = data.length;
+          var lineAcademic = [];
+          var lineStelvio = [];
+          var i;
+          for (i = 0; i < n; i++) {
+            lineAcademic.push(academicY);
+            lineStelvio.push(stelvioY);
+          }
+          var vo2LabelPlugin = {
+            id: 'vo2ValueLabels',
+            afterDatasetsDraw: function (chart) {
+              var meta = chart.getDatasetMeta(2);
+              if (!meta || !meta.data || meta.data.length === 0) return;
+              var dataset = chart.data && chart.data.datasets && chart.data.datasets[2];
+              var values = dataset && dataset.data ? dataset.data : [];
+              chart.ctx.save();
+              chart.ctx.font = '11px sans-serif';
+              chart.ctx.fillStyle = 'rgba(220, 38, 38, 0.75)';
+              chart.ctx.textAlign = 'center';
+              meta.data.forEach(function (point, idx) {
+                if (!point || point.x == null || point.y == null) return;
+                var value = values[idx];
+                if (value == null || isNaN(value)) return;
+                var y = point.y - 10;
+                if (y < 0) y = point.y + 16;
+                chart.ctx.fillText(String(Math.round(value)), point.x, y);
+              });
+              chart.ctx.restore();
+            }
+          };
+          chartInstanceRef.current = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: data.map(function (d) {
+                return d.monthLabel;
+              }),
+              datasets: [
+                {
+                  order: 2,
+                  label: '학술 문헌 평균 (연령·성별)',
+                  data: lineAcademic,
+                  borderColor: '#16a34a',
+                  borderWidth: 2,
+                  borderDash: [6, 4],
+                  backgroundColor: 'transparent',
+                  tension: 0,
+                  fill: false,
+                  pointRadius: 0,
+                  pointHoverRadius: 0
+                },
+                {
+                  order: 1,
+                  label: 'Stelvio 사용자 평균 (연령·성별)',
+                  data: lineStelvio,
+                  borderColor: '#ea580c',
+                  borderWidth: 2,
+                  borderDash: [4, 4],
+                  backgroundColor: 'transparent',
+                  tension: 0,
+                  fill: false,
+                  pointRadius: 0,
+                  pointHoverRadius: 0
+                },
+                {
+                  order: 0,
+                  label: '나의 추정 VO₂max',
+                  data: vo2Data,
+                  borderColor: '#dc2626',
+                  borderWidth: 2,
+                  backgroundColor: 'rgba(220, 38, 38, 0.12)',
+                  tension: 0.5,
+                  cubicInterpolationMode: 'default',
+                  stepped: false,
+                  fill: true,
+                  pointRadius: 5,
+                  pointBackgroundColor: '#dc2626',
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 2
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: {
+                  display: true,
+                  position: 'bottom',
+                  labels: { boxWidth: 10, font: { size: 9 }, color: '#475569' }
+                },
+                tooltip: { enabled: false }
+              },
+              scales: {
+                x: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280', maxRotation: 0, minRotation: 0 }
+                },
+                y: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280', stepSize: 5 },
+                  min: yMin,
+                  max: yMax,
+                  beginAtZero: false
+                }
+              }
+            },
+            plugins: [vo2LabelPlugin]
+          });
+          return function cleanup() {
+            if (chartInstanceRef.current) {
+              chartInstanceRef.current.destroy();
+              chartInstanceRef.current = null;
+            }
+          };
+        },
+        [data, userProfile]
+      );
       if (!data || data.length === 0) {
         return (
           <DashboardCard title="VO₂max 트렌드 (6개월)">
@@ -14603,8 +14681,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
+          {pr.isDefaultFallback ? (
+            <div className="mt-1 px-2 text-xs text-amber-800">
+              프로필에서 연령/성별을 설정하면 가이드 라인이 더 정확해집니다.
+              {pr.missingAge && pr.missingGender
+                ? ' (현재는 30대 남성 기준)'
+                : pr.missingAge
+                  ? ' (연령 미입력 시 기본 연령대 기준)'
+                  : ' (성별 미입력 시 남성 기준)'}
+            </div>
+          ) : null}
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500">
             현재월은 오늘 기준 30일, 이전 달은 해당 월 1일~말일 기준으로 <strong>calculateStelvioVO2Max</strong>로 산출된 값입니다.
+            녹색 점선은 일반 성인(학술) 연령·성별 평균, 주황 점선은 Stelvio 사용자 연령·성별 참고 평균입니다.
           </div>
         </DashboardCard>
       );
@@ -16738,13 +16827,23 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         };
       }, [userProfile, recentLogs, retryCoach, runConditionAnalysis, logsLoaded, logsLoading, logsLoadError]);
       
-      // AI 페어링 표시등: API 키 등록 여부만 사용. 등록됨 → 초록(연결됨), 미등록 → 회색(연결 대기).
+      // AI 페어링: 이 기기 localStorage 키 또는 Firestore users API_sts / gemini_api_registered
       useEffect(function apiKeyIndicatorEffect() {
         function refresh() {
           try {
             var key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
-            var hasKey = !!(key && String(key).trim());
-            setAiPairingStatus(hasKey);
+            var localHas = !!(key && String(key).trim());
+            if (localHas) {
+              setAiPairingStatus(true);
+              return;
+            }
+            var profHas = false;
+            try {
+              if (userProfile && typeof window.userHasGeminiApiRegistered === 'function') {
+                profHas = window.userHasGeminiApiRegistered(userProfile);
+              }
+            } catch (e2) {}
+            setAiPairingStatus(profHas);
           } catch (e) {
             setAiPairingStatus(false);
           }
@@ -16761,7 +16860,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         return function cleanup() {
           window.removeEventListener('stelvio-gemini-apikey-changed', onApiKeyChanged);
         };
-      }, []);
+      }, [userProfile]);
       
       const getGradeBadge = (grade) => {
         const badges = {
@@ -17299,7 +17398,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm">로그 로드 실패</div>
               </DashboardCard>
             ) : (
-              <Vo2MaxTrendChart data={vo2TrendData} />
+              <Vo2MaxTrendChart data={vo2TrendData} userProfile={userProfile} />
             )}
             
             {logsLoading ? (
@@ -18173,7 +18272,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   </div>
   <!-- 대시보드 AI: 주간 실적·컨디션 점수 코멘트 일치 (통합 대시보드에서 사용) -->
   <script src="assets/js/geminiCoachPrompt.js"></script>
-  <script src="assets/js/vo2maxCalculator.js"></script>
   <script src="assets/js/dashboardCoach.js"></script>
   <script src="assets/js/dashboard/dashboardAICache.js"></script>
   <!-- Dashboard 리팩터링: 반드시 마지막에 로드하여 window.PerformanceDashboard 덮어쓰기 -->
