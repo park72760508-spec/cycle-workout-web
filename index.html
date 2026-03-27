@@ -14445,7 +14445,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // VO₂max 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + Stelvio 전연령 평균(녹색 점선) + 동일 연령·성별 Stelvio 평균(주황 점선)
+    // VO₂max 트렌드: 월별 calculateStelvioVO2Max 산출(빨강) + Stelvio 전연령 평균(녹색 점선) + Stelvio 연령 평균(주황 점선, 연령·성별)
     function Vo2MaxTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -14581,7 +14581,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 1,
-                  label: 'Stelvio 사용자 평균 (연령·성별)',
+                  label: 'Stelvio 연령 평균 (연령·성별)',
                   data: lineStelvio,
                   borderColor: '#ea580c',
                   borderWidth: 2,
@@ -14714,7 +14714,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           ) : null}
           {stelvioRolling && stelvioRolling.userCount > 0 ? (
             <div className="mt-1 px-2 text-[11px] text-slate-600">
-              Stelvio 사용자 평균(주황)은 동일 연령·성별 사용자{' '}
+              Stelvio 연령 평균(주황)은 동일 연령·성별 사용자{' '}
               <strong className="text-slate-800">{stelvioRolling.userCount}명</strong>의 최근 6개월 월별 VO₂
               산술평균을 모은 값입니다.
             </div>
