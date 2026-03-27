@@ -2013,6 +2013,10 @@ function buildProfileZoneTableHtml(ftp, maxHr, opts) {
   return { ftpHtml, hrHtml };
 }
 
+if (typeof window !== 'undefined') {
+  window.buildProfileZoneTableHtml = buildProfileZoneTableHtml;
+}
+
 /**
  * 프로필 선택 화면: FTP 파워 영역 / 심박 영역 상세 테이블 렌더링 (상단 참고용)
  * @param {number} [ftp=200] - 사용자 FTP (W)
@@ -2251,6 +2255,10 @@ async function fetchMaxHrFromYearlyPeaks(userId) {
   }
 }
 
+if (typeof window !== 'undefined') {
+  window.fetchMaxHrFromYearlyPeaks = fetchMaxHrFromYearlyPeaks;
+}
+
 /**
  * 프로필 관리자 통계: A=Gemini API 등록(API_sts / gemini_api_registered / gemini_api_key), S=Strava 토큰 보유
  */
@@ -2300,10 +2308,9 @@ window.userHasGeminiApiRegistered = userHasGeminiApiRegistered;
  * @param {string|null} viewerId - 뷰어 ID
  * @param {Object} [maxHrByUser] - userId -> maxHr 맵 (훈련로그 기반, 비동기 채움)
  */
-function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUser) {
+function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
   const userList = document.getElementById('userList');
   if (!userList) return;
-  const maxHrMap = maxHrByUser || {};
   let hasAiKeyLocal = false;
   try {
     const key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
@@ -2358,19 +2365,6 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
     const aiDot = hasAiForUser ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
 
-    const maxHrEntry = maxHrMap[user.id];
-    const userFtp = Number(user.ftp) || 0;
-    const userMaxHr = maxHrEntry != null ? (typeof maxHrEntry === 'object' ? Number(maxHrEntry.maxHr) : Number(maxHrEntry)) : 0;
-    const maxHrDate = maxHrEntry && typeof maxHrEntry === 'object' ? maxHrEntry.maxHrDate : null;
-    var zoneResult2 = buildProfileZoneTableHtml(userFtp, userMaxHr, { compact: true, maxHrDate: maxHrDate });
-    var ftpHtml = zoneResult2 ? zoneResult2.ftpHtml : '';
-    var hrHtml = zoneResult2 ? zoneResult2.hrHtml : '';
-
-    const ftpZonesHtml = userFtp > 0 ? ftpHtml : '';
-    const hrZonesHtml = maxHrEntry === undefined
-      ? `<div class="profile-zone-section"><div class="profile-zone-title">💓 심박 영역</div><div class="profile-hr-loading">로딩 중...</div></div>`
-      : userMaxHr > 0 ? hrHtml : '';
-
     return `
       <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
         <div class="user-header">
@@ -2408,7 +2402,6 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
             ` : ''}
           </div>
           <div class="user-meta"><span class="contact">${user.contact || ''}</span><span class="expiry ${expiryClass}">만료일: ${expiryText}</span></div>
-          ${ftpZonesHtml}${hrZonesHtml}
         </div>
       </div>
     `;
@@ -2420,13 +2413,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUse
  * yearly_peaks에서 조회 (MMP 업데이트 시 max_hr도 반영됨, 로그 스캔 대비 효율적)
  */
 async function refreshProfileMaxHrAndRerender(usersToRender, viewerGrade, viewerId) {
-  const maxHrByUser = {};
-  const promises = usersToRender.map(async (u) => {
-    const res = await fetchMaxHrFromYearlyPeaks(u.id);
-    if (res != null) maxHrByUser[u.id] = res;
-  });
-  await Promise.all(promises);
-  renderProfileUserCards(usersToRender, viewerGrade, viewerId, maxHrByUser);
+  renderProfileUserCards(usersToRender, viewerGrade, viewerId);
 }
 
 /**
