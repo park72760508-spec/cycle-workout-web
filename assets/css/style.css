@@ -4822,32 +4822,42 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
   table-layout: fixed;
+  width: 100%;
 }
+/* 범위(%), 값(W/bpm): 한 줄 표시(nowrap)에 맞춰 넉넉한 최소 너비 — max-width 제거 */
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(2),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(2) {
-  width: 12%;
-  max-width: 76px;
-  padding: 10px 6px;
+  width: 26%;
+  min-width: 7.5rem;
+  padding: 10px 10px;
   box-sizing: border-box;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(3),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(3) {
-  width: 14%;
-  max-width: 88px;
-  padding: 10px 6px;
+  width: 22%;
+  min-width: 6.25rem;
+  padding: 10px 10px;
   box-sizing: border-box;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(1),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1) {
-  width: 18%;
+  width: 14%;
+  min-width: 3.25rem;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(4),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
   width: auto;
-  min-width: 46%;
-  padding: 10px 14px;
+  min-width: 30%;
+  padding: 10px 12px;
 }
 @media (max-width: 600px) {
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-tables-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
+    min-width: 32rem;
+  }
   #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
     font-size: 11px;
     line-height: 1.45;
