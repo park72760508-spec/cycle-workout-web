@@ -841,58 +841,34 @@ function hideAllScreens() {
 
 
 /* ================================
-   Screen Wake Lock (화면 항상 켜짐)
+   Screen Wake Lock (화면 항상 켜짐) — StelvioWakeLock 위임
    ================================ */
 const ScreenAwake = (() => {
-  const stateRef = { wakeLock: null };
-
   async function acquire() {
     try {
-      if (typeof WakeLockManager !== 'undefined') {
-        await WakeLockManager.requestScreenWakeLock(stateRef, '[ScreenAwake]');
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+        await window.StelvioWakeLock.refresh();
         return;
       }
-      if (!('wakeLock' in navigator)) {
-        console.warn('[ScreenAwake] Wake Lock API not supported in this browser.');
-        return;
-      }
-      if (stateRef.wakeLock) return;
-      stateRef.wakeLock = await navigator.wakeLock.request('screen');
-      console.log('[ScreenAwake] acquired');
-      stateRef.wakeLock.addEventListener('release', () => {
-        console.log('[ScreenAwake] released by system');
-        stateRef.wakeLock = null;
-      });
     } catch (err) {
       console.warn('[ScreenAwake] acquire failed:', err);
-      stateRef.wakeLock = null;
     }
   }
 
   async function release() {
     try {
-      if (typeof WakeLockManager !== 'undefined') {
-        await WakeLockManager.releaseScreenWakeLock(stateRef, '[ScreenAwake]');
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.releaseLegacy) {
+        await window.StelvioWakeLock.releaseLegacy();
         return;
-      }
-      if (stateRef.wakeLock) {
-        await stateRef.wakeLock.release();
-        console.log('[ScreenAwake] released by app');
       }
     } catch (err) {
       console.warn('[ScreenAwake] release failed:', err);
-    } finally {
-      stateRef.wakeLock = null;
     }
   }
 
   async function reAcquireIfNeeded() {
     if (document.visibilityState !== 'visible' || !window?.trainingState?.isRunning) return;
     try {
-      if (typeof WakeLockManager !== 'undefined') {
-        await WakeLockManager.reacquireScreenWakeLockOnForeground(stateRef, '[ScreenAwake]');
-        return;
-      }
       await acquire();
     } catch (err) {
       console.warn('[ScreenAwake] reAcquireIfNeeded failed:', err);
@@ -3328,6 +3304,13 @@ if (!window.showScreen) {
         resetScrollForScreen();
         requestAnimationFrame(function() { resetScrollForScreen(); });
         console.log(`Successfully switched to: ${id}`);
+        if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock && typeof window.StelvioWakeLock.applyForScreen === 'function') {
+          try {
+            window.StelvioWakeLock.applyForScreen(id);
+          } catch (e) {
+            console.warn('[StelvioWakeLock] applyForScreen:', e);
+          }
+        }
         if (typeof window.stelvioAnalyticsOnScreenChange === 'function') {
           try {
             window.stelvioAnalyticsOnScreenChange(id);
@@ -6632,13 +6615,8 @@ window.showScreen = function(screenId) {
     }
     console.log('[훈련일지] 화면 이탈 - fetch 카운트/플래그 초기화');
   }
-  // 통합 블루투스 개인훈련 화면 이탈 시 화면 꺼짐 방지 해제 (모바일 대시보드와 동일)
-  if (currentActive && currentActive.id === 'bluetoothIndividualScreen' && screenId !== 'bluetoothIndividualScreen') {
-    if (typeof window.wakeLockControl !== 'undefined' && typeof window.wakeLockControl.release === 'function') {
-      window.wakeLockControl.release();
-    }
-  }
-  
+  // bluetooth 이탈 시 Wake Lock은 showScreen 끝에서 StelvioWakeLock.applyForScreen으로 일괄 처리
+
   // 모든 화면 숨기기 (스플래시 화면 제외)
   document.querySelectorAll('.screen').forEach(screen => {
     if (screen.id !== 'splashScreen') {
@@ -6672,6 +6650,13 @@ window.showScreen = function(screenId) {
     }
 
     initializeCurrentScreen(screenId);
+    if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock && typeof window.StelvioWakeLock.applyForScreen === 'function') {
+      try {
+        window.StelvioWakeLock.applyForScreen(screenId);
+      } catch (e) {
+        console.warn('[StelvioWakeLock] applyForScreen:', e);
+      }
+    }
     if (typeof window.stelvioAnalyticsOnScreenChange === 'function') {
       try {
         window.stelvioAnalyticsOnScreenChange(screenId);
@@ -6762,13 +6747,7 @@ function initializeCurrentScreen(screenId) {
         var el = document.getElementById('indiv-ui-target-label');
         if (el) { el.setAttribute('font-size', '6'); el.setAttribute('y', '93'); }
       }, 0);
-      // 화면 복귀 시 이미 훈련 중이면 화면 꺼짐 방지 재요청 (모바일 대시보드와 동일)
-      setTimeout(function () {
-        var s = window.currentTrainingState;
-        if ((s === 'running' || s === 'countdown') && typeof window.wakeLockControl !== 'undefined' && window.wakeLockControl.request) {
-          window.wakeLockControl.request();
-        }
-      }, 400);
+      // StelvioWakeLock.applyForScreen(bluetoothIndividualScreen)로 이미 획득 — 훈련 중 복귀 시 refresh는 StelvioWakeLock 내부 visibility 처리
       break;
       
     case 'aiScheduleScreen':
@@ -14732,502 +14711,63 @@ function initializeMobileDashboardPullToRefreshPrevention() {
 }
 
 /**
- * 모바일 대시보드 화면 꺼짐 방지 초기화 (Wake Lock API + 비디오 트릭)
+ * 모바일 대시보드 화면 꺼짐 방지 — StelvioWakeLock 브리지
  */
 function initializeMobileDashboardWakeLock() {
-  // 전역 변수 초기화
   if (!window.mobileDashboardWakeLock) {
-    window.mobileDashboardWakeLock = {
-      wakeLock: null,
-      wakeLockVideo: null,
-      videoWakeLockInterval: null,
-      wakeLockCheckInterval: null,
-      isActive: false
-    };
+    window.mobileDashboardWakeLock = { isActive: false };
   }
-  
-  const wakeLockState = window.mobileDashboardWakeLock;
-  const wakeLockSupported = 'wakeLock' in navigator;
-  const WAKE_LOCK_CHECK_MS = 10000;
-  
-  // iOS, 안드로이드 및 크롬 브라우저 감지
-  function isIOS() {
-    const ua = navigator.userAgent || '';
-    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-  
-  function isAndroid() {
-    const ua = navigator.userAgent || '';
-    return /Android/.test(ua);
-  }
-  
-  function isChrome() {
-    const ua = navigator.userAgent || '';
-    return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
-  }
-  
-  function isMobileChrome() {
-    return (isIOS() || isAndroid()) && isChrome();
-  }
-  
-  // Bluefy 앱 감지 (iOS)
-  function isBluefy() {
-    const ua = navigator.userAgent || '';
-    return /Bluefy/i.test(ua);
-  }
-  
-  // 훈련 중 주기적으로 Wake Lock 상태 확인 후 해제됐으면 재요청 (통화/문자 복귀 등 대응)
-  function startWakeLockPeriodicCheck() {
-    if (wakeLockState.wakeLockCheckInterval) return;
-    wakeLockState.wakeLockCheckInterval = setInterval(async () => {
-      const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
-      if (!isTrainingRunning || !wakeLockState.isActive || document.visibilityState !== 'visible') return;
-      const needReacquire = !wakeLockState.wakeLock ||
-        (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended));
-      if (needReacquire) {
-        console.log('[Mobile Dashboard Wake Lock] 주기 체크: 화면 꺼짐 방지 재요청');
-        await requestWakeLock();
-      }
-    }, WAKE_LOCK_CHECK_MS);
-    console.log('[Mobile Dashboard Wake Lock] 주기적 재요청 체크 시작');
-  }
-
-  // Wake Lock API 사용
-  async function requestWakeLock() {
-    wakeLockState.isActive = true;
-    // 모바일 크롬(iOS/안드로이드) 또는 Bluefy에서는 비디오 트릭을 우선 사용 (더 안정적)
-    if (isMobileChrome() || (isIOS() && isBluefy())) {
-      const deviceType = isIOS() ? 'iOS' : 'Android';
-      const appType = isBluefy() ? ' (Bluefy)' : '';
-      console.log(`[Mobile Dashboard Wake Lock] ${deviceType}${appType} 감지 - 비디오 트릭 사용`);
-      if (!wakeLockState.wakeLockVideo) {
-        startVideoWakeLock();
-      }
-      startWakeLockPeriodicCheck();
-      return;
-    }
-    
-    if (wakeLockSupported) {
-      try {
-        // 이미 활성화되어 있으면 재요청하지 않음
-        if (wakeLockState.wakeLock) return;
-        
-        wakeLockState.wakeLock = await navigator.wakeLock.request('screen');
-        console.log('[Mobile Dashboard Wake Lock] Screen Wake Lock 활성화됨');
-        
-        // 시스템이 해제했을 때 플래그 정리
-        wakeLockState.wakeLock.addEventListener('release', () => {
-          console.log('[Mobile Dashboard Wake Lock] 시스템에 의해 해제됨');
-          wakeLockState.wakeLock = null;
-          // 다시 요청 시도 (훈련 중일 때만)
-          if (document.visibilityState === 'visible' && wakeLockState.isActive) {
-            requestWakeLock();
-          }
-        });
-        
-        // 모바일(iOS/안드로이드)에서는 Wake Lock이 성공해도 비디오 트릭도 함께 사용 (이중 보장)
-        if ((isIOS() || isAndroid()) && !wakeLockState.wakeLockVideo) {
-          startVideoWakeLock();
-        }
-      } catch (err) {
-        console.warn('[Mobile Dashboard Wake Lock] 활성화 실패:', err);
-        // Wake Lock이 실패하면 비디오 트릭 사용
-        if (!wakeLockState.wakeLockVideo) {
-          startVideoWakeLock();
-        }
-      }
-    } else {
-      // Wake Lock API 미지원 시 비디오 트릭 사용
-      if (!wakeLockState.wakeLockVideo) {
-        startVideoWakeLock();
-      }
-    }
-    startWakeLockPeriodicCheck();
-  }
-  
-  // 비디오 트릭 사용 (iOS Safari, Bluefy 및 구형 브라우저 대응)
-  function startVideoWakeLock() {
-    try {
-      // 이미 생성되어 있으면 재생성하지 않음
-      if (wakeLockState.wakeLockVideo) return;
-      
-      // 훈련 진행 중일 때만 비디오 트릭 활성화
-      const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
-      if (!isTrainingRunning) {
-        console.log('[Mobile Dashboard Video Wake Lock] 훈련 진행 중이 아니므로 비디오 트릭 비활성화');
-        return;
-      }
-      
-      // Canvas로 최소 크기의 비디오 스트림 생성
-      const canvas = document.createElement('canvas');
-      canvas.width = 2;
-      canvas.height = 2;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, 2, 2);
-      
-      // Canvas를 MediaStream으로 변환 (iOS 크롬/Bluefy 대응을 위해 30fps 사용)
-      const stream = canvas.captureStream(30);
-      
-      // 투명한 비디오 요소 생성
-      wakeLockState.wakeLockVideo = document.createElement('video');
-      wakeLockState.wakeLockVideo.setAttribute('playsinline', '');
-      wakeLockState.wakeLockVideo.setAttribute('muted', '');
-      wakeLockState.wakeLockVideo.setAttribute('loop', '');
-      wakeLockState.wakeLockVideo.setAttribute('webkit-playsinline', '');
-      wakeLockState.wakeLockVideo.setAttribute('autoplay', '');
-      wakeLockState.wakeLockVideo.style.position = 'fixed';
-      wakeLockState.wakeLockVideo.style.top = '0';
-      wakeLockState.wakeLockVideo.style.left = '0';
-      wakeLockState.wakeLockVideo.style.width = '1px';
-      wakeLockState.wakeLockVideo.style.height = '1px';
-      wakeLockState.wakeLockVideo.style.opacity = '0';
-      wakeLockState.wakeLockVideo.style.pointerEvents = 'none';
-      wakeLockState.wakeLockVideo.style.zIndex = '-9999';
-      
-      // 스트림을 비디오에 연결
-      wakeLockState.wakeLockVideo.srcObject = stream;
-      document.body.appendChild(wakeLockState.wakeLockVideo);
-      
-      // 비디오 재생 함수 (재시도 로직 포함)
-      const playVideo = () => {
-        const playPromise = wakeLockState.wakeLockVideo.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            console.log('[Mobile Dashboard Video Wake Lock] 화면 잠금 방지 활성화 (비디오 트릭)');
-          }).catch(err => {
-            console.warn('[Mobile Dashboard Video Wake Lock] 재생 실패, 재시도:', err);
-            // 재생 실패 시 잠시 후 재시도
-            setTimeout(playVideo, 1000);
-          });
-        }
-      };
-      
-      // 초기 재생 시도
-      playVideo();
-      
-      // 모바일(iOS/안드로이드)에서는 주기적으로 비디오 재생 상태 확인 및 재시작 (크롬/Bluefy 대응)
-      if (isIOS() || isAndroid()) {
-        if (wakeLockState.videoWakeLockInterval) {
-          clearInterval(wakeLockState.videoWakeLockInterval);
-        }
-        wakeLockState.videoWakeLockInterval = setInterval(() => {
-          if (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended)) {
-            console.log('[Mobile Dashboard Video Wake Lock] 비디오가 일시정지됨, 재시작');
-            playVideo();
-          }
-        }, 5000); // 5초마다 확인
-      }
-    } catch (err) {
-      console.warn('[Mobile Dashboard Video Wake Lock] 초기화 실패:', err);
-    }
-  }
-  
-  // 화면 잠금 해제 (훈련 종료·로그 저장 후에만 호출)
-  function releaseWakeLock() {
-    if (wakeLockState.wakeLockCheckInterval) {
-      clearInterval(wakeLockState.wakeLockCheckInterval);
-      wakeLockState.wakeLockCheckInterval = null;
-      console.log('[Mobile Dashboard Wake Lock] 주기적 재요청 체크 중지');
-    }
-    if (wakeLockState.wakeLock !== null) {
-      try {
-        if (typeof WakeLockManager !== 'undefined') {
-          WakeLockManager.releaseScreenWakeLock(wakeLockState, '[Mobile Dashboard Wake Lock]').catch(err => {
-            console.warn('[Mobile Dashboard Wake Lock] 해제 실패:', err);
-          });
-        } else {
-          wakeLockState.wakeLock.release().then(() => {
-            wakeLockState.wakeLock = null;
-            console.log('[Mobile Dashboard Wake Lock] Screen Wake Lock 해제됨');
-          }).catch(err => {
-            console.warn('[Mobile Dashboard Wake Lock] 해제 실패:', err);
-            wakeLockState.wakeLock = null;
-          });
-        }
-      } catch (err) {
-        console.warn('[Mobile Dashboard Wake Lock] 해제 예외:', err);
-        wakeLockState.wakeLock = null;
-      }
-    }
-    
-    // 비디오 트릭 주기적 확인 중지
-    if (wakeLockState.videoWakeLockInterval !== null) {
-      clearInterval(wakeLockState.videoWakeLockInterval);
-      wakeLockState.videoWakeLockInterval = null;
-    }
-    
-    if (wakeLockState.wakeLockVideo !== null) {
-      try {
-        if (wakeLockState.wakeLockVideo.srcObject) {
-          wakeLockState.wakeLockVideo.srcObject.getTracks().forEach(track => track.stop());
-          wakeLockState.wakeLockVideo.srcObject = null;
-        }
-        wakeLockState.wakeLockVideo.pause();
-        if (wakeLockState.wakeLockVideo.parentNode) {
-          wakeLockState.wakeLockVideo.parentNode.removeChild(wakeLockState.wakeLockVideo);
-        }
-        wakeLockState.wakeLockVideo = null;
-        console.log('[Mobile Dashboard Video Wake Lock] 화면 잠금 방지 해제 (비디오 트릭)');
-      } catch (err) {
-        console.warn('[Mobile Dashboard Video Wake Lock] 해제 실패:', err);
-      }
-    }
-    
-    wakeLockState.isActive = false;
-  }
-  
-  // 페이지 가시성 변경 시 재요청 (Background → Foreground 시 Screen Wake Lock 재획득)
-  document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState !== 'visible') return;
-    const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
-    if (!isTrainingRunning || !wakeLockState.isActive) return;
-    try {
-      const useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
-      if (useScreenApi && typeof WakeLockManager !== 'undefined') {
-        await WakeLockManager.reacquireScreenWakeLockOnForeground(wakeLockState, '[Mobile Dashboard Wake Lock]');
-      }
-      await requestWakeLock();
-    } catch (err) {
-      console.warn('[Mobile Dashboard Wake Lock] visibility 재획득 실패:', err);
-    }
-    if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
-      wakeLockState.wakeLockVideo.play().catch(err => {
-        console.warn('[Mobile Dashboard Video Wake Lock] 재시작 실패:', err);
-      });
-    }
-  });
-  
-  // 전역으로 노출 (워크아웃 시작/종료 시 호출)
   window.mobileDashboardWakeLockControl = {
-    request: requestWakeLock,
-    release: releaseWakeLock,
-    isActive: () => wakeLockState.isActive
+    request: function () {
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+        return Promise.resolve(window.StelvioWakeLock.refresh());
+      }
+      return Promise.resolve();
+    },
+    release: function () {
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.releaseLegacy) {
+        return Promise.resolve(window.StelvioWakeLock.releaseLegacy());
+      }
+      return Promise.resolve();
+    },
+    isActive: function () {
+      return typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.getWakeTargetScreenActive
+        ? window.StelvioWakeLock.getWakeTargetScreenActive()
+        : false;
+    }
   };
-  
-  console.log('[Mobile Dashboard] 화면 꺼짐 방지 초기화 완료');
+  console.log('[Mobile Dashboard] StelvioWakeLock bridge (wake lock)');
 }
 
 /**
- * 노트북 훈련 화면 전용 화면 꺼짐 방지 (모바일과 동일 로직, 독립 구동)
- * - window.laptopTrainingWakeLock / laptopTrainingWakeLockControl 사용 (모바일 미사용)
- * - 노트북 문맥: #trainingScreen 표시 중 + window.trainingState.timerId 로만 동작
+ * 노트북(태블릿) 훈련 화면 — StelvioWakeLock 브리지
  */
 function initializeLaptopTrainingWakeLock() {
   if (!window.laptopTrainingWakeLock) {
-    window.laptopTrainingWakeLock = {
-      wakeLock: null,
-      wakeLockVideo: null,
-      videoWakeLockInterval: null,
-      wakeLockCheckInterval: null,
-      isActive: false
-    };
+    window.laptopTrainingWakeLock = { isActive: false };
   }
-
-  var wakeLockState = window.laptopTrainingWakeLock;
-  var wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
-  var WAKE_LOCK_CHECK_MS = 10000;
-
-  function isLaptopTrainingScreenActive() {
-    var el = document.getElementById('trainingScreen');
-    return el && (el.classList.contains('active') || (window.getComputedStyle(el).display !== 'none'));
-  }
-
-  function isLaptopTrainingRunning() {
-    return isLaptopTrainingScreenActive() && window.trainingState && window.trainingState.timerId != null;
-  }
-
-  function isIOS() {
-    var ua = navigator.userAgent || '';
-    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-  function isAndroid() {
-    return /Android/.test(navigator.userAgent || '');
-  }
-  function isChrome() {
-    var ua = navigator.userAgent || '';
-    return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
-  }
-  function isMobileChrome() {
-    return (isIOS() || isAndroid()) && isChrome();
-  }
-  function isBluefy() {
-    return /Bluefy/i.test(navigator.userAgent || '');
-  }
-
-  function startWakeLockPeriodicCheck() {
-    if (wakeLockState.wakeLockCheckInterval) return;
-    wakeLockState.wakeLockCheckInterval = setInterval(function () {
-      if (!isLaptopTrainingRunning() || !wakeLockState.isActive || document.visibilityState !== 'visible') return;
-      var needReacquire = !wakeLockState.wakeLock ||
-        (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended));
-      if (needReacquire) {
-        console.log('[Laptop Training Wake Lock] 주기 체크: 화면 꺼짐 방지 재요청');
-        requestWakeLock();
-      }
-    }, WAKE_LOCK_CHECK_MS);
-    console.log('[Laptop Training Wake Lock] 주기적 재요청 체크 시작');
-  }
-
-  function requestWakeLock() {
-    wakeLockState.isActive = true;
-    if (isMobileChrome() || (isIOS() && isBluefy())) {
-      if (!wakeLockState.wakeLockVideo) {
-        startVideoWakeLock();
-      }
-      startWakeLockPeriodicCheck();
-      return;
-    }
-
-    if (wakeLockSupported) {
-      try {
-        if (wakeLockState.wakeLock) return;
-        navigator.wakeLock.request('screen').then(function (wl) {
-          wakeLockState.wakeLock = wl;
-          console.log('[Laptop Training Wake Lock] Screen Wake Lock 활성화됨');
-          wl.addEventListener('release', function () {
-            wakeLockState.wakeLock = null;
-            if (document.visibilityState === 'visible' && wakeLockState.isActive && isLaptopTrainingRunning()) {
-              requestWakeLock();
-            }
-          });
-          if ((isIOS() || isAndroid()) && !wakeLockState.wakeLockVideo) {
-            startVideoWakeLock();
-          }
-        }).catch(function (err) {
-          console.warn('[Laptop Training Wake Lock] 활성화 실패:', err);
-          if (!wakeLockState.wakeLockVideo) startVideoWakeLock();
-        });
-      } catch (err) {
-        console.warn('[Laptop Training Wake Lock] 활성화 실패:', err);
-        if (!wakeLockState.wakeLockVideo) startVideoWakeLock();
-      }
-    } else {
-      if (!wakeLockState.wakeLockVideo) startVideoWakeLock();
-    }
-    startWakeLockPeriodicCheck();
-  }
-
-  function startVideoWakeLock() {
-    try {
-      if (wakeLockState.wakeLockVideo) return;
-      // 요청된 상태이고 노트북 훈련 화면이면 비디오 트릭 시작 (타이머는 아직 없을 수 있음)
-      if (!wakeLockState.isActive || !isLaptopTrainingScreenActive()) return;
-
-      var canvas = document.createElement('canvas');
-      canvas.width = 2;
-      canvas.height = 2;
-      var ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, 2, 2);
-      var stream = canvas.captureStream(30);
-
-      wakeLockState.wakeLockVideo = document.createElement('video');
-      wakeLockState.wakeLockVideo.setAttribute('playsinline', '');
-      wakeLockState.wakeLockVideo.setAttribute('muted', '');
-      wakeLockState.wakeLockVideo.setAttribute('loop', '');
-      wakeLockState.wakeLockVideo.setAttribute('webkit-playsinline', '');
-      wakeLockState.wakeLockVideo.setAttribute('autoplay', '');
-      wakeLockState.wakeLockVideo.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-9999;';
-      wakeLockState.wakeLockVideo.srcObject = stream;
-      document.body.appendChild(wakeLockState.wakeLockVideo);
-
-      function playVideo() {
-        if (!wakeLockState.wakeLockVideo) return;
-        var p = wakeLockState.wakeLockVideo.play();
-        if (p && p.then) {
-          p.then(function () {
-            console.log('[Laptop Training Video Wake Lock] 화면 꺼짐 방지 활성화 (비디오 트릭)');
-          }).catch(function (err) {
-            setTimeout(playVideo, 1000);
-          });
-        }
-      }
-      playVideo();
-
-      if (isIOS() || isAndroid()) {
-        if (wakeLockState.videoWakeLockInterval) clearInterval(wakeLockState.videoWakeLockInterval);
-        wakeLockState.videoWakeLockInterval = setInterval(function () {
-          if (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended)) {
-            playVideo();
-          }
-        }, 5000);
-      }
-    } catch (err) {
-      console.warn('[Laptop Training Video Wake Lock] 초기화 실패:', err);
-    }
-  }
-
-  function releaseWakeLock() {
-    if (wakeLockState.wakeLockCheckInterval) {
-      clearInterval(wakeLockState.wakeLockCheckInterval);
-      wakeLockState.wakeLockCheckInterval = null;
-    }
-    if (wakeLockState.wakeLock) {
-      try {
-        if (typeof WakeLockManager !== 'undefined') {
-          WakeLockManager.releaseScreenWakeLock(wakeLockState, '[Laptop Training Wake Lock]').catch(function (err) {
-            console.warn('[Laptop Training Wake Lock] 해제 실패:', err);
-          });
-        } else {
-          wakeLockState.wakeLock.release().then(function () {
-            wakeLockState.wakeLock = null;
-            console.log('[Laptop Training Wake Lock] Screen Wake Lock 해제됨');
-          }).catch(function () {
-            wakeLockState.wakeLock = null;
-          });
-        }
-      } catch (e) {
-        console.warn('[Laptop Training Wake Lock] 해제 예외:', e);
-        wakeLockState.wakeLock = null;
-      }
-    }
-    if (wakeLockState.videoWakeLockInterval) {
-      clearInterval(wakeLockState.videoWakeLockInterval);
-      wakeLockState.videoWakeLockInterval = null;
-    }
-    if (wakeLockState.wakeLockVideo) {
-      try {
-        if (wakeLockState.wakeLockVideo.srcObject) {
-          wakeLockState.wakeLockVideo.srcObject.getTracks().forEach(function (t) { t.stop(); });
-          wakeLockState.wakeLockVideo.srcObject = null;
-        }
-        wakeLockState.wakeLockVideo.pause();
-        if (wakeLockState.wakeLockVideo.parentNode) {
-          wakeLockState.wakeLockVideo.parentNode.removeChild(wakeLockState.wakeLockVideo);
-        }
-        wakeLockState.wakeLockVideo = null;
-      } catch (e) {}
-    }
-    wakeLockState.isActive = false;
-  }
-
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'visible') return;
-    if (!isLaptopTrainingRunning() || !wakeLockState.isActive) return;
-    (async function () {
-      try {
-        var useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
-        if (useScreenApi && typeof WakeLockManager !== 'undefined') {
-          await WakeLockManager.reacquireScreenWakeLockOnForeground(wakeLockState, '[Laptop Training Wake Lock]');
-        }
-        await Promise.resolve(requestWakeLock());
-      } catch (err) {
-        console.warn('[Laptop Training Wake Lock] visibility 재획득 실패:', err);
-      }
-      if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
-        wakeLockState.wakeLockVideo.play().catch(function () {});
-      }
-    })();
-  });
-
   window.laptopTrainingWakeLockControl = {
-    request: requestWakeLock,
-    release: releaseWakeLock,
-    isActive: function () { return wakeLockState.isActive; }
+    request: function () {
+      if (typeof window.StelvioWakeLock !== "undefined" && window.StelvioWakeLock.refresh) {
+        return Promise.resolve(window.StelvioWakeLock.refresh());
+      }
+      return Promise.resolve();
+    },
+    release: function () {
+      if (typeof window.StelvioWakeLock !== "undefined" && window.StelvioWakeLock.releaseLegacy) {
+        return Promise.resolve(window.StelvioWakeLock.releaseLegacy());
+      }
+      return Promise.resolve();
+    },
+    isActive: function () {
+      return typeof window.StelvioWakeLock !== "undefined" && window.StelvioWakeLock.getWakeTargetScreenActive
+        ? window.StelvioWakeLock.getWakeTargetScreenActive()
+        : false;
+    }
   };
-  console.log('[Laptop Training] 화면 꺼짐 방지 초기화 완료');
+  console.log("[Laptop Training] StelvioWakeLock bridge (wake lock)");
 }
+
 
 /** 모바일 대시보드 속도 적산용: 마지막 업데이트 시각 */
 let mobileLastSpeedUpdateTime = null;
@@ -17144,11 +16684,8 @@ function cleanupMobileDashboard() {
     mobileGaugeAnimationFrameId = null;
   }
   
-  // 화면 꺼짐 방지 해제 (화면 닫힐 때)
-  if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.release === 'function') {
-    window.mobileDashboardWakeLockControl.release();
-  }
-  
+  // 화면 꺼짐 방지: showScreen → StelvioWakeLock.applyForScreen으로 일괄 처리
+
   // 화면 방향 고정 해제
   unlockScreenOrientation();
 
@@ -18403,10 +17940,7 @@ function handleMobileStop() {
     const btnImg = document.getElementById('imgMobileToggle');
     if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
     
-    // 화면 꺼짐 방지 해제 (워크아웃 종료 시)
-    if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.release === 'function') {
-      window.mobileDashboardWakeLockControl.release();
-    }
+    // 화면 꺼짐 방지: 훈련 종료 후에도 모바일 대시보드에 머무는 경우 유지 — 해제는 다른 화면으로 이동 시 StelvioWakeLock
   }
 }
 
@@ -19633,211 +19167,59 @@ window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
 // Data Proxy (REQUEST_LOGS, REQUEST_STATUS) → initDashboardLogsProxy에서 처리
 
 /* ==========================================================
-   화면 꺼짐 방지 (Wake Lock API)
-   iOS (Bluefy) / Android (Google App) 환경 지원
+   화면 꺼짐 방지 — StelvioWakeLock 위임 (레거시 window.wakeLock 호환)
 ========================================================== */
 
-// Wake Lock 상태 관리
 window.wakeLock = {
-  wakeLockInstance: null,
-  isActive: false,
-  
-  // 기기 감지
-  isIOS: function() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  isIOS: function () {
+    return (
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
   },
-  
-  isAndroid: function() {
-    return /android/i.test(navigator.userAgent);
+  isAndroid: function () {
+    return /android/i.test(navigator.userAgent || '');
   },
-  
-  // Wake Lock 활성화
-  request: async function() {
+  request: async function () {
     try {
-      // Wake Lock API 지원 확인
-      if ('wakeLock' in navigator) {
-        this.wakeLockInstance = await navigator.wakeLock.request('screen');
-        this.isActive = true;
-        console.log('✅ Wake Lock activated (Native API)');
-        
-        // Wake Lock 해제 이벤트 리스너
-        this.wakeLockInstance.addEventListener('release', () => {
-          console.log('⚠️ Wake Lock released');
-          this.isActive = false;
-        });
-        
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+        await window.StelvioWakeLock.refresh();
         return true;
       }
-      
-      // iOS (Bluefy) 환경: NoSleep.js 방식 (비디오 재생)
-      if (this.isIOS()) {
-        console.log('📱 iOS detected - using NoSleep.js fallback');
-        await this.enableNoSleep();
-        return true;
-      }
-      
-      // Android (Google App) 환경: 백업 방법
-      if (this.isAndroid()) {
-        console.log('🤖 Android detected - using visibility API fallback');
-        this.enableVisibilityFallback();
-        return true;
-      }
-      
-      console.warn('⚠️ Wake Lock not supported on this device');
-      return false;
-      
-    } catch (err) {
-      console.error('❌ Wake Lock request failed:', err);
-      
-      // Fallback: NoSleep.js 방식 시도
-      if (this.isIOS() || this.isAndroid()) {
-        try {
-          await this.enableNoSleep();
-          return true;
-        } catch (fallbackErr) {
-          console.error('❌ NoSleep.js fallback failed:', fallbackErr);
-        }
-      }
-      
-      return false;
-    }
+    } catch (e) {}
+    return false;
   },
-  
-  // Wake Lock 해제
-  release: async function() {
+  release: async function () {
     try {
-      if (this.wakeLockInstance) {
-        await this.wakeLockInstance.release();
-        this.wakeLockInstance = null;
-        this.isActive = false;
-        console.log('✅ Wake Lock released (Native API)');
+      if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.releaseLegacy) {
+        await window.StelvioWakeLock.releaseLegacy();
       }
-      
-      // NoSleep 비디오 정리
-      if (this.noSleepVideo) {
-        this.noSleepVideo.pause();
-        this.noSleepVideo.remove();
-        this.noSleepVideo = null;
-        console.log('✅ NoSleep video removed');
-      }
-      
-      // Visibility fallback 정리
-      if (this.visibilityHandler) {
-        document.removeEventListener('visibilitychange', this.visibilityHandler);
-        this.visibilityHandler = null;
-        console.log('✅ Visibility handler removed');
-      }
-      
-      this.isActive = false;
-      return true;
-      
-    } catch (err) {
-      console.error('❌ Wake Lock release failed:', err);
-      return false;
-    }
-  },
-  
-  // NoSleep.js 방식 (iOS/Android 폴백)
-  noSleepVideo: null,
-  enableNoSleep: async function() {
-    if (this.noSleepVideo) {
-      return; // 이미 활성화됨
-    }
-    
-    // 무음 비디오 생성 (1x1 픽셀, 투명, 무한 루프)
-    const video = document.createElement('video');
-    video.setAttribute('muted', '');
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-    video.style.position = 'fixed';
-    video.style.top = '-1px';
-    video.style.left = '-1px';
-    video.style.width = '1px';
-    video.style.height = '1px';
-    video.style.opacity = '0';
-    video.style.pointerEvents = 'none';
-    video.loop = true;
-    
-    // 무음 WebM 비디오 데이터 (1초, 무음, 1x1 픽셀)
-    video.src = 'data:video/webm;base64,GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwH/////////FUmpZpkq17GDD0JATYCGQ2hyb21lV0GGQ2hyb21lFlSua7+uvdeBAXPFh4EBY3Jvbm9zBAAAACCsAQAA//////////EqAQAAAbJFh0EEQoWBAhhTgGcB//////////9UaZpZpktq17NDi4EASqxsJ0gCAVEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0kCAUEA//////////YEQqxsJ0gCAVEA//////////YEQqxsJ0hGU4BnAf//////////VGmaWaZLatezQ4eBQoKDaWQgAf//////////BWmaWaZLatezQ4dBT8+BFUmpZpkq17EBI4ODQ4ODA4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4PDgQKB4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4OPAgSBA===';
-    
-    document.body.appendChild(video);
-    
-    try {
-      await video.play();
-      this.noSleepVideo = video;
-      this.isActive = true;
-      console.log('✅ NoSleep video activated');
-    } catch (err) {
-      console.error('❌ NoSleep video play failed:', err);
-      video.remove();
-      throw err;
-    }
-  },
-  
-  // Visibility API 폴백 (Android 웹뷰 환경)
-  visibilityHandler: null,
-  enableVisibilityFallback: function() {
-    if (this.visibilityHandler) {
-      return; // 이미 활성화됨
-    }
-    
-    // 페이지가 백그라운드로 가면 자동으로 Wake Lock 재요청
-    this.visibilityHandler = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('🔄 Page visible - re-requesting Wake Lock');
-        if ('wakeLock' in navigator) {
-          try {
-            this.wakeLockInstance = await navigator.wakeLock.request('screen');
-            console.log('✅ Wake Lock re-acquired');
-          } catch (err) {
-            console.warn('⚠️ Wake Lock re-request failed:', err);
-          }
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', this.visibilityHandler);
-    this.isActive = true;
-    console.log('✅ Visibility fallback enabled');
+    } catch (e) {}
+    return true;
   }
 };
 
-// 모바일 대시보드 시작 시 Wake Lock 활성화
 const originalStartMobileDashboard = window.startMobileDashboard;
 if (originalStartMobileDashboard) {
-  window.startMobileDashboard = async function() {
-    // 원래 함수 호출
-    const result = originalStartMobileDashboard.apply(this, arguments);
-    
-    // Wake Lock 활성화
-    setTimeout(async () => {
-      const activated = await window.wakeLock.request();
-      if (activated) {
-        console.log('✅ Wake Lock activated for mobile dashboard');
-      } else {
-        console.warn('⚠️ Wake Lock activation failed for mobile dashboard');
+  window.startMobileDashboard = async function () {
+    var result = originalStartMobileDashboard.apply(this, arguments);
+    setTimeout(function () {
+      if (window.StelvioWakeLock && window.StelvioWakeLock.refresh) {
+        window.StelvioWakeLock.refresh();
       }
     }, 500);
-    
     return result;
   };
 }
 
-// cleanupMobileDashboard에서 Wake Lock 해제
 const originalCleanupMobileDashboard = window.cleanupMobileDashboard;
 if (originalCleanupMobileDashboard) {
-  window.cleanupMobileDashboard = async function() {
-    // Wake Lock 해제
-    await window.wakeLock.release();
-    console.log('✅ Wake Lock released for mobile dashboard cleanup');
-    
-    // 원래 함수 호출
+  window.cleanupMobileDashboard = async function () {
+    if (window.StelvioWakeLock && window.StelvioWakeLock.releaseLegacy) {
+      await window.StelvioWakeLock.releaseLegacy();
+    }
     return originalCleanupMobileDashboard.apply(this, arguments);
   };
 }
 
-// 전역으로 노출
-window.wakeLock = window.wakeLock;
 

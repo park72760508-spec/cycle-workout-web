@@ -5244,149 +5244,25 @@ function initializeUserInfo() {
     }
 }
 
-/** SPA 전용: 화면 꺼짐 방지 (구버전 bluetoothIndividual.html과 동일 로직). window.wakeLockControl 할당 */
+/** SPA 전용: 화면 꺼짐 방지 — StelvioWakeLock 브리지 (window.wakeLockControl) */
 function initializeBluetoothIndividualWakeLockForSPA() {
     if (window.__bluetoothIndividualWakeLockInitialized) return;
     window.__bluetoothIndividualWakeLockInitialized = true;
-    var wlScreenRef = { wakeLock: null };
-    var wakeLockVideo = null;
-    var videoWakeLockInterval = null;
-    var wakeLockCheckInterval = null;
-    var wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
-    var WAKE_LOCK_CHECK_MS = 10000;
-    function isIOS() { var ua = navigator.userAgent || ''; return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
-    function isAndroid() { return /Android/.test(navigator.userAgent || ''); }
-    function isChrome() { var ua = navigator.userAgent || ''; return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua); }
-    function isMobileChrome() { return (isIOS() || isAndroid()) && isChrome(); }
-    function isBluefy() { return /Bluefy/i.test(navigator.userAgent || ''); }
-    function isTrainingActive() {
-        var s = window.currentTrainingState;
-        return s === 'running' || s === 'countdown';
-    }
-    function startVideoWakeLock() {
-        try {
-            if (wakeLockVideo) return;
-            if (!isTrainingActive()) return;
-            var canvas = document.createElement('canvas');
-            canvas.width = 2; canvas.height = 2;
-            var ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 2, 2);
-            var stream = canvas.captureStream(30);
-            wakeLockVideo = document.createElement('video');
-            wakeLockVideo.setAttribute('playsinline', ''); wakeLockVideo.setAttribute('muted', ''); wakeLockVideo.setAttribute('loop', ''); wakeLockVideo.setAttribute('webkit-playsinline', ''); wakeLockVideo.setAttribute('autoplay', '');
-            wakeLockVideo.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-9999';
-            wakeLockVideo.srcObject = stream;
-            document.body.appendChild(wakeLockVideo);
-            var playVideo = function () {
-                if (!wakeLockVideo) return;
-                wakeLockVideo.play().then(function () { console.log('[BluetoothIndividual Wake Lock] 비디오 트릭 활성화'); }).catch(function (err) { setTimeout(playVideo, 1000); });
-            };
-            playVideo();
-            if (isIOS() || isAndroid()) {
-                videoWakeLockInterval = setInterval(function () {
-                    if (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended)) playVideo();
-                }, 5000);
+    window.wakeLockControl = {
+        request: function () {
+            if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.refresh) {
+                return Promise.resolve(window.StelvioWakeLock.refresh());
             }
-        } catch (err) { console.warn('[BluetoothIndividual Wake Lock] 비디오 트릭 실패:', err); }
-    }
-    function startWakeLockPeriodicCheck() {
-        if (wakeLockCheckInterval) return;
-        wakeLockCheckInterval = setInterval(function () {
-            if (document.visibilityState !== 'visible' || !isTrainingActive()) return;
-            var needReacquire = !wlScreenRef.wakeLock || (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended));
-            if (needReacquire) {
-                console.log('[BluetoothIndividual Wake Lock] 주기 체크: 재요청');
-                requestWakeLock();
+            return Promise.resolve();
+        },
+        release: function () {
+            if (typeof window.StelvioWakeLock !== 'undefined' && window.StelvioWakeLock.releaseLegacy) {
+                return Promise.resolve(window.StelvioWakeLock.releaseLegacy());
             }
-        }, WAKE_LOCK_CHECK_MS);
-    }
-    function requestWakeLock() {
-        if (isMobileChrome() || (isIOS() && isBluefy())) {
-            if (!wakeLockVideo) startVideoWakeLock();
-            if (isTrainingActive()) startWakeLockPeriodicCheck();
-            return;
+            return Promise.resolve();
         }
-        if (wakeLockSupported) {
-            try {
-                if (wlScreenRef.wakeLock) return;
-                navigator.wakeLock.request('screen').then(function (wl) {
-                    wlScreenRef.wakeLock = wl;
-                    console.log('[BluetoothIndividual Wake Lock] Screen Wake Lock 활성화');
-                    wl.addEventListener('release', function () {
-                        wlScreenRef.wakeLock = null;
-                        if (document.visibilityState === 'visible' && isTrainingActive()) requestWakeLock();
-                    });
-                    if ((isIOS() || isAndroid()) && !wakeLockVideo) startVideoWakeLock();
-                }).catch(function (err) {
-                    console.warn('[BluetoothIndividual Wake Lock] 활성화 실패:', err);
-                    if (!wakeLockVideo) startVideoWakeLock();
-                });
-                if (isTrainingActive()) startWakeLockPeriodicCheck();
-            } catch (err) {
-                if (!wakeLockVideo) startVideoWakeLock();
-            }
-        } else {
-            if (!wakeLockVideo) startVideoWakeLock();
-            if (isTrainingActive()) startWakeLockPeriodicCheck();
-        }
-    }
-    function releaseWakeLock() {
-        if (wakeLockCheckInterval) { clearInterval(wakeLockCheckInterval); wakeLockCheckInterval = null; }
-        if (wlScreenRef.wakeLock) {
-            try {
-                if (typeof WakeLockManager !== 'undefined') {
-                    WakeLockManager.releaseScreenWakeLock(wlScreenRef, '[BluetoothIndividual Wake Lock]').catch(function (err) {
-                        console.warn('[BluetoothIndividual Wake Lock] 해제 실패:', err);
-                    });
-                } else {
-                    wlScreenRef.wakeLock.release().then(function () { wlScreenRef.wakeLock = null; console.log('[BluetoothIndividual Wake Lock] 해제'); }).catch(function () { wlScreenRef.wakeLock = null; });
-                }
-            } catch (e) {
-                console.warn('[BluetoothIndividual Wake Lock] 해제 예외:', e);
-                wlScreenRef.wakeLock = null;
-            }
-        }
-        if (videoWakeLockInterval) { clearInterval(videoWakeLockInterval); videoWakeLockInterval = null; }
-        if (wakeLockVideo) {
-            try {
-                if (wakeLockVideo.srcObject) { wakeLockVideo.srcObject.getTracks().forEach(function (t) { t.stop(); }); wakeLockVideo.srcObject = null; }
-                wakeLockVideo.pause();
-                if (wakeLockVideo.parentNode) wakeLockVideo.parentNode.removeChild(wakeLockVideo);
-                wakeLockVideo = null;
-            } catch (e) {}
-        }
-    }
-    document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState !== 'visible' || !isTrainingActive()) return;
-        (async function () {
-            try {
-                var useScreenApi = wakeLockSupported && !(isMobileChrome() || (isIOS() && isBluefy()));
-                if (useScreenApi && typeof WakeLockManager !== 'undefined') {
-                    await WakeLockManager.reacquireScreenWakeLockOnForeground(wlScreenRef, '[BluetoothIndividual Wake Lock]');
-                }
-                await Promise.resolve(requestWakeLock());
-            } catch (err) {
-                console.warn('[BluetoothIndividual Wake Lock] visibility 재획득 실패:', err);
-            }
-            if (wakeLockVideo && wakeLockVideo.paused) wakeLockVideo.play().catch(function () {});
-        })();
-    });
-    var activateOnFirstInteraction = function () {
-        if (isTrainingActive()) requestWakeLock();
     };
-    document.addEventListener('touchstart', activateOnFirstInteraction, { once: true, passive: true });
-    document.addEventListener('click', activateOnFirstInteraction, { once: true });
-    document.addEventListener('pointerdown', activateOnFirstInteraction, { once: true, passive: true });
-    window.addEventListener('beforeunload', releaseWakeLock);
-    window.addEventListener('pagehide', releaseWakeLock);
-    window.wakeLockControl = { request: requestWakeLock, release: releaseWakeLock };
-    // 화면 진입 시 이미 훈련 중이면 즉시 활성화 (복귀·지연 로드 대응)
-    setTimeout(function () {
-        if (isTrainingActive() && typeof window.wakeLockControl !== 'undefined' && window.wakeLockControl.request) {
-            window.wakeLockControl.request();
-        }
-    }, 300);
-    console.log('[BluetoothIndividual] 화면 꺼짐 방지 초기화 완료 (SPA, 모바일 대시보드와 동일 로직)');
+    console.log('[BluetoothIndividual] StelvioWakeLock bridge (wake lock)');
 }
 
 /** SPA 전용: Pull-to-refresh 방지 (모바일 대시보드·구버전 bluetoothIndividual.html과 동일, iOS/Bluefy 강화) */
