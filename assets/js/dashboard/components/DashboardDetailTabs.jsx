@@ -32,6 +32,7 @@
   function RidingMetricsZoneTables(props) {
     var userProfile = props.userProfile;
     var stats = props.stats || {};
+    var standalone = !!props.standalone;
     var _hr = useState(undefined);
     var hrPeak = _hr[0];
     var setHrPeak = _hr[1];
@@ -84,8 +85,11 @@
     if (ftpHtml) html += ftpHtml;
     html += hrHtml;
     if (!html) return null;
+    var wrapClass =
+      'dashboard-riding-metrics-zones profile-zone-tables-wrap' +
+      (standalone ? ' dashboard-riding-metrics-zones-standalone' : '');
     return React.createElement('div', {
-      className: 'dashboard-riding-metrics-zones profile-zone-tables-wrap',
+      className: wrapClass,
       dangerouslySetInnerHTML: { __html: html }
     });
   }
@@ -255,11 +259,15 @@
         return React.createElement(
           'div',
           { className: 'space-y-6' },
+          React.createElement(RidingMetricsZoneTables, {
+            userProfile: userProfile,
+            stats: stats,
+            standalone: true
+          }),
           React.createElement(
             'div',
             { className: 'rounded-xl border border-gray-200 bg-white overflow-hidden' },
             React.createElement('div', { className: 'px-4 pb-4 pt-1 space-y-4 text-xs text-gray-600 border-t-0' },
-              React.createElement(RidingMetricsZoneTables, { userProfile: userProfile, stats: stats }),
               React.createElement('section', null,
                 React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 표시 기준'),
                 React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
