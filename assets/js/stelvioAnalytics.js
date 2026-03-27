@@ -383,7 +383,11 @@
         : typeof global.getViewerGrade === 'function'
           ? String(global.getViewerGrade())
           : '2';
-    if (g !== '1') {
+    var ok =
+      typeof global.isStelvioAdminGrade === 'function'
+        ? global.isStelvioAdminGrade(g)
+        : String(g).trim() === '1' || Number(g) === 1;
+    if (!ok) {
       if (typeof global.showToast === 'function') global.showToast('관리자만 이용할 수 있습니다.');
       else alert('관리자만 이용할 수 있습니다.');
       return;

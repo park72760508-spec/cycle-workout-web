@@ -3218,7 +3218,11 @@ if (!window.showScreen) {
       console.log(`Switching to screen: ${id}`);
       if (id === 'accessStatsScreen') {
         var _ag = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2');
-        if (_ag !== '1') {
+        var _adminOk =
+          typeof window.isStelvioAdminGrade === 'function'
+            ? window.isStelvioAdminGrade(_ag)
+            : String(_ag).trim() === '1' || Number(_ag) === 1;
+        if (!_adminOk) {
           if (typeof showToast === 'function') showToast('관리자만 이용할 수 있습니다.');
           return;
         }
@@ -13411,7 +13415,11 @@ function openSettingsModal() {
   const accessRow = document.getElementById('settingsAccessStatsRow');
   if (accessRow) {
     const g = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : (typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2');
-    accessRow.style.display = g === '1' ? 'flex' : 'none';
+    const showAccess =
+      typeof window.isStelvioAdminGrade === 'function'
+        ? window.isStelvioAdminGrade(g)
+        : String(g).trim() === '1' || Number(g) === 1;
+    accessRow.style.display = showAccess ? 'flex' : 'none';
   }
 }
 /** 환경설정을 DOM만 열고 openSettingsModal을 건너뛴 경우 — 접속통계 행 표시 동기화 */
@@ -13425,7 +13433,11 @@ function refreshSettingsModalAdminExtras() {
     const accessRow = document.getElementById('settingsAccessStatsRow');
     if (accessRow) {
       const g = typeof getLoginUserGrade === 'function' ? String(getLoginUserGrade()) : '2';
-      accessRow.style.display = g === '1' ? 'flex' : 'none';
+      const showAccess =
+        typeof window.isStelvioAdminGrade === 'function'
+          ? window.isStelvioAdminGrade(g)
+          : String(g).trim() === '1' || Number(g) === 1;
+      accessRow.style.display = showAccess ? 'flex' : 'none';
     }
   } catch (e) {}
 }

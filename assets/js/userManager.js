@@ -23,12 +23,21 @@ function getViewerGrade() {
   return '2'; // 기본은 일반
 }
 
-/** 로그인 계정 등급 — 프로필 선택으로 currentUser가 다른 사용자로 바뀌어도 관리자 전용 메뉴는 로그인 계정 기준 */
+/** grade 값이 관리자(1)인지 (문자/숫자/공백 안전) */
+function isStelvioAdminGrade(g) {
+  if (g === null || g === undefined) return false;
+  const s = String(g).trim();
+  if (s === '1') return true;
+  const n = Number(s);
+  return n === 1;
+}
+
+/** 로그인 계정 등급 — 프로필 선택으로 currentUser가 바뀌어도 로그인 UID 기준. authUser.grade는 오래된 값일 수 있어 users 목록(Firestore 동기화)을 최우선 */
 function getLoginUserGrade() {
   try {
     if (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) return '1';
+
     const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-    if (authUser && authUser.grade != null) return String(authUser.grade);
 
     var uid = null;
     try {
@@ -40,29 +49,35 @@ function getLoginUserGrade() {
     } catch (e) {}
     if (!uid && authUser && authUser.id != null) uid = String(authUser.id);
 
+    function gradeFromUserList(arr) {
+      if (!uid || !Array.isArray(arr)) return null;
+      const hit = arr.find(function (u) {
+        if (!u || u.id == null) return false;
+        return String(u.id) === uid || u.id === uid;
+      });
+      return hit && hit.grade != null ? String(hit.grade) : null;
+    }
+
+    var fromList = gradeFromUserList(window.users);
+    if (fromList != null) return fromList;
+    fromList = gradeFromUserList(window.userProfiles);
+    if (fromList != null) return fromList;
+
+    if (authUser && authUser.grade != null) return String(authUser.grade);
+
     try {
       const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
       if (uid && viewer && String(viewer.id) === uid && viewer.grade != null) {
         return String(viewer.grade);
       }
     } catch (e) {}
-
-    if (uid && Array.isArray(window.users)) {
-      const hit = window.users.find(function (u) {
-        return u && String(u.id) === uid;
-      });
-      if (hit && hit.grade != null) return String(hit.grade);
-    }
-    if (uid && Array.isArray(window.userProfiles)) {
-      const hit2 = window.userProfiles.find(function (u) {
-        return u && String(u.id) === uid;
-      });
-      if (hit2 && hit2.grade != null) return String(hit2.grade);
-    }
   } catch (e) {}
   return typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
 }
-if (typeof window !== 'undefined') window.getLoginUserGrade = getLoginUserGrade;
+if (typeof window !== 'undefined') {
+  window.getLoginUserGrade = getLoginUserGrade;
+  window.isStelvioAdminGrade = isStelvioAdminGrade;
+}
 
 /* ==========================================================
    FTP 최소값: 몸무게의 1.8배 (사용자 등록 시)
@@ -2718,6 +2733,31 @@ async function loadUsers() {
 
     window.users = users;
     window.userProfiles = users;
+
+    try {
+      var uidSync = null;
+      if (typeof window !== 'undefined' && window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+        uidSync = String(window.auth.currentUser.uid);
+      } else if (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
+        uidSync = String(window.authV9.currentUser.uid);
+      }
+      if (uidSync && users.length) {
+        var meRow = users.find(function (u) {
+          return u && String(u.id) === uidSync;
+        });
+        if (meRow && meRow.grade != null) {
+          var auStr = localStorage.getItem('authUser');
+          if (auStr) {
+            var au = JSON.parse(auStr);
+            if (au && String(au.grade) !== String(meRow.grade)) {
+              au.grade = String(meRow.grade);
+              localStorage.setItem('authUser', JSON.stringify(au));
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
     if (typeof window.refreshSettingsModalAdminExtras === 'function') {
       try {
         window.refreshSettingsModalAdminExtras();
