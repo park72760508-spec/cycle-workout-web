@@ -721,8 +721,11 @@
       var row = order[i];
       var label = labels[row.key] || row.key;
       var v = row.isSpecial ? row.val : row.val != null ? row.val : '—';
+      var fullClass = row.isSpecial ? ' access-stats-card--span-full' : '';
       parts.push(
-        '<div class="access-stats-card">' +
+        '<div class="access-stats-card' +
+          fullClass +
+          '">' +
           '<div class="access-stats-card-label">' +
           label +
           '</div>' +
