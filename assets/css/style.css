@@ -4816,50 +4816,85 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 0;
   width: 100%;
 }
-/* 라이딩 지표 탭: FTP/심박 존 테이블을 카드 밖 상단에 두었을 때 — 내용 열 확장, 범위·값 열 축소 */
+/* 라이딩 지표 탭: FTP/심박 존 — W/kg 표와 동일(12px·gray-600 계열), 가로 스크롤 없이 열폭은 글자수 기반 */
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone.profile-zone-tables-wrap {
   margin: 0 0 16px 0;
+  overflow-x: visible;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table-block {
+  overflow-x: visible;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table-header {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-caption {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4b5563;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.4;
 }
-/* 범위(%), 값(W/bpm): 한 줄 표시(nowrap)에 맞춰 넉넉한 최소 너비 — max-width 제거 */
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(2),
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(2) {
-  width: 26%;
-  min-width: 7.5rem;
-  padding: 10px 10px;
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th,
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td {
+  padding: 4px 5px;
   box-sizing: border-box;
+  font-size: 12px;
+  color: #4b5563;
 }
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(3),
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(3) {
-  width: 22%;
-  min-width: 6.25rem;
-  padding: 10px 10px;
-  box-sizing: border-box;
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th {
+  font-weight: 600;
+  color: #4b5563;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(1),
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1) {
-  width: 14%;
-  min-width: 3.25rem;
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(2),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(2),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(3),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(3) {
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(4),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
   width: auto;
-  min-width: 30%;
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 4px 5px;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
 }
 @media (max-width: 600px) {
   #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-tables-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: visible;
+    -webkit-overflow-scrolling: auto;
   }
   #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
-    min-width: 32rem;
+    min-width: 0;
+    width: 100%;
+  }
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table-block {
+    overflow-x: visible;
   }
   #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.45;
   }
 }
