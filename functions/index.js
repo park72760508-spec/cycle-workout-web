@@ -4225,6 +4225,27 @@ exports.rebuildVo2StelvioRollingStats = onSchedule(
   }
 );
 
+// ---------- 훈련 트렌드 Fitness(Fitness) 전 사용자 평균 (샘플 → stats_fitness_stelvio_rolling) ----------
+const { rebuildFitnessStelvioRollingStats } = require("./fitnessDemographicStats");
+exports.rebuildFitnessStelvioRollingStats = onSchedule(
+  {
+    schedule: "30 4 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "512MiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      const r = await rebuildFitnessStelvioRollingStats(db);
+      console.log("[rebuildFitnessStelvioRollingStats] ok", r);
+    } catch (e) {
+      console.error("[rebuildFitnessStelvioRollingStats]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
 // ---------- STELVIO AI 네이버 구독 자동화 (30분 스케줄, TypeScript 빌드 결과 사용) ----------
 const path = require("path");
 const fs = require("fs");
