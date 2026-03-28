@@ -320,6 +320,30 @@ async function saveStravaActivityToFirebase(activity) {
       avg_cadence: activity.avg_cadence !== null && activity.avg_cadence !== undefined ? Number(activity.avg_cadence) : null,
       kilojoules: activity.kilojoules !== null && activity.kilojoules !== undefined ? Number(activity.kilojoules) : null,
       elevation_gain: activity.elevation_gain !== null && activity.elevation_gain !== undefined ? Number(activity.elevation_gain) : null,
+      avg_speed_kmh:
+        activity.avg_speed_kmh !== null && activity.avg_speed_kmh !== undefined && Number(activity.avg_speed_kmh) > 0
+          ? Number(activity.avg_speed_kmh)
+          : null,
+      left_right_balance:
+        activity.left_right_balance !== null && activity.left_right_balance !== undefined
+          ? Number(activity.left_right_balance)
+          : null,
+      pedal_smoothness_left:
+        activity.pedal_smoothness_left !== null && activity.pedal_smoothness_left !== undefined
+          ? Number(activity.pedal_smoothness_left)
+          : null,
+      pedal_smoothness_right:
+        activity.pedal_smoothness_right !== null && activity.pedal_smoothness_right !== undefined
+          ? Number(activity.pedal_smoothness_right)
+          : null,
+      torque_effectiveness_left:
+        activity.torque_effectiveness_left !== null && activity.torque_effectiveness_left !== undefined
+          ? Number(activity.torque_effectiveness_left)
+          : null,
+      torque_effectiveness_right:
+        activity.torque_effectiveness_right !== null && activity.torque_effectiveness_right !== undefined
+          ? Number(activity.torque_effectiveness_right)
+          : null,
       rpe: activity.rpe !== null && activity.rpe !== undefined ? Number(activity.rpe) : null,
       weight: (activity.weight != null && Number(activity.weight) > 0) ? Number(activity.weight) : null,
       

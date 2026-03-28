@@ -244,6 +244,74 @@ function computeTssFromActivity(activity, ftp) {
   return Math.max(0, Math.round(tss * 100) / 100);
 }
 
+/** 활동 JSON에서 첫 번째 유한 숫자 필드 (파트너·확장 필드 대비) */
+function pickFirstFiniteNumberFromActivity(obj, keys) {
+  if (!obj || !keys || !keys.length) return null;
+  for (let i = 0; i < keys.length; i++) {
+    const v = obj[keys[i]];
+    if (v == null || v === '') continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/** Strava average_speed(m/s) 또는 거리·시간으로 평균 시속 km/h */
+function computeAvgSpeedKmhFromActivity(activity, distanceKm, durationSec) {
+  const avgMs = Number(activity && activity.average_speed);
+  if (Number.isFinite(avgMs) && avgMs > 0) {
+    return Math.round(avgMs * 3.6 * 100) / 100;
+  }
+  const d = Number(distanceKm) || 0;
+  const t = Number(durationSec) || 0;
+  if (d > 0 && t > 0) {
+    return Math.round((d / (t / 3600)) * 100) / 100;
+  }
+  return null;
+}
+
+/**
+ * 좌·우 밸런스 / 페달 평활도 / 토크 유효성 — 공개 API에 없을 수 있음, 수집 시 저장
+ */
+function extractStravaPedalingExtras(activity) {
+  if (!activity || typeof activity !== 'object') {
+    return {
+      left_right_balance: null,
+      pedal_smoothness_left: null,
+      pedal_smoothness_right: null,
+      torque_effectiveness_left: null,
+      torque_effectiveness_right: null
+    };
+  }
+  return {
+    left_right_balance: pickFirstFiniteNumberFromActivity(activity, [
+      'left_right_balance',
+      'average_left_right_balance',
+      'avg_left_right_balance'
+    ]),
+    pedal_smoothness_left: pickFirstFiniteNumberFromActivity(activity, [
+      'average_pedal_smoothness_left',
+      'pedal_smoothness_left',
+      'avg_pedal_smoothness_left'
+    ]),
+    pedal_smoothness_right: pickFirstFiniteNumberFromActivity(activity, [
+      'average_pedal_smoothness_right',
+      'pedal_smoothness_right',
+      'avg_pedal_smoothness_right'
+    ]),
+    torque_effectiveness_left: pickFirstFiniteNumberFromActivity(activity, [
+      'average_torque_effectiveness_left',
+      'torque_effectiveness_left',
+      'avg_torque_effectiveness_left'
+    ]),
+    torque_effectiveness_right: pickFirstFiniteNumberFromActivity(activity, [
+      'average_torque_effectiveness_right',
+      'torque_effectiveness_right',
+      'avg_torque_effectiveness_right'
+    ])
+  };
+}
+
 /**
  * Strava 활동 데이터를 Target Schema에 맞게 변환
  * @param {object} activity - Strava Activity 객체 (상세 또는 요약)
@@ -319,6 +387,9 @@ function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
   // 현재는 null로 설정하고 주석으로 TODO 남김
   const timeInZones = null; // TODO: Strava /activities/{id}/zones API 호출하여 Z1~Z7 매핑
 
+  const avgSpeedKmh = computeAvgSpeedKmhFromActivity(activity, distanceKm, durationSec);
+  const pedaling = extractStravaPedalingExtras(activity);
+
   // 4. Internal Fields (기본값)
   const source = 'strava';
   const earnedPoints = 0; // 비즈니스 로직이므로 일단 0
@@ -343,6 +414,12 @@ function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
     weighted_watts: weightedWatts,
     kilojoules: kilojoules,
     elevation_gain: elevationGain,
+    avg_speed_kmh: avgSpeedKmh,
+    left_right_balance: pedaling.left_right_balance,
+    pedal_smoothness_left: pedaling.pedal_smoothness_left,
+    pedal_smoothness_right: pedaling.pedal_smoothness_right,
+    torque_effectiveness_left: pedaling.torque_effectiveness_left,
+    torque_effectiveness_right: pedaling.torque_effectiveness_right,
     rpe: rpe,
     ftp_at_time: ftp > 0 ? ftp : null,
     if: ifValue,
