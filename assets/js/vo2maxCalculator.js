@@ -250,6 +250,69 @@
   }
 
   /**
+   * 대시보드 훈련 트렌드(최근 1개월) 차트와 동일한 버킷별 Fitness → 산술평균을 기여(본인 문서만).
+   * @param {Object} userProfile
+   * @param {Array<{ fitness?: number }>} fitnessChartRows
+   * @returns {Promise<void>}
+   */
+  function persistFitnessDemographicSampleAsync(userProfile, fitnessChartRows) {
+    var uid = userProfile && userProfile.id;
+    var db = global.firestoreV9;
+    if (!uid || !db || !Array.isArray(fitnessChartRows) || fitnessChartRows.length === 0) {
+      return Promise.resolve();
+    }
+    var vals = [];
+    for (var fi = 0; fi < fitnessChartRows.length; fi++) {
+      var fv = Number(fitnessChartRows[fi].fitness);
+      if (isFinite(fv) && fv >= 0) vals.push(fv);
+    }
+    if (vals.length === 0) return Promise.resolve();
+    var avgTrend =
+      vals.reduce(function (a, b) {
+        return a + b;
+      }, 0) / vals.length;
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        return mod.setDoc(
+          mod.doc(db, 'fitness_demographic_samples', uid),
+          {
+            avgTrendFitness: Math.round(avgTrend * 10) / 10,
+            updatedAt: mod.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      })
+      .catch(function () {});
+  }
+
+  /**
+   * 연령·성별 미구분 전체 사용자 평균 Fitness(훈련 트렌드 샘플 기반) — stats_fitness_stelvio_rolling: all_all
+   * @returns {Promise<{ avgFitness: number, userCount: number }|null>}
+   */
+  function fetchStelvioRollingFitnessStatsGlobal() {
+    var db = global.firestoreV9;
+    if (!db) return Promise.resolve(null);
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        return mod.getDoc(mod.doc(db, 'stats_fitness_stelvio_rolling', 'all_all'));
+      })
+      .then(function (snap) {
+        if (!docSnapExists(snap)) return null;
+        var d = snap.data();
+        if (!d || d.minSamplesMet !== true) return null;
+        var avg = Number(d.avgFitness);
+        if (!isFinite(avg) || avg < 0) return null;
+        return {
+          avgFitness: Math.round(avg * 10) / 10,
+          userCount: Math.max(0, Math.floor(Number(d.userCount) || 0)),
+        };
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  /**
    * @param {number|null} age - 만 나이
    * @param {string|null} gender - 남/여 등
    * @param {number|null} vo2max - ml/kg/min
@@ -372,6 +435,8 @@
   global.getStelvioUserAvgVo2maxAllAgesMlKg = getStelvioUserAvgVo2maxAllAgesMlKg;
   global.getStelvioUserAvgVo2maxGlobalMlKg = getStelvioUserAvgVo2maxGlobalMlKg;
   global.persistVo2DemographicSampleAsync = persistVo2DemographicSampleAsync;
+  global.persistFitnessDemographicSampleAsync = persistFitnessDemographicSampleAsync;
+  global.fetchStelvioRollingFitnessStatsGlobal = fetchStelvioRollingFitnessStatsGlobal;
 
   // --- STELVIO VO2 Max (260327_V1 원본 로직) ---------------------------------
 
