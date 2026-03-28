@@ -186,6 +186,27 @@ var MONTH_POWER_CURVE_ITEMS = [
   { api: '60min', dataKey: 'power60min', label: '60분', color: '#22c55e' }
 ];
 
+/** 성장 트렌드 차트와 동일: PR 원·라벨 (파워) */
+function growthStylePowerPrDot(R, prIdx, prWatts, lineColor) {
+  var smallFill = lineColor || '#3b82f6';
+  return function(dotProps) {
+    if (!R || !dotProps || dotProps.cx == null || dotProps.cy == null) return null;
+    var cx = dotProps.cx;
+    var cy = dotProps.cy;
+    var idx = dotProps.index;
+    if (prIdx < 0 || prWatts <= 0 || idx !== prIdx) {
+      return R.createElement('circle', { cx: cx, cy: cy, r: 3, fill: smallFill, stroke: '#fff', strokeWidth: 1 });
+    }
+    return R.createElement(
+      'g',
+      null,
+      R.createElement('text', { x: cx, y: cy - 20, textAnchor: 'middle', fill: '#1d4ed8', fontSize: 9, fontWeight: 'bold' }, Math.round(prWatts) + ' W'),
+      R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: '#3b82f6', stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 }),
+      R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR')
+    );
+  };
+}
+
 // ========== 파워 커브 차트 (ALLR - Duration 기반) ==========
 function PowerProfileCurveChart(props) {
   var p = props || {};
@@ -300,6 +321,17 @@ function PowerProfileMonthCurveChart(props) {
   if (cohortAvgPower != null && cohortAvgPower > yMax) yMax = cohortAvgPower;
   yMax = Math.max(10, Math.ceil(yMax * 1.12 / 10) * 10);
 
+  var prIdx = -1;
+  var prWatts = 0;
+  for (var _pi = 0; _pi < data.length; _pi++) {
+    var _pv = Number(data[_pi][dataKey]) || 0;
+    if (_pv > prWatts) {
+      prWatts = _pv;
+      prIdx = _pi;
+    }
+  }
+  var ReactForDot = window.React;
+
   if (!Recharts || !hasAnyWeek) {
     return (
       <DashboardCard>
@@ -351,7 +383,7 @@ function PowerProfileMonthCurveChart(props) {
       </div>
       <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 26, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
@@ -371,7 +403,7 @@ function PowerProfileMonthCurveChart(props) {
               fill={'url(#' + fillGradId + ')'}
               strokeWidth={2}
               name={selItem.label + ' 파워'}
-              dot={{ r: 3, fill: selColor, stroke: '#fff', strokeWidth: 1 }}
+              dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor)}
               connectNulls
             />
           </AreaChart>

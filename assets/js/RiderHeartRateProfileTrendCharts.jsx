@@ -7,9 +7,50 @@
 
 /* global React, Recharts */
 
+var ReactObj = window.React || {};
+var useState = ReactObj.useState || null;
+
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
 let _hrChartId = 0;
 function nextHrChartId() { return 'hr-' + (++_hrChartId); }
+
+/** 1min/5min/20min/60min → 성장 트렌드 슬롯 인덱스 (getGrowthStelvioReferencePowerHr) */
+function monthHrApiToGrowthSlot(api) {
+  if (api === '1min') return 1;
+  if (api === '5min') return 2;
+  if (api === '20min') return 4;
+  if (api === '60min') return 6;
+  return 1;
+}
+
+/** 최근 1개월 심박: 구간별 색·dataKey (파워 매트릭스와 동일 팔레트) */
+var MONTH_HR_CURVE_ITEMS = [
+  { api: '1min', dataKey: 'hr1min', label: '1분', color: '#ef4444' },
+  { api: '5min', dataKey: 'hr5min', label: '5분', color: '#f97316' },
+  { api: '20min', dataKey: 'hr20min', label: '20분', color: '#3b82f6' },
+  { api: '60min', dataKey: 'hr60min', label: '60분', color: '#22c55e' }
+];
+
+/** 성장 트렌드 차트와 동일: PR 원·라벨 (심박) */
+function growthStyleHrPrDot(R, prIdx, prBpm, lineColor) {
+  var smallFill = lineColor || '#ec4899';
+  return function(dotProps) {
+    if (!R || !dotProps || dotProps.cx == null || dotProps.cy == null) return null;
+    var cx = dotProps.cx;
+    var cy = dotProps.cy;
+    var idx = dotProps.index;
+    if (prIdx < 0 || prBpm <= 0 || idx !== prIdx) {
+      return R.createElement('circle', { cx: cx, cy: cy, r: 3, fill: smallFill, stroke: '#fff', strokeWidth: 1 });
+    }
+    return R.createElement(
+      'g',
+      null,
+      R.createElement('text', { x: cx, y: cy - 20, textAnchor: 'middle', fill: '#be185d', fontSize: 9, fontWeight: 'bold' }, Math.round(prBpm) + ' bpm'),
+      R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: '#ec4899', stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 }),
+      R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR')
+    );
+  };
+}
 
 function getDateStr(offsetDays) {
   var d = new Date();
@@ -57,7 +98,11 @@ function buildMonthHeartRateCurveData(intervalHR) {
 }
 
 // ========== 전 구간 심박 커브 차트 ==========
-function HeartRateProfileCurveChart({ DashboardCard, heartRateCurveData, isFullWidth }) {
+function HeartRateProfileCurveChart(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var heartRateCurveData = p.heartRateCurveData;
+  var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
   var Area = Recharts && Recharts.Area;
@@ -106,8 +151,13 @@ function HeartRateProfileCurveChart({ DashboardCard, heartRateCurveData, isFullW
   );
 }
 
-// ========== 최근 1개월 심박 그래프 (1분/5분/20분/60분 4선) ==========
-function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFullWidth }) {
+// ========== 최근 1개월 심박 그래프 (구간 선택·코호트 평균 심박·PR) ==========
+function HeartRateProfileMonthCurveChart(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var monthCurveData = p.monthCurveData;
+  var userProfile = p.userProfile || null;
+  var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
   var Area = Recharts && Recharts.Area;
@@ -115,10 +165,51 @@ function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFull
   var YAxis = Recharts && Recharts.YAxis;
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
-  var Tooltip = Recharts && Recharts.Tooltip;
+  var ReferenceLine = Recharts && Recharts.ReferenceLine;
   var cid = nextHrChartId();
   var data = monthCurveData || [];
+
+  var _selState = useState('1min');
+  var selectedApi = _selState[0];
+  var setSelectedApi = _selState[1];
+
+  var selItem = MONTH_HR_CURVE_ITEMS[0];
+  for (var _si = 0; _si < MONTH_HR_CURVE_ITEMS.length; _si++) {
+    if (MONTH_HR_CURVE_ITEMS[_si].api === selectedApi) {
+      selItem = MONTH_HR_CURVE_ITEMS[_si];
+      break;
+    }
+  }
+  var dataKey = selItem.dataKey;
+  var selColor = selItem.color;
+
   var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr20min || r.hr60min) > 0; });
+
+  var growthRef = typeof window.getGrowthStelvioReferencePowerHr === 'function'
+    ? window.getGrowthStelvioReferencePowerHr(monthHrApiToGrowthSlot(selectedApi), userProfile)
+    : null;
+  var cohortAvgHr = growthRef && growthRef.hr != null && growthRef.hr > 0 ? Math.round(growthRef.hr) : null;
+
+  var yMax = 1;
+  data.forEach(function(r) {
+    var v = Number(r[dataKey]) || 0;
+    if (v > yMax) yMax = v;
+  });
+  if (cohortAvgHr != null && cohortAvgHr > yMax) yMax = cohortAvgHr;
+  yMax = Math.max(80, Math.ceil(yMax * 1.08 / 5) * 5);
+
+  var prIdx = -1;
+  var prBpm = 0;
+  for (var _pi = 0; _pi < data.length; _pi++) {
+    var _pv = Number(data[_pi][dataKey]) || 0;
+    if (_pv > prBpm) {
+      prBpm = _pv;
+      prIdx = _pi;
+    }
+  }
+  var ReactForDot = window.React;
+  var fillGradId = cid + '-fillSel';
+  var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
 
   if (!Recharts || !hasData) {
     return (
@@ -135,42 +226,61 @@ function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFull
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />1분</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f97316' }} />5분</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#3b82f6' }} />20분</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />60분</span>
+        <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
+          {MONTH_HR_CURVE_ITEMS.map(function(it) {
+            var active = selectedApi === it.api;
+            return (
+              <button
+                key={it.api}
+                type="button"
+                onClick={function() { setSelectedApi(it.api); }}
+                className={
+                  'relative flex items-center justify-center rounded-full min-w-[1.9rem] h-7 px-1 text-[10px] font-bold text-white shadow-sm border transition ' +
+                  (active ? activeRing : 'border-white/30 hover:brightness-95')
+                }
+                style={{ backgroundColor: it.color }}
+                title={it.label + ' 최대 심박'}
+              >
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs text-gray-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-5 border-t-2 border-dashed border-gray-400" style={{ verticalAlign: 'middle' }} />
+            전체 사용자 평균 심박
+            {cohortAvgHr != null && cohortAvgHr > 0 ? (
+              <span className="text-gray-500 tabular-nums">({cohortAvgHr}bpm)</span>
+            ) : null}
+          </span>
         </div>
       </div>
       <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 26, right: 12, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id={cid + '-fill1min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fill5min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fill20min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fill60min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+              <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={selColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={['auto', 'auto']} />
-            {Tooltip ? <Tooltip formatter={function(v) { return v + ' bpm'; }} contentStyle={{ fontSize: 12 }} labelFormatter={function(label) { return label; }} /> : null}
-            <Area type="monotone" dataKey="hr1min" stroke="#ef4444" fill={'url(#' + cid + '-fill1min)'} strokeWidth={2} name="1분 심박" dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 1 }} connectNulls />
-            <Area type="monotone" dataKey="hr5min" stroke="#f97316" fill={'url(#' + cid + '-fill5min)'} strokeWidth={2} name="5분 심박" dot={{ r: 3, fill: '#f97316', stroke: '#fff', strokeWidth: 1 }} connectNulls />
-            <Area type="monotone" dataKey="hr20min" stroke="#3b82f6" fill={'url(#' + cid + '-fill20min)'} strokeWidth={2} name="20분 심박" dot={{ r: 3, fill: '#3b82f6', stroke: '#fff', strokeWidth: 1 }} connectNulls />
-            <Area type="monotone" dataKey="hr60min" stroke="#22c55e" fill={'url(#' + cid + '-fill60min)'} strokeWidth={2} name="60분 심박" dot={{ r: 3, fill: '#22c55e', stroke: '#fff', strokeWidth: 1 }} connectNulls />
+            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[0, yMax]} />
+            {cohortAvgHr != null && cohortAvgHr > 0 && ReferenceLine ? (
+              <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
+            ) : null}
+            <Area
+              type="monotone"
+              dataKey={dataKey}
+              stroke={selColor}
+              fill={'url(#' + fillGradId + ')'}
+              strokeWidth={2}
+              name={selItem.label + ' 심박'}
+              dot={growthStyleHrPrDot(ReactForDot, prIdx, prBpm, selColor)}
+              connectNulls
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -179,7 +289,11 @@ function HeartRateProfileMonthCurveChart({ DashboardCard, monthCurveData, isFull
 }
 
 // ========== 메인 컴포넌트 ==========
-function RiderHeartRateProfileTrendCharts({ DashboardCard, userProfile, recentLogs }) {
+function RiderHeartRateProfileTrendCharts(props) {
+  var p = props || {};
+  var DashboardCard = p.DashboardCard;
+  var userProfile = p.userProfile;
+  var recentLogs = p.recentLogs;
   var Card = DashboardCard || function(props) { return <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">{props.children}</div>; };
 
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
@@ -199,7 +313,7 @@ function RiderHeartRateProfileTrendCharts({ DashboardCard, userProfile, recentLo
           <HeartRateProfileCurveChart DashboardCard={Card} heartRateCurveData={heartRateCurveData} isFullWidth />
         </div>
         <div className="min-w-0 overflow-hidden col-span-2">
-          <HeartRateProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} isFullWidth />
+          <HeartRateProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} userProfile={userProfile} isFullWidth />
         </div>
       </div>
     </div>
