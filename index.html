@@ -14094,7 +14094,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       'rgba(239, 68, 68, 0.7)',     // 40분 = Z6
       'rgba(168, 85, 247, 0.7)'     // 60분 = Z7
     ];
-    var GROWTH_PR_CIRCLE_LABELS = ['Max', '1분', '5분', '10', '20', '40', '60'];
+    var GROWTH_PR_CIRCLE_LABELS = ['Max', '1분', '5분', '10분', '20분', '40분', '60분'];
+    /** 나의 성장 트렌드 범례 표시 순서: 1분~60분 후 Max(슬롯 인덱스는 그대로) */
+    var GROWTH_PR_LEGEND_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
     
     // 년간 파워PR 그래프 (2026년 yearly_peaks 기반, 달성일 매칭)
     function YearlyPowerPrChart(props) {
@@ -14116,7 +14118,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var wattsData = data.map(function(d) { return d.watts || 0; });
         var maxWatts = Math.max.apply(null, wattsData.filter(function(w) { return w > 0; })) || 300;
         var yMax = Math.ceil(maxWatts * 1.15 / 50) * 50 || 350;
-        var legendInCircle = ['Max', '1분', '5분', '10', '20', '40', '60'];
+        var legendInCircle = ['Max', '1분', '5분', '10분', '20분', '40분', '60분'];
         var prValuePlugin = {
           id: 'prBarLabels',
           afterDatasetsDraw: function(chart) {
@@ -14873,7 +14875,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       return (
         <DashboardCard title="나의 성장 트렌드">
           <div className="flex flex-wrap justify-center gap-1.5 mb-2 px-1">
-            {GROWTH_PR_CIRCLE_LABELS.map(function (lab, i) {
+            {GROWTH_PR_LEGEND_DISPLAY_ORDER.map(function (i) {
+              var lab = GROWTH_PR_CIRCLE_LABELS[i];
               var active = selectedSlot === i;
               var bg = YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
               return (
@@ -14884,11 +14887,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     setSelectedSlot(i);
                   }}
                   className={
-                    'relative flex items-center justify-center rounded-full min-w-[2.35rem] h-9 px-0.5 text-[9px] font-bold text-gray-800 shadow-sm border transition ' +
-                    (active ? 'ring-2 ring-blue-600 ring-offset-2 border-blue-500' : 'border-gray-200 hover:border-gray-400')
+                    'relative flex items-center justify-center rounded-full min-w-[1.88rem] h-[1.8rem] px-0.5 text-[7.5px] font-bold text-white shadow-sm border transition ' +
+                    (active ? 'ring-2 ring-blue-600 ring-offset-1 border-blue-500' : 'border-gray-200/80 hover:border-gray-400')
                   }
                   style={{ backgroundColor: bg.replace('0.7)', '0.95)').replace('0.55)', '0.95)') }}
-                  title={lab + ' 구간'}
+                  title={(lab || '') + ' 구간'}
                 >
                   {lab}
                 </button>
