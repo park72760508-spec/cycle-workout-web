@@ -4184,6 +4184,19 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingBoardModal .stelvio-rank-row.stelvio-rank-current {
   background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
 }
+
+/* 대시보드「나의 라이딩 지표」등급 표: 랭킹보드 본인 행(stelvio-rank-current)과 동일 그라데이션 */
+tr.stelvio-dashboard-current-grade td {
+  background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
+}
+tr.stelvio-dashboard-current-grade td:first-child {
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+tr.stelvio-dashboard-current-grade td:last-child {
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
 #stelvioRankingBoardModal .stelvio-rank-wkg {
   color: #ff6b35;
 }
