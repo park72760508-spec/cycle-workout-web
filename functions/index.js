@@ -830,6 +830,12 @@ async function processStravaActivity(db, ownerId, objectId) {
     weighted_watts: mapped.weighted_watts,
     kilojoules: mapped.kilojoules,
     elevation_gain: mapped.elevation_gain,
+    avg_speed_kmh: mapped.avg_speed_kmh ?? null,
+    left_right_balance: mapped.left_right_balance ?? null,
+    pedal_smoothness_left: mapped.pedal_smoothness_left ?? null,
+    pedal_smoothness_right: mapped.pedal_smoothness_right ?? null,
+    torque_effectiveness_left: mapped.torque_effectiveness_left ?? null,
+    torque_effectiveness_right: mapped.torque_effectiveness_right ?? null,
     rpe: mapped.rpe,
     ftp_at_time: mapped.ftp_at_time,
     if: mapped.if,
@@ -896,6 +902,69 @@ async function processStravaActivity(db, ownerId, objectId) {
   console.log("[processStravaActivity] 완료:", { userId, activityId, isNew, userTss, max5minWatts, max10minWatts, max30minWatts });
 }
 
+function pickFirstFiniteNumberFromStravaActivity(obj, keys) {
+  if (!obj || !keys || !keys.length) return null;
+  for (let i = 0; i < keys.length; i++) {
+    const v = obj[keys[i]];
+    if (v == null || v === "") continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function computeAvgSpeedKmhFromStravaActivity(activity, distanceKm, durationSec) {
+  const avgMs = Number(activity && activity.average_speed);
+  if (Number.isFinite(avgMs) && avgMs > 0) {
+    return Math.round(avgMs * 3.6 * 100) / 100;
+  }
+  const d = Number(distanceKm) || 0;
+  const t = Number(durationSec) || 0;
+  if (d > 0 && t > 0) {
+    return Math.round((d / (t / 3600)) * 100) / 100;
+  }
+  return null;
+}
+
+function extractStravaPedalingExtrasFromActivity(activity) {
+  if (!activity || typeof activity !== "object") {
+    return {
+      left_right_balance: null,
+      pedal_smoothness_left: null,
+      pedal_smoothness_right: null,
+      torque_effectiveness_left: null,
+      torque_effectiveness_right: null,
+    };
+  }
+  return {
+    left_right_balance: pickFirstFiniteNumberFromStravaActivity(activity, [
+      "left_right_balance",
+      "average_left_right_balance",
+      "avg_left_right_balance",
+    ]),
+    pedal_smoothness_left: pickFirstFiniteNumberFromStravaActivity(activity, [
+      "average_pedal_smoothness_left",
+      "pedal_smoothness_left",
+      "avg_pedal_smoothness_left",
+    ]),
+    pedal_smoothness_right: pickFirstFiniteNumberFromStravaActivity(activity, [
+      "average_pedal_smoothness_right",
+      "pedal_smoothness_right",
+      "avg_pedal_smoothness_right",
+    ]),
+    torque_effectiveness_left: pickFirstFiniteNumberFromStravaActivity(activity, [
+      "average_torque_effectiveness_left",
+      "torque_effectiveness_left",
+      "avg_torque_effectiveness_left",
+    ]),
+    torque_effectiveness_right: pickFirstFiniteNumberFromStravaActivity(activity, [
+      "average_torque_effectiveness_right",
+      "torque_effectiveness_right",
+      "avg_torque_effectiveness_right",
+    ]),
+  };
+}
+
 /**
  * Strava 활동 → 로그 스키마 매핑 (수동 동기화 mapStravaActivityToSchema와 동일한 필드)
  * 상세 API 응답 기준으로 avg_hr, max_hr, avg_cadence, elevation_gain, kilojoules 등 포함.
@@ -940,6 +1009,8 @@ function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
   if (np > 0 && avgHr != null && avgHr > 0) efficiencyFactor = Math.round((np / avgHr) * 100) / 100;
   const now = new Date().toISOString();
   const activityType = String(activity.sport_type || activity.type || "").trim() || null;
+  const avgSpeedKmh = computeAvgSpeedKmhFromStravaActivity(activity, distanceKm, durationSec);
+  const pedaling = extractStravaPedalingExtrasFromActivity(activity);
   return {
     activity_id: String(activity.id || ""),
     user_id: userId,
@@ -958,6 +1029,12 @@ function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
     weighted_watts: weightedWatts,
     kilojoules: kilojoules,
     elevation_gain: elevationGain,
+    avg_speed_kmh: avgSpeedKmh,
+    left_right_balance: pedaling.left_right_balance,
+    pedal_smoothness_left: pedaling.pedal_smoothness_left,
+    pedal_smoothness_right: pedaling.pedal_smoothness_right,
+    torque_effectiveness_left: pedaling.torque_effectiveness_left,
+    torque_effectiveness_right: pedaling.torque_effectiveness_right,
     rpe: rpe,
     ftp_at_time: ftp > 0 ? ftp : null,
     if: ifValue,
@@ -1353,6 +1430,12 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       weighted_watts: mapped.weighted_watts,
       kilojoules: mapped.kilojoules,
       elevation_gain: mapped.elevation_gain,
+      avg_speed_kmh: mapped.avg_speed_kmh ?? null,
+      left_right_balance: mapped.left_right_balance ?? null,
+      pedal_smoothness_left: mapped.pedal_smoothness_left ?? null,
+      pedal_smoothness_right: mapped.pedal_smoothness_right ?? null,
+      torque_effectiveness_left: mapped.torque_effectiveness_left ?? null,
+      torque_effectiveness_right: mapped.torque_effectiveness_right ?? null,
       rpe: mapped.rpe,
       ftp_at_time: mapped.ftp_at_time,
       if: mapped.if,
@@ -1922,6 +2005,12 @@ exports.manualStravaSyncWithMmp = onRequest(
           weighted_watts: mapped.weighted_watts,
           kilojoules: mapped.kilojoules,
           elevation_gain: mapped.elevation_gain,
+          avg_speed_kmh: mapped.avg_speed_kmh ?? null,
+          left_right_balance: mapped.left_right_balance ?? null,
+          pedal_smoothness_left: mapped.pedal_smoothness_left ?? null,
+          pedal_smoothness_right: mapped.pedal_smoothness_right ?? null,
+          torque_effectiveness_left: mapped.torque_effectiveness_left ?? null,
+          torque_effectiveness_right: mapped.torque_effectiveness_right ?? null,
           rpe: mapped.rpe,
           ftp_at_time: mapped.ftp_at_time,
           if: mapped.if,
