@@ -5037,7 +5037,10 @@ document.addEventListener("DOMContentLoaded", () => {
               } else {
                 console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
               }
-              
+              // showScreen을 거치지 않으므로 로그인 상태 유지(localStorage) 복원은 여기서 수행
+              if (typeof window.restoreAuthRememberCredentials === 'function') {
+                window.restoreAuthRememberCredentials();
+              }
               // 전화번호 입력 필드 포커스
               const phoneInput = document.getElementById('authPhoneInput');
               if (phoneInput) {
@@ -5066,6 +5069,11 @@ document.addEventListener("DOMContentLoaded", () => {
       authScreen.classList.add("active");
       authScreen.style.opacity = "1";
       authScreen.style.visibility = "visible";
+      setTimeout(function () {
+        if (typeof window.restoreAuthRememberCredentials === 'function') {
+          window.restoreAuthRememberCredentials();
+        }
+      }, 0);
     }
   }
   
@@ -6680,7 +6688,10 @@ function initializeCurrentScreen(screenId) {
   switch(screenId) {
     case 'authScreen':
       setTimeout(() => {
-        const phoneInput = document.getElementById('phoneInput');
+        if (typeof window.restoreAuthRememberCredentials === 'function') {
+          window.restoreAuthRememberCredentials();
+        }
+        const phoneInput = document.getElementById('authPhoneInput');
         if (phoneInput) {
           phoneInput.focus();
         }
