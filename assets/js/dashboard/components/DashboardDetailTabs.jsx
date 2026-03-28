@@ -259,15 +259,15 @@
         return React.createElement(
           'div',
           { className: 'space-y-6' },
+          React.createElement(RidingMetricsZoneTables, {
+            userProfile: userProfile,
+            stats: stats,
+            standalone: true
+          }),
           React.createElement(
             'div',
             { className: 'rounded-xl border border-gray-200 bg-white overflow-hidden' },
             React.createElement('div', { className: 'px-4 pb-4 pt-1 space-y-4 text-xs text-gray-600 border-t-0' },
-              React.createElement(RidingMetricsZoneTables, {
-                userProfile: userProfile,
-                stats: stats,
-                standalone: true
-              }),
               React.createElement('section', null,
                 React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 표시 기준'),
                 React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
@@ -344,7 +344,6 @@
                 )
               )
             )
-          )
           )
         );
       }
