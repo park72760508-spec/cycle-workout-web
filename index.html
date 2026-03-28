@@ -680,6 +680,36 @@
       text-align: left;
     }
 
+    .auth-label-row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .auth-remember-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #4b5563;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      margin: 0;
+    }
+
+    .auth-remember-label input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #667eea;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
     .auth-input-group input {
       width: 100%;
       padding: 14px 18px;
@@ -1728,7 +1758,13 @@
           <div class="phone-auth-section">
             <!-- 전화번호 입력 -->
             <div class="auth-input-group">
-              <label for="authPhoneInput" class="auth-label-left">전화번호</label>
+              <div class="auth-label-row">
+                <label for="authPhoneInput" class="auth-label-left" style="margin:0;">전화번호</label>
+                <label class="auth-remember-label" for="authRememberLogin">
+                  <input type="checkbox" id="authRememberLogin" name="authRememberLogin" autocomplete="off">
+                  <span>로그인 상태 유지</span>
+                </label>
+              </div>
               <input 
                 type="tel" 
                 id="authPhoneInput" 
@@ -11153,6 +11189,58 @@
   <!-- 전화번호 기반 로그인 핸들러 -->
   <script>
     // isSignUpMode 변수 제거 (더 이상 사용하지 않음)
+
+    window.STELVIO_AUTH_REMEMBER_KEY = 'stelvio_remember_login_v1';
+
+    window.clearAuthRememberCredentials = function() {
+      try { localStorage.removeItem(window.STELVIO_AUTH_REMEMBER_KEY); } catch (e) {}
+    };
+
+    window.restoreAuthRememberCredentials = function() {
+      var phoneInput = document.getElementById('authPhoneInput');
+      var passwordInput = document.getElementById('authPasswordInput');
+      var cb = document.getElementById('authRememberLogin');
+      if (!phoneInput || !passwordInput || !cb) return;
+      try {
+        var raw = localStorage.getItem(window.STELVIO_AUTH_REMEMBER_KEY);
+        if (!raw) {
+          cb.checked = false;
+          return;
+        }
+        var o = JSON.parse(raw);
+        if (!o || o.v !== 1 || !o.phone || typeof o.password !== 'string') {
+          cb.checked = false;
+          return;
+        }
+        phoneInput.value = o.phone;
+        passwordInput.value = o.password;
+        cb.checked = true;
+        if (window.formatPhoneNumber) {
+          phoneInput.value = window.formatPhoneNumber(phoneInput.value);
+        }
+      } catch (err) {
+        cb.checked = false;
+      }
+    };
+
+    window.persistAuthRememberCredentialsIfChecked = function(phone, password) {
+      var cb = document.getElementById('authRememberLogin');
+      if (!cb || !cb.checked) {
+        window.clearAuthRememberCredentials();
+        return;
+      }
+      var phoneDisp = String(phone || '').trim();
+      try {
+        var normalized = phoneDisp.replace(/\D/g, '');
+        if (normalized.length === 11 && normalized.indexOf('010') === 0) {
+          phoneDisp = normalized.slice(0, 3) + '-' + normalized.slice(3, 7) + '-' + normalized.slice(7, 11);
+        }
+        localStorage.setItem(
+          window.STELVIO_AUTH_REMEMBER_KEY,
+          JSON.stringify({ v: 1, phone: phoneDisp, password: String(password || '') })
+        );
+      } catch (e) {}
+    };
     
     /**
      * 전화번호 기반 로그인/회원가입 처리 함수
@@ -11291,6 +11379,9 @@
                 localStorage.setItem('userPassword_' + phoneWithDash, password);
                 localStorage.setItem('userPassword_' + normalizedPhone, password);
                 localStorage.setItem('lastPassword', password);
+                if (typeof window.persistAuthRememberCredentialsIfChecked === 'function') {
+                  window.persistAuthRememberCredentialsIfChecked(phone, password);
+                }
                 window.isPhoneAuthenticated = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
@@ -11528,6 +11619,9 @@
       authScreen.style.visibility = 'visible';
       authScreen.style.opacity = '1';
       window.scrollTo(0, 0);
+      if (typeof window.restoreAuthRememberCredentials === 'function') {
+        window.restoreAuthRememberCredentials();
+      }
     }
     
     /**
@@ -11719,6 +11813,9 @@
         
         // 스크롤을 맨 위로
         window.scrollTo(0, 0);
+        if (typeof window.restoreAuthRememberCredentials === 'function') {
+          window.restoreAuthRememberCredentials();
+        }
       } else {
         console.error('❌ authScreen 요소를 찾을 수 없습니다');
       }
@@ -12099,6 +12196,15 @@
       // 제출 버튼
       if (submitBtn) {
         submitBtn.addEventListener('click', handlePhoneAuth);
+      }
+
+      var rememberCb = document.getElementById('authRememberLogin');
+      if (rememberCb) {
+        rememberCb.addEventListener('change', function() {
+          if (!rememberCb.checked && typeof window.clearAuthRememberCredentials === 'function') {
+            window.clearAuthRememberCredentials();
+          }
+        });
       }
       
       // 사용자 등록 링크
@@ -18389,5 +18495,33 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/components/DashboardDetailTabs.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel"></script>
+  <script>
+  (function() {
+    function wrapShowScreenForAuthRemember() {
+      if (typeof window.showScreen !== 'function') return;
+      if (window.showScreen.__stelvioAuthRememberWrapped) return;
+      var prev = window.showScreen;
+      function wrapped(screenId, skipHistory) {
+        var ret = prev.apply(this, arguments);
+        if (screenId === 'authScreen' && typeof window.restoreAuthRememberCredentials === 'function') {
+          setTimeout(function() { window.restoreAuthRememberCredentials(); }, 50);
+        }
+        return ret;
+      }
+      wrapped.__stelvioAuthRememberWrapped = true;
+      window.showScreen = wrapped;
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(wrapShowScreenForAuthRemember, 0);
+        setTimeout(wrapShowScreenForAuthRemember, 400);
+      });
+    } else {
+      setTimeout(wrapShowScreenForAuthRemember, 0);
+      setTimeout(wrapShowScreenForAuthRemember, 400);
+    }
+    setTimeout(wrapShowScreenForAuthRemember, 1200);
+  })();
+  </script>
 </body>
 </html>
