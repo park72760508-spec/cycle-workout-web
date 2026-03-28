@@ -466,6 +466,9 @@
             return { date: label, fitness: res.fitness, fatigue: res.fatigue };
           });
           if (isMounted) setFitnessData(chartData);
+          if (isMounted && userProfile && typeof window.persistFitnessDemographicSampleAsync === 'function') {
+            window.persistFitnessDemographicSampleAsync(userProfile, chartData).catch(function() {});
+          }
 
           var vo2Rows = [];
           for (var mOff = 5; mOff >= 0; mOff--) {
