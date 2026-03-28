@@ -20,6 +20,31 @@ const RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPo
 let _chartId = 0;
 function nextChartId() { return 'pp-' + (++_chartId); }
 
+/** 랭킹 byCategory 전체에서 사용자별 1회만 집계한 평균 W/kg (전 구간 동일 규칙) */
+function computeAvgWkgFromRankingByCategory(data) {
+  if (!data || !data.success || !data.byCategory) return null;
+  var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+  var seen = Object.create(null);
+  var sum = 0;
+  var n = 0;
+  for (var c = 0; c < cats.length; c++) {
+    var arr = data.byCategory[cats[c]] || [];
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (!e || !e.userId) continue;
+      if (seen[e.userId]) continue;
+      seen[e.userId] = true;
+      var wkg = Number(e.wkg);
+      if (wkg > 0) {
+        sum += wkg;
+        n++;
+      }
+    }
+  }
+  if (n === 0) return null;
+  return sum / n;
+}
+
 /**
  * 단일 duration에 대한 랭킹 API 조회 (병렬 호출용)
  */
@@ -30,7 +55,8 @@ function fetchRankingForDuration(dur, userId, w) {
   return fetch(RANKING_API + '?' + params.toString(), { method: 'GET', mode: 'cors' })
     .then(function(res) { return res.json().catch(function() { return {}; }); })
     .then(function(data) {
-      if (!data.success || !data.byCategory) return { dur: dur, goals: null };
+      var avgWkg = computeAvgWkgFromRankingByCategory(data);
+      if (!data.success || !data.byCategory) return { dur: dur, goals: null, avgWkg: avgWkg };
       var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
       var firstWkg = 0;
       var shortTermWkg = 0;
@@ -60,11 +86,11 @@ function fetchRankingForDuration(dur, userId, w) {
       } else if (firstWkg > 0) {
         g = { longTerm: Math.round(firstWkg * w), shortTerm: Math.round(firstWkg * w * 0.95), myWatts: 0, isFirst: false };
       }
-      return { dur: dur, goals: g };
+      return { dur: dur, goals: g, avgWkg: avgWkg };
     })
     .catch(function(e) {
       console.warn('[PowerProfileTrend] 랭킹 조회 실패:', dur, e);
-      return { dur: dur, goals: null };
+      return { dur: dur, goals: null, avgWkg: null };
     });
 }
 
@@ -75,13 +101,16 @@ function fetchRankingForDuration(dur, userId, w) {
 function fetchRankingGoals(userId, userWeight) {
   var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
   var w = Number(userWeight) || 70;
-  var promises = durations.map(function(dur) { return fetchRankingForDuration(dur, userId, w); });
+  var uid = userId || null;
+  var promises = durations.map(function(dur) { return fetchRankingForDuration(dur, uid, w); });
   return Promise.all(promises).then(function(results) {
     var goals = { max: {}, '1min': {}, '5min': {}, '10min': {}, '20min': {}, '40min': {}, '60min': {} };
+    var avgWkgByDuration = {};
     results.forEach(function(r) {
-      if (r.goals) goals[r.dur] = r.goals;
+      if (r && r.goals) goals[r.dur] = r.goals;
+      if (r && r.avgWkg != null && !isNaN(r.avgWkg)) avgWkgByDuration[r.dur] = r.avgWkg;
     });
-    return goals;
+    return { goals: goals, avgWkgByDuration: avgWkgByDuration };
   });
 }
 
@@ -149,6 +178,14 @@ function buildMonthPowerCurveData(weeklyMMP) {
   });
 }
 
+/** 최근 1개월 파워 그래프: 구간별 색·API키·dataKey */
+var MONTH_POWER_CURVE_ITEMS = [
+  { api: '1min', dataKey: 'power1min', label: '1분', color: '#ef4444' },
+  { api: '5min', dataKey: 'power5min', label: '5분', color: '#f97316' },
+  { api: '20min', dataKey: 'power20min', label: '20분', color: '#3b82f6' },
+  { api: '60min', dataKey: 'power60min', label: '60분', color: '#22c55e' }
+];
+
 // ========== 파워 커브 차트 (ALLR - Duration 기반) ==========
 function PowerProfileCurveChart(props) {
   var p = props || {};
@@ -212,11 +249,13 @@ function PowerProfileCurveChart(props) {
   );
 }
 
-// ========== 최근 1개월 파워 그래프 (1분/5분/20분/60분 4선) ==========
+// ========== 최근 1개월 파워 그래프 (구간 클릭 시 단일 곡선 + 전체 평균 W/kg×체중 점선) ==========
 function PowerProfileMonthCurveChart(props) {
   var p = props || {};
   var DashboardCard = p.DashboardCard;
   var monthCurveData = p.monthCurveData;
+  var avgWkgByDuration = p.avgWkgByDuration || {};
+  var userWeight = Number(p.userWeight) || 0;
   var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
@@ -225,12 +264,43 @@ function PowerProfileMonthCurveChart(props) {
   var YAxis = Recharts && Recharts.YAxis;
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
-  var Tooltip = Recharts && Recharts.Tooltip;
+  var ReferenceLine = Recharts && Recharts.ReferenceLine;
   var cid = nextChartId();
   var data = monthCurveData || [];
-  var hasData = data.length > 0 && data.some(function(r) { return (r.power1min || r.power5min || r.power20min || r.power60min) > 0; });
 
-  if (!Recharts || !hasData) {
+  var _selState = useState('1min');
+  var selectedApi = _selState[0];
+  var setSelectedApi = _selState[1];
+
+  var selItem = MONTH_POWER_CURVE_ITEMS[0];
+  for (var _si = 0; _si < MONTH_POWER_CURVE_ITEMS.length; _si++) {
+    if (MONTH_POWER_CURVE_ITEMS[_si].api === selectedApi) {
+      selItem = MONTH_POWER_CURVE_ITEMS[_si];
+      break;
+    }
+  }
+  var dataKey = selItem.dataKey;
+  var selColor = selItem.color;
+
+  var hasAnyWeek = data.length > 0 && data.some(function(r) {
+    return (r.power1min || r.power5min || r.power20min || r.power60min) > 0;
+  });
+
+  var avgWkgSel = avgWkgByDuration[selectedApi];
+  var cohortAvgPower =
+    userWeight > 0 && avgWkgSel != null && !isNaN(avgWkgSel)
+      ? Math.round(avgWkgSel * userWeight)
+      : null;
+
+  var yMax = 1;
+  data.forEach(function(r) {
+    var v = Number(r[dataKey]) || 0;
+    if (v > yMax) yMax = v;
+  });
+  if (cohortAvgPower != null && cohortAvgPower > yMax) yMax = cohortAvgPower;
+  yMax = Math.max(10, Math.ceil(yMax * 1.12 / 10) * 10);
+
+  if (!Recharts || !hasAnyWeek) {
     return (
       <DashboardCard>
         <div className="mb-1 min-w-0">
@@ -241,46 +311,69 @@ function PowerProfileMonthCurveChart(props) {
     );
   }
 
+  var fillGradId = cid + '-fillSel';
+  var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
+
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />1분</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f97316' }} />5분</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#3b82f6' }} />20분</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />60분</span>
+        <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
+          {MONTH_POWER_CURVE_ITEMS.map(function(it) {
+            var active = selectedApi === it.api;
+            var bg = it.color;
+            return (
+              <button
+                key={it.api}
+                type="button"
+                onClick={function() { setSelectedApi(it.api); }}
+                className={
+                  'relative flex items-center justify-center rounded-full min-w-[1.9rem] h-7 px-1 text-[10px] font-bold text-white shadow-sm border transition ' +
+                  (active ? activeRing : 'border-white/30 hover:brightness-95')
+                }
+                style={{ backgroundColor: bg }}
+                title={it.label + ' 최대 파워'}
+              >
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs text-gray-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-5 border-t-2 border-dashed border-gray-400" style={{ verticalAlign: 'middle' }} />
+            전체 사용자 평균 파워
+            {cohortAvgPower != null && cohortAvgPower > 0 ? (
+              <span className="text-gray-500 tabular-nums">({cohortAvgPower}W)</span>
+            ) : null}
+          </span>
         </div>
       </div>
       <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id={cid + '-fill1min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fill5min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fill20min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={cid + '-fill60min'} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+              <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={selColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={32} tick={{ fontSize: 12 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={['auto', 'auto']} />
-            {Tooltip ? <Tooltip formatter={function(v) { return v + ' W'; }} contentStyle={{ fontSize: 12 }} labelFormatter={function(label) { return label; }} /> : null}
-            <Area type="monotone" dataKey="power1min" stroke="#ef4444" fill={'url(#' + cid + '-fill1min)'} strokeWidth={2} name="1분 파워" dot={{ r: 3, fill: '#ef4444', stroke: '#fff', strokeWidth: 1 }} connectNulls />
-            <Area type="monotone" dataKey="power5min" stroke="#f97316" fill={'url(#' + cid + '-fill5min)'} strokeWidth={2} name="5분 파워" dot={{ r: 3, fill: '#f97316', stroke: '#fff', strokeWidth: 1 }} connectNulls />
-            <Area type="monotone" dataKey="power20min" stroke="#3b82f6" fill={'url(#' + cid + '-fill20min)'} strokeWidth={2} name="20분 파워" dot={{ r: 3, fill: '#3b82f6', stroke: '#fff', strokeWidth: 1 }} connectNulls />
-            <Area type="monotone" dataKey="power60min" stroke="#22c55e" fill={'url(#' + cid + '-fill60min)'} strokeWidth={2} name="60분 파워" dot={{ r: 3, fill: '#22c55e', stroke: '#fff', strokeWidth: 1 }} connectNulls />
+            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[0, yMax]} />
+            {cohortAvgPower != null && cohortAvgPower > 0 && ReferenceLine ? (
+              <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
+            ) : null}
+            <Area
+              type="monotone"
+              dataKey={dataKey}
+              stroke={selColor}
+              fill={'url(#' + fillGradId + ')'}
+              strokeWidth={2}
+              name={selItem.label + ' 파워'}
+              dot={{ r: 3, fill: selColor, stroke: '#fff', strokeWidth: 1 }}
+              connectNulls
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -300,14 +393,18 @@ function RiderPowerProfileTrendCharts(props) {
   var userId = userProfile && userProfile.id;
 
   var [goals, setGoals] = useState({});
+  var [avgWkgByDuration, setAvgWkgByDuration] = useState({});
 
   useEffect(function() {
-    if (!userId) return;
     var mounted = true;
-    fetchRankingGoals(userId, userWeight).then(function(g) {
-      if (mounted) setGoals(g);
+    fetchRankingGoals(userId || null, userWeight).then(function(res) {
+      if (!mounted) return;
+      setGoals(res.goals || {});
+      setAvgWkgByDuration(res.avgWkgByDuration || {});
     }).catch(function() {
-      if (mounted) setGoals({});
+      if (!mounted) return;
+      setGoals({});
+      setAvgWkgByDuration({});
     });
     return function() { mounted = false; };
   }, [userId, userWeight]);
@@ -334,7 +431,13 @@ function RiderPowerProfileTrendCharts(props) {
           <PowerProfileCurveChart DashboardCard={Card} powerCurveData={powerCurveData} isFullWidth />
         </div>
         <div className="min-w-0 overflow-hidden col-span-2">
-          <PowerProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} isFullWidth />
+          <PowerProfileMonthCurveChart
+            DashboardCard={Card}
+            monthCurveData={monthCurveData}
+            avgWkgByDuration={avgWkgByDuration}
+            userWeight={userWeight}
+            isFullWidth
+          />
         </div>
       </div>
     </div>
