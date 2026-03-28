@@ -17161,6 +17161,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         );
       }
       
+      const myWkgTierGuide = getWkgGradeInfo(stats.wkg).grade;
+      const _chG = (userProfile && userProfile.challenge) ? String(userProfile.challenge).trim() : 'Fitness';
+      const _chOrdG = ['Fitness', 'GranFondo', 'Racing', 'IronMan', 'Elite', 'PRO'];
+      let myChallengeGuide = 'Fitness';
+      for (let _ci = 0; _ci < _chOrdG.length; _ci++) {
+        if (_chOrdG[_ci].toLowerCase() === _chG.toLowerCase()) {
+          myChallengeGuide = _chOrdG[_ci];
+          break;
+        }
+      }
+      
       return (
         <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 scrollbar-hide relative">
           <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3">
@@ -17676,11 +17687,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   <table className="w-full text-left border-collapse">
                     <thead><tr className="border-b border-gray-200"><th className="py-1 pr-2">등급</th><th className="py-1">W/kg 기준</th><th className="py-1 pl-2">표시등</th></tr></thead>
                     <tbody>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">엘리트</td><td>4.0 이상</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={4.5} size={10} /></div></td></tr>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">고급</td><td>3.5 이상 ~ 4.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={3.7} size={10} /></div></td></tr>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">중급</td><td>3.0 이상 ~ 3.5 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={3.2} size={10} /></div></td></tr>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">입문</td><td>2.2 이상 ~ 3.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={2.5} size={10} /></div></td></tr>
-                      <tr><td className="py-1 pr-2">초급</td><td>2.2 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={1.8} size={10} /></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'elite' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">엘리트</td><td>4.0 이상</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={4.5} size={10} /></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'advanced' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">고급</td><td>3.5 이상 ~ 4.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={3.7} size={10} /></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'intermediate' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">중급</td><td>3.0 이상 ~ 3.5 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={3.2} size={10} /></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'beginner' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">입문</td><td>2.2 이상 ~ 3.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={2.5} size={10} /></div></td></tr>
+                      <tr className={myWkgTierGuide === 'novice' ? 'stelvio-dashboard-current-grade' : ''}><td className="py-1 pr-2">초급</td><td>2.2 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center"><WkgGradeIndicator wkg={1.8} size={10} /></div></td></tr>
                     </tbody>
                   </table>
                 </section>
@@ -17690,11 +17701,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   <table className="w-full text-left border-collapse">
                     <thead><tr className="border-b border-gray-200"><th className="py-1 pr-2">등급</th><th className="py-1">설명</th><th className="py-1">목표 TSS</th></tr></thead>
                     <tbody>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">Fitness</td><td>건강 유지, 기초 체력</td><td>225</td></tr>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">GranFondo</td><td>중장거리 완주</td><td>400</td></tr>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">Racing</td><td>MCT/아마 레이스 입상권</td><td>600</td></tr>
-                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">Elite</td><td>최상위 동호인, 선수 준비</td><td>800</td></tr>
-                      <tr><td className="py-1 pr-2">PRO</td><td>프로 선수</td><td>1050</td></tr>
+                      <tr className={'border-b border-gray-100' + (myChallengeGuide === 'Fitness' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">Fitness</td><td>건강 유지, 기초 체력</td><td>225</td></tr>
+                      <tr className={'border-b border-gray-100' + (myChallengeGuide === 'GranFondo' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">GranFondo</td><td>중장거리 완주</td><td>400</td></tr>
+                      <tr className={'border-b border-gray-100' + (myChallengeGuide === 'Racing' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">Racing</td><td>MCT/아마 레이스 입상권</td><td>600</td></tr>
+                      <tr className={'border-b border-gray-100' + (myChallengeGuide === 'IronMan' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">IronMan</td><td>극한의 초장거리 지구력 한계 극복 및 철인 완주</td><td>700</td></tr>
+                      <tr className={'border-b border-gray-100' + (myChallengeGuide === 'Elite' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">Elite</td><td>최상위 동호인, 선수 준비</td><td>800</td></tr>
+                      <tr className={myChallengeGuide === 'PRO' ? 'stelvio-dashboard-current-grade' : ''}><td className="py-1 pr-2">PRO</td><td>프로 선수</td><td>1050</td></tr>
                     </tbody>
                   </table>
                 </section>
