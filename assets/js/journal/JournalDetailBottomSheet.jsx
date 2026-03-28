@@ -565,11 +565,44 @@
     return m + '분 ' + s + '초';
   }
 
+  function avgSpeedKmhFromDistanceTime(distanceKm, durationSec) {
+    var d = Number(distanceKm) || 0;
+    var t = Number(durationSec) || 0;
+    if (d <= 0 || t <= 0) return null;
+    return Math.round((d / (t / 3600)) * 100) / 100;
+  }
+
+  function formatSpeedKmh(v) {
+    if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+    return Number(v).toFixed(1) + ' km/h';
+  }
+
+  function formatElevationM(v) {
+    if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+    return Math.round(Number(v)) + ' m';
+  }
+
+  function formatCadenceRpm(v) {
+    if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+    return Math.round(Number(v)) + ' rpm';
+  }
+
+  /** 0~100 구간은 %로 표시 (Strava/가민 스타일 대비) */
+  function formatPedalMetric(v) {
+    if (v == null || v === '' || !Number.isFinite(Number(v))) return '-';
+    var n = Number(v);
+    if (n >= 0 && n <= 100) return n.toFixed(1) + '%';
+    return String(Math.round(n * 10) / 10);
+  }
+
   function mergeLogsForDetail(logs) {
     if (!logs || logs.length === 0) return null;
     var log = logs[0];
     if (logs.length === 1) {
       var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+      var dist0 = log.distance_km != null ? Number(log.distance_km) : 0;
+      var spdStored0 = log.avg_speed_kmh != null ? Number(log.avg_speed_kmh) : null;
+      var spd0 = spdStored0 != null && spdStored0 > 0 ? spdStored0 : avgSpeedKmhFromDistanceTime(dist0, sec);
       return {
         date: log.date,
         distance_km: log.distance_km,
@@ -577,7 +610,14 @@
         tss: log.tss,
         if: log.if,
         kilojoules: log.kilojoules,
+        elevation_gain: log.elevation_gain != null ? Number(log.elevation_gain) : null,
+        avg_speed_kmh: spd0,
         avg_cadence: log.avg_cadence,
+        left_right_balance: log.left_right_balance,
+        pedal_smoothness_left: log.pedal_smoothness_left,
+        pedal_smoothness_right: log.pedal_smoothness_right,
+        torque_effectiveness_left: log.torque_effectiveness_left,
+        torque_effectiveness_right: log.torque_effectiveness_right,
         avg_hr: log.avg_hr,
         max_hr: log.max_hr,
         max_hr_5sec: log.max_hr_5sec,
@@ -602,6 +642,8 @@
       };
     }
     var totalSec = 0, totalTSS = 0, totalDist = 0, totalKj = 0;
+    var sumElev = 0;
+    var sumCadSec = 0, cadDur = 0;
     var sumNpSec = 0, sumApSec = 0, sumHrSec = 0;
     var maxHr = 0, maxHr5 = 0, maxHr1 = 0, maxHr5m = 0, maxHr10 = 0, maxHr20 = 0, maxHr40 = 0, maxHr60 = 0;
     var max1w = 0, max5w = 0, max10w = 0, max20w = 0, max30w = 0, max40w = 0, max60w = 0, maxW = 0;
@@ -613,6 +655,12 @@
       totalTSS += Number(l.tss || 0);
       totalDist += Number(l.distance_km || 0);
       totalKj += Number(l.kilojoules || 0);
+      sumElev += Number(l.elevation_gain || 0);
+      var c0 = l.avg_cadence != null ? Number(l.avg_cadence) : 0;
+      if (c0 > 0 && s > 0) {
+        sumCadSec += c0 * s;
+        cadDur += s;
+      }
       var np = l.weighted_watts != null ? Number(l.weighted_watts) : (l.avg_watts != null ? Number(l.avg_watts) : 0);
       var ap = l.avg_watts != null ? Number(l.avg_watts) : 0;
       var hr = l.avg_hr != null ? Number(l.avg_hr) : 0;
@@ -656,7 +704,14 @@
       tss: totalTSS,
       if: null,
       kilojoules: totalKj,
-      avg_cadence: null,
+      elevation_gain: sumElev > 0 ? sumElev : null,
+      avg_speed_kmh: avgSpeedKmhFromDistanceTime(totalDist, totalSec),
+      avg_cadence: cadDur > 0 ? sumCadSec / cadDur : null,
+      left_right_balance: null,
+      pedal_smoothness_left: null,
+      pedal_smoothness_right: null,
+      torque_effectiveness_left: null,
+      torque_effectiveness_right: null,
       avg_hr: totalSec > 0 ? sumHrSec / totalSec : null,
       max_hr: maxHr || null,
       max_hr_5sec: maxHr5 || null,
@@ -704,12 +759,18 @@
     if (!log) return React.createElement('div', { className: 'journal-tab-empty' }, '데이터 없음');
     var DailyCharts = window.DailyTimeInZonesCharts;
     var up = { id: userProfile.id || userProfile.uid, uid: userProfile.uid || userProfile.id, ftp: Number(userProfile.ftp) || 200, max_hr: Number(userProfile.max_hr) || 190 };
+    var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
+      ? Number(log.avg_speed_kmh)
+      : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
     var rows = [
       DetailRow({ label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-', isPr: false }),
-      DetailRow({ label: '훈련시간', value: formatDuration(log.duration_sec), isPr: false }),
-      DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false }),
+      DetailRow({ label: '라이딩 시간', value: formatDuration(log.duration_sec), isPr: false }),
+      DetailRow({ label: '평균 속도', value: formatSpeedKmh(spd), isPr: false }),
+      DetailRow({ label: '상승고도', value: formatElevationM(log.elevation_gain), isPr: false }),
+      DetailRow({ label: '평균 케이던스', value: formatCadenceRpm(log.avg_cadence), isPr: false }),
       DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
-      DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false })
+      DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false }),
+      DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false })
     ];
     var tizEl = log.time_in_zones && DailyCharts
       ? React.createElement('div', { className: 'journal-detail-time-in-zones-wrap' },
@@ -731,6 +792,11 @@
       DetailRow({ label: '평균 파워', value: log.avg_watts != null && log.avg_watts > 0 ? Math.round(log.avg_watts) + ' W' : '-', isPr: false }),
       DetailRow({ label: 'NP', value: log.weighted_watts != null && log.weighted_watts > 0 ? Math.round(log.weighted_watts) + ' W' : '-', isPr: false }),
       DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-', isPr: pr('max_watts') }),
+      DetailRow({ label: '좌/우 밸런스', value: formatPedalMetric(log.left_right_balance), isPr: false }),
+      DetailRow({ label: '좌측 페달 평활도', value: formatPedalMetric(log.pedal_smoothness_left), isPr: false }),
+      DetailRow({ label: '우측 페달 평활도', value: formatPedalMetric(log.pedal_smoothness_right), isPr: false }),
+      DetailRow({ label: '좌측 토크 유효성', value: formatPedalMetric(log.torque_effectiveness_left), isPr: false }),
+      DetailRow({ label: '우측 토크 유효성', value: formatPedalMetric(log.torque_effectiveness_right), isPr: false }),
       React.createElement('div', { className: 'journal-peak-chart-section' },
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 피크 파워'),
         React.createElement(JournalSessionPowerPeakChart, {
