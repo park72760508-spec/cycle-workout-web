@@ -4816,51 +4816,70 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 0;
   width: 100%;
 }
-/* 라이딩 지표 탭: FTP/심박 존 테이블을 카드 밖 상단에 두었을 때 — 내용 열 확장, 범위·값 열 축소 */
+/* 라이딩 지표 탭: W/kg 카드와 동일 px-4 너비 안에서 존 테이블 — 가로 스크롤 없음, 구간·범위·값은 콘텐츠 폭에 맞춤 */
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone.profile-zone-tables-wrap {
-  margin: 0 0 16px 0;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: visible;
+}
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table-block {
+  max-width: 100%;
+  overflow: visible;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
+  max-width: 100%;
 }
-/* 범위(%), 값(W/bpm): 한 줄 표시(nowrap)에 맞춰 넉넉한 최소 너비 — max-width 제거 */
+/* nowrap 열: width 1% → 내용에 맞게 최소 폭만 사용, 내용 열이 나머지 공간 사용 */
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(1),
+#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1) {
+  width: 1%;
+  padding: 8px 6px;
+  box-sizing: border-box;
+}
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(2),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(2) {
-  width: 26%;
-  min-width: 7.5rem;
-  padding: 10px 10px;
+  width: 1%;
+  padding: 8px 6px;
   box-sizing: border-box;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(3),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(3) {
-  width: 22%;
-  min-width: 6.25rem;
-  padding: 10px 10px;
+  width: 1%;
+  padding: 8px 6px;
   box-sizing: border-box;
-}
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(1),
-#performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1) {
-  width: 14%;
-  min-width: 3.25rem;
 }
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(4),
 #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
   width: auto;
-  min-width: 30%;
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 8px 8px 8px 10px;
+  box-sizing: border-box;
 }
 @media (max-width: 600px) {
-  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-tables-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table-block {
+    overflow-x: visible;
+    overflow: visible;
   }
   #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table {
-    min-width: 32rem;
+    min-width: 0;
+  }
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(1),
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(1),
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(2),
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(2),
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table th:nth-child(3),
+  #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(3) {
+    padding: 7px 5px;
+    font-size: 12px;
   }
   #performance-dashboard-container .dashboard-riding-metrics-zones-standalone .profile-zone-table td:nth-child(4) {
     font-size: 11px;
     line-height: 1.45;
+    padding: 7px 6px;
   }
 }
 .profile-zone-table-block {
