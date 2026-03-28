@@ -14376,7 +14376,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
     
-    // VO₂max 트렌드: 월별 나의 VO₂max(빨강 면·선) + Stelvio 전체 사용자 평균(녹색 점선, 연령·성별 구분 없음)
+    // VO₂max 트렌드: 월별 나의 VO₂max(빨강 면·선) + 전체 사용자 평균(녹색 점선, 연령·성별 구분 없음)
     function Vo2MaxTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -14462,7 +14462,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: 'Stelvio 전체 평균 VO₂max',
+                  label: '전체 사용자 평균',
                   data: lineStelvioGlobal,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -14588,7 +14588,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           </div>
           {stelvioRollingGlobal && stelvioRollingGlobal.userCount > 0 ? (
             <div className="mt-1 px-2 text-[11px] text-slate-600">
-              녹색 점선은 연령·성별 구분 없이 Stelvio 전체 사용자{' '}
+              녹색 점선(전체 사용자 평균)은 연령·성별 구분 없이 전체 사용자{' '}
               <strong className="text-slate-800">{stelvioRollingGlobal.userCount}명</strong>의 최근 6개월 월별 VO₂
               산술평균입니다.
             </div>
@@ -14750,7 +14750,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: '전체 사용자 맥스 평균 파워',
+                  label: '전체 사용자 평균 파워',
                   data: refWArr,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -14764,7 +14764,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 2,
-                  label: '전체 사용자 맥스 평균 심박',
+                  label: '전체 사용자 평균 심박',
                   data: refHArr,
                   borderColor: '#ea580c',
                   borderWidth: 2,
@@ -14909,11 +14909,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </span>
             <span className="inline-flex items-center gap-1 text-green-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-green-600"></span>
-              전체 사용자 맥스 평균 파워
+              전체 사용자 평균 파워
             </span>
             <span className="inline-flex items-center gap-1 text-orange-700">
               <span className="inline-block w-4 border-t-2 border-dashed border-orange-500"></span>
-              전체 사용자 맥스 평균 심박
+              전체 사용자 평균 심박
             </span>
           </div>
         </DashboardCard>
