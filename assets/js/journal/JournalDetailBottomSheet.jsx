@@ -587,14 +587,6 @@
     return Math.round(Number(v)) + ' rpm';
   }
 
-  /** 0~100 구간은 %로 표시 (Strava/가민 스타일 대비) */
-  function formatPedalMetric(v) {
-    if (v == null || v === '' || !Number.isFinite(Number(v))) return '-';
-    var n = Number(v);
-    if (n >= 0 && n <= 100) return n.toFixed(1) + '%';
-    return String(Math.round(n * 10) / 10);
-  }
-
   function mergeLogsForDetail(logs) {
     if (!logs || logs.length === 0) return null;
     var log = logs[0];
@@ -792,11 +784,6 @@
       DetailRow({ label: '평균 파워', value: log.avg_watts != null && log.avg_watts > 0 ? Math.round(log.avg_watts) + ' W' : '-', isPr: false }),
       DetailRow({ label: 'NP', value: log.weighted_watts != null && log.weighted_watts > 0 ? Math.round(log.weighted_watts) + ' W' : '-', isPr: false }),
       DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-', isPr: pr('max_watts') }),
-      DetailRow({ label: '좌/우 밸런스', value: formatPedalMetric(log.left_right_balance), isPr: false }),
-      DetailRow({ label: '좌측 페달 평활도', value: formatPedalMetric(log.pedal_smoothness_left), isPr: false }),
-      DetailRow({ label: '우측 페달 평활도', value: formatPedalMetric(log.pedal_smoothness_right), isPr: false }),
-      DetailRow({ label: '좌측 토크 유효성', value: formatPedalMetric(log.torque_effectiveness_left), isPr: false }),
-      DetailRow({ label: '우측 토크 유효성', value: formatPedalMetric(log.torque_effectiveness_right), isPr: false }),
       React.createElement('div', { className: 'journal-peak-chart-section' },
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 피크 파워'),
         React.createElement(JournalSessionPowerPeakChart, {
