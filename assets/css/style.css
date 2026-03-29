@@ -1242,6 +1242,10 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #trainingJournalScreen .journal-accordion-trigger {
   min-height: 48px !important;
   padding: 14px 20px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -1249,6 +1253,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 2;
   pointer-events: auto;
   overflow: visible;
+}
+#trainingJournalScreen .journal-accordion-trigger-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
 }
 
 /* 훈련 스케줄 화면 하단 버튼 영역 안전거리 확보 */
@@ -3517,6 +3528,15 @@ body:has(#trainingDetailModal:not(.hidden)) {
   height: 20px;
   margin-right: 6px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.weekly-rank-medal img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
 }
 .weekly-rank-position {
   font-weight: 700;
@@ -4049,9 +4069,18 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-rank-crown {
   width: 24px;
+  height: 24px;
   margin-right: 8px;
   flex-shrink: 0;
-  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stelvio-rank-crown img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
 }
 .stelvio-rank-pos {
   font-weight: 700;
