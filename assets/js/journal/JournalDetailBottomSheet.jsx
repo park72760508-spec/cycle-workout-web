@@ -786,6 +786,10 @@
       DetailRow({ label: '최대 파워', value: log.max_watts != null && log.max_watts > 0 ? Math.round(log.max_watts) + ' W' : '-', isPr: pr('max_watts') }),
       React.createElement('div', { className: 'journal-peak-chart-section' },
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 피크 파워'),
+        React.createElement('div', { className: 'journal-peak-chart-legend', 'aria-label': '차트 범례' },
+          React.createElement('span', { className: 'journal-peak-chart-legend-line', 'aria-hidden': 'true' }),
+          React.createElement('span', null, '주황색 선: 이 라이딩의 평균 파워 (전 구간 동일)')
+        ),
         React.createElement(JournalSessionPowerPeakChart, {
           log: log,
           userWeight: userWeight,
@@ -806,6 +810,10 @@
       DetailRow({ label: '최대 심박', value: log.max_hr != null && log.max_hr > 0 ? Math.round(log.max_hr) + ' bpm' : '-', isPr: pr('max_hr') }),
       React.createElement('div', { className: 'journal-peak-chart-section' },
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 최대 심박'),
+        React.createElement('div', { className: 'journal-peak-chart-legend', 'aria-label': '차트 범례' },
+          React.createElement('span', { className: 'journal-peak-chart-legend-line', 'aria-hidden': 'true' }),
+          React.createElement('span', null, '주황색 선: 이 라이딩의 평균 심박 (전 구간 동일)')
+        ),
         React.createElement(JournalSessionHrPeakChart, {
           log: log,
           yearlyPeaks: yearlyPeaks,
