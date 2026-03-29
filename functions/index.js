@@ -2415,6 +2415,16 @@ const DURATION_FIELDS = {
   max: "max_watts",
 };
 
+/** 구간별 심박 피크 필드 (로그 집계·코호트 평균 심박용) */
+const DURATION_HR_FIELDS = {
+  "1min": "max_hr_1min",
+  "5min": "max_hr_5min",
+  "10min": "max_hr_10min",
+  "20min": "max_hr_20min",
+  "40min": "max_hr_40min",
+  "60min": "max_hr_60min",
+};
+
 /** Andrew Coggan World Class 한계치 - 초과 시 센서 오류(이상치)로 간주. W/kg OR 절대 W 중 하나라도 초과하면 제외 */
 const PEAK_POWER_LIMITS = {
   max: { wkg: 25.0, watts: 2200 },
@@ -2784,6 +2794,20 @@ function getYearRangeSeoul(year) {
   return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
 }
 
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 30일 (YYYY-MM-DD, 시작~끝 각 30일 구간 집계와 동일) */
+function getRolling30DaysRangeSeoul() {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const today = new Date(y, m - 1, d);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 29);
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  return { startStr, endStr };
+}
+
 /** 생년월일 기준 연령대: Bianco(≤39), Rosa(40~49), Infinito(50~59), Leggenda(≥60) - 일반부용 */
 function getAgeCategory(birthYear) {
   if (birthYear == null || birthYear === "") return null;
@@ -2911,6 +2935,62 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
 }
 
 const PEAK_POWER_BATCH_SIZE = 50;
+
+/** 기간 내 싸이클링 로그에서 duration별 최고 심박(bpm) */
+async function getPeakHrForUser(db, userId, startStr, endStr, durationType) {
+  const field = DURATION_HR_FIELDS[durationType];
+  if (!field) return null;
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  let maxHr = 0;
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    if (!isCyclingForMmp(d)) return;
+    const dateStr = typeof d.date === "string" ? String(d.date).slice(0, 10) : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
+    const hr = Number(d[field]) || 0;
+    if (hr < 40 || hr > HR_MAX_BPM) return;
+    if (hr > maxHr) maxHr = hr;
+  });
+  if (maxHr <= 0) return null;
+  return { hr: maxHr };
+}
+
+/** 전체 사용자 대상 duration별 피크 심박 산술평균 (랭킹과 동일 성별·리그 필터) */
+async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderFilter) {
+  if (!DURATION_HR_FIELDS[durationType]) return null;
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs;
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
+    const batch = docs.slice(i, i + PEAK_POWER_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (doc) => {
+        const userId = doc.id;
+        const data = doc.data();
+        const gender = String(data.gender || data.sex || "").toLowerCase();
+        if (genderFilter && genderFilter !== "all") {
+          const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+          const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
+          if (match !== g) return null;
+        }
+        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+        const challenge = data.challenge || "Fitness";
+        const leagueCategory = getLeagueCategory(challenge, birthYear);
+        if (!leagueCategory) return null;
+        const peak = await getPeakHrForUser(db, userId, startStr, endStr, durationType);
+        if (!peak || peak.hr <= 0) return null;
+        return peak.hr;
+      })
+    );
+    results.forEach((h) => { if (h != null) { sum += h; n++; } });
+  }
+  if (n === 0) return null;
+  return Math.round((sum / n) * 10) / 10;
+}
 
 /** 피크 파워 랭킹 엔트리 (기간·종목·성별·연령대별) */
 async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter) {
@@ -3180,6 +3260,10 @@ exports.getPeakPowerRanking = onRequest(
       const r = getYearRangeSeoul(year);
       startStr = r.startStr;
       endStr = r.endStr;
+    } else if (period === "rolling30") {
+      const r = getRolling30DaysRangeSeoul();
+      startStr = r.startStr;
+      endStr = r.endStr;
     } else {
       const r = getMonthRangeSeoul(year, month);
       startStr = r.startStr;
@@ -3195,6 +3279,9 @@ exports.getPeakPowerRanking = onRequest(
       const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
       if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
         let out = { success: true, byCategory: data.byCategory, startStr, endStr, period, durationType, gender, cached: true };
+        if (data.cohortAvgHrBpm != null && !isNaN(Number(data.cohortAvgHrBpm))) {
+          out.cohortAvgHrBpm = Number(data.cohortAvgHrBpm);
+        }
         const entries = Array.isArray(data.entries) ? data.entries : [];
         if (uid) {
           const cat = data.byCategory;
@@ -3224,15 +3311,20 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
+    let cohortAvgHrBpm = null;
+    if (period === "rolling30" && DURATION_HR_FIELDS[durationType]) {
+      cohortAvgHrBpm = await getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, gender);
+    }
     await cacheRef.set({
       byCategory,
       entries,
       startStr,
       endStr,
+      cohortAvgHrBpm: cohortAvgHrBpm != null ? cohortAvgHrBpm : null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    let out = { success: true, byCategory, startStr, endStr, period, durationType, gender };
+    let out = { success: true, byCategory, startStr, endStr, period, durationType, gender, cohortAvgHrBpm };
     if (uid) {
       const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
       let current = null, nextUser = null;
