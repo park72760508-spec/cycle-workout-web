@@ -15,104 +15,9 @@ var ReactObj = window.React || {};
 var useState = ReactObj.useState || null;
 var useEffect = ReactObj.useEffect || null;
 
-const RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
 let _chartId = 0;
 function nextChartId() { return 'pp-' + (++_chartId); }
-
-/** 랭킹 byCategory 전체에서 사용자별 1회만 집계한 평균 W/kg (전 구간 동일 규칙) */
-function computeAvgWkgFromRankingByCategory(data) {
-  if (!data || !data.success || !data.byCategory) return null;
-  var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
-  var seen = Object.create(null);
-  var sum = 0;
-  var n = 0;
-  for (var c = 0; c < cats.length; c++) {
-    var arr = data.byCategory[cats[c]] || [];
-    for (var i = 0; i < arr.length; i++) {
-      var e = arr[i];
-      if (!e || !e.userId) continue;
-      if (seen[e.userId]) continue;
-      seen[e.userId] = true;
-      var wkg = Number(e.wkg);
-      if (wkg > 0) {
-        sum += wkg;
-        n++;
-      }
-    }
-  }
-  if (n === 0) return null;
-  return sum / n;
-}
-
-/**
- * 단일 duration에 대한 랭킹 API 조회 (병렬 호출용)
- */
-function fetchRankingForDuration(dur, userId, w) {
-  var params = new URLSearchParams({ period: 'monthly', gender: 'all' });
-  if (userId) params.set('uid', userId);
-  params.set('duration', dur === 'max' ? 'max' : dur);
-  return fetch(RANKING_API + '?' + params.toString(), { method: 'GET', mode: 'cors' })
-    .then(function(res) { return res.json().catch(function() { return {}; }); })
-    .then(function(data) {
-      var avgWkg = computeAvgWkgFromRankingByCategory(data);
-      if (!data.success || !data.byCategory) return { dur: dur, goals: null, avgWkg: avgWkg };
-      var cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
-      var firstWkg = 0;
-      var shortTermWkg = 0;
-      var myIdx = -1;
-      var myWatts = 0;
-      for (var c = 0; c < cats.length; c++) {
-        var arr = data.byCategory[cats[c]] || [];
-        if (arr.length === 0) continue;
-        var idx = userId ? arr.findIndex(function(e) { return e.userId === userId; }) : -1;
-        if (idx >= 0) {
-          myIdx = idx;
-          myWatts = Number(arr[idx].watts) || 0;
-          firstWkg = Number(arr[0].wkg) || 0;
-          shortTermWkg = idx > 0 ? (Number(arr[idx - 1].wkg) || 0) : 0;
-          break;
-        }
-        if (arr.length > 0 && firstWkg === 0) firstWkg = Number(arr[0].wkg) || 0;
-      }
-      var g = null;
-      if (myIdx >= 0) {
-        var longTerm = firstWkg > 0 ? Math.round(firstWkg * w) : 0;
-        var shortTerm = 0;
-        var isFirst = myIdx === 0;
-        if (isFirst) shortTerm = Math.round(myWatts * 1.03);
-        else shortTerm = shortTermWkg > 0 ? Math.round(shortTermWkg * w) : Math.round(longTerm * 0.95);
-        g = { longTerm: isFirst ? null : longTerm, shortTerm: shortTerm, myWatts: myWatts, isFirst: isFirst };
-      } else if (firstWkg > 0) {
-        g = { longTerm: Math.round(firstWkg * w), shortTerm: Math.round(firstWkg * w * 0.95), myWatts: 0, isFirst: false };
-      }
-      return { dur: dur, goals: g, avgWkg: avgWkg };
-    })
-    .catch(function(e) {
-      console.warn('[PowerProfileTrend] 랭킹 조회 실패:', dur, e);
-      return { dur: dur, goals: null, avgWkg: null };
-    });
-}
-
-/**
- * STELVIO 랭킹 API에서 카테고리별 1등(장기목표) 및 나의 바로 앞선 경쟁자(단기목표) 조회
- * 7개 duration을 병렬로 조회하여 로딩 시간 최소화 (심박 매트릭스와 동일하게 즉시 렌더)
- */
-function fetchRankingGoals(userId, userWeight) {
-  var durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
-  var w = Number(userWeight) || 70;
-  var uid = userId || null;
-  var promises = durations.map(function(dur) { return fetchRankingForDuration(dur, uid, w); });
-  return Promise.all(promises).then(function(results) {
-    var goals = { max: {}, '1min': {}, '5min': {}, '10min': {}, '20min': {}, '40min': {}, '60min': {} };
-    var avgWkgByDuration = {};
-    results.forEach(function(r) {
-      if (r && r.goals) goals[r.dur] = r.goals;
-      if (r && r.avgWkg != null && !isNaN(r.avgWkg)) avgWkgByDuration[r.dur] = r.avgWkg;
-    });
-    return { goals: goals, avgWkgByDuration: avgWkgByDuration };
-  });
-}
 
 /** 파워 커브 X축 순서 */
 var CURVE_DURATIONS = [
@@ -380,7 +285,7 @@ function PowerProfileMonthCurveChart(props) {
         <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs text-gray-600">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-5 border-t-2 border-dashed border-gray-400" style={{ verticalAlign: 'middle' }} />
-            전체 사용자 평균 파워
+            전체 사용자 평균 파워(최근 30일)
             {cohortAvgPower != null && cohortAvgPower > 0 ? (
               <span className="text-gray-500 tabular-nums">({cohortAvgPower}W)</span>
             ) : null}
@@ -435,10 +340,16 @@ function RiderPowerProfileTrendCharts(props) {
 
   useEffect(function() {
     var mounted = true;
-    fetchRankingGoals(userId || null, userWeight).then(function(res) {
+    var fetchCohort = window.fetchDashboardPeakRankingCohort;
+    if (typeof fetchCohort !== 'function') {
+      setGoals({});
+      setAvgWkgByDuration({});
+      return function() { mounted = false; };
+    }
+    fetchCohort(userId || null, userWeight).then(function(res) {
       if (!mounted) return;
-      setGoals(res.goals || {});
-      setAvgWkgByDuration(res.avgWkgByDuration || {});
+      setGoals((res && res.goals) || {});
+      setAvgWkgByDuration((res && res.avgWkgByDuration) || {});
     }).catch(function() {
       if (!mounted) return;
       setGoals({});

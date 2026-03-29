@@ -395,6 +395,108 @@ async function fetchAIProfileAnalysis(scores, options = {}) {
 /** 폴백 메시지 */
 const FALLBACK_AI_COMMENT = '현재 AI 분석 서버가 혼잡하여 코멘트를 불러올 수 없습니다. 점수를 통해 나의 강점을 확인해 보세요.';
 
+/** 대시보드 파워/심박 매트릭스: 랭킹 API(최근 30일 rolling, Asia/Seoul) */
+const DASHBOARD_PEAK_RANKING_API = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
+
+function computeAvgWkgFromRankingByCategory(data) {
+  if (!data || !data.success || !data.byCategory) return null;
+  const cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+  const seen = Object.create(null);
+  let sum = 0;
+  let n = 0;
+  for (let c = 0; c < cats.length; c++) {
+    const arr = data.byCategory[cats[c]] || [];
+    for (let i = 0; i < arr.length; i++) {
+      const e = arr[i];
+      if (!e || !e.userId) continue;
+      if (seen[e.userId]) continue;
+      seen[e.userId] = true;
+      const wkg = Number(e.wkg);
+      if (wkg > 0) {
+        sum += wkg;
+        n++;
+      }
+    }
+  }
+  if (n === 0) return null;
+  return sum / n;
+}
+
+function fetchRankingForDurationRolling30(dur, userId, userWeightKg) {
+  const params = new URLSearchParams({ period: 'rolling30', gender: 'all' });
+  if (userId) params.set('uid', userId);
+  params.set('duration', dur === 'max' ? 'max' : dur);
+  const w = Number(userWeightKg) || 70;
+  const uid = userId || null;
+  return fetch(DASHBOARD_PEAK_RANKING_API + '?' + params.toString(), { method: 'GET', mode: 'cors' })
+    .then(function(res) { return res.json().catch(function() { return {}; }); })
+    .then(function(data) {
+      const avgWkg = computeAvgWkgFromRankingByCategory(data);
+      let cohortAvgHrBpm = null;
+      if (data.cohortAvgHrBpm != null && !isNaN(Number(data.cohortAvgHrBpm))) {
+        cohortAvgHrBpm = Number(data.cohortAvgHrBpm);
+      }
+      if (!data.success || !data.byCategory) {
+        return { dur: dur, goals: null, avgWkg: avgWkg, cohortAvgHrBpm: cohortAvgHrBpm };
+      }
+      const cats = ['Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      let firstWkg = 0;
+      let shortTermWkg = 0;
+      let myIdx = -1;
+      let myWatts = 0;
+      for (let c = 0; c < cats.length; c++) {
+        const arr = data.byCategory[cats[c]] || [];
+        if (arr.length === 0) continue;
+        const idx = uid ? arr.findIndex(function(e) { return e.userId === uid; }) : -1;
+        if (idx >= 0) {
+          myIdx = idx;
+          myWatts = Number(arr[idx].watts) || 0;
+          firstWkg = Number(arr[0].wkg) || 0;
+          shortTermWkg = idx > 0 ? (Number(arr[idx - 1].wkg) || 0) : 0;
+          break;
+        }
+        if (arr.length > 0 && firstWkg === 0) firstWkg = Number(arr[0].wkg) || 0;
+      }
+      let g = null;
+      if (myIdx >= 0) {
+        const longTerm = firstWkg > 0 ? Math.round(firstWkg * w) : 0;
+        let shortTerm = 0;
+        const isFirst = myIdx === 0;
+        if (isFirst) shortTerm = Math.round(myWatts * 1.03);
+        else shortTerm = shortTermWkg > 0 ? Math.round(shortTermWkg * w) : Math.round(longTerm * 0.95);
+        g = { longTerm: isFirst ? null : longTerm, shortTerm: shortTerm, myWatts: myWatts, isFirst: isFirst };
+      } else if (firstWkg > 0) {
+        g = { longTerm: Math.round(firstWkg * w), shortTerm: Math.round(firstWkg * w * 0.95), myWatts: 0, isFirst: false };
+      }
+      return { dur: dur, goals: g, avgWkg: avgWkg, cohortAvgHrBpm: cohortAvgHrBpm };
+    })
+    .catch(function(e) {
+      console.warn('[fetchRankingForDurationRolling30]', dur, e);
+      return { dur: dur, goals: null, avgWkg: null, cohortAvgHrBpm: null };
+    });
+}
+
+/**
+ * 파워 커브 목표 + duration별 코호트 평균 W/kg·심박(bpm). 기간: API period=rolling30 (= 오늘 기준 Seoul 최근 30일).
+ */
+function fetchDashboardPeakRankingCohort(userId, userWeight) {
+  const durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
+  const w = Number(userWeight) || 70;
+  const uid = userId || null;
+  const promises = durations.map(function(dur) { return fetchRankingForDurationRolling30(dur, uid, w); });
+  return Promise.all(promises).then(function(results) {
+    const goals = { max: {}, '1min': {}, '5min': {}, '10min': {}, '20min': {}, '40min': {}, '60min': {} };
+    const avgWkgByDuration = {};
+    const avgHrByDuration = {};
+    results.forEach(function(r) {
+      if (r && r.goals) goals[r.dur] = r.goals;
+      if (r && r.avgWkg != null && !isNaN(r.avgWkg)) avgWkgByDuration[r.dur] = r.avgWkg;
+      if (r && r.cohortAvgHrBpm != null && !isNaN(r.cohortAvgHrBpm)) avgHrByDuration[r.dur] = r.cohortAvgHrBpm;
+    });
+    return { goals: goals, avgWkgByDuration: avgWkgByDuration, avgHrByDuration: avgHrByDuration };
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.calculateRiderScores = calculateRiderScores;
   window.aggregateMMPFromLogs = aggregateMMPFromLogs;
@@ -405,4 +507,5 @@ if (typeof window !== 'undefined') {
   window.getIntervalHRFromLogs = getIntervalHRFromLogs;
   window.fetchAIProfileAnalysis = fetchAIProfileAnalysis;
   window.FALLBACK_AI_COMMENT = FALLBACK_AI_COMMENT;
+  window.fetchDashboardPeakRankingCohort = fetchDashboardPeakRankingCohort;
 }

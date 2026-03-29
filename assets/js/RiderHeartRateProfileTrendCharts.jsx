@@ -9,6 +9,7 @@
 
 var ReactObj = window.React || {};
 var useState = ReactObj.useState || null;
+var useEffect = ReactObj.useEffect || null;
 
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
 let _hrChartId = 0;
@@ -163,6 +164,7 @@ function HeartRateProfileMonthCurveChart(props) {
   var DashboardCard = p.DashboardCard;
   var monthCurveData = p.monthCurveData;
   var userProfile = p.userProfile || null;
+  var avgHrByDuration = p.avgHrByDuration || {};
   var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
@@ -191,10 +193,14 @@ function HeartRateProfileMonthCurveChart(props) {
 
   var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
 
+  var hrFromApi = avgHrByDuration[selectedApi];
+  var cohortAvgHrFromRolling = hrFromApi != null && !isNaN(Number(hrFromApi)) ? Math.round(Number(hrFromApi)) : null;
   var growthRef = typeof window.getGrowthStelvioReferencePowerHr === 'function'
     ? window.getGrowthStelvioReferencePowerHr(monthHrApiToGrowthSlot(selectedApi), userProfile)
     : null;
-  var cohortAvgHr = growthRef && growthRef.hr != null && growthRef.hr > 0 ? Math.round(growthRef.hr) : null;
+  var cohortAvgHr = cohortAvgHrFromRolling != null && cohortAvgHrFromRolling > 0
+    ? cohortAvgHrFromRolling
+    : (growthRef && growthRef.hr != null && growthRef.hr > 0 ? Math.round(growthRef.hr) : null);
 
   var yMax = 1;
   data.forEach(function(r) {
@@ -257,7 +263,7 @@ function HeartRateProfileMonthCurveChart(props) {
         <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-xs text-gray-600">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-5 border-t-2 border-dashed border-gray-400" style={{ verticalAlign: 'middle' }} />
-            전체 사용자 평균 심박
+            전체 사용자 평균 심박(최근 30일)
             {cohortAvgHr != null && cohortAvgHr > 0 ? (
               <span className="text-gray-500 tabular-nums">({cohortAvgHr}bpm)</span>
             ) : null}
@@ -304,6 +310,27 @@ function RiderHeartRateProfileTrendCharts(props) {
   var recentLogs = p.recentLogs;
   var Card = DashboardCard || function(props) { return <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">{props.children}</div>; };
 
+  var userId = userProfile && userProfile.id;
+  var userWeight = userProfile && Number(userProfile.weight);
+  var _hrAvgState = useState({});
+  var avgHrByDuration = _hrAvgState[0];
+  var setAvgHrByDuration = _hrAvgState[1];
+  useEffect(function() {
+    var mounted = true;
+    var fetchCohort = window.fetchDashboardPeakRankingCohort;
+    if (typeof fetchCohort !== 'function') {
+      return function() { mounted = false; };
+    }
+    fetchCohort(userId || null, userWeight).then(function(res) {
+      if (!mounted) return;
+      setAvgHrByDuration((res && res.avgHrByDuration) || {});
+    }).catch(function() {
+      if (!mounted) return;
+      setAvgHrByDuration({});
+    });
+    return function() { mounted = false; };
+  }, [userId, userWeight]);
+
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
   var getIntervalHR = window.getIntervalHRFromLogs;
   var intervalHR = getIntervalHR ? getIntervalHR(logs, 30, 6) : [];
@@ -321,7 +348,7 @@ function RiderHeartRateProfileTrendCharts(props) {
           <HeartRateProfileCurveChart DashboardCard={Card} heartRateCurveData={heartRateCurveData} isFullWidth />
         </div>
         <div className="min-w-0 overflow-hidden col-span-2">
-          <HeartRateProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} userProfile={userProfile} isFullWidth />
+          <HeartRateProfileMonthCurveChart DashboardCard={Card} monthCurveData={monthCurveData} userProfile={userProfile} avgHrByDuration={avgHrByDuration} isFullWidth />
         </div>
       </div>
     </div>
