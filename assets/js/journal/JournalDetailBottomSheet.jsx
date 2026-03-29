@@ -788,7 +788,7 @@
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 피크 파워'),
         React.createElement('div', { className: 'journal-peak-chart-legend', 'aria-label': '차트 범례' },
           React.createElement('span', { className: 'journal-peak-chart-legend-line', 'aria-hidden': 'true' }),
-          React.createElement('span', null, '주황색 선: 이 라이딩의 평균 파워 (전 구간 동일)')
+          React.createElement('span', null, '평균 파워')
         ),
         React.createElement(JournalSessionPowerPeakChart, {
           log: log,
@@ -812,7 +812,7 @@
         React.createElement('div', { className: 'journal-peak-chart-title' }, '구간별 최대 심박'),
         React.createElement('div', { className: 'journal-peak-chart-legend', 'aria-label': '차트 범례' },
           React.createElement('span', { className: 'journal-peak-chart-legend-line', 'aria-hidden': 'true' }),
-          React.createElement('span', null, '주황색 선: 이 라이딩의 평균 심박 (전 구간 동일)')
+          React.createElement('span', null, '평균 심박')
         ),
         React.createElement(JournalSessionHrPeakChart, {
           log: log,
