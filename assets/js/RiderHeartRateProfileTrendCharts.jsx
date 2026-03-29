@@ -202,10 +202,14 @@ function HeartRateProfileMonthCurveChart(props) {
     ? cohortAvgHrFromRolling
     : (growthRef && growthRef.hr != null && growthRef.hr > 0 ? Math.round(growthRef.hr) : null);
 
-  var maxHrUser = 0;
-  if (userProfile) {
-    var mhRaw = userProfile.max_hr != null && userProfile.max_hr !== '' ? userProfile.max_hr : userProfile.maxHr;
-    maxHrUser = Number(mhRaw) || 0;
+  var prIdx = -1;
+  var prBpm = 0;
+  for (var _pi = 0; _pi < data.length; _pi++) {
+    var _pv = Number(data[_pi][dataKey]) || 0;
+    if (_pv > prBpm) {
+      prBpm = _pv;
+      prIdx = _pi;
+    }
   }
 
   var yMax = 1;
@@ -216,25 +220,11 @@ function HeartRateProfileMonthCurveChart(props) {
   if (cohortAvgHr != null && cohortAvgHr > yMax) yMax = cohortAvgHr;
   yMax = Math.max(80, Math.ceil(yMax * 1.08 / 5) * 5);
 
-  var yDomainMin = 0;
-  var yDomainMax = yMax;
-  if (maxHrUser > 0) {
-    yDomainMin = Math.round(maxHrUser / 2);
-    yDomainMax = Math.round(maxHrUser * 1.3);
-    if (yDomainMin >= yDomainMax) {
-      yDomainMin = Math.max(40, Math.floor(maxHrUser / 2));
-      yDomainMax = yDomainMin + 20;
-    }
-  }
-
-  var prIdx = -1;
-  var prBpm = 0;
-  for (var _pi = 0; _pi < data.length; _pi++) {
-    var _pv = Number(data[_pi][dataKey]) || 0;
-    if (_pv > prBpm) {
-      prBpm = _pv;
-      prIdx = _pi;
-    }
+  /** Y축: 100 ~ (현재 선택 구간의 최대 피크 PR × 1.2) */
+  var yDomainMin = 100;
+  var yDomainMax = prBpm > 0 ? Math.ceil(prBpm * 1.2) : yMax;
+  if (yDomainMax <= yDomainMin) {
+    yDomainMax = yDomainMin + 20;
   }
   var ReactForDot = window.React;
   var fillGradId = cid + '-fillSel';

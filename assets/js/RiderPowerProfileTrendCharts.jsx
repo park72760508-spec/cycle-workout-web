@@ -225,25 +225,6 @@ function PowerProfileMonthCurveChart(props) {
       ? Math.round(avgWkgSel * userWeight)
       : null;
 
-  var yMax = 1;
-  data.forEach(function(r) {
-    var v = Number(r[dataKey]) || 0;
-    if (v > yMax) yMax = v;
-  });
-  if (cohortAvgPower != null && cohortAvgPower > yMax) yMax = cohortAvgPower;
-  yMax = Math.max(10, Math.ceil(yMax * 1.12 / 10) * 10);
-
-  var yDomainMin = 0;
-  var yDomainMax = yMax;
-  if (ftpVal > 0) {
-    yDomainMin = Math.round(ftpVal / 2);
-    yDomainMax = Math.round(ftpVal * 2);
-    if (yDomainMin >= yDomainMax) {
-      yDomainMin = Math.max(0, Math.floor(ftpVal / 2));
-      yDomainMax = yDomainMin + 10;
-    }
-  }
-
   var prIdx = -1;
   var prWatts = 0;
   for (var _pi = 0; _pi < data.length; _pi++) {
@@ -252,6 +233,28 @@ function PowerProfileMonthCurveChart(props) {
       prWatts = _pv;
       prIdx = _pi;
     }
+  }
+
+  var yMax = 1;
+  data.forEach(function(r) {
+    var v = Number(r[dataKey]) || 0;
+    if (v > yMax) yMax = v;
+  });
+  if (cohortAvgPower != null && cohortAvgPower > yMax) yMax = cohortAvgPower;
+  yMax = Math.max(10, Math.ceil(yMax * 1.12 / 10) * 10);
+
+  /** Y축: FTP/2 ~ (현재 선택 구간의 최대 피크 PR × 1.2) */
+  var yDomainMin = 0;
+  var yDomainMax = yMax;
+  if (ftpVal > 0) {
+    yDomainMin = Math.round(ftpVal / 2);
+    yDomainMax = prWatts > 0 ? Math.ceil(prWatts * 1.2) : Math.round(ftpVal * 2);
+  } else {
+    yDomainMin = 0;
+    yDomainMax = prWatts > 0 ? Math.ceil(prWatts * 1.2) : yMax;
+  }
+  if (yDomainMax <= yDomainMin) {
+    yDomainMax = yDomainMin + 20;
   }
   var ReactForDot = window.React;
 
