@@ -235,7 +235,6 @@ function HeartRateProfileMonthCurveChart(props) {
       <DashboardCard>
         <div className="mb-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
-          <p className="text-[10px] text-gray-500 text-center mt-0.5 px-1">최근 30일, 6구간(각 5일) 구간 내 최고 피크</p>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -246,7 +245,6 @@ function HeartRateProfileMonthCurveChart(props) {
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
-        <p className="text-[10px] text-gray-500 text-center mt-0.5 px-1">최근 30일, 6구간(각 5일) 구간 내 최고 피크</p>
         <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
           {MONTH_HR_CURVE_ITEMS.map(function(it) {
             var active = selectedApi === it.api;
