@@ -186,6 +186,9 @@ function PowerProfileMonthCurveChart(props) {
   var monthCurveData = p.monthCurveData;
   var avgWkgByDuration = p.avgWkgByDuration || {};
   var userWeight = Number(p.userWeight) || 0;
+  var userProfile = p.userProfile || null;
+  var ftpFromProfile = userProfile != null ? Number(userProfile.ftp != null && userProfile.ftp !== '' ? userProfile.ftp : userProfile.ftpWatts) : NaN;
+  var ftpVal = !isNaN(ftpFromProfile) && ftpFromProfile > 0 ? ftpFromProfile : 0;
   var isFullWidth = p.isFullWidth;
   var Recharts = window.Recharts;
   var AreaChart = Recharts && Recharts.AreaChart;
@@ -229,6 +232,17 @@ function PowerProfileMonthCurveChart(props) {
   });
   if (cohortAvgPower != null && cohortAvgPower > yMax) yMax = cohortAvgPower;
   yMax = Math.max(10, Math.ceil(yMax * 1.12 / 10) * 10);
+
+  var yDomainMin = 0;
+  var yDomainMax = yMax;
+  if (ftpVal > 0) {
+    yDomainMin = Math.round(ftpVal / 2);
+    yDomainMax = Math.round(ftpVal * 2);
+    if (yDomainMin >= yDomainMax) {
+      yDomainMin = Math.max(0, Math.floor(ftpVal / 2));
+      yDomainMax = yDomainMin + 10;
+    }
+  }
 
   var prIdx = -1;
   var prWatts = 0;
@@ -302,8 +316,8 @@ function PowerProfileMonthCurveChart(props) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = len > 5 ? 9 : 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[0, yMax]} />
+            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
+            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[yDomainMin, yDomainMax]} />
             {cohortAvgPower != null && cohortAvgPower > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
@@ -385,6 +399,7 @@ function RiderPowerProfileTrendCharts(props) {
             monthCurveData={monthCurveData}
             avgWkgByDuration={avgWkgByDuration}
             userWeight={userWeight}
+            userProfile={userProfile}
             isFullWidth
           />
         </div>

@@ -202,6 +202,12 @@ function HeartRateProfileMonthCurveChart(props) {
     ? cohortAvgHrFromRolling
     : (growthRef && growthRef.hr != null && growthRef.hr > 0 ? Math.round(growthRef.hr) : null);
 
+  var maxHrUser = 0;
+  if (userProfile) {
+    var mhRaw = userProfile.max_hr != null && userProfile.max_hr !== '' ? userProfile.max_hr : userProfile.maxHr;
+    maxHrUser = Number(mhRaw) || 0;
+  }
+
   var yMax = 1;
   data.forEach(function(r) {
     var v = Number(r[dataKey]) || 0;
@@ -209,6 +215,17 @@ function HeartRateProfileMonthCurveChart(props) {
   });
   if (cohortAvgHr != null && cohortAvgHr > yMax) yMax = cohortAvgHr;
   yMax = Math.max(80, Math.ceil(yMax * 1.08 / 5) * 5);
+
+  var yDomainMin = 0;
+  var yDomainMax = yMax;
+  if (maxHrUser > 0) {
+    yDomainMin = Math.round(maxHrUser / 2);
+    yDomainMax = Math.round(maxHrUser * 1.3);
+    if (yDomainMin >= yDomainMax) {
+      yDomainMin = Math.max(40, Math.floor(maxHrUser / 2));
+      yDomainMax = yDomainMin + 20;
+    }
+  }
 
   var prIdx = -1;
   var prBpm = 0;
@@ -280,8 +297,8 @@ function HeartRateProfileMonthCurveChart(props) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = len > 5 ? 9 : 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[0, yMax]} />
+            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
+            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[yDomainMin, yDomainMax]} />
             {cohortAvgHr != null && cohortAvgHr > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}

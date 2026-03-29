@@ -190,7 +190,7 @@ function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
     const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
     const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
     const agg = aggregateMMPFromLogs(logs, startStr, endStr);
-    const name = (start.getMonth() + 1) + '/' + start.getDate() + '~' + (end.getMonth() + 1) + '/' + end.getDate();
+    const name = '~' + (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       name: name,
       max_watts: agg.max_watts,
@@ -228,7 +228,7 @@ function getIntervalHRFromLogs(logs, numDays, numIntervals) {
     const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
     const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
     const agg = aggregateHRFromLogs(logs, startStr, endStr);
-    const name = (start.getMonth() + 1) + '/' + start.getDate() + '~' + (end.getMonth() + 1) + '/' + end.getDate();
+    const name = '~' + (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       name: name,
       max_hr: agg.max_hr,
