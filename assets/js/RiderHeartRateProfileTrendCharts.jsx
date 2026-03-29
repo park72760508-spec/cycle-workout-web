@@ -14,11 +14,13 @@ var useState = ReactObj.useState || null;
 let _hrChartId = 0;
 function nextHrChartId() { return 'hr-' + (++_hrChartId); }
 
-/** 1min/5min/20min/60min → 성장 트렌드 슬롯 인덱스 (getGrowthStelvioReferencePowerHr) */
+/** 1·5·10·20·40·60분 → 성장 트렌드 슬롯 인덱스 (getGrowthStelvioReferencePowerHr) */
 function monthHrApiToGrowthSlot(api) {
   if (api === '1min') return 1;
   if (api === '5min') return 2;
+  if (api === '10min') return 3;
   if (api === '20min') return 4;
+  if (api === '40min') return 5;
   if (api === '60min') return 6;
   return 1;
 }
@@ -27,7 +29,9 @@ function monthHrApiToGrowthSlot(api) {
 var MONTH_HR_CURVE_ITEMS = [
   { api: '1min', dataKey: 'hr1min', label: '1분', color: '#ef4444' },
   { api: '5min', dataKey: 'hr5min', label: '5분', color: '#f97316' },
+  { api: '10min', dataKey: 'hr10min', label: '10분', color: '#ca8a04' },
   { api: '20min', dataKey: 'hr20min', label: '20분', color: '#3b82f6' },
+  { api: '40min', dataKey: 'hr40min', label: '40분', color: '#a855f7' },
   { api: '60min', dataKey: 'hr60min', label: '60분', color: '#22c55e' }
 ];
 
@@ -84,14 +88,16 @@ function buildHeartRateCurveData(logs) {
   }).filter(function(r) { return r.hr > 0; });
 }
 
-/** 최근 1개월 구간별 심박 데이터 (1분/5분/20분/60분 4선) */
+/** 최근 1개월 구간별 심박 데이터 (1·5·10·20·40·60분) — 구간 내 로그별 피크의 최댓값 */
 function buildMonthHeartRateCurveData(intervalHR) {
   return (intervalHR || []).map(function(row) {
     return {
       name: row.name,
       hr1min: Number(row.max_hr_1min) || 0,
       hr5min: Number(row.max_hr_5min) || 0,
+      hr10min: Number(row.max_hr_10min) || 0,
       hr20min: Number(row.max_hr_20min) || 0,
+      hr40min: Number(row.max_hr_40min) || 0,
       hr60min: Number(row.max_hr_60min) || 0
     };
   });
@@ -183,7 +189,7 @@ function HeartRateProfileMonthCurveChart(props) {
   var dataKey = selItem.dataKey;
   var selColor = selItem.color;
 
-  var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr20min || r.hr60min) > 0; });
+  var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
 
   var growthRef = typeof window.getGrowthStelvioReferencePowerHr === 'function'
     ? window.getGrowthStelvioReferencePowerHr(monthHrApiToGrowthSlot(selectedApi), userProfile)
@@ -216,6 +222,7 @@ function HeartRateProfileMonthCurveChart(props) {
       <DashboardCard>
         <div className="mb-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
+          <p className="text-[10px] text-gray-500 text-center mt-0.5 px-1">최근 30일, 6구간(각 5일) 구간 내 최고 피크</p>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -226,6 +233,7 @@ function HeartRateProfileMonthCurveChart(props) {
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 심박 그래프</h3>
+        <p className="text-[10px] text-gray-500 text-center mt-0.5 px-1">최근 30일, 6구간(각 5일) 구간 내 최고 피크</p>
         <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
           {MONTH_HR_CURVE_ITEMS.map(function(it) {
             var active = selectedApi === it.api;
@@ -235,7 +243,7 @@ function HeartRateProfileMonthCurveChart(props) {
                 type="button"
                 onClick={function() { setSelectedApi(it.api); }}
                 className={
-                  'relative flex items-center justify-center rounded-full min-w-[1.9rem] h-7 px-1 text-[10px] font-bold text-white shadow-sm border transition ' +
+                  'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
                   (active ? activeRing : 'border-white/30 hover:brightness-95')
                 }
                 style={{ backgroundColor: it.color }}
@@ -266,7 +274,7 @@ function HeartRateProfileMonthCurveChart(props) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
+            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = len > 5 ? 9 : 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
             <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[0, yMax]} />
             {cohortAvgHr != null && cohortAvgHr > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
@@ -298,7 +306,7 @@ function RiderHeartRateProfileTrendCharts(props) {
 
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
   var getIntervalHR = window.getIntervalHRFromLogs;
-  var intervalHR = getIntervalHR ? getIntervalHR(logs, 30, 7) : [];
+  var intervalHR = getIntervalHR ? getIntervalHR(logs, 30, 6) : [];
   var heartRateCurveData = buildHeartRateCurveData(logs);
   var monthCurveData = buildMonthHeartRateCurveData(intervalHR);
 

@@ -18,7 +18,7 @@ const NORM = {
  * @param {Array} logs - 훈련 로그 배열
  * @param {string} fromDate - YYYY-MM-DD
  * @param {string} toDate - YYYY-MM-DD
- * @returns {{ max_watts, max_1min_watts, max_5min_watts, max_20min_watts, max_60min_watts }}
+ * @returns {{ max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_40min_watts, max_60min_watts }}
  */
 function aggregateMMPFromLogs(logs, fromDate, toDate) {
   const inRange = (dateStr) => dateStr && dateStr >= fromDate && dateStr <= toDate;
@@ -168,17 +168,19 @@ function getWeeklyMMPFromLogs(logs, numWeeks) {
 }
 
 /**
- * 최근 N일간 구간별 MMP 집계 (최근 1개월 파워 그래프용, 7등분 ≈ 3~4일 주기)
+ * 최근 N일간 구간별 MMP 집계 (최근 1개월 파워 그래프용)
+ * 기본: 오늘 0시 기준 역산하여 (numDays)일을 numIntervals개 구간으로 나눔 — 예: 30일·6구간 = 구간당 5일, 각 구간 내 로그의 duration별 최댓값.
  * @param {Array} logs - 훈련 로그 배열
- * @param {number} numDays - 총 일수 (기본 30)
- * @param {number} numIntervals - 구간 수 (기본 7)
- * @returns {Array<{ name, max_watts, max_1min_watts, max_5min_watts, max_20min_watts, max_60min_watts }>}
+ * @param {number} numDays - 총 일수 (기본 30, 오늘 포함 역산)
+ * @param {number} numIntervals - 구간 수 (기본 6)
+ * @returns {Array<{ name, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_40min_watts, max_60min_watts }>}
  */
 function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
   numDays = numDays || 30;
-  numIntervals = numIntervals || 7;
-  const intervalDays = Math.floor(numDays / numIntervals);
+  numIntervals = numIntervals || 6;
+  const intervalDays = Math.max(1, Math.floor(numDays / numIntervals));
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const out = [];
   for (let i = numIntervals - 1; i >= 0; i--) {
     const end = new Date(today);
@@ -188,13 +190,15 @@ function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
     const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
     const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
     const agg = aggregateMMPFromLogs(logs, startStr, endStr);
-    const name = (end.getMonth() + 1) + '/' + end.getDate();
+    const name = (start.getMonth() + 1) + '/' + start.getDate() + '~' + (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       name: name,
       max_watts: agg.max_watts,
       max_1min_watts: agg.max_1min_watts,
       max_5min_watts: agg.max_5min_watts,
+      max_10min_watts: agg.max_10min_watts,
       max_20min_watts: agg.max_20min_watts,
+      max_40min_watts: agg.max_40min_watts,
       max_60min_watts: agg.max_60min_watts
     });
   }
@@ -202,17 +206,19 @@ function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
 }
 
 /**
- * 최근 N일간 구간별 심박(HR) 집계 (최근 1개월 심박 그래프용, 7등분)
+ * 최근 N일간 구간별 심박(HR) 집계 (최근 1개월 심박 그래프용)
+ * 기본: 30일·6구간·구간당 5일, 구간 내 로그의 duration별 최댓값.
  * @param {Array} logs - 훈련 로그 배열
  * @param {number} numDays - 총 일수 (기본 30)
- * @param {number} numIntervals - 구간 수 (기본 7)
- * @returns {Array<{ name, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_20min, max_hr_60min }>}
+ * @param {number} numIntervals - 구간 수 (기본 6)
+ * @returns {Array<{ name, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min }>}
  */
 function getIntervalHRFromLogs(logs, numDays, numIntervals) {
   numDays = numDays || 30;
-  numIntervals = numIntervals || 7;
-  const intervalDays = Math.floor(numDays / numIntervals);
+  numIntervals = numIntervals || 6;
+  const intervalDays = Math.max(1, Math.floor(numDays / numIntervals));
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const out = [];
   for (let i = numIntervals - 1; i >= 0; i--) {
     const end = new Date(today);
@@ -222,14 +228,16 @@ function getIntervalHRFromLogs(logs, numDays, numIntervals) {
     const startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
     const endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
     const agg = aggregateHRFromLogs(logs, startStr, endStr);
-    const name = (end.getMonth() + 1) + '/' + end.getDate();
+    const name = (start.getMonth() + 1) + '/' + start.getDate() + '~' + (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       name: name,
       max_hr: agg.max_hr,
       max_hr_5sec: agg.max_hr_5sec,
       max_hr_1min: agg.max_hr_1min,
       max_hr_5min: agg.max_hr_5min,
+      max_hr_10min: agg.max_hr_10min,
       max_hr_20min: agg.max_hr_20min,
+      max_hr_40min: agg.max_hr_40min,
       max_hr_60min: agg.max_hr_60min
     });
   }

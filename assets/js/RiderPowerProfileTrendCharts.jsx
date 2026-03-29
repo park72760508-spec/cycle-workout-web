@@ -3,7 +3,7 @@
  * '훈련 트렌드 (최근 1개월)' 섹션 바로 위에 배치
  * 6개 그래프: TSPT, RSPT, PCH, CLMB, TTST, ALLR
  * 목표값: STELVIO 랭킹 보드 카테고리별 1등(장기), 나의 바로 앞선 경쟁자(단기)
- * @see useRiderAnalysis.js - getWeeklyMMPFromLogs, aggregateMMPFromLogs
+ * @see useRiderAnalysis.js - getIntervalMMPFromLogs, aggregateMMPFromLogs
  */
 
 /* global React, Recharts */
@@ -165,24 +165,28 @@ function getDateStr(offsetDays) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-/** 최근 1개월 주별 파워 데이터 (1분/5분/20분/60분) - 4선 그래프용 */
-function buildMonthPowerCurveData(weeklyMMP) {
-  return (weeklyMMP || []).map(function(row) {
+/** 최근 1개월 구간별 파워 데이터 (1·5·10·20·40·60분) — 구간 내 로그별 피크의 최댓값 */
+function buildMonthPowerCurveData(intervalMMP) {
+  return (intervalMMP || []).map(function(row) {
     return {
       name: row.name,
       power1min: Number(row.max_1min_watts) || 0,
       power5min: Number(row.max_5min_watts) || 0,
+      power10min: Number(row.max_10min_watts) || 0,
       power20min: Number(row.max_20min_watts) || 0,
+      power40min: Number(row.max_40min_watts) || 0,
       power60min: Number(row.max_60min_watts) || 0
     };
   });
 }
 
-/** 최근 1개월 파워 그래프: 구간별 색·API키·dataKey */
+/** 최근 1개월 파워 그래프: 구간별 색·API키·dataKey (랭킹 평균 W/kg은 동일 api 키 사용) */
 var MONTH_POWER_CURVE_ITEMS = [
   { api: '1min', dataKey: 'power1min', label: '1분', color: '#ef4444' },
   { api: '5min', dataKey: 'power5min', label: '5분', color: '#f97316' },
+  { api: '10min', dataKey: 'power10min', label: '10분', color: '#ca8a04' },
   { api: '20min', dataKey: 'power20min', label: '20분', color: '#3b82f6' },
+  { api: '40min', dataKey: 'power40min', label: '40분', color: '#a855f7' },
   { api: '60min', dataKey: 'power60min', label: '60분', color: '#22c55e' }
 ];
 
@@ -304,7 +308,7 @@ function PowerProfileMonthCurveChart(props) {
   var selColor = selItem.color;
 
   var hasAnyWeek = data.length > 0 && data.some(function(r) {
-    return (r.power1min || r.power5min || r.power20min || r.power60min) > 0;
+    return (r.power1min || r.power5min || r.power10min || r.power20min || r.power40min || r.power60min) > 0;
   });
 
   var avgWkgSel = avgWkgByDuration[selectedApi];
@@ -337,6 +341,7 @@ function PowerProfileMonthCurveChart(props) {
       <DashboardCard>
         <div className="mb-1 min-w-0">
           <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
+          <p className="text-[10px] text-gray-500 text-center mt-0.5 px-1">최근 30일, 6구간(각 5일) 구간 내 최고 피크</p>
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
@@ -350,6 +355,7 @@ function PowerProfileMonthCurveChart(props) {
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className="text-sm font-semibold text-gray-800 truncate">최근 1개월 파워 그래프</h3>
+        <p className="text-[10px] text-gray-500 text-center mt-0.5 px-1">최근 30일, 6구간(각 5일) 구간 내 최고 피크</p>
         <div className="flex flex-wrap justify-center gap-1.5 mt-2 px-1">
           {MONTH_POWER_CURVE_ITEMS.map(function(it) {
             var active = selectedApi === it.api;
@@ -360,7 +366,7 @@ function PowerProfileMonthCurveChart(props) {
                 type="button"
                 onClick={function() { setSelectedApi(it.api); }}
                 className={
-                  'relative flex items-center justify-center rounded-full min-w-[1.9rem] h-7 px-1 text-[10px] font-bold text-white shadow-sm border transition ' +
+                  'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
                   (active ? activeRing : 'border-white/30 hover:brightness-95')
                 }
                 style={{ backgroundColor: bg }}
@@ -391,7 +397,7 @@ function PowerProfileMonthCurveChart(props) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={8} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 12; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
+            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = len > 5 ? 9 : 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
             <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[0, yMax]} />
             {cohortAvgPower != null && cohortAvgPower > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
@@ -444,7 +450,7 @@ function RiderPowerProfileTrendCharts(props) {
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
   var powerCurveData = buildPowerCurveData(logs, goals);
   var getIntervalMMP = window.getIntervalMMPFromLogs;
-  var intervalMMP = getIntervalMMP ? getIntervalMMP(logs, 30, 7) : [];
+  var intervalMMP = getIntervalMMP ? getIntervalMMP(logs, 30, 6) : [];
   var monthCurveData = buildMonthPowerCurveData(intervalMMP);
 
   return (
