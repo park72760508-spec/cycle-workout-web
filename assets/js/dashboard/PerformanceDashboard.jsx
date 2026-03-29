@@ -232,15 +232,15 @@
           }, React.createElement(React.Fragment, null,
             React.createElement('ul', { className: 'text-xs text-gray-600 space-y-1.5 mb-4' },
               React.createElement('li', { className: 'flex items-start gap-2' },
-                React.createElement('span', null, '⏱️'),
+                React.createElement('img', { src: 'assets/img/clock.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
                 React.createElement('span', null, '6개 구간(1, 5, 10, 20, 40, 60분) PR 파워 데이터 종합')
               ),
               React.createElement('li', { className: 'flex items-start gap-2' },
-                React.createElement('span', null, '⚖️'),
+                React.createElement('img', { src: 'assets/img/statistics.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
                 React.createElement('span', null, '구간별 생리학적 신뢰도 반영 (20분 파워 비중 최대)')
               ),
               React.createElement('li', { className: 'flex items-start gap-2' },
-                React.createElement('span', null, '📅'),
+                React.createElement('img', { src: 'assets/img/calendar.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
                 React.createElement('span', null, '최신 기록 우대 (오래된 기록일수록 반영 비율 감소)')
               )
             ),
