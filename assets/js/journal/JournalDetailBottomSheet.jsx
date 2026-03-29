@@ -859,7 +859,7 @@
             className: 'journal-bottom-sheet-close',
             'aria-label': '닫기',
             onClick: onClose
-          }, '\u00D7')
+          }, '\u2716')
         ),
         React.createElement('div', { className: 'journal-bottom-sheet-tabs' },
           tabs.map(function(t) {

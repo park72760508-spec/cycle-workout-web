@@ -214,7 +214,17 @@
           type: 'button',
           className: 'journal-accordion-trigger',
           onClick: function() { setAccordionOpen(!accordionOpen); }
-        }, '\uD83D\uDCCA ' + monthLabel + ' 상세 분석 차트 ' + (accordionOpen ? '접기' : '펼치기')),
+        },
+          React.createElement('img', {
+            src: 'assets/img/data-analytics.png',
+            alt: '',
+            className: 'journal-accordion-trigger-icon',
+            width: 20,
+            height: 20,
+            decoding: 'async'
+          }),
+          monthLabel + ' 상세 분석 차트 ' + (accordionOpen ? '접기' : '펼치기')
+        ),
         accordionOpen && React.createElement('p', { className: 'journal-accordion-hint' }, '아래로 스크롤하여 상세 차트를 확인하세요.')
       )
     );
