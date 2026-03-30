@@ -7367,7 +7367,7 @@
     /**
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
      */
-    var stelvioRankingState = { duration: '5min', gender: 'all', period: 'monthly', activeCategory: 'Supremo' };
+    var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo' };
     var stelvioRankingByCategory = null;
     var stelvioRankingExpandState = {};
     var stelvioRankingCurrentUserId = null;
@@ -7377,7 +7377,23 @@
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체순위 TOP10)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
     var stelvioBackToTopScrollHandler = null;
+    function stelvioResetRankingBoardFiltersToDefault() {
+      stelvioRankingState.duration = 'tss';
+      stelvioRankingState.gender = 'all';
+      stelvioRankingState.activeCategory = 'Supremo';
+      var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
+      tabs.forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-duration') === 'tss');
+      });
+      var gSel = document.getElementById('stelvioGenderSelect');
+      if (gSel) gSel.value = 'all';
+      var gLab = document.getElementById('stelvioGenderLabel');
+      if (gLab) gLab.textContent = '전체';
+      stelvioSyncCategorySelectUi();
+      stelvioApplyDurationModeUi();
+    }
     function openStelvioRankingBoardModal() {
+      stelvioResetRankingBoardFiltersToDefault();
       if (typeof showScreen === 'function') {
         showScreen('stelvioRankingScreen');
       }
@@ -7385,8 +7401,6 @@
         var s = document.getElementById('stelvioRankingScrollArea');
         if (s) s.scrollTop = 0;
       });
-      stelvioSyncCategorySelectUi();
-      stelvioApplyDurationModeUi();
       fetchStelvioPeakPowerRanking();
       stelvioInitBackToTopButton();
     }
@@ -7559,9 +7573,6 @@
         stelvioRankingCurrentUserId = uid;
         stelvioMyRankSupremo = data.myRankSupremo || null;
         stelvioCurrentUser = data.currentUser || null;
-        if (stelvioCurrentUser && stelvioCurrentUser.ageCategory && STELVIO_CATEGORY_LABELS[stelvioCurrentUser.ageCategory]) {
-          stelvioRankingState.activeCategory = stelvioCurrentUser.ageCategory;
-        }
         stelvioSyncCategorySelectUi();
         renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
         renderStelvioActiveCategory();
@@ -18332,9 +18343,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <div class="stelvio-ranking-sticky">
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
-              <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
+              <button type="button" class="stelvio-duration-tab active" data-duration="tss">TSS</button>
               <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
-              <button type="button" class="stelvio-duration-tab active" data-duration="5min">5분</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="5min">5분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="20min">20분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="40min">40분</button>
