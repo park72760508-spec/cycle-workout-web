@@ -3851,7 +3851,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-dropdown-caption {
   font-size: 0.72rem;
   font-weight: 700;
-  color: #7c3aed;
+  color: #374151;
   margin-right: 6px;
   flex-shrink: 0;
   line-height: 1.2;
@@ -3859,12 +3859,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
 #stelvioRankingScreen .stelvio-dropdown-label {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #7c3aed;
+  color: #374151;
   margin-right: 2px;
 }
 #stelvioRankingScreen .stelvio-dropdown-chevron {
   font-size: 0.75em;
-  color: #7c3aed;
+  color: #374151;
 }
 #stelvioRankingScreen .stelvio-dropdown-select {
   position: absolute;
