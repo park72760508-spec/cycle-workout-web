@@ -401,7 +401,7 @@
                 'flex-shrink-0 px-4 py-2.5 text-sm transition-all duration-200 rounded-[10px] ' +
                 (isActive
                   ? 'font-bold bg-white text-[#7c3aed] border-[1.5px] border-[#7c3aed] shadow-[0_2px_8px_rgba(124,58,237,0.14)]'
-                  : 'font-semibold text-gray-600 bg-gray-100 border-0 shadow-none hover:bg-gray-200 hover:text-gray-800')
+                  : 'font-semibold text-gray-700 bg-gray-200 border-0 shadow-none hover:bg-gray-300 hover:text-gray-900')
             },
             tab.label
           );
