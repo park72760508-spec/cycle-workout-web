@@ -7369,6 +7369,7 @@
      */
     var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo' };
     var stelvioRankingByCategory = null;
+    var stelvioRankingFullEntries = null;
     var stelvioRankingExpandState = {};
     var stelvioRankingCurrentUserId = null;
     var stelvioMyRankSupremo = null;
@@ -7529,6 +7530,33 @@
       if (catSel && STELVIO_CATEGORY_LABELS[cat]) catSel.value = cat;
       if (catLab) catLab.textContent = STELVIO_CATEGORY_LABELS[cat] || cat || '전체';
     }
+    /** API entries 폴백: byCategory 전 리그 합집합(중복 userId 제거) */
+    function stelvioMergeRankingEntriesFromByCategory(bc) {
+      if (!bc) return [];
+      var m = {};
+      ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'].forEach(function (c) {
+        (bc[c] || []).forEach(function (e) {
+          if (e && e.userId) m[e.userId] = e;
+        });
+      });
+      return Object.keys(m).map(function (k) { return m[k]; });
+    }
+    function stelvioResolveRankingFullEntries(data) {
+      if (data && Array.isArray(data.entries) && data.entries.length) return data.entries;
+      return stelvioMergeRankingEntriesFromByCategory(data && data.byCategory);
+    }
+    function refreshStelvioDistributionChartMounted() {
+      if (typeof window.refreshStelvioDistributionChart !== 'function') return;
+      window.refreshStelvioDistributionChart({
+        entries: stelvioRankingFullEntries,
+        byCategory: stelvioRankingByCategory,
+        activeCategory: stelvioRankingState.activeCategory,
+        duration: stelvioRankingState.duration,
+        currentUserId: stelvioRankingCurrentUserId,
+        currentUser: stelvioCurrentUser,
+        myRankSupremo: stelvioMyRankSupremo
+      });
+    }
 
     function bindStelvioRankingEvents() {
       var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
@@ -7565,9 +7593,13 @@
         var res = await fetch(url, { method: 'GET', mode: 'cors' });
         var data = await res.json().catch(function() { return { success: false }; });
         if (!data.success || !data.byCategory) {
+          stelvioRankingFullEntries = null;
+          stelvioRankingByCategory = null;
           renderStelvioRankingError('데이터를 불러올 수 없습니다.');
+          refreshStelvioDistributionChartMounted();
           return;
         }
+        stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
         stelvioRankingByCategory = data.byCategory;
         stelvioRankingExpandState = {};
         stelvioRankingCurrentUserId = uid;
@@ -7578,7 +7610,10 @@
         renderStelvioActiveCategory();
       } catch (e) {
         console.warn('[StelvioRanking] 조회 실패:', e);
+        stelvioRankingFullEntries = null;
+        stelvioRankingByCategory = null;
         renderStelvioRankingError('연결에 실패했습니다. 나중에 다시 시도해 주세요.');
+        refreshStelvioDistributionChartMounted();
       } finally {
         stelvioApplyDurationModeUi();
         if (loading) loading.classList.add('hidden');
@@ -7636,6 +7671,7 @@
       if (titleEl) titleEl.textContent = STELVIO_CATEGORY_TITLES[cat] || (STELVIO_CATEGORY_LABELS[cat] || cat) + ' 순위';
       if (unitEl) unitEl.textContent = stelvioIsTssRankingMode() ? 'TSS' : 'W/kg';
       renderStelvioRankingOneCategory(cat, stelvioRankingByCategory, stelvioRankingCurrentUserId, stelvioMyRankSupremo, bodyEl);
+      refreshStelvioDistributionChartMounted();
     }
 
     function renderStelvioRankingError(msg) {
@@ -18403,6 +18439,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div class="stelvio-category-header"><span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체순위 TOP10)</span><span class="stelvio-category-header-unit">W/kg</span></div>
             <div class="stelvio-category-body" id="stelvioRankingListBody"></div>
           </div>
+          <div id="stelvio-distribution-chart-root" class="stelvio-distribution-chart-root" aria-live="polite"></div>
         </div>
       </div>
     </div>
@@ -18562,6 +18599,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/components/DashboardDetailTabs.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel"></script>
+  <script src="assets/js/stelvio/StelvioRankingDistributionChart.jsx" type="text/babel"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {
