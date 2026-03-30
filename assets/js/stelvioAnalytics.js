@@ -12,7 +12,7 @@
  *     "trainingJournalScreen": 5,
  *     "scheduleListScreen": 3,
  *     "performanceDashboardScreen": 8,
- *     "stelvioRankingBoardModal": 2,
+ *     "stelvioRankingScreen": 2,
  *     "mobileDashboardScreen": 15,
  *     "trainingScreen": 7,
  *     "bluetoothIndividualScreen": 4,
@@ -59,6 +59,7 @@
     trainingJournalScreen: true,
     scheduleListScreen: true,
     performanceDashboardScreen: true,
+    stelvioRankingScreen: true,
     stelvioRankingBoardModal: true,
     mobileDashboardScreen: true,
     trainingScreen: true,
@@ -73,7 +74,8 @@
     trainingJournalScreen: '라이딩 일지',
     scheduleListScreen: '훈련 스케줄',
     performanceDashboardScreen: '대시보드',
-    stelvioRankingBoardModal: '랭킹보드',
+    stelvioRankingScreen: '랭킹보드',
+    stelvioRankingBoardModal: '랭킹보드(레거시)',
     mobileDashboardScreen: '훈련 화면 (모바일)',
     trainingScreen: '훈련 화면 (태블릿)',
     bluetoothIndividualScreen: '훈련 화면 (그룹)',
@@ -507,7 +509,7 @@
   };
 
   global.stelvioAnalyticsRecordRankingModal = function () {
-    recordScreenVisit('stelvioRankingBoardModal');
+    recordScreenVisit('stelvioRankingScreen');
   };
 
   function onDocumentClickCapture(ev) {
@@ -703,7 +705,13 @@
       { key: 'trainingJournalScreen', val: screens.trainingJournalScreen },
       { key: 'scheduleListScreen', val: screens.scheduleListScreen },
       { key: 'performanceDashboardScreen', val: screens.performanceDashboardScreen },
-      { key: 'stelvioRankingBoardModal', val: screens.stelvioRankingBoardModal },
+      {
+        key: 'stelvioRankingScreen',
+        val:
+          screens.stelvioRankingScreen != null
+            ? screens.stelvioRankingScreen
+            : screens.stelvioRankingBoardModal
+      },
       { key: 'mobileDashboardScreen', val: screens.mobileDashboardScreen },
       { key: 'trainingScreen', val: screens.trainingScreen },
       { key: 'bluetoothIndividualScreen', val: screens.bluetoothIndividualScreen },

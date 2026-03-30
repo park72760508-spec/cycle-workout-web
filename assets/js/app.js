@@ -3274,7 +3274,7 @@ if (!window.showScreen) {
           hideAuthScreen();
         }
         // flex 레이아웃이 필요한 화면 (Coach 대시보드: 헤더·전광판·그리드·목록 세로 배치)
-        if (id === 'mobileDashboardScreen' || id === 'workoutScreen' || id === 'bluetoothTrainingCoachScreen') {
+        if (id === 'mobileDashboardScreen' || id === 'workoutScreen' || id === 'bluetoothTrainingCoachScreen' || id === 'stelvioRankingScreen') {
           el.style.display = "flex";
         } else {
           el.style.display = "block";
@@ -6638,7 +6638,7 @@ window.showScreen = function(screenId) {
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
     // flex 레이아웃이 필요한 화면 (Coach 대시보드, 모바일 대시보드, 워크아웃 화면)
-    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen'];
+    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen'];
     targetScreen.style.display = flexScreens.includes(screenId) ? 'flex' : 'block';
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
