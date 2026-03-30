@@ -2613,7 +2613,7 @@
 
           <div class="connection-device-section basecamp-device-section">
             <div class="my-career-grid-8 mb-15">
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-ranking" id="btnCareerRanking" onclick="if (typeof fetchAndShowWeeklyTop10Modal === 'function') fetchAndShowWeeklyTop10Modal(true);" title="랭킹보드"></button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-ranking" id="btnCareerRanking" onclick="if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();" title="랭킹보드"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-dashboard" id="btnCareerDashboard" onclick="if (typeof showScreen === 'function') { showScreen('performanceDashboardScreen'); }" title="대시보드"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="라이딩 일지"></button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }" title="사용자 정보"></button>
