@@ -2794,7 +2794,7 @@ function getYearRangeSeoul(year) {
   return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
 }
 
-/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 30일 (YYYY-MM-DD, 시작~끝 각 30일 구간 집계와 동일) */
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 30일 (YYYY-MM-DD). 월간 랭킹·rolling30 동일. 달력 월 리셋 없음. */
 function getRolling30DaysRangeSeoul() {
   const now = new Date();
   const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -2802,6 +2802,20 @@ function getRolling30DaysRangeSeoul() {
   const today = new Date(y, m - 1, d);
   const start = new Date(today);
   start.setDate(today.getDate() - 29);
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  return { startStr, endStr };
+}
+
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 365일 (YYYY-MM-DD). 명예의 전당(연간 탭) 피크 집계용. */
+function getRolling365DaysRangeSeoul() {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const today = new Date(y, m - 1, d);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 364);
   const pad = (n) => String(n).padStart(2, "0");
   const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
   const endStr = `${y}-${pad(m)}-${pad(d)}`;
@@ -3257,10 +3271,10 @@ exports.getPeakPowerRanking = onRequest(
 
     let startStr, endStr;
     if (period === "yearly") {
-      const r = getYearRangeSeoul(year);
+      const r = getRolling365DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
-    } else if (period === "rolling30") {
+    } else if (period === "rolling30" || period === "monthly") {
       const r = getRolling30DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
@@ -3312,7 +3326,7 @@ exports.getPeakPowerRanking = onRequest(
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
     let cohortAvgHrBpm = null;
-    if (period === "rolling30" && DURATION_HR_FIELDS[durationType]) {
+    if ((period === "rolling30" || period === "monthly") && DURATION_HR_FIELDS[durationType]) {
       cohortAvgHrBpm = await getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, gender);
     }
     await cacheRef.set({
@@ -3382,11 +3396,11 @@ exports.getOvertakeAnalysis = onRequest(
     const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
     let startStr, endStr;
     if (period === "yearly") {
-      const r = getYearRangeSeoul(year);
+      const r = getRolling365DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
     } else {
-      const r = getMonthRangeSeoul(year, month);
+      const r = getRolling30DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
     }
