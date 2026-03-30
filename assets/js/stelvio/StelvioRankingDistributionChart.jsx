@@ -297,12 +297,9 @@
             {catTitle} · {durLabel}
           </span>
         </div>
-        <p className="text-[11px] text-slate-500 mb-2">
-          구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.
-        </p>
         <div className="h-[min(240px,52vw)] w-full min-h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartRows} margin={{ top: 42, right: 8, left: 0, bottom: 4 }}>
+            <AreaChart data={chartRows} margin={{ top: 42, right: 8, left: 0, bottom: 8 }}>
               <defs>
                 <linearGradient id={gid + '-area'} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={ACCENT_START} stopOpacity={0.45} />
@@ -364,6 +361,9 @@
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        <p className="text-[11px] text-slate-500 text-center leading-snug mt-1.5 px-1">
+          구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.
+        </p>
       </div>
     );
   }
