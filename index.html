@@ -1398,7 +1398,13 @@
       padding-bottom: 0;
     }
     #trainingJournalScreen #monthly-analysis-dashboard-root {
+      padding: 0;
       padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+      margin-bottom: 16px;
+      background: transparent;
+      box-shadow: none;
+      border-radius: 0;
+      max-width: 100%;
     }
     /* 차트 펼침 시: 펼치기 버튼과 차트 사이 간격 최소화 */
     #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
@@ -5090,7 +5096,7 @@
     <div id="journal-react-root" style="display: none; margin-top: 0;"></div>
     
     <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
-    <div id="monthly-analysis-dashboard-root" class="card monthly-analysis-dashboard-wrapper" style="margin-top: 16px;"></div>
+    <div id="monthly-analysis-dashboard-root" style="margin-top: 16px; width: 100%; box-sizing: border-box;"></div>
   </div>
 
   <!-- Strava 동기화 모달 (grade=1 관리자용, STELVIO 디자인): MMP 수집만, 2개 버튼 -->
@@ -10975,20 +10981,20 @@
 
         return (
           <div
-            className="monthly-analysis-dashboard bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm"
+            className="monthly-analysis-dashboard w-full max-w-full bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm box-border"
             style={{
               opacity: mounted ? 1 : 0,
               transform: mounted ? 'translateY(0)' : 'translateY(8px)',
               transition: 'opacity 0.35s ease-out, transform 0.35s ease-out'
             }}
           >
-            <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+            <div className="px-5 pt-5 pb-2 border-b border-gray-100 sm:px-6">
               <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
                 <img src="assets/img/data-analytics.png" alt="" style={{ height: '1em', width: 'auto', display: 'inline-block' }} />
                 {titleText}
               </h3>
             </div>
-            <div className="p-4">
+            <div className="px-5 py-5 sm:px-6">
               {isEmpty ? (
                 <div className="py-8 text-center text-gray-500 text-sm">
                   이 달에 훈련 기록이 없습니다. 달력에서 다른 달을 선택해 보세요.
