@@ -4034,6 +4034,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-ranking-content {
   transition: opacity 0.2s;
 }
+#stelvioRankingScreen .stelvio-distribution-chart-root {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 2px 12px;
+}
 .stelvio-category-card {
   margin-bottom: 16px;
   border: 2px solid rgba(102, 126, 234, 0.25);
