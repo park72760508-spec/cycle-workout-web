@@ -9,6 +9,12 @@
   if (!ReactObj) return;
 
   var useMemo = ReactObj.useMemo;
+  var useRef = ReactObj.useRef;
+  var useState = ReactObj.useState;
+  var useLayoutEffect = ReactObj.useLayoutEffect || ReactObj.useEffect;
+
+  var BADGE_HALF_W = 52;
+  var BADGE_EDGE_PAD = 6;
 
   var BRONZE = '#b87333';
   var BRONZE_MUTED = 'rgba(184, 115, 51, 0.35)';
@@ -122,6 +128,32 @@
 
     var isTss = duration === 'tss';
     var durLabel = isTss ? '주간 TSS' : STELVIO_DURATION_LABELS[duration] || duration;
+
+    var chartWrapRef = useRef(null);
+    var _cw = useState(0);
+    var chartContainerW = _cw[0];
+    var setChartContainerW = _cw[1];
+    useLayoutEffect(
+      function () {
+        var el = chartWrapRef.current;
+        if (!el) return;
+        function measure() {
+          try {
+            var r = el.getBoundingClientRect();
+            if (r && r.width) setChartContainerW(Math.max(0, Math.floor(r.width)));
+          } catch (e) {}
+        }
+        measure();
+        var ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+        if (ro) ro.observe(el);
+        window.addEventListener('resize', measure);
+        return function () {
+          if (ro) ro.disconnect();
+          window.removeEventListener('resize', measure);
+        };
+      },
+      []
+    );
 
     var cohort = useMemo(
       function () {
@@ -242,26 +274,46 @@
     function MeBadge(lprops) {
       var viewBox = lprops.viewBox;
       if (!viewBox) return null;
-      var x = viewBox.x;
+      var lineX = viewBox.x;
+      var half = BADGE_HALF_W;
+      var edge = BADGE_EDGE_PAD;
+      var cx = lineX;
+      var pv = lprops.parentViewBox;
+      var areaLeft;
+      var areaW;
+      if (pv && typeof pv.width === 'number' && pv.width > 0 && typeof pv.x === 'number') {
+        areaLeft = pv.x;
+        areaW = pv.width;
+      } else {
+        var yAxisW = 28;
+        var marginR = 8;
+        areaLeft = yAxisW;
+        areaW = Math.max(0, chartContainerW - yAxisW - marginR);
+      }
+      var minCenter = areaLeft + half + edge;
+      var maxCenter = areaLeft + areaW - half - edge;
+      if (areaW > 0 && maxCenter > minCenter) {
+        cx = Math.min(maxCenter, Math.max(minCenter, lineX));
+      }
       return (
         <g>
           <rect
-            x={x - 52}
+            x={cx - half}
             y={6}
             rx="10"
             ry="10"
-            width="104"
+            width={half * 2}
             height="36"
             fill="white"
             stroke={REF_LINE}
             strokeWidth="1.5"
             filter="url(#stelvio-dist-badge-shadow)"
           />
-          <text x={x} y={22} textAnchor="middle" fill={REF_LINE} fontSize="10" fontWeight="700">
+          <text x={cx} y={22} textAnchor="middle" fill={REF_LINE} fontSize="10" fontWeight="700">
             {badgeMain}
           </text>
           {badgeSub ? (
-            <text x={x} y={34} textAnchor="middle" fill="#64748b" fontSize="9">
+            <text x={cx} y={34} textAnchor="middle" fill="#64748b" fontSize="9">
               {badgeSub.length > 22 ? badgeSub.slice(0, 20) + '…' : badgeSub}
             </text>
           ) : null}
@@ -297,7 +349,7 @@
             {catTitle} · {durLabel}
           </span>
         </div>
-        <div className="h-[min(240px,52vw)] w-full min-h-[200px]">
+        <div ref={chartWrapRef} className="h-[min(240px,52vw)] w-full min-h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartRows} margin={{ top: 42, right: 8, left: 0, bottom: 8 }}>
               <defs>
