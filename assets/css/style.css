@@ -3664,6 +3664,10 @@ body:has(#trainingDetailModal:not(.hidden)) {
   transition: all 0.2s;
   white-space: nowrap;
 }
+/* 랭킹 보드 필터 바: 추월하기 버튼만 숨김(클라우드 함수·모달 로직 유지, 재표시 시 아래 블록 삭제) */
+#stelvioRankingScreen #stelvioOvertakeBtn {
+  display: none !important;
+}
 .stelvio-orange-btn {
   background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%) !important;
   color: #fff !important;
