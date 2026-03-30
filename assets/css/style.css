@@ -1206,7 +1206,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 /* 차트 영역: 펼침 시 최소 여백만 유지 (차트가 버튼 바로 아래 이어짐) */
 #trainingJournalScreen #monthly-analysis-dashboard-root {
+  padding: 0;
   padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  margin-bottom: 16px;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
   margin-top: 8px;
