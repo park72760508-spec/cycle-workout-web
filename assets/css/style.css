@@ -3832,40 +3832,41 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 12px;
   flex-wrap: wrap;
 }
-.stelvio-period-dropdown,
-.stelvio-gender-dropdown,
-.stelvio-category-dropdown {
+#stelvioRankingScreen .stelvio-period-dropdown,
+#stelvioRankingScreen .stelvio-gender-dropdown,
+#stelvioRankingScreen .stelvio-category-dropdown {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 8px 14px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1.5px solid #7c3aed;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
   min-width: 70px;
 }
-.stelvio-category-dropdown {
+#stelvioRankingScreen .stelvio-category-dropdown {
   min-width: 108px;
 }
-.stelvio-dropdown-caption {
+#stelvioRankingScreen .stelvio-dropdown-caption {
   font-size: 0.72rem;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 700;
+  color: #7c3aed;
   margin-right: 6px;
   flex-shrink: 0;
   line-height: 1.2;
 }
-.stelvio-dropdown-label {
+#stelvioRankingScreen .stelvio-dropdown-label {
   font-size: 0.9rem;
-  font-weight: 600;
-  color: #374151;
+  font-weight: 700;
+  color: #7c3aed;
   margin-right: 2px;
 }
-.stelvio-dropdown-chevron {
+#stelvioRankingScreen .stelvio-dropdown-chevron {
   font-size: 0.75em;
-  color: #6b7280;
+  color: #7c3aed;
 }
-.stelvio-dropdown-select {
+#stelvioRankingScreen .stelvio-dropdown-select {
   position: absolute;
   left: 0;
   top: 0;
