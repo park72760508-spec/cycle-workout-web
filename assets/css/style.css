@@ -3706,7 +3706,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 600;
   color: #374151;
 }
-#stelvioRankingBoardModal .stelvio-overtake-spinner.weekly-top10-spinner {
+#stelvioRankingScreen .stelvio-overtake-spinner.weekly-top10-spinner {
   border-top-color: #00d4aa;
   border-right-color: #00a88a;
   border-bottom-color: #00d4aa;
@@ -4190,27 +4190,27 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 
 /* STELVIO 랭킹 보드: 버튼만 STELVIO 스타일, 순위/카드/배너 등 나머지는 원래 스타일 */
-#stelvioRankingBoardModal .stelvio-motivation-banner {
+#stelvioRankingScreen .stelvio-motivation-banner {
   background: #f9fafb;
   border: 2px solid #e5e7eb;
   box-shadow: none;
 }
-#stelvioRankingBoardModal .stelvio-ranking-spinner {
+#stelvioRankingScreen .stelvio-ranking-spinner {
   border-top-color: #00d4aa;
   border-right-color: #00a88a;
 }
-#stelvioRankingBoardModal .stelvio-category-card {
+#stelvioRankingScreen .stelvio-category-card {
   border: 2px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
-#stelvioRankingBoardModal .stelvio-category-header {
+#stelvioRankingScreen .stelvio-category-header {
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
 }
-#stelvioRankingBoardModal .stelvio-category-header-unit {
+#stelvioRankingScreen .stelvio-category-header-unit {
   color: #ff6b35;
 }
-#stelvioRankingBoardModal .stelvio-rank-row.stelvio-rank-current {
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-current {
   background: linear-gradient(90deg, rgba(255, 107, 53, 0.12) 0%, transparent 100%);
 }
 
@@ -4226,15 +4226,31 @@ tr.stelvio-dashboard-current-grade td:last-child {
   border-top-right-radius: 8px;
   border-bottom-right-radius: 8px;
 }
-#stelvioRankingBoardModal .stelvio-rank-wkg {
+#stelvioRankingScreen .stelvio-rank-wkg {
   color: #ff6b35;
 }
 
 /* STELVIO 랭킹 보드: 상단 끝에서 스크롤 Lock 방지 (모바일/터치) */
-#stelvioRankingBoardModal .stelvio-ranking-modal-content {
+/* STELVIO 랭킹 보드 전체 화면: 헤더 + 스크롤 본문 */
+#stelvioRankingScreen.stelvio-ranking-screen-root {
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #fff;
+}
+#stelvioRankingScreen .stelvio-ranking-screen-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+#stelvioRankingScreen .stelvio-ranking-modal-content {
   touch-action: pan-y !important;
   overscroll-behavior-y: contain !important;
   -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
 }
 
 /* STELVIO 랭킹 보드: 맨 위로 가기 플로팅 버튼 */
