@@ -3829,7 +3829,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-wrap: wrap;
 }
 .stelvio-period-dropdown,
-.stelvio-gender-dropdown {
+.stelvio-gender-dropdown,
+.stelvio-category-dropdown {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -3838,6 +3839,17 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border-radius: 8px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   min-width: 70px;
+}
+.stelvio-category-dropdown {
+  min-width: 108px;
+}
+.stelvio-dropdown-caption {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-right: 6px;
+  flex-shrink: 0;
+  line-height: 1.2;
 }
 .stelvio-dropdown-label {
   font-size: 0.9rem;
@@ -4057,6 +4069,50 @@ body:has(#trainingDetailModal:not(.hidden)) {
   align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid #f3f4f6;
+}
+/* 랭킹 본문: 대시보드 AI 컨디션 코멘트와 동일 톤(text-sm/text-gray-700), 행 높이 최소화 */
+#stelvioRankingScreen .stelvio-category-body {
+  padding: 4px 10px 6px;
+}
+#stelvioRankingScreen .stelvio-rank-row {
+  padding: 3px 0;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-current {
+  margin: 1px -4px;
+  padding: 3px 4px;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-my-supremo {
+  margin-top: 4px !important;
+  padding-top: 6px !important;
+}
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-pos,
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name,
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name-text,
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-wkg {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #374151;
+  font-weight: 400;
+}
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-name {
+  font-weight: 400;
+}
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-pos {
+  font-weight: 500;
+  min-width: 2em;
+  margin-right: 6px;
+}
+#stelvioRankingScreen .stelvio-rank-row .stelvio-rank-wkg {
+  font-weight: 500;
+}
+#stelvioRankingScreen .stelvio-rank-crown {
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+}
+#stelvioRankingScreen .stelvio-rank-crown img {
+  width: 18px;
+  height: 18px;
 }
 .stelvio-rank-row:last-child {
   border-bottom: none;
