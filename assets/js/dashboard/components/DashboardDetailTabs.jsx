@@ -25,10 +25,10 @@
     { id: 'tendency', label: '나의 성향' },
     { id: 'training', label: '최근 훈련' },
     { id: 'growth', label: '성장 추이' },
-    { id: 'wkgGuide', label: '나의 라이딩 지표' }
+    { id: 'wkgGuide', label: '라이딩 지표' }
   ];
 
-  /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「나의 라이딩 지표」탭 상단 */
+  /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「라이딩 지표」탭 상단 */
   function RidingMetricsZoneTables(props) {
     var userProfile = props.userProfile;
     var stats = props.stats || {};
@@ -372,7 +372,7 @@
       React.createElement(
         'div',
         {
-          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-1 overflow-x-auto scrollbar-hide',
+          className: 'sticky top-0 z-10 bg-gray-50 -mx-4 px-4 pb-3 -mt-1 flex gap-2 overflow-x-auto scrollbar-hide items-center',
           style: { scrollbarWidth: 'none', msOverflowStyle: 'none' }
         },
         TABS.map(function(tab, i) {
@@ -397,12 +397,11 @@
                   }
                 }, 50);
               },
-              className: 'flex-shrink-0 px-5 py-3.5 text-sm font-semibold transition-all duration-200 border-b-2 -mb-0.5 ' + (
-                isActive
-                  ? 'border-[#667eea]'
-                  : 'text-gray-500 hover:text-gray-700 border-transparent'
-              ),
-              style: isActive ? { color: '#667eea' } : {}
+              className:
+                'flex-shrink-0 px-4 py-2.5 text-sm transition-all duration-200 rounded-[10px] border-[1.5px] ' +
+                (isActive
+                  ? 'font-bold bg-white text-[#7c3aed] border-[#7c3aed] shadow-[0_2px_8px_rgba(124,58,237,0.14)]'
+                  : 'font-semibold text-gray-500 border-transparent hover:text-gray-700 hover:bg-white/80')
             },
             tab.label
           );
