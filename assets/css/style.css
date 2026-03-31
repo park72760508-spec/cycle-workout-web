@@ -241,8 +241,9 @@ body:has(#authScreen.active) {
 }
 
 /* 베이스캠프 관련 화면 활성 시: html/body 배경을 그라데이션으로 — 위로 스크롤 시 하단 흰색 영역 노출 방지 */
-/* basecampScreen, deviceSettingScreen, userManualScreen, myCareerScreen, trainingRoomScreen, playerListScreen, bluetoothPlayerListScreen */
+/* basecampScreen, openRidingRoomScreen, deviceSettingScreen, userManualScreen, myCareerScreen, trainingRoomScreen, playerListScreen, bluetoothPlayerListScreen */
 html:has(#basecampScreen.active),
+html:has(#openRidingRoomScreen.active),
 html:has(#deviceSettingScreen.active),
 html:has(#userManualScreen.active),
 html:has(#myCareerScreen.active),
@@ -250,6 +251,7 @@ html:has(#trainingRoomScreen.active),
 html:has(#playerListScreen.active),
 html:has(#bluetoothPlayerListScreen.active),
 body:has(#basecampScreen.active),
+body:has(#openRidingRoomScreen.active),
 body:has(#deviceSettingScreen.active),
 body:has(#userManualScreen.active),
 body:has(#myCareerScreen.active),
@@ -837,15 +839,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: basecamp-device-section 좌우 5% 여백 유지, 4개 버튼 90% 비율 적용, 간격 3.75px 유지 */
+/* Choose Your Path: 2열 × 3행(6칸), 세로 비율 2:3 */
 #basecampScreen .connection-device-section.basecamp-device-section .grid-2.mb-15 {
   --basecamp-cell: calc((100% - 3.75px) / 2);
   width: 90% !important;
   max-width: 90% !important;
-  aspect-ratio: 1 !important;
+  aspect-ratio: 2 / 3 !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
-  grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(3, var(--basecamp-cell)) !important;
   gap: 3.75px !important;
   margin: 0 5% !important;
   box-sizing: border-box !important;
@@ -864,7 +866,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /* MY CAREER 버튼 = DEVICE SETTINGS 버튼과 동일한 크기·반응형 적용 (Choose Your Path) */
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-career,
-#basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual {
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual,
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-riding-room {
   width: 100% !important;
   height: 100% !important;
   min-height: 0 !important;
@@ -872,6 +875,55 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   max-height: 100% !important;
   aspect-ratio: 1 !important;
   box-sizing: border-box !important;
+}
+
+/* 라이딩방 타일(RIDING.png) · 우측 공란(STELVIO AI 로고) */
+#basecampScreen .btn-device.basecamp-btn-riding-room,
+#basecampScreen .basecamp-btn-riding-room {
+  background-image: url('https://stelvio.ai.kr/assets/img/RIDING.png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 88% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+#basecampScreen .btn-device.basecamp-btn-riding-room::before,
+#basecampScreen .basecamp-btn-riding-room::before {
+  background: rgba(135, 206, 235, 0.3) !important;
+}
+#basecampScreen .btn-device.basecamp-btn-riding-room span,
+#basecampScreen .basecamp-btn-riding-room span {
+  display: none !important;
+}
+
+#basecampScreen .connection-device-section .grid-2 .basecamp-placeholder-tile {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
+  border: 2px solid rgba(135, 206, 235, 0.35) !important;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden;
+  pointer-events: none;
+}
+#basecampScreen .basecamp-placeholder-tile .basecamp-placeholder-tile-img {
+  width: 92% !important;
+  height: auto !important;
+  max-height: 92% !important;
+  object-fit: contain;
+  opacity: 0.92;
+  display: block;
+}
+
+/* 라이딩방 초기 화면 히어로 이미지 */
+.open-riding-room-body .open-riding-room-hero-img {
+  max-width: min(280px, 72vw);
+  height: auto;
+  display: block;
+  margin: 0 auto;
 }
 
 /* Choose Your Path: authBar(Welcome 사용자명·로그아웃 박스) = 상단 2열 버튼 그리드와 동일한 폭(90%, 좌우 5%) */
