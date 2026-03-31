@@ -883,12 +883,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* 라이딩방 타일(RIDING.png) — 나의 기록(.basecamp-btn-career)과 동일 배경 비율 90% */
+/* 라이딩방 타일(RIDING.png) — 삽입 이미지 25% 비율 */
 #basecampScreen .btn-device.basecamp-btn-riding-room,
 #basecampScreen .basecamp-btn-riding-room {
   background-image: url('https://stelvio.ai.kr/assets/img/RIDING.png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 90% !important;
+  background-size: 25% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
