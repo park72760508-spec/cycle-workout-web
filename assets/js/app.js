@@ -3203,6 +3203,26 @@ if (!window.showScreen) {
           return;
         }
       }
+      if (id === 'openRidingRoomScreen') {
+        var _fbAuth =
+          (window.auth && window.auth.currentUser) ||
+          (window.authV9 && window.authV9.currentUser) ||
+          window.currentUser;
+        var _fbOk = _fbAuth != null;
+        var _phoneOk = window.isPhoneAuthenticated === true || typeof isPhoneAuthenticated !== 'undefined' && isPhoneAuthenticated;
+        if (_fbOk || _phoneOk) {
+          var _gOr =
+            typeof getLoginUserGrade === 'function'
+              ? String(getLoginUserGrade())
+              : typeof getViewerGrade === 'function'
+                ? String(getViewerGrade())
+                : '';
+          if (String(_gOr).trim() === '2' || Number(_gOr) === 2) {
+            if (typeof showOpenRidingGrade2NoticeModal === 'function') showOpenRidingGrade2NoticeModal();
+            return;
+          }
+        }
+      }
       // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 다른 화면으로 이동할 때)
       if (!skipHistory) {
         // 현재 활성화된 화면 찾기 (active 클래스 또는 display: block인 화면)
@@ -6602,6 +6622,21 @@ window.showScreen = function(screenId) {
         : String(_ag).trim() === '1' || Number(_ag) === 1;
     if (!_adminOk) {
       if (typeof showToast === 'function') showToast('관리자만 이용할 수 있습니다.');
+      return;
+    }
+  }
+
+  if (screenId === 'openRidingRoomScreen' && isAuthenticated) {
+    var _gOrMain =
+      typeof getLoginUserGrade === 'function'
+        ? String(getLoginUserGrade())
+        : typeof getViewerGrade === 'function'
+          ? String(getViewerGrade())
+          : '';
+    if (String(_gOrMain).trim() === '2' || Number(_gOrMain) === 2) {
+      if (typeof showOpenRidingGrade2NoticeModal === 'function') {
+        showOpenRidingGrade2NoticeModal();
+      }
       return;
     }
   }
@@ -13546,6 +13581,25 @@ function closeGeminiApiNotRegisteredModal() {
   }
 }
 
+/** 오픈 라이딩방 — 등급 2 사용자 안내 (STELVIO 스타일 팝업) */
+function showOpenRidingGrade2NoticeModal() {
+  const modal = document.getElementById('openRidingGrade2NoticeModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeOpenRidingGrade2NoticeModal() {
+  const modal = document.getElementById('openRidingGrade2NoticeModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  document.body.style.overflow = '';
+}
+
 function openGeminiApiSettingsFromModal() {
   closeGeminiApiNotRegisteredModal();
   if (typeof openSettingsModal === 'function') {
@@ -13562,6 +13616,8 @@ function openGeminiApiSettingsFromModal() {
 
 window.showGeminiApiNotRegisteredModal = showGeminiApiNotRegisteredModal;
 window.closeGeminiApiNotRegisteredModal = closeGeminiApiNotRegisteredModal;
+window.showOpenRidingGrade2NoticeModal = showOpenRidingGrade2NoticeModal;
+window.closeOpenRidingGrade2NoticeModal = closeOpenRidingGrade2NoticeModal;
 window.openGeminiApiSettingsFromModal = openGeminiApiSettingsFromModal;
 
 // Privacy Policy 모달 관련 함수
