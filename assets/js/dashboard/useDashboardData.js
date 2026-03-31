@@ -315,15 +315,19 @@
             return db.localeCompare(da);
           });
 
+          var logsDeduped = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
+            ? window.dedupeTrainingLogsByDateStravaFirst(logs)
+            : logs;
+
           if (isMounted) {
-            setRecentLogs(logs);
+            setRecentLogs(logsDeduped);
             setLogsLoaded(true);
           }
 
           var weeklyStart = new Date(today);
           weeklyStart.setDate(today.getDate() - 6);
           var weekStartStr = weeklyStart.getFullYear() + '-' + pad2(weeklyStart.getMonth() + 1) + '-' + pad2(weeklyStart.getDate());
-          var logsInWeek = logs.filter(function(log) {
+          var logsInWeek = logsDeduped.filter(function(log) {
             var ds = parseDate(log.date);
             return ds && ds >= weekStartStr && ds <= todayStr;
           });
@@ -368,11 +372,15 @@
           function emptyGrowthDay() {
             return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
           }
-          var byDateGrowth = {};
-          raw.filter(function(log) {
+          var rawSixMonthsForGrowth = raw.filter(function(log) {
             var ds = parseDate(log.date);
             return ds && ds >= sixMonthsStr && ds <= todayStr;
-          }).forEach(function(log) {
+          });
+          var logsForGrowth = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
+            ? window.dedupeTrainingLogsByDateStravaFirst(rawSixMonthsForGrowth)
+            : rawSixMonthsForGrowth;
+          var byDateGrowth = {};
+          logsForGrowth.forEach(function(log) {
             var ds = parseDate(log.date);
             if (!ds) return;
             if (!byDateGrowth[ds]) byDateGrowth[ds] = emptyGrowthDay();
@@ -427,7 +435,7 @@
           if (isMounted) setGrowthTrendData(growthRows);
 
           var byDateChart = {};
-          logs.forEach(function(log) {
+          logsDeduped.forEach(function(log) {
             var ds = parseDate(log.date);
             if (!ds || ds < sixtyDaysStr || ds > todayStr) return;
             if (!byDateChart[ds]) byDateChart[ds] = { tss: 0 };
@@ -532,6 +540,9 @@
             var ds = parseDate(log.date);
             return ds && ds >= yearStart && ds <= todayStr;
           });
+          if (typeof window.dedupeTrainingLogsByDateStravaFirst === 'function') {
+            logsYear = window.dedupeTrainingLogsByDateStravaFirst(logsYear);
+          }
           var prConfig = [
             { field: 'max_watts', label: 'Max' },
             { field: 'max_1min_watts', label: '1분' },
