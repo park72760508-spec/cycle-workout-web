@@ -3833,12 +3833,28 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-wrap: nowrap;
   padding-bottom: 4px;
 }
+.stelvio-filter-bar-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 0;
+}
+.stelvio-filter-bar-wrap::-webkit-scrollbar {
+  height: 4px;
+}
+.stelvio-filter-bar-wrap::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
 .stelvio-filter-bar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  width: max-content;
+  min-width: 100%;
+  padding-bottom: 4px;
+  box-sizing: border-box;
 }
 #stelvioRankingScreen .stelvio-period-dropdown,
 #stelvioRankingScreen .stelvio-gender-dropdown,
@@ -3846,6 +3862,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   padding: 8px 14px;
   background: #fff;
   border: 1.5px solid #7c3aed;
