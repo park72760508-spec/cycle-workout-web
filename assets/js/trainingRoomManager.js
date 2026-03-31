@@ -618,7 +618,10 @@ async function checkLoginAndRetry() {
   try {
     if (user && typeof user.getIdToken === 'function') {
       await user.getIdToken(true);
-      window.location.reload();
+      reEnableButton();
+      if (typeof loadTrainingRooms === 'function') {
+        await loadTrainingRooms();
+      }
       return;
     }
   } catch (e) {
@@ -962,8 +965,10 @@ async function trainingRoomRetryWithReauth() {
     await new Promise(r => setTimeout(r, 1000));
     if (typeof loadTrainingRooms === 'function') await loadTrainingRooms();
   } catch (e) {
-    console.warn('[Training Room] Retry with reauth failed, reloading:', e);
-    window.location.reload();
+    console.warn('[Training Room] Retry with reauth failed, 소프트 재시도:', e);
+    if (typeof loadTrainingRooms === 'function') {
+      await loadTrainingRooms();
+    }
   }
 }
 window.trainingRoomRetryWithReauth = trainingRoomRetryWithReauth;

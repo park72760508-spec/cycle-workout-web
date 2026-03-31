@@ -6769,6 +6769,10 @@ function initializeCurrentScreen(screenId) {
       break;
       
     case 'scheduleListScreen':
+      // 훈련일지와 동류: 이전 세션에서 로딩 플래그가 남은 경우 재진입 시 초기화
+      if (typeof window.resetTrainingSchedulesLoadGuard === 'function') {
+        window.resetTrainingSchedulesLoadGuard();
+      }
       // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
       // 함수가 로드될 때까지 재시도
       let retryCount = 0;

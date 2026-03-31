@@ -70,6 +70,31 @@ function animateNumber(element, start, end, duration) {
 
 // 로딩 중 플래그 (중복 호출 방지)
 let isLoadingTrainingSchedules = false;
+/** 일지 화면과 동일한 맥락: 네트워크 정체 시 플래그가 영구 고정되는 것 방지 */
+let __scheduleLoadWatchdogId = null;
+const SCHEDULE_LIST_LOAD_WATCHDOG_MS = 90000;
+const SCHEDULE_LIST_FETCH_TIMEOUT_MS = 60000;
+
+function resetTrainingSchedulesLoadGuard() {
+  isLoadingTrainingSchedules = false;
+  if (__scheduleLoadWatchdogId) {
+    clearTimeout(__scheduleLoadWatchdogId);
+    __scheduleLoadWatchdogId = null;
+  }
+}
+
+/**
+ * fetch + AbortController 기반 타임아웃 (무한 pending 방지)
+ */
+async function fetchWithTimeout(url, timeoutMs, fetchOptions) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, Object.assign({}, fetchOptions || {}, { signal: controller.signal }));
+  } finally {
+    clearTimeout(tid);
+  }
+}
 
 /**
  * 훈련 스케줄 목록 로드 (진행 표시 포함)
@@ -89,6 +114,14 @@ async function loadTrainingSchedules() {
   
   // 로딩 시작 플래그 설정
   isLoadingTrainingSchedules = true;
+  if (__scheduleLoadWatchdogId) clearTimeout(__scheduleLoadWatchdogId);
+  __scheduleLoadWatchdogId = setTimeout(function () {
+    __scheduleLoadWatchdogId = null;
+    if (isLoadingTrainingSchedules) {
+      console.warn('[Schedule] 워치독: isLoadingTrainingSchedules 강제 해제 (네트워크 정체·예외 누락 복구)');
+      isLoadingTrainingSchedules = false;
+    }
+  }, SCHEDULE_LIST_LOAD_WATCHDOG_MS);
   
   // grade 체크: grade=1 사용자만 "새 스케줄 만들기" 버튼 활성화
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
@@ -109,6 +142,10 @@ async function loadTrainingSchedules() {
   
   const listContainer = document.getElementById('scheduleList');
   if (!listContainer) {
+    if (__scheduleLoadWatchdogId) {
+      clearTimeout(__scheduleLoadWatchdogId);
+      __scheduleLoadWatchdogId = null;
+    }
     isLoadingTrainingSchedules = false;
     return;
   }
@@ -149,7 +186,15 @@ async function loadTrainingSchedules() {
     
     // 3단계: 응답 대기 중 (60%)
     updateLoadingProgress(progressContainer, 60, '서버 응답 대기 중...');
-    const response = await fetch(url);
+    let response;
+    try {
+      response = await fetchWithTimeout(url, SCHEDULE_LIST_FETCH_TIMEOUT_MS);
+    } catch (netErr) {
+      if (netErr && (netErr.name === 'AbortError' || String(netErr.message || '').indexOf('aborted') !== -1)) {
+        throw new Error('서버 응답 시간이 초과되었습니다. 네트워크를 확인한 뒤 다시 시도해주세요.');
+      }
+      throw netErr;
+    }
     
     // 4단계: 데이터 파싱 중 (80%)
     updateLoadingProgress(progressContainer, 80, '데이터 처리 중...');
@@ -217,7 +262,10 @@ async function loadTrainingSchedules() {
       </div>
     `;
   } finally {
-    // 로딩 완료 플래그 해제
+    if (__scheduleLoadWatchdogId) {
+      clearTimeout(__scheduleLoadWatchdogId);
+      __scheduleLoadWatchdogId = null;
+    }
     isLoadingTrainingSchedules = false;
   }
 }
@@ -2248,6 +2296,7 @@ async function showPasswordModal(scheduleTitle) {
 (function() {
   if (typeof window !== 'undefined') {
     window.loadTrainingSchedules = loadTrainingSchedules;
+    window.resetTrainingSchedulesLoadGuard = resetTrainingSchedulesLoadGuard;
     window.openScheduleDays = openScheduleDays;
     window.deleteTrainingSchedule = deleteTrainingSchedule;
     window.loadScheduleDays = loadScheduleDays;
