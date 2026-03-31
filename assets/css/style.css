@@ -883,14 +883,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* 라이딩방 타일(RIDING.png) — 삽입 이미지 25% 비율 */
+/* 라이딩방: 배경 이미지 없음 — 경로 그리드 셀 크기는 1·2열과 동일(.grid-2 .basecamp-btn-riding-room), 라벨만 표시 */
 #basecampScreen .btn-device.basecamp-btn-riding-room,
 #basecampScreen .basecamp-btn-riding-room {
-  background-image: url('https://stelvio.ai.kr/assets/img/RIDING.png') !important;
+  background-image: none !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 25% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
+  background-size: auto !important;
+  justify-content: center !important;
+  padding-bottom: 0 !important;
+  align-items: center !important;
 }
 #basecampScreen .btn-device.basecamp-btn-riding-room::before,
 #basecampScreen .basecamp-btn-riding-room::before {
@@ -898,9 +899,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 #basecampScreen .btn-device.basecamp-btn-riding-room span,
 #basecampScreen .basecamp-btn-riding-room span {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  margin-top: 0 !important;
+  text-align: center !important;
+  padding: 0 6px !important;
+  font-size: clamp(13px, 3.8vw, 16px) !important;
 }
 
 #basecampScreen .connection-device-section .grid-2 .basecamp-placeholder-tile {
