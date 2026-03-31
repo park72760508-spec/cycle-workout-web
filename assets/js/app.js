@@ -6592,10 +6592,12 @@ async function handleStrava6MonthSyncYes() {
   else if (typeof showScreen === 'function') showScreen('myCareerScreen');
 }
 
-/** 베이스캠프 라이딩방 행: 로그인 계정 등급 1·3일 때만 표시 (loadUsers·authBar 갱신 후 동기화) */
+/** 베이스캠프 3열(라이딩방+STELVIO): 등급 1·3일 때만 표시 — 1~2열과 동일 그리드·셀 크기 (loadUsers·authBar 갱신 후 동기화) */
 function refreshBasecampOpenRidingVisibility() {
-  var row = document.getElementById('basecampOpenRidingRow');
-  if (!row) return;
+  var grid = document.getElementById('basecampPathGrid');
+  var btn = document.getElementById('btnBasecampOpenRiding');
+  var ph = document.getElementById('basecampStelvioPlaceholder');
+  if (!grid || !btn || !ph) return;
   var g =
     typeof getLoginUserGrade === 'function'
       ? String(getLoginUserGrade())
@@ -6609,8 +6611,19 @@ function refreshBasecampOpenRidingVisibility() {
         String(g).trim() === '3' ||
         Number(g) === 1 ||
         Number(g) === 3;
-  row.style.display = ok ? 'block' : 'none';
-  row.setAttribute('aria-hidden', ok ? 'false' : 'true');
+  if (ok) {
+    grid.classList.add('has-open-riding-row');
+    btn.style.display = '';
+    ph.style.display = '';
+    btn.setAttribute('aria-hidden', 'false');
+    ph.setAttribute('aria-hidden', 'false');
+  } else {
+    grid.classList.remove('has-open-riding-row');
+    btn.style.display = 'none';
+    ph.style.display = 'none';
+    btn.setAttribute('aria-hidden', 'true');
+    ph.setAttribute('aria-hidden', 'true');
+  }
 }
 if (typeof window !== 'undefined') {
   window.refreshBasecampOpenRidingVisibility = refreshBasecampOpenRidingVisibility;
