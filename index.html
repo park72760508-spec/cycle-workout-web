@@ -2270,10 +2270,6 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="typeof openDeviceSettingsOrPrompt === 'function' ? openDeviceSettingsOrPrompt() : showScreen('deviceSettingScreen');">
                 <span>기기 설정</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-room" id="btnBasecampOpenRiding" aria-label="오픈 라이딩방" style="display: none;" tabindex="-1" onclick="if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');"><span>라이딩방</span></button>
-              <div id="basecampStelvioPlaceholder" class="basecamp-placeholder-tile" title="STELVIO" style="display: none;" aria-hidden="true">
-                <img class="basecamp-placeholder-tile-img" src="assets/img/STELVIO%20AI.png" alt="" onerror="this.onerror=null;this.src='https://stelvio.ai.kr/assets/img/STELVIO%20AI.png';" />
-              </div>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
             <div id="authBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
@@ -2281,14 +2277,14 @@
                 <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
                 <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
               </div>
-              <div id="authBarRight" style="display: none; align-items: center; justify-content: space-between; width: 100%;">
-                <div style="flex: 1;"></div>
-                <div id="authBarWelcome" style="flex: 0 0 auto; min-width: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: clamp(14px, 4vw, 17px); font-weight: 600; color: #0369a1; line-height: 1.4;"><span id="authBarWelcomeLine1" style="white-space: nowrap;">환영합니다.</span><span id="authBarWelcomeLine2" style="white-space: nowrap;">사용자명님</span></div>
-                <div style="flex: 1; display: flex; justify-content: flex-end;">
-                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
-                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
-                  </button>
-                </div>
+              <div id="authBarRight" style="display: none; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
+                <button type="button" class="auth-bar-riding-btn" id="btnAuthBarOpenRiding" onclick="if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="오픈 라이딩방" title="오픈 라이딩방">
+                  <img src="assets/img/riding.png" alt="" width="24" height="24" style="width: 24px; height: 24px; display: block; object-fit: contain;" onerror="var el=this;el._rideImgFb=(el._rideImgFb||0)+1;if(el._rideImgFb===1)el.src='assets/img/RIDING.png';else if(el._rideImgFb===2)el.src='https://stelvio.ai.kr/assets/img/riding.png';else el.onerror=null;" />
+                </button>
+                <div id="authBarWelcome" style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: clamp(14px, 4vw, 17px); font-weight: 600; color: #0369a1; line-height: 1.4;"><span id="authBarWelcomeLine1" style="white-space: nowrap;">환영합니다.</span><span id="authBarWelcomeLine2" style="white-space: nowrap;">사용자명님</span></div>
+                <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃" style="flex-shrink: 0;">
+                  <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                </button>
               </div>
             </div>
           </div>
@@ -11894,9 +11890,6 @@
         right.style.display = 'none';
         if (warning) { warning.style.display = 'inline'; warning.textContent = '로그인 시 워크아웃이 Realtime DB에 저장됩니다.'; }
       }
-      if (typeof window.refreshBasecampOpenRidingVisibility === 'function') {
-        try { window.refreshBasecampOpenRidingVisibility(); } catch (e) {}
-      }
     }
     
     window.handleLogin = handleLogin;
@@ -18200,28 +18193,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       window.showScreen = function(screenId) {
         console.log('[showScreen] 화면 전환 요청:', screenId);
 
-        if (screenId === 'openRidingRoomScreen') {
-          var _gRideIdx =
-            typeof getLoginUserGrade === 'function'
-              ? String(getLoginUserGrade())
-              : typeof getViewerGrade === 'function'
-                ? String(getViewerGrade())
-                : '2';
-          var _rideOkIdx =
-            typeof window.isStelvioOpenRidingRoomAdminGrade === 'function'
-              ? window.isStelvioOpenRidingRoomAdminGrade(_gRideIdx)
-              : String(_gRideIdx).trim() === '1' ||
-                String(_gRideIdx).trim() === '3' ||
-                Number(_gRideIdx) === 1 ||
-                Number(_gRideIdx) === 3;
-          if (!_rideOkIdx) {
-            if (typeof showToast === 'function') {
-              showToast('오픈 라이딩방은 등급 1·3 관리자만 이용할 수 있습니다.');
-            }
-            return;
-          }
-        }
-        
         // 주간 마일리지 TOP10: __basecampShownAfterAuth는 인증 완료 처리(로그인/회원가입 성공)에서만 true로 설정.
         // showScreen 래퍼에서는 설정하지 않음 → 초기 로딩 후 베이스캠프로 바로 갈 때 TOP10 미표시, 인증 후 베이스캠프 진입 시에만 1회 표시.
         
