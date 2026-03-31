@@ -79,6 +79,66 @@ const DEFAULT_FTP_W = 150;
 const DEFAULT_MAX_HR = 190;
 
 /**
+ * 결과 버퍼는 BLE/UI 갱신마다 append되어 초당 여러 샘플이 쌓일 수 있음.
+ * 존 시간·MMP·HR 피크는 1Hz를 가정하므로, timestamp가 있으면 초 단위로 병합한다.
+ * 각 정수 초에는 해당 구간의 마지막 샘플을 쓰고, 샘플이 없는 초는 직전 값을 유지한다.
+ *
+ * @param {Array<{t: string|Date, v: number}|number>} samples
+ * @param {number} durationSec - 훈련 기록 duration(초). 0이면 샘플 시계열 범위만큼만 생성
+ * @returns {number[]}
+ */
+function streamSamplesToOneHzSeconds(samples, durationSec) {
+  if (!samples || samples.length === 0) return [];
+  const dur = Math.max(0, Math.floor(Number(durationSec) || 0));
+  const pickV = (d) => Number(typeof d === 'object' && d != null && d.v !== undefined ? d.v : d) || 0;
+  const first = samples[0];
+  const hasTime = first && typeof first === 'object' && first !== null && first.t != null;
+
+  if (!hasTime) {
+    const vals = samples.map(pickV);
+    if (dur > 0 && vals.length > Math.ceil(dur * 1.2)) {
+      const out = [];
+      const n = vals.length;
+      for (let sec = 0; sec < dur; sec++) {
+        const idx = dur <= 1 ? 0 : Math.min(n - 1, Math.round((sec * (n - 1)) / (dur - 1)));
+        out.push(vals[idx]);
+      }
+      return out;
+    }
+    return vals;
+  }
+
+  const t0 = new Date(first.t).getTime();
+  if (Number.isNaN(t0)) return samples.map(pickV);
+
+  const lastInSec = new Map();
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i];
+    if (!s || s.t == null) continue;
+    const ms = new Date(s.t).getTime();
+    if (Number.isNaN(ms)) continue;
+    const secIdx = Math.floor((ms - t0) / 1000);
+    if (secIdx < 0) continue;
+    lastInSec.set(secIdx, Number(s.v) || 0);
+  }
+
+  let limit = dur;
+  if (limit <= 0) {
+    const keys = Array.from(lastInSec.keys());
+    limit = keys.length ? Math.max(...keys) + 1 : 0;
+  }
+  if (limit <= 0) return [];
+
+  const out = [];
+  let hold = 0;
+  for (let i = 0; i < limit; i++) {
+    if (lastInSec.has(i)) hold = lastInSec.get(i);
+    out.push(hold);
+  }
+  return out;
+}
+
+/**
  * Coggan 7-Zone: 파워(W) → 존 인덱스 (0=Coasting, 1~7)
  * Z0: 0W, Z1: <55%, Z2: 56-75%, Z3: 76-90%, Z4: 91-105%, Z5: 106-120%, Z6: 121-150%, Z7: >150%
  */
@@ -343,8 +403,9 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const currentExpiryDate = userData.expiry_date;
       
       // FTP Fallback: 프로필에 없으면 20분 MMP의 95% 또는 150W (TSS/존 계산에 사용)
+      // powerData는 BLE/UI마다 여러 번 append될 수 있음 → duration_sec 길이로 1Hz 정규화
       const rawWattsForFtp = trainingData.powerData && trainingData.powerData.length > 0
-        ? trainingData.powerData.map((d) => Number(d.v) || 0)
+        ? streamSamplesToOneHzSeconds(trainingData.powerData, durationSec)
         : [];
       const smoothedForFtp = rawWattsForFtp.length > 0 ? smoothPowerSpikes(rawWattsForFtp) : [];
       const effectiveFTP = currentFTP > 0 ? currentFTP : (
@@ -486,8 +547,12 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
           console.warn('[saveTrainingSession] yearly_peaks 조회 실패:', e.message);
         }
       }
-      if (!usedYearlyPeaks && trainingData.hrData && trainingData.hrData.length > 0) {
-        const fromStream = Math.max(...trainingData.hrData.map((d) => Number(d.v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM));
+      const hrOneHz = trainingData.hrData && trainingData.hrData.length > 0
+        ? streamSamplesToOneHzSeconds(trainingData.hrData, durationSec)
+        : [];
+
+      if (!usedYearlyPeaks && hrOneHz.length > 0) {
+        const fromStream = Math.max(...hrOneHz.filter((v) => v > 0 && v <= HR_MAX_BPM));
         if (fromStream > 0) maxHr = fromStream;
       }
       
@@ -497,8 +562,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       if (rawWattsForFtp.length > 0) {
         Object.assign(powerZones, calculateTimeInPowerZones(smoothedForFtp, effectiveFTP));
       }
-      if (trainingData.hrData && trainingData.hrData.length > 0) {
-        Object.assign(hrZones, calculateTimeInHRZones(trainingData.hrData, maxHr));
+      if (hrOneHz.length > 0) {
+        Object.assign(hrZones, calculateTimeInHRZones(hrOneHz, maxHr));
       }
       const timeInZones = { power: powerZones, hr: hrZones };
 
@@ -512,11 +577,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max40minWatts = wattsArray && wattsArray.length >= 2400 ? calculateMaxAveragePower(wattsArray, 2400) : null;
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
 
-      // 심박 피크 계산 (저장 시 1회만, 훈련 루프 영향 없음)
-      const hrValues = trainingData.hrData && trainingData.hrData.length > 0
-        ? trainingData.hrData.map((d) => Number(d.v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM)
-        : [];
-      const hrPeaks = hrValues.length > 0 ? calculateMaxHeartRatePeaks(hrValues) : null;
+      // 심박 피크 계산 (저장 시 1회만, 훈련 루프 영향 없음) — 1Hz 시계열 기준
+      const hrPeaks = hrOneHz.length > 0 ? calculateMaxHeartRatePeaks(hrOneHz) : null;
 
       const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
         ? Number(userData.weight ?? userData.weightKg)
