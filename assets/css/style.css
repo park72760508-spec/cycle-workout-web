@@ -839,15 +839,30 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 2열 × 3행(6칸), 세로 비율 2:3 */
-#basecampScreen .connection-device-section.basecamp-device-section .grid-2.mb-15 {
+/* Choose Your Path: 메인 2×2(정사각형 블록) */
+#basecampScreen .connection-device-section.basecamp-device-section .basecamp-main-path-grid {
   --basecamp-cell: calc((100% - 3.75px) / 2);
   width: 90% !important;
   max-width: 90% !important;
-  aspect-ratio: 2 / 3 !important;
+  aspect-ratio: 1 !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
-  grid-template-rows: repeat(3, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
+  gap: 3.75px !important;
+  margin: 0 5% !important;
+  box-sizing: border-box !important;
+  justify-content: center;
+}
+
+/* 등급 1·3 전용: 라이딩방 + STELVIO 플레이스홀더 1행 */
+#basecampScreen .connection-device-section.basecamp-device-section .basecamp-open-riding-grid {
+  --basecamp-cell: calc((100% - 3.75px) / 2);
+  width: 90% !important;
+  max-width: 90% !important;
+  aspect-ratio: 2 / 1 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: var(--basecamp-cell) !important;
   gap: 3.75px !important;
   margin: 0 5% !important;
   box-sizing: border-box !important;
@@ -877,12 +892,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* 라이딩방 타일(RIDING.png) · 우측 공란(STELVIO AI 로고) */
+/* 라이딩방 타일(RIDING.png) — 나의 기록(.basecamp-btn-career)과 동일 배경 비율 90% */
 #basecampScreen .btn-device.basecamp-btn-riding-room,
 #basecampScreen .basecamp-btn-riding-room {
   background-image: url('https://stelvio.ai.kr/assets/img/RIDING.png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 88% !important;
+  background-size: 90% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
@@ -893,6 +908,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #basecampScreen .btn-device.basecamp-btn-riding-room span,
 #basecampScreen .basecamp-btn-riding-room span {
   display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 #basecampScreen .connection-device-section .grid-2 .basecamp-placeholder-tile {
