@@ -6615,14 +6615,21 @@ function refreshBasecampOpenRidingVisibility() {
     grid.classList.add('has-open-riding-row');
     btn.style.display = '';
     ph.style.display = '';
-    btn.setAttribute('aria-hidden', 'false');
-    ph.setAttribute('aria-hidden', 'false');
+    btn.removeAttribute('aria-hidden');
+    ph.removeAttribute('aria-hidden');
+    btn.removeAttribute('tabindex');
   } else {
+    if (document.activeElement === btn) {
+      try {
+        btn.blur();
+      } catch (e) {}
+    }
     grid.classList.remove('has-open-riding-row');
     btn.style.display = 'none';
     ph.style.display = 'none';
-    btn.setAttribute('aria-hidden', 'true');
-    ph.setAttribute('aria-hidden', 'true');
+    btn.removeAttribute('aria-hidden');
+    ph.removeAttribute('aria-hidden');
+    btn.setAttribute('tabindex', '-1');
   }
 }
 if (typeof window !== 'undefined') {
