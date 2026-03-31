@@ -6791,6 +6791,13 @@ function initializeCurrentScreen(screenId) {
       break;
 
     case 'openRidingRoomScreen':
+      setTimeout(function () {
+        if (typeof window.initOpenRidingRoomReact === 'function') {
+          window.initOpenRidingRoomReact().catch(function (e) {
+            console.warn('[openRidingRoomScreen] init:', e);
+          });
+        }
+      }, 0);
       break;
 
     case 'connectionScreen':
