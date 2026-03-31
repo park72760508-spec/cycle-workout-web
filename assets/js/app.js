@@ -3203,28 +3203,6 @@ if (!window.showScreen) {
           return;
         }
       }
-      if (id === 'openRidingRoomScreen') {
-        var _gRideF =
-          typeof getLoginUserGrade === 'function'
-            ? String(getLoginUserGrade())
-            : typeof getViewerGrade === 'function'
-              ? String(getViewerGrade())
-              : '2';
-        var _rideOkF =
-          typeof window.isStelvioOpenRidingRoomAdminGrade === 'function'
-            ? window.isStelvioOpenRidingRoomAdminGrade(_gRideF)
-            : String(_gRideF).trim() === '1' ||
-              String(_gRideF).trim() === '3' ||
-              Number(_gRideF) === 1 ||
-              Number(_gRideF) === 3;
-        if (!_rideOkF) {
-          if (typeof showToast === 'function') {
-            showToast('오픈 라이딩방은 등급 1·3 관리자만 이용할 수 있습니다.');
-          }
-          return;
-        }
-      }
-      
       // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 다른 화면으로 이동할 때)
       if (!skipHistory) {
         // 현재 활성화된 화면 찾기 (active 클래스 또는 display: block인 화면)
@@ -6592,50 +6570,6 @@ async function handleStrava6MonthSyncYes() {
   else if (typeof showScreen === 'function') showScreen('myCareerScreen');
 }
 
-/** 베이스캠프 3열(라이딩방+STELVIO): 등급 1·3일 때만 표시 — 1~2열과 동일 그리드·셀 크기 (loadUsers·authBar 갱신 후 동기화) */
-function refreshBasecampOpenRidingVisibility() {
-  var grid = document.getElementById('basecampPathGrid');
-  var btn = document.getElementById('btnBasecampOpenRiding');
-  var ph = document.getElementById('basecampStelvioPlaceholder');
-  if (!grid || !btn || !ph) return;
-  var g =
-    typeof getLoginUserGrade === 'function'
-      ? String(getLoginUserGrade())
-      : typeof getViewerGrade === 'function'
-        ? String(getViewerGrade())
-        : '2';
-  var ok =
-    typeof window.isStelvioOpenRidingRoomAdminGrade === 'function'
-      ? window.isStelvioOpenRidingRoomAdminGrade(g)
-      : String(g).trim() === '1' ||
-        String(g).trim() === '3' ||
-        Number(g) === 1 ||
-        Number(g) === 3;
-  if (ok) {
-    grid.classList.add('has-open-riding-row');
-    btn.style.display = '';
-    ph.style.display = '';
-    btn.removeAttribute('aria-hidden');
-    ph.removeAttribute('aria-hidden');
-    btn.removeAttribute('tabindex');
-  } else {
-    if (document.activeElement === btn) {
-      try {
-        btn.blur();
-      } catch (e) {}
-    }
-    grid.classList.remove('has-open-riding-row');
-    btn.style.display = 'none';
-    ph.style.display = 'none';
-    btn.removeAttribute('aria-hidden');
-    ph.removeAttribute('aria-hidden');
-    btn.setAttribute('tabindex', '-1');
-  }
-}
-if (typeof window !== 'undefined') {
-  window.refreshBasecampOpenRidingVisibility = refreshBasecampOpenRidingVisibility;
-}
-
 window.showScreen = function(screenId) {
   console.log(`🔵 [Step 1] showScreen 함수 진입: '${screenId}'`);
   // TOP10 등 "인증 후에만 노출" 로직용: 리다이렉트 여부 플래그 (index.html 래퍼에서 사용)
@@ -6668,28 +6602,6 @@ window.showScreen = function(screenId) {
         : String(_ag).trim() === '1' || Number(_ag) === 1;
     if (!_adminOk) {
       if (typeof showToast === 'function') showToast('관리자만 이용할 수 있습니다.');
-      return;
-    }
-  }
-
-  if (screenId === 'openRidingRoomScreen') {
-    var _gRide =
-      typeof getLoginUserGrade === 'function'
-        ? String(getLoginUserGrade())
-        : typeof getViewerGrade === 'function'
-          ? String(getViewerGrade())
-          : '2';
-    var _rideOk =
-      typeof window.isStelvioOpenRidingRoomAdminGrade === 'function'
-        ? window.isStelvioOpenRidingRoomAdminGrade(_gRide)
-        : String(_gRide).trim() === '1' ||
-          String(_gRide).trim() === '3' ||
-          Number(_gRide) === 1 ||
-          Number(_gRide) === 3;
-    if (!_rideOk) {
-      if (typeof showToast === 'function') {
-        showToast('오픈 라이딩방은 등급 1·3 관리자만 이용할 수 있습니다.');
-      }
       return;
     }
   }
@@ -6790,11 +6702,6 @@ function initializeCurrentScreen(screenId) {
       // if (typeof window.checkFtpSuggestionAndShow === 'function') {
       //   setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
       // }
-      if (typeof window.refreshBasecampOpenRidingVisibility === 'function') {
-        try {
-          window.refreshBasecampOpenRidingVisibility();
-        } catch (e) {}
-      }
       break;
 
     case 'openRidingRoomScreen':

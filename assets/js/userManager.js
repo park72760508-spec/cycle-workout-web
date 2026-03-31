@@ -2768,11 +2768,6 @@ async function loadUsers() {
         window.refreshSettingsModalAdminExtras();
       } catch (_) {}
     }
-    if (typeof window.refreshBasecampOpenRidingVisibility === 'function') {
-      try {
-        window.refreshBasecampOpenRidingVisibility();
-      } catch (_) {}
-    }
     if (typeof window.syncGeminiApiRegistrationFromLocalStorage === 'function') {
       try {
         window.syncGeminiApiRegistrationFromLocalStorage();
