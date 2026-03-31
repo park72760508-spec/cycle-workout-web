@@ -1,15 +1,33 @@
 /**
  * 오픈 라이딩방 UI (메인 달력·설정 / 생성 폼 / 상세)
- * @requires React, Tailwind 또는 프로젝트 CSS에 맞게 클래스 조정
+ * @requires React, window.openRidingBoot(모듈)로 useOpenRiding·openRidingService 로드 후 type="text/babel" 로 본 파일 로드
  */
 /* global React */
 var useState = React.useState;
 var useMemo = React.useMemo;
 var useCallback = React.useCallback;
-import { useOpenRiding, useOpenRideDetail } from './useOpenRiding.js';
-import { createRide, uploadRideGpx } from './openRidingService.js';
-import { Timestamp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-import { KOREA_SIGUNGU_OPTIONS, RIDING_LEVEL_OPTIONS } from './koreaRegions.js';
+
+function getOpenRidingHooks() {
+  return {
+    useOpenRiding: window.useOpenRiding,
+    useOpenRideDetail: window.useOpenRideDetail
+  };
+}
+
+function getOpenRidingServiceFns() {
+  var svc = window.openRidingService || {};
+  return {
+    createRide: svc.createRide,
+    uploadRideGpx: svc.uploadRideGpx
+  };
+}
+
+function getKoreaRegionOptions() {
+  return {
+    KOREA_SIGUNGU_OPTIONS: window.KOREA_SIGUNGU_OPTIONS || [],
+    RIDING_LEVEL_OPTIONS: window.RIDING_LEVEL_OPTIONS || []
+  };
+}
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -27,12 +45,23 @@ export function OpenRidingCalendarMain(props) {
   var userLabel = props.userLabel || '라이더';
   var onOpenCreate = props.onOpenCreate || function () {};
   var onSelectRide = props.onSelectRide || function () {};
+  var compact = !!props.compact;
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
   var setViewMonth = _m[1];
 
-  var hook = useOpenRiding(firestore, userId || null, viewMonth);
+  var _hooks = getOpenRidingHooks();
+  var useOpenRidingFn = _hooks.useOpenRiding;
+  if (typeof useOpenRidingFn !== 'function') {
+    return (
+      <div className="p-4 text-center text-sm text-amber-800">
+        오픈 라이딩 모듈이 로드되지 않았습니다. 페이지를 새로고침해 주세요.
+      </div>
+    );
+  }
+
+  var hook = useOpenRidingFn(firestore, userId || null, viewMonth);
   var prefs = hook.prefs;
   var savePrefs = hook.savePrefs;
   var matchingDateKeys = hook.matchingDateKeys;
@@ -68,9 +97,15 @@ export function OpenRidingCalendarMain(props) {
     });
   }, [ridesMonth, selectedKey]);
 
+  var _koOpts = getKoreaRegionOptions();
+  var RIDING_LEVEL_OPTIONS = _koOpts.RIDING_LEVEL_OPTIONS;
+
   var _regionDraft = useState('');
   var regionDraft = _regionDraft[0];
   var setRegionDraft = _regionDraft[1];
+
+  var cellH = compact ? 'h-8' : 'h-10';
+  var emptyH = compact ? 'h-8' : 'h-10';
 
   function addRegion() {
     var t = regionDraft.trim();
@@ -98,8 +133,55 @@ export function OpenRidingCalendarMain(props) {
     savePrefs({ activeRegions: prefs.activeRegions, preferredLevels: next });
   }
 
+  function renderListSection() {
+    return (
+      <section className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
+        <h2 className="text-sm font-semibold text-slate-700 mb-2">
+          {selectedKey ? selectedKey + ' 라이딩' : '날짜를 선택하세요'}
+        </h2>
+        {!selectedKey ? (
+          <p className="text-sm text-slate-400">달력에서 날짜를 탭하면 목록이 표시됩니다.</p>
+        ) : ridesForDay.length === 0 ? (
+          <p className="text-sm text-slate-400">이 날 등록된 라이딩이 없습니다.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+            {ridesForDay.map(function (r) {
+              return (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    className="w-full text-left py-2.5 hover:bg-slate-50 px-2 rounded-lg"
+                    onClick={function () { onSelectRide(r.id); }}
+                  >
+                    <div className="font-medium text-slate-800 text-sm">{r.title}</div>
+                    <div className="text-xs text-slate-500">{r.region} · {r.level} · {r.departureTime}</div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    );
+  }
+
   return (
-    <div className="open-riding-main max-w-4xl mx-auto p-4 space-y-6">
+    <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
+      {compact ? (
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-xs text-slate-600">
+            <span className="font-medium text-slate-800">{userLabel}</span>
+            <span className="text-slate-500"> · 지역·레벨 맞춤</span>
+          </p>
+          <button
+            type="button"
+            className="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-xs font-medium shadow hover:bg-violet-700 shrink-0"
+            onClick={onOpenCreate}
+          >
+            라이딩 생성 (+)
+          </button>
+        </div>
+      ) : (
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-slate-800">오픈 라이딩방</h1>
@@ -113,9 +195,10 @@ export function OpenRidingCalendarMain(props) {
           라이딩 생성 (+)
         </button>
       </header>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <section className="md:col-span-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className={compact ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}>
+        <section className={(compact ? 'rounded-xl p-3 ' : 'md:col-span-2 rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
           <div className="flex items-center justify-between mb-3">
             <button type="button" className="text-slate-600" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}>{'‹'}</button>
             <span className="font-semibold">{year}년 {month + 1}월</span>
@@ -127,7 +210,7 @@ export function OpenRidingCalendarMain(props) {
           </div>
           <div className="grid grid-cols-7 gap-1">
             {days.map(function (day, idx) {
-              if (day == null) return <div key={'e' + idx} className="h-10" />;
+              if (day == null) return <div key={'e' + idx} className={emptyH} />;
               var key = dateKey(year, month, day);
               var hasMatch = matchingDateKeys.has(key);
               var isSel = selectedKey === key;
@@ -137,7 +220,7 @@ export function OpenRidingCalendarMain(props) {
                   type="button"
                   onClick={function () { setSelectedKey(key); }}
                   className={
-                    'relative h-10 rounded-lg text-sm flex items-center justify-center transition ' +
+                    'relative ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
                     (isSel ? 'ring-2 ring-violet-500 font-semibold ' : '') +
                     ' hover:bg-slate-50'
                   }
@@ -156,7 +239,9 @@ export function OpenRidingCalendarMain(props) {
           <p className="mt-2 text-[11px] text-slate-500">녹색 표시: 내 지역·레벨 설정과 맞는 라이딩이 있는 날</p>
         </section>
 
-        <aside className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-4">
+        {compact ? renderListSection() : null}
+
+        <aside className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-slate-50/80 space-y-4'}>
           <h2 className="text-sm font-semibold text-slate-700">맞춤 필터 설정</h2>
           <div>
             <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
@@ -196,39 +281,20 @@ export function OpenRidingCalendarMain(props) {
         </aside>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-700 mb-2">
-          {selectedKey ? selectedKey + ' 라이딩' : '날짜를 선택하세요'}
-        </h2>
-        {!selectedKey ? (
-          <p className="text-sm text-slate-400">달력에서 날짜를 탭하면 목록이 표시됩니다.</p>
-        ) : ridesForDay.length === 0 ? (
-          <p className="text-sm text-slate-400">이 날 등록된 라이딩이 없습니다.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {ridesForDay.map(function (r) {
-              return (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left py-3 hover:bg-slate-50 px-2 rounded-lg"
-                    onClick={function () { onSelectRide(r.id); }}
-                  >
-                    <div className="font-medium text-slate-800">{r.title}</div>
-                    <div className="text-xs text-slate-500">{r.region} · {r.level} · {r.departureTime}</div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {!compact ? renderListSection() : null}
     </div>
   );
 }
 
 /** 생성 폼 — storage, firestore, hostUserId, onCreated(rideId) */
 export function OpenRidingCreateForm(props) {
+  var _svcForm = getOpenRidingServiceFns();
+  var createRide = _svcForm.createRide;
+  var uploadRideGpx = _svcForm.uploadRideGpx;
+  var _koForm = getKoreaRegionOptions();
+  var KOREA_SIGUNGU_OPTIONS = _koForm.KOREA_SIGUNGU_OPTIONS;
+  var RIDING_LEVEL_OPTIONS = _koForm.RIDING_LEVEL_OPTIONS;
+
   var firestore = props.firestore;
   var storage = props.storage;
   var hostUserId = props.hostUserId;
@@ -269,18 +335,18 @@ export function OpenRidingCreateForm(props) {
 
   async function submit(e) {
     e.preventDefault();
-    if (!firestore || !hostUserId) return;
+    if (!firestore || !hostUserId || typeof createRide !== 'function') return;
     setBusy(true);
     try {
       var gpxUrl = null;
-      if (storage && form.gpxFile) {
+      if (storage && form.gpxFile && typeof uploadRideGpx === 'function') {
         var draftId = 'draft/' + hostUserId + '/' + Date.now();
         gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
       }
       var d = new Date(form.date + 'T12:00:00');
       var rideId = await createRide(firestore, hostUserId, {
         title: form.title,
-        date: Timestamp.fromDate(d),
+        date: d,
         departureTime: form.departureTime,
         departureLocation: form.departureLocation,
         distance: form.distance,
@@ -362,7 +428,12 @@ export function OpenRidingDetail(props) {
   var userId = props.userId;
   var onBack = props.onBack || function () {};
 
-  var h = useOpenRideDetail(firestore, rideId, userId);
+  var _hooksD = getOpenRidingHooks();
+  var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
+  if (typeof useOpenRideDetailFn !== 'function') {
+    return <div className="p-4 text-center text-sm text-amber-800">모듈 로드 오류</div>;
+  }
+  var h = useOpenRideDetailFn(firestore, rideId, userId);
   var ride = h.ride;
   var loading = h.loading;
   var join = h.join;
@@ -425,8 +496,67 @@ export function OpenRidingDetail(props) {
   );
 }
 
+/** 오픈 라이딩방 단일 앱: 컴팩트 달력·목록 ↔ 생성 ↔ 상세 */
+export function OpenRidingRoomApp(props) {
+  var firestore = props.firestore;
+  var storage = props.storage;
+  var userId = props.userId || '';
+  var userLabel = props.userLabel || '라이더';
+
+  var _v = useState('main');
+  var view = _v[0];
+  var setView = _v[1];
+  var _rid = useState(null);
+  var detailRideId = _rid[0];
+  var setDetailRideId = _rid[1];
+
+  if (!firestore) {
+    return (
+      <div className="p-4 text-center text-sm text-amber-900 rounded-xl border border-amber-200 bg-amber-50">
+        Firestore에 연결되지 않았습니다. 네트워크 또는 로그인 상태를 확인한 뒤 다시 시도해 주세요.
+      </div>
+    );
+  }
+
+  if (view === 'create') {
+    return (
+      <OpenRidingCreateForm
+        firestore={firestore}
+        storage={storage}
+        hostUserId={userId}
+        onCreated={function () { setView('main'); }}
+        onCancel={function () { setView('main'); }}
+      />
+    );
+  }
+
+  if (view === 'detail' && detailRideId) {
+    return (
+      <OpenRidingDetail
+        firestore={firestore}
+        rideId={detailRideId}
+        userId={userId}
+        onBack={function () { setView('main'); }}
+      />
+    );
+  }
+
+  return (
+    <OpenRidingCalendarMain
+      firestore={firestore}
+      storage={storage}
+      userId={userId}
+      userLabel={userLabel}
+      compact={true}
+      onOpenCreate={function () { setView('create'); }}
+      onSelectRide={function (id) { setDetailRideId(id); setView('detail'); }}
+    />
+  );
+}
+
 if (typeof window !== 'undefined') {
   window.OpenRidingCalendarMain = OpenRidingCalendarMain;
   window.OpenRidingCreateForm = OpenRidingCreateForm;
   window.OpenRidingDetail = OpenRidingDetail;
+  window.OpenRidingRoomApp = OpenRidingRoomApp;
 }

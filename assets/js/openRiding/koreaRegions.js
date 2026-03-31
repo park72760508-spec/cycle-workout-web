@@ -64,3 +64,8 @@ export const RIDING_LEVEL_OPTIONS = [
   { value: '중급', hint: '평속 25~30km/h' },
   { value: '상급', hint: '평속 30km/h 이상' }
 ];
+
+if (typeof window !== 'undefined') {
+  window.KOREA_SIGUNGU_OPTIONS = KOREA_SIGUNGU_OPTIONS;
+  window.RIDING_LEVEL_OPTIONS = RIDING_LEVEL_OPTIONS;
+}
