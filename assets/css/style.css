@@ -10562,6 +10562,23 @@ html.is-android #trainingDetailModal .training-detail-body {
 }
 
 /* Gemini API 미등록 알림 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
+.open-riding-grade2-notice-modal:not(.hidden) {
+  display: flex !important;
+}
+.open-riding-grade2-notice-content {
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.15);
+}
+.open-riding-grade2-notice-message {
+  margin-bottom: 20px;
+}
+.open-riding-grade2-notice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
 .gemini-api-modal:not(.hidden) {
   display: flex !important;
 }
