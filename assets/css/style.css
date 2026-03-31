@@ -931,12 +931,25 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   display: block;
 }
 
-/* 라이딩방 초기 화면 히어로 이미지 */
-.open-riding-room-body .open-riding-room-hero-img {
-  max-width: min(280px, 72vw);
-  height: auto;
-  display: block;
-  margin: 0 auto;
+/* 오픈 라이딩방: 미니 달력 + 리스트 스크롤 영역 */
+.open-riding-room-body-scroll {
+  text-align: left;
+  padding: 12px 10px 20px;
+  max-height: min(72vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.open-riding-room-lead {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+#openRidingRoomScreen .open-riding-react-root {
+  min-height: 120px;
 }
 
 /* Choose Your Path: authBar(Welcome 사용자명·로그아웃 박스) = 상단 2열 버튼 그리드와 동일한 폭(90%, 좌우 5%) */
