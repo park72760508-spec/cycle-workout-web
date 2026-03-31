@@ -38,7 +38,7 @@ function dateKey(y, m, d) {
 }
 
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
-export function OpenRidingCalendarMain(props) {
+function OpenRidingCalendarMain(props) {
   var firestore = props.firestore;
   var storage = props.storage;
   var userId = props.userId || '';
@@ -287,7 +287,7 @@ export function OpenRidingCalendarMain(props) {
 }
 
 /** 생성 폼 — storage, firestore, hostUserId, onCreated(rideId) */
-export function OpenRidingCreateForm(props) {
+function OpenRidingCreateForm(props) {
   var _svcForm = getOpenRidingServiceFns();
   var createRide = _svcForm.createRide;
   var uploadRideGpx = _svcForm.uploadRideGpx;
@@ -422,7 +422,7 @@ export function OpenRidingCreateForm(props) {
 }
 
 /** 상세 + 참석/취소 (Transaction) */
-export function OpenRidingDetail(props) {
+function OpenRidingDetail(props) {
   var firestore = props.firestore;
   var rideId = props.rideId;
   var userId = props.userId;
@@ -497,7 +497,7 @@ export function OpenRidingDetail(props) {
 }
 
 /** 오픈 라이딩방 단일 앱: 컴팩트 달력·목록 ↔ 생성 ↔ 상세 */
-export function OpenRidingRoomApp(props) {
+function OpenRidingRoomApp(props) {
   var firestore = props.firestore;
   var storage = props.storage;
   var userId = props.userId || '';
