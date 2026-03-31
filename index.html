@@ -2257,7 +2257,7 @@
 
           <div class="connection-device-section basecamp-device-section">
             <h3 class="mb-15 basecamp-status-bar">경로 선택</h3>
-            <div class="grid-2 mb-15 basecamp-path-grid basecamp-main-path-grid" style="gap: 3.75px;">
+            <div id="basecampPathGrid" class="grid-2 mb-15 basecamp-path-grid" style="gap: 3.75px;">
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
                 <span>그룹 훈련</span>
               </button>
@@ -2270,13 +2270,9 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="typeof openDeviceSettingsOrPrompt === 'function' ? openDeviceSettingsOrPrompt() : showScreen('deviceSettingScreen');">
                 <span>기기 설정</span>
               </button>
-            </div>
-            <div id="basecampOpenRidingRow" class="basecamp-open-riding-row" style="display: none;" aria-hidden="true">
-              <div class="grid-2 mb-15 basecamp-path-grid basecamp-open-riding-grid" style="gap: 3.75px;">
-                <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-room" id="btnBasecampOpenRiding" aria-label="오픈 라이딩방" onclick="if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');"></button>
-                <div class="basecamp-placeholder-tile" title="STELVIO" aria-hidden="true">
-                  <img class="basecamp-placeholder-tile-img" src="assets/img/STELVIO%20AI.png" alt="" onerror="this.onerror=null;this.src='https://stelvio.ai.kr/assets/img/STELVIO%20AI.png';" />
-                </div>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-room" id="btnBasecampOpenRiding" aria-label="오픈 라이딩방" style="display: none;" aria-hidden="true" onclick="if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');"></button>
+              <div id="basecampStelvioPlaceholder" class="basecamp-placeholder-tile" title="STELVIO" style="display: none;" aria-hidden="true">
+                <img class="basecamp-placeholder-tile-img" src="assets/img/STELVIO%20AI.png" alt="" onerror="this.onerror=null;this.src='https://stelvio.ai.kr/assets/img/STELVIO%20AI.png';" />
               </div>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
