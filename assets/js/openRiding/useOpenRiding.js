@@ -137,7 +137,11 @@ export function useOpenRideDetail(db, rideId, userId) {
     if (!db || !rideId || !userId) return;
     setActionError(null);
     try {
-      const res = await joinRideTransaction(db, rideId, userId);
+      const dn =
+        typeof window !== 'undefined' && typeof window.getOpenRidingProfileDefaults === 'function'
+          ? String(window.getOpenRidingProfileDefaults().hostName || '').trim().slice(0, 80)
+          : '';
+      const res = await joinRideTransaction(db, rideId, userId, dn || '라이더');
       await reload();
       return res;
     } catch (e) {

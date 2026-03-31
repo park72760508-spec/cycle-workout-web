@@ -28,6 +28,22 @@ function asStringArray(v) {
   return Array.isArray(v) ? v.map((x) => String(x)) : [];
 }
 
+/** Firestore map: uid -> 표시 이름 */
+function asParticipantDisplay(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out = {};
+  Object.keys(v).forEach((k) => {
+    out[String(k)] = String(v[k] != null ? v[k] : '');
+  });
+  return out;
+}
+
+function omitParticipantDisplay(/** @type {unknown} */ pd, /** @type {string} */ uid) {
+  const o = { ...asParticipantDisplay(pd) };
+  delete o[String(uid)];
+  return o;
+}
+
 /**
  * 사용자 선호 저장 (users 문서 merge)
  * @param {import('firebase/firestore').Firestore} db
@@ -67,6 +83,9 @@ export async function getUserOpenRidingPreferences(db, userId) {
  * @param {Record<string, unknown>} input
  */
 export async function createRide(db, hostUserId, input) {
+  const hostLabel = String(input.hostName || '').trim().slice(0, 80);
+  const participantDisplay = {};
+  if (hostUserId && hostLabel) participantDisplay[String(hostUserId)] = hostLabel;
   const payload = {
     title: String(input.title || ''),
     date: input.date instanceof Timestamp ? input.date : Timestamp.fromDate(new Date(input.date)),
@@ -83,6 +102,7 @@ export async function createRide(db, hostUserId, input) {
     region: String(input.region || ''),
     participants: asStringArray(input.participants),
     waitlist: [],
+    participantDisplay,
     hostUserId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
@@ -142,9 +162,11 @@ export async function fetchRideById(db, rideId) {
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
  * @param {string} userId
+ * @param {string} [displayName] 참가자 목록 표시용 이름(프로필)
  * @returns {Promise<{ status: string, role?: string, position?: number }>}
  */
-export async function joinRideTransaction(db, rideId, userId) {
+export async function joinRideTransaction(db, rideId, userId, displayName) {
+  const nameLabel = String(displayName != null ? displayName : '라이더').trim().slice(0, 80) || '라이더';
   const rideRef = doc(db, 'rides', rideId);
   return runTransaction(db, async (transaction) => {
     const snap = await transaction.get(rideRef);
@@ -152,6 +174,7 @@ export async function joinRideTransaction(db, rideId, userId) {
     const data = snap.data();
     let participants = asStringArray(data.participants);
     let waitlist = asStringArray(data.waitlist);
+    let participantDisplay = { ...asParticipantDisplay(data.participantDisplay) };
     const max = Math.max(1, Number(data.maxParticipants) || 1);
 
     if (participants.includes(userId)) {
@@ -162,10 +185,13 @@ export async function joinRideTransaction(db, rideId, userId) {
       return { status: 'already', role: 'waitlist', position: wIdx + 1 };
     }
 
+    participantDisplay = Object.assign({}, participantDisplay, { [String(userId)]: nameLabel });
+
     if (participants.length < max) {
       participants = [...participants, userId];
       transaction.update(rideRef, {
         participants,
+        participantDisplay,
         updatedAt: serverTimestamp()
       });
       return { status: 'joined', role: 'participant' };
@@ -174,6 +200,7 @@ export async function joinRideTransaction(db, rideId, userId) {
     waitlist = [...waitlist, userId];
     transaction.update(rideRef, {
       waitlist,
+      participantDisplay,
       updatedAt: serverTimestamp()
     });
     return { status: 'joined', role: 'waitlist', position: waitlist.length };
@@ -202,6 +229,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
       waitlist = waitlist.filter((id) => id !== userId);
       transaction.update(rideRef, {
         waitlist,
+        participantDisplay: omitParticipantDisplay(data.participantDisplay, userId),
         updatedAt: serverTimestamp()
       });
       return { status: 'left_waitlist', promotedUserId: null };
@@ -209,6 +237,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
 
     if (inPart) {
       participants = participants.filter((id) => id !== userId);
+      let participantDisplay = omitParticipantDisplay(data.participantDisplay, userId);
       /** @type {string | null} */
       let promotedUserId = null;
       if (waitlist.length > 0) {
@@ -219,6 +248,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
       transaction.update(rideRef, {
         participants,
         waitlist,
+        participantDisplay,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_participant', promotedUserId };

@@ -29,6 +29,46 @@ function getKoreaRegionOptions() {
   };
 }
 
+/** 로그인·프로필 기준 방장명·연락처 (라이딩 생성·참가 시 표시 이름) */
+function getOpenRidingProfileDefaults() {
+  try {
+    var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
+    if (!u) {
+      try { u = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e1) { u = null; }
+    }
+    if (!u) {
+      try { u = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (e2) { u = null; }
+    }
+    var name = (u && u.name) ? String(u.name).trim() : '';
+    var contact = '';
+    if (u) {
+      contact =
+        (u.contact && String(u.contact).trim()) ||
+        (u.phone && String(u.phone).trim()) ||
+        '';
+    }
+    if (typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser) {
+      var cu = window.authV9.currentUser;
+      if (!name && cu.displayName) name = String(cu.displayName).trim();
+      if (!contact && cu.phoneNumber) contact = String(cu.phoneNumber).trim();
+      if (!contact && cu.email) contact = String(cu.email).trim();
+    }
+    if (typeof window !== 'undefined' && window.auth && window.auth.currentUser && (!name || !contact)) {
+      var c2 = window.auth.currentUser;
+      if (!name && c2.displayName) name = String(c2.displayName).trim();
+      if (!contact && c2.phoneNumber) contact = String(c2.phoneNumber).trim();
+      if (!contact && c2.email) contact = String(c2.email).trim();
+    }
+    return { hostName: name, contactInfo: contact };
+  } catch (e) {
+    return { hostName: '', contactInfo: '' };
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.getOpenRidingProfileDefaults = getOpenRidingProfileDefaults;
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }
@@ -99,23 +139,27 @@ function OpenRidingCalendarMain(props) {
 
   var _koOpts = getKoreaRegionOptions();
   var RIDING_LEVEL_OPTIONS = _koOpts.RIDING_LEVEL_OPTIONS;
+  var KOREA_SIGUNGU_OPTIONS_FILTER = _koOpts.KOREA_SIGUNGU_OPTIONS;
 
-  var _regionDraft = useState('');
-  var regionDraft = _regionDraft[0];
-  var setRegionDraft = _regionDraft[1];
+  var _regionPick = useState('');
+  var regionPick = _regionPick[0];
+  var setRegionPick = _regionPick[1];
 
   var cellH = compact ? 'h-8' : 'h-10';
   var emptyH = compact ? 'h-8' : 'h-10';
 
-  function addRegion() {
-    var t = regionDraft.trim();
+  function addRegionFromSelect() {
+    var t = String(regionPick || '').trim();
     if (!t) return;
-    if (prefs.activeRegions.indexOf(t) >= 0) return;
+    if (prefs.activeRegions.indexOf(t) >= 0) {
+      setRegionPick('');
+      return;
+    }
     savePrefs({
       activeRegions: prefs.activeRegions.concat([t]),
       preferredLevels: prefs.preferredLevels
     });
-    setRegionDraft('');
+    setRegionPick('');
   }
 
   function removeRegion(r) {
@@ -245,14 +289,18 @@ function OpenRidingCalendarMain(props) {
           <h2 className="text-sm font-semibold text-slate-700">맞춤 필터 설정</h2>
           <div>
             <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
-            <div className="flex gap-1">
-              <input
-                className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                value={regionDraft}
-                onChange={function (e) { setRegionDraft(e.target.value); }}
-                placeholder="예: 서울특별시 강남구"
-              />
-              <button type="button" className="rounded-lg bg-slate-800 text-white px-2 text-sm" onClick={addRegion}>추가</button>
+            <div className="flex gap-1 flex-wrap">
+              <select
+                className="flex-1 min-w-[140px] rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                value={regionPick}
+                onChange={function (e) { setRegionPick(e.target.value); }}
+              >
+                <option value="">시·군·구 선택</option>
+                {KOREA_SIGUNGU_OPTIONS_FILTER.map(function (o) {
+                  return <option key={o} value={o}>{o}</option>;
+                })}
+              </select>
+              <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
             </div>
             <ul className="mt-2 flex flex-wrap gap-1">
               {prefs.activeRegions.map(function (r) {
@@ -302,6 +350,7 @@ function OpenRidingCreateForm(props) {
   var onCancel = props.onCancel || function () {};
 
   var st = useState(function () {
+    var prof = getOpenRidingProfileDefaults();
     return {
       title: '',
       date: new Date().toISOString().slice(0, 10),
@@ -311,8 +360,8 @@ function OpenRidingCreateForm(props) {
       course: '',
       level: '중급',
       maxParticipants: 10,
-      hostName: '',
-      contactInfo: '',
+      hostName: prof.hostName || '',
+      contactInfo: prof.contactInfo || '',
       isContactPublic: true,
       region: '',
       gpxFile: null
@@ -404,8 +453,26 @@ function OpenRidingCreateForm(props) {
         })}
       </fieldset>
 
-      <label className="block text-sm">방장명<input className="mt-1 w-full border rounded-lg px-2 py-1" value={form.hostName} onChange={function (e) { set('hostName', e.target.value); }} required /></label>
-      <label className="block text-sm">연락처<input className="mt-1 w-full border rounded-lg px-2 py-1" value={form.contactInfo} onChange={function (e) { set('contactInfo', e.target.value); }} /></label>
+      <label className="block text-sm">
+        방장명
+        <input
+          className="mt-1 w-full border rounded-lg px-2 py-1 bg-slate-50 text-slate-700"
+          value={form.hostName}
+          readOnly
+          required
+          title="로그인 프로필 이름이 자동 입력됩니다. 변경은 프로필(사용자 정보)에서 하세요."
+        />
+      </label>
+      <label className="block text-sm">
+        연락처
+        <input
+          className="mt-1 w-full border rounded-lg px-2 py-1 bg-slate-50 text-slate-700"
+          value={form.contactInfo}
+          readOnly
+          title="로그인 프로필 연락처가 자동 입력됩니다. 변경은 프로필에서 하세요."
+        />
+      </label>
+      <p className="text-[11px] text-slate-500 -mt-1">방장명·연락처는 로그인 계정 프로필에서 가져옵니다.</p>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={form.isContactPublic} onChange={function (e) { set('isContactPublic', e.target.checked); }} />
         연락처 공개
@@ -465,6 +532,18 @@ function OpenRidingDetail(props) {
 
   var roleLabel = !role ? '미신청' : role === 'participant' ? '참석 확정' : '대기 ' + role.position + '번';
 
+  var pd =
+    ride.participantDisplay && typeof ride.participantDisplay === 'object' && !Array.isArray(ride.participantDisplay)
+      ? ride.participantDisplay
+      : {};
+  var parts = Array.isArray(ride.participants) ? ride.participants : [];
+  var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
+  function participantRowName(uid, fallbackLabel) {
+    var n = pd[String(uid)];
+    if (n && String(n).trim()) return String(n).trim();
+    return fallbackLabel;
+  }
+
   return (
     <div className="max-w-lg mx-auto p-4 space-y-4">
       <button type="button" className="text-sm text-violet-600" onClick={onBack}>← 목록</button>
@@ -481,6 +560,44 @@ function OpenRidingDetail(props) {
       </ul>
       {ride.course ? <p className="text-sm bg-slate-50 rounded-lg p-3">{ride.course}</p> : null}
       {ride.gpxUrl ? <a className="text-violet-600 text-sm" href={ride.gpxUrl} target="_blank" rel="noreferrer">GPX 다운로드</a> : null}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-800">참가자 명단</h2>
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">참석 확정 ({parts.length}명)</p>
+          {parts.length === 0 ? (
+            <p className="text-xs text-slate-400">아직 없습니다.</p>
+          ) : (
+            <ol className="list-decimal list-inside text-sm text-slate-700 space-y-1.5 pl-0.5">
+              {parts.map(function (uid, idx) {
+                return (
+                  <li key={String(uid) + '-p'} className="marker:font-semibold">
+                    <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
+                    <span>{participantRowName(uid, '참가자')}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">대기 ({waits.length}명)</p>
+          {waits.length === 0 ? (
+            <p className="text-xs text-slate-400">없습니다.</p>
+          ) : (
+            <ol className="list-decimal list-inside text-sm text-slate-700 space-y-1.5 pl-0.5">
+              {waits.map(function (uid, idx) {
+                return (
+                  <li key={String(uid) + '-w'} className="marker:font-semibold">
+                    <span className="font-semibold text-amber-700">대기 {idx + 1}번</span>{' '}
+                    <span>{participantRowName(uid, '대기')}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+      </div>
 
       <p className="text-sm font-medium">내 상태: {roleLabel}</p>
       {actionErr ? <p className="text-sm text-red-600">{actionErr}</p> : null}
