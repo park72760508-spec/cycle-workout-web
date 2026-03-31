@@ -2257,19 +2257,25 @@
 
           <div class="connection-device-section basecamp-device-section">
             <h3 class="mb-15 basecamp-status-bar">경로 선택</h3>
-            <div class="grid-2 mb-15" style="gap: 3.75px;">
-              <button class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
-                <span>INDOOR TRAINING</span>
+            <div class="grid-2 mb-15 basecamp-path-grid" style="gap: 3.75px;">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
+                <span>그룹 훈련</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="if (typeof showRPEModalForSoloTraining === 'function') { showRPEModalForSoloTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'solo'; showRPEModal('solo'); }">
-                <span>SOLO TRAINING</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="if (typeof showRPEModalForSoloTraining === 'function') { showRPEModalForSoloTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'solo'; showRPEModal('solo'); }">
+                <span>개인 훈련</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}">
-                <span>MY CAREER</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}">
+                <span>나의 기록</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="typeof openDeviceSettingsOrPrompt === 'function' ? openDeviceSettingsOrPrompt() : showScreen('deviceSettingScreen');">
-                <span>센서 연결 (Device Settings)</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="typeof openDeviceSettingsOrPrompt === 'function' ? openDeviceSettingsOrPrompt() : showScreen('deviceSettingScreen');">
+                <span>기기 설정</span>
               </button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-room" id="btnBasecampOpenRiding" title="라이딩방" aria-label="라이딩방" onclick="if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');">
+                <span>라이딩방</span>
+              </button>
+              <div class="basecamp-placeholder-tile" title="STELVIO" aria-hidden="true">
+                <img class="basecamp-placeholder-tile-img" src="assets/img/STELVIO%20AI.png" alt="" onerror="this.onerror=null;this.src='https://stelvio.ai.kr/assets/img/STELVIO%20AI.png';" />
+              </div>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
             <div id="authBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
@@ -2294,6 +2300,33 @@
             <p>
               <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
               시스템 문의 : stelvio.ai.kr@gmail.com
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 오픈 라이딩방 초기 화면 (경로 선택 → 라이딩방) -->
+  <div id="openRidingRoomScreen" class="screen" style="display: none;">
+    <div class="basecamp-background-image"></div>
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card">
+          <div class="connection-header basecamp-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+            <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="if (typeof showScreen === 'function') showScreen('basecampScreen');" aria-label="경로 선택으로" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+              <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+              </svg>
+            </button>
+            <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0; text-align: center;">오픈 라이딩방</h3>
+            <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
+          </div>
+          <div class="connection-device-section basecamp-device-section open-riding-room-body" style="text-align: center; padding: 16px 12px 24px;">
+            <img src="assets/img/RIDING.png" alt="" class="open-riding-room-hero-img" onerror="this.onerror=null;this.src='https://stelvio.ai.kr/assets/img/RIDING.png';" />
+            <p style="margin-top: 16px; font-size: 1.02em; color: #0f172a; line-height: 1.6;">
+              지역·일정 기반 라이딩 모임을 찾고 참여할 수 있는 공간입니다.<br />
+              달력·참석 신청 등 상세 기능은 순차적으로 연결됩니다.
             </p>
           </div>
         </div>
