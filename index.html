@@ -2320,12 +2320,9 @@
             <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0; text-align: center;">오픈 라이딩방</h3>
             <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
           </div>
-          <div class="connection-device-section basecamp-device-section open-riding-room-body" style="text-align: center; padding: 16px 12px 24px;">
-            <img src="assets/img/RIDING.png" alt="" class="open-riding-room-hero-img" onerror="this.onerror=null;this.src='https://stelvio.ai.kr/assets/img/RIDING.png';" />
-            <p style="margin-top: 16px; font-size: 1.02em; color: #0f172a; line-height: 1.6;">
-              지역·일정 기반 라이딩 모임을 찾고 참여할 수 있는 공간입니다.<br />
-              달력·참석 신청 등 상세 기능은 순차적으로 연결됩니다.
-            </p>
+          <div class="connection-device-section basecamp-device-section open-riding-room-body open-riding-room-body-scroll">
+            <p class="open-riding-room-lead">지역·일정 기반 모임을 달력에서 확인하고, 날짜를 선택하면 해당 일의 라이딩 목록이 표시됩니다.</p>
+            <div id="open-riding-react-root" class="open-riding-react-root" aria-live="polite"></div>
           </div>
         </div>
       </div>
@@ -10031,6 +10028,75 @@
         }
       }
       window.initTrainingJournalReact = initTrainingJournalReact;
+    })();
+  </script>
+
+  <!-- ========== 오픈 라이딩방 (Firestore 달력 + 목록 / 생성 / 상세) ========== -->
+  <script src="assets/js/openRiding/OpenRidingScreens.jsx" type="text/babel"></script>
+  <script>
+    (function() {
+      var openRidingReactRoot = null;
+      function getOpenRidingUserId() {
+        try {
+          if (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) {
+            return String(window.authV9.currentUser.uid);
+          }
+          if (window.auth && window.auth.currentUser && window.auth.currentUser.uid) {
+            return String(window.auth.currentUser.uid);
+          }
+          var u = JSON.parse(localStorage.getItem('authUser') || 'null');
+          if (u && u.id != null) return String(u.id);
+        } catch (err) {}
+        return '';
+      }
+      function getOpenRidingUserLabel() {
+        try {
+          var c = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (c && c.name) return String(c.name);
+        } catch (err2) {}
+        return '라이더';
+      }
+      window.initOpenRidingRoomReact = async function () {
+        var rootEl = document.getElementById('open-riding-react-root');
+        if (!rootEl || typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+          console.warn('[OpenRiding] React 또는 root 없음');
+          return;
+        }
+        try {
+          await import('./assets/js/openRiding/openRidingBoot.js');
+        } catch (bootErr) {
+          console.error('[OpenRiding] openRidingBoot 로드 실패:', bootErr);
+          rootEl.innerHTML = '<p class="text-sm text-red-700 px-2">오픈 라이딩 모듈을 불러오지 못했습니다.</p>';
+          return;
+        }
+        if (typeof window.OpenRidingRoomApp !== 'function') {
+          console.warn('[OpenRiding] OpenRidingRoomApp 없음');
+          return;
+        }
+        if (typeof window.useOpenRiding !== 'function') {
+          console.warn('[OpenRiding] useOpenRiding 없음 — boot 확인');
+          rootEl.innerHTML = '<p class="text-sm text-amber-800 px-2">오픈 라이딩 훅 로드 실패. 새로고침해 주세요.</p>';
+          return;
+        }
+        var firestore = window.firestoreV9 || null;
+        var storage = window.firebaseStorageV9 || null;
+        var userId = getOpenRidingUserId();
+        var userLabel = getOpenRidingUserLabel();
+        var el = React.createElement(window.OpenRidingRoomApp, {
+          firestore: firestore,
+          storage: storage,
+          userId: userId,
+          userLabel: userLabel
+        });
+        if (!openRidingReactRoot) {
+          openRidingReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
+        }
+        if (openRidingReactRoot && openRidingReactRoot.render) {
+          openRidingReactRoot.render(el);
+        } else if (typeof ReactDOM.render === 'function') {
+          ReactDOM.render(el, rootEl);
+        }
+      };
     })();
   </script>
   
