@@ -16068,6 +16068,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               return (dateB || '').localeCompare(dateA || '');
             });
 
+            var logsDeduped = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
+              ? window.dedupeTrainingLogsByDateStravaFirst(logs)
+              : logs;
+
             console.log('[Dashboard] 필터링 완료:', {
               totalFetched: raw.length,
               filtered: logs.length,
@@ -16075,7 +16079,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             });
 
             if (isMounted) {
-              setRecentLogs(logs);
+              setRecentLogs(logsDeduped);
               setLogsLoaded(true);
             }
 
@@ -16158,6 +16162,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
 
             // 나의 성장 트렌드: 월단위 PR 슬롯·max_20min 등 (VO2max 트렌드와 동일 주기)
+            var logs6MonthsForGrowth = typeof window.dedupeTrainingLogsByDateStravaFirst === 'function'
+              ? window.dedupeTrainingLogsByDateStravaFirst(logs6Months)
+              : logs6Months;
             var GROWTH_SLOT_FIELDS_DASH = [
               { w: 'max_watts', h: 'max_hr' },
               { w: 'max_1min_watts', h: 'max_hr_1min' },
@@ -16171,7 +16178,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               return { w: [0, 0, 0, 0, 0, 0, 0], h: [0, 0, 0, 0, 0, 0, 0] };
             }
             var byDateGrowth = {};
-            logs6Months.forEach(function(log) {
+            logs6MonthsForGrowth.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr) return;
               if (!byDateGrowth[dateStr]) byDateGrowth[dateStr] = emptyGrowthDayDash();
@@ -16233,6 +16240,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var dateStr = parseDateForDashboard(log.date);
               return dateStr && dateStr >= yearStartStr && dateStr <= yearEndStr;
             });
+            if (typeof window.dedupeTrainingLogsByDateStravaFirst === 'function') {
+              logsThisYear = window.dedupeTrainingLogsByDateStravaFirst(logsThisYear);
+            }
             var prFieldsConfig = [
               { field: 'max_watts', label: 'Max' },
               { field: 'max_1min_watts', label: '1분' },
@@ -16296,7 +16306,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               String(week5End.getMonth() + 1).padStart(2, '0') + '-' +
               String(week5End.getDate()).padStart(2, '0');
 
-            var logsInWeek = logs.filter(function(log) {
+            var logsInWeek = logsDeduped.filter(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               return dateStr && dateStr >= week5StartStr && dateStr <= week5EndStr;
             });
@@ -16356,7 +16366,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             // 🔒 날짜별 TSS 합산 (날짜 파싱 함수 사용)
             // Fitness/Fatigue 계산을 위해 60일 전부터 모든 데이터 포함
             var byDate = {};
-            logs.forEach(function(log) {
+            logsDeduped.forEach(function(log) {
               var dateStr = parseDateForDashboard(log.date);
               if (!dateStr || dateStr < sixtyDaysAgoStr || dateStr > todayStr) return;
               if (!byDate[dateStr]) byDate[dateStr] = { tss: 0 };
