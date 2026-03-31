@@ -32,6 +32,15 @@ function isStelvioAdminGrade(g) {
   return n === 1;
 }
 
+/** 베이스캠프 오픈 라이딩방 노출·진입: grade 1 또는 3 (문자/숫자 안전) */
+function isStelvioOpenRidingRoomAdminGrade(g) {
+  if (g === null || g === undefined) return false;
+  const s = String(g).trim();
+  if (s === '1' || s === '3') return true;
+  const n = Number(s);
+  return n === 1 || n === 3;
+}
+
 /** 로그인 계정 등급 — 프로필 선택으로 currentUser가 바뀌어도 로그인 UID 기준. authUser.grade는 오래된 값일 수 있어 users 목록(Firestore 동기화)을 최우선 */
 function getLoginUserGrade() {
   try {
@@ -77,6 +86,7 @@ function getLoginUserGrade() {
 if (typeof window !== 'undefined') {
   window.getLoginUserGrade = getLoginUserGrade;
   window.isStelvioAdminGrade = isStelvioAdminGrade;
+  window.isStelvioOpenRidingRoomAdminGrade = isStelvioOpenRidingRoomAdminGrade;
 }
 
 /* ==========================================================
@@ -2756,6 +2766,11 @@ async function loadUsers() {
     if (typeof window.refreshSettingsModalAdminExtras === 'function') {
       try {
         window.refreshSettingsModalAdminExtras();
+      } catch (_) {}
+    }
+    if (typeof window.refreshBasecampOpenRidingVisibility === 'function') {
+      try {
+        window.refreshBasecampOpenRidingVisibility();
       } catch (_) {}
     }
     if (typeof window.syncGeminiApiRegistrationFromLocalStorage === 'function') {
