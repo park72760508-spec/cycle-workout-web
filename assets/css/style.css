@@ -839,7 +839,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 1~2열과 3열 동일 셀·열간격(gap 3.75px) — 단일 2×N 그리드 */
+/* Choose Your Path: 2×2 그리드, 동일 셀·열간격(gap 3.75px) */
 #basecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid {
   --basecamp-cell: calc((100% - 3.75px) / 2);
   width: 90% !important;
@@ -854,12 +854,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   aspect-ratio: 1 !important;
 }
 
-/* 등급 1·3: 라이딩방+STELVIO 포함 시 3행(세로 비율 2:3) — 각 칸은 동일 정사각형 */
-#basecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid.has-open-riding-row {
-  grid-template-rows: repeat(3, var(--basecamp-cell)) !important;
-  aspect-ratio: 2 / 3 !important;
-}
-
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn {
   width: 100% !important;
   height: 100% !important;
@@ -870,10 +864,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* MY CAREER 버튼 = DEVICE SETTINGS 버튼과 동일한 크기·반응형 적용 (Choose Your Path) */
+/* MY CAREER·기기 설정 = Choose Your Path 동일 셀 크기 */
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-career,
-#basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual,
-#basecampScreen .connection-device-section .grid-2 .basecamp-btn-riding-room {
+#basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual {
   width: 100% !important;
   height: 100% !important;
   min-height: 0 !important;
@@ -881,54 +874,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   max-height: 100% !important;
   aspect-ratio: 1 !important;
   box-sizing: border-box !important;
-}
-
-/* 라이딩방: 배경 이미지 없음 — 경로 그리드 셀 크기는 1·2열과 동일(.grid-2 .basecamp-btn-riding-room), 라벨만 표시 */
-#basecampScreen .btn-device.basecamp-btn-riding-room,
-#basecampScreen .basecamp-btn-riding-room {
-  background-image: none !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: auto !important;
-  justify-content: center !important;
-  padding-bottom: 0 !important;
-  align-items: center !important;
-}
-#basecampScreen .btn-device.basecamp-btn-riding-room::before,
-#basecampScreen .basecamp-btn-riding-room::before {
-  background: rgba(135, 206, 235, 0.3) !important;
-}
-#basecampScreen .btn-device.basecamp-btn-riding-room span,
-#basecampScreen .basecamp-btn-riding-room span {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  margin-top: 0 !important;
-  text-align: center !important;
-  padding: 0 6px !important;
-  font-size: clamp(13px, 3.8vw, 16px) !important;
-}
-
-#basecampScreen .connection-device-section .grid-2 .basecamp-placeholder-tile {
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  box-sizing: border-box !important;
-  border: 2px solid rgba(135, 206, 235, 0.6) !important;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  overflow: hidden;
-  pointer-events: none;
-}
-#basecampScreen .basecamp-placeholder-tile .basecamp-placeholder-tile-img {
-  width: 92% !important;
-  height: auto !important;
-  max-height: 92% !important;
-  object-fit: contain;
-  opacity: 0.92;
-  display: block;
 }
 
 /* 오픈 라이딩방: 미니 달력 + 리스트 스크롤 영역 */
@@ -992,6 +937,31 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 .bluetooth-session-exit-btn:active {
   background: rgba(0, 0, 0, 0.1);
   opacity: 0.7;
+}
+
+/* 인증 바: 오픈 라이딩방 아이콘(로그아웃과 동일 터치 영역 40×40, 이미지 24×24) */
+.auth-bar-riding-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+.auth-bar-riding-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  opacity: 0.92;
+}
+.auth-bar-riding-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  opacity: 0.85;
 }
 
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
