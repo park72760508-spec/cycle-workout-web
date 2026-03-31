@@ -839,12 +839,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
 }
 
-/* Choose Your Path: 메인 2×2(정사각형 블록) */
-#basecampScreen .connection-device-section.basecamp-device-section .basecamp-main-path-grid {
+/* Choose Your Path: 1~2열과 3열 동일 셀·열간격(gap 3.75px) — 단일 2×N 그리드 */
+#basecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid {
   --basecamp-cell: calc((100% - 3.75px) / 2);
   width: 90% !important;
   max-width: 90% !important;
-  aspect-ratio: 1 !important;
   display: grid !important;
   grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
   grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
@@ -852,21 +851,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin: 0 5% !important;
   box-sizing: border-box !important;
   justify-content: center;
+  aspect-ratio: 1 !important;
 }
 
-/* 등급 1·3 전용: 라이딩방 + STELVIO 플레이스홀더 1행 */
-#basecampScreen .connection-device-section.basecamp-device-section .basecamp-open-riding-grid {
-  --basecamp-cell: calc((100% - 3.75px) / 2);
-  width: 90% !important;
-  max-width: 90% !important;
-  aspect-ratio: 2 / 1 !important;
-  display: grid !important;
-  grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
-  grid-template-rows: var(--basecamp-cell) !important;
-  gap: 3.75px !important;
-  margin: 0 5% !important;
-  box-sizing: border-box !important;
-  justify-content: center;
+/* 등급 1·3: 라이딩방+STELVIO 포함 시 3행(세로 비율 2:3) — 각 칸은 동일 정사각형 */
+#basecampScreen .connection-device-section.basecamp-device-section .basecamp-path-grid.has-open-riding-row {
+  grid-template-rows: repeat(3, var(--basecamp-cell)) !important;
+  aspect-ratio: 2 / 3 !important;
 }
 
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn {
@@ -917,7 +908,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   height: 100% !important;
   min-height: 0 !important;
   box-sizing: border-box !important;
-  border: 2px solid rgba(135, 206, 235, 0.35) !important;
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08) !important;
   display: flex !important;
