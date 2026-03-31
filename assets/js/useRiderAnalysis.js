@@ -13,6 +13,39 @@ const NORM = {
   TTST: 5.0     // FTP
 };
 
+function parseTrainingLogDate(log) {
+  const d = log && log.date != null ? log.date : null;
+  if (!d) return null;
+  if (d.toDate && typeof d.toDate === 'function') return d.toDate().toISOString().slice(0, 10);
+  if (typeof d === 'string') return d.slice(0, 10);
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  return null;
+}
+
+/**
+ * 일자별: Strava 로그가 하나라도 있으면 그날은 Strava만, 없으면 Strava가 아닌 소스(예: stelvio)만.
+ * 대시보드 파워/심박 커브·구간 MMP·존 합산 등 동일 날 이중 반영 방지.
+ * @param {Array} logs
+ * @returns {Array}
+ */
+function dedupeTrainingLogsByDateStravaFirst(logs) {
+  if (!logs || !logs.length) return [];
+  const byDate = new Map();
+  logs.forEach((log) => {
+    const ds = parseTrainingLogDate(log);
+    if (!ds) return;
+    if (!byDate.has(ds)) byDate.set(ds, []);
+    byDate.get(ds).push(log);
+  });
+  const out = [];
+  byDate.forEach((arr) => {
+    const strava = arr.filter((l) => String(l.source || '').toLowerCase() === 'strava');
+    const chosen = strava.length > 0 ? strava : arr.filter((l) => String(l.source || '').toLowerCase() !== 'strava');
+    chosen.forEach((l) => out.push(l));
+  });
+  return out;
+}
+
 /**
  * 로그 배열에서 기간별 MMP 집계 (각 duration별 최대값)
  * @param {Array} logs - 훈련 로그 배열
@@ -21,6 +54,7 @@ const NORM = {
  * @returns {{ max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_40min_watts, max_60min_watts }}
  */
 function aggregateMMPFromLogs(logs, fromDate, toDate) {
+  logs = dedupeTrainingLogsByDateStravaFirst(logs || []);
   const inRange = (dateStr) => dateStr && dateStr >= fromDate && dateStr <= toDate;
   const parseDate = (d) => {
     if (!d) return null;
@@ -61,6 +95,7 @@ function aggregateMMPFromLogs(logs, fromDate, toDate) {
  * @returns {{ max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min }}
  */
 function aggregateHRFromLogs(logs, fromDate, toDate) {
+  logs = dedupeTrainingLogsByDateStravaFirst(logs || []);
   const inRange = (dateStr) => dateStr && dateStr >= fromDate && dateStr <= toDate;
   const parseDate = (d) => {
     if (!d) return null;
@@ -103,6 +138,7 @@ function aggregateHRFromLogs(logs, fromDate, toDate) {
  * @returns {{ power: Object, hr: Object }}
  */
 function aggregateTimeInZonesFromLogs(logs, fromDate, toDate) {
+  logs = dedupeTrainingLogsByDateStravaFirst(logs || []);
   const inRange = (dateStr) => dateStr && dateStr >= fromDate && dateStr <= toDate;
   const parseDate = (d) => {
     if (!d) return null;
@@ -498,6 +534,8 @@ function fetchDashboardPeakRankingCohort(userId, userWeight) {
 }
 
 if (typeof window !== 'undefined') {
+  window.parseTrainingLogDate = parseTrainingLogDate;
+  window.dedupeTrainingLogsByDateStravaFirst = dedupeTrainingLogsByDateStravaFirst;
   window.calculateRiderScores = calculateRiderScores;
   window.aggregateMMPFromLogs = aggregateMMPFromLogs;
   window.aggregateHRFromLogs = aggregateHRFromLogs;
