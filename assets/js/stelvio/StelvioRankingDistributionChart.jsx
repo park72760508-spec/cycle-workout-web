@@ -46,10 +46,32 @@
     return 'stelvio-dist-' + (++_gid);
   }
 
-  /** API·목록과 동일한 정수 순위 (잘못된 2→3 치환 제거) */
-  function normalizeRankDisplay(n) {
+  /** 과거 차트 배지용 (다른 카테고리 조회 시에만 순위 표기에 적용) */
+  function rankDisplayForChart(n) {
+    var r = Number(n);
+    if (r !== 2) return r;
+    return 3;
+  }
+
+  function safeFloorRank(n) {
     var r = Number(n);
     return isFinite(r) && r >= 1 ? Math.floor(r) : null;
+  }
+
+  /**
+   * 선택 카테고리 배열에서 내 W/kg·TSS가 몇 위인지 (동점은 표준 경기 순위: 더 큰 값만 선행)
+   */
+  function rankInCategoryByValue(categoryRows, myVal, isTssMode) {
+    if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
+    var eps = isTssMode ? 1e-6 : 1e-9;
+    var strictlyGreater = 0;
+    for (var i = 0; i < categoryRows.length; i++) {
+      var row = categoryRows[i];
+      if (!row) continue;
+      var v = isTssMode ? Number(row.totalTss) : Number(row.wkg);
+      if (isFinite(v) && v > myVal + eps) strictlyGreater++;
+    }
+    return strictlyGreater + 1;
   }
 
   function mergeEntriesFromByCategory(bc) {
@@ -66,9 +88,6 @@
   }
 
   function getCohortEntries(entries, byCategory, activeCategory) {
-    if (byCategory && byCategory[activeCategory] && byCategory[activeCategory].length) {
-      return byCategory[activeCategory].slice();
-    }
     var list =
       entries && entries.length
         ? entries.slice()
@@ -210,20 +229,29 @@
 
     var myX = myRaw != null && !isNaN(myRaw) ? Math.min(xMax, Math.max(xMin, myRaw)) : null;
 
+    var userAgeCat = currentUser && currentUser.ageCategory;
     var displayRank = null;
-    if (activeCategory === 'Supremo' && currentUser && currentUser.rank != null) {
-      displayRank = normalizeRankDisplay(currentUser.rank);
-    } else if (currentUserId && cohort.length) {
-      var idx = cohort.findIndex(function (e) {
-        return e.userId === currentUserId;
-      });
-      if (idx >= 0) {
-        var cohortRow = cohort[idx];
-        displayRank =
-          cohortRow && cohortRow.rank != null
-            ? normalizeRankDisplay(cohortRow.rank)
-            : normalizeRankDisplay(idx + 1);
-      }
+
+    if (activeCategory === 'Supremo') {
+      var globalR =
+        currentUser && currentUser.rank != null
+          ? currentUser.rank
+          : myRankSupremo && myRankSupremo.rank != null
+          ? myRankSupremo.rank
+          : null;
+      displayRank = safeFloorRank(globalR);
+    } else if (userAgeCat && activeCategory === userAgeCat) {
+      var heroArr = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
+      var heroIdx = currentUserId
+        ? heroArr.findIndex(function (e) {
+            return e.userId === currentUserId;
+          })
+        : -1;
+      if (heroIdx >= 0) displayRank = heroIdx + 1;
+    } else {
+      var compareArr = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
+      var rawRank = rankInCategoryByValue(compareArr, myRaw, isTss);
+      if (rawRank != null) displayRank = rankDisplayForChart(rawRank);
     }
 
     var valueFmt =
