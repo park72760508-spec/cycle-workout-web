@@ -46,10 +46,10 @@
     return 'stelvio-dist-' + (++_gid);
   }
 
-  function rankDisplayForChart(n) {
+  /** API·목록과 동일한 정수 순위 (잘못된 2→3 치환 제거) */
+  function normalizeRankDisplay(n) {
     var r = Number(n);
-    if (r !== 2) return r;
-    return 3;
+    return isFinite(r) && r >= 1 ? Math.floor(r) : null;
   }
 
   function mergeEntriesFromByCategory(bc) {
@@ -66,6 +66,9 @@
   }
 
   function getCohortEntries(entries, byCategory, activeCategory) {
+    if (byCategory && byCategory[activeCategory] && byCategory[activeCategory].length) {
+      return byCategory[activeCategory].slice();
+    }
     var list =
       entries && entries.length
         ? entries.slice()
@@ -208,13 +211,19 @@
     var myX = myRaw != null && !isNaN(myRaw) ? Math.min(xMax, Math.max(xMin, myRaw)) : null;
 
     var displayRank = null;
-    if (currentUser && currentUser.rank != null && activeCategory === 'Supremo') {
-      displayRank = rankDisplayForChart(currentUser.rank);
+    if (activeCategory === 'Supremo' && currentUser && currentUser.rank != null) {
+      displayRank = normalizeRankDisplay(currentUser.rank);
     } else if (currentUserId && cohort.length) {
       var idx = cohort.findIndex(function (e) {
         return e.userId === currentUserId;
       });
-      if (idx >= 0) displayRank = rankDisplayForChart(idx + 1);
+      if (idx >= 0) {
+        var cohortRow = cohort[idx];
+        displayRank =
+          cohortRow && cohortRow.rank != null
+            ? normalizeRankDisplay(cohortRow.rank)
+            : normalizeRankDisplay(idx + 1);
+      }
     }
 
     var valueFmt =
