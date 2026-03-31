@@ -6705,6 +6705,9 @@ function initializeCurrentScreen(screenId) {
       // }
       break;
 
+    case 'openRidingRoomScreen':
+      break;
+
     case 'connectionScreen':
       console.log('기기 연결 화면 초기화');
       // ANT+ 버튼 비활성화 (클릭 기능 제거)
