@@ -120,7 +120,7 @@ export function OpenRidingCalendarMain(props) {
 
   function removeRegion(r) {
     savePrefs({
-      activeRegions: prefs.activeRegions.filter(function (x) { return x !== r; });
+      activeRegions: prefs.activeRegions.filter(function (x) { return x !== r; }),
       preferredLevels: prefs.preferredLevels
     });
   }
