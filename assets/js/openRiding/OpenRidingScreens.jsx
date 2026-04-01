@@ -666,7 +666,7 @@ function OpenRidingCreateForm(props) {
       </label>
 
       <div>
-        <span className="block text-sm font-medium text-slate-700 mb-1">날짜 (한국 시간)</span>
+        <span className="block text-sm font-medium text-slate-700 mb-1">날짜</span>
         <button
           type="button"
           className="w-full text-left border border-slate-300 rounded-lg px-3 py-2.5 bg-white hover:bg-slate-50"
@@ -726,11 +726,11 @@ function OpenRidingCreateForm(props) {
         <legend className="font-medium text-slate-800 px-1">레벨</legend>
         {RIDING_LEVEL_OPTIONS.map(function (opt) {
           return (
-            <label key={opt.value} className="flex items-start gap-2 cursor-pointer py-1 rounded-lg hover:bg-slate-50">
-              <input type="radio" name="lvl" className="mt-1" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
-              <span>
+            <label key={opt.value} className="flex items-center gap-2 cursor-pointer py-1.5 rounded-lg hover:bg-slate-50">
+              <input type="radio" name="lvl" className="shrink-0" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
+              <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0 leading-snug">
                 <span className="font-medium text-slate-800">{opt.value}</span>
-                <span className="block text-xs text-slate-500 mt-0.5">{opt.hint}</span>
+                <span className="text-xs text-slate-500">({opt.hint})</span>
               </span>
             </label>
           );
@@ -809,20 +809,11 @@ function OpenRidingCreateForm(props) {
               </div>
               <button
                 type="button"
-                className="mt-3 w-full py-2 rounded-xl border border-slate-200 text-sm font-medium text-violet-700 bg-violet-50"
-                onClick={function () {
-                  var t = getTodaySeoulYmd();
-                  set('date', t);
-                  var tp = t.split('-');
-                  setPickerY(parseInt(tp[0], 10));
-                  setPickerM(parseInt(tp[1], 10));
-                }}
+                className="mt-3 w-full py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 mb-3"
+                onClick={function () { setDateModalOpen(false); }}
               >
-                오늘 (한국)
+                닫기
               </button>
-            </div>
-            <div className="px-3 py-2 border-t border-slate-100">
-              <button type="button" className="w-full py-2 text-sm text-slate-600" onClick={function () { setDateModalOpen(false); }}>닫기</button>
             </div>
           </div>
         </div>
