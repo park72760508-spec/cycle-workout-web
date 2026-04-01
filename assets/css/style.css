@@ -926,15 +926,25 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingRoomScreen .open-riding-create-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   margin-top: 1rem;
-  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  padding-top: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  padding-left: 1rem;
+  padding-right: 1rem;
   font-size: 1rem;
   font-weight: 600;
+  line-height: 1.25;
   border-radius: 12px;
   border: none;
   box-sizing: border-box;
-  min-height: 52px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  min-height: 0;
 }
 
 #openRidingRoomScreen .open-riding-time-dial {
