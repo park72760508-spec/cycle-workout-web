@@ -263,18 +263,25 @@ function OpenRidingCalendarMain(props) {
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
       {compact ? (
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-xs text-slate-600 min-w-0 flex-1">
-            <span className="font-medium text-slate-800">{userLabel}</span>
-            <span className="text-slate-500"> · 지역·레벨 맞춤</span>
-          </p>
-          <button
-            type="button"
-            className="open-riding-filter-launch-btn shrink-0 inline-flex items-center justify-center gap-0.5 rounded-lg border-2 border-violet-600 bg-white px-2.5 py-1.5 text-[11px] sm:text-xs font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
-            onClick={function () { setFilterModalOpen(true); }}
-            aria-label="맞춤 필터 설정"
-          >
-            맞춤 필터 (+)
-          </button>
+          <span className="text-xs font-medium text-slate-800 min-w-0 flex-1 truncate">{userLabel}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
+            <button
+              type="button"
+              className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap"
+              onClick={function () { setFilterModalOpen(true); }}
+              aria-label="맞춤 필터 설정"
+            >
+              맞춤 필터 (+)
+            </button>
+            <button
+              type="button"
+              className="open-riding-create-btn inline-flex items-center justify-center rounded-lg bg-violet-600 text-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold shadow hover:bg-violet-700 whitespace-nowrap"
+              onClick={onOpenCreate}
+              aria-label="라이딩 생성"
+            >
+              라이딩 생성 (+)
+            </button>
+          </div>
         </div>
       ) : (
       <header className="flex items-center justify-between gap-3 flex-wrap">
@@ -294,21 +301,10 @@ function OpenRidingCalendarMain(props) {
 
       <div className={compact ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}>
         <section className={(compact ? 'rounded-xl p-3 ' : 'md:col-span-2 rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
-          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-            <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
-              <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}>{'‹'}</button>
-              <span className="font-semibold text-sm sm:text-base">{year}년 {month + 1}월</span>
-              <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}>{'›'}</button>
-            </div>
-            {compact ? (
-              <button
-                type="button"
-                className="shrink-0 rounded-lg bg-violet-600 text-white px-2.5 py-1 text-[11px] font-medium shadow hover:bg-violet-700"
-                onClick={onOpenCreate}
-              >
-                라이딩 생성 (+)
-              </button>
-            ) : null}
+          <div className="flex items-center justify-center mb-3 gap-2">
+            <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}>{'‹'}</button>
+            <span className="font-semibold text-sm sm:text-base">{year}년 {month + 1}월</span>
+            <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}>{'›'}</button>
           </div>
           {loadingRides ? <p className="text-sm text-slate-400">불러오는 중…</p> : null}
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
