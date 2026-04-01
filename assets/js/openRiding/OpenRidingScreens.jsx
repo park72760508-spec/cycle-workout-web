@@ -926,6 +926,7 @@ function OpenRidingDetail(props) {
   var userId = props.userId;
   var onBack = props.onBack || function () {};
   var onOpenEdit = props.onOpenEdit || function () {};
+  var registerDetailHeaderEdit = props.registerDetailHeaderEdit;
 
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
@@ -980,6 +981,24 @@ function OpenRidingDetail(props) {
       setCancelBusy(false);
     }
   }
+
+  useEffect(
+    function () {
+      if (typeof registerDetailHeaderEdit !== 'function') return;
+      if (loading || !ride) {
+        registerDetailHeaderEdit(false, null);
+        return;
+      }
+      var host = !!(userId && String(ride.hostUserId || '') === String(userId));
+      var cancelled = String(ride.rideStatus || 'active') === 'cancelled';
+      if (host && !cancelled) registerDetailHeaderEdit(true, onOpenEdit);
+      else registerDetailHeaderEdit(false, null);
+      return function () {
+        registerDetailHeaderEdit(false, null);
+      };
+    },
+    [registerDetailHeaderEdit, loading, ride, userId, onOpenEdit]
+  );
 
   if (loading || !ride) {
     return <div className="p-6 text-center text-slate-500">불러오는 중…</div>;
@@ -1039,32 +1058,22 @@ function OpenRidingDetail(props) {
       ) : null}
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
-        <div className="open-riding-detail-stat-row items-center">
+        <div className="open-riding-detail-stat-row">
           <span className="open-riding-detail-stat-label">제목</span>
-          <div className="open-riding-detail-stat-value flex flex-1 min-w-0 items-center justify-end gap-2">
-            <span className={'text-left font-semibold text-slate-900 flex-1 min-w-0 break-words ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
+          <div className="open-riding-detail-stat-value flex min-w-0 flex-1 items-center justify-end gap-2 text-left">
+            <span className={'font-semibold text-slate-900 flex-1 min-w-0 break-words text-[13px] leading-[1.45] ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
               {ride.title}
             </span>
             {isHost && !isCancelled ? (
-              <div className="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  className="p-1.5 rounded-lg hover:bg-violet-100/80 active:opacity-80 border border-transparent hover:border-violet-200"
-                  onClick={onOpenEdit}
-                  aria-label="라이딩 수정"
-                >
-                  <OpenRidingDashboardEditIcon />
-                </button>
-                <button
-                  type="button"
-                  className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap"
-                  onClick={function () {
-                    setBombOpen(true);
-                  }}
-                >
-                  라이딩 폭파
-                </button>
-              </div>
+              <button
+                type="button"
+                className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap shrink-0 self-center"
+                onClick={function () {
+                  setBombOpen(true);
+                }}
+              >
+                라이딩 폭파
+              </button>
             ) : null}
           </div>
         </div>
@@ -1215,6 +1224,20 @@ function OpenRidingRoomApp(props) {
   var _rid = useState(null);
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
+  var _dhe = useState({ show: false, onEdit: null });
+  var detailHeaderEdit = _dhe[0];
+  var setDetailHeaderEdit = _dhe[1];
+
+  var registerDetailHeaderEdit = useCallback(function (show, onEdit) {
+    setDetailHeaderEdit({ show: !!show, onEdit: onEdit || null });
+  }, []);
+
+  useEffect(
+    function () {
+      if (view !== 'detail') setDetailHeaderEdit({ show: false, onEdit: null });
+    },
+    [view]
+  );
 
   function handleTopBack() {
     if (view === 'main') {
@@ -1267,6 +1290,7 @@ function OpenRidingRoomApp(props) {
         userId={userId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
+        registerDetailHeaderEdit={registerDetailHeaderEdit}
       />
     );
   } else {
@@ -1300,7 +1324,19 @@ function OpenRidingRoomApp(props) {
         <h1 className="flex-1 text-center font-bold text-base text-gray-900 m-0" style={{ fontSize: '1.05rem' }}>
           {headerTitle}
         </h1>
-        <span className="shrink-0" style={{ width: '2.5em' }} aria-hidden="true" />
+        {view === 'detail' && detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
+          <button
+            type="button"
+            className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
+            style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={detailHeaderEdit.onEdit}
+            aria-label="라이딩 수정"
+          >
+            <OpenRidingDashboardEditIcon />
+          </button>
+        ) : (
+          <span className="shrink-0" style={{ width: '2.5em' }} aria-hidden="true" />
+        )}
       </div>
       <div className="open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pt-2 w-full box-border pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">{inner}</div>
     </div>
