@@ -665,51 +665,57 @@ function OpenRidingCreateForm(props) {
         </select>
       </label>
 
-      <div>
-        <span className="block font-medium text-slate-700 mb-1">날짜</span>
-        <button
-          type="button"
-          className="w-full text-left border border-slate-300 rounded-lg px-3 py-2 bg-white hover:bg-slate-50 text-sm"
-          onClick={openKoreanDateModal}
-        >
-          <span className="text-slate-800">{formatKoreanDateLabelFromYmd(form.date)}</span>
-          <span className="block text-xs text-slate-500 mt-0.5">탭하여 달력에서 선택 · 오늘: {formatKoreanDateLabelFromYmd(seoulTodayYmd)}</span>
-        </button>
-      </div>
-
-      <div>
-        <span className="block font-medium text-slate-700 mb-1">출발 시간</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="open-riding-time-dial flex-1 min-w-[5rem] text-sm"
-            value={hmPick.h}
-            aria-label="시"
-            onChange={function (e) {
-              var nh = Number(e.target.value);
-              set('departureTime', pad2(nh) + ':' + pad2(hmPick.mi));
-            }}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <span className="block font-medium text-slate-700 mb-1">날짜</span>
+          <button
+            type="button"
+            className="w-full text-left border border-slate-300 rounded-lg px-2 py-1.5 bg-white hover:bg-slate-50 text-sm text-slate-800 inline-flex items-center"
+            onClick={openKoreanDateModal}
           >
-            {hourOptions.map(function (h) {
-              return (
-                <option key={h} value={h}>{pad2(h)}시</option>
-              );
-            })}
-          </select>
-          <select
-            className="open-riding-time-dial flex-1 min-w-[5rem] text-sm"
-            value={hmPick.mi}
-            aria-label="분"
-            onChange={function (e) {
-              var nm = Number(e.target.value);
-              set('departureTime', pad2(hmPick.h) + ':' + pad2(nm));
-            }}
-          >
-            {minuteOptions.map(function (m) {
-              return (
-                <option key={m} value={m}>{pad2(m)}분</option>
-              );
-            })}
-          </select>
+            {formatKoreanDateLabelFromYmd(form.date)}
+          </button>
+        </div>
+        <div className="min-w-0">
+          <span className="block font-medium text-slate-700 mb-1">출발 시간</span>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 min-w-0">
+              <span className="block text-xs text-slate-500 mb-0.5">시</span>
+              <select
+                className="open-riding-time-dial w-full text-sm"
+                value={hmPick.h}
+                aria-label="시"
+                onChange={function (e) {
+                  var nh = Number(e.target.value);
+                  set('departureTime', pad2(nh) + ':' + pad2(hmPick.mi));
+                }}
+              >
+                {hourOptions.map(function (h) {
+                  return (
+                    <option key={h} value={h}>{pad2(h)}시</option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="block text-xs text-slate-500 mb-0.5">분</span>
+              <select
+                className="open-riding-time-dial w-full text-sm"
+                value={hmPick.mi}
+                aria-label="분"
+                onChange={function (e) {
+                  var nm = Number(e.target.value);
+                  set('departureTime', pad2(hmPick.h) + ':' + pad2(nm));
+                }}
+              >
+                {minuteOptions.map(function (m) {
+                  return (
+                    <option key={m} value={m}>{pad2(m)}분</option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -760,7 +766,7 @@ function OpenRidingCreateForm(props) {
 
       <label className="block font-medium text-slate-700">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1 block w-full text-sm" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
 
-      <button type="submit" className="open-riding-create-submit w-full flex-1 bg-violet-600 text-white rounded-xl py-3 font-medium disabled:opacity-50" disabled={isBusy}>
+      <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
         {isBusy ? '저장 중…' : '생성'}
       </button>
 
@@ -938,9 +944,9 @@ function OpenRidingDetail(props) {
 
       <div className="flex gap-2">
         {role ? (
-          <button type="button" className="flex-1 border border-red-200 text-red-700 rounded-xl py-3" disabled={isActionBusy} onClick={onLeave}>참석 취소</button>
+          <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>참석 취소</button>
         ) : (
-          <button type="button" className="flex-1 bg-violet-600 text-white rounded-xl py-3" disabled={isActionBusy || !userId} onClick={onJoin}>참석 신청</button>
+          <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isActionBusy || !userId} onClick={onJoin}>참석 신청</button>
         )}
       </div>
     </div>
@@ -1030,7 +1036,7 @@ function OpenRidingRoomApp(props) {
         </h1>
         <span className="shrink-0" style={{ width: '2.5em' }} aria-hidden="true" />
       </div>
-      <div className="open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pb-4 pt-2 w-full box-border">{inner}</div>
+      <div className="open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pt-2 w-full box-border pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">{inner}</div>
     </div>
   );
 }
