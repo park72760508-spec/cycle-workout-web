@@ -77,6 +77,66 @@ function dateKey(y, m, d) {
   return y + '-' + pad2(m + 1) + '-' + pad2(d);
 }
 
+/** 한국(서울) 기준 오늘 YYYY-MM-DD */
+function getTodaySeoulYmd() {
+  try {
+    var parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    var y = '';
+    var m = '';
+    var d = '';
+    parts.forEach(function (p) {
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') m = p.value;
+      if (p.type === 'day') d = p.value;
+    });
+    if (y && m && d) return y + '-' + m + '-' + d;
+  } catch (e1) {}
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+function daysInGregorianMonth(year, month1) {
+  return new Date(year, month1, 0).getDate();
+}
+
+function seoulFirstDayOfWeekSun0(year, month1) {
+  var iso = year + '-' + pad2(month1) + '-01T12:00:00+09:00';
+  var parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).formatToParts(new Date(iso));
+  var w = '';
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].type === 'weekday') w = parts[i].value;
+  }
+  var map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[w] !== undefined ? map[w] : 0;
+}
+
+function formatKoreanDateLabelFromYmd(ymd) {
+  if (!ymd || String(ymd).length < 8) return '';
+  try {
+    return new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short'
+    }).format(new Date(String(ymd).trim() + 'T12:00:00+09:00'));
+  } catch (e) {
+    return ymd;
+  }
+}
+
+function parseHmFromDeparture(s) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
+  if (!m) return { h: 7, mi: 0 };
+  var h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  var mi = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+  mi = Math.round(mi / 5) * 5;
+  if (mi === 60) {
+    mi = 0;
+    h = Math.min(23, h + 1);
+  }
+  return { h: h, mi: mi };
+}
+
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
 function OpenRidingCalendarMain(props) {
   var firestore = props.firestore;
@@ -475,13 +535,12 @@ function OpenRidingCreateForm(props) {
   var storage = props.storage;
   var hostUserId = props.hostUserId;
   var onCreated = props.onCreated || function () {};
-  var onCancel = props.onCancel || function () {};
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
     return {
       title: '',
-      date: new Date().toISOString().slice(0, 10),
+      date: getTodaySeoulYmd(),
       departureTime: '07:00',
       departureLocation: '',
       distance: 40,
@@ -490,7 +549,6 @@ function OpenRidingCreateForm(props) {
       maxParticipants: 10,
       hostName: prof.hostName || '',
       contactInfo: prof.contactInfo || '',
-      isContactPublic: true,
       region: '',
       gpxFile: null
     };
@@ -501,6 +559,16 @@ function OpenRidingCreateForm(props) {
   var isBusy = _busy[0];
   var setBusy = _busy[1];
 
+  var _dm = useState(false);
+  var dateModalOpen = _dm[0];
+  var setDateModalOpen = _dm[1];
+  var _py = useState(new Date().getFullYear());
+  var pickerY = _py[0];
+  var setPickerY = _py[1];
+  var _pm = useState(1);
+  var pickerM = _pm[0];
+  var setPickerM = _pm[1];
+
   function set(k, v) {
     setForm(function (prev) {
       var n = {};
@@ -509,6 +577,50 @@ function OpenRidingCreateForm(props) {
       return n;
     });
   }
+
+  function openKoreanDateModal() {
+    var p = String(form.date || '').split('-');
+    var y = parseInt(p[0], 10);
+    var mo = parseInt(p[1], 10);
+    if (!isNaN(y) && !isNaN(mo)) {
+      setPickerY(y);
+      setPickerM(mo);
+    } else {
+      var t = getTodaySeoulYmd().split('-');
+      setPickerY(parseInt(t[0], 10));
+      setPickerM(parseInt(t[1], 10));
+    }
+    setDateModalOpen(true);
+  }
+
+  function shiftPickerMonth(delta) {
+    var y = pickerY;
+    var m = pickerM + delta;
+    while (m < 1) {
+      m += 12;
+      y -= 1;
+    }
+    while (m > 12) {
+      m -= 12;
+      y += 1;
+    }
+    setPickerY(y);
+    setPickerM(m);
+  }
+
+  var hmPick = parseHmFromDeparture(form.departureTime);
+  var minuteOptions = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+  var hourOptions = [];
+  for (var hi = 0; hi < 24; hi++) hourOptions.push(hi);
+
+  var seoulTodayYmd = getTodaySeoulYmd();
+  var firstDow = seoulFirstDayOfWeekSun0(pickerY, pickerM);
+  var dim = daysInGregorianMonth(pickerY, pickerM);
+  var pickerCells = [];
+  var ci;
+  for (ci = 0; ci < firstDow; ci++) pickerCells.push(null);
+  for (ci = 1; ci <= dim; ci++) pickerCells.push(ci);
+  while (pickerCells.length % 7 !== 0) pickerCells.push(null);
 
   async function submit(e) {
     e.preventDefault();
@@ -520,7 +632,7 @@ function OpenRidingCreateForm(props) {
         var draftId = 'draft/' + hostUserId + '/' + Date.now();
         gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
       }
-      var d = new Date(form.date + 'T12:00:00');
+      var d = new Date(form.date + 'T12:00:00+09:00');
       var rideId = await createRide(firestore, hostUserId, {
         title: form.title,
         date: d,
@@ -532,7 +644,7 @@ function OpenRidingCreateForm(props) {
         maxParticipants: form.maxParticipants,
         hostName: form.hostName,
         contactInfo: form.contactInfo,
-        isContactPublic: form.isContactPublic,
+        isContactPublic: false,
         region: form.region,
         gpxUrl: gpxUrl
       });
@@ -543,75 +655,178 @@ function OpenRidingCreateForm(props) {
   }
 
   return (
-    <form className="max-w-lg mx-auto p-4 space-y-3 bg-white rounded-2xl border border-slate-200 shadow-sm" onSubmit={submit}>
-      <h2 className="text-lg font-bold">라이딩 생성</h2>
+    <form className="w-full max-w-lg mx-auto space-y-3 pb-1" onSubmit={submit}>
+      <label className="block text-sm font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
 
-      <label className="block text-sm">제목<input className="mt-1 w-full border rounded-lg px-2 py-1" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
-
-      <label className="block text-sm">지역
-        <select className="mt-1 w-full border rounded-lg px-2 py-1" value={form.region} onChange={function (e) { set('region', e.target.value); }} required>
+      <label className="block text-sm font-medium text-slate-700">지역
+        <select className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.region} onChange={function (e) { set('region', e.target.value); }} required>
           <option value="">선택</option>
           {KOREA_SIGUNGU_OPTIONS.map(function (o) { return <option key={o} value={o}>{o}</option>; })}
         </select>
       </label>
 
-      <div className="grid grid-cols-2 gap-2">
-        <label className="block text-sm">날짜<input type="date" className="mt-1 w-full border rounded-lg px-2 py-1" value={form.date} onChange={function (e) { set('date', e.target.value); }} required /></label>
-        <label className="block text-sm">출발시간<input className="mt-1 w-full border rounded-lg px-2 py-1" value={form.departureTime} onChange={function (e) { set('departureTime', e.target.value); }} required /></label>
+      <div>
+        <span className="block text-sm font-medium text-slate-700 mb-1">날짜 (한국 시간)</span>
+        <button
+          type="button"
+          className="w-full text-left border border-slate-300 rounded-lg px-3 py-2.5 bg-white hover:bg-slate-50"
+          onClick={openKoreanDateModal}
+        >
+          <span className="text-slate-800">{formatKoreanDateLabelFromYmd(form.date)}</span>
+          <span className="block text-[11px] text-slate-500 mt-0.5">탭하여 달력에서 선택 · 오늘: {formatKoreanDateLabelFromYmd(seoulTodayYmd)}</span>
+        </button>
       </div>
 
-      <label className="block text-sm">출발 장소<input className="mt-1 w-full border rounded-lg px-2 py-1" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} required /></label>
-
-      <div className="grid grid-cols-2 gap-2">
-        <label className="block text-sm">거리(km)<input type="number" className="mt-1 w-full border rounded-lg px-2 py-1" value={form.distance} onChange={function (e) { set('distance', Number(e.target.value)); }} min={1} /></label>
-        <label className="block text-sm">최대 인원<input type="number" className="mt-1 w-full border rounded-lg px-2 py-1" value={form.maxParticipants} onChange={function (e) { set('maxParticipants', Number(e.target.value)); }} min={1} /></label>
+      <div>
+        <span className="block text-sm font-medium text-slate-700 mb-1">출발 시간</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="open-riding-time-dial flex-1 min-w-[5rem]"
+            value={hmPick.h}
+            aria-label="시"
+            onChange={function (e) {
+              var nh = Number(e.target.value);
+              set('departureTime', pad2(nh) + ':' + pad2(hmPick.mi));
+            }}
+          >
+            {hourOptions.map(function (h) {
+              return (
+                <option key={h} value={h}>{pad2(h)}시</option>
+              );
+            })}
+          </select>
+          <select
+            className="open-riding-time-dial flex-1 min-w-[5rem]"
+            value={hmPick.mi}
+            aria-label="분"
+            onChange={function (e) {
+              var nm = Number(e.target.value);
+              set('departureTime', pad2(hmPick.h) + ':' + pad2(nm));
+            }}
+          >
+            {minuteOptions.map(function (m) {
+              return (
+                <option key={m} value={m}>{pad2(m)}분</option>
+              );
+            })}
+          </select>
+        </div>
       </div>
 
-      <label className="block text-sm">코스 설명<textarea className="mt-1 w-full border rounded-lg px-2 py-1" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
+      <label className="block text-sm font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} required /></label>
 
-      <fieldset className="text-sm">
-        <legend className="font-medium">레벨</legend>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block text-sm font-medium text-slate-700">거리(km)<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.distance} onChange={function (e) { set('distance', Number(e.target.value)); }} min={1} /></label>
+        <label className="block text-sm font-medium text-slate-700">최대 인원<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.maxParticipants} onChange={function (e) { set('maxParticipants', Number(e.target.value)); }} min={1} /></label>
+      </div>
+
+      <label className="block text-sm font-medium text-slate-700">코스 설명<textarea className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
+
+      <fieldset className="text-sm border border-slate-200 rounded-xl p-3 space-y-2">
+        <legend className="font-medium text-slate-800 px-1">레벨</legend>
         {RIDING_LEVEL_OPTIONS.map(function (opt) {
           return (
-            <label key={opt.value} className="mr-4">
-              <input type="radio" name="lvl" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
-              {opt.value}
+            <label key={opt.value} className="flex items-start gap-2 cursor-pointer py-1 rounded-lg hover:bg-slate-50">
+              <input type="radio" name="lvl" className="mt-1" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
+              <span>
+                <span className="font-medium text-slate-800">{opt.value}</span>
+                <span className="block text-xs text-slate-500 mt-0.5">{opt.hint}</span>
+              </span>
             </label>
           );
         })}
       </fieldset>
 
-      <label className="block text-sm">
+      <label className="block text-sm font-medium text-slate-700">
         방장명
         <input
-          className="mt-1 w-full border rounded-lg px-2 py-1 bg-slate-50 text-slate-700"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 bg-slate-50 text-slate-700"
           value={form.hostName}
           readOnly
           required
           title="로그인 프로필 이름이 자동 입력됩니다. 변경은 프로필(사용자 정보)에서 하세요."
         />
       </label>
-      <label className="block text-sm">
+      <label className="block text-sm font-medium text-slate-700">
         연락처
         <input
-          className="mt-1 w-full border rounded-lg px-2 py-1 bg-slate-50 text-slate-700"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 bg-slate-50 text-slate-700"
           value={form.contactInfo}
           readOnly
-          title="로그인 프로필 연락처가 자동 입력됩니다. 변경은 프로필에서 하세요."
+          title="로그인 프로필 연락처가 자동 입력됩니다. 참석 확정자에게만 공개됩니다."
         />
       </label>
-      <p className="text-[11px] text-slate-500 -mt-1">방장명·연락처는 로그인 계정 프로필에서 가져옵니다.</p>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={form.isContactPublic} onChange={function (e) { set('isContactPublic', e.target.checked); }} />
-        연락처 공개
-      </label>
+      <p className="text-[11px] text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      <label className="block text-sm">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
+      <label className="block text-sm font-medium text-slate-700">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1 block w-full text-sm" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
 
-      <div className="flex gap-2 pt-2">
-        <button type="button" className="flex-1 border rounded-xl py-2" onClick={onCancel}>취소</button>
-        <button type="submit" className="flex-1 bg-violet-600 text-white rounded-xl py-2 disabled:opacity-50" disabled={isBusy}>{isBusy ? '저장 중…' : '생성'}</button>
-      </div>
+      <button type="submit" className="open-riding-create-submit bg-violet-600 text-white disabled:opacity-50" disabled={isBusy}>
+        {isBusy ? '저장 중…' : '생성'}
+      </button>
+
+      {dateModalOpen ? (
+        <div
+          className="fixed inset-0 z-[10060] flex items-end sm:items-center justify-center bg-black/45 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-label="날짜 선택"
+          onClick={function () { setDateModalOpen(false); }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden" onClick={function (e) { e.stopPropagation(); }}>
+            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+              <button type="button" className="p-2 text-slate-600 text-lg" onClick={function () { shiftPickerMonth(-1); }} aria-label="이전 달">‹</button>
+              <span className="font-semibold text-slate-800">{pickerY}년 {pickerM}월</span>
+              <button type="button" className="p-2 text-slate-600 text-lg" onClick={function () { shiftPickerMonth(1); }} aria-label="다음 달">›</button>
+            </div>
+            <div className="p-3">
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-500 mb-1">
+                {['일', '월', '화', '수', '목', '금', '토'].map(function (w) { return <div key={w}>{w}</div>; })}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {pickerCells.map(function (cell, idx) {
+                  if (cell == null) return <div key={'e' + idx} className="h-9" />;
+                  var cellKey = dateKey(pickerY, pickerM - 1, cell);
+                  var isToday = cellKey === seoulTodayYmd;
+                  var isSel = form.date === cellKey;
+                  return (
+                    <button
+                      key={cellKey}
+                      type="button"
+                      onClick={function () {
+                        set('date', cellKey);
+                        setDateModalOpen(false);
+                      }}
+                      className={
+                        'h-9 rounded-lg text-sm ' +
+                        (isSel ? 'bg-violet-600 text-white font-semibold ' : 'hover:bg-violet-50 text-slate-800 ') +
+                        (isToday && !isSel ? ' ring-2 ring-violet-400 ring-inset ' : '')
+                      }
+                    >
+                      {cell}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="mt-3 w-full py-2 rounded-xl border border-slate-200 text-sm font-medium text-violet-700 bg-violet-50"
+                onClick={function () {
+                  var t = getTodaySeoulYmd();
+                  set('date', t);
+                  var tp = t.split('-');
+                  setPickerY(parseInt(tp[0], 10));
+                  setPickerM(parseInt(tp[1], 10));
+                }}
+              >
+                오늘 (한국)
+              </button>
+            </div>
+            <div className="px-3 py-2 border-t border-slate-100">
+              <button type="button" className="w-full py-2 text-sm text-slate-600" onClick={function () { setDateModalOpen(false); }}>닫기</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }
@@ -656,7 +871,8 @@ function OpenRidingDetail(props) {
   var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
   var dateStr = ts ? ts.toLocaleDateString('ko-KR') : '';
 
-  var showContact = ride.isContactPublic || (role === 'participant');
+  var isHost = userId && String(ride.hostUserId || '') === String(userId);
+  var showContact = !!(isHost || role === 'participant');
 
   var roleLabel = !role ? '미신청' : role === 'participant' ? '참석 확정' : '대기 ' + role.position + '번';
 
@@ -673,10 +889,9 @@ function OpenRidingDetail(props) {
   }
 
   return (
-    <div className="max-w-lg mx-auto p-4 space-y-4">
-      <button type="button" className="text-sm text-violet-600" onClick={onBack}>← 목록</button>
-      <h1 className="text-xl font-bold">{ride.title}</h1>
-      <ul className="text-sm text-slate-600 space-y-1">
+    <div className="max-w-lg mx-auto py-2 space-y-4 w-full">
+      <h1 className="text-xl font-bold px-1">{ride.title}</h1>
+      <ul className="text-sm text-slate-600 space-y-1 px-1">
         <li>일시: {dateStr} {ride.departureTime}</li>
         <li>출발: {ride.departureLocation}</li>
         <li>지역: {ride.region} / 레벨: {ride.level}</li>
@@ -684,7 +899,7 @@ function OpenRidingDetail(props) {
         <li>정원: {(ride.participants && ride.participants.length) || 0} / {ride.maxParticipants}</li>
         <li>방장: {ride.hostName}</li>
         {showContact && ride.contactInfo ? <li>연락처: {ride.contactInfo}</li> : null}
-        {!ride.isContactPublic && role !== 'participant' ? <li className="text-amber-600">연락처는 참석 확정 후 공개됩니다.</li> : null}
+        {!showContact && ride.contactInfo ? <li className="text-amber-600">연락처는 참석 확정 후에 표시됩니다.</li> : null}
       </ul>
       {ride.course ? <p className="text-sm bg-slate-50 rounded-lg p-3">{ride.course}</p> : null}
       {ride.gpxUrl ? <a className="text-violet-600 text-sm" href={ride.gpxUrl} target="_blank" rel="noreferrer">GPX 다운로드</a> : null}
@@ -755,28 +970,35 @@ function OpenRidingRoomApp(props) {
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
 
+  function handleTopBack() {
+    if (view === 'main') {
+      if (typeof showScreen === 'function') showScreen('basecampScreen');
+    } else {
+      setDetailRideId(null);
+      setView('main');
+    }
+  }
+
+  var headerTitle = view === 'create' ? '라이딩 생성' : view === 'detail' ? '라이딩 상세' : '오픈 라이딩방';
+
+  var inner = null;
   if (!firestore) {
-    return (
+    inner = (
       <div className="p-4 text-center text-sm text-amber-900 rounded-xl border border-amber-200 bg-amber-50">
         Firestore에 연결되지 않았습니다. 네트워크 또는 로그인 상태를 확인한 뒤 다시 시도해 주세요.
       </div>
     );
-  }
-
-  if (view === 'create') {
-    return (
+  } else if (view === 'create') {
+    inner = (
       <OpenRidingCreateForm
         firestore={firestore}
         storage={storage}
         hostUserId={userId}
         onCreated={function () { setView('main'); }}
-        onCancel={function () { setView('main'); }}
       />
     );
-  }
-
-  if (view === 'detail' && detailRideId) {
-    return (
+  } else if (view === 'detail' && detailRideId) {
+    inner = (
       <OpenRidingDetail
         firestore={firestore}
         rideId={detailRideId}
@@ -784,18 +1006,41 @@ function OpenRidingRoomApp(props) {
         onBack={function () { setView('main'); }}
       />
     );
+  } else {
+    inner = (
+      <OpenRidingCalendarMain
+        firestore={firestore}
+        storage={storage}
+        userId={userId}
+        userLabel={userLabel}
+        compact={true}
+        onOpenCreate={function () { setView('create'); }}
+        onSelectRide={function (id) { setDetailRideId(id); setView('detail'); }}
+      />
+    );
   }
 
   return (
-    <OpenRidingCalendarMain
-      firestore={firestore}
-      storage={storage}
-      userId={userId}
-      userLabel={userLabel}
-      compact={true}
-      onOpenCreate={function () { setView('create'); }}
-      onSelectRide={function (id) { setDetailRideId(id); setView('detail'); }}
-    />
+    <div className="open-riding-app-root">
+      <div className="open-riding-inner-header">
+        <button
+          type="button"
+          className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
+          style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={handleTopBack}
+          aria-label={view === 'main' ? '경로 선택' : '미니 달력 화면으로'}
+        >
+          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="flex-1 text-center font-bold text-base text-gray-900 m-0" style={{ fontSize: '1.05rem' }}>
+          {headerTitle}
+        </h1>
+        <span className="shrink-0" style={{ width: '2.5em' }} aria-hidden="true" />
+      </div>
+      <div className="open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pb-4 pt-2 w-full box-border">{inner}</div>
+    </div>
   );
 }
 

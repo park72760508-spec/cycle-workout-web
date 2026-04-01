@@ -60,9 +60,10 @@ export const KOREA_SIGUNGU_OPTIONS = [
 ].sort((a, b) => a.localeCompare(b, 'ko'));
 
 export const RIDING_LEVEL_OPTIONS = [
-  { value: '초급', hint: '평속 25km/h 이하' },
-  { value: '중급', hint: '평속 25~30km/h' },
-  { value: '상급', hint: '평속 30km/h 이상' }
+  { value: '초급', hint: '항속 25km/h 이하' },
+  { value: '중급', hint: '항속 25~30km/h' },
+  { value: '중상급', hint: '항속 30~35km/h' },
+  { value: '상급', hint: '항속 35km/h 이상' }
 ];
 
 if (typeof window !== 'undefined') {
