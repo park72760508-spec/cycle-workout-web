@@ -876,48 +876,33 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* 오픈 라이딩방: 미니 달력 + 리스트 스크롤 영역 */
-.open-riding-room-body-scroll {
-  text-align: left;
-  padding: 12px 10px 20px;
-  max-height: min(72vh, 640px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.open-riding-room-lead {
-  margin: 0 0 12px;
-  font-size: 0.88rem;
-  color: #334155;
-  line-height: 1.5;
-}
-
-/* 오픈 라이딩방: 화면 세로·가로 중앙 정렬 */
-#openRidingRoomScreen.active {
-  display: flex !important;
+/* 오픈 라이딩방: 랭킹보드와 동일 전체 화면 (헤더 고정 + 본문 스크롤) */
+#openRidingRoomScreen.open-riding-room-screen-root {
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
   box-sizing: border-box;
-  padding: 12px 10px;
-  position: relative;
-  overflow: hidden auto;
+  background: #fff;
 }
-#openRidingRoomScreen .connection-main-container {
-  margin: auto;
-  width: 100%;
-  max-width: 500px;
+#openRidingRoomScreen .open-riding-room-scroll {
+  flex: 1;
   min-height: 0;
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  padding: 12px 12px 24px;
+  max-width: 100%;
+  text-align: left;
 }
 
 #openRidingRoomScreen .open-riding-react-root {
   min-height: 120px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* 오픈 라이딩방: 맞춤 필터 열기 버튼(보라 테두리·흰 배경) */
