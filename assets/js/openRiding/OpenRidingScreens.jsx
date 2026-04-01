@@ -384,19 +384,16 @@ function OpenRidingCalendarMain(props) {
           </div>
           <div className="mt-2 flex flex-col gap-1.5 text-[11px] text-slate-600">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-slate-500 shrink-0">녹색 표시 :</span>
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
-              <span className="text-slate-500">맞춤 필터에 맞는 라이딩이 있는 날</span>
+              <span className="text-slate-500">맞춤 필터 라이딩</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-slate-500 shrink-0">보라색 표시 :</span>
               <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
               <span className="text-slate-500">내가 올린 라이딩</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-slate-500 shrink-0">회색 표시 :</span>
               <span className="inline-block w-3 h-3 rounded-sm bg-slate-300/90 shrink-0 border border-slate-500/30" aria-hidden />
-              <span className="text-slate-500">맞춤 필터에 맞는 라이딩은 없고 다른 라이딩만 있는 날</span>
+              <span className="text-slate-500">맞춤 필터 외 라이딩</span>
             </div>
           </div>
         </section>
