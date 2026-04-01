@@ -252,6 +252,17 @@ function OpenRidingCalendarMain(props) {
     return n + 'km';
   }
 
+  function rideListMetaSep() {
+    return (
+      <span
+        className="open-riding-list-meta-sep inline-flex shrink-0 items-center justify-center text-slate-400 px-1.5 text-[11px] leading-none select-none"
+        aria-hidden
+      >
+        ·
+      </span>
+    );
+  }
+
   function renderListSection() {
     return (
       <section className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
@@ -273,12 +284,16 @@ function OpenRidingCalendarMain(props) {
                     onClick={function () { onSelectRide(r.id); }}
                   >
                     <div className="font-medium text-slate-800 text-sm">{r.title}</div>
-                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span>{r.region != null && String(r.region).trim() ? r.region : '-'}</span>
-                      <span>{r.level != null && String(r.level).trim() ? r.level : '-'}</span>
-                      <span>{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
-                      <span>{rideDistanceKm(r)}</span>
-                      <span className="text-violet-700 font-semibold tabular-nums">{rideParticipantRatio(r)}</span>
+                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-center gap-y-0.5">
+                      <span className="shrink-0">{r.region != null && String(r.region).trim() ? r.region : '-'}</span>
+                      {rideListMetaSep()}
+                      <span className="shrink-0">{r.level != null && String(r.level).trim() ? r.level : '-'}</span>
+                      {rideListMetaSep()}
+                      <span className="shrink-0">{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
+                      {rideListMetaSep()}
+                      <span className="shrink-0">{rideDistanceKm(r)}</span>
+                      {rideListMetaSep()}
+                      <span className="text-violet-700 font-semibold tabular-nums shrink-0">{rideParticipantRatio(r)}</span>
                     </div>
                   </button>
                 </li>
