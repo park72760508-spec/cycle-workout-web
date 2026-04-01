@@ -925,32 +925,19 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   touch-action: pan-y;
 }
 
+/* 생성 버튼: 상세 「참석 신청」과 동일 py-3·rounded-xl, 하단 홈 인디케이터만 추가 */
 #openRidingRoomScreen .open-riding-create-submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
   margin-top: 1rem;
-  padding-top: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  padding-left: 1rem;
-  padding-right: 1rem;
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.25;
-  border-radius: 12px;
-  border: none;
   box-sizing: border-box;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  min-height: 0;
+  padding-bottom: max(0.75rem, calc(0.75rem + env(safe-area-inset-bottom, 0px))) !important;
 }
 
 #openRidingRoomScreen .open-riding-time-dial {
-  min-height: 44px;
-  font-size: 1rem;
-  padding: 0.5rem 0.75rem;
+  min-height: 38px;
+  padding: 0.35rem 0.5rem;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #fff;
