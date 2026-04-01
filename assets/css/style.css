@@ -925,14 +925,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   touch-action: pan-y;
 }
 
-/* 생성 버튼: 상세 「참석 신청」과 동일 py-3·rounded-xl, 하단 홈 인디케이터만 추가 */
-#openRidingRoomScreen .open-riding-create-submit {
-  margin-top: 1rem;
+/* 생성·참석 신청 동일 터치 높이 (비대칭 padding 금지 → 문구 아래 빈 줄 현상 방지) */
+#openRidingRoomScreen .open-riding-action-btn {
   box-sizing: border-box;
-  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  padding-bottom: max(0.75rem, calc(0.75rem + env(safe-area-inset-bottom, 0px))) !important;
+}
+#openRidingRoomScreen .open-riding-create-submit {
+  margin-top: 1rem;
+  cursor: pointer;
 }
 
 #openRidingRoomScreen .open-riding-time-dial {
