@@ -2301,20 +2301,9 @@
     </div>
   </div>
 
-  <!-- 오픈 라이딩방 (랭킹보드와 동일한 전체 화면 구조) -->
+  <!-- 오픈 라이딩방 (헤더·뒤로가기는 React OpenRidingRoomApp에서 처리) -->
   <div id="openRidingRoomScreen" class="screen open-riding-room-screen-root" style="display: none;">
-    <div class="open-riding-room-header" style="display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 10px 12px; background: #fff; border-bottom: 1px solid #e5e7eb; box-sizing: border-box;">
-      <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="if (typeof showScreen === 'function') showScreen('basecampScreen');" aria-label="경로 선택으로" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
-        <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-        </svg>
-      </button>
-      <h1 style="margin: 0; flex: 1; text-align: center; font-weight: 700; font-size: 1.05rem; color: #111827;">오픈 라이딩방</h1>
-      <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
-    </div>
-    <div id="open-riding-room-scroll" class="open-riding-room-scroll">
-      <div id="open-riding-react-root" class="open-riding-react-root" aria-live="polite"></div>
-    </div>
+    <div id="open-riding-react-root" class="open-riding-react-root" aria-live="polite"></div>
   </div>
 
   <!-- 센서 연결 (Device Settings) 화면 -->
