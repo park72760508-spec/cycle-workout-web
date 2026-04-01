@@ -655,33 +655,33 @@ function OpenRidingCreateForm(props) {
   }
 
   return (
-    <form className="w-full max-w-lg mx-auto space-y-3 pb-1" onSubmit={submit}>
-      <label className="block text-sm font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
+    <form className="w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700" onSubmit={submit}>
+      <label className="block font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
 
-      <label className="block text-sm font-medium text-slate-700">지역
-        <select className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.region} onChange={function (e) { set('region', e.target.value); }} required>
+      <label className="block font-medium text-slate-700">지역
+        <select className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.region} onChange={function (e) { set('region', e.target.value); }} required>
           <option value="">선택</option>
           {KOREA_SIGUNGU_OPTIONS.map(function (o) { return <option key={o} value={o}>{o}</option>; })}
         </select>
       </label>
 
       <div>
-        <span className="block text-sm font-medium text-slate-700 mb-1">날짜</span>
+        <span className="block font-medium text-slate-700 mb-1">날짜</span>
         <button
           type="button"
-          className="w-full text-left border border-slate-300 rounded-lg px-3 py-2.5 bg-white hover:bg-slate-50"
+          className="w-full text-left border border-slate-300 rounded-lg px-3 py-2 bg-white hover:bg-slate-50 text-sm"
           onClick={openKoreanDateModal}
         >
           <span className="text-slate-800">{formatKoreanDateLabelFromYmd(form.date)}</span>
-          <span className="block text-[11px] text-slate-500 mt-0.5">탭하여 달력에서 선택 · 오늘: {formatKoreanDateLabelFromYmd(seoulTodayYmd)}</span>
+          <span className="block text-xs text-slate-500 mt-0.5">탭하여 달력에서 선택 · 오늘: {formatKoreanDateLabelFromYmd(seoulTodayYmd)}</span>
         </button>
       </div>
 
       <div>
-        <span className="block text-sm font-medium text-slate-700 mb-1">출발 시간</span>
+        <span className="block font-medium text-slate-700 mb-1">출발 시간</span>
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="open-riding-time-dial flex-1 min-w-[5rem]"
+            className="open-riding-time-dial flex-1 min-w-[5rem] text-sm"
             value={hmPick.h}
             aria-label="시"
             onChange={function (e) {
@@ -696,7 +696,7 @@ function OpenRidingCreateForm(props) {
             })}
           </select>
           <select
-            className="open-riding-time-dial flex-1 min-w-[5rem]"
+            className="open-riding-time-dial flex-1 min-w-[5rem] text-sm"
             value={hmPick.mi}
             aria-label="분"
             onChange={function (e) {
@@ -713,20 +713,20 @@ function OpenRidingCreateForm(props) {
         </div>
       </div>
 
-      <label className="block text-sm font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} required /></label>
+      <label className="block font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} required /></label>
 
       <div className="grid grid-cols-2 gap-2">
-        <label className="block text-sm font-medium text-slate-700">거리(km)<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.distance} onChange={function (e) { set('distance', Number(e.target.value)); }} min={1} /></label>
-        <label className="block text-sm font-medium text-slate-700">최대 인원<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" value={form.maxParticipants} onChange={function (e) { set('maxParticipants', Number(e.target.value)); }} min={1} /></label>
+        <label className="block font-medium text-slate-700">거리(km)<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.distance} onChange={function (e) { set('distance', Number(e.target.value)); }} min={1} /></label>
+        <label className="block font-medium text-slate-700">최대 인원<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.maxParticipants} onChange={function (e) { set('maxParticipants', Number(e.target.value)); }} min={1} /></label>
       </div>
 
-      <label className="block text-sm font-medium text-slate-700">코스 설명<textarea className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
+      <label className="block font-medium text-slate-700">코스 설명<textarea className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
 
-      <fieldset className="text-sm border border-slate-200 rounded-xl p-3 space-y-2">
-        <legend className="font-medium text-slate-800 px-1">레벨</legend>
+      <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2">
+        <legend className="text-sm font-semibold text-slate-800 px-1">레벨</legend>
         {RIDING_LEVEL_OPTIONS.map(function (opt) {
           return (
-            <label key={opt.value} className="flex items-center gap-2 cursor-pointer py-1.5 rounded-lg hover:bg-slate-50">
+            <label key={opt.value} className="flex items-center gap-2 cursor-pointer py-1 rounded-lg hover:bg-slate-50 text-sm">
               <input type="radio" name="lvl" className="shrink-0" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
               <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0 leading-snug">
                 <span className="font-medium text-slate-800">{opt.value}</span>
@@ -737,30 +737,30 @@ function OpenRidingCreateForm(props) {
         })}
       </fieldset>
 
-      <label className="block text-sm font-medium text-slate-700">
+      <label className="block font-medium text-slate-700">
         방장명
         <input
-          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 bg-slate-50 text-slate-700"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 text-sm"
           value={form.hostName}
           readOnly
           required
           title="로그인 프로필 이름이 자동 입력됩니다. 변경은 프로필(사용자 정보)에서 하세요."
         />
       </label>
-      <label className="block text-sm font-medium text-slate-700">
+      <label className="block font-medium text-slate-700">
         연락처
         <input
-          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 bg-slate-50 text-slate-700"
+          className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 text-sm"
           value={form.contactInfo}
           readOnly
           title="로그인 프로필 연락처가 자동 입력됩니다. 참석 확정자에게만 공개됩니다."
         />
       </label>
-      <p className="text-[11px] text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
+      <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      <label className="block text-sm font-medium text-slate-700">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1 block w-full text-sm" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
+      <label className="block font-medium text-slate-700">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1 block w-full text-sm" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
 
-      <button type="submit" className="open-riding-create-submit bg-violet-600 text-white disabled:opacity-50" disabled={isBusy}>
+      <button type="submit" className="open-riding-create-submit w-full flex-1 bg-violet-600 text-white rounded-xl py-3 font-medium disabled:opacity-50" disabled={isBusy}>
         {isBusy ? '저장 중…' : '생성'}
       </button>
 
@@ -774,9 +774,9 @@ function OpenRidingCreateForm(props) {
         >
           <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden" onClick={function (e) { e.stopPropagation(); }}>
             <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
-              <button type="button" className="p-2 text-slate-600 text-lg" onClick={function () { shiftPickerMonth(-1); }} aria-label="이전 달">‹</button>
-              <span className="font-semibold text-slate-800">{pickerY}년 {pickerM}월</span>
-              <button type="button" className="p-2 text-slate-600 text-lg" onClick={function () { shiftPickerMonth(1); }} aria-label="다음 달">›</button>
+              <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftPickerMonth(-1); }} aria-label="이전 달">‹</button>
+              <span className="font-semibold text-slate-800 text-sm">{pickerY}년 {pickerM}월</span>
+              <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftPickerMonth(1); }} aria-label="다음 달">›</button>
             </div>
             <div className="p-3">
               <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-500 mb-1">
