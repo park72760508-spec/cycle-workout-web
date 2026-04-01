@@ -144,15 +144,18 @@ export function useOpenRideDetail(db, rideId, userId) {
     if (!db || !rideId || !userId) return;
     setActionError(null);
     try {
-      const dn =
+      const prof =
         typeof window !== 'undefined' && typeof window.getOpenRidingProfileDefaults === 'function'
-          ? String(window.getOpenRidingProfileDefaults().hostName || '').trim().slice(0, 80)
-          : '';
-      const res = await joinRideTransaction(db, rideId, userId, dn || '라이더');
+          ? window.getOpenRidingProfileDefaults()
+          : {};
+      const dn = String(prof.hostName || '').trim().slice(0, 80);
+      const phone = String(prof.contactInfo || '').trim().slice(0, 80);
+      const res = await joinRideTransaction(db, rideId, userId, dn || '라이더', phone);
       await reload();
       return res;
     } catch (e) {
-      const msg = (e && e.message) || 'join_failed';
+      const raw = (e && e.message) || 'join_failed';
+      const msg = raw === 'RIDE_CANCELLED' ? '취소된 라이딩에는 참석할 수 없습니다.' : raw;
       setActionError(msg);
       throw e;
     }

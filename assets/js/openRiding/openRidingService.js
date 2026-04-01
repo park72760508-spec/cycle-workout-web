@@ -44,6 +44,22 @@ function omitParticipantDisplay(/** @type {unknown} */ pd, /** @type {string} */
   return o;
 }
 
+/** Firestore map: uid -> 참가 신청 시 공개 연락처(방장만 목록에서 확인) */
+function asParticipantContact(/** @type {unknown} */ v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out = {};
+  Object.keys(v).forEach((k) => {
+    out[String(k)] = String(v[k] != null ? v[k] : '');
+  });
+  return out;
+}
+
+function omitParticipantContact(/** @type {unknown} */ pc, /** @type {string} */ uid) {
+  const o = { ...asParticipantContact(pc) };
+  delete o[String(uid)];
+  return o;
+}
+
 /**
  * 사용자 선호 저장 (users 문서 merge)
  * @param {import('firebase/firestore').Firestore} db
@@ -105,10 +121,63 @@ export async function createRide(db, hostUserId, input) {
     participantDisplay,
     hostUserId,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    updatedAt: serverTimestamp(),
+    rideStatus: 'active'
   };
   const ref = await addDoc(collection(db, 'rides'), payload);
   return ref.id;
+}
+
+/**
+ * 방장 라이딩 수정 (참가자 명단 필드는 변경하지 않음)
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} hostUserId
+ * @param {Record<string, unknown>} input
+ */
+export async function updateRideByHost(db, rideId, hostUserId, input) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+  if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
+  const patch = {
+    title: String(input.title || ''),
+    date: input.date instanceof Timestamp ? input.date : Timestamp.fromDate(new Date(input.date)),
+    departureTime: String(input.departureTime || ''),
+    departureLocation: String(input.departureLocation || ''),
+    distance: Number(input.distance) || 0,
+    course: String(input.course || ''),
+    level: String(input.level || '중급'),
+    maxParticipants: Math.max(1, Number(input.maxParticipants) || 10),
+    hostName: String(input.hostName || ''),
+    contactInfo: String(input.contactInfo || ''),
+    isContactPublic: !!input.isContactPublic,
+    gpxUrl: input.gpxUrl != null ? String(input.gpxUrl) : data.gpxUrl != null ? String(data.gpxUrl) : null,
+    region: String(input.region || ''),
+    updatedAt: serverTimestamp()
+  };
+  await updateDoc(rideRef, patch);
+}
+
+/**
+ * 방장 폭파(취소) — 목록에 폭파 상태로 표시
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} hostUserId
+ */
+export async function cancelRideByHost(db, rideId, hostUserId) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+  await updateDoc(rideRef, {
+    rideStatus: 'cancelled',
+    cancelledAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
 }
 
 /**
@@ -163,18 +232,22 @@ export async function fetchRideById(db, rideId) {
  * @param {string} rideId
  * @param {string} userId
  * @param {string} [displayName] 참가자 목록 표시용 이름(프로필)
+ * @param {string} [participantPhone] 방장에게만 공개되는 신청자 연락처
  * @returns {Promise<{ status: string, role?: string, position?: number }>}
  */
-export async function joinRideTransaction(db, rideId, userId, displayName) {
+export async function joinRideTransaction(db, rideId, userId, displayName, participantPhone) {
   const nameLabel = String(displayName != null ? displayName : '라이더').trim().slice(0, 80) || '라이더';
+  const phoneLabel = String(participantPhone != null ? participantPhone : '').trim().slice(0, 80);
   const rideRef = doc(db, 'rides', rideId);
   return runTransaction(db, async (transaction) => {
     const snap = await transaction.get(rideRef);
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
+    if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
     let participants = asStringArray(data.participants);
     let waitlist = asStringArray(data.waitlist);
     let participantDisplay = { ...asParticipantDisplay(data.participantDisplay) };
+    let participantContact = { ...asParticipantContact(data.participantContact) };
     const max = Math.max(1, Number(data.maxParticipants) || 1);
 
     if (participants.includes(userId)) {
@@ -186,12 +259,14 @@ export async function joinRideTransaction(db, rideId, userId, displayName) {
     }
 
     participantDisplay = Object.assign({}, participantDisplay, { [String(userId)]: nameLabel });
+    if (phoneLabel) participantContact[String(userId)] = phoneLabel;
 
     if (participants.length < max) {
       participants = [...participants, userId];
       transaction.update(rideRef, {
         participants,
         participantDisplay,
+        participantContact,
         updatedAt: serverTimestamp()
       });
       return { status: 'joined', role: 'participant' };
@@ -201,6 +276,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName) {
     transaction.update(rideRef, {
       waitlist,
       participantDisplay,
+      participantContact,
       updatedAt: serverTimestamp()
     });
     return { status: 'joined', role: 'waitlist', position: waitlist.length };
@@ -230,6 +306,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
       transaction.update(rideRef, {
         waitlist,
         participantDisplay: omitParticipantDisplay(data.participantDisplay, userId),
+        participantContact: omitParticipantContact(data.participantContact, userId),
         updatedAt: serverTimestamp()
       });
       return { status: 'left_waitlist', promotedUserId: null };
@@ -238,6 +315,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
     if (inPart) {
       participants = participants.filter((id) => id !== userId);
       let participantDisplay = omitParticipantDisplay(data.participantDisplay, userId);
+      let participantContact = omitParticipantContact(data.participantContact, userId);
       /** @type {string | null} */
       let promotedUserId = null;
       if (waitlist.length > 0) {
@@ -249,6 +327,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
         participants,
         waitlist,
         participantDisplay,
+        participantContact,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_participant', promotedUserId };
@@ -323,6 +402,8 @@ if (typeof window !== 'undefined') {
     fetchRideById,
     joinRideTransaction,
     leaveRideTransaction,
+    updateRideByHost,
+    cancelRideByHost,
     computeMatchingRideDates,
     computeHostRideDateKeys
   };

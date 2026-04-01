@@ -4,6 +4,7 @@
  */
 /* global React */
 var useState = React.useState;
+var useEffect = React.useEffect;
 var useMemo = React.useMemo;
 var useCallback = React.useCallback;
 
@@ -18,7 +19,9 @@ function getOpenRidingServiceFns() {
   var svc = window.openRidingService || {};
   return {
     createRide: svc.createRide,
-    uploadRideGpx: svc.uploadRideGpx
+    uploadRideGpx: svc.uploadRideGpx,
+    fetchRideById: svc.fetchRideById,
+    updateRideByHost: svc.updateRideByHost
   };
 }
 
@@ -336,6 +339,7 @@ function OpenRidingCalendarMain(props) {
         ) : (
           <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
             {ridesForDay.map(function (r) {
+              var isCancelled = String(r.rideStatus || 'active') === 'cancelled';
               return (
                 <li key={r.id}>
                   <button
@@ -343,8 +347,13 @@ function OpenRidingCalendarMain(props) {
                     className="w-full text-left py-2.5 hover:bg-slate-50 px-2 rounded-lg"
                     onClick={function () { onSelectRide(r.id); }}
                   >
-                    <div className="font-medium text-slate-800 text-sm">{r.title}</div>
-                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-center gap-y-0.5">
+                    <div className={'font-medium text-sm flex items-center gap-1.5 min-w-0 ' + (isCancelled ? 'text-red-300' : 'text-slate-800')}>
+                      {isCancelled ? (
+                        <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
+                      ) : null}
+                      <span className="truncate">{r.title}</span>
+                    </div>
+                    <div className={'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' + (isCancelled ? 'text-slate-400' : 'text-slate-600')}>
                       <span className="shrink-0">{r.region != null && String(r.region).trim() ? r.region : '-'}</span>
                       {rideListMetaSep()}
                       <span className="shrink-0">{r.level != null && String(r.level).trim() ? r.level : '-'}</span>
@@ -353,7 +362,7 @@ function OpenRidingCalendarMain(props) {
                       {rideListMetaSep()}
                       <span className="shrink-0">{rideDistanceKm(r)}</span>
                       {rideListMetaSep()}
-                      <span className="text-violet-700 font-semibold tabular-nums shrink-0">{rideParticipantRatio(r)}</span>
+                      <span className={'font-semibold tabular-nums shrink-0 ' + (isCancelled ? 'text-slate-400' : 'text-violet-700')}>{rideParticipantRatio(r)}</span>
                     </div>
                   </button>
                 </li>
@@ -522,11 +531,13 @@ function OpenRidingCalendarMain(props) {
   );
 }
 
-/** 생성 폼 — storage, firestore, hostUserId, onCreated(rideId) */
+/** 생성·수정 폼 — editRideId 있으면 수정 모드 */
 function OpenRidingCreateForm(props) {
   var _svcForm = getOpenRidingServiceFns();
   var createRide = _svcForm.createRide;
   var uploadRideGpx = _svcForm.uploadRideGpx;
+  var fetchRideById = _svcForm.fetchRideById;
+  var updateRideByHost = _svcForm.updateRideByHost;
   var _koForm = getKoreaRegionOptions();
   var KOREA_SIGUNGU_OPTIONS = _koForm.KOREA_SIGUNGU_OPTIONS;
   var RIDING_LEVEL_OPTIONS = _koForm.RIDING_LEVEL_OPTIONS;
@@ -534,7 +545,9 @@ function OpenRidingCreateForm(props) {
   var firestore = props.firestore;
   var storage = props.storage;
   var hostUserId = props.hostUserId;
+  var editRideId = props.editRideId || null;
   var onCreated = props.onCreated || function () {};
+  var onEditSaved = props.onEditSaved || function () {};
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
@@ -550,7 +563,8 @@ function OpenRidingCreateForm(props) {
       hostName: prof.hostName || '',
       contactInfo: prof.contactInfo || '',
       region: '',
-      gpxFile: null
+      gpxFile: null,
+      gpxUrlExisting: null
     };
   });
   var form = st[0];
@@ -558,6 +572,55 @@ function OpenRidingCreateForm(props) {
   var _busy = useState(false);
   var isBusy = _busy[0];
   var setBusy = _busy[1];
+
+  var _hyd = useState(!editRideId);
+  var editHydrated = _hyd[0];
+  var setEditHydrated = _hyd[1];
+
+  useEffect(
+    function () {
+      if (!editRideId || !firestore || typeof fetchRideById !== 'function') {
+        setEditHydrated(true);
+        return;
+      }
+      var cancelled = false;
+      setEditHydrated(false);
+      fetchRideById(firestore, editRideId)
+        .then(function (ride) {
+          if (cancelled) return;
+          if (!ride) {
+            setEditHydrated(true);
+            return;
+          }
+          var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+          var ymd = ts ? dateKey(ts.getFullYear(), ts.getMonth(), ts.getDate()) : getTodaySeoulYmd();
+          var prof = getOpenRidingProfileDefaults();
+          setForm({
+            title: String(ride.title || ''),
+            date: ymd,
+            departureTime: String(ride.departureTime || '07:00'),
+            departureLocation: String(ride.departureLocation || ''),
+            distance: Number(ride.distance) || 40,
+            course: String(ride.course || ''),
+            level: String(ride.level || '중급'),
+            maxParticipants: Math.max(1, Number(ride.maxParticipants) || 10),
+            hostName: String(ride.hostName || prof.hostName || ''),
+            contactInfo: String(ride.contactInfo || prof.contactInfo || ''),
+            region: String(ride.region || ''),
+            gpxFile: null,
+            gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null
+          });
+          setEditHydrated(true);
+        })
+        .catch(function () {
+          if (!cancelled) setEditHydrated(true);
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [editRideId, firestore]
+  );
 
   var _dm = useState(false);
   var dateModalOpen = _dm[0];
@@ -624,15 +687,36 @@ function OpenRidingCreateForm(props) {
 
   async function submit(e) {
     e.preventDefault();
-    if (!firestore || !hostUserId || typeof createRide !== 'function') return;
+    if (!firestore || !hostUserId) return;
     setBusy(true);
     try {
-      var gpxUrl = null;
+      var gpxUrl = form.gpxUrlExisting != null ? form.gpxUrlExisting : null;
       if (storage && form.gpxFile && typeof uploadRideGpx === 'function') {
-        var draftId = 'draft/' + hostUserId + '/' + Date.now();
+        var draftPrefix = editRideId ? String(editRideId) : 'draft/' + hostUserId;
+        var draftId = draftPrefix + '/' + Date.now();
         gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
       }
       var d = new Date(form.date + 'T12:00:00+09:00');
+      if (editRideId && typeof updateRideByHost === 'function') {
+        await updateRideByHost(firestore, editRideId, hostUserId, {
+          title: form.title,
+          date: d,
+          departureTime: form.departureTime,
+          departureLocation: form.departureLocation,
+          distance: form.distance,
+          course: form.course,
+          level: form.level,
+          maxParticipants: form.maxParticipants,
+          hostName: form.hostName,
+          contactInfo: form.contactInfo,
+          isContactPublic: false,
+          region: form.region,
+          gpxUrl: gpxUrl
+        });
+        onEditSaved();
+        return;
+      }
+      if (typeof createRide !== 'function') return;
       var rideId = await createRide(firestore, hostUserId, {
         title: form.title,
         date: d,
@@ -652,6 +736,10 @@ function OpenRidingCreateForm(props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (editRideId && !editHydrated) {
+    return <div className="py-12 text-center text-sm text-slate-500">불러오는 중…</div>;
   }
 
   return (
@@ -678,43 +766,37 @@ function OpenRidingCreateForm(props) {
         </div>
         <div className="min-w-0">
           <span className="block font-medium text-slate-700 mb-1">출발 시간</span>
-          <div className="flex gap-2 items-end">
-            <div className="flex-1 min-w-0">
-              <span className="block text-xs text-slate-500 mb-0.5">시</span>
-              <select
-                className="open-riding-time-dial w-full text-sm"
-                value={hmPick.h}
-                aria-label="시"
-                onChange={function (e) {
-                  var nh = Number(e.target.value);
-                  set('departureTime', pad2(nh) + ':' + pad2(hmPick.mi));
-                }}
-              >
-                {hourOptions.map(function (h) {
-                  return (
-                    <option key={h} value={h}>{pad2(h)}시</option>
-                  );
-                })}
-              </select>
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="block text-xs text-slate-500 mb-0.5">분</span>
-              <select
-                className="open-riding-time-dial w-full text-sm"
-                value={hmPick.mi}
-                aria-label="분"
-                onChange={function (e) {
-                  var nm = Number(e.target.value);
-                  set('departureTime', pad2(hmPick.h) + ':' + pad2(nm));
-                }}
-              >
-                {minuteOptions.map(function (m) {
-                  return (
-                    <option key={m} value={m}>{pad2(m)}분</option>
-                  );
-                })}
-              </select>
-            </div>
+          <div className="flex gap-2 items-stretch">
+            <select
+              className="open-riding-time-dial flex-1 min-w-0 text-sm"
+              value={hmPick.h}
+              aria-label="시"
+              onChange={function (e) {
+                var nh = Number(e.target.value);
+                set('departureTime', pad2(nh) + ':' + pad2(hmPick.mi));
+              }}
+            >
+              {hourOptions.map(function (h) {
+                return (
+                  <option key={h} value={h}>{pad2(h)}시</option>
+                );
+              })}
+            </select>
+            <select
+              className="open-riding-time-dial flex-1 min-w-0 text-sm"
+              value={hmPick.mi}
+              aria-label="분"
+              onChange={function (e) {
+                var nm = Number(e.target.value);
+                set('departureTime', pad2(hmPick.h) + ':' + pad2(nm));
+              }}
+            >
+              {minuteOptions.map(function (m) {
+                return (
+                  <option key={m} value={m}>{pad2(m)}분</option>
+                );
+              })}
+            </select>
           </div>
         </div>
       </div>
@@ -767,7 +849,7 @@ function OpenRidingCreateForm(props) {
       <label className="block font-medium text-slate-700">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1 block w-full text-sm" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
 
       <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
-        {isBusy ? '저장 중…' : '생성'}
+        {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
       </button>
 
       {dateModalOpen ? (
@@ -828,12 +910,22 @@ function OpenRidingCreateForm(props) {
   );
 }
 
+/** 대시보드 상단 우측 수정 아이콘과 동일 SVG */
+function OpenRidingDashboardEditIcon() {
+  return (
+    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  );
+}
+
 /** 상세 + 참석/취소 (Transaction) */
 function OpenRidingDetail(props) {
   var firestore = props.firestore;
   var rideId = props.rideId;
   var userId = props.userId;
   var onBack = props.onBack || function () {};
+  var onOpenEdit = props.onOpenEdit || function () {};
 
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
@@ -845,20 +937,48 @@ function OpenRidingDetail(props) {
   var loading = h.loading;
   var join = h.join;
   var leave = h.leave;
+  var reload = h.reload;
   var role = h.role;
   var actionErr = h.actionError;
 
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
   var setBusy = _actBusy[1];
+  var _bomb = useState(false);
+  var bombOpen = _bomb[0];
+  var setBombOpen = _bomb[1];
+  var _cancelBusy = useState(false);
+  var cancelBusy = _cancelBusy[0];
+  var setCancelBusy = _cancelBusy[1];
 
   async function onJoin() {
     setBusy(true);
-    try { await join(); } finally { setBusy(false); }
+    try {
+      await join();
+    } finally {
+      setBusy(false);
+    }
   }
   async function onLeave() {
     setBusy(true);
-    try { await leave(); } finally { setBusy(false); }
+    try {
+      await leave();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmBombRide() {
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (!firestore || !userId || typeof svc.cancelRideByHost !== 'function') return;
+    setCancelBusy(true);
+    try {
+      await svc.cancelRideByHost(firestore, rideId, userId);
+      setBombOpen(false);
+      if (typeof reload === 'function') await reload();
+    } finally {
+      setCancelBusy(false);
+    }
   }
 
   if (loading || !ride) {
@@ -868,8 +988,10 @@ function OpenRidingDetail(props) {
   var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
   var dateStr = ts ? ts.toLocaleDateString('ko-KR') : '';
 
-  var isHost = userId && String(ride.hostUserId || '') === String(userId);
-  var showContact = !!(isHost || role === 'participant');
+  var isHost = !!(userId && String(ride.hostUserId || '') === String(userId));
+  var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
+  var hasApplied = role === 'participant' || (role && typeof role === 'object' && role.type === 'waitlist');
+  var showHostContactRow = !!(isHost || hasApplied);
 
   var roleLabel = !role ? '미신청' : role === 'participant' ? '참석 확정' : '대기 ' + role.position + '번';
 
@@ -877,43 +999,123 @@ function OpenRidingDetail(props) {
     ride.participantDisplay && typeof ride.participantDisplay === 'object' && !Array.isArray(ride.participantDisplay)
       ? ride.participantDisplay
       : {};
+  var pc =
+    ride.participantContact && typeof ride.participantContact === 'object' && !Array.isArray(ride.participantContact)
+      ? ride.participantContact
+      : {};
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
+
   function participantRowName(uid, fallbackLabel) {
     var n = pd[String(uid)];
     if (n && String(n).trim()) return String(n).trim();
     return fallbackLabel;
   }
 
+  function participantPhoneSuffix(uid) {
+    if (!isHost) return null;
+    var ph = pc[String(uid)];
+    if (!ph || !String(ph).trim()) return null;
+    return ' (' + String(ph).trim() + ')';
+  }
+
+  var detailMuted = isCancelled ? ' open-riding-detail-muted' : '';
+
+  function statRow(label, valueNode) {
+    return (
+      <div className="open-riding-detail-stat-row">
+        <span className="open-riding-detail-stat-label">{label}</span>
+        <div className="open-riding-detail-stat-value min-w-0">{valueNode}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-lg mx-auto py-2 space-y-4 w-full">
-      <h1 className="text-xl font-bold px-1">{ride.title}</h1>
-      <ul className="text-sm text-slate-600 space-y-1 px-1">
-        <li>일시: {dateStr} {ride.departureTime}</li>
-        <li>출발: {ride.departureLocation}</li>
-        <li>지역: {ride.region} / 레벨: {ride.level}</li>
-        <li>거리: {ride.distance}km</li>
-        <li>정원: {(ride.participants && ride.participants.length) || 0} / {ride.maxParticipants}</li>
-        <li>방장: {ride.hostName}</li>
-        {showContact && ride.contactInfo ? <li>연락처: {ride.contactInfo}</li> : null}
-        {!showContact && ride.contactInfo ? <li className="text-amber-600">연락처는 참석 확정 후에 표시됩니다.</li> : null}
-      </ul>
-      {ride.course ? <p className="text-sm bg-slate-50 rounded-lg p-3">{ride.course}</p> : null}
-      {ride.gpxUrl ? <a className="text-violet-600 text-sm" href={ride.gpxUrl} target="_blank" rel="noreferrer">GPX 다운로드</a> : null}
+      {isCancelled ? (
+        <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2">
+          이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
+        </p>
+      ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-800">참가자 명단</h2>
+      <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
+        <div className="open-riding-detail-stat-row items-center">
+          <span className="open-riding-detail-stat-label">제목</span>
+          <div className="open-riding-detail-stat-value flex flex-1 min-w-0 items-center justify-end gap-2">
+            <span className={'text-left font-semibold text-slate-900 flex-1 min-w-0 break-words ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
+              {ride.title}
+            </span>
+            {isHost && !isCancelled ? (
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  className="p-1.5 rounded-lg hover:bg-violet-100/80 active:opacity-80 border border-transparent hover:border-violet-200"
+                  onClick={onOpenEdit}
+                  aria-label="라이딩 수정"
+                >
+                  <OpenRidingDashboardEditIcon />
+                </button>
+                <button
+                  type="button"
+                  className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap"
+                  onClick={function () {
+                    setBombOpen(true);
+                  }}
+                >
+                  라이딩 폭파
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        {statRow('일시', (
+          <span>
+            {dateStr} {ride.departureTime != null ? ride.departureTime : ''}
+          </span>
+        ))}
+        {statRow('출발', ride.departureLocation != null ? ride.departureLocation : '-')}
+        {statRow('지역', ride.region != null ? ride.region : '-')}
+        {statRow('레벨', ride.level != null ? ride.level : '-')}
+        {statRow('거리', (ride.distance != null ? ride.distance : '-') + 'km')}
+        {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
+        {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
+        {statRow(
+          '연락처',
+          showHostContactRow && ride.contactInfo ? (
+            ride.contactInfo
+          ) : !showHostContactRow && ride.contactInfo ? (
+            <span className="text-amber-600">참석 신청 후 방장 연락처가 표시됩니다.</span>
+          ) : (
+            '-'
+          )
+        )}
+        {statRow('내 상태', roleLabel)}
+      </div>
+
+      {ride.course ? (
+        <p className={'text-sm rounded-lg p-3 border border-violet-100/80 bg-violet-50/40' + detailMuted}>{ride.course}</p>
+      ) : null}
+      {ride.gpxUrl ? (
+        <a className={'text-violet-600 text-sm font-medium' + (isCancelled ? ' opacity-50 pointer-events-none' : '')} href={ride.gpxUrl} target="_blank" rel="noreferrer">
+          GPX 다운로드
+        </a>
+      ) : null}
+
+      <div className={'rounded-xl border border-violet-200/60 bg-white p-3 space-y-3 shadow-sm' + detailMuted}>
+        <h2 className="text-sm font-semibold text-violet-900">참가자 명단</h2>
         <div>
           <p className="text-xs font-medium text-slate-600 mb-1">참석 확정 ({parts.length}명)</p>
           {parts.length === 0 ? (
             <p className="text-xs text-slate-400">아직 없습니다.</p>
           ) : (
-            <ol className="list-decimal list-inside text-sm text-slate-700 space-y-1.5 pl-0.5">
+            <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
               {parts.map(function (uid, idx) {
+                var suf = participantPhoneSuffix(uid);
                 return (
-                  <li key={String(uid) + '-p'} className="marker:font-semibold">
+                  <li key={String(uid) + '-p'}>
                     <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
                     <span>{participantRowName(uid, '참가자')}</span>
+                    {suf ? <span className="text-slate-600">{suf}</span> : null}
                   </li>
                 );
               })}
@@ -925,12 +1127,14 @@ function OpenRidingDetail(props) {
           {waits.length === 0 ? (
             <p className="text-xs text-slate-400">없습니다.</p>
           ) : (
-            <ol className="list-decimal list-inside text-sm text-slate-700 space-y-1.5 pl-0.5">
+            <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
               {waits.map(function (uid, idx) {
+                var suf = participantPhoneSuffix(uid);
                 return (
-                  <li key={String(uid) + '-w'} className="marker:font-semibold">
-                    <span className="font-semibold text-amber-700">대기 {idx + 1}번</span>{' '}
+                  <li key={String(uid) + '-w'}>
+                    <span className="font-semibold text-amber-700">{idx + 1}번</span>{' '}
                     <span>{participantRowName(uid, '대기')}</span>
+                    {suf ? <span className="text-slate-600">{suf}</span> : null}
                   </li>
                 );
               })}
@@ -939,16 +1143,61 @@ function OpenRidingDetail(props) {
         </div>
       </div>
 
-      <p className="text-sm font-medium">내 상태: {roleLabel}</p>
       {actionErr ? <p className="text-sm text-red-600">{actionErr}</p> : null}
 
-      <div className="flex gap-2">
-        {role ? (
-          <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>참석 취소</button>
-        ) : (
-          <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isActionBusy || !userId} onClick={onJoin}>참석 신청</button>
-        )}
-      </div>
+      {!isCancelled ? (
+        <div className="flex gap-2">
+          {role ? (
+            <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
+              참석 취소
+            </button>
+          ) : (
+            <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isActionBusy || !userId} onClick={onJoin}>
+              참석 신청
+            </button>
+          )}
+        </div>
+      ) : null}
+
+      {bombOpen ? (
+        <div
+          className="fixed inset-0 z-[10070] flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-bomb-title"
+          onClick={function () {
+            if (!cancelBusy) setBombOpen(false);
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-xl p-4" onClick={function (e) { e.stopPropagation(); }}>
+            <h2 id="open-riding-bomb-title" className="text-base font-semibold text-slate-900 mb-2">
+              라이딩 폭파
+            </h2>
+            <p className="text-sm text-slate-600 mb-4">정말 라이딩을 폭파하시겠습니까?</p>
+            <p className="text-xs text-slate-500 mb-4">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 font-medium"
+                disabled={cancelBusy}
+                onClick={function () {
+                  setBombOpen(false);
+                }}
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl bg-red-600 text-white font-medium disabled:opacity-50"
+                disabled={cancelBusy}
+                onClick={confirmBombRide}
+              >
+                {cancelBusy ? '처리 중…' : '예'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -970,13 +1219,18 @@ function OpenRidingRoomApp(props) {
   function handleTopBack() {
     if (view === 'main') {
       if (typeof showScreen === 'function') showScreen('basecampScreen');
+    } else if (view === 'edit') {
+      setView('detail');
+    } else if (view === 'create') {
+      setView('main');
     } else {
       setDetailRideId(null);
       setView('main');
     }
   }
 
-  var headerTitle = view === 'create' ? '라이딩 생성' : view === 'detail' ? '라이딩 상세' : '오픈 라이딩방';
+  var headerTitle =
+    view === 'create' ? '라이딩 생성' : view === 'edit' ? '라이딩 수정' : view === 'detail' ? '라이딩 상세' : '오픈 라이딩방';
 
   var inner = null;
   if (!firestore) {
@@ -994,6 +1248,17 @@ function OpenRidingRoomApp(props) {
         onCreated={function () { setView('main'); }}
       />
     );
+  } else if (view === 'edit' && detailRideId) {
+    inner = (
+      <OpenRidingCreateForm
+        firestore={firestore}
+        storage={storage}
+        hostUserId={userId}
+        editRideId={detailRideId}
+        onCreated={function () { setView('main'); }}
+        onEditSaved={function () { setView('detail'); }}
+      />
+    );
   } else if (view === 'detail' && detailRideId) {
     inner = (
       <OpenRidingDetail
@@ -1001,6 +1266,7 @@ function OpenRidingRoomApp(props) {
         rideId={detailRideId}
         userId={userId}
         onBack={function () { setView('main'); }}
+        onOpenEdit={function () { setView('edit'); }}
       />
     );
   } else {
