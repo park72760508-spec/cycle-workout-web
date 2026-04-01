@@ -936,6 +936,54 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   cursor: pointer;
 }
 
+/* 라이딩 상세: 랭킹/주간 TSS 패널 느낌의 보라 톤 스탯 행 */
+#openRidingRoomScreen .open-riding-detail-stat-panel {
+  border-radius: 12px;
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  background: linear-gradient(145deg, rgba(245, 243, 255, 0.98) 0%, rgba(237, 233, 254, 0.55) 55%, rgba(196, 181, 253, 0.12) 100%);
+  box-shadow: 0 2px 14px rgba(102, 126, 234, 0.14), 0 1px 4px rgba(91, 33, 182, 0.06);
+}
+#openRidingRoomScreen .open-riding-detail-stat-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.14);
+  box-sizing: border-box;
+}
+#openRidingRoomScreen .open-riding-detail-stat-row:last-child {
+  border-bottom: none;
+}
+#openRidingRoomScreen .open-riding-detail-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6d28d9;
+  flex-shrink: 0;
+  min-width: 4.25rem;
+  line-height: 1.4;
+  padding-top: 2px;
+}
+#openRidingRoomScreen .open-riding-detail-stat-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  text-align: right;
+  line-height: 1.45;
+}
+#openRidingRoomScreen .open-riding-detail-muted .open-riding-detail-stat-value,
+#openRidingRoomScreen .open-riding-detail-muted .open-riding-detail-stat-label {
+  color: #94a3b8;
+}
+#openRidingRoomScreen .open-riding-detail-muted .open-riding-detail-stat-panel {
+  opacity: 0.92;
+}
+#openRidingRoomScreen .open-riding-detail-title-cancelled {
+  color: #fca5a5 !important;
+}
+
 #openRidingRoomScreen .open-riding-time-dial {
   min-height: 38px;
   padding: 0.35rem 0.5rem;
