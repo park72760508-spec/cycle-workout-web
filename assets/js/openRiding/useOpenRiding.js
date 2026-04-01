@@ -12,6 +12,7 @@ import {
   getUserOpenRidingPreferences,
   fetchRidesInDateRange,
   computeMatchingRideDates,
+  computeHostRideDateKeys,
   joinRideTransaction,
   leaveRideTransaction,
   fetchRideById
@@ -81,6 +82,11 @@ export function useOpenRiding(db, userId, anchorMonth) {
     [ridesMonth, prefs]
   );
 
+  const hostDateKeys = useMemo(
+    () => computeHostRideDateKeys(ridesMonth, userId),
+    [ridesMonth, userId]
+  );
+
   const savePrefs = useCallback(
     async (next) => {
       if (!db || !userId) return;
@@ -98,6 +104,7 @@ export function useOpenRiding(db, userId, anchorMonth) {
     loadingRides,
     error,
     matchingDateKeys,
+    hostDateKeys,
     refreshMonth,
     monthRange
   };

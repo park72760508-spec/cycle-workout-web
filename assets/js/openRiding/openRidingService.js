@@ -286,6 +286,33 @@ export function computeMatchingRideDates(rides, prefs) {
   return dates;
 }
 
+/**
+ * 달력용: 기간 내 내가 방장으로 올린 라이딩이 있는 날짜 (YYYY-MM-DD) — 맞춤 필터보다 우선 보라 표시
+ * @param {Array<Record<string, unknown>>} rides
+ * @param {string | null} userId
+ */
+export function computeHostRideDateKeys(rides, userId) {
+  const uid = String(userId || '').trim();
+  if (!uid) return new Set();
+  const dates = new Set();
+  rides.forEach((ride) => {
+    if (String(ride.hostUserId || '').trim() !== uid) return;
+    const ts = ride.date;
+    let d;
+    if (ts && typeof ts.toDate === 'function') d = ts.toDate();
+    else if (ts instanceof Date) d = ts;
+    else return;
+    const key =
+      d.getFullYear() +
+      '-' +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(d.getDate()).padStart(2, '0');
+    dates.add(key);
+  });
+  return dates;
+}
+
 if (typeof window !== 'undefined') {
   window.openRidingService = {
     saveUserOpenRidingPreferences,
@@ -296,6 +323,7 @@ if (typeof window !== 'undefined') {
     fetchRideById,
     joinRideTransaction,
     leaveRideTransaction,
-    computeMatchingRideDates
+    computeMatchingRideDates,
+    computeHostRideDateKeys
   };
 }

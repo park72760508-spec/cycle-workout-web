@@ -105,6 +105,7 @@ function OpenRidingCalendarMain(props) {
   var prefs = hook.prefs;
   var savePrefs = hook.savePrefs;
   var matchingDateKeys = hook.matchingDateKeys;
+  var hostDateKeys = hook.hostDateKeys || new Set();
   var ridesMonth = hook.ridesMonth;
   var loadingRides = hook.loadingRides;
 
@@ -227,6 +228,12 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  function rideParticipantRatio(r) {
+    var p = Array.isArray(r.participants) ? r.participants.length : 0;
+    var max = Math.max(1, Number(r.maxParticipants) || 10);
+    return p + '/' + max;
+  }
+
   function renderListSection() {
     return (
       <section className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
@@ -248,7 +255,12 @@ function OpenRidingCalendarMain(props) {
                     onClick={function () { onSelectRide(r.id); }}
                   >
                     <div className="font-medium text-slate-800 text-sm">{r.title}</div>
-                    <div className="text-xs text-slate-500">{r.region} · {r.level} · {r.departureTime}</div>
+                    <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span>{r.region}</span>
+                      <span>{r.level}</span>
+                      <span>{r.departureTime}</span>
+                      <span className="text-violet-700 font-semibold tabular-nums">{rideParticipantRatio(r)}</span>
+                    </div>
                   </button>
                 </li>
               );
@@ -314,6 +326,7 @@ function OpenRidingCalendarMain(props) {
             {days.map(function (day, idx) {
               if (day == null) return <div key={'e' + idx} className={emptyH} />;
               var key = dateKey(year, month, day);
+              var isHostDay = hostDateKeys.has(key);
               var hasMatch = matchingDateKeys.has(key);
               var isSel = selectedKey === key;
               return (
@@ -327,7 +340,12 @@ function OpenRidingCalendarMain(props) {
                     ' hover:bg-slate-50'
                   }
                 >
-                  {hasMatch ? (
+                  {isHostDay ? (
+                    <span
+                      className="absolute inset-1 rounded-md bg-violet-300/50 border border-violet-400/40 pointer-events-none"
+                      aria-hidden
+                    />
+                  ) : hasMatch ? (
                     <span
                       className="absolute inset-1 rounded-md bg-emerald-400/35 pointer-events-none"
                       aria-hidden
@@ -338,7 +356,18 @@ function OpenRidingCalendarMain(props) {
               );
             })}
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">녹색 표시: 내 지역·레벨 설정과 맞는 라이딩이 있는 날</p>
+          <div className="mt-2 flex flex-col gap-1.5 text-[11px] text-slate-600">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-slate-500 shrink-0">녹색 표시 :</span>
+              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
+              <span className="text-slate-500">맞춤 필터에 맞는 라이딩이 있는 날</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-slate-500 shrink-0">보라색 표시 :</span>
+              <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
+              <span className="text-slate-500">내가 올린 라이딩</span>
+            </div>
+          </div>
         </section>
 
         {compact ? renderListSection() : null}
