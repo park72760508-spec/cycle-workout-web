@@ -145,6 +145,10 @@ function OpenRidingCalendarMain(props) {
   var regionPick = _regionPick[0];
   var setRegionPick = _regionPick[1];
 
+  var _filterOpen = useState(false);
+  var filterModalOpen = _filterOpen[0];
+  var setFilterModalOpen = _filterOpen[1];
+
   var cellH = compact ? 'h-8' : 'h-10';
   var emptyH = compact ? 'h-8' : 'h-10';
 
@@ -175,6 +179,52 @@ function OpenRidingCalendarMain(props) {
     if (i >= 0) next.splice(i, 1);
     else next.push(lvl);
     savePrefs({ activeRegions: prefs.activeRegions, preferredLevels: next });
+  }
+
+  function renderFilterSettingsBody() {
+    return (
+      <div className="space-y-4 text-left">
+        <div>
+          <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
+          <div className="flex gap-1 flex-wrap">
+            <select
+              className="flex-1 min-w-[140px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
+              value={regionPick}
+              onChange={function (e) { setRegionPick(e.target.value); }}
+            >
+              <option value="">시·군·구 선택</option>
+              {KOREA_SIGUNGU_OPTIONS_FILTER.map(function (o) {
+                return <option key={o} value={o}>{o}</option>;
+              })}
+            </select>
+            <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-1">
+            {prefs.activeRegions.map(function (r) {
+              return (
+                <li key={r}>
+                  <button type="button" className="text-xs bg-white border border-slate-200 rounded-full px-2 py-0.5" onClick={function () { removeRegion(r); }}>
+                    {r} ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        <div>
+          <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
+          {RIDING_LEVEL_OPTIONS.map(function (opt) {
+            var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
+            return (
+              <label key={opt.value} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
+                <input type="checkbox" checked={on} onChange={function () { toggleLevel(opt.value); }} />
+                {opt.value} <span className="text-xs text-slate-400">({opt.hint})</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+    );
   }
 
   function renderListSection() {
@@ -213,16 +263,17 @@ function OpenRidingCalendarMain(props) {
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
       {compact ? (
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-600 min-w-0 flex-1">
             <span className="font-medium text-slate-800">{userLabel}</span>
             <span className="text-slate-500"> · 지역·레벨 맞춤</span>
           </p>
           <button
             type="button"
-            className="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-xs font-medium shadow hover:bg-violet-700 shrink-0"
-            onClick={onOpenCreate}
+            className="open-riding-filter-launch-btn shrink-0 inline-flex items-center justify-center gap-0.5 rounded-lg border-2 border-violet-600 bg-white px-2.5 py-1.5 text-[11px] sm:text-xs font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
+            onClick={function () { setFilterModalOpen(true); }}
+            aria-label="맞춤 필터 설정"
           >
-            라이딩 생성 (+)
+            맞춤 필터 (+)
           </button>
         </div>
       ) : (
@@ -243,10 +294,21 @@ function OpenRidingCalendarMain(props) {
 
       <div className={compact ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}>
         <section className={(compact ? 'rounded-xl p-3 ' : 'md:col-span-2 rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
-          <div className="flex items-center justify-between mb-3">
-            <button type="button" className="text-slate-600" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}>{'‹'}</button>
-            <span className="font-semibold">{year}년 {month + 1}월</span>
-            <button type="button" className="text-slate-600" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}>{'›'}</button>
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
+              <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month - 1, 1)); }}>{'‹'}</button>
+              <span className="font-semibold text-sm sm:text-base">{year}년 {month + 1}월</span>
+              <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}>{'›'}</button>
+            </div>
+            {compact ? (
+              <button
+                type="button"
+                className="shrink-0 rounded-lg bg-violet-600 text-white px-2.5 py-1 text-[11px] font-medium shadow hover:bg-violet-700"
+                onClick={onOpenCreate}
+              >
+                라이딩 생성 (+)
+              </button>
+            ) : null}
           </div>
           {loadingRides ? <p className="text-sm text-slate-400">불러오는 중…</p> : null}
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
@@ -285,51 +347,49 @@ function OpenRidingCalendarMain(props) {
 
         {compact ? renderListSection() : null}
 
-        <aside className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-slate-50/80 space-y-4'}>
+        {!compact ? (
+        <aside className="rounded-2xl p-4 border border-slate-200 bg-slate-50/80 space-y-4">
           <h2 className="text-sm font-semibold text-slate-700">맞춤 필터 설정</h2>
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
-            <div className="flex gap-1 flex-wrap">
-              <select
-                className="flex-1 min-w-[140px] rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                value={regionPick}
-                onChange={function (e) { setRegionPick(e.target.value); }}
-              >
-                <option value="">시·군·구 선택</option>
-                {KOREA_SIGUNGU_OPTIONS_FILTER.map(function (o) {
-                  return <option key={o} value={o}>{o}</option>;
-                })}
-              </select>
-              <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
-            </div>
-            <ul className="mt-2 flex flex-wrap gap-1">
-              {prefs.activeRegions.map(function (r) {
-                return (
-                  <li key={r}>
-                    <button type="button" className="text-xs bg-white border rounded-full px-2 py-0.5" onClick={function () { removeRegion(r); }}>
-                      {r} ×
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          <div>
-            <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
-            {RIDING_LEVEL_OPTIONS.map(function (opt) {
-              var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
-              return (
-                <label key={opt.value} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
-                  <input type="checkbox" checked={on} onChange={function () { toggleLevel(opt.value); }} />
-                  {opt.value} <span className="text-xs text-slate-400">({opt.hint})</span>
-                </label>
-              );
-            })}
-          </div>
+          {renderFilterSettingsBody()}
         </aside>
+        ) : null}
       </div>
 
       {!compact ? renderListSection() : null}
+
+      {compact && filterModalOpen ? (
+        <div
+          className="open-riding-filter-modal fixed inset-0 z-[10050] flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-filter-modal-title"
+          onClick={function () { setFilterModalOpen(false); }}
+        >
+          <div
+            className="open-riding-filter-modal-panel w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-violet-200 bg-white p-4 shadow-xl"
+            onClick={function (e) { e.stopPropagation(); }}
+          >
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h2 id="open-riding-filter-modal-title" className="text-sm font-semibold text-slate-800">맞춤 필터 설정</h2>
+              <button
+                type="button"
+                className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                onClick={function () { setFilterModalOpen(false); }}
+              >
+                닫기
+              </button>
+            </div>
+            {renderFilterSettingsBody()}
+            <button
+              type="button"
+              className="mt-4 w-full rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-violet-700"
+              onClick={function () { setFilterModalOpen(false); }}
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
