@@ -945,7 +945,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 #openRidingRoomScreen .open-riding-detail-stat-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 11px 14px;
@@ -956,15 +956,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   border-bottom: none;
 }
 #openRidingRoomScreen .open-riding-detail-stat-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: #6d28d9;
   flex-shrink: 0;
   min-width: 4.25rem;
-  line-height: 1.4;
-  padding-top: 2px;
+  line-height: 1.45;
 }
 #openRidingRoomScreen .open-riding-detail-stat-value {
   font-size: 13px;
