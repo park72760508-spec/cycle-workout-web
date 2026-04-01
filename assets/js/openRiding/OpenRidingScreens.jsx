@@ -138,6 +138,18 @@ function OpenRidingCalendarMain(props) {
     });
   }, [ridesMonth, selectedKey]);
 
+  /** 해당 월에 라이딩이 하나라도 있는 모든 날짜(필터 무관) */
+  var allRideDateKeys = useMemo(function () {
+    var s = new Set();
+    ridesMonth.forEach(function (r) {
+      var ts = r.date;
+      var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+      if (!d) return;
+      s.add(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+    });
+    return s;
+  }, [ridesMonth]);
+
   var _koOpts = getKoreaRegionOptions();
   var RIDING_LEVEL_OPTIONS = _koOpts.RIDING_LEVEL_OPTIONS;
   var KOREA_SIGUNGU_OPTIONS_FILTER = _koOpts.KOREA_SIGUNGU_OPTIONS;
@@ -234,6 +246,12 @@ function OpenRidingCalendarMain(props) {
     return p + '/' + max;
   }
 
+  function rideDistanceKm(r) {
+    var n = Number(r.distance);
+    if (isNaN(n) || n <= 0) return '-';
+    return n + 'km';
+  }
+
   function renderListSection() {
     return (
       <section className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
@@ -255,10 +273,11 @@ function OpenRidingCalendarMain(props) {
                     onClick={function () { onSelectRide(r.id); }}
                   >
                     <div className="font-medium text-slate-800 text-sm">{r.title}</div>
-                    <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <span>{r.region}</span>
-                      <span>{r.level}</span>
-                      <span>{r.departureTime}</span>
+                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span>{r.region != null && String(r.region).trim() ? r.region : '-'}</span>
+                      <span>{r.level != null && String(r.level).trim() ? r.level : '-'}</span>
+                      <span>{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
+                      <span>{rideDistanceKm(r)}</span>
                       <span className="text-violet-700 font-semibold tabular-nums">{rideParticipantRatio(r)}</span>
                     </div>
                   </button>
@@ -328,6 +347,8 @@ function OpenRidingCalendarMain(props) {
               var key = dateKey(year, month, day);
               var isHostDay = hostDateKeys.has(key);
               var hasMatch = matchingDateKeys.has(key);
+              var hasAnyRide = allRideDateKeys.has(key);
+              var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
               var isSel = selectedKey === key;
               return (
                 <button
@@ -350,6 +371,11 @@ function OpenRidingCalendarMain(props) {
                       className="absolute inset-1 rounded-md bg-emerald-400/35 pointer-events-none"
                       aria-hidden
                     />
+                  ) : showOtherOnly ? (
+                    <span
+                      className="absolute inset-1 rounded-md bg-slate-300/45 border border-slate-400/35 pointer-events-none"
+                      aria-hidden
+                    />
                   ) : null}
                   <span className="relative z-10">{day}</span>
                 </button>
@@ -366,6 +392,11 @@ function OpenRidingCalendarMain(props) {
               <span className="text-slate-500 shrink-0">보라색 표시 :</span>
               <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
               <span className="text-slate-500">내가 올린 라이딩</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-slate-500 shrink-0">회색 표시 :</span>
+              <span className="inline-block w-3 h-3 rounded-sm bg-slate-300/90 shrink-0 border border-slate-500/30" aria-hidden />
+              <span className="text-slate-500">맞춤 필터에 맞는 라이딩은 없고 다른 라이딩만 있는 날</span>
             </div>
           </div>
         </section>
