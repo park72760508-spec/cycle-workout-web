@@ -893,6 +893,29 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   line-height: 1.5;
 }
 
+/* 오픈 라이딩방: 화면 세로·가로 중앙 정렬 */
+#openRidingRoomScreen.active {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 12px 10px;
+  position: relative;
+  overflow: hidden auto;
+}
+#openRidingRoomScreen .connection-main-container {
+  margin: auto;
+  width: 100%;
+  max-width: 500px;
+  min-height: 0;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
 #openRidingRoomScreen .open-riding-react-root {
   min-height: 120px;
 }
@@ -909,6 +932,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 #openRidingRoomScreen .open-riding-filter-modal-panel {
   box-shadow: 0 20px 50px rgba(91, 33, 182, 0.15);
+}
+#openRidingRoomScreen .open-riding-create-btn {
+  box-sizing: border-box;
 }
 
 /* Choose Your Path: authBar(Welcome 사용자명·로그아웃 박스) = 상단 2열 버튼 그리드와 동일한 폭(90%, 좌우 5%) */
