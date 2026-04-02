@@ -982,8 +982,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   color: #fca5a5 !important;
 }
 
+/* 라이딩 목록: 폭파됨 — 제목 회색톤 */
+#openRidingRoomScreen .open-riding-list-title-cancelled {
+  color: #94a3b8;
+}
+/* 라이딩 목록: 비공개 — 제목 투명 빨강 */
 #openRidingRoomScreen .open-riding-list-title-private {
-  color: rgba(255, 0, 0, 0.6);
+  color: rgba(220, 38, 38, 0.72);
 }
 
 /* 오픈 라이딩 생성: 공개/비공개 — device-connection-switch 재사용, 폭만 컨테이너에 맞춤 */
