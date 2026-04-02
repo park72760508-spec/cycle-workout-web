@@ -864,7 +864,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
-/* MY CAREER·기기 설정 = Choose Your Path 동일 셀 크기 */
+/* MY CAREER·오픈 라이딩방 = Choose Your Path 동일 셀 크기 */
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-career,
 #basecampScreen .connection-device-section .grid-2 .basecamp-btn-manual {
   width: 100% !important;
@@ -1251,12 +1251,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 0 !important;
 }
 
-/* 베이스캠프 화면의 사용자 메뉴얼 버튼 스타일 (우하 버튼) */
+/* 베이스캠프 화면의 오픈 라이딩방 버튼 스타일 (우하, b(04) 아트워크) */
 #basecampScreen .btn-device.basecamp-btn-manual,
 #basecampScreen .basecamp-btn-manual {
   background-image: url('https://stelvio.ai.kr/assets/img/b(04).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 95% !important;
+  background-size: 90% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
