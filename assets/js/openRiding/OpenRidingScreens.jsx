@@ -229,13 +229,26 @@ function loadGpxTextFromUrl(url, storage, isCancelled) {
         if (!api || typeof api.ref !== 'function' || typeof api.getBytes !== 'function') {
           throw new Error('Storage 모듈 API 없음 (ref/getBytes, index.html 선로드 확인)');
         }
-        var r = api.ref(st, objectPath);
+        // Firestore에 저장된 전체 다운로드 URL(토큰 포함)이 있으면 ref(storage, url) 우선 — SDK가 권한 처리에 유리
+        var r =
+          u.indexOf('https://firebasestorage.googleapis.com') === 0
+            ? api.ref(st, u)
+            : api.ref(st, objectPath);
         return api.getBytes(r);
       })
       .then(function (bytes) {
         if (isCancelled()) return '';
         if (!bytes || !bytes.byteLength) return '';
         return new TextDecoder('utf-8').decode(bytes);
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? String(err.message) : 'GPX 다운로드 실패';
+        var code = err && err.code ? String(err.code) : '';
+        if (code) msg = code + ': ' + msg;
+        msg +=
+          ' · 브라우저에서 getBytes/fetch로 Storage를 읽으려면 GCS 버킷 CORS가 필요합니다. ' +
+          '예: gsutil cors set docs/storage.cors.json gs://<Firebase Console Storage에 표시된 버킷명>';
+        return Promise.reject(new Error(msg));
       });
   }
 
