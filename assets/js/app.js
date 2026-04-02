@@ -4593,7 +4593,7 @@ function togglePause() {
     const splashScreen = document.getElementById("splashScreen");
     if (splashScreen) {
       // 즉시 스플래시 화면 보호 설정
-      splashScreen.style.setProperty('display', 'block', 'important');
+      splashScreen.style.setProperty('display', 'flex', 'important');
       splashScreen.style.setProperty('opacity', '1', 'important');
       splashScreen.style.setProperty('visibility', 'visible', 'important');
       splashScreen.style.setProperty('z-index', '10000', 'important');
@@ -4624,141 +4624,7 @@ function togglePause() {
   } else {
     protectSplash();
   }
-  
-  // 추가 보호: 주기적으로 확인 (매우 빠른 간격)
-  const protectionInterval = setInterval(() => {
-    if (window.isSplashActive) {
-      protectSplash();
-    } else {
-      clearInterval(protectionInterval);
-    }
-  }, 16); // 약 60fps로 확인
-  
-  // 5초 후 자동 정리 (스플래시 화면이 완료되어야 함)
-  setTimeout(() => {
-    clearInterval(protectionInterval);
-    // 스플래시 화면이 완료되면 보호 중단
-    window.isSplashActive = false;
-  }, 5000);
 })();
-
-/**
- * 스플래시 STELVIO.mp4: iOS Safari / WKWebView에서 음소거 자동재생·인라인 속성과 canplay 타이밍을 맞추고,
- * 재생 실패·디코드 오류 시 정적 로고(.splash-video-use-fallback)로 대체.
- * 네이티브 앱은 WKWebViewConfiguration.allowsInlineMediaPlayback = true,
- * mediaTypesRequiringUserActionForPlayback = [] 권장.
- */
-function configureAndPlaySplashVideo() {
-  const video = document.getElementById("splashVideo");
-  const wrapper = document.getElementById("splashVideoWrapper");
-  if (!video) return;
-
-  const ua = navigator.userAgent || "";
-  const isIOSDevice =
-    /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-  function showSplashFallback() {
-    if (wrapper) wrapper.classList.add("splash-video-use-fallback");
-  }
-
-  function armVideoForInlineAutoplay() {
-    video.muted = true;
-    video.defaultMuted = true;
-    video.setAttribute("muted", "");
-    video.playsInline = true;
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "");
-    try {
-      video.setAttribute("disablepictureinpicture", "");
-      video.setAttribute("disableremoteplayback", "");
-    } catch (e1) {}
-  }
-
-  function tryPlay() {
-    armVideoForInlineAutoplay();
-    return video
-      .play()
-      .then(function () {
-        return true;
-      })
-      .catch(function (err) {
-        console.warn("[splash] video.play():", err && err.message ? err.message : err);
-        return false;
-      });
-  }
-
-  video.addEventListener(
-    "error",
-    function () {
-      console.warn("[splash] video element error", video.error);
-      showSplashFallback();
-    },
-    { once: true }
-  );
-
-  video.addEventListener("playing", function onPlaying() {
-    if (wrapper) wrapper.classList.remove("splash-video-use-fallback");
-  });
-
-  var playStarted = false;
-  var playAttemptBusy = false;
-
-  function attemptPlayback() {
-    if (playStarted || playAttemptBusy) return;
-    playAttemptBusy = true;
-    video.currentTime = 0;
-    tryPlay().then(function (ok) {
-      playAttemptBusy = false;
-      if (ok) {
-        playStarted = true;
-        return;
-      }
-      setTimeout(function () {
-        if (playStarted) return;
-        playAttemptBusy = true;
-        tryPlay().then(function (ok2) {
-          playAttemptBusy = false;
-          if (ok2) playStarted = true;
-          else showSplashFallback();
-        });
-      }, isIOSDevice ? 280 : 150);
-    });
-  }
-
-  armVideoForInlineAutoplay();
-
-  if (video.readyState >= 2) {
-    attemptPlayback();
-  } else {
-    video.addEventListener(
-      "canplay",
-      function onCanplay() {
-        video.removeEventListener("canplay", onCanplay);
-        attemptPlayback();
-      },
-      { once: true }
-    );
-    video.addEventListener(
-      "loadeddata",
-      function onData() {
-        video.removeEventListener("loadeddata", onData);
-        attemptPlayback();
-      },
-      { once: true }
-    );
-  }
-
-  setTimeout(function () {
-    if (!playStarted) attemptPlayback();
-  }, isIOSDevice ? 450 : 320);
-
-  setTimeout(function () {
-    if (video.error) return;
-    if (video.readyState >= 2 && video.paused && !video.ended) {
-      showSplashFallback();
-    }
-  }, isIOSDevice ? 1400 : 2200);
-}
 
 // DOMContentLoaded 이벤트
 document.addEventListener("DOMContentLoaded", () => {
@@ -4866,7 +4732,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 스플래시 화면 처리 (최우선 실행 - 다른 모든 초기화보다 먼저)
   const splashScreen = document.getElementById("splashScreen");
-  const splashVideo = document.getElementById("splashVideo");
   
   // 블루투스 연결 버튼에서 센서연결만 열려고 온 경우 스플래시 비활성화 (초기 로딩 화면 건너뛰기)
   const skipSplashForDeviceSettings = !!window._openDeviceSettingsFromBluetooth || !!window._openDeviceSettingsOnly;
@@ -4908,7 +4773,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // 스플래시 화면도 다시 한번 보호
     if (splashScreen) {
-      splashScreen.style.setProperty('display', 'block', 'important');
+      splashScreen.style.setProperty('display', 'flex', 'important');
       splashScreen.style.setProperty('opacity', '1', 'important');
       splashScreen.style.setProperty('visibility', 'visible', 'important');
       splashScreen.style.setProperty('z-index', '10000', 'important');
@@ -5017,7 +4882,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     // 스플래시 화면 강제 표시 보호 (깜빡임 방지) - !important 사용
-    splashScreen.style.setProperty('display', 'block', 'important');
+    splashScreen.style.setProperty('display', 'flex', 'important');
     splashScreen.style.setProperty('opacity', '1', 'important');
     splashScreen.style.setProperty('visibility', 'visible', 'important');
     splashScreen.style.setProperty('z-index', '10000', 'important');
@@ -5041,13 +4906,13 @@ document.addEventListener("DOMContentLoaded", () => {
           
           if (needsFix) {
             // 즉시 복구 - !important 사용
-            splashScreen.style.setProperty('display', 'block', 'important');
+            splashScreen.style.setProperty('display', 'flex', 'important');
             splashScreen.style.setProperty('opacity', '1', 'important');
             splashScreen.style.setProperty('visibility', 'visible', 'important');
             splashScreen.style.setProperty('z-index', '10000', 'important');
             splashScreen.style.setProperty('transition', 'none', 'important');
-    splashScreen.classList.add("active");
-    
+            splashScreen.classList.add("active");
+
             // 다른 화면들도 강제로 숨김
             document.querySelectorAll(".screen").forEach(screen => {
               if (screen.id !== 'splashScreen') {
@@ -5073,112 +4938,79 @@ document.addEventListener("DOMContentLoaded", () => {
     // 전역에 observer 저장 (나중에 정리용)
     window.splashObserver = splashObserver;
     
-    console.log("🎬 스플래시 화면 시작 - 2초 후 인증 화면으로 전환");
-    
-    // 스플래시 화면이 활성화되어 있으면 처리 (진행바·태그라인 제거로 2초로 단축)
-    const totalDuration = 2000; // 2초 (기존 4초에서 단축)
-    
-    // 동영상 재생 (iOS 대응: configureAndPlaySplashVideo)
-    if (splashVideo) {
-      configureAndPlaySplashVideo();
-    }
-    
-    // totalDuration 후 스플래시 종료 및 인증 화면 전환
+    console.log("🎬 스플래시(정적 로고 2초) - 인증 화면으로 전환");
+    const totalDuration = 2000;
+
     setTimeout(() => {
-      console.log("✅ 스플래시 화면 완료 (2초) - 인증 화면으로 전환");
-      
-      // Observer 정리 및 플래그 해제
+      console.log("✅ 스플래시 완료 - 인증 화면으로 전환");
+
       window.isSplashActive = false;
       if (window.splashObserver) {
         window.splashObserver.disconnect();
         window.splashObserver = null;
       }
-      
-      // 페이드 아웃 애니메이션 (0.3초)
-      splashScreen.style.transition = "opacity 0.3s ease-out";
-      splashScreen.style.opacity = "0";
-      
-      // 페이드 아웃 완료 후 인증 화면 표시 (300ms)
-      setTimeout(() => {
-            // 스플래시 화면 완전히 숨기기
-          splashScreen.classList.remove("active");
-            splashScreen.style.setProperty('display', 'none', 'important');
-            splashScreen.style.setProperty('opacity', '0', 'important');
-            splashScreen.style.setProperty('visibility', 'hidden', 'important');
-            splashScreen.style.setProperty('z-index', '-1', 'important');
-            splashScreen.style.setProperty('transition', 'none', 'important');
-            splashScreen.style.setProperty('background', 'transparent', 'important'); // 배경색 제거
-            
-            // body 배경색 원복 (원래 배경색으로 복원)
-            document.body.style.setProperty('background-color', '#f6f8fa', 'important');
-            document.body.style.setProperty('background-attachment', 'fixed', 'important');
-            
-            // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
-            const splashContainer = document.querySelector('.splash-container');
-            if (splashContainer) {
-              splashContainer.style.setProperty('display', 'none', 'important');
-              splashContainer.style.setProperty('opacity', '0', 'important');
-              splashContainer.style.setProperty('visibility', 'hidden', 'important');
-            }
-            
-            // body 배경색 원복 (원래 배경색으로 복원)
-            document.body.style.setProperty('background-color', '#f6f8fa', 'important');
-            document.body.style.setProperty('background-attachment', 'fixed', 'important');
-          
-          // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
-          const authScreen = document.getElementById("authScreen");
-          if (authScreen) {
-            // 다른 모든 화면 숨기기
-            document.querySelectorAll(".screen").forEach(screen => {
-              if (screen.id !== 'splashScreen') {
-                screen.classList.remove("active");
-                screen.style.display = "none";
-              }
-            });
-            
-            // 인증 화면 표시
-            authScreen.style.display = "block";
-            authScreen.classList.add("active");
-            authScreen.style.opacity = "1";
-            authScreen.style.visibility = "visible";
-            
-            // 인증 시스템 초기화 (스플래시 후 실행)
-            setTimeout(() => {
-              // 인증 시스템 이벤트 리스너 초기화
-              if (typeof initializeAuthenticationSystem === 'function') {
-                console.log('🔧 인증 시스템 초기화 시작');
-                initializeAuthenticationSystem();
-              } else {
-                console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
-              }
-              // showScreen을 거치지 않으므로 로그인 상태 유지(localStorage) 복원은 여기서 수행
-              if (typeof window.restoreAuthRememberCredentials === 'function') {
-                window.restoreAuthRememberCredentials();
-              }
-              // 전화번호 입력 필드 포커스
-              const phoneInput = document.getElementById('authPhoneInput');
-              if (phoneInput) {
-                phoneInput.focus();
-              }
-            }, 200);
+
+      splashScreen.classList.remove("active");
+      splashScreen.style.setProperty('display', 'none', 'important');
+      splashScreen.style.setProperty('opacity', '0', 'important');
+      splashScreen.style.setProperty('visibility', 'hidden', 'important');
+      splashScreen.style.setProperty('z-index', '-1', 'important');
+      splashScreen.style.setProperty('transition', 'none', 'important');
+      splashScreen.style.setProperty('background', 'transparent', 'important');
+
+      document.body.style.setProperty('background-color', '#f6f8fa', 'important');
+      document.body.style.setProperty('background-attachment', 'fixed', 'important');
+
+      const splashContainer = document.querySelector('.splash-container');
+      if (splashContainer) {
+        splashContainer.style.setProperty('display', 'none', 'important');
+        splashContainer.style.setProperty('opacity', '0', 'important');
+        splashContainer.style.setProperty('visibility', 'hidden', 'important');
+      }
+
+      const authScreen = document.getElementById("authScreen");
+      if (authScreen) {
+        document.querySelectorAll(".screen").forEach(screen => {
+          if (screen.id !== 'splashScreen') {
+            screen.classList.remove("active");
+            screen.style.display = "none";
           }
-          }, 300); // 페이드 아웃 시간 (0.3초)
-      }, totalDuration); // 2초 후 스플래시 종료
+        });
+
+        authScreen.style.display = "block";
+        authScreen.classList.add("active");
+        authScreen.style.opacity = "1";
+        authScreen.style.visibility = "visible";
+
+        setTimeout(() => {
+          if (typeof initializeAuthenticationSystem === 'function') {
+            console.log('🔧 인증 시스템 초기화 시작');
+            initializeAuthenticationSystem();
+          } else {
+            console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
+          }
+          if (typeof window.restoreAuthRememberCredentials === 'function') {
+            window.restoreAuthRememberCredentials();
+          }
+          const phoneInput = document.getElementById('authPhoneInput');
+          if (phoneInput) {
+            phoneInput.focus();
+          }
+        }, 200);
+      }
+    }, totalDuration);
   } else {
     // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
-    // body 배경색 원복 (원래 배경색으로 복원)
     document.body.style.setProperty('background-color', '#f6f8fa', 'important');
     document.body.style.setProperty('background-attachment', 'fixed', 'important');
-    
+
     const authScreen = document.getElementById("authScreen");
     if (authScreen) {
-      // 다른 모든 화면 숨기기
       document.querySelectorAll(".screen").forEach(screen => {
         screen.classList.remove("active");
         screen.style.display = "none";
       });
-      
-      // 인증 화면 표시
+
       authScreen.style.display = "block";
       authScreen.classList.add("active");
       authScreen.style.opacity = "1";
