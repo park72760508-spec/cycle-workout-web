@@ -1982,7 +1982,6 @@ function OpenRidingDetail(props) {
         )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
-        {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow(
           '연락처',
           showHostContactRow && ride.contactInfo ? (
@@ -1993,6 +1992,7 @@ function OpenRidingDetail(props) {
             '-'
           )
         )}
+        {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow('내 상태', roleLabel)}
       </div>
       {maskContacts ? (
