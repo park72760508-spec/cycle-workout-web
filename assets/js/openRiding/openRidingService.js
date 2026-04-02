@@ -231,22 +231,34 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
 }
 
 /**
- * 방장 폭파(취소) — 목록에 폭파 상태로 표시
+ * 방장 폭파(취소)
+ * - 참석 확정(participants) 0명: 문서 삭제
+ * - 1명 이상: 기존처럼 rideStatus= cancelled 유지
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
  * @param {string} hostUserId
+ * @returns {Promise<{ deleted: boolean }>}
  */
 export async function cancelRideByHost(db, rideId, hostUserId) {
   const rideRef = doc(db, 'rides', rideId);
-  const snap = await getDoc(rideRef);
-  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
-  const data = snap.data();
-  if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
-  await updateDoc(rideRef, {
-    rideStatus: 'cancelled',
-    cancelledAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+  const deleted = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(rideRef);
+    if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+    const data = snap.data();
+    if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+    const parts = Array.isArray(data.participants) ? data.participants : [];
+    if (parts.length === 0) {
+      transaction.delete(rideRef);
+      return true;
+    }
+    transaction.update(rideRef, {
+      rideStatus: 'cancelled',
+      cancelledAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return false;
   });
+  return { deleted: !!deleted };
 }
 
 /**

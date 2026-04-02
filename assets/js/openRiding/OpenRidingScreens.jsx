@@ -1944,9 +1944,13 @@ function OpenRidingDetail(props) {
     if (!firestore || !userId || typeof svc.cancelRideByHost !== 'function') return;
     setCancelBusy(true);
     try {
-      await svc.cancelRideByHost(firestore, rideId, userId);
+      var res = await svc.cancelRideByHost(firestore, rideId, userId);
       setBombOpen(false);
-      if (typeof reload === 'function') await reload();
+      if (res && res.deleted) {
+        if (typeof onBack === 'function') onBack();
+      } else if (typeof reload === 'function') {
+        await reload();
+      }
     } finally {
       setCancelBusy(false);
     }
@@ -1970,8 +1974,26 @@ function OpenRidingDetail(props) {
     [registerDetailHeaderEdit, loading, ride, userId, onOpenEdit]
   );
 
-  if (loading || !ride) {
+  if (loading) {
     return <div className="p-6 text-center text-slate-500">불러오는 중…</div>;
+  }
+  if (!ride) {
+    return (
+      <div className="max-w-lg mx-auto py-8 px-4 text-center space-y-4">
+        <p className="text-sm text-slate-600 leading-relaxed m-0">
+          라이딩을 찾을 수 없거나 삭제되었습니다.
+        </p>
+        <button
+          type="button"
+          className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
+          onClick={function () {
+            if (typeof onBack === 'function') onBack();
+          }}
+        >
+          목록으로
+        </button>
+      </div>
+    );
   }
 
   var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
