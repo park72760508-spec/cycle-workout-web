@@ -10037,6 +10037,22 @@
   </script>
 
   <!-- ========== 오픈 라이딩방 (Firestore 달력 + 목록 / 생성 / 상세) ========== -->
+  <!-- Babel이 아닌 일반 스크립트에서만 dynamic import (OpenRidingScreens.jsx의 import는 require로 바뀌어 깨짐 방지) -->
+  <script>
+    (function () {
+      if (window._firebaseStorageModReady) return;
+      window._firebaseStorageModReady = import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js')
+        .then(function (m) {
+          window.firebaseStorageModV9API = m;
+          return m;
+        })
+        .catch(function (e) {
+          console.warn('[오픈라이딩] firebase-storage 모듈 선로드 실패:', e && e.message ? e.message : e);
+          window.firebaseStorageModV9API = null;
+          throw e;
+        });
+    })();
+  </script>
   <script src="assets/js/openRiding/openRidingGpx.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="assets/js/openRiding/OpenRidingScreens.jsx" type="text/babel"></script>
