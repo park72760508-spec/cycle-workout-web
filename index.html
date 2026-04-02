@@ -1772,29 +1772,17 @@
 </head>
 
 <body>
-  <!-- 스플래시 화면 (첫 화면) -->
+  <!-- 스플래시: 흰 배경 + 중앙 로고 2초 후 인증 화면 -->
   <div id="splashScreen" class="screen active">
-    <div class="splash-container">
-      <!-- 동영상 배경 -->
-      <div class="splash-video-wrapper" id="splashVideoWrapper">
-        <!-- iOS: 영상 실패·미재생 시 정적 로고 폴백 (WKWebView 인라인 재생 미설정 시에도 브랜딩 유지) -->
-        <img id="splashVideoFallback" class="splash-video-fallback" src="assets/img/STELVIO AI.png" alt="" width="512" height="512" decoding="async" />
-        <video id="splashVideo" class="splash-video"
-          autoplay muted playsinline webkit-playsinline
-          disablepictureinpicture disableremoteplayback
-          preload="auto"
-          poster="assets/img/STELVIO AI.png">
-          <source src="assets/img/STELVIO.mp4" type="video/mp4">
-        </video>
-        <!-- 동영상 오버레이 (그라데이션) -->
-        <div class="splash-video-overlay"></div>
-      </div>
-      
-      <!-- 브랜딩 콘텐츠 (진행바·태그라인 제거로 로딩 시간 단축) -->
-      <div class="splash-content">
-        <div class="splash-logo-container">
-        </div>
-      </div>
+    <div class="splash-container splash-container--simple">
+      <img
+        class="splash-center-logo"
+        src="assets/img/STELVIO AI.png"
+        alt="STELVIO AI"
+        width="512"
+        height="512"
+        decoding="async"
+      />
     </div>
   </div>
 
