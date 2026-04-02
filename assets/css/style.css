@@ -996,6 +996,45 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   max-width: 100%;
 }
 
+/* 오픈 라이딩 공개/비공개 토글: 70% 크기, 선택 보라·비선택 회색 */
+#openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch {
+  transform: scale(0.7);
+  transform-origin: center center;
+  margin: -6px auto;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch.active-bluetooth .switch-slider,
+#openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch.active-ant .switch-slider {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%) !important;
+  box-shadow: 0 2px 10px rgba(124, 58, 237, 0.4) !important;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2 .switch-option span {
+  color: #9ca3af;
+  transition: color 0.25s ease;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2.active-bluetooth .switch-option-left span {
+  color: #5b21b6;
+  font-weight: 800;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2.active-ant .switch-option-right span {
+  color: #5b21b6;
+  font-weight: 800;
+}
+#openRidingRoomScreen .open-riding-vlabel-on {
+  color: #5b21b6;
+}
+#openRidingRoomScreen .open-riding-vlabel-off {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* 참석 신청 연락처 공개 팝업 (STELVIO 보라 톤) */
+#openRidingRoomScreen .open-riding-share-contact-panel {
+  box-shadow: 0 16px 48px rgba(91, 33, 182, 0.18), 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+#openRidingRoomScreen .open-riding-share-contact-header {
+  background: linear-gradient(135deg, rgba(245, 243, 255, 0.98) 0%, rgba(237, 233, 254, 0.9) 50%, rgba(221, 214, 254, 0.5) 100%);
+}
+
 #openRidingRoomScreen .open-riding-time-dial {
   min-height: 38px;
   padding: 0.35rem 0.5rem;
