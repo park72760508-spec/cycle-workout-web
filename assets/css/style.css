@@ -15232,7 +15232,7 @@ html.is-android #trainingDetailModal .training-detail-body {
   opacity: 1;
 }
 
-/* ========== 스플래시 화면 (STELVIO AI) ========== */
+/* ========== 스플래시 화면 (흰 배경 + 중앙 로고) ========== */
 #splashScreen {
   position: fixed !important;
   top: 0 !important;
@@ -15244,7 +15244,7 @@ html.is-android #trainingDetailModal .training-detail-body {
   min-height: 100vh !important;
   min-height: 100dvh !important;
   min-height: -webkit-fill-available !important;
-  background: #000000 !important;
+  background: #ffffff !important;
   z-index: 10000 !important;
   display: flex !important;
   align-items: center !important;
@@ -15274,54 +15274,33 @@ html.is-android #trainingDetailModal .training-detail-body {
   justify-content: center;
 }
 
-/* 동영상 배경 */
-.splash-video-wrapper {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+.splash-container--simple {
+  padding: 1.5rem;
+  box-sizing: border-box;
 }
 
-.splash-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
+.splash-center-logo {
+  display: block;
+  width: min(72vw, 320px);
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
-/* 동영상 오버레이 (그라데이션으로 텍스트 가독성 향상) */
-.splash-video-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.3) 0%,
-    rgba(0, 0, 0, 0.1) 30%,
-    rgba(0, 0, 0, 0.1) 70%,
-    rgba(0, 0, 0, 0.5) 100%
-  );
-  pointer-events: none;
-}
-
-/* 브랜딩 콘텐츠 */
+/* 레거시 스플래시 클래스(동영상·타이틀 UI) — HTML에서 제거됨, 정의 유지 시 다른 화면과 충돌 없음 */
 .splash-content {
   position: relative;
   z-index: 10;
   text-align: center;
   color: #ffffff;
-  animation: fadeInUp 1s ease-out;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
   height: 100%;
   padding-bottom: 15%;
-  transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
 }
 
 .splash-logo-container {
