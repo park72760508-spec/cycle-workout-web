@@ -6754,6 +6754,15 @@ window.showScreen = function(screenId) {
     }
     console.log('[훈련일지] 화면 이탈 - fetch 카운트/플래그 초기화');
   }
+  if (currentActive && currentActive.id === 'openRidingRoomScreen' && screenId !== 'openRidingRoomScreen') {
+    if (typeof window.destroyOpenRidingRoomReact === 'function') {
+      try {
+        window.destroyOpenRidingRoomReact();
+      } catch (eOrExit) {
+        console.warn('[openRiding] destroy on leave:', eOrExit);
+      }
+    }
+  }
   // bluetooth 이탈 시 Wake Lock은 showScreen 끝에서 StelvioWakeLock.applyForScreen으로 일괄 처리
 
   // 모든 화면 숨기기 (스플래시 화면 제외)
