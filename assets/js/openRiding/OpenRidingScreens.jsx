@@ -35,6 +35,28 @@ function getKoreaRegionOptions() {
   };
 }
 
+/** 상세 패널: 레벨명 뒤 항속(hint) 괄호 표기 */
+function formatOpenRidingLevelDetailValue(levelStr) {
+  if (levelStr == null || String(levelStr).trim() === '') return '-';
+  var s = String(levelStr).trim();
+  var opts = typeof window !== 'undefined' ? window.RIDING_LEVEL_OPTIONS || [] : [];
+  var hint = '';
+  var i;
+  for (i = 0; i < opts.length; i++) {
+    if (opts[i].value === s) {
+      hint = opts[i].hint != null ? String(opts[i].hint) : '';
+      break;
+    }
+  }
+  if (!hint) return s;
+  return (
+    <span className="text-[13px] leading-snug">
+      <span className="font-medium">{s}</span>
+      <span className="text-slate-600 font-normal"> ({hint})</span>
+    </span>
+  );
+}
+
 /** 로그인·프로필 기준 방장명·연락처 (라이딩 생성·참가 시 표시 이름) */
 function getOpenRidingProfileDefaults() {
   try {
@@ -1457,7 +1479,7 @@ function OpenRidingCreateForm(props) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-        <span className="block font-medium text-slate-700">공개 / 비공개</span>
+        <span className="block font-medium text-slate-700">라이딩 벙 공개/비공개 설정</span>
         <div className="device-connection-switch-container flex flex-col items-stretch sm:items-center">
           <div
             role="switch"
@@ -1624,7 +1646,6 @@ function OpenRidingCreateForm(props) {
             }}
           />
         </label>
-        <p className="text-xs text-slate-600 m-0 leading-snug">파일을 고르면 위에서 미리 볼 수 있습니다. 최종 업로드는 저장(생성) 시 Firebase Storage에 반영됩니다.</p>
         {form.gpxUrlExisting && !form.gpxFile ? (
           <p className="text-xs text-slate-600 m-0">이미 등록된 GPX가 있습니다. 새 파일을 선택하면 저장 시 교체됩니다.</p>
         ) : null}
@@ -1949,7 +1970,7 @@ function OpenRidingDetail(props) {
         ))}
         {statRow('출발', ride.departureLocation != null ? ride.departureLocation : '-')}
         {statRow('지역', ride.region != null ? ride.region : '-')}
-        {statRow('레벨', ride.level != null ? ride.level : '-')}
+        {statRow('레벨', formatOpenRidingLevelDetailValue(ride.level))}
         {statRow(
           '거리',
           ride.distance != null && String(ride.distance).trim() !== ''
