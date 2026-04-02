@@ -7,6 +7,7 @@ var useState = React.useState;
 var useEffect = React.useEffect;
 var useMemo = React.useMemo;
 var useCallback = React.useCallback;
+var useRef = React.useRef;
 
 function getOpenRidingHooks() {
   return {
@@ -177,6 +178,251 @@ function parseNativeAddressBookData(data) {
     });
   });
   return out;
+}
+
+/**
+ * GPX URL 또는 로컬 File → Leaflet 지도 + Chart.js 고도표 (코스 설명 블록 하단용)
+ * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean }} props
+ */
+function OpenRidingGpxCoursePanel(props) {
+  var gpxUrl = props.gpxUrl != null ? String(props.gpxUrl) : '';
+  var file = props.file || null;
+  var showEmpty =
+    props.showEmptyMessage === undefined || props.showEmptyMessage === null ? true : !!props.showEmptyMessage;
+
+  var mapRef = useRef(null);
+  var chartRef = useRef(null);
+  var mapInstRef = useRef(null);
+  var chartInstRef = useRef(null);
+
+  var _st = useState({ status: 'idle', track: null, err: '' });
+  var loadState = _st[0];
+  var setLoadState = _st[1];
+
+  useEffect(
+    function () {
+      var cancelled = false;
+      var hasFile = !!(file && file.name);
+      var hasUrl = !!(gpxUrl && String(gpxUrl).trim());
+
+      if (!hasFile && !hasUrl) {
+        setLoadState({ status: 'empty', track: null, err: '' });
+        return;
+      }
+
+      setLoadState({ status: 'loading', track: null, err: '' });
+
+      function applyTrack(text) {
+        var mod = typeof window !== 'undefined' ? window.openRidingGpx : null;
+        var parse = mod && typeof mod.parseGpxToTrack === 'function' ? mod.parseGpxToTrack : null;
+        if (!parse) throw new Error('GPX 모듈(openRidingGpx)이 로드되지 않았습니다.');
+        return parse(String(text || ''));
+      }
+
+      if (hasFile) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          if (cancelled) return;
+          try {
+            var track = applyTrack(reader.result);
+            setLoadState({ status: 'ok', track: track, err: '' });
+          } catch (e) {
+            setLoadState({ status: 'err', track: null, err: (e && e.message) ? String(e.message) : '파싱 실패' });
+          }
+        };
+        reader.onerror = function () {
+          if (!cancelled) setLoadState({ status: 'err', track: null, err: '파일을 읽을 수 없습니다.' });
+        };
+        reader.readAsText(file, 'UTF-8');
+        return function () {
+          cancelled = true;
+        };
+      }
+
+      fetch(String(gpxUrl).trim(), { mode: 'cors', credentials: 'omit', cache: 'no-store' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.text();
+        })
+        .then(function (text) {
+          if (cancelled) return;
+          try {
+            var track = applyTrack(text);
+            setLoadState({ status: 'ok', track: track, err: '' });
+          } catch (e2) {
+            setLoadState({ status: 'err', track: null, err: (e2 && e2.message) ? String(e2.message) : '파싱 실패' });
+          }
+        })
+        .catch(function (e3) {
+          if (!cancelled) {
+            setLoadState({
+              status: 'err',
+              track: null,
+              err: (e3 && e3.message) ? String(e3.message) : 'GPX를 가져올 수 없습니다.'
+            });
+          }
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [gpxUrl, file]
+  );
+
+  useEffect(
+    function () {
+      if (loadState.status !== 'ok' || !loadState.track || !loadState.track.latlngs || loadState.track.latlngs.length < 2) {
+        if (mapInstRef.current) {
+          try {
+            mapInstRef.current.remove();
+          } catch (e0) {}
+          mapInstRef.current = null;
+        }
+        return;
+      }
+      var L = typeof window !== 'undefined' ? window.L : null;
+      if (!L || !mapRef.current) return;
+
+      try {
+        if (mapInstRef.current) {
+          try {
+            mapInstRef.current.remove();
+          } catch (e1) {}
+          mapInstRef.current = null;
+        }
+        var map = L.map(mapRef.current, { zoomControl: true, attributionControl: true });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+        var poly = L.polyline(loadState.track.latlngs, { color: '#7c3aed', weight: 4, opacity: 0.92 }).addTo(map);
+        map.fitBounds(poly.getBounds(), { padding: [18, 18] });
+        mapInstRef.current = map;
+        var t0 = setTimeout(function () {
+          try {
+            map.invalidateSize();
+          } catch (e2) {}
+        }, 240);
+        return function () {
+          clearTimeout(t0);
+          try {
+            if (mapInstRef.current) {
+              mapInstRef.current.remove();
+              mapInstRef.current = null;
+            }
+          } catch (e3) {}
+        };
+      } catch (e4) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[OpenRiding GPX] map', e4);
+      }
+    },
+    [loadState.status, loadState.track]
+  );
+
+  useEffect(
+    function () {
+      var Chart = typeof window !== 'undefined' ? window.Chart : null;
+      if (chartInstRef.current) {
+        try {
+          chartInstRef.current.destroy();
+        } catch (e0) {}
+        chartInstRef.current = null;
+      }
+      if (loadState.status !== 'ok' || !loadState.track || !Chart || !chartRef.current) return;
+      var tr = loadState.track;
+      if (!tr.distancesKm || !tr.elevs || tr.distancesKm.length < 2) return;
+
+      try {
+        var ctx = chartRef.current.getContext('2d');
+        chartInstRef.current = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: tr.distancesKm.map(function (d) {
+              return Number(d).toFixed(2);
+            }),
+            datasets: [
+              {
+                label: '고도',
+                data: tr.elevs,
+                borderColor: '#7c3aed',
+                backgroundColor: 'rgba(124, 58, 237, 0.22)',
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0,
+                borderWidth: 2
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: {
+                display: true,
+                title: { display: true, text: '누적 거리 (km)', font: { size: 11 } },
+                grid: { display: false },
+                ticks: { maxTicksLimit: 6, font: { size: 10 } }
+              },
+              y: {
+                display: true,
+                title: { display: true, text: '고도 (m)', font: { size: 11 } },
+                grid: { color: 'rgba(0,0,0,0.06)' },
+                ticks: { font: { size: 10 } }
+              }
+            },
+            plugins: { legend: { display: false } }
+          }
+        });
+      } catch (e1) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[OpenRiding GPX] chart', e1);
+      }
+      return function () {
+        if (chartInstRef.current) {
+          try {
+            chartInstRef.current.destroy();
+          } catch (e2) {}
+          chartInstRef.current = null;
+        }
+      };
+    },
+    [loadState.status, loadState.track]
+  );
+
+  if (loadState.status === 'empty' || loadState.status === 'idle') {
+    if (!showEmpty) return null;
+    return (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/90 px-3 py-6 text-center text-sm text-slate-500 leading-snug">
+        등록된 코스가 없습니다. GPX 파일을 선택하면 지도와 고도표가 표시됩니다.
+      </div>
+    );
+  }
+  if (loadState.status === 'loading') {
+    return <div className="text-sm text-slate-500 py-4 text-center">코스 불러오는 중…</div>;
+  }
+  if (loadState.status === 'err') {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-3 text-sm text-amber-900 leading-snug">
+        코스를 표시할 수 없습니다. {loadState.err}
+      </div>
+    );
+  }
+  return (
+    <div className="open-riding-gpx-panel w-full max-w-full space-y-3">
+      <div
+        className="w-full rounded-xl overflow-hidden border border-violet-200/80 bg-slate-100 shadow-sm open-riding-gpx-map-wrap"
+        style={{ height: 'clamp(220px, 42vh, 300px)', width: '100%' }}
+      >
+        <div ref={mapRef} className="open-riding-gpx-map-inner w-full h-full" style={{ height: '100%', minHeight: '220px' }} />
+      </div>
+      <div
+        className="w-full rounded-xl border border-violet-200/80 bg-white p-2 shadow-sm open-riding-gpx-chart-wrap"
+        style={{ height: 'clamp(150px, 28vh, 200px)', width: '100%' }}
+      >
+        <canvas ref={chartRef} className="block w-full h-full max-w-full" />
+      </div>
+    </div>
+  );
 }
 
 function openRidingBridgeOpenAddressBook() {
@@ -1130,6 +1376,30 @@ function OpenRidingCreateForm(props) {
 
       <label className="block font-medium text-slate-700">코스 설명<textarea className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
 
+      <div className="rounded-xl border border-violet-100/90 bg-violet-50/25 p-3 space-y-3">
+        <p className="text-xs font-semibold text-violet-900 m-0">코스 지도 · 고도표 (GPX)</p>
+        <OpenRidingGpxCoursePanel
+          gpxUrl={form.gpxUrlExisting}
+          file={form.gpxFile}
+          showEmptyMessage={!!(form.gpxUrlExisting || form.gpxFile)}
+        />
+        <label className="block text-sm font-medium text-slate-700">
+          GPX 파일 (선택)
+          <input
+            type="file"
+            accept=".gpx,application/gpx+xml"
+            className="mt-1 block w-full text-sm"
+            onChange={function (e) {
+              set('gpxFile', e.target.files && e.target.files[0]);
+            }}
+          />
+        </label>
+        <p className="text-xs text-slate-600 m-0 leading-snug">파일을 고르면 위에서 미리 볼 수 있습니다. 최종 업로드는 저장(생성) 시 Firebase Storage에 반영됩니다.</p>
+        {form.gpxUrlExisting && !form.gpxFile ? (
+          <p className="text-xs text-slate-600 m-0">이미 등록된 GPX가 있습니다. 새 파일을 선택하면 저장 시 교체됩니다.</p>
+        ) : null}
+      </div>
+
       <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2">
         <legend className="text-sm font-semibold text-slate-800 px-1">레벨</legend>
         {RIDING_LEVEL_OPTIONS.map(function (opt) {
@@ -1165,8 +1435,6 @@ function OpenRidingCreateForm(props) {
         />
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
-
-      <label className="block font-medium text-slate-700">GPX 파일 (선택)<input type="file" accept=".gpx,application/gpx+xml" className="mt-1 block w-full text-sm" onChange={function (e) { set('gpxFile', e.target.files && e.target.files[0]); }} /></label>
 
       <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
         {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
@@ -1471,14 +1739,21 @@ function OpenRidingDetail(props) {
         <p className="text-xs text-slate-500 px-1 leading-snug">라이딩 일정일이 지나 방장·참가자 연락처는 개인정보 보호를 위해 마스킹되었습니다.</p>
       ) : null}
 
-      {ride.course ? (
-        <p className={'text-sm rounded-lg p-3 border border-violet-100/80 bg-violet-50/40' + detailMuted}>{ride.course}</p>
-      ) : null}
-      {ride.gpxUrl ? (
-        <a className={'text-violet-600 text-sm font-medium' + (isCancelled ? ' opacity-50 pointer-events-none' : '')} href={ride.gpxUrl} target="_blank" rel="noreferrer">
-          GPX 다운로드
-        </a>
-      ) : null}
+      <div className={'open-riding-course-detail-card rounded-xl border border-violet-100/80 bg-violet-50/30 p-3 space-y-3' + detailMuted}>
+        {ride.course ? <p className="text-sm text-slate-800 whitespace-pre-wrap m-0">{ride.course}</p> : null}
+        <OpenRidingGpxCoursePanel gpxUrl={ride.gpxUrl != null ? String(ride.gpxUrl) : ''} file={null} showEmptyMessage={true} />
+        {ride.gpxUrl ? (
+          <a
+            className={'inline-flex items-center gap-1 text-violet-600 text-sm font-semibold hover:underline' + (isCancelled ? ' opacity-50 pointer-events-none' : '')}
+            href={ride.gpxUrl}
+            target="_blank"
+            rel="noreferrer"
+            download
+          >
+            GPX 파일 다운로드
+          </a>
+        ) : null}
+      </div>
 
       <div className={'rounded-xl border border-violet-200/60 bg-white p-3 space-y-3 shadow-sm' + detailMuted}>
         <h2 className="text-sm font-semibold text-violet-900">참가자 명단</h2>
