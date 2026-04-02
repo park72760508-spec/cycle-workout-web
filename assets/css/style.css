@@ -1010,13 +1010,20 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   color: #fca5a5 !important;
 }
 
-/* 라이딩 목록: 폭파됨 — 제목 회색톤 */
+/* 라이딩 목록: 폭파됨 — 제목 회색톤(타인) / 연한 보라(내가 올린 라이딩) */
 #openRidingRoomScreen .open-riding-list-title-cancelled {
   color: #94a3b8;
 }
-/* 라이딩 목록: 비공개 — 제목 투명 빨강 */
-#openRidingRoomScreen .open-riding-list-title-private {
-  color: rgba(220, 38, 38, 0.72);
+#openRidingRoomScreen .open-riding-list-title-cancelled-mine {
+  color: #a78bfa;
+}
+/* 라이딩 목록: 비공개(타인) — 제목 검정 */
+#openRidingRoomScreen .open-riding-list-title-private-black {
+  color: #0f172a;
+}
+/* 라이딩 목록: 내가 올린 라이딩(미폭파) — 제목 보라 */
+#openRidingRoomScreen .open-riding-list-title-mine {
+  color: #6d28d9;
 }
 
 /* 오픈 라이딩 생성: 공개/비공개 — device-connection-switch 재사용, 폭만 컨테이너에 맞춤 */
