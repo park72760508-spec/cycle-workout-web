@@ -144,37 +144,77 @@ export function useOpenRideDetail(db, rideId, userId) {
     if (!db || !rideId || !userId) return;
     setActionError(null);
     try {
-      const prof =
-        typeof window !== 'undefined' && typeof window.getOpenRidingProfileDefaults === 'function'
-          ? window.getOpenRidingProfileDefaults()
-          : {};
-      var dn = String(prof.hostName || '').trim().slice(0, 80);
-      var phone = String(prof.contactInfo || '').trim().slice(0, 80);
-      /** 참석 신청: Firestore users/{uid}가 최종 원천 — 로컬/세션 불일치 시에도 동일 userId 행의 name·contact만 기록 */
-      try {
-        if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
-          const row = await window.getUserByUid(String(userId));
-          if (row && typeof row === 'object') {
-            const n = String(row.name != null ? row.name : '').trim().slice(0, 80);
-            const ph =
-              String(row.contact != null ? row.contact : '').trim() ||
-              String(row.phone != null ? row.phone : '').trim();
-            if (n) dn = n;
-            if (ph) phone = ph.slice(0, 80);
-          }
-        }
-      } catch (eFetch) {
-        if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] join getUserByUid:', eFetch);
-      }
+      var uid = String(userId);
+      var dn = '';
+      var phone = '';
       var cuJoin =
         typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser
           ? window.authV9.currentUser
           : typeof window !== 'undefined' && window.auth && window.auth.currentUser
             ? window.auth.currentUser
             : null;
-      if (!phone && cuJoin && cuJoin.uid === String(userId) && cuJoin.phoneNumber) {
+      /** 1) Firebase Auth 전화 — 세션 UID == 참가 userId 일 때만 */
+      if (cuJoin && String(cuJoin.uid) === uid && cuJoin.phoneNumber) {
         phone = String(cuJoin.phoneNumber).trim().slice(0, 80);
       }
+      /** 2) 앱 전화 DB 인증 직후 저장값(authUser·currentUser) — UID 일치할 때만, Firebase phone 미사용 앱 대비 */
+      try {
+        if (typeof window !== 'undefined') {
+          var au2 = null;
+          try { au2 = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (eA2) { au2 = null; }
+          if (au2 && String(au2.id != null ? au2.id : au2.uid != null ? au2.uid : '') === uid) {
+            if (!dn) dn = String(au2.name || '').trim().slice(0, 80);
+            if (!phone) {
+              phone = (
+                String(au2.contact != null ? au2.contact : '').trim() ||
+                String(au2.phone != null ? au2.phone : '').trim()
+              ).slice(0, 80);
+            }
+          }
+          if (
+            (!dn || !phone) &&
+            window.currentUser &&
+            String(window.currentUser.id != null ? window.currentUser.id : window.currentUser.uid != null ? window.currentUser.uid : '') ===
+              uid
+          ) {
+            var c2 = window.currentUser;
+            if (!dn) dn = String(c2.name || '').trim().slice(0, 80);
+            if (!phone) {
+              phone = (
+                String(c2.contact != null ? c2.contact : '').trim() ||
+                String(c2.phone != null ? c2.phone : '').trim()
+              ).slice(0, 80);
+            }
+          }
+        }
+      } catch (eLoc) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] join local profile:', eLoc);
+      }
+      /** 3) Firestore users/{uid} — 이름·번호 보강(문서 contact가 오래됐거나 비어 있을 수 있음) */
+      try {
+        if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
+          const row = await window.getUserByUid(uid);
+          if (row && typeof row === 'object') {
+            const n = String(row.name != null ? row.name : '').trim().slice(0, 80);
+            const ph = (
+              String(row.contact != null ? row.contact : '').trim() ||
+              String(row.phone != null ? row.phone : '').trim()
+            ).slice(0, 80);
+            if (n) dn = n;
+            if (!phone && ph) phone = ph;
+          }
+        }
+      } catch (eFetch) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] join getUserByUid:', eFetch);
+      }
+      /** 4) 마지막 수단 — getOpenRidingProfileDefaults(절대 먼저 쓰지 않음: users 문서 contact 비어 있을 때 방장 번호가 들어가던 버그) */
+      var prof =
+        typeof window !== 'undefined' && typeof window.getOpenRidingProfileDefaults === 'function'
+          ? window.getOpenRidingProfileDefaults()
+          : {};
+      if (!dn) dn = String(prof.hostName || '').trim().slice(0, 80);
+      if (!phone) phone = String(prof.contactInfo || '').trim().slice(0, 80);
+
       const jopt = joinOptions && typeof joinOptions === 'object' ? joinOptions : {};
       const res = await joinRideTransaction(db, rideId, userId, dn || '라이더', phone, {
         contactPublicToParticipants: !!jopt.contactPublicToParticipants,
