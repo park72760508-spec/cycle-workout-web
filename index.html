@@ -13,6 +13,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <!-- 👆 여기까지 추가 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <!-- API 키·시크릿: config.local.js (index.html과 같은 폴더에 두세요). 없으면 placeholder 사용 -->
   <script src="config.local.js"></script>
   <!-- Android 감지: 워크아웃 목록 스크롤 등 화면 제어 제한 해제용 (iPhone은 기존 유지) -->
@@ -10017,6 +10018,8 @@
   </script>
 
   <!-- ========== 오픈 라이딩방 (Firestore 달력 + 목록 / 생성 / 상세) ========== -->
+  <script src="assets/js/openRiding/openRidingGpx.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="assets/js/openRiding/OpenRidingScreens.jsx" type="text/babel"></script>
   <script>
     (function() {
