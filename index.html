@@ -2267,8 +2267,8 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}">
                 <span>나의 기록</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampDeviceSettings" onclick="typeof openDeviceSettingsOrPrompt === 'function' ? openDeviceSettingsOrPrompt() : showScreen('deviceSettingScreen');">
-                <span>기기 설정</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="오픈 라이딩방">
+                <span>오픈 라이딩방</span>
               </button>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
