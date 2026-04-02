@@ -436,6 +436,14 @@ function OpenRidingCalendarMain(props) {
           <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
             {ridesForDay.map(function (r) {
               var isCancelled = String(r.rideStatus || 'active') === 'cancelled';
+              var titleRowClass = 'font-medium text-sm flex items-center gap-1.5 min-w-0 ';
+              if (isCancelled) {
+                titleRowClass += 'open-riding-list-title-cancelled';
+              } else if (r.isPrivate) {
+                titleRowClass += 'open-riding-list-title-private';
+              } else {
+                titleRowClass += 'text-slate-800';
+              }
               return (
                 <li key={r.id}>
                   <button
@@ -443,14 +451,9 @@ function OpenRidingCalendarMain(props) {
                     className="w-full text-left py-2.5 hover:bg-slate-50 px-2 rounded-lg"
                     onClick={function () { onSelectRide(r.id); }}
                   >
-                    <div
-                      className={
-                        'font-medium text-sm flex items-center gap-1.5 min-w-0 ' +
-                        (isCancelled ? 'text-red-300' : r.isPrivate ? 'open-riding-list-title-private' : 'text-slate-800')
-                      }
-                    >
+                    <div className={titleRowClass}>
                       {isCancelled ? (
-                        <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
+                        <img src="assets/img/rcancel.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
                       ) : null}
                       <span className="truncate">{r.title}</span>
                     </div>
