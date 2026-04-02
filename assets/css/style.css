@@ -996,11 +996,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   max-width: 100%;
 }
 
-/* 오픈 라이딩 공개/비공개 토글: 70% 크기, 선택 보라·비선택 회색 */
+/* 오픈 라이딩 공개/비공개 토글: 보라 슬라이더 위 흰 글씨, 비선택 반쪽 회색 트랙·진한 그레이 글씨 */
 #openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch {
-  transform: scale(0.7);
-  transform-origin: center center;
-  margin: -6px auto;
+  background: #e5e7eb !important;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch:hover {
+  background: #d1d5db !important;
 }
 #openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch.active-bluetooth .switch-slider,
 #openRidingRoomScreen .open-riding-visibility-switch-v2.device-connection-switch.active-ant .switch-slider {
@@ -1008,22 +1009,32 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-shadow: 0 2px 10px rgba(124, 58, 237, 0.4) !important;
 }
 #openRidingRoomScreen .open-riding-visibility-switch-v2 .switch-option span {
-  color: #9ca3af;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   transition: color 0.25s ease;
 }
 #openRidingRoomScreen .open-riding-visibility-switch-v2.active-bluetooth .switch-option-left span {
-  color: #5b21b6;
-  font-weight: 800;
+  color: #ffffff;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2.active-bluetooth .switch-option-right span {
+  color: #374151;
 }
 #openRidingRoomScreen .open-riding-visibility-switch-v2.active-ant .switch-option-right span {
-  color: #5b21b6;
-  font-weight: 800;
+  color: #ffffff;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-v2.active-ant .switch-option-left span {
+  color: #374151;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-labels.switch-label-container {
+  font-size: 14px;
+  margin-top: 10px;
 }
 #openRidingRoomScreen .open-riding-vlabel-on {
   color: #5b21b6;
 }
 #openRidingRoomScreen .open-riding-vlabel-off {
-  color: #9ca3af;
+  color: #4b5563;
   font-weight: 400;
 }
 
