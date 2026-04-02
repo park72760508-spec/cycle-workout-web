@@ -982,6 +982,20 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   color: #fca5a5 !important;
 }
 
+#openRidingRoomScreen .open-riding-list-title-private {
+  color: rgba(255, 0, 0, 0.6);
+}
+
+/* 오픈 라이딩 생성: 공개/비공개 — device-connection-switch 재사용, 폭만 컨테이너에 맞춤 */
+#openRidingRoomScreen .open-riding-visibility-switch.device-connection-switch {
+  width: min(200px, 100%);
+  max-width: 100%;
+}
+#openRidingRoomScreen .open-riding-visibility-switch-labels.switch-label-container {
+  width: min(200px, 100%) !important;
+  max-width: 100%;
+}
+
 #openRidingRoomScreen .open-riding-time-dial {
   min-height: 38px;
   padding: 0.35rem 0.5rem;
