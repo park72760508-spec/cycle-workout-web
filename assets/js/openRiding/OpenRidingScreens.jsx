@@ -181,12 +181,52 @@ function parseNativeAddressBookData(data) {
 }
 
 /**
+ * GPX 원격 URL → 텍스트 (Firebase Storage URL은 fetch CORS 회피를 위해 SDK getBytes 사용)
+ * @param {string} url
+ * @param {import('firebase/storage').FirebaseStorage | null | undefined} storage
+ * @param {() => boolean} isCancelled
+ */
+function loadGpxTextFromUrl(url, storage, isCancelled) {
+  var u = String(url || '').trim();
+  if (!u) return Promise.reject(new Error('URL 없음'));
+  var looksFirebase =
+    u.indexOf('firebasestorage.googleapis.com') !== -1 ||
+    (u.indexOf('googleapis.com') !== -1 && u.indexOf('/v0/b/') !== -1);
+  var st =
+    storage ||
+    (typeof window !== 'undefined' && window.firebaseStorageV9 ? window.firebaseStorageV9 : null);
+
+  if (st && looksFirebase) {
+    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js').then(function (mod) {
+      if (isCancelled()) return '';
+      var refFromURL = mod.refFromURL;
+      var getBytes = mod.getBytes;
+      if (typeof refFromURL !== 'function' || typeof getBytes !== 'function') {
+        throw new Error('Storage 모듈 API 없음');
+      }
+      var r = refFromURL(st, u);
+      return getBytes(r);
+    }).then(function (bytes) {
+      if (isCancelled()) return '';
+      if (!bytes || !bytes.byteLength) return '';
+      return new TextDecoder('utf-8').decode(bytes);
+    });
+  }
+
+  return fetch(u, { mode: 'cors', credentials: 'omit', cache: 'no-store' }).then(function (res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.text();
+  });
+}
+
+/**
  * GPX URL 또는 로컬 File → Leaflet 지도 + Chart.js 고도표 (코스 설명 블록 하단용)
- * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean }} props
+ * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean, storage?: import('firebase/storage').FirebaseStorage | null }} props
  */
 function OpenRidingGpxCoursePanel(props) {
   var gpxUrl = props.gpxUrl != null ? String(props.gpxUrl) : '';
   var file = props.file || null;
+  var storage = props.storage || null;
   var showEmpty =
     props.showEmptyMessage === undefined || props.showEmptyMessage === null ? true : !!props.showEmptyMessage;
 
@@ -239,11 +279,9 @@ function OpenRidingGpxCoursePanel(props) {
         };
       }
 
-      fetch(String(gpxUrl).trim(), { mode: 'cors', credentials: 'omit', cache: 'no-store' })
-        .then(function (res) {
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          return res.text();
-        })
+      loadGpxTextFromUrl(String(gpxUrl).trim(), storage, function () {
+        return cancelled;
+      })
         .then(function (text) {
           if (cancelled) return;
           try {
@@ -266,7 +304,7 @@ function OpenRidingGpxCoursePanel(props) {
         cancelled = true;
       };
     },
-    [gpxUrl, file]
+    [gpxUrl, file, storage]
   );
 
   useEffect(
@@ -1386,6 +1424,7 @@ function OpenRidingCreateForm(props) {
         <OpenRidingGpxCoursePanel
           gpxUrl={form.gpxUrlExisting}
           file={form.gpxFile}
+          storage={storage}
           showEmptyMessage={!!(form.gpxUrlExisting || form.gpxFile)}
         />
         <label className="block text-sm font-medium text-slate-700">
@@ -1515,6 +1554,7 @@ function OpenRidingDashboardEditIcon() {
 /** 상세 + 참석/취소 (Transaction) */
 function OpenRidingDetail(props) {
   var firestore = props.firestore;
+  var storage = props.storage || null;
   var rideId = props.rideId;
   var userId = props.userId;
   var onBack = props.onBack || function () {};
@@ -1746,7 +1786,7 @@ function OpenRidingDetail(props) {
 
       <div className={'open-riding-course-detail-card rounded-xl border border-violet-100/80 bg-violet-50/30 p-3 space-y-3' + detailMuted}>
         {ride.course ? <p className="text-sm text-slate-800 whitespace-pre-wrap m-0">{ride.course}</p> : null}
-        <OpenRidingGpxCoursePanel gpxUrl={ride.gpxUrl != null ? String(ride.gpxUrl) : ''} file={null} showEmptyMessage={true} />
+        <OpenRidingGpxCoursePanel gpxUrl={ride.gpxUrl != null ? String(ride.gpxUrl) : ''} file={null} storage={storage} showEmptyMessage={true} />
         {ride.gpxUrl ? (
           <a
             className={'inline-flex items-center gap-1 text-violet-600 text-sm font-semibold hover:underline' + (isCancelled ? ' opacity-50 pointer-events-none' : '')}
@@ -2018,6 +2058,7 @@ function OpenRidingRoomApp(props) {
     inner = (
       <OpenRidingDetail
         firestore={firestore}
+        storage={storage}
         rideId={detailRideId}
         userId={userId}
         onBack={function () { setView('main'); }}
