@@ -197,20 +197,26 @@ function loadGpxTextFromUrl(url, storage, isCancelled) {
     (typeof window !== 'undefined' && window.firebaseStorageV9 ? window.firebaseStorageV9 : null);
 
   if (st && looksFirebase) {
-    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js').then(function (mod) {
-      if (isCancelled()) return '';
-      var refFromURL = mod.refFromURL;
-      var getBytes = mod.getBytes;
-      if (typeof refFromURL !== 'function' || typeof getBytes !== 'function') {
-        throw new Error('Storage 모듈 API 없음');
-      }
-      var r = refFromURL(st, u);
-      return getBytes(r);
-    }).then(function (bytes) {
-      if (isCancelled()) return '';
-      if (!bytes || !bytes.byteLength) return '';
-      return new TextDecoder('utf-8').decode(bytes);
-    });
+    var ready =
+      typeof window !== 'undefined' && window._firebaseStorageModReady
+        ? window._firebaseStorageModReady
+        : Promise.reject(new Error('Storage 모듈 선로드 대기열 없음'));
+
+    return ready
+      .then(function (mod) {
+        if (isCancelled()) return '';
+        var api = mod || (typeof window !== 'undefined' ? window.firebaseStorageModV9API : null);
+        if (!api || typeof api.refFromURL !== 'function' || typeof api.getBytes !== 'function') {
+          throw new Error('Storage 모듈 API 없음 (index.html 선로드 확인)');
+        }
+        var r = api.refFromURL(st, u);
+        return api.getBytes(r);
+      })
+      .then(function (bytes) {
+        if (isCancelled()) return '';
+        if (!bytes || !bytes.byteLength) return '';
+        return new TextDecoder('utf-8').decode(bytes);
+      });
   }
 
   return fetch(u, { mode: 'cors', credentials: 'omit', cache: 'no-store' }).then(function (res) {
