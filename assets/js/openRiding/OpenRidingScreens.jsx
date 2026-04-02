@@ -430,17 +430,22 @@ function OpenRidingGpxCoursePanel(props) {
       if (!tr.distancesKm || !tr.elevs || tr.distancesKm.length < 2) return;
 
       try {
+        var pts = [];
+        var iPt;
+        var nKm = tr.distancesKm.length;
+        for (iPt = 0; iPt < nKm; iPt++) {
+          pts.push({ x: Number(tr.distancesKm[iPt]), y: Number(tr.elevs[iPt]) });
+        }
+        var xMax = pts[pts.length - 1] && pts[pts.length - 1].x != null ? Number(pts[pts.length - 1].x) : 0;
+
         var ctx = chartRef.current.getContext('2d');
         chartInstRef.current = new Chart(ctx, {
           type: 'line',
           data: {
-            labels: tr.distancesKm.map(function (d) {
-              return String(Math.round(Number(d)));
-            }),
             datasets: [
               {
                 label: '고도',
-                data: tr.elevs,
+                data: pts,
                 borderColor: '#7c3aed',
                 backgroundColor: 'rgba(124, 58, 237, 0.22)',
                 fill: true,
@@ -451,16 +456,38 @@ function OpenRidingGpxCoursePanel(props) {
             ]
           },
           options: {
+            parsing: false,
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
+            layout: {
+              padding: { right: 18, left: 2, top: 4, bottom: 2 }
+            },
             interaction: { mode: 'index', intersect: false },
             scales: {
               x: {
+                type: 'linear',
                 display: true,
+                min: 0,
+                max: xMax,
                 title: { display: true, text: '누적 거리 (km)', font: { size: 11 } },
                 grid: { display: false },
-                ticks: { maxTicksLimit: 6, font: { size: 10 } }
+                afterBuildTicks: function (scale) {
+                  var ticks = scale.ticks;
+                  if (!ticks || !ticks.length || xMax <= 0) return;
+                  var last = ticks[ticks.length - 1];
+                  var lastV = last && last.value != null ? Number(last.value) : NaN;
+                  if (!Number.isFinite(lastV) || Math.abs(lastV - xMax) > Math.max(1e-6, xMax * 1e-5)) {
+                    ticks.push({ value: xMax });
+                  }
+                },
+                ticks: {
+                  maxTicksLimit: 7,
+                  font: { size: 10 },
+                  callback: function (value) {
+                    return String(Math.round(Number(value)));
+                  }
+                }
               },
               y: {
                 display: true,
@@ -470,7 +497,7 @@ function OpenRidingGpxCoursePanel(props) {
                   font: { size: 10 },
                   callback: function (val) {
                     var n = Math.round(Number(val));
-                    return n + 'm';
+                    return n === 0 ? '0m' : String(n);
                   }
                 }
               }
