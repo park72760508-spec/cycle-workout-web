@@ -38,6 +38,13 @@ function getKoreaRegionOptions() {
 /** 로그인·프로필 기준 방장명·연락처 (라이딩 생성·참가 시 표시 이름) */
 function getOpenRidingProfileDefaults() {
   try {
+    var cu = null;
+    if (typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser) {
+      cu = window.authV9.currentUser;
+    } else if (typeof window !== 'undefined' && window.auth && window.auth.currentUser) {
+      cu = window.auth.currentUser;
+    }
+
     var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
     if (!u) {
       try { u = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e1) { u = null; }
@@ -45,25 +52,22 @@ function getOpenRidingProfileDefaults() {
     if (!u) {
       try { u = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (e2) { u = null; }
     }
+
     var name = (u && u.name) ? String(u.name).trim() : '';
+    /** 전화번호: Firebase Auth 세션 번호를 최우선 — 계정 전환 후 프로필 객체 contact만 남아 방장/이전 계정 번호가 들어가는 문제 방지 */
     var contact = '';
-    if (u) {
+    if (cu && cu.phoneNumber) {
+      contact = String(cu.phoneNumber).trim();
+    }
+    if (!contact && u) {
       contact =
         (u.contact && String(u.contact).trim()) ||
         (u.phone && String(u.phone).trim()) ||
         '';
     }
-    if (typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser) {
-      var cu = window.authV9.currentUser;
+    if (cu) {
       if (!name && cu.displayName) name = String(cu.displayName).trim();
-      if (!contact && cu.phoneNumber) contact = String(cu.phoneNumber).trim();
       if (!contact && cu.email) contact = String(cu.email).trim();
-    }
-    if (typeof window !== 'undefined' && window.auth && window.auth.currentUser && (!name || !contact)) {
-      var c2 = window.auth.currentUser;
-      if (!name && c2.displayName) name = String(c2.displayName).trim();
-      if (!contact && c2.phoneNumber) contact = String(c2.phoneNumber).trim();
-      if (!contact && c2.email) contact = String(c2.email).trim();
     }
     return { hostName: name, contactInfo: contact };
   } catch (e) {
@@ -765,11 +769,14 @@ function OpenRidingCalendarMain(props) {
           <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
             {ridesForDay.map(function (r) {
               var isCancelled = String(r.rideStatus || 'active') === 'cancelled';
+              var isMine = !!(userId && String(r.hostUserId || '') === String(userId));
               var titleRowClass = 'font-medium text-sm flex items-center gap-1.5 min-w-0 ';
               if (isCancelled) {
-                titleRowClass += 'open-riding-list-title-cancelled';
+                titleRowClass += isMine ? 'open-riding-list-title-cancelled-mine' : 'open-riding-list-title-cancelled';
+              } else if (isMine) {
+                titleRowClass += 'open-riding-list-title-mine';
               } else if (r.isPrivate) {
-                titleRowClass += 'open-riding-list-title-private';
+                titleRowClass += 'open-riding-list-title-private-black';
               } else {
                 titleRowClass += 'text-slate-800';
               }
@@ -782,7 +789,9 @@ function OpenRidingCalendarMain(props) {
                   >
                     <div className={titleRowClass}>
                       {isCancelled ? (
-                        <img src="assets/img/rcancel.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
+                        <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
+                      ) : r.isPrivate ? (
+                        <img src="assets/img/lock.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
                       ) : null}
                       <span className="truncate">{r.title}</span>
                     </div>
