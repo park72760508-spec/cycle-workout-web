@@ -1002,10 +1002,10 @@ function OpenRidingCreateForm(props) {
             }}
           >
             <div className="switch-option switch-option-left">
-              <span className="text-[11px] font-bold">공개</span>
+              <span>공개</span>
             </div>
             <div className="switch-option switch-option-right">
-              <span className="text-[11px] font-bold">비공개</span>
+              <span>비공개</span>
             </div>
             <div className="switch-slider" />
           </div>
