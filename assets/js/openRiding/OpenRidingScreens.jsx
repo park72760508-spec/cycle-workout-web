@@ -181,7 +181,23 @@ function parseNativeAddressBookData(data) {
 }
 
 /**
- * GPX 원격 URL → 텍스트 (Firebase Storage URL은 fetch CORS 회피를 위해 SDK getBytes 사용)
+ * Firebase Storage 다운로드 URL → 객체 경로 (예: open_riding_gpx/ride/file.gpx)
+ * @param {string} url
+ */
+function firebaseStorageDownloadUrlToObjectPath(url) {
+  var u = String(url || '').trim();
+  var m = u.match(/\/v0\/b\/[^/]+\/o\/([^?#]+)/);
+  if (!m || !m[1]) return null;
+  try {
+    return decodeURIComponent(m[1].replace(/\+/g, ' '));
+  } catch (e1) {
+    return null;
+  }
+}
+
+/**
+ * GPX 원격 URL → 텍스트 (Firebase Storage URL은 fetch CORS 회피를 위해 SDK ref + getBytes 사용)
+ * 참고: firebase-storage.js v9.23 공개 export에 refFromURL 없음 → URL에서 경로 파싱 후 ref(storage, path).
  * @param {string} url
  * @param {import('firebase/storage').FirebaseStorage | null | undefined} storage
  * @param {() => boolean} isCancelled
@@ -197,6 +213,10 @@ function loadGpxTextFromUrl(url, storage, isCancelled) {
     (typeof window !== 'undefined' && window.firebaseStorageV9 ? window.firebaseStorageV9 : null);
 
   if (st && looksFirebase) {
+    var objectPath = firebaseStorageDownloadUrlToObjectPath(u);
+    if (!objectPath) {
+      return Promise.reject(new Error('Storage 다운로드 URL 형식을 읽을 수 없습니다.'));
+    }
     var ready =
       typeof window !== 'undefined' && window._firebaseStorageModReady
         ? window._firebaseStorageModReady
@@ -206,10 +226,10 @@ function loadGpxTextFromUrl(url, storage, isCancelled) {
       .then(function (mod) {
         if (isCancelled()) return '';
         var api = mod || (typeof window !== 'undefined' ? window.firebaseStorageModV9API : null);
-        if (!api || typeof api.refFromURL !== 'function' || typeof api.getBytes !== 'function') {
-          throw new Error('Storage 모듈 API 없음 (index.html 선로드 확인)');
+        if (!api || typeof api.ref !== 'function' || typeof api.getBytes !== 'function') {
+          throw new Error('Storage 모듈 API 없음 (ref/getBytes, index.html 선로드 확인)');
         }
-        var r = api.refFromURL(st, u);
+        var r = api.ref(st, objectPath);
         return api.getBytes(r);
       })
       .then(function (bytes) {
