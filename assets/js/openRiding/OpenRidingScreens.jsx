@@ -415,7 +415,7 @@ function OpenRidingGpxCoursePanel(props) {
           type: 'line',
           data: {
             labels: tr.distancesKm.map(function (d) {
-              return Number(d).toFixed(2);
+              return String(Math.round(Number(d)));
             }),
             datasets: [
               {
@@ -443,9 +443,15 @@ function OpenRidingGpxCoursePanel(props) {
               },
               y: {
                 display: true,
-                title: { display: true, text: '고도 (m)', font: { size: 11 } },
+                title: { display: false },
                 grid: { color: 'rgba(0,0,0,0.06)' },
-                ticks: { font: { size: 10 } }
+                ticks: {
+                  font: { size: 10 },
+                  callback: function (val) {
+                    var n = Math.round(Number(val));
+                    return n + 'm';
+                  }
+                }
               }
             },
             plugins: { legend: { display: false } }
@@ -1803,7 +1809,15 @@ function OpenRidingDetail(props) {
         {statRow('출발', ride.departureLocation != null ? ride.departureLocation : '-')}
         {statRow('지역', ride.region != null ? ride.region : '-')}
         {statRow('레벨', ride.level != null ? ride.level : '-')}
-        {statRow('거리', (ride.distance != null ? ride.distance : '-') + 'km')}
+        {statRow(
+          '거리',
+          ride.distance != null && String(ride.distance).trim() !== ''
+            ? (function () {
+                var n = Number(ride.distance);
+                return isNaN(n) ? '-' : String(Math.round(n)) + 'km';
+              })()
+            : '-'
+        )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
         {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
