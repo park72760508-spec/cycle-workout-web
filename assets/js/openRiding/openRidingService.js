@@ -82,6 +82,22 @@ function omitParticipantContact(/** @type {unknown} */ pc, /** @type {string} */
   return o;
 }
 
+/** uid -> 참석자 간 연락처 공개 여부(true면 전체 표시) */
+function asParticipantContactPublic(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out = {};
+  Object.keys(v).forEach((k) => {
+    out[String(k)] = !!v[k];
+  });
+  return out;
+}
+
+function omitParticipantContactPublic(/** @type {unknown} */ m, /** @type {string} */ uid) {
+  const o = { ...asParticipantContactPublic(m) };
+  delete o[String(uid)];
+  return o;
+}
+
 /**
  * 사용자 선호 저장 (users 문서 merge)
  * @param {import('firebase/firestore').Firestore} db
@@ -129,6 +145,11 @@ export async function createRide(db, hostUserId, input) {
   const invitedList = invitedRaw
     .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
     .filter((d) => d.length >= 9);
+  const rideJoinPassword = isPrivate
+    ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
+        .replace(/\D/g, '')
+        .slice(0, 4)
+    : '';
 
   const payload = {
     title: String(input.title || ''),
@@ -146,6 +167,8 @@ export async function createRide(db, hostUserId, input) {
     region: String(input.region || ''),
     isPrivate,
     invitedList,
+    rideJoinPassword: rideJoinPassword.length === 4 ? rideJoinPassword : '',
+    participantContactPublic: {},
     participants: asStringArray(input.participants),
     waitlist: [],
     participantDisplay,
@@ -179,6 +202,11 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
         .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
         .filter((d) => d.length >= 9)
     : [];
+  const rideJoinPassword = isPrivate
+    ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
+        .replace(/\D/g, '')
+        .slice(0, 4)
+    : '';
 
   const patch = {
     title: String(input.title || ''),
@@ -196,6 +224,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     region: String(input.region || ''),
     isPrivate,
     invitedList,
+    rideJoinPassword: isPrivate && rideJoinPassword.length === 4 ? rideJoinPassword : '',
     updatedAt: serverTimestamp()
   };
   await updateDoc(rideRef, patch);
@@ -273,9 +302,16 @@ export async function fetchRideById(db, rideId) {
  * @param {string} userId
  * @param {string} [displayName] 참가자 목록 표시용 이름(프로필)
  * @param {string} [participantPhone] 방장에게만 공개되는 신청자 연락처
+ * @param {{ contactPublicToParticipants?: boolean, joinPasswordAttempt?: string }} [joinOpts]
  * @returns {Promise<{ status: string, role?: string, position?: number }>}
  */
-export async function joinRideTransaction(db, rideId, userId, displayName, participantPhone) {
+export async function joinRideTransaction(db, rideId, userId, displayName, participantPhone, joinOpts) {
+  const opt = joinOpts && typeof joinOpts === 'object' ? joinOpts : {};
+  const contactPublicToParticipants =
+    joinOpts === undefined || joinOpts === null ? true : !!opt.contactPublicToParticipants;
+  const joinPasswordAttempt = String(opt.joinPasswordAttempt != null ? opt.joinPasswordAttempt : '')
+    .replace(/\D/g, '')
+    .slice(0, 4);
   const nameLabel = String(displayName != null ? displayName : '라이더').trim().slice(0, 80) || '라이더';
   const phoneLabel = String(participantPhone != null ? participantPhone : '').trim().slice(0, 80);
   const rideRef = doc(db, 'rides', rideId);
@@ -287,8 +323,13 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     const isPrivate = !!data.isPrivate;
     const invitedList = asStringArray(data.invitedList);
     const hostUid = String(data.hostUserId || '');
+    const pwdStored = String(data.rideJoinPassword != null ? data.rideJoinPassword : '')
+      .replace(/\D/g, '')
+      .slice(0, 4);
     if (isPrivate && hostUid !== String(userId)) {
-      if (!isUserPhoneInvitedToRide(phoneLabel, invitedList)) {
+      const invited = isUserPhoneInvitedToRide(phoneLabel, invitedList);
+      const pwdOk = pwdStored.length === 4 && joinPasswordAttempt === pwdStored;
+      if (!invited && !pwdOk) {
         throw new Error('INVITE_ONLY');
       }
     }
@@ -296,6 +337,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     let waitlist = asStringArray(data.waitlist);
     let participantDisplay = { ...asParticipantDisplay(data.participantDisplay) };
     let participantContact = { ...asParticipantContact(data.participantContact) };
+    let participantContactPublic = { ...asParticipantContactPublic(data.participantContactPublic) };
     const max = Math.max(1, Number(data.maxParticipants) || 1);
 
     if (participants.includes(userId)) {
@@ -308,6 +350,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
 
     participantDisplay = Object.assign({}, participantDisplay, { [String(userId)]: nameLabel });
     if (phoneLabel) participantContact[String(userId)] = phoneLabel;
+    participantContactPublic[String(userId)] = contactPublicToParticipants;
 
     if (participants.length < max) {
       participants = [...participants, userId];
@@ -315,6 +358,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
         participants,
         participantDisplay,
         participantContact,
+        participantContactPublic,
         updatedAt: serverTimestamp()
       });
       return { status: 'joined', role: 'participant' };
@@ -325,6 +369,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
       waitlist,
       participantDisplay,
       participantContact,
+      participantContactPublic,
       updatedAt: serverTimestamp()
     });
     return { status: 'joined', role: 'waitlist', position: waitlist.length };
@@ -355,6 +400,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
         waitlist,
         participantDisplay: omitParticipantDisplay(data.participantDisplay, userId),
         participantContact: omitParticipantContact(data.participantContact, userId),
+        participantContactPublic: omitParticipantContactPublic(data.participantContactPublic, userId),
         updatedAt: serverTimestamp()
       });
       return { status: 'left_waitlist', promotedUserId: null };
@@ -364,6 +410,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
       participants = participants.filter((id) => id !== userId);
       let participantDisplay = omitParticipantDisplay(data.participantDisplay, userId);
       let participantContact = omitParticipantContact(data.participantContact, userId);
+      let participantContactPublic = omitParticipantContactPublic(data.participantContactPublic, userId);
       /** @type {string | null} */
       let promotedUserId = null;
       if (waitlist.length > 0) {
@@ -376,6 +423,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
         waitlist,
         participantDisplay,
         participantContact,
+        participantContactPublic,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_participant', promotedUserId };

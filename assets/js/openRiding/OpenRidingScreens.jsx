@@ -126,6 +126,14 @@ function shouldMaskOpenRidingContacts(ride) {
 }
 
 /** 전화 등 연락처 표시용 마스킹 (숫자 위주, 이메일은 일부 가림) */
+/** 참가자 명단: 끝 4자리 마스킹 (010-1234-****) */
+function maskPhoneLastFourDisplay(raw) {
+  var d = String(raw || '').replace(/\D/g, '');
+  if (d.length >= 10) return d.slice(0, 3) + '-' + d.slice(3, 7) + '-****';
+  if (d.length >= 7) return d.slice(0, 3) + '-****-' + d.slice(-4);
+  return '****';
+}
+
 function maskContactForDisplay(raw) {
   var s = String(raw || '').trim();
   if (!s) return '';
@@ -660,7 +668,8 @@ function OpenRidingCreateForm(props) {
       gpxUrlExisting: null,
       isPrivate: false,
       invitePending: [],
-      inviteSelected: []
+      inviteSelected: [],
+      rideJoinPassword: ''
     };
   });
   var form = st[0];
@@ -760,7 +769,10 @@ function OpenRidingCreateForm(props) {
             gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null,
             isPrivate: !!ride.isPrivate,
             invitePending: [],
-            inviteSelected: inviteSelected
+            inviteSelected: inviteSelected,
+            rideJoinPassword: String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
+              .replace(/\D/g, '')
+              .slice(0, 4)
           });
           setEditHydrated(true);
         })
@@ -865,7 +877,8 @@ function OpenRidingCreateForm(props) {
           region: form.region,
           gpxUrl: gpxUrl,
           isPrivate: !!form.isPrivate,
-          invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : []
+          invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : [],
+          rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
         });
         onEditSaved();
         return;
@@ -886,7 +899,8 @@ function OpenRidingCreateForm(props) {
         region: form.region,
         gpxUrl: gpxUrl,
         isPrivate: !!form.isPrivate,
-        invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : []
+        invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : [],
+        rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
       });
       onCreated(rideId);
     } finally {
@@ -966,13 +980,12 @@ function OpenRidingCreateForm(props) {
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
         <span className="block font-medium text-slate-700">공개 / 비공개</span>
-        <p className="text-xs text-slate-500 -mt-1">디바이스 연결 화면과 동일한 슬라이드 스위치 스타일입니다.</p>
         <div className="device-connection-switch-container flex flex-col items-stretch sm:items-center">
           <div
             role="switch"
             aria-checked={!form.isPrivate}
             aria-label={form.isPrivate ? '비공개 모임' : '공개 모임'}
-            className={'device-connection-switch open-riding-visibility-switch mx-auto ' + (form.isPrivate ? 'active-ant' : 'active-bluetooth')}
+            className={'device-connection-switch open-riding-visibility-switch open-riding-visibility-switch-v2 mx-auto ' + (form.isPrivate ? 'active-ant' : 'active-bluetooth')}
             onClick={function () {
               var next = !form.isPrivate;
               setForm(function (f) {
@@ -982,26 +995,23 @@ function OpenRidingCreateForm(props) {
                 if (!next) {
                   n.invitePending = [];
                   n.inviteSelected = [];
+                  n.rideJoinPassword = '';
                 }
                 return n;
               });
             }}
           >
             <div className="switch-option switch-option-left">
-              <span className="text-[11px] font-bold text-slate-700">공개</span>
+              <span className="text-[11px] font-bold">공개</span>
             </div>
             <div className="switch-option switch-option-right">
-              <span className="text-[11px] font-bold text-slate-700">비공개</span>
+              <span className="text-[11px] font-bold">비공개</span>
             </div>
             <div className="switch-slider" />
           </div>
           <div className="switch-label-container open-riding-visibility-switch-labels mx-auto !w-[200px] max-w-full">
-            <span id="openRidingVisibilityLabelPublic" className={!form.isPrivate ? 'font-semibold text-green-600' : 'text-slate-400'}>
-              공개
-            </span>
-            <span id="openRidingVisibilityLabelPrivate" className={form.isPrivate ? 'font-semibold text-amber-600' : 'text-slate-400'}>
-              비공개
-            </span>
+            <span className={!form.isPrivate ? 'font-semibold open-riding-vlabel-on' : 'open-riding-vlabel-off'}>공개</span>
+            <span className={form.isPrivate ? 'font-semibold open-riding-vlabel-on' : 'open-riding-vlabel-off'}>비공개</span>
           </div>
         </div>
       </div>
@@ -1016,7 +1026,6 @@ function OpenRidingCreateForm(props) {
           >
             주소록에서 초대하기
           </button>
-          <p className="text-xs text-slate-600 leading-snug">앱에서 연락처를 고르면 네이티브가 <span className="font-mono text-[10px]">onAddressBookSelected</span> 로 이름·전화 목록을 넘깁니다.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2">
               <p className="text-xs font-semibold text-slate-600 mb-2">초대 목록</p>
@@ -1092,7 +1101,27 @@ function OpenRidingCreateForm(props) {
               )}
             </div>
           </div>
-          {(form.inviteSelected || []).length === 0 ? <p className="text-xs text-amber-700">선택된 초대가 없으면 방장 외 참석 신청이 불가능합니다.</p> : null}
+          {(form.inviteSelected || []).length === 0 ? (
+            <p className="text-xs text-amber-700">초대 목록이 비어 있으면, 아래 비밀번호(4자리)를 설정해야 비초대자도 입장할 수 있습니다.</p>
+          ) : null}
+          <label className="block font-medium text-slate-700 mt-2">
+            비공개 입장 비밀번호 (숫자 4자리, 선택)
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              autoComplete="off"
+              className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm tracking-widest"
+              placeholder="예: 1234"
+              value={form.rideJoinPassword}
+              onChange={function (e) {
+                var v = String(e.target.value || '').replace(/\D/g, '').slice(0, 4);
+                set('rideJoinPassword', v);
+              }}
+            />
+          </label>
+          <p className="text-xs text-slate-500">초대된 전화번호 또는 올바른 비밀번호를 입력한 사용자만 참석 신청할 수 있습니다.</p>
         </div>
       ) : null}
 
@@ -1239,11 +1268,29 @@ function OpenRidingDetail(props) {
   var _cancelBusy = useState(false);
   var cancelBusy = _cancelBusy[0];
   var setCancelBusy = _cancelBusy[1];
+  var _jpw = useState('');
+  var joinPasswordInput = _jpw[0];
+  var setJoinPasswordInput = _jpw[1];
+  var _jsm = useState(false);
+  var joinShareModalOpen = _jsm[0];
+  var setJoinShareModalOpen = _jsm[1];
 
-  async function onJoin() {
+  useEffect(
+    function () {
+      setJoinPasswordInput('');
+      setJoinShareModalOpen(false);
+    },
+    [rideId]
+  );
+
+  async function confirmJoinWithContactShare(contactPublic) {
     setBusy(true);
     try {
-      await join();
+      await join({
+        contactPublicToParticipants: !!contactPublic,
+        joinPasswordAttempt: joinPasswordInput
+      });
+      setJoinShareModalOpen(false);
     } finally {
       setBusy(false);
     }
@@ -1304,10 +1351,18 @@ function OpenRidingDetail(props) {
   var invitedListArr = Array.isArray(ride.invitedList) ? ride.invitedList : [];
   var myPhoneForInvite = String(getOpenRidingProfileDefaults().contactInfo || '').trim();
   var _svcInv = typeof window !== 'undefined' ? window.openRidingService || {} : {};
-  var joinInviteOk = true;
-  if (isPrivateRide && !isHost) {
-    joinInviteOk = !!(typeof _svcInv.isUserPhoneInvitedToRide === 'function' && _svcInv.isUserPhoneInvitedToRide(myPhoneForInvite, invitedListArr));
-  }
+  var phoneInvited = !!(
+    typeof _svcInv.isUserPhoneInvitedToRide === 'function' && _svcInv.isUserPhoneInvitedToRide(myPhoneForInvite, invitedListArr)
+  );
+  var pwdStored = String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
+    .replace(/\D/g, '')
+    .slice(0, 4);
+  var joinPwdNorm = String(joinPasswordInput || '')
+    .replace(/\D/g, '')
+    .slice(0, 4);
+  var passwordGateOk = pwdStored.length === 4 && joinPwdNorm === pwdStored;
+  var joinInviteOk = !isPrivateRide || isHost || phoneInvited || passwordGateOk;
+  var showJoinPasswordField = isPrivateRide && !isHost && !phoneInvited && !role;
 
   var roleLabel = !role ? '미신청' : role === 'participant' ? '참석 확정' : '대기 ' + role.position + '번';
 
@@ -1319,6 +1374,10 @@ function OpenRidingDetail(props) {
     ride.participantContact && typeof ride.participantContact === 'object' && !Array.isArray(ride.participantContact)
       ? ride.participantContact
       : {};
+  var pcp =
+    ride.participantContactPublic && typeof ride.participantContactPublic === 'object' && !Array.isArray(ride.participantContactPublic)
+      ? ride.participantContactPublic
+      : {};
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
   var maskContacts = shouldMaskOpenRidingContacts(ride);
@@ -1329,12 +1388,17 @@ function OpenRidingDetail(props) {
     return fallbackLabel;
   }
 
-  function participantPhoneSuffix(uid) {
-    if (!isHost) return null;
+  function participantListPhoneSuffix(uid) {
     var ph = pc[String(uid)];
     if (!ph || !String(ph).trim()) return null;
-    var display = maskContacts ? maskContactForDisplay(String(ph).trim()) : String(ph).trim();
-    return ' (' + display + ')';
+    var rawStr = String(ph).trim();
+    var uk = String(uid);
+    var shareToPeers = !Object.prototype.hasOwnProperty.call(pcp, uk) || pcp[uk] === true;
+    var attendeeViewer = isHost || hasApplied;
+    if (maskContacts) return ' (' + maskContactForDisplay(rawStr) + ')';
+    if (!attendeeViewer) return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
+    if (shareToPeers) return ' (' + rawStr + ')';
+    return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
   }
 
   var detailMuted = isCancelled ? ' open-riding-detail-muted' : '';
@@ -1387,7 +1451,7 @@ function OpenRidingDetail(props) {
         {statRow('거리', (ride.distance != null ? ride.distance : '-') + 'km')}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
-        {statRow('공개 여부', isPrivateRide ? '비공개 · 초대된 연락처만 신청 가능' : '공개')}
+        {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow(
           '연락처',
           showHostContactRow && ride.contactInfo ? (
@@ -1422,7 +1486,7 @@ function OpenRidingDetail(props) {
           ) : (
             <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
               {parts.map(function (uid, idx) {
-                var suf = participantPhoneSuffix(uid);
+                var suf = participantListPhoneSuffix(uid);
                 return (
                   <li key={String(uid) + '-p'}>
                     <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
@@ -1441,7 +1505,7 @@ function OpenRidingDetail(props) {
           ) : (
             <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
               {waits.map(function (uid, idx) {
-                var suf = participantPhoneSuffix(uid);
+                var suf = participantListPhoneSuffix(uid);
                 return (
                   <li key={String(uid) + '-w'}>
                     <span className="font-semibold text-amber-700">{idx + 1}번</span>{' '}
@@ -1459,6 +1523,23 @@ function OpenRidingDetail(props) {
 
       {!isCancelled ? (
         <div className="space-y-2">
+          {showJoinPasswordField ? (
+            <label className="block text-sm font-medium text-slate-700">
+              비공개 입장 비밀번호 (숫자 4자리)
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                autoComplete="off"
+                className="mt-1 w-full border border-violet-200 rounded-xl px-3 py-2 text-sm tracking-[0.4em] text-center"
+                placeholder="••••"
+                value={joinPasswordInput}
+                onChange={function (e) {
+                  setJoinPasswordInput(String(e.target.value || '').replace(/\D/g, '').slice(0, 4));
+                }}
+              />
+            </label>
+          ) : null}
           <div className="flex gap-2">
             {role ? (
               <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
@@ -1469,16 +1550,70 @@ function OpenRidingDetail(props) {
                 type="button"
                 className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
                 disabled={isActionBusy || !userId || !joinInviteOk}
-                title={!joinInviteOk ? '초대받은 사용자만 참석할 수 있습니다' : undefined}
-                onClick={onJoin}
+                title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
+                onClick={function () {
+                  if (!joinInviteOk) return;
+                  setJoinShareModalOpen(true);
+                }}
               >
-                {joinInviteOk ? '참석 신청' : '참석 신청 (초대자만)'}
+                {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
               </button>
             )}
           </div>
           {isPrivateRide && !isHost && !role && !joinInviteOk ? (
-            <p className="text-xs text-amber-800 text-center leading-snug px-1">초대받은 사용자만 참석할 수 있습니다. 로그인 프로필의 연락처가 초대된 번호와 같아야 합니다.</p>
+            <p className="text-xs text-amber-800 text-center leading-snug px-1">
+              초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
+            </p>
           ) : null}
+        </div>
+      ) : null}
+
+      {joinShareModalOpen ? (
+        <div
+          className="fixed inset-0 z-[10075] flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-share-contact-title"
+          onClick={function () {
+            if (!isActionBusy) setJoinShareModalOpen(false);
+          }}
+        >
+          <div
+            className="open-riding-share-contact-panel w-full max-w-sm rounded-2xl border border-violet-200 bg-white shadow-xl overflow-hidden"
+            onClick={function (e) { e.stopPropagation(); }}
+          >
+            <div className="open-riding-share-contact-header px-4 py-3 border-b border-violet-100">
+              <h2 id="open-riding-share-contact-title" className="text-base font-bold text-violet-900 m-0">
+                참석자에게 연락처 표시
+              </h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-slate-800 font-medium m-0">연락처를 공개하시겠습니까?</p>
+              <p className="text-xs text-slate-500 m-0 leading-relaxed">(라이딩에 참석자에게만 공개됩니다.)</p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl border-2 border-violet-300 bg-white text-violet-800 font-semibold text-sm disabled:opacity-50"
+                  disabled={isActionBusy}
+                  onClick={function () {
+                    confirmJoinWithContactShare(false);
+                  }}
+                >
+                  비공개
+                </button>
+                <button
+                  type="button"
+                  className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm shadow-md disabled:opacity-50"
+                  disabled={isActionBusy}
+                  onClick={function () {
+                    confirmJoinWithContactShare(true);
+                  }}
+                >
+                  공개
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 

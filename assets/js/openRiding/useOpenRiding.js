@@ -140,7 +140,7 @@ export function useOpenRideDetail(db, rideId, userId) {
     reload();
   }, [reload]);
 
-  const join = useCallback(async () => {
+  const join = useCallback(async (joinOptions) => {
     if (!db || !rideId || !userId) return;
     setActionError(null);
     try {
@@ -150,7 +150,13 @@ export function useOpenRideDetail(db, rideId, userId) {
           : {};
       const dn = String(prof.hostName || '').trim().slice(0, 80);
       const phone = String(prof.contactInfo || '').trim().slice(0, 80);
-      const res = await joinRideTransaction(db, rideId, userId, dn || '라이더', phone);
+      const jopt = joinOptions && typeof joinOptions === 'object' ? joinOptions : {};
+      const res = await joinRideTransaction(db, rideId, userId, dn || '라이더', phone, {
+        contactPublicToParticipants: !!jopt.contactPublicToParticipants,
+        joinPasswordAttempt: String(jopt.joinPasswordAttempt != null ? jopt.joinPasswordAttempt : '')
+          .replace(/\D/g, '')
+          .slice(0, 4)
+      });
       await reload();
       return res;
     } catch (e) {
