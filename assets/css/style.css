@@ -1120,6 +1120,42 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box !important;
 }
 
+/* 로그인 후: 좌·우 동일 폭 + 가운데 열에 환영 문구 → 컨테이너 정가운데 정렬 */
+#basecampScreen #authBarRight.basecamp-auth-bar-right {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  box-sizing: border-box;
+}
+#basecampScreen .basecamp-auth-bar-spacer {
+  min-width: 0;
+  pointer-events: none;
+}
+#basecampScreen .basecamp-auth-bar-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  justify-self: center;
+  min-width: 0;
+  font-size: clamp(14px, 4vw, 17px);
+  font-weight: 600;
+  color: #0369a1;
+  line-height: 1.35;
+}
+#basecampScreen .basecamp-auth-bar-welcome-line {
+  display: block;
+  white-space: nowrap;
+}
+#basecampScreen .basecamp-auth-bar-logout-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+
 /* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
 #basecampScreen .connection-device-section,
 #basecampScreen .connection-main-container {
