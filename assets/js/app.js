@@ -4642,6 +4642,124 @@ function togglePause() {
   }, 5000);
 })();
 
+/**
+ * 스플래시 STELVIO.mp4: iOS Safari / WKWebView에서 음소거 자동재생·인라인 속성과 canplay 타이밍을 맞추고,
+ * 재생 실패·디코드 오류 시 정적 로고(.splash-video-use-fallback)로 대체.
+ * 네이티브 앱은 WKWebViewConfiguration.allowsInlineMediaPlayback = true,
+ * mediaTypesRequiringUserActionForPlayback = [] 권장.
+ */
+function configureAndPlaySplashVideo() {
+  const video = document.getElementById("splashVideo");
+  const wrapper = document.getElementById("splashVideoWrapper");
+  if (!video) return;
+
+  const ua = navigator.userAgent || "";
+  const isIOSDevice =
+    /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  function showSplashFallback() {
+    if (wrapper) wrapper.classList.add("splash-video-use-fallback");
+  }
+
+  function armVideoForInlineAutoplay() {
+    video.muted = true;
+    video.defaultMuted = true;
+    video.setAttribute("muted", "");
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    try {
+      video.setAttribute("disablepictureinpicture", "");
+      video.setAttribute("disableremoteplayback", "");
+    } catch (e1) {}
+  }
+
+  function tryPlay() {
+    armVideoForInlineAutoplay();
+    return video
+      .play()
+      .then(function () {
+        return true;
+      })
+      .catch(function (err) {
+        console.warn("[splash] video.play():", err && err.message ? err.message : err);
+        return false;
+      });
+  }
+
+  video.addEventListener(
+    "error",
+    function () {
+      console.warn("[splash] video element error", video.error);
+      showSplashFallback();
+    },
+    { once: true }
+  );
+
+  video.addEventListener("playing", function onPlaying() {
+    if (wrapper) wrapper.classList.remove("splash-video-use-fallback");
+  });
+
+  var playStarted = false;
+  var playAttemptBusy = false;
+
+  function attemptPlayback() {
+    if (playStarted || playAttemptBusy) return;
+    playAttemptBusy = true;
+    video.currentTime = 0;
+    tryPlay().then(function (ok) {
+      playAttemptBusy = false;
+      if (ok) {
+        playStarted = true;
+        return;
+      }
+      setTimeout(function () {
+        if (playStarted) return;
+        playAttemptBusy = true;
+        tryPlay().then(function (ok2) {
+          playAttemptBusy = false;
+          if (ok2) playStarted = true;
+          else showSplashFallback();
+        });
+      }, isIOSDevice ? 280 : 150);
+    });
+  }
+
+  armVideoForInlineAutoplay();
+
+  if (video.readyState >= 2) {
+    attemptPlayback();
+  } else {
+    video.addEventListener(
+      "canplay",
+      function onCanplay() {
+        video.removeEventListener("canplay", onCanplay);
+        attemptPlayback();
+      },
+      { once: true }
+    );
+    video.addEventListener(
+      "loadeddata",
+      function onData() {
+        video.removeEventListener("loadeddata", onData);
+        attemptPlayback();
+      },
+      { once: true }
+    );
+  }
+
+  setTimeout(function () {
+    if (!playStarted) attemptPlayback();
+  }, isIOSDevice ? 450 : 320);
+
+  setTimeout(function () {
+    if (video.error) return;
+    if (video.readyState >= 2 && video.paused && !video.ended) {
+      showSplashFallback();
+    }
+  }, isIOSDevice ? 1400 : 2200);
+}
+
 // DOMContentLoaded 이벤트
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
@@ -4960,12 +5078,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // 스플래시 화면이 활성화되어 있으면 처리 (진행바·태그라인 제거로 2초로 단축)
     const totalDuration = 2000; // 2초 (기존 4초에서 단축)
     
-    // 동영상 재생 시작
+    // 동영상 재생 (iOS 대응: configureAndPlaySplashVideo)
     if (splashVideo) {
-      splashVideo.currentTime = 0; // 동영상 처음부터 재생
-      splashVideo.play().catch(err => {
-        console.warn("동영상 자동 재생 실패:", err);
-      });
+      configureAndPlaySplashVideo();
     }
     
     // totalDuration 후 스플래시 종료 및 인증 화면 전환
