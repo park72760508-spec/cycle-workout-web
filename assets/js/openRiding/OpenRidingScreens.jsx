@@ -1459,6 +1459,19 @@ function OpenRidingCreateForm(props) {
   async function submit(e) {
     e.preventDefault();
     if (!firestore || !hostUserId) return;
+    var distParsed = form.distance === '' || form.distance === null || form.distance === undefined ? NaN : Number(form.distance);
+    var maxParsed =
+      form.maxParticipants === '' || form.maxParticipants === null || form.maxParticipants === undefined
+        ? NaN
+        : Number(form.maxParticipants);
+    if (!Number.isFinite(distParsed) || distParsed < 1) {
+      if (typeof window !== 'undefined' && window.alert) window.alert('거리(km)를 1 이상 입력해 주세요.');
+      return;
+    }
+    if (!Number.isFinite(maxParsed) || maxParsed < 1) {
+      if (typeof window !== 'undefined' && window.alert) window.alert('최대 인원을 1 이상 입력해 주세요.');
+      return;
+    }
     setBusy(true);
     try {
       var gpxUrl = form.gpxUrlExisting != null ? form.gpxUrlExisting : null;
@@ -1474,10 +1487,10 @@ function OpenRidingCreateForm(props) {
           date: d,
           departureTime: form.departureTime,
           departureLocation: form.departureLocation,
-          distance: form.distance,
+          distance: distParsed,
           course: form.course,
           level: form.level,
-          maxParticipants: form.maxParticipants,
+          maxParticipants: Math.max(1, Math.floor(maxParsed)),
           hostName: form.hostName,
           contactInfo: form.contactInfo,
           isContactPublic: false,
@@ -1496,10 +1509,10 @@ function OpenRidingCreateForm(props) {
         date: d,
         departureTime: form.departureTime,
         departureLocation: form.departureLocation,
-        distance: form.distance,
+        distance: distParsed,
         course: form.course,
         level: form.level,
-        maxParticipants: form.maxParticipants,
+        maxParticipants: Math.max(1, Math.floor(maxParsed)),
         hostName: form.hostName,
         contactInfo: form.contactInfo,
         isContactPublic: false,
@@ -1586,8 +1599,46 @@ function OpenRidingCreateForm(props) {
       <label className="block font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} required /></label>
 
       <div className="grid grid-cols-2 gap-2">
-        <label className="block font-medium text-slate-700">거리(km)<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.distance} onChange={function (e) { set('distance', Number(e.target.value)); }} min={1} /></label>
-        <label className="block font-medium text-slate-700">최대 인원<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.maxParticipants} onChange={function (e) { set('maxParticipants', Number(e.target.value)); }} min={1} /></label>
+        <label className="block font-medium text-slate-700">
+          거리(km)
+          <input
+            type="number"
+            inputMode="numeric"
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+            value={form.distance === '' || form.distance === null || form.distance === undefined ? '' : form.distance}
+            onChange={function (e) {
+              var v = e.target.value;
+              if (v === '') {
+                set('distance', '');
+                return;
+              }
+              var n = Number(v);
+              if (!Number.isNaN(n)) set('distance', n);
+            }}
+          />
+        </label>
+        <label className="block font-medium text-slate-700">
+          최대 인원
+          <input
+            type="number"
+            inputMode="numeric"
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+            value={
+              form.maxParticipants === '' || form.maxParticipants === null || form.maxParticipants === undefined
+                ? ''
+                : form.maxParticipants
+            }
+            onChange={function (e) {
+              var v = e.target.value;
+              if (v === '') {
+                set('maxParticipants', '');
+                return;
+              }
+              var n = Number(v);
+              if (!Number.isNaN(n)) set('maxParticipants', n);
+            }}
+          />
+        </label>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
