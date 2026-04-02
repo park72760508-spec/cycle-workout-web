@@ -148,8 +148,33 @@ export function useOpenRideDetail(db, rideId, userId) {
         typeof window !== 'undefined' && typeof window.getOpenRidingProfileDefaults === 'function'
           ? window.getOpenRidingProfileDefaults()
           : {};
-      const dn = String(prof.hostName || '').trim().slice(0, 80);
-      const phone = String(prof.contactInfo || '').trim().slice(0, 80);
+      var dn = String(prof.hostName || '').trim().slice(0, 80);
+      var phone = String(prof.contactInfo || '').trim().slice(0, 80);
+      /** 참석 신청: Firestore users/{uid}가 최종 원천 — 로컬/세션 불일치 시에도 동일 userId 행의 name·contact만 기록 */
+      try {
+        if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
+          const row = await window.getUserByUid(String(userId));
+          if (row && typeof row === 'object') {
+            const n = String(row.name != null ? row.name : '').trim().slice(0, 80);
+            const ph =
+              String(row.contact != null ? row.contact : '').trim() ||
+              String(row.phone != null ? row.phone : '').trim();
+            if (n) dn = n;
+            if (ph) phone = ph.slice(0, 80);
+          }
+        }
+      } catch (eFetch) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] join getUserByUid:', eFetch);
+      }
+      var cuJoin =
+        typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser
+          ? window.authV9.currentUser
+          : typeof window !== 'undefined' && window.auth && window.auth.currentUser
+            ? window.auth.currentUser
+            : null;
+      if (!phone && cuJoin && cuJoin.uid === String(userId) && cuJoin.phoneNumber) {
+        phone = String(cuJoin.phoneNumber).trim().slice(0, 80);
+      }
       const jopt = joinOptions && typeof joinOptions === 'object' ? joinOptions : {};
       const res = await joinRideTransaction(db, rideId, userId, dn || '라이더', phone, {
         contactPublicToParticipants: !!jopt.contactPublicToParticipants,

@@ -44,6 +44,7 @@ function getOpenRidingProfileDefaults() {
     } else if (typeof window !== 'undefined' && window.auth && window.auth.currentUser) {
       cu = window.auth.currentUser;
     }
+    var authUid = cu && cu.uid ? String(cu.uid) : '';
 
     var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
     if (!u) {
@@ -53,17 +54,25 @@ function getOpenRidingProfileDefaults() {
       try { u = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch (e2) { u = null; }
     }
 
-    var name = (u && u.name) ? String(u.name).trim() : '';
-    /** 전화번호: Firebase Auth 세션 번호를 최우선 — 계정 전환 후 프로필 객체 contact만 남아 방장/이전 계정 번호가 들어가는 문제 방지 */
+    var profileId = '';
+    if (u && u.id != null) profileId = String(u.id);
+    else if (u && u.uid != null) profileId = String(u.uid);
+    /** Firebase 세션 UID와 로컬 프로필 id가 다르면 로컬 name/contact 무시(이전 계정·방장 번호 혼입 방지) */
+    var profileOk = !authUid || !profileId || profileId === authUid;
+
+    var name = '';
     var contact = '';
     if (cu && cu.phoneNumber) {
       contact = String(cu.phoneNumber).trim();
     }
-    if (!contact && u) {
-      contact =
-        (u.contact && String(u.contact).trim()) ||
-        (u.phone && String(u.phone).trim()) ||
-        '';
+    if (profileOk && u) {
+      if ((u.name && String(u.name).trim())) name = String(u.name).trim();
+      if (!contact) {
+        contact =
+          (u.contact && String(u.contact).trim()) ||
+          (u.phone && String(u.phone).trim()) ||
+          '';
+      }
     }
     if (cu) {
       if (!name && cu.displayName) name = String(cu.displayName).trim();
