@@ -28,6 +28,28 @@ function asStringArray(v) {
   return Array.isArray(v) ? v.map((x) => String(x)) : [];
 }
 
+/** 전화번호 비교용 정규화 (숫자만, +82 → 0) */
+export function normalizePhoneDigits(input) {
+  let d = String(input || '').replace(/\D/g, '');
+  if (d.startsWith('82') && d.length >= 10) d = `0${d.slice(2)}`;
+  return d.slice(0, 15);
+}
+
+/**
+ * 비공개 방 초대 목록과 사용자 연락처 일치 여부 (방장은 항상 true 아님 — UI에서 제외, 트랜잭션에서 방장 예외)
+ * @param {string} userPhone
+ * @param {string[]} invitedList Firestore invited_list
+ */
+export function isUserPhoneInvitedToRide(userPhone, invitedList) {
+  const u = normalizePhoneDigits(userPhone);
+  if (!u || u.length < 9) return false;
+  const list = Array.isArray(invitedList) ? invitedList : [];
+  return list.some((inv) => {
+    const n = normalizePhoneDigits(inv);
+    return n && (n === u || n.slice(-10) === u.slice(-10));
+  });
+}
+
 /** Firestore map: uid -> 표시 이름 */
 function asParticipantDisplay(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
@@ -102,6 +124,12 @@ export async function createRide(db, hostUserId, input) {
   const hostLabel = String(input.hostName || '').trim().slice(0, 80);
   const participantDisplay = {};
   if (hostUserId && hostLabel) participantDisplay[String(hostUserId)] = hostLabel;
+  const isPrivate = !!input.isPrivate;
+  const invitedRaw = isPrivate && Array.isArray(input.invitedList) ? input.invitedList : [];
+  const invitedList = invitedRaw
+    .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
+    .filter((d) => d.length >= 9);
+
   const payload = {
     title: String(input.title || ''),
     date: input.date instanceof Timestamp ? input.date : Timestamp.fromDate(new Date(input.date)),
@@ -116,6 +144,8 @@ export async function createRide(db, hostUserId, input) {
     isContactPublic: !!input.isContactPublic,
     gpxUrl: input.gpxUrl != null ? String(input.gpxUrl) : null,
     region: String(input.region || ''),
+    isPrivate,
+    invitedList,
     participants: asStringArray(input.participants),
     waitlist: [],
     participantDisplay,
@@ -142,6 +172,14 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   const data = snap.data();
   if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
   if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
+  const isPrivate = !!input.isPrivate;
+  const invitedRaw = isPrivate && Array.isArray(input.invitedList) ? input.invitedList : [];
+  const invitedList = isPrivate
+    ? invitedRaw
+        .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
+        .filter((d) => d.length >= 9)
+    : [];
+
   const patch = {
     title: String(input.title || ''),
     date: input.date instanceof Timestamp ? input.date : Timestamp.fromDate(new Date(input.date)),
@@ -156,6 +194,8 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     isContactPublic: !!input.isContactPublic,
     gpxUrl: input.gpxUrl != null ? String(input.gpxUrl) : data.gpxUrl != null ? String(data.gpxUrl) : null,
     region: String(input.region || ''),
+    isPrivate,
+    invitedList,
     updatedAt: serverTimestamp()
   };
   await updateDoc(rideRef, patch);
@@ -244,6 +284,14 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
+    const isPrivate = !!data.isPrivate;
+    const invitedList = asStringArray(data.invitedList);
+    const hostUid = String(data.hostUserId || '');
+    if (isPrivate && hostUid !== String(userId)) {
+      if (!isUserPhoneInvitedToRide(phoneLabel, invitedList)) {
+        throw new Error('INVITE_ONLY');
+      }
+    }
     let participants = asStringArray(data.participants);
     let waitlist = asStringArray(data.waitlist);
     let participantDisplay = { ...asParticipantDisplay(data.participantDisplay) };
@@ -405,6 +453,8 @@ if (typeof window !== 'undefined') {
     updateRideByHost,
     cancelRideByHost,
     computeMatchingRideDates,
-    computeHostRideDateKeys
+    computeHostRideDateKeys,
+    normalizePhoneDigits,
+    isUserPhoneInvitedToRide
   };
 }

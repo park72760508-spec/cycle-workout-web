@@ -21,7 +21,9 @@ function getOpenRidingServiceFns() {
     createRide: svc.createRide,
     uploadRideGpx: svc.uploadRideGpx,
     fetchRideById: svc.fetchRideById,
-    updateRideByHost: svc.updateRideByHost
+    updateRideByHost: svc.updateRideByHost,
+    normalizePhoneDigits: svc.normalizePhoneDigits,
+    isUserPhoneInvitedToRide: svc.isUserPhoneInvitedToRide
   };
 }
 
@@ -95,6 +97,92 @@ function getTodaySeoulYmd() {
     if (y && m && d) return y + '-' + m + '-' + d;
   } catch (e1) {}
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
+/** 라이딩 문서 date → 서울 기준 YYYY-MM-DD */
+function getRideDateSeoulYmd(ride) {
+  var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  if (!ts) return null;
+  try {
+    var parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(ts);
+    var y = '';
+    var m = '';
+    var d = '';
+    parts.forEach(function (p) {
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') m = p.value;
+      if (p.type === 'day') d = p.value;
+    });
+    if (y && m && d) return y + '-' + m + '-' + d;
+  } catch (e0) {}
+  return null;
+}
+
+/** 서울 달력상 라이딩일이 지난 경우(다음날부터) 상세 연락처 마스킹 */
+function shouldMaskOpenRidingContacts(ride) {
+  var rideYmd = getRideDateSeoulYmd(ride);
+  if (!rideYmd) return false;
+  return getTodaySeoulYmd() > rideYmd;
+}
+
+/** 전화 등 연락처 표시용 마스킹 (숫자 위주, 이메일은 일부 가림) */
+function maskContactForDisplay(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return '';
+  var digits = s.replace(/\D/g, '');
+  if (digits.length >= 11) {
+    return digits.slice(0, 3) + '-****-' + digits.slice(-4);
+  }
+  if (digits.length >= 10) {
+    return digits.slice(0, 3) + '-****-' + digits.slice(-4);
+  }
+  if (digits.length >= 7) {
+    return '***-' + digits.slice(-4);
+  }
+  if (digits.length >= 4) {
+    return '****';
+  }
+  if (s.indexOf('@') >= 0) {
+    var at = s.indexOf('@');
+    var local = s.slice(0, at);
+    var dom = s.slice(at + 1);
+    var domParts = dom.split('.');
+    var tld = domParts.length ? domParts[domParts.length - 1] : '';
+    return (local.length ? local[0] : '*') + '***@***.' + (tld || '*');
+  }
+  return '***';
+}
+
+/** 네이티브 주소록에서 전달하는 data → { name, phone }[] */
+function parseNativeAddressBookData(data) {
+  var raw = Array.isArray(data) ? data : data && (data.contacts || data.items || data.selected);
+  if (!Array.isArray(raw)) raw = [];
+  var out = [];
+  raw.forEach(function (row) {
+    if (!row || typeof row !== 'object') return;
+    var phone = row.phone != null ? row.phone : row.tel != null ? row.tel : row.mobile != null ? row.mobile : row.number;
+    var name = row.name != null ? row.name : row.displayName != null ? row.displayName : '';
+    if (phone == null || String(phone).replace(/\D/g, '').length < 8) return;
+    out.push({
+      name: String(name).trim() || '이름 없음',
+      phone: String(phone).trim()
+    });
+  });
+  return out;
+}
+
+function openRidingBridgeOpenAddressBook() {
+  try {
+    if (typeof window !== 'undefined' && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openAddressBook) {
+      window.webkit.messageHandlers.openAddressBook.postMessage({});
+      return;
+    }
+    if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.openAddressBook === 'function') {
+      window.AndroidBridge.openAddressBook();
+      return;
+    }
+  } catch (e1) {}
+  if (typeof window !== 'undefined' && window.console) window.console.warn('[오픈라이딩] openAddressBook 브릿지를 찾을 수 없습니다.');
 }
 
 function daysInGregorianMonth(year, month1) {
@@ -347,7 +435,12 @@ function OpenRidingCalendarMain(props) {
                     className="w-full text-left py-2.5 hover:bg-slate-50 px-2 rounded-lg"
                     onClick={function () { onSelectRide(r.id); }}
                   >
-                    <div className={'font-medium text-sm flex items-center gap-1.5 min-w-0 ' + (isCancelled ? 'text-red-300' : 'text-slate-800')}>
+                    <div
+                      className={
+                        'font-medium text-sm flex items-center gap-1.5 min-w-0 ' +
+                        (isCancelled ? 'text-red-300' : r.isPrivate ? 'open-riding-list-title-private' : 'text-slate-800')
+                      }
+                    >
                       {isCancelled ? (
                         <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
                       ) : null}
@@ -564,7 +657,10 @@ function OpenRidingCreateForm(props) {
       contactInfo: prof.contactInfo || '',
       region: '',
       gpxFile: null,
-      gpxUrlExisting: null
+      gpxUrlExisting: null,
+      isPrivate: false,
+      invitePending: [],
+      inviteSelected: []
     };
   });
   var form = st[0];
@@ -572,6 +668,47 @@ function OpenRidingCreateForm(props) {
   var _busy = useState(false);
   var isBusy = _busy[0];
   var setBusy = _busy[1];
+
+  useEffect(function () {
+    var prev = typeof window !== 'undefined' ? window.onAddressBookSelected : undefined;
+    window.onAddressBookSelected = function (data) {
+      if (typeof prev === 'function') {
+        try {
+          prev(data);
+        } catch (e0) {}
+      }
+      var rows = parseNativeAddressBookData(data);
+      if (rows.length === 0) return;
+      setForm(function (f) {
+        var _svc = getOpenRidingServiceFns();
+        var norm =
+          typeof _svc.normalizePhoneDigits === 'function'
+            ? _svc.normalizePhoneDigits
+            : function (s) {
+                return String(s || '').replace(/\D/g, '');
+              };
+        var pending = (f.invitePending || []).slice();
+        var keysSel = {};
+        (f.inviteSelected || []).forEach(function (x) {
+          keysSel[x.key] = true;
+        });
+        rows.forEach(function (row) {
+          var key = norm(row.phone);
+          if (!key || key.length < 9) return;
+          if (keysSel[key]) return;
+          if (pending.some(function (p) { return p.key === key; })) return;
+          pending.push({ name: row.name, phone: row.phone, key: key });
+        });
+        var n = {};
+        for (var k in f) n[k] = f[k];
+        n.invitePending = pending;
+        return n;
+      });
+    };
+    return function () {
+      if (typeof window !== 'undefined') window.onAddressBookSelected = prev;
+    };
+  }, []);
 
   var _hyd = useState(!editRideId);
   var editHydrated = _hyd[0];
@@ -595,6 +732,18 @@ function OpenRidingCreateForm(props) {
           var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
           var ymd = ts ? dateKey(ts.getFullYear(), ts.getMonth(), ts.getDate()) : getTodaySeoulYmd();
           var prof = getOpenRidingProfileDefaults();
+          var _svcN = getOpenRidingServiceFns();
+          var normFn =
+            typeof _svcN.normalizePhoneDigits === 'function'
+              ? _svcN.normalizePhoneDigits
+              : function (s) {
+                  return String(s || '').replace(/\D/g, '');
+                };
+          var il = Array.isArray(ride.invitedList) ? ride.invitedList : [];
+          var inviteSelected = il.map(function (phone) {
+            var p = String(phone != null ? phone : '');
+            return { name: '초대', phone: p, key: normFn(p) };
+          });
           setForm({
             title: String(ride.title || ''),
             date: ymd,
@@ -608,7 +757,10 @@ function OpenRidingCreateForm(props) {
             contactInfo: String(ride.contactInfo || prof.contactInfo || ''),
             region: String(ride.region || ''),
             gpxFile: null,
-            gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null
+            gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null,
+            isPrivate: !!ride.isPrivate,
+            invitePending: [],
+            inviteSelected: inviteSelected
           });
           setEditHydrated(true);
         })
@@ -711,7 +863,9 @@ function OpenRidingCreateForm(props) {
           contactInfo: form.contactInfo,
           isContactPublic: false,
           region: form.region,
-          gpxUrl: gpxUrl
+          gpxUrl: gpxUrl,
+          isPrivate: !!form.isPrivate,
+          invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : []
         });
         onEditSaved();
         return;
@@ -730,7 +884,9 @@ function OpenRidingCreateForm(props) {
         contactInfo: form.contactInfo,
         isContactPublic: false,
         region: form.region,
-        gpxUrl: gpxUrl
+        gpxUrl: gpxUrl,
+        isPrivate: !!form.isPrivate,
+        invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : []
       });
       onCreated(rideId);
     } finally {
@@ -807,6 +963,138 @@ function OpenRidingCreateForm(props) {
         <label className="block font-medium text-slate-700">거리(km)<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.distance} onChange={function (e) { set('distance', Number(e.target.value)); }} min={1} /></label>
         <label className="block font-medium text-slate-700">최대 인원<input type="number" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.maxParticipants} onChange={function (e) { set('maxParticipants', Number(e.target.value)); }} min={1} /></label>
       </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+        <span className="block font-medium text-slate-700">공개 / 비공개</span>
+        <p className="text-xs text-slate-500 -mt-1">디바이스 연결 화면과 동일한 슬라이드 스위치 스타일입니다.</p>
+        <div className="device-connection-switch-container flex flex-col items-stretch sm:items-center">
+          <div
+            role="switch"
+            aria-checked={!form.isPrivate}
+            aria-label={form.isPrivate ? '비공개 모임' : '공개 모임'}
+            className={'device-connection-switch open-riding-visibility-switch mx-auto ' + (form.isPrivate ? 'active-ant' : 'active-bluetooth')}
+            onClick={function () {
+              var next = !form.isPrivate;
+              setForm(function (f) {
+                var n = {};
+                for (var k in f) n[k] = f[k];
+                n.isPrivate = next;
+                if (!next) {
+                  n.invitePending = [];
+                  n.inviteSelected = [];
+                }
+                return n;
+              });
+            }}
+          >
+            <div className="switch-option switch-option-left">
+              <span className="text-[11px] font-bold text-slate-700">공개</span>
+            </div>
+            <div className="switch-option switch-option-right">
+              <span className="text-[11px] font-bold text-slate-700">비공개</span>
+            </div>
+            <div className="switch-slider" />
+          </div>
+          <div className="switch-label-container open-riding-visibility-switch-labels mx-auto !w-[200px] max-w-full">
+            <span id="openRidingVisibilityLabelPublic" className={!form.isPrivate ? 'font-semibold text-green-600' : 'text-slate-400'}>
+              공개
+            </span>
+            <span id="openRidingVisibilityLabelPrivate" className={form.isPrivate ? 'font-semibold text-amber-600' : 'text-slate-400'}>
+              비공개
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {form.isPrivate ? (
+        <div className="rounded-xl border border-violet-200/80 bg-violet-50/40 p-3 space-y-3">
+          <h3 className="text-sm font-semibold text-violet-900">친구 초대 목록</h3>
+          <button
+            type="button"
+            className="w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
+            onClick={openRidingBridgeOpenAddressBook}
+          >
+            주소록에서 초대하기
+          </button>
+          <p className="text-xs text-slate-600 leading-snug">앱에서 연락처를 고르면 네이티브가 <span className="font-mono text-[10px]">onAddressBookSelected</span> 로 이름·전화 목록을 넘깁니다.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2">
+              <p className="text-xs font-semibold text-slate-600 mb-2">초대 목록</p>
+              {(form.invitePending || []).length === 0 ? (
+                <p className="text-xs text-slate-400 py-2">주소록에서 추가하거나, 행을 눌러 오른쪽으로 옮기세요.</p>
+              ) : (
+                <ul className="space-y-1 max-h-36 overflow-y-auto">
+                  {(form.invitePending || []).map(function (row) {
+                    return (
+                      <li key={row.key}>
+                        <button
+                          type="button"
+                          className="w-full text-left rounded-md px-2 py-1.5 text-sm bg-slate-50 hover:bg-violet-100 border border-transparent hover:border-violet-200"
+                          onClick={function () {
+                            setForm(function (f) {
+                              var pend = (f.invitePending || []).filter(function (p) { return p.key !== row.key; });
+                              var picked = (f.invitePending || []).filter(function (p) { return p.key === row.key; })[0];
+                              var sel = (f.inviteSelected || []).slice();
+                              if (picked && !sel.some(function (s) { return s.key === row.key; })) sel.push(picked);
+                              var n = {};
+                              for (var k in f) n[k] = f[k];
+                              n.invitePending = pend;
+                              n.inviteSelected = sel;
+                              return n;
+                            });
+                          }}
+                        >
+                          <span className="font-medium text-slate-800">{row.name}</span>
+                          <span className="block text-xs text-slate-500">{row.phone}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="min-w-0 rounded-lg border border-violet-200 bg-white p-2">
+              <p className="text-xs font-semibold text-violet-800 mb-2">선택된 목록 ({(form.inviteSelected || []).length}명)</p>
+              {(form.inviteSelected || []).length === 0 ? (
+                <p className="text-xs text-slate-400 py-2">비공개 모임에 초대할 사람을 왼쪽에서 탭해 추가하세요.</p>
+              ) : (
+                <ul className="space-y-1 max-h-36 overflow-y-auto">
+                  {(form.inviteSelected || []).map(function (row) {
+                    return (
+                      <li key={row.key} className="flex items-start gap-2 rounded-md bg-violet-50/80 px-2 py-1.5 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-slate-800">{row.name}</span>
+                          <span className="block text-xs text-slate-600">{row.phone}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 text-xs text-red-600 font-medium px-1"
+                          onClick={function () {
+                            setForm(function (f) {
+                              var sel = (f.inviteSelected || []).filter(function (s) { return s.key !== row.key; });
+                              var removed = (f.inviteSelected || []).filter(function (s) { return s.key === row.key; })[0];
+                              var pend = (f.invitePending || []).slice();
+                              if (removed && !pend.some(function (p) { return p.key === row.key; })) pend.push(removed);
+                              var n = {};
+                              for (var k in f) n[k] = f[k];
+                              n.inviteSelected = sel;
+                              n.invitePending = pend;
+                              return n;
+                            });
+                          }}
+                        >
+                          빼기
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+          {(form.inviteSelected || []).length === 0 ? <p className="text-xs text-amber-700">선택된 초대가 없으면 방장 외 참석 신청이 불가능합니다.</p> : null}
+        </div>
+      ) : null}
 
       <label className="block font-medium text-slate-700">코스 설명<textarea className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
 
@@ -1012,6 +1300,15 @@ function OpenRidingDetail(props) {
   var hasApplied = role === 'participant' || (role && typeof role === 'object' && role.type === 'waitlist');
   var showHostContactRow = !!(isHost || hasApplied);
 
+  var isPrivateRide = !!ride.isPrivate;
+  var invitedListArr = Array.isArray(ride.invitedList) ? ride.invitedList : [];
+  var myPhoneForInvite = String(getOpenRidingProfileDefaults().contactInfo || '').trim();
+  var _svcInv = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  var joinInviteOk = true;
+  if (isPrivateRide && !isHost) {
+    joinInviteOk = !!(typeof _svcInv.isUserPhoneInvitedToRide === 'function' && _svcInv.isUserPhoneInvitedToRide(myPhoneForInvite, invitedListArr));
+  }
+
   var roleLabel = !role ? '미신청' : role === 'participant' ? '참석 확정' : '대기 ' + role.position + '번';
 
   var pd =
@@ -1024,6 +1321,7 @@ function OpenRidingDetail(props) {
       : {};
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
+  var maskContacts = shouldMaskOpenRidingContacts(ride);
 
   function participantRowName(uid, fallbackLabel) {
     var n = pd[String(uid)];
@@ -1035,7 +1333,8 @@ function OpenRidingDetail(props) {
     if (!isHost) return null;
     var ph = pc[String(uid)];
     if (!ph || !String(ph).trim()) return null;
-    return ' (' + String(ph).trim() + ')';
+    var display = maskContacts ? maskContactForDisplay(String(ph).trim()) : String(ph).trim();
+    return ' (' + display + ')';
   }
 
   var detailMuted = isCancelled ? ' open-riding-detail-muted' : '';
@@ -1088,10 +1387,11 @@ function OpenRidingDetail(props) {
         {statRow('거리', (ride.distance != null ? ride.distance : '-') + 'km')}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
+        {statRow('공개 여부', isPrivateRide ? '비공개 · 초대된 연락처만 신청 가능' : '공개')}
         {statRow(
           '연락처',
           showHostContactRow && ride.contactInfo ? (
-            ride.contactInfo
+            maskContacts ? maskContactForDisplay(ride.contactInfo) : ride.contactInfo
           ) : !showHostContactRow && ride.contactInfo ? (
             <span className="text-amber-600">참석 신청 후 방장 연락처가 표시됩니다.</span>
           ) : (
@@ -1100,6 +1400,9 @@ function OpenRidingDetail(props) {
         )}
         {statRow('내 상태', roleLabel)}
       </div>
+      {maskContacts ? (
+        <p className="text-xs text-slate-500 px-1 leading-snug">라이딩 일정일이 지나 방장·참가자 연락처는 개인정보 보호를 위해 마스킹되었습니다.</p>
+      ) : null}
 
       {ride.course ? (
         <p className={'text-sm rounded-lg p-3 border border-violet-100/80 bg-violet-50/40' + detailMuted}>{ride.course}</p>
@@ -1155,16 +1458,27 @@ function OpenRidingDetail(props) {
       {actionErr ? <p className="text-sm text-red-600">{actionErr}</p> : null}
 
       {!isCancelled ? (
-        <div className="flex gap-2">
-          {role ? (
-            <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
-              참석 취소
-            </button>
-          ) : (
-            <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isActionBusy || !userId} onClick={onJoin}>
-              참석 신청
-            </button>
-          )}
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            {role ? (
+              <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
+                참석 취소
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
+                disabled={isActionBusy || !userId || !joinInviteOk}
+                title={!joinInviteOk ? '초대받은 사용자만 참석할 수 있습니다' : undefined}
+                onClick={onJoin}
+              >
+                {joinInviteOk ? '참석 신청' : '참석 신청 (초대자만)'}
+              </button>
+            )}
+          </div>
+          {isPrivateRide && !isHost && !role && !joinInviteOk ? (
+            <p className="text-xs text-amber-800 text-center leading-snug px-1">초대받은 사용자만 참석할 수 있습니다. 로그인 프로필의 연락처가 초대된 번호와 같아야 합니다.</p>
+          ) : null}
         </div>
       ) : null}
 

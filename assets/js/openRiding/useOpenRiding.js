@@ -155,7 +155,12 @@ export function useOpenRideDetail(db, rideId, userId) {
       return res;
     } catch (e) {
       const raw = (e && e.message) || 'join_failed';
-      const msg = raw === 'RIDE_CANCELLED' ? '취소된 라이딩에는 참석할 수 없습니다.' : raw;
+      const msg =
+        raw === 'RIDE_CANCELLED'
+          ? '취소된 라이딩에는 참석할 수 없습니다.'
+          : raw === 'INVITE_ONLY'
+            ? '초대받은 사용자만 참석 신청할 수 있습니다.'
+            : raw;
       setActionError(msg);
       throw e;
     }
