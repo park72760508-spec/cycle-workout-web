@@ -1126,31 +1126,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 0.7;
 }
 
-/* 인증 바: 오픈 라이딩방 아이콘(이미지 48×48, 터치 영역 64×64) */
-.auth-bar-riding-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  margin: 0;
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s, opacity 0.2s;
-}
-.auth-bar-riding-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  opacity: 0.92;
-}
-.auth-bar-riding-btn:active {
-  background: rgba(0, 0, 0, 0.1);
-  opacity: 0.85;
-}
-
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
 #basecampScreen .btn-device.basecamp-btn,
 .basecamp-btn {
