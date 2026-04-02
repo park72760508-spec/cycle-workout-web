@@ -256,9 +256,12 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
  * @param {string} rideId 임시 폴더면 'draft/{uid}/{timestamp}'
  */
 export async function uploadRideGpx(storage, file, rideId) {
-  const path = `open_riding_gpx/${rideId}/${Date.now()}.gpx`;
+  const safeSeg = String(rideId || 'draft').replace(/[/\\]/g, '_').slice(0, 180);
+  const path = `open_riding_gpx/${safeSeg}/${Date.now()}.gpx`;
   const ref = storageRef(storage, path);
-  await uploadBytes(ref, file);
+  const contentType =
+    file && file.type && String(file.type).trim() ? String(file.type).trim() : 'application/gpx+xml';
+  await uploadBytes(ref, file, { contentType });
   return getDownloadURL(ref);
 }
 

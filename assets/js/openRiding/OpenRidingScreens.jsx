@@ -1163,6 +1163,11 @@ function OpenRidingCreateForm(props) {
 
   return (
     <form className="w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700" onSubmit={submit}>
+      {!storage ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
+          Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
+        </p>
+      ) : null}
       <label className="block font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
 
       <label className="block font-medium text-slate-700">지역
