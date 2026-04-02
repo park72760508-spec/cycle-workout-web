@@ -7,6 +7,7 @@
  *   "date": "2025-03-27",
  *   "updatedAt": <ServerTimestamp>,
  *   "screens": {
+ *     "openRidingRoomScreen": 12,
  *     "deviceSettingScreen": 42,
  *     "workoutScreen": 10,
  *     "trainingJournalScreen": 5,
@@ -64,12 +65,14 @@
     mobileDashboardScreen: true,
     trainingScreen: true,
     bluetoothIndividualScreen: true,
-    profileScreen: true
+    profileScreen: true,
+    openRidingRoomScreen: true
   };
 
   global.STELVIO_ANALYTICS_LABELS = {
     basecamp_unique: '접속자 수 (베이스캠프·계정당 1회/일)',
     deviceSettingScreen: '디바이스 설정',
+    openRidingRoomScreen: '라이딩 벙',
     workoutScreen: '워크아웃',
     trainingJournalScreen: '라이딩 일지',
     scheduleListScreen: '훈련 스케줄',
@@ -700,7 +703,7 @@
 
     var order = [
       { key: 'basecamp_unique', val: bu, isSpecial: true },
-      { key: 'deviceSettingScreen', val: screens.deviceSettingScreen },
+      { key: 'openRidingRoomScreen', val: screens.openRidingRoomScreen },
       { key: 'workoutScreen', val: screens.workoutScreen },
       { key: 'trainingJournalScreen', val: screens.trainingJournalScreen },
       { key: 'scheduleListScreen', val: screens.scheduleListScreen },
