@@ -95,6 +95,19 @@
         console.log('✅ Firebase v9 Auth 초기화');
         firestoreV9 = initFirestore(appV9, { experimentalForceLongPolling: true });
         console.log('✅ Firebase v9 Firestore 초기화');
+        try {
+          var storageModMain = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
+          if (storageModMain && typeof storageModMain.getStorage === 'function') {
+            window.firebaseStorageV9 = storageModMain.getStorage(appV9);
+            console.log('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
+          } else {
+            window.firebaseStorageV9 = null;
+            console.warn('[Firebase v9] getStorage 없음');
+          }
+        } catch (se) {
+          console.warn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
+          window.firebaseStorageV9 = null;
+        }
         window.authV9 = authV9;
         window.firestoreV9 = firestoreV9;
         if (authMod.signInWithEmailAndPassword) window.signInWithEmailAndPasswordV9 = authMod.signInWithEmailAndPassword;
@@ -2278,11 +2291,17 @@
                 <button type="button" id="btnAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
                 <span id="authBarWarning" style="font-size: 13px; color: #0c4a6e;">로그인 시 워크아웃이 Realtime DB에 저장됩니다.</span>
               </div>
-              <div id="authBarRight" style="display: none; align-items: center; justify-content: space-between; width: 100%; gap: 8px;">
-                <div id="authBarWelcome" style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: clamp(14px, 4vw, 17px); font-weight: 600; color: #0369a1; line-height: 1.4;"><span id="authBarWelcomeLine1" style="white-space: nowrap;">환영합니다.</span><span id="authBarWelcomeLine2" style="white-space: nowrap;">사용자명님</span></div>
-                <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃" style="flex-shrink: 0;">
-                  <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
-                </button>
+              <div id="authBarRight" class="basecamp-auth-bar-right" style="display: none;">
+                <span class="basecamp-auth-bar-spacer" aria-hidden="true"></span>
+                <div id="authBarWelcome" class="basecamp-auth-bar-welcome">
+                  <span id="authBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">환영합니다.</span>
+                  <span id="authBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
+                </div>
+                <div class="basecamp-auth-bar-logout-wrap">
+                  <button type="button" id="btnAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
+                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -11864,7 +11883,7 @@
       if (!left || !right) return;
       if (user && user.email) {
         left.style.display = 'none';
-        right.style.display = 'flex';
+        right.style.display = 'grid';
         if (warning) warning.style.display = 'none';
         var userName = '사용자';
         try {
