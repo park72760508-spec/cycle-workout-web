@@ -5,7 +5,8 @@
 (function (global) {
   'use strict';
 
-  var MAX_POINTS = 4000;
+  /** 미리보기용 상한 — 과다 포인트는 모바일 CPU·발열에 영향 (코스 형태는 유지) */
+  var MAX_POINTS = 2200;
 
   function haversineMeters(lat1, lon1, lat2, lon2) {
     var R = 6371000;

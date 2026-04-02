@@ -380,9 +380,16 @@ function OpenRidingGpxCoursePanel(props) {
           } catch (e1) {}
           mapInstRef.current = null;
         }
-        var map = L.map(mapRef.current, { zoomControl: true, attributionControl: true });
+        var map = L.map(mapRef.current, {
+          zoomControl: true,
+          attributionControl: true,
+          fadeAnimation: false,
+          zoomAnimation: false
+        });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
+          updateWhenIdle: true,
+          keepBuffer: 1,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
         var poly = L.polyline(loadState.track.latlngs, { color: '#7c3aed', weight: 4, opacity: 0.92 }).addTo(map);
@@ -446,6 +453,7 @@ function OpenRidingGpxCoursePanel(props) {
           options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
             interaction: { mode: 'index', intersect: false },
             scales: {
               x: {
