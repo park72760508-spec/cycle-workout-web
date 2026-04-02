@@ -197,22 +197,126 @@ function maskContactForDisplay(raw) {
   return '***';
 }
 
-/** 네이티브 주소록에서 전달하는 data → { name, phone }[] */
+/** 연락처 행에서 전화번호 필드 추출 (iOS CNContact / Android ContentResolver 등 편차 흡수) */
+function openRidingExtractPhoneFromContactRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  var p =
+    row.phone != null
+      ? row.phone
+      : row.phoneNumber != null
+        ? row.phoneNumber
+        : row.phone_number != null
+          ? row.phone_number
+          : row.tel != null
+            ? row.tel
+            : row.mobile != null
+              ? row.mobile
+              : row.number != null
+                ? row.number
+                : row.mobilePhone != null
+                  ? row.mobilePhone
+                  : '';
+  if (!p && Array.isArray(row.phoneNumbers) && row.phoneNumbers.length) {
+    var pn0 = row.phoneNumbers[0];
+    p = typeof pn0 === 'string' ? pn0 : pn0 && (pn0.number != null ? pn0.number : pn0.value != null ? pn0.value : pn0.stringValue);
+  }
+  return String(p != null ? p : '').trim();
+}
+
+/** 연락처 행에서 표시 이름 */
+function openRidingExtractNameFromContactRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  var n =
+    row.name != null
+      ? row.name
+      : row.displayName != null
+        ? row.displayName
+        : row.fullName != null
+          ? row.fullName
+          : '';
+  if (!String(n).trim() && (row.givenName != null || row.familyName != null)) {
+    n = [row.familyName, row.givenName].filter(Boolean).join(' ').trim();
+  }
+  return String(n != null ? n : '').trim();
+}
+
+/**
+ * 네이티브 주소록에서 전달하는 data → { name, phone }[]
+ * - JSON 문자열(JSON.parse)
+ * - 단일 객체 또는 { contacts | items | selected }
+ * - phoneNumbers[] (iOS)
+ */
 function parseNativeAddressBookData(data) {
-  var raw = Array.isArray(data) ? data : data && (data.contacts || data.items || data.selected);
-  if (!Array.isArray(raw)) raw = [];
+  if (data == null) return [];
+  if (typeof data === 'string') {
+    var s = String(data).trim();
+    if (!s) return [];
+    try {
+      data = JSON.parse(s);
+    } catch (e0) {
+      return [];
+    }
+  }
+  var raw;
+  if (Array.isArray(data)) {
+    raw = data;
+  } else if (data && typeof data === 'object') {
+    raw = data.contacts || data.items || data.selected || data.results || data.data;
+    if (!Array.isArray(raw)) {
+      if (data.phone != null || data.phoneNumber != null || data.phoneNumbers || data.tel || data.mobile) {
+        raw = [data];
+      } else {
+        raw = [];
+      }
+    }
+  } else {
+    raw = [];
+  }
   var out = [];
   raw.forEach(function (row) {
     if (!row || typeof row !== 'object') return;
-    var phone = row.phone != null ? row.phone : row.tel != null ? row.tel : row.mobile != null ? row.mobile : row.number;
-    var name = row.name != null ? row.name : row.displayName != null ? row.displayName : '';
-    if (phone == null || String(phone).replace(/\D/g, '').length < 8) return;
+    var phoneRaw = openRidingExtractPhoneFromContactRow(row);
+    var digits = String(phoneRaw).replace(/\D/g, '');
+    if (digits.length < 8) return;
+    var name = openRidingExtractNameFromContactRow(row) || '이름 없음';
     out.push({
-      name: String(name).trim() || '이름 없음',
-      phone: String(phone).trim()
+      name: name,
+      phone: phoneRaw
     });
   });
   return out;
+}
+
+/** 초대 목록 병합(setForm은 OpenRidingCreateForm의 setter) */
+function openRidingMergeAddressBookIntoInvitePending(data, setForm) {
+  var rows = parseNativeAddressBookData(data);
+  if (rows.length === 0) return;
+  setForm(function (f) {
+    var _svc = getOpenRidingServiceFns();
+    var norm =
+      typeof _svc.normalizePhoneDigits === 'function'
+        ? _svc.normalizePhoneDigits
+        : function (s) {
+            return String(s || '').replace(/\D/g, '');
+          };
+    var pending = (f.invitePending || []).slice();
+    var keysSel = {};
+    (f.inviteSelected || []).forEach(function (x) {
+      keysSel[x.key] = true;
+    });
+    rows.forEach(function (row) {
+      var key = norm(row.phone);
+      if (!key || key.length < 8) return;
+      if (keysSel[key]) return;
+      if (pending.some(function (p) { return p.key === key; })) return;
+      var displayPhone = row.phone;
+      pending.push({ name: row.name, phone: displayPhone, key: key });
+    });
+    var n = {};
+    for (var k in f) n[k] = f[k];
+    n.invitePending = pending;
+    return n;
+  });
 }
 
 /**
@@ -674,6 +778,10 @@ function openRidingBridgeOpenAddressBook() {
     }
     if (typeof window !== 'undefined' && window.AndroidBridge && typeof window.AndroidBridge.openAddressBook === 'function') {
       window.AndroidBridge.openAddressBook();
+      return;
+    }
+    if (typeof window !== 'undefined' && window.Android && typeof window.Android.openAddressBook === 'function') {
+      window.Android.openAddressBook();
       return;
     }
   } catch (e1) {}
@@ -1174,43 +1282,47 @@ function OpenRidingCreateForm(props) {
   var setBusy = _busy[1];
 
   useEffect(function () {
-    var prev = typeof window !== 'undefined' ? window.onAddressBookSelected : undefined;
+    if (typeof window === 'undefined') return undefined;
+
+    function onAddressBookPayload(data) {
+      openRidingMergeAddressBookIntoInvitePending(data, setForm);
+    }
+
+    var prevMain = window.onAddressBookSelected;
+    var prevAlt = window.onOpenRidingAddressBookSelected;
+    var prevPick = window.stelvioAddressBookPicked;
+
     window.onAddressBookSelected = function (data) {
-      if (typeof prev === 'function') {
+      if (typeof prevMain === 'function') {
         try {
-          prev(data);
+          prevMain(data);
         } catch (e0) {}
       }
-      var rows = parseNativeAddressBookData(data);
-      if (rows.length === 0) return;
-      setForm(function (f) {
-        var _svc = getOpenRidingServiceFns();
-        var norm =
-          typeof _svc.normalizePhoneDigits === 'function'
-            ? _svc.normalizePhoneDigits
-            : function (s) {
-                return String(s || '').replace(/\D/g, '');
-              };
-        var pending = (f.invitePending || []).slice();
-        var keysSel = {};
-        (f.inviteSelected || []).forEach(function (x) {
-          keysSel[x.key] = true;
-        });
-        rows.forEach(function (row) {
-          var key = norm(row.phone);
-          if (!key || key.length < 9) return;
-          if (keysSel[key]) return;
-          if (pending.some(function (p) { return p.key === key; })) return;
-          pending.push({ name: row.name, phone: row.phone, key: key });
-        });
-        var n = {};
-        for (var k in f) n[k] = f[k];
-        n.invitePending = pending;
-        return n;
-      });
+      onAddressBookPayload(data);
     };
+    window.onOpenRidingAddressBookSelected = onAddressBookPayload;
+    window.stelvioAddressBookPicked = onAddressBookPayload;
+
+    function onMessage(ev) {
+      var d = ev && ev.data;
+      if (d == null || typeof d !== 'object') return;
+      var t = d.type != null ? String(d.type) : '';
+      if (
+        t === 'OPEN_RIDING_ADDRESS_BOOK' ||
+        t === 'addressBookSelected' ||
+        t === 'ADDRESS_BOOK_SELECTED' ||
+        t === 'stelvio.addressBook'
+      ) {
+        onAddressBookPayload(d.payload != null ? d.payload : d.data != null ? d.data : d);
+      }
+    }
+    window.addEventListener('message', onMessage);
+
     return function () {
-      if (typeof window !== 'undefined') window.onAddressBookSelected = prev;
+      window.removeEventListener('message', onMessage);
+      window.onAddressBookSelected = prevMain;
+      window.onOpenRidingAddressBookSelected = prevAlt;
+      window.stelvioAddressBookPicked = prevPick;
     };
   }, []);
 
