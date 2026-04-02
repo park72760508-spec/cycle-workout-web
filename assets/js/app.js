@@ -3203,26 +3203,6 @@ if (!window.showScreen) {
           return;
         }
       }
-      if (id === 'openRidingRoomScreen') {
-        var _fbAuth =
-          (window.auth && window.auth.currentUser) ||
-          (window.authV9 && window.authV9.currentUser) ||
-          window.currentUser;
-        var _fbOk = _fbAuth != null;
-        var _phoneOk = window.isPhoneAuthenticated === true || typeof isPhoneAuthenticated !== 'undefined' && isPhoneAuthenticated;
-        if (_fbOk || _phoneOk) {
-          var _gOr =
-            typeof getLoginUserGrade === 'function'
-              ? String(getLoginUserGrade())
-              : typeof getViewerGrade === 'function'
-                ? String(getViewerGrade())
-                : '';
-          if (String(_gOr).trim() === '2' || Number(_gOr) === 2) {
-            if (typeof showOpenRidingGrade2NoticeModal === 'function') showOpenRidingGrade2NoticeModal();
-            return;
-          }
-        }
-      }
       // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 다른 화면으로 이동할 때)
       if (!skipHistory) {
         // 현재 활성화된 화면 찾기 (active 클래스 또는 display: block인 화면)
@@ -6626,22 +6606,24 @@ window.showScreen = function(screenId) {
     }
   }
 
+  // 오픈 라이딩방: 로그인 필수, 등급 1·2·3만 허용
   if (screenId === 'openRidingRoomScreen' && isAuthenticated) {
-    var _gOrMain =
+    var _gRide =
       typeof getLoginUserGrade === 'function'
         ? String(getLoginUserGrade())
         : typeof getViewerGrade === 'function'
           ? String(getViewerGrade())
           : '';
-    if (String(_gOrMain).trim() === '2' || Number(_gOrMain) === 2) {
-      if (typeof showOpenRidingGrade2NoticeModal === 'function') {
-        showOpenRidingGrade2NoticeModal();
+    var _gRideN = Number(String(_gRide).trim());
+    if (!(_gRideN === 1 || _gRideN === 2 || _gRideN === 3)) {
+      if (typeof showToast === 'function') {
+        showToast('오픈 라이딩방은 1·2·3등급 회원만 이용할 수 있습니다.');
       }
       return;
     }
   }
 
-  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트 (태블릿 등에서 TOP10 인증 전 노출 방지)
+  // 인증 없을 때 인증 화면으로 보냄(일부 화면 예외)
   if (!isAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen' && screenId !== 'splashScreen') {
     console.log('⚠️ 인증되지 않은 상태 - 인증 화면으로 리다이렉트');
     window.__showScreenRedirectedToAuth = true;
