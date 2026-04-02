@@ -271,6 +271,32 @@ function loadGpxTextFromUrl(url, storage, isCancelled) {
   });
 }
 
+/** 모바일·터치·절약 모드: 타일·폴리라인 부하를 줄여 발열 완화 */
+function openRidingPreferLowPowerMap() {
+  try {
+    if (typeof window === 'undefined') return false;
+    var c = navigator.connection;
+    if (c && c.saveData) return true;
+    if (window.matchMedia) {
+      if (window.matchMedia('(max-width: 900px)').matches) return true;
+      if (window.matchMedia('(pointer: coarse)').matches) return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+/** 지도 표시용 좌표만 순 번호로 축소(고도 그래프는 원본 유지) */
+function openRidingDownsampleLatLngs(latlngs, maxPts) {
+  if (!latlngs || latlngs.length <= maxPts) return latlngs;
+  var n = latlngs.length;
+  var step = Math.ceil(n / maxPts);
+  var out = [];
+  var i;
+  for (i = 0; i < n; i += step) out.push(latlngs[i]);
+  if (out[out.length - 1] !== latlngs[n - 1]) out.push(latlngs[n - 1]);
+  return out;
+}
+
 /**
  * GPX URL 또는 로컬 File → Leaflet 지도 + Chart.js 고도표 (코스 설명 블록 하단용)
  * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean, storage?: import('firebase/storage').FirebaseStorage | null }} props
@@ -286,10 +312,14 @@ function OpenRidingGpxCoursePanel(props) {
   var chartRef = useRef(null);
   var mapInstRef = useRef(null);
   var chartInstRef = useRef(null);
+  var mapPausedByVisibilityRef = useRef(false);
 
   var _st = useState({ status: 'idle', track: null, err: '' });
   var loadState = _st[0];
   var setLoadState = _st[1];
+  var _mk = useState(0);
+  var mapRemountKey = _mk[0];
+  var setMapRemountKey = _mk[1];
 
   useEffect(
     function () {
@@ -361,6 +391,39 @@ function OpenRidingGpxCoursePanel(props) {
 
   useEffect(
     function () {
+      function onVis() {
+        if (typeof document === 'undefined') return;
+        if (document.visibilityState === 'hidden') {
+          if (mapInstRef.current) {
+            mapPausedByVisibilityRef.current = true;
+            try {
+              mapInstRef.current.remove();
+            } catch (eH) {}
+            mapInstRef.current = null;
+          }
+        } else if (
+          mapPausedByVisibilityRef.current &&
+          loadState.status === 'ok' &&
+          loadState.track &&
+          loadState.track.latlngs &&
+          loadState.track.latlngs.length >= 2
+        ) {
+          mapPausedByVisibilityRef.current = false;
+          setMapRemountKey(function (k) {
+            return k + 1;
+          });
+        }
+      }
+      document.addEventListener('visibilitychange', onVis);
+      return function () {
+        document.removeEventListener('visibilitychange', onVis);
+      };
+    },
+    [loadState.status, loadState.track]
+  );
+
+  useEffect(
+    function () {
       if (loadState.status !== 'ok' || !loadState.track || !loadState.track.latlngs || loadState.track.latlngs.length < 2) {
         if (mapInstRef.current) {
           try {
@@ -380,20 +443,34 @@ function OpenRidingGpxCoursePanel(props) {
           } catch (e1) {}
           mapInstRef.current = null;
         }
+        var lowPower = openRidingPreferLowPowerMap();
+        var tileCap = lowPower ? 16 : 19;
+        var latlngsDraw = openRidingDownsampleLatLngs(loadState.track.latlngs, lowPower ? 420 : 1100);
+
         var map = L.map(mapRef.current, {
           zoomControl: true,
           attributionControl: true,
           fadeAnimation: false,
-          zoomAnimation: false
+          zoomAnimation: false,
+          trackResize: false,
+          inertia: !lowPower,
+          maxZoom: tileCap
         });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
+          maxZoom: tileCap,
+          maxNativeZoom: 19,
           updateWhenIdle: true,
-          keepBuffer: 1,
+          updateWhenZooming: false,
+          keepBuffer: lowPower ? 0 : 1,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
-        var poly = L.polyline(loadState.track.latlngs, { color: '#7c3aed', weight: 4, opacity: 0.92 }).addTo(map);
-        map.fitBounds(poly.getBounds(), { padding: [18, 18] });
+        var poly = L.polyline(latlngsDraw, {
+          color: '#7c3aed',
+          weight: 4,
+          opacity: 0.92,
+          smoothFactor: lowPower ? 2 : 1
+        }).addTo(map);
+        map.fitBounds(poly.getBounds(), { padding: [18, 18], maxZoom: tileCap });
         mapInstRef.current = map;
         var t0 = setTimeout(function () {
           try {
@@ -413,7 +490,7 @@ function OpenRidingGpxCoursePanel(props) {
         if (typeof console !== 'undefined' && console.warn) console.warn('[OpenRiding GPX] map', e4);
       }
     },
-    [loadState.status, loadState.track]
+    [loadState.status, loadState.track, mapRemountKey]
   );
 
   useEffect(
@@ -438,6 +515,17 @@ function OpenRidingGpxCoursePanel(props) {
         }
         var xMax = pts[pts.length - 1] && pts[pts.length - 1].x != null ? Number(pts[pts.length - 1].x) : 0;
 
+        var lowPowerCh = openRidingPreferLowPowerMap();
+        var decimateChart = lowPowerCh || pts.length > 700;
+        var chartPlugins = { legend: { display: false } };
+        if (decimateChart) {
+          chartPlugins.decimation = {
+            enabled: true,
+            algorithm: 'lttb',
+            samples: lowPowerCh ? 320 : 480
+          };
+        }
+
         var ctx = chartRef.current.getContext('2d');
         chartInstRef.current = new Chart(ctx, {
           type: 'line',
@@ -449,7 +537,7 @@ function OpenRidingGpxCoursePanel(props) {
                 borderColor: '#7c3aed',
                 backgroundColor: 'rgba(124, 58, 237, 0.22)',
                 fill: true,
-                tension: 0.25,
+                tension: lowPowerCh ? 0.2 : 0.25,
                 pointRadius: 0,
                 borderWidth: 2
               }
@@ -463,7 +551,7 @@ function OpenRidingGpxCoursePanel(props) {
             layout: {
               padding: { right: 18, left: 2, top: 4, bottom: 2 }
             },
-            interaction: { mode: 'index', intersect: false },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
             scales: {
               x: {
                 type: 'linear',
@@ -502,7 +590,7 @@ function OpenRidingGpxCoursePanel(props) {
                 }
               }
             },
-            plugins: { legend: { display: false } }
+            plugins: chartPlugins
           }
         });
       } catch (e1) {
