@@ -6777,6 +6777,9 @@ function initializeCurrentScreen(screenId) {
       // 나의 기록 화면 진입 시: 사용자 FTP ≠ 동적 FTP일 때만 모달 표시 (10일 보이지 않음 체크 시 중단)
       // grade=1 관리자 포함, 의존성(getUserTrainingLogs·firestoreV9) 로드 대기 후 구동
       console.log('[MyCareer] initializeCurrentScreen myCareerScreen - 동적 FTP 체크 예약 (1초 후)');
+      if (typeof window.initMyCareerGridIcons === 'function') {
+        window.initMyCareerGridIcons();
+      }
       if (typeof window.checkAndShowDynamicFtpForMyCareer === 'function') {
         setTimeout(window.checkAndShowDynamicFtpForMyCareer, 1000);
       } else {
@@ -19240,4 +19243,38 @@ if (originalCleanupMobileDashboard) {
   };
 }
 
+/**
+ * 나의 기록 8버튼: 이미지 로드 완료 시 스켈레톤 제거·페이드인
+ */
+(function setupMyCareerGridIcons() {
+  function markReady(img) {
+    var btn = img.closest('.my-career-icon-btn');
+    if (btn) btn.classList.add('my-career-icon-ready');
+  }
+  function bind() {
+    var imgs = document.querySelectorAll('#myCareerScreen .my-career-btn-img');
+    for (var i = 0; i < imgs.length; i++) {
+      (function (img) {
+        if (img.dataset.myCareerIconBound === '1') return;
+        img.dataset.myCareerIconBound = '1';
+        if (img.complete && img.naturalWidth > 0) {
+          markReady(img);
+          return;
+        }
+        img.addEventListener('load', function () {
+          markReady(img);
+        }, { once: true });
+        img.addEventListener('error', function () {
+          markReady(img);
+        }, { once: true });
+      })(imgs[i]);
+    }
+  }
+  window.initMyCareerGridIcons = bind;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
+})();
 
