@@ -28,9 +28,81 @@ function getOpenRidingServiceFns() {
   };
 }
 
+/**
+ * window.KOREA_REGION_GROUPS 가 비었을 때(부트 전·캐시 등) 플랫 목록에서 시·도별 그룹 복원
+ * — 맞춤 필터는 반드시 시·도 / 구·군 2단 UI를 유지
+ */
+var KOREA_SIDO_CANONICAL_ORDER = [
+  '서울특별시',
+  '부산광역시',
+  '대구광역시',
+  '인천광역시',
+  '광주광역시',
+  '대전광역시',
+  '울산광역시',
+  '세종특별자치시',
+  '경기도',
+  '강원특별자치도',
+  '충청북도',
+  '충청남도',
+  '전북특별자치도',
+  '전라남도',
+  '경상북도',
+  '경상남도',
+  '제주특별자치도'
+];
+
+function buildKoreaRegionGroupsFromFlat(flat) {
+  if (!flat || !flat.length) return [];
+  var sortedSido = KOREA_SIDO_CANONICAL_ORDER.slice().sort(function (a, b) {
+    return b.length - a.length;
+  });
+  var bySido = {};
+  var fi;
+  for (fi = 0; fi < flat.length; fi++) {
+    var trimmed = String(flat[fi] || '').trim();
+    if (!trimmed) continue;
+    var si;
+    for (si = 0; si < sortedSido.length; si++) {
+      var s = sortedSido[si];
+      if (trimmed === s) {
+        bySido[s] = bySido[s] || [];
+        break;
+      }
+      var prefix = s + ' ';
+      if (trimmed.indexOf(prefix) === 0) {
+        var d = trimmed.slice(prefix.length).trim();
+        if (!d) break;
+        if (!bySido[s]) bySido[s] = [];
+        if (bySido[s].indexOf(d) < 0) bySido[s].push(d);
+        break;
+      }
+    }
+  }
+  var out = [];
+  var ci;
+  for (ci = 0; ci < KOREA_SIDO_CANONICAL_ORDER.length; ci++) {
+    var sido = KOREA_SIDO_CANONICAL_ORDER[ci];
+    if (!Object.prototype.hasOwnProperty.call(bySido, sido)) continue;
+    var districts = bySido[sido].slice().sort(function (a, b) {
+      return a.localeCompare(b, 'ko');
+    });
+    out.push({ sido: sido, districts: districts });
+  }
+  return out;
+}
+
+function getKoreaRegionGroupsResolved() {
+  var flat = typeof window !== 'undefined' ? window.KOREA_SIGUNGU_OPTIONS || [] : [];
+  var groups = typeof window !== 'undefined' ? window.KOREA_REGION_GROUPS : null;
+  if (groups && groups.length) return groups;
+  return buildKoreaRegionGroupsFromFlat(flat);
+}
+
 function getKoreaRegionOptions() {
   return {
     KOREA_SIGUNGU_OPTIONS: window.KOREA_SIGUNGU_OPTIONS || [],
+    KOREA_REGION_GROUPS: getKoreaRegionGroupsResolved(),
     RIDING_LEVEL_OPTIONS: window.RIDING_LEVEL_OPTIONS || []
   };
 }
@@ -906,11 +978,38 @@ function OpenRidingCalendarMain(props) {
 
   var _koOpts = getKoreaRegionOptions();
   var RIDING_LEVEL_OPTIONS = _koOpts.RIDING_LEVEL_OPTIONS;
-  var KOREA_SIGUNGU_OPTIONS_FILTER = _koOpts.KOREA_SIGUNGU_OPTIONS;
+  var KOREA_REGION_GROUPS_FILTER = _koOpts.KOREA_REGION_GROUPS;
 
-  var _regionPick = useState('');
-  var regionPick = _regionPick[0];
-  var setRegionPick = _regionPick[1];
+  var _filterSidoPick = useState('');
+  var filterSidoPick = _filterSidoPick[0];
+  var setFilterSidoPick = _filterSidoPick[1];
+  var _filterDistrictPick = useState('');
+  var filterDistrictPick = _filterDistrictPick[0];
+  var setFilterDistrictPick = _filterDistrictPick[1];
+
+  useEffect(
+    function () {
+      setFilterDistrictPick('');
+    },
+    [filterSidoPick]
+  );
+
+  var filterDistrictsForSido = useMemo(
+    function () {
+      var fn = typeof window !== 'undefined' ? window.getDistrictsForSido : null;
+      if (typeof fn === 'function') return fn(filterSidoPick);
+      var i;
+      for (i = 0; i < KOREA_REGION_GROUPS_FILTER.length; i++) {
+        if (KOREA_REGION_GROUPS_FILTER[i].sido === filterSidoPick) {
+          return Array.isArray(KOREA_REGION_GROUPS_FILTER[i].districts)
+            ? KOREA_REGION_GROUPS_FILTER[i].districts.slice()
+            : [];
+        }
+      }
+      return [];
+    },
+    [filterSidoPick, KOREA_REGION_GROUPS_FILTER]
+  );
 
   var _filterOpen = useState(false);
   var filterModalOpen = _filterOpen[0];
@@ -920,17 +1019,29 @@ function OpenRidingCalendarMain(props) {
   var emptyH = compact ? 'h-8' : 'h-10';
 
   function addRegionFromSelect() {
-    var t = String(regionPick || '').trim();
+    var sd = String(filterSidoPick || '').trim();
+    if (!sd) return;
+    var t = '';
+    if (!filterDistrictsForSido.length) {
+      t = sd;
+    } else {
+      var build = typeof window !== 'undefined' ? window.buildFullRegionLabel : null;
+      var di = String(filterDistrictPick || '').trim();
+      if (!di) return;
+      t = typeof build === 'function' ? build(sd, di) : sd + ' ' + di;
+    }
     if (!t) return;
     if (prefs.activeRegions.indexOf(t) >= 0) {
-      setRegionPick('');
+      setFilterSidoPick('');
+      setFilterDistrictPick('');
       return;
     }
     savePrefs({
       activeRegions: prefs.activeRegions.concat([t]),
       preferredLevels: prefs.preferredLevels
     });
-    setRegionPick('');
+    setFilterSidoPick('');
+    setFilterDistrictPick('');
   }
 
   function removeRegion(r) {
@@ -953,15 +1064,36 @@ function OpenRidingCalendarMain(props) {
       <div className="space-y-4 text-left">
         <div>
           <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap items-center" data-open-riding-label="활동지역-시도-구군-선택">
             <select
-              className="flex-1 min-w-[140px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
-              value={regionPick}
-              onChange={function (e) { setRegionPick(e.target.value); }}
+              className="flex-1 min-w-[120px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
+              aria-label="활동 지역 시·도"
+              value={filterSidoPick}
+              onChange={function (e) { setFilterSidoPick(e.target.value); }}
             >
-              <option value="">시·군·구 선택</option>
-              {KOREA_SIGUNGU_OPTIONS_FILTER.map(function (o) {
-                return <option key={o} value={o}>{o}</option>;
+              <option value="">시·도</option>
+              {KOREA_REGION_GROUPS_FILTER.map(function (g) {
+                return (
+                  <option key={g.sido} value={g.sido}>{g.sido}</option>
+                );
+              })}
+            </select>
+            <select
+              className="flex-1 min-w-[120px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
+              aria-label="활동 지역 구·군"
+              value={filterDistrictPick}
+              disabled={!filterSidoPick || !filterDistrictsForSido.length}
+              onChange={function (e) { setFilterDistrictPick(e.target.value); }}
+            >
+              <option value="">
+                {!filterSidoPick
+                  ? '시·도 먼저'
+                  : !filterDistrictsForSido.length
+                    ? '구·군 없음'
+                    : '구·군'}
+              </option>
+              {filterDistrictsForSido.map(function (d) {
+                return <option key={d} value={d}>{d}</option>;
               })}
             </select>
             <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
