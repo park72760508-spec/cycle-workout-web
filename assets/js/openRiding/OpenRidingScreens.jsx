@@ -65,6 +65,24 @@ function resolveOpenRidingFullRegionLabel(sido, districtPick, districtsForSido) 
   return typeof build === 'function' ? build(sd, di) : sd + ' ' + di;
 }
 
+/** 목록 카드용: "서울특별시 강남구" → "강남구". 구·군 없음(세종 등)이면 시·도만 */
+function formatOpenRidingRegionShort(regionRaw) {
+  var s = String(regionRaw || '').trim();
+  if (!s) return '-';
+  var groups = getKoreaRegionGroupsResolved();
+  var i;
+  for (i = 0; i < groups.length; i++) {
+    var sido = groups[i].sido;
+    if (s === sido) return sido;
+    var prefix = sido + ' ';
+    if (s.indexOf(prefix) === 0) {
+      var rest = s.slice(prefix.length).trim();
+      return rest || sido;
+    }
+  }
+  return s;
+}
+
 /** 상세 패널: 레벨명 뒤 항속(hint) 괄호 표기 */
 function formatOpenRidingLevelDetailValue(levelStr) {
   if (levelStr == null || String(levelStr).trim() === '') return '-';
@@ -184,7 +202,7 @@ function getRideDateSeoulYmd(ride) {
   return null;
 }
 
-/** 서울 기준 라이딩일 → M/D(요일) 예: 4/4(토) */
+/** 서울 기준 라이딩일 → M/D (요일) 예: 4/7 (화) */
 function formatRideDateMdDowSeoul(ride) {
   var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
   if (!ts) return '';
@@ -202,8 +220,32 @@ function formatRideDateMdDowSeoul(ride) {
     });
     var w = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', weekday: 'narrow' }).format(ts);
     if (!mo || !da) return '';
-    return mo + '/' + da + '(' + w + ')';
+    return mo + '/' + da + ' (' + w + ')';
   } catch (eFmt) {
+    return '';
+  }
+}
+
+/** YYYY-MM-DD(서울 정오) → M/D (요일) — 달력 선택일 제목 등 */
+function formatMdDowFromYmdSeoul(ymd) {
+  if (!ymd || String(ymd).trim().length < 8) return '';
+  try {
+    var ts = new Date(String(ymd).trim() + 'T12:00:00+09:00');
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul',
+      month: 'numeric',
+      day: 'numeric'
+    }).formatToParts(ts);
+    var mo = '';
+    var da = '';
+    parts.forEach(function (p) {
+      if (p.type === 'month') mo = p.value;
+      if (p.type === 'day') da = p.value;
+    });
+    var w = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', weekday: 'narrow' }).format(ts);
+    if (!mo || !da) return '';
+    return mo + '/' + da + ' (' + w + ')';
+  } catch (e0) {
     return '';
   }
 }
@@ -1258,6 +1300,8 @@ function OpenRidingCalendarMain(props) {
     var titleRowClass = 'font-medium text-sm flex items-center gap-1.5 min-w-0 ';
     if (isCancelled) {
       titleRowClass += isMine ? 'open-riding-list-title-cancelled-mine' : 'open-riding-list-title-cancelled';
+    } else if (isMine && ex.hostedListSection) {
+      titleRowClass += 'text-black';
     } else if (isMine) {
       titleRowClass += 'open-riding-list-title-mine';
     } else if (r.isPrivate) {
@@ -1271,13 +1315,10 @@ function OpenRidingCalendarMain(props) {
     if (ex.showRideDate) {
       dateLabel = useInviteHostedRow ? formatRideDateMdDowSeoul(r) : rideYmd && formatKoreanDateLabelFromYmd(rideYmd);
     }
-    var placeLabel = useInviteHostedRow
-      ? r.departureLocation != null && String(r.departureLocation).trim()
-        ? String(r.departureLocation).trim()
-        : '-'
-      : r.region != null && String(r.region).trim()
-        ? r.region
-        : '-';
+    var regionFull = r.region != null && String(r.region).trim() ? String(r.region).trim() : '';
+    var regionShort = formatOpenRidingRegionShort(regionFull);
+    var placeLabel = regionShort;
+    var regionTitleAttr = regionFull ? regionFull : undefined;
     return (
       <li key={r.id}>
         <button
@@ -1300,7 +1341,7 @@ function OpenRidingCalendarMain(props) {
                 {rideListMetaSep()}
               </>
             ) : null}
-            <span className={'shrink-0 min-w-0 ' + (useInviteHostedRow ? 'truncate max-w-[min(100%,12rem)]' : '')} title={useInviteHostedRow ? placeLabel : undefined}>
+            <span className={'shrink-0 min-w-0 ' + (useInviteHostedRow ? 'truncate max-w-[min(100%,12rem)]' : '')} title={regionTitleAttr}>
               {placeLabel}
             </span>
             {rideListMetaSep()}
@@ -1321,7 +1362,7 @@ function OpenRidingCalendarMain(props) {
     return (
       <section className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
         <h2 className="text-sm font-semibold text-slate-700 mb-2">
-          {selectedKey ? selectedKey + ' 라이딩' : '날짜를 선택하세요'}
+          {selectedKey ? formatMdDowFromYmdSeoul(selectedKey) || selectedKey : '날짜를 선택하세요'}
         </h2>
         {!selectedKey ? (
           <p className="text-sm text-slate-400">달력에서 날짜를 탭하면 목록이 표시됩니다.</p>
@@ -1364,7 +1405,7 @@ function OpenRidingCalendarMain(props) {
             프로필·계정에 등록된 전화번호로 초대 여부를 확인합니다. 연락처를 등록한 뒤 새로고침해 주세요.
           </p>
         ) : invitedRidesSorted.length === 0 ? (
-          <p className="text-sm text-slate-400">이번 달 초대받은 비공개 라이딩이 없습니다.</p>
+          <p className="text-sm text-slate-400">이번 달 초대받은 라이딩이 없습니다.</p>
         ) : (
           <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
             {invitedRidesSorted.map(function (r) {
@@ -1393,12 +1434,12 @@ function OpenRidingCalendarMain(props) {
             className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
             style={hostedTitlePillStyle}
           >
-            내가 올린 라이딩
+            내가 주최한 라이딩
           </span>
         </div>
         <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
           {myHostedRidesSorted.map(function (r) {
-            return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
+            return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true, hostedListSection: true });
           })}
         </ul>
       </section>
@@ -1415,17 +1456,17 @@ function OpenRidingCalendarMain(props) {
               type="button"
               className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap"
               onClick={function () { setFilterModalOpen(true); }}
-              aria-label="맞춤 필터 설정"
+              aria-label="맞춤 설정"
             >
-              맞춤 필터 (+)
+              맞춤 설정 (+)
             </button>
             <button
               type="button"
               className="open-riding-create-btn inline-flex items-center justify-center rounded-lg bg-violet-600 text-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold shadow hover:bg-violet-700 whitespace-nowrap"
               onClick={onOpenCreate}
-              aria-label="라이딩 생성"
+              aria-label="라이딩 주최"
             >
-              라이딩 생성 (+)
+              라이딩 주최 (+)
             </button>
           </div>
         </div>
@@ -1440,7 +1481,7 @@ function OpenRidingCalendarMain(props) {
           className="rounded-xl bg-violet-600 text-white px-4 py-2 text-sm font-medium shadow hover:bg-violet-700"
           onClick={onOpenCreate}
         >
-          라이딩 생성 (+)
+          라이딩 주최 (+)
         </button>
       </header>
       )}
@@ -1500,15 +1541,15 @@ function OpenRidingCalendarMain(props) {
           <div className="mt-2 flex flex-col gap-1.5 text-[11px] text-slate-600">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
-              <span className="text-slate-500">맞춤 필터 라이딩</span>
+              <span className="text-slate-500">참여 가능 라이딩</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
-              <span className="text-slate-500">내가 올린 라이딩</span>
+              <span className="text-slate-500">내가 주최한 라이딩</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block w-3 h-3 rounded-sm bg-slate-300/90 shrink-0 border border-slate-500/30" aria-hidden />
-              <span className="text-slate-500">맞춤 필터 외 라이딩</span>
+              <span className="text-slate-500">구경해 볼 라이딩</span>
             </div>
           </div>
         </section>
