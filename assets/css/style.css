@@ -1695,6 +1695,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* 나의 기록 8버튼: <picture> + 스켈레톤 (CLS 방지: 프레임 1:1, img intrinsic 256×256) */
+/* 흰 PNG 바탕이 버튼 하늘색과 어색하지 않도록 프레임에 동일 톤 베이스 + 아이콘 multiply 블렌드 */
 #myCareerScreen .my-career-icon-btn .my-career-btn-frame {
   position: relative;
   z-index: 2;
@@ -1706,6 +1707,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  isolation: isolate;
+  border-radius: 12px;
+  overflow: hidden;
+  background: radial-gradient(
+    110% 110% at 50% 35%,
+    rgba(186, 230, 253, 0.72) 0%,
+    rgba(135, 206, 235, 0.52) 45%,
+    rgba(120, 190, 225, 0.58) 100%
+  );
 }
 
 #myCareerScreen .my-career-btn-skeleton {
@@ -1745,6 +1755,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   object-fit: contain;
   opacity: 0;
   transition: opacity 0.28s ease;
+  /* 흰색(1,1,1)은 아래 베이스 색이 그대로 비치고, 아이콘 색만 곱해져 버튼 톤과 이질감 완화 */
+  mix-blend-mode: multiply;
 }
 
 #myCareerScreen .my-career-icon-ready .my-career-btn-img {
