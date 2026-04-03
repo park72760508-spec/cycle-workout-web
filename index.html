@@ -1729,6 +1729,9 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css" />
+  <!-- 나의 기록 8버튼: WebP 우선 로드 (스크립트로 WebP 생성 후 배포). 없으면 PNG만 로드됨 -->
+  <link rel="preload" as="image" type="image/webp" href="assets/img/RANKING1.webp" />
+  <link rel="preload" as="image" type="image/webp" href="assets/img/DASHBOARD.webp" />
   <link rel="stylesheet" href="assets/css/group-training.css" />
 
   <!-- 앱 전역설정 (실제 값은 config.local.js 에서 로드, Git 제외) -->
@@ -2646,14 +2649,78 @@
 
           <div class="connection-device-section basecamp-device-section">
             <div class="my-career-grid-8 mb-15">
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-ranking" id="btnCareerRanking" onclick="if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();" title="랭킹보드"></button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-dashboard" id="btnCareerDashboard" onclick="if (typeof showScreen === 'function') { showScreen('performanceDashboardScreen'); }" title="대시보드"></button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="라이딩 일지"></button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }" title="사용자 정보"></button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }" title="워크아웃"></button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('aiScheduleScreen'); if (typeof loadAIScheduleScreen === 'function') { setTimeout(loadAIScheduleScreen, 200); } }" title="훈련 스케줄"></button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-subscribe" id="btnCareerSubscribe" title="구독하기"></button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-settings" id="btnCareerLogo" onclick="if (typeof openSettingsModal === 'function') openSettingsModal();" title="환경설정"></button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-ranking my-career-icon-btn" id="btnCareerRanking" onclick="if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();" title="랭킹보드">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/RANKING1.webp" />
+                    <img class="my-career-btn-img" src="assets/img/RANKING1.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-dashboard my-career-icon-btn" id="btnCareerDashboard" onclick="if (typeof showScreen === 'function') { showScreen('performanceDashboardScreen'); }" title="대시보드">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/DASHBOARD.webp" />
+                    <img class="my-career-btn-img" src="assets/img/DASHBOARD.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-journal my-career-icon-btn" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }" title="라이딩 일지">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/LOGS.webp" />
+                    <img class="my-career-btn-img" src="assets/img/LOGS.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-profile my-career-icon-btn" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }" title="사용자 정보">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/INFO.webp" />
+                    <img class="my-career-btn-img" src="assets/img/INFO.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-workout my-career-icon-btn" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof workoutViewInit === 'function') { setTimeout(workoutViewInit, 150); } else if (typeof window.workoutViewInit === 'function') { setTimeout(window.workoutViewInit, 150); } }" title="워크아웃">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/WORKOUT.webp" />
+                    <img class="my-career-btn-img" src="assets/img/WORKOUT.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-schedule my-career-icon-btn" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('aiScheduleScreen'); if (typeof loadAIScheduleScreen === 'function') { setTimeout(loadAIScheduleScreen, 200); } }" title="훈련 스케줄">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/SCHEDULE.webp" />
+                    <img class="my-career-btn-img" src="assets/img/SCHEDULE.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-subscribe my-career-icon-btn" id="btnCareerSubscribe" title="구독하기">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/SUBSCRIBE.webp" />
+                    <img class="my-career-btn-img" src="assets/img/SUBSCRIBE.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career basecamp-btn-career-settings my-career-icon-btn" id="btnCareerLogo" onclick="if (typeof openSettingsModal === 'function') openSettingsModal();" title="환경설정">
+                <div class="my-career-btn-frame">
+                  <div class="my-career-btn-skeleton" aria-hidden="true"></div>
+                  <picture class="my-career-btn-picture">
+                    <source type="image/webp" srcset="assets/img/SETTINGS2.webp" />
+                    <img class="my-career-btn-img" src="assets/img/SETTINGS2.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
+                  </picture>
+                </div>
+              </button>
             </div>
           </div>
         </div>
