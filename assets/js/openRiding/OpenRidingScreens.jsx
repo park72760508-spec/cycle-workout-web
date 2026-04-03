@@ -1432,7 +1432,7 @@ function OpenRidingCalendarMain(props) {
       ) : (
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">오픈 라이딩방</h1>
+          <h1 className="open-riding-main-screen-title">라이딩 모임</h1>
           <p className="text-sm text-slate-500">지역·레벨 맞춤 모임 — {userLabel}</p>
         </div>
         <button
@@ -2870,7 +2870,7 @@ function OpenRidingRoomApp(props) {
   }
 
   var headerTitle =
-    view === 'create' ? '라이딩 생성' : view === 'edit' ? '라이딩 수정' : view === 'detail' ? '라이딩 상세' : '오픈 라이딩방';
+    view === 'create' ? '라이딩 생성' : view === 'edit' ? '라이딩 수정' : view === 'detail' ? '라이딩 상세' : '라이딩 모임';
 
   var inner = null;
   if (!firestore) {
@@ -2939,7 +2939,7 @@ function OpenRidingRoomApp(props) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h1 className="flex-1 text-center font-bold text-base text-gray-900 m-0" style={{ fontSize: '1.05rem' }}>
+        <h1 className="open-riding-screen-title flex-1 text-center m-0">
           {headerTitle}
         </h1>
         {view === 'detail' && detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
