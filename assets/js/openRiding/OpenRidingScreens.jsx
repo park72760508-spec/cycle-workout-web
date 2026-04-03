@@ -29,74 +29,20 @@ function getOpenRidingServiceFns() {
 }
 
 /**
- * window.KOREA_REGION_GROUPS 가 비었을 때(부트 전·캐시 등) 플랫 목록에서 시·도별 그룹 복원
- * — 맞춤 필터는 반드시 시·도 / 구·군 2단 UI를 유지
+ * 전국 시·도→구·군 목록: koreaRegions.js 의 KOREA_REGION_GROUPS 단일 소스
+ * — window.getKoreaRegionGroupsForUi() 우선(koreaRegions 부트), 없으면 window 백업
  */
-var KOREA_SIDO_CANONICAL_ORDER = [
-  '서울특별시',
-  '부산광역시',
-  '대구광역시',
-  '인천광역시',
-  '광주광역시',
-  '대전광역시',
-  '울산광역시',
-  '세종특별자치시',
-  '경기도',
-  '강원특별자치도',
-  '충청북도',
-  '충청남도',
-  '전북특별자치도',
-  '전라남도',
-  '경상북도',
-  '경상남도',
-  '제주특별자치도'
-];
-
-function buildKoreaRegionGroupsFromFlat(flat) {
-  if (!flat || !flat.length) return [];
-  var sortedSido = KOREA_SIDO_CANONICAL_ORDER.slice().sort(function (a, b) {
-    return b.length - a.length;
-  });
-  var bySido = {};
-  var fi;
-  for (fi = 0; fi < flat.length; fi++) {
-    var trimmed = String(flat[fi] || '').trim();
-    if (!trimmed) continue;
-    var si;
-    for (si = 0; si < sortedSido.length; si++) {
-      var s = sortedSido[si];
-      if (trimmed === s) {
-        bySido[s] = bySido[s] || [];
-        break;
-      }
-      var prefix = s + ' ';
-      if (trimmed.indexOf(prefix) === 0) {
-        var d = trimmed.slice(prefix.length).trim();
-        if (!d) break;
-        if (!bySido[s]) bySido[s] = [];
-        if (bySido[s].indexOf(d) < 0) bySido[s].push(d);
-        break;
-      }
-    }
-  }
-  var out = [];
-  var ci;
-  for (ci = 0; ci < KOREA_SIDO_CANONICAL_ORDER.length; ci++) {
-    var sido = KOREA_SIDO_CANONICAL_ORDER[ci];
-    if (!Object.prototype.hasOwnProperty.call(bySido, sido)) continue;
-    var districts = bySido[sido].slice().sort(function (a, b) {
-      return a.localeCompare(b, 'ko');
-    });
-    out.push({ sido: sido, districts: districts });
-  }
-  return out;
-}
-
 function getKoreaRegionGroupsResolved() {
-  var flat = typeof window !== 'undefined' ? window.KOREA_SIGUNGU_OPTIONS || [] : [];
+  var fn = typeof window !== 'undefined' ? window.getKoreaRegionGroupsForUi : null;
+  if (typeof fn === 'function') {
+    try {
+      var fromMod = fn();
+      if (fromMod && fromMod.length) return fromMod;
+    } catch (e0) {}
+  }
   var groups = typeof window !== 'undefined' ? window.KOREA_REGION_GROUPS : null;
   if (groups && groups.length) return groups;
-  return buildKoreaRegionGroupsFromFlat(flat);
+  return [];
 }
 
 function getKoreaRegionOptions() {
