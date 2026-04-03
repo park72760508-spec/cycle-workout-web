@@ -83,7 +83,7 @@ function formatOpenRidingRegionShort(regionRaw) {
   return s;
 }
 
-/** 상세 패널: 레벨명 뒤 항속(hint) 괄호 표기 */
+/** 상세 패널: 레벨명 뒤 항속(hint) 괄호 표기 — 값 열은 다른 statRow와 동일 폰트·크기 상속 */
 function formatOpenRidingLevelDetailValue(levelStr) {
   if (levelStr == null || String(levelStr).trim() === '') return '-';
   var s = String(levelStr).trim();
@@ -97,12 +97,7 @@ function formatOpenRidingLevelDetailValue(levelStr) {
     }
   }
   if (!hint) return s;
-  return (
-    <span className="text-[13px] leading-snug">
-      <span className="font-medium">{s}</span>
-      <span className="text-slate-600 font-normal"> ({hint})</span>
-    </span>
-  );
+  return s + ' (' + hint + ')';
 }
 
 /** 로그인·프로필 기준 방장명·연락처 (라이딩 생성·참가 시 표시 이름) */
