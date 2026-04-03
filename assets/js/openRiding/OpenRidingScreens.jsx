@@ -2177,7 +2177,7 @@ function OpenRidingCreateForm(props) {
             <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2">
               <p className="text-xs font-semibold text-slate-600 mb-2">초대 목록</p>
               {(form.invitePending || []).length === 0 ? (
-                <p className="text-xs text-slate-400 py-2">주소록에서 추가하거나, 행을 눌러 오른쪽으로 옮기세요.</p>
+                <p className="text-xs text-slate-400 py-2">주소록에서 추가하거나, 친구목록에서 추가하세요.</p>
               ) : (
                 <ul className="space-y-1 max-h-36 overflow-y-auto">
                   {(form.invitePending || []).map(function (row) {
@@ -2212,7 +2212,7 @@ function OpenRidingCreateForm(props) {
             <div className="min-w-0 rounded-lg border border-violet-200 bg-white p-2">
               <p className="text-xs font-semibold text-violet-800 mb-2">선택된 목록 ({(form.inviteSelected || []).length}명)</p>
               {(form.inviteSelected || []).length === 0 ? (
-                <p className="text-xs text-slate-400 py-2">비공개 모임에 초대할 사람을 왼쪽에서 탭해 추가하세요.</p>
+                <p className="text-xs text-slate-400 py-2">모임에 초대할 사람을 초대 목록에서 추가하세요</p>
               ) : (
                 <ul className="space-y-1 max-h-36 overflow-y-auto">
                   {(form.inviteSelected || []).map(function (row) {
