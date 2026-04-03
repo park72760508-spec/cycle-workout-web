@@ -107,6 +107,18 @@ function getKoreaRegionOptions() {
   };
 }
 
+/** 맞춤 필터·라이딩 생성 폼 공통: 시·도·구군 선택값 → 저장용 전체 문자열 */
+function resolveOpenRidingFullRegionLabel(sido, districtPick, districtsForSido) {
+  var sd = String(sido || '').trim();
+  if (!sd) return '';
+  var dList = districtsForSido != null && Array.isArray(districtsForSido) ? districtsForSido : [];
+  if (!dList.length) return sd;
+  var di = String(districtPick || '').trim();
+  if (!di) return '';
+  var build = typeof window !== 'undefined' ? window.buildFullRegionLabel : null;
+  return typeof build === 'function' ? build(sd, di) : sd + ' ' + di;
+}
+
 /** 상세 패널: 레벨명 뒤 항속(hint) 괄호 표기 */
 function formatOpenRidingLevelDetailValue(levelStr) {
   if (levelStr == null || String(levelStr).trim() === '') return '-';
@@ -978,7 +990,9 @@ function OpenRidingCalendarMain(props) {
 
   var _koOpts = getKoreaRegionOptions();
   var RIDING_LEVEL_OPTIONS = _koOpts.RIDING_LEVEL_OPTIONS;
-  var KOREA_REGION_GROUPS_FILTER = _koOpts.KOREA_REGION_GROUPS;
+  /** 부트·캐시 타이밍에도 최신 그룹을 읽기 위한 시그니처 */
+  var openRidingRegionDataSig =
+    getKoreaRegionGroupsResolved().length * 100000 + (window.KOREA_SIGUNGU_OPTIONS || []).length;
 
   var _filterSidoPick = useState('');
   var filterSidoPick = _filterSidoPick[0];
@@ -996,20 +1010,21 @@ function OpenRidingCalendarMain(props) {
 
   var filterDistrictsForSido = useMemo(
     function () {
+      var groups = getKoreaRegionGroupsResolved();
       var fn = typeof window !== 'undefined' ? window.getDistrictsForSido : null;
       if (typeof fn === 'function') return fn(filterSidoPick);
       var i;
-      for (i = 0; i < KOREA_REGION_GROUPS_FILTER.length; i++) {
-        if (KOREA_REGION_GROUPS_FILTER[i].sido === filterSidoPick) {
-          return Array.isArray(KOREA_REGION_GROUPS_FILTER[i].districts)
-            ? KOREA_REGION_GROUPS_FILTER[i].districts.slice()
-            : [];
+      for (i = 0; i < groups.length; i++) {
+        if (groups[i].sido === filterSidoPick) {
+          return Array.isArray(groups[i].districts) ? groups[i].districts.slice() : [];
         }
       }
       return [];
     },
-    [filterSidoPick, KOREA_REGION_GROUPS_FILTER]
+    [filterSidoPick, openRidingRegionDataSig]
   );
+
+  var koreaRegionGroupsForFilterUi = getKoreaRegionGroupsResolved();
 
   var _filterOpen = useState(false);
   var filterModalOpen = _filterOpen[0];
@@ -1019,17 +1034,7 @@ function OpenRidingCalendarMain(props) {
   var emptyH = compact ? 'h-8' : 'h-10';
 
   function addRegionFromSelect() {
-    var sd = String(filterSidoPick || '').trim();
-    if (!sd) return;
-    var t = '';
-    if (!filterDistrictsForSido.length) {
-      t = sd;
-    } else {
-      var build = typeof window !== 'undefined' ? window.buildFullRegionLabel : null;
-      var di = String(filterDistrictPick || '').trim();
-      if (!di) return;
-      t = typeof build === 'function' ? build(sd, di) : sd + ' ' + di;
-    }
+    var t = resolveOpenRidingFullRegionLabel(filterSidoPick, filterDistrictPick, filterDistrictsForSido);
     if (!t) return;
     if (prefs.activeRegions.indexOf(t) >= 0) {
       setFilterSidoPick('');
@@ -1072,7 +1077,7 @@ function OpenRidingCalendarMain(props) {
               onChange={function (e) { setFilterSidoPick(e.target.value); }}
             >
               <option value="">시·도</option>
-              {KOREA_REGION_GROUPS_FILTER.map(function (g) {
+              {koreaRegionGroupsForFilterUi.map(function (g) {
                 return (
                   <option key={g.sido} value={g.sido}>{g.sido}</option>
                 );
@@ -1375,7 +1380,6 @@ function OpenRidingCreateForm(props) {
   var fetchRideById = _svcForm.fetchRideById;
   var updateRideByHost = _svcForm.updateRideByHost;
   var _koForm = getKoreaRegionOptions();
-  var KOREA_SIGUNGU_OPTIONS = _koForm.KOREA_SIGUNGU_OPTIONS;
   var RIDING_LEVEL_OPTIONS = _koForm.RIDING_LEVEL_OPTIONS;
 
   var firestore = props.firestore;
@@ -1412,6 +1416,53 @@ function OpenRidingCreateForm(props) {
   var _busy = useState(false);
   var isBusy = _busy[0];
   var setBusy = _busy[1];
+
+  var _rideSido = useState('');
+  var rideFormSidoPick = _rideSido[0];
+  var setRideFormSidoPick = _rideSido[1];
+  var _rideGu = useState('');
+  var rideFormDistrictPick = _rideGu[0];
+  var setRideFormDistrictPick = _rideGu[1];
+
+  useEffect(
+    function () {
+      setRideFormDistrictPick('');
+    },
+    [rideFormSidoPick]
+  );
+
+  var openRidingRideFormRegionSig =
+    getKoreaRegionGroupsResolved().length * 100000 + (window.KOREA_SIGUNGU_OPTIONS || []).length;
+
+  var rideFormDistrictsForSido = useMemo(
+    function () {
+      var groups = getKoreaRegionGroupsResolved();
+      var fn = typeof window !== 'undefined' ? window.getDistrictsForSido : null;
+      if (typeof fn === 'function') return fn(rideFormSidoPick);
+      var ri;
+      for (ri = 0; ri < groups.length; ri++) {
+        if (groups[ri].sido === rideFormSidoPick) {
+          return Array.isArray(groups[ri].districts) ? groups[ri].districts.slice() : [];
+        }
+      }
+      return [];
+    },
+    [rideFormSidoPick, openRidingRideFormRegionSig]
+  );
+
+  var rideFormRegionGroupsUi = getKoreaRegionGroupsResolved();
+
+  function applyRideFormRegionFromPicker() {
+    var t = resolveOpenRidingFullRegionLabel(rideFormSidoPick, rideFormDistrictPick, rideFormDistrictsForSido);
+    if (!t) return;
+    set('region', t);
+    setRideFormSidoPick('');
+    setRideFormDistrictPick('');
+  }
+
+  function clearRideFormRegion() {
+    set('region', '');
+  }
 
   useEffect(function () {
     if (typeof window === 'undefined') return undefined;
@@ -1604,6 +1655,10 @@ function OpenRidingCreateForm(props) {
       if (typeof window !== 'undefined' && window.alert) window.alert('최대 인원을 1 이상 입력해 주세요.');
       return;
     }
+    if (!String(form.region || '').trim()) {
+      if (typeof window !== 'undefined' && window.alert) window.alert('지역을 시·도·구·군에서 선택한 뒤 「추가」로 넣어 주세요.');
+      return;
+    }
     setBusy(true);
     try {
       var gpxUrl = form.gpxUrlExisting != null ? form.gpxUrlExisting : null;
@@ -1673,12 +1728,63 @@ function OpenRidingCreateForm(props) {
       ) : null}
       <label className="block font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
 
-      <label className="block font-medium text-slate-700">지역
-        <select className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.region} onChange={function (e) { set('region', e.target.value); }} required>
-          <option value="">선택</option>
-          {KOREA_SIGUNGU_OPTIONS.map(function (o) { return <option key={o} value={o}>{o}</option>; })}
-        </select>
-      </label>
+      <div className="block font-medium text-slate-700">
+        <span className="block mb-1">지역</span>
+        <span className="text-xs font-normal text-slate-500 block mb-1">
+          시·도를 고른 뒤 구·군을 고르고 「추가」를 누르면 아래에 반영됩니다.
+        </span>
+        <div className="flex gap-1 flex-wrap items-center mt-1" data-open-riding-label="라이딩폼-지역-시도-구군">
+          <select
+            className="flex-1 min-w-[120px] border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+            aria-label="라이딩 지역 시·도"
+            value={rideFormSidoPick}
+            onChange={function (e) { setRideFormSidoPick(e.target.value); }}
+          >
+            <option value="">시·도</option>
+            {rideFormRegionGroupsUi.map(function (g) {
+              return <option key={g.sido} value={g.sido}>{g.sido}</option>;
+            })}
+          </select>
+          <select
+            className="flex-1 min-w-[120px] border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+            aria-label="라이딩 지역 구·군"
+            value={rideFormDistrictPick}
+            disabled={!rideFormSidoPick || !rideFormDistrictsForSido.length}
+            onChange={function (e) { setRideFormDistrictPick(e.target.value); }}
+          >
+            <option value="">
+              {!rideFormSidoPick
+                ? '시·도 먼저'
+                : !rideFormDistrictsForSido.length
+                  ? '구·군 없음'
+                  : '구·군'}
+            </option>
+            {rideFormDistrictsForSido.map(function (d) {
+              return <option key={d} value={d}>{d}</option>;
+            })}
+          </select>
+          <button
+            type="button"
+            className="rounded-lg bg-slate-800 text-white px-3 py-1.5 text-sm shrink-0"
+            onClick={applyRideFormRegionFromPicker}
+          >
+            추가
+          </button>
+        </div>
+        {String(form.region || '').trim() ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            <button
+              type="button"
+              className="text-xs bg-white border border-slate-200 rounded-full px-2 py-0.5 font-normal"
+              onClick={clearRideFormRegion}
+            >
+              {String(form.region).trim()} ×
+            </button>
+          </div>
+        ) : (
+          <p className="mt-1.5 text-xs text-amber-700/90">선택된 지역 없음 — 제출하려면 위에서 추가해 주세요.</p>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="min-w-0">
