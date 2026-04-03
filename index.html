@@ -7411,6 +7411,18 @@
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체순위 TOP10)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
     var stelvioBackToTopScrollHandler = null;
+    /** 랭킹보드 내부 스크롤 영역 맨 위로 (부드럽게) */
+    function stelvioScrollRankingBoardToTopSmooth() {
+      var s = document.getElementById('stelvioRankingScrollArea');
+      if (!s) return;
+      try {
+        s.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {
+        s.scrollTop = 0;
+      }
+    }
+    window.stelvioScrollRankingBoardToTopSmooth = stelvioScrollRankingBoardToTopSmooth;
+
     function stelvioResetRankingBoardFiltersToDefault() {
       stelvioRankingState.duration = 'tss';
       stelvioRankingState.gender = 'all';
@@ -7539,12 +7551,14 @@
       stelvioRankingState.period = val;
       var label = document.getElementById('stelvioPeriodLabel');
       if (label) label.textContent = val === 'yearly' ? '명예의 전당' : '월간';
+      stelvioScrollRankingBoardToTopSmooth();
       fetchStelvioPeakPowerRanking();
     }
     function stelvioOnGenderChange(val) {
       stelvioRankingState.gender = val;
       var label = document.getElementById('stelvioGenderLabel');
       if (label) label.textContent = val === 'M' ? '남성' : (val === 'F' ? '여성' : '전체');
+      stelvioScrollRankingBoardToTopSmooth();
       fetchStelvioPeakPowerRanking();
     }
     window.stelvioOnPeriodChange = stelvioOnPeriodChange;
@@ -7553,6 +7567,7 @@
       stelvioRankingState.activeCategory = val;
       var label = document.getElementById('stelvioCategoryLabel');
       if (label) label.textContent = STELVIO_CATEGORY_LABELS[val] || val;
+      stelvioScrollRankingBoardToTopSmooth();
       renderStelvioActiveCategory();
     }
     window.stelvioOnCategoryChange = stelvioOnCategoryChange;
@@ -7599,6 +7614,7 @@
           btn.classList.add('active');
           stelvioRankingState.duration = btn.getAttribute('data-duration');
           stelvioApplyDurationModeUi();
+          stelvioScrollRankingBoardToTopSmooth();
           fetchStelvioPeakPowerRanking();
         };
       });
@@ -7614,6 +7630,11 @@
       var content = document.getElementById('stelvioRankingContent');
       if (loading) loading.classList.remove('hidden');
       if (content) content.style.opacity = '0.5';
+      await new Promise(function (resolve) {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(resolve);
+        });
+      });
       var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
       var params = new URLSearchParams({
         period: stelvioRankingState.period,
