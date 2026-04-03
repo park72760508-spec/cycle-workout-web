@@ -1729,9 +1729,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css" />
-  <!-- 나의 기록 8버튼: WebP 우선 로드 (스크립트로 WebP 생성 후 배포). 없으면 PNG만 로드됨 -->
-  <link rel="preload" as="image" type="image/webp" href="assets/img/RANKING1.webp" />
-  <link rel="preload" as="image" type="image/webp" href="assets/img/DASHBOARD.webp" />
+  <!-- WebP를 assets/img에 배포한 뒤: 각 <picture> 안에 <source type="image/webp" srcset="..."> 추가 + (선택) 상단 preload 2개 -->
   <link rel="stylesheet" href="assets/css/group-training.css" />
 
   <!-- 앱 전역설정 (실제 값은 config.local.js 에서 로드, Git 제외) -->
@@ -2653,7 +2651,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/RANKING1.webp" />
                     <img class="my-career-btn-img" src="assets/img/RANKING1.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2662,7 +2659,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/DASHBOARD.webp" />
                     <img class="my-career-btn-img" src="assets/img/DASHBOARD.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2671,7 +2667,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/LOGS.webp" />
                     <img class="my-career-btn-img" src="assets/img/LOGS.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2680,7 +2675,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/INFO.webp" />
                     <img class="my-career-btn-img" src="assets/img/INFO.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2689,7 +2683,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/WORKOUT.webp" />
                     <img class="my-career-btn-img" src="assets/img/WORKOUT.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2698,7 +2691,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/SCHEDULE.webp" />
                     <img class="my-career-btn-img" src="assets/img/SCHEDULE.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2707,7 +2699,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/SUBSCRIBE.webp" />
                     <img class="my-career-btn-img" src="assets/img/SUBSCRIBE.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
@@ -2716,7 +2707,6 @@
                 <div class="my-career-btn-frame">
                   <div class="my-career-btn-skeleton" aria-hidden="true"></div>
                   <picture class="my-career-btn-picture">
-                    <source type="image/webp" srcset="assets/img/SETTINGS2.webp" />
                     <img class="my-career-btn-img" src="assets/img/SETTINGS2.png" alt="" width="256" height="256" decoding="async" fetchpriority="high" />
                   </picture>
                 </div>
