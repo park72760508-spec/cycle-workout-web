@@ -1293,8 +1293,13 @@ function OpenRidingCalendarMain(props) {
     var isCancelled = String(r.rideStatus || 'active') === 'cancelled';
     var isMine = !!(userId && String(r.hostUserId || '') === String(userId));
     var titleRowClass = 'font-medium text-sm flex items-center gap-1.5 min-w-0 ';
+    var hostedCancelledMine = !!(ex.hostedListSection && isMine && isCancelled);
     if (isCancelled) {
-      titleRowClass += isMine ? 'open-riding-list-title-cancelled-mine' : 'open-riding-list-title-cancelled';
+      titleRowClass += hostedCancelledMine
+        ? 'text-slate-600'
+        : isMine
+          ? 'open-riding-list-title-cancelled-mine'
+          : 'open-riding-list-title-cancelled';
     } else if (isMine && ex.hostedListSection) {
       titleRowClass += 'text-black';
     } else if (isMine) {
@@ -1329,7 +1334,12 @@ function OpenRidingCalendarMain(props) {
             ) : null}
             <span className="truncate">{r.title}</span>
           </div>
-          <div className={'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' + (isCancelled ? 'text-slate-400' : 'text-slate-600')}>
+          <div
+            className={
+              'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' +
+              (hostedCancelledMine ? 'text-slate-600' : isCancelled ? 'text-slate-400' : 'text-slate-600')
+            }
+          >
             {ex.showRideDate && dateLabel ? (
               <>
                 <span className={'shrink-0 ' + (useInviteHostedRow ? 'text-slate-600' : 'text-slate-500')}>{dateLabel}</span>
@@ -1346,7 +1356,14 @@ function OpenRidingCalendarMain(props) {
             {rideListMetaSep()}
             <span className="shrink-0">{rideDistanceKm(r)}</span>
             {rideListMetaSep()}
-            <span className={'font-semibold tabular-nums shrink-0 ' + (isCancelled ? 'text-slate-400' : 'text-violet-700')}>{rideParticipantRatio(r)}</span>
+            <span
+              className={
+                'font-semibold tabular-nums shrink-0 ' +
+                (hostedCancelledMine ? 'text-slate-600' : isCancelled ? 'text-slate-400' : 'text-violet-700')
+              }
+            >
+              {rideParticipantRatio(r)}
+            </span>
           </div>
         </button>
       </li>
