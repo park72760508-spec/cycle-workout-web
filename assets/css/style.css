@@ -1694,6 +1694,72 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   max-height: 100% !important;
 }
 
+/* 나의 기록 8버튼: <picture> + 스켈레톤 (CLS 방지: 프레임 1:1, img intrinsic 256×256) */
+#myCareerScreen .my-career-icon-btn .my-career-btn-frame {
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 70%;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#myCareerScreen .my-career-btn-skeleton {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 45%,
+    rgba(255, 255, 255, 0.06) 90%
+  );
+  background-size: 200% 100%;
+  animation: my-career-icon-skeleton 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+#myCareerScreen .my-career-icon-ready .my-career-btn-skeleton {
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  animation: none;
+}
+
+#myCareerScreen .my-career-btn-picture {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+#myCareerScreen .my-career-btn-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+
+#myCareerScreen .my-career-icon-ready .my-career-btn-img {
+  opacity: 1;
+}
+
+@keyframes my-career-icon-skeleton {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 .basecamp-btn-career span {
   display: none !important;
 }
@@ -1846,6 +1912,18 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 .basecamp-btn-career-settings {
   background-image: url('../img/SETTINGS2.png') !important;
   background-size: 70% !important;
+}
+
+/* 나의 기록 화면은 배경 PNG 제거 — WebP/PNG는 마크업 <picture>에서만 로드 */
+#myCareerScreen .basecamp-btn-career-workout,
+#myCareerScreen .basecamp-btn-career-journal,
+#myCareerScreen .basecamp-btn-career-schedule,
+#myCareerScreen .basecamp-btn-career-dashboard,
+#myCareerScreen .basecamp-btn-career-profile,
+#myCareerScreen .basecamp-btn-career-subscribe,
+#myCareerScreen .basecamp-btn-career-ranking,
+#myCareerScreen .basecamp-btn-career-settings {
+  background-image: none !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
