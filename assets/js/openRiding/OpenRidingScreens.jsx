@@ -184,6 +184,30 @@ function getRideDateSeoulYmd(ride) {
   return null;
 }
 
+/** 서울 기준 라이딩일 → M/D(요일) 예: 4/4(토) */
+function formatRideDateMdDowSeoul(ride) {
+  var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  if (!ts) return '';
+  try {
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul',
+      month: 'numeric',
+      day: 'numeric'
+    }).formatToParts(ts);
+    var mo = '';
+    var da = '';
+    parts.forEach(function (p) {
+      if (p.type === 'month') mo = p.value;
+      if (p.type === 'day') da = p.value;
+    });
+    var w = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', weekday: 'narrow' }).format(ts);
+    if (!mo || !da) return '';
+    return mo + '/' + da + '(' + w + ')';
+  } catch (eFmt) {
+    return '';
+  }
+}
+
 /** 월간 목록: 일시 오름차순 정렬 */
 function sortOpenRidingListByDateTime(rides) {
   return rides.slice().sort(function (a, b) {
@@ -1242,7 +1266,18 @@ function OpenRidingCalendarMain(props) {
       titleRowClass += 'text-slate-800';
     }
     var rideYmd = getRideDateSeoulYmd(r);
-    var dateLabel = rideYmd && formatKoreanDateLabelFromYmd(rideYmd);
+    var useInviteHostedRow = !!ex.compactInviteOrHostedList;
+    var dateLabel = '';
+    if (ex.showRideDate) {
+      dateLabel = useInviteHostedRow ? formatRideDateMdDowSeoul(r) : rideYmd && formatKoreanDateLabelFromYmd(rideYmd);
+    }
+    var placeLabel = useInviteHostedRow
+      ? r.departureLocation != null && String(r.departureLocation).trim()
+        ? String(r.departureLocation).trim()
+        : '-'
+      : r.region != null && String(r.region).trim()
+        ? r.region
+        : '-';
     return (
       <li key={r.id}>
         <button
@@ -1261,11 +1296,13 @@ function OpenRidingCalendarMain(props) {
           <div className={'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' + (isCancelled ? 'text-slate-400' : 'text-slate-600')}>
             {ex.showRideDate && dateLabel ? (
               <>
-                <span className="shrink-0 text-slate-500">{dateLabel}</span>
+                <span className={'shrink-0 ' + (useInviteHostedRow ? 'text-slate-600' : 'text-slate-500')}>{dateLabel}</span>
                 {rideListMetaSep()}
               </>
             ) : null}
-            <span className="shrink-0">{r.region != null && String(r.region).trim() ? r.region : '-'}</span>
+            <span className={'shrink-0 min-w-0 ' + (useInviteHostedRow ? 'truncate max-w-[min(100%,12rem)]' : '')} title={useInviteHostedRow ? placeLabel : undefined}>
+              {placeLabel}
+            </span>
             {rideListMetaSep()}
             <span className="shrink-0">{r.level != null && String(r.level).trim() ? r.level : '-'}</span>
             {rideListMetaSep()}
@@ -1302,11 +1339,24 @@ function OpenRidingCalendarMain(props) {
   }
 
   function renderInvitedRidesCompactSection() {
+    var invitedTitlePillStyle = {
+      borderColor: 'rgba(22, 101, 52, 0.38)',
+      color: '#166534',
+      background: 'rgba(34, 197, 94, 0.12)'
+    };
     return (
       <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-invited-rides-panel" aria-labelledby="open-riding-invited-heading">
-        <h2 id="open-riding-invited-heading" className="text-sm font-semibold text-slate-700 mb-2">
-          초대받은 라이딩
-        </h2>
+        <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+          <span
+            id="open-riding-invited-heading"
+            role="heading"
+            aria-level={2}
+            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
+            style={invitedTitlePillStyle}
+          >
+            초대받은 라이딩
+          </span>
+        </div>
         {!userId ? (
           <p className="text-sm text-slate-400">로그인 후 비공개 라이딩 초대 목록을 확인할 수 있습니다.</p>
         ) : !String(inviteCheckPhone || '').trim() ? (
@@ -1318,7 +1368,7 @@ function OpenRidingCalendarMain(props) {
         ) : (
           <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
             {invitedRidesSorted.map(function (r) {
-              return renderMonthRideListRow(r, { showRideDate: true });
+              return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
             })}
           </ul>
         )}
@@ -1328,14 +1378,27 @@ function OpenRidingCalendarMain(props) {
 
   function renderMyHostedRidesCompactSection() {
     if (!myHostedRidesSorted.length) return null;
+    var hostedTitlePillStyle = {
+      borderColor: 'rgba(109, 40, 217, 0.4)',
+      color: '#5b21b6',
+      background: 'rgba(139, 92, 246, 0.12)'
+    };
     return (
       <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-my-hosted-panel" aria-labelledby="open-riding-my-hosted-heading">
-        <h2 id="open-riding-my-hosted-heading" className="text-sm font-semibold text-slate-700 mb-2">
-          내가 올린 라이딩
-        </h2>
+        <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+          <span
+            id="open-riding-my-hosted-heading"
+            role="heading"
+            aria-level={2}
+            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
+            style={hostedTitlePillStyle}
+          >
+            내가 올린 라이딩
+          </span>
+        </div>
         <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
           {myHostedRidesSorted.map(function (r) {
-            return renderMonthRideListRow(r, { showRideDate: true });
+            return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
           })}
         </ul>
       </section>
