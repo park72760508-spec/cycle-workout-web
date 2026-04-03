@@ -2280,9 +2280,12 @@ function OpenRidingCreateForm(props) {
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
-        {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
-      </button>
+      {/* Safe Area + 터치 타깃: 라이딩 생성/수정 폼 하단 제출 */}
+      <div className="open-riding-bottom-actions">
+        <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
+          {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
+        </button>
+      </div>
 
       {dateModalOpen ? (
         <div
@@ -2464,15 +2467,18 @@ function OpenRidingDetail(props) {
         <p className="text-sm text-slate-600 leading-relaxed m-0">
           라이딩을 찾을 수 없거나 삭제되었습니다.
         </p>
-        <button
-          type="button"
-          className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
-          onClick={function () {
-            if (typeof onBack === 'function') onBack();
-          }}
-        >
-          목록으로
-        </button>
+        {/* Safe Area: 하단 버튼이 홈 인디케이터·시스템 제스처와 겹치지 않도록 */}
+        <div className="open-riding-bottom-actions flex justify-center">
+          <button
+            type="button"
+            className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
+            onClick={function () {
+              if (typeof onBack === 'function') onBack();
+            }}
+          >
+            목록으로
+          </button>
+        </div>
       </div>
     );
   }
@@ -2693,46 +2699,34 @@ function OpenRidingDetail(props) {
               />
             </label>
           ) : null}
-          <div className="flex gap-2">
-            {role ? (
-              <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
-                참석 취소
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
-                disabled={isActionBusy || !userId || !joinInviteOk}
-                title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
-                onClick={function () {
-                  if (!joinInviteOk) return;
-                  setJoinShareModalOpen(true);
-                }}
-              >
-                {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
-              </button>
-            )}
+          {/* Safe Area: iOS/Android 홈 인디케이터 영역과 하단 CTA가 겹치지 않도록 패딩 */}
+          <div className="open-riding-bottom-actions">
+            <div className="flex gap-2">
+              {role ? (
+                <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
+                  참석 취소
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
+                  disabled={isActionBusy || !userId || !joinInviteOk}
+                  title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
+                  onClick={function () {
+                    if (!joinInviteOk) return;
+                    setJoinShareModalOpen(true);
+                  }}
+                >
+                  {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
+                </button>
+              )}
+            </div>
           </div>
           {isPrivateRide && !isHost && !role && !joinInviteOk ? (
             <p className="text-xs text-amber-800 text-center leading-snug px-1">
               초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
             </p>
           ) : null}
-          {/* 하단 탭·홈 인디케이터와 겹침 완화 + 브랜딩 — 이미지 높이 = 참석 버튼(h-11)의 2배 */}
-          <div
-            className="flex justify-center items-center pt-3 pb-8 mt-1 pointer-events-none select-none"
-            aria-hidden="true"
-          >
-            <img
-              src="assets/img/STELVIO AI.png"
-              alt=""
-              width={512}
-              height={512}
-              decoding="async"
-              className="w-auto max-w-[min(200px,55vw)] object-contain object-center"
-              style={{ height: '5.5rem' }}
-            />
-          </div>
         </div>
       ) : null}
 
