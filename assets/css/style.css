@@ -960,6 +960,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
+/* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
+#openRidingRoomScreen .open-riding-app-body::before,
+#openRidingRoomScreen .open-riding-app-body::after {
+  pointer-events: none !important;
+}
+
 /* 레이아웃 전용 루트: 하단 CTA(z-index 높음)보다 아래 스택에 고정해 보이지 않는 형제 레이어가 버튼을 덮지 않게 함 */
 #openRidingRoomScreen .open-riding-detail-content-root,
 #openRidingRoomScreen .open-riding-create-form-root {
@@ -967,15 +973,23 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·참석 신청 동일 터치 높이 (비대칭 padding 금지 → 문구 아래 빈 줄 현상 방지) */
+/* 생성·참석 신청 동일 터치 높이 (비대칭 padding 금지 → 문구 아래 빈 줄 현상 방지) + Safari GPU 레이어·네이티브 스타일 간섭 차단 */
 #openRidingRoomScreen .open-riding-action-btn {
   box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
   position: relative;
   z-index: 10;
   min-width: 48px;
   min-height: 48px;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /*
@@ -989,11 +1003,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 /*
  * 2) Safe Area: 하단 버튼 래퍼 — OS 홈 인디케이터·스와이프 제스처와 겹치지 않게 여백 확보
  * 3) Stacking: 스크롤 래퍼·본문 장식보다 항상 위에 오도록 최상단 z-index
+ * 4) isolation: isolate — 독립 스태킹 컨텍스트로 외부 GPU/오버레이가 CTA 내부를 덮지 않도록 강제
  */
 #openRidingRoomScreen .open-riding-bottom-actions {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   position: relative;
   z-index: 9999;
+  isolation: isolate;
 }
 
 /* 하단 CTA 가로 정렬 행: 스택 순서만 지정(레이아웃용 flex) */
