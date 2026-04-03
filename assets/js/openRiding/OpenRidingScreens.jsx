@@ -1911,8 +1911,9 @@ function OpenRidingCreateForm(props) {
     return <div className="py-12 text-center text-sm text-slate-500">불러오는 중…</div>;
   }
 
+  /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 폼 루트는 입력·스크롤 레이어(z-0), 하단 CTA(.open-riding-bottom-actions)만 z-9999로 위에 올림 — 장식·패널이 버튼을 덮지 않도록 */
   return (
-    <form className="w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700" onSubmit={submit}>
+    <form className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit}>
       {!storage ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
@@ -2556,8 +2557,9 @@ function OpenRidingDetail(props) {
     );
   }
 
+  /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 상세 본문 루트는 z-0, 하단 참석 CTA는 .open-riding-bottom-actions(z-9999)로만 최상단 */
   return (
-    <div className="max-w-lg mx-auto py-2 space-y-4 w-full">
+    <div className="open-riding-detail-content-root max-w-lg mx-auto py-2 space-y-4 w-full relative z-0">
       {isCancelled ? (
         <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2">
           이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
@@ -2701,7 +2703,7 @@ function OpenRidingDetail(props) {
           ) : null}
           {/* Safe Area: iOS/Android 홈 인디케이터 영역과 하단 CTA가 겹치지 않도록 패딩 */}
           <div className="open-riding-bottom-actions">
-            <div className="flex gap-2">
+            <div className="open-riding-bottom-actions-row flex gap-2">
               {role ? (
                 <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
                   참석 취소
@@ -2919,8 +2921,9 @@ function OpenRidingRoomApp(props) {
     );
   }
 
+  /* 🚀 투명 레이어 클릭 가로채기 원천 차단: style.css에서 #openRidingRoomScreen.screen.active 이중 스크롤 제거. 본문(#open-riding-app-body)만 세로 스크롤·z-0 */
   return (
-    <div className="open-riding-app-root">
+    <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
         <button
           type="button"
