@@ -948,7 +948,40 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  position: relative;
+  z-index: 1;
 }
+
+/*
+ * 1) Safe Area: 하단 버튼 래퍼 — OS 홈 인디케이터·스와이프 제스처와 겹치지 않게 여백 확보
+ *    (iPhone 노치·안드로이드 내비게이션 바 등 env(safe-area-inset-bottom) 반영)
+ */
+#openRidingRoomScreen .open-riding-bottom-actions {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  position: relative;
+  z-index: 2;
+}
+
+/*
+ * 2) 히트 영역 확장: 시각적 크기(h-11·padding 등)는 유지하고, 터치 인식 영역은 최소 48×48px 이상.
+ *    ::before 가상 박스가 버튼 박스와 동일 또는 더 크게 잡히도록 max(100%, 48px) 사용 (가로 넓은 flex-1 버튼 포함)
+ */
+#openRidingRoomScreen button.open-riding-action-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 48px);
+  height: max(100%, 48px);
+  min-width: 48px;
+  min-height: 48px;
+  box-sizing: border-box;
+  pointer-events: auto;
+  z-index: 0;
+  background: transparent;
+}
+
 #openRidingRoomScreen .open-riding-create-submit {
   margin-top: 1rem;
   cursor: pointer;
