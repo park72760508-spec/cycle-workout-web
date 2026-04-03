@@ -2288,6 +2288,21 @@ function OpenRidingDetail(props) {
               초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
             </p>
           ) : null}
+          {/* 하단 탭·홈 인디케이터와 겹침 완화 + 브랜딩 — 이미지 높이 = 참석 버튼(h-11)의 2배 */}
+          <div
+            className="flex justify-center items-center pt-3 pb-8 mt-1 pointer-events-none select-none"
+            aria-hidden="true"
+          >
+            <img
+              src="assets/img/STELVIO AI.png"
+              alt=""
+              width={512}
+              height={512}
+              decoding="async"
+              className="w-auto max-w-[min(200px,55vw)] object-contain object-center"
+              style={{ height: '5.5rem' }}
+            />
+          </div>
         </div>
       ) : null}
 
