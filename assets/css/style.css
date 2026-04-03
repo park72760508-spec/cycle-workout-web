@@ -885,6 +885,14 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
   background: #fff;
 }
+
+/* 🚀 투명 레이어 클릭 가로채기 원천 차단: 전역 .screen.active가 overflow-y:auto!important로 화면 전체를 스크롤 영역으로 만들면 .open-riding-app-body와 이중 스크롤·히트 검사가 겹쳐 버튼 중앙만 클릭이 비는 증상이 날 수 있음 → 이 화면만 바깥 스크롤 차단, 내부 본문만 스크롤 */
+#openRidingRoomScreen.screen.active {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
 #openRidingRoomScreen .open-riding-react-root {
   flex: 1;
   min-height: 0;
@@ -917,6 +925,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background: #fff;
   border-bottom: 1px solid #e5e7eb;
   box-sizing: border-box;
+  position: relative;
+  z-index: 3;
+}
+
+/* 🚀 투명 레이어 클릭 가로채기 원천 차단: 헤더 자리만 맞추는 빈 span은 터치를 가로채지 않도록 */
+#openRidingRoomScreen .open-riding-inner-header > span[aria-hidden='true'] {
+  pointer-events: none;
 }
 
 /* 라이딩 일지 화면 .header h1 과 동일: font-size 1.8em · font-weight bold · 시스템 폰트 상속 */
@@ -941,6 +956,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  position: relative;
+  z-index: 0;
+}
+
+/* 레이아웃 전용 루트: 하단 CTA(z-index 높음)보다 아래 스택에 고정해 보이지 않는 형제 레이어가 버튼을 덮지 않게 함 */
+#openRidingRoomScreen .open-riding-detail-content-root,
+#openRidingRoomScreen .open-riding-create-form-root {
+  position: relative;
+  z-index: 0;
 }
 
 /* 생성·참석 신청 동일 터치 높이 (비대칭 padding 금지 → 문구 아래 빈 줄 현상 방지) */
@@ -949,37 +973,33 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   position: relative;
-  z-index: 1;
+  z-index: 10;
+  min-width: 48px;
+  min-height: 48px;
 }
 
 /*
- * 1) Safe Area: 하단 버튼 래퍼 — OS 홈 인디케이터·스와이프 제스처와 겹치지 않게 여백 확보
- *    (iPhone 노치·안드로이드 내비게이션 바 등 env(safe-area-inset-bottom) 반영)
+ * 1) Ghost Target 방지: span/svg/img 등 자식이 별도 히트 박스로 이벤트를 가로채지 않음 — 클릭은 button 요소만 수신
+ *    (::before 히트 확장은 투명 레이어가 중앙 클릭을 삼키는 브라우저 이슈가 있어 제거, min 크기로 대체)
+ */
+#openRidingRoomScreen button.open-riding-action-btn > * {
+  pointer-events: none;
+}
+
+/*
+ * 2) Safe Area: 하단 버튼 래퍼 — OS 홈 인디케이터·스와이프 제스처와 겹치지 않게 여백 확보
+ * 3) Stacking: 스크롤 래퍼·본문 장식보다 항상 위에 오도록 최상단 z-index
  */
 #openRidingRoomScreen .open-riding-bottom-actions {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   position: relative;
-  z-index: 2;
+  z-index: 9999;
 }
 
-/*
- * 2) 히트 영역 확장: 시각적 크기(h-11·padding 등)는 유지하고, 터치 인식 영역은 최소 48×48px 이상.
- *    ::before 가상 박스가 버튼 박스와 동일 또는 더 크게 잡히도록 max(100%, 48px) 사용 (가로 넓은 flex-1 버튼 포함)
- */
-#openRidingRoomScreen button.open-riding-action-btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: max(100%, 48px);
-  height: max(100%, 48px);
-  min-width: 48px;
-  min-height: 48px;
-  box-sizing: border-box;
-  pointer-events: auto;
-  z-index: 0;
-  background: transparent;
+/* 하단 CTA 가로 정렬 행: 스택 순서만 지정(레이아웃용 flex) */
+#openRidingRoomScreen .open-riding-bottom-actions-row {
+  position: relative;
+  z-index: 1;
 }
 
 #openRidingRoomScreen .open-riding-create-submit {
@@ -1056,6 +1076,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   height: 100%;
   border-radius: 12px;
   font-family: inherit;
+}
+/* 🚀 투명 레이어 클릭 가로채기 원천 차단: 지도·차트 블록을 본문 스택(z-0)에 묶어 폼 하단 CTA보다 위로 새지 않게 함 */
+#openRidingRoomScreen .open-riding-gpx-panel {
+  position: relative;
+  z-index: 0;
 }
 #openRidingRoomScreen .open-riding-detail-title-cancelled {
   color: #fca5a5 !important;
