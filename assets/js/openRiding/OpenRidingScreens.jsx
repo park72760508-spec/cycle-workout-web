@@ -1346,7 +1346,7 @@ function OpenRidingCalendarMain(props) {
     };
     return (
       <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-invited-rides-panel" aria-labelledby="open-riding-invited-heading">
-        <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+        <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
             id="open-riding-invited-heading"
             role="heading"
@@ -1385,7 +1385,7 @@ function OpenRidingCalendarMain(props) {
     };
     return (
       <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-my-hosted-panel" aria-labelledby="open-riding-my-hosted-heading">
-        <div className="flex items-center justify-end gap-2 mb-2 flex-wrap">
+        <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
             id="open-riding-my-hosted-heading"
             role="heading"
