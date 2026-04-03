@@ -919,6 +919,24 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
 }
 
+/* 라이딩 일지 화면 .header h1 과 동일: font-size 1.8em · font-weight bold · 시스템 폰트 상속 */
+#openRidingRoomScreen .open-riding-inner-header .open-riding-screen-title {
+  font-size: 1.8em;
+  font-weight: bold;
+  line-height: 1.2;
+  font-family: inherit;
+  color: #111827;
+}
+
+#openRidingRoomScreen .open-riding-main-screen-title {
+  font-size: 1.8em;
+  font-weight: bold;
+  line-height: 1.2;
+  font-family: inherit;
+  color: #1e293b;
+  margin: 0;
+}
+
 #openRidingRoomScreen .open-riding-app-body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
