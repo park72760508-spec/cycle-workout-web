@@ -3405,7 +3405,7 @@ function OpenRidingDetail(props) {
                 {detailLevelPeakHint && detailLevelPeakHint.soloSpeedKmh > 0 ? (
                   <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-left">
                     <p className="m-0 font-semibold">
-                      평지 개인 평속 (60분 피크 투입)
+                      나의 평지 항속 능력(60분 파워 기준)
                       {!detailLevelPeakHint.usedPeak ? (
                         <span className="font-normal text-emerald-800/95"> — 프로필 FTP 반영</span>
                       ) : null}
@@ -3417,7 +3417,7 @@ function OpenRidingDetail(props) {
                     <p className="m-0 text-emerald-900">
                       {detailLevelPeakHint.maxGoLevel ? (
                         <>
-                          최대 참석 가능 레벨:{' '}
+                          나의 레벨:{' '}
                           <strong className="text-emerald-950">{detailLevelPeakHint.maxGoLevel}</strong>
                         </>
                       ) : detailLevelPeakHint.maxCautionLevel ? (
