@@ -1399,9 +1399,9 @@ function OpenRidingCalendarMain(props) {
       <div className="space-y-4 text-left">
         <div>
           <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
-          <div className="flex gap-1 flex-wrap items-stretch" data-open-riding-label="활동지역-시도-구군-선택">
+          <div className="flex gap-1 flex-wrap items-center" data-open-riding-label="활동지역-시도-구군-선택">
             <select
-              className="flex-1 min-w-[120px] h-9 min-h-9 box-border rounded-lg border border-slate-200 px-2 py-0 text-sm bg-white leading-normal"
+              className="flex-1 min-w-[120px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
               aria-label="활동 지역 시·도"
               value={filterSidoPick}
               onChange={function (e) { setFilterSidoPick(e.target.value); }}
@@ -1414,7 +1414,7 @@ function OpenRidingCalendarMain(props) {
               })}
             </select>
             <select
-              className="flex-1 min-w-[120px] h-9 min-h-9 box-border rounded-lg border border-slate-200 px-2 py-0 text-sm bg-white leading-normal"
+              className="flex-1 min-w-[120px] rounded-lg border border-slate-200 px-2 py-1 text-sm bg-white"
               aria-label="활동 지역 구·군"
               value={filterDistrictPick}
               disabled={!filterSidoPick || !filterDistrictsForSido.length}
@@ -1431,13 +1431,7 @@ function OpenRidingCalendarMain(props) {
                 return <option key={d} value={d}>{d}</option>;
               })}
             </select>
-            <button
-              type="button"
-              className="open-riding-action-btn inline-flex items-center justify-center shrink-0 h-9 min-h-9 box-border rounded-lg bg-violet-600 text-white text-sm font-semibold px-3 py-0 shadow-[0_2px_8px_rgba(102,126,234,0.35)] hover:bg-violet-700 active:translate-y-px transition-colors leading-none"
-              onClick={addRegionFromSelect}
-            >
-              추가
-            </button>
+            <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
           </div>
           <ul className="mt-2 flex flex-wrap gap-1">
             {prefs.activeRegions.map(function (r) {
