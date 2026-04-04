@@ -960,6 +960,66 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
+/* 생성·수정·상세: 하단 고정 CTA 높이만큼 스크롤 여백 (로고 16px + 여백 + 버튼 44px + 패딩 + safe-area) */
+#openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+
+/* 하단 고정바: 헤더와 동일하게 흰 배경·상단 보더, 뷰포트 하단 고정 (max-width는 앱 루트와 정렬) */
+#openRidingRoomScreen .open-riding-bottom-fixed-shell {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  z-index: 10000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.07);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  isolation: isolate;
+  touch-action: manipulation;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+#openRidingRoomScreen .open-riding-bottom-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px 10px 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#openRidingRoomScreen .open-riding-bottom-brand-logo {
+  height: 16px;
+  width: auto;
+  max-width: min(200px, 85vw);
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  opacity: 0.95;
+}
+
+#openRidingRoomScreen .open-riding-bottom-fixed-shell .open-riding-bottom-actions {
+  position: relative;
+  z-index: 1;
+  padding: 6px 10px 8px;
+  padding-bottom: 8px;
+}
+
 /* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
 #openRidingRoomScreen .open-riding-app-body::before,
 #openRidingRoomScreen .open-riding-app-body::after {
@@ -1021,6 +1081,10 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #openRidingRoomScreen .open-riding-create-submit {
   margin-top: 1rem;
   cursor: pointer;
+}
+
+#openRidingRoomScreen .open-riding-bottom-fixed-shell .open-riding-create-submit {
+  margin-top: 0;
 }
 
 /* 라이딩 상세: 랭킹/주간 TSS 패널 느낌의 보라 톤 스탯 행 */
