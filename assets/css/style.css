@@ -294,7 +294,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen) {
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#authScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -10680,33 +10680,43 @@ html.is-android #trainingDetailModal .training-detail-body {
 ========================================================== */
 
 /* display에 !important 사용 시 JS로 display:none 해도 CSS가 덮어써서 인증 화면이 사라지지 않음 → !important 제거 */
+/* 공통 .screen.active(position:fixed·상단 패딩만 강조)에서 제외 — 본 블록에서 뷰포트 채움 + 세로·가로 중앙 정렬 */
 #authScreen {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
-  /* 화면 확장: iOS/Bluefy 하단 회색 바 제거 */
-  min-height: 100vh;
-  min-height: 100dvh;
-  min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
-  min-height: -webkit-fill-available;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  padding-top: max(20px, env(safe-area-inset-top, 0px));
-  padding-bottom: 0 !important; /* 하단 패딩 영역 제거 */
   box-sizing: border-box;
-}
-/* 인증 화면 활성 시: 메인 블럭을 화면 정중앙(상하좌우)에 배치 */
-#authScreen.active {
-  display: flex !important; /* JS 인라인 display:block 덮어써서 세로 중앙 정렬 유지 */
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   min-height: 100dvh;
-  min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
   min-height: -webkit-fill-available;
+  padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px)) 20px;
+}
+/* 인증 화면 활성 시: 뷰포트 고정 + 콘텐츠 블록 세로 중앙(JS가 display:block 넣어도 flex 유지) */
+#authScreen.active,
+#authScreen.screen.active {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  min-height: -webkit-fill-available !important;
   height: var(--vvh, 100dvh) !important;
-  height: 100dvh !important;
+  max-height: var(--vvh, 100dvh) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px)) 20px !important;
+  box-sizing: border-box !important;
 }
 
 .auth-main-container {
