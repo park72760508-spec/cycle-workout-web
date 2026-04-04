@@ -960,9 +960,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·수정·상세: 고정 로고바 실제 높이(로고 + 최소 상단 여유) + safe-area — 로고 아래 불필요 패딩 없음 */
+/* 생성·수정·상세: 고정 로고바 높이만큼 스크롤 여백 — safe-area 미가산 */
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 36px;
   box-sizing: border-box;
 }
 
@@ -984,9 +984,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background: #fff;
   border-top: 1px solid #e5e7eb;
   box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.07);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
   isolation: isolate;
   touch-action: manipulation;
   -webkit-transform: translateZ(0);
@@ -1018,7 +1015,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 0.95;
 }
 
-/* 로고 전용 고정바 minimal: 로고 아래 패딩 없음 — safe-area는 shell padding-bottom만 */
+/* 로고 전용 고정바 minimal: 로고 아래·safe-area 추가 패딩 없음 */
 #openRidingRoomScreen .open-riding-bottom-logo-bar.open-riding-bottom-fixed-shell {
   box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.05);
   padding-top: 0;
