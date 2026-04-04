@@ -819,7 +819,12 @@ function applyInitialAuthRouting() {
     const authScreen = document.getElementById('authScreen');
     if (authScreen) {
       authScreen.classList.add('active');
-      authScreen.style.setProperty('display', 'block', 'important');
+      authScreen.style.removeProperty('position');
+      authScreen.style.removeProperty('z-index');
+      authScreen.style.setProperty('display', 'flex', 'important');
+      authScreen.style.setProperty('flex-direction', 'column', 'important');
+      authScreen.style.setProperty('justify-content', 'center', 'important');
+      authScreen.style.setProperty('align-items', 'center', 'important');
       authScreen.style.setProperty('opacity', '1', 'important');
       authScreen.style.setProperty('visibility', 'visible', 'important');
     }
@@ -874,7 +879,12 @@ function showAuthScreen() {
   const authScreen = document.getElementById('authScreen');
   if (authScreen) {
     authScreen.classList.add('active');
-    authScreen.style.setProperty('display', 'block', 'important');
+    authScreen.style.removeProperty('position');
+    authScreen.style.removeProperty('z-index');
+    authScreen.style.setProperty('display', 'flex', 'important');
+    authScreen.style.setProperty('flex-direction', 'column', 'important');
+    authScreen.style.setProperty('justify-content', 'center', 'important');
+    authScreen.style.setProperty('align-items', 'center', 'important');
     authScreen.style.setProperty('opacity', '1', 'important');
     authScreen.style.setProperty('visibility', 'visible', 'important');
     /* body 스크롤 잠금 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤 */
@@ -6684,11 +6694,18 @@ window.showScreen = function(screenId) {
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
     // flex 레이아웃이 필요한 화면 (Coach 대시보드, 모바일 대시보드, 워크아웃 화면)
-    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'openRidingRoomScreen'];
+    const flexScreens = ['mobileDashboardScreen', 'workoutScreen', 'bluetoothTrainingCoachScreen', 'stelvioRankingScreen', 'openRidingRoomScreen', 'authScreen'];
     targetScreen.style.display = flexScreens.includes(screenId) ? 'flex' : 'block';
     targetScreen.classList.add('active');
     targetScreen.style.opacity = '1';
     targetScreen.style.visibility = 'visible';
+    if (screenId === 'authScreen') {
+      targetScreen.style.removeProperty('position');
+      targetScreen.style.removeProperty('z-index');
+      targetScreen.style.setProperty('flex-direction', 'column', 'important');
+      targetScreen.style.setProperty('justify-content', 'center', 'important');
+      targetScreen.style.setProperty('align-items', 'center', 'important');
+    }
 
     // bluetoothTrainingCoachScreen: 고정 위치·z-index로 화면 전체 덮기 (흰 화면 방지)
     if (screenId === 'bluetoothTrainingCoachScreen') {
@@ -7736,7 +7753,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // authScreen만 표시
     const authScreen = document.getElementById('authScreen');
     if (authScreen) {
-      authScreen.style.display = 'block';
+      authScreen.style.removeProperty('position');
+      authScreen.style.removeProperty('z-index');
+      authScreen.style.setProperty('display', 'flex', 'important');
+      authScreen.style.setProperty('flex-direction', 'column', 'important');
+      authScreen.style.setProperty('justify-content', 'center', 'important');
+      authScreen.style.setProperty('align-items', 'center', 'important');
       authScreen.classList.add('active');
       authScreen.style.opacity = '1';
       authScreen.style.visibility = 'visible';
