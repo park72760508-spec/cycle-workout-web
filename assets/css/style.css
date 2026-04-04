@@ -1155,6 +1155,28 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   line-height: 1.45;
 }
 
+/* 초대 명단: 일시~내 상태와 동일 값 타이포(12px·line-height 1.3·500). 이름 색만 기본값, (참석)/(미응답) 색은 JSX에서 유지 */
+#openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-invite-list {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 500;
+  color: #334155;
+}
+#openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-invite-list > li {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+}
+#openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-invite-list .open-riding-detail-invite-name {
+  color: #334155;
+  font-weight: 500;
+}
+#openRidingRoomScreen .open-riding-detail-stat-row:not(:first-child) .open-riding-detail-invite-list .open-riding-detail-invite-status {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: 500;
+}
+
 /* 맞춤 필터: 평지 개인 평속(60분 피크) — 현실 지표 강조(주황 톤) */
 #openRidingRoomScreen .open-riding-filter-realistic-solo-highlight {
   border-color: rgba(234, 88, 12, 0.55) !important;
