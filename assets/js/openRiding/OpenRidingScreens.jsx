@@ -1578,29 +1578,55 @@ function OpenRidingCalendarMain(props) {
 
         <div>
           <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
-          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5 space-y-1">
-            <p className="text-[10px] font-semibold text-slate-600 m-0">모임 기준 평균속도 (참고)</p>
-            {RIDING_LEVEL_OPTIONS.map(function (opt) {
-              return (
-                <p key={'legend-' + opt.value} className="text-[11px] text-slate-600 m-0 leading-snug pl-0.5">
-                  <span className="font-semibold text-slate-800">{opt.value}</span>
-                  <span className="text-slate-500"> ({opt.hint})</span>
-                </p>
-              );
-            })}
-          </div>
           {RIDING_LEVEL_OPTIONS.map(function (opt) {
             var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
+            var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
+            var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
+            var clsFn =
+              typeof window !== 'undefined' && typeof window.classifyOpenRidingParticipation === 'function'
+                ? window.classifyOpenRidingParticipation
+                : null;
+            var part =
+              clsFn && prof.ok && wLv > 0 ? clsFn(powLv, wLv, opt.value) : null;
+            var badgeCls =
+              part && part.tier === 'go'
+                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300/90'
+                : part && part.tier === 'caution'
+                  ? 'bg-orange-50 text-orange-900 border border-orange-200/90'
+                  : part && part.tier === 'stop'
+                    ? 'bg-red-50 text-red-800 border border-red-200/90'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200';
+            var badgeTitle = part
+              ? part.comment
+              : !prof.ok
+                ? 'FTP·체중을 입력하면 60분 피크(있으면)·없으면 FTP 기준으로 참석 판정이 표시됩니다.'
+                : '';
             return (
-              <label key={opt.value} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="open-riding-filter-level-checkbox h-4 w-4 shrink-0 rounded border-slate-300 accent-violet-600 focus:ring-2 focus:ring-violet-500/35 focus:ring-offset-0 cursor-pointer"
-                  checked={on}
-                  onChange={function () { toggleLevel(opt.value); }}
-                />
-                {opt.value} <span className="text-xs text-slate-400">({opt.hint})</span>
-              </label>
+              <div
+                key={opt.value}
+                className="flex items-center justify-between gap-2 text-sm py-1 pr-0.5"
+              >
+                <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
+                  <input
+                    type="checkbox"
+                    className="open-riding-filter-level-checkbox h-4 w-4 shrink-0 rounded border-slate-300 accent-violet-600 focus:ring-2 focus:ring-violet-500/35 focus:ring-offset-0 cursor-pointer"
+                    checked={on}
+                    onChange={function () { toggleLevel(opt.value); }}
+                  />
+                  <span className="min-w-0">
+                    {opt.value}{' '}
+                    <span className="text-xs text-slate-400">({opt.hint})</span>
+                  </span>
+                </label>
+                <span
+                  className={
+                    'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums ' + badgeCls
+                  }
+                  title={badgeTitle}
+                >
+                  {part ? part.label : '—'}
+                </span>
+              </div>
             );
           })}
         </div>
