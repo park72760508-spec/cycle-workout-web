@@ -1237,7 +1237,9 @@ function OpenRidingCalendarMain(props) {
     byCategory: null,
     entries: null,
     currentUser: null,
-    myRankSupremo: null
+    myRankSupremo: null,
+    startStr: null,
+    endStr: null
   });
   var openRidingFilterRankDist = _rankFetch[0];
   var setOpenRidingFilterRankDist = _rankFetch[1];
@@ -1281,7 +1283,9 @@ function OpenRidingCalendarMain(props) {
               byCategory: null,
               entries: null,
               currentUser: null,
-              myRankSupremo: null
+              myRankSupremo: null,
+              startStr: null,
+              endStr: null
             });
             return;
           }
@@ -1292,7 +1296,9 @@ function OpenRidingCalendarMain(props) {
             byCategory: data.byCategory,
             entries: merged,
             currentUser: data.currentUser || null,
-            myRankSupremo: data.myRankSupremo || null
+            myRankSupremo: data.myRankSupremo || null,
+            startStr: data.startStr != null ? String(data.startStr) : null,
+            endStr: data.endStr != null ? String(data.endStr) : null
           });
         })
         .catch(function () {
@@ -1303,7 +1309,9 @@ function OpenRidingCalendarMain(props) {
               byCategory: null,
               entries: null,
               currentUser: null,
-              myRankSupremo: null
+              myRankSupremo: null,
+              startStr: null,
+              endStr: null
             });
           }
         });
@@ -1362,6 +1370,31 @@ function OpenRidingCalendarMain(props) {
       typeof window !== 'undefined' ? window.StelvioRankingDistributionChart : null;
     var baseStats = prof.ok && ev ? ev(prof.ftp, prof.weight, 0) : null;
 
+    var rankPeakEntry = null;
+    if (openRidingFilterRankDist.entries && userId) {
+      var uidPeak = String(userId);
+      var pi;
+      for (pi = 0; pi < openRidingFilterRankDist.entries.length; pi++) {
+        if (openRidingFilterRankDist.entries[pi].userId === uidPeak) {
+          rankPeakEntry = openRidingFilterRankDist.entries[pi];
+          break;
+        }
+      }
+    }
+    var cuRank = openRidingFilterRankDist.currentUser || rankPeakEntry;
+    var peak60Watts = cuRank && Number(cuRank.watts) > 0 ? Number(cuRank.watts) : 0;
+    var peakWeightKg =
+      cuRank && Number(cuRank.weightKg) > 0 ? Number(cuRank.weightKg) : prof.ok ? prof.weight : 0;
+    var realisticStats =
+      prof.ok && ev && peak60Watts > 0 && peakWeightKg > 0 ? ev(peak60Watts, peakWeightKg, 0) : null;
+    var rangePeak =
+      openRidingFilterRankDist.startStr && openRidingFilterRankDist.endStr
+        ? openRidingFilterRankDist.startStr + ' ~ ' + openRidingFilterRankDist.endStr
+        : '';
+    var chartRefWkg = realisticStats ? realisticStats.wkg : baseStats ? baseStats.wkg : null;
+    var chartRefBadgeTitle = realisticStats ? '나의 60분' : '나의 FTP';
+    var chartRefValueNote = realisticStats ? ' (최근 30일)' : ' (프로필)';
+
     return (
       <div className="space-y-4 text-left">
         <div>
@@ -1416,17 +1449,18 @@ function OpenRidingCalendarMain(props) {
         <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-semibold text-violet-900">나의 항속 능력 레벨</span>
-            <span className="text-[10px] text-slate-500 leading-tight">
-              프로필 FTP·체중 기준 · 팩 드래프팅 1.2×
+            <span className="text-[10px] text-slate-500 leading-tight text-right">
+              최대 능력치: 프로필 FTP·체중 · 현실 지표: 최근 30일 60분 최고 평균 파워 · 팩 1.2×
             </span>
           </div>
           {!prof.ok ? (
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
               프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 평지 개인 평속·예상 그룹 평속과 관심 레벨별
-              참가 난이도를 안내합니다.
+              참가 난이도를 안내합니다. 60분 피크·분포는 훈련 로그가 반영된 뒤 랭킹과 동일하게 표시됩니다.
             </p>
           ) : (
             <>
+              <p className="text-[10px] font-semibold text-violet-800 m-0">최대 능력치 (프로필 FTP·체중)</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5">
                   <div className="text-slate-500 text-[10px]">FTP</div>
@@ -1455,14 +1489,57 @@ function OpenRidingCalendarMain(props) {
                   </div>
                 </div>
               </div>
+
+              <p className="text-[10px] font-semibold text-slate-800 m-0 pt-1 border-t border-violet-100/80">
+                현실 지표 (최근 30일 · 60분 최대 평균 파워·체중, 랭킹보드와 동일 산출)
+                {rangePeak ? (
+                  <span className="font-normal text-slate-500"> · {rangePeak}</span>
+                ) : null}
+              </p>
+              {realisticStats ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5">
+                    <div className="text-slate-500 text-[10px]">60분 최고 평균 파워</div>
+                    <div className="font-semibold text-slate-800 tabular-nums">{peak60Watts} W</div>
+                  </div>
+                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5">
+                    <div className="text-slate-500 text-[10px]">체중 (랭킹 산출)</div>
+                    <div className="font-semibold text-slate-800 tabular-nums">{peakWeightKg} kg</div>
+                  </div>
+                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-1">
+                    <div className="text-slate-500 text-[10px]">W/kg (60분 피크)</div>
+                    <div className="font-semibold text-indigo-700 tabular-nums">
+                      {realisticStats.wkg.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3">
+                    <div className="text-slate-500 text-[10px]">평지 개인 평속 (60분 피크 투입)</div>
+                    <div className="font-semibold text-slate-800 tabular-nums">
+                      {realisticStats.soloSpeed + ' km/h'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3">
+                    <div className="text-slate-500 text-[10px]">예상 그룹 평속 (×1.2)</div>
+                    <div className="font-semibold text-slate-800 tabular-nums">
+                      {realisticStats.estimatedGroupSpeed + ' km/h'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 m-0 leading-snug">
+                  이 구간에 반영된 60분 최고 평균 파워 기록이 없거나, 아직 랭킹 데이터에 포함되지 않았습니다.
+                  라이딩 로그를 동기화한 뒤 맞춤 설정을 다시 여세요.
+                </p>
+              )}
               <p className="text-[10px] text-slate-500 m-0 leading-snug">
-                관심 레벨의 항속 구간 상한을 기준으로 참가 여부를 참고하세요. 실제 지형·바람·페이스에 따라 달라질 수 있습니다.
+                관심 레벨 참고는 <strong className="text-slate-600">60분 피크가 있으면 그 값</strong>으로, 없으면 FTP로 계산합니다.
               </p>
               <ul className="space-y-1.5 m-0 p-0 list-none border-t border-violet-100/80 pt-2">
                 {RIDING_LEVEL_OPTIONS.map(function (opt) {
                   var tkm = tgtSpd ? tgtSpd(opt.value) : null;
-                  var row =
-                    ev && tkm != null && prof.ok ? ev(prof.ftp, prof.weight, tkm) : null;
+                  var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
+                  var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
+                  var row = ev && tkm != null && prof.ok && wLv > 0 ? ev(powLv, wLv, tkm) : null;
                   return (
                     <li
                       key={opt.value}
@@ -1514,11 +1591,14 @@ function OpenRidingCalendarMain(props) {
               currentUserId={userId || ''}
               currentUser={openRidingFilterRankDist.currentUser}
               myRankSupremo={openRidingFilterRankDist.myRankSupremo}
-              overrideMyWkg={prof.ok && baseStats ? baseStats.wkg : null}
-              titleOverride="전체 사용자 W/kg 분포"
-              pillLabelOverride="전체 · 60분 (랭킹 코호트)"
+              overrideMyWkg={chartRefWkg != null ? chartRefWkg : null}
+              overrideReferenceBadgeTitle={chartRefBadgeTitle}
+              overrideReferenceValueNote={chartRefValueNote}
+              titleOverride="전체 사용자 60분 W/kg 분포"
+              pillLabelOverride="전체 · 60분 W/kg · 최근 30일"
               chartSubNoteOverride={
-                '랭킹보드와 동일한 참가자 밀도 그래프입니다. 세로 점선은 프로필 FTP 기준 W/kg 위치입니다.'
+                '훈련 로그 기준 최근 30일(서울) 내 60분 최대 평균 파워로 산출한 W/kg 분포입니다. ' +
+                '세로 점선은 본인의 동일 기준 W/kg(없으면 FTP W/kg)입니다.'
               }
             />
           ) : (
