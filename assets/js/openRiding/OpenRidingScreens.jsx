@@ -982,13 +982,13 @@ function parseHmFromDeparture(s) {
 }
 
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
-/** 생성·수정·상세: 하단 고정바(스텔비오 로고 + CTA) — 스크롤 레이어와 분리해 터치 인식 안정화 */
-function OpenRidingBottomFixedBar(props) {
+/** 하단 뷰포트 고정: 스텔비오 로고만 (CTA는 본문 흐름의 open-riding-bottom-actions 유지) */
+function OpenRidingBottomLogoBar() {
   return (
-    <div className="open-riding-bottom-fixed-shell">
+    <div className="open-riding-bottom-fixed-shell open-riding-bottom-logo-bar">
       <div className="open-riding-bottom-brand" aria-hidden="true">
         <img
-          src="assets/img/STELVIO%20AI.png"
+          src="assets/img/STELVIO AI.png"
           alt=""
           className="open-riding-bottom-brand-logo"
           width={140}
@@ -996,7 +996,6 @@ function OpenRidingBottomFixedBar(props) {
           decoding="async"
         />
       </div>
-      <div className="open-riding-bottom-actions">{props.children}</div>
     </div>
   );
 }
@@ -2411,12 +2410,13 @@ function OpenRidingCreateForm(props) {
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      {/* 하단 고정바: style.css .open-riding-bottom-fixed-shell */}
-      <OpenRidingBottomFixedBar>
+      {/* Safe Area + 터치 타깃: 하단 CTA — style.css isolation+z-9999 */}
+      <div className="open-riding-bottom-actions">
         <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
           {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
         </button>
-      </OpenRidingBottomFixedBar>
+      </div>
+      <OpenRidingBottomLogoBar />
 
       {dateModalOpen ? (
         <div
@@ -2637,19 +2637,18 @@ function OpenRidingDetail(props) {
         <p className="text-sm text-slate-600 leading-relaxed m-0">
           라이딩을 찾을 수 없거나 삭제되었습니다.
         </p>
-        <OpenRidingBottomFixedBar>
-          <div className="flex justify-center">
-            <button
-              type="button"
-              className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
-              onClick={function () {
-                if (typeof onBack === 'function') onBack();
-              }}
-            >
-              목록으로
-            </button>
-          </div>
-        </OpenRidingBottomFixedBar>
+        <div className="open-riding-bottom-actions flex justify-center">
+          <button
+            type="button"
+            className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
+            onClick={function () {
+              if (typeof onBack === 'function') onBack();
+            }}
+          >
+            목록으로
+          </button>
+        </div>
+        <OpenRidingBottomLogoBar />
       </div>
     );
   }
@@ -2876,7 +2875,7 @@ function OpenRidingDetail(props) {
               초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
             </p>
           ) : null}
-          <OpenRidingBottomFixedBar>
+          <div className="open-riding-bottom-actions">
             <div className="open-riding-bottom-actions-row flex gap-2">
               {role ? (
                 <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
@@ -2897,7 +2896,8 @@ function OpenRidingDetail(props) {
                 </button>
               )}
             </div>
-          </OpenRidingBottomFixedBar>
+          </div>
+          <OpenRidingBottomLogoBar />
         </div>
       ) : null}
 
