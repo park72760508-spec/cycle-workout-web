@@ -962,7 +962,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /* 생성·수정·상세: 고정 로고바 높이만큼 스크롤 여백 — safe-area 미가산 */
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: 36px;
+  padding-bottom: 54px;
   box-sizing: border-box;
 }
 
@@ -997,16 +997,16 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 2px 8px 0;
+  padding: 3px 12px 0;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
 #openRidingRoomScreen .open-riding-bottom-brand-logo {
-  height: 32px;
+  height: 48px;
   width: auto;
-  max-width: min(400px, 90vw);
+  max-width: min(600px, 90vw);
   margin-left: auto;
   margin-right: auto;
   object-fit: contain;
