@@ -2028,20 +2028,26 @@ function OpenRidingCalendarMain(props) {
   return (
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
       {compact ? (
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-xs font-medium text-slate-800 min-w-0 flex-1 truncate">{userLabel}</span>
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
+        <div className="grid grid-cols-3 items-center gap-x-1 sm:gap-x-2 w-full min-w-0">
+          <div className="flex justify-start items-center min-w-0">
             <button
               type="button"
-              className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap"
+              className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap max-w-full"
               onClick={onOpenFilterPage}
               aria-label="맞춤 설정"
             >
               맞춤 설정 (+)
             </button>
+          </div>
+          <div className="flex justify-center items-center min-w-0 px-0.5">
+            <span className="text-xs font-medium text-slate-800 truncate text-center block w-full" title={userLabel}>
+              {userLabel}
+            </span>
+          </div>
+          <div className="flex justify-end items-center min-w-0">
             <button
               type="button"
-              className="open-riding-create-btn inline-flex items-center justify-center rounded-lg bg-violet-600 text-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold shadow hover:bg-violet-700 whitespace-nowrap"
+              className="open-riding-create-btn inline-flex items-center justify-center rounded-lg bg-violet-600 text-white px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold shadow hover:bg-violet-700 whitespace-nowrap max-w-full"
               onClick={onOpenCreate}
               aria-label="라이딩 주최"
             >
