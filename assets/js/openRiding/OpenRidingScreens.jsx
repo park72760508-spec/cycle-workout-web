@@ -1060,7 +1060,8 @@ function OpenRidingCalendarMain(props) {
       if (!uid || !phone) return [];
       var list = ridesMonth.filter(function (r) {
         if (String(r.hostUserId || '') === uid) return false;
-        if (!r.isPrivate) return false;
+        var il = Array.isArray(r.invitedList) ? r.invitedList : [];
+        if (!il.length) return false;
         return isInv(phone, r.invitedList);
       });
       return sortOpenRidingListByDateTime(list);
@@ -1929,7 +1930,7 @@ function OpenRidingCreateForm(props) {
           region: form.region,
           gpxUrl: gpxUrl,
           isPrivate: !!form.isPrivate,
-          invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : [],
+          invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
           rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
         });
         onEditSaved();
@@ -1951,7 +1952,7 @@ function OpenRidingCreateForm(props) {
         region: form.region,
         gpxUrl: gpxUrl,
         isPrivate: !!form.isPrivate,
-        invitedList: form.isPrivate ? (form.inviteSelected || []).map(function (x) { return x.phone; }) : [],
+        invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
         rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
       });
       onCreated(rideId);
@@ -2126,7 +2127,7 @@ function OpenRidingCreateForm(props) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-        <span className="block font-medium text-slate-700">라이딩 벙 공개/비공개 설정</span>
+        <span className="block font-medium text-slate-700">라이딩 모임 공개/비공개 설정</span>
         <div className="device-connection-switch-container flex flex-col items-stretch sm:items-center">
           <div
             role="switch"
@@ -2140,8 +2141,6 @@ function OpenRidingCreateForm(props) {
                 for (var k in f) n[k] = f[k];
                 n.isPrivate = next;
                 if (!next) {
-                  n.invitePending = [];
-                  n.inviteSelected = [];
                   n.rideJoinPassword = '';
                 }
                 return n;
@@ -2163,114 +2162,130 @@ function OpenRidingCreateForm(props) {
         </div>
       </div>
 
-      {form.isPrivate ? (
-        <div className="rounded-xl border border-violet-200/80 bg-violet-50/40 p-3 space-y-3">
-          <h3 className="text-sm font-semibold text-violet-900">친구 초대 목록</h3>
-          <button
-            type="button"
-            className="w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
-            onClick={openRidingBridgeOpenAddressBook}
-          >
-            주소록에서 초대하기
-          </button>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2">
-              <p className="text-xs font-semibold text-slate-600 mb-2">초대 목록</p>
-              {(form.invitePending || []).length === 0 ? (
-                <p className="text-xs text-slate-400 py-2">주소록에서 추가하거나, 친구목록에서 추가하세요.</p>
-              ) : (
-                <ul className="space-y-1 max-h-36 overflow-y-auto">
-                  {(form.invitePending || []).map(function (row) {
-                    return (
-                      <li key={row.key}>
-                        <button
-                          type="button"
-                          className="w-full text-left rounded-md px-2 py-1.5 text-sm bg-slate-50 hover:bg-violet-100 border border-transparent hover:border-violet-200"
-                          onClick={function () {
-                            setForm(function (f) {
-                              var pend = (f.invitePending || []).filter(function (p) { return p.key !== row.key; });
-                              var picked = (f.invitePending || []).filter(function (p) { return p.key === row.key; })[0];
-                              var sel = (f.inviteSelected || []).slice();
-                              if (picked && !sel.some(function (s) { return s.key === row.key; })) sel.push(picked);
-                              var n = {};
-                              for (var k in f) n[k] = f[k];
-                              n.invitePending = pend;
-                              n.inviteSelected = sel;
-                              return n;
-                            });
-                          }}
-                        >
-                          <span className="font-medium text-slate-800">{row.name}</span>
-                          <span className="block text-xs text-slate-500">{row.phone}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-            <div className="min-w-0 rounded-lg border border-violet-200 bg-white p-2">
-              <p className="text-xs font-semibold text-violet-800 mb-2">선택된 목록 ({(form.inviteSelected || []).length}명)</p>
-              {(form.inviteSelected || []).length === 0 ? (
-                <p className="text-xs text-slate-400 py-2">모임에 초대할 사람을 초대 목록에서 추가하세요</p>
-              ) : (
-                <ul className="space-y-1 max-h-36 overflow-y-auto">
-                  {(form.inviteSelected || []).map(function (row) {
-                    return (
-                      <li key={row.key} className="flex items-start gap-2 rounded-md bg-violet-50/80 px-2 py-1.5 text-sm">
-                        <div className="min-w-0 flex-1">
-                          <span className="font-medium text-slate-800">{row.name}</span>
-                          <span className="block text-xs text-slate-600">{row.phone}</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="shrink-0 text-xs text-red-600 font-medium px-1"
-                          onClick={function () {
-                            setForm(function (f) {
-                              var sel = (f.inviteSelected || []).filter(function (s) { return s.key !== row.key; });
-                              var removed = (f.inviteSelected || []).filter(function (s) { return s.key === row.key; })[0];
-                              var pend = (f.invitePending || []).slice();
-                              if (removed && !pend.some(function (p) { return p.key === row.key; })) pend.push(removed);
-                              var n = {};
-                              for (var k in f) n[k] = f[k];
-                              n.inviteSelected = sel;
-                              n.invitePending = pend;
-                              return n;
-                            });
-                          }}
-                        >
-                          빼기
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+      <div className="rounded-xl border border-violet-200/80 bg-violet-50/40 p-3 space-y-3">
+        <h3 className="text-sm font-semibold text-violet-900">친구 초대 목록</h3>
+        <button
+          type="button"
+          className="w-full rounded-lg border-2 border-violet-600 bg-white py-2 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50"
+          onClick={openRidingBridgeOpenAddressBook}
+        >
+          주소록에서 초대하기
+        </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-2">
+            <p className="text-xs font-semibold text-slate-600 mb-2">초대 목록</p>
+            {(form.invitePending || []).length === 0 ? (
+              <p className="text-xs text-slate-400 py-2">주소록에서 추가하거나, 친구목록에서 추가하세요.</p>
+            ) : (
+              <ul className="space-y-1 max-h-36 overflow-y-auto">
+                {(form.invitePending || []).map(function (row) {
+                  return (
+                    <li key={row.key}>
+                      <button
+                        type="button"
+                        className="w-full text-left rounded-md px-2 py-1.5 text-sm bg-slate-50 hover:bg-violet-100 border border-transparent hover:border-violet-200"
+                        onClick={function () {
+                          setForm(function (f) {
+                            var pend = (f.invitePending || []).filter(function (p) { return p.key !== row.key; });
+                            var picked = (f.invitePending || []).filter(function (p) { return p.key === row.key; })[0];
+                            var sel = (f.inviteSelected || []).slice();
+                            if (picked && !sel.some(function (s) { return s.key === row.key; })) sel.push(picked);
+                            var n = {};
+                            for (var k in f) n[k] = f[k];
+                            n.invitePending = pend;
+                            n.inviteSelected = sel;
+                            return n;
+                          });
+                        }}
+                      >
+                        <span className="font-medium text-slate-800">{row.name}</span>
+                        <span className="block text-xs text-slate-500">{row.phone}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
-          {(form.inviteSelected || []).length === 0 ? (
-            <p className="text-xs text-amber-700">초대 목록이 비어 있으면, 아래 비밀번호(4자리)를 설정해야 비초대자도 입장할 수 있습니다.</p>
-          ) : null}
-          <label className="block font-medium text-slate-700 mt-2">
-            비공개 입장 비밀번호 (숫자 4자리, 선택)
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
-              autoComplete="off"
-              className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm tracking-widest"
-              placeholder="예: 1234"
-              value={form.rideJoinPassword}
-              onChange={function (e) {
-                var v = String(e.target.value || '').replace(/\D/g, '').slice(0, 4);
-                set('rideJoinPassword', v);
-              }}
-            />
-          </label>
-          <p className="text-xs text-slate-500">초대된 전화번호 또는 올바른 비밀번호를 입력한 사용자만 참석 신청할 수 있습니다.</p>
+          <div className="min-w-0 rounded-lg border border-violet-200 bg-white p-2">
+            <p className="text-xs font-semibold text-violet-800 mb-2">선택된 목록 ({(form.inviteSelected || []).length}명)</p>
+            {(form.inviteSelected || []).length === 0 ? (
+              <p className="text-xs text-slate-400 py-2">모임에 초대할 사람을 초대 목록에서 추가하세요</p>
+            ) : (
+              <ul className="space-y-1 max-h-36 overflow-y-auto">
+                {(form.inviteSelected || []).map(function (row) {
+                  return (
+                    <li key={row.key} className="flex items-start gap-2 rounded-md bg-violet-50/80 px-2 py-1.5 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium text-slate-800">{row.name}</span>
+                        <span className="block text-xs text-slate-600">{row.phone}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-red-600 font-medium px-1"
+                        onClick={function () {
+                          setForm(function (f) {
+                            var sel = (f.inviteSelected || []).filter(function (s) { return s.key !== row.key; });
+                            var removed = (f.inviteSelected || []).filter(function (s) { return s.key === row.key; })[0];
+                            var pend = (f.invitePending || []).slice();
+                            if (removed && !pend.some(function (p) { return p.key === row.key; })) pend.push(removed);
+                            var n = {};
+                            for (var k in f) n[k] = f[k];
+                            n.inviteSelected = sel;
+                            n.invitePending = pend;
+                            return n;
+                          });
+                        }}
+                      >
+                        빼기
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
-      ) : null}
+        {form.isPrivate ? (
+          <>
+            {(form.inviteSelected || []).length === 0 ? (
+              <p className="text-xs text-amber-700">
+                초대 목록이 비어 있으면, 아래 비밀번호(4자리)를 설정해야 비초대자도 입장할 수 있습니다.
+              </p>
+            ) : null}
+            <label className="block font-medium text-slate-700 mt-2">
+              비공개 입장 비밀번호 (숫자 4자리, 선택)
+              <input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                autoComplete="off"
+                className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm tracking-widest"
+                placeholder="예: 1234"
+                value={form.rideJoinPassword}
+                onChange={function (e) {
+                  var v = String(e.target.value || '').replace(/\D/g, '').slice(0, 4);
+                  set('rideJoinPassword', v);
+                }}
+              />
+            </label>
+            <p className="text-xs text-slate-500">초대된 전화번호 또는 올바른 비밀번호를 입력한 사용자만 참석 신청할 수 있습니다.</p>
+          </>
+        ) : (
+          <>
+            {(form.inviteSelected || []).length === 0 ? (
+              <p className="text-xs text-amber-700">
+                초대 목록이 비어 있어도 공개 모임이므로, 입장 비밀번호(4자리) 없이 누구나 참석 신청할 수 있습니다.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-600">
+                지정한 전화번호(뒤 8자리 일치)로 로그인한 친구는 「초대받은 라이딩」에서 이 모임을 바로 볼 수 있습니다.
+              </p>
+            )}
+          </>
+        )}
+      </div>
 
       <label className="block font-medium text-slate-700">코스 설명<textarea className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" rows={3} value={form.course} onChange={function (e) { set('course', e.target.value); }} /></label>
 

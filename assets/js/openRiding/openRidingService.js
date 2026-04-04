@@ -36,17 +36,20 @@ export function normalizePhoneDigits(input) {
 }
 
 /**
- * 비공개 방 초대 목록과 사용자 연락처 일치 여부 (방장은 항상 true 아님 — UI에서 제외, 트랜잭션에서 방장 예외)
+ * 비공개·공개(초대 지정) 방 초대 목록과 사용자 연락처 일치 여부
+ * 국가코드 등 표기 차이는 정규화 후 뒤 8자리 일치로 판별 (예: 8210… vs 010…)
  * @param {string} userPhone
  * @param {string[]} invitedList Firestore invited_list
  */
 export function isUserPhoneInvitedToRide(userPhone, invitedList) {
   const u = normalizePhoneDigits(userPhone);
-  if (!u || u.length < 9) return false;
+  if (!u || u.length < 8) return false;
   const list = Array.isArray(invitedList) ? invitedList : [];
   return list.some((inv) => {
     const n = normalizePhoneDigits(inv);
-    return n && (n === u || n.slice(-10) === u.slice(-10));
+    if (!n || n.length < 8) return false;
+    if (n === u) return true;
+    return n.slice(-8) === u.slice(-8);
   });
 }
 
@@ -141,10 +144,10 @@ export async function createRide(db, hostUserId, input) {
   const participantDisplay = {};
   if (hostUserId && hostLabel) participantDisplay[String(hostUserId)] = hostLabel;
   const isPrivate = !!input.isPrivate;
-  const invitedRaw = isPrivate && Array.isArray(input.invitedList) ? input.invitedList : [];
+  const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
   const invitedList = invitedRaw
     .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
-    .filter((d) => d.length >= 9);
+    .filter((d) => d.length >= 8);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
@@ -196,12 +199,10 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
   if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
   const isPrivate = !!input.isPrivate;
-  const invitedRaw = isPrivate && Array.isArray(input.invitedList) ? input.invitedList : [];
-  const invitedList = isPrivate
-    ? invitedRaw
-        .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
-        .filter((d) => d.length >= 9)
-    : [];
+  const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
+  const invitedList = invitedRaw
+    .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
+    .filter((d) => d.length >= 8);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
