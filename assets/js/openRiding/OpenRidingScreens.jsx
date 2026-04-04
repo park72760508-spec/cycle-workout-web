@@ -3196,6 +3196,7 @@ function OpenRidingDetail(props) {
   var onOpenEdit = props.onOpenEdit || function () {};
   var registerDetailHeaderEdit = props.registerDetailHeaderEdit;
   var registerDetailHeaderCancel = props.registerDetailHeaderCancel;
+  var registerDetailHeaderTitle = props.registerDetailHeaderTitle;
 
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
@@ -3482,6 +3483,26 @@ function OpenRidingDetail(props) {
       };
     },
     [registerDetailHeaderCancel, loading, ride, userId]
+  );
+
+  useEffect(
+    function () {
+      if (typeof registerDetailHeaderTitle !== 'function') return undefined;
+      if (loading) {
+        registerDetailHeaderTitle('불러오는 중…');
+        return undefined;
+      }
+      if (!ride) {
+        registerDetailHeaderTitle('라이딩 상세');
+        return undefined;
+      }
+      var t = ride.title != null ? String(ride.title).trim() : '';
+      registerDetailHeaderTitle(t || '제목 없음');
+      return function () {
+        registerDetailHeaderTitle('');
+      };
+    },
+    [registerDetailHeaderTitle, loading, ride, rideId]
   );
 
   if (loading) {
@@ -3890,7 +3911,7 @@ function OpenRidingDetail(props) {
 
       {bombOpen ? (
         <div
-          className="fixed inset-0 z-[10070] flex items-center justify-center bg-black/45 p-4"
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[10070] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="open-riding-bomb-title"
@@ -3898,16 +3919,29 @@ function OpenRidingDetail(props) {
             if (!cancelBusy) setBombOpen(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-xl p-4" onClick={function (e) { e.stopPropagation(); }}>
-            <h2 id="open-riding-bomb-title" className="text-base font-semibold text-slate-900 mb-2">
-              라이딩 취소
-            </h2>
-            <p className="text-sm text-slate-600 mb-4">정말 라이딩을 취소하시겠습니까?</p>
-            <p className="text-xs text-slate-500 mb-4">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm rounded-2xl border border-violet-200/90 bg-gradient-to-b from-violet-50/98 via-white to-violet-100/35 shadow-[0_10px_40px_-10px_rgba(109,40,217,0.35)] p-5 ring-1 ring-violet-100/90"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <div className="flex items-center gap-2.5 mb-3 pb-3 border-b border-violet-200/70">
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-sm font-bold shadow-inner shadow-violet-200/50"
+                aria-hidden
+              >
+                !
+              </span>
+              <h2 id="open-riding-bomb-title" className="text-base font-bold text-violet-950 m-0 leading-tight">
+                라이딩 취소
+              </h2>
+            </div>
+            <p className="text-sm text-violet-900/90 mb-3 leading-relaxed m-0">정말 라이딩을 취소하시겠습니까?</p>
+            <p className="text-xs text-violet-700/75 mb-5 leading-snug m-0">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
             <div className="flex gap-2">
               <button
                 type="button"
-                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl border border-slate-200 text-slate-700 font-medium"
+                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl border-2 border-violet-200 bg-white text-violet-800 font-semibold text-sm hover:bg-violet-50/80"
                 disabled={cancelBusy}
                 onClick={function () {
                   setBombOpen(false);
@@ -3917,7 +3951,7 @@ function OpenRidingDetail(props) {
               </button>
               <button
                 type="button"
-                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl bg-red-600 text-white font-medium disabled:opacity-50"
+                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm shadow-md shadow-violet-500/25 hover:bg-violet-700 disabled:opacity-50"
                 disabled={cancelBusy}
                 onClick={confirmBombRide}
               >
@@ -3950,6 +3984,9 @@ function OpenRidingRoomApp(props) {
   var _dhc = useState({ show: false, onCancel: null });
   var detailHeaderCancel = _dhc[0];
   var setDetailHeaderCancel = _dhc[1];
+  var _dht = useState('');
+  var detailHeaderRideTitle = _dht[0];
+  var setDetailHeaderRideTitle = _dht[1];
 
   var registerDetailHeaderEdit = useCallback(function (show, onEdit) {
     setDetailHeaderEdit({ show: !!show, onEdit: onEdit || null });
@@ -3959,11 +3996,16 @@ function OpenRidingRoomApp(props) {
     setDetailHeaderCancel({ show: !!show, onCancel: onCancel || null });
   }, []);
 
+  var registerDetailHeaderTitle = useCallback(function (text) {
+    setDetailHeaderRideTitle(String(text != null ? text : ''));
+  }, []);
+
   useEffect(
     function () {
       if (view !== 'detail') {
         setDetailHeaderEdit({ show: false, onEdit: null });
         setDetailHeaderCancel({ show: false, onCancel: null });
+        setDetailHeaderRideTitle('');
       }
     },
     [view]
@@ -4042,6 +4084,7 @@ function OpenRidingRoomApp(props) {
         onOpenEdit={function () { setView('edit'); }}
         registerDetailHeaderEdit={registerDetailHeaderEdit}
         registerDetailHeaderCancel={registerDetailHeaderCancel}
+        registerDetailHeaderTitle={registerDetailHeaderTitle}
       />
     );
   } else {
@@ -4065,59 +4108,82 @@ function OpenRidingRoomApp(props) {
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
-        <button
-          type="button"
-          className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-          style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={handleTopBack}
-          aria-label={view === 'main' ? '경로 선택' : '미니 달력 화면으로'}
-        >
-          <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <h1 className="open-riding-screen-title flex-1 text-center m-0">
-          {headerTitle}
-        </h1>
-        <div className="flex shrink-0 items-center justify-end gap-0.5">
-          {view === 'detail' && detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
+        {view === 'detail' ? (
+          <div className="grid grid-cols-3 items-center w-full min-w-0 flex-1 gap-x-1 sm:gap-x-2">
+            <div className="flex justify-start min-w-0">
+              <button
+                type="button"
+                className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
+                style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={handleTopBack}
+                aria-label="미니 달력 화면으로"
+              >
+                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            </div>
+            <h1
+              className="open-riding-detail-header-ride-title m-0 min-w-0 px-0.5 text-center font-bold leading-tight truncate"
+              style={{
+                fontSize: 'clamp(0.82rem, 3.2vw, 1rem)',
+                color: '#4c1d95'
+              }}
+              title={detailHeaderRideTitle || headerTitle}
+            >
+              {detailHeaderRideTitle || headerTitle}
+            </h1>
+            <div className="flex justify-end items-center gap-0.5 min-w-0 shrink-0">
+              {detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
+                <button
+                  type="button"
+                  className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
+                  style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  onClick={detailHeaderEdit.onEdit}
+                  aria-label="라이딩 수정"
+                >
+                  <OpenRidingDashboardEditIcon />
+                </button>
+              ) : null}
+              {detailHeaderCancel.show && detailHeaderCancel.onCancel ? (
+                <button
+                  type="button"
+                  className="open-riding-header-cancel-btn p-2 rounded-lg hover:bg-violet-100 active:opacity-80 transition-all shrink-0"
+                  style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  onClick={detailHeaderCancel.onCancel}
+                  aria-label="라이딩 취소"
+                >
+                  <img
+                    src="assets/img/cancel01.png"
+                    alt=""
+                    width={22}
+                    height={22}
+                    className="block object-contain pointer-events-none"
+                    decoding="async"
+                  />
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <>
             <button
               type="button"
               className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
               style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={detailHeaderEdit.onEdit}
-              aria-label="라이딩 수정"
+              onClick={handleTopBack}
+              aria-label={view === 'main' ? '경로 선택' : '미니 달력 화면으로'}
             >
-              <OpenRidingDashboardEditIcon />
+              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
-          ) : null}
-          {view === 'detail' && detailHeaderCancel.show && detailHeaderCancel.onCancel ? (
-            <button
-              type="button"
-              className="open-riding-header-cancel-btn p-2 rounded-lg hover:bg-red-50 active:opacity-80 transition-all shrink-0"
-              style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={detailHeaderCancel.onCancel}
-              aria-label="라이딩 취소"
-            >
-              <img
-                src="assets/img/delete2.png"
-                alt=""
-                width={22}
-                height={22}
-                className="block object-contain pointer-events-none"
-                decoding="async"
-              />
-            </button>
-          ) : null}
-          {view === 'detail' &&
-          !(detailHeaderEdit.show && detailHeaderEdit.onEdit) &&
-          !(detailHeaderCancel.show && detailHeaderCancel.onCancel) ? (
+            <h1 className="open-riding-screen-title flex-1 text-center m-0">
+              {headerTitle}
+            </h1>
             <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
-          ) : null}
-          {view !== 'detail' ? (
-            <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
-          ) : null}
-        </div>
+          </>
+        )}
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. CTA는 고정바 아래 z-스택(style.css) */}
       <div
