@@ -1315,19 +1315,8 @@ function skipCurrentSegment() {
     if (window.trainingState) {
       window.trainingState.segIndex = newIndex;
       window.trainingState.segElapsedSec = 0;
-       
-      // 🔵 핵심: 전체 경과시간을 '새 세그먼트 시작 시각'으로 점프
-      const jumpTo = getCumulativeStartSec(newIndex);
-      // window.trainingState.elapsedSec = jumpTo;  // ❌ 이건 이제 비추천
-      window.setElapsedSecSafely?.(jumpTo);          // ✅ startMs까지 보정
-
-       
-      // (참고) 그룹 타임라인을 쓰는 경우 start time을 가진 객체가 따로 있으면 그것도 갱신
-      if (window.trainingSession && window.trainingSession.startTime) {
-        // startTime을 과거로 재조정해서 now-startTime ≈ jumpTo 가 되도록 보정할 수도 있음
-        // 필요 없다면 생략 가능
-      }
-       
+      // 벽시계 경과(elapsedSec)는 건너뛴 구간만큼 늘리지 않음. 세그먼트 내 경과는 tick에서 cumStart 대비 계산됨.
+      window.trainingState._lastProcessedSegIndex = newIndex;
     }
     
     if (typeof applySegmentTarget === 'function') {
@@ -1337,9 +1326,10 @@ function skipCurrentSegment() {
       updateTimeUI();
     }
 
-    // 🔵 타임라인 즉시 반영
+    // 🔵 타임라인·마스코트 즉시 반영
     if (typeof updateSegmentBarTick === 'function') updateSegmentBarTick();
     if (typeof updateTimelineByTime === 'function') updateTimelineByTime();
+    if (typeof updateSegmentGraphMascot === 'function') updateSegmentGraphMascot();
      
     console.log(`세그먼트 건너뛰기: ${newIndex + 1}번째 세그먼트로 이동`);
     
@@ -3129,45 +3119,100 @@ function startSegmentLoop() {
    
      console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
    
-     // 다음 세그먼트로 인덱스 전환
      const nextSegIndex = currentSegIndex + 1;
-     window.trainingState.segIndex = nextSegIndex;
-     window.trainingState.segElapsedSec = 0;
-     ts._lastProcessedSegIndex = nextSegIndex;  // 전환 완료 표시
 
-      // 다음 세그먼트의 카운트다운 상태 초기화
-      if (nextSegIndex < w.segments.length) {
-        const nextSeg = w.segments[nextSegIndex];
-        const nextSegDur = segDurationSec(nextSeg);
-        ts._countdownFired[String(nextSegIndex)] = {};
-        ts._prevRemainMs[String(nextSegIndex)] = nextSegDur * 1000; // 새 세그 초기 남은 ms
-      }
-   
-     if (nextSegIndex < w.segments.length) {
-       console.log(`세그먼트 ${nextSegIndex + 1}로 전환`);
-       applySegmentTarget(nextSegIndex);
-   
-       // 남아있을 수 있는 카운트다운 정리
-       if (segmentCountdownActive) {
-         stopSegmentCountdown();
-       }
-   
-       // 진행바 즉시 반영(선택)
-       if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
-       if (typeof updateTimelineByTime === "function") updateTimelineByTime();
-       
-       // 모바일 대시보드 UI 업데이트
+     if (nextSegIndex >= w.segments.length) {
+       console.log('모든 세그먼트 완료');
+       ts._lastProcessedSegIndex = currentSegIndex;
+       if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('trainingScreen');
+       window.trainingState.timerId = null;
+       stopSegmentCountdown();
+       if (typeof setPaused === 'function') setPaused(false);
+       if (typeof showToast === 'function') showToast('훈련이 완료되었습니다!');
+
        const mobileScreen = document.getElementById('mobileDashboardScreen');
-       if (mobileScreen && 
-           (mobileScreen.classList.contains('active') || 
+       if (mobileScreen &&
+           (mobileScreen.classList.contains('active') ||
             window.getComputedStyle(mobileScreen).display !== 'none')) {
-         if (typeof updateMobileDashboardUI === 'function') {
-           updateMobileDashboardUI();
+         Promise.resolve()
+           .then(() => window.saveTrainingResultAtEnd?.())
+           .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+           .then(() => window.trainingResults?.initializeResultScreen?.())
+           .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+           .then(() => {
+             if (typeof showMobileTrainingResultModal === 'function') {
+               showMobileTrainingResultModal();
+             }
+           });
+       } else {
+         const trainingScreenEl = document.getElementById('trainingScreen');
+         const isLaptopTraining = trainingScreenEl && (trainingScreenEl.classList.contains('active') || window.getComputedStyle(trainingScreenEl).display !== 'none');
+         if (isLaptopTraining && typeof window.saveLaptopTrainingResultAtEnd === 'function') {
+           var tabletLoadingModal = document.getElementById('tabletTrainingLoadingModal');
+           if (tabletLoadingModal) {
+             if (tabletLoadingModal.parentNode !== document.body) document.body.appendChild(tabletLoadingModal);
+             tabletLoadingModal.classList.remove('hidden');
+             tabletLoadingModal.style.display = 'flex';
+           }
+           Promise.resolve()
+             .then(() => window.saveLaptopTrainingResultAtEnd())
+             .catch((e) => { console.warn('[result] saveLaptopTrainingResultAtEnd error', e); })
+             .then((saveResult) => {
+               if (tabletLoadingModal) {
+                 tabletLoadingModal.classList.add('hidden');
+                 tabletLoadingModal.style.display = 'none';
+               }
+               if (typeof window.showMobileTrainingResultModal === 'function') {
+                 window.__laptopResultModalOpen = true;
+                 window.showMobileTrainingResultModal();
+               } else if (typeof window.showLaptopTrainingResultPopup === 'function') {
+                 window.showLaptopTrainingResultPopup(saveResult);
+               } else {
+                 if (typeof showToast === 'function') showToast('수고하셨습니다. 훈련 결과가 저장되었습니다.');
+                 if (typeof showScreen === 'function') showScreen('trainingReadyScreen');
+               }
+             });
+         } else {
+           Promise.resolve()
+             .then(() => window.saveTrainingResultAtEnd?.())
+             .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+             .then(() => window.trainingResults?.initializeResultScreen?.())
+             .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+             .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
+             .then(() => { if (typeof showScreen === 'function') showScreen('trainingJournalScreen'); });
          }
        }
-   
-     } else {
-       console.log('모든 세그먼트 완료');
+       return;
+     }
+
+     window.trainingState.segIndex = nextSegIndex;
+     window.trainingState.segElapsedSec = 0;
+     ts._lastProcessedSegIndex = nextSegIndex;
+
+     {
+       const nextSeg = w.segments[nextSegIndex];
+       const nextSegDur = segDurationSec(nextSeg);
+       ts._countdownFired[String(nextSegIndex)] = {};
+       ts._prevRemainMs[String(nextSegIndex)] = nextSegDur * 1000;
+     }
+
+     console.log(`세그먼트 ${nextSegIndex + 1}로 전환`);
+     applySegmentTarget(nextSegIndex);
+
+     if (segmentCountdownActive) {
+       stopSegmentCountdown();
+     }
+
+     if (typeof updateSegmentBarTick === 'function') updateSegmentBarTick();
+     if (typeof updateTimelineByTime === 'function') updateTimelineByTime();
+
+     const mobileScreen2 = document.getElementById('mobileDashboardScreen');
+     if (mobileScreen2 &&
+         (mobileScreen2.classList.contains('active') ||
+          window.getComputedStyle(mobileScreen2).display !== 'none')) {
+       if (typeof updateMobileDashboardUI === 'function') {
+         updateMobileDashboardUI();
+       }
      }
    } else if (prevSegIndex !== currentSegIndex) {
      // 세그먼트가 이미 전환된 경우, 추적 변수만 업데이트
@@ -3778,8 +3823,11 @@ function updateSegmentGraphMascot() {
   const scaleY = canvasRect.height / canvas.height;
   
   // 현재 경과 시간 가져오기
-  const elapsedSec = window.trainingState?.elapsedSec || 0;
-  
+  var segIdxM = Math.max(0, Number(window.trainingState?.segIndex) || 0);
+  var cumStartM = typeof getCumulativeStartSec === 'function' ? getCumulativeStartSec(segIdxM) : 0;
+  var segElM = Math.max(0, Number(window.trainingState?.segElapsedSec) || 0);
+  var timelineSec = cumStartM + segElM;
+
   // 마스코트 레이어를 컨테이너 전체 크기로 설정 (검정 바탕 그래프를 둘러싼 다크 레이어 블럭)
   // 로딩 완료 후에만 표시
   mascotLayer.style.display = 'block';
@@ -3809,8 +3857,8 @@ function updateSegmentGraphMascot() {
   const startX = startTimeX; // 시작점: 0:00 시간 문자 중앙
   const endX = endTimeX; // 종료점: 마지막 시간 문자 중앙
   
-  // X 위치 계산 (경과 시간에 비례) - 시작점과 종료점 사이를 경과 시간 비율로 이동
-  const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
+  // X 위치: 워크아웃 타임라인(세그 시작 누적 + 구간 내 경과). 건너뛰기 시 벽시계와 달라져도 구간 시작에 맞춤.
+  const progressRatio = Math.min(1, Math.max(0, timelineSec / totalSeconds));
   const xPosition = startX + (progressRatio * (endX - startX));
   
   // Y 위치: 컨테이너(다크 레이어 블럭)의 하단 라인에 마스코트가 위치하도록
@@ -17142,6 +17190,60 @@ function startMobileWorkout() {
   if (typeof showToast === "function") showToast("훈련을 시작합니다");
 }
 
+/** 모바일 대시보드: 타이머 정지·결과 저장·모달 (경과 시간 vs 마지막 세그먼트 완료 공통) */
+function runMobileDashboardWorkoutCompletion(mts) {
+  if (!mts) return;
+  console.log('[Mobile Dashboard] 훈련 완료!');
+  if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
+  mts.timerId = null;
+  MobileCountdownDisplay.hideImmediate();
+  if (typeof showToast === 'function') showToast('훈련이 완료되었습니다!');
+  var loadingModal = safeGetElement('mobileTrainingLoadingModal');
+  if (loadingModal) {
+    loadingModal.classList.remove('hidden');
+    loadingModal.style.display = 'flex';
+  }
+  Promise.resolve()
+    .then(function () {
+      console.log('[Mobile Dashboard] 결과 저장 시작');
+      if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
+        window.trainingResults.endSession();
+      }
+      var extra = {
+        workoutId: window.currentWorkout?.id || '',
+        workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+        elapsedTime: mts.elapsedSec,
+        completionType: 'normal',
+        appVersion: '1.0.0',
+        timestamp: new Date().toISOString(),
+        source: 'mobile_dashboard'
+      };
+      if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
+        return window.trainingResults.saveTrainingResult(extra);
+      }
+      return Promise.resolve({ success: true });
+    })
+    .catch(function (e) {
+      console.warn('[Mobile Dashboard] 결과 저장 오류:', e);
+      return { success: false, error: e.message };
+    })
+    .then(function () {
+      return window.trainingResults?.initializeResultScreen?.();
+    })
+    .catch(function (e) {
+      console.warn('[Mobile Dashboard] initializeResultScreen error', e);
+    })
+    .then(function () {
+      if (loadingModal) {
+        loadingModal.classList.add('hidden');
+        loadingModal.style.display = 'none';
+      }
+      if (typeof showMobileTrainingResultModal === 'function') {
+        showMobileTrainingResultModal();
+      }
+    });
+}
+
 /**
  * 모바일 개인훈련 대시보드 전용 독립적인 타이머 루프 (Firebase와 무관)
  * Indoor Training의 startSegmentLoop와 유사하지만 모바일 전용 상태를 사용
@@ -17306,69 +17408,9 @@ function startMobileTrainingTimerLoop() {
       }
     }
     
-    // 전체 종료 판단
+    // 전체 종료 판단 (벽시계가 명목 총시간에 도달)
     if (mts.elapsedSec >= mts.totalSec) {
-      console.log('[Mobile Dashboard] 훈련 완료!');
-      if (typeof TrainingTimer !== 'undefined') TrainingTimer.stop('mobileDashboard');
-      mts.timerId = null;
-      
-      // 카운트다운 오버레이 닫기
-      MobileCountdownDisplay.hideImmediate();
-      
-      if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
-      
-      // 로딩 애니메이션 표시
-      const loadingModal = safeGetElement('mobileTrainingLoadingModal');
-      if (loadingModal) {
-        loadingModal.classList.remove('hidden');
-        loadingModal.style.display = 'flex';
-      }
-      
-      // 모바일 전용 결과 저장 (독립적으로 구동)
-      Promise.resolve()
-        .then(() => {
-          console.log('[Mobile Dashboard] 결과 저장 시작');
-          
-          // 세션 종료
-          if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
-            window.trainingResults.endSession();
-          }
-          
-          // 추가 메타데이터 준비
-          const extra = {
-            workoutId: window.currentWorkout?.id || '',
-            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-            elapsedTime: mts.elapsedSec, // 모바일 전용 경과 시간
-            completionType: 'normal',
-            appVersion: '1.0.0',
-            timestamp: new Date().toISOString(),
-            source: 'mobile_dashboard' // 모바일 대시보드에서 저장됨을 표시
-          };
-          
-          // 결과 저장
-          if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
-            return window.trainingResults.saveTrainingResult(extra);
-          }
-          return Promise.resolve({ success: true });
-        })
-        .catch((e) => { 
-          console.warn('[Mobile Dashboard] 결과 저장 오류:', e);
-          return { success: false, error: e.message };
-        })
-        .then(() => window.trainingResults?.initializeResultScreen?.())
-        .catch((e) => { console.warn('[Mobile Dashboard] initializeResultScreen error', e); })
-        .then(() => { 
-          // 로딩 애니메이션 숨기기
-          if (loadingModal) {
-            loadingModal.classList.add('hidden');
-            loadingModal.style.display = 'none';
-          }
-          
-          // 결과 모달 표시
-          if (typeof showMobileTrainingResultModal === 'function') {
-            showMobileTrainingResultModal();
-          }
-        });
+      runMobileDashboardWorkoutCompletion(mts);
       return;
     }
     
@@ -17470,10 +17512,8 @@ function startMobileTrainingTimerLoop() {
     // 2. 아직 전환되지 않은 경우 (prevSegIndex === currentSegIndex)
     // 3. 마지막 세그먼트가 아닌 경우
     const segEndAtSec = cumStart + segDur;
-    // 세그먼트 경과 시간이 segDur 이상이거나, 전체 경과 시간이 세그먼트 종료 시각을 초과한 경우 전환
-    const shouldTransition = ((mts.segElapsedSec >= segDur) || (mts.elapsedSec >= segEndAtSec)) && 
-                             (prevSegIndex === currentSegIndex) && 
-                             (currentSegIndex < w.segments.length - 1);
+    const shouldTransition = ((mts.segElapsedSec >= segDur) || (mts.elapsedSec >= segEndAtSec)) &&
+                             (prevSegIndex === currentSegIndex);
     
     // 디버깅 로그
     if (mts.segElapsedSec >= segDur * 0.9) { // 세그먼트가 90% 이상 진행되었을 때만 로그
@@ -17481,68 +17521,13 @@ function startMobileTrainingTimerLoop() {
     }
     
     if (shouldTransition) {
-      // 카운트다운 오버레이 닫기
       MobileCountdownDisplay.hideImmediate();
       console.log(`[Mobile Dashboard] 세그먼트 ${currentSegIndex + 1} 완료 (경과: ${mts.segElapsedSec}초/${segDur}초, 전체: ${mts.elapsedSec}초), 다음 세그먼트로 이동`);
-      
+
       const nextSegIndex = currentSegIndex + 1;
-      mts.segIndex = nextSegIndex;
-      mts._lastProcessedSegIndex = nextSegIndex;
-      
-      // 세그먼트 전환 직후 다음 세그먼트의 경과 시간 즉시 계산 (다음 틱까지 기다리지 않음)
-      // 이전 세그먼트들의 누적 시간 재계산
-      let nextCumStart = 0;
-      for (let i = 0; i < nextSegIndex; i++) {
-        const seg = w.segments[i];
-        if (seg) {
-          nextCumStart += segDurationSec(seg);
-        }
-      }
-      // 다음 세그먼트의 경과 시간 계산
-      const nextSegElapsed = Math.max(0, mts.elapsedSec - nextCumStart);
-      mts.segElapsedSec = nextSegElapsed;
-      
-      console.log(`[Mobile Dashboard] 세그먼트 전환 직후 경과 시간 업데이트: segIndex=${nextSegIndex}, elapsedSec=${mts.elapsedSec}, cumStart=${nextCumStart}, segElapsedSec=${nextSegElapsed.toFixed(1)}`);
-      
-      // 다음 세그먼트의 카운트다운 상태 초기화
-      if (nextSegIndex < w.segments.length) {
-        const nextSeg = w.segments[nextSegIndex];
-        const nextSegDur = segDurationSec(nextSeg);
-        mts._countdownFired[String(nextSegIndex)] = {};
-        mts._prevRemainMs[String(nextSegIndex)] = nextSegDur * 1000;
-      }
-      
-      if (nextSegIndex < w.segments.length) {
-        console.log(`[Mobile Dashboard] 세그먼트 ${nextSegIndex + 1}로 전환 (전체 경과: ${mts.elapsedSec}초)`);
-        
-        // 이전 세그먼트 결과 기록
-        if (window.trainingResults && typeof window.trainingResults.recordSegmentResult === 'function') {
-          const prevSeg = w.segments[currentSegIndex];
-          if (prevSeg) {
-            window.trainingResults.recordSegmentResult(currentSegIndex, prevSeg);
-            console.log('[Mobile Dashboard] 세그먼트 결과 기록:', currentSegIndex);
-          }
-        }
-        
-        // 세그먼트 파워 히스토리 초기화 (새 세그먼트 시작)
-        mts.segmentPowerHistory = [];
-        
-        // UI 업데이트
-        if (typeof updateMobileDashboardUI === 'function') {
-          updateMobileDashboardUI();
-        }
-        
-        // 목표 파워 및 원호 업데이트 (새 세그먼트의 목표값 표시)
-        if (typeof updateMobileTargetPower === 'function') {
-          updateMobileTargetPower();
-        }
-        if (typeof updateMobileTargetPowerArc === 'function') {
-          updateMobileTargetPowerArc();
-        }
-      } else {
+
+      if (nextSegIndex >= w.segments.length) {
         console.log('[Mobile Dashboard] 모든 세그먼트 완료');
-        
-        // 마지막 세그먼트 결과 기록
         if (window.trainingResults && typeof window.trainingResults.recordSegmentResult === 'function') {
           const lastSeg = w.segments[currentSegIndex];
           if (lastSeg) {
@@ -17550,6 +17535,52 @@ function startMobileTrainingTimerLoop() {
             console.log('[Mobile Dashboard] 마지막 세그먼트 결과 기록:', currentSegIndex);
           }
         }
+        runMobileDashboardWorkoutCompletion(mts);
+        return;
+      }
+
+      mts.segIndex = nextSegIndex;
+      mts._lastProcessedSegIndex = nextSegIndex;
+
+      let nextCumStart = 0;
+      for (let i = 0; i < nextSegIndex; i++) {
+        const seg = w.segments[i];
+        if (seg) {
+          nextCumStart += segDurationSec(seg);
+        }
+      }
+      const nextSegElapsed = Math.max(0, mts.elapsedSec - nextCumStart);
+      mts.segElapsedSec = nextSegElapsed;
+
+      console.log(`[Mobile Dashboard] 세그먼트 전환 직후 경과 시간 업데이트: segIndex=${nextSegIndex}, elapsedSec=${mts.elapsedSec}, cumStart=${nextCumStart}, segElapsedSec=${nextSegElapsed.toFixed(1)}`);
+
+      {
+        const nextSeg = w.segments[nextSegIndex];
+        const nextSegDur = segDurationSec(nextSeg);
+        mts._countdownFired[String(nextSegIndex)] = {};
+        mts._prevRemainMs[String(nextSegIndex)] = nextSegDur * 1000;
+      }
+
+      console.log(`[Mobile Dashboard] 세그먼트 ${nextSegIndex + 1}로 전환 (전체 경과: ${mts.elapsedSec}초)`);
+
+      if (window.trainingResults && typeof window.trainingResults.recordSegmentResult === 'function') {
+        const prevSeg = w.segments[currentSegIndex];
+        if (prevSeg) {
+          window.trainingResults.recordSegmentResult(currentSegIndex, prevSeg);
+          console.log('[Mobile Dashboard] 세그먼트 결과 기록:', currentSegIndex);
+        }
+      }
+
+      mts.segmentPowerHistory = [];
+
+      if (typeof updateMobileDashboardUI === 'function') {
+        updateMobileDashboardUI();
+      }
+      if (typeof updateMobileTargetPower === 'function') {
+        updateMobileTargetPower();
+      }
+      if (typeof updateMobileTargetPowerArc === 'function') {
+        updateMobileTargetPowerArc();
       }
     } else if (prevSegIndex !== currentSegIndex) {
       // 세그먼트가 이미 전환된 경우, 추적 변수만 업데이트

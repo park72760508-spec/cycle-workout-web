@@ -1794,13 +1794,28 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       // Bluetooth Coach의 경우 bluetoothCoachState에서 경과시간 가져오기
       currentElapsedTime = (window.bluetoothCoachState && window.bluetoothCoachState.totalElapsedTime) ? window.bluetoothCoachState.totalElapsedTime : 0;
     } else if (canvasId === 'mobileIndividualSegmentGraph') {
-      // 모바일 대시보드의 경우 mobileTrainingState에서 경과시간 가져오기 (우선순위: 함수 파라미터 > mobileTrainingState > 전역 변수)
+      // 벽시계 경과(상단 타이머)와 별도로, 마스코트는 워크아웃 타임라인(세그먼트 누적 시작 + 구간 내 경과)에 둠 — 건너뛰기 직후 구간 시작에 위치
+      var wallElapsed = 0;
       if (elapsedTime !== null && elapsedTime !== undefined) {
-        currentElapsedTime = elapsedTime;
+        wallElapsed = elapsedTime;
       } else if (window.mobileTrainingState && window.mobileTrainingState.elapsedSec !== undefined) {
-        currentElapsedTime = window.mobileTrainingState.elapsedSec;
+        wallElapsed = window.mobileTrainingState.elapsedSec;
       } else {
-        currentElapsedTime = window.lastElapsedTime || 0;
+        wallElapsed = window.lastElapsedTime || 0;
+      }
+      currentElapsedTime = wallElapsed;
+      var mtsMob = window.mobileTrainingState;
+      var wMob = window.currentWorkout;
+      if (mtsMob && wMob && Array.isArray(wMob.segments) && currentSegmentIndex >= 0) {
+        var cumMob = 0;
+        var im;
+        for (im = 0; im < currentSegmentIndex; im++) {
+          var sg = wMob.segments[im];
+          if (!sg) continue;
+          cumMob += typeof segDurationSec === 'function' ? segDurationSec(sg) : Math.max(0, Number(sg.duration_sec || sg.duration || 0));
+        }
+        var segElMob = Math.max(0, Number(mtsMob.segElapsedSec) || 0);
+        currentElapsedTime = cumMob + segElMob;
       }
     } else {
       // 개인 대시보드의 경우 함수 파라미터 또는 전역 변수 사용
