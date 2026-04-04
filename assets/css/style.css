@@ -949,11 +949,20 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   letter-spacing: -0.01em;
 }
 
-/* 라이딩 취소 확인: 스텔비오 보라 톤 오버레이 */
+/* 라이딩 취소 확인: 일반 모달과 동일한 어두운 오버레이 (modal-overlay / stelvio-exit-confirm-overlay 톤) */
 #openRidingRoomScreen .open-riding-bomb-modal-backdrop {
-  background: rgba(76, 29, 149, 0.32);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+/* 패널: 불투명 흰색 + 스텔비오 종료 확인(.stelvio-exit-confirm-content)과 동일 계열 카드 */
+#openRidingRoomScreen .open-riding-bomb-modal-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  box-shadow: 0 16px 48px rgba(102, 126, 234, 0.2), 0 0 0 1px rgba(118, 75, 162, 0.1);
+  box-sizing: border-box;
 }
 
 #openRidingRoomScreen .open-riding-main-screen-title {
