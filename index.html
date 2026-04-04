@@ -11911,7 +11911,12 @@
         }
       });
       authScreen.classList.add('active');
-      authScreen.style.display = 'block';
+      authScreen.style.removeProperty('position');
+      authScreen.style.removeProperty('z-index');
+      authScreen.style.setProperty('display', 'flex', 'important');
+      authScreen.style.setProperty('flex-direction', 'column', 'important');
+      authScreen.style.setProperty('justify-content', 'center', 'important');
+      authScreen.style.setProperty('align-items', 'center', 'important');
       authScreen.style.visibility = 'visible';
       authScreen.style.opacity = '1';
       window.scrollTo(0, 0);
@@ -12098,13 +12103,15 @@
       
       // 로그인 화면 표시
       if (authScreen) {
-        // 스타일 강제 설정
         authScreen.classList.add('active');
-        authScreen.style.display = 'block';
+        authScreen.style.removeProperty('position');
+        authScreen.style.removeProperty('z-index');
+        authScreen.style.setProperty('display', 'flex', 'important');
+        authScreen.style.setProperty('flex-direction', 'column', 'important');
+        authScreen.style.setProperty('justify-content', 'center', 'important');
+        authScreen.style.setProperty('align-items', 'center', 'important');
         authScreen.style.visibility = 'visible';
         authScreen.style.opacity = '1';
-        authScreen.style.position = 'relative';
-        authScreen.style.zIndex = '1000';
         console.log('✅ 로그인 화면 표시 완료');
         
         // 스크롤을 맨 위로
