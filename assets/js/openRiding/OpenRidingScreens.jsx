@@ -887,8 +887,9 @@ function OpenRidingGpxCoursePanel(props) {
   if (loadState.status === 'empty' || loadState.status === 'idle') {
     if (!showEmpty) return null;
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/90 px-3 py-6 text-center text-sm text-slate-500 leading-snug">
-        등록된 코스가 없습니다. GPX 파일을 선택하면 지도와 고도표가 표시됩니다.
+      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/90 px-3 py-6 text-center open-riding-gpx-empty-hint space-y-1.5">
+        <p className="m-0">등록된 코스가 없습니다.</p>
+        <p className="m-0">GPX파일을 업로드하면 지도와 고도표가 표시됩니다.</p>
       </div>
     );
   }
@@ -1587,7 +1588,7 @@ function OpenRidingCalendarMain(props) {
                   ) : null}
                   {isConfirmedDay ? (
                     <span
-                      className="absolute inset-0 z-[8] rounded-lg border-2 border-emerald-700 pointer-events-none box-border"
+                      className="absolute inset-0 z-[8] rounded-lg border-2 border-red-600 pointer-events-none box-border"
                       aria-hidden
                     />
                   ) : null}
@@ -1603,7 +1604,7 @@ function OpenRidingCalendarMain(props) {
             </div>
             <div className="flex items-center gap-1.5 min-w-0">
               <span
-                className="inline-block w-3 h-3 rounded-sm shrink-0 border-2 border-emerald-700 bg-white box-border"
+                className="inline-block w-3 h-3 rounded-sm shrink-0 border-2 border-red-600 bg-white box-border"
                 aria-hidden
               />
               <span className="text-slate-500 min-w-0 leading-tight">참석 확정 라이딩</span>
