@@ -1317,6 +1317,16 @@ function skipCurrentSegment() {
       window.trainingState.segElapsedSec = 0;
       // 벽시계 경과(elapsedSec)는 건너뛴 구간만큼 늘리지 않음. 세그먼트 내 경과는 tick에서 cumStart 대비 계산됨.
       window.trainingState._lastProcessedSegIndex = newIndex;
+
+      if (newIndex < w.segments.length) {
+        var tsCd = window.trainingState;
+        var nextSegAfterSkip = w.segments[newIndex];
+        var nextSegDurSkip = segDurationSec(nextSegAfterSkip);
+        tsCd._countdownFired = tsCd._countdownFired || {};
+        tsCd._prevRemainMs = tsCd._prevRemainMs || {};
+        tsCd._countdownFired[String(newIndex)] = {};
+        tsCd._prevRemainMs[String(newIndex)] = nextSegDurSkip * 1000;
+      }
     }
     
     if (typeof applySegmentTarget === 'function') {
@@ -15153,6 +15163,8 @@ function setupMobileDashboardFirebaseStatusSubscription() {
         
         if (status.lapCountdown !== undefined && status.lapCountdown !== null && w && w.segments) {
           window.mobileDashboardFirebaseLapCountdown = status.lapCountdown;
+          window.mobileDashboardFirebaseLapForSegIndex =
+            status.segmentIndex !== undefined && status.segmentIndex !== null ? Number(status.segmentIndex) : null;
           const currentSeg = w.segments[status.segmentIndex || 0];
           if (currentSeg) {
             let segDur = 0;
@@ -15188,6 +15200,8 @@ function setupMobileDashboardFirebaseStatusSubscription() {
         // 랩 카운트다운 값 동기화 (코치 화면과 동일한 값 사용)
         if (status.lapCountdown !== undefined && status.lapCountdown !== null) {
           window.mobileDashboardFirebaseLapCountdown = status.lapCountdown;
+          window.mobileDashboardFirebaseLapForSegIndex =
+            status.segmentIndex !== undefined && status.segmentIndex !== null ? Number(status.segmentIndex) : null;
           console.log('[Mobile Dashboard] Firebase 랩 카운트다운 동기화:', status.lapCountdown, '초');
           
           // 랩 카운트다운을 기반으로 세그먼트 경과 시간도 동기화
@@ -17312,10 +17326,16 @@ function startMobileTrainingTimerLoop() {
     }
     const segDur = segDurationSec(currentSeg);
     
-    // Firebase에서 받은 랩 카운트다운 값이 있으면 우선 사용 (코치 화면과 동기화)
-    if (window.mobileDashboardFirebaseLapCountdown !== undefined && window.mobileDashboardFirebaseLapCountdown !== null) {
-      // Firebase에서 받은 랩 카운트다운 값 사용 (코치 화면과 동기화)
-      const firebaseLapCountdown = Math.max(0, Math.floor(window.mobileDashboardFirebaseLapCountdown));
+    // Firebase 랩: 현재 로컬 세그먼트 인덱스와 일치할 때만 사용(건너뛰기 직후 이전 구간 값 오용 방지)
+    var firebaseLapRaw = window.mobileDashboardFirebaseLapCountdown;
+    var firebaseLapSeg = window.mobileDashboardFirebaseLapForSegIndex;
+    var useFirebaseLap = firebaseLapRaw !== undefined && firebaseLapRaw !== null;
+    if (useFirebaseLap && firebaseLapSeg != null && Number(firebaseLapSeg) !== Number(currentSegIndex)) {
+      useFirebaseLap = false;
+    }
+    
+    if (useFirebaseLap) {
+      const firebaseLapCountdown = Math.max(0, Math.floor(firebaseLapRaw));
       
       // 랩 카운트다운을 기반으로 세그먼트 경과 시간 역산
       const segElapsedSec = Math.max(0, segDur - firebaseLapCountdown);
@@ -17946,6 +17966,32 @@ function handleMobileToggle() {
   }
 }
 
+/** 모바일: 랩 남은시간 UI를 현재 segIndex·elapsedSec 기준으로 즉시 반영(건너뛰기 직후 05:00부터 표시) */
+function refreshMobileLapTimeDisplay() {
+  var mts = window.mobileTrainingState;
+  var w = window.currentWorkout;
+  if (!mts || !w || !w.segments || w.segments.length === 0) return;
+  var idx = mts.segIndex != null ? mts.segIndex : 0;
+  var seg = w.segments[idx];
+  if (!seg) return;
+  var segDur = typeof segDurationSec === 'function' ? segDurationSec(seg) : Math.max(0, Math.floor(Number(seg.duration_sec || seg.duration || 0)));
+  var cum = 0;
+  var i;
+  for (i = 0; i < idx; i++) {
+    var s = w.segments[i];
+    if (s) cum += typeof segDurationSec === 'function' ? segDurationSec(s) : Math.max(0, Math.floor(Number(s.duration_sec || s.duration || 0)));
+  }
+  var elapsedInSeg = Math.max(0, (Number(mts.elapsedSec) || 0) - cum);
+  var remaining = Math.max(0, segDur - Math.min(elapsedInSeg, segDur));
+  var lapTimeEl = safeGetElement('mobile-ui-lap-time');
+  if (lapTimeEl) {
+    var lapMinutes = Math.floor(remaining / 60);
+    var lapSeconds = Math.floor(remaining % 60);
+    lapTimeEl.textContent = String(lapMinutes).padStart(2, '0') + ':' + String(lapSeconds).padStart(2, '0');
+    lapTimeEl.setAttribute('fill', remaining <= 10 ? '#ff4444' : '#00d4aa');
+  }
+}
+
 /**
  * 2. 건너뛰기 핸들러
  */
@@ -17977,6 +18023,10 @@ function handleMobileSkip() {
     mts.segElapsedSec = 0;
     mts._lastProcessedSegIndex = nextSegIndex;
     
+    // 로컬 건너뛰기 직후 이전 구간 Firebase 랩 값이 새 세그먼트에 섞이지 않도록 무효화
+    window.mobileDashboardFirebaseLapCountdown = null;
+    window.mobileDashboardFirebaseLapForSegIndex = null;
+    
     // 세그먼트 카운트다운 상태 초기화
     if (nextSegIndex < w.segments.length) {
       const nextSeg = w.segments[nextSegIndex];
@@ -17988,6 +18038,9 @@ function handleMobileSkip() {
     // UI 업데이트
     if (typeof updateMobileDashboardUI === 'function') {
       updateMobileDashboardUI();
+    }
+    if (typeof refreshMobileLapTimeDisplay === 'function') {
+      refreshMobileLapTimeDisplay();
     }
     
     console.log('[Mobile Dashboard] 세그먼트 스킵:', currentSegIndex, '→', nextSegIndex);
