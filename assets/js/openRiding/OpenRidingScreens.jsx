@@ -1037,6 +1037,9 @@ function OpenRidingCalendarMain(props) {
   var onOpenCreate = props.onOpenCreate || function () {};
   var onSelectRide = props.onSelectRide || function () {};
   var compact = !!props.compact;
+  var filterPageOpen = !!props.filterPageOpen;
+  var onOpenFilterPage = props.onOpenFilterPage || function () {};
+  var onCloseFilterPage = props.onCloseFilterPage || function () {};
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -1227,10 +1230,6 @@ function OpenRidingCalendarMain(props) {
 
   var koreaRegionGroupsForFilterUi = getKoreaRegionGroupsResolved();
 
-  var _filterOpen = useState(false);
-  var filterModalOpen = _filterOpen[0];
-  var setFilterModalOpen = _filterOpen[1];
-
   var _rankFetch = useState({
     loading: false,
     error: false,
@@ -1254,7 +1253,16 @@ function OpenRidingCalendarMain(props) {
 
   useEffect(
     function () {
-      if (!filterModalOpen) return undefined;
+      if (filterPageOpen) {
+        filterRankFetchStartedRef.current = false;
+      }
+    },
+    [filterPageOpen]
+  );
+
+  useEffect(
+    function () {
+      if (!filterPageOpen) return undefined;
       if (filterRankFetchStartedRef.current) return undefined;
       filterRankFetchStartedRef.current = true;
       var cancelled = false;
@@ -1319,7 +1327,7 @@ function OpenRidingCalendarMain(props) {
         cancelled = true;
       };
     },
-    [filterModalOpen, userId]
+    [filterPageOpen, userId]
   );
 
   var cellH = compact ? 'h-8' : 'h-10';
@@ -1858,6 +1866,26 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  if (compact && filterPageOpen) {
+    return (
+      <div className="open-riding-filter-full-page w-full max-w-lg mx-auto text-left relative z-0">
+        <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0">
+          {renderFilterSettingsBody()}
+          <div className="open-riding-bottom-actions">
+            <button
+              type="button"
+              className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none hover:bg-violet-700"
+              onClick={onCloseFilterPage}
+            >
+              확인
+            </button>
+          </div>
+          <OpenRidingBottomLogoBar />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
       {compact ? (
@@ -1867,7 +1895,7 @@ function OpenRidingCalendarMain(props) {
             <button
               type="button"
               className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap"
-              onClick={function () { setFilterModalOpen(true); }}
+              onClick={onOpenFilterPage}
               aria-label="맞춤 설정"
             >
               맞춤 설정 (+)
@@ -1993,40 +2021,6 @@ function OpenRidingCalendarMain(props) {
       </div>
 
       {!compact ? renderListSection() : null}
-
-      {compact && filterModalOpen ? (
-        <div
-          className="open-riding-filter-modal fixed inset-0 z-[10050] flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="open-riding-filter-modal-title"
-          onClick={function () { setFilterModalOpen(false); }}
-        >
-          <div
-            className="open-riding-filter-modal-panel w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-violet-200 bg-white p-4 shadow-xl"
-            onClick={function (e) { e.stopPropagation(); }}
-          >
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h2 id="open-riding-filter-modal-title" className="text-sm font-semibold text-slate-800">맞춤 필터 설정</h2>
-              <button
-                type="button"
-                className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
-                onClick={function () { setFilterModalOpen(false); }}
-              >
-                닫기
-              </button>
-            </div>
-            {renderFilterSettingsBody()}
-            <button
-              type="button"
-              className="mt-4 w-full rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-violet-700"
-              onClick={function () { setFilterModalOpen(false); }}
-            >
-              확인
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -3501,6 +3495,8 @@ function OpenRidingRoomApp(props) {
   function handleTopBack() {
     if (view === 'main') {
       if (typeof showScreen === 'function') showScreen('basecampScreen');
+    } else if (view === 'filter') {
+      setView('main');
     } else if (view === 'edit') {
       setView('detail');
     } else if (view === 'create') {
@@ -3512,12 +3508,21 @@ function OpenRidingRoomApp(props) {
   }
 
   var headerTitle =
-    view === 'create' ? '라이딩 생성' : view === 'edit' ? '라이딩 수정' : view === 'detail' ? '라이딩 상세' : '라이딩 모임';
+    view === 'create'
+      ? '라이딩 생성'
+      : view === 'edit'
+        ? '라이딩 수정'
+        : view === 'detail'
+          ? '라이딩 상세'
+          : view === 'filter'
+            ? '맞춤 필터 설정'
+            : '라이딩 모임';
 
   var useBottomFixedBar = !!(
     firestore &&
     (view === 'main' ||
       view === 'create' ||
+      view === 'filter' ||
       (view === 'edit' && detailRideId) ||
       (view === 'detail' && detailRideId))
   );
@@ -3569,6 +3574,9 @@ function OpenRidingRoomApp(props) {
         userId={userId}
         userLabel={userLabel}
         compact={true}
+        filterPageOpen={view === 'filter'}
+        onOpenFilterPage={function () { setView('filter'); }}
+        onCloseFilterPage={function () { setView('main'); }}
         onOpenCreate={function () { setView('create'); }}
         onSelectRide={function (id) { setDetailRideId(id); setView('detail'); }}
       />
