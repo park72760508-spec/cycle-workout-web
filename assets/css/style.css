@@ -1120,6 +1120,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   font-size: 12px;
   line-height: 1.3;
 }
+/* GPX 미등록 안내: 상세 정보(일시~내 상태) 값 행과 동일 타이포 */
+.open-riding-gpx-empty-hint {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 500;
+  color: #334155;
+}
 #openRidingRoomScreen .open-riding-detail-stat-row:last-child {
   border-bottom: none;
 }
