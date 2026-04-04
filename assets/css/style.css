@@ -943,6 +943,19 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   color: #111827;
 }
 
+/* 라이딩 상세: 상단 3분할 가운데 라이딩 제목 */
+#openRidingRoomScreen .open-riding-detail-header-ride-title {
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+/* 라이딩 취소 확인: 스텔비오 보라 톤 오버레이 */
+#openRidingRoomScreen .open-riding-bomb-modal-backdrop {
+  background: rgba(76, 29, 149, 0.32);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
 #openRidingRoomScreen .open-riding-main-screen-title {
   font-size: 1.8em;
   font-weight: bold;
