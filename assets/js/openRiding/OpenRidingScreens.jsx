@@ -3334,7 +3334,10 @@ function OpenRidingRoomApp(props) {
 
   var useBottomFixedBar = !!(
     firestore &&
-    (view === 'create' || (view === 'edit' && detailRideId) || (view === 'detail' && detailRideId))
+    (view === 'main' ||
+      view === 'create' ||
+      (view === 'edit' && detailRideId) ||
+      (view === 'detail' && detailRideId))
   );
 
   var inner = null;
@@ -3431,6 +3434,8 @@ function OpenRidingRoomApp(props) {
       >
         {inner}
       </div>
+      {/* 라이딩 모임(메인 달력): 상세·생성·수정과 동일 스타일의 하단 STELVIO 고정바 — 해당 화면들은 폼 내부에 별도 배치 */}
+      {firestore && view === 'main' ? <OpenRidingBottomLogoBar /> : null}
     </div>
   );
 }
