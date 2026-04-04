@@ -203,16 +203,23 @@ function buildOpenRidingInviteListRows(ride) {
     if (!key || seen[key]) continue;
     seen[key] = true;
     var matchedUid = findOpenRidingUidForInvitePhone(phoneStr, part, wait, pc);
-    var attended =
+    var inPart =
       !!matchedUid &&
       part.some(function (id) {
         return String(id) === String(matchedUid);
       });
+    var inWait =
+      !!matchedUid &&
+      wait.some(function (id) {
+        return String(id) === String(matchedUid);
+      });
+    /** 참석 확정 | 대기 명단만 신청 | 미신청(연락처 매칭 없음) */
+    var inviteStatus = inPart ? 'attended' : inWait ? 'wait' : 'none';
     rows.push({
       phoneKey: key,
       invitePhone: phoneStr,
       matchedUid: matchedUid,
-      attended: attended
+      inviteStatus: inviteStatus
     });
   }
   return rows;
@@ -3667,8 +3674,18 @@ function OpenRidingDetail(props) {
                   } else {
                     named = String(named).trim();
                   }
-                  var st = r.attended ? '참석' : '미응답';
-                  var stCls = r.attended ? 'text-emerald-700' : 'text-slate-500';
+                  var st =
+                    r.inviteStatus === 'attended'
+                      ? '참석'
+                      : r.inviteStatus === 'wait'
+                        ? '대기'
+                        : '미응답';
+                  var stCls =
+                    r.inviteStatus === 'attended'
+                      ? 'text-emerald-700'
+                      : r.inviteStatus === 'wait'
+                        ? 'text-amber-700'
+                        : 'text-slate-500';
                   return (
                     <li key={r.phoneKey} className="break-words">
                       <span className="open-riding-detail-invite-name">{named}</span>
