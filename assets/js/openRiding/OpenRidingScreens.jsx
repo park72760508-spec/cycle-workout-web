@@ -1596,25 +1596,25 @@ function OpenRidingCalendarMain(props) {
               );
             })}
           </div>
-          <div className="mt-2 flex flex-col gap-1.5 text-[11px] text-slate-600">
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-600 items-center">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
-              <span className="text-slate-500">참여 가능 라이딩</span>
+              <span className="text-slate-500 min-w-0 leading-tight">참여 가능 라이딩</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span
                 className="inline-block w-3 h-3 rounded-sm shrink-0 border-2 border-emerald-700 bg-white box-border"
                 aria-hidden
               />
-              <span className="text-slate-500">참석 확정 라이딩</span>
+              <span className="text-slate-500 min-w-0 leading-tight">참석 확정 라이딩</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
-              <span className="text-slate-500">내가 주최한 라이딩</span>
+              <span className="text-slate-500 min-w-0 leading-tight">내가 주최한 라이딩</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span className="inline-block w-3 h-3 rounded-sm bg-slate-300/90 shrink-0 border border-slate-500/30" aria-hidden />
-              <span className="text-slate-500">구경해 볼 라이딩</span>
+              <span className="text-slate-500 min-w-0 leading-tight">구경해 볼 라이딩</span>
             </div>
           </div>
         </section>
