@@ -1460,7 +1460,7 @@ function OpenRidingCalendarMain(props) {
               </p>
               <ul className="space-y-1.5 m-0 p-0 list-none border-t border-violet-100/80 pt-2">
                 {RIDING_LEVEL_OPTIONS.map(function (opt) {
-                  var tkm = tgtFn ? tgtFn(opt.value) : null;
+                  var tkm = tgtSpd ? tgtSpd(opt.value) : null;
                   var row =
                     ev && tkm != null && prof.ok ? ev(prof.ftp, prof.weight, tkm) : null;
                   return (
