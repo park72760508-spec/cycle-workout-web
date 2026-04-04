@@ -1020,8 +1020,8 @@ function OpenRidingBottomLogoBar() {
           src="assets/img/STELVIO AI.png"
           alt=""
           className="open-riding-bottom-brand-logo"
-          width={280}
-          height={36}
+          width={420}
+          height={54}
           decoding="async"
         />
       </div>
