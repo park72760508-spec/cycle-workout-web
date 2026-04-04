@@ -960,9 +960,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·수정·상세: 하단 고정 CTA 높이만큼 스크롤 여백 (로고 16px + 여백 + 버튼 44px + 패딩 + safe-area) */
+/* 생성·수정·상세: 하단 고정 로고 줄만큼 스크롤 여백 (CTA는 본문 흐름) */
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -997,7 +997,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 2px 10px 0;
+  padding: 4px 10px 3px;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1013,11 +1013,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 0.95;
 }
 
-#openRidingRoomScreen .open-riding-bottom-fixed-shell .open-riding-bottom-actions {
-  position: relative;
-  z-index: 1;
-  padding: 6px 10px 8px;
-  padding-bottom: 8px;
+/* 로고 전용 고정바: 최소 높이·섀도만 */
+#openRidingRoomScreen .open-riding-bottom-logo-bar.open-riding-bottom-fixed-shell {
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.05);
 }
 
 /* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
@@ -1081,10 +1079,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #openRidingRoomScreen .open-riding-create-submit {
   margin-top: 1rem;
   cursor: pointer;
-}
-
-#openRidingRoomScreen .open-riding-bottom-fixed-shell .open-riding-create-submit {
-  margin-top: 0;
 }
 
 /* 라이딩 상세: 랭킹/주간 TSS 패널 느낌의 보라 톤 스탯 행 */
