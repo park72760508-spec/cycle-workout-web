@@ -1147,7 +1147,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   line-height: 1.45;
 }
 
-/* 맞춤 필터: 평지 개인 평속(60분 피크) — 현실 지표 강조 */
+/* 맞춤 필터: 평지 개인 평속(60분 피크) — 현실 지표 강조(주황 톤) */
 #openRidingRoomScreen .open-riding-filter-realistic-solo-highlight {
   border-color: rgba(234, 88, 12, 0.55) !important;
   background: linear-gradient(
@@ -1157,6 +1157,18 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
     rgba(255, 237, 213, 0.82) 100%
   ) !important;
   box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.1), 0 2px 12px rgba(234, 88, 12, 0.12);
+}
+
+/* 맞춤 필터: 평지 개인 평속(FTP 투입) — 최대 능력치 핵심 강조(보라 톤, 위와 동일 패턴) */
+#openRidingRoomScreen .open-riding-filter-ftp-solo-highlight {
+  border-color: rgba(109, 40, 217, 0.48) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(245, 243, 255, 0.98) 0%,
+    rgba(237, 233, 254, 0.55) 45%,
+    rgba(221, 214, 254, 0.88) 100%
+  ) !important;
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.14), 0 2px 12px rgba(91, 33, 182, 0.12);
 }
 
 /* 맞춤 필터: 관심 레벨 체크박스 — 체크 시 채움 보라(violet-600) */
