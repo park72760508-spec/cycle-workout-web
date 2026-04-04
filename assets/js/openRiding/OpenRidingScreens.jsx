@@ -1627,7 +1627,12 @@ function OpenRidingCalendarMain(props) {
             var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
             return (
               <label key={opt.value} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
-                <input type="checkbox" checked={on} onChange={function () { toggleLevel(opt.value); }} />
+                <input
+                  type="checkbox"
+                  className="open-riding-filter-level-checkbox h-4 w-4 shrink-0 rounded border-slate-300 accent-violet-600 focus:ring-2 focus:ring-violet-500/35 focus:ring-offset-0 cursor-pointer"
+                  checked={on}
+                  onChange={function () { toggleLevel(opt.value); }}
+                />
                 {opt.value} <span className="text-xs text-slate-400">({opt.hint})</span>
               </label>
             );
