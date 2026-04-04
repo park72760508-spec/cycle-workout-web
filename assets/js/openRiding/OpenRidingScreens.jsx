@@ -3189,6 +3189,7 @@ function OpenRidingDetail(props) {
   var onBack = props.onBack || function () {};
   var onOpenEdit = props.onOpenEdit || function () {};
   var registerDetailHeaderEdit = props.registerDetailHeaderEdit;
+  var registerDetailHeaderCancel = props.registerDetailHeaderCancel;
 
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
@@ -3456,6 +3457,27 @@ function OpenRidingDetail(props) {
     [registerDetailHeaderEdit, loading, ride, userId, onOpenEdit]
   );
 
+  useEffect(
+    function () {
+      if (typeof registerDetailHeaderCancel !== 'function') return;
+      if (loading || !ride) {
+        registerDetailHeaderCancel(false, null);
+        return;
+      }
+      var host = !!(userId && String(ride.hostUserId || '') === String(userId));
+      var cancelled = String(ride.rideStatus || 'active') === 'cancelled';
+      if (host && !cancelled) {
+        registerDetailHeaderCancel(true, function () {
+          setBombOpen(true);
+        });
+      } else registerDetailHeaderCancel(false, null);
+      return function () {
+        registerDetailHeaderCancel(false, null);
+      };
+    },
+    [registerDetailHeaderCancel, loading, ride, userId]
+  );
+
   if (loading) {
     return <div className="p-6 text-center text-slate-500">불러오는 중…</div>;
   }
@@ -3564,25 +3586,12 @@ function OpenRidingDetail(props) {
       ) : null}
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
-        <div className="open-riding-detail-stat-row">
-          <span className="open-riding-detail-stat-label">제목</span>
-          <div className="open-riding-detail-stat-value flex min-w-0 flex-1 items-center justify-end gap-2 text-left">
-            <span className={'font-semibold text-slate-900 flex-1 min-w-0 break-words text-[13px] leading-[1.45] ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
-              {ride.title}
-            </span>
-            {isHost && !isCancelled ? (
-              <button
-                type="button"
-                className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap shrink-0 self-center"
-                onClick={function () {
-                  setBombOpen(true);
-                }}
-              >
-                라이딩 취소
-              </button>
-            ) : null}
-          </div>
-        </div>
+        {statRow(
+          '제목',
+          <span className={'font-semibold text-slate-900 block min-w-0 break-words text-[13px] leading-[1.45] text-left ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
+            {ride.title}
+          </span>
+        )}
         {statRow('일시', (
           <span>
             {dateStr} {ride.departureTime != null ? ride.departureTime : ''}
@@ -3932,14 +3941,24 @@ function OpenRidingRoomApp(props) {
   var _dhe = useState({ show: false, onEdit: null });
   var detailHeaderEdit = _dhe[0];
   var setDetailHeaderEdit = _dhe[1];
+  var _dhc = useState({ show: false, onCancel: null });
+  var detailHeaderCancel = _dhc[0];
+  var setDetailHeaderCancel = _dhc[1];
 
   var registerDetailHeaderEdit = useCallback(function (show, onEdit) {
     setDetailHeaderEdit({ show: !!show, onEdit: onEdit || null });
   }, []);
 
+  var registerDetailHeaderCancel = useCallback(function (show, onCancel) {
+    setDetailHeaderCancel({ show: !!show, onCancel: onCancel || null });
+  }, []);
+
   useEffect(
     function () {
-      if (view !== 'detail') setDetailHeaderEdit({ show: false, onEdit: null });
+      if (view !== 'detail') {
+        setDetailHeaderEdit({ show: false, onEdit: null });
+        setDetailHeaderCancel({ show: false, onCancel: null });
+      }
     },
     [view]
   );
@@ -4016,6 +4035,7 @@ function OpenRidingRoomApp(props) {
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
         registerDetailHeaderEdit={registerDetailHeaderEdit}
+        registerDetailHeaderCancel={registerDetailHeaderCancel}
       />
     );
   } else {
@@ -4053,19 +4073,45 @@ function OpenRidingRoomApp(props) {
         <h1 className="open-riding-screen-title flex-1 text-center m-0">
           {headerTitle}
         </h1>
-        {view === 'detail' && detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
-          <button
-            type="button"
-            className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-            style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={detailHeaderEdit.onEdit}
-            aria-label="라이딩 수정"
-          >
-            <OpenRidingDashboardEditIcon />
-          </button>
-        ) : (
-          <span className="shrink-0" style={{ width: '2.5em' }} aria-hidden="true" />
-        )}
+        <div className="flex shrink-0 items-center justify-end gap-0.5">
+          {view === 'detail' && detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
+            <button
+              type="button"
+              className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
+              style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={detailHeaderEdit.onEdit}
+              aria-label="라이딩 수정"
+            >
+              <OpenRidingDashboardEditIcon />
+            </button>
+          ) : null}
+          {view === 'detail' && detailHeaderCancel.show && detailHeaderCancel.onCancel ? (
+            <button
+              type="button"
+              className="open-riding-header-cancel-btn p-2 rounded-lg hover:bg-red-50 active:opacity-80 transition-all shrink-0"
+              style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={detailHeaderCancel.onCancel}
+              aria-label="라이딩 취소"
+            >
+              <img
+                src="assets/img/delete2.png"
+                alt=""
+                width={22}
+                height={22}
+                className="block object-contain pointer-events-none"
+                decoding="async"
+              />
+            </button>
+          ) : null}
+          {view === 'detail' &&
+          !(detailHeaderEdit.show && detailHeaderEdit.onEdit) &&
+          !(detailHeaderCancel.show && detailHeaderCancel.onCancel) ? (
+            <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
+          ) : null}
+          {view !== 'detail' ? (
+            <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
+          ) : null}
+        </div>
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. CTA는 고정바 아래 z-스택(style.css) */}
       <div
