@@ -1431,7 +1431,7 @@ function OpenRidingCalendarMain(props) {
                 return <option key={d} value={d}>{d}</option>;
               })}
             </select>
-            <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
+            <button type="button" className="rounded-lg bg-violet-600 text-white px-3 py-1 text-sm shrink-0 hover:bg-violet-700" onClick={addRegionFromSelect}>추가</button>
           </div>
           <ul className="mt-2 flex flex-wrap gap-1">
             {prefs.activeRegions.map(function (r) {
