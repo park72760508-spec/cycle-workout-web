@@ -960,9 +960,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·수정·상세: 하단 고정 로고 줄만큼 스크롤 여백 (CTA는 본문 흐름) */
+/* 생성·수정·상세: 하단 고정 로고 줄만큼 스크롤 여백 (CTA는 본문 흐름) — 로고 2배 높이 기준 */
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -979,7 +979,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
   background: #fff;
   border-top: 1px solid #e5e7eb;
   box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.07);
@@ -997,18 +998,22 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 4px 10px 3px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
 #openRidingRoomScreen .open-riding-bottom-brand-logo {
-  height: 16px;
+  height: 32px;
   width: auto;
-  max-width: min(200px, 85vw);
+  max-width: min(400px, 90vw);
+  margin-left: auto;
+  margin-right: auto;
   object-fit: contain;
-  object-position: center;
+  object-position: center center;
   display: block;
   opacity: 0.95;
 }
