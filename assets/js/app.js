@@ -1327,6 +1327,10 @@ function skipCurrentSegment() {
         tsCd._countdownFired[String(newIndex)] = {};
         tsCd._prevRemainMs[String(newIndex)] = nextSegDurSkip * 1000;
       }
+
+      // 모바일 대시보드와 동일: 명목 cum vs 벽시계 불일치 시 랩·세그 진행이 멈추지 않도록 앵커
+      window.trainingState._lapBaselineBySegIndex = {};
+      window.trainingState._lapBaselineBySegIndex[newIndex] = Number(window.trainingState.elapsedSec) || 0;
     }
     
     if (typeof applySegmentTarget === 'function') {
@@ -1504,21 +1508,25 @@ function getCumulativeSegmentStartSec(index) {
 window.getCumulativeSegmentStartSec = getCumulativeSegmentStartSec;
 
 /**
- * 모바일 대시보드: 세그먼트 내 경과(초) — TrainingTimer → mobileTrainingState.elapsedSec 단일 소스.
- * 건너뛰기 후에는 명목 누적(getCumulativeSegmentStartSec)과 벽시계가 맞지 않으므로
- * _lapBaselineBySegIndex[segIndex] = 세그먼트 진입 시점의 elapsedSec 으로 랩만 보정한다.
+ * TrainingTimer가 넣는 elapsedSec(SSOT) 기준 세그먼트 내 경과(초).
+ * 노트북 trainingState / 모바일 mobileTrainingState 공통. 건너뛰기 시 _lapBaselineBySegIndex 로 보정.
  */
-function getMobileSegmentElapsedForLap(mts, segIndex) {
-  if (!mts) return 0;
+function getWallClockSegmentElapsedForLap(state, segIndex) {
+  if (!state) return 0;
   var idx = Math.max(0, Math.floor(Number(segIndex)) || 0);
-  var map = mts._lapBaselineBySegIndex;
+  var map = state._lapBaselineBySegIndex;
   var rawB = map && Object.prototype.hasOwnProperty.call(map, idx) ? map[idx] : null;
   var b = rawB != null ? Number(rawB) : NaN;
   if (Number.isFinite(b)) {
-    return Math.max(0, (Number(mts.elapsedSec) || 0) - b);
+    return Math.max(0, (Number(state.elapsedSec) || 0) - b);
   }
   var cum = typeof getCumulativeSegmentStartSec === 'function' ? getCumulativeSegmentStartSec(idx) : 0;
-  return Math.max(0, (Number(mts.elapsedSec) || 0) - cum);
+  return Math.max(0, (Number(state.elapsedSec) || 0) - cum);
+}
+window.getWallClockSegmentElapsedForLap = getWallClockSegmentElapsedForLap;
+
+function getMobileSegmentElapsedForLap(mts, segIndex) {
+  return getWallClockSegmentElapsedForLap(mts, segIndex);
 }
 window.getMobileSegmentElapsedForLap = getMobileSegmentElapsedForLap;
 
@@ -2297,7 +2305,9 @@ window.trainingState = window.trainingState || {
   segIndex: 0,
   segElapsedSec: 0,
   segEnds: [],
-  totalSec: 0
+  totalSec: 0,
+  /** 노트북 훈련화면: 건너뛰기 직후 랩/세그 진행 — 모바일과 동일 벽시계 앵커 */
+  _lapBaselineBySegIndex: {}
 };
 
 // [추가] 모바일 개인훈련 대시보드 전용 독립적인 상태 관리 (Firebase와 무관)
@@ -2360,7 +2370,10 @@ function updateTimeUI() {
       const cumUi = typeof getCumulativeSegmentStartSec === 'function'
         ? getCumulativeSegmentStartSec(i)
         : 0;
-      const segElapsedUi = Math.max(0, elapsed - cumUi);
+      const tsUi = window.trainingState;
+      const segElapsedUi = typeof getWallClockSegmentElapsedForLap === 'function' && tsUi
+        ? getWallClockSegmentElapsedForLap(tsUi, i)
+        : Math.max(0, elapsed - cumUi);
       const segRemain = Math.max(0, segDur - Math.min(segElapsedUi, segDur));
       safeSetText("segmentTime", formatMMSS(segRemain));
     }
@@ -2384,7 +2397,10 @@ function updateTimeUI() {
       const cumProg = typeof getCumulativeSegmentStartSec === 'function'
         ? getCumulativeSegmentStartSec(i)
         : 0;
-      const segElapsed = Math.max(0, elapsed - cumProg);
+      const tsPr = window.trainingState;
+      const segElapsed = typeof getWallClockSegmentElapsedForLap === 'function' && tsPr
+        ? getWallClockSegmentElapsedForLap(tsPr, i)
+        : Math.max(0, elapsed - cumProg);
       const sp = Math.min(100, Math.floor((Math.min(segElapsed, segDur) / segDur) * 100));
       // safeSetText("segmentProgress", String(sp)); // 진행율 표시 제거됨
       //safeSetText("segmentProgressLegend", String(sp)); // ← 범례에도 동일 % 표시
@@ -2791,6 +2807,7 @@ function startSegmentLoop() {
   window.trainingState.elapsedSec = 0;
   window.trainingState.segIndex = 0;
   window.trainingState.segElapsedSec = 0;
+  window.trainingState._lapBaselineBySegIndex = {};
   window.trainingState.paused = false;
 
    window._powerSeries?.clear?.();
@@ -2890,9 +2907,9 @@ function startSegmentLoop() {
         if (!ts) return;
         ts.elapsedSec = elapsedSec;
    
-   // 현재 세그 경과초 = 전체경과초 - 해당 세그 누적시작초
-   const cumStart = getCumulativeSegmentStartSec(ts.segIndex);
-   ts.segElapsedSec = Math.max(0, ts.elapsedSec - cumStart);
+   ts.segElapsedSec = typeof getWallClockSegmentElapsedForLap === 'function'
+     ? getWallClockSegmentElapsedForLap(ts, ts.segIndex)
+     : Math.max(0, ts.elapsedSec - getCumulativeSegmentStartSec(ts.segIndex));
    
    // 이후 로직은 기존과 동일하게 진행 (currentSegIndex/segDur/segRemaining 계산 등)
    const w = window.currentWorkout;
@@ -2933,10 +2950,9 @@ function startSegmentLoop() {
         ts._prevRemainMs   = ts._prevRemainMs   || {};   // 세그먼트별 이전 남은 ms
         const key = String(currentSegIndex);
       
-        // 종료 누적초(초 단위 SSOT)와 남은 ms
-        const endAtSec      = getCumulativeSegmentStartSec(currentSegIndex) + segDur; // 세그 끝나는 '절대 초'
-        const remainMsPrev  = ts._prevRemainMs[key] ?? Math.round(segRemaining * 1000); // 바로 직전 남은 ms
-        const remainMsNow   = Math.round((endAtSec - ts.elapsedSec) * 1000);           // 현재 남은 ms (초 기반)
+        // 남은 ms: 명목 endAtSec 대비가 아니라 구간 내 경과(segElapsedSec) 기준(건너뛰기 후에도 카운트다운·엣지 일치)
+        const remainMsPrev  = ts._prevRemainMs[key] ?? Math.round(segRemaining * 1000);
+        const remainMsNow   = Math.max(0, Math.round((segDur - ts.segElapsedSec) * 1000));
       
         // remainMsNow가 0 이하이면 카운트다운만 건너뜀(여기서 onTick 전체를 return 하면 updateTimeUI·세그먼트 전환이 누락됨)
         if (remainMsNow <= 0) {
@@ -3239,7 +3255,13 @@ function startSegmentLoop() {
      }
 
      window.trainingState.segIndex = nextSegIndex;
-     window.trainingState.segElapsedSec = 0;
+     if (ts._lapBaselineBySegIndex) {
+       delete ts._lapBaselineBySegIndex[currentSegIndex];
+       delete ts._lapBaselineBySegIndex[nextSegIndex];
+     }
+     window.trainingState.segElapsedSec = typeof getWallClockSegmentElapsedForLap === 'function'
+       ? getWallClockSegmentElapsedForLap(ts, nextSegIndex)
+       : 0;
      ts._lastProcessedSegIndex = nextSegIndex;
 
      {
@@ -4554,6 +4576,7 @@ function startWorkoutTraining() {
       window.trainingState.elapsedSec = 0;
       window.trainingState.segElapsedSec = 0;
       window.trainingState.segIndex = 0;
+      window.trainingState._lapBaselineBySegIndex = {};
     }
 
     // (C) 세그먼트 타임라인 생성 (안전 장치 추가)
