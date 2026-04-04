@@ -147,9 +147,16 @@
     var currentUserId = p.currentUserId;
     var currentUser = p.currentUser;
     var myRankSupremo = p.myRankSupremo;
+    var titleOverride = p.titleOverride;
+    var pillLabelOverride = p.pillLabelOverride;
+    var chartSubNoteOverride = p.chartSubNoteOverride;
 
     var isTss = duration === 'tss';
     var durLabel = isTss ? '주간 TSS' : STELVIO_DURATION_LABELS[duration] || duration;
+    /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
+    var overrideMyWkg =
+      !isTss && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
+    if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
     var chartWrapRef = useRef(null);
     var _cw = useState(0);
@@ -212,7 +219,10 @@
     var xMax = binPack.xMax;
 
     var myRaw = null;
-    if (currentUserId && cohort.length) {
+    if (overrideMyWkg != null && !isTss) {
+      myRaw = overrideMyWkg;
+    }
+    if (myRaw == null && currentUserId && cohort.length) {
       var mine = cohort.filter(function (e) {
         return e.userId === currentUserId;
       })[0];
@@ -232,7 +242,9 @@
     var userAgeCat = currentUser && currentUser.ageCategory;
     var displayRank = null;
 
-    if (activeCategory === 'Supremo') {
+    if (overrideMyWkg != null && !isTss) {
+      displayRank = null;
+    } else if (activeCategory === 'Supremo') {
       var globalR =
         currentUser && currentUser.rank != null
           ? currentUser.rank
@@ -261,9 +273,11 @@
           : myRaw.toFixed(2) + ' W/kg'
         : '';
 
-    var badgeMain = '나의 위치';
+    var badgeMain = overrideMyWkg != null && !isTss ? '나의 FTP' : '나의 위치';
     var badgeSub =
-      displayRank != null && valueFmt
+      overrideMyWkg != null && !isTss && valueFmt
+        ? '· ' + valueFmt + ' (프로필)'
+        : displayRank != null && valueFmt
         ? '· ' + displayRank + '위 · ' + valueFmt
         : valueFmt
         ? '· ' + valueFmt
@@ -272,6 +286,11 @@
         : '';
 
     var catTitle = STELVIO_CATEGORY_LABELS[activeCategory] || activeCategory || '전체';
+    var cardTitleText = typeof titleOverride === 'string' && titleOverride.trim() ? titleOverride.trim() : '참가자 분포';
+    var pillText =
+      typeof pillLabelOverride === 'string' && pillLabelOverride.trim()
+        ? pillLabelOverride.trim()
+        : catTitle + ' · ' + durLabel;
 
     var RechartsLib = global.Recharts;
     var AreaChart = RechartsLib && RechartsLib.AreaChart;
@@ -362,12 +381,12 @@
       return (
         <div className="stelvio-dist-card rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-sm px-4 py-4 mt-4">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-slate-800">참가자 분포</h3>
+            <h3 className="text-sm font-semibold text-slate-800">{cardTitleText}</h3>
             <span
               className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100"
               style={{ color: BRONZE }}
             >
-              {catTitle} · {durLabel}
+              {pillText}
             </span>
           </div>
           <p className="text-xs text-slate-500 py-8 text-center">표시할 분포 데이터가 없습니다.</p>
@@ -378,12 +397,12 @@
     return (
       <div className="stelvio-dist-card rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-sm px-3 sm:px-4 py-4 mt-4">
         <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-          <h3 className="text-sm font-semibold text-slate-800 tracking-tight">참가자 분포</h3>
+          <h3 className="text-sm font-semibold text-slate-800 tracking-tight">{cardTitleText}</h3>
           <span
             className="text-[11px] font-medium px-2.5 py-0.5 rounded-full border"
             style={{ borderColor: BRONZE_MUTED, color: BRONZE, background: 'rgba(184, 115, 51, 0.08)' }}
           >
-            {catTitle} · {durLabel}
+            {pillText}
           </span>
         </div>
         <div ref={chartWrapRef} className="h-[min(240px,52vw)] w-full min-h-[200px]">
@@ -451,7 +470,9 @@
           </ResponsiveContainer>
         </div>
         <p className="text-[11px] text-slate-500 text-center leading-snug mt-1.5 px-1">
-          구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.
+          {typeof chartSubNoteOverride === 'string' && chartSubNoteOverride.trim()
+            ? chartSubNoteOverride.trim()
+            : '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'}
         </p>
       </div>
     );
