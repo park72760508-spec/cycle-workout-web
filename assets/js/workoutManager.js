@@ -996,12 +996,26 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
       ctx.textAlign = 'right'; // 원래 정렬 복원
       ctx.textBaseline = 'alphabetic'; // 원래 기준선 복원
+    } else if (canvasId === 'mobileIndividualSegmentGraph') {
+      // 모바일 대시보드: FTP 기준선 끝 = 빨강 원 + "90"
+      const circleR = Math.max(textWidth / 2, textHeight / 2) + boxPadding + 1;
+      const cx = padding.left + chartWidth - circleR - 2;
+      const cy = ftpY;
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.92)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(rpm90Text, cx, cy);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'alphabetic';
     } else {
-      // 개인훈련 대시보드: 기존 로직 유지
+      // 개인훈련 대시보드 등: 기존 둥근 사각형
       const boxX = padding.left + chartWidth - boxWidth - 2;
       const boxY = ftpY - boxHeight / 2;
       
-      // 빨강색 바탕 상자 그리기
       ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
       ctx.beginPath();
       const radius = 3;
@@ -1017,7 +1031,6 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.closePath();
       ctx.fill();
       
-      // 흰색 텍스트 표시
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -1836,38 +1849,47 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // 펄스 애니메이션 효과 (원 테두리에서 퍼져나가는 효과)
     const currentTime = Date.now() / 1000;
-    const pulseDuration = 1.5; // 펄스 한 사이클 시간 (초)
+    const isMobileSegGraphMascot = canvasId === 'mobileIndividualSegmentGraph';
+    const pulseDuration = isMobileSegGraphMascot ? 1.15 : 1.5;
     const pulsePhase = currentTime % pulseDuration;
-    const normalizedPhase = pulsePhase / pulseDuration; // 0 ~ 1
     
     // 마스코트 그리기
     ctx.save();
     
-    // 원 테두리에서 퍼져나가는 흰색 펄스 효과 (여러 개의 원)
-    const pulseCount = 3; // 동시에 표시될 펄스 원의 개수
+    const pulseCount = isMobileSegGraphMascot ? 4 : 3;
     for (let i = 0; i < pulseCount; i++) {
       const pulseOffset = (i / pulseCount) * pulseDuration;
       const pulseTime = (pulsePhase + pulseOffset) % pulseDuration;
       const pulseNormalized = pulseTime / pulseDuration;
       
-      // 펄스가 퍼져나가는 크기 (원 테두리에서 시작하여 점점 커짐)
-      const pulseRadius = mascotRadius + (pulseNormalized * mascotRadius * 2); // 원 테두리에서 3배까지 확장
+      const expandMul = isMobileSegGraphMascot ? 3.8 : 2;
+      const pulseRadius = mascotRadius + (pulseNormalized * mascotRadius * expandMul);
       
-      // 펄스 투명도 (시작할 때는 불투명, 끝날 때는 투명)
       const pulseAlpha = 1 - pulseNormalized;
       
-      // 흰색 펄스 원 그리기
       ctx.beginPath();
       ctx.arc(mascotX, mascotY, pulseRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.8})`;
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      if (isMobileSegGraphMascot) {
+        // 모바일: 주황 펄스 + 안쪽 소프트 글로우로 가시성 강화
+        ctx.strokeStyle = `rgba(249, 115, 22, ${pulseAlpha * 0.95})`;
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(mascotX, mascotY, pulseRadius * 0.96, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(253, 186, 116, ${pulseAlpha * 0.45})`;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.8})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
     }
     
-    // 메인 빨간색 원
+    // 메인 빨간색 원 (모바일·개인 대시보드 공통)
     ctx.beginPath();
     ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
-    ctx.fillStyle = '#ef4444'; // 빨간색
+    ctx.fillStyle = '#ef4444';
     ctx.fill();
     
     ctx.restore();
