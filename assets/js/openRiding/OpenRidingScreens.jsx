@@ -53,6 +53,34 @@ function getKoreaRegionOptions() {
   };
 }
 
+/** 랭킹 API byCategory → 분포 차트용 합집합( userId 기준 중복 제거 ) */
+function mergePeakRankingEntriesFromByCategory(bc) {
+  if (!bc) return [];
+  var m = {};
+  ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'].forEach(function (c) {
+    (bc[c] || []).forEach(function (e) {
+      if (e && e.userId) m[e.userId] = e;
+    });
+  });
+  return Object.keys(m).map(function (k) {
+    return m[k];
+  });
+}
+
+function readOpenRidingProfileFtpWeight() {
+  var u = typeof window !== 'undefined' ? window.currentUser : null;
+  if (!u) {
+    try {
+      u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (e0) {
+      u = null;
+    }
+  }
+  var ftp = u && Number(u.ftp) > 0 ? Number(u.ftp) : 0;
+  var w = u && Number(u.weight) > 0 ? Number(u.weight) : 0;
+  return { ftp: ftp, weight: w, ok: ftp > 0 && w > 0 };
+}
+
 /** 맞춤 필터·라이딩 생성 폼 공통: 시·도·구군 선택값 → 저장용 전체 문자열 */
 function resolveOpenRidingFullRegionLabel(sido, districtPick, districtsForSido) {
   var sd = String(sido || '').trim();
@@ -1203,6 +1231,89 @@ function OpenRidingCalendarMain(props) {
   var filterModalOpen = _filterOpen[0];
   var setFilterModalOpen = _filterOpen[1];
 
+  var _rankFetch = useState({
+    loading: false,
+    error: false,
+    byCategory: null,
+    entries: null,
+    currentUser: null,
+    myRankSupremo: null
+  });
+  var openRidingFilterRankDist = _rankFetch[0];
+  var setOpenRidingFilterRankDist = _rankFetch[1];
+  var filterRankFetchStartedRef = useRef(false);
+
+  useEffect(
+    function () {
+      filterRankFetchStartedRef.current = false;
+    },
+    [userId]
+  );
+
+  useEffect(
+    function () {
+      if (!filterModalOpen) return undefined;
+      if (filterRankFetchStartedRef.current) return undefined;
+      filterRankFetchStartedRef.current = true;
+      var cancelled = false;
+      setOpenRidingFilterRankDist(function (s) {
+        return Object.assign({}, s, { loading: true, error: false });
+      });
+      var uid = String(userId || '');
+      var params = new URLSearchParams({
+        period: 'monthly',
+        duration: '60min',
+        gender: 'all'
+      });
+      if (uid) params.set('uid', uid);
+      var url =
+        'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
+      fetch(url, { method: 'GET', mode: 'cors' })
+        .then(function (res) {
+          return res.json();
+        })
+        .then(function (data) {
+          if (cancelled) return;
+          if (!data || !data.success || !data.byCategory) {
+            setOpenRidingFilterRankDist({
+              loading: false,
+              error: true,
+              byCategory: null,
+              entries: null,
+              currentUser: null,
+              myRankSupremo: null
+            });
+            return;
+          }
+          var merged = mergePeakRankingEntriesFromByCategory(data.byCategory);
+          setOpenRidingFilterRankDist({
+            loading: false,
+            error: false,
+            byCategory: data.byCategory,
+            entries: merged,
+            currentUser: data.currentUser || null,
+            myRankSupremo: data.myRankSupremo || null
+          });
+        })
+        .catch(function () {
+          if (!cancelled) {
+            setOpenRidingFilterRankDist({
+              loading: false,
+              error: true,
+              byCategory: null,
+              entries: null,
+              currentUser: null,
+              myRankSupremo: null
+            });
+          }
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [filterModalOpen, userId]
+  );
+
   var cellH = compact ? 'h-8' : 'h-10';
   var emptyH = compact ? 'h-8' : 'h-10';
 
@@ -1238,6 +1349,19 @@ function OpenRidingCalendarMain(props) {
   }
 
   function renderFilterSettingsBody() {
+    var prof = readOpenRidingProfileFtpWeight();
+    var ev =
+      typeof window !== 'undefined' && typeof window.evaluateGroupRideEligibility === 'function'
+        ? window.evaluateGroupRideEligibility
+        : null;
+    var tgtSpd =
+      typeof window !== 'undefined' && typeof window.getRidingLevelTargetSpeedKmH === 'function'
+        ? window.getRidingLevelTargetSpeedKmH
+        : null;
+    var StelvioDistChart =
+      typeof window !== 'undefined' ? window.StelvioRankingDistributionChart : null;
+    var baseStats = prof.ok && ev ? ev(prof.ftp, prof.weight, 0) : null;
+
     return (
       <div className="space-y-4 text-left">
         <div>
@@ -1288,6 +1412,120 @@ function OpenRidingCalendarMain(props) {
             })}
           </ul>
         </div>
+
+        <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-violet-900">나의 항속 능력 레벨</span>
+            <span className="text-[10px] text-slate-500 leading-tight">
+              프로필 FTP·체중 기준 · 팩 드래프팅 1.2×
+            </span>
+          </div>
+          {!prof.ok ? (
+            <p className="text-xs text-slate-600 m-0 leading-relaxed">
+              프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 평지 개인 평속·예상 그룹 평속과 관심 레벨별
+              참가 난이도를 안내합니다.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5">
+                  <div className="text-slate-500 text-[10px]">FTP</div>
+                  <div className="font-semibold text-slate-800 tabular-nums">{prof.ftp} W</div>
+                </div>
+                <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5">
+                  <div className="text-slate-500 text-[10px]">체중</div>
+                  <div className="font-semibold text-slate-800 tabular-nums">{prof.weight} kg</div>
+                </div>
+                <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5 col-span-2 sm:col-span-1">
+                  <div className="text-slate-500 text-[10px]">W/kg (FTP)</div>
+                  <div className="font-semibold text-violet-800 tabular-nums">
+                    {baseStats ? baseStats.wkg.toFixed(2) : '-'}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5 col-span-2 sm:col-span-3">
+                  <div className="text-slate-500 text-[10px]">평지 개인 평속 (FTP 투입)</div>
+                  <div className="font-semibold text-slate-800 tabular-nums">
+                    {baseStats ? baseStats.soloSpeed + ' km/h' : '-'}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5 col-span-2 sm:col-span-3">
+                  <div className="text-slate-500 text-[10px]">예상 그룹 평속 (×1.2 드래프팅)</div>
+                  <div className="font-semibold text-slate-800 tabular-nums">
+                    {baseStats ? baseStats.estimatedGroupSpeed + ' km/h' : '-'}
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 m-0 leading-snug">
+                관심 레벨의 항속 구간 상한을 기준으로 참가 여부를 참고하세요. 실제 지형·바람·페이스에 따라 달라질 수 있습니다.
+              </p>
+              <ul className="space-y-1.5 m-0 p-0 list-none border-t border-violet-100/80 pt-2">
+                {RIDING_LEVEL_OPTIONS.map(function (opt) {
+                  var tkm = tgtFn ? tgtFn(opt.value) : null;
+                  var row =
+                    ev && tkm != null && prof.ok ? ev(prof.ftp, prof.weight, tkm) : null;
+                  return (
+                    <li
+                      key={opt.value}
+                      className="text-xs rounded-lg bg-white/80 border border-slate-100 px-2 py-1.5 flex flex-col gap-0.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-medium text-slate-800">
+                          {opt.value}{' '}
+                          <span className="text-slate-400 font-normal">({opt.hint})</span>
+                        </span>
+                        {row ? (
+                          <span
+                            className={
+                              'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ' +
+                              (row.isEligible ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900')
+                            }
+                          >
+                            {row.isEligible ? '참가 여유' : '주의'}
+                          </span>
+                        ) : null}
+                      </div>
+                      {row ? (
+                        <p className="text-[11px] text-slate-600 m-0 leading-snug">{row.guideMessage}</p>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 m-0">기준 속도 없음</p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
+          {openRidingFilterRankDist.loading ? (
+            <p className="text-xs text-slate-500 m-0 py-2 text-center">분포 데이터 불러오는 중…</p>
+          ) : openRidingFilterRankDist.error ? (
+            <p className="text-xs text-amber-700 m-0 py-2 text-center">
+              전체 사용자 분포를 불러오지 못했습니다. 네트워크 후 다시 열어 주세요.
+            </p>
+          ) : StelvioDistChart &&
+            openRidingFilterRankDist.byCategory &&
+            openRidingFilterRankDist.entries &&
+            openRidingFilterRankDist.entries.length ? (
+            <StelvioDistChart
+              entries={openRidingFilterRankDist.entries}
+              byCategory={openRidingFilterRankDist.byCategory}
+              activeCategory="Supremo"
+              duration="60min"
+              currentUserId={userId || ''}
+              currentUser={openRidingFilterRankDist.currentUser}
+              myRankSupremo={openRidingFilterRankDist.myRankSupremo}
+              overrideMyWkg={prof.ok && baseStats ? baseStats.wkg : null}
+              titleOverride="전체 사용자 W/kg 분포"
+              pillLabelOverride="전체 · 60분 (랭킹 코호트)"
+              chartSubNoteOverride={
+                '랭킹보드와 동일한 참가자 밀도 그래프입니다. 세로 점선은 프로필 FTP 기준 W/kg 위치입니다.'
+              }
+            />
+          ) : (
+            <p className="text-xs text-slate-500 m-0 py-2 text-center">표시할 분포 데이터가 없습니다.</p>
+          )}
+        </div>
+
         <div>
           <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
           {RIDING_LEVEL_OPTIONS.map(function (opt) {

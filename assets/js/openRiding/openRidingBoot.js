@@ -5,3 +5,4 @@
 import './openRidingService.js';
 import './useOpenRiding.js';
 import './koreaRegions.js';
+import './groupRideEligibility.js';
