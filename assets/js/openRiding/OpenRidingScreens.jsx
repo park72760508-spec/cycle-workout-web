@@ -1484,9 +1484,11 @@ function OpenRidingCalendarMain(props) {
                     {baseStats ? baseStats.wkg.toFixed(2) : '-'}
                   </div>
                 </div>
-                <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5 col-span-2 sm:col-span-3">
-                  <div className="text-slate-500 text-[10px]">평지 개인 평속 (FTP 투입)</div>
-                  <div className="font-semibold text-slate-800 tabular-nums">
+                <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3 open-riding-filter-ftp-solo-highlight">
+                  <div className="text-violet-900 text-[10px] font-semibold">
+                    평지 개인 평속 (FTP 투입) — 최대 능력치 핵심
+                  </div>
+                  <div className="font-bold text-violet-950 tabular-nums text-sm">
                     {baseStats ? baseStats.soloSpeed + ' km/h' : '-'}
                   </div>
                 </div>
