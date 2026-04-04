@@ -138,6 +138,137 @@ function formatOpenRidingDepartureRegionDisplay(ride) {
   return reg || dep;
 }
 
+/** 초대 번호 ↔ 저장 연락처 매칭 (openRidingService.normalizePhoneDigits + 뒤 8자리 규칙) */
+function openRidingInvitePhoneDigitsMatch(a, b) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  var norm =
+    typeof svc.normalizePhoneDigits === 'function'
+      ? svc.normalizePhoneDigits
+      : function (x) {
+          return String(x || '').replace(/\D/g, '');
+        };
+  var u = norm(a);
+  var v = norm(b);
+  if (!u || !v || u.length < 8 || v.length < 8) return false;
+  if (u === v) return true;
+  return u.slice(-8) === v.slice(-8);
+}
+
+function findOpenRidingUidForInvitePhone(phone, participantIds, waitlistIds, participantContact) {
+  var pc = participantContact && typeof participantContact === 'object' ? participantContact : {};
+  function scan(ids) {
+    if (!Array.isArray(ids)) return null;
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var uid = String(ids[i]);
+      var ph = pc[uid];
+      if (ph && openRidingInvitePhoneDigitsMatch(phone, ph)) return uid;
+    }
+    return null;
+  }
+  var found = scan(participantIds);
+  if (found) return found;
+  return scan(waitlistIds);
+}
+
+/** 초대 명단 표시용 행 (전화 정규화 키, 참석자·대기 participantContact 로 uid 매칭) */
+function buildOpenRidingInviteListRows(ride) {
+  var raw = ride && Array.isArray(ride.invitedList) ? ride.invitedList : [];
+  var part = ride && Array.isArray(ride.participants) ? ride.participants : [];
+  var wait = ride && Array.isArray(ride.waitlist) ? ride.waitlist : [];
+  var pc =
+    ride &&
+    ride.participantContact &&
+    typeof ride.participantContact === 'object' &&
+    !Array.isArray(ride.participantContact)
+      ? ride.participantContact
+      : {};
+  var normFn =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits
+      : function (x) {
+          return String(x || '').replace(/\D/g, '');
+        };
+  var seen = {};
+  var rows = [];
+  var ii;
+  for (ii = 0; ii < raw.length; ii++) {
+    var inv = raw[ii];
+    var phoneStr = typeof inv === 'string' ? inv : inv != null && inv.phone != null ? String(inv.phone) : '';
+    phoneStr = String(phoneStr).trim();
+    if (!phoneStr) continue;
+    var key = normFn(phoneStr);
+    if (!key || seen[key]) continue;
+    seen[key] = true;
+    var matchedUid = findOpenRidingUidForInvitePhone(phoneStr, part, wait, pc);
+    var attended =
+      !!matchedUid &&
+      part.some(function (id) {
+        return String(id) === String(matchedUid);
+      });
+    rows.push({
+      phoneKey: key,
+      invitePhone: phoneStr,
+      matchedUid: matchedUid,
+      attended: attended
+    });
+  }
+  return rows;
+}
+
+function formatOpenRidingInviteFallbackLabel(phoneRaw, maskedMode) {
+  if (maskedMode) return maskPhoneLastFourDisplay(String(phoneRaw || ''));
+  var d =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits(phoneRaw)
+      : String(phoneRaw || '').replace(/\D/g, '');
+  if (d.length >= 10) return d.slice(0, 3) + '-****-' + d.slice(-4);
+  return '초대 대상';
+}
+
+/** Firestore users.contact 로 초대 번호 프로필 이름 조회 (규칙·데이터 형식에 따라 실패할 수 있음) */
+function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
+  if (!firestoreDb || !invitePhone) return Promise.resolve('');
+  return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+    .then(function (mod) {
+      var col = mod.collection(firestoreDb, 'users');
+      var norm =
+        typeof window !== 'undefined' &&
+        window.openRidingService &&
+        typeof window.openRidingService.normalizePhoneDigits === 'function'
+          ? window.openRidingService.normalizePhoneDigits(invitePhone)
+          : String(invitePhone).replace(/\D/g, '');
+      if (!norm || norm.length < 8) return '';
+      var candidates = [];
+      if (typeof window.formatPhoneNumber === 'function') {
+        var fo = window.formatPhoneNumber(norm);
+        if (fo) candidates.push(fo);
+      }
+      if (candidates.indexOf(norm) < 0) candidates.push(norm);
+
+      function tryCandidate(idx) {
+        if (idx >= candidates.length) return Promise.resolve('');
+        var q = mod.query(col, mod.where('contact', '==', candidates[idx]), mod.limit(1));
+        return mod.getDocs(q).then(function (snap) {
+          if (!snap.empty) {
+            var data = snap.docs[0].data();
+            var nm = String((data && data.name) || (data && data.displayName) || '').trim();
+            if (nm) return nm;
+          }
+          return tryCandidate(idx + 1);
+        });
+      }
+      return tryCandidate(0);
+    })
+    .catch(function () {
+      return '';
+    });
+}
+
 /** 로그인·프로필 기준 방장명·연락처 (라이딩 생성·참가 시 표시 이름) */
 function getOpenRidingProfileDefaults() {
   try {
@@ -3188,6 +3319,80 @@ function OpenRidingDetail(props) {
     [rideId, userId, ride && ride.level]
   );
 
+  var inviteRows = useMemo(
+    function () {
+      return ride ? buildOpenRidingInviteListRows(ride) : [];
+    },
+    [rideId, ride]
+  );
+
+  var _invLab = useState({});
+  var inviteResolvedLabels = _invLab[0];
+  var setInviteResolvedLabels = _invLab[1];
+
+  useEffect(
+    function () {
+      if (!ride || !inviteRows.length) {
+        setInviteResolvedLabels({});
+        return undefined;
+      }
+      var cancelled = false;
+      var pdLocal =
+        ride.participantDisplay &&
+        typeof ride.participantDisplay === 'object' &&
+        !Array.isArray(ride.participantDisplay)
+          ? ride.participantDisplay
+          : {};
+      var seed = {};
+      inviteRows.forEach(function (r) {
+        if (r.matchedUid) {
+          var nm0 = pdLocal[String(r.matchedUid)];
+          if (nm0 && String(nm0).trim()) seed[r.phoneKey] = String(nm0).trim();
+        }
+      });
+      setInviteResolvedLabels(seed);
+
+      inviteRows.forEach(function (r) {
+        if (cancelled) return;
+        if (r.matchedUid && (!seed[r.phoneKey] || !String(seed[r.phoneKey]).trim())) {
+          if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
+            window
+              .getUserByUid(String(r.matchedUid))
+              .then(function (row) {
+                if (cancelled || !row) return;
+                var nm = String(row.name != null ? row.name : row.displayName != null ? row.displayName : '').trim();
+                if (nm) {
+                  setInviteResolvedLabels(function (prev) {
+                    var o = {};
+                    for (var ks in prev) o[ks] = prev[ks];
+                    o[r.phoneKey] = nm;
+                    return o;
+                  });
+                }
+              })
+              .catch(function () {});
+          }
+        } else if (!r.matchedUid && firestore) {
+          lookupOpenRidingUserNameByInvitePhone(firestore, r.invitePhone).then(function (nm) {
+            if (cancelled || !nm) return;
+            setInviteResolvedLabels(function (prev) {
+              if (prev[r.phoneKey]) return prev;
+              var o = {};
+              for (var ks in prev) o[ks] = prev[ks];
+              o[r.phoneKey] = nm;
+              return o;
+            });
+          });
+        }
+      });
+
+      return function () {
+        cancelled = true;
+      };
+    },
+    [rideId, ride, firestore, inviteRows]
+  );
+
   async function confirmJoinWithContactShare(contactPublic) {
     setBusy(true);
     try {
@@ -3451,6 +3656,29 @@ function OpenRidingDetail(props) {
             : '-'
         )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
+        {inviteRows.length > 0
+          ? statRow(
+              '초대 명단',
+              <ul className="m-0 list-none space-y-2 p-0 text-right">
+                {inviteRows.map(function (r) {
+                  var named = inviteResolvedLabels[r.phoneKey];
+                  if (!named || !String(named).trim()) {
+                    named = formatOpenRidingInviteFallbackLabel(r.invitePhone, maskContacts);
+                  } else {
+                    named = String(named).trim();
+                  }
+                  var st = r.attended ? '참석' : '미응답';
+                  var stCls = r.attended ? 'text-emerald-700' : 'text-slate-500';
+                  return (
+                    <li key={r.phoneKey} className="text-[13px] leading-snug text-slate-800 break-words">
+                      <span className="font-medium">{named}</span>
+                      <span className={'ml-1 text-xs font-semibold ' + stCls}>({st})</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          : null}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
         {statRow(
           '연락처',
