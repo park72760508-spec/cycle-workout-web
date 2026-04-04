@@ -3659,7 +3659,7 @@ function OpenRidingDetail(props) {
         {inviteRows.length > 0
           ? statRow(
               '초대 명단',
-              <ul className="m-0 list-none space-y-2 p-0 text-right">
+              <ul className="open-riding-detail-invite-list m-0 w-full min-w-0 list-none space-y-2 p-0 text-right">
                 {inviteRows.map(function (r) {
                   var named = inviteResolvedLabels[r.phoneKey];
                   if (!named || !String(named).trim()) {
@@ -3670,9 +3670,9 @@ function OpenRidingDetail(props) {
                   var st = r.attended ? '참석' : '미응답';
                   var stCls = r.attended ? 'text-emerald-700' : 'text-slate-500';
                   return (
-                    <li key={r.phoneKey} className="text-[13px] leading-snug text-slate-800 break-words">
-                      <span className="font-medium">{named}</span>
-                      <span className={'ml-1 text-xs font-semibold ' + stCls}>({st})</span>
+                    <li key={r.phoneKey} className="break-words">
+                      <span className="open-riding-detail-invite-name">{named}</span>
+                      <span className={'open-riding-detail-invite-status ml-1 ' + stCls}>({st})</span>
                     </li>
                   );
                 })}
