@@ -991,8 +991,8 @@ function OpenRidingBottomLogoBar() {
           src="assets/img/STELVIO AI.png"
           alt=""
           className="open-riding-bottom-brand-logo"
-          width={140}
-          height={18}
+          width={280}
+          height={36}
           decoding="async"
         />
       </div>
@@ -1098,6 +1098,26 @@ function OpenRidingCalendarMain(props) {
     },
     [ridesMonth, userId]
   );
+
+  /** 해당 월에서 내가 참석 확정(participants)인 라이딩이 있는 날짜 */
+  var participantConfirmedDateKeys = useMemo(function () {
+    var uid = String(userId || '');
+    if (!uid) return new Set();
+    var s = new Set();
+    ridesMonth.forEach(function (r) {
+      if (String(r.rideStatus || 'active') === 'cancelled') return;
+      var parts = Array.isArray(r.participants) ? r.participants : [];
+      var inPart = parts.some(function (p) {
+        return String(p) === uid;
+      });
+      if (!inPart) return;
+      var ts = r.date;
+      var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+      if (!d) return;
+      s.add(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+    });
+    return s;
+  }, [ridesMonth, userId]);
 
   var _sel = useState(null);
   var selectedKey = _sel[0];
@@ -1537,6 +1557,7 @@ function OpenRidingCalendarMain(props) {
               var hasAnyRide = allRideDateKeys.has(key);
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
               var isSel = selectedKey === key;
+              var isConfirmedDay = participantConfirmedDateKeys.has(key);
               return (
                 <button
                   key={key}
@@ -1550,17 +1571,23 @@ function OpenRidingCalendarMain(props) {
                 >
                   {isHostDay ? (
                     <span
-                      className="absolute inset-1 rounded-md bg-violet-300/50 border border-violet-400/40 pointer-events-none"
+                      className="absolute inset-1 z-[1] rounded-md bg-violet-300/50 border border-violet-400/40 pointer-events-none"
                       aria-hidden
                     />
                   ) : hasMatch ? (
                     <span
-                      className="absolute inset-1 rounded-md bg-emerald-400/35 pointer-events-none"
+                      className="absolute inset-1 z-[1] rounded-md bg-emerald-400/35 pointer-events-none"
                       aria-hidden
                     />
                   ) : showOtherOnly ? (
                     <span
-                      className="absolute inset-1 rounded-md bg-slate-300/45 border border-slate-400/35 pointer-events-none"
+                      className="absolute inset-1 z-[1] rounded-md bg-slate-300/45 border border-slate-400/35 pointer-events-none"
+                      aria-hidden
+                    />
+                  ) : null}
+                  {isConfirmedDay ? (
+                    <span
+                      className="absolute inset-0 z-[8] rounded-lg border-2 border-emerald-700 pointer-events-none box-border"
                       aria-hidden
                     />
                   ) : null}
@@ -1573,6 +1600,13 @@ function OpenRidingCalendarMain(props) {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
               <span className="text-slate-500">참여 가능 라이딩</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className="inline-block w-3 h-3 rounded-sm shrink-0 border-2 border-emerald-700 bg-white box-border"
+                aria-hidden
+              />
+              <span className="text-slate-500">참석 확정 라이딩</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
