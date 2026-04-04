@@ -3366,7 +3366,7 @@ function OpenRidingDetail(props) {
                   setBombOpen(true);
                 }}
               >
-                라이딩 폭파
+                라이딩 취소
               </button>
             ) : null}
           </div>
@@ -3640,9 +3640,9 @@ function OpenRidingDetail(props) {
         >
           <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-xl p-4" onClick={function (e) { e.stopPropagation(); }}>
             <h2 id="open-riding-bomb-title" className="text-base font-semibold text-slate-900 mb-2">
-              라이딩 폭파
+              라이딩 취소
             </h2>
-            <p className="text-sm text-slate-600 mb-4">정말 라이딩을 폭파하시겠습니까?</p>
+            <p className="text-sm text-slate-600 mb-4">정말 라이딩을 취소하시겠습니까?</p>
             <p className="text-xs text-slate-500 mb-4">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
             <div className="flex gap-2">
               <button
