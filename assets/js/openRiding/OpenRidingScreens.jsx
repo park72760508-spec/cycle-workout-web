@@ -982,6 +982,25 @@ function parseHmFromDeparture(s) {
 }
 
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
+/** 생성·수정·상세: 하단 고정바(스텔비오 로고 + CTA) — 스크롤 레이어와 분리해 터치 인식 안정화 */
+function OpenRidingBottomFixedBar(props) {
+  return (
+    <div className="open-riding-bottom-fixed-shell">
+      <div className="open-riding-bottom-brand" aria-hidden="true">
+        <img
+          src="assets/img/STELVIO%20AI.png"
+          alt=""
+          className="open-riding-bottom-brand-logo"
+          width={140}
+          height={18}
+          decoding="async"
+        />
+      </div>
+      <div className="open-riding-bottom-actions">{props.children}</div>
+    </div>
+  );
+}
+
 function OpenRidingCalendarMain(props) {
   var firestore = props.firestore;
   var storage = props.storage;
@@ -2392,13 +2411,12 @@ function OpenRidingCreateForm(props) {
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      {/* Safe Area + 터치 타깃: 라이딩 생성/수정 폼 하단 제출 */}
-      {/* 하단 CTA: style.css에서 isolation+z-9999 + 버튼 translateZ(0)로 Safari 할로우/레이어 간섭 완화 */}
-      <div className="open-riding-bottom-actions">
+      {/* 하단 고정바: style.css .open-riding-bottom-fixed-shell */}
+      <OpenRidingBottomFixedBar>
         <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
           {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
         </button>
-      </div>
+      </OpenRidingBottomFixedBar>
 
       {dateModalOpen ? (
         <div
@@ -2619,18 +2637,19 @@ function OpenRidingDetail(props) {
         <p className="text-sm text-slate-600 leading-relaxed m-0">
           라이딩을 찾을 수 없거나 삭제되었습니다.
         </p>
-        {/* Safe Area + style.css isolation/z-9999 + 버튼 translateZ(0) — 할로우 클릭 완화 */}
-        <div className="open-riding-bottom-actions flex justify-center">
-          <button
-            type="button"
-            className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
-            onClick={function () {
-              if (typeof onBack === 'function') onBack();
-            }}
-          >
-            목록으로
-          </button>
-        </div>
+        <OpenRidingBottomFixedBar>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              className="open-riding-action-btn inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm px-6 py-2.5 shadow"
+              onClick={function () {
+                if (typeof onBack === 'function') onBack();
+              }}
+            >
+              목록으로
+            </button>
+          </div>
+        </OpenRidingBottomFixedBar>
       </div>
     );
   }
@@ -2852,8 +2871,12 @@ function OpenRidingDetail(props) {
               />
             </label>
           ) : null}
-          {/* Safe Area + isolation+z-9999(style.css): Safari GPU 할로우 버그·외부 오버레이와 스택 분리 */}
-          <div className="open-riding-bottom-actions">
+          {isPrivateRide && !isHost && !role && !joinInviteOk ? (
+            <p className="text-xs text-amber-800 text-center leading-snug px-1">
+              초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
+            </p>
+          ) : null}
+          <OpenRidingBottomFixedBar>
             <div className="open-riding-bottom-actions-row flex gap-2">
               {role ? (
                 <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
@@ -2874,12 +2897,7 @@ function OpenRidingDetail(props) {
                 </button>
               )}
             </div>
-          </div>
-          {isPrivateRide && !isHost && !role && !joinInviteOk ? (
-            <p className="text-xs text-amber-800 text-center leading-snug px-1">
-              초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
-            </p>
-          ) : null}
+          </OpenRidingBottomFixedBar>
         </div>
       ) : null}
 
@@ -3019,6 +3037,11 @@ function OpenRidingRoomApp(props) {
   var headerTitle =
     view === 'create' ? '라이딩 생성' : view === 'edit' ? '라이딩 수정' : view === 'detail' ? '라이딩 상세' : '라이딩 모임';
 
+  var useBottomFixedBar = !!(
+    firestore &&
+    (view === 'create' || (view === 'edit' && detailRideId) || (view === 'detail' && detailRideId))
+  );
+
   var inner = null;
   if (!firestore) {
     inner = (
@@ -3105,7 +3128,14 @@ function OpenRidingRoomApp(props) {
         )}
       </div>
       {/* 스크롤 전용 본문: 하단 페이드/마스크 pseudo가 붙어도 style.css에서 pointer-events:none 처리. CTA는 .open-riding-bottom-actions(isolation+z-9999)에서 분리 */}
-      <div className="open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pt-2 w-full box-border pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">{inner}</div>
+      <div
+        className={
+          'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pt-2 w-full box-border ' +
+          (useBottomFixedBar ? 'open-riding-app-body--bottom-fixed' : 'pb-[calc(1rem+env(safe-area-inset-bottom,0px))]')
+        }
+      >
+        {inner}
+      </div>
     </div>
   );
 }
