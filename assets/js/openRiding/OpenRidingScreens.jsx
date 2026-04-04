@@ -128,6 +128,16 @@ function formatOpenRidingLevelDetailValue(levelStr) {
   return s + ' (' + hint + ')';
 }
 
+/** 상세: 지역 + 출발 장소 한 줄 (지역 우선, 공백으로 구분) */
+function formatOpenRidingDepartureRegionDisplay(ride) {
+  if (!ride) return '-';
+  var reg = ride.region != null ? String(ride.region).trim() : '';
+  var dep = ride.departureLocation != null ? String(ride.departureLocation).trim() : '';
+  if (!reg && !dep) return '-';
+  if (reg && dep) return reg + ' ' + dep;
+  return reg || dep;
+}
+
 /** 로그인·프로필 기준 방장명·연락처 (라이딩 생성·참가 시 표시 이름) */
 function getOpenRidingProfileDefaults() {
   try {
@@ -3077,6 +3087,9 @@ function OpenRidingDetail(props) {
   var _dlph = useState(null);
   var detailLevelPeakHint = _dlph[0];
   var setDetailLevelPeakHint = _dlph[1];
+  var _lvlLd = useState(false);
+  var levelAnalysisLoading = _lvlLd[0];
+  var setLevelAnalysisLoading = _lvlLd[1];
 
   useEffect(
     function () {
@@ -3091,8 +3104,10 @@ function OpenRidingDetail(props) {
       if (!ride || !userId) {
         setLevelParticipation(null);
         setDetailLevelPeakHint(null);
+        setLevelAnalysisLoading(false);
         return undefined;
       }
+      setLevelAnalysisLoading(true);
       var cancelled = false;
       var prof = readOpenRidingProfileFtpWeight();
       var uid = String(userId);
@@ -3130,6 +3145,7 @@ function OpenRidingDetail(props) {
             maxCautionLevel: summ.maxCautionLevel,
             profileOk: prof.ok
           });
+          setLevelAnalysisLoading(false);
         }
       }
 
@@ -3360,13 +3376,25 @@ function OpenRidingDetail(props) {
             {dateStr} {ride.departureTime != null ? ride.departureTime : ''}
           </span>
         ))}
-        {statRow('출발', ride.departureLocation != null ? ride.departureLocation : '-')}
-        {statRow('지역', ride.region != null ? ride.region : '-')}
+        {statRow('출발 지역', formatOpenRidingDepartureRegionDisplay(ride))}
         {statRow(
           '레벨',
           <div className="min-w-0 w-full space-y-1.5 text-right">
             <div>{formatOpenRidingLevelDetailValue(ride.level)}</div>
-            {levelParticipation ? (
+            {userId && levelAnalysisLoading ? (
+              <div
+                className="mt-1 flex w-full max-w-[17rem] flex-col items-end gap-1.5 self-end text-left"
+                role="status"
+                aria-live="polite"
+                aria-label="레벨 분석 중"
+              >
+                <span
+                  className="inline-block h-4 w-4 shrink-0 rounded-full border-2 border-emerald-200 border-t-emerald-600 animate-spin motion-reduce:animate-none"
+                  aria-hidden
+                />
+                <span className="text-[11px] font-medium text-emerald-800">레벨 분석 중 ...</span>
+              </div>
+            ) : levelParticipation ? (
               <div
                 className={
                   'open-riding-level-participation-hint open-riding-level-participation-hint--' +
