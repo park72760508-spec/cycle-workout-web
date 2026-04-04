@@ -1512,9 +1512,9 @@ function OpenRidingCalendarMain(props) {
                       {realisticStats.wkg.toFixed(2)}
                     </div>
                   </div>
-                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3">
-                    <div className="text-slate-500 text-[10px]">평지 개인 평속 (60분 피크 투입)</div>
-                    <div className="font-semibold text-slate-800 tabular-nums">
+                  <div className="rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3 open-riding-filter-realistic-solo-highlight">
+                    <div className="text-slate-700 text-[10px] font-semibold">평지 개인 평속 (60분 피크 투입) — 현실 지표 핵심</div>
+                    <div className="font-bold text-slate-900 tabular-nums text-sm">
                       {realisticStats.soloSpeed + ' km/h'}
                     </div>
                   </div>
@@ -1536,10 +1536,30 @@ function OpenRidingCalendarMain(props) {
               </p>
               <ul className="space-y-1.5 m-0 p-0 list-none border-t border-violet-100/80 pt-2">
                 {RIDING_LEVEL_OPTIONS.map(function (opt) {
-                  var tkm = tgtSpd ? tgtSpd(opt.value) : null;
                   var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
                   var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
-                  var row = ev && tkm != null && prof.ok && wLv > 0 ? ev(powLv, wLv, tkm) : null;
+                  var clsFn =
+                    typeof window !== 'undefined' && typeof window.classifyOpenRidingParticipation === 'function'
+                      ? window.classifyOpenRidingParticipation
+                      : null;
+                  var part =
+                    clsFn && prof.ok && wLv > 0 ? clsFn(powLv, wLv, opt.value) : null;
+                  var badgeCls =
+                    part && part.tier === 'go'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
+                      : part && part.tier === 'caution'
+                        ? 'bg-orange-50 text-orange-900 border border-orange-200/90'
+                        : part && part.tier === 'stop'
+                          ? 'bg-red-50 text-red-800 border border-red-200/90'
+                          : '';
+                  var msgCls =
+                    part && part.tier === 'go'
+                      ? 'text-emerald-900'
+                      : part && part.tier === 'caution'
+                        ? 'text-orange-900'
+                        : part && part.tier === 'stop'
+                          ? 'text-red-800'
+                          : 'text-slate-400';
                   return (
                     <li
                       key={opt.value}
@@ -1550,21 +1570,16 @@ function OpenRidingCalendarMain(props) {
                           {opt.value}{' '}
                           <span className="text-slate-400 font-normal">({opt.hint})</span>
                         </span>
-                        {row ? (
-                          <span
-                            className={
-                              'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ' +
-                              (row.isEligible ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900')
-                            }
-                          >
-                            {row.isEligible ? '참가 여유' : '주의'}
+                        {part ? (
+                          <span className={'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ' + badgeCls}>
+                            {part.label}
                           </span>
                         ) : null}
                       </div>
-                      {row ? (
-                        <p className="text-[11px] text-slate-600 m-0 leading-snug">{row.guideMessage}</p>
+                      {part ? (
+                        <p className={'text-[11px] m-0 leading-snug ' + msgCls}>{part.comment}</p>
                       ) : (
-                        <p className="text-[11px] text-slate-400 m-0">기준 속도 없음</p>
+                        <p className="text-[11px] text-slate-400 m-0">기준 없음 또는 프로필 미충족</p>
                       )}
                     </li>
                   );
@@ -2938,6 +2953,9 @@ function OpenRidingDetail(props) {
   var _jsm = useState(false);
   var joinShareModalOpen = _jsm[0];
   var setJoinShareModalOpen = _jsm[1];
+  var _lvlPart = useState(null);
+  var levelParticipation = _lvlPart[0];
+  var setLevelParticipation = _lvlPart[1];
 
   useEffect(
     function () {
@@ -2945,6 +2963,69 @@ function OpenRidingDetail(props) {
       setJoinShareModalOpen(false);
     },
     [rideId]
+  );
+
+  useEffect(
+    function () {
+      if (!ride || !userId) {
+        setLevelParticipation(null);
+        return undefined;
+      }
+      var cancelled = false;
+      var prof = readOpenRidingProfileFtpWeight();
+      var uid = String(userId);
+      var levelStr = ride.level != null ? String(ride.level) : '';
+
+      function applyLvClassify(pow, w) {
+        var fn = typeof window !== 'undefined' ? window.classifyOpenRidingParticipation : null;
+        if (!fn || !(Number(pow) > 0) || !(Number(w) > 0) || !levelStr) return null;
+        return fn(Number(pow), Number(w), levelStr);
+      }
+
+      function finishWithPeak(peakW, wKg) {
+        var pw = Number(peakW) > 0 ? Number(peakW) : prof.ok ? prof.ftp : 0;
+        var ww =
+          Number(peakW) > 0 && Number(wKg) > 0 ? Number(wKg) : prof.ok ? prof.weight : 0;
+        if (!cancelled) setLevelParticipation(applyLvClassify(pw, ww));
+      }
+
+      var params = new URLSearchParams({
+        period: 'monthly',
+        duration: '60min',
+        gender: 'all'
+      });
+      params.set('uid', uid);
+      fetch(
+        'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString(),
+        { mode: 'cors' }
+      )
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (cancelled) return;
+          if (!data || !data.success || !data.byCategory) {
+            finishWithPeak(0, 0);
+            return;
+          }
+          var merged = mergePeakRankingEntriesFromByCategory(data.byCategory);
+          var entry =
+            merged.filter(function (e) {
+              return e.userId === uid;
+            })[0] || data.currentUser;
+          var peakW = entry && Number(entry.watts) > 0 ? Number(entry.watts) : 0;
+          var wKg = entry && Number(entry.weightKg) > 0 ? Number(entry.weightKg) : 0;
+          finishWithPeak(peakW, wKg);
+        })
+        .catch(function () {
+          if (!cancelled) finishWithPeak(0, 0);
+        });
+
+      return function () {
+        cancelled = true;
+      };
+    },
+    [rideId, userId, ride && ride.level]
   );
 
   async function confirmJoinWithContactShare(contactPublic) {
@@ -3137,7 +3218,23 @@ function OpenRidingDetail(props) {
         ))}
         {statRow('출발', ride.departureLocation != null ? ride.departureLocation : '-')}
         {statRow('지역', ride.region != null ? ride.region : '-')}
-        {statRow('레벨', formatOpenRidingLevelDetailValue(ride.level))}
+        {statRow(
+          '레벨',
+          <div className="min-w-0 w-full space-y-1.5 text-right">
+            <div>{formatOpenRidingLevelDetailValue(ride.level)}</div>
+            {levelParticipation ? (
+              <div
+                className={
+                  'open-riding-level-participation-hint open-riding-level-participation-hint--' +
+                  levelParticipation.tier
+                }
+              >
+                <span className="open-riding-level-participation-label">{levelParticipation.label}</span>
+                <span className="open-riding-level-participation-comment">{levelParticipation.comment}</span>
+              </div>
+            ) : null}
+          </div>
+        )}
         {statRow(
           '거리',
           ride.distance != null && String(ride.distance).trim() !== ''

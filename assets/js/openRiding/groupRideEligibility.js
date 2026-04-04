@@ -134,8 +134,60 @@ export function evaluateGroupRideEligibility(ftp, weight, targetSpeed) {
   };
 }
 
+/**
+ * 라이딩 모임 레벨(평속 상한) 대비 참가 난이도 3단계 — 60분 피크(또는 FTP)·체중·드래프팅 1.2× 동일 모델.
+ *
+ * @param {number} powerW 60분 최고 평균 파워(W) 또는 FTP(W)
+ * @param {number} weightKg 체중(kg)
+ * @param {string} rideLevelValue 모임 레벨 문자열 (예: '중급')
+ * @returns {{ tier: 'go'|'caution'|'stop', label: string, comment: string, estimatedGroupSpeed: number, targetSpeed: number, margin: number } | null}
+ */
+export function classifyOpenRidingParticipation(powerW, weightKg, rideLevelValue) {
+  var tgt = getRidingLevelTargetSpeedKmH(rideLevelValue);
+  if (tgt == null) return null;
+  var p = Number(powerW);
+  var w = Number(weightKg);
+  if (!isFinite(p) || p <= 0 || !isFinite(w) || w <= 0) return null;
+
+  var ev = evaluateGroupRideEligibility(p, w, tgt);
+  var margin = ev.estimatedGroupSpeed - tgt;
+
+  if (margin >= 1) {
+    return {
+      tier: 'go',
+      label: '참가',
+      comment:
+        '현실 지표(60분 피크·체중) 기준 예상 그룹 항속이 이 모임 레벨 요구를 안정적으로 충족합니다.',
+      estimatedGroupSpeed: ev.estimatedGroupSpeed,
+      targetSpeed: tgt,
+      margin: Math.round(margin * 10) / 10
+    };
+  }
+  if (margin >= -2) {
+    return {
+      tier: 'caution',
+      label: '주의',
+      comment:
+        '경계에 가깝습니다. 컨디션·풍향·지형에 따라 버거울 수 있으니 한 단계 낮은 레벨도 검토해 보세요.',
+      estimatedGroupSpeed: ev.estimatedGroupSpeed,
+      targetSpeed: tgt,
+      margin: Math.round(margin * 10) / 10
+    };
+  }
+  return {
+    tier: 'stop',
+    label: '불가',
+    comment:
+      '현실 지표 기준 예상 그룹 항속이 모임 요구에 크게 못 미칩니다. 하위 레벨 모임을 권장합니다.',
+    estimatedGroupSpeed: ev.estimatedGroupSpeed,
+    targetSpeed: tgt,
+    margin: Math.round(margin * 10) / 10
+  };
+}
+
 if (typeof window !== 'undefined') {
   window.calculateSpeedOnFlat = calculateSpeedOnFlat;
   window.evaluateGroupRideEligibility = evaluateGroupRideEligibility;
   window.getRidingLevelTargetSpeedKmH = getRidingLevelTargetSpeedKmH;
+  window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
 }
