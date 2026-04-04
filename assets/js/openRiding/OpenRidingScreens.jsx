@@ -3403,13 +3403,9 @@ function OpenRidingDetail(props) {
               >
                 <span className="open-riding-level-participation-label">{levelParticipation.label}</span>
                 {detailLevelPeakHint && detailLevelPeakHint.soloSpeedKmh > 0 ? (
-                  <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-left">
+                  <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-right">
                     <p className="m-0 font-semibold">
-                      나의 평지 항속 능력(60분 파워 기준)
-                      {!detailLevelPeakHint.usedPeak ? (
-                        <span className="font-normal text-emerald-800/95"> — 프로필 FTP 반영</span>
-                      ) : null}
-                      :{' '}
+                      나의 평지 항속 능력 :{' '}
                       <span className="tabular-nums font-bold text-emerald-950">
                         {detailLevelPeakHint.soloSpeedKmh} km/h
                       </span>
@@ -3417,7 +3413,7 @@ function OpenRidingDetail(props) {
                     <p className="m-0 text-emerald-900">
                       {detailLevelPeakHint.maxGoLevel ? (
                         <>
-                          나의 레벨:{' '}
+                          나의 레벨 :{' '}
                           <strong className="text-emerald-950">{detailLevelPeakHint.maxGoLevel}</strong>
                         </>
                       ) : detailLevelPeakHint.maxCautionLevel ? (
@@ -3433,13 +3429,13 @@ function OpenRidingDetail(props) {
                     </p>
                   </div>
                 ) : userId && detailLevelPeakHint && detailLevelPeakHint.profileOk === false ? (
-                  <p className="m-0 mt-1 w-full max-w-[17rem] ml-auto pt-1.5 border-t border-slate-200/80 text-[11px] text-slate-600 leading-snug text-left">
+                  <p className="m-0 mt-1 w-full max-w-[17rem] ml-auto pt-1.5 border-t border-slate-200/80 text-[11px] text-slate-600 leading-snug text-right">
                     프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
                   </p>
                 ) : null}
               </div>
             ) : userId && detailLevelPeakHint && detailLevelPeakHint.profileOk === false ? (
-              <p className="m-0 text-[11px] text-slate-500 leading-snug text-left">
+              <p className="m-0 text-[11px] text-slate-500 leading-snug text-right">
                 프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
               </p>
             ) : null}
