@@ -1159,6 +1159,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.1), 0 2px 12px rgba(234, 88, 12, 0.12);
 }
 
+/* 맞춤 필터: 관심 레벨 체크박스 — 체크 시 채움 보라(violet-600) */
+#openRidingRoomScreen .open-riding-filter-level-checkbox {
+  accent-color: #7c3aed;
+}
+
 /* 라이딩 상세 레벨: 60분 피크 기준 참가·주의·불가 */
 #openRidingRoomScreen .open-riding-level-participation-hint {
   display: flex;
