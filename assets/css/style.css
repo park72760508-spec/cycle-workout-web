@@ -10706,6 +10706,7 @@ html.is-android #trainingDetailModal .training-detail-body {
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
+  z-index: 1200 !important;
   width: 100% !important;
   min-height: 100vh !important;
   min-height: 100dvh !important;
