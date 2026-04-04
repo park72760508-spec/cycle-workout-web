@@ -1663,6 +1663,10 @@ function OpenRidingCreateForm(props) {
   var isBusy = _busy[0];
   var setBusy = _busy[1];
 
+  var _valDlg = useState({ open: false, text: '' });
+  var validationDlg = _valDlg[0];
+  var setValidationDlg = _valDlg[1];
+
   var _rideSido = useState('');
   var rideFormSidoPick = _rideSido[0];
   var setRideFormSidoPick = _rideSido[1];
@@ -1885,26 +1889,63 @@ function OpenRidingCreateForm(props) {
   for (ci = 1; ci <= dim; ci++) pickerCells.push(ci);
   while (pickerCells.length % 7 !== 0) pickerCells.push(null);
 
+  function closeFormValidationDialog() {
+    setValidationDlg({ open: false, text: '' });
+  }
+
+  function openFormValidationDialog(text) {
+    setValidationDlg({ open: true, text: text });
+  }
+
+  /** 스텔비오 종료 확인 팝업과 유사한 단일 확인 알림 (모바일 WebView에서 native validation 무반응 대비) */
+  function showFormValidationMessages(errors) {
+    var list = Array.isArray(errors) ? errors.filter(function (s) { return s && String(s).trim(); }) : [];
+    if (!list.length) return;
+    var body =
+      list.length === 1
+        ? list[0]
+        : '다음 내용을 확인해 주세요.\n\n' + list.map(function (line) { return '· ' + line; }).join('\n');
+    openFormValidationDialog(body);
+  }
+
   async function submit(e) {
     e.preventDefault();
-    if (!firestore || !hostUserId) return;
     var distParsed = form.distance === '' || form.distance === null || form.distance === undefined ? NaN : Number(form.distance);
     var maxParsed =
       form.maxParticipants === '' || form.maxParticipants === null || form.maxParticipants === undefined
         ? NaN
         : Number(form.maxParticipants);
-    if (!Number.isFinite(distParsed) || distParsed < 1) {
-      if (typeof window !== 'undefined' && window.alert) window.alert('거리(km)를 1 이상 입력해 주세요.');
-      return;
+
+    var checkList = [];
+    if (!firestore || !hostUserId) {
+      checkList.push('라이딩을 저장할 수 없습니다. 로그인 상태와 네트워크를 확인해 주세요.');
     }
-    if (!Number.isFinite(maxParsed) || maxParsed < 1) {
-      if (typeof window !== 'undefined' && window.alert) window.alert('최대 인원을 1 이상 입력해 주세요.');
-      return;
+    if (!String(form.title || '').trim()) {
+      checkList.push('제목을 입력해 주세요.');
     }
     if (!String(form.region || '').trim()) {
-      if (typeof window !== 'undefined' && window.alert) window.alert('지역을 시·도·구·군에서 선택한 뒤 「추가」로 넣어 주세요.');
+      checkList.push('지역이 선택되지 않았습니다. 시·도·구·군을 선택한 뒤 「추가」를 눌러 주세요.');
+    }
+    if (!String(form.departureLocation || '').trim()) {
+      checkList.push('출발 장소를 입력해 주세요.');
+    }
+    if (!Number.isFinite(distParsed) || distParsed < 1) {
+      checkList.push('거리(km)를 1 이상 입력해 주세요.');
+    }
+    if (!Number.isFinite(maxParsed) || maxParsed < 1) {
+      checkList.push('최대 인원을 1 이상 입력해 주세요.');
+    }
+    if (!String(form.hostName || '').trim()) {
+      checkList.push('방장명이 없습니다. 프로필(사용자 정보)에서 이름을 등록해 주세요.');
+    }
+    if (!String(form.contactInfo || '').trim()) {
+      checkList.push('연락처가 없습니다. 프로필에서 휴대폰 번호를 등록해 주세요.');
+    }
+    if (checkList.length) {
+      showFormValidationMessages(checkList);
       return;
     }
+
     setBusy(true);
     try {
       var gpxUrl = form.gpxUrlExisting != null ? form.gpxUrlExisting : null;
@@ -1936,7 +1977,10 @@ function OpenRidingCreateForm(props) {
         onEditSaved();
         return;
       }
-      if (typeof createRide !== 'function') return;
+      if (typeof createRide !== 'function') {
+        showFormValidationMessages(['라이딩 저장 기능을 불러오지 못했습니다. 페이지를 새로고침해 주세요.']);
+        return;
+      }
       var rideId = await createRide(firestore, hostUserId, {
         title: form.title,
         date: d,
@@ -1967,13 +2011,13 @@ function OpenRidingCreateForm(props) {
 
   /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 폼 루트는 입력·스크롤 레이어(z-0), 하단 CTA(.open-riding-bottom-actions)만 z-9999로 위에 올림 — 장식·패널이 버튼을 덮지 않도록 */
   return (
-    <form className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit}>
+    <form className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
       {!storage ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
         </p>
       ) : null}
-      <label className="block font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} required /></label>
+      <label className="block font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
 
       <div className="block font-medium text-slate-700">
         <span className="block mb-1">지역</span>
@@ -2081,7 +2125,7 @@ function OpenRidingCreateForm(props) {
         </div>
       </div>
 
-      <label className="block font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} required /></label>
+      <label className="block font-medium text-slate-700">출발 장소<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.departureLocation} onChange={function (e) { set('departureLocation', e.target.value); }} /></label>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="block font-medium text-slate-700">
@@ -2334,7 +2378,6 @@ function OpenRidingCreateForm(props) {
           className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 text-sm"
           value={form.hostName}
           readOnly
-          required
           title="로그인 프로필 이름이 자동 입력됩니다. 변경은 프로필(사용자 정보)에서 하세요."
         />
       </label>
@@ -2408,6 +2451,45 @@ function OpenRidingCreateForm(props) {
                 닫기
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {validationDlg.open ? (
+        <div
+          className="fixed inset-0 z-[10070] flex items-center justify-center p-4"
+          style={{ fontFamily: 'inherit' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-form-val-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 w-full h-full border-0 p-0 cursor-default bg-black/45 backdrop-blur-[4px]"
+            style={{ WebkitBackdropFilter: 'blur(4px)' }}
+            aria-label="닫기"
+            onClick={closeFormValidationDialog}
+          />
+          <div
+            className="relative z-[1] w-full max-w-[min(90vw,360px)] rounded-2xl border border-violet-300/40 bg-[rgba(255,255,255,0.98)] shadow-[0_16px_48px_rgba(102,126,234,0.2),0_0_0_1px_rgba(118,75,162,0.1)] text-center px-6 sm:px-8 py-7 box-border"
+            onClick={function (e) { e.stopPropagation(); }}
+          >
+            <h2 id="open-riding-form-val-title" className="sr-only">
+              입력 확인
+            </h2>
+            <p className="m-0 text-base font-semibold text-slate-700 leading-snug whitespace-pre-line text-left">
+              {validationDlg.text}
+            </p>
+            <button
+              type="button"
+              className="open-riding-action-btn mt-6 w-full rounded-[10px] py-3 text-[15px] font-semibold text-white border-0 shadow-[0_2px_8px_rgba(102,126,234,0.35)] cursor-pointer active:translate-y-0 hover:-translate-y-px transition-transform"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              }}
+              onClick={closeFormValidationDialog}
+            >
+              확인
+            </button>
           </div>
         </div>
       ) : null}
