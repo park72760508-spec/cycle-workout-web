@@ -3920,28 +3920,28 @@ function OpenRidingDetail(props) {
           }}
         >
           <div
-            className="open-riding-bomb-modal-panel w-full max-w-sm rounded-2xl border border-violet-200/90 bg-gradient-to-b from-violet-50/98 via-white to-violet-100/35 shadow-[0_10px_40px_-10px_rgba(109,40,217,0.35)] p-5 ring-1 ring-violet-100/90"
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-7 px-8 text-center"
             onClick={function (e) {
               e.stopPropagation();
             }}
           >
-            <div className="flex items-center gap-2.5 mb-3 pb-3 border-b border-violet-200/70">
+            <div className="flex items-center justify-center gap-2.5 mb-4 pb-4 border-b border-slate-200">
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-sm font-bold shadow-inner shadow-violet-200/50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-sm font-bold border border-indigo-100"
                 aria-hidden
               >
                 !
               </span>
-              <h2 id="open-riding-bomb-title" className="text-base font-bold text-violet-950 m-0 leading-tight">
+              <h2 id="open-riding-bomb-title" className="text-base font-bold text-slate-800 m-0 leading-tight">
                 라이딩 취소
               </h2>
             </div>
-            <p className="text-sm text-violet-900/90 mb-3 leading-relaxed m-0">정말 라이딩을 취소하시겠습니까?</p>
-            <p className="text-xs text-violet-700/75 mb-5 leading-snug m-0">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
-            <div className="flex gap-2">
+            <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 취소하시겠습니까?</p>
+            <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
+            <div className="stelvio-exit-confirm-buttons">
               <button
                 type="button"
-                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl border-2 border-violet-200 bg-white text-violet-800 font-semibold text-sm hover:bg-violet-50/80"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel inline-flex items-center justify-center disabled:opacity-50"
                 disabled={cancelBusy}
                 onClick={function () {
                   setBombOpen(false);
@@ -3951,7 +3951,7 @@ function OpenRidingDetail(props) {
               </button>
               <button
                 type="button"
-                className="open-riding-action-btn h-11 flex-1 inline-flex items-center justify-center rounded-xl bg-violet-600 text-white font-semibold text-sm shadow-md shadow-violet-500/25 hover:bg-violet-700 disabled:opacity-50"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok inline-flex items-center justify-center disabled:opacity-50"
                 disabled={cancelBusy}
                 onClick={confirmBombRide}
               >
