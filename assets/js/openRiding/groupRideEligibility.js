@@ -155,7 +155,7 @@ export function classifyOpenRidingParticipation(powerW, weightKg, rideLevelValue
   if (margin >= 1) {
     return {
       tier: 'go',
-      label: '참가 가능',
+      label: '참석 가능',
       comment:
         '현실 지표(60분 피크·체중) 기준 예상 그룹 항속이 이 모임 레벨 요구를 안정적으로 충족합니다.',
       estimatedGroupSpeed: ev.estimatedGroupSpeed,
@@ -187,7 +187,7 @@ export function classifyOpenRidingParticipation(powerW, weightKg, rideLevelValue
 
 /**
  * 난이도 순(쉬운 것 → 어려운 것) 레벨 문자열 배열에 대해,
- * '참가 가능'인 가장 어려운 레벨과, 그게 없을 때 '주의'인 가장 어려운 레벨.
+ * '참석 가능'인 가장 어려운 레벨과, 그게 없을 때 '주의'인 가장 어려운 레벨.
  *
  * @param {number} powerW
  * @param {number} weightKg

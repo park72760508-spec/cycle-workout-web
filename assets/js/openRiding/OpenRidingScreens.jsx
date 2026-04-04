@@ -2888,16 +2888,16 @@ function OpenRidingCreateForm(props) {
             <p className="m-0 text-emerald-900">
               {createFormPeakHint.maxGoLevel ? (
                 <>
-                  최대 참가 가능 레벨: <strong className="text-emerald-950">{createFormPeakHint.maxGoLevel}</strong>
+                  최대 참석 가능 레벨: <strong className="text-emerald-950">{createFormPeakHint.maxGoLevel}</strong>
                 </>
               ) : createFormPeakHint.maxCautionLevel ? (
                 <>
-                  참가 가능(안정) 구간 없음 · 주의 수준 최고:{' '}
+                  참석 가능(안정) 구간 없음 · 주의 수준 최고:{' '}
                   <strong className="text-emerald-950">{createFormPeakHint.maxCautionLevel}</strong>
                 </>
               ) : (
                 <span className="text-emerald-800/95">
-                  여유가 큰 참가 가능 레벨이 없습니다. 초급·하위 모임을 권장합니다.
+                  여유가 큰 참석 가능 레벨이 없습니다. 초급·하위 모임을 권장합니다.
                 </span>
               )}
             </p>
@@ -3409,7 +3409,7 @@ function OpenRidingDetail(props) {
       </div>
 
       <div className={'rounded-xl border border-violet-200/60 bg-white p-3 space-y-3 shadow-sm' + detailMuted}>
-        <h2 className="text-sm font-semibold text-violet-900">참가자 명단</h2>
+        <h2 className="text-sm font-semibold text-violet-900">참석자 명단</h2>
         <div>
           <p className="text-xs font-medium text-slate-600 mb-1">참석 확정 ({parts.length}명)</p>
           {parts.length === 0 ? (
