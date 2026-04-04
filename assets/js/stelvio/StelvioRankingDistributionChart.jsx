@@ -273,10 +273,15 @@
           : myRaw.toFixed(2) + ' W/kg'
         : '';
 
-    var badgeMain = overrideMyWkg != null && !isTss ? '나의 FTP' : '나의 위치';
+    var refBadgeTitle = typeof p.overrideReferenceBadgeTitle === 'string' && p.overrideReferenceBadgeTitle.trim()
+      ? p.overrideReferenceBadgeTitle.trim()
+      : '나의 FTP';
+    var refValueNote =
+      typeof p.overrideReferenceValueNote === 'string' ? p.overrideReferenceValueNote : ' (프로필)';
+    var badgeMain = overrideMyWkg != null && !isTss ? refBadgeTitle : '나의 위치';
     var badgeSub =
       overrideMyWkg != null && !isTss && valueFmt
-        ? '· ' + valueFmt + ' (프로필)'
+        ? '· ' + valueFmt + (refValueNote || '')
         : displayRank != null && valueFmt
         ? '· ' + displayRank + '위 · ' + valueFmt
         : valueFmt
