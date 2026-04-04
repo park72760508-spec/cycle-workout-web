@@ -3067,6 +3067,9 @@ function OpenRidingDetail(props) {
   var _lvlPart = useState(null);
   var levelParticipation = _lvlPart[0];
   var setLevelParticipation = _lvlPart[1];
+  var _dlph = useState(null);
+  var detailLevelPeakHint = _dlph[0];
+  var setDetailLevelPeakHint = _dlph[1];
 
   useEffect(
     function () {
@@ -3080,6 +3083,7 @@ function OpenRidingDetail(props) {
     function () {
       if (!ride || !userId) {
         setLevelParticipation(null);
+        setDetailLevelPeakHint(null);
         return undefined;
       }
       var cancelled = false;
@@ -3097,7 +3101,29 @@ function OpenRidingDetail(props) {
         var pw = Number(peakW) > 0 ? Number(peakW) : prof.ok ? prof.ftp : 0;
         var ww =
           Number(peakW) > 0 && Number(wKg) > 0 ? Number(wKg) : prof.ok ? prof.weight : 0;
-        if (!cancelled) setLevelParticipation(applyLvClassify(pw, ww));
+        var usedPeak = Number(peakW) > 0;
+        var opts = typeof window !== 'undefined' ? window.RIDING_LEVEL_OPTIONS || [] : [];
+        var levelVals = opts.map(function (o) {
+          return o.value;
+        });
+        var calcFn = typeof window !== 'undefined' ? window.calculateSpeedOnFlat : null;
+        var spd =
+          calcFn && pw > 0 && ww > 0 ? Math.round(calcFn(pw, ww) * 10) / 10 : 0;
+        var summ =
+          typeof window !== 'undefined' &&
+          typeof window.getMaxRidingLevelsForPeakParticipation === 'function'
+            ? window.getMaxRidingLevelsForPeakParticipation(pw, ww, levelVals)
+            : { maxGoLevel: null, maxCautionLevel: null };
+        if (!cancelled) {
+          setLevelParticipation(applyLvClassify(pw, ww));
+          setDetailLevelPeakHint({
+            soloSpeedKmh: spd,
+            usedPeak: !!usedPeak,
+            maxGoLevel: summ.maxGoLevel,
+            maxCautionLevel: summ.maxCautionLevel,
+            profileOk: prof.ok
+          });
+        }
       }
 
       var params = new URLSearchParams({
@@ -3341,8 +3367,46 @@ function OpenRidingDetail(props) {
                 }
               >
                 <span className="open-riding-level-participation-label">{levelParticipation.label}</span>
-                <span className="open-riding-level-participation-comment">{levelParticipation.comment}</span>
+                {detailLevelPeakHint && detailLevelPeakHint.soloSpeedKmh > 0 ? (
+                  <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-left">
+                    <p className="m-0 font-semibold">
+                      평지 개인 평속 (60분 피크 투입)
+                      {!detailLevelPeakHint.usedPeak ? (
+                        <span className="font-normal text-emerald-800/95"> — 프로필 FTP 반영</span>
+                      ) : null}
+                      :{' '}
+                      <span className="tabular-nums font-bold text-emerald-950">
+                        {detailLevelPeakHint.soloSpeedKmh} km/h
+                      </span>
+                    </p>
+                    <p className="m-0 text-emerald-900">
+                      {detailLevelPeakHint.maxGoLevel ? (
+                        <>
+                          최대 참석 가능 레벨:{' '}
+                          <strong className="text-emerald-950">{detailLevelPeakHint.maxGoLevel}</strong>
+                        </>
+                      ) : detailLevelPeakHint.maxCautionLevel ? (
+                        <>
+                          참석 가능(안정) 구간 없음 · 주의 수준 최고:{' '}
+                          <strong className="text-emerald-950">{detailLevelPeakHint.maxCautionLevel}</strong>
+                        </>
+                      ) : (
+                        <span className="text-emerald-800/95">
+                          여유가 큰 참석 가능 레벨이 없습니다. 초급·하위 모임을 권장합니다.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                ) : userId && detailLevelPeakHint && detailLevelPeakHint.profileOk === false ? (
+                  <p className="m-0 mt-1 w-full max-w-[17rem] ml-auto pt-1.5 border-t border-slate-200/80 text-[11px] text-slate-600 leading-snug text-left">
+                    프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
+                  </p>
+                ) : null}
               </div>
+            ) : userId && detailLevelPeakHint && detailLevelPeakHint.profileOk === false ? (
+              <p className="m-0 text-[11px] text-slate-500 leading-snug text-left">
+                프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
+              </p>
             ) : null}
           </div>
         )}
