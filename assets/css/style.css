@@ -1146,6 +1146,59 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   text-align: right;
   line-height: 1.45;
 }
+
+/* 맞춤 필터: 평지 개인 평속(60분 피크) — 현실 지표 강조 */
+#openRidingRoomScreen .open-riding-filter-realistic-solo-highlight {
+  border-color: rgba(234, 88, 12, 0.55) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 247, 237, 0.98) 0%,
+    rgba(254, 215, 170, 0.38) 48%,
+    rgba(255, 237, 213, 0.82) 100%
+  ) !important;
+  box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.1), 0 2px 12px rgba(234, 88, 12, 0.12);
+}
+
+/* 라이딩 상세 레벨: 60분 피크 기준 참가·주의·불가 */
+#openRidingRoomScreen .open-riding-level-participation-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(124, 58, 237, 0.12);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
+}
+#openRidingRoomScreen .open-riding-level-participation-label {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+#openRidingRoomScreen .open-riding-level-participation-comment {
+  font-weight: 500;
+  max-width: 17rem;
+}
+#openRidingRoomScreen .open-riding-level-participation-hint--go .open-riding-level-participation-label {
+  color: #15803d;
+}
+#openRidingRoomScreen .open-riding-level-participation-hint--go .open-riding-level-participation-comment {
+  color: #166534;
+}
+#openRidingRoomScreen .open-riding-level-participation-hint--caution .open-riding-level-participation-label {
+  color: #c2410c;
+}
+#openRidingRoomScreen .open-riding-level-participation-hint--caution .open-riding-level-participation-comment {
+  color: #9a3412;
+}
+#openRidingRoomScreen .open-riding-level-participation-hint--stop .open-riding-level-participation-label {
+  color: #b91c1c;
+}
+#openRidingRoomScreen .open-riding-level-participation-hint--stop .open-riding-level-participation-comment {
+  color: #991b1b;
+}
+
 #openRidingRoomScreen .open-riding-detail-muted .open-riding-detail-stat-value,
 #openRidingRoomScreen .open-riding-detail-muted .open-riding-detail-stat-label {
   color: #94a3b8;
