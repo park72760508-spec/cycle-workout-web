@@ -1979,7 +1979,7 @@ function OpenRidingCalendarMain(props) {
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-600 items-center">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">참여 가능 라이딩</span>
+              <span className="text-slate-500 min-w-0 leading-tight">참석 가능 라이딩</span>
             </div>
             <div className="flex items-center gap-1.5 min-w-0">
               <span
