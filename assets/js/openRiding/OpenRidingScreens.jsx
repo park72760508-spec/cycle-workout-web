@@ -2245,6 +2245,7 @@ function OpenRidingCreateForm(props) {
         setCreateFormPeakHint(null);
         return undefined;
       }
+      setCreateFormPeakHint({ loading: true });
       var cancelled = false;
       var prof = readOpenRidingProfileFtpWeight();
       var uid = String(hostUserId);
@@ -2266,6 +2267,7 @@ function OpenRidingCreateForm(props) {
             : { maxGoLevel: null, maxCautionLevel: null };
         if (!cancelled) {
           setCreateFormPeakHint({
+            loading: false,
             soloSpeedKmh: spd,
             usedPeak: !!(usedPeak && Number(peakW) > 0),
             maxGoLevel: summ.maxGoLevel,
@@ -2313,6 +2315,9 @@ function OpenRidingCreateForm(props) {
     },
     [hostUserId, RIDING_LEVEL_OPTIONS.length]
   );
+
+  var createFormPeakHintLoading =
+    !!hostUserId && (!createFormPeakHint || createFormPeakHint.loading === true);
 
   var _dm = useState(false);
   var dateModalOpen = _dm[0];
@@ -2858,15 +2863,25 @@ function OpenRidingCreateForm(props) {
             </label>
           );
         })}
-        {createFormPeakHint && createFormPeakHint.soloSpeedKmh > 0 ? (
+        {createFormPeakHintLoading ? (
+          <div
+            className="open-riding-create-level-peak-loading mt-2 flex min-h-[4.5rem] items-center justify-center rounded-lg border border-emerald-200/65 bg-emerald-50/45 px-2.5 py-3"
+            role="status"
+            aria-live="polite"
+            aria-label="레벨 참고 지표 불러오는 중"
+          >
+            <span
+              className="inline-block h-7 w-7 shrink-0 rounded-full border-2 border-emerald-200 border-t-emerald-600 animate-spin motion-reduce:animate-none"
+              aria-hidden
+            />
+          </div>
+        ) : createFormPeakHint && createFormPeakHint.soloSpeedKmh > 0 ? (
           <div className="open-riding-create-level-peak-hint mt-2 rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug">
             <p className="m-0 font-semibold">
               평지 개인 평속 (60분 피크 투입)
-              {createFormPeakHint.usedPeak ? (
-                <span className="font-normal text-emerald-800/95"> — 현실 지표 핵심</span>
-              ) : (
+              {!createFormPeakHint.usedPeak ? (
                 <span className="font-normal text-emerald-800/95"> — 프로필 FTP 반영</span>
-              )}
+              ) : null}
               :{' '}
               <span className="tabular-nums font-bold text-emerald-950">{createFormPeakHint.soloSpeedKmh} km/h</span>
             </p>
@@ -2882,7 +2897,7 @@ function OpenRidingCreateForm(props) {
                 </>
               ) : (
                 <span className="text-emerald-800/95">
-                  현실 지표 기준 여유가 큰 레벨이 없습니다. 초급·하위 모임을 권장합니다.
+                  여유가 큰 참가 가능 레벨이 없습니다. 초급·하위 모임을 권장합니다.
                 </span>
               )}
             </p>
