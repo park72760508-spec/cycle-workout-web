@@ -742,6 +742,118 @@ function checkAuthStatus() {
   }
 }
 
+/**
+ * 스플래시 DOM에 남은 !important·MutationObserver가 인증/베이스캠프 전환을 막는 경우가 있어
+ * 한 곳에서 완전히 내립니다.
+ */
+function dismissSplashFully() {
+  window.isSplashActive = false;
+  if (window.splashObserver) {
+    try {
+      window.splashObserver.disconnect();
+    } catch (e) {
+      /* ignore */
+    }
+    window.splashObserver = null;
+  }
+  const splashScreen = document.getElementById('splashScreen');
+  if (splashScreen) {
+    splashScreen.classList.remove('active');
+    splashScreen.style.setProperty('display', 'none', 'important');
+    splashScreen.style.setProperty('opacity', '0', 'important');
+    splashScreen.style.setProperty('visibility', 'hidden', 'important');
+    splashScreen.style.setProperty('z-index', '-1', 'important');
+    splashScreen.style.setProperty('transition', 'none', 'important');
+    splashScreen.style.setProperty('background', 'transparent', 'important');
+  }
+  const splashContainer = document.querySelector('.splash-container');
+  if (splashContainer) {
+    splashContainer.style.setProperty('display', 'none', 'important');
+    splashContainer.style.setProperty('opacity', '0', 'important');
+    splashContainer.style.setProperty('visibility', 'hidden', 'important');
+  }
+}
+
+/**
+ * 스플래시 종료 후(또는 스킵 시) 로컬 세션 복구 → 베이스캠프 또는 인증 화면.
+ * 기존에는 스플래시 타이머가 항상 인증만 열어 load 이벤트·로그인 세션과 경쟁했습니다.
+ */
+function applyInitialAuthRouting() {
+  if (window._openDeviceSettingsOnly) {
+    return;
+  }
+
+  document.body.style.setProperty('background-color', '#f6f8fa', 'important');
+  document.body.style.setProperty('background-attachment', 'fixed', 'important');
+
+  try {
+    checkAuthStatus();
+  } catch (e) {
+    console.warn('[init] checkAuthStatus:', e);
+  }
+
+  if (window.currentUser) {
+    hideAllScreens();
+    const basecampScreen = document.getElementById('basecampScreen');
+    if (basecampScreen) {
+      basecampScreen.classList.add('active');
+      basecampScreen.style.display = 'block';
+      basecampScreen.style.opacity = '1';
+      basecampScreen.style.visibility = 'visible';
+      if (typeof applyScrollContainmentForScreen === 'function') {
+        applyScrollContainmentForScreen('basecampScreen');
+      }
+    } else {
+      const connectionScreen = document.getElementById('connectionScreen');
+      if (connectionScreen) {
+        connectionScreen.classList.add('active');
+        connectionScreen.style.display = 'block';
+        connectionScreen.style.opacity = '1';
+        connectionScreen.style.visibility = 'visible';
+      }
+    }
+  } else if (typeof showAuthScreen === 'function') {
+    showAuthScreen();
+  } else {
+    hideAllScreens();
+    const authScreen = document.getElementById('authScreen');
+    if (authScreen) {
+      authScreen.classList.add('active');
+      authScreen.style.setProperty('display', 'block', 'important');
+      authScreen.style.setProperty('opacity', '1', 'important');
+      authScreen.style.setProperty('visibility', 'visible', 'important');
+    }
+  }
+
+  setTimeout(function () {
+    if (!window.currentUser && typeof initializeAuthenticationSystem === 'function') {
+      try {
+        initializeAuthenticationSystem();
+      } catch (err) {
+        console.warn('[init] initializeAuthenticationSystem:', err);
+      }
+    }
+    if (typeof window.restoreAuthRememberCredentials === 'function') {
+      try {
+        window.restoreAuthRememberCredentials();
+      } catch (err2) {
+        /* ignore */
+      }
+    }
+    const phoneInput = document.getElementById('authPhoneInput');
+    if (phoneInput && !window.currentUser) {
+      try {
+        phoneInput.focus();
+      } catch (err3) {
+        /* ignore */
+      }
+    }
+  }, 200);
+}
+
+window.dismissSplashFully = dismissSplashFully;
+window.applyInitialAuthRouting = applyInitialAuthRouting;
+
 
 // ===== 로그아웃 & 화면 유틸 =====
 
@@ -757,13 +869,14 @@ function hideAllScreens() {
 
 // 인증 화면 표시 (이미 showAuthScreen이 있으면 그걸 쓰세요)
 function showAuthScreen() {
+  dismissSplashFully();
   hideAllScreens();
   const authScreen = document.getElementById('authScreen');
   if (authScreen) {
     authScreen.classList.add('active');
-    authScreen.style.display = 'block';
-    authScreen.style.opacity = '1';
-    authScreen.style.visibility = 'visible';
+    authScreen.style.setProperty('display', 'block', 'important');
+    authScreen.style.setProperty('opacity', '1', 'important');
+    authScreen.style.setProperty('visibility', 'visible', 'important');
     /* body 스크롤 잠금 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤 */
     if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen') && window.__pullToRefreshBlockerCleanup) {
       window.__pullToRefreshBlockerCleanup();
@@ -820,20 +933,6 @@ function refreshPage() {
   window.location.reload();
 }
 
-
-
-
-
-
-// (공용) 모든 화면 숨기기
-function hideAllScreens() {
-  document.querySelectorAll('.screen').forEach(screen => {
-    screen.classList.remove('active');
-    screen.style.display = 'none';
-    screen.style.opacity = '0';
-    screen.style.visibility = 'hidden';
-  });
-}
 
 
 
@@ -4737,8 +4836,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const skipSplashForDeviceSettings = !!window._openDeviceSettingsFromBluetooth || !!window._openDeviceSettingsOnly;
   const isSplashActive = !skipSplashForDeviceSettings && splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
   
-  // 스플래시 화면 보호 플래그 (전역)
-  window.isSplashActive = isSplashActive || window.isSplashActive;
+  // 스플래시 화면 보호 플래그 (전역) — 스플래시 스킵 모드에서는 이전 protectSplash의 true를 OR 하면 안 됨
+  if (skipSplashForDeviceSettings) {
+    window.isSplashActive = false;
+  } else {
+    window.isSplashActive = !!isSplashActive || !!window.isSplashActive;
+  }
   
   if (skipSplashForDeviceSettings && splashScreen) {
     splashScreen.style.setProperty('display', 'none', 'important');
@@ -4938,88 +5041,59 @@ document.addEventListener("DOMContentLoaded", () => {
     // 전역에 observer 저장 (나중에 정리용)
     window.splashObserver = splashObserver;
     
-    console.log("🎬 스플래시(정적 로고 2초) - 인증 화면으로 전환");
+    console.log("🎬 스플래시(정적 로고 2초) - 이후 초기 라우팅");
     const totalDuration = 2000;
 
-    setTimeout(() => {
-      console.log("✅ 스플래시 완료 - 인증 화면으로 전환");
-
-      window.isSplashActive = false;
-      if (window.splashObserver) {
-        window.splashObserver.disconnect();
-        window.splashObserver = null;
-      }
-
-      splashScreen.classList.remove("active");
-      splashScreen.style.setProperty('display', 'none', 'important');
-      splashScreen.style.setProperty('opacity', '0', 'important');
-      splashScreen.style.setProperty('visibility', 'hidden', 'important');
-      splashScreen.style.setProperty('z-index', '-1', 'important');
-      splashScreen.style.setProperty('transition', 'none', 'important');
-      splashScreen.style.setProperty('background', 'transparent', 'important');
-
-      document.body.style.setProperty('background-color', '#f6f8fa', 'important');
-      document.body.style.setProperty('background-attachment', 'fixed', 'important');
-
-      const splashContainer = document.querySelector('.splash-container');
-      if (splashContainer) {
-        splashContainer.style.setProperty('display', 'none', 'important');
-        splashContainer.style.setProperty('opacity', '0', 'important');
-        splashContainer.style.setProperty('visibility', 'hidden', 'important');
-      }
-
-      const authScreen = document.getElementById("authScreen");
-      if (authScreen) {
-        document.querySelectorAll(".screen").forEach(screen => {
-          if (screen.id !== 'splashScreen') {
-            screen.classList.remove("active");
-            screen.style.display = "none";
-          }
-        });
-
-        authScreen.style.display = "block";
-        authScreen.classList.add("active");
-        authScreen.style.opacity = "1";
-        authScreen.style.visibility = "visible";
-
-        setTimeout(() => {
-          if (typeof initializeAuthenticationSystem === 'function') {
-            console.log('🔧 인증 시스템 초기화 시작');
-            initializeAuthenticationSystem();
-          } else {
-            console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
-          }
-          if (typeof window.restoreAuthRememberCredentials === 'function') {
-            window.restoreAuthRememberCredentials();
-          }
-          const phoneInput = document.getElementById('authPhoneInput');
-          if (phoneInput) {
-            phoneInput.focus();
-          }
-        }, 200);
+    setTimeout(function splashTimerDone() {
+      console.log("✅ 스플래시 완료 - 초기 라우팅");
+      try {
+        if (typeof dismissSplashFully === 'function') {
+          dismissSplashFully();
+        }
+        if (typeof applyInitialAuthRouting === 'function') {
+          applyInitialAuthRouting();
+        }
+      } catch (splashRouteErr) {
+        console.error('[splash] 전환 실패:', splashRouteErr);
+        if (typeof dismissSplashFully === 'function') {
+          dismissSplashFully();
+        }
+        if (typeof applyInitialAuthRouting === 'function') {
+          applyInitialAuthRouting();
+        }
       }
     }, totalDuration);
-  } else {
-    // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
-    document.body.style.setProperty('background-color', '#f6f8fa', 'important');
-    document.body.style.setProperty('background-attachment', 'fixed', 'important');
 
-    const authScreen = document.getElementById("authScreen");
-    if (authScreen) {
-      document.querySelectorAll(".screen").forEach(screen => {
-        screen.classList.remove("active");
-        screen.style.display = "none";
-      });
-
-      authScreen.style.display = "block";
-      authScreen.classList.add("active");
-      authScreen.style.opacity = "1";
-      authScreen.style.visibility = "visible";
-      setTimeout(function () {
-        if (typeof window.restoreAuthRememberCredentials === 'function') {
-          window.restoreAuthRememberCredentials();
+    setTimeout(function splashFailsafe() {
+      if (!window.isSplashActive) {
+        return;
+      }
+      var el = document.getElementById('splashScreen');
+      if (el) {
+        var st = window.getComputedStyle(el);
+        if (st.display === 'none' || st.visibility === 'hidden') {
+          window.isSplashActive = false;
+          return;
         }
-      }, 0);
+      }
+      console.warn('[splash] failsafe: 예상보다 길어 강제로 스플래시를 내리고 초기 화면으로 이동');
+      try {
+        if (typeof dismissSplashFully === 'function') {
+          dismissSplashFully();
+        }
+        if (typeof applyInitialAuthRouting === 'function') {
+          applyInitialAuthRouting();
+        }
+      } catch (fe) {
+        console.error('[splash] failsafe error:', fe);
+      }
+    }, 5500);
+  } else {
+    if (typeof dismissSplashFully === 'function') {
+      dismissSplashFully();
+    }
+    if (typeof applyInitialAuthRouting === 'function') {
+      applyInitialAuthRouting();
     }
   }
   
@@ -8620,57 +8694,24 @@ console.log('🛠️ 디버깅 함수 로드 완료: debugScreenState(), emergen
 
 
 
-// 앱 로드 시 인증 복구 → 라우팅
+// 앱 로드 시 인증 복구 → 라우팅 (스플래시 중에는 전환하지 않음 — MutationObserver·타이머와 경쟁으로 흰 화면 정지 방지)
 window.addEventListener('load', () => {
-  // 1) 인증 상태 복구
-  checkAuthStatus();
+  if (window._openDeviceSettingsOnly) {
+    return;
+  }
+  try {
+    checkAuthStatus();
+  } catch (e) {
+    console.warn('[init] load checkAuthStatus:', e);
+  }
 
-  // 2) 복구 결과에 따라 초기 화면 결정
-  if (window.currentUser) {
-    // (A안) 바로 프로필 선택 화면에서 사용자 리스트 보고 싶다면:
-    // hideAllScreens();
-    // const profileScreen = document.getElementById('profileScreen');
-    // if (profileScreen) {
-    //   profileScreen.classList.add('active');
-    //   profileScreen.style.display = 'block';
-    //   profileScreen.style.opacity = '1';
-    //   profileScreen.style.visibility = 'visible';
-    //   if (typeof loadUsers === 'function') loadUsers(); // grade=1 전체/이름순, 그 외 본인만
-    // }
+  if (window.isSplashActive) {
+    console.log('[init] window load: 스플래시 진행 중 — 초기 라우팅은 스플래시 종료 시 한 번만 처리');
+    return;
+  }
 
-    // 베이스캠프 화면으로 이동
-    hideAllScreens();
-    const basecampScreen = document.getElementById('basecampScreen');
-    if (basecampScreen) {
-      basecampScreen.classList.add('active');
-      basecampScreen.style.display = 'block';
-      basecampScreen.style.opacity = '1';
-      basecampScreen.style.visibility = 'visible';
-      if (typeof applyScrollContainmentForScreen === 'function') applyScrollContainmentForScreen('basecampScreen');
-    } else {
-      // 대체: connectionScreen으로 이동
-      const connectionScreen = document.getElementById('connectionScreen');
-      if (connectionScreen) {
-        connectionScreen.classList.add('active');
-        connectionScreen.style.display = 'block';
-        connectionScreen.style.opacity = '1';
-        connectionScreen.style.visibility = 'visible';
-      }
-    }
-  } else {
-    // 인증 정보 없으면 인증 화면으로
-    if (typeof showAuthScreen === 'function') {
-      showAuthScreen();
-    } else {
-      hideAllScreens();
-      const authScreen = document.getElementById('authScreen');
-      if (authScreen) {
-        authScreen.classList.add('active');
-        authScreen.style.display = 'block';
-        authScreen.style.opacity = '1';
-        authScreen.style.visibility = 'visible';
-      }
-    }
+  if (typeof applyInitialAuthRouting === 'function') {
+    applyInitialAuthRouting();
   }
 });
 
