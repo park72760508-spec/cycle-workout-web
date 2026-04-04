@@ -26,6 +26,22 @@ window.indoorTrainingState = {
   segmentCountdownActive: false // 세그먼트 카운트다운 활성화 여부
 };
 
+/**
+ * 세그먼트 길이(초) — app.js의 segDurationSec와 동일 규칙 우선 사용.
+ * duration이 문자열인 경우 등으로 건너뛰기 시 누적이 문자열 병합되는 오류 방지.
+ */
+function getIndoorSegmentDurationSec(seg) {
+  if (typeof window.segDurationSec === 'function') {
+    return window.segDurationSec(seg);
+  }
+  if (!seg) return 0;
+  if (typeof seg.duration_sec === 'number') return Math.max(0, Math.floor(seg.duration_sec));
+  if (typeof seg.duration === 'number') return Math.max(0, Math.floor(seg.duration));
+  var raw = seg.duration_sec != null ? seg.duration_sec : seg.duration;
+  var n = Number(raw);
+  return Math.max(0, Math.floor(isNaN(n) ? 0 : n));
+}
+
 // ANT+ 통신 관련 전역 상태 (rollerRaceDashboard와 공유)
 if (!window.antState) {
   window.antState = {
@@ -1913,8 +1929,8 @@ function calculateSegmentRemainingTime() {
   const segment = window.indoorTrainingState.currentWorkout.segments[window.indoorTrainingState.currentSegmentIndex];
   if (!segment) return 0;
   
-  const duration = segment.duration_sec || segment.duration || 0;
-  const elapsed = window.indoorTrainingState.segmentElapsedTime;
+  const duration = getIndoorSegmentDurationSec(segment);
+  const elapsed = Number(window.indoorTrainingState.segmentElapsedTime) || 0;
   
   return Math.max(0, duration - elapsed);
 }
@@ -4662,8 +4678,7 @@ function skipCurrentSegmentTraining() {
       for (let i = currentIndex; i < newIndex; i++) {
         const seg = w.segments[i];
         if (seg) {
-          const duration = seg.duration_sec || seg.duration || 0;
-          skippedTime += duration;
+          skippedTime += getIndoorSegmentDurationSec(seg);
         }
       }
       
@@ -4714,6 +4729,15 @@ function skipCurrentSegmentTraining() {
     
     if (typeof showToast === 'function') {
       showToast(`세그먼트 ${newIndex + 1}로 건너뛰기`);
+    }
+
+    // 건너뛰기 직후 랩/전광판 즉시 반영(다음 setTimeout(1s)까지 표시가 멈춘 것처럼 보이는 것 방지)
+    if (window.indoorTrainingState.trainingState === 'running' && window.indoorTrainingState.segmentStartTime) {
+      const nowSkip = Date.now();
+      window.indoorTrainingState.segmentElapsedTime = Math.floor((nowSkip - window.indoorTrainingState.segmentStartTime) / 1000);
+    }
+    if (typeof updateScoreboard === 'function') {
+      updateScoreboard();
     }
     
   } catch (error) {
@@ -4795,8 +4819,8 @@ function startTrainingTimer() {
     const currentSegment = segments[currentIndex];
     
     if (currentSegment) {
-      const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
-      const segmentElapsed = window.indoorTrainingState.segmentElapsedTime;
+      const segmentDuration = getIndoorSegmentDurationSec(currentSegment);
+      const segmentElapsed = Number(window.indoorTrainingState.segmentElapsedTime) || 0;
       const remaining = segmentDuration - segmentElapsed;
       
       // 세그먼트 종료 6초 전에 5초 카운트다운
