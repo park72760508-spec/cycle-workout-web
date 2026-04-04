@@ -1431,7 +1431,13 @@ function OpenRidingCalendarMain(props) {
                 return <option key={d} value={d}>{d}</option>;
               })}
             </select>
-            <button type="button" className="rounded-lg bg-slate-800 text-white px-3 py-1 text-sm shrink-0" onClick={addRegionFromSelect}>추가</button>
+            <button
+              type="button"
+              className="open-riding-action-btn inline-flex items-center justify-center shrink-0 rounded-xl bg-violet-600 text-white text-sm font-semibold px-3 py-1.5 shadow-[0_2px_8px_rgba(102,126,234,0.35)] hover:bg-violet-700 active:translate-y-px transition-colors leading-none"
+              onClick={addRegionFromSelect}
+            >
+              추가
+            </button>
           </div>
           <ul className="mt-2 flex flex-wrap gap-1">
             {prefs.activeRegions.map(function (r) {
