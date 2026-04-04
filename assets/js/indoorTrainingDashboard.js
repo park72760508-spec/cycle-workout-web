@@ -4667,7 +4667,7 @@ function skipCurrentSegmentTraining() {
       return;
     }
     
-    // 세그먼트 변경
+    // 세그먼트 변경 — segmentStartTime = 벽시계 앵커(모바일 TrainingTimer의 _lapBaselineBySegIndex와 동일 역할)
     window.indoorTrainingState.currentSegmentIndex = newIndex;
     window.indoorTrainingState.segmentStartTime = Date.now();
     window.indoorTrainingState.segmentElapsedTime = 0;

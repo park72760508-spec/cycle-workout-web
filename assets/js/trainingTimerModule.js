@@ -10,6 +10,11 @@
  *
  * [대상 화면]
  * - #mobileDashboardScreen, #trainingScreen, #bluetoothIndividualScreen, individual.html
+ *
+ * [시간 SSOT — 경과·세그 연동]
+ * - onTick(wholeWorkoutElapsedSec) 한 가지 값만 전달. 노트북은 trainingState.elapsedSec, 모바일은 mobileTrainingState.elapsedSec.
+ * - 모바일 랩(세그먼트 남은 시간)은 명목 타임라인과 벽시계가 어긋날 수 있어 app.js의 getMobileSegmentElapsedForLap +
+ *   mobileTrainingState._lapBaselineBySegIndex(건너뛰기 진입 시점 앵커)로 TrainingTimer 경과와 정합한다.
  */
 (function (global) {
   'use strict';

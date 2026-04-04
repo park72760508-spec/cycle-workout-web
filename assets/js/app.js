@@ -1503,6 +1503,25 @@ function getCumulativeSegmentStartSec(index) {
 }
 window.getCumulativeSegmentStartSec = getCumulativeSegmentStartSec;
 
+/**
+ * 모바일 대시보드: 세그먼트 내 경과(초) — TrainingTimer → mobileTrainingState.elapsedSec 단일 소스.
+ * 건너뛰기 후에는 명목 누적(getCumulativeSegmentStartSec)과 벽시계가 맞지 않으므로
+ * _lapBaselineBySegIndex[segIndex] = 세그먼트 진입 시점의 elapsedSec 으로 랩만 보정한다.
+ */
+function getMobileSegmentElapsedForLap(mts, segIndex) {
+  if (!mts) return 0;
+  var idx = Math.max(0, Math.floor(Number(segIndex)) || 0);
+  var map = mts._lapBaselineBySegIndex;
+  var rawB = map && Object.prototype.hasOwnProperty.call(map, idx) ? map[idx] : null;
+  var b = rawB != null ? Number(rawB) : NaN;
+  if (Number.isFinite(b)) {
+    return Math.max(0, (Number(mts.elapsedSec) || 0) - b);
+  }
+  var cum = typeof getCumulativeSegmentStartSec === 'function' ? getCumulativeSegmentStartSec(idx) : 0;
+  return Math.max(0, (Number(mts.elapsedSec) || 0) - cum);
+}
+window.getMobileSegmentElapsedForLap = getMobileSegmentElapsedForLap;
+
 // 세그먼트 누적 시작초
 // function getCumulativeStartSec(index) {
   // const w = window.currentWorkout;
@@ -2297,7 +2316,9 @@ window.mobileTrainingState = window.mobileTrainingState || {
   _prevRemainMs: {},
   _lastProcessedSegIndex: 0,
   /** 로컬 건너뛰기 후 Firebase status가 명목 타임라인으로 랩/경과를 덮어쓰지 않도록 함 */
-  _mobileLocalLapOnly: false
+  _mobileLocalLapOnly: false,
+  /** 세그먼트 인덱스 → 해당 구간 진입 시점의 벽시계 elapsedSec(건너뛰기 직후 랩 전용) */
+  _lapBaselineBySegIndex: {}
 };
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
@@ -17196,6 +17217,7 @@ function startMobileWorkout() {
   mts._prevRemainMs = {};
   mts._lastProcessedSegIndex = 0;
   mts._mobileLocalLapOnly = false;
+  mts._lapBaselineBySegIndex = {};
   mts.segmentPowerHistory = []; // 세그먼트별 파워 히스토리 (랩 평균 파워 계산용)
   mts.distanceKm = 0; // 속도 적산 거리 초기화 (연속 훈련 시 이전 값 제거)
 
@@ -17386,10 +17408,10 @@ function startMobileTrainingTimerLoop() {
       mts.segElapsedSec = Math.min(segElapsedSec, segDur);
       segRemaining = firebaseLapCountdown;
     } else {
-      const cumStart = typeof getCumulativeSegmentStartSec === 'function'
-        ? getCumulativeSegmentStartSec(currentSegIndex)
-        : 0;
-      const calculatedSegElapsed = Math.max(0, mts.elapsedSec - cumStart);
+      const calculatedSegElapsed = typeof getMobileSegmentElapsedForLap === 'function'
+        ? getMobileSegmentElapsedForLap(mts, currentSegIndex)
+        : Math.max(0, mts.elapsedSec - (typeof getCumulativeSegmentStartSec === 'function'
+          ? getCumulativeSegmentStartSec(currentSegIndex) : 0));
       mts.segElapsedSec = calculatedSegElapsed;
       segRemaining = Math.max(0, segDur - Math.min(calculatedSegElapsed, segDur));
     }
@@ -17572,13 +17594,19 @@ function startMobileTrainingTimerLoop() {
       mts.segIndex = nextSegIndex;
       mts._lastProcessedSegIndex = nextSegIndex;
 
-      const nextCumStart = typeof getCumulativeSegmentStartSec === 'function'
-        ? getCumulativeSegmentStartSec(nextSegIndex)
-        : 0;
-      const nextSegElapsed = Math.max(0, mts.elapsedSec - nextCumStart);
+      if (mts._lapBaselineBySegIndex) {
+        delete mts._lapBaselineBySegIndex[currentSegIndex];
+        delete mts._lapBaselineBySegIndex[nextSegIndex];
+      }
+
+      const nextSegElapsed = typeof getMobileSegmentElapsedForLap === 'function'
+        ? getMobileSegmentElapsedForLap(mts, nextSegIndex)
+        : Math.max(0, mts.elapsedSec - (typeof getCumulativeSegmentStartSec === 'function'
+          ? getCumulativeSegmentStartSec(nextSegIndex) : 0));
       mts.segElapsedSec = nextSegElapsed;
 
-      console.log(`[Mobile Dashboard] 세그먼트 전환 직후 경과 시간 업데이트: segIndex=${nextSegIndex}, elapsedSec=${mts.elapsedSec}, cumStart=${nextCumStart}, segElapsedSec=${nextSegElapsed.toFixed(1)}`);
+      var nextCumLog = typeof getCumulativeSegmentStartSec === 'function' ? getCumulativeSegmentStartSec(nextSegIndex) : 0;
+      console.log(`[Mobile Dashboard] 세그먼트 전환 직후 경과 시간 업데이트: segIndex=${nextSegIndex}, elapsedSec=${mts.elapsedSec}, cumStart=${nextCumLog}, segElapsedSec=${nextSegElapsed.toFixed(1)}`);
 
       {
         const nextSeg = w.segments[nextSegIndex];
@@ -17998,8 +18026,9 @@ function refreshMobileLapTimeDisplay() {
   var seg = w.segments[idx];
   if (!seg) return;
   var segDur = typeof segDurationSec === 'function' ? segDurationSec(seg) : Math.max(0, Math.floor(Number(seg.duration_sec || seg.duration || 0)));
-  var cum = typeof getCumulativeSegmentStartSec === 'function' ? getCumulativeSegmentStartSec(idx) : 0;
-  var elapsedInSeg = Math.max(0, (Number(mts.elapsedSec) || 0) - cum);
+  var elapsedInSeg = typeof getMobileSegmentElapsedForLap === 'function'
+    ? getMobileSegmentElapsedForLap(mts, idx)
+    : Math.max(0, (Number(mts.elapsedSec) || 0) - (typeof getCumulativeSegmentStartSec === 'function' ? getCumulativeSegmentStartSec(idx) : 0));
   var remaining = Math.max(0, segDur - Math.min(elapsedInSeg, segDur));
   setMobileLapTimeDisplay(remaining);
 }
@@ -18041,6 +18070,10 @@ function handleMobileSkip() {
     mts._mobileLocalLapOnly = true;
     window.mobileDashboardFirebaseLapCountdown = null;
     window.mobileDashboardFirebaseLapForSegIndex = null;
+
+    // 명목 누적(cum)과 벽시clock elapsed가 불일치할 때 랩이 00:00에 고정되지 않도록 구간 앵커(TrainingTimer SSOT와 정합)
+    mts._lapBaselineBySegIndex = {};
+    mts._lapBaselineBySegIndex[nextSegIndex] = Number(mts.elapsedSec) || 0;
     
     // 세그먼트 카운트다운 상태 초기화
     if (nextSegIndex < w.segments.length) {
