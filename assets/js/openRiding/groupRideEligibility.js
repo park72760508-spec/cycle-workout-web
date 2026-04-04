@@ -155,7 +155,7 @@ export function classifyOpenRidingParticipation(powerW, weightKg, rideLevelValue
   if (margin >= 1) {
     return {
       tier: 'go',
-      label: '참가',
+      label: '참가 가능',
       comment:
         '현실 지표(60분 피크·체중) 기준 예상 그룹 항속이 이 모임 레벨 요구를 안정적으로 충족합니다.',
       estimatedGroupSpeed: ev.estimatedGroupSpeed,
