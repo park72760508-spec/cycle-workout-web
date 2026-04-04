@@ -2484,7 +2484,7 @@ function OpenRidingCreateForm(props) {
     return <div className="py-12 text-center text-sm text-slate-500">불러오는 중…</div>;
   }
 
-  /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 폼 루트는 입력·스크롤 레이어(z-0), 하단 CTA(.open-riding-bottom-actions)만 z-9999로 위에 올림 — 장식·패널이 버튼을 덮지 않도록 */
+  /* 폼 루트 z-0, 하단 CTA는 style.css에서 z-5(고정 로고바 10000 미만)로 본문보다만 위 — 스크롤 시 고정바 뒤로 가려짐 */
   return (
     <form className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
       {!storage ? (
@@ -2911,7 +2911,7 @@ function OpenRidingCreateForm(props) {
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      {/* Safe Area + 터치 타깃: 하단 CTA — style.css isolation+z-9999 */}
+      {/* Safe Area + 터치 타깃: 하단 CTA — style.css (고정바보다 낮은 z-index) */}
       <div className="open-riding-bottom-actions">
         <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
           {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
@@ -3293,7 +3293,7 @@ function OpenRidingDetail(props) {
     );
   }
 
-  /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 상세 본문 루트는 z-0, 하단 참석 CTA는 .open-riding-bottom-actions(z-9999)로만 최상단 */
+  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css) */
   return (
     <div className="open-riding-detail-content-root max-w-lg mx-auto py-2 space-y-4 w-full relative z-0">
       {isCancelled ? (
@@ -3727,7 +3727,7 @@ function OpenRidingRoomApp(props) {
           <span className="shrink-0" style={{ width: '2.5em' }} aria-hidden="true" />
         )}
       </div>
-      {/* 스크롤 전용 본문: 하단 페이드/마스크 pseudo가 붙어도 style.css에서 pointer-events:none 처리. CTA는 .open-riding-bottom-actions(isolation+z-9999)에서 분리 */}
+      {/* 스크롤 전용 본문: pseudo는 pointer-events:none. CTA는 고정바 아래 z-스택(style.css) */}
       <div
         className={
           'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pt-2 w-full box-border ' +
