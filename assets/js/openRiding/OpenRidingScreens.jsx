@@ -332,11 +332,16 @@ function getOpenRidingInvitePhoneSync(userId) {
   return phone;
 }
 
-/** 서울 달력상 라이딩일이 지난 경우(다음날부터) 상세 연락처 마스킹 */
-function shouldMaskOpenRidingContacts(ride) {
+/** 한국(서울) 달력 기준으로 라이딩일이 오늘보다 이전인지 (당일·미래는 false) */
+function isOpenRidingPastBySeoulDate(ride) {
   var rideYmd = getRideDateSeoulYmd(ride);
   if (!rideYmd) return false;
   return getTodaySeoulYmd() > rideYmd;
+}
+
+/** 서울 달력상 라이딩일이 지난 경우(다음날부터) 상세 연락처 마스킹 */
+function shouldMaskOpenRidingContacts(ride) {
+  return isOpenRidingPastBySeoulDate(ride);
 }
 
 /** 전화 등 연락처 표시용 마스킹 (숫자 위주, 이메일은 일부 가림) */
@@ -1109,6 +1114,7 @@ function OpenRidingCalendarMain(props) {
             };
       if (!uid || !phone) return [];
       var list = ridesMonth.filter(function (r) {
+        if (isOpenRidingPastBySeoulDate(r)) return false;
         if (String(r.hostUserId || '') === uid) return false;
         var il = Array.isArray(r.invitedList) ? r.invitedList : [];
         if (!il.length) return false;
@@ -1124,6 +1130,7 @@ function OpenRidingCalendarMain(props) {
       var uid = String(userId || '');
       if (!uid) return [];
       var list = ridesMonth.filter(function (r) {
+        if (isOpenRidingPastBySeoulDate(r)) return false;
         return String(r.hostUserId || '') === uid;
       });
       return sortOpenRidingListByDateTime(list);
