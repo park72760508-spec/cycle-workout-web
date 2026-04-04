@@ -960,9 +960,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·수정·상세: 고정 로고바 높이만큼 스크롤 여백 — safe-area 미가산 */
+/* 생성·수정·상세: 고정 로고바·홈 인디케이터 + CTA와 겹침 방지(안드로이드 중앙 탭 누락 완화) */
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: 54px;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -1015,12 +1015,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 0.95;
 }
 
-/* 로고 전용 고정바 minimal: 로고 아래·safe-area 추가 패딩 없음 */
+/* 로고 전용 고정바 minimal: 표시만 하고 터치는 통과(겹치는 CTA가 히트 테스트를 받도록) */
 #openRidingRoomScreen .open-riding-bottom-logo-bar.open-riding-bottom-fixed-shell {
   box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.05);
   padding-top: 0;
   justify-content: flex-end;
   align-items: stretch;
+  pointer-events: none;
 }
 
 /* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
@@ -1069,10 +1070,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
  * 4) isolation: isolate — 독립 스태킹 컨텍스트로 외부 GPU/오버레이가 CTA 내부를 덮지 않도록 강제
  */
 #openRidingRoomScreen .open-riding-bottom-actions {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 고정바 상단선과 CTA 사이 시각·터치 여백, 상위 pan-y와의 탭 경합 완화 */
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  padding-top: 4px;
   position: relative;
-  z-index: 9999;
+  z-index: 10001;
   isolation: isolate;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
 }
 
 /* 하단 CTA 가로 정렬 행: 스택 순서만 지정(레이아웃용 flex) */
