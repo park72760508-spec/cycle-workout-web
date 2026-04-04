@@ -1327,6 +1327,16 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  function isUserParticipantConfirmedForRide(r) {
+    var uid = String(userId || '');
+    if (!uid) return false;
+    if (String(r.rideStatus || 'active') === 'cancelled') return false;
+    var parts = Array.isArray(r.participants) ? r.participants : [];
+    return parts.some(function (p) {
+      return String(p) === uid;
+    });
+  }
+
   /** extra.showRideDate: 월간 합성 목록에서 일자 표시 */
   function renderMonthRideListRow(r, extra) {
     var ex = extra || {};
@@ -1359,6 +1369,8 @@ function OpenRidingCalendarMain(props) {
     var regionShort = formatOpenRidingRegionShort(regionFull);
     var placeLabel = regionShort;
     var regionTitleAttr = regionFull ? regionFull : undefined;
+    var showParticipantConfirmedIcon =
+      isUserParticipantConfirmedForRide(r) && !(ex.compactInviteOrHostedList && ex.hostedListSection);
     return (
       <li key={r.id}>
         <button
@@ -1371,6 +1383,16 @@ function OpenRidingCalendarMain(props) {
               <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
             ) : r.isPrivate ? (
               <img src="assets/img/lock.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
+            ) : null}
+            {showParticipantConfirmedIcon ? (
+              <img
+                src="assets/img/check.svg"
+                alt="참석 확정"
+                className="w-4 h-4 shrink-0 object-contain"
+                width={16}
+                height={16}
+                decoding="async"
+              />
             ) : null}
             <span className="truncate">{r.title}</span>
           </div>
