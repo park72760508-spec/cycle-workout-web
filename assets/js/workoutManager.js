@@ -1850,7 +1850,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 펄스 애니메이션 효과 (원 테두리에서 퍼져나가는 효과)
     const currentTime = Date.now() / 1000;
     const isMobileSegGraphMascot = canvasId === 'mobileIndividualSegmentGraph';
-    const pulseDuration = isMobileSegGraphMascot ? 1.15 : 1.5;
+    // 모바일: 깜빡임이 빠르다는 피드백 반영 → 주기 2배(한 사이클 약 2.3초)
+    const pulseDuration = isMobileSegGraphMascot ? 2.3 : 1.5;
     const pulsePhase = currentTime % pulseDuration;
     
     // 마스코트 그리기
@@ -1870,14 +1871,14 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.beginPath();
       ctx.arc(mascotX, mascotY, pulseRadius, 0, Math.PI * 2);
       if (isMobileSegGraphMascot) {
-        // 모바일: 주황 펄스 + 안쪽 소프트 글로우로 가시성 강화
+        // 모바일: 주황 펄스(링 두께 절반: 3.5→1.75, 5→2.5)
         ctx.strokeStyle = `rgba(249, 115, 22, ${pulseAlpha * 0.95})`;
-        ctx.lineWidth = 3.5;
+        ctx.lineWidth = 1.75;
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(mascotX, mascotY, pulseRadius * 0.96, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(253, 186, 116, ${pulseAlpha * 0.45})`;
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 2.5;
         ctx.stroke();
       } else {
         ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.8})`;
