@@ -1370,10 +1370,6 @@ function OpenRidingCalendarMain(props) {
       typeof window !== 'undefined' && typeof window.evaluateGroupRideEligibility === 'function'
         ? window.evaluateGroupRideEligibility
         : null;
-    var tgtSpd =
-      typeof window !== 'undefined' && typeof window.getRidingLevelTargetSpeedKmH === 'function'
-        ? window.getRidingLevelTargetSpeedKmH
-        : null;
     var StelvioDistChart =
       typeof window !== 'undefined' ? window.StelvioRankingDistributionChart : null;
     var baseStats = prof.ok && ev ? ev(prof.ftp, prof.weight, 0) : null;
@@ -1544,57 +1540,6 @@ function OpenRidingCalendarMain(props) {
               <p className="text-[10px] text-slate-500 m-0 leading-snug">
                 관심 레벨 참고는 <strong className="text-slate-600">60분 피크가 있으면 그 값</strong>으로, 없으면 FTP로 계산합니다.
               </p>
-              <ul className="space-y-1.5 m-0 p-0 list-none border-t border-violet-100/80 pt-2">
-                {RIDING_LEVEL_OPTIONS.map(function (opt) {
-                  var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
-                  var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
-                  var clsFn =
-                    typeof window !== 'undefined' && typeof window.classifyOpenRidingParticipation === 'function'
-                      ? window.classifyOpenRidingParticipation
-                      : null;
-                  var part =
-                    clsFn && prof.ok && wLv > 0 ? clsFn(powLv, wLv, opt.value) : null;
-                  var badgeCls =
-                    part && part.tier === 'go'
-                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
-                      : part && part.tier === 'caution'
-                        ? 'bg-orange-50 text-orange-900 border border-orange-200/90'
-                        : part && part.tier === 'stop'
-                          ? 'bg-red-50 text-red-800 border border-red-200/90'
-                          : '';
-                  var msgCls =
-                    part && part.tier === 'go'
-                      ? 'text-emerald-900'
-                      : part && part.tier === 'caution'
-                        ? 'text-orange-900'
-                        : part && part.tier === 'stop'
-                          ? 'text-red-800'
-                          : 'text-slate-400';
-                  return (
-                    <li
-                      key={opt.value}
-                      className="text-xs rounded-lg bg-white/80 border border-slate-100 px-2 py-1.5 flex flex-col gap-0.5"
-                    >
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="font-medium text-slate-800">
-                          {opt.value}{' '}
-                          <span className="text-slate-400 font-normal">({opt.hint})</span>
-                        </span>
-                        {part ? (
-                          <span className={'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ' + badgeCls}>
-                            {part.label}
-                          </span>
-                        ) : null}
-                      </div>
-                      {part ? (
-                        <p className={'text-[11px] m-0 leading-snug ' + msgCls}>{part.comment}</p>
-                      ) : (
-                        <p className="text-[11px] text-slate-400 m-0">기준 없음 또는 프로필 미충족</p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
             </>
           )}
 
@@ -1633,6 +1578,17 @@ function OpenRidingCalendarMain(props) {
 
         <div>
           <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/90 px-3 py-2.5 space-y-1">
+            <p className="text-[10px] font-semibold text-slate-600 m-0">모임 기준 평균속도 (참고)</p>
+            {RIDING_LEVEL_OPTIONS.map(function (opt) {
+              return (
+                <p key={'legend-' + opt.value} className="text-[11px] text-slate-600 m-0 leading-snug pl-0.5">
+                  <span className="font-semibold text-slate-800">{opt.value}</span>
+                  <span className="text-slate-500"> ({opt.hint})</span>
+                </p>
+              );
+            })}
+          </div>
           {RIDING_LEVEL_OPTIONS.map(function (opt) {
             var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
             return (
