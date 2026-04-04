@@ -2295,7 +2295,9 @@ window.mobileTrainingState = window.mobileTrainingState || {
   pausedAtMs: null,
   _countdownFired: {},
   _prevRemainMs: {},
-  _lastProcessedSegIndex: 0
+  _lastProcessedSegIndex: 0,
+  /** 로컬 건너뛰기 후 Firebase status가 명목 타임라인으로 랩/경과를 덮어쓰지 않도록 함 */
+  _mobileLocalLapOnly: false
 };
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
@@ -2915,19 +2917,15 @@ function startSegmentLoop() {
         const remainMsPrev  = ts._prevRemainMs[key] ?? Math.round(segRemaining * 1000); // 바로 직전 남은 ms
         const remainMsNow   = Math.round((endAtSec - ts.elapsedSec) * 1000);           // 현재 남은 ms (초 기반)
       
-        // remainMsNow가 0 이하이면 카운트다운 실행하지 않음 (반복 방지)
+        // remainMsNow가 0 이하이면 카운트다운만 건너뜀(여기서 onTick 전체를 return 하면 updateTimeUI·세그먼트 전환이 누락됨)
         if (remainMsNow <= 0) {
-          // 이미 종료된 세그먼트이므로 카운트다운 로직 건너뛰기
-          // 카운트다운이 활성화되어 있으면 즉시 종료
           if (segmentCountdownActive) {
             segmentCountdownActive = false;
             CountdownDisplay.hideImmediate();
             MobileCountdownDisplay.hideImmediate();
           }
-          // firedMap에 모든 숫자를 기록하여 더 이상 실행되지 않도록 함
           ts._countdownFired[key] = { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true };
-          return;
-        }
+        } else {
       
         // 0초는 살짝 일찍(200ms) 울리기
         const EPS_0_MS = 200;
@@ -3023,6 +3021,7 @@ function startSegmentLoop() {
       
         // 다음 비교를 위해 현재 값 저장
         ts._prevRemainMs[key] = remainMsNow;
+        }
       }
 
 
@@ -15169,6 +15168,13 @@ function setupMobileDashboardFirebaseStatusSubscription() {
   statusRef.once('value').then((snapshot) => {
     try {
       if (!snapshot) return;
+      var mtsOnceGuard = window.mobileTrainingState;
+      if (mtsOnceGuard && mtsOnceGuard._firebaseStatusIgnoreUntilMs && Date.now() < mtsOnceGuard._firebaseStatusIgnoreUntilMs) {
+        return;
+      }
+      if (mtsOnceGuard && mtsOnceGuard._mobileLocalLapOnly) {
+        return;
+      }
       const status = snapshot.val();
       if (status && status.state === 'running') {
         // 훈련이 진행 중이면 즉시 동기화
@@ -15220,6 +15226,9 @@ function setupMobileDashboardFirebaseStatusSubscription() {
       if (!snapshot) return;
       var mtsFbGuard = window.mobileTrainingState;
       if (mtsFbGuard && mtsFbGuard._firebaseStatusIgnoreUntilMs && Date.now() < mtsFbGuard._firebaseStatusIgnoreUntilMs) {
+        return;
+      }
+      if (mtsFbGuard && mtsFbGuard._mobileLocalLapOnly) {
         return;
       }
       const status = snapshot.val();
@@ -17186,6 +17195,7 @@ function startMobileWorkout() {
   mts._countdownFired = {};
   mts._prevRemainMs = {};
   mts._lastProcessedSegIndex = 0;
+  mts._mobileLocalLapOnly = false;
   mts.segmentPowerHistory = []; // 세그먼트별 파워 히스토리 (랩 평균 파워 계산용)
   mts.distanceKm = 0; // 속도 적산 거리 초기화 (연속 훈련 시 이전 값 제거)
 
@@ -17360,6 +17370,7 @@ function startMobileTrainingTimerLoop() {
     var firebaseLapRaw = window.mobileDashboardFirebaseLapCountdown;
     var firebaseLapSeg = window.mobileDashboardFirebaseLapForSegIndex;
     var useFirebaseLap =
+      !mts._mobileLocalLapOnly &&
       firebaseLapRaw !== undefined && firebaseLapRaw !== null &&
       firebaseLapSeg != null &&
       Number(firebaseLapSeg) === Number(currentSegIndex);
@@ -18029,7 +18040,8 @@ function handleMobileSkip() {
     // 로컬 건너뛰기 후 수초간 Firebase status가 세그먼트를 되돌리거나 옛 lap만 보내 랩이 멈추는 것 방지
     mts._firebaseStatusIgnoreUntilMs = Date.now() + 5000;
     
-    // 로컬 건너뛰기 직후 이전 구간 Firebase 랩 값이 새 세그먼트에 섞이지 않도록 무효화
+    // 로컬 건너뛰기 후에는 벽시계·누적시작 기반 랩만 사용(Firebase 명목 타임라인이 랩을 망가뜨리는 것 방지)
+    mts._mobileLocalLapOnly = true;
     window.mobileDashboardFirebaseLapCountdown = null;
     window.mobileDashboardFirebaseLapForSegIndex = null;
     
