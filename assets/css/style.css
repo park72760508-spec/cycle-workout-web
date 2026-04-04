@@ -960,9 +960,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·수정·상세: 하단 고정 로고 줄만큼 스크롤 여백 (CTA는 본문 흐름) — 로고 2배 높이 기준 */
+/* 생성·수정·상세: 고정 로고바 실제 높이(로고 + 최소 상단 여유) + safe-area — 로고 아래 불필요 패딩 없음 */
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 }
 
@@ -980,7 +980,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   background: #fff;
   border-top: 1px solid #e5e7eb;
   box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.07);
@@ -1000,7 +1000,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-shrink: 0;
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: 2px 8px 0;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1018,9 +1018,12 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 0.95;
 }
 
-/* 로고 전용 고정바: 최소 높이·섀도만 */
+/* 로고 전용 고정바 minimal: 로고 아래 패딩 없음 — safe-area는 shell padding-bottom만 */
 #openRidingRoomScreen .open-riding-bottom-logo-bar.open-riding-bottom-fixed-shell {
   box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.05);
+  padding-top: 0;
+  justify-content: flex-end;
+  align-items: stretch;
 }
 
 /* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
