@@ -2233,6 +2233,85 @@ function OpenRidingCreateForm(props) {
     [editRideId, firestore]
   );
 
+  var _cph = useState(null);
+  var createFormPeakHint = _cph[0];
+  var setCreateFormPeakHint = _cph[1];
+
+  useEffect(
+    function () {
+      if (!hostUserId) {
+        setCreateFormPeakHint(null);
+        return undefined;
+      }
+      var cancelled = false;
+      var prof = readOpenRidingProfileFtpWeight();
+      var uid = String(hostUserId);
+      var levelVals = RIDING_LEVEL_OPTIONS.map(function (o) {
+        return o.value;
+      });
+
+      function applyHint(peakW, wKg, usedPeak) {
+        var pw = Number(peakW) > 0 ? Number(peakW) : prof.ok ? prof.ftp : 0;
+        var ww =
+          Number(peakW) > 0 && Number(wKg) > 0 ? Number(wKg) : prof.ok ? prof.weight : 0;
+        var calcFn = typeof window !== 'undefined' ? window.calculateSpeedOnFlat : null;
+        var spd =
+          calcFn && pw > 0 && ww > 0 ? Math.round(calcFn(pw, ww) * 10) / 10 : 0;
+        var summ =
+          typeof window !== 'undefined' &&
+          typeof window.getMaxRidingLevelsForPeakParticipation === 'function'
+            ? window.getMaxRidingLevelsForPeakParticipation(pw, ww, levelVals)
+            : { maxGoLevel: null, maxCautionLevel: null };
+        if (!cancelled) {
+          setCreateFormPeakHint({
+            soloSpeedKmh: spd,
+            usedPeak: !!(usedPeak && Number(peakW) > 0),
+            maxGoLevel: summ.maxGoLevel,
+            maxCautionLevel: summ.maxCautionLevel,
+            profileOk: prof.ok
+          });
+        }
+      }
+
+      var params = new URLSearchParams({
+        period: 'monthly',
+        duration: '60min',
+        gender: 'all'
+      });
+      params.set('uid', uid);
+      fetch(
+        'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString(),
+        { mode: 'cors' }
+      )
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (cancelled) return;
+          if (!data || !data.success || !data.byCategory) {
+            applyHint(0, 0, false);
+            return;
+          }
+          var merged = mergePeakRankingEntriesFromByCategory(data.byCategory);
+          var entry =
+            merged.filter(function (e) {
+              return e.userId === uid;
+            })[0] || data.currentUser;
+          var peakW = entry && Number(entry.watts) > 0 ? Number(entry.watts) : 0;
+          var wKg = entry && Number(entry.weightKg) > 0 ? Number(entry.weightKg) : 0;
+          applyHint(peakW, wKg, peakW > 0);
+        })
+        .catch(function () {
+          if (!cancelled) applyHint(0, 0, false);
+        });
+
+      return function () {
+        cancelled = true;
+      };
+    },
+    [hostUserId, RIDING_LEVEL_OPTIONS.length]
+  );
+
   var _dm = useState(false);
   var dateModalOpen = _dm[0];
   var setDateModalOpen = _dm[1];
@@ -2777,6 +2856,40 @@ function OpenRidingCreateForm(props) {
             </label>
           );
         })}
+        {createFormPeakHint && createFormPeakHint.soloSpeedKmh > 0 ? (
+          <div className="open-riding-create-level-peak-hint mt-2 rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug">
+            <p className="m-0 font-semibold">
+              평지 개인 평속 (60분 피크 투입)
+              {createFormPeakHint.usedPeak ? (
+                <span className="font-normal text-emerald-800/95"> — 현실 지표 핵심</span>
+              ) : (
+                <span className="font-normal text-emerald-800/95"> — 프로필 FTP 반영</span>
+              )}
+              :{' '}
+              <span className="tabular-nums font-bold text-emerald-950">{createFormPeakHint.soloSpeedKmh} km/h</span>
+            </p>
+            <p className="m-0 text-emerald-900">
+              {createFormPeakHint.maxGoLevel ? (
+                <>
+                  최대 참가 가능 레벨: <strong className="text-emerald-950">{createFormPeakHint.maxGoLevel}</strong>
+                </>
+              ) : createFormPeakHint.maxCautionLevel ? (
+                <>
+                  참가 가능(안정) 구간 없음 · 주의 수준 최고:{' '}
+                  <strong className="text-emerald-950">{createFormPeakHint.maxCautionLevel}</strong>
+                </>
+              ) : (
+                <span className="text-emerald-800/95">
+                  현실 지표 기준 여유가 큰 레벨이 없습니다. 초급·하위 모임을 권장합니다.
+                </span>
+              )}
+            </p>
+          </div>
+        ) : hostUserId && createFormPeakHint && createFormPeakHint.profileOk === false ? (
+          <p className="m-0 mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500 leading-snug">
+            프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
+          </p>
+        ) : null}
       </fieldset>
 
       <label className="block font-medium text-slate-700">

@@ -185,9 +185,43 @@ export function classifyOpenRidingParticipation(powerW, weightKg, rideLevelValue
   };
 }
 
+/**
+ * 난이도 순(쉬운 것 → 어려운 것) 레벨 문자열 배열에 대해,
+ * '참가 가능'인 가장 어려운 레벨과, 그게 없을 때 '주의'인 가장 어려운 레벨.
+ *
+ * @param {number} powerW
+ * @param {number} weightKg
+ * @param {string[]} levelValuesEasiestFirst
+ * @returns {{ maxGoLevel: string|null, maxCautionLevel: string|null }}
+ */
+export function getMaxRidingLevelsForPeakParticipation(powerW, weightKg, levelValuesEasiestFirst) {
+  var arr = Array.isArray(levelValuesEasiestFirst) ? levelValuesEasiestFirst.slice() : [];
+  var maxGo = null;
+  var maxCaution = null;
+  var i;
+  for (i = arr.length - 1; i >= 0; i--) {
+    var r = classifyOpenRidingParticipation(powerW, weightKg, arr[i]);
+    if (r && r.tier === 'go') {
+      maxGo = arr[i];
+      break;
+    }
+  }
+  if (!maxGo) {
+    for (i = arr.length - 1; i >= 0; i--) {
+      var r2 = classifyOpenRidingParticipation(powerW, weightKg, arr[i]);
+      if (r2 && r2.tier === 'caution') {
+        maxCaution = arr[i];
+        break;
+      }
+    }
+  }
+  return { maxGoLevel: maxGo, maxCautionLevel: maxCaution };
+}
+
 if (typeof window !== 'undefined') {
   window.calculateSpeedOnFlat = calculateSpeedOnFlat;
   window.evaluateGroupRideEligibility = evaluateGroupRideEligibility;
   window.getRidingLevelTargetSpeedKmH = getRidingLevelTargetSpeedKmH;
   window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
+  window.getMaxRidingLevelsForPeakParticipation = getMaxRidingLevelsForPeakParticipation;
 }
