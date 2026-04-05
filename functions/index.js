@@ -3006,6 +3006,9 @@ async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderF
   return Math.round((sum / n) * 10) / 10;
 }
 
+/** 현재 사용자 조회 순서: 연령·선수부 리그 우선(동기부여·추월은 부문 내 상대), Supremo(전체)는 폴백 */
+const PEAK_RANKING_USER_LOOKUP_ORDER = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda", "Supremo"];
+
 /** 피크 파워 랭킹 엔트리 (기간·종목·성별·연령대별) */
 async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter) {
   const usersSnap = await db.collection("users").get();
@@ -3046,7 +3049,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   }
   entries.sort((a, b) => b.wkg - a.wkg);
   const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
-  const byCategory = { Supremo: withRank.slice(0, 10), Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
   withRank.forEach((e) => {
     if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
   });
@@ -3092,7 +3095,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
   }
   entries.sort((a, b) => b.totalTss - a.totalTss);
   const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
-  const byCategory = { Supremo: withRank.slice(0, 10), Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
   withRank.forEach((e) => {
     if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
   });
@@ -3188,7 +3191,7 @@ exports.getPeakPowerRanking = onRequest(
     /** 주간 TSS 랭킹 탭: 기간은 주간 마일리지 TOP10과 동일(월~오늘), 월간/명예 필터 미적용 */
     if (durationType === "tss") {
       const { startStr, endStr } = getWeekRangeSeoul();
-      const cacheKey = `peakRanking_weekly_tss_${gender}_${startStr}_${endStr}`;
+      const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
       const cacheRef = db.collection("cache").doc(cacheKey);
       const cacheSnap = await cacheRef.get();
       const nowMs = Date.now();
@@ -3209,9 +3212,8 @@ exports.getPeakPowerRanking = onRequest(
           const entries = Array.isArray(data.entries) ? data.entries : [];
           if (uid) {
             const cat = data.byCategory;
-            const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
             let current = null; let nextUser = null;
-            for (const c of cats) {
+            for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
               const arr = cat?.[c] || [];
               const idx = arr.findIndex((e) => e.userId === uid);
               if (idx >= 0) {
@@ -3223,11 +3225,6 @@ exports.getPeakPowerRanking = onRequest(
             if (current) {
               out.currentUser = current;
               out.motivationMessage = buildMotivationMessage(current, nextUser);
-            }
-            const globalIdx = entries.findIndex((e) => e.userId === uid);
-            if (globalIdx >= 10) {
-              const e = entries[globalIdx];
-              out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, totalTss: e.totalTss, is_private: e.is_private };
             }
           }
           return res.status(200).json(out);
@@ -3245,9 +3242,8 @@ exports.getPeakPowerRanking = onRequest(
 
       let out = { success: true, byCategory, startStr, endStr, period: "weekly", durationType: "tss", gender };
       if (uid) {
-        const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
         let current = null; let nextUser = null;
-        for (const c of cats) {
+        for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
           const arr = byCategory[c] || [];
           const idx = arr.findIndex((e) => e.userId === uid);
           if (idx >= 0) {
@@ -3259,11 +3255,6 @@ exports.getPeakPowerRanking = onRequest(
         if (current) {
           out.currentUser = current;
           out.motivationMessage = buildMotivationMessage(current, nextUser);
-        }
-        const globalIdx = entries.findIndex((e) => e.userId === uid);
-        if (globalIdx >= 10) {
-          const e = entries[globalIdx];
-          out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, totalTss: e.totalTss, is_private: e.is_private };
         }
       }
       return res.status(200).json(out);
@@ -3284,7 +3275,7 @@ exports.getPeakPowerRanking = onRequest(
       endStr = r.endStr;
     }
 
-    const cacheKey = `peakRanking_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
+    const cacheKey = `peakRanking_v2_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
     const cacheRef = db.collection("cache").doc(cacheKey);
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
@@ -3299,9 +3290,8 @@ exports.getPeakPowerRanking = onRequest(
         const entries = Array.isArray(data.entries) ? data.entries : [];
         if (uid) {
           const cat = data.byCategory;
-          const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
           let current = null, nextUser = null;
-          for (const c of cats) {
+          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
             const arr = cat?.[c] || [];
             const idx = arr.findIndex((e) => e.userId === uid);
             if (idx >= 0) {
@@ -3313,11 +3303,6 @@ exports.getPeakPowerRanking = onRequest(
           if (current) {
             out.currentUser = current;
             out.motivationMessage = buildMotivationMessage(current, nextUser);
-          }
-          const globalIdx = entries.findIndex((e) => e.userId === uid);
-          if (globalIdx >= 10) {
-            const e = entries[globalIdx];
-            out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, wkg: e.wkg, is_private: e.is_private };
           }
         }
         return res.status(200).json(out);
@@ -3340,9 +3325,8 @@ exports.getPeakPowerRanking = onRequest(
 
     let out = { success: true, byCategory, startStr, endStr, period, durationType, gender, cohortAvgHrBpm };
     if (uid) {
-      const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
       let current = null, nextUser = null;
-      for (const c of cats) {
+      for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
         const arr = byCategory[c] || [];
         const idx = arr.findIndex((e) => e.userId === uid);
         if (idx >= 0) {
@@ -3354,11 +3338,6 @@ exports.getPeakPowerRanking = onRequest(
       if (current) {
         out.currentUser = current;
         out.motivationMessage = buildMotivationMessage(current, nextUser);
-      }
-      const globalIdx = entries.findIndex((e) => e.userId === uid);
-      if (globalIdx >= 10) {
-        const e = entries[globalIdx];
-        out.myRankSupremo = { rank: e.rank, userId: e.userId, name: e.name, wkg: e.wkg, is_private: e.is_private };
       }
     }
     res.status(200).json(out);
@@ -3413,10 +3392,9 @@ exports.getOvertakeAnalysis = onRequest(
 
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const { byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
-      const cats = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
       let current = null;
       let rival = null;
-      for (const c of cats) {
+      for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
         const arr = byCategory[c] || [];
         const idx = arr.findIndex((e) => e.userId === uid);
         if (idx >= 0) {
