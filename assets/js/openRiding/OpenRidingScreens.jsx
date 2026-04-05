@@ -3554,7 +3554,7 @@ function OpenRidingDetail(props) {
     );
   }
 
-  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css). 상·하 여백은 수정/취소 행 CSS(5vh)로만 둠 */
+  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css). 수정/취소 행·게스트 상단 추가 여백 없음 */
   return (
     <div
       className={
