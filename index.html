@@ -26,6 +26,43 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
+  <!-- STELVIO: 콘솔 상세 로그는 grade=1(관리자)만 출력 — userManager 로드 후 isStelvioSysConsoleAdmin으로 판별 보강 -->
+  <script>
+    (function (w) {
+      function grade1FromStorage() {
+        try {
+          if (w.__TEMP_ADMIN_OVERRIDE__ === true) return true;
+          var keys = ['authUser', 'currentUser'];
+          var i, u;
+          for (i = 0; i < keys.length; i++) {
+            u = JSON.parse(localStorage.getItem(keys[i]) || 'null');
+            if (!u || u.grade == null) continue;
+            if (String(u.grade).trim() === '1' || Number(u.grade) === 1) return true;
+          }
+        } catch (e) {}
+        return false;
+      }
+      function canStelvioSysConsole() {
+        if (typeof w.isStelvioSysConsoleAdmin === 'function') {
+          try {
+            if (w.isStelvioSysConsoleAdmin()) return true;
+          } catch (e) {}
+        }
+        return grade1FromStorage();
+      }
+      function mk(method) {
+        return function () {
+          if (!canStelvioSysConsole()) return;
+          if (!w.console || typeof w.console[method] !== 'function') return;
+          w.console[method].apply(w.console, arguments);
+        };
+      }
+      w.stelvioAdminLog = mk('log');
+      w.stelvioAdminInfo = mk('info');
+      w.stelvioAdminDebug = mk('debug');
+      w.stelvioAdminWarn = mk('warn');
+    })(window);
+  </script>
   
   <!-- Performance Dashboard Dependencies (React, Tailwind, Chart.js, Babel) -->
   <script>
@@ -89,23 +126,29 @@
         authV9 = getAuthFn(appV9);
         if (typeof setPersistenceFn === 'function' && browserSessionPersistence) {
           setPersistenceFn(authV9, browserSessionPersistence).catch(function(e) {
-            console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
+            if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence 실패:', e && e.message);
+            else console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
           });
         }
-        console.log('✅ Firebase v9 Auth 초기화');
+        if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Auth 초기화');
+        else console.log('✅ Firebase v9 Auth 초기화');
         firestoreV9 = initFirestore(appV9, { experimentalForceLongPolling: true });
-        console.log('✅ Firebase v9 Firestore 초기화');
+        if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Firestore 초기화');
+        else console.log('✅ Firebase v9 Firestore 초기화');
         try {
           var storageModMain = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
           if (storageModMain && typeof storageModMain.getStorage === 'function') {
             window.firebaseStorageV9 = storageModMain.getStorage(appV9);
-            console.log('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
+            if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
+            else console.log('✅ Firebase v9 Storage 초기화 (오픈 라이딩 GPX 등)');
           } else {
             window.firebaseStorageV9 = null;
-            console.warn('[Firebase v9] getStorage 없음');
+            if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] getStorage 없음');
+            else console.warn('[Firebase v9] getStorage 없음');
           }
         } catch (se) {
-          console.warn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
+          if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
+          else console.warn('[Firebase v9] Storage 로드 실패:', se && se.message ? se.message : se);
           window.firebaseStorageV9 = null;
         }
         window.authV9 = authV9;
@@ -124,9 +167,11 @@
             window.httpsCallableV9 = funcMod.httpsCallable;
           }
         } catch (fe) {
-          console.warn('Firebase Functions 미로드:', fe && fe.message);
+          if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('Firebase Functions 미로드:', fe && fe.message);
+          else console.warn('Firebase Functions 미로드:', fe && fe.message);
         }
-        console.log('✅ Firebase v9 SDK 초기화 완료');
+        if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 SDK 초기화 완료');
+        else console.log('✅ Firebase v9 SDK 초기화 완료');
       } catch (error) {
         console.error('❌ Firebase v9 초기화 실패:', error);
       }
@@ -197,10 +242,12 @@
             window.CONFIG.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
             window.STRAVA_REDIRECT_URI = d.strava_redirect_uri;
           }
-          console.log('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
+          if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
+          else console.log('✅ Strava 설정 Firestore에서 로드됨 (appConfig/strava)');
         }
       } catch (e) {
-        console.warn('[Strava] appConfig/strava 로드 실패:', e && e.message);
+        if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Strava] appConfig/strava 로드 실패:', e && e.message);
+        else console.warn('[Strava] appConfig/strava 로드 실패:', e && e.message);
       }
     };
     if (firestoreV9) {
@@ -1766,7 +1813,8 @@
         splashScreen.style.transition = 'none';
         splashScreen.classList.add('active');
         
-        console.log('🛡️ 스플래시 화면 즉시 보호 활성화');
+        if (typeof stelvioAdminLog === 'function') stelvioAdminLog('🛡️ 스플래시 화면 즉시 보호 활성화');
+        else console.log('🛡️ 스플래시 화면 즉시 보호 활성화');
       }
     })();
   </script>
