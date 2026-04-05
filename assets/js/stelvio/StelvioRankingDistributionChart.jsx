@@ -138,22 +138,6 @@
     return { rows: [head].concat(rows).concat([tail]), xMin: xMin, xMax: xMax, maxY: maxY };
   }
 
-  /** buildBins과 동일한 방식으로 wkg(또는 TSS)가 들어갈 bin의 count 반환 — 세로 구간선 높이용 */
-  function histogramCountAtX(chartRows, xMin, xMax, xVal) {
-    if (!chartRows || chartRows.length < 3) return 0;
-    var xv = Number(xVal);
-    if (!isFinite(xv)) return 0;
-    var binCount = chartRows.length - 2;
-    if (binCount < 1) return 0;
-    var step = (xMax - xMin) / binCount;
-    if (!(step > 0)) return 0;
-    var idx = Math.floor((xv - xMin) / step);
-    if (idx < 0) idx = 0;
-    if (idx >= binCount) idx = binCount - 1;
-    var row = chartRows[idx + 1];
-    return row && row.count != null ? row.count : 0;
-  }
-
   function StelvioRankingDistributionChart(props) {
     var p = props || {};
     var entries = p.entries;
@@ -166,12 +150,6 @@
     var titleOverride = p.titleOverride;
     var pillLabelOverride = p.pillLabelOverride;
     var chartSubNoteOverride = p.chartSubNoteOverride;
-    /** { x:number, stroke:string }[] — 오픈 라이딩 레벨 경계 W/kg 세로선(분포 히스토그램 높이까지) */
-    var levelBandReferenceLines = Array.isArray(p.levelBandReferenceLines)
-      ? p.levelBandReferenceLines.filter(function (it) {
-          return it && isFinite(Number(it.x)) && typeof it.stroke === 'string' && it.stroke;
-        })
-      : [];
 
     var isTss = duration === 'tss';
     var durLabel = isTss ? '주간 TSS' : STELVIO_DURATION_LABELS[duration] || duration;
@@ -484,23 +462,6 @@
                 animationEasing="ease-out"
                 isAnimationActive={true}
               />
-              {!isTss && levelBandReferenceLines.length
-                ? levelBandReferenceLines.map(function (lb, li) {
-                    var lx = Number(lb.x);
-                    if (!isFinite(lx)) return null;
-                    var xDraw = Math.min(xMax, Math.max(xMin, lx));
-                    var yTop = histogramCountAtX(chartRows, xMin, xMax, lx);
-                    return (
-                      <ReferenceLine
-                        key={'lvl-' + li + '-' + String(lx)}
-                        segment={[{ x: xDraw, y: 0 }, { x: xDraw, y: yTop }]}
-                        stroke={lb.stroke}
-                        strokeWidth={lb.strokeWidth != null ? Number(lb.strokeWidth) : 2}
-                        ifOverflow="visible"
-                      />
-                    );
-                  })
-                : null}
               {myX != null ? (
                 <ReferenceLine
                   x={myX}
