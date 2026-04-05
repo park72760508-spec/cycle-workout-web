@@ -2691,7 +2691,7 @@ function OpenRidingCreateForm(props) {
           </select>
           <button
             type="button"
-            className="rounded-lg bg-slate-800 text-white px-3 py-1.5 text-sm shrink-0"
+            className="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-sm shrink-0 hover:bg-violet-700"
             onClick={applyRideFormRegionFromPicker}
           >
             추가
