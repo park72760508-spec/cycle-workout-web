@@ -60,6 +60,35 @@ export function getRidingLevelTargetSpeedKmH(levelValue) {
   return map[k] != null ? map[k] : null;
 }
 
+/** 참가 판정과 동일: 그룹 목표 평속(km/h)을 맞추려면 개인 평속이 target/1.2이어야 함 */
+var OPEN_RIDING_DRAFTING_FACTOR = 1.2;
+
+/**
+ * 모임 레벨의 '그룹 기준 평속'을 충족하는 데 필요한 W/kg (같은 평지·드래프팅 모델).
+ * 맞춤 필터 분포 차트의 초·중·중상 경계선에 사용합니다.
+ *
+ * @param {number} groupTargetSpeedKmH getRidingLevelTargetSpeedKmH와 동일 스케일 (예: 25)
+ * @param {number} weightKg 체중(kg)
+ * @returns {number|null}
+ */
+export function wkgForOpenRidingGroupTargetSpeed(groupTargetSpeedKmH, weightKg) {
+  var tgt = Number(groupTargetSpeedKmH);
+  var w = Number(weightKg);
+  if (!isFinite(tgt) || tgt <= 0 || !isFinite(w) || w <= 0) return null;
+  var soloNeededKmH = tgt / OPEN_RIDING_DRAFTING_FACTOR;
+  var lo = 1;
+  var hi = 1000;
+  var i;
+  for (i = 0; i < 70; i++) {
+    var mid = (lo + hi) / 2;
+    var spd = calculateSpeedOnFlat(mid, w);
+    if (spd < soloNeededKmH) lo = mid;
+    else hi = mid;
+  }
+  var P = (lo + hi) / 2;
+  return Math.round((P / w) * 100) / 100;
+}
+
 /**
  * FTP·체중·모임 기준 평속으로 그룹 라이딩 적합성을 평가합니다.
  * - 개인 평속: calculateSpeedOnFlat(ftp, weight)
@@ -222,6 +251,7 @@ if (typeof window !== 'undefined') {
   window.calculateSpeedOnFlat = calculateSpeedOnFlat;
   window.evaluateGroupRideEligibility = evaluateGroupRideEligibility;
   window.getRidingLevelTargetSpeedKmH = getRidingLevelTargetSpeedKmH;
+  window.wkgForOpenRidingGroupTargetSpeed = wkgForOpenRidingGroupTargetSpeed;
   window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
   window.getMaxRidingLevelsForPeakParticipation = getMaxRidingLevelsForPeakParticipation;
 }
