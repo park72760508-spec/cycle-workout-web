@@ -46,6 +46,48 @@
     return 'stelvio-dist-' + (++_gid);
   }
 
+  /** 맞춤 필터 분포: X축 W/kg + 체중 기준 평지 항속(km/h) 보조 눈금 */
+  function OpenRidingWkgSpeedTick(props) {
+    var x = props.x;
+    var y = props.y;
+    var payload = props.payload;
+    var wKg = props.openRidingTierBandWeightKg;
+    var isTs = props.isTssMode;
+    if (isTs || !payload || payload.value == null || !isFinite(Number(payload.value))) {
+      var disp = payload && payload.value != null ? payload.value : '';
+      return (
+        <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10}>
+          {isTs ? String(Number(disp).toFixed(0)) : Number(disp).toFixed(1)}
+        </text>
+      );
+    }
+    var wkgVal = Number(payload.value);
+    var spd = null;
+    var calc = global.calculateSpeedOnFlat;
+    if (wKg > 0 && typeof calc === 'function') {
+      spd = Math.round(calc(wkgVal * wKg, wKg) * 10) / 10;
+    }
+    if (!(wKg > 0)) {
+      return (
+        <text x={x} y={y} dy={12} textAnchor="middle" fill="#64748b" fontSize={10}>
+          {wkgVal.toFixed(1)}
+        </text>
+      );
+    }
+    return (
+      <g transform={'translate(' + x + ',' + y + ')'}>
+        <text x={0} y={0} dy={12} textAnchor="middle" fill="#64748b" fontSize={10}>
+          {wkgVal.toFixed(1)}
+        </text>
+        {spd != null ? (
+          <text x={0} y={0} dy={26} textAnchor="middle" fill="#94a3b8" fontSize={9}>
+            {'~' + spd + ' km/h'}
+          </text>
+        ) : null}
+      </g>
+    );
+  }
+
   /** 과거 차트 배지용 (다른 카테고리 조회 시에만 순위 표기에 적용) */
   function rankDisplayForChart(n) {
     var r = Number(n);
@@ -217,6 +259,38 @@
     var chartRows = binPack.rows;
     var xMin = binPack.xMin;
     var xMax = binPack.xMax;
+
+    var openRidingTierBandWeightKg =
+      !isTss &&
+      p.openRidingTierBandWeightKg != null &&
+      isFinite(Number(p.openRidingTierBandWeightKg)) &&
+      Number(p.openRidingTierBandWeightKg) > 0
+        ? Number(p.openRidingTierBandWeightKg)
+        : null;
+
+    var openRidingTierBandSegments = useMemo(
+      function () {
+        if (!openRidingTierBandWeightKg || isTss) return [];
+        var wFn = typeof global.wkgForOpenRidingSoloSpeedKmH === 'function' ? global.wkgForOpenRidingSoloSpeedKmH : null;
+        if (!wFn) return [];
+        var w = openRidingTierBandWeightKg;
+        var b1 = wFn(25, w);
+        var b2 = wFn(28, w);
+        var b3 = wFn(32, w);
+        var b4 = wFn(35, w);
+        if (b1 == null || b2 == null || b3 == null || b4 == null) return [];
+        return [
+          { x0: xMin, x1: b1, label: '초급', speedHint: '~25 km/h', color: 'rgba(250, 204, 21, 0.42)' },
+          { x0: b1, x1: b2, label: '입문', speedHint: '~28 km/h', color: 'rgba(190, 242, 100, 0.46)' },
+          { x0: b2, x1: b3, label: '중급', speedHint: '~32 km/h', color: 'rgba(168, 85, 247, 0.4)' },
+          { x0: b3, x1: b4, label: '중상급', speedHint: '~35 km/h', color: 'rgba(249, 115, 22, 0.42)' },
+          { x0: b4, x1: xMax, label: '상급', speedHint: '35+ km/h', color: 'rgba(239, 68, 68, 0.42)' },
+        ];
+      },
+      [openRidingTierBandWeightKg, isTss, xMin, xMax]
+    );
+
+    var chartXAxisBottomMargin = openRidingTierBandWeightKg ? 38 : 8;
 
     var myRaw = null;
     if (overrideMyWkg != null && !isTss) {
@@ -412,7 +486,10 @@
         </div>
         <div ref={chartWrapRef} className="h-[min(240px,52vw)] w-full min-h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartRows} margin={{ top: 42, right: 8, left: 0, bottom: 8 }}>
+            <AreaChart
+              data={chartRows}
+              margin={{ top: 42, right: 8, left: 0, bottom: chartXAxisBottomMargin }}
+            >
               <defs>
                 <linearGradient id={gid + '-area'} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={ACCENT_START} stopOpacity={0.45} />
@@ -428,10 +505,26 @@
                 dataKey="x"
                 type="number"
                 domain={[xMin, xMax]}
-                tickFormatter={function (v) {
-                  return isTss ? String(Number(v).toFixed(0)) : Number(v).toFixed(1);
-                }}
-                tick={{ fontSize: 10, fill: '#64748b' }}
+                tick={
+                  openRidingTierBandWeightKg
+                    ? function (tp) {
+                        return (
+                          <OpenRidingWkgSpeedTick
+                            {...tp}
+                            openRidingTierBandWeightKg={openRidingTierBandWeightKg}
+                            isTssMode={isTss}
+                          />
+                        );
+                      }
+                    : { fontSize: 10, fill: '#64748b' }
+                }
+                tickFormatter={
+                  openRidingTierBandWeightKg
+                    ? undefined
+                    : function (v) {
+                        return isTss ? String(Number(v).toFixed(0)) : Number(v).toFixed(1);
+                      }
+                }
                 stroke="#cbd5e1"
               />
               <YAxis
@@ -474,6 +567,43 @@
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        {openRidingTierBandSegments.length > 0 ? (
+          <div className="mt-1 w-full">
+            <p className="text-[10px] text-slate-500 text-center mb-1 m-0 px-1">
+              본인 체중({openRidingTierBandWeightKg}kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일
+            </p>
+            <div
+              className="relative h-11 w-full rounded-md overflow-hidden border border-slate-200/90 box-border"
+              style={{ marginLeft: 28, marginRight: 8, width: 'calc(100% - 36px)' }}
+            >
+              {openRidingTierBandSegments.map(function (seg, si) {
+                var span = xMax - xMin;
+                if (!(span > 0)) return null;
+                var xa = Math.max(xMin, Math.min(xMax, seg.x0));
+                var xb = Math.max(xMin, Math.min(xMax, seg.x1));
+                if (xb <= xa) return null;
+                var leftPct = ((xa - xMin) / span) * 100;
+                var wPct = Math.max(0.5, ((xb - xa) / span) * 100);
+                return (
+                  <div
+                    key={'open-tier-' + si}
+                    title={seg.label + ' ' + seg.speedHint}
+                    className="absolute inset-y-0 flex flex-col items-center justify-center text-center leading-tight px-0.5 box-border"
+                    style={{
+                      left: leftPct + '%',
+                      width: wPct + '%',
+                      background: seg.color,
+                      borderRight: '1px solid rgba(255,255,255,0.5)',
+                    }}
+                  >
+                    <span className="text-[9px] font-bold text-slate-900/95">{seg.label}</span>
+                    <span className="text-[8px] font-semibold text-slate-800/95">{seg.speedHint}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         <p className="text-[11px] text-slate-500 text-center leading-snug mt-1.5 px-1">
           {typeof chartSubNoteOverride === 'string' && chartSubNoteOverride.trim()
             ? chartSubNoteOverride.trim()
