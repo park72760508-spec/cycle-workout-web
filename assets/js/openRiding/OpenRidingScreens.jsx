@@ -1847,11 +1847,7 @@ function OpenRidingCalendarMain(props) {
               }
               titleOverride="전체 사용자 60분 W/kg 분포"
               pillLabelOverride="전체 · 60분 W/kg · 최근 30일"
-              chartSubNoteOverride={
-                '훈련 로그 기준 최근 30일(서울) 내 60분 최대 평균 파워로 산출한 W/kg 분포입니다. ' +
-                '아래 막대·보조 눈금은 프로필(또는 60분 피크) 체중으로 평지 항속(초급~상급 상한)을 W/kg에 환산한 구간입니다. ' +
-                '세로 점선은 본인 동일 기준 W/kg(없으면 FTP W/kg)입니다.'
-              }
+              chartSubNoteOverride={false}
             />
           ) : (
             <p className="text-xs text-slate-500 m-0 py-2 text-center">표시할 분포 데이터가 없습니다.</p>
