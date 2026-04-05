@@ -1609,14 +1609,19 @@ function OpenRidingCalendarMain(props) {
           <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
           {RIDING_LEVEL_OPTIONS.map(function (opt) {
             var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
-            var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
             var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
-            var clsFn =
-              typeof window !== 'undefined' && typeof window.classifyOpenRidingParticipation === 'function'
-                ? window.classifyOpenRidingParticipation
+            var refSoloFn =
+              typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
+                ? window.getFilterInterestReferenceSoloSpeedKmH
                 : null;
+            var intClsFn =
+              typeof window !== 'undefined' && typeof window.classifyOpenRidingInterestLevelFilter === 'function'
+                ? window.classifyOpenRidingInterestLevelFilter
+                : null;
+            var refSolo =
+              refSoloFn && prof.ok && wLv > 0 ? refSoloFn(peak60Watts, prof.ftp, wLv) : null;
             var part =
-              clsFn && prof.ok && wLv > 0 ? clsFn(powLv, wLv, opt.value) : null;
+              intClsFn && refSolo != null && refSolo > 0 ? intClsFn(refSolo, opt.value) : null;
             var badgeCls =
               part && part.tier === 'go'
                 ? 'bg-emerald-100 text-emerald-900 border border-emerald-300/90'
@@ -1628,7 +1633,7 @@ function OpenRidingCalendarMain(props) {
             var badgeTitle = part
               ? part.comment
               : !prof.ok
-                ? 'FTP·체중을 입력하면 60분 피크(있으면)·없으면 FTP 기준으로 참석 판정이 표시됩니다.'
+                ? 'FTP·체중을 입력하면 참조 평지 개인 평속(60분 피크, 없으면 FTP 평속×93%)으로 관심 레벨을 판별합니다.'
                 : '';
             return (
               <div
@@ -1667,13 +1672,14 @@ function OpenRidingCalendarMain(props) {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-semibold text-violet-900">나의 항속 능력 레벨</span>
             <span className="text-[10px] text-slate-500 leading-tight text-right">
-              최대 능력치: 프로필 FTP·체중 · 현실 지표: 최근 30일 60분 최고 평균 파워 · 팩 1.2×
+              관심 레벨 판별: 평지 개인 평속(60분 피크 우선, 없으면 FTP×93%) · 구간은 초급~상급 항속 기준
             </span>
           </div>
           {!prof.ok ? (
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
-              프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 평지 개인 평속·예상 그룹 평속과 관심 레벨별
-              참가 난이도를 안내합니다. 60분 피크·분포는 훈련 로그가 반영된 뒤 랭킹과 동일하게 표시됩니다.
+              프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 관심 레벨 배지는
+              <strong> 평지 개인 평속(60분 피크·없으면 FTP 평속×93%)</strong>으로 초급~상급 항속 구간과 비교합니다.
+              아래 분포·그룹 평속은 참고용입니다.
             </p>
           ) : (
             <>
@@ -1751,7 +1757,8 @@ function OpenRidingCalendarMain(props) {
                 </p>
               )}
               <p className="text-[10px] text-slate-500 m-0 leading-snug">
-                관심 레벨 참고는 <strong className="text-slate-600">60분 피크가 있으면 그 값</strong>으로, 없으면 FTP로 계산합니다.
+                관심 레벨 배지는 <strong className="text-slate-600">60분 피크 평지 평속</strong>이 없을 때만
+                <strong className="text-slate-600"> FTP 평지 평속의 93%</strong>를 참조 속도로 씁니다.
               </p>
             </>
           )}

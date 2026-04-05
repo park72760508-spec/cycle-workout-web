@@ -61,6 +61,117 @@ export function getRidingLevelTargetSpeedKmH(levelValue) {
   return map[k] != null ? map[k] : null;
 }
 
+/** 맞춤 필터 — 관심 레벨: 피크 부재 시 FTP 평지 평속에 곱하는 계수 */
+var FTP_FALLBACK_FOR_FILTER_SOLO = 0.93;
+
+var OPEN_RIDING_INTEREST_LEVEL_ORDER = ['초급', '입문', '중급', '중상급', '상급'];
+
+/** 항속 구간 → 티어 인덱스(0=초급 … 4=상급) */
+function soloSpeedTierIndexFromKmH(soloKmh) {
+  var v = Number(soloKmh);
+  if (!isFinite(v)) return 0;
+  if (v < 25) return 0;
+  if (v < 28) return 1;
+  if (v < 32) return 2;
+  if (v < 35) return 3;
+  return 4;
+}
+
+function interestLevelValueToTierIndex(levelValue) {
+  var k = String(levelValue || '').trim();
+  var i = OPEN_RIDING_INTEREST_LEVEL_ORDER.indexOf(k);
+  return i >= 0 ? i : -1;
+}
+
+/** 관심 레벨 티어의 구간 하한(km/h) — 초급 0, 입문 25, … */
+function interestLevelBandMinKmHByTierIndex(tierIdx) {
+  var mins = [0, 25, 28, 32, 35];
+  if (tierIdx < 0 || tierIdx >= mins.length) return 0;
+  return mins[tierIdx];
+}
+
+/**
+ * 맞춤 필터용 참조 평지 개인 평속(km/h)
+ * - 60분 피크(W)가 있으면 그 파워로 산출
+ * - 없으면 FTP 평지 개인 평속 × 93%
+ *
+ * @param {number} peakWatts 60분 최고 평균 파워(없으면 0)
+ * @param {number} ftpWatts FTP
+ * @param {number} weightKg
+ * @returns {number|null}
+ */
+export function getFilterInterestReferenceSoloSpeedKmH(peakWatts, ftpWatts, weightKg) {
+  var w = Number(weightKg);
+  var peak = Number(peakWatts);
+  var ftp = Number(ftpWatts);
+  if (!isFinite(w) || w <= 0) return null;
+  if (isFinite(peak) && peak > 0) {
+    var sPeak = calculateSpeedOnFlat(peak, w);
+    return Math.round(sPeak * 100) / 100;
+  }
+  if (isFinite(ftp) && ftp > 0) {
+    var sFtp = calculateSpeedOnFlat(ftp, w);
+    return Math.round(sFtp * FTP_FALLBACK_FOR_FILTER_SOLO * 100) / 100;
+  }
+  return null;
+}
+
+/**
+ * 맞춤 필터 — 관심 레벨 체크박스 배지(참석 가능/주의/불가)
+ * 평지 개인 평속(60분 피크 우선, 없으면 FTP×93%)을 초급~상급 항속 구간과 비교합니다.
+ *
+ * @param {number} userSoloKmh getFilterInterestReferenceSoloSpeedKmH 결과
+ * @param {string} levelValue '초급' … '상급'
+ * @returns {{ tier: string, label: string, comment: string, estimatedGroupSpeed: number, targetSpeed: number, margin: number } | null}
+ */
+export function classifyOpenRidingInterestLevelFilter(userSoloKmh, levelValue) {
+  var needIdx = interestLevelValueToTierIndex(levelValue);
+  if (needIdx < 0) return null;
+  var u = Number(userSoloKmh);
+  if (!isFinite(u) || u <= 0) return null;
+
+  var userIdx = soloSpeedTierIndexFromKmH(u);
+  var bandMin = interestLevelBandMinKmHByTierIndex(needIdx);
+  var tgt = getRidingLevelTargetSpeedKmH(levelValue);
+  var marginTier = userIdx - needIdx;
+
+  if (userIdx >= needIdx) {
+    return {
+      tier: 'go',
+      label: '참석 가능',
+      comment:
+        '참조 평지 개인 평속 ' +
+        u +
+        'km/h(60분 피크, 없으면 FTP 평속×' +
+        String(FTP_FALLBACK_FOR_FILTER_SOLO) +
+        ') 기준, 이 관심 레벨 구간과 같거나 상위 난이도에 맞습니다.',
+      estimatedGroupSpeed: Math.round(u * 10) / 10,
+      targetSpeed: tgt != null ? tgt : bandMin,
+      margin: marginTier
+    };
+  }
+  if (userIdx === needIdx - 1) {
+    return {
+      tier: 'caution',
+      label: '주의',
+      comment:
+        '참조 평지 개인 평속은 바로 아래 구간에 가깝습니다. 컨디션·바람에 따라 버거울 수 있으니 한 단계 낮은 관심도 검토해 보세요.',
+      estimatedGroupSpeed: Math.round(u * 10) / 10,
+      targetSpeed: tgt != null ? tgt : bandMin,
+      margin: marginTier
+    };
+  }
+  return {
+    tier: 'stop',
+    label: '불가',
+    comment:
+      '참조 평지 개인 평속 기준으로는 이 관심 레벨보다 두 단계 이상 낮은 구간에 가깝습니다. 하위 레벨을 권장합니다.',
+    estimatedGroupSpeed: Math.round(u * 10) / 10,
+    targetSpeed: tgt != null ? tgt : bandMin,
+    margin: marginTier
+  };
+}
+
 /** 참가 판정과 동일: 그룹 목표 평속(km/h)을 맞추려면 개인 평속이 target/1.2이어야 함 */
 var OPEN_RIDING_DRAFTING_FACTOR = 1.2;
 
@@ -252,6 +363,8 @@ if (typeof window !== 'undefined') {
   window.evaluateGroupRideEligibility = evaluateGroupRideEligibility;
   window.getRidingLevelTargetSpeedKmH = getRidingLevelTargetSpeedKmH;
   window.wkgForOpenRidingGroupTargetSpeed = wkgForOpenRidingGroupTargetSpeed;
+  window.getFilterInterestReferenceSoloSpeedKmH = getFilterInterestReferenceSoloSpeedKmH;
+  window.classifyOpenRidingInterestLevelFilter = classifyOpenRidingInterestLevelFilter;
   window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
   window.getMaxRidingLevelsForPeakParticipation = getMaxRidingLevelsForPeakParticipation;
 }
