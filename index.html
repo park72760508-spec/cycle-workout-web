@@ -7806,7 +7806,7 @@
     window.handleStelvioRankingCollapse = handleStelvioRankingCollapse;
 
     function handleStelvioRankingGapSet(cat, key, expanded) {
-      var o = stelvioRankingGapState[cat] || { pre: false, post: false };
+      var o = stelvioRankingGapState[cat] || {};
       o[key] = !!expanded;
       stelvioRankingGapState[cat] = o;
       if (stelvioRankingByCategory) renderStelvioActiveCategory();
@@ -7839,7 +7839,7 @@
         var TOP_N = 5;
         var NEIGH = 3;
         var lastIdx = arr.length - 1;
-        var gapSt = stelvioRankingGapState.Supremo || { pre: false, post: false };
+        var supremoExpanded = !!(stelvioRankingGapState.Supremo || {}).expanded;
         var catKey = 'Supremo';
 
         function buildSupremoRow(item, categoryRank, extraRowClass) {
@@ -7907,12 +7907,12 @@
           var topEndO = Math.min(TOP_N - 1, lastIdx);
           for (var oi = 0; oi <= topEndO; oi++) htmlS += buildSupremoRow(arr[oi], oi + 1, '');
           if (lastIdx > topEndO) {
-            if (!gapSt.post) {
+            if (!supremoExpanded) {
               htmlS += dotsRowS();
-              htmlS += expandGapRowS('post', true);
+              htmlS += expandGapRowS('expanded', true);
             } else {
               for (var oj = topEndO + 1; oj <= lastIdx; oj++) htmlS += buildSupremoRow(arr[oj], oj + 1, '');
-              htmlS += expandGapRowS('post', false);
+              htmlS += expandGapRowS('expanded', false);
             }
           }
           htmlS += buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
@@ -7933,12 +7933,12 @@
           var topEnd0 = Math.min(TOP_N - 1, lastIdx);
           for (var i0 = 0; i0 <= topEnd0; i0++) htmlS += buildSupremoRow(arr[i0], i0 + 1, '');
           if (lastIdx > topEnd0) {
-            if (!gapSt.post) {
+            if (!supremoExpanded) {
               htmlS += dotsRowS();
-              htmlS += expandGapRowS('post', true);
+              htmlS += expandGapRowS('expanded', true);
             } else {
               for (var e0 = topEnd0 + 1; e0 <= lastIdx; e0++) htmlS += buildSupremoRow(arr[e0], e0 + 1, '');
-              htmlS += expandGapRowS('post', false);
+              htmlS += expandGapRowS('expanded', false);
             }
           }
           bodyEl.innerHTML = htmlS;
@@ -7967,6 +7967,26 @@
           runs.push([rs, re]);
         }
 
+        var hasMiddleGap = false;
+        for (var rg = 1; rg < runs.length; rg++) {
+          var mLo = runs[rg - 1][1] + 1;
+          var mHi = runs[rg][0] - 1;
+          if (mLo <= mHi) {
+            hasMiddleGap = true;
+            break;
+          }
+        }
+        var tailLoR = runs.length ? runs[runs.length - 1][1] + 1 : 0;
+        var hasTail = tailLoR <= lastIdx;
+        var needsExpandControl = hasMiddleGap || hasTail;
+
+        if (supremoExpanded && needsExpandControl) {
+          for (var fullI = 0; fullI <= lastIdx; fullI++) htmlS += buildSupremoRow(arr[fullI], fullI + 1, '');
+          htmlS += expandGapRowS('expanded', false);
+          bodyEl.innerHTML = htmlS;
+          return;
+        }
+
         for (var r = 0; r < runs.length; r++) {
           var lo = runs[r][0];
           var hi = runs[r][1];
@@ -7974,29 +7994,15 @@
             var pLo = runs[r - 1][1] + 1;
             var pHi = lo - 1;
             if (pLo <= pHi) {
-              if (!gapSt.pre) {
-                htmlS += dotsRowS();
-                htmlS += expandGapRowS('pre', true);
-              } else {
-                renderRangeS(pLo, pHi);
-                htmlS += expandGapRowS('pre', false);
-              }
+              htmlS += dotsRowS();
             }
           }
           renderRangeS(lo, hi);
         }
 
-        if (runs.length) {
-          var tailLo = runs[runs.length - 1][1] + 1;
-          if (tailLo <= lastIdx) {
-            if (!gapSt.post) {
-              htmlS += dotsRowS();
-              htmlS += expandGapRowS('post', true);
-            } else {
-              renderRangeS(tailLo, lastIdx);
-              htmlS += expandGapRowS('post', false);
-            }
-          }
+        if (needsExpandControl && !supremoExpanded) {
+          if (hasTail) htmlS += dotsRowS();
+          htmlS += expandGapRowS('expanded', true);
         }
 
         bodyEl.innerHTML = htmlS;
