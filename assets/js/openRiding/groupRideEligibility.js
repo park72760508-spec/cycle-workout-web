@@ -182,6 +182,30 @@ export function getOpenRidingSoloTierLevelLabelFromKmH(soloKmh) {
   return OPEN_RIDING_INTEREST_LEVEL_ORDER[idx] || '초급';
 }
 
+/**
+ * 평지 개인 항속(solo km/h)에 필요한 W/kg — calculateSpeedOnFlat 역추정 (분포 차트 등급 막대·눈금 환산용)
+ *
+ * @param {number} soloSpeedKmH 목표 평지 평균 속도(km/h) (예: 25, 28, …)
+ * @param {number} weightKg 체중(kg)
+ * @returns {number|null}
+ */
+export function wkgForOpenRidingSoloSpeedKmH(soloSpeedKmH, weightKg) {
+  var target = Number(soloSpeedKmH);
+  var w = Number(weightKg);
+  if (!isFinite(target) || target <= 0 || !isFinite(w) || w <= 0) return null;
+  var lo = 0.5;
+  var hi = 2000;
+  var i;
+  for (i = 0; i < 72; i++) {
+    var mid = (lo + hi) / 2;
+    var spd = calculateSpeedOnFlat(mid, w);
+    if (spd < target) lo = mid;
+    else hi = mid;
+  }
+  var P = (lo + hi) / 2;
+  return Math.round((P / w) * 100) / 100;
+}
+
 /** 참가 판정과 동일: 그룹 목표 평속(km/h)을 맞추려면 개인 평속이 target/1.2이어야 함 */
 var OPEN_RIDING_DRAFTING_FACTOR = 1.2;
 
@@ -376,6 +400,7 @@ if (typeof window !== 'undefined') {
   window.getFilterInterestReferenceSoloSpeedKmH = getFilterInterestReferenceSoloSpeedKmH;
   window.classifyOpenRidingInterestLevelFilter = classifyOpenRidingInterestLevelFilter;
   window.getOpenRidingSoloTierLevelLabelFromKmH = getOpenRidingSoloTierLevelLabelFromKmH;
+  window.wkgForOpenRidingSoloSpeedKmH = wkgForOpenRidingSoloSpeedKmH;
   window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
   window.getMaxRidingLevelsForPeakParticipation = getMaxRidingLevelsForPeakParticipation;
 }
