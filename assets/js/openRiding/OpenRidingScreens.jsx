@@ -4003,7 +4003,7 @@ function OpenRidingRoomApp(props) {
       : view === 'edit'
         ? '라이딩 수정'
         : view === 'detail'
-          ? '라이딩 상세'
+          ? '세부내용'
           : view === 'filter'
             ? '맞춤 필터 설정'
             : '라이딩 모임';
