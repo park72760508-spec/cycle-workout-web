@@ -6,7 +6,6 @@
 var useState = React.useState;
 var useEffect = React.useEffect;
 var useMemo = React.useMemo;
-var useCallback = React.useCallback;
 var useRef = React.useRef;
 
 function getOpenRidingHooks() {
@@ -3194,9 +3193,6 @@ function OpenRidingDetail(props) {
   var userId = props.userId;
   var onBack = props.onBack || function () {};
   var onOpenEdit = props.onOpenEdit || function () {};
-  var registerDetailHeaderEdit = props.registerDetailHeaderEdit;
-  var registerDetailHeaderCancel = props.registerDetailHeaderCancel;
-
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
   if (typeof useOpenRideDetailFn !== 'function') {
@@ -3445,45 +3441,6 @@ function OpenRidingDetail(props) {
     }
   }
 
-  useEffect(
-    function () {
-      if (typeof registerDetailHeaderEdit !== 'function') return;
-      if (loading || !ride) {
-        registerDetailHeaderEdit(false, null);
-        return;
-      }
-      var host = !!(userId && String(ride.hostUserId || '') === String(userId));
-      var cancelled = String(ride.rideStatus || 'active') === 'cancelled';
-      if (host && !cancelled) registerDetailHeaderEdit(true, onOpenEdit);
-      else registerDetailHeaderEdit(false, null);
-      return function () {
-        registerDetailHeaderEdit(false, null);
-      };
-    },
-    [registerDetailHeaderEdit, loading, ride, userId, onOpenEdit]
-  );
-
-  useEffect(
-    function () {
-      if (typeof registerDetailHeaderCancel !== 'function') return;
-      if (loading || !ride) {
-        registerDetailHeaderCancel(false, null);
-        return;
-      }
-      var host = !!(userId && String(ride.hostUserId || '') === String(userId));
-      var cancelled = String(ride.rideStatus || 'active') === 'cancelled';
-      if (host && !cancelled) {
-        registerDetailHeaderCancel(true, function () {
-          setBombOpen(true);
-        });
-      } else registerDetailHeaderCancel(false, null);
-      return function () {
-        registerDetailHeaderCancel(false, null);
-      };
-    },
-    [registerDetailHeaderCancel, loading, ride, userId]
-  );
-
   if (loading) {
     return <div className="p-6 text-center text-slate-500">불러오는 중…</div>;
   }
@@ -3589,6 +3546,38 @@ function OpenRidingDetail(props) {
         <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2">
           이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
         </p>
+      ) : null}
+
+      {isHost && !isCancelled ? (
+        <div className="flex justify-end items-center gap-0.5 min-w-0 open-riding-detail-host-actions">
+          <button
+            type="button"
+            className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
+            style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={onOpenEdit}
+            aria-label="라이딩 수정"
+          >
+            <OpenRidingDashboardEditIcon />
+          </button>
+          <button
+            type="button"
+            className="open-riding-header-cancel-btn p-2 rounded-lg hover:bg-violet-100 active:opacity-80 transition-all shrink-0"
+            style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={function () {
+              setBombOpen(true);
+            }}
+            aria-label="라이딩 취소"
+          >
+            <img
+              src="assets/img/cancel01.png"
+              alt=""
+              width={22}
+              height={22}
+              className="block object-contain pointer-events-none"
+              decoding="async"
+            />
+          </button>
+        </div>
       ) : null}
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
@@ -3957,30 +3946,6 @@ function OpenRidingRoomApp(props) {
   var _rid = useState(null);
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
-  var _dhe = useState({ show: false, onEdit: null });
-  var detailHeaderEdit = _dhe[0];
-  var setDetailHeaderEdit = _dhe[1];
-  var _dhc = useState({ show: false, onCancel: null });
-  var detailHeaderCancel = _dhc[0];
-  var setDetailHeaderCancel = _dhc[1];
-
-  var registerDetailHeaderEdit = useCallback(function (show, onEdit) {
-    setDetailHeaderEdit({ show: !!show, onEdit: onEdit || null });
-  }, []);
-
-  var registerDetailHeaderCancel = useCallback(function (show, onCancel) {
-    setDetailHeaderCancel({ show: !!show, onCancel: onCancel || null });
-  }, []);
-
-  useEffect(
-    function () {
-      if (view !== 'detail') {
-        setDetailHeaderEdit({ show: false, onEdit: null });
-        setDetailHeaderCancel({ show: false, onCancel: null });
-      }
-    },
-    [view]
-  );
 
   function handleTopBack() {
     if (view === 'main') {
@@ -4003,7 +3968,7 @@ function OpenRidingRoomApp(props) {
       : view === 'edit'
         ? '라이딩 수정'
         : view === 'detail'
-          ? '세부내용'
+          ? '라이딩 일정 상세'
           : view === 'filter'
             ? '맞춤 필터 설정'
             : '라이딩 모임';
@@ -4053,8 +4018,6 @@ function OpenRidingRoomApp(props) {
         userId={userId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
-        registerDetailHeaderEdit={registerDetailHeaderEdit}
-        registerDetailHeaderCancel={registerDetailHeaderCancel}
       />
     );
   } else {
@@ -4079,8 +4042,8 @@ function OpenRidingRoomApp(props) {
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
         {view === 'detail' ? (
-          <div className="grid grid-cols-3 items-center w-full min-w-0 flex-1 gap-x-1 sm:gap-x-2">
-            <div className="flex justify-start min-w-0">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
+            <div className="flex justify-start min-w-0 shrink-0">
               <button
                 type="button"
                 className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
@@ -4096,37 +4059,7 @@ function OpenRidingRoomApp(props) {
             <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
               {headerTitle}
             </h1>
-            <div className="flex justify-end items-center gap-0.5 min-w-0 shrink-0">
-              {detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
-                <button
-                  type="button"
-                  className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-                  style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  onClick={detailHeaderEdit.onEdit}
-                  aria-label="라이딩 수정"
-                >
-                  <OpenRidingDashboardEditIcon />
-                </button>
-              ) : null}
-              {detailHeaderCancel.show && detailHeaderCancel.onCancel ? (
-                <button
-                  type="button"
-                  className="open-riding-header-cancel-btn p-2 rounded-lg hover:bg-violet-100 active:opacity-80 transition-all shrink-0"
-                  style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  onClick={detailHeaderCancel.onCancel}
-                  aria-label="라이딩 취소"
-                >
-                  <img
-                    src="assets/img/cancel01.png"
-                    alt=""
-                    width={22}
-                    height={22}
-                    className="block object-contain pointer-events-none"
-                    decoding="async"
-                  />
-                </button>
-              ) : null}
-            </div>
+            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
           </div>
         ) : (
           <>
