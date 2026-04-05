@@ -1518,7 +1518,8 @@ function OpenRidingCalendarMain(props) {
     savePrefs({ activeRegions: prefs.activeRegions, preferredLevels: next });
   }
 
-  function renderFilterSettingsBody() {
+  /** 맞춤 필터: 지역·관심 레벨(참석 판정 배지) / 능력 패널 분리 — 전체 화면에서는 확인 버튼이 중간에 옴 */
+  function renderFilterSettingsBodyParts() {
     var prof = readOpenRidingProfileFtpWeight();
     var ev =
       typeof window !== 'undefined' && typeof window.evaluateGroupRideEligibility === 'function'
@@ -1553,7 +1554,7 @@ function OpenRidingCalendarMain(props) {
     var chartRefBadgeTitle = realisticStats ? '나의 60분' : '나의 FTP';
     var chartRefValueNote = realisticStats ? ' (최근 30일)' : ' (프로필)';
 
-    return (
+    var regionAndLevels = (
       <div className="space-y-4 text-left">
         <div>
           <label className="text-xs text-slate-500 block mb-1">활동 지역 추가</label>
@@ -1604,7 +1605,65 @@ function OpenRidingCalendarMain(props) {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
+        <div>
+          <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
+          {RIDING_LEVEL_OPTIONS.map(function (opt) {
+            var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
+            var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
+            var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
+            var clsFn =
+              typeof window !== 'undefined' && typeof window.classifyOpenRidingParticipation === 'function'
+                ? window.classifyOpenRidingParticipation
+                : null;
+            var part =
+              clsFn && prof.ok && wLv > 0 ? clsFn(powLv, wLv, opt.value) : null;
+            var badgeCls =
+              part && part.tier === 'go'
+                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300/90'
+                : part && part.tier === 'caution'
+                  ? 'bg-orange-50 text-orange-900 border border-orange-200/90'
+                  : part && part.tier === 'stop'
+                    ? 'bg-red-50 text-red-800 border border-red-200/90'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200';
+            var badgeTitle = part
+              ? part.comment
+              : !prof.ok
+                ? 'FTP·체중을 입력하면 60분 피크(있으면)·없으면 FTP 기준으로 참석 판정이 표시됩니다.'
+                : '';
+            return (
+              <div
+                key={opt.value}
+                className="flex items-center justify-between gap-2 text-sm py-1 pr-0.5"
+              >
+                <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
+                  <input
+                    type="checkbox"
+                    className="open-riding-filter-level-checkbox h-4 w-4 shrink-0 rounded border-slate-300 accent-violet-600 focus:ring-2 focus:ring-violet-500/35 focus:ring-offset-0 cursor-pointer"
+                    checked={on}
+                    onChange={function () { toggleLevel(opt.value); }}
+                  />
+                  <span className="min-w-0">
+                    {opt.value}{' '}
+                    <span className="text-xs text-slate-400">({opt.hint})</span>
+                  </span>
+                </label>
+                <span
+                  className={
+                    'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums ' + badgeCls
+                  }
+                  title={badgeTitle}
+                >
+                  {part ? part.label : '—'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    var abilityPanel = (
+      <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-3 space-y-3 open-riding-filter-ability-panel">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-semibold text-violet-900">나의 항속 능력 레벨</span>
             <span className="text-[10px] text-slate-500 leading-tight text-right">
@@ -1729,63 +1788,9 @@ function OpenRidingCalendarMain(props) {
             <p className="text-xs text-slate-500 m-0 py-2 text-center">표시할 분포 데이터가 없습니다.</p>
           )}
         </div>
-
-        <div>
-          <span className="text-xs text-slate-500 block mb-1">관심 레벨</span>
-          {RIDING_LEVEL_OPTIONS.map(function (opt) {
-            var on = prefs.preferredLevels.indexOf(opt.value) >= 0;
-            var powLv = peak60Watts > 0 ? peak60Watts : prof.ftp;
-            var wLv = peak60Watts > 0 && peakWeightKg > 0 ? peakWeightKg : prof.weight;
-            var clsFn =
-              typeof window !== 'undefined' && typeof window.classifyOpenRidingParticipation === 'function'
-                ? window.classifyOpenRidingParticipation
-                : null;
-            var part =
-              clsFn && prof.ok && wLv > 0 ? clsFn(powLv, wLv, opt.value) : null;
-            var badgeCls =
-              part && part.tier === 'go'
-                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300/90'
-                : part && part.tier === 'caution'
-                  ? 'bg-orange-50 text-orange-900 border border-orange-200/90'
-                  : part && part.tier === 'stop'
-                    ? 'bg-red-50 text-red-800 border border-red-200/90'
-                    : 'bg-slate-100 text-slate-500 border border-slate-200';
-            var badgeTitle = part
-              ? part.comment
-              : !prof.ok
-                ? 'FTP·체중을 입력하면 60분 피크(있으면)·없으면 FTP 기준으로 참석 판정이 표시됩니다.'
-                : '';
-            return (
-              <div
-                key={opt.value}
-                className="flex items-center justify-between gap-2 text-sm py-1 pr-0.5"
-              >
-                <label className="flex items-center gap-2 cursor-pointer min-w-0 flex-1">
-                  <input
-                    type="checkbox"
-                    className="open-riding-filter-level-checkbox h-4 w-4 shrink-0 rounded border-slate-300 accent-violet-600 focus:ring-2 focus:ring-violet-500/35 focus:ring-offset-0 cursor-pointer"
-                    checked={on}
-                    onChange={function () { toggleLevel(opt.value); }}
-                  />
-                  <span className="min-w-0">
-                    {opt.value}{' '}
-                    <span className="text-xs text-slate-400">({opt.hint})</span>
-                  </span>
-                </label>
-                <span
-                  className={
-                    'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums ' + badgeCls
-                  }
-                  title={badgeTitle}
-                >
-                  {part ? part.label : '—'}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     );
+
+    return { regionAndLevels: regionAndLevels, abilityPanel: abilityPanel };
   }
 
   function rideParticipantRatio(r) {
@@ -2005,10 +2010,11 @@ function OpenRidingCalendarMain(props) {
   }
 
   if (compact && filterPageOpen) {
+    var _filterParts = renderFilterSettingsBodyParts();
     return (
       <div className="open-riding-filter-full-page w-full max-w-lg mx-auto text-left relative z-0">
         <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0">
-          {renderFilterSettingsBody()}
+          {_filterParts.regionAndLevels}
           <div className="open-riding-bottom-actions">
             <button
               type="button"
@@ -2018,6 +2024,7 @@ function OpenRidingCalendarMain(props) {
               확인
             </button>
           </div>
+          {_filterParts.abilityPanel}
           <OpenRidingBottomLogoBar />
         </div>
       </div>
@@ -2159,7 +2166,15 @@ function OpenRidingCalendarMain(props) {
         {!compact ? (
         <aside className="rounded-2xl p-4 border border-slate-200 bg-slate-50/80 space-y-4">
           <h2 className="text-sm font-semibold text-slate-700">맞춤 필터 설정</h2>
-          {renderFilterSettingsBody()}
+          {function () {
+            var fp = renderFilterSettingsBodyParts();
+            return (
+              <>
+                {fp.regionAndLevels}
+                {fp.abilityPanel}
+              </>
+            );
+          }()}
         </aside>
         ) : null}
       </div>
