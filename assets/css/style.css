@@ -943,12 +943,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   color: #111827;
 }
 
-/* 라이딩 상세: 상단 3분할 가운데 라이딩 제목 */
-#openRidingRoomScreen .open-riding-detail-header-ride-title {
-  font-family: inherit;
-  letter-spacing: -0.01em;
-}
-
 /* 라이딩 취소 확인: 일반 모달과 동일한 어두운 오버레이 (modal-overlay / stelvio-exit-confirm-overlay 톤) */
 #openRidingRoomScreen .open-riding-bomb-modal-backdrop {
   background: rgba(0, 0, 0, 0.45);
