@@ -3296,36 +3296,37 @@ function OpenRidingDetail(props) {
       var uid = String(userId);
       var levelStr = ride.level != null ? String(ride.level) : '';
 
-      function applyLvClassify(pow, w) {
-        var fn = typeof window !== 'undefined' ? window.classifyOpenRidingParticipation : null;
-        if (!fn || !(Number(pow) > 0) || !(Number(w) > 0) || !levelStr) return null;
-        return fn(Number(pow), Number(w), levelStr);
-      }
-
       function finishWithPeak(peakW, wKg) {
-        var pw = Number(peakW) > 0 ? Number(peakW) : prof.ok ? prof.ftp : 0;
         var ww =
           Number(peakW) > 0 && Number(wKg) > 0 ? Number(wKg) : prof.ok ? prof.weight : 0;
         var usedPeak = Number(peakW) > 0;
-        var opts = typeof window !== 'undefined' ? window.RIDING_LEVEL_OPTIONS || [] : [];
-        var levelVals = opts.map(function (o) {
-          return o.value;
-        });
-        var calcFn = typeof window !== 'undefined' ? window.calculateSpeedOnFlat : null;
-        var spd =
-          calcFn && pw > 0 && ww > 0 ? Math.round(calcFn(pw, ww) * 10) / 10 : 0;
-        var summ =
-          typeof window !== 'undefined' &&
-          typeof window.getMaxRidingLevelsForPeakParticipation === 'function'
-            ? window.getMaxRidingLevelsForPeakParticipation(pw, ww, levelVals)
-            : { maxGoLevel: null, maxCautionLevel: null };
+        var refSoloFn =
+          typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
+            ? window.getFilterInterestReferenceSoloSpeedKmH
+            : null;
+        var intClsFn =
+          typeof window !== 'undefined' && typeof window.classifyOpenRidingInterestLevelFilter === 'function'
+            ? window.classifyOpenRidingInterestLevelFilter
+            : null;
+        var tierLblFn =
+          typeof window !== 'undefined' && typeof window.getOpenRidingSoloTierLevelLabelFromKmH === 'function'
+            ? window.getOpenRidingSoloTierLevelLabelFromKmH
+            : null;
+        var refSolo =
+          refSoloFn && prof.ok && ww > 0 ? refSoloFn(Number(peakW) > 0 ? Number(peakW) : 0, prof.ftp, ww) : null;
+        var part =
+          intClsFn && refSolo != null && refSolo > 0 && levelStr
+            ? intClsFn(refSolo, levelStr)
+            : null;
+        var myTier =
+          tierLblFn && refSolo != null && refSolo > 0 ? tierLblFn(refSolo) : null;
         if (!cancelled) {
-          setLevelParticipation(applyLvClassify(pw, ww));
+          setLevelParticipation(part);
           setDetailLevelPeakHint({
-            soloSpeedKmh: spd,
+            refSoloKmh: refSolo,
             usedPeak: !!usedPeak,
-            maxGoLevel: summ.maxGoLevel,
-            maxCautionLevel: summ.maxCautionLevel,
+            usedFtpFallback: !!(prof.ok && !usedPeak && Number(prof.ftp) > 0 && refSolo != null),
+            myTierLabel: myTier,
             profileOk: prof.ok
           });
           setLevelAnalysisLoading(false);
@@ -3657,49 +3658,57 @@ function OpenRidingDetail(props) {
                 />
                 <span className="text-[11px] font-medium text-emerald-800">레벨 분석 중 ...</span>
               </div>
-            ) : levelParticipation ? (
+            ) : levelParticipation ||
+              (detailLevelPeakHint &&
+                detailLevelPeakHint.refSoloKmh != null &&
+                Number(detailLevelPeakHint.refSoloKmh) > 0) ? (
               <div
                 className={
-                  'open-riding-level-participation-hint open-riding-level-participation-hint--' +
-                  levelParticipation.tier
+                  'open-riding-level-participation-hint' +
+                  (levelParticipation
+                    ? ' open-riding-level-participation-hint--' + levelParticipation.tier
+                    : '')
                 }
               >
-                <span className="open-riding-level-participation-label">{levelParticipation.label}</span>
-                {detailLevelPeakHint && detailLevelPeakHint.soloSpeedKmh > 0 ? (
+                {levelParticipation ? (
+                  <span
+                    className="open-riding-level-participation-label"
+                    title={levelParticipation.comment || ''}
+                  >
+                    {levelParticipation.label}
+                  </span>
+                ) : null}
+                {detailLevelPeakHint &&
+                detailLevelPeakHint.refSoloKmh != null &&
+                Number(detailLevelPeakHint.refSoloKmh) > 0 ? (
                   <div className="open-riding-create-level-peak-hint mt-1 w-full max-w-[17rem] ml-auto rounded-lg border border-emerald-200/70 bg-emerald-50/55 px-2.5 py-2 space-y-1.5 text-[11px] sm:text-xs text-emerald-900 leading-snug text-right">
                     <p className="m-0 font-semibold">
                       나의 평지 항속 능력 :{' '}
                       <span className="tabular-nums font-bold text-emerald-950">
-                        {detailLevelPeakHint.soloSpeedKmh} km/h
+                        {detailLevelPeakHint.refSoloKmh} km/h
                       </span>
                     </p>
-                    <p className="m-0 text-emerald-900">
-                      {detailLevelPeakHint.maxGoLevel ? (
-                        <>
-                          나의 레벨 :{' '}
-                          <strong className="text-emerald-950">{detailLevelPeakHint.maxGoLevel}</strong>
-                        </>
-                      ) : detailLevelPeakHint.maxCautionLevel ? (
-                        <>
-                          참석 가능(안정) 구간 없음 · 주의 수준 최고:{' '}
-                          <strong className="text-emerald-950">{detailLevelPeakHint.maxCautionLevel}</strong>
-                        </>
-                      ) : (
-                        <span className="text-emerald-800/95">
-                          여유가 큰 참석 가능 레벨이 없습니다. 초급·하위 모임을 권장합니다.
-                        </span>
-                      )}
-                    </p>
+                    {detailLevelPeakHint.myTierLabel ? (
+                      <p className="m-0 text-emerald-900">
+                        나의 레벨 :{' '}
+                        <strong className="text-emerald-950">{detailLevelPeakHint.myTierLabel}</strong>
+                      </p>
+                    ) : null}
+                    {detailLevelPeakHint.usedFtpFallback ? (
+                      <p className="m-0 text-[10px] text-emerald-800/90">
+                        참조: 60분 피크 없음 · FTP 평지 평속 × 93%
+                      </p>
+                    ) : detailLevelPeakHint.usedPeak ? (
+                      <p className="m-0 text-[10px] text-emerald-800/90">
+                        참조: 60분 최고 평균 파워·체중 (현실 지표)
+                      </p>
+                    ) : null}
                   </div>
-                ) : userId && detailLevelPeakHint && detailLevelPeakHint.profileOk === false ? (
-                  <p className="m-0 mt-1 w-full max-w-[17rem] ml-auto pt-1.5 border-t border-slate-200/80 text-[11px] text-slate-600 leading-snug text-right">
-                    프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
-                  </p>
                 ) : null}
               </div>
             ) : userId && detailLevelPeakHint && detailLevelPeakHint.profileOk === false ? (
               <p className="m-0 text-[11px] text-slate-500 leading-snug text-right">
-                프로필에 FTP·체중을 저장하면 평지 개인 평속과 권장 레벨이 표시됩니다.
+                프로필에 FTP·체중을 저장하면 평지 개인 평속·레벨 안내와 참석 가능 여부가 표시됩니다.
               </p>
             ) : null}
           </div>

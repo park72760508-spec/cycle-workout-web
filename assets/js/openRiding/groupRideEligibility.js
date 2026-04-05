@@ -172,6 +172,16 @@ export function classifyOpenRidingInterestLevelFilter(userSoloKmh, levelValue) {
   };
 }
 
+/**
+ * 평지 개인 평속(km/h)에 해당하는 레벨 명칭(초급~상급)
+ * @param {number} soloKmh 60분 피크 또는 FTP×93% 등 참조 평속
+ * @returns {string}
+ */
+export function getOpenRidingSoloTierLevelLabelFromKmH(soloKmh) {
+  var idx = soloSpeedTierIndexFromKmH(soloKmh);
+  return OPEN_RIDING_INTEREST_LEVEL_ORDER[idx] || '초급';
+}
+
 /** 참가 판정과 동일: 그룹 목표 평속(km/h)을 맞추려면 개인 평속이 target/1.2이어야 함 */
 var OPEN_RIDING_DRAFTING_FACTOR = 1.2;
 
@@ -365,6 +375,7 @@ if (typeof window !== 'undefined') {
   window.wkgForOpenRidingGroupTargetSpeed = wkgForOpenRidingGroupTargetSpeed;
   window.getFilterInterestReferenceSoloSpeedKmH = getFilterInterestReferenceSoloSpeedKmH;
   window.classifyOpenRidingInterestLevelFilter = classifyOpenRidingInterestLevelFilter;
+  window.getOpenRidingSoloTierLevelLabelFromKmH = getOpenRidingSoloTierLevelLabelFromKmH;
   window.classifyOpenRidingParticipation = classifyOpenRidingParticipation;
   window.getMaxRidingLevelsForPeakParticipation = getMaxRidingLevelsForPeakParticipation;
 }
