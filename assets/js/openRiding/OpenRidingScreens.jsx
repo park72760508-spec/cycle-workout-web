@@ -224,16 +224,70 @@ function buildOpenRidingInviteListRows(ride) {
   return rows;
 }
 
-function formatOpenRidingInviteFallbackLabel(phoneRaw, maskedMode) {
-  if (maskedMode) return maskPhoneLastFourDisplay(String(phoneRaw || ''));
-  var d =
+/** 초대 명단: 이름을 못 찾을 때 전화번호 대신 일반 라벨(상세·목록 공통) */
+function formatOpenRidingInviteFallbackLabel(_phoneRaw, _maskedMode) {
+  return '초대 회원';
+}
+
+/**
+ * 베이스캠프에 로드된 users / userProfiles 에서 UID 또는 연락처로 이름 조회
+ */
+function resolveOpenRidingInviteNameFromLocalUsers(matchedUid, invitePhone) {
+  var uid = matchedUid != null ? String(matchedUid) : '';
+  var normSvc =
     typeof window !== 'undefined' &&
     window.openRidingService &&
     typeof window.openRidingService.normalizePhoneDigits === 'function'
-      ? window.openRidingService.normalizePhoneDigits(phoneRaw)
-      : String(phoneRaw || '').replace(/\D/g, '');
-  if (d.length >= 10) return d.slice(0, 3) + '-****-' + d.slice(-4);
-  return '초대 대상';
+      ? window.openRidingService.normalizePhoneDigits
+      : function (x) {
+          return String(x || '').replace(/\D/g, '');
+        };
+  var normInvite = normSvc(invitePhone);
+  var fmtDb =
+    typeof window !== 'undefined' && typeof window.formatPhoneForDB === 'function'
+      ? window.formatPhoneForDB(String(invitePhone || '').trim())
+      : '';
+  var lists = [];
+  if (typeof window !== 'undefined') {
+    if (Array.isArray(window.users)) lists.push(window.users);
+    if (Array.isArray(window.userProfiles)) lists.push(window.userProfiles);
+  }
+  var li;
+  var i;
+  var u;
+  var nm;
+  for (li = 0; li < lists.length; li++) {
+    for (i = 0; i < lists[li].length; i++) {
+      u = lists[li][i];
+      if (!u) continue;
+      if (uid && String(u.id) === uid) {
+        nm = String(u.name != null ? u.name : u.displayName != null ? u.displayName : '').trim();
+        if (nm) return nm;
+      }
+    }
+  }
+  for (li = 0; li < lists.length; li++) {
+    for (i = 0; i < lists[li].length; i++) {
+      u = lists[li][i];
+      if (!u) continue;
+      var c = String(u.contact != null ? u.contact : '').trim();
+      if (!c) continue;
+      var nd = normSvc(c);
+      var fmtC =
+        typeof window.formatPhoneForDB === 'function' ? window.formatPhoneForDB(c) : '';
+      var phoneMatch =
+        (normInvite &&
+          nd &&
+          (nd === normInvite ||
+            (nd.length >= 8 && normInvite.length >= 8 && nd.slice(-8) === normInvite.slice(-8)))) ||
+        (fmtDb && fmtC && fmtDb === fmtC);
+      if (phoneMatch) {
+        nm = String(u.name != null ? u.name : u.displayName != null ? u.displayName : '').trim();
+        if (nm) return nm;
+      }
+    }
+  }
+  return '';
 }
 
 /** Firestore users.contact 로 초대 번호 프로필 이름 조회 (규칙·데이터 형식에 따라 실패할 수 있음) */
@@ -250,9 +304,13 @@ function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
           : String(invitePhone).replace(/\D/g, '');
       if (!norm || norm.length < 8) return '';
       var candidates = [];
+      if (typeof window.formatPhoneForDB === 'function') {
+        var fdb = window.formatPhoneForDB(String(invitePhone || '').trim());
+        if (fdb) candidates.push(fdb);
+      }
       if (typeof window.formatPhoneNumber === 'function') {
         var fo = window.formatPhoneNumber(norm);
-        if (fo) candidates.push(fo);
+        if (fo && candidates.indexOf(fo) < 0) candidates.push(fo);
       }
       if (candidates.indexOf(norm) < 0) candidates.push(norm);
 
@@ -3398,44 +3456,55 @@ function OpenRidingDetail(props) {
           : {};
       var seed = {};
       inviteRows.forEach(function (r) {
+        var nm = '';
         if (r.matchedUid) {
           var nm0 = pdLocal[String(r.matchedUid)];
-          if (nm0 && String(nm0).trim()) seed[r.phoneKey] = String(nm0).trim();
+          if (nm0 && String(nm0).trim()) nm = String(nm0).trim();
         }
+        if (!nm) nm = resolveOpenRidingInviteNameFromLocalUsers(r.matchedUid, r.invitePhone);
+        if (nm) seed[r.phoneKey] = nm;
       });
       setInviteResolvedLabels(seed);
 
+      function mergeInviteName(phoneKey, nm) {
+        if (cancelled || !nm || !String(nm).trim()) return;
+        var finalNm = String(nm).trim();
+        setInviteResolvedLabels(function (prev) {
+          if (prev[phoneKey] && String(prev[phoneKey]).trim()) return prev;
+          var o = {};
+          for (var ks in prev) o[ks] = prev[ks];
+          o[phoneKey] = finalNm;
+          return o;
+        });
+      }
+
       inviteRows.forEach(function (r) {
         if (cancelled) return;
-        if (r.matchedUid && (!seed[r.phoneKey] || !String(seed[r.phoneKey]).trim())) {
-          if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
-            window
-              .getUserByUid(String(r.matchedUid))
-              .then(function (row) {
-                if (cancelled || !row) return;
-                var nm = String(row.name != null ? row.name : row.displayName != null ? row.displayName : '').trim();
-                if (nm) {
-                  setInviteResolvedLabels(function (prev) {
-                    var o = {};
-                    for (var ks in prev) o[ks] = prev[ks];
-                    o[r.phoneKey] = nm;
-                    return o;
-                  });
-                }
-              })
-              .catch(function () {});
-          }
-        } else if (!r.matchedUid && firestore) {
+        if (seed[r.phoneKey] && String(seed[r.phoneKey]).trim()) return;
+
+        function tryPhoneLookup() {
+          if (!firestore) return;
           lookupOpenRidingUserNameByInvitePhone(firestore, r.invitePhone).then(function (nm) {
-            if (cancelled || !nm) return;
-            setInviteResolvedLabels(function (prev) {
-              if (prev[r.phoneKey]) return prev;
-              var o = {};
-              for (var ks in prev) o[ks] = prev[ks];
-              o[r.phoneKey] = nm;
-              return o;
-            });
+            mergeInviteName(r.phoneKey, nm);
           });
+        }
+
+        if (r.matchedUid && typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
+          window
+            .getUserByUid(String(r.matchedUid))
+            .then(function (row) {
+              if (cancelled) return;
+              var nm = row
+                ? String(row.name != null ? row.name : row.displayName != null ? row.displayName : '').trim()
+                : '';
+              if (nm) mergeInviteName(r.phoneKey, nm);
+              else tryPhoneLookup();
+            })
+            .catch(function () {
+              tryPhoneLookup();
+            });
+        } else {
+          tryPhoneLookup();
         }
       });
 
