@@ -140,22 +140,22 @@ export async function getUserOpenRidingPreferences(db, userId) {
  * @param {Record<string, unknown>} input
  */
 export async function createRide(db, hostUserId, input) {
+  /** Firestore·클라이언트 비교 일관성을 위해 방장 UID는 항상 trim 문자열 */
+  const hostKey = String(hostUserId != null ? hostUserId : '').trim();
   const hostLabel = String(input.hostName || '').trim().slice(0, 80);
   const hostPhone = String(input.contactInfo || '').trim().slice(0, 80);
   const participantDisplay = {};
-  if (hostUserId && hostLabel) participantDisplay[String(hostUserId)] = hostLabel;
+  if (hostKey && hostLabel) participantDisplay[hostKey] = hostLabel;
   /** 방장 기본값: 1번 참석 확정 + 참석자 간 연락처 공개(신청 시 공개와 동일 정책) */
-  let participants = asStringArray(input.participants);
-  if (hostUserId) {
-    const h = String(hostUserId);
-    participants = [h, ...participants.filter((id) => String(id) !== h)];
+  let participants = asStringArray(input.participants).map((id) => String(id).trim()).filter(Boolean);
+  if (hostKey) {
+    participants = [hostKey, ...participants.filter((id) => id !== hostKey)];
   }
   const participantContact = {};
   const participantContactPublic = {};
-  if (hostUserId) {
-    const h = String(hostUserId);
-    if (hostPhone) participantContact[h] = hostPhone;
-    participantContactPublic[h] = true;
+  if (hostKey) {
+    if (hostPhone) participantContact[hostKey] = hostPhone;
+    participantContactPublic[hostKey] = true;
   }
   const isPrivate = !!input.isPrivate;
   const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
@@ -190,7 +190,7 @@ export async function createRide(db, hostUserId, input) {
     participants,
     waitlist: [],
     participantDisplay,
-    hostUserId,
+    hostUserId: hostKey || hostUserId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     rideStatus: 'active'

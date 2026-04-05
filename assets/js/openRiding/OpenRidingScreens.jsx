@@ -2647,8 +2647,28 @@ function OpenRidingCreateForm(props) {
         gpxUrl: gpxUrl,
         isPrivate: !!form.isPrivate,
         invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
-        rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
+        rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
+        /** createRide 내부와 동일하게 명시(캐시·구버전 서비스 대비) */
+        participants: hostUserId ? [String(hostUserId).trim()] : []
       });
+      /** 생성 직후 방장을 참석 확정으로 한 번 더 보장(Transaction, 비공개 방도 hostUid 예외) */
+      if (rideId && hostUserId) {
+        var svcJoin = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+        if (typeof svcJoin.joinRideTransaction === 'function') {
+          try {
+            await svcJoin.joinRideTransaction(
+              firestore,
+              rideId,
+              String(hostUserId).trim(),
+              String(form.hostName || '').trim().slice(0, 80) || '라이더',
+              String(form.contactInfo || '').trim().slice(0, 80),
+              { contactPublicToParticipants: true, joinPasswordAttempt: '' }
+            );
+          } catch (eJoin) {
+            console.warn('[OpenRiding] 생성 직후 방장 참석 명단 보정 실패:', eJoin && eJoin.message ? eJoin.message : eJoin);
+          }
+        }
+      }
       onCreated(rideId);
     } finally {
       setBusy(false);
