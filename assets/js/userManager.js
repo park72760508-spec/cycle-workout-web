@@ -89,6 +89,117 @@ if (typeof window !== 'undefined') {
   window.isStelvioOpenRidingRoomAdminGrade = isStelvioOpenRidingRoomAdminGrade;
 }
 
+/** F12 콘솔 STELVIO 시스템·접속 상세 로그: grade=1(관리자)만 true (__TEMP_ADMIN_OVERRIDE__ 포함) */
+function isStelvioSysConsoleAdmin() {
+  try {
+    if (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true) return true;
+    var g =
+      typeof getLoginUserGrade === 'function'
+        ? getLoginUserGrade()
+        : typeof getViewerGrade === 'function'
+          ? getViewerGrade()
+          : '2';
+    return isStelvioAdminGrade(g);
+  } catch (e) {
+    return false;
+  }
+}
+if (typeof window !== 'undefined') {
+  window.isStelvioSysConsoleAdmin = isStelvioSysConsoleAdmin;
+}
+
+/**
+ * 일반 사용자에게는 STELVIO 흐름 추적용 console.log/info/debug/warn 출력을 숨김 (관리자만 통과).
+ * console.error는 유지 — 장애 대응용.
+ */
+function installStelvioNonAdminConsoleFilter() {
+  if (typeof window === 'undefined' || window.__STELVIO_CONSOLE_FILTER_INSTALLED__) return;
+  window.__STELVIO_CONSOLE_FILTER_INSTALLED__ = true;
+  var c = window.console;
+  if (!c || typeof c.log !== 'function') return;
+  var origLog = c.log.bind(c);
+  var origInfo = typeof c.info === 'function' ? c.info.bind(c) : origLog;
+  var origDebug = typeof c.debug === 'function' ? c.debug.bind(c) : origLog;
+  var origWarn = typeof c.warn === 'function' ? c.warn.bind(c) : null;
+  var patterns = [
+    /\[MiniCalendarJournal\]/i,
+    /\[MiniCalendar\]/i,
+    /\[Journal Step\]/i,
+    /\[AI\]/i,
+    /\[Dashboard\]/i,
+    /\[Auth Guard\]/i,
+    /\[Login\]/i,
+    /\[Logout\]/i,
+    /\[showScreen\]/i,
+    /Firebase v9/i,
+    /Strava 설정 Firestore/i,
+    /\[Strava\]/i,
+    /스플래시 화면 즉시 보호/i,
+    /\[deviceConnected 수신\]/i,
+    /🔐 로그인/i,
+    /✅ 로그인 성공/i,
+    /화면 전환/i,
+    /사용자 목록 DB 동기화/i,
+    /⚠️ 전화번호로 사용자를 찾지 못함/i,
+    /📝 회원가입/i,
+    /✅ Firebase Authentication/i,
+    /✅ Firestore users/i,
+    /\[Training\]/i,
+    /\[StelvioWakeLock\]/i,
+    /StelvioWakeLock bridge/i,
+    /\[trainingDashboardBridge\]/i,
+    /\[Mobile Debug\]/i,
+    /\[BluetoothIndividual\].*Stelvio/i,
+    /\[Laptop Training\].*Stelvio/i,
+    /\[Firebase 확인\]/i,
+    /stelvio-auth-ready/i,
+    /훈련 결과 저장 서비스 로드/i,
+    /✅ 훈련일지 화면용 미니 달력|✅ 월간 훈련 이력 미니 달력/i,
+    /현재 앱 환경이 아닙니다/i,
+    /비밀번호 재설정 전송 기능이 제거/i,
+    /\[deviceSettings\]/i,
+    /fetchAndProcessStravaData/i,
+    /\[App Download\]/i
+  ];
+  function shouldSuppress(args) {
+    if (typeof window.isStelvioSysConsoleAdmin === 'function' && window.isStelvioSysConsoleAdmin()) return false;
+    var s = '';
+    var i;
+    for (i = 0; i < Math.min(args.length, 4); i++) {
+      try {
+        if (typeof args[i] === 'string') s += args[i];
+        else if (args[i] != null && typeof args[i] === 'object') s += JSON.stringify(args[i]).slice(0, 800);
+        else s += String(args[i]);
+      } catch (e) {}
+      s += ' ';
+    }
+    var j;
+    for (j = 0; j < patterns.length; j++) {
+      if (patterns[j].test(s)) return true;
+    }
+    return false;
+  }
+  c.log = function () {
+    if (shouldSuppress(arguments)) return;
+    return origLog.apply(c, arguments);
+  };
+  c.info = function () {
+    if (shouldSuppress(arguments)) return;
+    return origInfo.apply(c, arguments);
+  };
+  c.debug = function () {
+    if (shouldSuppress(arguments)) return;
+    return origDebug.apply(c, arguments);
+  };
+  if (origWarn) {
+    c.warn = function () {
+      if (shouldSuppress(arguments)) return;
+      return origWarn.apply(c, arguments);
+    };
+  }
+}
+installStelvioNonAdminConsoleFilter();
+
 /* ==========================================================
    FTP 최소값: 몸무게의 1.8배 (사용자 등록 시)
    - 최소값 = Math.round(weight * 1.8)
