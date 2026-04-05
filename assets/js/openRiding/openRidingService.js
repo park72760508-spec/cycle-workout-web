@@ -141,8 +141,22 @@ export async function getUserOpenRidingPreferences(db, userId) {
  */
 export async function createRide(db, hostUserId, input) {
   const hostLabel = String(input.hostName || '').trim().slice(0, 80);
+  const hostPhone = String(input.contactInfo || '').trim().slice(0, 80);
   const participantDisplay = {};
   if (hostUserId && hostLabel) participantDisplay[String(hostUserId)] = hostLabel;
+  /** 방장 기본값: 1번 참석 확정 + 참석자 간 연락처 공개(신청 시 공개와 동일 정책) */
+  let participants = asStringArray(input.participants);
+  if (hostUserId) {
+    const h = String(hostUserId);
+    participants = [h, ...participants.filter((id) => String(id) !== h)];
+  }
+  const participantContact = {};
+  const participantContactPublic = {};
+  if (hostUserId) {
+    const h = String(hostUserId);
+    if (hostPhone) participantContact[h] = hostPhone;
+    participantContactPublic[h] = true;
+  }
   const isPrivate = !!input.isPrivate;
   const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
   const invitedList = invitedRaw
@@ -171,8 +185,9 @@ export async function createRide(db, hostUserId, input) {
     isPrivate,
     invitedList,
     rideJoinPassword: rideJoinPassword.length === 4 ? rideJoinPassword : '',
-    participantContactPublic: {},
-    participants: asStringArray(input.participants),
+    participantContact,
+    participantContactPublic,
+    participants,
     waitlist: [],
     participantDisplay,
     hostUserId,

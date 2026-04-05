@@ -3824,11 +3824,11 @@ function OpenRidingDetail(props) {
           ) : null}
           <div className="open-riding-bottom-actions">
             <div className="open-riding-bottom-actions-row flex gap-2">
-              {role ? (
+              {role && !isHost ? (
                 <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
                   참석 취소
                 </button>
-              ) : (
+              ) : !role && !isHost ? (
                 <button
                   type="button"
                   className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
@@ -3841,7 +3841,7 @@ function OpenRidingDetail(props) {
                 >
                   {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
           <OpenRidingBottomLogoBar />
