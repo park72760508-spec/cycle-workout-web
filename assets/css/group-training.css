@@ -16,6 +16,23 @@
    [10] 성능 최적화
 ========================================================== */
 
+/* 시스템 글자 크기·자동 텍스트 조정 무시 (style.css와 동일 정책, 단독 로드 대비) */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  -ms-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+body {
+  font-size: 16px;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  -ms-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
 /* ========== [1] 훈련 방식 선택 화면 ========== */
 
 .training-mode-selection {

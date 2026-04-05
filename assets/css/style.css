@@ -45,10 +45,25 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 한/영/숫자 폰트 통일: 전체 상속 (안드로이드 등에서 영문·숫자만 다른 폰트로 나오는 것 방지) */
+/* 시스템 글자 크기·자동 텍스트 조정과 무관하게 레이아웃 고정 (rem·em 기준 = 16px 루트) */
 html {
+  font-size: 16px;
   font-family: "Noto Sans KR", "Pretendard", -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  -ms-text-size-adjust: none;
+  text-size-adjust: none;
 }
+
+body {
+  font-size: 16px;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  -ms-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+/* 한/영/숫자 폰트: input 등은 위 html font-family 상속 */
 input, button, select, textarea, .screen {
   font-family: inherit;
 }
