@@ -11,7 +11,7 @@ export interface FirestoreTimestamp {
 }
 
 /** 라이딩 난이도 (평속 기준은 UI/가이드용 설명) */
-export type RidingLevel = '초급' | '중급' | '상급';
+export type RidingLevel = '초급' | '입문' | '중급' | '중상급' | '상급';
 
 /**
  * rides 컬렉션 문서

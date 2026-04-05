@@ -1554,26 +1554,6 @@ function OpenRidingCalendarMain(props) {
     var chartRefBadgeTitle = realisticStats ? '나의 60분' : '나의 FTP';
     var chartRefValueNote = realisticStats ? ' (최근 30일)' : ' (프로필)';
 
-    var wkgForBand =
-      typeof window !== 'undefined' && typeof window.wkgForOpenRidingGroupTargetSpeed === 'function'
-        ? window.wkgForOpenRidingGroupTargetSpeed
-        : null;
-    var bandWeightKg =
-      peakWeightKg > 0 ? peakWeightKg : prof.ok && Number(prof.weight) > 0 ? Number(prof.weight) : 0;
-    var levelBandReferenceLines = null;
-    if (wkgForBand && bandWeightKg > 0) {
-      var bx1 = wkgForBand(25, bandWeightKg);
-      var bx2 = wkgForBand(30, bandWeightKg);
-      var bx3 = wkgForBand(35, bandWeightKg);
-      if (bx1 != null && bx2 != null && bx3 != null) {
-        levelBandReferenceLines = [
-          { x: bx1, stroke: '#facc15' },
-          { x: bx2, stroke: '#22c55e' },
-          { x: bx3, stroke: '#f97316' },
-        ];
-      }
-    }
-
     var regionAndLevels = (
       <div className="space-y-4 text-left">
         <div>
@@ -1797,13 +1777,11 @@ function OpenRidingCalendarMain(props) {
               overrideMyWkg={chartRefWkg != null ? chartRefWkg : null}
               overrideReferenceBadgeTitle={chartRefBadgeTitle}
               overrideReferenceValueNote={chartRefValueNote}
-              levelBandReferenceLines={levelBandReferenceLines || undefined}
               titleOverride="전체 사용자 60분 W/kg 분포"
               pillLabelOverride="전체 · 60분 W/kg · 최근 30일"
               chartSubNoteOverride={
                 '훈련 로그 기준 최근 30일(서울) 내 60분 최대 평균 파워로 산출한 W/kg 분포입니다. ' +
-                '노란·녹·주황 세로 실선은 초급·중급·중상급 모임 기준(평지·×1.2)에 해당하는 W/kg 경계이고, ' +
-                '보라 점선은 본인 동일 기준 W/kg(없으면 FTP W/kg)입니다.'
+                '세로 점선은 본인의 동일 기준 W/kg(없으면 FTP W/kg)입니다.'
               }
             />
           ) : (

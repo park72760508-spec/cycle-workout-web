@@ -280,9 +280,10 @@ export const KOREA_SIGUNGU_OPTIONS = (function () {
 })();
 
 export const RIDING_LEVEL_OPTIONS = [
-  { value: '초급', hint: '항속 25km/h 이하' },
-  { value: '중급', hint: '항속 25~30km/h' },
-  { value: '중상급', hint: '항속 30~35km/h' },
+  { value: '초급', hint: '항속 25km/h 미만' },
+  { value: '입문', hint: '항속 25~28km/h 미만' },
+  { value: '중급', hint: '항속 28~32km/h 미만' },
+  { value: '중상급', hint: '항속 32~35km/h 미만' },
   { value: '상급', hint: '항속 35km/h 이상' }
 ];
 

@@ -42,18 +42,19 @@ export function calculateSpeedOnFlat(power, weight) {
 }
 
 /**
- * RIDING_LEVEL_OPTIONS의 value에 대응하는 '모임 기준 평속'(km/h) 상한 근사.
- * 관심 레벨 필터 힌트(항속 구간)의 상한을 targetSpeed로 사용합니다.
+ * RIDING_LEVEL_OPTIONS의 value에 대응하는 '모임 기준 평속'(km/h) 근사.
+ * 각 레벨 구간의 상한(또는 상급은 35km/h 이상 구간의 대표 페이스)을 targetSpeed로 사용합니다.
  *
- * @param {string} levelValue 예: '초급', '중급'
+ * @param {string} levelValue 예: '초급', '입문', '중급'
  * @returns {number|null}
  */
 export function getRidingLevelTargetSpeedKmH(levelValue) {
   var map = {
     초급: 25,
-    중급: 30,
+    입문: 28,
+    중급: 32,
     중상급: 35,
-    /** '35km/h 이상' 구간 — 팩 상층 페이스를 다소 높게 잡은 기준 */
+    /** 35km/h 이상 — 팩 페이스 상층 근사 */
     상급: 38
   };
   var k = String(levelValue || '').trim();
@@ -65,7 +66,6 @@ var OPEN_RIDING_DRAFTING_FACTOR = 1.2;
 
 /**
  * 모임 레벨의 '그룹 기준 평속'을 충족하는 데 필요한 W/kg (같은 평지·드래프팅 모델).
- * 맞춤 필터 분포 차트의 초·중·중상 경계선에 사용합니다.
  *
  * @param {number} groupTargetSpeedKmH getRidingLevelTargetSpeedKmH와 동일 스케일 (예: 25)
  * @param {number} weightKg 체중(kg)
