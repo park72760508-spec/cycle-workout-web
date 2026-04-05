@@ -3196,7 +3196,6 @@ function OpenRidingDetail(props) {
   var onOpenEdit = props.onOpenEdit || function () {};
   var registerDetailHeaderEdit = props.registerDetailHeaderEdit;
   var registerDetailHeaderCancel = props.registerDetailHeaderCancel;
-  var registerDetailHeaderTitle = props.registerDetailHeaderTitle;
 
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
@@ -3483,26 +3482,6 @@ function OpenRidingDetail(props) {
       };
     },
     [registerDetailHeaderCancel, loading, ride, userId]
-  );
-
-  useEffect(
-    function () {
-      if (typeof registerDetailHeaderTitle !== 'function') return undefined;
-      if (loading) {
-        registerDetailHeaderTitle('불러오는 중…');
-        return undefined;
-      }
-      if (!ride) {
-        registerDetailHeaderTitle('라이딩 상세');
-        return undefined;
-      }
-      var t = ride.title != null ? String(ride.title).trim() : '';
-      registerDetailHeaderTitle(t || '제목 없음');
-      return function () {
-        registerDetailHeaderTitle('');
-      };
-    },
-    [registerDetailHeaderTitle, loading, ride, rideId]
   );
 
   if (loading) {
@@ -3984,9 +3963,6 @@ function OpenRidingRoomApp(props) {
   var _dhc = useState({ show: false, onCancel: null });
   var detailHeaderCancel = _dhc[0];
   var setDetailHeaderCancel = _dhc[1];
-  var _dht = useState('');
-  var detailHeaderRideTitle = _dht[0];
-  var setDetailHeaderRideTitle = _dht[1];
 
   var registerDetailHeaderEdit = useCallback(function (show, onEdit) {
     setDetailHeaderEdit({ show: !!show, onEdit: onEdit || null });
@@ -3996,16 +3972,11 @@ function OpenRidingRoomApp(props) {
     setDetailHeaderCancel({ show: !!show, onCancel: onCancel || null });
   }, []);
 
-  var registerDetailHeaderTitle = useCallback(function (text) {
-    setDetailHeaderRideTitle(String(text != null ? text : ''));
-  }, []);
-
   useEffect(
     function () {
       if (view !== 'detail') {
         setDetailHeaderEdit({ show: false, onEdit: null });
         setDetailHeaderCancel({ show: false, onCancel: null });
-        setDetailHeaderRideTitle('');
       }
     },
     [view]
@@ -4084,7 +4055,6 @@ function OpenRidingRoomApp(props) {
         onOpenEdit={function () { setView('edit'); }}
         registerDetailHeaderEdit={registerDetailHeaderEdit}
         registerDetailHeaderCancel={registerDetailHeaderCancel}
-        registerDetailHeaderTitle={registerDetailHeaderTitle}
       />
     );
   } else {
@@ -4123,15 +4093,8 @@ function OpenRidingRoomApp(props) {
                 </svg>
               </button>
             </div>
-            <h1
-              className="open-riding-detail-header-ride-title m-0 min-w-0 px-0.5 text-center font-bold leading-tight truncate"
-              style={{
-                fontSize: 'clamp(0.82rem, 3.2vw, 1rem)',
-                color: '#4c1d95'
-              }}
-              title={detailHeaderRideTitle || headerTitle}
-            >
-              {detailHeaderRideTitle || headerTitle}
+            <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
+              {headerTitle}
             </h1>
             <div className="flex justify-end items-center gap-0.5 min-w-0 shrink-0">
               {detailHeaderEdit.show && detailHeaderEdit.onEdit ? (
