@@ -290,7 +290,8 @@
       [openRidingTierBandWeightKg, isTss, xMin, xMax]
     );
 
-    var chartXAxisBottomMargin = openRidingTierBandWeightKg ? 38 : 8;
+    var chartXAxisBottomMargin = openRidingTierBandWeightKg ? 33 : 8;
+    var openRidingTierStripOverlapPx = openRidingTierBandWeightKg && openRidingTierBandSegments.length > 0 ? 15 : 0;
 
     var myRaw = null;
     if (overrideMyWkg != null && !isTss) {
@@ -485,7 +486,10 @@
           </span>
         </div>
         <div className="flex flex-col gap-0 w-full">
-          <div ref={chartWrapRef} className="h-[min(240px,52vw)] w-full min-h-[200px] shrink-0 leading-[0]">
+          <div
+            ref={chartWrapRef}
+            className="relative z-[1] h-[min(240px,52vw)] w-full min-h-[200px] shrink-0 leading-[0] [&_.recharts-responsive-container]:leading-[0] [&_svg]:block"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={chartRows}
@@ -506,6 +510,7 @@
                   dataKey="x"
                   type="number"
                   domain={[xMin, xMax]}
+                  tickMargin={openRidingTierBandWeightKg ? 3 : undefined}
                   tick={
                     openRidingTierBandWeightKg
                       ? function (tp) {
@@ -570,8 +575,13 @@
           </div>
           {openRidingTierBandSegments.length > 0 ? (
             <div
-              className="relative h-[30px] w-full overflow-hidden border border-slate-200/90 box-border rounded-b-md leading-normal mt-0 shrink-0"
-              style={{ marginLeft: 28, marginRight: 8, width: 'calc(100% - 36px)', marginTop: '-1px' }}
+              className="relative z-0 h-[30px] w-full overflow-hidden border border-slate-200/90 box-border rounded-b-md leading-normal mt-0 shrink-0"
+              style={{
+                marginLeft: 28,
+                marginRight: 8,
+                width: 'calc(100% - 36px)',
+                marginTop: openRidingTierStripOverlapPx ? -openRidingTierStripOverlapPx + 'px' : 0,
+              }}
             >
               {openRidingTierBandSegments.map(function (seg, si) {
                 var span = xMax - xMin;
