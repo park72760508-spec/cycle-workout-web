@@ -4901,6 +4901,36 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #9ca3af;
   font-size: 0.85em;
 }
+/* 랭킹 보드: 생략(.....) 행을 「전체 랭킹」 행과 동일한 좌·우폭으로 가운데 정렬 */
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row {
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 4px;
+  padding-right: 4px;
+  gap: 8px;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-crown {
+  flex: 0 0 2.25rem;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  margin-right: 0;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-pos {
+  display: none !important;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-name-text {
+  text-align: center;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-dots-row .stelvio-rank-wkg {
+  flex: 0 0 2.25rem;
+  min-width: 2.25rem;
+  width: 2.25rem;
+}
 .stelvio-rank-expand-row {
   cursor: pointer;
   padding: 10px 0;
