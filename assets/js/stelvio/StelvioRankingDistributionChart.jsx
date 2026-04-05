@@ -484,97 +484,94 @@
             {pillText}
           </span>
         </div>
-        <div ref={chartWrapRef} className="h-[min(240px,52vw)] w-full min-h-[200px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={chartRows}
-              margin={{ top: 42, right: 8, left: 0, bottom: chartXAxisBottomMargin }}
-            >
-              <defs>
-                <linearGradient id={gid + '-area'} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={ACCENT_START} stopOpacity={0.45} />
-                  <stop offset="55%" stopColor={ACCENT_END} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={ACCENT_END} stopOpacity={0} />
-                </linearGradient>
-                <filter id="stelvio-dist-badge-shadow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
-                </filter>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis
-                dataKey="x"
-                type="number"
-                domain={[xMin, xMax]}
-                tick={
-                  openRidingTierBandWeightKg
-                    ? function (tp) {
-                        return (
-                          <OpenRidingWkgSpeedTick
-                            {...tp}
-                            openRidingTierBandWeightKg={openRidingTierBandWeightKg}
-                            isTssMode={isTss}
-                          />
-                        );
-                      }
-                    : { fontSize: 10, fill: '#64748b' }
-                }
-                tickFormatter={
-                  openRidingTierBandWeightKg
-                    ? undefined
-                    : function (v) {
-                        return isTss ? String(Number(v).toFixed(0)) : Number(v).toFixed(1);
-                      }
-                }
-                stroke="#cbd5e1"
-              />
-              <YAxis
-                width={28}
-                allowDecimals={false}
-                tick={{ fontSize: 10, fill: '#64748b' }}
-                stroke="#cbd5e1"
-                domain={[
-                  0,
-                  function (dataMax) {
-                    return Math.ceil(dataMax * 1.12) || 1;
-                  },
-                ]}
-              />
-              <Tooltip
-                content={<DistTooltip />}
-                cursor={{ stroke: BRONZE, strokeWidth: 1, strokeDasharray: '4 4' }}
-              />
-              <Area
-                type="natural"
-                dataKey="count"
-                stroke={ACCENT_START}
-                strokeWidth={2.2}
-                fill={'url(#' + gid + '-area)'}
-                dot={false}
-                activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2, fill: ACCENT_END }}
-                animationDuration={1100}
-                animationEasing="ease-out"
-                isAnimationActive={true}
-              />
-              {myX != null ? (
-                <ReferenceLine
-                  x={myX}
-                  stroke={REF_LINE}
-                  strokeWidth={3}
-                  strokeDasharray="6 4"
-                  label={<MeBadge />}
+        <div className="flex flex-col gap-0 w-full">
+          <div ref={chartWrapRef} className="h-[min(240px,52vw)] w-full min-h-[200px] shrink-0 leading-[0]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chartRows}
+                margin={{ top: 42, right: 8, left: 0, bottom: chartXAxisBottomMargin }}
+              >
+                <defs>
+                  <linearGradient id={gid + '-area'} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={ACCENT_START} stopOpacity={0.45} />
+                    <stop offset="55%" stopColor={ACCENT_END} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={ACCENT_END} stopOpacity={0} />
+                  </linearGradient>
+                  <filter id="stelvio-dist-badge-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
+                  </filter>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis
+                  dataKey="x"
+                  type="number"
+                  domain={[xMin, xMax]}
+                  tick={
+                    openRidingTierBandWeightKg
+                      ? function (tp) {
+                          return (
+                            <OpenRidingWkgSpeedTick
+                              {...tp}
+                              openRidingTierBandWeightKg={openRidingTierBandWeightKg}
+                              isTssMode={isTss}
+                            />
+                          );
+                        }
+                      : { fontSize: 10, fill: '#64748b' }
+                  }
+                  tickFormatter={
+                    openRidingTierBandWeightKg
+                      ? undefined
+                      : function (v) {
+                          return isTss ? String(Number(v).toFixed(0)) : Number(v).toFixed(1);
+                        }
+                  }
+                  stroke="#cbd5e1"
                 />
-              ) : null}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        {openRidingTierBandSegments.length > 0 ? (
-          <div className="mt-1 w-full">
-            <p className="text-[10px] text-slate-500 text-center mb-1 m-0 px-1">
-              본인 체중({openRidingTierBandWeightKg}kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일
-            </p>
+                <YAxis
+                  width={28}
+                  allowDecimals={false}
+                  tick={{ fontSize: 10, fill: '#64748b' }}
+                  stroke="#cbd5e1"
+                  domain={[
+                    0,
+                    function (dataMax) {
+                      return Math.ceil(dataMax * 1.12) || 1;
+                    },
+                  ]}
+                />
+                <Tooltip
+                  content={<DistTooltip />}
+                  cursor={{ stroke: BRONZE, strokeWidth: 1, strokeDasharray: '4 4' }}
+                />
+                <Area
+                  type="natural"
+                  dataKey="count"
+                  stroke={ACCENT_START}
+                  strokeWidth={2.2}
+                  fill={'url(#' + gid + '-area)'}
+                  dot={false}
+                  activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2, fill: ACCENT_END }}
+                  animationDuration={1100}
+                  animationEasing="ease-out"
+                  isAnimationActive={true}
+                />
+                {myX != null ? (
+                  <ReferenceLine
+                    x={myX}
+                    stroke={REF_LINE}
+                    strokeWidth={3}
+                    strokeDasharray="6 4"
+                    label={<MeBadge />}
+                  />
+                ) : null}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          {openRidingTierBandSegments.length > 0 ? (
             <div
-              className="relative h-11 w-full rounded-md overflow-hidden border border-slate-200/90 box-border"
-              style={{ marginLeft: 28, marginRight: 8, width: 'calc(100% - 36px)' }}
+              className="relative h-[30px] w-full overflow-hidden border border-slate-200/90 box-border rounded-b-md leading-normal mt-0 shrink-0"
+              style={{ marginLeft: 28, marginRight: 8, width: 'calc(100% - 36px)', marginTop: '-1px' }}
             >
               {openRidingTierBandSegments.map(function (seg, si) {
                 var span = xMax - xMin;
@@ -584,11 +581,12 @@
                 if (xb <= xa) return null;
                 var leftPct = ((xa - xMin) / span) * 100;
                 var wPct = Math.max(0.5, ((xb - xa) / span) * 100);
+                var beginnerOnly = si === 0;
                 return (
                   <div
                     key={'open-tier-' + si}
                     title={seg.label + ' ' + seg.speedHint}
-                    className="absolute inset-y-0 flex flex-col items-center justify-center text-center leading-tight px-0.5 box-border"
+                    className="absolute inset-y-0 flex flex-col items-center justify-center text-center px-0.5 box-border py-0.5"
                     style={{
                       left: leftPct + '%',
                       width: wPct + '%',
@@ -596,19 +594,30 @@
                       borderRight: '1px solid rgba(255,255,255,0.5)',
                     }}
                   >
-                    <span className="text-[9px] font-bold text-slate-900/95">{seg.label}</span>
-                    <span className="text-[8px] font-semibold text-slate-800/95">{seg.speedHint}</span>
+                    {beginnerOnly ? null : (
+                      <>
+                        <span className="text-[9px] font-bold text-slate-900/95 leading-tight">{seg.label}</span>
+                        <span className="text-[8px] font-semibold text-slate-800/95 leading-tight">{seg.speedHint}</span>
+                      </>
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
+          ) : null}
+          {openRidingTierBandSegments.length > 0 ? (
+            <p className="text-[10px] text-slate-500 text-center m-0 mt-1.5 px-1">
+              본인 체중({openRidingTierBandWeightKg}kg) 기준 평지 항속 상한 — W/kg 축과 동일 스케일
+            </p>
+          ) : null}
+        </div>
+        {chartSubNoteOverride !== false ? (
+          <p className="text-[11px] text-slate-500 text-center leading-snug mt-1.5 px-1">
+            {typeof chartSubNoteOverride === 'string' && chartSubNoteOverride.trim()
+              ? chartSubNoteOverride.trim()
+              : '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'}
+          </p>
         ) : null}
-        <p className="text-[11px] text-slate-500 text-center leading-snug mt-1.5 px-1">
-          {typeof chartSubNoteOverride === 'string' && chartSubNoteOverride.trim()
-            ? chartSubNoteOverride.trim()
-            : '구간별 참가자 수(밀도). 곡선 아래 면적은 동일 스케일에서의 상대 분포를 나타냅니다.'}
-        </p>
       </div>
     );
   }
