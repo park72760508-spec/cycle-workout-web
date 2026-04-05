@@ -1068,7 +1068,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 라이딩 일정 상세: 수정·취소 아이콘 행 기준 상·하만 뷰포트 높이의 5% 두고, 루트·본문 상단 패딩·스택 간격 제거 */
+/* 라이딩 일정 상세: 루트·본문 상단 패딩·스택 간격·게스트 상단·방장 수정/취소 행 상하 마진 제거(0) */
 #openRidingRoomScreen .open-riding-app-body--riding-detail {
   padding-top: 0;
 }
@@ -1080,11 +1080,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   padding-bottom: 0;
 }
 #openRidingRoomScreen .open-riding-detail-content-root--guest {
-  padding-top: 5dvh;
+  padding-top: 0;
 }
 #openRidingRoomScreen .open-riding-detail-host-actions {
-  margin-top: 5dvh;
-  margin-bottom: 5dvh;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 /* 생성·참석 신청 동일 터치 높이 (비대칭 padding 금지 → 문구 아래 빈 줄 현상 방지) + Safari GPU 레이어·네이티브 스타일 간섭 차단 */
