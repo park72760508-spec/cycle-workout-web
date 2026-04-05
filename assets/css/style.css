@@ -4950,6 +4950,41 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 700;
 }
 
+/* 전체(Supremo) 랭킹: 가운데 「전체 랭킹」·좌우 −/+ 분할 행 */
+.stelvio-rank-expand-row-split {
+  cursor: default;
+  justify-content: space-between;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.stelvio-rank-expand-row-split:hover {
+  background: transparent;
+}
+#stelvioRankingScreen .stelvio-rank-expand-row-split:hover {
+  background: transparent;
+}
+.stelvio-rank-expand-hit {
+  cursor: pointer;
+}
+.stelvio-rank-expand-hit:hover {
+  opacity: 0.85;
+}
+.stelvio-rank-expand-muted {
+  cursor: default;
+  opacity: 0.35;
+  pointer-events: none;
+}
+.stelvio-rank-expand-row-split .stelvio-rank-expand-left,
+.stelvio-rank-expand-row-split .stelvio-rank-expand-right {
+  flex: 0 0 auto;
+  min-width: 2.25rem;
+  text-align: center;
+}
+.stelvio-rank-expand-row-split .stelvio-rank-expand-center {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* STELVIO 랭킹 보드: 버튼만 STELVIO 스타일, 순위/카드/배너 등 나머지는 원래 스타일 */
 #stelvioRankingScreen .stelvio-motivation-banner {
   background: #f9fafb;
