@@ -3554,11 +3554,16 @@ function OpenRidingDetail(props) {
     );
   }
 
-  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css) */
+  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css). 상·하 여백은 수정/취소 행 CSS(5vh)로만 둠 */
   return (
-    <div className="open-riding-detail-content-root max-w-lg mx-auto py-2 space-y-4 w-full relative z-0">
+    <div
+      className={
+        'open-riding-detail-content-root max-w-lg mx-auto w-full relative z-0 ' +
+        (isHost && !isCancelled ? 'open-riding-detail-content-root--host' : 'open-riding-detail-content-root--guest')
+      }
+    >
       {isCancelled ? (
-        <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2">
+        <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2 m-0">
           이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
         </p>
       ) : null}
@@ -4099,7 +4104,8 @@ function OpenRidingRoomApp(props) {
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. CTA는 고정바 아래 z-스택(style.css) */}
       <div
         className={
-          'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 pt-2 w-full box-border ' +
+          'open-riding-app-body flex-1 min-h-0 overflow-y-auto px-3 w-full box-border ' +
+          (view === 'detail' && detailRideId ? 'open-riding-app-body--riding-detail ' : 'pt-2 ') +
           (useBottomFixedBar ? 'open-riding-app-body--bottom-fixed' : 'pb-[calc(1rem+env(safe-area-inset-bottom,0px))]')
         }
       >
