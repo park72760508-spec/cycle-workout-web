@@ -28,6 +28,33 @@ function asStringArray(v) {
   return Array.isArray(v) ? v.map((x) => String(x)) : [];
 }
 
+/**
+ * 팩 라이딩 룰(운영 방식) — 옵션 필드만 저장, 빈 값 허용
+ * @param {unknown} input
+ * @returns {{ rotation: string; nodrop: string; gear: { helmet: boolean; lights: boolean; puncture: boolean; water: boolean }; minorsAllowed: string }}
+ */
+export function normalizePackRidingRules(input) {
+  const src = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const gearIn = src.gear && typeof src.gear === 'object' && !Array.isArray(src.gear) ? src.gear : {};
+  const rot = String(src.rotation || '');
+  const rotation = rot === 'maalseon' || rot === 'rotation' ? rot : '';
+  const nd = String(src.nodrop || '');
+  const nodrop = nd === 'together' || nd === 'ownpace' ? nd : '';
+  const minors = String(src.minorsAllowed || '');
+  const minorsAllowed = minors === 'yes' || minors === 'no' ? minors : '';
+  return {
+    rotation,
+    nodrop,
+    gear: {
+      helmet: !!gearIn.helmet,
+      lights: !!gearIn.lights,
+      puncture: !!gearIn.puncture,
+      water: !!gearIn.water
+    },
+    minorsAllowed
+  };
+}
+
 /** 전화번호 비교용 정규화 (숫자만, +82 → 0) */
 export function normalizePhoneDigits(input) {
   let d = String(input || '').replace(/\D/g, '');
@@ -281,6 +308,7 @@ export async function createRide(db, hostUserId, input) {
     waitlist: [],
     participantDisplay,
     hostUserId: hostKey || hostUserId,
+    packRidingRules: normalizePackRidingRules(input.packRidingRules),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     rideStatus: 'active'
@@ -335,6 +363,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     invitedList,
     inviteDisplayByPhone,
     rideJoinPassword: isPrivate && rideJoinPassword.length === 4 ? rideJoinPassword : '',
+    packRidingRules: normalizePackRidingRules(input.packRidingRules),
     updatedAt: serverTimestamp()
   };
   await updateDoc(rideRef, patch);
@@ -689,6 +718,7 @@ if (typeof window !== 'undefined') {
     computeMatchingRideDates,
     computeHostRideDateKeys,
     normalizePhoneDigits,
-    isUserPhoneInvitedToRide
+    isUserPhoneInvitedToRide,
+    normalizePackRidingRules
   };
 }

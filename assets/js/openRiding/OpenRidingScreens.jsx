@@ -23,8 +23,71 @@ function getOpenRidingServiceFns() {
     fetchRideById: svc.fetchRideById,
     updateRideByHost: svc.updateRideByHost,
     normalizePhoneDigits: svc.normalizePhoneDigits,
-    isUserPhoneInvitedToRide: svc.isUserPhoneInvitedToRide
+    isUserPhoneInvitedToRide: svc.isUserPhoneInvitedToRide,
+    normalizePackRidingRules: svc.normalizePackRidingRules
   };
+}
+
+/** 팩 라이딩 룰 폼 기본값 (생성 폼) */
+function openRidingPackRulesFormDefaults() {
+  return {
+    packRotation: '',
+    packNodrop: '',
+    packGearHelmet: false,
+    packGearLights: false,
+    packGearPuncture: false,
+    packGearWater: false,
+    packMinorsAllowed: ''
+  };
+}
+
+/** 수정 폼: ride 문서 → 폼 필드 */
+function openRidingApplyPackRulesFromRide(ride) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  var n =
+    typeof svc.normalizePackRidingRules === 'function'
+      ? svc.normalizePackRidingRules(ride && ride.packRidingRules)
+      : {
+          rotation: '',
+          nodrop: '',
+          gear: { helmet: false, lights: false, puncture: false, water: false },
+          minorsAllowed: ''
+        };
+  return {
+    packRotation: n.rotation,
+    packNodrop: n.nodrop,
+    packGearHelmet: !!n.gear.helmet,
+    packGearLights: !!n.gear.lights,
+    packGearPuncture: !!n.gear.puncture,
+    packGearWater: !!n.gear.water,
+    packMinorsAllowed: n.minorsAllowed
+  };
+}
+
+/** 상세·폼 공통: packRidingRules 정규화 객체 → 표시용 문구 */
+function openRidingPackRulesDisplay(prNorm) {
+  var pr = prNorm || {};
+  var rot =
+    pr.rotation === 'maalseon'
+      ? '방장 말선'
+      : pr.rotation === 'rotation'
+        ? '순환 로테이션(가능한 사람에 한함)'
+        : '';
+  var nd =
+    pr.nodrop === 'together'
+      ? '끝까지 챙겨서 가기'
+      : pr.nodrop === 'ownpace'
+        ? '각자 페이스대로 타고 목적지에 도착'
+        : '';
+  var g = pr.gear && typeof pr.gear === 'object' ? pr.gear : {};
+  var gearLines = [];
+  if (g.helmet) gearLines.push('헬멧(미착용 참석 불가)');
+  if (g.lights) gearLines.push('전/후미등');
+  if (g.puncture) gearLines.push('펑크 대비 용품');
+  if (g.water) gearLines.push('식수/개인용');
+  var minors =
+    pr.minorsAllowed === 'yes' ? '예' : pr.minorsAllowed === 'no' ? '아니오' : '';
+  return { rot: rot, nodrop: nd, gearLines: gearLines, minors: minors };
 }
 
 /**
@@ -2461,25 +2524,28 @@ function OpenRidingCreateForm(props) {
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
-    return {
-      title: '',
-      date: getTodaySeoulYmd(),
-      departureTime: '07:00',
-      departureLocation: '',
-      distance: 40,
-      course: '',
-      level: '중급',
-      maxParticipants: 10,
-      hostName: prof.hostName || '',
-      contactInfo: prof.contactInfo || '',
-      region: '',
-      gpxFile: null,
-      gpxUrlExisting: null,
-      isPrivate: false,
-      invitePending: [],
-      inviteSelected: [],
-      rideJoinPassword: ''
-    };
+    return Object.assign(
+      {
+        title: '',
+        date: getTodaySeoulYmd(),
+        departureTime: '07:00',
+        departureLocation: '',
+        distance: 40,
+        course: '',
+        level: '중급',
+        maxParticipants: 10,
+        hostName: prof.hostName || '',
+        contactInfo: prof.contactInfo || '',
+        region: '',
+        gpxFile: null,
+        gpxUrlExisting: null,
+        isPrivate: false,
+        invitePending: [],
+        inviteSelected: [],
+        rideJoinPassword: ''
+      },
+      openRidingPackRulesFormDefaults()
+    );
   });
   var form = st[0];
   var setForm = st[1];
@@ -2631,27 +2697,32 @@ function OpenRidingCreateForm(props) {
             }
             return { name: nm, phone: p, key: k };
           });
-          setForm({
-            title: String(ride.title || ''),
-            date: ymd,
-            departureTime: String(ride.departureTime || '07:00'),
-            departureLocation: String(ride.departureLocation || ''),
-            distance: Number(ride.distance) || 40,
-            course: String(ride.course || ''),
-            level: String(ride.level || '중급'),
-            maxParticipants: Math.max(1, Number(ride.maxParticipants) || 10),
-            hostName: String(ride.hostName || prof.hostName || ''),
-            contactInfo: String(ride.contactInfo || prof.contactInfo || ''),
-            region: String(ride.region || ''),
-            gpxFile: null,
-            gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null,
-            isPrivate: !!ride.isPrivate,
-            invitePending: [],
-            inviteSelected: inviteSelected,
-            rideJoinPassword: String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
-              .replace(/\D/g, '')
-              .slice(0, 4)
-          });
+          setForm(
+            Object.assign(
+              {
+                title: String(ride.title || ''),
+                date: ymd,
+                departureTime: String(ride.departureTime || '07:00'),
+                departureLocation: String(ride.departureLocation || ''),
+                distance: Number(ride.distance) || 40,
+                course: String(ride.course || ''),
+                level: String(ride.level || '중급'),
+                maxParticipants: Math.max(1, Number(ride.maxParticipants) || 10),
+                hostName: String(ride.hostName || prof.hostName || ''),
+                contactInfo: String(ride.contactInfo || prof.contactInfo || ''),
+                region: String(ride.region || ''),
+                gpxFile: null,
+                gpxUrlExisting: ride.gpxUrl != null ? String(ride.gpxUrl) : null,
+                isPrivate: !!ride.isPrivate,
+                invitePending: [],
+                inviteSelected: inviteSelected,
+                rideJoinPassword: String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
+                  .replace(/\D/g, '')
+                  .slice(0, 4)
+              },
+              openRidingApplyPackRulesFromRide(ride)
+            )
+          );
           setEditHydrated(true);
         })
         .catch(function () {
@@ -2843,7 +2914,7 @@ function OpenRidingCreateForm(props) {
       checkList.push('라이딩을 저장할 수 없습니다. 로그인 상태와 네트워크를 확인해 주세요.');
     }
     if (!String(form.title || '').trim()) {
-      checkList.push('제목을 입력해 주세요.');
+      checkList.push('모임명을 입력해 주세요.');
     }
     if (!String(form.region || '').trim()) {
       checkList.push('지역이 선택되지 않았습니다. 시·도·구·군을 선택한 뒤 「추가」를 눌러 주세요.');
@@ -2877,6 +2948,17 @@ function OpenRidingCreateForm(props) {
         gpxUrl = await uploadRideGpx(storage, form.gpxFile, draftId);
       }
       var d = new Date(form.date + 'T12:00:00+09:00');
+      var packRidingRulesPayload = {
+        rotation: form.packRotation,
+        nodrop: form.packNodrop,
+        gear: {
+          helmet: !!form.packGearHelmet,
+          lights: !!form.packGearLights,
+          puncture: !!form.packGearPuncture,
+          water: !!form.packGearWater
+        },
+        minorsAllowed: form.packMinorsAllowed
+      };
       if (editRideId && typeof updateRideByHost === 'function') {
         await updateRideByHost(firestore, editRideId, hostUserId, {
           title: form.title,
@@ -2895,7 +2977,8 @@ function OpenRidingCreateForm(props) {
           isPrivate: !!form.isPrivate,
           invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
           inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
-          rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
+          rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
+          packRidingRules: packRidingRulesPayload
         });
         onEditSaved();
         return;
@@ -2922,6 +3005,7 @@ function OpenRidingCreateForm(props) {
         invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
         inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
         rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
+        packRidingRules: packRidingRulesPayload,
         /** createRide 내부와 동일하게 명시(캐시·구버전 서비스 대비) */
         participants: hostUserId ? [String(hostUserId).trim()] : []
       });
@@ -2961,7 +3045,7 @@ function OpenRidingCreateForm(props) {
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
         </p>
       ) : null}
-      <label className="block font-medium text-slate-700">제목<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
+      <label className="block font-medium text-slate-700">모임명<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
 
       <div className="block font-medium text-slate-700">
         <span className="block mb-1">지역</span>
@@ -3360,6 +3444,179 @@ function OpenRidingCreateForm(props) {
         ) : null}
       </fieldset>
 
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800 m-0">운영 방식 (팩 라이딩 룰)</h3>
+          <p className="text-xs text-slate-500 m-0 mt-1 leading-relaxed">
+            아래 운영 방식은 필수 조건은 아니며 옵션 조건으로 빈 값 허용 됩니다.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-700 block">로테이션 방식</span>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackRot"
+              className="mt-0.5 shrink-0"
+              checked={form.packRotation === ''}
+              onChange={function () { set('packRotation', ''); }}
+            />
+            <span>선택 안 함</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackRot"
+              className="mt-0.5 shrink-0"
+              checked={form.packRotation === 'maalseon'}
+              onChange={function () { set('packRotation', 'maalseon'); }}
+            />
+            <span>방장 말선</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackRot"
+              className="mt-0.5 shrink-0"
+              checked={form.packRotation === 'rotation'}
+              onChange={function () { set('packRotation', 'rotation'); }}
+            />
+            <span>순환 로테이션(가능한 사람에 한함)</span>
+          </label>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-700 block">노드랍 팩라이딩</span>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackNd"
+              className="mt-0.5 shrink-0"
+              checked={form.packNodrop === ''}
+              onChange={function () { set('packNodrop', ''); }}
+            />
+            <span>선택 안 함</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackNd"
+              className="mt-0.5 shrink-0"
+              checked={form.packNodrop === 'together'}
+              onChange={function () { set('packNodrop', 'together'); }}
+            />
+            <span>끝까지 챙겨서 가기</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackNd"
+              className="mt-0.5 shrink-0"
+              checked={form.packNodrop === 'ownpace'}
+              onChange={function () { set('packNodrop', 'ownpace'); }}
+            />
+            <span>각자 페이스대로 타고 목적지에 도착</span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
+          <p className="text-xs font-semibold text-slate-600 m-0">오픈(Open) 구간 (가이드)</p>
+          <p className="text-xs text-slate-600 m-0 leading-relaxed">업힐 구간만 오픈 후 정상 대기</p>
+        </div>
+        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
+          <p className="text-xs font-semibold text-slate-600 m-0">보급 구간 (가이드)</p>
+          <p className="text-xs text-slate-600 m-0 leading-relaxed">
+            1차(출발 후 1시간 후 10분 보급), 2차(반환점, 10분), 3차(라이딩 3시간 후, 15분)
+          </p>
+        </div>
+        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
+          <p className="text-xs font-semibold text-slate-600 m-0">회비 (가이드)</p>
+          <p className="text-xs text-slate-600 m-0 leading-relaxed">약 1~2만 원 (식사 및 보급 / 1/N 정산)</p>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-700 block">필수 준비물 (체크)</span>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-violet-600"
+              checked={!!form.packGearHelmet}
+              onChange={function (e) { set('packGearHelmet', e.target.checked); }}
+            />
+            <span>헬멧(미착용 참석 불가)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-violet-600"
+              checked={!!form.packGearLights}
+              onChange={function (e) { set('packGearLights', e.target.checked); }}
+            />
+            <span>전/후미등</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-violet-600"
+              checked={!!form.packGearPuncture}
+              onChange={function (e) { set('packGearPuncture', e.target.checked); }}
+            />
+            <span>펑크 대비 용품</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-violet-600"
+              checked={!!form.packGearWater}
+              onChange={function (e) { set('packGearWater', e.target.checked); }}
+            />
+            <span>식수/개인용</span>
+          </label>
+        </div>
+
+        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
+          <p className="text-xs font-semibold text-slate-600 m-0">모임 취소 조건 (가이드)</p>
+          <p className="text-xs text-slate-600 m-0 leading-relaxed">
+            모임 2시간 전 기상청 기준 비 예보 시 자동 취소, 신청 인원 0명 미만 시 취소
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-700 block">미성년자 참석 가능 여부</span>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackMinors"
+              className="mt-0.5 shrink-0"
+              checked={form.packMinorsAllowed === ''}
+              onChange={function () { set('packMinorsAllowed', ''); }}
+            />
+            <span>선택 안 함</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackMinors"
+              className="mt-0.5 shrink-0"
+              checked={form.packMinorsAllowed === 'yes'}
+              onChange={function () { set('packMinorsAllowed', 'yes'); }}
+            />
+            <span>예</span>
+          </label>
+          <label className="flex items-start gap-2 cursor-pointer text-sm">
+            <input
+              type="radio"
+              name="openRidingPackMinors"
+              className="mt-0.5 shrink-0"
+              checked={form.packMinorsAllowed === 'no'}
+              onChange={function () { set('packMinorsAllowed', 'no'); }}
+            />
+            <span>아니오</span>
+          </label>
+        </div>
+      </div>
+
       <label className="block font-medium text-slate-700">
         방장명
         <input
@@ -3554,6 +3811,9 @@ function OpenRidingDetail(props) {
   var _invListExp = useState(false);
   var inviteListExpanded = _invListExp[0];
   var setInviteListExpanded = _invListExp[1];
+  var _opRulesExp = useState(false);
+  var operationRulesExpanded = _opRulesExp[0];
+  var setOperationRulesExpanded = _opRulesExp[1];
 
   useEffect(
     function () {
@@ -3561,6 +3821,7 @@ function OpenRidingDetail(props) {
       setJoinShareModalOpen(false);
       setDeleteModalOpen(false);
       setInviteListExpanded(false);
+      setOperationRulesExpanded(false);
     },
     [rideId]
   );
@@ -3674,6 +3935,30 @@ function OpenRidingDetail(props) {
     [inviteRows]
   );
   var inviteTotalCount = inviteRows.length;
+
+  var packRulesNorm = useMemo(
+    function () {
+      if (!ride) return null;
+      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      if (typeof svc.normalizePackRidingRules === 'function') {
+        return svc.normalizePackRidingRules(ride.packRidingRules);
+      }
+      return {
+        rotation: '',
+        nodrop: '',
+        gear: { helmet: false, lights: false, puncture: false, water: false },
+        minorsAllowed: ''
+      };
+    },
+    [rideId, ride]
+  );
+
+  var packRulesDisp = useMemo(
+    function () {
+      return packRulesNorm ? openRidingPackRulesDisplay(packRulesNorm) : null;
+    },
+    [packRulesNorm]
+  );
 
   var _invLab = useState({});
   var inviteResolvedLabels = _invLab[0];
@@ -4040,7 +4325,7 @@ function OpenRidingDetail(props) {
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
         {statRow(
-          '제목',
+          '모임명',
           <span className={'font-semibold text-slate-900 block min-w-0 break-words text-[13px] leading-[1.45] text-left ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
             {ride.title}
           </span>
@@ -4198,6 +4483,94 @@ function OpenRidingDetail(props) {
             ) : null}
           </div>
         ) : null}
+        {ride && packRulesNorm ? (
+          <div className="open-riding-detail-pack-rules-fold open-riding-detail-invite-fold--block w-full min-w-0">
+            <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
+              <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
+                <button
+                  type="button"
+                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-xs font-semibold leading-[1.3] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  onClick={function () {
+                    setOperationRulesExpanded(function (v) {
+                      return !v;
+                    });
+                  }}
+                  aria-expanded={operationRulesExpanded}
+                  id="open-riding-pack-rules-toggle"
+                >
+                  운영방식{' '}
+                  <span className="tabular-nums font-semibold text-inherit" aria-hidden>
+                    {operationRulesExpanded ? '(−)' : '(+)'}
+                  </span>
+                </button>
+              </span>
+              <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
+                <span className="text-[10px] text-slate-500 leading-tight font-medium">팩 라이딩 룰</span>
+              </div>
+            </div>
+            {operationRulesExpanded && packRulesDisp ? (
+              <div
+                className="open-riding-detail-invite-list m-0 w-full min-w-0 border-t border-slate-100/90 pt-2 space-y-2.5 text-left"
+                role="region"
+                aria-labelledby="open-riding-pack-rules-toggle"
+              >
+                <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                  아래 운영 방식은 필수 조건은 아니며 옵션 조건으로 빈 값 허용 됩니다.
+                </p>
+                {packRulesDisp.rot ? (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">로테이션 방식</p>
+                    <p className="text-sm text-slate-800 m-0 leading-snug">{packRulesDisp.rot}</p>
+                  </div>
+                ) : null}
+                {packRulesDisp.nodrop ? (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">노드랍 팩라이딩</p>
+                    <p className="text-sm text-slate-800 m-0 leading-snug">{packRulesDisp.nodrop}</p>
+                  </div>
+                ) : null}
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">오픈(Open) 구간 (가이드)</p>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed">업힐 구간만 오픈 후 정상 대기</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">보급 구간 (가이드)</p>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed">
+                    1차(출발 후 1시간 후 10분 보급), 2차(반환점, 10분), 3차(라이딩 3시간 후, 15분)
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">회비 (가이드)</p>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed">약 1~2만 원 (식사 및 보급 / 1/N 정산)</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">필수 준비물</p>
+                  {packRulesDisp.gearLines.length ? (
+                    <ul className="m-0 pl-4 list-disc text-sm text-slate-800 space-y-0.5">
+                      {packRulesDisp.gearLines.map(function (line, ix) {
+                        return <li key={ix}>{line}</li>;
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-slate-500 m-0">선택된 항목 없음</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">모임 취소 조건 (가이드)</p>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed">
+                    모임 2시간 전 기상청 기준 비 예보 시 자동 취소, 신청 인원 0명 미만 시 취소
+                  </p>
+                </div>
+                {packRulesDisp.minors ? (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">미성년자 참석 가능 여부</p>
+                    <p className="text-sm text-slate-800 m-0 leading-snug">{packRulesDisp.minors}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
         {statRow(
           '연락처',
@@ -4321,6 +4694,19 @@ function OpenRidingDetail(props) {
                 </button>
               ) : null}
             </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 mt-2 space-y-2 text-left">
+            <h3 className="text-xs font-bold text-slate-800 m-0 tracking-tight">[안전 및 주의사항 (필독)]</h3>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed">
+              스텔비오 모임은 자발적인 친목 모임으로, 라이딩 중 발생하는 모든 사고 및 자전거 손상에 대한 책임은 참석자 본인에게 있습니다.
+            </p>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed">
+              참석 신청을 하시는 것은 위 면책 조항에 동의하는 것으로 간주합니다.
+            </p>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed">
+              그룹 라이딩 수신호를 반드시 숙지하시고, 선두의 지시에 잘 따라주시기 바랍니다.
+            </p>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed">개인 자전거 보험 가입을 적극 권장합니다.</p>
           </div>
           <OpenRidingBottomLogoBar />
         </div>

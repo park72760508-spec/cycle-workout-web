@@ -13,6 +13,19 @@ export interface FirestoreTimestamp {
 /** 라이딩 난이도 (평속 기준은 UI/가이드용 설명) */
 export type RidingLevel = '초급' | '입문' | '중급' | '중상급' | '상급';
 
+/** 팩 라이딩 룰(운영 방식) — normalizePackRidingRules 로 저장 */
+export interface PackRidingRules {
+  rotation: '' | 'maalseon' | 'rotation';
+  nodrop: '' | 'together' | 'ownpace';
+  gear: {
+    helmet: boolean;
+    lights: boolean;
+    puncture: boolean;
+    water: boolean;
+  };
+  minorsAllowed: '' | 'yes' | 'no';
+}
+
 /**
  * rides 컬렉션 문서
  * 경로: rides/{rideId}
@@ -42,6 +55,8 @@ export interface OpenRide {
   hostUserId?: string;
   createdAt?: FirestoreTimestamp;
   updatedAt?: FirestoreTimestamp;
+  /** 생성·수정 폼의 운영 방식(옵션) */
+  packRidingRules?: PackRidingRules;
 }
 
 /** rides 생성 시 서버/클라이언트가 채울 입력 타입 */
