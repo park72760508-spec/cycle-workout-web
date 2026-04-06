@@ -341,6 +341,28 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
 }
 
 /**
+ * 방장 전용: inviteDisplayByPhone 부분 병합 (프로필 DB에서 조회한 실명을 저장해 초대받은 사용자도 동일 문서로 표시)
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} hostUserId
+ * @param {Record<string, unknown>} partialMap 정규화 전화 키 → 표시 이름
+ */
+export async function mergeInviteDisplayByPhoneForHost(db, rideId, hostUserId, partialMap) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+  const existing = sanitizeInviteDisplayByPhone(data.inviteDisplayByPhone);
+  const incoming = sanitizeInviteDisplayByPhone(partialMap);
+  const merged = Object.assign({}, existing, incoming);
+  await updateDoc(rideRef, {
+    inviteDisplayByPhone: merged,
+    updatedAt: serverTimestamp()
+  });
+}
+
+/**
  * 방장 폭파(취소)
  * - 참석 확정(participants) 0명: 문서 삭제
  * - 1명 이상: 기존처럼 rideStatus= cancelled 유지
@@ -661,6 +683,7 @@ if (typeof window !== 'undefined') {
     joinRideTransaction,
     leaveRideTransaction,
     updateRideByHost,
+    mergeInviteDisplayByPhoneForHost,
     cancelRideByHost,
     deleteRideByHost,
     computeMatchingRideDates,

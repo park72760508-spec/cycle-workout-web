@@ -3509,6 +3509,9 @@ function OpenRidingDetail(props) {
   var reload = h.reload;
   var role = h.role;
   var actionErr = h.actionError;
+  /** hooks·초대 명단 동기화에서 사용 (조건부 return 이전에 계산) */
+  var isHost = !!(userId && ride && String(ride.hostUserId || '') === String(userId));
+  var hostIdpSyncTmRef = useRef(null);
 
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
@@ -3757,6 +3760,62 @@ function OpenRidingDetail(props) {
     [rideId, ride, firestore, inviteRows]
   );
 
+  /**
+   * 방장만: 프로필 조회로 채워진 inviteResolvedLabels(실명)을 rides.inviteDisplayByPhone에 병합 저장.
+   * 초대받은 사용자는 users 컬렉션 쿼리가 불가하므로 문서의 inviteDisplayByPhone으로 동일 표기.
+   */
+  useEffect(
+    function () {
+      if (!isHost || !firestore || !rideId || !userId || !ride || !inviteRows.length) return undefined;
+      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      if (typeof svc.mergeInviteDisplayByPhoneForHost !== 'function') return undefined;
+
+      var normFn =
+        typeof window !== 'undefined' &&
+        window.openRidingService &&
+        typeof window.openRidingService.normalizePhoneDigits === 'function'
+          ? window.openRidingService.normalizePhoneDigits
+          : function (x) {
+              return String(x || '').replace(/\D/g, '');
+            };
+      var idp =
+        ride.inviteDisplayByPhone && typeof ride.inviteDisplayByPhone === 'object' && !Array.isArray(ride.inviteDisplayByPhone)
+          ? ride.inviteDisplayByPhone
+          : {};
+
+      var patch = {};
+      var i;
+      for (i = 0; i < inviteRows.length; i++) {
+        var r = inviteRows[i];
+        var nm = inviteResolvedLabels[r.phoneKey];
+        if (!nm || isOpenRidingInviteWeakDisplayName(nm)) continue;
+        var cur = openRidingResolveInviteDisplayByPhoneKey(idp, r.phoneKey, normFn);
+        if (cur === nm) continue;
+        patch[r.phoneKey] = nm;
+      }
+      if (Object.keys(patch).length === 0) return undefined;
+
+      if (hostIdpSyncTmRef.current) clearTimeout(hostIdpSyncTmRef.current);
+      hostIdpSyncTmRef.current = setTimeout(function () {
+        hostIdpSyncTmRef.current = null;
+        svc
+          .mergeInviteDisplayByPhoneForHost(firestore, rideId, userId, patch)
+          .then(function () {
+            if (typeof reload === 'function') reload();
+          })
+          .catch(function () {});
+      }, 900);
+
+      return function () {
+        if (hostIdpSyncTmRef.current) {
+          clearTimeout(hostIdpSyncTmRef.current);
+          hostIdpSyncTmRef.current = null;
+        }
+      };
+    },
+    [isHost, firestore, rideId, userId, ride, inviteRows, inviteResolvedLabels, reload]
+  );
+
   async function confirmJoinWithContactShare(contactPublic) {
     setBusy(true);
     try {
@@ -3838,7 +3897,6 @@ function OpenRidingDetail(props) {
   var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
   var dateStr = ts ? ts.toLocaleDateString('ko-KR') : '';
 
-  var isHost = !!(userId && String(ride.hostUserId || '') === String(userId));
   var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
   var hasApplied = role === 'participant' || (role && typeof role === 'object' && role.type === 'waitlist');
   var showHostContactRow = !!(isHost || hasApplied);
