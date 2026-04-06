@@ -4384,7 +4384,7 @@ function OpenRidingDetail(props) {
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
         {statRow(
           '모임명',
-          <span className={'font-semibold text-slate-900 block min-w-0 break-words text-[13px] leading-[1.45] text-left ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
+          <span className={'font-bold text-slate-900 block min-w-0 break-words text-sm leading-[1.25rem] text-left ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
             {ride.title}
           </span>
         )}
@@ -4482,7 +4482,7 @@ function OpenRidingDetail(props) {
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
                 <button
                   type="button"
-                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-xs font-semibold leading-[1.3] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
                   onClick={function () {
                     setInviteListExpanded(function (v) {
                       return !v;
@@ -4498,8 +4498,8 @@ function OpenRidingDetail(props) {
                 </button>
               </span>
               <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
-                <span className="tabular-nums">{inviteAttendedCount} / {inviteTotalCount}</span>
-                <span className="text-[10px] text-slate-500 leading-tight font-medium">참석 / 초대</span>
+                <span className="tabular-nums text-sm leading-[1.25rem]">{inviteAttendedCount} / {inviteTotalCount}</span>
+                <span className="text-xs text-slate-500 leading-tight font-medium">참석 / 초대</span>
               </div>
             </div>
             {inviteListExpanded ? (
@@ -4547,7 +4547,7 @@ function OpenRidingDetail(props) {
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
                 <button
                   type="button"
-                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-xs font-semibold leading-[1.3] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
                   onClick={function () {
                     setOperationRulesExpanded(function (v) {
                       return !v;
@@ -4563,7 +4563,7 @@ function OpenRidingDetail(props) {
                 </button>
               </span>
               <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
-                <span className="text-[10px] text-slate-500 leading-tight font-medium">팩 라이딩 룰</span>
+                <span className="text-xs text-slate-500 leading-tight font-medium">팩 라이딩 룰</span>
               </div>
             </div>
             {operationRulesExpanded && packRulesDisp ? (
