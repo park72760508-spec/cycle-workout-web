@@ -7854,6 +7854,9 @@
     window.handleStelvioRankingCollapse = handleStelvioRankingCollapse;
 
     function handleStelvioRankingGapSet(cat, key, expanded) {
+      if (typeof getViewerGrade !== 'function') return;
+      var _gg = getViewerGrade();
+      if (String(_gg) !== '1' && Number(_gg) !== 1) return;
       var o = stelvioRankingGapState[cat] || {};
       o[key] = !!expanded;
       stelvioRankingGapState[cat] = o;
@@ -7888,6 +7891,10 @@
         var NEIGH = 3;
         var lastIdx = arr.length - 1;
         var supremoExpanded = !!(stelvioRankingGapState.Supremo || {}).expanded;
+        var _vgSup = typeof getViewerGrade === 'function' ? getViewerGrade() : null;
+        var canSupremoGapControls =
+          _vgSup != null && (String(_vgSup) === '1' || Number(_vgSup) === 1);
+        if (!canSupremoGapControls) supremoExpanded = true;
         var catKey = 'Supremo';
 
         function buildSupremoRow(item, categoryRank, extraRowClass) {
@@ -7923,6 +7930,7 @@
           return '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">.....</span></span><span class="stelvio-rank-wkg"></span></div>';
         }
         function expandGapRowS(key, forCollapsedState) {
+          if (!canSupremoGapControls) return '';
           var minusHit = !forCollapsedState
             ? ' stelvio-rank-expand-hit" onclick="event.stopPropagation();handleStelvioRankingGapSet(\'' + catKey + '\',\'' + key + '\',false)" title="접어보기"'
             : ' stelvio-rank-expand-muted"';
