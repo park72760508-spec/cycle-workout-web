@@ -229,11 +229,41 @@ function formatOpenRidingInviteFallbackLabel(_phoneRaw, _maskedMode) {
   return '초대 회원';
 }
 
+/** 방장 폼 inviteSelected → Firestore inviteDisplayByPhone 맵 */
+function buildOpenRidingInviteDisplayMap(inviteSelected) {
+  var out = {};
+  var norm =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits
+      : function (s) {
+          return String(s || '').replace(/\D/g, '');
+        };
+  (inviteSelected || []).forEach(function (x) {
+    if (!x) return;
+    var k = norm(x.phone);
+    var nm = x.name != null ? String(x.name).trim() : '';
+    if (k.length >= 8 && nm) out[k] = nm.slice(0, 40);
+  });
+  return out;
+}
+
 /**
- * 상세 초대 명단 한 줄 표시명: 캐시 → participantDisplay → 본인 초대 행(연락처·UID)이면 프로필 이름 → 폴백
+ * 상세 초대 명단 한 줄 표시명: 문서 저장명 → 캐시 → participantDisplay → 본인 초대 행 → 폴백
  */
 function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskContacts, myPhoneForInvite, viewerUserId) {
   var key = r.phoneKey;
+  var idp =
+    ride &&
+    ride.inviteDisplayByPhone &&
+    typeof ride.inviteDisplayByPhone === 'object' &&
+    !Array.isArray(ride.inviteDisplayByPhone)
+      ? ride.inviteDisplayByPhone
+      : {};
+  var fromDoc = idp[key] != null ? String(idp[key]).trim() : idp[String(key)] != null ? String(idp[String(key)]).trim() : '';
+  if (fromDoc) return fromDoc;
+
   var fromSeed = inviteResolvedLabels[key];
   if (fromSeed && String(fromSeed).trim()) return String(fromSeed).trim();
 
@@ -2455,9 +2485,17 @@ function OpenRidingCreateForm(props) {
                   return String(s || '').replace(/\D/g, '');
                 };
           var il = Array.isArray(ride.invitedList) ? ride.invitedList : [];
+          var idp =
+            ride.inviteDisplayByPhone &&
+            typeof ride.inviteDisplayByPhone === 'object' &&
+            !Array.isArray(ride.inviteDisplayByPhone)
+              ? ride.inviteDisplayByPhone
+              : {};
           var inviteSelected = il.map(function (phone) {
             var p = String(phone != null ? phone : '');
-            return { name: '초대', phone: p, key: normFn(p) };
+            var k = normFn(p);
+            var nm = idp[k] && String(idp[k]).trim() ? String(idp[k]).trim() : '초대';
+            return { name: nm, phone: p, key: k };
           });
           setForm({
             title: String(ride.title || ''),
@@ -2722,6 +2760,7 @@ function OpenRidingCreateForm(props) {
           gpxUrl: gpxUrl,
           isPrivate: !!form.isPrivate,
           invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
+          inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
           rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : ''
         });
         onEditSaved();
@@ -2747,6 +2786,7 @@ function OpenRidingCreateForm(props) {
         gpxUrl: gpxUrl,
         isPrivate: !!form.isPrivate,
         invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
+        inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
         rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
         /** createRide 내부와 동일하게 명시(캐시·구버전 서비스 대비) */
         participants: hostUserId ? [String(hostUserId).trim()] : []
@@ -3515,10 +3555,19 @@ function OpenRidingDetail(props) {
         !Array.isArray(ride.participantDisplay)
           ? ride.participantDisplay
           : {};
+      var idpLocal =
+        ride.inviteDisplayByPhone &&
+        typeof ride.inviteDisplayByPhone === 'object' &&
+        !Array.isArray(ride.inviteDisplayByPhone)
+          ? ride.inviteDisplayByPhone
+          : {};
       var seed = {};
       inviteRows.forEach(function (r) {
         var nm = '';
-        if (r.matchedUid) {
+        if (idpLocal[r.phoneKey] && String(idpLocal[r.phoneKey]).trim()) {
+          nm = String(idpLocal[r.phoneKey]).trim();
+        }
+        if (!nm && r.matchedUid) {
           var nm0 = pdLocal[String(r.matchedUid)];
           if (nm0 && String(nm0).trim()) nm = String(nm0).trim();
         }
@@ -3887,7 +3936,7 @@ function OpenRidingDetail(props) {
         )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
         {inviteRows.length > 0 ? (
-          <div className="open-riding-detail-invite-fold w-full min-w-0">
+          <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
             <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
                 <button
@@ -3917,7 +3966,7 @@ function OpenRidingDetail(props) {
                 id="open-riding-detail-invite-listbox"
                 role="region"
                 aria-labelledby="open-riding-invite-toggle"
-                className="open-riding-detail-invite-list open-riding-detail-invite-list--in-fold m-0 w-full min-w-0 list-none space-y-2 p-0 pt-2 mt-1 border-t border-slate-100 text-right"
+                className="open-riding-detail-invite-list open-riding-detail-invite-list--in-fold m-0 w-full min-w-0 list-none space-y-2 border-t border-slate-100/90"
               >
                 {inviteRows.map(function (r) {
                   var named = getOpenRidingInviteRowDisplayName(

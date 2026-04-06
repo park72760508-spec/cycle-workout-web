@@ -101,6 +101,20 @@ function omitParticipantContactPublic(/** @type {unknown} */ m, /** @type {strin
   return o;
 }
 
+/** 정규화된 전화 키 → 초대 시 방장이 지정한 표시 이름(상세 화면 전체 공개) */
+function sanitizeInviteDisplayByPhone(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out = {};
+  Object.keys(v).forEach((k) => {
+    const key = normalizePhoneDigits(k);
+    const label = String(v[k] != null ? v[k] : '')
+      .trim()
+      .slice(0, 40);
+    if (key.length >= 8 && label) out[key] = label;
+  });
+  return out;
+}
+
 /**
  * 사용자 선호 저장 (users 문서 merge)
  * @param {import('firebase/firestore').Firestore} db
@@ -162,6 +176,7 @@ export async function createRide(db, hostUserId, input) {
   const invitedList = invitedRaw
     .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
     .filter((d) => d.length >= 8);
+  const inviteDisplayByPhone = sanitizeInviteDisplayByPhone(input.inviteDisplayByPhone);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
@@ -184,6 +199,7 @@ export async function createRide(db, hostUserId, input) {
     region: String(input.region || ''),
     isPrivate,
     invitedList,
+    inviteDisplayByPhone,
     rideJoinPassword: rideJoinPassword.length === 4 ? rideJoinPassword : '',
     participantContact,
     participantContactPublic,
@@ -218,6 +234,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   const invitedList = invitedRaw
     .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
     .filter((d) => d.length >= 8);
+  const inviteDisplayByPhone = sanitizeInviteDisplayByPhone(input.inviteDisplayByPhone);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
@@ -240,6 +257,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     region: String(input.region || ''),
     isPrivate,
     invitedList,
+    inviteDisplayByPhone,
     rideJoinPassword: isPrivate && rideJoinPassword.length === 4 ? rideJoinPassword : '',
     updatedAt: serverTimestamp()
   };
