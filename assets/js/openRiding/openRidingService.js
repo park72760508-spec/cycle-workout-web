@@ -144,7 +144,47 @@ function omitInviteJoinedUidByPhoneForPhone(inviteUidMap, phoneRaw) {
   const key = normalizePhoneDigits(phoneRaw);
   if (key.length < 8) return base;
   const o = { ...base };
-  delete o[key];
+  if (Object.prototype.hasOwnProperty.call(o, key)) {
+    delete o[key];
+    return o;
+  }
+  for (const k of Object.keys(o)) {
+    const nk = normalizePhoneDigits(k);
+    if (nk === key || (key.length >= 8 && nk.slice(-8) === key.slice(-8))) {
+      delete o[k];
+      break;
+    }
+  }
+  return o;
+}
+
+/** 참석 신청 시: 초대 명단 공개 맵에 표시명 병합 (비방장도 읽기 가능한 필드) */
+function mergeInviteDisplayOnJoin(inviteMap, phoneRaw, nameLabel) {
+  const base = sanitizeInviteDisplayByPhone(inviteMap);
+  const key = normalizePhoneDigits(phoneRaw);
+  const nm = String(nameLabel != null ? nameLabel : '')
+    .trim()
+    .slice(0, 40);
+  if (key.length < 8 || !nm) return base;
+  return Object.assign({}, base, { [key]: nm });
+}
+
+function omitInviteDisplayByPhoneForPhone(inviteMap, phoneRaw) {
+  const base = sanitizeInviteDisplayByPhone(inviteMap);
+  const key = normalizePhoneDigits(phoneRaw);
+  if (key.length < 8) return base;
+  const o = { ...base };
+  if (Object.prototype.hasOwnProperty.call(o, key)) {
+    delete o[key];
+    return o;
+  }
+  for (const k of Object.keys(o)) {
+    const nk = normalizePhoneDigits(k);
+    if (nk === key || (key.length >= 8 && nk.slice(-8) === key.slice(-8))) {
+      delete o[k];
+      break;
+    }
+  }
   return o;
 }
 
@@ -267,7 +307,9 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   const invitedList = invitedRaw
     .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
     .filter((d) => d.length >= 8);
-  const inviteDisplayByPhone = sanitizeInviteDisplayByPhone(input.inviteDisplayByPhone);
+  const existingIdp = sanitizeInviteDisplayByPhone(data.inviteDisplayByPhone);
+  const fromForm = sanitizeInviteDisplayByPhone(input.inviteDisplayByPhone);
+  const inviteDisplayByPhone = Object.assign({}, existingIdp, fromForm);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
@@ -453,6 +495,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     if (phoneLabel) participantContact[String(userId)] = phoneLabel;
     participantContactPublic[String(userId)] = contactPublicToParticipants;
     const inviteJoinedUidByPhone = mergeInviteJoinedUidOnJoin(data.inviteJoinedUidByPhone, phoneLabel, userId);
+    const inviteDisplayByPhone = mergeInviteDisplayOnJoin(data.inviteDisplayByPhone, phoneLabel, nameLabel);
 
     if (participants.length < max) {
       participants = [...participants, userId];
@@ -462,6 +505,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
         participantContact,
         participantContactPublic,
         inviteJoinedUidByPhone,
+        inviteDisplayByPhone,
         updatedAt: serverTimestamp()
       });
       return { status: 'joined', role: 'participant' };
@@ -474,6 +518,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
       participantContact,
       participantContactPublic,
       inviteJoinedUidByPhone,
+      inviteDisplayByPhone,
       updatedAt: serverTimestamp()
     });
     return { status: 'joined', role: 'waitlist', position: waitlist.length };
@@ -502,6 +547,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
       const prevPc = asParticipantContact(data.participantContact);
       const leavingPhone = prevPc[String(userId)] || '';
       const inviteJoinedUidByPhone = omitInviteJoinedUidByPhoneForPhone(data.inviteJoinedUidByPhone, leavingPhone);
+      const inviteDisplayByPhone = omitInviteDisplayByPhoneForPhone(data.inviteDisplayByPhone, leavingPhone);
       waitlist = waitlist.filter((id) => id !== userId);
       transaction.update(rideRef, {
         waitlist,
@@ -509,6 +555,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
         participantContact: omitParticipantContact(data.participantContact, userId),
         participantContactPublic: omitParticipantContactPublic(data.participantContactPublic, userId),
         inviteJoinedUidByPhone,
+        inviteDisplayByPhone,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_waitlist', promotedUserId: null };
@@ -518,6 +565,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
       const prevPc = asParticipantContact(data.participantContact);
       const leavingPhone = prevPc[String(userId)] || '';
       const inviteJoinedUidByPhone = omitInviteJoinedUidByPhoneForPhone(data.inviteJoinedUidByPhone, leavingPhone);
+      const inviteDisplayByPhone = omitInviteDisplayByPhoneForPhone(data.inviteDisplayByPhone, leavingPhone);
       participants = participants.filter((id) => id !== userId);
       let participantDisplay = omitParticipantDisplay(data.participantDisplay, userId);
       let participantContact = omitParticipantContact(data.participantContact, userId);
@@ -536,6 +584,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
         participantContact,
         participantContactPublic,
         inviteJoinedUidByPhone,
+        inviteDisplayByPhone,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_participant', promotedUserId };

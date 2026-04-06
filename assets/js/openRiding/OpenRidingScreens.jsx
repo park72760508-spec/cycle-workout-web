@@ -153,6 +153,25 @@ function openRidingInvitePhoneDigitsMatch(a, b) {
   return u.slice(-8) === v.slice(-8);
 }
 
+/** inviteJoinedUidByPhone: 저장 키·초대 목록 키 정규화 차이 시에도 UID 조회 */
+function findOpenRidingInviteJoinedUidByPhoneKey(iju, rowKey, normFn) {
+  if (!iju || typeof iju !== 'object' || !rowKey || String(rowKey).length < 8) return null;
+  var rk = String(rowKey);
+  var direct = iju[rk] != null ? iju[rk] : iju[String(rk)];
+  if (direct) {
+    var u0 = String(direct).trim();
+    if (u0) return u0;
+  }
+  var k;
+  for (k in iju) {
+    if (!Object.prototype.hasOwnProperty.call(iju, k)) continue;
+    var nk = normFn(k);
+    if (nk === rk) return String(iju[k] || '').trim() || null;
+    if (nk.length >= 8 && rk.length >= 8 && nk.slice(-8) === rk.slice(-8)) return String(iju[k] || '').trim() || null;
+  }
+  return null;
+}
+
 function findOpenRidingUidForInvitePhone(phone, participantIds, waitlistIds, participantContact) {
   var pc = participantContact && typeof participantContact === 'object' ? participantContact : {};
   function scan(ids) {
@@ -203,8 +222,7 @@ function buildOpenRidingInviteListRows(ride) {
     seen[key] = true;
     var matchedUid = findOpenRidingUidForInvitePhone(phoneStr, part, wait, pc);
     if (!matchedUid && ride.inviteJoinedUidByPhone && typeof ride.inviteJoinedUidByPhone === 'object') {
-      var iju = ride.inviteJoinedUidByPhone;
-      var uidFromJoin = iju[key] != null ? iju[key] : iju[String(key)];
+      var uidFromJoin = findOpenRidingInviteJoinedUidByPhoneKey(ride.inviteJoinedUidByPhone, key, normFn);
       if (uidFromJoin) {
         var uj = String(uidFromJoin).trim();
         var inP = part.some(function (id) {
@@ -214,6 +232,38 @@ function buildOpenRidingInviteListRows(ride) {
           return String(id) === uj;
         });
         if (inP || inW) matchedUid = uj;
+      }
+    }
+    /** inviteDisplayByPhone(참석 신청 시 병합)·participantDisplay 이름 일치로 UID 보정 (구데이터·맵 키 불일치) */
+    if (!matchedUid && ride.inviteDisplayByPhone && typeof ride.inviteDisplayByPhone === 'object') {
+      var idpRow = ride.inviteDisplayByPhone;
+      var invLabel = idpRow[key] != null ? String(idpRow[key]).trim() : idpRow[String(key)] != null ? String(idpRow[String(key)]).trim() : '';
+      if (!invLabel) {
+        var ik;
+        for (ik in idpRow) {
+          if (!Object.prototype.hasOwnProperty.call(idpRow, ik)) continue;
+          var nik = normFn(ik);
+          if (nik === key || (nik.length >= 8 && key.length >= 8 && nik.slice(-8) === key.slice(-8))) {
+            invLabel = String(idpRow[ik] != null ? idpRow[ik] : '').trim();
+            break;
+          }
+        }
+      }
+      if (invLabel) {
+        var pdMap =
+          ride.participantDisplay && typeof ride.participantDisplay === 'object' && !Array.isArray(ride.participantDisplay)
+            ? ride.participantDisplay
+            : {};
+        var cand2 = part.concat(wait);
+        var cj;
+        for (cj = 0; cj < cand2.length; cj++) {
+          var cuid2 = String(cand2[cj]);
+          var pdName2 = pdMap[cuid2] != null ? String(pdMap[cuid2]).trim() : '';
+          if (pdName2 && pdName2 === invLabel) {
+            matchedUid = cuid2;
+            break;
+          }
+        }
       }
     }
     var inPart =
