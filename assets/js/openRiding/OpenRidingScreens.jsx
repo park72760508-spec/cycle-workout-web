@@ -4576,7 +4576,7 @@ function OpenRidingDetail(props) {
                   <div className="divide-y divide-slate-100/90">
                     {packRulesDisp.rot ? (
                       <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                        <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                           로테이션 방식
                         </p>
                         <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
@@ -4586,7 +4586,7 @@ function OpenRidingDetail(props) {
                     ) : null}
                     {packRulesDisp.nodrop ? (
                       <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                        <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                           노드랍 팩라이딩
                         </p>
                         <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
@@ -4595,7 +4595,7 @@ function OpenRidingDetail(props) {
                       </div>
                     ) : null}
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                      <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         오픈(Open) 구간
                       </p>
                       <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
@@ -4607,7 +4607,7 @@ function OpenRidingDetail(props) {
                       </div>
                     </div>
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                      <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         보급 구간
                       </p>
                       <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
@@ -4619,7 +4619,7 @@ function OpenRidingDetail(props) {
                       </div>
                     </div>
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                      <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         회비
                       </p>
                       <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
@@ -4631,7 +4631,7 @@ function OpenRidingDetail(props) {
                       </div>
                     </div>
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                      <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         필수 준비물
                       </p>
                       <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
@@ -4655,7 +4655,7 @@ function OpenRidingDetail(props) {
                       </div>
                     </div>
                     <div className="px-3 py-3.5 sm:px-4 sm:py-4">
-                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                      <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                         모임 취소 조건
                       </p>
                       <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
@@ -4668,7 +4668,7 @@ function OpenRidingDetail(props) {
                     </div>
                     {packRulesDisp.minors ? (
                       <div className="px-3 py-3.5 sm:px-4 sm:py-4 bg-violet-50/40">
-                        <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        <p className="text-sm font-semibold text-violet-900 m-0 mb-2 tracking-tight">
                           미성년자 참석 가능 여부
                         </p>
                         <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
