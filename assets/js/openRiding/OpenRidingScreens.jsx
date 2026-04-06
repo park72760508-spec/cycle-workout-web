@@ -153,43 +153,70 @@ function openRidingInvitePhoneDigitsMatch(a, b) {
   return u.slice(-8) === v.slice(-8);
 }
 
-/** inviteJoinedUidByPhone: 저장 키·초대 목록 키 정규화 차이 시에도 UID 조회 */
-function findOpenRidingInviteJoinedUidByPhoneKey(iju, rowKey, normFn) {
-  if (!iju || typeof iju !== 'object' || !rowKey || String(rowKey).length < 8) return null;
+/** inviteDisplayByPhone: 방장·참석 병합 맵에서 행 키로 표시명 (키 표기·앞자리 차이 보정) */
+function openRidingResolveInviteDisplayByPhoneKey(idp, rowKey, normFn) {
+  if (!idp || typeof idp !== 'object' || !rowKey || String(rowKey).length < 8) return '';
   var rk = String(rowKey);
-  var direct = iju[rk] != null ? iju[rk] : iju[String(rk)];
-  if (direct) {
-    var u0 = String(direct).trim();
-    if (u0) return u0;
+  var direct =
+    idp[rk] != null ? String(idp[rk]).trim() : idp[String(rk)] != null ? String(idp[String(rk)]).trim() : '';
+  if (direct) return direct;
+  var ik;
+  for (ik in idp) {
+    if (!Object.prototype.hasOwnProperty.call(idp, ik)) continue;
+    var nik = normFn(ik);
+    if (nik === rk || (nik.length >= 8 && rk.length >= 8 && nik.slice(-8) === rk.slice(-8))) {
+      var lab = String(idp[ik] != null ? idp[ik] : '').trim();
+      if (lab) return lab;
+    }
   }
-  var k;
-  for (k in iju) {
-    if (!Object.prototype.hasOwnProperty.call(iju, k)) continue;
-    var nk = normFn(k);
-    if (nk === rk) return String(iju[k] || '').trim() || null;
-    if (nk.length >= 8 && rk.length >= 8 && nk.slice(-8) === rk.slice(-8)) return String(iju[k] || '').trim() || null;
+  return '';
+}
+
+/**
+ * 초대 전화 키 → UID (participantContact + inviteJoinedUidByPhone 통합, 뒤 8자리 보조)
+ * 비방장도 문서에 participantContact 전체가 오면 매칭 가능하고, 없으면 inviteJoinedUidByPhone에 의존
+ */
+function buildOpenRidingPhoneKeyToUidMap(ride, part, wait, pc, normFn) {
+  var out = {};
+  var i;
+  var idx;
+  var candUids = [];
+  for (i = 0; i < part.length; i++) candUids.push(String(part[i]));
+  for (i = 0; i < wait.length; i++) candUids.push(String(wait[i]));
+  for (idx = 0; idx < candUids.length; idx++) {
+    var uid = candUids[idx];
+    var ph = pc[uid] != null ? String(pc[uid]) : '';
+    if (!ph) continue;
+    var pk = normFn(ph);
+    if (pk.length >= 8) out[pk] = uid;
+  }
+  var iju = ride && ride.inviteJoinedUidByPhone;
+  if (iju && typeof iju === 'object') {
+    var k2;
+    for (k2 in iju) {
+      if (!Object.prototype.hasOwnProperty.call(iju, k2)) continue;
+      var nk = normFn(k2);
+      var u = String(iju[k2] || '').trim();
+      if (nk.length >= 8 && u) out[nk] = u;
+    }
+  }
+  return out;
+}
+
+function lookupUidFromPhoneKeyMap(map, rowKey) {
+  var rk = String(rowKey);
+  if (!rk || rk.length < 8) return null;
+  if (map[rk]) return map[rk];
+  var mk;
+  for (mk in map) {
+    if (!Object.prototype.hasOwnProperty.call(map, mk)) continue;
+    if (mk === rk) return map[mk];
+    if (rk.length >= 8 && mk.length >= 8 && mk.slice(-8) === rk.slice(-8)) return map[mk];
   }
   return null;
 }
 
-function findOpenRidingUidForInvitePhone(phone, participantIds, waitlistIds, participantContact) {
-  var pc = participantContact && typeof participantContact === 'object' ? participantContact : {};
-  function scan(ids) {
-    if (!Array.isArray(ids)) return null;
-    var i;
-    for (i = 0; i < ids.length; i++) {
-      var uid = String(ids[i]);
-      var ph = pc[uid];
-      if (ph && openRidingInvitePhoneDigitsMatch(phone, ph)) return uid;
-    }
-    return null;
-  }
-  var found = scan(participantIds);
-  if (found) return found;
-  return scan(waitlistIds);
-}
-
-/** 초대 명단 표시용 행 (전화 정규화 키, 참석자·대기 participantContact 로 uid 매칭) */
+/** 초대 명단 표시용 행 (전화 정규화 키, participantContact + inviteJoinedUidByPhone 통합 UID 매칭) */
 function buildOpenRidingInviteListRows(ride) {
   var raw = ride && Array.isArray(ride.invitedList) ? ride.invitedList : [];
   var part = ride && Array.isArray(ride.participants) ? ride.participants : [];
@@ -209,6 +236,7 @@ function buildOpenRidingInviteListRows(ride) {
       : function (x) {
           return String(x || '').replace(/\D/g, '');
         };
+  var phoneKeyToUid = buildOpenRidingPhoneKeyToUidMap(ride, part, wait, pc, normFn);
   var seen = {};
   var rows = [];
   var ii;
@@ -220,35 +248,10 @@ function buildOpenRidingInviteListRows(ride) {
     var key = normFn(phoneStr);
     if (!key || seen[key]) continue;
     seen[key] = true;
-    var matchedUid = findOpenRidingUidForInvitePhone(phoneStr, part, wait, pc);
-    if (!matchedUid && ride.inviteJoinedUidByPhone && typeof ride.inviteJoinedUidByPhone === 'object') {
-      var uidFromJoin = findOpenRidingInviteJoinedUidByPhoneKey(ride.inviteJoinedUidByPhone, key, normFn);
-      if (uidFromJoin) {
-        var uj = String(uidFromJoin).trim();
-        var inP = part.some(function (id) {
-          return String(id) === uj;
-        });
-        var inW = wait.some(function (id) {
-          return String(id) === uj;
-        });
-        if (inP || inW) matchedUid = uj;
-      }
-    }
-    /** inviteDisplayByPhone(참석 신청 시 병합)·participantDisplay 이름 일치로 UID 보정 (구데이터·맵 키 불일치) */
+    var matchedUid = lookupUidFromPhoneKeyMap(phoneKeyToUid, key);
+    /** inviteDisplayByPhone 표시명과 participantDisplay 실명 일치로 UID 보정 (맵만으로 부족할 때) */
     if (!matchedUid && ride.inviteDisplayByPhone && typeof ride.inviteDisplayByPhone === 'object') {
-      var idpRow = ride.inviteDisplayByPhone;
-      var invLabel = idpRow[key] != null ? String(idpRow[key]).trim() : idpRow[String(key)] != null ? String(idpRow[String(key)]).trim() : '';
-      if (!invLabel) {
-        var ik;
-        for (ik in idpRow) {
-          if (!Object.prototype.hasOwnProperty.call(idpRow, ik)) continue;
-          var nik = normFn(ik);
-          if (nik === key || (nik.length >= 8 && key.length >= 8 && nik.slice(-8) === key.slice(-8))) {
-            invLabel = String(idpRow[ik] != null ? idpRow[ik] : '').trim();
-            break;
-          }
-        }
-      }
+      var invLabel = openRidingResolveInviteDisplayByPhoneKey(ride.inviteDisplayByPhone, key, normFn);
       if (invLabel) {
         var pdMap =
           ride.participantDisplay && typeof ride.participantDisplay === 'object' && !Array.isArray(ride.participantDisplay)
@@ -318,6 +321,14 @@ function buildOpenRidingInviteDisplayMap(inviteSelected) {
  */
 function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskContacts, myPhoneForInvite, viewerUserId) {
   var key = r.phoneKey;
+  var normFn =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits
+      : function (x) {
+          return String(x || '').replace(/\D/g, '');
+        };
   var idp =
     ride &&
     ride.inviteDisplayByPhone &&
@@ -325,7 +336,7 @@ function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskCo
     !Array.isArray(ride.inviteDisplayByPhone)
       ? ride.inviteDisplayByPhone
       : {};
-  var fromDoc = idp[key] != null ? String(idp[key]).trim() : idp[String(key)] != null ? String(idp[String(key)]).trim() : '';
+  var fromDoc = openRidingResolveInviteDisplayByPhoneKey(idp, key, normFn);
   if (fromDoc) return fromDoc;
 
   var fromSeed = inviteResolvedLabels[key];
@@ -3625,12 +3636,18 @@ function OpenRidingDetail(props) {
         !Array.isArray(ride.inviteDisplayByPhone)
           ? ride.inviteDisplayByPhone
           : {};
+      var normFnSeed =
+        typeof window !== 'undefined' &&
+        window.openRidingService &&
+        typeof window.openRidingService.normalizePhoneDigits === 'function'
+          ? window.openRidingService.normalizePhoneDigits
+          : function (x) {
+              return String(x || '').replace(/\D/g, '');
+            };
       var seed = {};
       inviteRows.forEach(function (r) {
         var nm = '';
-        if (idpLocal[r.phoneKey] && String(idpLocal[r.phoneKey]).trim()) {
-          nm = String(idpLocal[r.phoneKey]).trim();
-        }
+        nm = openRidingResolveInviteDisplayByPhoneKey(idpLocal, r.phoneKey, normFnSeed);
         if (!nm && r.matchedUid) {
           var nm0 = pdLocal[String(r.matchedUid)];
           if (nm0 && String(nm0).trim()) nm = String(nm0).trim();
