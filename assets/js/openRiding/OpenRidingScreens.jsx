@@ -202,6 +202,20 @@ function buildOpenRidingInviteListRows(ride) {
     if (!key || seen[key]) continue;
     seen[key] = true;
     var matchedUid = findOpenRidingUidForInvitePhone(phoneStr, part, wait, pc);
+    if (!matchedUid && ride.inviteJoinedUidByPhone && typeof ride.inviteJoinedUidByPhone === 'object') {
+      var iju = ride.inviteJoinedUidByPhone;
+      var uidFromJoin = iju[key] != null ? iju[key] : iju[String(key)];
+      if (uidFromJoin) {
+        var uj = String(uidFromJoin).trim();
+        var inP = part.some(function (id) {
+          return String(id) === uj;
+        });
+        var inW = wait.some(function (id) {
+          return String(id) === uj;
+        });
+        if (inP || inW) matchedUid = uj;
+      }
+    }
     var inPart =
       !!matchedUid &&
       part.some(function (id) {

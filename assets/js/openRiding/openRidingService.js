@@ -116,6 +116,39 @@ function sanitizeInviteDisplayByPhone(v) {
 }
 
 /**
+ * 정규화 전화 키 → 참석 신청한 UID (비방장은 participantContact로 전화↔UID 매칭 불가 시 사용)
+ */
+function sanitizeInviteJoinedUidByPhone(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const out = {};
+  Object.keys(v).forEach((k) => {
+    const key = normalizePhoneDigits(k);
+    const uid = String(v[k] != null ? v[k] : '')
+      .trim()
+      .slice(0, 128);
+    if (key.length >= 8 && uid) out[key] = uid;
+  });
+  return out;
+}
+
+function mergeInviteJoinedUidOnJoin(inviteUidMap, phoneRaw, userId) {
+  const base = sanitizeInviteJoinedUidByPhone(inviteUidMap);
+  const key = normalizePhoneDigits(phoneRaw);
+  const uid = String(userId != null ? userId : '').trim();
+  if (key.length < 8 || !uid) return base;
+  return Object.assign({}, base, { [key]: uid });
+}
+
+function omitInviteJoinedUidByPhoneForPhone(inviteUidMap, phoneRaw) {
+  const base = sanitizeInviteJoinedUidByPhone(inviteUidMap);
+  const key = normalizePhoneDigits(phoneRaw);
+  if (key.length < 8) return base;
+  const o = { ...base };
+  delete o[key];
+  return o;
+}
+
+/**
  * 사용자 선호 저장 (users 문서 merge)
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} userId
@@ -419,6 +452,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     participantDisplay = Object.assign({}, participantDisplay, { [String(userId)]: nameLabel });
     if (phoneLabel) participantContact[String(userId)] = phoneLabel;
     participantContactPublic[String(userId)] = contactPublicToParticipants;
+    const inviteJoinedUidByPhone = mergeInviteJoinedUidOnJoin(data.inviteJoinedUidByPhone, phoneLabel, userId);
 
     if (participants.length < max) {
       participants = [...participants, userId];
@@ -427,6 +461,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
         participantDisplay,
         participantContact,
         participantContactPublic,
+        inviteJoinedUidByPhone,
         updatedAt: serverTimestamp()
       });
       return { status: 'joined', role: 'participant' };
@@ -438,6 +473,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
       participantDisplay,
       participantContact,
       participantContactPublic,
+      inviteJoinedUidByPhone,
       updatedAt: serverTimestamp()
     });
     return { status: 'joined', role: 'waitlist', position: waitlist.length };
@@ -463,18 +499,25 @@ export async function leaveRideTransaction(db, rideId, userId) {
     const inPart = participants.includes(userId);
 
     if (inWait) {
+      const prevPc = asParticipantContact(data.participantContact);
+      const leavingPhone = prevPc[String(userId)] || '';
+      const inviteJoinedUidByPhone = omitInviteJoinedUidByPhoneForPhone(data.inviteJoinedUidByPhone, leavingPhone);
       waitlist = waitlist.filter((id) => id !== userId);
       transaction.update(rideRef, {
         waitlist,
         participantDisplay: omitParticipantDisplay(data.participantDisplay, userId),
         participantContact: omitParticipantContact(data.participantContact, userId),
         participantContactPublic: omitParticipantContactPublic(data.participantContactPublic, userId),
+        inviteJoinedUidByPhone,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_waitlist', promotedUserId: null };
     }
 
     if (inPart) {
+      const prevPc = asParticipantContact(data.participantContact);
+      const leavingPhone = prevPc[String(userId)] || '';
+      const inviteJoinedUidByPhone = omitInviteJoinedUidByPhoneForPhone(data.inviteJoinedUidByPhone, leavingPhone);
       participants = participants.filter((id) => id !== userId);
       let participantDisplay = omitParticipantDisplay(data.participantDisplay, userId);
       let participantContact = omitParticipantContact(data.participantContact, userId);
@@ -492,6 +535,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
         participantDisplay,
         participantContact,
         participantContactPublic,
+        inviteJoinedUidByPhone,
         updatedAt: serverTimestamp()
       });
       return { status: 'left_participant', promotedUserId };
