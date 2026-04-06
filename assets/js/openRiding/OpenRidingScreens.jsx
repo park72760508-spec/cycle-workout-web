@@ -3313,6 +3313,12 @@ function OpenRidingDetail(props) {
   var _bomb = useState(false);
   var bombOpen = _bomb[0];
   var setBombOpen = _bomb[1];
+  var _delM = useState(false);
+  var deleteModalOpen = _delM[0];
+  var setDeleteModalOpen = _delM[1];
+  var _delBusy = useState(false);
+  var deleteBusy = _delBusy[0];
+  var setDeleteBusy = _delBusy[1];
   var _cancelBusy = useState(false);
   var cancelBusy = _cancelBusy[0];
   var setCancelBusy = _cancelBusy[1];
@@ -3336,6 +3342,7 @@ function OpenRidingDetail(props) {
     function () {
       setJoinPasswordInput('');
       setJoinShareModalOpen(false);
+      setDeleteModalOpen(false);
     },
     [rideId]
   );
@@ -3553,6 +3560,21 @@ function OpenRidingDetail(props) {
     }
   }
 
+  async function confirmDeleteRide() {
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (!firestore || !userId || typeof svc.deleteRideByHost !== 'function') return;
+    setDeleteBusy(true);
+    try {
+      await svc.deleteRideByHost(firestore, rideId, userId);
+      setDeleteModalOpen(false);
+      if (typeof onBack === 'function') onBack();
+    } catch (err) {
+      console.warn('[openRiding] deleteRideByHost', err);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   if (loading) {
     return <div className="p-6 text-center text-slate-500">불러오는 중…</div>;
   }
@@ -3666,20 +3688,18 @@ function OpenRidingDetail(props) {
       ) : null}
 
       {isHost && !isCancelled ? (
-        <div className="flex justify-end items-center gap-0.5 min-w-0 open-riding-detail-host-actions">
+        <div className="flex justify-end items-center gap-2 flex-wrap min-w-0 open-riding-detail-host-actions px-1">
           <button
             type="button"
-            className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-            style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 active:opacity-90 transition-colors shrink-0"
             onClick={onOpenEdit}
             aria-label="라이딩 수정"
           >
-            <OpenRidingDashboardEditIcon />
+            수정
           </button>
           <button
             type="button"
-            className="open-riding-header-cancel-btn p-2 rounded-lg hover:bg-violet-100 active:opacity-80 transition-all shrink-0"
-            style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50 active:opacity-90 transition-colors shrink-0"
             onClick={function () {
               setBombOpen(true);
             }}
@@ -3688,11 +3708,30 @@ function OpenRidingDetail(props) {
             <img
               src="assets/img/cancel01.png"
               alt=""
-              width={22}
-              height={22}
-              className="block object-contain pointer-events-none"
+              width={20}
+              height={20}
+              className="block object-contain shrink-0"
               decoding="async"
             />
+            <span>취소</span>
+          </button>
+          <button
+            type="button"
+            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 active:opacity-90 transition-colors shrink-0"
+            onClick={function () {
+              setDeleteModalOpen(true);
+            }}
+            aria-label="라이딩 삭제"
+          >
+            <img
+              src="assets/img/delete2.png"
+              alt=""
+              width={20}
+              height={20}
+              className="block object-contain shrink-0"
+              decoding="async"
+            />
+            <span>삭제</span>
           </button>
         </div>
       ) : null}
@@ -4049,6 +4088,59 @@ function OpenRidingDetail(props) {
                 onClick={confirmBombRide}
               >
                 {cancelBusy ? '처리 중…' : '예'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteModalOpen ? (
+        <div
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[10071] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-delete-title"
+          onClick={function () {
+            if (!deleteBusy) setDeleteModalOpen(false);
+          }}
+        >
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-7 px-8 text-center"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <div className="flex items-center justify-center gap-2.5 mb-4 pb-4 border-b border-slate-200">
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 text-sm font-bold border border-red-100"
+                aria-hidden
+              >
+                !
+              </span>
+              <h2 id="open-riding-delete-title" className="text-base font-bold text-slate-800 m-0 leading-tight">
+                라이딩 삭제
+              </h2>
+            </div>
+            <p className="stelvio-exit-confirm-message text-center m-0">등록한 라이딩을 삭제하시겠습니까?</p>
+            <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">삭제 후에는 복구할 수 없습니다.</p>
+            <div className="stelvio-exit-confirm-buttons">
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel inline-flex items-center justify-center disabled:opacity-50"
+                disabled={deleteBusy}
+                onClick={function () {
+                  setDeleteModalOpen(false);
+                }}
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok inline-flex items-center justify-center disabled:opacity-50"
+                disabled={deleteBusy}
+                onClick={confirmDeleteRide}
+              >
+                {deleteBusy ? '처리 중…' : '예'}
               </button>
             </div>
           </div>

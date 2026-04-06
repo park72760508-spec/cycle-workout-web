@@ -278,6 +278,25 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
 }
 
 /**
+ * 방장 전용: 등록 라이딩 문서 영구 삭제 (참가자 수와 무관)
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} hostUserId
+ * @returns {Promise<{ deleted: boolean }>}
+ */
+export async function deleteRideByHost(db, rideId, hostUserId) {
+  const rideRef = doc(db, 'rides', rideId);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(rideRef);
+    if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+    const data = snap.data();
+    if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+    transaction.delete(rideRef);
+  });
+  return { deleted: true };
+}
+
+/**
  * GPX 업로드 후 다운로드 URL
  * @param {import('firebase/storage').FirebaseStorage} storage
  * @param {File|Blob} file
@@ -531,6 +550,7 @@ if (typeof window !== 'undefined') {
     leaveRideTransaction,
     updateRideByHost,
     cancelRideByHost,
+    deleteRideByHost,
     computeMatchingRideDates,
     computeHostRideDateKeys,
     normalizePhoneDigits,
