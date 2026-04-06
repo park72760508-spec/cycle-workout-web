@@ -230,6 +230,41 @@ function formatOpenRidingInviteFallbackLabel(_phoneRaw, _maskedMode) {
 }
 
 /**
+ * 상세 초대 명단 한 줄 표시명: 캐시 → participantDisplay → 본인 초대 행(연락처·UID)이면 프로필 이름 → 폴백
+ */
+function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskContacts, myPhoneForInvite, viewerUserId) {
+  var key = r.phoneKey;
+  var fromSeed = inviteResolvedLabels[key];
+  if (fromSeed && String(fromSeed).trim()) return String(fromSeed).trim();
+
+  var pd =
+    ride &&
+    ride.participantDisplay &&
+    typeof ride.participantDisplay === 'object' &&
+    !Array.isArray(ride.participantDisplay)
+      ? ride.participantDisplay
+      : {};
+  if (r.matchedUid && pd[String(r.matchedUid)] && String(pd[String(r.matchedUid)]).trim()) {
+    return String(pd[String(r.matchedUid)]).trim();
+  }
+
+  var uidStr = viewerUserId != null ? String(viewerUserId) : '';
+  if (uidStr && r.matchedUid && String(r.matchedUid) === uidStr) {
+    var profUid = getOpenRidingProfileDefaults();
+    var selfByUid = profUid.hostName && String(profUid.hostName).trim();
+    if (selfByUid) return selfByUid;
+  }
+
+  if (myPhoneForInvite && openRidingInvitePhoneDigitsMatch(myPhoneForInvite, r.invitePhone)) {
+    var prof = getOpenRidingProfileDefaults();
+    var selfName = prof.hostName && String(prof.hostName).trim();
+    if (selfName) return selfName;
+  }
+
+  return formatOpenRidingInviteFallbackLabel(r.invitePhone, maskContacts);
+}
+
+/**
  * 베이스캠프에 로드된 users / userProfiles 에서 UID 또는 연락처로 이름 조회
  */
 function resolveOpenRidingInviteNameFromLocalUsers(matchedUid, invitePhone) {
@@ -3277,9 +3312,11 @@ function OpenRidingCreateForm(props) {
 }
 
 /** 대시보드 상단 우측 수정 아이콘과 동일 SVG */
-function OpenRidingDashboardEditIcon() {
+function OpenRidingDashboardEditIcon(props) {
+  var p = props || {};
+  var cls = typeof p.className === 'string' && p.className.trim() ? p.className.trim() : 'w-6 h-6 text-gray-600';
   return (
-    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+    <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
     </svg>
   );
@@ -3712,7 +3749,8 @@ function OpenRidingDetail(props) {
             onClick={onOpenEdit}
             aria-label="라이딩 수정"
           >
-            수정
+            <OpenRidingDashboardEditIcon className="w-5 h-5 shrink-0 text-violet-700" />
+            <span>수정</span>
           </button>
           <button
             type="button"
@@ -3850,11 +3888,11 @@ function OpenRidingDetail(props) {
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
         {inviteRows.length > 0 ? (
           <div className="open-riding-detail-invite-fold w-full min-w-0">
-            <div className="open-riding-detail-stat-row items-start gap-2">
+            <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
                 <button
                   type="button"
-                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left font-medium text-slate-700 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-xs font-semibold leading-[1.3] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
                   onClick={function () {
                     setInviteListExpanded(function (v) {
                       return !v;
@@ -3864,16 +3902,14 @@ function OpenRidingDetail(props) {
                   id="open-riding-invite-toggle"
                 >
                   초대 명단{' '}
-                  <span className="text-violet-600 font-semibold tabular-nums" aria-hidden>
+                  <span className="tabular-nums font-semibold text-inherit" aria-hidden>
                     {inviteListExpanded ? '(−)' : '(+)'}
                   </span>
                 </button>
               </span>
               <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
-                <span className="tabular-nums text-sm font-semibold text-slate-800">
-                  {inviteAttendedCount} / {inviteTotalCount}
-                </span>
-                <span className="text-[10px] text-slate-500 leading-tight">참석 / 초대</span>
+                <span className="tabular-nums">{inviteAttendedCount} / {inviteTotalCount}</span>
+                <span className="text-[10px] text-slate-500 leading-tight font-medium">참석 / 초대</span>
               </div>
             </div>
             {inviteListExpanded ? (
@@ -3881,15 +3917,17 @@ function OpenRidingDetail(props) {
                 id="open-riding-detail-invite-listbox"
                 role="region"
                 aria-labelledby="open-riding-invite-toggle"
-                className="open-riding-detail-invite-list m-0 w-full min-w-0 list-none space-y-2 p-0 pt-2 mt-1 border-t border-slate-100 text-right"
+                className="open-riding-detail-invite-list open-riding-detail-invite-list--in-fold m-0 w-full min-w-0 list-none space-y-2 p-0 pt-2 mt-1 border-t border-slate-100 text-right"
               >
                 {inviteRows.map(function (r) {
-                  var named = inviteResolvedLabels[r.phoneKey];
-                  if (!named || !String(named).trim()) {
-                    named = formatOpenRidingInviteFallbackLabel(r.invitePhone, maskContacts);
-                  } else {
-                    named = String(named).trim();
-                  }
+                  var named = getOpenRidingInviteRowDisplayName(
+                    r,
+                    ride,
+                    inviteResolvedLabels,
+                    maskContacts,
+                    myPhoneForInvite,
+                    userId
+                  );
                   var st =
                     r.inviteStatus === 'attended'
                       ? '참석'
