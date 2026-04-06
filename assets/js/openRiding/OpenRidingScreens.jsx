@@ -4568,75 +4568,118 @@ function OpenRidingDetail(props) {
             </div>
             {operationRulesExpanded && packRulesDisp ? (
               <div
-                className="open-riding-detail-invite-list m-0 w-full min-w-0 border-t border-slate-100/90 pt-2 space-y-2.5 text-left"
+                className="open-riding-pack-rules-expanded m-0 w-full min-w-0 border-t border-slate-100/90 pt-3 text-left"
                 role="region"
                 aria-labelledby="open-riding-pack-rules-toggle"
               >
-                <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  아래 운영 방식은 필수 조건은 아니며 옵션 조건으로 빈 값 허용 됩니다.
-                </p>
-                {packRulesDisp.rot ? (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">로테이션 방식</p>
-                    <p className="text-sm text-slate-800 m-0 leading-snug">{packRulesDisp.rot}</p>
+                <div className="rounded-2xl border border-violet-200/50 bg-gradient-to-b from-white via-violet-50/[0.35] to-slate-50/50 shadow-[0_2px_12px_-2px_rgba(109,40,217,0.08)] ring-1 ring-violet-100/30 overflow-hidden">
+                  <div className="divide-y divide-slate-100/90">
+                    {packRulesDisp.rot ? (
+                      <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                        <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                          로테이션 방식
+                        </p>
+                        <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
+                          <p className="text-sm text-slate-800 m-0 leading-relaxed font-medium">{packRulesDisp.rot}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {packRulesDisp.nodrop ? (
+                      <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                        <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                          노드랍 팩라이딩
+                        </p>
+                        <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
+                          <p className="text-sm text-slate-800 m-0 leading-relaxed font-medium">{packRulesDisp.nodrop}</p>
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        오픈(Open) 구간
+                      </p>
+                      <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
+                        {packRulesDisp.openSectionText ? (
+                          <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.openSectionText}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        보급 구간
+                      </p>
+                      <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
+                        {packRulesDisp.supplySectionText ? (
+                          <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.supplySectionText}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        회비
+                      </p>
+                      <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
+                        {packRulesDisp.feeText ? (
+                          <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.feeText}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        필수 준비물
+                      </p>
+                      <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
+                        {packRulesDisp.gearLines.length ? (
+                          <ul className="m-0 pl-0 list-none space-y-1.5 text-sm text-slate-700 leading-snug">
+                            {packRulesDisp.gearLines.map(function (line, ix) {
+                              return (
+                                <li key={ix} className="flex gap-2 items-start">
+                                  <span
+                                    className="mt-2 h-1 w-1 shrink-0 rounded-full bg-violet-400/80"
+                                    aria-hidden
+                                  />
+                                  <span className="min-w-0 flex-1">{line}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-slate-400 m-0 italic">선택된 항목 없음</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-3 py-3.5 sm:px-4 sm:py-4">
+                      <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                        모임 취소 조건
+                      </p>
+                      <div className="ml-1 border-l-[3px] border-slate-300/90 pl-3.5 pr-1 min-h-[1.25rem]">
+                        {packRulesDisp.cancelConditionText ? (
+                          <p className="text-sm text-slate-700 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.cancelConditionText}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 m-0 italic">입력 없음</p>
+                        )}
+                      </div>
+                    </div>
+                    {packRulesDisp.minors ? (
+                      <div className="px-3 py-3.5 sm:px-4 sm:py-4 bg-violet-50/40">
+                        <p className="text-xs font-semibold text-violet-900 m-0 mb-2 tracking-tight">
+                          미성년자 참석 가능 여부
+                        </p>
+                        <div className="ml-1 border-l-[3px] border-violet-400/85 pl-3.5 pr-1">
+                          <p className="text-sm text-slate-800 m-0 leading-relaxed font-semibold">
+                            {packRulesDisp.minors}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-                {packRulesDisp.nodrop ? (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">노드랍 팩라이딩</p>
-                    <p className="text-sm text-slate-800 m-0 leading-snug">{packRulesDisp.nodrop}</p>
-                  </div>
-                ) : null}
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">오픈(Open) 구간</p>
-                  {packRulesDisp.openSectionText ? (
-                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.openSectionText}</p>
-                  ) : (
-                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
-                  )}
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">보급 구간</p>
-                  {packRulesDisp.supplySectionText ? (
-                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.supplySectionText}</p>
-                  ) : (
-                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">회비</p>
-                  {packRulesDisp.feeText ? (
-                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.feeText}</p>
-                  ) : (
-                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">필수 준비물</p>
-                  {packRulesDisp.gearLines.length ? (
-                    <ul className="m-0 pl-4 list-disc text-sm text-slate-800 space-y-0.5">
-                      {packRulesDisp.gearLines.map(function (line, ix) {
-                        return <li key={ix}>{line}</li>;
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-slate-500 m-0">선택된 항목 없음</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">모임 취소 조건</p>
-                  {packRulesDisp.cancelConditionText ? (
-                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.cancelConditionText}</p>
-                  ) : (
-                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
-                  )}
-                </div>
-                {packRulesDisp.minors ? (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">미성년자 참석 가능 여부</p>
-                    <p className="text-sm text-slate-800 m-0 leading-snug">{packRulesDisp.minors}</p>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
