@@ -153,20 +153,40 @@ function openRidingInvitePhoneDigitsMatch(a, b) {
   return u.slice(-8) === v.slice(-8);
 }
 
+/** 방장 폼 자리표시어 — Firestore에 저장되면 상세에서 실명 대신 이 문자열만 보임 */
+function isOpenRidingInvitePlaceholderDisplayName(name) {
+  var s = String(name != null ? name : '').trim();
+  if (!s) return true;
+  if (s === '초대') return true;
+  return false;
+}
+
+/** 프로필 DB·getUserByUid로 덮어써도 되는 임시 표기(끝자리·폴백 등) */
+function isOpenRidingInviteWeakDisplayName(name) {
+  if (isOpenRidingInvitePlaceholderDisplayName(name)) return true;
+  var s = String(name != null ? name : '').trim();
+  if (!s) return true;
+  if (s === '초대 회원') return true;
+  if (s === '초대 대상') return true;
+  if (s.indexOf('초대 대상 ·') === 0) return true;
+  if (s.indexOf('끝자리 ') === 0) return true;
+  return false;
+}
+
 /** inviteDisplayByPhone: 방장·참석 병합 맵에서 행 키로 표시명 (키 표기·앞자리 차이 보정) */
 function openRidingResolveInviteDisplayByPhoneKey(idp, rowKey, normFn) {
   if (!idp || typeof idp !== 'object' || !rowKey || String(rowKey).length < 8) return '';
   var rk = String(rowKey);
   var direct =
     idp[rk] != null ? String(idp[rk]).trim() : idp[String(rk)] != null ? String(idp[String(rk)]).trim() : '';
-  if (direct) return direct;
+  if (direct && !isOpenRidingInvitePlaceholderDisplayName(direct)) return direct;
   var ik;
   for (ik in idp) {
     if (!Object.prototype.hasOwnProperty.call(idp, ik)) continue;
     var nik = normFn(ik);
     if (nik === rk || (nik.length >= 8 && rk.length >= 8 && nik.slice(-8) === rk.slice(-8))) {
       var lab = String(idp[ik] != null ? idp[ik] : '').trim();
-      if (lab) return lab;
+      if (lab && !isOpenRidingInvitePlaceholderDisplayName(lab)) return lab;
     }
   }
   return '';
@@ -291,8 +311,10 @@ function buildOpenRidingInviteListRows(ride) {
   return rows;
 }
 
-/** 초대 명단: 이름을 못 찾을 때 전화번호 대신 일반 라벨(상세·목록 공통) */
-function formatOpenRidingInviteFallbackLabel(_phoneRaw, _maskedMode) {
+/** 초대 명단: 실명 없을 때 행 구분용(끝 4자리) — '초대' 자리표시어와 구분 */
+function formatOpenRidingInviteFallbackLabel(phoneRaw, _maskedMode) {
+  var d = String(phoneRaw != null ? phoneRaw : '').replace(/\D/g, '');
+  if (d.length >= 4) return '초대 대상 · ' + d.slice(-4);
   return '초대 회원';
 }
 
@@ -311,6 +333,7 @@ function buildOpenRidingInviteDisplayMap(inviteSelected) {
     if (!x) return;
     var k = norm(x.phone);
     var nm = x.name != null ? String(x.name).trim() : '';
+    if (isOpenRidingInvitePlaceholderDisplayName(nm)) nm = '';
     if (k.length >= 8 && nm) out[k] = nm.slice(0, 40);
   });
   return out;
@@ -340,7 +363,7 @@ function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskCo
   if (fromDoc) return fromDoc;
 
   var fromSeed = inviteResolvedLabels[key];
-  if (fromSeed && String(fromSeed).trim()) return String(fromSeed).trim();
+  if (fromSeed && String(fromSeed).trim() && !isOpenRidingInviteWeakDisplayName(fromSeed)) return String(fromSeed).trim();
 
   var pd =
     ride &&
@@ -430,43 +453,65 @@ function resolveOpenRidingInviteNameFromLocalUsers(matchedUid, invitePhone) {
   return '';
 }
 
-/** Firestore users.contact 로 초대 번호 프로필 이름 조회 (규칙·데이터 형식에 따라 실패할 수 있음) */
+/** 전화번호 후보(프로필 DB contact 등과 동일 형식으로 맞춤) */
+function buildOpenRidingPhoneLookupCandidates(invitePhone) {
+  var norm =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits(invitePhone)
+      : String(invitePhone || '').replace(/\D/g, '');
+  var candidates = [];
+  if (typeof window.formatPhoneForDB === 'function') {
+    var fdb = window.formatPhoneForDB(String(invitePhone || '').trim());
+    if (fdb) candidates.push(fdb);
+  }
+  if (typeof window.formatPhoneNumber === 'function' && norm) {
+    var fo = window.formatPhoneNumber(norm);
+    if (fo && candidates.indexOf(fo) < 0) candidates.push(fo);
+  }
+  if (norm && candidates.indexOf(norm) < 0) candidates.push(norm);
+  return { norm: norm, candidates: candidates };
+}
+
+/**
+ * 초대 전화 → 표시 이름: 1) 메모리 users/userProfiles 2) Firestore users (contact·phone·phoneNumber·tel)
+ * 일반 회원은 타인 users 문서 쿼리가 규칙상 막힐 수 있음 → 1)이 중요
+ */
 function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
-  if (!firestoreDb || !invitePhone) return Promise.resolve('');
+  if (!invitePhone) return Promise.resolve('');
+  var localFirst = resolveOpenRidingInviteNameFromLocalUsers('', invitePhone);
+  if (localFirst) return Promise.resolve(localFirst);
+  if (!firestoreDb) return Promise.resolve('');
+  var info = buildOpenRidingPhoneLookupCandidates(invitePhone);
+  if (!info.norm || info.norm.length < 8) return Promise.resolve('');
+  var candidates = info.candidates;
+  if (candidates.length === 0) return Promise.resolve('');
   return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
     .then(function (mod) {
       var col = mod.collection(firestoreDb, 'users');
-      var norm =
-        typeof window !== 'undefined' &&
-        window.openRidingService &&
-        typeof window.openRidingService.normalizePhoneDigits === 'function'
-          ? window.openRidingService.normalizePhoneDigits(invitePhone)
-          : String(invitePhone).replace(/\D/g, '');
-      if (!norm || norm.length < 8) return '';
-      var candidates = [];
-      if (typeof window.formatPhoneForDB === 'function') {
-        var fdb = window.formatPhoneForDB(String(invitePhone || '').trim());
-        if (fdb) candidates.push(fdb);
-      }
-      if (typeof window.formatPhoneNumber === 'function') {
-        var fo = window.formatPhoneNumber(norm);
-        if (fo && candidates.indexOf(fo) < 0) candidates.push(fo);
-      }
-      if (candidates.indexOf(norm) < 0) candidates.push(norm);
+      var fields = ['contact', 'phone', 'phoneNumber', 'tel'];
 
-      function tryCandidate(idx) {
-        if (idx >= candidates.length) return Promise.resolve('');
-        var q = mod.query(col, mod.where('contact', '==', candidates[idx]), mod.limit(1));
-        return mod.getDocs(q).then(function (snap) {
-          if (!snap.empty) {
-            var data = snap.docs[0].data();
-            var nm = String((data && data.name) || (data && data.displayName) || '').trim();
-            if (nm) return nm;
-          }
-          return tryCandidate(idx + 1);
-        });
+      function tryField(fieldIdx, candIdx) {
+        if (fieldIdx >= fields.length) return Promise.resolve('');
+        if (candIdx >= candidates.length) return tryField(fieldIdx + 1, 0);
+        var field = fields[fieldIdx];
+        var q = mod.query(col, mod.where(field, '==', candidates[candIdx]), mod.limit(1));
+        return mod
+          .getDocs(q)
+          .then(function (snap) {
+            if (!snap.empty) {
+              var data = snap.docs[0].data();
+              var nm = String((data && data.name) || (data && data.displayName) || '').trim();
+              if (nm) return nm;
+            }
+            return tryField(fieldIdx, candIdx + 1);
+          })
+          .catch(function () {
+            return tryField(fieldIdx, candIdx + 1);
+          });
       }
-      return tryCandidate(0);
+      return tryField(0, 0);
     })
     .catch(function () {
       return '';
@@ -2569,7 +2614,13 @@ function OpenRidingCreateForm(props) {
           var inviteSelected = il.map(function (phone) {
             var p = String(phone != null ? phone : '');
             var k = normFn(p);
-            var nm = idp[k] && String(idp[k]).trim() ? String(idp[k]).trim() : '초대';
+            var nm = idp[k] && String(idp[k]).trim() ? String(idp[k]).trim() : '';
+            if (isOpenRidingInvitePlaceholderDisplayName(nm)) nm = '';
+            if (!nm && k.length >= 4) {
+              nm = '끝자리 ' + k.slice(-4);
+            } else if (!nm) {
+              nm = '초대 대상';
+            }
             return { name: nm, phone: p, key: k };
           });
           setForm({
@@ -3661,7 +3712,8 @@ function OpenRidingDetail(props) {
         if (cancelled || !nm || !String(nm).trim()) return;
         var finalNm = String(nm).trim();
         setInviteResolvedLabels(function (prev) {
-          if (prev[phoneKey] && String(prev[phoneKey]).trim()) return prev;
+          var prevNm = prev[phoneKey] ? String(prev[phoneKey]).trim() : '';
+          if (prevNm && !isOpenRidingInviteWeakDisplayName(prevNm)) return prev;
           var o = {};
           for (var ks in prev) o[ks] = prev[ks];
           o[phoneKey] = finalNm;
@@ -3671,9 +3723,8 @@ function OpenRidingDetail(props) {
 
       inviteRows.forEach(function (r) {
         if (cancelled) return;
-        if (seed[r.phoneKey] && String(seed[r.phoneKey]).trim()) return;
 
-        function tryPhoneLookup() {
+        function tryPhoneProfileLookup() {
           if (!firestore) return;
           lookupOpenRidingUserNameByInvitePhone(firestore, r.invitePhone).then(function (nm) {
             mergeInviteName(r.phoneKey, nm);
@@ -3689,13 +3740,13 @@ function OpenRidingDetail(props) {
                 ? String(row.name != null ? row.name : row.displayName != null ? row.displayName : '').trim()
                 : '';
               if (nm) mergeInviteName(r.phoneKey, nm);
-              else tryPhoneLookup();
+              tryPhoneProfileLookup();
             })
             .catch(function () {
-              tryPhoneLookup();
+              tryPhoneProfileLookup();
             });
         } else {
-          tryPhoneLookup();
+          tryPhoneProfileLookup();
         }
       });
 

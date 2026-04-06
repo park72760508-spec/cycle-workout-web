@@ -110,7 +110,8 @@ function sanitizeInviteDisplayByPhone(v) {
     const label = String(v[k] != null ? v[k] : '')
       .trim()
       .slice(0, 40);
-    if (key.length >= 8 && label) out[key] = label;
+    /** UI 자리표시어 '초대'는 저장하지 않음(상세에서 실명 조회가 막힘) */
+    if (key.length >= 8 && label && label !== '초대') out[key] = label;
   });
   return out;
 }
@@ -165,7 +166,7 @@ function mergeInviteDisplayOnJoin(inviteMap, phoneRaw, nameLabel) {
   const nm = String(nameLabel != null ? nameLabel : '')
     .trim()
     .slice(0, 40);
-  if (key.length < 8 || !nm) return base;
+  if (key.length < 8 || !nm || nm === '초대') return base;
   return Object.assign({}, base, { [key]: nm });
 }
 
