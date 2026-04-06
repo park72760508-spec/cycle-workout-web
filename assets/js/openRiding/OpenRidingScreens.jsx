@@ -3337,12 +3337,16 @@ function OpenRidingDetail(props) {
   var _lvlLd = useState(false);
   var levelAnalysisLoading = _lvlLd[0];
   var setLevelAnalysisLoading = _lvlLd[1];
+  var _invListExp = useState(false);
+  var inviteListExpanded = _invListExp[0];
+  var setInviteListExpanded = _invListExp[1];
 
   useEffect(
     function () {
       setJoinPasswordInput('');
       setJoinShareModalOpen(false);
       setDeleteModalOpen(false);
+      setInviteListExpanded(false);
     },
     [rideId]
   );
@@ -3443,6 +3447,19 @@ function OpenRidingDetail(props) {
     },
     [rideId, ride]
   );
+
+  var inviteAttendedCount = useMemo(
+    function () {
+      var n = 0;
+      var i;
+      for (i = 0; i < inviteRows.length; i++) {
+        if (inviteRows[i].inviteStatus === 'attended') n++;
+      }
+      return n;
+    },
+    [inviteRows]
+  );
+  var inviteTotalCount = inviteRows.length;
 
   var _invLab = useState({});
   var inviteResolvedLabels = _invLab[0];
@@ -3831,10 +3848,41 @@ function OpenRidingDetail(props) {
             : '-'
         )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
-        {inviteRows.length > 0
-          ? statRow(
-              '초대 명단',
-              <ul className="open-riding-detail-invite-list m-0 w-full min-w-0 list-none space-y-2 p-0 text-right">
+        {inviteRows.length > 0 ? (
+          <div className="open-riding-detail-invite-fold w-full min-w-0">
+            <div className="open-riding-detail-stat-row items-start gap-2">
+              <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
+                <button
+                  type="button"
+                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left font-medium text-slate-700 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  onClick={function () {
+                    setInviteListExpanded(function (v) {
+                      return !v;
+                    });
+                  }}
+                  aria-expanded={inviteListExpanded}
+                  id="open-riding-invite-toggle"
+                >
+                  초대 명단{' '}
+                  <span className="text-violet-600 font-semibold tabular-nums" aria-hidden>
+                    {inviteListExpanded ? '(−)' : '(+)'}
+                  </span>
+                </button>
+              </span>
+              <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
+                <span className="tabular-nums text-sm font-semibold text-slate-800">
+                  {inviteAttendedCount} / {inviteTotalCount}
+                </span>
+                <span className="text-[10px] text-slate-500 leading-tight">참석 / 초대</span>
+              </div>
+            </div>
+            {inviteListExpanded ? (
+              <ul
+                id="open-riding-detail-invite-listbox"
+                role="region"
+                aria-labelledby="open-riding-invite-toggle"
+                className="open-riding-detail-invite-list m-0 w-full min-w-0 list-none space-y-2 p-0 pt-2 mt-1 border-t border-slate-100 text-right"
+              >
                 {inviteRows.map(function (r) {
                   var named = inviteResolvedLabels[r.phoneKey];
                   if (!named || !String(named).trim()) {
@@ -3862,8 +3910,9 @@ function OpenRidingDetail(props) {
                   );
                 })}
               </ul>
-            )
-          : null}
+            ) : null}
+          </div>
+        ) : null}
         {statRow('방장', ride.hostName != null ? ride.hostName : '-')}
         {statRow(
           '연락처',
