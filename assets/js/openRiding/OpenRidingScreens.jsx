@@ -453,8 +453,9 @@ function resolveOpenRidingInviteNameFromLocalUsers(matchedUid, invitePhone) {
   return '';
 }
 
-/** 전화번호 후보(프로필 DB contact 등과 동일 형식으로 맞춤) */
+/** 전화번호 후보(프로필 DB contact·phone 등과 동일 형식으로 맞춤) */
 function buildOpenRidingPhoneLookupCandidates(invitePhone) {
+  var raw = String(invitePhone != null ? invitePhone : '').trim();
   var norm =
     typeof window !== 'undefined' &&
     window.openRidingService &&
@@ -462,15 +463,22 @@ function buildOpenRidingPhoneLookupCandidates(invitePhone) {
       ? window.openRidingService.normalizePhoneDigits(invitePhone)
       : String(invitePhone || '').replace(/\D/g, '');
   var candidates = [];
+  function add(x) {
+    var s = x != null ? String(x).trim() : '';
+    if (s && candidates.indexOf(s) < 0) candidates.push(s);
+  }
   if (typeof window.formatPhoneForDB === 'function') {
-    var fdb = window.formatPhoneForDB(String(invitePhone || '').trim());
-    if (fdb) candidates.push(fdb);
+    if (raw) add(window.formatPhoneForDB(raw));
+    if (norm) add(window.formatPhoneForDB(norm));
   }
   if (typeof window.formatPhoneNumber === 'function' && norm) {
-    var fo = window.formatPhoneNumber(norm);
-    if (fo && candidates.indexOf(fo) < 0) candidates.push(fo);
+    add(window.formatPhoneNumber(norm));
   }
-  if (norm && candidates.indexOf(norm) < 0) candidates.push(norm);
+  if (norm) add(norm);
+  if (norm && norm.length >= 10 && norm.charAt(0) === '0') {
+    add('82' + norm.slice(1));
+    add('+82' + norm.slice(1));
+  }
   return { norm: norm, candidates: candidates };
 }
 
