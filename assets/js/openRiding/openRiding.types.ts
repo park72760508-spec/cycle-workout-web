@@ -24,6 +24,14 @@ export interface PackRidingRules {
     water: boolean;
   };
   minorsAllowed: '' | 'yes' | 'no';
+  /** 오픈 구간 안내(옵션, 빈 값 허용) */
+  openSectionText?: string;
+  /** 보급 구간 안내(옵션) */
+  supplySectionText?: string;
+  /** 회비 안내(옵션) */
+  feeText?: string;
+  /** 모임 취소 조건(옵션) */
+  cancelConditionText?: string;
 }
 
 /**

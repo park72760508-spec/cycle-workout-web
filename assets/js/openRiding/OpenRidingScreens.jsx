@@ -28,11 +28,24 @@ function getOpenRidingServiceFns() {
   };
 }
 
+/** 팩 라이딩 룰 — 텍스트 필드 placeholder(가이드, 입력 비필수) */
+var OPEN_RIDING_PACK_TEXT_PLACEHOLDERS = {
+  openSection: '업힐 구간만 오픈 후 정상 대기',
+  supplySection:
+    '1차(출발 후 1시간 후 10분 보급), 2차(반환점, 10분), 3차(라이딩 3시간 후, 15분)',
+  fee: '약 1~2만 원 (식사 및 보급 / 1/N 정산)',
+  cancelCondition: '모임 2시간 전 기상청 기준 비 예보 시 자동 취소, 신청 인원 0명 미만 시 취소'
+};
+
 /** 팩 라이딩 룰 폼 기본값 (생성 폼) */
 function openRidingPackRulesFormDefaults() {
   return {
     packRotation: '',
     packNodrop: '',
+    packOpenSectionText: '',
+    packSupplySectionText: '',
+    packFeeText: '',
+    packCancelConditionText: '',
     packGearHelmet: false,
     packGearLights: false,
     packGearPuncture: false,
@@ -51,11 +64,19 @@ function openRidingApplyPackRulesFromRide(ride) {
           rotation: '',
           nodrop: '',
           gear: { helmet: false, lights: false, puncture: false, water: false },
-          minorsAllowed: ''
+          minorsAllowed: '',
+          openSectionText: '',
+          supplySectionText: '',
+          feeText: '',
+          cancelConditionText: ''
         };
   return {
     packRotation: n.rotation,
     packNodrop: n.nodrop,
+    packOpenSectionText: n.openSectionText != null ? String(n.openSectionText) : '',
+    packSupplySectionText: n.supplySectionText != null ? String(n.supplySectionText) : '',
+    packFeeText: n.feeText != null ? String(n.feeText) : '',
+    packCancelConditionText: n.cancelConditionText != null ? String(n.cancelConditionText) : '',
     packGearHelmet: !!n.gear.helmet,
     packGearLights: !!n.gear.lights,
     packGearPuncture: !!n.gear.puncture,
@@ -87,7 +108,16 @@ function openRidingPackRulesDisplay(prNorm) {
   if (g.water) gearLines.push('식수/개인용');
   var minors =
     pr.minorsAllowed === 'yes' ? '예' : pr.minorsAllowed === 'no' ? '아니오' : '';
-  return { rot: rot, nodrop: nd, gearLines: gearLines, minors: minors };
+  return {
+    rot: rot,
+    nodrop: nd,
+    gearLines: gearLines,
+    minors: minors,
+    openSectionText: String(pr.openSectionText != null ? pr.openSectionText : '').trim(),
+    supplySectionText: String(pr.supplySectionText != null ? pr.supplySectionText : '').trim(),
+    feeText: String(pr.feeText != null ? pr.feeText : '').trim(),
+    cancelConditionText: String(pr.cancelConditionText != null ? pr.cancelConditionText : '').trim()
+  };
 }
 
 /**
@@ -2957,7 +2987,11 @@ function OpenRidingCreateForm(props) {
           puncture: !!form.packGearPuncture,
           water: !!form.packGearWater
         },
-        minorsAllowed: form.packMinorsAllowed
+        minorsAllowed: form.packMinorsAllowed,
+        openSectionText: form.packOpenSectionText,
+        supplySectionText: form.packSupplySectionText,
+        feeText: form.packFeeText,
+        cancelConditionText: form.packCancelConditionText
       };
       if (editRideId && typeof updateRideByHost === 'function') {
         await updateRideByHost(firestore, editRideId, hostUserId, {
@@ -3520,20 +3554,36 @@ function OpenRidingCreateForm(props) {
           </label>
         </div>
 
-        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
-          <p className="text-xs font-semibold text-slate-600 m-0">오픈(Open) 구간 (가이드)</p>
-          <p className="text-xs text-slate-600 m-0 leading-relaxed">업힐 구간만 오픈 후 정상 대기</p>
-        </div>
-        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
-          <p className="text-xs font-semibold text-slate-600 m-0">보급 구간 (가이드)</p>
-          <p className="text-xs text-slate-600 m-0 leading-relaxed">
-            1차(출발 후 1시간 후 10분 보급), 2차(반환점, 10분), 3차(라이딩 3시간 후, 15분)
-          </p>
-        </div>
-        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
-          <p className="text-xs font-semibold text-slate-600 m-0">회비 (가이드)</p>
-          <p className="text-xs text-slate-600 m-0 leading-relaxed">약 1~2만 원 (식사 및 보급 / 1/N 정산)</p>
-        </div>
+        <label className="block text-xs font-semibold text-slate-700">
+          오픈(Open) 구간
+          <textarea
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
+            rows={2}
+            placeholder={OPEN_RIDING_PACK_TEXT_PLACEHOLDERS.openSection}
+            value={form.packOpenSectionText}
+            onChange={function (e) { set('packOpenSectionText', e.target.value); }}
+          />
+        </label>
+        <label className="block text-xs font-semibold text-slate-700">
+          보급 구간
+          <textarea
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
+            rows={2}
+            placeholder={OPEN_RIDING_PACK_TEXT_PLACEHOLDERS.supplySection}
+            value={form.packSupplySectionText}
+            onChange={function (e) { set('packSupplySectionText', e.target.value); }}
+          />
+        </label>
+        <label className="block text-xs font-semibold text-slate-700">
+          회비
+          <input
+            type="text"
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
+            placeholder={OPEN_RIDING_PACK_TEXT_PLACEHOLDERS.fee}
+            value={form.packFeeText}
+            onChange={function (e) { set('packFeeText', e.target.value); }}
+          />
+        </label>
 
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-700 block">필수 준비물 (체크)</span>
@@ -3575,12 +3625,16 @@ function OpenRidingCreateForm(props) {
           </label>
         </div>
 
-        <div className="rounded-lg border border-dashed border-slate-200 bg-white/80 px-2.5 py-2 space-y-2">
-          <p className="text-xs font-semibold text-slate-600 m-0">모임 취소 조건 (가이드)</p>
-          <p className="text-xs text-slate-600 m-0 leading-relaxed">
-            모임 2시간 전 기상청 기준 비 예보 시 자동 취소, 신청 인원 0명 미만 시 취소
-          </p>
-        </div>
+        <label className="block text-xs font-semibold text-slate-700">
+          모임 취소 조건
+          <textarea
+            className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
+            rows={2}
+            placeholder={OPEN_RIDING_PACK_TEXT_PLACEHOLDERS.cancelCondition}
+            value={form.packCancelConditionText}
+            onChange={function (e) { set('packCancelConditionText', e.target.value); }}
+          />
+        </label>
 
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-700 block">미성년자 참석 가능 여부</span>
@@ -3947,7 +4001,11 @@ function OpenRidingDetail(props) {
         rotation: '',
         nodrop: '',
         gear: { helmet: false, lights: false, puncture: false, water: false },
-        minorsAllowed: ''
+        minorsAllowed: '',
+        openSectionText: '',
+        supplySectionText: '',
+        feeText: '',
+        cancelConditionText: ''
       };
     },
     [rideId, ride]
@@ -4530,18 +4588,28 @@ function OpenRidingDetail(props) {
                   </div>
                 ) : null}
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">오픈(Open) 구간 (가이드)</p>
-                  <p className="text-xs text-slate-600 m-0 leading-relaxed">업힐 구간만 오픈 후 정상 대기</p>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">오픈(Open) 구간</p>
+                  {packRulesDisp.openSectionText ? (
+                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.openSectionText}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
+                  )}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">보급 구간 (가이드)</p>
-                  <p className="text-xs text-slate-600 m-0 leading-relaxed">
-                    1차(출발 후 1시간 후 10분 보급), 2차(반환점, 10분), 3차(라이딩 3시간 후, 15분)
-                  </p>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">보급 구간</p>
+                  {packRulesDisp.supplySectionText ? (
+                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.supplySectionText}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
+                  )}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">회비 (가이드)</p>
-                  <p className="text-xs text-slate-600 m-0 leading-relaxed">약 1~2만 원 (식사 및 보급 / 1/N 정산)</p>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">회비</p>
+                  {packRulesDisp.feeText ? (
+                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.feeText}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">필수 준비물</p>
@@ -4556,10 +4624,12 @@ function OpenRidingDetail(props) {
                   )}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">모임 취소 조건 (가이드)</p>
-                  <p className="text-xs text-slate-600 m-0 leading-relaxed">
-                    모임 2시간 전 기상청 기준 비 예보 시 자동 취소, 신청 인원 0명 미만 시 취소
-                  </p>
+                  <p className="text-xs font-semibold text-slate-600 m-0 mb-0.5">모임 취소 조건</p>
+                  {packRulesDisp.cancelConditionText ? (
+                    <p className="text-xs text-slate-800 m-0 leading-relaxed whitespace-pre-wrap">{packRulesDisp.cancelConditionText}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500 m-0">입력 없음</p>
+                  )}
                 </div>
                 {packRulesDisp.minors ? (
                   <div>

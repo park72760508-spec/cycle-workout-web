@@ -28,10 +28,17 @@ function asStringArray(v) {
   return Array.isArray(v) ? v.map((x) => String(x)) : [];
 }
 
+/** @param {unknown} v @param {number} maxLen */
+function trimPackText(v, maxLen) {
+  const t = String(v != null ? v : '').trim();
+  if (!t) return '';
+  return t.length > maxLen ? t.slice(0, maxLen) : t;
+}
+
 /**
  * 팩 라이딩 룰(운영 방식) — 옵션 필드만 저장, 빈 값 허용
  * @param {unknown} input
- * @returns {{ rotation: string; nodrop: string; gear: { helmet: boolean; lights: boolean; puncture: boolean; water: boolean }; minorsAllowed: string }}
+ * @returns {{ rotation: string; nodrop: string; gear: { helmet: boolean; lights: boolean; puncture: boolean; water: boolean }; minorsAllowed: string; openSectionText: string; supplySectionText: string; feeText: string; cancelConditionText: string }}
  */
 export function normalizePackRidingRules(input) {
   const src = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
@@ -51,7 +58,11 @@ export function normalizePackRidingRules(input) {
       puncture: !!gearIn.puncture,
       water: !!gearIn.water
     },
-    minorsAllowed
+    minorsAllowed,
+    openSectionText: trimPackText(src.openSectionText, 1000),
+    supplySectionText: trimPackText(src.supplySectionText, 1000),
+    feeText: trimPackText(src.feeText, 500),
+    cancelConditionText: trimPackText(src.cancelConditionText, 1000)
   };
 }
 
