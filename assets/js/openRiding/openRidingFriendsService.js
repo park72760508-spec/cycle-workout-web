@@ -12,6 +12,7 @@ import {
   limit,
   setDoc,
   updateDoc,
+  deleteDoc,
   writeBatch,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
@@ -431,6 +432,18 @@ export async function cancelFriendRequest(db, fromUid, toUid) {
   await updateDoc(ref, { status: 'cancelled', updatedAt: serverTimestamp() });
 }
 
+/** 발신자만: 취소·거절된 요청을 목록에서 제거(문서 삭제) */
+export async function deleteFriendRequestForSender(db, fromUid, toUid) {
+  const ref = doc(db, 'friendRequests', friendRequestDocId(fromUid, toUid));
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const d = snap.data();
+  if (String(d.fromUid) !== String(fromUid)) throw new Error('FORBIDDEN');
+  const st = String(d.status || '');
+  if (st !== 'cancelled' && st !== 'rejected') throw new Error('CANNOT_DELETE');
+  await deleteDoc(ref);
+}
+
 /**
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} fromUid
@@ -477,7 +490,7 @@ export async function rejectFriendRequest(db, fromUid, toUid) {
   if (!snap.exists()) throw new Error('NOT_FOUND');
   const d = snap.data();
   if (String(d.toUid) !== String(toUid)) throw new Error('FORBIDDEN');
-  if (String(d.status) !== 'pending' && String(d.status) !== 'rejected') throw new Error('CANNOT_REJECT');
+  if (String(d.status) !== 'pending') throw new Error('CANNOT_REJECT');
   await updateDoc(ref, { status: 'rejected', updatedAt: serverTimestamp() });
 }
 
@@ -569,6 +582,7 @@ if (typeof window !== 'undefined') {
     getFriendSearchRowStatus,
     sendFriendRequest,
     cancelFriendRequest,
+    deleteFriendRequestForSender,
     acceptFriendRequest,
     rejectFriendRequest,
     reopenFriendRequestToPending,

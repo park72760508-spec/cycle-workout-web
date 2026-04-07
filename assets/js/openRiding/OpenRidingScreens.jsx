@@ -5154,7 +5154,6 @@ function OpenRidingDetail(props) {
 function OpenRidingFriendsManage(props) {
   var firestore = props.firestore;
   var userId = props.userId || '';
-  var onBack = props.onBack || function () {};
 
   var _b = useState({
     friends: [],
@@ -5428,67 +5427,91 @@ function OpenRidingFriendsManage(props) {
             {outgoingList.length === 0 ? (
               <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
             ) : (
-              <ul className="space-y-2 m-0 p-0 list-none">
-                {outgoingList.map(function (row) {
+              <ul className="m-0 p-0 list-none rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 text-xs sm:text-sm">
+                {outgoingList.map(function (row, idx) {
                   var st = String(row.status || '');
                   var to = String(row.toUid || '');
                   return (
                     <li
                       key={String(row.id || 'out-' + to)}
-                      className="rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                      className="flex gap-2 px-2 py-2.5 items-start sm:items-center"
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-800 m-0">{outgoingDisplayName(row)}</p>
-                        <p className="text-xs text-slate-600 m-0 break-all">{outgoingContactForDisplay(row)}</p>
-                        <p className="text-[11px] text-slate-500 m-0 mt-0.5">상태: {statusKo(st)}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 shrink-0">
-                        {st === 'pending' ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 bg-white hover:bg-amber-50"
-                            disabled={actionBusy}
-                            onClick={function () {
-                              var fr = window.openRidingFriendsService || {};
-                              if (typeof fr.cancelFriendRequest !== 'function') return;
-                              setActionBusy(true);
-                              fr.cancelFriendRequest(firestore, userId, to).then(refresh).catch(function (e) {
-                                alert(e && e.message ? e.message : '취소 실패');
-                              }).finally(function () {
-                                setActionBusy(false);
-                              });
-                            }}
-                          >
-                            요청 취소
-                          </button>
-                        ) : null}
-                        {st === 'rejected' || st === 'cancelled' ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-violet-200 text-violet-800 bg-white hover:bg-violet-50"
-                            disabled={actionBusy}
-                            onClick={function () {
-                              var fr = window.openRidingFriendsService || {};
-                              if (typeof fr.sendFriendRequest !== 'function') return;
-                              var pr = profForSend();
-                              if (!pr.fromContact) {
-                                alert('프로필 연락처를 등록해 주세요.');
-                                return;
-                              }
-                              setActionBusy(true);
-                              fr.sendFriendRequest(firestore, userId, to, pr, {
-                                targetName: outgoingDisplayName(row),
-                                targetContact: outgoingContact(row)
-                              }).then(refresh).catch(function (e) {
-                                alert(e && e.message ? e.message : '재요청 실패');
-                              }).finally(function () {
-                                setActionBusy(false);
-                              });
-                            }}
-                          >
-                            다시 요청
-                          </button>
-                        ) : null}
+                      <span className="shrink-0 w-6 text-right text-slate-400 tabular-nums font-normal pt-0.5 sm:pt-0">
+                        {idx + 1}.
+                      </span>
+                      <div className="flex-1 min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 min-w-0">
+                          <span className="font-semibold text-slate-800">{outgoingDisplayName(row)}</span>
+                          <span className="text-slate-600 tabular-nums break-all">{outgoingContactForDisplay(row)}</span>
+                          <span className="text-slate-500">{statusKo(st)}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 shrink-0">
+                          {st === 'pending' ? (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 bg-white hover:bg-amber-50"
+                              disabled={actionBusy}
+                              onClick={function () {
+                                var fr = window.openRidingFriendsService || {};
+                                if (typeof fr.cancelFriendRequest !== 'function') return;
+                                setActionBusy(true);
+                                fr.cancelFriendRequest(firestore, userId, to).then(refresh).catch(function (e) {
+                                  alert(e && e.message ? e.message : '취소 실패');
+                                }).finally(function () {
+                                  setActionBusy(false);
+                                });
+                              }}
+                            >
+                              요청 취소
+                            </button>
+                          ) : null}
+                          {st === 'rejected' || st === 'cancelled' ? (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-violet-200 text-violet-800 bg-white hover:bg-violet-50"
+                              disabled={actionBusy}
+                              onClick={function () {
+                                var fr = window.openRidingFriendsService || {};
+                                if (typeof fr.sendFriendRequest !== 'function') return;
+                                var pr = profForSend();
+                                if (!pr.fromContact) {
+                                  alert('프로필 연락처를 등록해 주세요.');
+                                  return;
+                                }
+                                setActionBusy(true);
+                                fr.sendFriendRequest(firestore, userId, to, pr, {
+                                  targetName: outgoingDisplayName(row),
+                                  targetContact: outgoingContact(row)
+                                }).then(refresh).catch(function (e) {
+                                  alert(e && e.message ? e.message : '재요청 실패');
+                                }).finally(function () {
+                                  setActionBusy(false);
+                                });
+                              }}
+                            >
+                              다시 요청
+                            </button>
+                          ) : null}
+                          {st === 'rejected' || st === 'cancelled' ? (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-50"
+                              disabled={actionBusy}
+                              onClick={function () {
+                                var fr = window.openRidingFriendsService || {};
+                                if (typeof fr.deleteFriendRequestForSender !== 'function') return;
+                                setActionBusy(true);
+                                fr.deleteFriendRequestForSender(firestore, userId, to).then(refresh).catch(function (e) {
+                                  alert(e && e.message ? e.message : '삭제 실패');
+                                }).finally(function () {
+                                  setActionBusy(false);
+                                });
+                              }}
+                            >
+                              삭제
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </li>
                   );
@@ -5631,84 +5654,70 @@ function OpenRidingFriendsManage(props) {
             {incomingList.length === 0 ? (
               <p className="text-xs text-slate-500 m-0">새 요청이 없습니다.</p>
             ) : (
-              <ul className="space-y-2 m-0 p-0 list-none">
-                {incomingList.map(function (row) {
+              <ul className="m-0 p-0 list-none rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 text-xs sm:text-sm">
+                {incomingList.map(function (row, idx) {
                   var st = String(row.status || '');
                   var from = String(row.fromUid || '');
                   return (
                     <li
                       key={String(row.id || 'in-' + from)}
-                      className="rounded-lg border border-violet-100 bg-violet-50/50 px-2 py-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2"
+                      className="flex gap-2 px-2 py-2.5 items-start sm:items-center"
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-800 m-0">
-                          {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
-                        </p>
-                        <p className="text-xs text-slate-600 m-0 break-all">{incomingContactForDisplay(row)}</p>
-                        <p className="text-[11px] text-slate-500 m-0 mt-0.5">상태: {statusKo(st)}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 shrink-0">
-                        {st === 'pending' || st === 'rejected' ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                            disabled={actionBusy}
-                            onClick={function () {
-                              if (!acceptProfMemo.toContact) {
-                                alert('수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.');
-                                return;
-                              }
-                              var fr = window.openRidingFriendsService || {};
-                              if (typeof fr.acceptFriendRequest !== 'function') return;
-                              setActionBusy(true);
-                              fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(refresh).catch(function (e) {
-                                alert(e && e.message ? e.message : '수락 실패');
-                              }).finally(function () {
-                                setActionBusy(false);
-                              });
-                            }}
-                          >
-                            수락
-                          </button>
-                        ) : null}
-                        {st === 'pending' ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                            disabled={actionBusy}
-                            onClick={function () {
-                              var fr = window.openRidingFriendsService || {};
-                              if (typeof fr.rejectFriendRequest !== 'function') return;
-                              setActionBusy(true);
-                              fr.rejectFriendRequest(firestore, from, userId).then(refresh).catch(function (e) {
-                                alert(e && e.message ? e.message : '거절 실패');
-                              }).finally(function () {
-                                setActionBusy(false);
-                              });
-                            }}
-                          >
-                            거절
-                          </button>
-                        ) : null}
-                        {st === 'rejected' ? (
-                          <button
-                            type="button"
-                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                            disabled={actionBusy}
-                            onClick={function () {
-                              var fr = window.openRidingFriendsService || {};
-                              if (typeof fr.reopenFriendRequestToPending !== 'function') return;
-                              setActionBusy(true);
-                              fr.reopenFriendRequestToPending(firestore, from, userId).then(refresh).catch(function (e) {
-                                alert(e && e.message ? e.message : '처리 실패');
-                              }).finally(function () {
-                                setActionBusy(false);
-                              });
-                            }}
-                          >
-                            대기로 변경
-                          </button>
-                        ) : null}
+                      <span className="shrink-0 w-6 text-right text-slate-400 tabular-nums font-normal pt-0.5 sm:pt-0">
+                        {idx + 1}.
+                      </span>
+                      <div className="flex-1 min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 min-w-0">
+                          <span className="font-semibold text-slate-800">
+                            {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
+                          </span>
+                          <span className="text-slate-600 tabular-nums break-all">{incomingContactForDisplay(row)}</span>
+                          {st === 'rejected' ? <span className="text-slate-500">{statusKo(st)}</span> : null}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 shrink-0">
+                          {st === 'pending' || st === 'rejected' ? (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                              disabled={actionBusy}
+                              onClick={function () {
+                                if (!acceptProfMemo.toContact) {
+                                  alert('수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.');
+                                  return;
+                                }
+                                var fr = window.openRidingFriendsService || {};
+                                if (typeof fr.acceptFriendRequest !== 'function') return;
+                                setActionBusy(true);
+                                fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(refresh).catch(function (e) {
+                                  alert(e && e.message ? e.message : '수락 실패');
+                                }).finally(function () {
+                                  setActionBusy(false);
+                                });
+                              }}
+                            >
+                              수락
+                            </button>
+                          ) : null}
+                          {st === 'pending' ? (
+                            <button
+                              type="button"
+                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                              disabled={actionBusy}
+                              onClick={function () {
+                                var fr = window.openRidingFriendsService || {};
+                                if (typeof fr.rejectFriendRequest !== 'function') return;
+                                setActionBusy(true);
+                                fr.rejectFriendRequest(firestore, from, userId).then(refresh).catch(function (e) {
+                                  alert(e && e.message ? e.message : '거절 실패');
+                                }).finally(function () {
+                                  setActionBusy(false);
+                                });
+                              }}
+                            >
+                              거절
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </li>
                   );
@@ -5720,15 +5729,6 @@ function OpenRidingFriendsManage(props) {
 
         {bundle.err ? <p className="text-xs text-red-600 m-0 px-1">{bundle.err}</p> : null}
 
-        <div className="open-riding-bottom-actions">
-          <button
-            type="button"
-            className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none hover:bg-violet-700"
-            onClick={onBack}
-          >
-            닫기
-          </button>
-        </div>
         <OpenRidingBottomLogoBar />
       </div>
     </div>
