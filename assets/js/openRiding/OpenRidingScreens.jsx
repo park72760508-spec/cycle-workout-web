@@ -329,7 +329,10 @@ function lookupUidFromPhoneKeyMap(map, rowKey) {
   return null;
 }
 
-/** 초대 명단 표시용 행 (전화 정규화 키, participantContact + inviteJoinedUidByPhone 통합 UID 매칭) */
+/**
+ * 초대 명단 표시용 행 (전화 정규화 키, participantContact + inviteJoinedUidByPhone 통합 UID 매칭)
+ * 참석 신청한 초대 대상만 포함(참석 확정·대기). 미신청 초대 번호는 목록에 넣지 않음.
+ */
 function buildOpenRidingInviteListRows(ride) {
   var raw = ride && Array.isArray(ride.invitedList) ? ride.invitedList : [];
   var part = ride && Array.isArray(ride.participants) ? ride.participants : [];
@@ -392,8 +395,9 @@ function buildOpenRidingInviteListRows(ride) {
       wait.some(function (id) {
         return String(id) === String(matchedUid);
       });
-    /** 참석 확정 | 대기 명단만 신청 | 미신청(연락처 매칭 없음) */
+    /** 참석 확정 | 대기 — 미신청·미매칭 행은 초대 명단에 표시하지 않음 */
     var inviteStatus = inPart ? 'attended' : inWait ? 'wait' : 'none';
+    if (inviteStatus === 'none') continue;
     rows.push({
       phoneKey: key,
       invitePhone: phoneStr,
@@ -433,41 +437,14 @@ function buildOpenRidingInviteDisplayMap(inviteSelected) {
 }
 
 /**
- * 상세 초대 명단 한 줄 표시명: 문서 저장명 → 캐시 → participantDisplay → 본인 초대 행 → 폴백
+ * 상세 초대 명단 한 줄 표시명: Firestore/UID 조회 캐시 → 본인 행 → 폴백
+ * inviteDisplayByPhone·participantDisplay 는 주소록/구버전 표기와 섞일 수 있어 표시에 사용하지 않음.
  */
 function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskContacts, myPhoneForInvite, viewerUserId) {
   var key = r.phoneKey;
-  var normFn =
-    typeof window !== 'undefined' &&
-    window.openRidingService &&
-    typeof window.openRidingService.normalizePhoneDigits === 'function'
-      ? window.openRidingService.normalizePhoneDigits
-      : function (x) {
-          return String(x || '').replace(/\D/g, '');
-        };
-  var idp =
-    ride &&
-    ride.inviteDisplayByPhone &&
-    typeof ride.inviteDisplayByPhone === 'object' &&
-    !Array.isArray(ride.inviteDisplayByPhone)
-      ? ride.inviteDisplayByPhone
-      : {};
-  var fromDoc = openRidingResolveInviteDisplayByPhoneKey(idp, key, normFn);
-  if (fromDoc) return fromDoc;
 
   var fromSeed = inviteResolvedLabels[key];
   if (fromSeed && String(fromSeed).trim() && !isOpenRidingInviteWeakDisplayName(fromSeed)) return String(fromSeed).trim();
-
-  var pd =
-    ride &&
-    ride.participantDisplay &&
-    typeof ride.participantDisplay === 'object' &&
-    !Array.isArray(ride.participantDisplay)
-      ? ride.participantDisplay
-      : {};
-  if (r.matchedUid && pd[String(r.matchedUid)] && String(pd[String(r.matchedUid)]).trim()) {
-    return String(pd[String(r.matchedUid)]).trim();
-  }
 
   var uidStr = viewerUserId != null ? String(viewerUserId) : '';
   if (uidStr && r.matchedUid && String(r.matchedUid) === uidStr) {
@@ -560,6 +537,25 @@ function buildOpenRidingPhoneLookupCandidates(invitePhone) {
     var s = x != null ? String(x).trim() : '';
     if (s && candidates.indexOf(s) < 0) candidates.push(s);
   }
+  /** users.contact 등에 흔한 표기(예: "010-9135-4272") — 쿼리 == 일치용 */
+  function addKoreanDialVariants(digits) {
+    var d = String(digits || '').replace(/\D/g, '');
+    if (d.length < 10) return;
+    if (d.length === 11 && d.indexOf('010') === 0) {
+      add(d.slice(0, 3) + '-' + d.slice(3, 7) + '-' + d.slice(7, 11));
+      add(d.slice(0, 3) + ' ' + d.slice(3, 7) + ' ' + d.slice(7, 11));
+      var rest11 = d.slice(3);
+      add('+82-10-' + rest11.slice(0, 4) + '-' + rest11.slice(4, 8));
+      add('+82 10-' + rest11.slice(0, 4) + '-' + rest11.slice(4, 8));
+    }
+    if (d.length === 11 && d.indexOf('011') === 0) {
+      add(d.slice(0, 3) + '-' + d.slice(3, 7) + '-' + d.slice(7, 11));
+    }
+    if (d.length === 10 && d.charAt(0) === '0') {
+      add(d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6, 10));
+      add(d.slice(0, 2) + '-' + d.slice(2, 6) + '-' + d.slice(6, 10));
+    }
+  }
   if (typeof window.formatPhoneForDB === 'function') {
     if (raw) add(window.formatPhoneForDB(raw));
     if (norm) add(window.formatPhoneForDB(norm));
@@ -567,7 +563,10 @@ function buildOpenRidingPhoneLookupCandidates(invitePhone) {
   if (typeof window.formatPhoneNumber === 'function' && norm) {
     add(window.formatPhoneNumber(norm));
   }
-  if (norm) add(norm);
+  if (norm) {
+    add(norm);
+    addKoreanDialVariants(norm);
+  }
   if (norm && norm.length >= 10 && norm.charAt(0) === '0') {
     add('82' + norm.slice(1));
     add('+82' + norm.slice(1));
@@ -576,18 +575,22 @@ function buildOpenRidingPhoneLookupCandidates(invitePhone) {
 }
 
 /**
- * 초대 전화 → 표시 이름: 1) 메모리 users/userProfiles 2) Firestore users (contact·phone·phoneNumber·tel)
- * 일반 회원은 타인 users 문서 쿼리가 규칙상 막힐 수 있음 → 1)이 중요
+ * 초대 전화 → 표시 이름: 1) Firestore users (contact·phone·phoneNumber·tel) 2) 메모리 users/userProfiles
+ * 규칙상 타인 문서 조회는 전화 필드 일치 문서에 한해 허용됨(docs/firestore.rules).
  */
 function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
   if (!invitePhone) return Promise.resolve('');
-  var localFirst = resolveOpenRidingInviteNameFromLocalUsers('', invitePhone);
-  if (localFirst) return Promise.resolve(localFirst);
-  if (!firestoreDb) return Promise.resolve('');
+  if (!firestoreDb) {
+    return Promise.resolve(resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '');
+  }
   var info = buildOpenRidingPhoneLookupCandidates(invitePhone);
-  if (!info.norm || info.norm.length < 8) return Promise.resolve('');
+  if (!info.norm || info.norm.length < 8) {
+    return Promise.resolve(resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '');
+  }
   var candidates = info.candidates;
-  if (candidates.length === 0) return Promise.resolve('');
+  if (candidates.length === 0) {
+    return Promise.resolve(resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '');
+  }
   return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
     .then(function (mod) {
       var col = mod.collection(firestoreDb, 'users');
@@ -614,8 +617,12 @@ function lookupOpenRidingUserNameByInvitePhone(firestoreDb, invitePhone) {
       }
       return tryField(0, 0);
     })
+    .then(function (fromFs) {
+      if (fromFs && String(fromFs).trim()) return String(fromFs).trim();
+      return resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '';
+    })
     .catch(function () {
-      return '';
+      return resolveOpenRidingInviteNameFromLocalUsers('', invitePhone) || '';
     });
 }
 
@@ -4024,40 +4031,18 @@ function OpenRidingDetail(props) {
 
   useEffect(
     function () {
-      if (!ride || !inviteRows.length) {
+      var hasAppliedForInvite =
+        role === 'participant' || (role && typeof role === 'object' && role.type === 'waitlist');
+      /** 참가 미신청·비방장은 초대 명단 미표시 — 조회·시드 생략 */
+      if (!ride || !inviteRows.length || (!isHost && !hasAppliedForInvite)) {
         setInviteResolvedLabels({});
         return undefined;
       }
       var cancelled = false;
-      var pdLocal =
-        ride.participantDisplay &&
-        typeof ride.participantDisplay === 'object' &&
-        !Array.isArray(ride.participantDisplay)
-          ? ride.participantDisplay
-          : {};
-      var idpLocal =
-        ride.inviteDisplayByPhone &&
-        typeof ride.inviteDisplayByPhone === 'object' &&
-        !Array.isArray(ride.inviteDisplayByPhone)
-          ? ride.inviteDisplayByPhone
-          : {};
-      var normFnSeed =
-        typeof window !== 'undefined' &&
-        window.openRidingService &&
-        typeof window.openRidingService.normalizePhoneDigits === 'function'
-          ? window.openRidingService.normalizePhoneDigits
-          : function (x) {
-              return String(x || '').replace(/\D/g, '');
-            };
+      /** 시드: 메모리 캐시만(빠른 1프레임). 본 이름은 getUserByUid·Firestore users 전화 조회로 덮어씀 */
       var seed = {};
       inviteRows.forEach(function (r) {
-        var nm = '';
-        nm = openRidingResolveInviteDisplayByPhoneKey(idpLocal, r.phoneKey, normFnSeed);
-        if (!nm && r.matchedUid) {
-          var nm0 = pdLocal[String(r.matchedUid)];
-          if (nm0 && String(nm0).trim()) nm = String(nm0).trim();
-        }
-        if (!nm) nm = resolveOpenRidingInviteNameFromLocalUsers(r.matchedUid, r.invitePhone);
+        var nm = resolveOpenRidingInviteNameFromLocalUsers(r.matchedUid, r.invitePhone);
         if (nm) seed[r.phoneKey] = nm;
       });
       setInviteResolvedLabels(seed);
@@ -4066,8 +4051,6 @@ function OpenRidingDetail(props) {
         if (cancelled || !nm || !String(nm).trim()) return;
         var finalNm = String(nm).trim();
         setInviteResolvedLabels(function (prev) {
-          var prevNm = prev[phoneKey] ? String(prev[phoneKey]).trim() : '';
-          if (prevNm && !isOpenRidingInviteWeakDisplayName(prevNm)) return prev;
           var o = {};
           for (var ks in prev) o[ks] = prev[ks];
           o[phoneKey] = finalNm;
@@ -4078,14 +4061,8 @@ function OpenRidingDetail(props) {
       inviteRows.forEach(function (r) {
         if (cancelled) return;
 
-        function tryPhoneProfileLookup() {
-          if (!firestore) return;
-          lookupOpenRidingUserNameByInvitePhone(firestore, r.invitePhone).then(function (nm) {
-            mergeInviteName(r.phoneKey, nm);
-          });
-        }
-
-        if (r.matchedUid && typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
+        function tryUidFallback() {
+          if (!r.matchedUid || typeof window === 'undefined' || typeof window.getUserByUid !== 'function') return;
           window
             .getUserByUid(String(r.matchedUid))
             .then(function (row) {
@@ -4094,13 +4071,19 @@ function OpenRidingDetail(props) {
                 ? String(row.name != null ? row.name : row.displayName != null ? row.displayName : '').trim()
                 : '';
               if (nm) mergeInviteName(r.phoneKey, nm);
-              tryPhoneProfileLookup();
             })
-            .catch(function () {
-              tryPhoneProfileLookup();
-            });
+            .catch(function () {});
+        }
+
+        /** 1) users.contact·phone 등 형식(하이픈 포함)으로 Firestore 조회 → name 우선 */
+        if (firestore) {
+          lookupOpenRidingUserNameByInvitePhone(firestore, r.invitePhone).then(function (nm) {
+            if (cancelled) return;
+            if (nm && String(nm).trim()) mergeInviteName(r.phoneKey, nm);
+            else tryUidFallback();
+          });
         } else {
-          tryPhoneProfileLookup();
+          tryUidFallback();
         }
       });
 
@@ -4108,7 +4091,7 @@ function OpenRidingDetail(props) {
         cancelled = true;
       };
     },
-    [rideId, ride, firestore, inviteRows]
+    [rideId, ride, firestore, inviteRows, role, isHost]
   );
 
   /**
@@ -4250,6 +4233,8 @@ function OpenRidingDetail(props) {
 
   var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
   var hasApplied = role === 'participant' || (role && typeof role === 'object' && role.type === 'waitlist');
+  /** 초대 명단·인원 수: 방장 또는 참석/대기 신청한 사용자만 열람 */
+  var viewerCanSeeInviteFold = isHost || hasApplied;
   var showHostContactRow = !!(isHost || hasApplied);
 
   var isPrivateRide = !!ride.isPrivate;
@@ -4476,7 +4461,7 @@ function OpenRidingDetail(props) {
             : '-'
         )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
-        {inviteRows.length > 0 ? (
+        {inviteRows.length > 0 && viewerCanSeeInviteFold ? (
           <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
             <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
