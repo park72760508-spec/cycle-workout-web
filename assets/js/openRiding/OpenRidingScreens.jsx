@@ -4724,6 +4724,14 @@ function OpenRidingDetail(props) {
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
   var maskContacts = shouldMaskOpenRidingContacts(ride);
+  /** 서울 기준 일정일이 지난 뒤에는 방장도 수정/취소/삭제 불가 — grade=1 관리자는 예외 */
+  var _loginGr =
+    typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
+  var _isAdmin1 =
+    typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function'
+      ? window.isStelvioAdminGrade(_loginGr)
+      : false;
+  var hostToolbarPastLocked = isOpenRidingPastBySeoulDate(ride) && !_isAdmin1;
 
   function participantRowName(uid, fallbackLabel) {
     var n = pd[String(uid)];
@@ -4774,7 +4782,9 @@ function OpenRidingDetail(props) {
         <div className="flex justify-end items-center gap-2 flex-wrap min-w-0 open-riding-detail-host-actions px-1">
           <button
             type="button"
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 active:opacity-90 transition-colors shrink-0"
+            disabled={hostToolbarPastLocked}
+            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined}
+            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
             onClick={onOpenEdit}
             aria-label="라이딩 수정"
           >
@@ -4783,7 +4793,9 @@ function OpenRidingDetail(props) {
           </button>
           <button
             type="button"
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50 active:opacity-90 transition-colors shrink-0"
+            disabled={hostToolbarPastLocked}
+            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
+            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
             onClick={function () {
               setBombOpen(true);
             }}
@@ -4801,7 +4813,9 @@ function OpenRidingDetail(props) {
           </button>
           <button
             type="button"
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 active:opacity-90 transition-colors shrink-0"
+            disabled={hostToolbarPastLocked}
+            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
+            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
             onClick={function () {
               setDeleteModalOpen(true);
             }}
