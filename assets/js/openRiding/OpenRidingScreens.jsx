@@ -5407,10 +5407,10 @@ function OpenRidingFriendsManage(props) {
           <p className="text-xs text-slate-500 m-0 leading-snug">
             검색 결과·보낸/받은 요청에서는 상대 전화번호가 수락되기 전까지 마스킹(예: 010-4017-****)되어 표시됩니다.
           </p>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-row flex-nowrap gap-2 items-stretch">
             <input
               type="text"
-              className="flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"
+              className="min-w-0 flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"
               placeholder="이름 또는 전화 뒤 4자리"
               value={searchTerm}
               onChange={function (e) {
@@ -5419,7 +5419,7 @@ function OpenRidingFriendsManage(props) {
             />
             <button
               type="button"
-              className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border-0 px-3 py-2 text-sm font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
               disabled={actionBusy || searchBusy}
               onClick={runSearch}
             >
@@ -5581,7 +5581,7 @@ function OpenRidingFriendsManage(props) {
                     <th className="py-1.5 pl-2 pr-1 font-medium w-[18%]">이름</th>
                     <th className="py-1.5 px-1 font-medium w-[36%]">연락처</th>
                     <th className="py-1.5 px-1 font-medium w-[14%]">상태</th>
-                    <th className="py-1.5 pr-2 pl-1 font-medium text-center w-[32%]">요청</th>
+                    <th className="py-1.5 pr-2 pl-1 font-medium text-center align-middle w-[32%]">요청</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5589,14 +5589,14 @@ function OpenRidingFriendsManage(props) {
                     var st = String(row.status || '');
                     var to = String(row.toUid || '');
                     return (
-                      <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0">
-                        <td className="py-1.5 pl-2 pr-1 font-medium text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis" title={outgoingDisplayName(row)}>
+                      <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0 align-middle">
+                        <td className="py-1.5 pl-2 pr-1 font-medium text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis align-middle" title={outgoingDisplayName(row)}>
                           {truncateNameThreeDots(outgoingDisplayName(row))}
                         </td>
-                        <td className="py-1.5 px-1 text-slate-600 tabular-nums whitespace-nowrap">{outgoingContactForDisplay(row)}</td>
-                        <td className="py-1.5 px-1 text-slate-600 whitespace-nowrap">{outgoingStatusShort(st)}</td>
-                        <td className="py-1 pr-2 pl-1 text-right">
-                          <div className="inline-flex flex-nowrap items-center justify-end gap-0.5 max-w-full">
+                        <td className="py-1.5 px-1 text-slate-600 tabular-nums whitespace-nowrap align-middle">{outgoingContactForDisplay(row)}</td>
+                        <td className="py-1.5 px-1 text-slate-600 whitespace-nowrap align-middle">{outgoingStatusShort(st)}</td>
+                        <td className="py-1 pr-2 pl-1 text-center align-middle">
+                          <div className="inline-flex flex-nowrap items-center justify-center gap-0.5 max-w-full">
                             {st === 'pending' ? (
                               <button
                                 type="button"
@@ -5680,36 +5680,30 @@ function OpenRidingFriendsManage(props) {
             <p className="text-xs text-slate-500 m-0">새 요청이 없습니다.</p>
           ) : (
             <div className="overflow-x-auto -mx-0.5">
-              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[340px]">
+              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[280px]">
                 <thead>
                   <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
-                    <th className="py-2 px-2 font-medium w-10">순번</th>
                     <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
-                    <th className="py-2 px-2 font-medium min-w-[7rem]">연락처</th>
-                    <th className="py-2 px-2 font-medium whitespace-nowrap">상태</th>
-                    <th className="py-2 px-2 font-medium text-center min-w-[7rem]">처리</th>
+                    <th className="py-2 px-2 font-medium min-w-[6rem]">연락처</th>
+                    <th className="py-2 px-2 font-medium text-center whitespace-nowrap w-[1%]">처리</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {incomingList.map(function (row, idx) {
+                  {incomingList.map(function (row) {
                     var st = String(row.status || '');
                     var from = String(row.fromUid || '');
                     return (
-                      <tr key={String(row.id || 'in-' + from)} className="border-b border-slate-50 last:border-b-0 align-top">
-                        <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
-                        <td className="py-2 px-2 font-medium text-slate-800">
+                      <tr key={String(row.id || 'in-' + from)} className="border-b border-slate-50 last:border-b-0 align-middle">
+                        <td className="py-2 px-2 font-medium text-slate-800 align-middle">
                           {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
                         </td>
-                        <td className="py-2 px-2 text-slate-600 break-all tabular-nums">{incomingContactForDisplay(row)}</td>
-                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
-                          {st === 'pending' ? '대기 중' : statusKo(st)}
-                        </td>
-                        <td className="py-2 px-1 text-center">
-                          <div className="flex flex-col sm:flex-row gap-1 justify-end items-stretch sm:items-center">
+                        <td className="py-2 px-2 text-slate-600 break-all tabular-nums align-middle">{incomingContactForDisplay(row)}</td>
+                        <td className="py-2 px-2 text-center align-middle whitespace-nowrap">
+                          <div className="inline-flex flex-row flex-nowrap items-center justify-center gap-1 max-w-full scale-[0.6] origin-center">
                             {st === 'pending' || st === 'rejected' ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 whitespace-nowrap"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   if (!acceptProfMemo.toContact) {
@@ -5732,7 +5726,7 @@ function OpenRidingFriendsManage(props) {
                             {st === 'pending' ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5747,6 +5741,9 @@ function OpenRidingFriendsManage(props) {
                               >
                                 거절
                               </button>
+                            ) : null}
+                            {st !== 'pending' && st !== 'rejected' ? (
+                              <span className="text-[11px] text-slate-600">{statusKo(st)}</span>
                             ) : null}
                           </div>
                         </td>
