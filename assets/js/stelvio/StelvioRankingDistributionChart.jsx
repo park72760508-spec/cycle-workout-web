@@ -280,8 +280,8 @@
         var b4 = wFn(35, w);
         if (b1 == null || b2 == null || b3 == null || b4 == null) return [];
         return [
-          { x0: xMin, x1: b1, label: '초급', speedHint: '~25 km/h', color: 'rgba(250, 204, 21, 0.42)' },
-          { x0: b1, x1: b2, label: '입문', speedHint: '~28 km/h', color: 'rgba(190, 242, 100, 0.46)' },
+          { x0: xMin, x1: b1, label: '입문', speedHint: '~25 km/h', color: 'rgba(250, 204, 21, 0.42)' },
+          { x0: b1, x1: b2, label: '초급', speedHint: '~28 km/h', color: 'rgba(190, 242, 100, 0.46)' },
           { x0: b2, x1: b3, label: '중급', speedHint: '~32 km/h', color: 'rgba(168, 85, 247, 0.4)' },
           { x0: b3, x1: b4, label: '중상급', speedHint: '~35 km/h', color: 'rgba(249, 115, 22, 0.42)' },
           { x0: b4, x1: xMax, label: '상급', speedHint: '35+ km/h', color: 'rgba(239, 68, 68, 0.42)' },
