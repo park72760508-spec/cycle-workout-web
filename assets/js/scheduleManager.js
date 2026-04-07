@@ -2175,6 +2175,13 @@ function showScheduleScreen(screenId) {
     targetScreen.classList.add('active');
     targetScreen.style.display = 'block';
   }
+
+  // 전역 맨 위로 가기 (showScreen을 쓰지 않으므로 동일 로직을 여기서 호출)
+  setTimeout(function () {
+    if (typeof window.bindGlobalBackToTopForScreenId === 'function') {
+      window.bindGlobalBackToTopForScreenId(screenId);
+    }
+  }, 150);
 }
 
 /**
