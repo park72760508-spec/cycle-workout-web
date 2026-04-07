@@ -449,8 +449,9 @@ function buildOpenRidingInviteListRows(ride) {
   return rows;
 }
 
-/** 초대 명단: 실명 없을 때 행 구분용(끝 4자리) — '초대' 자리표시어와 구분 */
-function formatOpenRidingInviteFallbackLabel(phoneRaw, _maskedMode) {
+/** 초대 명단: 실명 없을 때 행 구분용(끝 4자리) — 일정 지난 뒤에는 번호 일부도 표시하지 않음 */
+function formatOpenRidingInviteFallbackLabel(phoneRaw, maskedMode) {
+  if (maskedMode) return '초대 대상';
   var d = String(phoneRaw != null ? phoneRaw : '').replace(/\D/g, '');
   if (d.length >= 4) return '초대 대상 · ' + d.slice(-4);
   return '초대 회원';
@@ -4374,7 +4375,8 @@ function OpenRidingDetail(props) {
     var uk = String(uid);
     var shareToPeers = !Object.prototype.hasOwnProperty.call(pcp, uk) || pcp[uk] === true;
     var attendeeViewer = isHost || hasApplied;
-    if (maskContacts) return ' (' + maskContactForDisplay(rawStr) + ')';
+    /** 일정 지난 뒤 정원·참석자 목록에서는 전화번호 자체를 표시하지 않음 */
+    if (maskContacts) return null;
     if (!attendeeViewer) return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
     if (shareToPeers) return ' (' + rawStr + ')';
     return ' (' + maskPhoneLastFourDisplay(rawStr) + ')';
@@ -4866,7 +4868,7 @@ function OpenRidingDetail(props) {
         {statRow(
           '연락처',
           showHostContactRow && ride.contactInfo ? (
-            maskContacts ? maskContactForDisplay(ride.contactInfo) : ride.contactInfo
+            maskContacts ? maskPhoneLastFourDisplay(ride.contactInfo) : ride.contactInfo
           ) : !showHostContactRow && ride.contactInfo ? (
             <span className="text-amber-600">참석 신청 후 방장 연락처가 표시됩니다.</span>
           ) : (
@@ -4877,14 +4879,16 @@ function OpenRidingDetail(props) {
         {statRow('내 상태', roleLabel)}
       </div>
       {maskContacts ? (
-        <p className="text-xs text-slate-500 px-1 leading-snug">라이딩 일정일이 지나 방장·참가자 연락처는 개인정보 보호를 위해 마스킹되었습니다.</p>
+        <p className="text-xs text-slate-500 px-1 leading-snug">
+          라이딩 일정일이 지나 참가자 연락처는 표시하지 않으며, 방장 연락처는 끝 네 자리가 가려집니다.
+        </p>
       ) : null}
 
       {actionErr ? <p className="text-sm text-red-600">{actionErr}</p> : null}
 
       {!isCancelled ? (
         <div className="space-y-2">
-          {showJoinPasswordField ? (
+          {!maskContacts && showJoinPasswordField ? (
             <label className="block text-sm font-medium text-slate-700">
               비공개 입장 비밀번호 (숫자 4자리)
               <input
@@ -4901,33 +4905,35 @@ function OpenRidingDetail(props) {
               />
             </label>
           ) : null}
-          {isPrivateRide && !isHost && !role && !joinInviteOk ? (
+          {!maskContacts && isPrivateRide && !isHost && !role && !joinInviteOk ? (
             <p className="text-xs text-amber-800 text-center leading-snug px-1">
               초대된 전화번호와 프로필 연락처가 일치하거나, 방장이 설정한 4자리 비밀번호를 입력해야 참석 신청할 수 있습니다.
             </p>
           ) : null}
-          <div className="open-riding-bottom-actions">
-            <div className="open-riding-bottom-actions-row flex gap-2">
-              {role && !isHost ? (
-                <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
-                  참석 취소
-                </button>
-              ) : !role && !isHost ? (
-                <button
-                  type="button"
-                  className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
-                  disabled={isActionBusy || !userId || !joinInviteOk}
-                  title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
-                  onClick={function () {
-                    if (!joinInviteOk) return;
-                    setJoinShareModalOpen(true);
-                  }}
-                >
-                  {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
-                </button>
-              ) : null}
+          {!maskContacts ? (
+            <div className="open-riding-bottom-actions">
+              <div className="open-riding-bottom-actions-row flex gap-2">
+                {role && !isHost ? (
+                  <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
+                    참석 취소
+                  </button>
+                ) : !role && !isHost ? (
+                  <button
+                    type="button"
+                    className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
+                    disabled={isActionBusy || !userId || !joinInviteOk}
+                    title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
+                    onClick={function () {
+                      if (!joinInviteOk) return;
+                      setJoinShareModalOpen(true);
+                    }}
+                  >
+                    {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
           <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 mt-2 space-y-2 text-left">
             <h3 className="text-xs font-bold text-slate-800 m-0 tracking-tight">[안전 및 주의사항 (필독)]</h3>
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
