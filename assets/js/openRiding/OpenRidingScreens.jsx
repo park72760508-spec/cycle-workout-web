@@ -3836,7 +3836,11 @@ function OpenRidingDetail(props) {
   var role = h.role;
   var actionErr = h.actionError;
   /** hooks·초대 명단 동기화에서 사용 (조건부 return 이전에 계산) */
-  var isHost = !!(userId && ride && String(ride.hostUserId || '') === String(userId));
+  var isHost = !!(
+    userId &&
+    ride &&
+    String(ride.hostUserId != null ? ride.hostUserId : '').trim() === String(userId != null ? userId : '').trim()
+  );
   var hostIdpSyncTmRef = useRef(null);
 
   var _actBusy = useState(false);
@@ -4461,7 +4465,7 @@ function OpenRidingDetail(props) {
             : '-'
         )}
         {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
-        {inviteRows.length > 0 && viewerCanSeeInviteFold ? (
+        {viewerCanSeeInviteFold && (isHost || inviteRows.length > 0) ? (
           <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
             <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
