@@ -66,6 +66,14 @@ var FTP_FALLBACK_FOR_FILTER_SOLO = 0.93;
 
 var OPEN_RIDING_INTEREST_LEVEL_ORDER = ['초급', '입문', '중급', '중상급', '상급'];
 
+/** 저장 키(초급·입문) → 화면 명칭 — 명칭 변경: 25미만=입문, 25~28=초급 표기 */
+function openRidingInterestTierDisplayLabel(interestStorageKey) {
+  var s = String(interestStorageKey || '').trim();
+  if (s === '초급') return '입문';
+  if (s === '입문') return '초급';
+  return s;
+}
+
 /** 항속 구간 → 티어 인덱스(0=초급 … 4=상급) */
 function soloSpeedTierIndexFromKmH(soloKmh) {
   var v = Number(soloKmh);
@@ -179,7 +187,8 @@ export function classifyOpenRidingInterestLevelFilter(userSoloKmh, levelValue) {
  */
 export function getOpenRidingSoloTierLevelLabelFromKmH(soloKmh) {
   var idx = soloSpeedTierIndexFromKmH(soloKmh);
-  return OPEN_RIDING_INTEREST_LEVEL_ORDER[idx] || '초급';
+  var k = OPEN_RIDING_INTEREST_LEVEL_ORDER[idx] || '초급';
+  return openRidingInterestTierDisplayLabel(k);
 }
 
 /**

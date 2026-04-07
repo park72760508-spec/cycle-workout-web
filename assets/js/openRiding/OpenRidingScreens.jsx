@@ -209,15 +209,17 @@ function formatOpenRidingLevelDetailValue(levelStr) {
   var s = String(levelStr).trim();
   var opts = typeof window !== 'undefined' ? window.RIDING_LEVEL_OPTIONS || [] : [];
   var hint = '';
+  var display = s;
   var i;
   for (i = 0; i < opts.length; i++) {
     if (opts[i].value === s) {
       hint = opts[i].hint != null ? String(opts[i].hint) : '';
+      if (opts[i].label != null && String(opts[i].label).trim()) display = String(opts[i].label).trim();
       break;
     }
   }
   if (!hint) return s;
-  return s + ' (' + hint + ')';
+  return display + ' (' + hint + ')';
 }
 
 /** 상세: 지역 + 출발 장소 한 줄 (지역 우선, 공백으로 구분) */
@@ -2243,7 +2245,7 @@ function OpenRidingCalendarMain(props) {
                     onChange={function () { toggleLevel(opt.value); }}
                   />
                   <span className="min-w-0">
-                    {opt.value}{' '}
+                    {(opt.label != null && String(opt.label).trim() ? opt.label : opt.value) + ' '}
                     <span className="text-xs text-slate-400">({opt.hint})</span>
                   </span>
                 </label>
@@ -2267,13 +2269,13 @@ function OpenRidingCalendarMain(props) {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-semibold text-violet-900">나의 항속 능력 레벨</span>
             <span className="text-[10px] text-slate-500 leading-tight text-right">
-              관심 레벨 판별: 평지 개인 평속(60분 피크 우선, 없으면 FTP×93%) · 구간은 초급~상급 항속 기준
+              관심 레벨 판별: 평지 개인 평속(60분 피크 우선, 없으면 FTP×93%) · 구간은 입문~상급 항속 기준
             </span>
           </div>
           {!prof.ok ? (
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
               프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 관심 레벨 배지는
-              <strong> 평지 개인 평속(60분 피크·없으면 FTP 평속×93%)</strong>으로 초급~상급 항속 구간과 비교합니다.
+              <strong> 평지 개인 평속(60분 피크·없으면 FTP 평속×93%)</strong>으로 입문~상급 항속 구간과 비교합니다.
               아래 분포·그룹 평속은 참고용입니다.
             </p>
           ) : (
@@ -2503,7 +2505,13 @@ function OpenRidingCalendarMain(props) {
               {placeLabel}
             </span>
             {rideListMetaSep()}
-            <span className="shrink-0">{r.level != null && String(r.level).trim() ? r.level : '-'}</span>
+            <span className="shrink-0">
+              {r.level != null && String(r.level).trim()
+                ? typeof window !== 'undefined' && typeof window.ridingLevelDisplayNameForStorageValue === 'function'
+                  ? window.ridingLevelDisplayNameForStorageValue(r.level)
+                  : r.level
+                : '-'}
+            </span>
             {rideListMetaSep()}
             <span className="shrink-0">{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
             {rideListMetaSep()}
@@ -3739,7 +3747,9 @@ function OpenRidingCreateForm(props) {
             <label key={opt.value} className="flex items-center gap-2 cursor-pointer py-1 rounded-lg hover:bg-slate-50 text-sm">
               <input type="radio" name="lvl" className="shrink-0" value={opt.value} checked={form.level === opt.value} onChange={function () { set('level', opt.value); }} />
               <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0 leading-snug">
-                <span className="font-medium text-slate-800">{opt.value}</span>
+                <span className="font-medium text-slate-800">
+                  {opt.label != null && String(opt.label).trim() ? opt.label : opt.value}
+                </span>
                 <span className="text-xs text-slate-500">({opt.hint})</span>
               </span>
             </label>
@@ -3770,16 +3780,25 @@ function OpenRidingCreateForm(props) {
             <p className="m-0 text-emerald-900">
               {createFormPeakHint.maxGoLevel ? (
                 <>
-                  최대 참석 가능 레벨: <strong className="text-emerald-950">{createFormPeakHint.maxGoLevel}</strong>
+                  최대 참석 가능 레벨:{' '}
+                  <strong className="text-emerald-950">
+                    {typeof window !== 'undefined' && typeof window.ridingLevelDisplayNameForStorageValue === 'function'
+                      ? window.ridingLevelDisplayNameForStorageValue(createFormPeakHint.maxGoLevel)
+                      : createFormPeakHint.maxGoLevel}
+                  </strong>
                 </>
               ) : createFormPeakHint.maxCautionLevel ? (
                 <>
                   참석 가능(안정) 구간 없음 · 주의 수준 최고:{' '}
-                  <strong className="text-emerald-950">{createFormPeakHint.maxCautionLevel}</strong>
+                  <strong className="text-emerald-950">
+                    {typeof window !== 'undefined' && typeof window.ridingLevelDisplayNameForStorageValue === 'function'
+                      ? window.ridingLevelDisplayNameForStorageValue(createFormPeakHint.maxCautionLevel)
+                      : createFormPeakHint.maxCautionLevel}
+                  </strong>
                 </>
               ) : (
                 <span className="text-emerald-800/95">
-                  여유가 큰 참석 가능 레벨이 없습니다. 초급·하위 모임을 권장합니다.
+                  여유가 큰 참석 가능 레벨이 없습니다. 입문·하위 모임을 권장합니다.
                 </span>
               )}
             </p>

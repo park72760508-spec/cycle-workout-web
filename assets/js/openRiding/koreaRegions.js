@@ -280,12 +280,26 @@ export const KOREA_SIGUNGU_OPTIONS = (function () {
 })();
 
 export const RIDING_LEVEL_OPTIONS = [
-  { value: '초급', hint: '항속 25km/h 미만' },
-  { value: '입문', hint: '항속 25~28km/h 미만' },
+  { value: '초급', label: '입문', hint: '항속 25km/h 미만' },
+  { value: '입문', label: '초급', hint: '항속 25~28km/h 미만' },
   { value: '중급', hint: '항속 28~32km/h 미만' },
   { value: '중상급', hint: '항속 32~35km/h 미만' },
   { value: '상급', hint: '항속 35km/h 이상' }
 ];
+
+/** 저장값(Firestore) → 화면 표기명 (맞춤 필터·목록·상세) */
+export function ridingLevelDisplayNameForStorageValue(storageValue) {
+  var s = String(storageValue || '').trim();
+  var i;
+  for (i = 0; i < RIDING_LEVEL_OPTIONS.length; i++) {
+    var o = RIDING_LEVEL_OPTIONS[i];
+    if (o.value === s) {
+      if (o.label != null && String(o.label).trim()) return String(o.label).trim();
+      return s;
+    }
+  }
+  return s;
+}
 
 /**
  * 맞춤 필터·라이딩 생성 등 UI — 항상 본 파일의 KOREA_REGION_GROUPS만 사용 (단일 소스)
@@ -323,4 +337,5 @@ if (typeof window !== 'undefined') {
   window.getKoreaRegionGroupsForUi = getKoreaRegionGroupsForUi;
   window.getDistrictsForSido = getDistrictsForSido;
   window.buildFullRegionLabel = buildFullRegionLabel;
+  window.ridingLevelDisplayNameForStorageValue = ridingLevelDisplayNameForStorageValue;
 }
