@@ -317,12 +317,12 @@
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 3.2, size: 10 })) : null)
                     ),
                     React.createElement('tr', { className: 'border-b border-gray-100' + (userWkgTier === 'beginner' ? ' stelvio-dashboard-current-grade' : '') },
-                      React.createElement('td', { className: 'py-1 pr-2' }, '입문'),
+                      React.createElement('td', { className: 'py-1 pr-2' }, '초급'),
                       React.createElement('td', null, '2.2 이상 ~ 3.0 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 2.5, size: 10 })) : null)
                     ),
                     React.createElement('tr', { className: (userWkgTier === 'novice' ? 'stelvio-dashboard-current-grade' : '') },
-                      React.createElement('td', { className: 'py-1 pr-2' }, '초급'),
+                      React.createElement('td', { className: 'py-1 pr-2' }, '입문'),
                       React.createElement('td', null, '2.2 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center' }, React.createElement(WkgGradeIndicator, { wkg: 1.8, size: 10 })) : null)
                     )
