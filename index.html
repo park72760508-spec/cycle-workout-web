@@ -7624,10 +7624,54 @@
       globalBackToTopScrollEl2 = null;
     }
     function handleGlobalBackToTop() {
-      var el = globalBackToTopScrollEl || document.getElementById('performance-dashboard-container') || document.getElementById('trainingJournalScreen') || document.getElementById('profileScreen') || document.getElementById('workoutScreen') || document.getElementById('trainingReadyScreen');
-      if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
-      if (globalBackToTopScrollEl2) globalBackToTopScrollEl2.scrollTo({ top: 0, behavior: 'smooth' });
+      var el = globalBackToTopScrollEl;
+      if (!el) {
+        el = document.querySelector('#openRidingRoomScreen.active .open-riding-app-body')
+          || document.querySelector('#deviceSettingScreen.active')
+          || document.querySelector('#scheduleListScreen.active, #scheduleCreateScreen.active, #scheduleDaysScreen.active, #scheduleCalendarScreen.active')
+          || document.getElementById('performance-dashboard-container')
+          || document.getElementById('trainingJournalScreen')
+          || document.getElementById('profileScreen')
+          || document.getElementById('workoutScreen')
+          || document.getElementById('trainingReadyScreen');
+      }
+      if (el) {
+        try { el.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { el.scrollTop = 0; }
+      }
+      if (globalBackToTopScrollEl2) {
+        try { globalBackToTopScrollEl2.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { globalBackToTopScrollEl2.scrollTop = 0; }
+      }
     }
+    /** showScreen / showScheduleScreen 공통: 해당 화면의 스크롤 루트에 맞춤 맨 위로 버튼 바인딩 */
+    function bindGlobalBackToTopForScreenId(screenId) {
+      if (typeof cleanupGlobalBackToTop !== 'function') return;
+      cleanupGlobalBackToTop();
+      var scrollEl = null;
+      if (screenId === 'trainingJournalScreen') scrollEl = document.getElementById('trainingJournalScreen');
+      else if (screenId === 'profileScreen') scrollEl = document.getElementById('profileScreen');
+      else if (screenId === 'workoutScreen') {
+        var w1 = document.getElementById('workoutScreen');
+        var w2 = document.getElementById('workoutViewContainer');
+        if (w1 && typeof initGlobalBackToTop === 'function') initGlobalBackToTop(w1, w2);
+        return;
+      } else if (screenId === 'trainingReadyScreen') scrollEl = document.getElementById('trainingReadyScreen');
+      else if (screenId === 'performanceDashboardScreen') scrollEl = document.getElementById('performance-dashboard-container');
+      else if (screenId === 'openRidingRoomScreen') {
+        function tryBindOpenRiding() {
+          var ob = document.querySelector('#openRidingRoomScreen .open-riding-app-body');
+          if (ob && typeof initGlobalBackToTop === 'function') initGlobalBackToTop(ob);
+        }
+        tryBindOpenRiding();
+        setTimeout(tryBindOpenRiding, 200);
+        setTimeout(tryBindOpenRiding, 450);
+        return;
+      } else if (screenId === 'deviceSettingScreen') scrollEl = document.getElementById('deviceSettingScreen');
+      else if (screenId === 'scheduleListScreen' || screenId === 'scheduleCreateScreen' || screenId === 'scheduleDaysScreen' || screenId === 'scheduleCalendarScreen') {
+        scrollEl = document.getElementById(screenId);
+      }
+      if (scrollEl && typeof initGlobalBackToTop === 'function') initGlobalBackToTop(scrollEl);
+    }
+    window.bindGlobalBackToTopForScreenId = bindGlobalBackToTopForScreenId;
     function refreshGlobalBackToTopState() {
       if (globalBackToTopScrollHandler) globalBackToTopScrollHandler();
     }
@@ -18702,18 +18746,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         
         // 전역 맨 위로 가기: 대상 화면일 때 스크롤 리스너 등록, 그 외엔 제거
         setTimeout(function() {
-          if (typeof window.cleanupGlobalBackToTop === 'function') window.cleanupGlobalBackToTop();
-          var scrollEl = null;
-          if (screenId === 'trainingJournalScreen') scrollEl = document.getElementById('trainingJournalScreen');
-          else if (screenId === 'profileScreen') scrollEl = document.getElementById('profileScreen');
-          else if (screenId === 'workoutScreen') {
-            scrollEl = document.getElementById('workoutScreen');
-            var scrollEl2 = document.getElementById('workoutViewContainer');
-            if (scrollEl && typeof window.initGlobalBackToTop === 'function') window.initGlobalBackToTop(scrollEl, scrollEl2);
-            scrollEl = null;
-          } else if (screenId === 'trainingReadyScreen') scrollEl = document.getElementById('trainingReadyScreen');
-          else if (screenId === 'performanceDashboardScreen') scrollEl = document.getElementById('performance-dashboard-container');
-          if (scrollEl && typeof window.initGlobalBackToTop === 'function') window.initGlobalBackToTop(scrollEl);
+          if (typeof window.bindGlobalBackToTopForScreenId === 'function') window.bindGlobalBackToTopForScreenId(screenId);
         }, 150);
       };
       
