@@ -5185,6 +5185,9 @@ function OpenRidingFriendsManage(props) {
   var _busy = useState(false);
   var actionBusy = _busy[0];
   var setActionBusy = _busy[1];
+  var _fe = useState(true);
+  var friendsExpanded = _fe[0];
+  var setFriendsExpanded = _fe[1];
 
   function refresh() {
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
@@ -5532,75 +5535,104 @@ function OpenRidingFriendsManage(props) {
         </section>
 
         {/* 2. 등록된 친구 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <h2 className="text-sm font-semibold text-slate-800 m-0">등록된 친구</h2>
-          {bundle.loading ? (
-            <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
-          ) : bundle.friends.length === 0 ? (
-            <p className="text-xs text-slate-500 m-0">등록된 친구가 없습니다. 요청이 수락되면 여기에 표시됩니다.</p>
-          ) : (
-            <div className="overflow-x-auto -mx-0.5">
-              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
-                    <th className="py-2 px-2 font-medium w-10">순번</th>
-                    <th className="py-2 px-2 font-medium">이름</th>
-                    <th className="py-2 px-2 font-medium">연락처</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bundle.friends.map(function (row, idx) {
-                    return (
-                      <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0">
-                        <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
-                        <td className="py-2 px-2 font-medium text-slate-800">
-                          {row.displayName != null ? String(row.displayName) : '-'}
-                        </td>
-                        <td className="py-2 px-2 text-slate-700 break-all">
-                          {row.contact != null ? String(row.contact) : '-'}
-                        </td>
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <button
+            type="button"
+            aria-expanded={friendsExpanded}
+            className="w-full text-left bg-violet-100 border-0 border-b border-violet-200/60 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-violet-100/90"
+            onClick={function () {
+              setFriendsExpanded(function (v) {
+                return !v;
+              });
+            }}
+          >
+            <span className="text-sm font-semibold text-slate-800 inline-flex items-center gap-1.5">
+              등록된 친구
+              <span className="text-violet-700 tabular-nums" aria-hidden="true">
+                {friendsExpanded ? '(−)' : '(+)'}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-3 text-sm shrink-0">
+              <span className="text-slate-700 font-medium tabular-nums">
+                {bundle.loading ? '…' : bundle.friends.length + '명'}
+              </span>
+              <span className="text-violet-800 font-semibold">{friendsExpanded ? '접어보기' : '펼쳐보기'}</span>
+            </span>
+          </button>
+          {friendsExpanded ? (
+            <div className="p-3 space-y-2">
+              {bundle.loading ? (
+                <p className="text-sm text-slate-500 m-0">불러오는 중…</p>
+              ) : bundle.friends.length === 0 ? (
+                <p className="text-sm text-slate-500 m-0">등록된 친구가 없습니다. 요청이 수락되면 여기에 표시됩니다.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-0.5">
+                  <table className="w-full text-sm text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
+                    <thead>
+                      <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
+                        <th className="py-2 px-2 font-medium w-10">순번</th>
+                        <th className="py-2 px-2 font-medium">이름</th>
+                        <th className="py-2 px-2 font-medium">연락처</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {bundle.friends.map(function (row, idx) {
+                        return (
+                          <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0">
+                            <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
+                            <td className="py-2 px-2 font-medium text-slate-800">
+                              {row.displayName != null ? String(row.displayName) : '-'}
+                            </td>
+                            <td className="py-2 px-2 text-slate-700 break-all">
+                              {row.contact != null ? String(row.contact) : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
+          ) : null}
         </section>
 
         {/* 3. 내가 보낸 요청 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <h2 className="text-sm font-semibold text-slate-800 m-0">내가 보낸 요청</h2>
-          {outgoingList.length === 0 ? (
-            <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
-          ) : (
-            <div className="overflow-x-auto -mx-0.5">
-              <table className="w-full table-fixed text-[11px] leading-tight text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
-                    <th className="py-1.5 pl-2 pr-1 font-medium w-[18%]">이름</th>
-                    <th className="py-1.5 px-1 font-medium w-[36%]">연락처</th>
-                    <th className="py-1.5 px-1 font-medium w-[14%]">상태</th>
-                    <th className="py-1.5 pr-2 pl-1 font-medium text-center align-middle w-[32%]">요청</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outgoingList.map(function (row) {
-                    var st = String(row.status || '');
-                    var to = String(row.toUid || '');
-                    return (
-                      <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0 align-middle">
-                        <td className="py-1.5 pl-2 pr-1 font-medium text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis align-middle" title={outgoingDisplayName(row)}>
-                          {truncateNameThreeDots(outgoingDisplayName(row))}
-                        </td>
-                        <td className="py-1.5 px-1 text-slate-600 tabular-nums whitespace-nowrap align-middle">{outgoingContactForDisplay(row)}</td>
-                        <td className="py-1.5 px-1 text-slate-600 whitespace-nowrap align-middle">{outgoingStatusShort(st)}</td>
-                        <td className="py-1 pr-2 pl-1 text-center align-middle">
-                          <div className="inline-flex flex-nowrap items-center justify-center gap-0.5 max-w-full">
-                            {st === 'pending' ? (
-                              <button
-                                type="button"
-                                className="text-[10px] font-semibold px-1.5 py-1 rounded border border-amber-200 text-amber-800 bg-white hover:bg-amber-50 whitespace-nowrap shrink-0"
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5">
+            <h2 className="text-sm font-semibold text-slate-800 m-0">내가 보낸 요청</h2>
+          </div>
+          <div className="p-3 space-y-2">
+            {outgoingList.length === 0 ? (
+              <p className="text-sm text-slate-500 m-0">보낸 요청이 없습니다.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-0.5">
+                <table className="w-full table-fixed text-sm leading-snug text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
+                  <thead>
+                    <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
+                      <th className="py-2 pl-2 pr-1 font-medium w-[18%]">이름</th>
+                      <th className="py-2 px-1 font-medium w-[36%]">연락처</th>
+                      <th className="py-2 px-1 font-medium w-[14%]">상태</th>
+                      <th className="py-2 pr-2 pl-1 font-medium text-center align-middle w-[32%]">요청</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outgoingList.map(function (row) {
+                      var st = String(row.status || '');
+                      var to = String(row.toUid || '');
+                      return (
+                        <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0 align-middle">
+                          <td className="py-2 pl-2 pr-1 font-medium text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis align-middle" title={outgoingDisplayName(row)}>
+                            {truncateNameThreeDots(outgoingDisplayName(row))}
+                          </td>
+                          <td className="py-2 px-1 text-slate-600 tabular-nums whitespace-nowrap align-middle">{outgoingContactForDisplay(row)}</td>
+                          <td className="py-2 px-1 text-slate-600 whitespace-nowrap align-middle">{outgoingStatusShort(st)}</td>
+                          <td className="py-2 pr-2 pl-1 text-center align-middle">
+                            <div className="inline-flex flex-nowrap items-center justify-center gap-0.5 max-w-full">
+                              {st === 'pending' ? (
+                                <button
+                                  type="button"
+                                  className="text-sm font-semibold px-2 py-1 rounded border border-amber-200 text-amber-800 bg-white hover:bg-amber-50 whitespace-nowrap shrink-0"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5619,7 +5651,7 @@ function OpenRidingFriendsManage(props) {
                             {st === 'rejected' || st === 'cancelled' ? (
                               <button
                                 type="button"
-                                className="text-[10px] font-semibold px-1.5 py-1 rounded border border-violet-200 text-violet-800 bg-white hover:bg-violet-50 whitespace-nowrap shrink-0"
+                                className="text-sm font-semibold px-2 py-1 rounded border border-violet-200 text-violet-800 bg-white hover:bg-violet-50 whitespace-nowrap shrink-0"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5646,7 +5678,7 @@ function OpenRidingFriendsManage(props) {
                             {st === 'rejected' || st === 'cancelled' ? (
                               <button
                                 type="button"
-                                className="text-[10px] font-semibold px-1.5 py-1 rounded border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 whitespace-nowrap shrink-0"
+                                className="text-sm font-semibold px-2 py-1 rounded border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 whitespace-nowrap shrink-0"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5662,48 +5694,52 @@ function OpenRidingFriendsManage(props) {
                                 삭제
                               </button>
                             ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
 
         {/* 4. 나에게 온 요청 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
-          <h2 className="text-sm font-semibold text-slate-800 m-0">나에게 온 요청</h2>
-          {incomingList.length === 0 ? (
-            <p className="text-xs text-slate-500 m-0">새 요청이 없습니다.</p>
-          ) : (
-            <div className="overflow-x-auto -mx-0.5">
-              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[280px]">
-                <thead>
-                  <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
-                    <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
-                    <th className="py-2 px-2 font-medium min-w-[6rem]">연락처</th>
-                    <th className="py-2 px-2 font-medium text-center whitespace-nowrap w-[1%]">처리</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {incomingList.map(function (row) {
-                    var st = String(row.status || '');
-                    var from = String(row.fromUid || '');
-                    return (
-                      <tr key={String(row.id || 'in-' + from)} className="border-b border-slate-50 last:border-b-0 align-middle">
-                        <td className="py-2 px-2 font-medium text-slate-800 align-middle">
-                          {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
-                        </td>
-                        <td className="py-2 px-2 text-slate-600 break-all tabular-nums align-middle">{incomingContactForDisplay(row)}</td>
-                        <td className="py-2 px-2 text-center align-middle whitespace-nowrap">
-                          <div className="inline-flex flex-row flex-nowrap items-center justify-center gap-1 max-w-full scale-[0.6] origin-center">
-                            {st === 'pending' || st === 'rejected' ? (
-                              <button
-                                type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5">
+            <h2 className="text-sm font-semibold text-slate-800 m-0">나에게 온 요청</h2>
+          </div>
+          <div className="p-3 space-y-2">
+            {incomingList.length === 0 ? (
+              <p className="text-sm text-slate-500 m-0">새 요청이 없습니다.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-0.5">
+                <table className="w-full text-sm text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[280px]">
+                  <thead>
+                    <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
+                      <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
+                      <th className="py-2 px-2 font-medium min-w-[6rem]">연락처</th>
+                      <th className="py-2 px-2 font-medium text-center whitespace-nowrap w-[1%]">처리</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {incomingList.map(function (row) {
+                      var st = String(row.status || '');
+                      var from = String(row.fromUid || '');
+                      return (
+                        <tr key={String(row.id || 'in-' + from)} className="border-b border-slate-50 last:border-b-0 align-middle">
+                          <td className="py-2 px-2 font-medium text-slate-800 align-middle">
+                            {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
+                          </td>
+                          <td className="py-2 px-2 text-slate-600 break-all tabular-nums align-middle">{incomingContactForDisplay(row)}</td>
+                          <td className="py-2 px-2 text-center align-middle whitespace-nowrap">
+                            <div className="inline-flex flex-row flex-nowrap items-center justify-center gap-1 max-w-full">
+                              {st === 'pending' || st === 'rejected' ? (
+                                <button
+                                  type="button"
+                                  className="text-sm font-semibold px-2 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   if (!acceptProfMemo.toContact) {
@@ -5726,7 +5762,7 @@ function OpenRidingFriendsManage(props) {
                             {st === 'pending' ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="text-sm font-semibold px-2 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5743,17 +5779,18 @@ function OpenRidingFriendsManage(props) {
                               </button>
                             ) : null}
                             {st !== 'pending' && st !== 'rejected' ? (
-                              <span className="text-[11px] text-slate-600">{statusKo(st)}</span>
+                              <span className="text-sm text-slate-600">{statusKo(st)}</span>
                             ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
 
         {bundle.err ? <p className="text-xs text-red-600 m-0 px-1">{bundle.err}</p> : null}
