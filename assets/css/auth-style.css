@@ -19,6 +19,9 @@ html {
   -moz-text-size-adjust: none;
   -ms-text-size-adjust: none;
   text-size-adjust: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 
 :root {
@@ -74,6 +77,9 @@ body {
   justify-content: center;
   padding: 20px;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 
 /* ============================================

@@ -41,8 +41,11 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* 스크롤: body 고정/잠금 사용 안 함. 모든 화면은 인증 화면과 동일하게 화면 단위 스크롤 */
+/* 뷰포트 overscroll 비활성화: 모바일 Pull-to-refresh·바운스가 내부 .screen 스크롤과 첫 터치 충돌하는 현상 완화 */
 html, body {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 
 /* 시스템 글자 크기·자동 텍스트 조정과 무관하게 레이아웃 고정 (rem·em 기준 = 16px 루트) */
@@ -226,6 +229,8 @@ html {
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
   background: #f6f8fa; /* html 배경도 동일 (갭 시 body 대신 표시) */
   background-attachment: fixed;
 }
@@ -236,6 +241,8 @@ body {
   min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
   min-height: -webkit-fill-available;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 body {
   /* 한/영/숫자 통일: Noto Sans KR 우선 적용 (index.html에서 로드). 영문·숫자도 동일 폰트로 표시 */
@@ -245,6 +252,8 @@ body {
   color: #222;
   overflow-x: hidden;
   /* overflow-y: 기본값(visible) — 스크롤 방지/고정 없음 */
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
 }
 /* 인증 화면 활성 시: html/body 배경을 그라데이션으로 — 스크롤 시 하단 흰색바탕 노출 방지 (overscroll bounce 시 body 배경이 보임) */
 /* 바깥쪽 스크롤 제거: body/html overflow hidden → #authScreen 안에서만 스크롤 (스크롤바 1개만 표시) */
@@ -5249,6 +5258,11 @@ tr.stelvio-dashboard-current-grade td:last-child {
   visibility: visible;
   pointer-events: auto;
 }
+/* 오픈 라이딩방: 하단 고정 STELVIO 바(z-index:10000) 위로 버튼이 가려지지 않도록 */
+body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-top-active {
+  z-index: 10001;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
 .global-back-to-top-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5), 0 4px 12px rgba(118, 75, 162, 0.35);
@@ -6801,7 +6815,9 @@ html.is-android #workoutScreen .workout-view-container {
   touch-action: auto !important;
   overflow-y: scroll !important; /* Android WebView: auto 대신 scroll로 스크롤 강제 활성화 */
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: auto; /* contain 제거 → 기본 스크롤 동작 허용 */
+  /* html/body에 overscroll none 적용 후에도 내부 스크롤 경계에서 뷰포트로 체인되지 않도록 contain 유지 */
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior: contain !important;
 }
 html.is-android #workoutScreen .workout-list { touch-action: auto !important; }
 html.is-android #workoutScreen .workout-card { touch-action: auto !important; }
