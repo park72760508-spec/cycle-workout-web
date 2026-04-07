@@ -253,10 +253,8 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
   if (!me || !t) {
     return { rows: [], errors: ['로그인·검색어를 확인해 주세요.'], hints };
   }
-  if (!db) {
-    hints.push('Firestore 연결이 없어 메모리 목록만 검색합니다.');
-  }
 
+  const dbMissing = !db;
   const out = [];
   const seen = {};
 
@@ -275,11 +273,6 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
   const digitsOnly = t.replace(/\D/g, '');
 
   searchUsersInMemoryLists(t, me, pushRow, getLen);
-  if (getLen() > 0) {
-    hints.push(`앱에 로드된 회원 목록에서 ${getLen()}명 매칭.`);
-  } else if (!/^[\d\s\-+()]+$/.test(t) || !/\d/.test(t)) {
-    hints.push('메모리에 회원 목록이 없거나 일치 항목이 없습니다. Firestore 이름 검색을 시도합니다.');
-  }
 
   if (db) {
     await firestoreQueryUsersByNameAndDisplay(db, t, me, pushRow, getLen, errors);
@@ -294,10 +287,23 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
   }
 
   const after = getLen();
-  if (after === 0) {
-    hints.push(
-      '일치하는 사용자가 없습니다. 상대 users 문서에 name·contact(8자 이상)가 있는지, 검색어 철자·Firestore 인덱스(이름 접두 검색)를 확인해 주세요.'
-    );
+  const permRe = /insufficient permissions|permission-denied|missing or insufficient permissions/i;
+
+  function stripPermissionNoise(arr) {
+    return (arr || []).filter(function (m) {
+      return !permRe.test(String(m || ''));
+    });
+  }
+
+  errors.splice(0, errors.length, ...stripPermissionNoise(errors));
+  hints.length = 0;
+  if (after > 0) {
+    /* 성공 시 진단 문구 숨김 */
+  } else {
+    if (dbMissing) {
+      hints.push('Firestore 연결이 없어 메모리 목록만 검색했습니다.');
+    }
+    hints.push('일치하는 사용자가 없습니다. 검색어를 바꿔 보세요.');
   }
 
   return { rows: out.slice(0, 30), errors, hints };

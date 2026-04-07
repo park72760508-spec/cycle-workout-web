@@ -5500,8 +5500,7 @@ function OpenRidingFriendsManage(props) {
           <div className="border-t border-slate-100 pt-3 space-y-2">
             <h3 className="text-sm font-semibold text-slate-800 m-0">친구 요청 대상자 검색</h3>
             <p className="text-xs text-slate-500 m-0 leading-snug">
-              users 컬렉션의 name·displayName(이름 일치·접두 검색)과 contact·phone·phoneNumber·tel(전화 일치)로 조회합니다. 전화 8자리 이상은 저장 형식 후보와 매칭하고, 뒤 4자리만 입력하면 흔한 010 패턴 일부를 추가로 시도합니다.{' '}
-              <span className="text-slate-600">검색 결과·보낸/받은 요청에서는 상대 전화번호가 수락되기 전까지 마스킹(예: 010-4017-****)되어 표시됩니다.</span>
+              검색 결과·보낸/받은 요청에서는 상대 전화번호가 수락되기 전까지 마스킹(예: 010-4017-****)되어 표시됩니다.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
