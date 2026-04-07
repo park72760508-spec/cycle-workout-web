@@ -5225,6 +5225,37 @@ function OpenRidingFriendsManage(props) {
     [firestore, userId]
   );
 
+  /** 수락 API 성공 직후: 받은 요청에서 해당 건 제거·친구 목록에 반영, 이어서 refresh로 서버와 일치 */
+  function applyLocalStateAfterAccept(row, fromUid) {
+    var from = String(fromUid || '');
+    var rowId = row && row.id != null ? String(row.id) : '';
+    setBundle(function (x) {
+      var incoming = (x.incoming || []).filter(function (r) {
+        if (rowId && String(r.id) === rowId) return false;
+        if (!rowId && String(r.fromUid || '') === from && String(r.status || '') === 'pending') return false;
+        return true;
+      });
+      var friends = (x.friends || []).slice();
+      var exists = friends.some(function (f) {
+        return String(f.friendUid || f.id || '') === from;
+      });
+      if (!exists) {
+        var nm = row && row.fromDisplayName != null ? String(row.fromDisplayName) : '회원';
+        var ct = row && row.fromContact != null ? String(row.fromContact) : '';
+        friends.push({
+          id: from,
+          friendUid: from,
+          displayName: nm,
+          contact: ct
+        });
+        friends.sort(function (a, b) {
+          return String(a.displayName || '').localeCompare(String(b.displayName || ''), 'ko');
+        });
+      }
+      return Object.assign({}, x, { incoming: incoming, friends: friends });
+    });
+  }
+
   function runSearch() {
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
     if (!firestore || typeof fr.searchUsersForFriendRequest !== 'function') return;
@@ -5779,6 +5810,7 @@ function OpenRidingFriendsManage(props) {
                                   if (typeof fr.acceptFriendRequest !== 'function') return;
                                   setActionBusy(true);
                                   fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(function () {
+                                    applyLocalStateAfterAccept(row, from);
                                     setFriendsExpanded(true);
                                     return refresh();
                                   }).catch(function (e) {
