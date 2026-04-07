@@ -285,6 +285,49 @@ function openRidingResolveInviteDisplayByPhoneKey(idp, rowKey, normFn) {
   return '';
 }
 
+/** inviteDisplayByPhone 저장값 → 목록 표시명 (형식 "주소록/users이름"이면 users이름) */
+function openRidingInviteDisplayLabelForUi(storedValue) {
+  var s = String(storedValue != null ? storedValue : '').trim();
+  if (!s) return '';
+  var i = s.indexOf('/');
+  if (i >= 0) {
+    var after = s.slice(i + 1).trim();
+    if (after) return after;
+    return s.slice(0, i).trim();
+  }
+  return s;
+}
+
+function openRidingInviteStoredMatchesParticipant(invLabel, pdName) {
+  var p = String(pdName || '').trim();
+  if (!p) return false;
+  var inv = String(invLabel || '').trim();
+  if (!inv) return false;
+  if (inv === p) return true;
+  if (openRidingInviteDisplayLabelForUi(inv) === p) return true;
+  var slash = inv.indexOf('/');
+  var loc = slash >= 0 ? inv.slice(0, slash).trim() : inv;
+  if (loc === p) return true;
+  return false;
+}
+
+/** 방장 문서 병합: 프로필 조회명을 "주소록/실명" 형태로 맞춤 */
+function openRidingComposeInviteDisplayStoredValue(cur, firebaseResolvedName) {
+  var nm = String(firebaseResolvedName != null ? firebaseResolvedName : '').trim();
+  if (!nm || isOpenRidingInviteWeakDisplayName(nm)) return null;
+  var curS = String(cur != null ? cur : '').trim();
+  if (!curS || isOpenRidingInvitePlaceholderDisplayName(curS)) return nm.slice(0, 40);
+  var slash = curS.indexOf('/');
+  if (slash >= 0) {
+    var fbPart = curS.slice(slash + 1).trim();
+    var locPart = curS.slice(0, slash).trim();
+    if (fbPart === nm || curS === nm || locPart === nm) return null;
+    return (locPart && locPart !== nm ? locPart + '/' + nm : nm).slice(0, 40);
+  }
+  if (curS === nm) return null;
+  return (curS !== nm ? curS + '/' + nm : curS).slice(0, 40);
+}
+
 /**
  * 초대 전화 키 → UID (participantContact + inviteJoinedUidByPhone 통합, 뒤 8자리 보조)
  * 비방장도 문서에 participantContact 전체가 오면 매칭 가능하고, 없으면 inviteJoinedUidByPhone에 의존
@@ -331,7 +374,7 @@ function lookupUidFromPhoneKeyMap(map, rowKey) {
 
 /**
  * 초대 명단 표시용 행 (전화 정규화 키, participantContact + inviteJoinedUidByPhone 통합 UID 매칭)
- * 참석 신청한 초대 대상만 포함(참석 확정·대기). 미신청 초대 번호는 목록에 넣지 않음.
+ * 초대된 전화는 모두 포함; 참석·대기·미응답(none) 구분.
  */
 function buildOpenRidingInviteListRows(ride) {
   var raw = ride && Array.isArray(ride.invitedList) ? ride.invitedList : [];
@@ -378,7 +421,7 @@ function buildOpenRidingInviteListRows(ride) {
         for (cj = 0; cj < cand2.length; cj++) {
           var cuid2 = String(cand2[cj]);
           var pdName2 = pdMap[cuid2] != null ? String(pdMap[cuid2]).trim() : '';
-          if (pdName2 && pdName2 === invLabel) {
+          if (pdName2 && openRidingInviteStoredMatchesParticipant(invLabel, pdName2)) {
             matchedUid = cuid2;
             break;
           }
@@ -395,9 +438,7 @@ function buildOpenRidingInviteListRows(ride) {
       wait.some(function (id) {
         return String(id) === String(matchedUid);
       });
-    /** 참석 확정 | 대기 — 미신청·미매칭 행은 초대 명단에 표시하지 않음 */
     var inviteStatus = inPart ? 'attended' : inWait ? 'wait' : 'none';
-    if (inviteStatus === 'none') continue;
     rows.push({
       phoneKey: key,
       invitePhone: phoneStr,
@@ -437,11 +478,29 @@ function buildOpenRidingInviteDisplayMap(inviteSelected) {
 }
 
 /**
- * 상세 초대 명단 한 줄 표시명: Firestore/UID 조회 캐시 → 본인 행 → 폴백
- * inviteDisplayByPhone·participantDisplay 는 주소록/구버전 표기와 섞일 수 있어 표시에 사용하지 않음.
+ * 상세 초대 명단 한 줄 표시명: inviteDisplayByPhone(주소록/users)의 users 측 → 조회 캐시 → 본인 → 폴백
  */
 function getOpenRidingInviteRowDisplayName(r, ride, inviteResolvedLabels, maskContacts, myPhoneForInvite, viewerUserId) {
   var key = r.phoneKey;
+  var normFnDl =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits
+      : function (x) {
+          return String(x || '').replace(/\D/g, '');
+        };
+  var idpMap =
+    ride && ride.inviteDisplayByPhone && typeof ride.inviteDisplayByPhone === 'object' && !Array.isArray(ride.inviteDisplayByPhone)
+      ? ride.inviteDisplayByPhone
+      : null;
+  if (idpMap) {
+    var rawIdp = openRidingResolveInviteDisplayByPhoneKey(idpMap, key, normFnDl);
+    var fromIdpUi = openRidingInviteDisplayLabelForUi(rawIdp);
+    if (fromIdpUi && !isOpenRidingInviteWeakDisplayName(fromIdpUi) && !isOpenRidingInvitePlaceholderDisplayName(fromIdpUi)) {
+      return fromIdpUi;
+    }
+  }
 
   var fromSeed = inviteResolvedLabels[key];
   if (fromSeed && String(fromSeed).trim() && !isOpenRidingInviteWeakDisplayName(fromSeed)) return String(fromSeed).trim();
@@ -3021,6 +3080,17 @@ function OpenRidingCreateForm(props) {
           rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
           packRidingRules: packRidingRulesPayload
         });
+        try {
+          var svcEn0 = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+          if (
+            typeof svcEn0.enrichInviteDisplayByPhoneFromUsers === 'function' &&
+            ((form.inviteSelected && form.inviteSelected.length) || 0) > 0
+          ) {
+            await svcEn0.enrichInviteDisplayByPhoneFromUsers(firestore, editRideId, String(hostUserId).trim());
+          }
+        } catch (eEn0) {
+          console.warn('[OpenRiding] 초대 표시 users 병합(수정) 실패:', eEn0 && eEn0.message ? eEn0.message : eEn0);
+        }
         onEditSaved();
         return;
       }
@@ -3066,6 +3136,16 @@ function OpenRidingCreateForm(props) {
           } catch (eJoin) {
             console.warn('[OpenRiding] 생성 직후 방장 참석 명단 보정 실패:', eJoin && eJoin.message ? eJoin.message : eJoin);
           }
+        }
+        try {
+          if (
+            typeof svcJoin.enrichInviteDisplayByPhoneFromUsers === 'function' &&
+            ((form.inviteSelected && form.inviteSelected.length) || 0) > 0
+          ) {
+            await svcJoin.enrichInviteDisplayByPhoneFromUsers(firestore, rideId, String(hostUserId).trim());
+          }
+        } catch (eEn1) {
+          console.warn('[OpenRiding] 초대 표시 users 병합(생성) 실패:', eEn1 && eEn1.message ? eEn1.message : eEn1);
         }
       }
       onCreated(rideId);
@@ -4128,8 +4208,9 @@ function OpenRidingDetail(props) {
         var nm = inviteResolvedLabels[r.phoneKey];
         if (!nm || isOpenRidingInviteWeakDisplayName(nm)) continue;
         var cur = openRidingResolveInviteDisplayByPhoneKey(idp, r.phoneKey, normFn);
-        if (cur === nm) continue;
-        patch[r.phoneKey] = nm;
+        var composed = openRidingComposeInviteDisplayStoredValue(cur, nm);
+        if (!composed || composed === cur) continue;
+        patch[r.phoneKey] = composed;
       }
       if (Object.keys(patch).length === 0) return undefined;
 
@@ -4528,6 +4609,15 @@ function OpenRidingDetail(props) {
                 })}
               </ul>
             ) : null}
+          </div>
+        ) : userId && invitedListArr.length > 0 ? (
+          <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--teaser w-full min-w-0">
+            <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
+              <span className="open-riding-detail-stat-label shrink-0 pt-0.5 text-sm font-semibold text-slate-700">초대 명단</span>
+              <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right">
+                <span className="text-sm text-slate-500 leading-snug">참가 신청 후 확인 가능</span>
+              </div>
+            </div>
           </div>
         ) : null}
         {ride && packRulesNorm ? (

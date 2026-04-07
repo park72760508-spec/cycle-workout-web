@@ -13,6 +13,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   runTransaction,
   Timestamp,
   serverTimestamp
@@ -205,7 +206,115 @@ function mergeInviteDisplayOnJoin(inviteMap, phoneRaw, nameLabel) {
     .trim()
     .slice(0, 40);
   if (key.length < 8 || !nm || nm === '초대') return base;
+  const prev = base[key];
+  if (prev) {
+    const prevS = String(prev).trim();
+    const slash = prevS.indexOf('/');
+    if (slash >= 0) {
+      const fb = prevS.slice(slash + 1).trim();
+      const loc = prevS.slice(0, slash).trim();
+      if (nm === fb || nm === prevS || nm === loc) return base;
+      return Object.assign({}, base, { [key]: `${loc}/${nm}`.slice(0, 40) });
+    }
+    if (prevS === nm) return base;
+    return Object.assign({}, base, { [key]: `${prevS}/${nm}`.slice(0, 40) });
+  }
   return Object.assign({}, base, { [key]: nm });
+}
+
+/** users.contact 등 쿼리용 전화 후보(오픈라이딩 상세 조회와 동일 규칙) */
+function buildOpenRidingInvitePhoneQueryCandidates(normDigits) {
+  const d = normalizePhoneDigits(normDigits);
+  const candidates = [];
+  const add = (x) => {
+    const s = String(x || '').trim();
+    if (s && !candidates.includes(s)) candidates.push(s);
+  };
+  if (d.length < 8) return candidates;
+  add(d);
+  if (d.length === 11 && d.startsWith('010')) {
+    add(`${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7, 11)}`);
+    add(`${d.slice(0, 3)} ${d.slice(3, 7)} ${d.slice(7, 11)}`);
+    const rest11 = d.slice(3);
+    add(`+82-10-${rest11.slice(0, 4)}-${rest11.slice(4, 8)}`);
+    add(`+82 10-${rest11.slice(0, 4)}-${rest11.slice(4, 8)}`);
+  }
+  if (d.length === 11 && d.startsWith('011')) {
+    add(`${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7, 11)}`);
+  }
+  if (d.length === 10 && d[0] === '0') {
+    add(`${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6, 10)}`);
+    add(`${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6, 10)}`);
+  }
+  if (d.length >= 10 && d[0] === '0') {
+    add(`82${d.slice(1)}`);
+    add(`+82${d.slice(1)}`);
+  }
+  return candidates;
+}
+
+async function fetchUserDisplayNameByPhoneForOpenRiding(db, candidates) {
+  if (!db || !candidates.length) return '';
+  const col = collection(db, 'users');
+  const fields = ['contact', 'phone', 'phoneNumber', 'tel'];
+  for (const field of fields) {
+    for (const c of candidates) {
+      try {
+        const q = query(col, where(field, '==', c), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const row = snap.docs[0].data();
+          const nm = String((row && row.name) || (row && row.displayName) || '').trim();
+          if (nm) return nm;
+        }
+      } catch {
+        /* 규칙·인덱스 등 */
+      }
+    }
+  }
+  return '';
+}
+
+function inviteDisplayAddressBookPart(stored) {
+  const s = String(stored != null ? stored : '').trim();
+  if (!s) return '';
+  const i = s.indexOf('/');
+  return (i >= 0 ? s.slice(0, i) : s).trim();
+}
+
+/**
+ * 방장 전용: inviteDisplayByPhone 값을 users.name 과 병합 (주소록명/users이름, 미가입은 주소록만 유지)
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} hostUserId
+ * @returns {Promise<{ updated: number }>}
+ */
+export async function enrichInviteDisplayByPhoneFromUsers(db, rideId, hostUserId) {
+  const rideRef = doc(db, 'rides', rideId);
+  const snap = await getDoc(rideRef);
+  if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+  const data = snap.data();
+  if (String(data.hostUserId || '').trim() !== String(hostUserId || '').trim()) throw new Error('FORBIDDEN');
+  const idp = sanitizeInviteDisplayByPhone(data.inviteDisplayByPhone);
+  const keys = Object.keys(idp);
+  if (keys.length === 0) return { updated: 0 };
+  const patch = {};
+  for (const key of keys) {
+    const stored = String(idp[key] != null ? idp[key] : '').trim();
+    if (!stored) continue;
+    const localOnly = inviteDisplayAddressBookPart(stored);
+    if (!localOnly) continue;
+    const candidates = buildOpenRidingInvitePhoneQueryCandidates(key);
+    const fbName = await fetchUserDisplayNameByPhoneForOpenRiding(db, candidates);
+    if (!fbName) continue;
+    let next = stored;
+    if (fbName !== localOnly) next = `${localOnly}/${fbName}`.slice(0, 40);
+    else next = localOnly.slice(0, 40);
+    if (next !== stored) patch[key] = next;
+  }
+  if (Object.keys(patch).length === 0) return { updated: 0 };
+  await mergeInviteDisplayByPhoneForHost(db, rideId, hostUserId, patch);
+  return { updated: Object.keys(patch).length };
 }
 
 function omitInviteDisplayByPhoneForPhone(inviteMap, phoneRaw) {
@@ -723,6 +832,7 @@ if (typeof window !== 'undefined') {
     joinRideTransaction,
     leaveRideTransaction,
     updateRideByHost,
+    enrichInviteDisplayByPhoneFromUsers,
     mergeInviteDisplayByPhoneForHost,
     cancelRideByHost,
     deleteRideByHost,
