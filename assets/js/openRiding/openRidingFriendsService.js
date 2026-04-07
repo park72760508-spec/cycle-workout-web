@@ -551,6 +551,15 @@ export async function fetchFriendManagementSnapshot(db, userId) {
   return { friends, outgoing, incoming };
 }
 
+/** 라이딩 모임 헤더 배지: 나에게 온 pending 친구 요청 건수 */
+export async function countPendingIncomingFriendRequests(db, userId) {
+  const uid = String(userId || '').trim();
+  if (!db || !uid) return 0;
+  const q = query(collection(db, 'friendRequests'), where('toUid', '==', uid), where('status', '==', 'pending'));
+  const snap = await getDocs(q);
+  return snap.size;
+}
+
 export async function loadFriendsForInviteMerge(db, userId) {
   const uid = String(userId || '').trim();
   if (!db || !uid) return [];
@@ -588,6 +597,7 @@ if (typeof window !== 'undefined') {
     reopenFriendRequestToPending,
     syncFriendsFromAcceptedRequests,
     fetchFriendManagementSnapshot,
+    countPendingIncomingFriendRequests,
     loadFriendsForInviteMerge,
     normalizePhoneDigits
   };

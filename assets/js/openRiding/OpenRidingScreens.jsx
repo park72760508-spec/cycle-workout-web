@@ -5355,6 +5355,13 @@ function OpenRidingFriendsManage(props) {
     return row.toDisplayName != null ? String(row.toDisplayName).trim() : '상대';
   }
 
+  /** 3자 이상 이름은 3자 + .. (한 줄 표기용) */
+  function truncateNameThreeDots(name) {
+    var s = String(name != null ? name : '').trim();
+    if (s.length >= 3) return s.slice(0, 3) + '..';
+    return s || '-';
+  }
+
   function outgoingContact(row) {
     var c = row.targetPreviewContact != null ? String(row.targetPreviewContact).trim() : '';
     if (c) return c;
@@ -5568,13 +5575,13 @@ function OpenRidingFriendsManage(props) {
             <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
           ) : (
             <div className="overflow-x-auto -mx-0.5">
-              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[300px]">
+              <table className="w-full table-fixed text-[11px] leading-tight text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
                 <thead>
                   <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
-                    <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
-                    <th className="py-2 px-2 font-medium min-w-[6.5rem]">연락처</th>
-                    <th className="py-2 px-2 font-medium whitespace-nowrap w-[4.5rem]">상태</th>
-                    <th className="py-2 px-2 font-medium text-center w-[4.5rem]">요청</th>
+                    <th className="py-1.5 pl-2 pr-1 font-medium w-[18%]">이름</th>
+                    <th className="py-1.5 px-1 font-medium w-[36%]">연락처</th>
+                    <th className="py-1.5 px-1 font-medium w-[14%]">상태</th>
+                    <th className="py-1.5 pr-2 pl-1 font-medium text-center w-[32%]">요청</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5582,16 +5589,18 @@ function OpenRidingFriendsManage(props) {
                     var st = String(row.status || '');
                     var to = String(row.toUid || '');
                     return (
-                      <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0 align-top">
-                        <td className="py-2 px-2 font-medium text-slate-800">{outgoingDisplayName(row)}</td>
-                        <td className="py-2 px-2 text-slate-600 break-all tabular-nums">{outgoingContactForDisplay(row)}</td>
-                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{outgoingStatusShort(st)}</td>
-                        <td className="py-2 px-1 text-center">
-                          <div className="flex flex-col gap-1 items-stretch sm:items-end">
+                      <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0">
+                        <td className="py-1.5 pl-2 pr-1 font-medium text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis" title={outgoingDisplayName(row)}>
+                          {truncateNameThreeDots(outgoingDisplayName(row))}
+                        </td>
+                        <td className="py-1.5 px-1 text-slate-600 tabular-nums whitespace-nowrap">{outgoingContactForDisplay(row)}</td>
+                        <td className="py-1.5 px-1 text-slate-600 whitespace-nowrap">{outgoingStatusShort(st)}</td>
+                        <td className="py-1 pr-2 pl-1 text-right">
+                          <div className="inline-flex flex-nowrap items-center justify-end gap-0.5 max-w-full">
                             {st === 'pending' ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-amber-200 text-amber-800 bg-white hover:bg-amber-50 whitespace-nowrap"
+                                className="text-[10px] font-semibold px-1.5 py-1 rounded border border-amber-200 text-amber-800 bg-white hover:bg-amber-50 whitespace-nowrap shrink-0"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5610,7 +5619,7 @@ function OpenRidingFriendsManage(props) {
                             {st === 'rejected' || st === 'cancelled' ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-violet-200 text-violet-800 bg-white hover:bg-violet-50 whitespace-nowrap"
+                                className="text-[10px] font-semibold px-1.5 py-1 rounded border border-violet-200 text-violet-800 bg-white hover:bg-violet-50 whitespace-nowrap shrink-0"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5637,7 +5646,7 @@ function OpenRidingFriendsManage(props) {
                             {st === 'rejected' || st === 'cancelled' ? (
                               <button
                                 type="button"
-                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 whitespace-nowrap"
+                                className="text-[10px] font-semibold px-1.5 py-1 rounded border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 whitespace-nowrap shrink-0"
                                 disabled={actionBusy}
                                 onClick={function () {
                                   var fr = window.openRidingFriendsService || {};
@@ -5771,6 +5780,30 @@ function OpenRidingRoomApp(props) {
   var _rid = useState(null);
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
+  var _pic = useState(0);
+  var pendingIncomingCount = _pic[0];
+  var setPendingIncomingCount = _pic[1];
+
+  useEffect(
+    function () {
+      if (!firestore || !userId) {
+        setPendingIncomingCount(0);
+        return;
+      }
+      var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+      if (typeof fr.countPendingIncomingFriendRequests !== 'function') return;
+      var cancelled = false;
+      fr.countPendingIncomingFriendRequests(firestore, userId).then(function (n) {
+        if (!cancelled) setPendingIncomingCount(typeof n === 'number' ? n : 0);
+      }).catch(function () {
+        if (!cancelled) setPendingIncomingCount(0);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [firestore, userId, view]
+  );
 
   function handleTopBack() {
     if (view === 'main') {
@@ -5916,28 +5949,47 @@ function OpenRidingRoomApp(props) {
               {headerTitle}
             </h1>
             {view === 'main' && userId ? (
-              <button
-                type="button"
-                className="shrink-0 p-1 rounded-lg hover:bg-gray-100 border-0 bg-transparent cursor-pointer flex items-center justify-center"
-                style={{ width: '2.5em' }}
-                onClick={function () {
-                  setView('friends');
-                }}
-                aria-label="친구 관리"
-              >
-                <img
-                  src="assets/img/friends.png"
-                  alt=""
-                  width={26}
-                  height={26}
-                  className="block object-contain"
-                  decoding="async"
-                  onError={function (e) {
-                    e.currentTarget.src = 'assets/img/friends.svg';
-                    e.currentTarget.onerror = null;
+              <div className="relative shrink-0 w-[2.5em] h-[2.5em] flex items-center justify-center">
+                <button
+                  type="button"
+                  className="p-1 rounded-lg hover:bg-gray-100 border-0 bg-transparent cursor-pointer flex items-center justify-center w-full h-full"
+                  onClick={function () {
+                    setView('friends');
                   }}
-                />
-              </button>
+                  aria-label={'친구 관리' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}
+                >
+                  <img
+                    src="assets/img/friends.png"
+                    alt=""
+                    width={26}
+                    height={26}
+                    className="block object-contain"
+                    decoding="async"
+                    onError={function (e) {
+                      e.currentTarget.src = 'assets/img/friends.svg';
+                      e.currentTarget.onerror = null;
+                    }}
+                  />
+                </button>
+                {pendingIncomingCount > 0 ? (
+                  <span
+                    className="absolute pointer-events-none flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm z-10"
+                    style={{
+                      minWidth: '15px',
+                      height: '15px',
+                      fontSize: pendingIncomingCount > 9 ? 8 : 9,
+                      paddingLeft: pendingIncomingCount > 9 ? 3 : 4,
+                      paddingRight: pendingIncomingCount > 9 ? 3 : 4,
+                      top: '0',
+                      right: '0',
+                      transform: 'translate(20%, -35%)'
+                    }}
+                    aria-hidden="true"
+                  >
+                    {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
+                  </span>
+                ) : null}
+              </div>
             ) : (
               <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
             )}
