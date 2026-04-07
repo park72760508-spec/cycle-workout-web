@@ -5385,6 +5385,137 @@ function OpenRidingFriendsManage(props) {
   return (
     <div className="open-riding-filter-full-page w-full max-w-lg mx-auto text-left relative z-0">
       <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-4 text-sm text-slate-700 relative z-0">
+        {/* 1. 친구 요청 대상자 검색 */}
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
+          <h2 className="text-sm font-semibold text-slate-800 m-0">친구 요청 대상자 검색</h2>
+          <p className="text-xs text-slate-500 m-0 leading-snug">
+            검색 결과·보낸/받은 요청에서는 상대 전화번호가 수락되기 전까지 마스킹(예: 010-4017-****)되어 표시됩니다.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              className="flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"
+              placeholder="이름 또는 전화 뒤 4자리"
+              value={searchTerm}
+              onChange={function (e) {
+                setSearchTerm(e.target.value);
+              }}
+            />
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              disabled={actionBusy || searchBusy}
+              onClick={runSearch}
+            >
+              검색
+            </button>
+          </div>
+          {searchBusy || searchDiag.done ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-2.5 space-y-1.5 text-xs">
+              {searchBusy ? (
+                <p className="text-slate-600 m-0 font-medium">검색 중…</p>
+              ) : (
+                <p className="text-slate-800 m-0">
+                  <span className="font-semibold">검색어:</span>{' '}
+                  <span className="text-slate-700">{searchDiag.lastTerm || '(없음)'}</span>
+                  <span className="text-slate-400 mx-1.5">·</span>
+                  <span className="font-semibold text-slate-700">
+                    {searchDiag.rowCount > 0 ? searchDiag.rowCount + '건' : '결과 없음'}
+                  </span>
+                </p>
+              )}
+              {!searchBusy && searchDiag.errors && searchDiag.errors.length > 0
+                ? searchDiag.errors.map(function (msg, i) {
+                    return (
+                      <p key={'se-' + i} className="text-red-600 m-0 leading-snug">
+                        {msg}
+                      </p>
+                    );
+                  })
+                : null}
+              {!searchBusy && searchDiag.hints && searchDiag.hints.length > 0
+                ? searchDiag.hints.map(function (h, i) {
+                    return (
+                      <p key={'sh-' + i} className="text-slate-500 m-0 leading-snug">
+                        {h}
+                      </p>
+                    );
+                  })
+                : null}
+            </div>
+          ) : null}
+          {searchDiag.done && !searchBusy ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-600 m-0">검색 대상</p>
+              {searchCandidates.length === 0 ? (
+                <p className="text-xs text-slate-500 m-0">표시할 사용자가 없습니다. 조건을 바꿔 다시 검색해 주세요.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-slate-200 -mx-0.5">
+                  <table className="w-full text-xs text-left border-collapse min-w-[320px]">
+                    <thead>
+                      <tr className="text-slate-500 bg-slate-50 border-b border-slate-200 sticky top-0">
+                        <th className="py-2 px-2 font-medium">이름</th>
+                        <th className="py-2 px-2 font-medium w-[5.5rem] text-center">친구 요청</th>
+                        <th className="py-2 px-2 font-medium w-[3.5rem] text-center">삭제</th>
+                        <th className="py-2 px-2 font-medium">상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {searchCandidates.map(function (c) {
+                        var rowSt = searchRowStatus(c);
+                        var canReq = canClickFriendRequest(c);
+                        return (
+                          <tr key={c.uid} className="border-b border-slate-100 align-top">
+                            <td className="py-2 px-2">
+                              <span className="font-medium text-slate-800 block">{c.name}</span>
+                              <span className="text-[11px] text-slate-500 break-all">{searchContactDisplay(c)}</span>
+                            </td>
+                            <td className="py-2 px-1 text-center">
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-violet-600 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-violet-700"
+                                disabled={actionBusy || !canReq}
+                                onClick={function () {
+                                  sendFriendRequestToCandidate(c);
+                                }}
+                              >
+                                친구 요청
+                              </button>
+                            </td>
+                            <td className="py-2 px-1 text-center">
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-slate-50"
+                                disabled={actionBusy}
+                                title="이 검색 결과 목록에서만 제거합니다"
+                                onClick={function () {
+                                  setSearchCandidates(function (prev) {
+                                    var next = prev.filter(function (x) {
+                                      return x.uid !== c.uid;
+                                    });
+                                    setSearchDiag(function (d) {
+                                      return Object.assign({}, d, { rowCount: next.length });
+                                    });
+                                    return next;
+                                  });
+                                }}
+                              >
+                                삭제
+                              </button>
+                            </td>
+                            <td className="py-2 px-2 text-slate-700 leading-snug">{searchStatusDisplay(rowSt)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </section>
+
+        {/* 2. 등록된 친구 */}
         <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
           <h2 className="text-sm font-semibold text-slate-800 m-0">등록된 친구</h2>
           {bundle.loading ? (
@@ -5392,24 +5523,24 @@ function OpenRidingFriendsManage(props) {
           ) : bundle.friends.length === 0 ? (
             <p className="text-xs text-slate-500 m-0">등록된 친구가 없습니다. 요청이 수락되면 여기에 표시됩니다.</p>
           ) : (
-            <div className="overflow-x-auto -mx-1">
-              <table className="w-full text-xs text-left border-collapse">
+            <div className="overflow-x-auto -mx-0.5">
+              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-100">
-                    <th className="py-2 pr-2 font-medium w-8">순번</th>
-                    <th className="py-2 pr-2 font-medium">친구 이름</th>
-                    <th className="py-2 font-medium">연락처</th>
+                  <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
+                    <th className="py-2 px-2 font-medium w-10">순번</th>
+                    <th className="py-2 px-2 font-medium">이름</th>
+                    <th className="py-2 px-2 font-medium">연락처</th>
                   </tr>
                 </thead>
                 <tbody>
                   {bundle.friends.map(function (row, idx) {
                     return (
-                      <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50">
-                        <td className="py-2 pr-2 text-slate-600 tabular-nums">{idx + 1}</td>
-                        <td className="py-2 pr-2 font-medium text-slate-800">
+                      <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0">
+                        <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
+                        <td className="py-2 px-2 font-medium text-slate-800">
                           {row.displayName != null ? String(row.displayName) : '-'}
                         </td>
-                        <td className="py-2 text-slate-700 break-all">
+                        <td className="py-2 px-2 text-slate-700 break-all">
                           {row.contact != null ? String(row.contact) : '-'}
                         </td>
                       </tr>
@@ -5421,310 +5552,195 @@ function OpenRidingFriendsManage(props) {
           )}
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-2">내가 보낸 요청</h3>
-            {outgoingList.length === 0 ? (
-              <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
-            ) : (
-              <ul className="m-0 p-0 list-none rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 text-xs sm:text-sm">
-                {outgoingList.map(function (row, idx) {
-                  var st = String(row.status || '');
-                  var to = String(row.toUid || '');
-                  return (
-                    <li
-                      key={String(row.id || 'out-' + to)}
-                      className="flex gap-2 px-2 py-2.5 items-start sm:items-center"
-                    >
-                      <span className="shrink-0 w-6 text-right text-slate-400 tabular-nums font-normal pt-0.5 sm:pt-0">
-                        {idx + 1}.
-                      </span>
-                      <div className="flex-1 min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 min-w-0">
-                          <span className="font-semibold text-slate-800">{outgoingDisplayName(row)}</span>
-                          <span className="text-slate-600 tabular-nums break-all">{outgoingContactForDisplay(row)}</span>
-                          <span className="text-slate-500">{statusKo(st)}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 shrink-0">
-                          {st === 'pending' ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 bg-white hover:bg-amber-50"
-                              disabled={actionBusy}
-                              onClick={function () {
-                                var fr = window.openRidingFriendsService || {};
-                                if (typeof fr.cancelFriendRequest !== 'function') return;
-                                setActionBusy(true);
-                                fr.cancelFriendRequest(firestore, userId, to).then(refresh).catch(function (e) {
-                                  alert(e && e.message ? e.message : '취소 실패');
-                                }).finally(function () {
-                                  setActionBusy(false);
-                                });
-                              }}
-                            >
-                              요청 취소
-                            </button>
-                          ) : null}
-                          {st === 'rejected' || st === 'cancelled' ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-violet-200 text-violet-800 bg-white hover:bg-violet-50"
-                              disabled={actionBusy}
-                              onClick={function () {
-                                var fr = window.openRidingFriendsService || {};
-                                if (typeof fr.sendFriendRequest !== 'function') return;
-                                var pr = profForSend();
-                                if (!pr.fromContact) {
-                                  alert('프로필 연락처를 등록해 주세요.');
-                                  return;
-                                }
-                                setActionBusy(true);
-                                fr.sendFriendRequest(firestore, userId, to, pr, {
-                                  targetName: outgoingDisplayName(row),
-                                  targetContact: outgoingContact(row)
-                                }).then(refresh).catch(function (e) {
-                                  alert(e && e.message ? e.message : '재요청 실패');
-                                }).finally(function () {
-                                  setActionBusy(false);
-                                });
-                              }}
-                            >
-                              다시 요청
-                            </button>
-                          ) : null}
-                          {st === 'rejected' || st === 'cancelled' ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-600 bg-white hover:bg-slate-50"
-                              disabled={actionBusy}
-                              onClick={function () {
-                                var fr = window.openRidingFriendsService || {};
-                                if (typeof fr.deleteFriendRequestForSender !== 'function') return;
-                                setActionBusy(true);
-                                fr.deleteFriendRequestForSender(firestore, userId, to).then(refresh).catch(function (e) {
-                                  alert(e && e.message ? e.message : '삭제 실패');
-                                }).finally(function () {
-                                  setActionBusy(false);
-                                });
-                              }}
-                            >
-                              삭제
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          <div className="border-t border-slate-100 pt-3 space-y-2">
-            <h3 className="text-sm font-semibold text-slate-800 m-0">친구 요청 대상자 검색</h3>
-            <p className="text-xs text-slate-500 m-0 leading-snug">
-              검색 결과·보낸/받은 요청에서는 상대 전화번호가 수락되기 전까지 마스킹(예: 010-4017-****)되어 표시됩니다.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                className="flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"
-                placeholder="이름 또는 전화 뒤 4자리"
-                value={searchTerm}
-                onChange={function (e) {
-                  setSearchTerm(e.target.value);
-                }}
-              />
-              <button
-                type="button"
-                className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                disabled={actionBusy || searchBusy}
-                onClick={runSearch}
-              >
-                검색
-              </button>
+        {/* 3. 내가 보낸 요청 */}
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
+          <h2 className="text-sm font-semibold text-slate-800 m-0">내가 보낸 요청</h2>
+          {outgoingList.length === 0 ? (
+            <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
+          ) : (
+            <div className="overflow-x-auto -mx-0.5">
+              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[340px]">
+                <thead>
+                  <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
+                    <th className="py-2 px-2 font-medium w-10">순번</th>
+                    <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
+                    <th className="py-2 px-2 font-medium min-w-[7rem]">연락처</th>
+                    <th className="py-2 px-2 font-medium whitespace-nowrap">상태</th>
+                    <th className="py-2 px-2 font-medium text-center w-[6.5rem]">요청 취소</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outgoingList.map(function (row, idx) {
+                    var st = String(row.status || '');
+                    var to = String(row.toUid || '');
+                    return (
+                      <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0 align-top">
+                        <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
+                        <td className="py-2 px-2 font-medium text-slate-800">{outgoingDisplayName(row)}</td>
+                        <td className="py-2 px-2 text-slate-600 break-all tabular-nums">{outgoingContactForDisplay(row)}</td>
+                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{statusKo(st)}</td>
+                        <td className="py-2 px-1 text-center">
+                          <div className="flex flex-col gap-1 items-stretch sm:items-end">
+                            {st === 'pending' ? (
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-amber-200 text-amber-800 bg-white hover:bg-amber-50 whitespace-nowrap"
+                                disabled={actionBusy}
+                                onClick={function () {
+                                  var fr = window.openRidingFriendsService || {};
+                                  if (typeof fr.cancelFriendRequest !== 'function') return;
+                                  setActionBusy(true);
+                                  fr.cancelFriendRequest(firestore, userId, to).then(refresh).catch(function (e) {
+                                    alert(e && e.message ? e.message : '취소 실패');
+                                  }).finally(function () {
+                                    setActionBusy(false);
+                                  });
+                                }}
+                              >
+                                요청 취소
+                              </button>
+                            ) : null}
+                            {st === 'rejected' || st === 'cancelled' ? (
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-violet-200 text-violet-800 bg-white hover:bg-violet-50 whitespace-nowrap"
+                                disabled={actionBusy}
+                                onClick={function () {
+                                  var fr = window.openRidingFriendsService || {};
+                                  if (typeof fr.sendFriendRequest !== 'function') return;
+                                  var pr = profForSend();
+                                  if (!pr.fromContact) {
+                                    alert('프로필 연락처를 등록해 주세요.');
+                                    return;
+                                  }
+                                  setActionBusy(true);
+                                  fr.sendFriendRequest(firestore, userId, to, pr, {
+                                    targetName: outgoingDisplayName(row),
+                                    targetContact: outgoingContact(row)
+                                  }).then(refresh).catch(function (e) {
+                                    alert(e && e.message ? e.message : '재요청 실패');
+                                  }).finally(function () {
+                                    setActionBusy(false);
+                                  });
+                                }}
+                              >
+                                다시 요청
+                              </button>
+                            ) : null}
+                            {st === 'rejected' || st === 'cancelled' ? (
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 whitespace-nowrap"
+                                disabled={actionBusy}
+                                onClick={function () {
+                                  var fr = window.openRidingFriendsService || {};
+                                  if (typeof fr.deleteFriendRequestForSender !== 'function') return;
+                                  setActionBusy(true);
+                                  fr.deleteFriendRequestForSender(firestore, userId, to).then(refresh).catch(function (e) {
+                                    alert(e && e.message ? e.message : '삭제 실패');
+                                  }).finally(function () {
+                                    setActionBusy(false);
+                                  });
+                                }}
+                              >
+                                삭제
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            {searchBusy || searchDiag.done ? (
-              <div className="rounded-lg border border-slate-200 bg-slate-50/90 p-2.5 space-y-1.5 text-xs">
-                {searchBusy ? (
-                  <p className="text-slate-600 m-0 font-medium">검색 중…</p>
-                ) : (
-                  <p className="text-slate-800 m-0">
-                    <span className="font-semibold">검색어:</span>{' '}
-                    <span className="text-slate-700">{searchDiag.lastTerm || '(없음)'}</span>
-                    <span className="text-slate-400 mx-1.5">·</span>
-                    <span className="font-semibold text-slate-700">
-                      {searchDiag.rowCount > 0 ? searchDiag.rowCount + '건' : '결과 없음'}
-                    </span>
-                  </p>
-                )}
-                {!searchBusy && searchDiag.errors && searchDiag.errors.length > 0
-                  ? searchDiag.errors.map(function (msg, i) {
-                      return (
-                        <p key={'se-' + i} className="text-red-600 m-0 leading-snug">
-                          {msg}
-                        </p>
-                      );
-                    })
-                  : null}
-                {!searchBusy && searchDiag.hints && searchDiag.hints.length > 0
-                  ? searchDiag.hints.map(function (h, i) {
-                      return (
-                        <p key={'sh-' + i} className="text-slate-500 m-0 leading-snug">
-                          {h}
-                        </p>
-                      );
-                    })
-                  : null}
-              </div>
-            ) : null}
-            {searchDiag.done && !searchBusy ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-600 m-0">검색 대상</p>
-                {searchCandidates.length === 0 ? (
-                  <p className="text-xs text-slate-500 m-0">표시할 사용자가 없습니다. 조건을 바꿔 다시 검색해 주세요.</p>
-                ) : (
-                  <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-slate-200">
-                    <table className="w-full text-xs text-left border-collapse min-w-[320px]">
-                      <thead>
-                        <tr className="text-slate-500 bg-slate-50 border-b border-slate-200 sticky top-0">
-                          <th className="py-2 px-2 font-medium">이름</th>
-                          <th className="py-2 px-2 font-medium w-[5.5rem] text-center">친구 요청</th>
-                          <th className="py-2 px-2 font-medium w-[3.5rem] text-center">삭제</th>
-                          <th className="py-2 px-2 font-medium">상태</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {searchCandidates.map(function (c) {
-                          var rowSt = searchRowStatus(c);
-                          var canReq = canClickFriendRequest(c);
-                          return (
-                            <tr key={c.uid} className="border-b border-slate-100 align-top">
-                              <td className="py-2 px-2">
-                                <span className="font-medium text-slate-800 block">{c.name}</span>
-                                <span className="text-[11px] text-slate-500 break-all">{searchContactDisplay(c)}</span>
-                              </td>
-                              <td className="py-2 px-1 text-center">
-                                <button
-                                  type="button"
-                                  className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-violet-600 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-violet-700"
-                                  disabled={actionBusy || !canReq}
-                                  onClick={function () {
-                                    sendFriendRequestToCandidate(c);
-                                  }}
-                                >
-                                  친구 요청
-                                </button>
-                              </td>
-                              <td className="py-2 px-1 text-center">
-                                <button
-                                  type="button"
-                                  className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-slate-50"
-                                  disabled={actionBusy}
-                                  title="이 검색 결과 목록에서만 제거합니다"
-                                  onClick={function () {
-                                    setSearchCandidates(function (prev) {
-                                      var next = prev.filter(function (x) {
-                                        return x.uid !== c.uid;
-                                      });
-                                      setSearchDiag(function (d) {
-                                        return Object.assign({}, d, { rowCount: next.length });
-                                      });
-                                      return next;
-                                    });
-                                  }}
-                                >
-                                  삭제
-                                </button>
-                              </td>
-                              <td className="py-2 px-2 text-slate-700 leading-snug">{searchStatusDisplay(rowSt)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
+          )}
+        </section>
 
-          <div className="border-t border-slate-100 pt-3">
-            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-2">나에게 온 요청</h3>
-            {incomingList.length === 0 ? (
-              <p className="text-xs text-slate-500 m-0">새 요청이 없습니다.</p>
-            ) : (
-              <ul className="m-0 p-0 list-none rounded-lg border border-slate-200 bg-white divide-y divide-slate-100 text-xs sm:text-sm">
-                {incomingList.map(function (row, idx) {
-                  var st = String(row.status || '');
-                  var from = String(row.fromUid || '');
-                  return (
-                    <li
-                      key={String(row.id || 'in-' + from)}
-                      className="flex gap-2 px-2 py-2.5 items-start sm:items-center"
-                    >
-                      <span className="shrink-0 w-6 text-right text-slate-400 tabular-nums font-normal pt-0.5 sm:pt-0">
-                        {idx + 1}.
-                      </span>
-                      <div className="flex-1 min-w-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 min-w-0">
-                          <span className="font-semibold text-slate-800">
-                            {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
-                          </span>
-                          <span className="text-slate-600 tabular-nums break-all">{incomingContactForDisplay(row)}</span>
-                          {st === 'rejected' ? <span className="text-slate-500">{statusKo(st)}</span> : null}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 shrink-0">
-                          {st === 'pending' || st === 'rejected' ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                              disabled={actionBusy}
-                              onClick={function () {
-                                if (!acceptProfMemo.toContact) {
-                                  alert('수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.');
-                                  return;
-                                }
-                                var fr = window.openRidingFriendsService || {};
-                                if (typeof fr.acceptFriendRequest !== 'function') return;
-                                setActionBusy(true);
-                                fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(refresh).catch(function (e) {
-                                  alert(e && e.message ? e.message : '수락 실패');
-                                }).finally(function () {
-                                  setActionBusy(false);
-                                });
-                              }}
-                            >
-                              수락
-                            </button>
-                          ) : null}
-                          {st === 'pending' ? (
-                            <button
-                              type="button"
-                              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                              disabled={actionBusy}
-                              onClick={function () {
-                                var fr = window.openRidingFriendsService || {};
-                                if (typeof fr.rejectFriendRequest !== 'function') return;
-                                setActionBusy(true);
-                                fr.rejectFriendRequest(firestore, from, userId).then(refresh).catch(function (e) {
-                                  alert(e && e.message ? e.message : '거절 실패');
-                                }).finally(function () {
-                                  setActionBusy(false);
-                                });
-                              }}
-                            >
-                              거절
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+        {/* 4. 나에게 온 요청 */}
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
+          <h2 className="text-sm font-semibold text-slate-800 m-0">나에게 온 요청</h2>
+          {incomingList.length === 0 ? (
+            <p className="text-xs text-slate-500 m-0">새 요청이 없습니다.</p>
+          ) : (
+            <div className="overflow-x-auto -mx-0.5">
+              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[340px]">
+                <thead>
+                  <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
+                    <th className="py-2 px-2 font-medium w-10">순번</th>
+                    <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
+                    <th className="py-2 px-2 font-medium min-w-[7rem]">연락처</th>
+                    <th className="py-2 px-2 font-medium whitespace-nowrap">상태</th>
+                    <th className="py-2 px-2 font-medium text-center min-w-[7rem]">처리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incomingList.map(function (row, idx) {
+                    var st = String(row.status || '');
+                    var from = String(row.fromUid || '');
+                    return (
+                      <tr key={String(row.id || 'in-' + from)} className="border-b border-slate-50 last:border-b-0 align-top">
+                        <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
+                        <td className="py-2 px-2 font-medium text-slate-800">
+                          {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
+                        </td>
+                        <td className="py-2 px-2 text-slate-600 break-all tabular-nums">{incomingContactForDisplay(row)}</td>
+                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
+                          {st === 'pending' ? '대기 중' : statusKo(st)}
+                        </td>
+                        <td className="py-2 px-1 text-center">
+                          <div className="flex flex-col sm:flex-row gap-1 justify-end items-stretch sm:items-center">
+                            {st === 'pending' || st === 'rejected' ? (
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 whitespace-nowrap"
+                                disabled={actionBusy}
+                                onClick={function () {
+                                  if (!acceptProfMemo.toContact) {
+                                    alert('수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.');
+                                    return;
+                                  }
+                                  var fr = window.openRidingFriendsService || {};
+                                  if (typeof fr.acceptFriendRequest !== 'function') return;
+                                  setActionBusy(true);
+                                  fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(refresh).catch(function (e) {
+                                    alert(e && e.message ? e.message : '수락 실패');
+                                  }).finally(function () {
+                                    setActionBusy(false);
+                                  });
+                                }}
+                              >
+                                수락
+                              </button>
+                            ) : null}
+                            {st === 'pending' ? (
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+                                disabled={actionBusy}
+                                onClick={function () {
+                                  var fr = window.openRidingFriendsService || {};
+                                  if (typeof fr.rejectFriendRequest !== 'function') return;
+                                  setActionBusy(true);
+                                  fr.rejectFriendRequest(firestore, from, userId).then(refresh).catch(function (e) {
+                                    alert(e && e.message ? e.message : '거절 실패');
+                                  }).finally(function () {
+                                    setActionBusy(false);
+                                  });
+                                }}
+                              >
+                                거절
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {bundle.err ? <p className="text-xs text-red-600 m-0 px-1">{bundle.err}</p> : null}
