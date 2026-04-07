@@ -420,8 +420,12 @@ function DailyTimeInZonesCharts(props) {
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
   var hrSourceCaption = (maxHr > 0 && logYear) ? '영역 기준: yearly_peaks/' + logYear + ' max_hr ' + maxHr + 'bpm' : null;
+  var sectionHeadingClass =
+    typeof p.sectionTitleClassName === 'string' && p.sectionTitleClassName.trim()
+      ? p.sectionTitleClassName.trim()
+      : 'text-sm font-semibold text-gray-800 mb-2';
   return React.createElement('div', { className: 'training-detail-time-in-zones space-y-4' },
-    React.createElement('h3', { className: 'text-sm font-semibold text-gray-800 mb-2' }, '영역별 누적 시간'),
+    React.createElement('h3', { className: sectionHeadingClass }, '영역별 누적 시간'),
     hasPower ? React.createElement(PowerTimeInZonesChart, { DashboardCard: Card, powerData: powerData, ftp: ftp, isFullWidth: true, yAxisUnit: 'm', titleOverride: '파워 영역 누적 시간' }) : null,
     hasHr ? React.createElement(HRTimeInZonesChart, { DashboardCard: Card, hrData: hrData, maxHr: maxHr, maxHrSourceCaption: hrSourceCaption, isFullWidth: true, yAxisUnit: 'm', titleOverride: '심박 영역 누적 시간' }) : null
   );
