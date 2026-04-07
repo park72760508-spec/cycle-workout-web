@@ -5298,7 +5298,7 @@ function OpenRidingDetail(props) {
                 <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
               ) : (
                 <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  이 일정일에 STRAVA 라이딩 기록이 없거나 아직 훈련일지에 반영되지 않았습니다. 동기화 후 다시 열어 주세요.
+                  이 일정일에 STRAVA 라이딩 기록이 없거나 아직 라이딩이 종료되지 않았습니다.
                 </p>
               )}
             </div>
