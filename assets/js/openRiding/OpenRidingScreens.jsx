@@ -3959,6 +3959,9 @@ function OpenRidingDetail(props) {
   var _opRulesExp = useState(false);
   var operationRulesExpanded = _opRulesExp[0];
   var setOperationRulesExpanded = _opRulesExp[1];
+  var _partListExp = useState(false);
+  var participantListExpanded = _partListExp[0];
+  var setParticipantListExpanded = _partListExp[1];
 
   useEffect(
     function () {
@@ -3967,6 +3970,7 @@ function OpenRidingDetail(props) {
       setDeleteModalOpen(false);
       setInviteListExpanded(false);
       setOperationRulesExpanded(false);
+      setParticipantListExpanded(false);
     },
     [rideId]
   );
@@ -4545,7 +4549,97 @@ function OpenRidingDetail(props) {
               })()
             : '-'
         )}
-        {statRow('정원', ((ride.participants && ride.participants.length) || 0) + ' / ' + (ride.maxParticipants != null ? ride.maxParticipants : '-'))}
+        <div className={'w-full border-t border-slate-100/90 px-3 py-3 space-y-3 bg-violet-50/25' + detailMuted}>
+          {ride.course ? <p className="text-sm text-slate-800 whitespace-pre-wrap m-0">{ride.course}</p> : null}
+          <OpenRidingGpxCoursePanel gpxUrl={ride.gpxUrl != null ? String(ride.gpxUrl) : ''} file={null} storage={storage} showEmptyMessage={true} />
+          {ride.gpxUrl ? (
+            <a
+              className={
+                'inline-flex items-center gap-1 text-violet-600 text-sm font-semibold hover:underline' +
+                (isCancelled ? ' opacity-50 pointer-events-none' : '')
+              }
+              href={ride.gpxUrl}
+              target="_blank"
+              rel="noreferrer"
+              download
+            >
+              GPX 파일 다운로드
+            </a>
+          ) : null}
+        </div>
+        <div className="open-riding-detail-participant-fold open-riding-detail-invite-fold--block w-full min-w-0 border-t border-slate-100/90">
+          <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2 px-3 py-2">
+            <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
+              <button
+                type="button"
+                className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                onClick={function () {
+                  setParticipantListExpanded(function (v) {
+                    return !v;
+                  });
+                }}
+                aria-expanded={participantListExpanded}
+                id="open-riding-participant-toggle"
+              >
+                정원{' '}
+                <span className="tabular-nums font-semibold text-inherit" aria-hidden>
+                  {participantListExpanded ? '(−)' : '(+)'}
+                </span>
+              </button>
+            </span>
+            <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
+              <span className="tabular-nums text-sm leading-[1.25rem]">
+                {parts.length} / {ride.maxParticipants != null ? ride.maxParticipants : '-'}
+              </span>
+            </div>
+          </div>
+          {participantListExpanded ? (
+            <div
+              className="open-riding-detail-participant-list-expanded m-0 w-full min-w-0 border-t border-slate-100/90 px-3 py-3 space-y-3 text-left"
+              role="region"
+              aria-labelledby="open-riding-participant-toggle"
+            >
+              <div>
+                <p className="text-xs font-medium text-slate-600 mb-1">참석 확정 ({parts.length}명)</p>
+                {parts.length === 0 ? (
+                  <p className="text-xs text-slate-400">아직 없습니다.</p>
+                ) : (
+                  <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
+                    {parts.map(function (uid, idx) {
+                      var suf = participantListPhoneSuffix(uid);
+                      return (
+                        <li key={String(uid) + '-p'}>
+                          <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
+                          <span>{participantRowName(uid, '참가자')}</span>
+                          {suf ? <span className="text-slate-600">{suf}</span> : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-600 mb-1">대기 ({waits.length}명)</p>
+                {waits.length === 0 ? (
+                  <p className="text-xs text-slate-400">없습니다.</p>
+                ) : (
+                  <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
+                    {waits.map(function (uid, idx) {
+                      var suf = participantListPhoneSuffix(uid);
+                      return (
+                        <li key={String(uid) + '-w'}>
+                          <span className="font-semibold text-amber-700">{idx + 1}번</span>{' '}
+                          <span>{participantRowName(uid, '대기')}</span>
+                          {suf ? <span className="text-slate-600">{suf}</span> : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
         {viewerCanSeeInviteFold && (isHost || inviteRows.length > 0) ? (
           <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
             <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
@@ -4780,64 +4874,6 @@ function OpenRidingDetail(props) {
       {maskContacts ? (
         <p className="text-xs text-slate-500 px-1 leading-snug">라이딩 일정일이 지나 방장·참가자 연락처는 개인정보 보호를 위해 마스킹되었습니다.</p>
       ) : null}
-
-      <div className={'open-riding-course-detail-card rounded-xl border border-violet-100/80 bg-violet-50/30 p-3 space-y-3' + detailMuted}>
-        {ride.course ? <p className="text-sm text-slate-800 whitespace-pre-wrap m-0">{ride.course}</p> : null}
-        <OpenRidingGpxCoursePanel gpxUrl={ride.gpxUrl != null ? String(ride.gpxUrl) : ''} file={null} storage={storage} showEmptyMessage={true} />
-        {ride.gpxUrl ? (
-          <a
-            className={'inline-flex items-center gap-1 text-violet-600 text-sm font-semibold hover:underline' + (isCancelled ? ' opacity-50 pointer-events-none' : '')}
-            href={ride.gpxUrl}
-            target="_blank"
-            rel="noreferrer"
-            download
-          >
-            GPX 파일 다운로드
-          </a>
-        ) : null}
-      </div>
-
-      <div className={'rounded-xl border border-violet-200/60 bg-white p-3 space-y-3 shadow-sm' + detailMuted}>
-        <h2 className="text-sm font-semibold text-violet-900">참석자 명단</h2>
-        <div>
-          <p className="text-xs font-medium text-slate-600 mb-1">참석 확정 ({parts.length}명)</p>
-          {parts.length === 0 ? (
-            <p className="text-xs text-slate-400">아직 없습니다.</p>
-          ) : (
-            <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
-              {parts.map(function (uid, idx) {
-                var suf = participantListPhoneSuffix(uid);
-                return (
-                  <li key={String(uid) + '-p'}>
-                    <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
-                    <span>{participantRowName(uid, '참가자')}</span>
-                    {suf ? <span className="text-slate-600">{suf}</span> : null}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-medium text-slate-600 mb-1">대기 ({waits.length}명)</p>
-          {waits.length === 0 ? (
-            <p className="text-xs text-slate-400">없습니다.</p>
-          ) : (
-            <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
-              {waits.map(function (uid, idx) {
-                var suf = participantListPhoneSuffix(uid);
-                return (
-                  <li key={String(uid) + '-w'}>
-                    <span className="font-semibold text-amber-700">{idx + 1}번</span>{' '}
-                    <span>{participantRowName(uid, '대기')}</span>
-                    {suf ? <span className="text-slate-600">{suf}</span> : null}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-        </div>
-      </div>
 
       {actionErr ? <p className="text-sm text-red-600">{actionErr}</p> : null}
 
