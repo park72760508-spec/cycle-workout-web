@@ -4144,7 +4144,11 @@ function OpenRidingRideReviewSummaryContent(props) {
   if (log.time_in_zones && DailyCharts) {
     tizEl = (
       <div className="journal-detail-time-in-zones-wrap mt-3">
-        <DailyCharts log={log} userProfile={up} />
+        <DailyCharts
+          log={log}
+          userProfile={up}
+          sectionTitleClassName="text-sm font-semibold text-gray-800 mb-2 text-center w-full"
+        />
       </div>
     );
   }
@@ -4155,8 +4159,8 @@ function OpenRidingRideReviewSummaryContent(props) {
           {rows.map(function (r) {
             return (
               <tr key={r.label} className="border-b border-slate-100 last:border-b-0">
-                <th className="text-left py-2 px-3 font-medium text-slate-600 align-top w-[42%]">{r.label}</th>
-                <td className="py-2 px-3 text-slate-800 font-semibold">{r.value}</td>
+                <th className="text-left py-2 px-3 font-medium text-slate-600 align-middle w-[42%]">{r.label}</th>
+                <td className="py-2 px-3 text-slate-800 font-semibold text-right tabular-nums align-middle">{r.value}</td>
               </tr>
             );
           })}
@@ -4164,7 +4168,7 @@ function OpenRidingRideReviewSummaryContent(props) {
       </table>
       {tizEl}
       {String(log.source || '').toLowerCase() === 'strava' ? (
-        <div className="px-3 py-2 border-t border-slate-100 flex justify-end bg-slate-50/50">
+        <div className="px-3 py-2 border-t border-slate-100 flex justify-center bg-slate-50/50">
           <img src="assets/img/api_strava.png" alt="Powered by Strava" style={{ height: 12 }} />
         </div>
       ) : null}
@@ -5218,27 +5222,26 @@ function OpenRidingDetail(props) {
         {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow('내 상태', roleLabel)}
         <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
-          <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
-            <div className="open-riding-detail-stat-label shrink-0 min-w-0 flex-1 text-left">
-              <p className="text-xs text-slate-600 m-0 leading-snug mb-1.5">라이딩이 종료되면 후기 자동 작성</p>
-              <button
-                type="button"
-                className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
-                onClick={function () {
-                  setReviewExpanded(function (v) {
-                    return !v;
-                  });
-                }}
-                aria-expanded={reviewExpanded}
-                id="open-riding-review-toggle"
-              >
-                후기{' '}
-                <span className="tabular-nums font-semibold text-inherit" aria-hidden>
-                  {reviewExpanded ? '(−)' : '(+)'}
-                </span>
-              </button>
-            </div>
-            <div className="open-riding-detail-stat-value min-w-0 w-8 shrink-0" aria-hidden="true" />
+          <div className="flex flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1 w-full min-w-0">
+            <button
+              type="button"
+              className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded shrink-0"
+              onClick={function () {
+                setReviewExpanded(function (v) {
+                  return !v;
+                });
+              }}
+              aria-expanded={reviewExpanded}
+              id="open-riding-review-toggle"
+            >
+              후기{' '}
+              <span className="tabular-nums font-semibold text-inherit" aria-hidden>
+                {reviewExpanded ? '(−)' : '(+)'}
+              </span>
+            </button>
+            <p className="text-xs text-slate-600 m-0 leading-snug text-right flex-1 min-w-0 max-w-[min(100%,22rem)]">
+              라이딩이 종료되면 후기 자동 작성됩니다
+            </p>
           </div>
           {reviewExpanded ? (
             <div
