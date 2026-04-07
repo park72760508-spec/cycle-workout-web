@@ -5195,12 +5195,12 @@ function OpenRidingFriendsManage(props) {
       setBundle(function (x) {
         return Object.assign({}, x, { loading: false });
       });
-      return;
+      return Promise.resolve();
     }
     setBundle(function (x) {
       return Object.assign({}, x, { loading: true, err: '' });
     });
-    fr.fetchFriendManagementSnapshot(firestore, userId).then(function (data) {
+    return fr.fetchFriendManagementSnapshot(firestore, userId).then(function (data) {
       setBundle({
         friends: data.friends || [],
         outgoing: data.outgoing || [],
@@ -5290,7 +5290,7 @@ function OpenRidingFriendsManage(props) {
       targetName: c.name,
       targetContact: c.contact
     }).then(function () {
-      refresh();
+      return refresh();
     }).catch(function (e) {
       alert(e && e.message ? e.message : '요청 실패');
     }).finally(function () {
@@ -5401,8 +5401,26 @@ function OpenRidingFriendsManage(props) {
     toContact: String(getOpenRidingProfileDefaults().contactInfo || '').trim()
   };
 
+  var friendActionSpinnerVisible = searchBusy || actionBusy;
+
   return (
     <div className="open-riding-filter-full-page w-full max-w-lg mx-auto text-left relative z-0">
+      {friendActionSpinnerVisible ? (
+        <div
+          className="fixed inset-0 z-[10050] flex items-center justify-center bg-slate-900/30 pointer-events-auto"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-white px-8 py-6 shadow-xl border border-slate-200">
+            <div
+              className="h-11 w-11 rounded-full border-[3px] border-emerald-100 border-t-emerald-600 animate-spin shrink-0"
+              style={{ animationDuration: '0.7s' }}
+            />
+            <p className="text-sm font-medium text-slate-700 m-0">동작 진행 중…</p>
+          </div>
+        </div>
+      ) : null}
       <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-4 text-sm text-slate-700 relative z-0">
         {/* 1. 친구 요청 대상자 검색 */}
         <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
@@ -5552,11 +5570,8 @@ function OpenRidingFriendsManage(props) {
                 {friendsExpanded ? '(−)' : '(+)'}
               </span>
             </span>
-            <span className="inline-flex items-center gap-3 text-sm shrink-0">
-              <span className="text-slate-700 font-medium tabular-nums">
-                {bundle.loading ? '…' : bundle.friends.length + '명'}
-              </span>
-              <span className="text-violet-800 font-semibold">{friendsExpanded ? '접어보기' : '펼쳐보기'}</span>
+            <span className="text-sm text-slate-700 font-medium tabular-nums shrink-0">
+              {bundle.loading ? '…' : bundle.friends.length + '명'}
             </span>
           </button>
           {friendsExpanded ? (
@@ -5567,23 +5582,23 @@ function OpenRidingFriendsManage(props) {
                 <p className="text-sm text-slate-500 m-0">등록된 친구가 없습니다. 요청이 수락되면 여기에 표시됩니다.</p>
               ) : (
                 <div className="overflow-x-auto -mx-0.5">
-                  <table className="w-full text-sm text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
+                  <table className="text-sm text-left border-collapse border border-slate-100 rounded-lg overflow-hidden w-max max-w-full">
                     <thead>
                       <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
-                        <th className="py-2 px-2 font-medium w-10">순번</th>
-                        <th className="py-2 px-2 font-medium">이름</th>
-                        <th className="py-2 px-2 font-medium">연락처</th>
+                        <th className="py-2 px-2 font-medium whitespace-nowrap">순번</th>
+                        <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
+                        <th className="py-2 px-2 font-medium whitespace-nowrap">연락처</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bundle.friends.map(function (row, idx) {
                         return (
                           <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0">
-                            <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
-                            <td className="py-2 px-2 font-medium text-slate-800">
+                            <td className="py-2 px-2 text-slate-600 tabular-nums whitespace-nowrap align-middle">{idx + 1}</td>
+                            <td className="py-2 px-2 font-medium text-slate-800 whitespace-nowrap align-middle">
                               {row.displayName != null ? String(row.displayName) : '-'}
                             </td>
-                            <td className="py-2 px-2 text-slate-700 break-all">
+                            <td className="py-2 px-2 text-slate-700 whitespace-nowrap align-middle tabular-nums">
                               {row.contact != null ? String(row.contact) : '-'}
                             </td>
                           </tr>
@@ -5638,7 +5653,9 @@ function OpenRidingFriendsManage(props) {
                                   var fr = window.openRidingFriendsService || {};
                                   if (typeof fr.cancelFriendRequest !== 'function') return;
                                   setActionBusy(true);
-                                  fr.cancelFriendRequest(firestore, userId, to).then(refresh).catch(function (e) {
+                                  fr.cancelFriendRequest(firestore, userId, to).then(function () {
+                                    return refresh();
+                                  }).catch(function (e) {
                                     alert(e && e.message ? e.message : '취소 실패');
                                   }).finally(function () {
                                     setActionBusy(false);
@@ -5665,7 +5682,9 @@ function OpenRidingFriendsManage(props) {
                                   fr.sendFriendRequest(firestore, userId, to, pr, {
                                     targetName: outgoingDisplayName(row),
                                     targetContact: outgoingContact(row)
-                                  }).then(refresh).catch(function (e) {
+                                  }).then(function () {
+                                    return refresh();
+                                  }).catch(function (e) {
                                     alert(e && e.message ? e.message : '재요청 실패');
                                   }).finally(function () {
                                     setActionBusy(false);
@@ -5684,7 +5703,9 @@ function OpenRidingFriendsManage(props) {
                                   var fr = window.openRidingFriendsService || {};
                                   if (typeof fr.deleteFriendRequestForSender !== 'function') return;
                                   setActionBusy(true);
-                                  fr.deleteFriendRequestForSender(firestore, userId, to).then(refresh).catch(function (e) {
+                                  fr.deleteFriendRequestForSender(firestore, userId, to).then(function () {
+                                    return refresh();
+                                  }).catch(function (e) {
                                     alert(e && e.message ? e.message : '삭제 실패');
                                   }).finally(function () {
                                     setActionBusy(false);
@@ -5749,7 +5770,10 @@ function OpenRidingFriendsManage(props) {
                                   var fr = window.openRidingFriendsService || {};
                                   if (typeof fr.acceptFriendRequest !== 'function') return;
                                   setActionBusy(true);
-                                  fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(refresh).catch(function (e) {
+                                  fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(function () {
+                                    setFriendsExpanded(true);
+                                    return refresh();
+                                  }).catch(function (e) {
                                     alert(e && e.message ? e.message : '수락 실패');
                                   }).finally(function () {
                                     setActionBusy(false);
@@ -5768,7 +5792,9 @@ function OpenRidingFriendsManage(props) {
                                   var fr = window.openRidingFriendsService || {};
                                   if (typeof fr.rejectFriendRequest !== 'function') return;
                                   setActionBusy(true);
-                                  fr.rejectFriendRequest(firestore, from, userId).then(refresh).catch(function (e) {
+                                  fr.rejectFriendRequest(firestore, from, userId).then(function () {
+                                    return refresh();
+                                  }).catch(function (e) {
                                     alert(e && e.message ? e.message : '거절 실패');
                                   }).finally(function () {
                                     setActionBusy(false);
