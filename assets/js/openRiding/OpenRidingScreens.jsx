@@ -5370,6 +5370,15 @@ function OpenRidingFriendsManage(props) {
     return s || '-';
   }
 
+  /** 내가 보낸 요청 목록용 짧은 상태 문구 */
+  function outgoingStatusShort(st) {
+    var s = String(st || '');
+    if (s === 'pending') return '대기';
+    if (s === 'rejected') return '거절';
+    if (s === 'cancelled') return '취소됨';
+    return statusKo(s);
+  }
+
   var outgoingList = bundle.outgoing.filter(function (r) {
     return String(r.status) !== 'accepted';
   });
@@ -5559,26 +5568,24 @@ function OpenRidingFriendsManage(props) {
             <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
           ) : (
             <div className="overflow-x-auto -mx-0.5">
-              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[340px]">
+              <table className="w-full text-xs text-left border-collapse border border-slate-100 rounded-lg overflow-hidden min-w-[300px]">
                 <thead>
                   <tr className="text-slate-500 bg-slate-50 border-b border-slate-100">
-                    <th className="py-2 px-2 font-medium w-10">순번</th>
                     <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
-                    <th className="py-2 px-2 font-medium min-w-[7rem]">연락처</th>
-                    <th className="py-2 px-2 font-medium whitespace-nowrap">상태</th>
-                    <th className="py-2 px-2 font-medium text-center w-[6.5rem]">요청 취소</th>
+                    <th className="py-2 px-2 font-medium min-w-[6.5rem]">연락처</th>
+                    <th className="py-2 px-2 font-medium whitespace-nowrap w-[4.5rem]">상태</th>
+                    <th className="py-2 px-2 font-medium text-center w-[4.5rem]">요청</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {outgoingList.map(function (row, idx) {
+                  {outgoingList.map(function (row) {
                     var st = String(row.status || '');
                     var to = String(row.toUid || '');
                     return (
                       <tr key={String(row.id || 'out-' + to)} className="border-b border-slate-50 last:border-b-0 align-top">
-                        <td className="py-2 px-2 text-slate-600 tabular-nums">{idx + 1}</td>
                         <td className="py-2 px-2 font-medium text-slate-800">{outgoingDisplayName(row)}</td>
                         <td className="py-2 px-2 text-slate-600 break-all tabular-nums">{outgoingContactForDisplay(row)}</td>
-                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{statusKo(st)}</td>
+                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{outgoingStatusShort(st)}</td>
                         <td className="py-2 px-1 text-center">
                           <div className="flex flex-col gap-1 items-stretch sm:items-end">
                             {st === 'pending' ? (
@@ -5597,7 +5604,7 @@ function OpenRidingFriendsManage(props) {
                                   });
                                 }}
                               >
-                                요청 취소
+                                취소
                               </button>
                             ) : null}
                             {st === 'rejected' || st === 'cancelled' ? (
