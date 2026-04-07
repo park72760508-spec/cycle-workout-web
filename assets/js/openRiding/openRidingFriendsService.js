@@ -38,6 +38,32 @@ function nameFromUserData(data) {
   return String(data.name || data.displayName || '').trim() || '회원';
 }
 
+/**
+ * 수락 전 검색·요청 목록 표시용(끝 4자리 마스킹). 010-xxxx-yyyy → 010-xxxx-****
+ * @param {string} contact
+ * @returns {string}
+ */
+export function maskContactPrivacy(contact) {
+  const raw = String(contact || '').trim();
+  if (!raw) return '-';
+  const d = normalizePhoneDigits(raw);
+  if (d.length < 8) {
+    if (/\d/.test(raw)) return '****';
+    return raw;
+  }
+  if (d.length === 11 && d.startsWith('010')) {
+    return `010-${d.slice(3, 7)}-****`;
+  }
+  if (d.length === 11) {
+    return `${d.slice(0, 3)}-${d.slice(3, 7)}-****`;
+  }
+  if (d.length === 10) {
+    return `${d.slice(0, 3)}-${d.slice(3, 6)}-****`;
+  }
+  const head = d.slice(0, Math.max(0, d.length - 4));
+  return head ? `${head}-****` : '****';
+}
+
 function buildPhoneQueryCandidates(digits) {
   const d = normalizePhoneDigits(digits);
   const candidates = [];
@@ -532,6 +558,7 @@ export async function loadFriendsForInviteMerge(db, userId) {
 if (typeof window !== 'undefined') {
   window.openRidingFriendsService = {
     friendRequestDocId,
+    maskContactPrivacy,
     searchUsersForFriendRequest,
     getFriendSearchRowStatus,
     sendFriendRequest,

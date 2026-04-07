@@ -5302,9 +5302,52 @@ function OpenRidingFriendsManage(props) {
     return fr.getFriendSearchRowStatus(c.uid, bundle.friends, bundle.outgoing, bundle.incoming);
   }
 
+  function privacyMask(contact) {
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (typeof fr.maskContactPrivacy === 'function') {
+      return fr.maskContactPrivacy(contact);
+    }
+    return String(contact || '').trim() ? '****' : '-';
+  }
+
+  /** 검색 표시: 이미 친구면 DB friends 연락처, 아니면 마스킹 */
+  function searchContactDisplay(c) {
+    if (searchRowStatus(c) === '이미 친구') {
+      var uid = String(c.uid || '');
+      var fi;
+      for (fi = 0; fi < bundle.friends.length; fi++) {
+        var fd = bundle.friends[fi];
+        if (String(fd.friendUid || fd.id || '') === uid) {
+          var n = fd.contact != null ? String(fd.contact).trim() : '';
+          if (n) return n;
+          break;
+        }
+      }
+      return c.contact != null ? String(c.contact).trim() || '-' : '-';
+    }
+    return privacyMask(c.contact);
+  }
+
+  /** 보낸 요청: 상대 번호는 수락 전까지 비공개 */
+  function outgoingContactForDisplay(row) {
+    return privacyMask(outgoingContact(row));
+  }
+
+  /** 받은 요청: 상대(보낸 사람) 번호는 수락 전까지 비공개 */
+  function incomingContactForDisplay(row) {
+    return privacyMask(row.fromContact != null ? row.fromContact : '');
+  }
+
   function canClickFriendRequest(c) {
     var st = searchRowStatus(c);
     return st === '친구 요청 가능' || st === '거절됨' || st === '요청 취소됨';
+  }
+
+  function searchStatusDisplay(st) {
+    var s = String(st || '');
+    if (s === '이미 친구') return '친구';
+    if (s === '친구 요청 가능') return '요청 가능';
+    return s || '—';
   }
 
   function outgoingDisplayName(row) {
@@ -5396,7 +5439,7 @@ function OpenRidingFriendsManage(props) {
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-slate-800 m-0">{outgoingDisplayName(row)}</p>
-                        <p className="text-xs text-slate-600 m-0 break-all">{outgoingContact(row)}</p>
+                        <p className="text-xs text-slate-600 m-0 break-all">{outgoingContactForDisplay(row)}</p>
                         <p className="text-[11px] text-slate-500 m-0 mt-0.5">상태: {statusKo(st)}</p>
                       </div>
                       <div className="flex flex-wrap gap-1.5 shrink-0">
@@ -5457,7 +5500,8 @@ function OpenRidingFriendsManage(props) {
           <div className="border-t border-slate-100 pt-3 space-y-2">
             <h3 className="text-sm font-semibold text-slate-800 m-0">친구 요청 대상자 검색</h3>
             <p className="text-xs text-slate-500 m-0 leading-snug">
-              users 컬렉션의 name·displayName(이름 일치·접두 검색)과 contact·phone·phoneNumber·tel(전화 일치)로 조회합니다. 전화 8자리 이상은 저장 형식 후보와 매칭하고, 뒤 4자리만 입력하면 흔한 010 패턴 일부를 추가로 시도합니다.
+              users 컬렉션의 name·displayName(이름 일치·접두 검색)과 contact·phone·phoneNumber·tel(전화 일치)로 조회합니다. 전화 8자리 이상은 저장 형식 후보와 매칭하고, 뒤 4자리만 입력하면 흔한 010 패턴 일부를 추가로 시도합니다.{' '}
+              <span className="text-slate-600">검색 결과·보낸/받은 요청에서는 상대 전화번호가 수락되기 전까지 마스킹(예: 010-4017-****)되어 표시됩니다.</span>
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -5522,9 +5566,9 @@ function OpenRidingFriendsManage(props) {
                     <table className="w-full text-xs text-left border-collapse min-w-[320px]">
                       <thead>
                         <tr className="text-slate-500 bg-slate-50 border-b border-slate-200 sticky top-0">
-                          <th className="py-2 px-2 font-medium">이름·연락처</th>
-                          <th className="py-2 px-2 font-medium w-[4.5rem] text-center">요청</th>
-                          <th className="py-2 px-2 font-medium w-[5.5rem] text-center">취소(삭제)</th>
+                          <th className="py-2 px-2 font-medium">이름</th>
+                          <th className="py-2 px-2 font-medium w-[5.5rem] text-center">친구 요청</th>
+                          <th className="py-2 px-2 font-medium w-[3.5rem] text-center">삭제</th>
                           <th className="py-2 px-2 font-medium">상태</th>
                         </tr>
                       </thead>
@@ -5536,7 +5580,7 @@ function OpenRidingFriendsManage(props) {
                             <tr key={c.uid} className="border-b border-slate-100 align-top">
                               <td className="py-2 px-2">
                                 <span className="font-medium text-slate-800 block">{c.name}</span>
-                                <span className="text-[11px] text-slate-500 break-all">{c.contact || '-'}</span>
+                                <span className="text-[11px] text-slate-500 break-all">{searchContactDisplay(c)}</span>
                               </td>
                               <td className="py-2 px-1 text-center">
                                 <button
@@ -5547,7 +5591,7 @@ function OpenRidingFriendsManage(props) {
                                     sendFriendRequestToCandidate(c);
                                   }}
                                 >
-                                  요청
+                                  친구 요청
                                 </button>
                               </td>
                               <td className="py-2 px-1 text-center">
@@ -5568,10 +5612,10 @@ function OpenRidingFriendsManage(props) {
                                     });
                                   }}
                                 >
-                                  취소(삭제)
+                                  삭제
                                 </button>
                               </td>
-                              <td className="py-2 px-2 text-slate-700 leading-snug">{rowSt}</td>
+                              <td className="py-2 px-2 text-slate-700 leading-snug">{searchStatusDisplay(rowSt)}</td>
                             </tr>
                           );
                         })}
@@ -5601,9 +5645,7 @@ function OpenRidingFriendsManage(props) {
                         <p className="text-sm font-medium text-slate-800 m-0">
                           {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
                         </p>
-                        <p className="text-xs text-slate-600 m-0 break-all">
-                          {row.fromContact != null ? String(row.fromContact) : '-'}
-                        </p>
+                        <p className="text-xs text-slate-600 m-0 break-all">{incomingContactForDisplay(row)}</p>
                         <p className="text-[11px] text-slate-500 m-0 mt-0.5">상태: {statusKo(st)}</p>
                       </div>
                       <div className="flex flex-wrap gap-1.5 shrink-0">
