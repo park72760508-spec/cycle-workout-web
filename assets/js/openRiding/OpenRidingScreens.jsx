@@ -5240,27 +5240,33 @@ function OpenRidingDetail(props) {
         )}
         {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow('내 상태', roleLabel)}
-        <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
-          <div className="flex flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1 w-full min-w-0">
-            <button
-              type="button"
-              className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded shrink-0"
-              onClick={function () {
-                setReviewExpanded(function (v) {
-                  return !v;
-                });
-              }}
-              aria-expanded={reviewExpanded}
-              id="open-riding-review-toggle"
-            >
-              후기{' '}
-              <span className="tabular-nums font-semibold text-inherit" aria-hidden>
-                {reviewExpanded ? '(−)' : '(+)'}
+        <div className="open-riding-detail-pack-rules-fold open-riding-detail-invite-fold--block w-full min-w-0">
+          <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
+            <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
+              <button
+                type="button"
+                className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                onClick={function () {
+                  setReviewExpanded(function (v) {
+                    return !v;
+                  });
+                }}
+                aria-expanded={reviewExpanded}
+                id="open-riding-review-toggle"
+              >
+                후기{' '}
+                <span className="tabular-nums font-semibold text-inherit" aria-hidden>
+                  {reviewExpanded ? '(−)' : '(+)'}
+                </span>
+              </button>
+            </span>
+            <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
+              <span className="text-xs text-slate-500 leading-tight font-medium">
+                {reviewMergedLog
+                  ? '펼쳐보기 하면 라이딩 후기를 확인하실 수 있습니다.'
+                  : '라이딩이 종료되면 후기 자동 작성됩니다.'}
               </span>
-            </button>
-            <p className="text-xs text-slate-600 m-0 leading-snug text-right flex-1 min-w-0 max-w-[min(100%,22rem)]">
-              라이딩이 종료되면 후기 자동 작성됩니다
-            </p>
+            </div>
           </div>
           {reviewExpanded ? (
             <div
