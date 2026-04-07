@@ -78,11 +78,12 @@ function buildSampleContactCandidatesForSuffix(last4) {
   return out;
 }
 
-async function firestoreQueryUsersByNameAndDisplay(db, term, me, pushRow, getLen) {
+async function firestoreQueryUsersByNameAndDisplay(db, term, me, pushRow, getLen, errorSink) {
   const t = String(term || '').trim();
   if (!t) return;
   if (/^[\d\s\-+()]+$/.test(t) && /\d/.test(t) && t.replace(/\D/g, '').length > 0) return;
   const col = collection(db, 'users');
+  const label = '이름·표시명 Firestore';
 
   async function runField(field) {
     if (getLen() >= 30) return;
@@ -95,8 +96,8 @@ async function firestoreQueryUsersByNameAndDisplay(db, term, me, pushRow, getLen
         const data = d.data();
         pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
       });
-    } catch {
-      /* 인덱스·규칙 */
+    } catch (e) {
+      if (errorSink && e && e.message) errorSink.push(`[${label} ${field} 일치] ${e.message}`);
     }
     try {
       const end = t + '\uf8ff';
@@ -108,8 +109,10 @@ async function firestoreQueryUsersByNameAndDisplay(db, term, me, pushRow, getLen
         const data = d.data();
         pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
       });
-    } catch {
-      /* 인덱스·규칙 */
+    } catch (e) {
+      if (errorSink && e && e.message) {
+        errorSink.push(`[${label} ${field} 접두] ${e.message}(인덱스 필요할 수 있음)`);
+      }
     }
   }
 
@@ -117,7 +120,7 @@ async function firestoreQueryUsersByNameAndDisplay(db, term, me, pushRow, getLen
   await runField('displayName');
 }
 
-async function firestoreQueryUsersByContactFields(db, candidates, me, pushRow, getLen) {
+async function firestoreQueryUsersByContactFields(db, candidates, me, pushRow, getLen, errorSink) {
   const col = collection(db, 'users');
   const fields = ['contact', 'phone', 'phoneNumber', 'tel'];
   for (const c of candidates) {
@@ -133,9 +136,46 @@ async function firestoreQueryUsersByContactFields(db, candidates, me, pushRow, g
           const data = d.data();
           pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
         });
-      } catch {
-        /* 규칙·인덱스 */
+      } catch (e) {
+        if (errorSink && e && e.message && errorSink.length < 6) {
+          errorSink.push(`[전화 ${field}=${c}] ${e.message}`);
+        }
       }
+    }
+  }
+}
+
+/**
+ * 로컬(메모리) 사용자 목록만으로 검색 — Firestore 실패와 무관하게 표시
+ */
+function searchUsersInMemoryLists(term, myUid, pushRow, getLen) {
+  const me = String(myUid || '').trim();
+  const t = String(term || '').trim();
+  if (!me || !t) return;
+  const digitsOnly = t.replace(/\D/g, '');
+  const looksLikePhone = /^[\d\s\-+()]+$/.test(t) && /\d/.test(t);
+  const lists = [];
+  if (typeof window !== 'undefined') {
+    if (Array.isArray(window.users)) lists.push(window.users);
+    if (Array.isArray(window.userProfiles)) lists.push(window.userProfiles);
+  }
+  const tLower = t.toLowerCase();
+  for (let li = 0; li < lists.length; li++) {
+    const arr = lists[li];
+    for (let i = 0; i < arr.length; i++) {
+      if (getLen() >= 30) break;
+      const u = arr[i];
+      if (!u) continue;
+      const uid = String(u.id != null ? u.id : u.uid != null ? u.uid : '');
+      if (!uid || uid === me) continue;
+      const nm = String(u.name != null ? u.name : u.displayName != null ? u.displayName : '').trim();
+      const rowData = u && typeof u === 'object' ? u : {};
+      const ph = contactFromUserData(rowData);
+      const nd = normalizePhoneDigits(ph);
+      const matchName = nm && nm.toLowerCase().indexOf(tLower) >= 0 && !looksLikePhone;
+      const matchTail4 = digitsOnly.length === 4 && nd.length >= 4 && nd.slice(-4) === digitsOnly;
+      const matchFull = digitsOnly.length >= 8 && nd && nd === digitsOnly;
+      if (matchName || matchTail4 || matchFull) pushRow(uid, nm || '회원', ph);
     }
   }
 }
@@ -175,15 +215,22 @@ export function getFriendSearchRowStatus(uid, friends, outgoing, incoming) {
 
 /**
  * Firestore users: name·displayName(일치·접두), contact·phone·phoneNumber·tel(전화·뒤4자리 대표 패턴)
- * @param {import('firebase/firestore').Firestore} db
- * @param {string} term
- * @param {string} myUid
- * @returns {Promise<Array<{ uid: string; name: string; contact: string }>>}
+ * 로컬(window.users) 검색을 먼저 수행해 UI에 즉시 후보가 보이게 함.
+ * @returns {Promise<{ rows: Array<{ uid: string; name: string; contact: string }>; errors: string[]; hints: string[] }>}
  */
 export async function searchUsersForFriendRequest(db, term, myUid) {
   const me = String(myUid || '').trim();
   const t = String(term || '').trim();
-  if (!db || !me || !t) return [];
+  const errors = [];
+  const hints = [];
+
+  if (!me || !t) {
+    return { rows: [], errors: ['로그인·검색어를 확인해 주세요.'], hints };
+  }
+  if (!db) {
+    hints.push('Firestore 연결이 없어 메모리 목록만 검색합니다.');
+  }
+
   const out = [];
   const seen = {};
 
@@ -200,43 +247,34 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
   };
 
   const digitsOnly = t.replace(/\D/g, '');
-  const looksLikePhone = /^[\d\s\-+()]+$/.test(t) && /\d/.test(t);
 
-  await firestoreQueryUsersByNameAndDisplay(db, t, me, pushRow, getLen);
-
-  if (digitsOnly.length >= 8) {
-    const candidates = buildPhoneQueryCandidates(digitsOnly);
-    await firestoreQueryUsersByContactFields(db, candidates, me, pushRow, getLen);
-  } else if (digitsOnly.length === 4) {
-    const sample = buildSampleContactCandidatesForSuffix(digitsOnly);
-    await firestoreQueryUsersByContactFields(db, sample, me, pushRow, getLen);
+  searchUsersInMemoryLists(t, me, pushRow, getLen);
+  if (getLen() > 0) {
+    hints.push(`앱에 로드된 회원 목록에서 ${getLen()}명 매칭.`);
+  } else if (!/^[\d\s\-+()]+$/.test(t) || !/\d/.test(t)) {
+    hints.push('메모리에 회원 목록이 없거나 일치 항목이 없습니다. Firestore 이름 검색을 시도합니다.');
   }
 
-  const lists = [];
-  if (typeof window !== 'undefined') {
-    if (Array.isArray(window.users)) lists.push(window.users);
-    if (Array.isArray(window.userProfiles)) lists.push(window.userProfiles);
-  }
-  const tLower = t.toLowerCase();
-  for (let li = 0; li < lists.length; li++) {
-    const arr = lists[li];
-    for (let i = 0; i < arr.length; i++) {
-      if (out.length >= 30) break;
-      const u = arr[i];
-      if (!u) continue;
-      const uid = String(u.id != null ? u.id : u.uid != null ? u.uid : '');
-      if (!uid || uid === me) continue;
-      const nm = String(u.name != null ? u.name : u.displayName != null ? u.displayName : '').trim();
-      const ph = contactFromUserData(u);
-      const nd = normalizePhoneDigits(ph);
-      const matchName = nm && nm.toLowerCase().indexOf(tLower) >= 0 && !looksLikePhone;
-      const matchTail4 = digitsOnly.length === 4 && nd.length >= 4 && nd.slice(-4) === digitsOnly;
-      const matchFull = digitsOnly.length >= 8 && nd && nd === digitsOnly;
-      if (matchName || matchTail4 || matchFull) pushRow(uid, nm || '회원', ph);
+  if (db) {
+    await firestoreQueryUsersByNameAndDisplay(db, t, me, pushRow, getLen, errors);
+
+    if (digitsOnly.length >= 8) {
+      const candidates = buildPhoneQueryCandidates(digitsOnly);
+      await firestoreQueryUsersByContactFields(db, candidates, me, pushRow, getLen, errors);
+    } else if (digitsOnly.length === 4) {
+      const sample = buildSampleContactCandidatesForSuffix(digitsOnly);
+      await firestoreQueryUsersByContactFields(db, sample, me, pushRow, getLen, errors);
     }
   }
 
-  return out.slice(0, 30);
+  const after = getLen();
+  if (after === 0) {
+    hints.push(
+      '일치하는 사용자가 없습니다. 상대 users 문서에 name·contact(8자 이상)가 있는지, 검색어 철자·Firestore 인덱스(이름 접두 검색)를 확인해 주세요.'
+    );
+  }
+
+  return { rows: out.slice(0, 30), errors, hints };
 }
 
 /**
