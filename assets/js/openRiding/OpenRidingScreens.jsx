@@ -5582,24 +5582,32 @@ function OpenRidingFriendsManage(props) {
                 <p className="text-sm text-slate-500 m-0">등록된 친구가 없습니다. 요청이 수락되면 여기에 표시됩니다.</p>
               ) : (
                 <div className="overflow-x-auto -mx-0.5">
-                  <table className="text-sm text-left border-collapse border border-slate-100 rounded-lg overflow-hidden w-max max-w-full">
+                  <table className="w-full table-fixed text-sm leading-snug text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
                     <thead>
                       <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
-                        <th className="py-2 px-2 font-medium whitespace-nowrap">순번</th>
-                        <th className="py-2 px-2 font-medium whitespace-nowrap">이름</th>
-                        <th className="py-2 px-2 font-medium whitespace-nowrap">연락처</th>
+                        <th className="py-2 pl-2 pr-1 font-medium w-[14%] whitespace-nowrap">순번</th>
+                        <th className="py-2 px-1 font-medium w-[18%] whitespace-nowrap">이름</th>
+                        <th className="py-2 pr-2 pl-1 font-medium w-[68%] whitespace-nowrap">연락처</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bundle.friends.map(function (row, idx) {
+                        var disp = row.displayName != null ? String(row.displayName) : '-';
+                        var cont = row.contact != null ? String(row.contact) : '-';
                         return (
-                          <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0">
-                            <td className="py-2 px-2 text-slate-600 tabular-nums whitespace-nowrap align-middle">{idx + 1}</td>
-                            <td className="py-2 px-2 font-medium text-slate-800 whitespace-nowrap align-middle">
-                              {row.displayName != null ? String(row.displayName) : '-'}
+                          <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0 align-middle">
+                            <td className="py-2 pl-2 pr-1 text-slate-600 tabular-nums whitespace-nowrap align-middle">{idx + 1}</td>
+                            <td
+                              className="py-2 px-1 font-medium text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis align-middle min-w-0"
+                              title={disp}
+                            >
+                              {disp}
                             </td>
-                            <td className="py-2 px-2 text-slate-700 whitespace-nowrap align-middle tabular-nums">
-                              {row.contact != null ? String(row.contact) : '-'}
+                            <td
+                              className="py-2 pr-2 pl-1 text-slate-700 tabular-nums whitespace-nowrap overflow-hidden text-ellipsis align-middle min-w-0"
+                              title={cont}
+                            >
+                              {cont}
                             </td>
                           </tr>
                         );
