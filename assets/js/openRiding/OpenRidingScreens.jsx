@@ -783,6 +783,190 @@ function getRideDateSeoulYmd(ride) {
   return null;
 }
 
+/** 훈련 로그 date → 서울 기준 YYYY-MM-DD (일지·상세 후기 동기화용) */
+function openRidingLogYmdSeoul(log) {
+  if (!log || log.date == null) return '';
+  var d = log.date;
+  if (typeof d === 'string') return d.length >= 10 ? d.slice(0, 10) : '';
+  if (d && typeof d.toDate === 'function') {
+    var dt = d.toDate();
+    try {
+      var parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(dt);
+      var y = '';
+      var m = '';
+      var day = '';
+      parts.forEach(function (p) {
+        if (p.type === 'year') y = p.value;
+        if (p.type === 'month') m = p.value;
+        if (p.type === 'day') day = p.value;
+      });
+      if (y && m && day) return y + '-' + m + '-' + day;
+    } catch (e1) {}
+  }
+  return '';
+}
+
+function openRidingLogIsStrava(log) {
+  var s = log && log.source != null ? String(log.source).toLowerCase().trim() : '';
+  return s === 'strava';
+}
+
+function openRidingReviewFormatDuration(sec) {
+  if (sec == null || sec === '' || Number.isNaN(Number(sec))) return '-';
+  var s = Math.floor(Number(sec));
+  var m = Math.floor(s / 60);
+  var h = Math.floor(m / 60);
+  s = s % 60;
+  m = m % 60;
+  if (h > 0) return h + '시간 ' + m + '분 ' + s + '초';
+  return m + '분 ' + s + '초';
+}
+
+function openRidingReviewAvgSpeedKmh(distanceKm, durationSec) {
+  var d = Number(distanceKm) || 0;
+  var t = Number(durationSec) || 0;
+  if (d <= 0 || t <= 0) return null;
+  return Math.round((d / (t / 3600)) * 100) / 100;
+}
+
+function openRidingReviewFormatSpeedKmh(v) {
+  if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+  return Number(v).toFixed(1) + ' km/h';
+}
+
+function openRidingReviewFormatElevationM(v) {
+  if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+  return Math.round(Number(v)) + ' m';
+}
+
+function openRidingReviewFormatCadenceRpm(v) {
+  if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+  return Math.round(Number(v)) + ' rpm';
+}
+
+/**
+ * 일지 JournalDetailBottomSheet.mergeLogsForDetail 와 동일 규칙 — Summary 탭용 단일 로그
+ * @param {object[]} logs 해당 일·STRAVA만 필터된 배열
+ */
+function openRidingMergeLogsForReviewSummary(logs) {
+  if (!logs || logs.length === 0) return null;
+  if (logs.length === 1) {
+    var log = logs[0];
+    var sec = Number(log.duration_sec != null ? log.duration_sec : (log.time != null ? log.time : log.duration)) || 0;
+    var dist0 = log.distance_km != null ? Number(log.distance_km) : 0;
+    var spdStored0 = log.avg_speed_kmh != null ? Number(log.avg_speed_kmh) : null;
+    var spd0 = spdStored0 != null && spdStored0 > 0 ? spdStored0 : openRidingReviewAvgSpeedKmh(dist0, sec);
+    return {
+      date: log.date,
+      distance_km: log.distance_km,
+      duration_sec: sec,
+      tss: log.tss,
+      if: log.if,
+      kilojoules: log.kilojoules,
+      elevation_gain: log.elevation_gain != null ? Number(log.elevation_gain) : null,
+      avg_speed_kmh: spd0,
+      avg_cadence: log.avg_cadence,
+      avg_hr: log.avg_hr,
+      max_hr: log.max_hr,
+      avg_watts: log.avg_watts,
+      weighted_watts: log.weighted_watts,
+      max_watts: log.max_watts,
+      time_in_zones: log.time_in_zones,
+      source: log.source
+    };
+  }
+  var totalSec = 0;
+  var totalTSS = 0;
+  var totalDist = 0;
+  var totalKj = 0;
+  var sumElev = 0;
+  var sumCadSec = 0;
+  var cadDur = 0;
+  var sumNpSec = 0;
+  var sumApSec = 0;
+  var sumHrSec = 0;
+  var maxHr = 0;
+  var maxW = 0;
+  var aggPower = {};
+  var aggHr = {};
+  var i;
+  for (i = 0; i < logs.length; i++) {
+    var l = logs[i];
+    var s = Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
+    totalSec += s;
+    totalTSS += Number(l.tss || 0);
+    totalDist += Number(l.distance_km || 0);
+    totalKj += Number(l.kilojoules || 0);
+    sumElev += Number(l.elevation_gain || 0);
+    var c0 = l.avg_cadence != null ? Number(l.avg_cadence) : 0;
+    if (c0 > 0 && s > 0) {
+      sumCadSec += c0 * s;
+      cadDur += s;
+    }
+    var np = l.weighted_watts != null ? Number(l.weighted_watts) : (l.avg_watts != null ? Number(l.avg_watts) : 0);
+    var ap = l.avg_watts != null ? Number(l.avg_watts) : 0;
+    var hr = l.avg_hr != null ? Number(l.avg_hr) : 0;
+    sumNpSec += np * s;
+    sumApSec += ap * s;
+    sumHrSec += hr * s;
+    maxHr = Math.max(maxHr, Number(l.max_hr || 0));
+    maxW = Math.max(maxW, Number(l.max_watts || 0));
+    var tiz = l.time_in_zones;
+    if (tiz && tiz.power) {
+      ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].forEach(function (k) {
+        aggPower[k] = (aggPower[k] || 0) + (Number(tiz.power[k]) || 0);
+      });
+    }
+    if (tiz && tiz.hr) {
+      ['z1', 'z2', 'z3', 'z4', 'z5'].forEach(function (k) {
+        aggHr[k] = (aggHr[k] || 0) + (Number(tiz.hr[k]) || 0);
+      });
+    }
+  }
+  var mergedTiz = null;
+  if (Object.keys(aggPower).length > 0 || Object.keys(aggHr).length > 0) {
+    mergedTiz = { power: aggPower, hr: aggHr };
+  } else if (logs[0].time_in_zones) {
+    mergedTiz = logs[0].time_in_zones;
+  }
+  return {
+    date: logs[0].date,
+    distance_km: totalDist,
+    duration_sec: totalSec,
+    tss: totalTSS,
+    if: null,
+    kilojoules: totalKj,
+    elevation_gain: sumElev > 0 ? sumElev : null,
+    avg_speed_kmh: openRidingReviewAvgSpeedKmh(totalDist, totalSec),
+    avg_cadence: cadDur > 0 ? sumCadSec / cadDur : null,
+    avg_hr: totalSec > 0 ? sumHrSec / totalSec : null,
+    max_hr: maxHr || null,
+    avg_watts: totalSec > 0 ? sumApSec / totalSec : null,
+    weighted_watts: totalSec > 0 ? sumNpSec / totalSec : null,
+    max_watts: maxW || null,
+    time_in_zones: mergedTiz,
+    source: logs[0].source
+  };
+}
+
+function getOpenRidingJournalUserProfileForCharts() {
+  var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
+  if (!u) {
+    try {
+      u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (eU) {
+      u = null;
+    }
+  }
+  var uid = u && (u.id != null ? String(u.id) : u.uid != null ? String(u.uid) : '');
+  return {
+    id: uid,
+    uid: uid,
+    ftp: Number(u && u.ftp) || 200,
+    max_hr: Number(u && (u.max_hr != null ? u.max_hr : u.maxHr)) || 190
+  };
+}
+
 /** 서울 기준 라이딩일 → M/D (요일) 예: 4/7 (화) */
 function formatRideDateMdDowSeoul(ride) {
   var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
@@ -3936,6 +4120,58 @@ function OpenRidingDashboardEditIcon(props) {
   );
 }
 
+/** 라이딩 상세 후기: 일지 Summary 탭과 동일 지표 + 존 차트(가능 시) */
+function OpenRidingRideReviewSummaryContent(props) {
+  var log = props.log;
+  if (!log) return null;
+  var spd =
+    log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
+      ? Number(log.avg_speed_kmh)
+      : openRidingReviewAvgSpeedKmh(log.distance_km, log.duration_sec);
+  var rows = [
+    { label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-' },
+    { label: '라이딩 시간', value: openRidingReviewFormatDuration(log.duration_sec) },
+    { label: '평균 속도', value: openRidingReviewFormatSpeedKmh(spd) },
+    { label: '상승고도', value: openRidingReviewFormatElevationM(log.elevation_gain) },
+    { label: '평균 케이던스', value: openRidingReviewFormatCadenceRpm(log.avg_cadence) },
+    { label: 'TSS', value: log.tss != null && log.tss > 0 ? String(Math.round(log.tss)) : '-' },
+    { label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-' },
+    { label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-' }
+  ];
+  var DailyCharts = typeof window !== 'undefined' ? window.DailyTimeInZonesCharts : null;
+  var up = getOpenRidingJournalUserProfileForCharts();
+  var tizEl = null;
+  if (log.time_in_zones && DailyCharts) {
+    tizEl = (
+      <div className="journal-detail-time-in-zones-wrap mt-3">
+        <DailyCharts log={log} userProfile={up} />
+      </div>
+    );
+  }
+  return (
+    <div className="journal-tab-content border border-slate-200 rounded-xl overflow-hidden bg-white">
+      <table className="w-full text-sm border-collapse">
+        <tbody>
+          {rows.map(function (r) {
+            return (
+              <tr key={r.label} className="border-b border-slate-100 last:border-b-0">
+                <th className="text-left py-2 px-3 font-medium text-slate-600 align-top w-[42%]">{r.label}</th>
+                <td className="py-2 px-3 text-slate-800 font-semibold">{r.value}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {tizEl}
+      {String(log.source || '').toLowerCase() === 'strava' ? (
+        <div className="px-3 py-2 border-t border-slate-100 flex justify-end bg-slate-50/50">
+          <img src="assets/img/api_strava.png" alt="Powered by Strava" style={{ height: 12 }} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** 상세 + 참석/취소 (Transaction) */
 function OpenRidingDetail(props) {
   var firestore = props.firestore;
@@ -4004,6 +4240,15 @@ function OpenRidingDetail(props) {
   var _partListExp = useState(false);
   var participantListExpanded = _partListExp[0];
   var setParticipantListExpanded = _partListExp[1];
+  var _revExp = useState(false);
+  var reviewExpanded = _revExp[0];
+  var setReviewExpanded = _revExp[1];
+  var _revMerged = useState(null);
+  var reviewMergedLog = _revMerged[0];
+  var setReviewMergedLog = _revMerged[1];
+  var _revLd = useState(false);
+  var reviewLogsLoading = _revLd[0];
+  var setReviewLogsLoading = _revLd[1];
 
   useEffect(
     function () {
@@ -4013,8 +4258,62 @@ function OpenRidingDetail(props) {
       setInviteListExpanded(false);
       setOperationRulesExpanded(false);
       setParticipantListExpanded(false);
+      setReviewExpanded(false);
+      setReviewMergedLog(null);
     },
     [rideId]
+  );
+
+  useEffect(
+    function () {
+      setReviewMergedLog(null);
+      if (!userId || !ride || loading) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      if (role !== 'participant') {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var ymd = getRideDateSeoulYmd(ride);
+      if (!ymd) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var yParts = String(ymd).split('-');
+      var year = parseInt(yParts[0], 10);
+      var month = parseInt(yParts[1], 10) - 1;
+      if (!Number.isFinite(year) || !Number.isFinite(month)) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var getRng = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
+      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      if (!getRng || !db) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var cancelled = false;
+      setReviewLogsLoading(true);
+      getRng(String(userId), year, month, db)
+        .then(function (logs) {
+          if (cancelled) return;
+          var dayLogs = (logs || []).filter(function (log) {
+            return openRidingLogYmdSeoul(log) === ymd && openRidingLogIsStrava(log);
+          });
+          setReviewMergedLog(openRidingMergeLogsForReviewSummary(dayLogs));
+        })
+        .catch(function () {
+          if (!cancelled) setReviewMergedLog(null);
+        })
+        .finally(function () {
+          if (!cancelled) setReviewLogsLoading(false);
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [firestore, userId, rideId, loading, role, ride]
   );
 
   useEffect(
@@ -4918,6 +5217,51 @@ function OpenRidingDetail(props) {
         )}
         {statRow('공개 여부', isPrivateRide ? '비공개 · 초대 또는 입장 비밀번호로 신청' : '공개')}
         {statRow('내 상태', roleLabel)}
+        <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
+          <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
+            <div className="open-riding-detail-stat-label shrink-0 min-w-0 flex-1 text-left">
+              <p className="text-xs text-slate-600 m-0 leading-snug mb-1.5">라이딩이 종료되면 후기 자동 작성</p>
+              <button
+                type="button"
+                className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                onClick={function () {
+                  setReviewExpanded(function (v) {
+                    return !v;
+                  });
+                }}
+                aria-expanded={reviewExpanded}
+                id="open-riding-review-toggle"
+              >
+                후기{' '}
+                <span className="tabular-nums font-semibold text-inherit" aria-hidden>
+                  {reviewExpanded ? '(−)' : '(+)'}
+                </span>
+              </button>
+            </div>
+            <div className="open-riding-detail-stat-value min-w-0 w-8 shrink-0" aria-hidden="true" />
+          </div>
+          {reviewExpanded ? (
+            <div
+              className="m-0 w-full min-w-0 border-t border-slate-100/90 px-3 py-3 space-y-2 text-left"
+              role="region"
+              aria-labelledby="open-riding-review-toggle"
+            >
+              {role !== 'participant' ? (
+                <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다.
+                </p>
+              ) : reviewLogsLoading ? (
+                <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
+              ) : reviewMergedLog ? (
+                <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+              ) : (
+                <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                  이 일정일에 STRAVA 라이딩 기록이 없거나 아직 훈련일지에 반영되지 않았습니다. 동기화 후 다시 열어 주세요.
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
       {maskContacts ? (
         <p className="text-xs text-slate-500 px-1 leading-snug">
