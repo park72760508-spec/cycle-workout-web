@@ -3,6 +3,7 @@
  * window.openRidingService, window.useOpenRiding, window.useOpenRideDetail, 지역/레벨 옵션 노출
  */
 import './openRidingService.js';
+import './openRidingFriendsService.js';
 import './useOpenRiding.js';
 import './koreaRegions.js';
 import './groupRideEligibility.js';

@@ -2746,6 +2746,47 @@ function OpenRidingCreateForm(props) {
     };
   }, []);
 
+  /** Firestore 친구 목록 → 초대 후보(invitePending)에 병합 */
+  useEffect(
+    function () {
+      if (!firestore || !hostUserId) return undefined;
+      var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+      if (typeof fr.loadFriendsForInviteMerge !== 'function') return undefined;
+      var cancelled = false;
+      fr.loadFriendsForInviteMerge(firestore, String(hostUserId).trim())
+        .then(function (rows) {
+          if (cancelled || !rows || !rows.length) return;
+          setForm(function (f) {
+            var pending = (f.invitePending || []).slice();
+            var keysP = {};
+            pending.forEach(function (p) {
+              keysP[p.key] = true;
+            });
+            (f.inviteSelected || []).forEach(function (s) {
+              keysP[s.key] = true;
+            });
+            var added = false;
+            rows.forEach(function (row) {
+              if (!row || !row.key || keysP[row.key]) return;
+              keysP[row.key] = true;
+              pending.push({ name: row.name, phone: row.phone, key: row.key });
+              added = true;
+            });
+            if (!added) return f;
+            var n = {};
+            for (var k in f) n[k] = f[k];
+            n.invitePending = pending;
+            return n;
+          });
+        })
+        .catch(function () {});
+      return function () {
+        cancelled = true;
+      };
+    },
+    [firestore, hostUserId]
+  );
+
   var _hyd = useState(!editRideId);
   var editHydrated = _hyd[0];
   var setEditHydrated = _hyd[1];
@@ -5109,6 +5150,435 @@ function OpenRidingDetail(props) {
   );
 }
 
+/** 친구 관리 (맞춤 필터 전체 화면 레이아웃과 동일) */
+function OpenRidingFriendsManage(props) {
+  var firestore = props.firestore;
+  var userId = props.userId || '';
+  var onBack = props.onBack || function () {};
+
+  var _b = useState({
+    friends: [],
+    outgoing: [],
+    incoming: [],
+    loading: true,
+    err: ''
+  });
+  var bundle = _b[0];
+  var setBundle = _b[1];
+  var _s = useState('');
+  var searchTerm = _s[0];
+  var setSearchTerm = _s[1];
+  var _c = useState([]);
+  var searchCandidates = _c[0];
+  var setSearchCandidates = _c[1];
+  var _sel = useState(null);
+  var selectedCandidate = _sel[0];
+  var setSelectedCandidate = _sel[1];
+  var _busy = useState(false);
+  var actionBusy = _busy[0];
+  var setActionBusy = _busy[1];
+
+  function refresh() {
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (!firestore || !userId || typeof fr.fetchFriendManagementSnapshot !== 'function') {
+      setBundle(function (x) {
+        return Object.assign({}, x, { loading: false });
+      });
+      return;
+    }
+    setBundle(function (x) {
+      return Object.assign({}, x, { loading: true, err: '' });
+    });
+    fr.fetchFriendManagementSnapshot(firestore, userId).then(function (data) {
+      setBundle({
+        friends: data.friends || [],
+        outgoing: data.outgoing || [],
+        incoming: data.incoming || [],
+        loading: false,
+        err: ''
+      });
+    }).catch(function (e) {
+      setBundle(function (x) {
+        return Object.assign({}, x, {
+          loading: false,
+          err: e && e.message ? String(e.message) : '불러오기 실패'
+        });
+      });
+    });
+  }
+
+  useEffect(
+    function () {
+      refresh();
+    },
+    [firestore, userId]
+  );
+
+  function runSearch() {
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (!firestore || typeof fr.searchUsersForFriendRequest !== 'function') return;
+    setActionBusy(true);
+    fr.searchUsersForFriendRequest(firestore, searchTerm, userId).then(function (rows) {
+      var list = rows || [];
+      setSearchCandidates(list);
+      setSelectedCandidate(list.length ? list[0] : null);
+    }).finally(function () {
+      setActionBusy(false);
+    });
+  }
+
+  function profForSend() {
+    var p = getOpenRidingProfileDefaults();
+    return {
+      fromDisplayName: String(p.hostName || '').trim() || '라이더',
+      fromContact: String(p.contactInfo || '').trim()
+    };
+  }
+
+  function sendSelectedRequest() {
+    if (!selectedCandidate || !selectedCandidate.uid) return;
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (typeof fr.sendFriendRequest !== 'function') return;
+    var pr = profForSend();
+    if (!pr.fromContact) {
+      alert('프로필에 연락처를 등록한 뒤 친구 요청을 보낼 수 있습니다.');
+      return;
+    }
+    setActionBusy(true);
+    fr.sendFriendRequest(firestore, userId, selectedCandidate.uid, pr, {
+      targetName: selectedCandidate.name,
+      targetContact: selectedCandidate.contact
+    }).then(function () {
+      refresh();
+      setSearchCandidates([]);
+      setSelectedCandidate(null);
+      setSearchTerm('');
+    }).catch(function (e) {
+      alert(e && e.message ? e.message : '요청 실패');
+    }).finally(function () {
+      setActionBusy(false);
+    });
+  }
+
+  function outgoingDisplayName(row) {
+    var nm = row.targetPreviewName != null ? String(row.targetPreviewName).trim() : '';
+    if (nm) return nm;
+    return row.toDisplayName != null ? String(row.toDisplayName).trim() : '상대';
+  }
+
+  function outgoingContact(row) {
+    var c = row.targetPreviewContact != null ? String(row.targetPreviewContact).trim() : '';
+    if (c) return c;
+    return row.toContact != null ? String(row.toContact).trim() : '-';
+  }
+
+  function statusKo(st) {
+    var s = String(st || '');
+    if (s === 'pending') return '대기 중';
+    if (s === 'rejected') return '거절';
+    if (s === 'cancelled') return '취소됨';
+    if (s === 'accepted') return '수락됨';
+    return s || '-';
+  }
+
+  var outgoingList = bundle.outgoing.filter(function (r) {
+    return String(r.status) !== 'accepted';
+  });
+  var incomingList = bundle.incoming.filter(function (r) {
+    return String(r.status) !== 'accepted';
+  });
+
+  var acceptProfMemo = {
+    toDisplayName: String(getOpenRidingProfileDefaults().hostName || '').trim() || '라이더',
+    toContact: String(getOpenRidingProfileDefaults().contactInfo || '').trim()
+  };
+
+  return (
+    <div className="open-riding-filter-full-page w-full max-w-lg mx-auto text-left relative z-0">
+      <div className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-4 text-sm text-slate-700 relative z-0">
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
+          <h2 className="text-sm font-semibold text-slate-800 m-0">등록된 친구</h2>
+          {bundle.loading ? (
+            <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
+          ) : bundle.friends.length === 0 ? (
+            <p className="text-xs text-slate-500 m-0">등록된 친구가 없습니다. 요청이 수락되면 여기에 표시됩니다.</p>
+          ) : (
+            <div className="overflow-x-auto -mx-1">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="text-slate-500 border-b border-slate-100">
+                    <th className="py-2 pr-2 font-medium w-8">순번</th>
+                    <th className="py-2 pr-2 font-medium">친구 이름</th>
+                    <th className="py-2 font-medium">연락처</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bundle.friends.map(function (row, idx) {
+                    return (
+                      <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50">
+                        <td className="py-2 pr-2 text-slate-600 tabular-nums">{idx + 1}</td>
+                        <td className="py-2 pr-2 font-medium text-slate-800">
+                          {row.displayName != null ? String(row.displayName) : '-'}
+                        </td>
+                        <td className="py-2 text-slate-700 break-all">
+                          {row.contact != null ? String(row.contact) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-2">내가 보낸 요청</h3>
+            {outgoingList.length === 0 ? (
+              <p className="text-xs text-slate-500 m-0">보낸 요청이 없습니다.</p>
+            ) : (
+              <ul className="space-y-2 m-0 p-0 list-none">
+                {outgoingList.map(function (row) {
+                  var st = String(row.status || '');
+                  var to = String(row.toUid || '');
+                  return (
+                    <li
+                      key={String(row.id || 'out-' + to)}
+                      className="rounded-lg border border-slate-100 bg-slate-50/80 px-2 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 m-0">{outgoingDisplayName(row)}</p>
+                        <p className="text-xs text-slate-600 m-0 break-all">{outgoingContact(row)}</p>
+                        <p className="text-[11px] text-slate-500 m-0 mt-0.5">상태: {statusKo(st)}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 shrink-0">
+                        {st === 'pending' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-800 bg-white hover:bg-amber-50"
+                            disabled={actionBusy}
+                            onClick={function () {
+                              var fr = window.openRidingFriendsService || {};
+                              if (typeof fr.cancelFriendRequest !== 'function') return;
+                              setActionBusy(true);
+                              fr.cancelFriendRequest(firestore, userId, to).then(refresh).catch(function (e) {
+                                alert(e && e.message ? e.message : '취소 실패');
+                              }).finally(function () {
+                                setActionBusy(false);
+                              });
+                            }}
+                          >
+                            요청 취소
+                          </button>
+                        ) : null}
+                        {st === 'rejected' || st === 'cancelled' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-violet-200 text-violet-800 bg-white hover:bg-violet-50"
+                            disabled={actionBusy}
+                            onClick={function () {
+                              var fr = window.openRidingFriendsService || {};
+                              if (typeof fr.sendFriendRequest !== 'function') return;
+                              var pr = profForSend();
+                              if (!pr.fromContact) {
+                                alert('프로필 연락처를 등록해 주세요.');
+                                return;
+                              }
+                              setActionBusy(true);
+                              fr.sendFriendRequest(firestore, userId, to, pr, {
+                                targetName: outgoingDisplayName(row),
+                                targetContact: outgoingContact(row)
+                              }).then(refresh).catch(function (e) {
+                                alert(e && e.message ? e.message : '재요청 실패');
+                              }).finally(function () {
+                                setActionBusy(false);
+                              });
+                            }}
+                          >
+                            다시 요청
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100 pt-3 space-y-2">
+            <h3 className="text-sm font-semibold text-slate-800 m-0">친구 요청 대상자 검색</h3>
+            <p className="text-xs text-slate-500 m-0 leading-snug">
+              이름(부분 일치) 또는 전화번호(뒤 4자리·전체). 앱에 로드된 회원 목록이 있으면 우선 검색되고, 전화 전체(8자리 이상)는 서버 프로필과도 매칭됩니다.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                className="flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                placeholder="이름 또는 전화 뒤 4자리"
+                value={searchTerm}
+                onChange={function (e) {
+                  setSearchTerm(e.target.value);
+                }}
+              />
+              <button
+                type="button"
+                className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                disabled={actionBusy}
+                onClick={runSearch}
+              >
+                검색
+              </button>
+            </div>
+            {searchCandidates.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-600 m-0">검색 결과</p>
+                <ul className="max-h-40 overflow-y-auto space-y-1 m-0 p-0 list-none">
+                  {searchCandidates.map(function (c) {
+                    var on = selectedCandidate && selectedCandidate.uid === c.uid;
+                    return (
+                      <li key={c.uid}>
+                        <button
+                          type="button"
+                          className={
+                            'w-full text-left rounded-lg px-2 py-2 text-sm border ' +
+                            (on ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white hover:bg-slate-50')
+                          }
+                          onClick={function () {
+                            setSelectedCandidate(c);
+                          }}
+                        >
+                          <span className="font-medium text-slate-800">{c.name}</span>
+                          <span className="block text-xs text-slate-600 break-all">{c.contact || '-'}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button
+                  type="button"
+                  className="w-full open-riding-action-btn h-11 inline-flex items-center justify-center px-4 bg-violet-600 text-white rounded-xl font-medium disabled:opacity-50"
+                  disabled={actionBusy || !selectedCandidate}
+                  onClick={sendSelectedRequest}
+                >
+                  친구 요청 하기
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border-t border-slate-100 pt-3">
+            <h3 className="text-sm font-semibold text-slate-800 m-0 mb-2">나에게 온 요청</h3>
+            {incomingList.length === 0 ? (
+              <p className="text-xs text-slate-500 m-0">새 요청이 없습니다.</p>
+            ) : (
+              <ul className="space-y-2 m-0 p-0 list-none">
+                {incomingList.map(function (row) {
+                  var st = String(row.status || '');
+                  var from = String(row.fromUid || '');
+                  return (
+                    <li
+                      key={String(row.id || 'in-' + from)}
+                      className="rounded-lg border border-violet-100 bg-violet-50/50 px-2 py-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 m-0">
+                          {row.fromDisplayName != null ? String(row.fromDisplayName) : '회원'}
+                        </p>
+                        <p className="text-xs text-slate-600 m-0 break-all">
+                          {row.fromContact != null ? String(row.fromContact) : '-'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 m-0 mt-0.5">상태: {statusKo(st)}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 shrink-0">
+                        {st === 'pending' || st === 'rejected' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                            disabled={actionBusy}
+                            onClick={function () {
+                              if (!acceptProfMemo.toContact) {
+                                alert('수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.');
+                                return;
+                              }
+                              var fr = window.openRidingFriendsService || {};
+                              if (typeof fr.acceptFriendRequest !== 'function') return;
+                              setActionBusy(true);
+                              fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(refresh).catch(function (e) {
+                                alert(e && e.message ? e.message : '수락 실패');
+                              }).finally(function () {
+                                setActionBusy(false);
+                              });
+                            }}
+                          >
+                            수락
+                          </button>
+                        ) : null}
+                        {st === 'pending' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                            disabled={actionBusy}
+                            onClick={function () {
+                              var fr = window.openRidingFriendsService || {};
+                              if (typeof fr.rejectFriendRequest !== 'function') return;
+                              setActionBusy(true);
+                              fr.rejectFriendRequest(firestore, from, userId).then(refresh).catch(function (e) {
+                                alert(e && e.message ? e.message : '거절 실패');
+                              }).finally(function () {
+                                setActionBusy(false);
+                              });
+                            }}
+                          >
+                            거절
+                          </button>
+                        ) : null}
+                        {st === 'rejected' ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+                            disabled={actionBusy}
+                            onClick={function () {
+                              var fr = window.openRidingFriendsService || {};
+                              if (typeof fr.reopenFriendRequestToPending !== 'function') return;
+                              setActionBusy(true);
+                              fr.reopenFriendRequestToPending(firestore, from, userId).then(refresh).catch(function (e) {
+                                alert(e && e.message ? e.message : '처리 실패');
+                              }).finally(function () {
+                                setActionBusy(false);
+                              });
+                            }}
+                          >
+                            대기로 변경
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        {bundle.err ? <p className="text-xs text-red-600 m-0 px-1">{bundle.err}</p> : null}
+
+        <div className="open-riding-bottom-actions">
+          <button
+            type="button"
+            className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none hover:bg-violet-700"
+            onClick={onBack}
+          >
+            닫기
+          </button>
+        </div>
+        <OpenRidingBottomLogoBar />
+      </div>
+    </div>
+  );
+}
+
 /** 오픈 라이딩방 단일 앱: 컴팩트 달력·목록 ↔ 생성 ↔ 상세 */
 function OpenRidingRoomApp(props) {
   var firestore = props.firestore;
@@ -5126,6 +5596,8 @@ function OpenRidingRoomApp(props) {
   function handleTopBack() {
     if (view === 'main') {
       if (typeof showScreen === 'function') showScreen('basecampScreen');
+    } else if (view === 'friends') {
+      setView('main');
     } else if (view === 'filter') {
       setView('main');
     } else if (view === 'edit') {
@@ -5147,13 +5619,16 @@ function OpenRidingRoomApp(props) {
           ? '라이딩 일정 상세'
           : view === 'filter'
             ? '맞춤 필터 설정'
-            : '라이딩 모임';
+            : view === 'friends'
+              ? '친구 관리'
+              : '라이딩 모임';
 
   var useBottomFixedBar = !!(
     firestore &&
     (view === 'main' ||
       view === 'create' ||
       view === 'filter' ||
+      view === 'friends' ||
       (view === 'edit' && detailRideId) ||
       (view === 'detail' && detailRideId))
   );
@@ -5194,6 +5669,14 @@ function OpenRidingRoomApp(props) {
         userId={userId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
+      />
+    );
+  } else if (view === 'friends') {
+    inner = (
+      <OpenRidingFriendsManage
+        firestore={firestore}
+        userId={userId}
+        onBack={function () { setView('main'); }}
       />
     );
   } else {
@@ -5253,7 +5736,32 @@ function OpenRidingRoomApp(props) {
             <h1 className="open-riding-screen-title flex-1 text-center m-0">
               {headerTitle}
             </h1>
-            <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
+            {view === 'main' && userId ? (
+              <button
+                type="button"
+                className="shrink-0 p-1 rounded-lg hover:bg-gray-100 border-0 bg-transparent cursor-pointer flex items-center justify-center"
+                style={{ width: '2.5em' }}
+                onClick={function () {
+                  setView('friends');
+                }}
+                aria-label="친구 관리"
+              >
+                <img
+                  src="assets/img/friends.png"
+                  alt=""
+                  width={26}
+                  height={26}
+                  className="block object-contain"
+                  decoding="async"
+                  onError={function (e) {
+                    e.currentTarget.src = 'assets/img/friends.svg';
+                    e.currentTarget.onerror = null;
+                  }}
+                />
+              </button>
+            ) : (
+              <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
+            )}
           </>
         )}
       </div>
@@ -5277,5 +5785,6 @@ if (typeof window !== 'undefined') {
   window.OpenRidingCalendarMain = OpenRidingCalendarMain;
   window.OpenRidingCreateForm = OpenRidingCreateForm;
   window.OpenRidingDetail = OpenRidingDetail;
+  window.OpenRidingFriendsManage = OpenRidingFriendsManage;
   window.OpenRidingRoomApp = OpenRidingRoomApp;
 }
