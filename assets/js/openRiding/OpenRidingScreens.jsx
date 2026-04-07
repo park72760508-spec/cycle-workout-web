@@ -5355,10 +5355,10 @@ function OpenRidingFriendsManage(props) {
     return row.toDisplayName != null ? String(row.toDisplayName).trim() : '상대';
   }
 
-  /** 3자 이상 이름은 3자 + .. (한 줄 표기용) */
+  /** 4글자 이상은 앞 2글자 + .., 1~3글자는 그대로 (한 줄 표기용) */
   function truncateNameThreeDots(name) {
     var s = String(name != null ? name : '').trim();
-    if (s.length >= 3) return s.slice(0, 3) + '..';
+    if (s.length >= 4) return s.slice(0, 2) + '..';
     return s || '-';
   }
 
