@@ -5171,9 +5171,6 @@ function OpenRidingFriendsManage(props) {
   var _c = useState([]);
   var searchCandidates = _c[0];
   var setSearchCandidates = _c[1];
-  var _sel = useState(null);
-  var selectedCandidate = _sel[0];
-  var setSelectedCandidate = _sel[1];
   var _busy = useState(false);
   var actionBusy = _busy[0];
   var setActionBusy = _busy[1];
@@ -5219,9 +5216,7 @@ function OpenRidingFriendsManage(props) {
     if (!firestore || typeof fr.searchUsersForFriendRequest !== 'function') return;
     setActionBusy(true);
     fr.searchUsersForFriendRequest(firestore, searchTerm, userId).then(function (rows) {
-      var list = rows || [];
-      setSearchCandidates(list);
-      setSelectedCandidate(list.length ? list[0] : null);
+      setSearchCandidates(rows || []);
     }).finally(function () {
       setActionBusy(false);
     });
@@ -5235,8 +5230,8 @@ function OpenRidingFriendsManage(props) {
     };
   }
 
-  function sendSelectedRequest() {
-    if (!selectedCandidate || !selectedCandidate.uid) return;
+  function sendFriendRequestToCandidate(c) {
+    if (!c || !c.uid) return;
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
     if (typeof fr.sendFriendRequest !== 'function') return;
     var pr = profForSend();
@@ -5245,19 +5240,27 @@ function OpenRidingFriendsManage(props) {
       return;
     }
     setActionBusy(true);
-    fr.sendFriendRequest(firestore, userId, selectedCandidate.uid, pr, {
-      targetName: selectedCandidate.name,
-      targetContact: selectedCandidate.contact
+    fr.sendFriendRequest(firestore, userId, c.uid, pr, {
+      targetName: c.name,
+      targetContact: c.contact
     }).then(function () {
       refresh();
-      setSearchCandidates([]);
-      setSelectedCandidate(null);
-      setSearchTerm('');
     }).catch(function (e) {
       alert(e && e.message ? e.message : '요청 실패');
     }).finally(function () {
       setActionBusy(false);
     });
+  }
+
+  function searchRowStatus(c) {
+    var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
+    if (typeof fr.getFriendSearchRowStatus !== 'function') return '—';
+    return fr.getFriendSearchRowStatus(c.uid, bundle.friends, bundle.outgoing, bundle.incoming);
+  }
+
+  function canClickFriendRequest(c) {
+    var st = searchRowStatus(c);
+    return st === '친구 요청 가능' || st === '거절됨' || st === '요청 취소됨';
   }
 
   function outgoingDisplayName(row) {
@@ -5410,7 +5413,7 @@ function OpenRidingFriendsManage(props) {
           <div className="border-t border-slate-100 pt-3 space-y-2">
             <h3 className="text-sm font-semibold text-slate-800 m-0">친구 요청 대상자 검색</h3>
             <p className="text-xs text-slate-500 m-0 leading-snug">
-              이름(부분 일치) 또는 전화번호(뒤 4자리·전체). 앱에 로드된 회원 목록이 있으면 우선 검색되고, 전화 전체(8자리 이상)는 서버 프로필과도 매칭됩니다.
+              users 컬렉션의 name·displayName(이름 일치·접두 검색)과 contact·phone·phoneNumber·tel(전화 일치)로 조회합니다. 전화 8자리 이상은 저장 형식 후보와 매칭하고, 뒤 4자리만 입력하면 흔한 010 패턴 일부를 추가로 시도합니다.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -5434,36 +5437,61 @@ function OpenRidingFriendsManage(props) {
             {searchCandidates.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-slate-600 m-0">검색 결과</p>
-                <ul className="max-h-40 overflow-y-auto space-y-1 m-0 p-0 list-none">
-                  {searchCandidates.map(function (c) {
-                    var on = selectedCandidate && selectedCandidate.uid === c.uid;
-                    return (
-                      <li key={c.uid}>
-                        <button
-                          type="button"
-                          className={
-                            'w-full text-left rounded-lg px-2 py-2 text-sm border ' +
-                            (on ? 'border-violet-500 bg-violet-50' : 'border-slate-200 bg-white hover:bg-slate-50')
-                          }
-                          onClick={function () {
-                            setSelectedCandidate(c);
-                          }}
-                        >
-                          <span className="font-medium text-slate-800">{c.name}</span>
-                          <span className="block text-xs text-slate-600 break-all">{c.contact || '-'}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <button
-                  type="button"
-                  className="w-full open-riding-action-btn h-11 inline-flex items-center justify-center px-4 bg-violet-600 text-white rounded-xl font-medium disabled:opacity-50"
-                  disabled={actionBusy || !selectedCandidate}
-                  onClick={sendSelectedRequest}
-                >
-                  친구 요청 하기
-                </button>
+                <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-lg border border-slate-200">
+                  <table className="w-full text-xs text-left border-collapse min-w-[320px]">
+                    <thead>
+                      <tr className="text-slate-500 bg-slate-50 border-b border-slate-200 sticky top-0">
+                        <th className="py-2 px-2 font-medium">이름</th>
+                        <th className="py-2 px-2 font-medium w-[5.5rem] text-center">친구 요청</th>
+                        <th className="py-2 px-2 font-medium w-[3.5rem] text-center">삭제</th>
+                        <th className="py-2 px-2 font-medium">상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {searchCandidates.map(function (c) {
+                        var rowSt = searchRowStatus(c);
+                        var canReq = canClickFriendRequest(c);
+                        return (
+                          <tr key={c.uid} className="border-b border-slate-100 align-top">
+                            <td className="py-2 px-2">
+                              <span className="font-medium text-slate-800 block">{c.name}</span>
+                              <span className="text-[11px] text-slate-500 break-all">{c.contact || '-'}</span>
+                            </td>
+                            <td className="py-2 px-1 text-center">
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md bg-violet-600 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-violet-700"
+                                disabled={actionBusy || !canReq}
+                                onClick={function () {
+                                  sendFriendRequestToCandidate(c);
+                                }}
+                              >
+                                친구 요청
+                              </button>
+                            </td>
+                            <td className="py-2 px-1 text-center">
+                              <button
+                                type="button"
+                                className="text-[11px] font-semibold px-2 py-1.5 rounded-md border border-slate-300 text-slate-600 bg-white hover:bg-slate-50"
+                                disabled={actionBusy}
+                                onClick={function () {
+                                  setSearchCandidates(function (prev) {
+                                    return prev.filter(function (x) {
+                                      return x.uid !== c.uid;
+                                    });
+                                  });
+                                }}
+                              >
+                                삭제
+                              </button>
+                            </td>
+                            <td className="py-2 px-2 text-slate-700 leading-snug">{rowSt}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : null}
           </div>

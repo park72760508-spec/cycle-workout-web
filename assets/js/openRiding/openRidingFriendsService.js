@@ -61,7 +61,120 @@ function buildPhoneQueryCandidates(digits) {
 }
 
 /**
- * 이름(부분 일치)·전화 뒤 4자리·전화 전체 정규화로 후보 조회
+ * 뒤 4자리 — Firestore equality용 010-xxxx-yyyy 대표 후보(여러 중간 4자리 시도)
+ */
+function buildSampleContactCandidatesForSuffix(last4) {
+  const s = String(last4 || '').replace(/\D/g, '');
+  if (s.length !== 4) return [];
+  const mids = [
+    1000, 1234, 2000, 2345, 3000, 3456, 4000, 4321, 5000, 5555, 6000, 6543, 7000, 7654, 8000, 8765, 9000, 9876
+  ];
+  const out = [];
+  mids.forEach((mid) => {
+    const m = String(mid).padStart(4, '0');
+    out.push(`010-${m}-${s}`);
+    out.push(`010${m}${s}`);
+  });
+  return out;
+}
+
+async function firestoreQueryUsersByNameAndDisplay(db, term, me, pushRow, getLen) {
+  const t = String(term || '').trim();
+  if (!t) return;
+  if (/^[\d\s\-+()]+$/.test(t) && /\d/.test(t) && t.replace(/\D/g, '').length > 0) return;
+  const col = collection(db, 'users');
+
+  async function runField(field) {
+    if (getLen() >= 30) return;
+    try {
+      const q1 = query(col, where(field, '==', t), limit(20));
+      const s1 = await getDocs(q1);
+      s1.forEach((d) => {
+        if (getLen() >= 30) return;
+        if (!d.id || d.id === me) return;
+        const data = d.data();
+        pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
+      });
+    } catch {
+      /* 인덱스·규칙 */
+    }
+    try {
+      const end = t + '\uf8ff';
+      const q2 = query(col, where(field, '>=', t), where(field, '<=', end), limit(20));
+      const s2 = await getDocs(q2);
+      s2.forEach((d) => {
+        if (getLen() >= 30) return;
+        if (!d.id || d.id === me) return;
+        const data = d.data();
+        pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
+      });
+    } catch {
+      /* 인덱스·규칙 */
+    }
+  }
+
+  await runField('name');
+  await runField('displayName');
+}
+
+async function firestoreQueryUsersByContactFields(db, candidates, me, pushRow, getLen) {
+  const col = collection(db, 'users');
+  const fields = ['contact', 'phone', 'phoneNumber', 'tel'];
+  for (const c of candidates) {
+    if (!c || getLen() >= 30) break;
+    for (const field of fields) {
+      if (getLen() >= 30) break;
+      try {
+        const q = query(col, where(field, '==', c), limit(8));
+        const snap = await getDocs(q);
+        snap.forEach((d) => {
+          if (getLen() >= 30) return;
+          if (!d.id || d.id === me) return;
+          const data = d.data();
+          pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
+        });
+      } catch {
+        /* 규칙·인덱스 */
+      }
+    }
+  }
+}
+
+/** 검색 행 — 버튼·상태 표시용 */
+export function getFriendSearchRowStatus(uid, friends, outgoing, incoming) {
+  const fu = String(uid || '').trim();
+  if (!fu) return '—';
+  if (
+    (friends || []).some(function (f) {
+      return String(f.friendUid || f.id || '') === fu;
+    })
+  ) {
+    return '이미 친구';
+  }
+  var oi;
+  var o;
+  for (oi = 0; oi < (outgoing || []).length; oi++) {
+    o = outgoing[oi];
+    if (String(o.toUid || '') === fu && String(o.status || '') !== 'accepted') {
+      var ost = String(o.status || '');
+      if (ost === 'pending') return '요청 보냄(대기)';
+      if (ost === 'rejected') return '거절됨';
+      if (ost === 'cancelled') return '요청 취소됨';
+      return ost;
+    }
+  }
+  var inc;
+  for (oi = 0; oi < (incoming || []).length; oi++) {
+    inc = incoming[oi];
+    if (String(inc.fromUid || '') === fu && String(inc.status || '') === 'pending') {
+      return '상대가 나에게 요청';
+    }
+  }
+  return '친구 요청 가능';
+}
+
+/**
+ * Firestore users: name·displayName(일치·접두), contact·phone·phoneNumber·tel(전화·뒤4자리 대표 패턴)
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} term
  * @param {string} myUid
@@ -82,6 +195,23 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
     out.push({ uid: u, name: name || '회원', contact: String(contact || '').trim() });
   }
 
+  const getLen = function () {
+    return out.length;
+  };
+
+  const digitsOnly = t.replace(/\D/g, '');
+  const looksLikePhone = /^[\d\s\-+()]+$/.test(t) && /\d/.test(t);
+
+  await firestoreQueryUsersByNameAndDisplay(db, t, me, pushRow, getLen);
+
+  if (digitsOnly.length >= 8) {
+    const candidates = buildPhoneQueryCandidates(digitsOnly);
+    await firestoreQueryUsersByContactFields(db, candidates, me, pushRow, getLen);
+  } else if (digitsOnly.length === 4) {
+    const sample = buildSampleContactCandidatesForSuffix(digitsOnly);
+    await firestoreQueryUsersByContactFields(db, sample, me, pushRow, getLen);
+  }
+
   const lists = [];
   if (typeof window !== 'undefined') {
     if (Array.isArray(window.users)) lists.push(window.users);
@@ -91,6 +221,7 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
   for (let li = 0; li < lists.length; li++) {
     const arr = lists[li];
     for (let i = 0; i < arr.length; i++) {
+      if (out.length >= 30) break;
       const u = arr[i];
       if (!u) continue;
       const uid = String(u.id != null ? u.id : u.uid != null ? u.uid : '');
@@ -98,37 +229,14 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
       const nm = String(u.name != null ? u.name : u.displayName != null ? u.displayName : '').trim();
       const ph = contactFromUserData(u);
       const nd = normalizePhoneDigits(ph);
-      const matchName = nm && nm.toLowerCase().indexOf(tLower) >= 0;
-      const matchTail4 = /^\d{4}$/.test(t) && nd.length >= 4 && nd.slice(-4) === t;
-      const matchFull = t.replace(/\D/g, '').length >= 8 && nd && nd === normalizePhoneDigits(t);
+      const matchName = nm && nm.toLowerCase().indexOf(tLower) >= 0 && !looksLikePhone;
+      const matchTail4 = digitsOnly.length === 4 && nd.length >= 4 && nd.slice(-4) === digitsOnly;
+      const matchFull = digitsOnly.length >= 8 && nd && nd === digitsOnly;
       if (matchName || matchTail4 || matchFull) pushRow(uid, nm || '회원', ph);
     }
   }
 
-  const digitsOnly = t.replace(/\D/g, '');
-  if (digitsOnly.length >= 8) {
-    const candidates = buildPhoneQueryCandidates(digitsOnly);
-    const fields = ['contact', 'phone', 'phoneNumber', 'tel'];
-    const col = collection(db, 'users');
-    for (const field of fields) {
-      for (const c of candidates) {
-        if (out.length >= 12) break;
-        try {
-          const q = query(col, where(field, '==', c), limit(5));
-          const snap = await getDocs(q);
-          snap.forEach((d) => {
-            if (!d.id || d.id === me) return;
-            const data = d.data();
-            pushRow(d.id, nameFromUserData(data), contactFromUserData(data));
-          });
-        } catch {
-          /* 규칙·인덱스 */
-        }
-      }
-    }
-  }
-
-  return out.slice(0, 20);
+  return out.slice(0, 30);
 }
 
 /**
@@ -387,6 +495,7 @@ if (typeof window !== 'undefined') {
   window.openRidingFriendsService = {
     friendRequestDocId,
     searchUsersForFriendRequest,
+    getFriendSearchRowStatus,
     sendFriendRequest,
     cancelFriendRequest,
     acceptFriendRequest,
