@@ -4549,7 +4549,12 @@ function OpenRidingDetail(props) {
               })()
             : '-'
         )}
-        <div className={'w-full border-t border-slate-100/90 px-3 py-3 space-y-3 bg-violet-50/25' + detailMuted}>
+        <div
+          className={
+            'w-full border-t border-slate-100/90 border-b border-slate-300/90 px-3 py-3 space-y-3 bg-violet-50/25' +
+            detailMuted
+          }
+        >
           {ride.course ? <p className="text-sm text-slate-800 whitespace-pre-wrap m-0">{ride.course}</p> : null}
           <OpenRidingGpxCoursePanel gpxUrl={ride.gpxUrl != null ? String(ride.gpxUrl) : ''} file={null} storage={storage} showEmptyMessage={true} />
           {ride.gpxUrl ? (
@@ -4567,7 +4572,7 @@ function OpenRidingDetail(props) {
             </a>
           ) : null}
         </div>
-        <div className="open-riding-detail-participant-fold open-riding-detail-invite-fold--block w-full min-w-0 border-t border-slate-100/90">
+        <div className="open-riding-detail-participant-fold open-riding-detail-invite-fold--block w-full min-w-0">
           <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2 px-3 py-2">
             <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
               <button
