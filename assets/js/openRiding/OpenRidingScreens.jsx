@@ -1759,8 +1759,12 @@ function parseHmFromDeparture(s) {
   return { h: h, mi: mi };
 }
 
-/** 라이딩 모임 메인·필터: 글래스모피즘 하단 탭바 (스타일: style.css .open-riding-bottom-glass-nav) */
+/**
+ * 라이딩 모임 하단 네비: 2중 레이어(Outer=글래스+Safe Area / Inner=대칭 패딩+버튼 행).
+ * navVariant: main(홈|모임·맞춤·주최·친구) | create(홈·모임·맞춤·친구) | friends(홈·모임·맞춤·주최)
+ */
 function OpenRidingBottomGlassNav(props) {
+  var navVariant = props.navVariant === 'create' || props.navVariant === 'friends' ? props.navVariant : 'main';
   var filterActive = props.activeTab === 'filter';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
@@ -1771,123 +1775,136 @@ function OpenRidingBottomGlassNav(props) {
   var userId = props.userId || '';
 
   function itemClass(isActive) {
+    return 'open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent' + (isActive ? ' open-riding-bottom-glass-nav__btn--active' : '');
+  }
+
+  function iconHome() {
     return (
-      'open-riding-bottom-glass-nav__btn flex flex-col items-center justify-start flex-1 min-w-0 gap-0.5 rounded-xl border-0 bg-transparent pt-0.5 ' +
-      (isActive ? 'open-riding-bottom-glass-nav__btn--active' : '')
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
     );
   }
 
-  return (
-    <nav
-      className="open-riding-bottom-glass-nav"
-      role="navigation"
-      aria-label="라이딩 모임 하단 메뉴"
-    >
-      <div className="open-riding-bottom-glass-nav__float">
-        <div className="open-riding-bottom-glass-nav__row">
+  function iconMoim() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+
+  function iconFilter() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+    );
+  }
+
+  function iconJuchey() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+      </svg>
+    );
+  }
+
+  function renderFriendsButton(isActive) {
+    if (!userId) {
+      return (
+        <button type="button" className={itemClass(false) + ' opacity-50'} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
+          <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+          <span className="open-riding-bottom-glass-nav__label">친구</span>
+        </button>
+      );
+    }
+    return (
+      <button type="button" className={itemClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
+        <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
+          <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+          {pendingIncomingCount > 0 ? (
+            <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
+            </span>
+          ) : null}
+        </span>
+        <span className="open-riding-bottom-glass-nav__label">친구</span>
+      </button>
+    );
+  }
+
+  var innerContent = null;
+  if (navVariant === 'create') {
+    innerContent = (
+      <>
+        <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+          {iconHome()}
+          <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </button>
+        <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+          {iconMoim()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+        <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+          {iconFilter()}
+          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        </button>
+        {renderFriendsButton(false)}
+      </>
+    );
+  } else if (navVariant === 'friends') {
+    innerContent = (
+      <>
+        <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+          {iconHome()}
+          <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </button>
+        <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+          {iconMoim()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+        <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+          {iconFilter()}
+          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        </button>
+        <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+          {iconJuchey()}
+          <span className="open-riding-bottom-glass-nav__label">주최</span>
+        </button>
+      </>
+    );
+  } else {
+    innerContent = (
+      <>
         {filterActive ? (
           <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
-            <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
+            {iconMoim()}
             <span className="open-riding-bottom-glass-nav__label">모임</span>
           </button>
         ) : (
-          <button
-            type="button"
-            className={itemClass(false)}
-            onClick={onHome}
-            aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임"
-          >
-            <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-              />
-            </svg>
+          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
+            {iconHome()}
             <span className="open-riding-bottom-glass-nav__label">홈</span>
           </button>
         )}
         <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-          <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-          </svg>
+          {iconFilter()}
           <span className="open-riding-bottom-glass-nav__label">맞춤</span>
         </button>
         <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-          <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-          </svg>
+          {iconJuchey()}
           <span className="open-riding-bottom-glass-nav__label">주최</span>
         </button>
-        {userId ? (
-          <div className="open-riding-bottom-glass-nav__cell relative min-w-0">
-            <button
-              type="button"
-              className={itemClass(false) + ' w-full h-full min-h-0'}
-              onClick={onFriends}
-              aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}
-            >
-              <span className="relative inline-flex items-center justify-center">
-                <img
-                  src="assets/img/friends.png"
-                  alt=""
-                  width={22}
-                  height={22}
-                  className="open-riding-bottom-glass-nav__friend-img block object-contain"
-                  decoding="async"
-                  onError={function (e) {
-                    e.currentTarget.src = 'assets/img/friends.svg';
-                    e.currentTarget.onerror = null;
-                  }}
-                />
-                {pendingIncomingCount > 0 ? (
-                  <span
-                    className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none"
-                    style={{
-                      minWidth: '15px',
-                      height: '15px',
-                      fontSize: pendingIncomingCount > 9 ? 8 : 9,
-                      paddingLeft: pendingIncomingCount > 9 ? 3 : 4,
-                      paddingRight: pendingIncomingCount > 9 ? 3 : 4,
-                      top: '0',
-                      right: '0',
-                      transform: 'translate(45%, -40%)'
-                    }}
-                    aria-hidden="true"
-                  >
-                    {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
-                  </span>
-                ) : null}
-              </span>
-              <span className="open-riding-bottom-glass-nav__label">친구</span>
-            </button>
-          </div>
-        ) : (
-          <button type="button" className={itemClass(false) + ' opacity-50'} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-            <img
-              src="assets/img/friends.png"
-              alt=""
-              width={22}
-              height={22}
-              className="open-riding-bottom-glass-nav__friend-img block object-contain mx-auto"
-              decoding="async"
-              onError={function (e) {
-                e.currentTarget.src = 'assets/img/friends.svg';
-                e.currentTarget.onerror = null;
-              }}
-            />
-            <span className="open-riding-bottom-glass-nav__label">친구</span>
-          </button>
-        )}
-        </div>
+        {renderFriendsButton(false)}
+      </>
+    );
+  }
+
+  return (
+    <nav className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
+      <div className="open-riding-bottom-glass-nav__inner">
+        {innerContent}
       </div>
     </nav>
   );
@@ -6431,7 +6448,9 @@ function OpenRidingRoomApp(props) {
               ? '친구 관리'
               : '라이딩 모임';
 
-  var useGlassBottomNavSpacer = !!(firestore && (view === 'main' || view === 'filter'));
+  var useGlassBottomNavSpacer = !!(
+    firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends')
+  );
 
   var inner = null;
   if (!firestore) {
@@ -6596,8 +6615,9 @@ function OpenRidingRoomApp(props) {
       >
         {inner}
       </div>
-      {firestore && (view === 'main' || view === 'filter') ? (
+      {firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends') ? (
         <OpenRidingBottomGlassNav
+          navVariant={view === 'create' ? 'create' : view === 'friends' ? 'friends' : 'main'}
           activeTab={view === 'filter' ? 'filter' : ''}
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
