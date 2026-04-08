@@ -1778,6 +1778,11 @@ function OpenRidingBottomGlassNav(props) {
     return 'open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent' + (isActive ? ' open-riding-bottom-glass-nav__btn--active' : '');
   }
 
+  /** 터치: flex 4등분 슬롯 + 버튼이 슬롯 전체를 히트박스로 채움 (데드존 방지) */
+  function NavSlot(props) {
+    return <div className="open-riding-bottom-glass-nav__slot">{props.children}</div>;
+  }
+
   function iconHome() {
     return (
       <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1813,24 +1818,28 @@ function OpenRidingBottomGlassNav(props) {
   function renderFriendsButton(isActive) {
     if (!userId) {
       return (
-        <button type="button" className={itemClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-          <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
-          <span className="open-riding-bottom-glass-nav__label">친구</span>
-        </button>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
+            <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <span className="open-riding-bottom-glass-nav__label">친구</span>
+          </button>
+        </NavSlot>
       );
     }
     return (
-      <button type="button" className={itemClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
-        <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-          <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
-          {pendingIncomingCount > 0 ? (
-            <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
-              {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
-            </span>
-          ) : null}
-        </span>
-        <span className="open-riding-bottom-glass-nav__label">친구</span>
-      </button>
+      <NavSlot>
+        <button type="button" className={itemClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
+          <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
+            <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            {pendingIncomingCount > 0 ? (
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+                {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
+              </span>
+            ) : null}
+          </span>
+          <span className="open-riding-bottom-glass-nav__label">친구</span>
+        </button>
+      </NavSlot>
     );
   }
 
@@ -1838,64 +1847,84 @@ function OpenRidingBottomGlassNav(props) {
   if (navVariant === 'create') {
     innerContent = (
       <>
-        <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
-          {iconHome()}
-          <span className="open-riding-bottom-glass-nav__label">홈</span>
-        </button>
-        <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
-          {iconMoim()}
-          <span className="open-riding-bottom-glass-nav__label">모임</span>
-        </button>
-        <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-          {iconFilter()}
-          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-        </button>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+            {iconHome()}
+            <span className="open-riding-bottom-glass-nav__label">홈</span>
+          </button>
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+            {iconMoim()}
+            <span className="open-riding-bottom-glass-nav__label">모임</span>
+          </button>
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+            {iconFilter()}
+            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+          </button>
+        </NavSlot>
         {renderFriendsButton(false)}
       </>
     );
   } else if (navVariant === 'friends') {
     innerContent = (
       <>
-        <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
-          {iconHome()}
-          <span className="open-riding-bottom-glass-nav__label">홈</span>
-        </button>
-        <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
-          {iconMoim()}
-          <span className="open-riding-bottom-glass-nav__label">모임</span>
-        </button>
-        <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-          {iconFilter()}
-          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-        </button>
-        <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-          {iconJuchey()}
-          <span className="open-riding-bottom-glass-nav__label">주최</span>
-        </button>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+            {iconHome()}
+            <span className="open-riding-bottom-glass-nav__label">홈</span>
+          </button>
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+            {iconMoim()}
+            <span className="open-riding-bottom-glass-nav__label">모임</span>
+          </button>
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+            {iconFilter()}
+            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+          </button>
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+            {iconJuchey()}
+            <span className="open-riding-bottom-glass-nav__label">주최</span>
+          </button>
+        </NavSlot>
       </>
     );
   } else {
     innerContent = (
       <>
-        {filterActive ? (
-          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
-            {iconMoim()}
-            <span className="open-riding-bottom-glass-nav__label">모임</span>
+        <NavSlot>
+          {filterActive ? (
+            <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
+              {iconMoim()}
+              <span className="open-riding-bottom-glass-nav__label">모임</span>
+            </button>
+          ) : (
+            <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
+              {iconHome()}
+              <span className="open-riding-bottom-glass-nav__label">홈</span>
+            </button>
+          )}
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+            {iconFilter()}
+            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
           </button>
-        ) : (
-          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
-            {iconHome()}
-            <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </NavSlot>
+        <NavSlot>
+          <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+            {iconJuchey()}
+            <span className="open-riding-bottom-glass-nav__label">주최</span>
           </button>
-        )}
-        <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-          {iconFilter()}
-          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-        </button>
-        <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-          {iconJuchey()}
-          <span className="open-riding-bottom-glass-nav__label">주최</span>
-        </button>
+        </NavSlot>
         {renderFriendsButton(false)}
       </>
     );
@@ -1904,8 +1933,9 @@ function OpenRidingBottomGlassNav(props) {
   return (
     <nav className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
       <div className="open-riding-bottom-glass-nav__pill">
-        <div className="open-riding-bottom-glass-nav__inner">
-          {innerContent}
+        <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
+        <div className="open-riding-bottom-glass-nav__pill-surface">
+          <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
         </div>
       </div>
     </nav>
