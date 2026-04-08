@@ -1772,7 +1772,7 @@ function OpenRidingBottomGlassNav(props) {
 
   function itemClass(isActive) {
     return (
-      'open-riding-bottom-glass-nav__btn flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 rounded-xl border-0 bg-transparent ' +
+      'open-riding-bottom-glass-nav__btn flex flex-col items-center justify-start flex-1 min-w-0 gap-0.5 rounded-xl border-0 bg-transparent pt-0.5 ' +
       (isActive ? 'open-riding-bottom-glass-nav__btn--active' : '')
     );
   }
@@ -1828,10 +1828,10 @@ function OpenRidingBottomGlassNav(props) {
           <span className="open-riding-bottom-glass-nav__label">주최</span>
         </button>
         {userId ? (
-          <div className="relative flex flex-1 min-w-0 justify-center">
+          <div className="open-riding-bottom-glass-nav__cell relative min-w-0">
             <button
               type="button"
-              className={itemClass(false) + ' w-full'}
+              className={itemClass(false) + ' w-full h-full min-h-0'}
               onClick={onFriends}
               aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}
             >
