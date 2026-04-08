@@ -1039,23 +1039,23 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
   padding-bottom: calc(
-    var(--open-riding-glass-nav-float-gap) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
-      var(--open-riding-glass-nav-row-min) + 28px + env(safe-area-inset-bottom, 0px)
+    16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
+      var(--open-riding-glass-nav-row-min) + 28px
   );
   box-sizing: border-box;
 }
 
-/* Shell: document.body 포털 마운트(#openRidingBottomGlassNavRoot) — 화면 스택·조상 transform과 분리 */
+/* 플로팅 글래스 네비: document.body 포털(#openRidingBottomGlassNavRoot) — 터치·z-index·pointer-events 규칙 유지 */
 #openRidingBottomGlassNavRoot {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 500px;
   margin: 0;
   box-sizing: border-box;
-  padding: 0 max(12px, env(safe-area-inset-left, 0px))
-    calc(var(--open-riding-glass-nav-float-gap) + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-right, 0px));
+  padding: 0;
   z-index: 99999 !important;
   isolation: isolate;
   background: transparent;
@@ -1068,14 +1068,14 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-touch-callout: none;
 }
 
-/* Pill: 테두리·그림자·클리핑만 (시각적 크기·라운드 유지) */
+/* Pill: 테두리·그림자·클리핑 — 텔레그램형 플로팅 둥근 박스 */
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill {
   pointer-events: auto;
   width: 100%;
-  max-width: 500px;
+  max-width: none;
   margin: 0 auto;
   box-sizing: border-box;
-  border-radius: 26px;
+  border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow:
     0 10px 36px rgba(15, 23, 42, 0.15),
