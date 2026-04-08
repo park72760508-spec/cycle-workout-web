@@ -1023,8 +1023,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /* 글래스 하단 네비: 본문 마지막 항목이 바에 가리지 않도록 (높이는 .open-riding-bottom-glass-nav 와 동일 계열) */
 #openRidingRoomScreen {
-  /* 주최 탭 원형 버튼(40px) + 라벨까지 포함한 행 최소 높이 */
-  --open-riding-glass-nav-row-min-height: 64px;
+  /* 22px 아이콘 + 라벨 행 최소 높이 */
+  --open-riding-glass-nav-row-min-height: 56px;
   --open-riding-glass-nav-pad-y: 8px;
   /* 화면 하단에서 떠 있도록 아래·좌우 여백 */
   --open-riding-glass-nav-float-gap: 12px;
@@ -1127,24 +1127,6 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #openRidingRoomScreen .open-riding-bottom-glass-nav__icon {
   width: 22px;
   height: 22px;
-  flex-shrink: 0;
-}
-
-#openRidingRoomScreen .open-riding-bottom-glass-nav__icon--fab {
-  width: 20px;
-  height: 20px;
-  color: #fff;
-}
-
-#openRidingRoomScreen .open-riding-bottom-glass-nav__icon-fab {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 9999px;
-  background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
-  box-shadow: 0 2px 10px rgba(109, 40, 217, 0.35);
   flex-shrink: 0;
 }
 
