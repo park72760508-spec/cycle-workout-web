@@ -1950,7 +1950,13 @@ function OpenRidingDetailGlassNav(props) {
           onClick={onEdit}
           disabled={!showHostActions || hostToolbarLocked}
           aria-label="라이딩 수정"
-          title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined}
+          title={
+            !showHostActions
+              ? '방장 또는 관리자만 이용할 수 있습니다.'
+              : hostToolbarLocked
+                ? '라이딩 일정일이 지나 수정할 수 없습니다.'
+                : undefined
+          }
         >
           <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
           <span className="open-riding-bottom-glass-nav__label">수정</span>
@@ -1963,7 +1969,13 @@ function OpenRidingDetailGlassNav(props) {
           onClick={onCancel}
           disabled={!showHostActions || hostToolbarLocked}
           aria-label="라이딩 취소"
-          title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
+          title={
+            !showHostActions
+              ? '방장 또는 관리자만 이용할 수 있습니다.'
+              : hostToolbarLocked
+                ? '라이딩 일정일이 지나 취소할 수 없습니다.'
+                : undefined
+          }
         >
           <img src="assets/img/cancel01.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">취소</span>
@@ -1976,7 +1988,13 @@ function OpenRidingDetailGlassNav(props) {
           onClick={onDelete}
           disabled={!showHostActions || hostToolbarLocked}
           aria-label="라이딩 삭제"
-          title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
+          title={
+            !showHostActions
+              ? '방장 또는 관리자만 이용할 수 있습니다.'
+              : hostToolbarLocked
+                ? '라이딩 일정일이 지나 삭제할 수 없습니다.'
+                : undefined
+          }
         >
           <img src="assets/img/delete2.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">삭제</span>
@@ -2021,7 +2039,13 @@ function OpenRidingEditGlassNav(props) {
         </button>
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onEdit} aria-label="일정 상세 화면으로">
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(true)}
+          onClick={onEdit}
+          aria-current="page"
+          aria-label="일정 상세 화면으로"
+        >
           <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
           <span className="open-riding-bottom-glass-nav__label">수정</span>
         </button>
@@ -2752,14 +2776,15 @@ function OpenRidingCalendarMain(props) {
               <img src="assets/img/lock.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
             ) : null}
             {showParticipantConfirmedIcon ? (
-              <img
-                src="assets/img/check.svg"
-                alt="참석 확정"
-                className="w-4 h-4 shrink-0 object-contain"
-                width={16}
-                height={16}
-                decoding="async"
-              />
+              <span
+                className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25"
+                title="참석 확정"
+                aria-label="참석 확정"
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" />
+                </svg>
+              </span>
             ) : null}
             <span className="truncate">{r.title}</span>
           </div>
@@ -4425,6 +4450,23 @@ function OpenRidingCreateForm(props) {
         </div>
       ) : null}
     </form>
+    {editRideId && isBusy ? (
+      <div
+        className="fixed left-1/2 z-[99990] flex -translate-x-1/2 flex-col items-center gap-1.5 px-4 pointer-events-none"
+        style={{ bottom: 'calc(88px + env(safe-area-inset-bottom, 0px))' }}
+      >
+        <div className="flex flex-col items-center gap-1 rounded-2xl border border-emerald-200/90 bg-white/95 px-4 py-3 shadow-lg">
+          <span
+            className="inline-block h-9 w-9 rounded-full border-[3px] border-emerald-200 border-t-emerald-600 animate-spin"
+            style={{ animationDuration: '0.85s' }}
+            role="status"
+            aria-live="polite"
+            aria-label="저장 중"
+          />
+          <span className="text-[11px] font-semibold text-emerald-800">저장 중…</span>
+        </div>
+      </div>
+    ) : null}
     {editRideId ? (
       <OpenRidingEditGlassNav
         onMoim={typeof onEditNavMoim === 'function' ? onEditNavMoim : function () {}}
@@ -5815,7 +5857,7 @@ function OpenRidingDetail(props) {
         setDeleteModalOpen(true);
       }}
       hostToolbarLocked={hostToolbarPastLocked}
-      showHostActions={isHost && !isCancelled}
+      showHostActions={!isCancelled && (isHost || _isAdmin1)}
     />
     </>
   );
