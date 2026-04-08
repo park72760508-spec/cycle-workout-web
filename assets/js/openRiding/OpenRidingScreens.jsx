@@ -1799,6 +1799,7 @@ function OpenRidingBottomGlassNav(props) {
   var navVariant =
     nv === 'filter' || nv === 'create' || nv === 'friends' ? nv : 'main';
   var filterActive = props.activeTab === 'filter';
+  var createActive = props.activeTab === 'create';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
   var onFilter = props.onFilter || function () {};
@@ -1899,7 +1900,13 @@ function OpenRidingBottomGlassNav(props) {
         </button>
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(createActive)}
+          onClick={onCreate}
+          aria-current={createActive ? 'page' : undefined}
+          aria-label="라이딩 주최"
+        >
           {iconJuchey()}
           <span className="open-riding-bottom-glass-nav__label">주최</span>
         </button>
@@ -6567,23 +6574,6 @@ function OpenRidingRoomApp(props) {
     [firestore, userId, view]
   );
 
-  function handleTopBack() {
-    if (view === 'main') {
-      if (typeof showScreen === 'function') showScreen('basecampScreen');
-    } else if (view === 'friends') {
-      setView('main');
-    } else if (view === 'filter') {
-      setView('main');
-    } else if (view === 'edit') {
-      setView('detail');
-    } else if (view === 'create') {
-      setView('main');
-    } else {
-      setDetailRideId(null);
-      setView('main');
-    }
-  }
-
   function handleEditNavDeleteRide() {
     if (!firestore || !userId || !detailRideId) return;
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -6698,41 +6688,13 @@ function OpenRidingRoomApp(props) {
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
-        {view === 'detail' || view === 'edit' ? (
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
-            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
-            <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
-              {headerTitle}
-            </h1>
-            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
-          </div>
-        ) : view === 'main' ? (
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
-            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
-            <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
-              {headerTitle}
-            </h1>
-            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
-          </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-              style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={handleTopBack}
-              aria-label="미니 달력 화면으로"
-            >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h1 className="open-riding-screen-title flex-1 text-center m-0">
-              {headerTitle}
-            </h1>
-            <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
-          </>
-        )}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
+          <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
+            {headerTitle}
+          </h1>
+          <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+        </div>
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. 메인·필터는 글래스 하단 네비만큼 하단 여백(style.css) */}
       <div
@@ -6759,7 +6721,7 @@ function OpenRidingRoomApp(props) {
                     ? 'friends'
                     : 'main'
           }
-          activeTab={view === 'filter' ? 'filter' : ''}
+          activeTab={view === 'filter' ? 'filter' : view === 'create' ? 'create' : ''}
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
           }}
