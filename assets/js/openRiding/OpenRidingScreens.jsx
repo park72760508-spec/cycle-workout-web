@@ -1759,6 +1759,38 @@ function parseHmFromDeparture(s) {
   return { h: h, mi: mi };
 }
 
+function openRidingGlassNavBtnClass(isActive) {
+  return (
+    'open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent' +
+    (isActive ? ' open-riding-bottom-glass-nav__btn--active' : '')
+  );
+}
+
+function OpenRidingGlassNavSlot(p) {
+  return <div className="open-riding-bottom-glass-nav__slot">{p.children}</div>;
+}
+
+/** body 포털 + 동일 글래스 DOM — 터치 레이어 규칙은 style.css(#openRidingBottomGlassNavRoot)에 일괄 정의 */
+function OpenRidingGlassNavPortal(p) {
+  var innerContent = p.innerContent;
+  var ariaLabel = p.ariaLabel || '하단 메뉴';
+  var navEl = (
+    <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label={ariaLabel}>
+      <div className="open-riding-bottom-glass-nav__pill">
+        <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
+        <div className="open-riding-bottom-glass-nav__pill-surface">
+          <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
+        </div>
+      </div>
+    </nav>
+  );
+  var rd = typeof ReactDOM !== 'undefined' ? ReactDOM : typeof window !== 'undefined' ? window.ReactDOM : undefined;
+  if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
+    return rd.createPortal(navEl, document.body);
+  }
+  return navEl;
+}
+
 /**
  * 라이딩 모임 하단 네비: 2중 레이어(Outer=글래스+Safe Area / Inner=대칭 패딩+버튼 행).
  * navVariant: main(홈|모임·맞춤·주최·친구) | create(홈·모임·맞춤·친구) | friends(홈·모임·맞춤·주최)
@@ -1773,15 +1805,6 @@ function OpenRidingBottomGlassNav(props) {
   var onFriends = props.onFriends || function () {};
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var userId = props.userId || '';
-
-  function itemClass(isActive) {
-    return 'open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent' + (isActive ? ' open-riding-bottom-glass-nav__btn--active' : '');
-  }
-
-  /** 터치: flex 4등분 슬롯 + 버튼이 슬롯 전체를 히트박스로 채움 (데드존 방지) */
-  function NavSlot(props) {
-    return <div className="open-riding-bottom-glass-nav__slot">{props.children}</div>;
-  }
 
   function iconHome() {
     return (
@@ -1818,17 +1841,17 @@ function OpenRidingBottomGlassNav(props) {
   function renderFriendsButton(isActive) {
     if (!userId) {
       return (
-        <NavSlot>
-          <button type="button" className={itemClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
             <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             <span className="open-riding-bottom-glass-nav__label">친구</span>
           </button>
-        </NavSlot>
+        </OpenRidingGlassNavSlot>
       );
     }
     return (
-      <NavSlot>
-        <button type="button" className={itemClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
@@ -1839,7 +1862,7 @@ function OpenRidingBottomGlassNav(props) {
           </span>
           <span className="open-riding-bottom-glass-nav__label">친구</span>
         </button>
-      </NavSlot>
+      </OpenRidingGlassNavSlot>
     );
   }
 
@@ -1847,104 +1870,247 @@ function OpenRidingBottomGlassNav(props) {
   if (navVariant === 'create') {
     innerContent = (
       <>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
             {iconHome()}
             <span className="open-riding-bottom-glass-nav__label">홈</span>
           </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
             {iconMoim()}
             <span className="open-riding-bottom-glass-nav__label">모임</span>
           </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
             {iconFilter()}
             <span className="open-riding-bottom-glass-nav__label">맞춤</span>
           </button>
-        </NavSlot>
+        </OpenRidingGlassNavSlot>
         {renderFriendsButton(false)}
       </>
     );
   } else if (navVariant === 'friends') {
     innerContent = (
       <>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
             {iconHome()}
             <span className="open-riding-bottom-glass-nav__label">홈</span>
           </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
             {iconMoim()}
             <span className="open-riding-bottom-glass-nav__label">모임</span>
           </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
             {iconFilter()}
             <span className="open-riding-bottom-glass-nav__label">맞춤</span>
           </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onCreate} aria-label="라이딩 주최">
             {iconJuchey()}
             <span className="open-riding-bottom-glass-nav__label">주최</span>
           </button>
-        </NavSlot>
+        </OpenRidingGlassNavSlot>
       </>
     );
   } else {
     innerContent = (
       <>
-        <NavSlot>
+        <OpenRidingGlassNavSlot>
           {filterActive ? (
-            <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
+            <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
               {iconMoim()}
               <span className="open-riding-bottom-glass-nav__label">모임</span>
             </button>
           ) : (
-            <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
+            <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
               {iconHome()}
               <span className="open-riding-bottom-glass-nav__label">홈</span>
             </button>
           )}
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
             {iconFilter()}
             <span className="open-riding-bottom-glass-nav__label">맞춤</span>
           </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+        </OpenRidingGlassNavSlot>
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onCreate} aria-label="라이딩 주최">
             {iconJuchey()}
             <span className="open-riding-bottom-glass-nav__label">주최</span>
           </button>
-        </NavSlot>
+        </OpenRidingGlassNavSlot>
         {renderFriendsButton(false)}
       </>
     );
   }
 
-  var navEl = (
-    <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
-      <div className="open-riding-bottom-glass-nav__pill">
-        <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
-        <div className="open-riding-bottom-glass-nav__pill-surface">
-          <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
-        </div>
-      </div>
-    </nav>
-  );
-  var rd = typeof ReactDOM !== 'undefined' ? ReactDOM : typeof window !== 'undefined' ? window.ReactDOM : undefined;
-  if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
-    return rd.createPortal(navEl, document.body);
+  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 모임 하단 메뉴" />;
+}
+
+/** 상세 화면 하단: 모임·수정·취소·삭제 (기존 툴바 아이콘 재사용) */
+function OpenRidingDetailGlassNav(props) {
+  var onMoim = props.onMoim || function () {};
+  var onEdit = props.onEdit || function () {};
+  var onCancel = props.onCancel || function () {};
+  var onDelete = props.onDelete || function () {};
+  var hostToolbarLocked = !!props.hostToolbarLocked;
+  var showHostActions = !!props.showHostActions;
+
+  function iconMoimNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
   }
-  return navEl;
+
+  var innerContent = (
+    <>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력으로">
+          {iconMoimNav()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onEdit}
+          disabled={!showHostActions || hostToolbarLocked}
+          aria-label="라이딩 수정"
+          title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined}
+        >
+          <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
+          <span className="open-riding-bottom-glass-nav__label">수정</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onCancel}
+          disabled={!showHostActions || hostToolbarLocked}
+          aria-label="라이딩 취소"
+          title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
+        >
+          <img src="assets/img/cancel01.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">취소</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onDelete}
+          disabled={!showHostActions || hostToolbarLocked}
+          aria-label="라이딩 삭제"
+          title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
+        >
+          <img src="assets/img/delete2.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">삭제</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    </>
+  );
+
+  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 상세 하단 메뉴" />;
+}
+
+/** 수정 폼 하단: 모임·맞춤·친구·저장 */
+function OpenRidingEditGlassNav(props) {
+  var onMoim = props.onMoim || function () {};
+  var onFilter = props.onFilter || function () {};
+  var onFriends = props.onFriends || function () {};
+  var onSave = props.onSave || function () {};
+  var isBusy = !!props.isBusy;
+  var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
+  var userId = props.userId || '';
+
+  function iconMoimNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+  function iconFilterNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+    );
+  }
+  function iconSaveNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+      </svg>
+    );
+  }
+
+  var friendsSlot = null;
+  if (!userId) {
+    friendsSlot = (
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
+          <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+          <span className="open-riding-bottom-glass-nav__label">친구</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    );
+  } else {
+    friendsSlot = (
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onFriends} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
+          <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
+            <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            {pendingIncomingCount > 0 ? (
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+                {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
+              </span>
+            ) : null}
+          </span>
+          <span className="open-riding-bottom-glass-nav__label">친구</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    );
+  }
+
+  var innerContent = (
+    <>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력으로">
+          {iconMoimNav()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onFilter} aria-label="맞춤 필터">
+          {iconFilterNav()}
+          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      {friendsSlot}
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onSave} disabled={isBusy} aria-label="저장">
+          {iconSaveNav()}
+          <span className="open-riding-bottom-glass-nav__label">저장</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    </>
+  );
+
+  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 수정 하단 메뉴" />;
 }
 
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
@@ -2979,6 +3145,12 @@ function OpenRidingCreateForm(props) {
   var editRideId = props.editRideId || null;
   var onCreated = props.onCreated || function () {};
   var onEditSaved = props.onEditSaved || function () {};
+  var onEditNavMoim = props.onEditNavMoim;
+  var onEditNavFilter = props.onEditNavFilter;
+  var onEditNavFriends = props.onEditNavFriends;
+  var editNavPendingCount = props.editNavPendingCount;
+
+  var formRef = useRef(null);
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
@@ -3563,7 +3735,8 @@ function OpenRidingCreateForm(props) {
 
   /* 폼 루트 z-0, 하단 CTA는 style.css에서 z-5(고정 로고바 10000 미만)로 본문보다만 위 — 스크롤 시 고정바 뒤로 가려짐 */
   return (
-    <form className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
+    <>
+    <form ref={formRef} id="open-riding-ride-form" className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
       {!storage ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
@@ -4192,12 +4365,13 @@ function OpenRidingCreateForm(props) {
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      {/* Safe Area + 터치 타깃: 하단 CTA — style.css (고정바보다 낮은 z-index) */}
-      <div className="open-riding-bottom-actions">
-        <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
-          {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
-        </button>
-      </div>
+      {!editRideId ? (
+        <div className="open-riding-bottom-actions">
+          <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
+            {isBusy ? '저장 중…' : '생성'}
+          </button>
+        </div>
+      ) : null}
 
       {dateModalOpen ? (
         <div
@@ -4293,6 +4467,22 @@ function OpenRidingCreateForm(props) {
         </div>
       ) : null}
     </form>
+    {editRideId ? (
+      <OpenRidingEditGlassNav
+        onMoim={typeof onEditNavMoim === 'function' ? onEditNavMoim : function () {}}
+        onFilter={typeof onEditNavFilter === 'function' ? onEditNavFilter : function () {}}
+        onFriends={typeof onEditNavFriends === 'function' ? onEditNavFriends : function () {}}
+        onSave={function () {
+          if (formRef.current && typeof formRef.current.requestSubmit === 'function') {
+            formRef.current.requestSubmit();
+          }
+        }}
+        isBusy={isBusy}
+        pendingIncomingCount={typeof editNavPendingCount === 'number' ? editNavPendingCount : 0}
+        userId={hostUserId}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -4931,8 +5121,9 @@ function OpenRidingDetail(props) {
     );
   }
 
-  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css). 수정/취소 행·게스트 상단 추가 여백 없음 */
+  /* 상세 본문 루트 z-0, 방장 수정/취소/삭제는 하단 글래스 네비(OpenRidingDetailGlassNav) */
   return (
+    <>
     <div
       className={
         'open-riding-detail-content-root max-w-lg mx-auto w-full relative z-0 ' +
@@ -4943,62 +5134,6 @@ function OpenRidingDetail(props) {
         <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2 m-0">
           이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
         </p>
-      ) : null}
-
-      {isHost && !isCancelled ? (
-        <div className="flex justify-end items-center gap-2 flex-wrap min-w-0 open-riding-detail-host-actions px-1">
-          <button
-            type="button"
-            disabled={hostToolbarPastLocked}
-            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined}
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
-            onClick={onOpenEdit}
-            aria-label="라이딩 수정"
-          >
-            <OpenRidingDashboardEditIcon className="w-5 h-5 shrink-0 text-violet-700" />
-            <span>수정</span>
-          </button>
-          <button
-            type="button"
-            disabled={hostToolbarPastLocked}
-            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
-            onClick={function () {
-              setBombOpen(true);
-            }}
-            aria-label="라이딩 취소"
-          >
-            <img
-              src="assets/img/cancel01.png"
-              alt=""
-              width={20}
-              height={20}
-              className="block object-contain shrink-0"
-              decoding="async"
-            />
-            <span>취소</span>
-          </button>
-          <button
-            type="button"
-            disabled={hostToolbarPastLocked}
-            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
-            onClick={function () {
-              setDeleteModalOpen(true);
-            }}
-            aria-label="라이딩 삭제"
-          >
-            <img
-              src="assets/img/delete2.png"
-              alt=""
-              width={20}
-              height={20}
-              className="block object-contain shrink-0"
-              decoding="async"
-            />
-            <span>삭제</span>
-          </button>
-        </div>
       ) : null}
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
@@ -5699,6 +5834,19 @@ function OpenRidingDetail(props) {
         </div>
       ) : null}
     </div>
+    <OpenRidingDetailGlassNav
+      onMoim={onBack}
+      onEdit={onOpenEdit}
+      onCancel={function () {
+        setBombOpen(true);
+      }}
+      onDelete={function () {
+        setDeleteModalOpen(true);
+      }}
+      hostToolbarLocked={hostToolbarPastLocked}
+      showHostActions={isHost && !isCancelled}
+    />
+    </>
   );
 }
 
@@ -6486,7 +6634,13 @@ function OpenRidingRoomApp(props) {
               : '라이딩 모임';
 
   var useGlassBottomNavSpacer = !!(
-    firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends')
+    firestore &&
+    (view === 'main' ||
+      view === 'filter' ||
+      view === 'create' ||
+      view === 'friends' ||
+      (view === 'detail' && detailRideId) ||
+      (view === 'edit' && detailRideId))
   );
 
   var inner = null;
@@ -6514,6 +6668,16 @@ function OpenRidingRoomApp(props) {
         editRideId={detailRideId}
         onCreated={function () { setView('main'); }}
         onEditSaved={function () { setView('detail'); }}
+        onEditNavMoim={function () {
+          setView('main');
+        }}
+        onEditNavFilter={function () {
+          setView('filter');
+        }}
+        onEditNavFriends={function () {
+          setView('friends');
+        }}
+        editNavPendingCount={pendingIncomingCount}
       />
     );
   } else if (view === 'detail' && detailRideId) {
