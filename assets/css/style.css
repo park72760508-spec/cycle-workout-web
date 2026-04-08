@@ -1035,6 +1035,10 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   --open-riding-glass-nav-inner-pad-y: 14px;
   --open-riding-glass-nav-row-min: 66px;
   --open-riding-glass-nav-float-gap: 16px;
+  /* 아이콘·라벨 축소 후에도 바 높이 유지(현재 패딩+행 높이와 동일) */
+  --open-riding-glass-nav-inner-fixed-height: calc(
+    var(--open-riding-glass-nav-inner-pad-y) * 2 + var(--open-riding-glass-nav-row-min)
+  );
 }
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
@@ -1106,7 +1110,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   touch-action: manipulation;
 }
 
-/* Inner: 패딩·flex 행 — 시각 값 변경 없음 */
+/* Inner: 패딩·flex 행 — 높이 고정(콘텐츠 축소와 무관) */
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__inner {
   display: flex;
   flex-direction: row;
@@ -1116,13 +1120,16 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   gap: 0;
   padding: var(--open-riding-glass-nav-inner-pad-y) 13px;
   width: 100%;
-  min-height: var(--open-riding-glass-nav-row-min);
+  height: var(--open-riding-glass-nav-inner-fixed-height);
+  min-height: var(--open-riding-glass-nav-inner-fixed-height);
+  max-height: var(--open-riding-glass-nav-inner-fixed-height);
   box-sizing: border-box;
   margin: 0;
   pointer-events: none;
   touch-action: manipulation;
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
 }
 
 /* 4등분 슬롯: 가운데 열 히트 면적 보장 */
@@ -1150,7 +1157,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   box-sizing: border-box;
   padding: 4px 5px;
@@ -1200,8 +1207,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__icon {
-  width: 29px;
-  height: 29px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -1211,7 +1218,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__label {
-  font-size: 13px;
+  font-size: 9px;
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -1227,8 +1234,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__friend-img {
-  width: 29px;
-  height: 29px;
+  width: 20px;
+  height: 20px;
 }
 
 /* 컴팩트 상단 3열(맞춤설정·닉네임·주최): 그리드 래퍼가 가로로 넓게 깔려 하단 네비 중앙과 히트가 겹칠 수 있음 — 래퍼는 통과, 실버튼만 수신 */
