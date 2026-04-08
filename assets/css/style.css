@@ -1026,18 +1026,21 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   /* 주최 탭 원형 버튼(40px) + 라벨까지 포함한 행 최소 높이 */
   --open-riding-glass-nav-row-min-height: 64px;
   --open-riding-glass-nav-pad-y: 8px;
+  /* 화면 하단에서 떠 있도록 아래·좌우 여백 */
+  --open-riding-glass-nav-float-gap: 12px;
+  --open-riding-glass-nav-float-x: 14px;
 }
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
-  /* 네비: 상단 패딩 + 행 + 행 하단 여백 + 홈 인디케이터 — 리스트 마지막 항목이 바에 가리지 않도록 추가 10px */
+  /* 플로팅 박스 높이 + 하단 간격 + 홈 인디케이터 — 리스트 마지막 항목이 바에 가리지 않도록 10px 여유 */
   padding-bottom: calc(
-    var(--open-riding-glass-nav-pad-y) + var(--open-riding-glass-nav-row-min-height) + 4px + 10px +
-      env(safe-area-inset-bottom, 0px)
+    var(--open-riding-glass-nav-pad-y) + var(--open-riding-glass-nav-row-min-height) + 8px + 10px +
+      var(--open-riding-glass-nav-float-gap) + env(safe-area-inset-bottom, 0px)
   );
   box-sizing: border-box;
 }
 
-/* 라이딩 모임: 텔레그램형 글래스모피즘 하단 탭바 (플로팅, 전체 너비) */
+/* 외곽: 고정 레이어(투명), 터치는 둥근 박스에만 */
 #openRidingRoomScreen .open-riding-bottom-glass-nav {
   position: fixed;
   left: 0;
@@ -1048,16 +1051,37 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   margin: 0;
   z-index: 10000;
   box-sizing: border-box;
+  padding-left: max(var(--open-riding-glass-nav-float-x), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--open-riding-glass-nav-float-x), env(safe-area-inset-right, 0px));
+  padding-bottom: calc(var(--open-riding-glass-nav-float-gap) + env(safe-area-inset-bottom, 0px));
+  padding-top: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 텔레그램형 글래스: 떠 있는 둥근 상자 */
+#openRidingRoomScreen .open-riding-bottom-glass-nav__float {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  box-sizing: border-box;
   isolation: isolate;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
-  background: rgba(255, 255, 255, 0.75);
-  -webkit-backdrop-filter: blur(15px);
-  backdrop-filter: blur(15px);
-  border-top: 1px solid rgba(229, 231, 235, 0.65);
-  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.08);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  padding-top: var(--open-riding-glass-nav-pad-y);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(16px) saturate(165%);
+  backdrop-filter: blur(16px) saturate(165%);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 12px 42px rgba(15, 23, 42, 0.16),
+    0 4px 14px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  padding: var(--open-riding-glass-nav-pad-y) 10px 8px;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -1072,12 +1096,10 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   justify-content: space-around;
   gap: 2px;
   min-height: var(--open-riding-glass-nav-row-min-height);
-  padding-left: 6px;
-  padding-right: 6px;
-  padding-bottom: 2px;
+  padding-left: 2px;
+  padding-right: 2px;
+  padding-bottom: 0;
   box-sizing: border-box;
-  max-width: 500px;
-  margin: 0 auto;
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn {
