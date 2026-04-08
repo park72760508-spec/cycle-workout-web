@@ -2,7 +2,7 @@
  * 오픈 라이딩방 UI (메인 달력·설정 / 생성 폼 / 상세)
  * @requires React, window.openRidingBoot(모듈)로 useOpenRiding·openRidingService 로드 후 type="text/babel" 로 본 파일 로드
  */
-/* global React */
+/* global React, ReactDOM */
 var useState = React.useState;
 var useEffect = React.useEffect;
 var useMemo = React.useMemo;
@@ -1930,8 +1930,8 @@ function OpenRidingBottomGlassNav(props) {
     );
   }
 
-  return (
-    <nav className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
+  var navEl = (
+    <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
       <div className="open-riding-bottom-glass-nav__pill">
         <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
         <div className="open-riding-bottom-glass-nav__pill-surface">
@@ -1940,6 +1940,11 @@ function OpenRidingBottomGlassNav(props) {
       </div>
     </nav>
   );
+  var rd = typeof ReactDOM !== 'undefined' ? ReactDOM : typeof window !== 'undefined' ? window.ReactDOM : undefined;
+  if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
+    return rd.createPortal(navEl, document.body);
+  }
+  return navEl;
 }
 
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
@@ -2808,7 +2813,7 @@ function OpenRidingCalendarMain(props) {
   return (
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
       {compact ? (
-        <div className="grid grid-cols-3 items-center gap-x-1 sm:gap-x-2 w-full min-w-0">
+        <div className="open-riding-compact-toolbar grid grid-cols-3 items-center gap-x-1 sm:gap-x-2 w-full min-w-0">
           <div className="flex justify-start items-center min-w-0">
             <button
               type="button"
