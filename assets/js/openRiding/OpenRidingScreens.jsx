@@ -2988,7 +2988,7 @@ function OpenRidingCalendarMain(props) {
           라이딩 주최 (+)
         </button>
       </header>
-      )}
+      ) : null}
 
       <div className={compact ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}>
         <section className={(compact ? 'rounded-xl p-3 ' : 'md:col-span-2 rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
