@@ -6547,7 +6547,7 @@ function OpenRidingRoomApp(props) {
     );
   }
 
-  /* 본문: glass-nav-spacer일 때 style.css에서 .open-riding-app-body에 pointer-events:none·직계 자식만 auto → 겹침 구간 터치가 하단 네비로 전달(범인은 스크롤 래퍼 본체). */
+  /* 스크롤/.open-riding-app-body 터치: style.css — html/body overflow 미적용, 스크롤 래퍼에 pointer-events 미무력화 */
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
