@@ -1813,7 +1813,7 @@ function OpenRidingBottomGlassNav(props) {
   function renderFriendsButton(isActive) {
     if (!userId) {
       return (
-        <button type="button" className={itemClass(false) + ' opacity-50'} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
+        <button type="button" className={itemClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
           <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
           <span className="open-riding-bottom-glass-nav__label">친구</span>
         </button>
@@ -1903,8 +1903,10 @@ function OpenRidingBottomGlassNav(props) {
 
   return (
     <nav className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
-      <div className="open-riding-bottom-glass-nav__inner">
-        {innerContent}
+      <div className="open-riding-bottom-glass-nav__pill">
+        <div className="open-riding-bottom-glass-nav__inner">
+          {innerContent}
+        </div>
       </div>
     </nav>
   );
