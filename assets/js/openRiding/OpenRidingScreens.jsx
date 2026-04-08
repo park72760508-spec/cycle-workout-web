@@ -1792,11 +1792,12 @@ function OpenRidingGlassNavPortal(p) {
 }
 
 /**
- * 라이딩 모임 하단 네비: 2중 레이어(Outer=글래스+Safe Area / Inner=대칭 패딩+버튼 행).
- * navVariant: main(홈|모임·맞춤·주최·친구) | create(홈·모임·맞춤·친구) | friends(홈·모임·맞춤·주최)
+ * 라이딩 모임 하단 네비: main(홈·맞춤·주최·친구) | filter|create|friends(모임·맞춤·주최·친구)
  */
 function OpenRidingBottomGlassNav(props) {
-  var navVariant = props.navVariant === 'create' || props.navVariant === 'friends' ? props.navVariant : 'main';
+  var nv = props.navVariant || 'main';
+  var navVariant =
+    nv === 'filter' || nv === 'create' || nv === 'friends' ? nv : 'main';
   var filterActive = props.activeTab === 'filter';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
@@ -1866,92 +1867,46 @@ function OpenRidingBottomGlassNav(props) {
     );
   }
 
-  var innerContent = null;
-  if (navVariant === 'create') {
-    innerContent = (
-      <>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
-            {iconHome()}
-            <span className="open-riding-bottom-glass-nav__label">홈</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
-            {iconMoim()}
-            <span className="open-riding-bottom-glass-nav__label">모임</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-            {iconFilter()}
-            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        {renderFriendsButton(false)}
-      </>
-    );
-  } else if (navVariant === 'friends') {
-    innerContent = (
-      <>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
-            {iconHome()}
-            <span className="open-riding-bottom-glass-nav__label">홈</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
-            {iconMoim()}
-            <span className="open-riding-bottom-glass-nav__label">모임</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-            {iconFilter()}
-            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-            {iconJuchey()}
-            <span className="open-riding-bottom-glass-nav__label">주최</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-      </>
+  var friendsActive = navVariant === 'friends';
+  var firstSlot = null;
+  if (navVariant === 'main') {
+    firstSlot = (
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+          {iconHome()}
+          <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </button>
+      </OpenRidingGlassNavSlot>
     );
   } else {
-    innerContent = (
-      <>
-        <OpenRidingGlassNavSlot>
-          {filterActive ? (
-            <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
-              {iconMoim()}
-              <span className="open-riding-bottom-glass-nav__label">모임</span>
-            </button>
-          ) : (
-            <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
-              {iconHome()}
-              <span className="open-riding-bottom-glass-nav__label">홈</span>
-            </button>
-          )}
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-            {iconFilter()}
-            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        <OpenRidingGlassNavSlot>
-          <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-            {iconJuchey()}
-            <span className="open-riding-bottom-glass-nav__label">주최</span>
-          </button>
-        </OpenRidingGlassNavSlot>
-        {renderFriendsButton(false)}
-      </>
+    firstSlot = (
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+          {iconMoim()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+      </OpenRidingGlassNavSlot>
     );
   }
+
+  var innerContent = (
+    <>
+      {firstSlot}
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
+          {iconFilter()}
+          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onCreate} aria-label="라이딩 주최">
+          {iconJuchey()}
+          <span className="open-riding-bottom-glass-nav__label">주최</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      {renderFriendsButton(friendsActive)}
+    </>
+  );
 
   return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 모임 하단 메뉴" />;
 }
@@ -2026,15 +1981,14 @@ function OpenRidingDetailGlassNav(props) {
   return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 상세 하단 메뉴" />;
 }
 
-/** 수정 폼 하단: 모임·맞춤·친구·저장 */
+/** 수정 폼 하단: 모임·수정(상세)·삭제·저장 */
 function OpenRidingEditGlassNav(props) {
   var onMoim = props.onMoim || function () {};
-  var onFilter = props.onFilter || function () {};
-  var onFriends = props.onFriends || function () {};
+  var onEdit = props.onEdit || function () {};
+  var onDelete = props.onDelete || function () {};
   var onSave = props.onSave || function () {};
   var isBusy = !!props.isBusy;
-  var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
-  var userId = props.userId || '';
+  var hostToolbarLocked = !!props.hostToolbarLocked;
 
   function iconMoimNav() {
     return (
@@ -2043,46 +1997,11 @@ function OpenRidingEditGlassNav(props) {
       </svg>
     );
   }
-  function iconFilterNav() {
-    return (
-      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-      </svg>
-    );
-  }
   function iconSaveNav() {
     return (
       <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
       </svg>
-    );
-  }
-
-  var friendsSlot = null;
-  if (!userId) {
-    friendsSlot = (
-      <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-          <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
-          <span className="open-riding-bottom-glass-nav__label">친구</span>
-        </button>
-      </OpenRidingGlassNavSlot>
-    );
-  } else {
-    friendsSlot = (
-      <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onFriends} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
-          <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-            <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
-            {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '13px', height: '13px', fontSize: pendingIncomingCount > 9 ? 7 : 8, paddingLeft: pendingIncomingCount > 9 ? 3 : 3, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
-                {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
-              </span>
-            ) : null}
-          </span>
-          <span className="open-riding-bottom-glass-nav__label">친구</span>
-        </button>
-      </OpenRidingGlassNavSlot>
     );
   }
 
@@ -2095,12 +2014,24 @@ function OpenRidingEditGlassNav(props) {
         </button>
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onFilter} aria-label="맞춤 필터">
-          {iconFilterNav()}
-          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onEdit} aria-label="일정 상세 화면으로">
+          <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
+          <span className="open-riding-bottom-glass-nav__label">수정</span>
         </button>
       </OpenRidingGlassNavSlot>
-      {friendsSlot}
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onDelete}
+          disabled={hostToolbarLocked}
+          aria-label="라이딩 삭제"
+          title={hostToolbarLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
+        >
+          <img src="assets/img/delete2.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">삭제</span>
+        </button>
+      </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onSave} disabled={isBusy} aria-label="저장">
           {iconSaveNav()}
@@ -3061,8 +2992,11 @@ function OpenRidingCalendarMain(props) {
                   ) : null}
                   {isConfirmedDay ? (
                     <span
-                      className="open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-white/95"
-                      style={{ width: '11px', height: '11px', top: 0, right: 0, transform: 'translate(50%, -50%)' }}
+                      className={
+                        'open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
+                        (isPastCell ? 'bg-red-400/75 opacity-90' : 'bg-red-600')
+                      }
+                      style={{ width: '11px', height: '11px', top: '50%', right: '4px', transform: 'translate(50%, -50%)' }}
                       title="참석 확정"
                       aria-hidden
                     >
@@ -3105,9 +3039,7 @@ function OpenRidingCalendarMain(props) {
                   <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
-              <span className="font-semibold text-slate-700 min-w-0 leading-tight">
-                참석 체크 <span className="text-slate-600 font-semibold">참석 확정</span>
-              </span>
+              <span className="font-semibold text-slate-700 min-w-0 leading-tight">참석 확정</span>
             </div>
           </div>
         </section>
@@ -3154,9 +3086,8 @@ function OpenRidingCreateForm(props) {
   var onCreated = props.onCreated || function () {};
   var onEditSaved = props.onEditSaved || function () {};
   var onEditNavMoim = props.onEditNavMoim;
-  var onEditNavFilter = props.onEditNavFilter;
-  var onEditNavFriends = props.onEditNavFriends;
-  var editNavPendingCount = props.editNavPendingCount;
+  var onEditNavDetail = props.onEditNavDetail;
+  var onEditNavDelete = props.onEditNavDelete;
 
   var formRef = useRef(null);
 
@@ -3740,6 +3671,18 @@ function OpenRidingCreateForm(props) {
   if (editRideId && !editHydrated) {
     return <div className="py-12 text-center text-sm text-slate-500">불러오는 중…</div>;
   }
+
+  var _loginGrForm =
+    typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
+  var _isAdmin1Form =
+    typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function'
+      ? window.isStelvioAdminGrade(_loginGrForm)
+      : false;
+  var editGlassNavPastLocked =
+    !!editRideId &&
+    !!form.date &&
+    String(form.date) < getTodaySeoulYmd() &&
+    !_isAdmin1Form;
 
   /* 폼 루트 z-0, 하단 CTA는 style.css에서 z-5(고정 로고바 10000 미만)로 본문보다만 위 — 스크롤 시 고정바 뒤로 가려짐 */
   return (
@@ -4478,16 +4421,15 @@ function OpenRidingCreateForm(props) {
     {editRideId ? (
       <OpenRidingEditGlassNav
         onMoim={typeof onEditNavMoim === 'function' ? onEditNavMoim : function () {}}
-        onFilter={typeof onEditNavFilter === 'function' ? onEditNavFilter : function () {}}
-        onFriends={typeof onEditNavFriends === 'function' ? onEditNavFriends : function () {}}
+        onEdit={typeof onEditNavDetail === 'function' ? onEditNavDetail : function () {}}
+        onDelete={typeof onEditNavDelete === 'function' ? onEditNavDelete : function () {}}
         onSave={function () {
           if (formRef.current && typeof formRef.current.requestSubmit === 'function') {
             formRef.current.requestSubmit();
           }
         }}
         isBusy={isBusy}
-        pendingIncomingCount={typeof editNavPendingCount === 'number' ? editNavPendingCount : 0}
-        userId={hostUserId}
+        hostToolbarLocked={editGlassNavPastLocked}
       />
     ) : null}
     </>
@@ -5062,6 +5004,8 @@ function OpenRidingDetail(props) {
   var phoneInvited = !!(
     typeof _svcInv.isUserPhoneInvitedToRide === 'function' && _svcInv.isUserPhoneInvitedToRide(myPhoneForInvite, invitedListArr)
   );
+  /** (+) 펼침: 방장 또는 (전화 초대 대상이면서 참석·대기 신청 완료) */
+  var inviteListToggleEnabled = isHost || (!!userId && phoneInvited && hasApplied);
   var pwdStored = String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
     .replace(/\D/g, '')
     .slice(0, 4);
@@ -5340,8 +5284,20 @@ function OpenRidingDetail(props) {
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
                 <button
                   type="button"
-                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  disabled={!inviteListToggleEnabled}
+                  title={
+                    !inviteListToggleEnabled && !isHost
+                      ? '초대받은 뒤 참석(또는 대기) 신청을 완료한 경우에만 펼칠 수 있습니다.'
+                      : undefined
+                  }
+                  className={
+                    'm-0 p-0 bg-transparent border-0 text-left text-sm font-semibold leading-[1.25rem] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ' +
+                    (inviteListToggleEnabled
+                      ? 'cursor-pointer text-[#6d28d9] hover:text-[#5b21b6]'
+                      : 'cursor-not-allowed text-slate-400 opacity-70')
+                  }
                   onClick={function () {
+                    if (!inviteListToggleEnabled) return;
                     setInviteListExpanded(function (v) {
                       return !v;
                     });
@@ -6628,6 +6584,23 @@ function OpenRidingRoomApp(props) {
     }
   }
 
+  function handleEditNavDeleteRide() {
+    if (!firestore || !userId || !detailRideId) return;
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (typeof svc.deleteRideByHost !== 'function') return;
+    if (!window.confirm('등록한 라이딩을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) return;
+    svc
+      .deleteRideByHost(firestore, detailRideId, userId)
+      .then(function () {
+        setDetailRideId(null);
+        setView('main');
+      })
+      .catch(function (err) {
+        console.warn('[openRiding] deleteRideByHost', err);
+        alert('삭제에 실패했습니다.');
+      });
+  }
+
   var headerTitle =
     view === 'create'
       ? '라이딩 생성'
@@ -6679,13 +6652,10 @@ function OpenRidingRoomApp(props) {
         onEditNavMoim={function () {
           setView('main');
         }}
-        onEditNavFilter={function () {
-          setView('filter');
+        onEditNavDetail={function () {
+          setView('detail');
         }}
-        onEditNavFriends={function () {
-          setView('friends');
-        }}
-        editNavPendingCount={pendingIncomingCount}
+        onEditNavDelete={handleEditNavDeleteRide}
       />
     );
   } else if (view === 'detail' && detailRideId) {
@@ -6728,21 +6698,9 @@ function OpenRidingRoomApp(props) {
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
-        {view === 'detail' ? (
+        {view === 'detail' || view === 'edit' ? (
           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
-            <div className="flex justify-start min-w-0 shrink-0">
-              <button
-                type="button"
-                className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-                style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                onClick={handleTopBack}
-                aria-label="미니 달력 화면으로"
-              >
-                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </div>
+            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
             <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
               {headerTitle}
             </h1>
@@ -6790,7 +6748,17 @@ function OpenRidingRoomApp(props) {
       </div>
       {firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends') ? (
         <OpenRidingBottomGlassNav
-          navVariant={view === 'create' ? 'create' : view === 'friends' ? 'friends' : 'main'}
+          navVariant={
+            view === 'main'
+              ? 'main'
+              : view === 'filter'
+                ? 'filter'
+                : view === 'create'
+                  ? 'create'
+                  : view === 'friends'
+                    ? 'friends'
+                    : 'main'
+          }
           activeTab={view === 'filter' ? 'filter' : ''}
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
