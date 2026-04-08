@@ -1022,23 +1022,24 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /*
- * 글래스 하단 네비: 2중 레이어 — Outer(배경+Safe Area) / Inner(12px 상하 대칭+버튼 행)
- * 본문 여백: Inner 높이 + Outer의 padding-bottom(env) + 추가 여유
+ * 글래스 하단 네비: 텔레그램형 공중 플로팅 둥근 상자
+ * Shell(투명+safe) → Pill(글래스+그림자) → Inner(상·하 동일 패딩)
  */
 #openRidingRoomScreen {
-  --open-riding-glass-nav-inner-pad-y: 12px;
-  --open-riding-glass-nav-row-min: 52px;
+  --open-riding-glass-nav-inner-pad-y: 11px;
+  --open-riding-glass-nav-row-min: 50px;
+  --open-riding-glass-nav-float-gap: 12px;
 }
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
   padding-bottom: calc(
-    var(--open-riding-glass-nav-inner-pad-y) * 2 + var(--open-riding-glass-nav-row-min) + 24px +
-      env(safe-area-inset-bottom, 0px)
+    var(--open-riding-glass-nav-float-gap) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
+      var(--open-riding-glass-nav-row-min) + 28px + env(safe-area-inset-bottom, 0px)
   );
   box-sizing: border-box;
 }
 
-/* Layer 1 — Outer: 글래스 배경, 하단 Safe Area만 padding-bottom (margin 미사용) */
+/* Shell: 화면 하단 고정, 좌·하단 safe + 플로팅 간격만 padding (둥근 박스는 __pill) */
 #openRidingRoomScreen .open-riding-bottom-glass-nav {
   position: fixed;
   bottom: 0;
@@ -1047,41 +1048,59 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   width: 100%;
   margin: 0;
   box-sizing: border-box;
-  padding: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-  background: rgba(255, 255, 255, 0.75);
-  -webkit-backdrop-filter: blur(15px);
-  backdrop-filter: blur(15px);
+  padding: 0 max(12px, env(safe-area-inset-left, 0px))
+    calc(var(--open-riding-glass-nav-float-gap) + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-right, 0px));
   z-index: 9999;
-  pointer-events: auto;
-  border-top: 1px solid rgba(229, 231, 235, 0.65);
-  box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.07);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  pointer-events: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-/* Layer 2 — Inner: 콘텐츠 행, 상·하 12px 동일 */
+/* Pill: 공중에 떠 있는 둥근 글래스 (텔레그램 톤) */
+#openRidingRoomScreen .open-riding-bottom-glass-nav__pill {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.76);
+  -webkit-backdrop-filter: blur(20px) saturate(175%);
+  backdrop-filter: blur(20px) saturate(175%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 10px 36px rgba(15, 23, 42, 0.15),
+    0 4px 14px rgba(15, 23, 42, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Inner: 상·하 동일 (한 변수로만 세로 패딩 지정) */
 #openRidingRoomScreen .open-riding-bottom-glass-nav__inner {
   display: flex;
   flex-direction: row;
   justify-content: space-around;
   align-items: stretch;
-  padding: var(--open-riding-glass-nav-inner-pad-y) 0;
+  padding: var(--open-riding-glass-nav-inner-pad-y) 10px;
   width: 100%;
   min-height: var(--open-riding-glass-nav-row-min);
   box-sizing: border-box;
-  max-width: 500px;
-  margin: 0 auto;
+  margin: 0;
   pointer-events: auto;
   position: relative;
   z-index: 1;
 }
 
-/* 버튼: flex 균등 + 세로 히트 영역 stretch + 최상단 터치 레이어 */
+/* 버튼: 균등 너비 + 텔레그램式 탭 미감(스케일·배경) */
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn {
   flex: 1;
   display: flex;
@@ -1106,20 +1125,38 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 10000;
   -webkit-appearance: none;
   appearance: none;
-  background: transparent;
+  background-color: transparent;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
+  transition:
+    transform 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    background-color 0.14s ease,
+    color 0.14s ease,
+    opacity 0.14s ease;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__btn:active:not(:disabled) {
+  transform: translateZ(0) scale(0.93);
+  background-color: rgba(15, 23, 42, 0.08);
+}
+
+@media (hover: hover) {
+  #openRidingRoomScreen .open-riding-bottom-glass-nav__btn:hover:not(:disabled):not(:active) {
+    background-color: rgba(15, 23, 42, 0.05);
+  }
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn:disabled {
   cursor: default;
   pointer-events: none;
+  opacity: 0.48;
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn--active {
-  color: #6d28d9;
+  color: #5b21b6;
+  background-color: rgba(109, 40, 217, 0.12);
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__icon {
@@ -5376,7 +5413,7 @@ tr.stelvio-dashboard-current-grade td:last-child {
 /* 오픈 라이딩방: 하단 네비(Outer z-index:9999) 위로 FAB — 네비 높이 ≈ inner(12+52+12)+outer safe padding */
 body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-top-active {
   z-index: 10050;
-  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(108px + env(safe-area-inset-bottom, 0px));
 }
 .global-back-to-top-btn:hover {
   transform: translateY(-2px);
