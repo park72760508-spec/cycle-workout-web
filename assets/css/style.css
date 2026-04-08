@@ -265,9 +265,8 @@ body:has(#authScreen.active) {
 }
 
 /* 베이스캠프 관련 화면 활성 시: html/body 배경을 그라데이션으로 — 위로 스크롤 시 하단 흰색 영역 노출 방지 */
-/* basecampScreen, openRidingRoomScreen, deviceSettingScreen, userManualScreen, myCareerScreen, trainingRoomScreen, playerListScreen, bluetoothPlayerListScreen */
+/* (openRidingRoomScreen 제외: 아래 별도 규칙 — html/body overflow:hidden이 모바일에서 .open-riding-app-body 스크롤을 잠금) */
 html:has(#basecampScreen.active),
-html:has(#openRidingRoomScreen.active),
 html:has(#deviceSettingScreen.active),
 html:has(#userManualScreen.active),
 html:has(#myCareerScreen.active),
@@ -275,7 +274,6 @@ html:has(#trainingRoomScreen.active),
 html:has(#playerListScreen.active),
 html:has(#bluetoothPlayerListScreen.active),
 body:has(#basecampScreen.active),
-body:has(#openRidingRoomScreen.active),
 body:has(#deviceSettingScreen.active),
 body:has(#userManualScreen.active),
 body:has(#myCareerScreen.active),
@@ -285,6 +283,13 @@ body:has(#bluetoothPlayerListScreen.active) {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
   background-attachment: fixed !important;
   overflow: hidden !important;
+}
+
+/* 오픈 라이딩방: 배경만 동일 적용, 문서 루트는 overflow 잠그지 않음 */
+html:has(#openRidingRoomScreen.active),
+body:has(#openRidingRoomScreen.active) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%) !important;
+  background-attachment: fixed !important;
 }
 h1,h2,h3,h4 { font-weight: 600; }
 
@@ -1019,17 +1024,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   touch-action: pan-y;
   position: relative;
   z-index: 0;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /*
- * 범인: `.open-riding-app-body--glass-nav-spacer` 스크롤 래퍼가 flex:1로 화면 하단까지 확장되며 글래스 네비와 겹침.
- * WebKit/WebView에서 이 레이어의 히트 테스트가 네비 중앙(맞춤·주최 등)까지 삼킴 → 래퍼는 pointer-events:none,
- * 실제 본문 루트(직계 자식 > *)만 auto로 스크롤·탭 유지.
- */
-/*
- * 글래스 하단 네비: Shell → Pill → [pill-bg z9998 | pill-surface z10001] → Inner → Slot → Button z100000
- * 배경은 터치 차단(pointer-events:none), 표면만 수신 — 스크롤 영역·backdrop 히트테스트 충돌 방지
- * Shell z-index는 모달(200026+)보다 낮게 유지 — 오픈 라이딩 JSX/notice 모달 z만 상향됨.
+ * 글래스 네비: Shell(z99999)·pill-bg만 pointer-events:none, 나머지는 터치 수신
+ * 스크롤/중앙탭 버그: (1) glass-nav-spacer 래퍼에 pointer-events:none → 모바일 스크롤기능 상실 (2) html/body overflow:hidden
  */
 #openRidingRoomScreen {
   --open-riding-glass-nav-inner-pad-y: 11px;
@@ -1038,15 +1039,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
-  pointer-events: none;
   padding-bottom: calc(
     var(--open-riding-glass-nav-float-gap) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
       var(--open-riding-glass-nav-row-min) + 28px + env(safe-area-inset-bottom, 0px)
   );
   box-sizing: border-box;
-}
-#openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer > * {
-  pointer-events: auto;
 }
 
 /* Shell: 본문·스크롤 래퍼 위로 올림 — 터치 우선(모달·오버레이는 200026+ z-index) */
@@ -1065,7 +1062,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background: transparent;
   border: none;
   box-shadow: none;
-  pointer-events: none;
+  pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
@@ -1092,7 +1089,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   transform: translateZ(0);
 }
 
-/* 배경 전담: 투명도 ↑ · blur 20px — 터치는 받지 않음(필수) */
+/* 배경 전담: 투명도 ↑ · blur 20px — 터치는 받지 않음(필수, WebKit 히트 테스트 이중 방지) */
 #openRidingRoomScreen .open-riding-bottom-glass-nav__pill-bg {
   position: absolute;
   inset: 0;
@@ -1101,7 +1098,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   background: rgba(255, 255, 255, 0.6);
   -webkit-backdrop-filter: blur(20px) saturate(175%);
   backdrop-filter: blur(20px) saturate(175%);
-  pointer-events: none;
+  pointer-events: none !important;
 }
 
 /* 버튼·Inner 전담 터치 레이어 */
@@ -1172,8 +1169,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  pointer-events: auto;
-  position: relative;
+  pointer-events: auto !important;
+  position: relative !important;
   z-index: 100000 !important;
   -webkit-appearance: none;
   appearance: none;
