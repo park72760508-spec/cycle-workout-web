@@ -1032,15 +1032,15 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
  * 글래스 네비: #openRidingBottomGlassNavRoot(body 포털)·pill-bg·surface·inner는 통과/pointer-events:none 하위 슬롯·버튼만 auto
  */
 #openRidingRoomScreen {
-  --open-riding-glass-nav-inner-pad-y: 12px;
-  --open-riding-glass-nav-row-min: 55px;
-  --open-riding-glass-nav-float-gap: 13px;
+  --open-riding-glass-nav-inner-pad-y: 14px;
+  --open-riding-glass-nav-row-min: 66px;
+  --open-riding-glass-nav-float-gap: 16px;
 }
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
   padding-bottom: calc(
     16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-pad-y) * 2 +
-      var(--open-riding-glass-nav-row-min) + 31px
+      var(--open-riding-glass-nav-row-min) + 37px
   );
   box-sizing: border-box;
 }
@@ -1114,7 +1114,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   justify-content: flex-start;
   align-items: stretch;
   gap: 0;
-  padding: var(--open-riding-glass-nav-inner-pad-y) 11px;
+  padding: var(--open-riding-glass-nav-inner-pad-y) 13px;
   width: 100%;
   min-height: var(--open-riding-glass-nav-row-min);
   box-sizing: border-box;
@@ -1150,10 +1150,10 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   margin: 0;
   box-sizing: border-box;
-  padding: 3px 4px;
+  padding: 4px 5px;
   cursor: pointer;
   font: inherit;
   color: #64748b;
@@ -1169,7 +1169,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   appearance: none;
   background-color: transparent;
   border: none;
-  border-radius: 14px;
+  border-radius: 17px;
   transition:
     transform 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     background-color 0.14s ease,
@@ -1200,8 +1200,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__icon {
-  width: 24px;
-  height: 24px;
+  width: 29px;
+  height: 29px;
   flex-shrink: 0;
 }
 
@@ -1211,7 +1211,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -1227,8 +1227,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__friend-img {
-  width: 24px;
-  height: 24px;
+  width: 29px;
+  height: 29px;
 }
 
 /* 컴팩트 상단 3열(맞춤설정·닉네임·주최): 그리드 래퍼가 가로로 넓게 깔려 하단 네비 중앙과 히트가 겹칠 수 있음 — 래퍼는 통과, 실버튼만 수신 */
@@ -5461,7 +5461,7 @@ tr.stelvio-dashboard-current-grade td:last-child {
 /* 오픈 라이딩방: 하단 네비(Shell z-index:10025) 위로 FAB — 네비 높이 ≈ inner+safe padding */
 body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-top-active {
   z-index: 101000;
-  bottom: calc(119px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(143px + env(safe-area-inset-bottom, 0px));
 }
 .global-back-to-top-btn:hover {
   transform: translateY(-2px);
