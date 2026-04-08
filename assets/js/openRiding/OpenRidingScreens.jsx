@@ -2899,7 +2899,7 @@ function OpenRidingCalendarMain(props) {
             id="open-riding-invited-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-300/80 bg-white/80 text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white/80 text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
           >
             [초대받은 라이딩]
           </span>
@@ -2935,7 +2935,7 @@ function OpenRidingCalendarMain(props) {
             id="open-riding-my-hosted-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-300/80 bg-white/80 text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white/80 text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
           >
             [내가 주최한 라이딩]
           </span>
@@ -3001,7 +3001,7 @@ function OpenRidingCalendarMain(props) {
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
             {['일', '월', '화', '수', '목', '금', '토'].map(function (w) { return <div key={w}>{w}</div>; })}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5">
             {days.map(function (day, idx) {
               if (day == null) return <div key={'e' + idx} className={emptyH} />;
               var key = dateKey(year, month, day);
@@ -3028,7 +3028,7 @@ function OpenRidingCalendarMain(props) {
                   type="button"
                   onClick={function () { setSelectedKey(key); }}
                   className={
-                    'relative ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
+                    'relative overflow-visible ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
                     (isSel ? 'ring-2 ring-violet-500 font-semibold ' : '') +
                     ' hover:bg-slate-50'
                   }
@@ -3062,7 +3062,7 @@ function OpenRidingCalendarMain(props) {
                   {isConfirmedDay ? (
                     <span
                       className="open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-white/95"
-                      style={{ width: '11px', height: '11px', top: '22%', right: '12%' }}
+                      style={{ width: '11px', height: '11px', top: 0, right: 0, transform: 'translate(50%, -50%)' }}
                       title="참석 확정"
                       aria-hidden
                     >
@@ -3082,48 +3082,32 @@ function OpenRidingCalendarMain(props) {
               );
             })}
           </div>
-          <div className="mt-2 space-y-2 text-[10px] sm:text-[11px] text-slate-600 leading-snug open-riding-calendar-legend">
-            <div className="flex gap-2 items-start min-w-0">
-              <div className="flex shrink-0 gap-0.5 mt-0.5" aria-hidden>
-                <span className="inline-block w-3.5 h-3.5 rounded-sm bg-emerald-400/85 border border-emerald-600/30" />
-                <span className="inline-block w-3.5 h-3.5 rounded-sm bg-emerald-200/65 border border-emerald-400/35" />
-              </div>
-              <p className="m-0 min-w-0">
-                <span className="font-semibold text-slate-700">참석 가능</span>
-                <span className="text-slate-500"> (오늘·이후 표시: 연록색, 오늘 이전: 희미한 연록색)</span>
-              </p>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] sm:text-[11px] text-slate-600 leading-snug open-riding-calendar-legend">
+            <div className="flex gap-2 items-center min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-emerald-400/90 border border-emerald-600/25" aria-hidden />
+              <span className="font-semibold text-slate-700 min-w-0">참석 가능</span>
             </div>
-            <div className="flex gap-2 items-start min-w-0">
-              <div className="flex shrink-0 gap-0.5 mt-0.5" aria-hidden>
-                <span className="inline-block w-3.5 h-3.5 rounded-md bg-violet-600 border border-violet-700/40 shadow-[inset_0_-2px_0_rgba(255,255,255,0.35)]" />
-                <span className="inline-block w-3.5 h-3.5 rounded-md bg-violet-200/60 border border-violet-400/40" />
-              </div>
-              <p className="m-0 min-w-0">
-                <span className="font-semibold text-slate-700">내가 주최</span>
-                <span className="text-slate-500"> (오늘·이후: 보라 배경·흰 글씨, 이전: 희미한 보라)</span>
-              </p>
+            <div className="flex gap-2 items-center min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-violet-600 border border-violet-800/30" aria-hidden />
+              <span className="font-semibold text-slate-700 min-w-0">내가 주최</span>
             </div>
-            <div className="flex gap-2 items-start min-w-0">
+            <div className="flex gap-2 items-center min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-slate-300/90 border border-slate-400/35" aria-hidden />
+              <span className="font-semibold text-slate-700 min-w-0">구경 하기</span>
+            </div>
+            <div className="flex gap-2 items-center min-w-0">
               <span
-                className="open-riding-cal-legend-badge shrink-0 mt-0.5 inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white shadow-sm"
-                style={{ width: '14px', height: '14px' }}
+                className="open-riding-cal-legend-badge shrink-0 inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm"
+                style={{ width: '12px', height: '12px' }}
                 aria-hidden
               >
-                <svg className="block" width={9} height={9} viewBox="0 0 12 12" fill="none">
+                <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
                   <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
-              <p className="m-0 min-w-0">
-                <span className="font-semibold text-slate-700">참석 확정</span>
-                <span className="text-slate-500"> (빨강 원·흰 체크 뱃지, 날짜 셀 우측 상단 약 1/3 지점 오버레이)</span>
-              </p>
-            </div>
-            <div className="flex gap-2 items-start min-w-0">
-              <span className="inline-block w-3.5 h-3.5 rounded-sm bg-slate-300/90 shrink-0 mt-0.5 border border-slate-400/40" aria-hidden />
-              <p className="m-0 min-w-0">
-                <span className="font-semibold text-slate-700">구경 하기</span>
-                <span className="text-slate-500"> (연회색)</span>
-              </p>
+              <span className="font-semibold text-slate-700 min-w-0 leading-tight">
+                참석 체크 <span className="text-slate-600 font-semibold">참석 확정</span>
+              </span>
             </div>
           </div>
         </section>
