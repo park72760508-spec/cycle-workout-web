@@ -1843,7 +1843,7 @@ function OpenRidingBottomGlassNav(props) {
       return (
         <OpenRidingGlassNavSlot>
           <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-            <img src="assets/img/friends.png" alt="" width={24} height={24} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             <span className="open-riding-bottom-glass-nav__label">친구</span>
           </button>
         </OpenRidingGlassNavSlot>
@@ -1853,9 +1853,9 @@ function OpenRidingBottomGlassNav(props) {
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-            <img src="assets/img/friends.png" alt="" width={24} height={24} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '18px', height: '18px', fontSize: pendingIncomingCount > 9 ? 10 : 11, paddingLeft: pendingIncomingCount > 9 ? 4 : 5, paddingRight: pendingIncomingCount > 9 ? 4 : 5, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
               </span>
             ) : null}
@@ -2003,7 +2003,7 @@ function OpenRidingDetailGlassNav(props) {
           aria-label="라이딩 취소"
           title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
         >
-          <img src="assets/img/cancel01.png" alt="" width={24} height={24} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <img src="assets/img/cancel01.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">취소</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2016,7 +2016,7 @@ function OpenRidingDetailGlassNav(props) {
           aria-label="라이딩 삭제"
           title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
         >
-          <img src="assets/img/delete2.png" alt="" width={24} height={24} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <img src="assets/img/delete2.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">삭제</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2063,7 +2063,7 @@ function OpenRidingEditGlassNav(props) {
     friendsSlot = (
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-          <img src="assets/img/friends.png" alt="" width={24} height={24} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+          <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
           <span className="open-riding-bottom-glass-nav__label">친구</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2073,9 +2073,9 @@ function OpenRidingEditGlassNav(props) {
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onFriends} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-            <img src="assets/img/friends.png" alt="" width={24} height={24} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '18px', height: '18px', fontSize: pendingIncomingCount > 9 ? 10 : 11, paddingLeft: pendingIncomingCount > 9 ? 4 : 5, paddingRight: pendingIncomingCount > 9 ? 4 : 5, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
               </span>
             ) : null}
