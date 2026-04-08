@@ -2879,7 +2879,7 @@ function OpenRidingCalendarMain(props) {
         ) : invitedRidesSorted.length === 0 ? (
           <p className="text-sm text-slate-400">이번 달 초대받은 라이딩이 없습니다.</p>
         ) : (
-          <ul className="divide-y divide-emerald-200/50 max-h-56 overflow-y-auto rounded-lg bg-white/40">
+          <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
             {invitedRidesSorted.map(function (r) {
               return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
             })}
@@ -2906,7 +2906,7 @@ function OpenRidingCalendarMain(props) {
             [내가 주최한 라이딩]
           </span>
         </div>
-        <ul className="divide-y divide-violet-200/50 max-h-56 overflow-y-auto rounded-lg bg-white/40">
+        <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
           {myHostedRidesSorted.map(function (r) {
             return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true, hostedListSection: true });
           })}
