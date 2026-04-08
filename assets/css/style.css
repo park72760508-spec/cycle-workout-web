@@ -1050,8 +1050,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
 }
 
-/* 플로팅 글래스 네비: document.body 포털(#openRidingBottomGlassNavRoot) — 터치·z-index·pointer-events 규칙 유지 */
-#openRidingBottomGlassNavRoot {
+/* 플로팅 글래스 네비: 라이딩 모임 React 포털 + 허브(랭킹·대시보드·일지·프로필) 공통 — 터치·z-index·pointer-events 규칙 유지 */
+#openRidingBottomGlassNavRoot,
+#globalHubBottomGlassNavRoot {
   /* #openRidingRoomScreen 밖에 있어 동일 토큰을 여기서도 정의(높이·iOS 오프셋 계산용) */
   --open-riding-glass-nav-inner-pad-y: calc(14px * 1.2 * 0.5 * 0.6);
   --open-riding-glass-nav-row-min: calc(66px * 1.2 * 0.6);
@@ -1079,8 +1080,19 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-touch-callout: none;
 }
 
+/* 허브 5메뉴: 라이딩 모임 4슬롯보다 가로 확장 */
+#globalHubBottomGlassNavRoot {
+  width: calc(100% - 20px);
+  max-width: min(720px, 100% - 16px);
+}
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__inner {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 /* Pill: 테두리·그림자·클리핑 — 텔레그램형 플로팅 둥근 박스 */
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill {
   pointer-events: auto;
   width: 100%;
   max-width: none;
@@ -1098,7 +1110,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* 배경 전담: 투명도 ↑ · blur 20px — 터치는 받지 않음(필수, WebKit 히트 테스트 이중 방지) */
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-bg {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-bg,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-bg {
   position: absolute;
   inset: 0;
   z-index: 9998;
@@ -1111,7 +1124,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* 버튼·Inner 전담 터치 레이어 */
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-surface {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-surface,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-surface {
   position: relative;
   z-index: 10001;
   pointer-events: none;
@@ -1119,7 +1133,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* Inner: 패딩·flex 행 — 높이 고정(콘텐츠 축소와 무관) */
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__inner {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__inner,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__inner {
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
@@ -1141,7 +1156,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* 4등분 슬롯: 가운데 열 히트 면적 보장 */
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__slot {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__slot,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__slot {
   flex: 1 1 0%;
   min-width: 0;
   display: flex;
@@ -1152,7 +1168,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   pointer-events: auto !important;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__slot > .open-riding-bottom-glass-nav__btn {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__slot > .open-riding-bottom-glass-nav__btn,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__slot > .open-riding-bottom-glass-nav__btn {
   flex: 1;
   align-self: stretch;
   width: 100%;
@@ -1160,7 +1177,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 }
 
 /* 버튼: 히트박스·OS 간섭 차단 — 다른 레이어보다 터치 우선 */
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__btn {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1192,40 +1210,47 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
     opacity 0.14s ease;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:active:not(:disabled) {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:active:not(:disabled),
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:active:not(:disabled) {
   transform: scale(0.93);
   background-color: rgba(15, 23, 42, 0.08);
 }
 
 @media (hover: hover) {
-  #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:hover:not(:disabled):not(:active) {
+  #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:hover:not(:disabled):not(:active),
+  #globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:hover:not(:disabled):not(:active) {
     background-color: rgba(15, 23, 42, 0.05);
   }
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:disabled {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:disabled,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__btn:disabled {
   cursor: default;
   pointer-events: none;
   opacity: 0.48;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn--active {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn--active,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__btn--active {
   color: #5b21b6;
   background-color: rgba(109, 40, 217, 0.12);
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__icon {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__icon,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__icon {
   width: calc(20px * 1.1);
   height: calc(20px * 1.1);
   flex-shrink: 0;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__icon-wrap {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__icon-wrap,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__icon-wrap {
   flex-shrink: 0;
   position: relative;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__label {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__label,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__label {
   font-size: calc(9px * 1.1);
   font-weight: 600;
   line-height: 1.1;
@@ -1237,11 +1262,13 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   text-align: center;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn * {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__btn *,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__btn * {
   pointer-events: none !important;
 }
 
-#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__friend-img {
+#openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__friend-img,
+#globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__friend-img {
   width: calc(20px * 1.1);
   height: calc(20px * 1.1);
 }
@@ -1261,6 +1288,43 @@ html.open-riding-glass-nav-ios-phone
     16px + env(safe-area-inset-bottom, 0px) + var(--open-riding-glass-nav-inner-fixed-height) + 37px +
       (var(--open-riding-glass-nav-inner-fixed-height) * 0.5)
   );
+}
+
+html.global-hub-glass-nav-ios-phone #globalHubBottomGlassNavRoot {
+  bottom: calc(
+    16px + env(safe-area-inset-bottom, 0px) -
+      (var(--open-riding-glass-nav-inner-fixed-height) * 0.5)
+  );
+}
+
+/* 허브 글래스 네비 표시 중: 본문·스크롤 영역 하단 여백 */
+html.global-hub-glass-nav-active {
+  --hub-glass-nav-inner-h: calc((14px * 1.2 * 0.5 * 0.6 * 2) + (66px * 1.2 * 0.6));
+  --hub-glass-nav-scroll-pad: calc(
+    16px + env(safe-area-inset-bottom, 0px) + var(--hub-glass-nav-inner-h) + 37px
+  );
+}
+html.global-hub-glass-nav-active.global-hub-glass-nav-ios-phone {
+  --hub-glass-nav-scroll-pad: calc(
+    16px + env(safe-area-inset-bottom, 0px) + var(--hub-glass-nav-inner-h) + 37px +
+      (var(--hub-glass-nav-inner-h) * 0.5)
+  );
+}
+html.global-hub-glass-nav-active #stelvioRankingScrollArea {
+  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #performance-dashboard-container {
+  padding-bottom: var(--hub-glass-nav-scroll-pad) !important;
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen.active {
+  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #profileScreen.active {
+  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  box-sizing: border-box;
 }
 
 /* 컴팩트 상단 3열(맞춤설정·닉네임·주최): 그리드 래퍼가 가로로 넓게 깔려 하단 네비 중앙과 히트가 겹칠 수 있음 — 래퍼는 통과, 실버튼만 수신 */
