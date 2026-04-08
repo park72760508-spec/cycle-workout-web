@@ -1021,132 +1021,94 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 글래스 하단 네비: 본문 마지막 항목이 바에 가리지 않도록 (높이는 .open-riding-bottom-glass-nav 와 동일 계열) */
+/*
+ * 글래스 하단 네비: 2중 레이어 — Outer(배경+Safe Area) / Inner(12px 상하 대칭+버튼 행)
+ * 본문 여백: Inner 높이 + Outer의 padding-bottom(env) + 추가 여유
+ */
 #openRidingRoomScreen {
-  /* 22px 아이콘 + 라벨 행 최소 높이 */
-  --open-riding-glass-nav-row-min-height: 56px;
-  --open-riding-glass-nav-pad-y: 8px;
-  /* 화면 하단에서 떠 있도록 아래·좌우 여백 */
-  --open-riding-glass-nav-float-gap: 12px;
-  --open-riding-glass-nav-float-x: 14px;
+  --open-riding-glass-nav-inner-pad-y: 12px;
+  --open-riding-glass-nav-row-min: 52px;
 }
 
 #openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
-  /* 플로팅 박스 높이 + 하단 간격 + 홈 인디케이터 — 리스트 마지막 항목이 바에 가리지 않도록 10px 여유 */
   padding-bottom: calc(
-    var(--open-riding-glass-nav-pad-y) + var(--open-riding-glass-nav-row-min-height) + 8px + 10px +
-      var(--open-riding-glass-nav-float-gap) + env(safe-area-inset-bottom, 0px)
+    var(--open-riding-glass-nav-inner-pad-y) * 2 + var(--open-riding-glass-nav-row-min) + 24px +
+      env(safe-area-inset-bottom, 0px)
   );
   box-sizing: border-box;
 }
 
-/*
- * 외곽: margin-bottom으로 들어 올리지 않음. Safe Area는 __row padding-bottom으로만 넣어
- * 행 높이 안에 터치 영역이 홈 인디케이터까지 스트레치됨(iOS 미클릭 완화).
- * 터치: __float·__row·버튼에 pointer-events:auto + z-index 정비.
- */
+/* Layer 1 — Outer: 글래스 배경, 하단 Safe Area만 padding-bottom (margin 미사용) */
 #openRidingRoomScreen .open-riding-bottom-glass-nav {
   position: fixed;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
   width: 100%;
-  max-width: none;
   margin: 0;
-  z-index: 10000;
   box-sizing: border-box;
-  padding-left: max(var(--open-riding-glass-nav-float-x), env(safe-area-inset-left, 0px));
-  padding-right: max(var(--open-riding-glass-nav-float-x), env(safe-area-inset-right, 0px));
-  padding-bottom: var(--open-riding-glass-nav-float-gap);
-  padding-top: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  pointer-events: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* 텔레그램형 글래스: 떠 있는 둥근 상자 */
-#openRidingRoomScreen .open-riding-bottom-glass-nav__float {
+  padding: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px);
+  z-index: 9999;
   pointer-events: auto;
-  position: relative;
-  z-index: 10001;
-  width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
-  box-sizing: border-box;
-  isolation: isolate;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  -webkit-backdrop-filter: blur(16px) saturate(165%);
-  backdrop-filter: blur(16px) saturate(165%);
-  border: 1px solid rgba(255, 255, 255, 0.88);
-  box-shadow:
-    0 12px 42px rgba(15, 23, 42, 0.16),
-    0 4px 14px rgba(15, 23, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  padding: var(--open-riding-glass-nav-pad-y) 8px 6px;
+  border-top: 1px solid rgba(229, 231, 235, 0.65);
+  box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.07);
+  -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
 }
 
-#openRidingRoomScreen .open-riding-bottom-glass-nav__row {
+/* Layer 2 — Inner: 콘텐츠 행, 상·하 12px 동일 */
+#openRidingRoomScreen .open-riding-bottom-glass-nav__inner {
   display: flex;
   flex-direction: row;
+  justify-content: space-around;
   align-items: stretch;
-  justify-content: space-between;
-  gap: 0;
-  min-height: var(--open-riding-glass-nav-row-min-height);
-  padding-left: 0;
-  padding-right: 0;
-  /* Safe Area: margin이 아닌 padding으로 hitbox를 아래까지 확장 → flex stretch로 버튼 전체가 히트 */
-  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  padding: var(--open-riding-glass-nav-inner-pad-y) 0;
+  width: 100%;
+  min-height: var(--open-riding-glass-nav-row-min);
   box-sizing: border-box;
+  max-width: 500px;
+  margin: 0 auto;
+  pointer-events: auto;
   position: relative;
   z-index: 1;
-  pointer-events: auto;
-  -webkit-touch-callout: none;
 }
 
-#openRidingRoomScreen .open-riding-bottom-glass-nav__cell {
-  flex: 1 1 0;
-  min-width: 0;
+/* 버튼: flex 균등 + 세로 히트 영역 stretch + 최상단 터치 레이어 */
+#openRidingRoomScreen .open-riding-bottom-glass-nav__btn {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  pointer-events: auto;
-  position: relative;
-  z-index: 2;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-#openRidingRoomScreen .open-riding-bottom-glass-nav__cell > .open-riding-bottom-glass-nav__btn {
-  flex: 1 1 auto;
-  width: 100%;
-  min-height: 0;
-}
-
-#openRidingRoomScreen .open-riding-bottom-glass-nav__btn {
-  color: #64748b;
-  font: inherit;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+  padding: 2px 4px;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  font: inherit;
+  color: #64748b;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  box-sizing: border-box;
-  padding: 4px 6px 6px;
-  min-width: 0;
   pointer-events: auto;
   position: relative;
-  z-index: 2;
+  z-index: 10000;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
 }
@@ -1166,6 +1128,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   flex-shrink: 0;
 }
 
+#openRidingRoomScreen .open-riding-bottom-glass-nav__icon-wrap {
+  flex-shrink: 0;
+  position: relative;
+}
+
 #openRidingRoomScreen .open-riding-bottom-glass-nav__label {
   font-size: 10px;
   font-weight: 600;
@@ -1175,6 +1142,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn > * {
@@ -1275,7 +1243,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-user-select: none;
   user-select: none;
   position: relative;
-  /* 고정바(10000)보다 낮게: 스크롤 시 CTA가 로고바 뒤로 가려지도록. 형제 콘텐츠보다만 약간 위(래퍼 z-index) */
+  /* 하단 네비(9999)보다 낮게: 스크롤 시 CTA가 탭바 뒤로 가려지도록 */
   z-index: 1;
   min-width: 48px;
   min-height: 48px;
@@ -1295,7 +1263,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /*
  * 2) Safe Area: 하단 버튼 래퍼 — OS 홈 인디케이터·스와이프 제스처와 겹치지 않게 여백 확보
- * 3) Stacking: 본문·형제 블록 위에는 두되, 글래스 하단 네비(.open-riding-bottom-glass-nav z-index:10000)보다 낮게 —
+ * 3) Stacking: 본문·형제 블록 위에는 두되, 글래스 하단 네비(Outer z-index:9999)보다 낮게 —
  *    스크롤 시 다른 내용과 같이 탭바 뒤로 사라지게 함(안드로이드에서 CTA만 앞면에 떠 보이던 현상 방지)
  * 4) isolation: isolate — 독립 스태킹 컨텍스트로 CTA 행 정리
  */
@@ -5405,10 +5373,10 @@ tr.stelvio-dashboard-current-grade td:last-child {
   visibility: visible;
   pointer-events: auto;
 }
-/* 오픈 라이딩방: 하단 고정 STELVIO 바(z-index:10000) 위로 버튼이 가려지지 않도록 */
+/* 오픈 라이딩방: 하단 네비(Outer z-index:9999) 위로 FAB — 네비 높이 ≈ inner(12+52+12)+outer safe padding */
 body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-top-active {
-  z-index: 10001;
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  z-index: 10050;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 .global-back-to-top-btn:hover {
   transform: translateY(-2px);
