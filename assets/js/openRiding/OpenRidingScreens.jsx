@@ -1843,7 +1843,7 @@ function OpenRidingBottomGlassNav(props) {
       return (
         <OpenRidingGlassNavSlot>
           <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-            <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             <span className="open-riding-bottom-glass-nav__label">친구</span>
           </button>
         </OpenRidingGlassNavSlot>
@@ -1853,9 +1853,9 @@ function OpenRidingBottomGlassNav(props) {
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-            <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '18px', height: '18px', fontSize: pendingIncomingCount > 9 ? 10 : 11, paddingLeft: pendingIncomingCount > 9 ? 4 : 5, paddingRight: pendingIncomingCount > 9 ? 4 : 5, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '13px', height: '13px', fontSize: pendingIncomingCount > 9 ? 7 : 8, paddingLeft: pendingIncomingCount > 9 ? 3 : 3, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
               </span>
             ) : null}
@@ -2003,7 +2003,7 @@ function OpenRidingDetailGlassNav(props) {
           aria-label="라이딩 취소"
           title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
         >
-          <img src="assets/img/cancel01.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <img src="assets/img/cancel01.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">취소</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2016,7 +2016,7 @@ function OpenRidingDetailGlassNav(props) {
           aria-label="라이딩 삭제"
           title={!showHostActions ? '방장만 이용할 수 있습니다.' : hostToolbarLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
         >
-          <img src="assets/img/delete2.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <img src="assets/img/delete2.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">삭제</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2063,7 +2063,7 @@ function OpenRidingEditGlassNav(props) {
     friendsSlot = (
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-          <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+          <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
           <span className="open-riding-bottom-glass-nav__label">친구</span>
         </button>
       </OpenRidingGlassNavSlot>
@@ -2073,9 +2073,9 @@ function OpenRidingEditGlassNav(props) {
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onFriends} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-            <img src="assets/img/friends.png" alt="" width={29} height={29} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '18px', height: '18px', fontSize: pendingIncomingCount > 9 ? 10 : 11, paddingLeft: pendingIncomingCount > 9 ? 4 : 5, paddingRight: pendingIncomingCount > 9 ? 4 : 5, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '13px', height: '13px', fontSize: pendingIncomingCount > 9 ? 7 : 8, paddingLeft: pendingIncomingCount > 9 ? 3 : 3, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
               </span>
             ) : null}
@@ -2889,22 +2889,19 @@ function OpenRidingCalendarMain(props) {
   }
 
   function renderInvitedRidesCompactSection() {
-    var invitedTitlePillStyle = {
-      borderColor: 'rgba(22, 101, 52, 0.38)',
-      color: '#166534',
-      background: 'rgba(34, 197, 94, 0.12)'
-    };
     return (
-      <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-invited-rides-panel" aria-labelledby="open-riding-invited-heading">
+      <section
+        className="rounded-2xl p-3 border border-emerald-200/70 bg-emerald-50 shadow-sm open-riding-invited-rides-panel"
+        aria-labelledby="open-riding-invited-heading"
+      >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
             id="open-riding-invited-heading"
             role="heading"
             aria-level={2}
-            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
-            style={invitedTitlePillStyle}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-300/80 bg-white/80 text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
           >
-            초대받은 라이딩
+            [초대받은 라이딩]
           </span>
         </div>
         {!userId ? (
@@ -2916,7 +2913,7 @@ function OpenRidingCalendarMain(props) {
         ) : invitedRidesSorted.length === 0 ? (
           <p className="text-sm text-slate-400">이번 달 초대받은 라이딩이 없습니다.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+          <ul className="divide-y divide-emerald-200/50 max-h-56 overflow-y-auto rounded-lg bg-white/40">
             {invitedRidesSorted.map(function (r) {
               return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
             })}
@@ -2928,25 +2925,22 @@ function OpenRidingCalendarMain(props) {
 
   function renderMyHostedRidesCompactSection() {
     if (!myHostedRidesSorted.length) return null;
-    var hostedTitlePillStyle = {
-      borderColor: 'rgba(109, 40, 217, 0.4)',
-      color: '#5b21b6',
-      background: 'rgba(139, 92, 246, 0.12)'
-    };
     return (
-      <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-my-hosted-panel" aria-labelledby="open-riding-my-hosted-heading">
+      <section
+        className="rounded-2xl p-3 border border-violet-200/80 bg-violet-50 shadow-sm open-riding-my-hosted-panel"
+        aria-labelledby="open-riding-my-hosted-heading"
+      >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
             id="open-riding-my-hosted-heading"
             role="heading"
             aria-level={2}
-            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
-            style={hostedTitlePillStyle}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-300/80 bg-white/80 text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
           >
-            내가 주최한 라이딩
+            [내가 주최한 라이딩]
           </span>
         </div>
-        <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+        <ul className="divide-y divide-violet-200/50 max-h-56 overflow-y-auto rounded-lg bg-white/40">
           {myHostedRidesSorted.map(function (r) {
             return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true, hostedListSection: true });
           })}
@@ -2976,37 +2970,11 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  var calendarTodayYmd = getTodaySeoulYmd();
+
   return (
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
-      {compact ? (
-        <div className="open-riding-compact-toolbar grid grid-cols-3 items-center gap-x-1 sm:gap-x-2 w-full min-w-0">
-          <div className="flex justify-start items-center min-w-0">
-            <button
-              type="button"
-              className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap max-w-full"
-              onClick={onOpenFilterPage}
-              aria-label="맞춤 설정"
-            >
-              맞춤 설정 (+)
-            </button>
-          </div>
-          <div className="flex justify-center items-center min-w-0 px-0.5">
-            <span className="text-xs font-medium text-slate-800 truncate text-center block w-full" title={userLabel}>
-              {userLabel}
-            </span>
-          </div>
-          <div className="flex justify-end items-center min-w-0">
-            <button
-              type="button"
-              className="open-riding-create-btn inline-flex items-center justify-center rounded-lg bg-violet-600 text-white px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold shadow hover:bg-violet-700 whitespace-nowrap max-w-full"
-              onClick={onOpenCreate}
-              aria-label="라이딩 주최"
-            >
-              라이딩 주최 (+)
-            </button>
-          </div>
-        </div>
-      ) : (
+      {!compact ? (
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="open-riding-main-screen-title">라이딩 모임</h1>
@@ -3037,12 +3005,23 @@ function OpenRidingCalendarMain(props) {
             {days.map(function (day, idx) {
               if (day == null) return <div key={'e' + idx} className={emptyH} />;
               var key = dateKey(year, month, day);
+              var isPastCell = key < calendarTodayYmd;
               var isHostDay = hostDateKeys.has(key);
               var hasMatch = matchingDateKeys.has(key);
               var hasAnyRide = allRideDateKeys.has(key);
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
+              var dayNumClass = 'relative z-10 tabular-nums ';
+              if (isHostDay) {
+                dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
+              } else if (hasMatch) {
+                dayNumClass += isPastCell ? 'text-emerald-800/50 font-medium' : 'text-emerald-950 font-semibold';
+              } else if (showOtherOnly) {
+                dayNumClass += 'text-slate-500 font-medium';
+              } else {
+                dayNumClass += 'text-slate-800';
+              }
               return (
                 <button
                   key={key}
@@ -3056,50 +3035,95 @@ function OpenRidingCalendarMain(props) {
                 >
                   {isHostDay ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-violet-300/50 border border-violet-400/40 pointer-events-none"
+                      className={
+                        'absolute inset-1 z-[1] rounded-md pointer-events-none border ' +
+                        (isPastCell
+                          ? 'bg-violet-200/45 border-violet-300/40'
+                          : 'bg-violet-600 border-violet-700/45')
+                      }
                       aria-hidden
                     />
                   ) : hasMatch ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-emerald-400/35 pointer-events-none"
+                      className={
+                        'absolute inset-1 z-[1] rounded-md pointer-events-none border ' +
+                        (isPastCell
+                          ? 'bg-emerald-200/45 border-emerald-400/35'
+                          : 'bg-emerald-400/80 border-emerald-600/40')
+                      }
                       aria-hidden
                     />
                   ) : showOtherOnly ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-slate-300/45 border border-slate-400/35 pointer-events-none"
+                      className="absolute inset-1 z-[1] rounded-md bg-slate-200/60 border border-slate-400/35 pointer-events-none"
                       aria-hidden
                     />
                   ) : null}
                   {isConfirmedDay ? (
                     <span
-                      className="absolute inset-0 z-[8] rounded-lg border-2 border-red-600 pointer-events-none box-border"
+                      className="open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-white/95"
+                      style={{ width: '11px', height: '11px', top: '22%', right: '12%' }}
+                      title="참석 확정"
                       aria-hidden
-                    />
+                    >
+                      <svg className="block" width={7} height={7} viewBox="0 0 12 12" fill="none" aria-hidden>
+                        <path
+                          d="M2.5 6L5 8.5L9.5 3.5"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
                   ) : null}
-                  <span className="relative z-10">{day}</span>
+                  <span className={dayNumClass}>{day}</span>
                 </button>
               );
             })}
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-600 items-center">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">참석 가능 라이딩</span>
+          <div className="mt-2 space-y-2 text-[10px] sm:text-[11px] text-slate-600 leading-snug open-riding-calendar-legend">
+            <div className="flex gap-2 items-start min-w-0">
+              <div className="flex shrink-0 gap-0.5 mt-0.5" aria-hidden>
+                <span className="inline-block w-3.5 h-3.5 rounded-sm bg-emerald-400/85 border border-emerald-600/30" />
+                <span className="inline-block w-3.5 h-3.5 rounded-sm bg-emerald-200/65 border border-emerald-400/35" />
+              </div>
+              <p className="m-0 min-w-0">
+                <span className="font-semibold text-slate-700">참석 가능</span>
+                <span className="text-slate-500"> (오늘·이후 표시: 연록색, 오늘 이전: 희미한 연록색)</span>
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex gap-2 items-start min-w-0">
+              <div className="flex shrink-0 gap-0.5 mt-0.5" aria-hidden>
+                <span className="inline-block w-3.5 h-3.5 rounded-md bg-violet-600 border border-violet-700/40 shadow-[inset_0_-2px_0_rgba(255,255,255,0.35)]" />
+                <span className="inline-block w-3.5 h-3.5 rounded-md bg-violet-200/60 border border-violet-400/40" />
+              </div>
+              <p className="m-0 min-w-0">
+                <span className="font-semibold text-slate-700">내가 주최</span>
+                <span className="text-slate-500"> (오늘·이후: 보라 배경·흰 글씨, 이전: 희미한 보라)</span>
+              </p>
+            </div>
+            <div className="flex gap-2 items-start min-w-0">
               <span
-                className="inline-block w-3 h-3 rounded-sm shrink-0 border-2 border-red-600 bg-white box-border"
+                className="open-riding-cal-legend-badge shrink-0 mt-0.5 inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white shadow-sm"
+                style={{ width: '14px', height: '14px' }}
                 aria-hidden
-              />
-              <span className="text-slate-500 min-w-0 leading-tight">참석 확정 라이딩</span>
+              >
+                <svg className="block" width={9} height={9} viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <p className="m-0 min-w-0">
+                <span className="font-semibold text-slate-700">참석 확정</span>
+                <span className="text-slate-500"> (빨강 원·흰 체크 뱃지, 날짜 셀 우측 상단 약 1/3 지점 오버레이)</span>
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">내가 주최한 라이딩</span>
-            </div>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="inline-block w-3 h-3 rounded-sm bg-slate-300/90 shrink-0 border border-slate-500/30" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">구경해 볼 라이딩</span>
+            <div className="flex gap-2 items-start min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm bg-slate-300/90 shrink-0 mt-0.5 border border-slate-400/40" aria-hidden />
+              <p className="m-0 min-w-0">
+                <span className="font-semibold text-slate-700">구경 하기</span>
+                <span className="text-slate-500"> (연회색)</span>
+              </p>
             </div>
           </div>
         </section>
@@ -6740,6 +6764,14 @@ function OpenRidingRoomApp(props) {
             </h1>
             <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
           </div>
+        ) : view === 'main' ? (
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
+            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+            <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
+              {headerTitle}
+            </h1>
+            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+          </div>
         ) : (
           <>
             <button
@@ -6747,7 +6779,7 @@ function OpenRidingRoomApp(props) {
               className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
               style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={handleTopBack}
-              aria-label={view === 'main' ? '경로 선택' : '미니 달력 화면으로'}
+              aria-label="미니 달력 화면으로"
             >
               <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
@@ -6756,51 +6788,7 @@ function OpenRidingRoomApp(props) {
             <h1 className="open-riding-screen-title flex-1 text-center m-0">
               {headerTitle}
             </h1>
-            {view === 'main' && userId ? (
-              <div className="relative shrink-0 w-[2.5em] h-[2.5em] flex items-center justify-center">
-                <button
-                  type="button"
-                  className="p-1 rounded-lg hover:bg-gray-100 border-0 bg-transparent cursor-pointer flex items-center justify-center w-full h-full"
-                  onClick={function () {
-                    setView('friends');
-                  }}
-                  aria-label={'친구 관리' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}
-                >
-                  <img
-                    src="assets/img/friends.png"
-                    alt=""
-                    width={26}
-                    height={26}
-                    className="block object-contain"
-                    decoding="async"
-                    onError={function (e) {
-                      e.currentTarget.src = 'assets/img/friends.svg';
-                      e.currentTarget.onerror = null;
-                    }}
-                  />
-                </button>
-                {pendingIncomingCount > 0 ? (
-                  <span
-                    className="absolute pointer-events-none flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm z-10"
-                    style={{
-                      minWidth: '15px',
-                      height: '15px',
-                      fontSize: pendingIncomingCount > 9 ? 8 : 9,
-                      paddingLeft: pendingIncomingCount > 9 ? 3 : 4,
-                      paddingRight: pendingIncomingCount > 9 ? 3 : 4,
-                      top: '0',
-                      right: '0',
-                      transform: 'translate(20%, -35%)'
-                    }}
-                    aria-hidden="true"
-                  >
-                    {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
-                  </span>
-                ) : null}
-              </div>
-            ) : (
-              <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
-            )}
+            <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
           </>
         )}
       </div>
