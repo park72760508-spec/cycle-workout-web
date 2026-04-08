@@ -1040,7 +1040,11 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
 }
 
-/* 외곽: 고정 레이어(투명), 터치는 둥근 박스에만 */
+/*
+ * 외곽: margin-bottom으로 들어 올리지 않음. Safe Area는 __row padding-bottom으로만 넣어
+ * 행 높이 안에 터치 영역이 홈 인디케이터까지 스트레치됨(iOS 미클릭 완화).
+ * 터치: __float·__row·버튼에 pointer-events:auto + z-index 정비.
+ */
 #openRidingRoomScreen .open-riding-bottom-glass-nav {
   position: fixed;
   left: 0;
@@ -1053,7 +1057,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   box-sizing: border-box;
   padding-left: max(var(--open-riding-glass-nav-float-x), env(safe-area-inset-left, 0px));
   padding-right: max(var(--open-riding-glass-nav-float-x), env(safe-area-inset-right, 0px));
-  padding-bottom: calc(var(--open-riding-glass-nav-float-gap) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--open-riding-glass-nav-float-gap);
   padding-top: 0;
   background: transparent;
   border: none;
@@ -1065,6 +1069,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 /* 텔레그램형 글래스: 떠 있는 둥근 상자 */
 #openRidingRoomScreen .open-riding-bottom-glass-nav__float {
   pointer-events: auto;
+  position: relative;
+  z-index: 10001;
   width: 100%;
   max-width: 500px;
   margin: 0 auto;
@@ -1081,7 +1087,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
     0 12px 42px rgba(15, 23, 42, 0.16),
     0 4px 14px rgba(15, 23, 42, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  padding: var(--open-riding-glass-nav-pad-y) 10px 8px;
+  padding: var(--open-riding-glass-nav-pad-y) 8px 6px;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -1093,13 +1099,37 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  justify-content: space-around;
-  gap: 2px;
+  justify-content: space-between;
+  gap: 0;
   min-height: var(--open-riding-glass-nav-row-min-height);
-  padding-left: 2px;
-  padding-right: 2px;
-  padding-bottom: 0;
+  padding-left: 0;
+  padding-right: 0;
+  /* Safe Area: margin이 아닌 padding으로 hitbox를 아래까지 확장 → flex stretch로 버튼 전체가 히트 */
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  -webkit-touch-callout: none;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__cell > .open-riding-bottom-glass-nav__btn {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn {
@@ -1111,8 +1141,14 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  padding: 4px 2px;
+  box-sizing: border-box;
+  padding: 4px 6px 6px;
   min-width: 0;
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 #openRidingRoomScreen .open-riding-bottom-glass-nav__btn:disabled {
@@ -1148,6 +1184,52 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 #openRidingRoomScreen .open-riding-bottom-glass-nav__friend-img {
   width: 22px;
   height: 22px;
+}
+
+/*
+ * ========== STELVIO 전역: 하단 고정·플로팅 조작 UI 터치 표준 ==========
+ * index.html viewport 에 viewport-fit=cover 필요(메타 확인).
+ * margin-bottom 으로만 들어 올린 하단 버튼은 지양 — 컴포넌트별 padding-bottom + env(safe-area) 권장.
+ */
+.global-back-to-top-btn,
+.stelvio-back-to-top-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.global-back-to-top-btn.global-back-to-top-visible,
+.stelvio-back-to-top-btn.stelvio-back-to-top-visible {
+  pointer-events: auto;
+}
+/* 라이딩 일지 바텀시트(동일 id·클래스 — index.html 인라인과 병행) */
+#trainingJournalScreen .journal-bottom-sheet {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+}
+#trainingJournalScreen .journal-bottom-sheet-footer {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+#trainingJournalScreen .journal-bottom-sheet button,
+#trainingJournalScreen .journal-bottom-sheet .journal-bottom-sheet-tab,
+#trainingJournalScreen .journal-bottom-sheet .journal-bottom-sheet-close {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+.training-detail-footer .btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
