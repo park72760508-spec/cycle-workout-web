@@ -1021,68 +1021,129 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 0;
 }
 
-/* 생성·수정·상세: 고정 로고바·홈 인디케이터 + CTA와 겹침 방지(안드로이드 중앙 탭 누락 완화) */
-#openRidingRoomScreen .open-riding-app-body.open-riding-app-body--bottom-fixed {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+/* 글래스 하단 네비: 본문 마지막 항목이 바에 가리지 않도록 (높이는 .open-riding-bottom-glass-nav 와 동일 계열) */
+#openRidingRoomScreen {
+  /* 주최 탭 원형 버튼(40px) + 라벨까지 포함한 행 최소 높이 */
+  --open-riding-glass-nav-row-min-height: 64px;
+  --open-riding-glass-nav-pad-y: 8px;
+}
+
+#openRidingRoomScreen .open-riding-app-body.open-riding-app-body--glass-nav-spacer {
+  /* 네비: 상단 패딩 + 행 + 행 하단 여백 + 홈 인디케이터 — 리스트 마지막 항목이 바에 가리지 않도록 추가 10px */
+  padding-bottom: calc(
+    var(--open-riding-glass-nav-pad-y) + var(--open-riding-glass-nav-row-min-height) + 4px + 10px +
+      env(safe-area-inset-bottom, 0px)
+  );
   box-sizing: border-box;
 }
 
-/* 하단 고정바: 헤더와 동일하게 흰 배경·상단 보더, 뷰포트 하단 고정 (max-width는 앱 루트와 정렬) */
-#openRidingRoomScreen .open-riding-bottom-fixed-shell {
+/* 라이딩 모임: 텔레그램형 글래스모피즘 하단 탭바 (플로팅, 전체 너비) */
+#openRidingRoomScreen .open-riding-bottom-glass-nav {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   z-index: 10000;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
-  box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.07);
   isolation: isolate;
-  touch-action: manipulation;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
+  background: rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(15px);
+  backdrop-filter: blur(15px);
+  border-top: 1px solid rgba(229, 231, 235, 0.65);
+  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.08);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: var(--open-riding-glass-nav-pad-y);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-#openRidingRoomScreen .open-riding-bottom-brand {
+#openRidingRoomScreen .open-riding-bottom-glass-nav__row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 2px;
+  min-height: var(--open-riding-glass-nav-row-min-height);
+  padding-left: 6px;
+  padding-right: 6px;
+  padding-bottom: 2px;
+  box-sizing: border-box;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__btn {
+  color: #64748b;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  padding: 4px 2px;
+  min-width: 0;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__btn:disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__btn--active {
+  color: #6d28d9;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__icon--fab {
+  width: 20px;
+  height: 20px;
+  color: #fff;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__icon-fab {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: linear-gradient(145deg, #7c3aed 0%, #6d28d9 100%);
+  box-shadow: 0 2px 10px rgba(109, 40, 217, 0.35);
   flex-shrink: 0;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 3px 12px 0;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-select: none;
 }
 
-#openRidingRoomScreen .open-riding-bottom-brand-logo {
-  height: 48px;
-  width: auto;
-  max-width: min(600px, 90vw);
-  margin-left: auto;
-  margin-right: auto;
-  object-fit: contain;
-  object-position: center center;
-  display: block;
-  opacity: 0.95;
+#openRidingRoomScreen .open-riding-bottom-glass-nav__label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 로고 전용 고정바 minimal: 표시만 하고 터치는 통과(겹치는 CTA가 히트 테스트를 받도록) */
-#openRidingRoomScreen .open-riding-bottom-logo-bar.open-riding-bottom-fixed-shell {
-  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.05);
-  padding-top: 0;
-  justify-content: flex-end;
-  align-items: stretch;
+#openRidingRoomScreen .open-riding-bottom-glass-nav__btn > * {
   pointer-events: none;
+}
+
+#openRidingRoomScreen .open-riding-bottom-glass-nav__friend-img {
+  width: 22px;
+  height: 22px;
 }
 
 /* 🚀 딥 DOM 오딧: 스크롤 컨테이너에 장식용 ::before/::after(페이드·마스크)가 붙어도 터치를 가로채지 않음 — Safari 할로우 버튼 완화 */
@@ -1148,8 +1209,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 
 /*
  * 2) Safe Area: 하단 버튼 래퍼 — OS 홈 인디케이터·스와이프 제스처와 겹치지 않게 여백 확보
- * 3) Stacking: 본문·형제 블록 위에는 두되, 하단 고정 로고바(open-riding-bottom-fixed-shell z-index:10000)보다 낮게 —
- *    스크롤 시 다른 내용과 같이 고정바 뒤로 사라지게 함(안드로이드에서 CTA만 앞면에 떠 보이던 현상 방지)
+ * 3) Stacking: 본문·형제 블록 위에는 두되, 글래스 하단 네비(.open-riding-bottom-glass-nav z-index:10000)보다 낮게 —
+ *    스크롤 시 다른 내용과 같이 탭바 뒤로 사라지게 함(안드로이드에서 CTA만 앞면에 떠 보이던 현상 방지)
  * 4) isolation: isolate — 독립 스태킹 컨텍스트로 CTA 행 정리
  */
 #openRidingRoomScreen .open-riding-bottom-actions {
