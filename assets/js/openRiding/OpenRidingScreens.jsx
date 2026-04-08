@@ -2762,18 +2762,16 @@ function OpenRidingCalendarMain(props) {
     var regionTitleAttr = regionFull ? regionFull : undefined;
     var showParticipantConfirmedIcon =
       isUserParticipantConfirmedForRide(r) && !(ex.compactInviteOrHostedList && ex.hostedListSection);
-    var listRowBtnClass =
-      'w-full text-left py-2.5 px-2 rounded-lg ';
-    if (useInviteHostedRow) {
-      listRowBtnClass += ex.hostedListSection
-        ? 'bg-violet-50 border border-violet-100/80 hover:bg-violet-100/70'
-        : 'bg-emerald-50 border border-emerald-100/80 hover:bg-emerald-100/70';
-    } else {
-      listRowBtnClass += 'hover:bg-slate-50';
-    }
+    var attendeeCheckCircleClass = useInviteHostedRow
+      ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25'
+      : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30';
     return (
       <li key={r.id}>
-        <button type="button" className={listRowBtnClass} onClick={function () { onSelectRide(r.id); }}>
+        <button
+          type="button"
+          className="w-full text-left py-2.5 hover:bg-slate-50 px-2 rounded-lg"
+          onClick={function () { onSelectRide(r.id); }}
+        >
           <div className={titleRowClass}>
             {isCancelled ? (
               <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
@@ -2782,7 +2780,7 @@ function OpenRidingCalendarMain(props) {
             ) : null}
             {showParticipantConfirmedIcon ? (
               <span
-                className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25"
+                className={attendeeCheckCircleClass}
                 title="참석 확정"
                 aria-label="참석 확정"
               >
@@ -2859,7 +2857,7 @@ function OpenRidingCalendarMain(props) {
   function renderInvitedRidesCompactSection() {
     return (
       <section
-        className="rounded-2xl p-3 border border-slate-200 bg-white shadow-sm open-riding-invited-rides-panel"
+        className="rounded-2xl p-3 border border-emerald-200/70 bg-emerald-50 shadow-sm open-riding-invited-rides-panel"
         aria-labelledby="open-riding-invited-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
@@ -2867,7 +2865,7 @@ function OpenRidingCalendarMain(props) {
             id="open-riding-invited-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-200/70 bg-emerald-50/90 text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white/80 text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
           >
             [초대받은 라이딩]
           </span>
@@ -2881,7 +2879,7 @@ function OpenRidingCalendarMain(props) {
         ) : invitedRidesSorted.length === 0 ? (
           <p className="text-sm text-slate-400">이번 달 초대받은 라이딩이 없습니다.</p>
         ) : (
-          <ul className="max-h-56 overflow-y-auto rounded-lg bg-white space-y-1.5 list-none p-0 m-0">
+          <ul className="divide-y divide-emerald-200/50 max-h-56 overflow-y-auto rounded-lg bg-white/40">
             {invitedRidesSorted.map(function (r) {
               return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
             })}
@@ -2895,7 +2893,7 @@ function OpenRidingCalendarMain(props) {
     if (!myHostedRidesSorted.length) return null;
     return (
       <section
-        className="rounded-2xl p-3 border border-slate-200 bg-white shadow-sm open-riding-my-hosted-panel"
+        className="rounded-2xl p-3 border border-violet-200/80 bg-violet-50 shadow-sm open-riding-my-hosted-panel"
         aria-labelledby="open-riding-my-hosted-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
@@ -2903,12 +2901,12 @@ function OpenRidingCalendarMain(props) {
             id="open-riding-my-hosted-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-200/80 bg-violet-50/90 text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white/80 text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
           >
             [내가 주최한 라이딩]
           </span>
         </div>
-        <ul className="max-h-56 overflow-y-auto rounded-lg bg-white space-y-1.5 list-none p-0 m-0">
+        <ul className="divide-y divide-violet-200/50 max-h-56 overflow-y-auto rounded-lg bg-white/40">
           {myHostedRidesSorted.map(function (r) {
             return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true, hostedListSection: true });
           })}
