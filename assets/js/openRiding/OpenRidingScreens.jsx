@@ -1766,6 +1766,16 @@ function openRidingGlassNavBtnClass(isActive) {
   );
 }
 
+/** iOS 휴대폰(Android 제외). 포털 네비 하단 추가 오프셋·본문 패딩 보정용 */
+function openRidingIsIOSPhoneUA() {
+  if (typeof navigator === 'undefined') return false;
+  var ua = navigator.userAgent || '';
+  if (/android/i.test(ua)) return false;
+  if (/iPhone|iPod/.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
 function OpenRidingGlassNavSlot(p) {
   return <div className="open-riding-bottom-glass-nav__slot">{p.children}</div>;
 }
@@ -1774,6 +1784,19 @@ function OpenRidingGlassNavSlot(p) {
 function OpenRidingGlassNavPortal(p) {
   var innerContent = p.innerContent;
   var ariaLabel = p.ariaLabel || '하단 메뉴';
+
+  useEffect(
+    function () {
+      if (!openRidingIsIOSPhoneUA()) return undefined;
+      var el = document.documentElement;
+      el.classList.add('open-riding-glass-nav-ios-phone');
+      return function () {
+        el.classList.remove('open-riding-glass-nav-ios-phone');
+      };
+    },
+    []
+  );
+
   var navEl = (
     <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label={ariaLabel}>
       <div className="open-riding-bottom-glass-nav__pill">
