@@ -1782,7 +1782,8 @@ function OpenRidingBottomGlassNav(props) {
       role="navigation"
       aria-label="라이딩 모임 하단 메뉴"
     >
-      <div className="open-riding-bottom-glass-nav__row">
+      <div className="open-riding-bottom-glass-nav__float">
+        <div className="open-riding-bottom-glass-nav__row">
         <button type="button" className={itemClass(activeTab === 'moim')} onClick={onMoim} aria-current={activeTab === 'moim' ? 'page' : undefined}>
           <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1863,6 +1864,7 @@ function OpenRidingBottomGlassNav(props) {
             <span className="open-riding-bottom-glass-nav__label">친구</span>
           </button>
         )}
+        </div>
       </div>
     </nav>
   );
