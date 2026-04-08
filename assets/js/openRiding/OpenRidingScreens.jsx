@@ -4196,7 +4196,7 @@ function OpenRidingCreateForm(props) {
 
       {dateModalOpen ? (
         <div
-          className="fixed inset-0 z-[10060] flex items-end sm:items-center justify-center bg-black/45 p-3"
+          className="fixed inset-0 z-[200060] flex items-end sm:items-center justify-center bg-black/45 p-3"
           role="dialog"
           aria-modal="true"
           aria-label="날짜 선택"
@@ -4251,7 +4251,7 @@ function OpenRidingCreateForm(props) {
 
       {validationDlg.open ? (
         <div
-          className="fixed inset-0 z-[10070] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[200070] flex items-center justify-center p-4"
           style={{ fontFamily: 'inherit' }}
           role="dialog"
           aria-modal="true"
@@ -5541,7 +5541,7 @@ function OpenRidingDetail(props) {
 
       {joinShareModalOpen ? (
         <div
-          className="fixed inset-0 z-[10075] flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm"
+          className="fixed inset-0 z-[200075] flex items-center justify-center p-4 bg-black/45 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="open-riding-share-contact-title"
@@ -5590,7 +5590,7 @@ function OpenRidingDetail(props) {
 
       {bombOpen ? (
         <div
-          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[10070] flex items-center justify-center p-4"
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200070] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="open-riding-bomb-title"
@@ -5643,7 +5643,7 @@ function OpenRidingDetail(props) {
 
       {deleteModalOpen ? (
         <div
-          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[10071] flex items-center justify-center p-4"
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200071] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="open-riding-delete-title"
@@ -5985,7 +5985,7 @@ function OpenRidingFriendsManage(props) {
     <div className="open-riding-filter-full-page w-full max-w-lg mx-auto text-left relative z-0">
       {friendActionSpinnerVisible ? (
         <div
-          className="fixed inset-0 z-[10050] flex items-center justify-center bg-slate-900/30 pointer-events-auto"
+          className="fixed inset-0 z-[200050] flex items-center justify-center bg-slate-900/30 pointer-events-auto"
           role="status"
           aria-live="polite"
           aria-busy="true"
@@ -6547,7 +6547,7 @@ function OpenRidingRoomApp(props) {
     );
   }
 
-  /* 🚀 투명 레이어 클릭 가로채기 원천 차단: style.css에서 #openRidingRoomScreen.screen.active 이중 스크롤 제거. 본문(#open-riding-app-body)만 세로 스크롤·z-0 */
+  /* 본문: glass-nav-spacer일 때 style.css에서 .open-riding-app-body에 pointer-events:none·직계 자식만 auto → 겹침 구간 터치가 하단 네비로 전달(범인은 스크롤 래퍼 본체). */
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
