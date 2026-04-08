@@ -1032,9 +1032,9 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
  * 글래스 네비: #openRidingBottomGlassNavRoot(body 포털)·pill-bg·surface·inner는 통과/pointer-events:none 하위 슬롯·버튼만 auto
  */
 #openRidingRoomScreen {
-  /* 세로 패딩·행 최소 높이: 전체 바 높이(2*pad-y+row-min) 기준 10% 축소 — 아이콘·라벨 크기는 별도 규칙 유지 */
-  --open-riding-glass-nav-inner-pad-y: calc(14px * 1.2 * 0.5 * 0.9);
-  --open-riding-glass-nav-row-min: calc(66px * 1.2 * 0.9);
+  /* 세로 패딩·행 최소 높이: 전체 바 높이(2*pad-y+row-min)에 0.8 배 — 아이콘·라벨 크기는 별도 규칙 유지 */
+  --open-riding-glass-nav-inner-pad-y: calc(14px * 1.2 * 0.5 * 0.8);
+  --open-riding-glass-nav-row-min: calc(66px * 1.2 * 0.8);
   --open-riding-glass-nav-float-gap: 16px;
   /* 아이콘·라벨 축소 후에도 바 높이 유지(현재 패딩+행 높이와 동일) */
   --open-riding-glass-nav-inner-fixed-height: calc(
@@ -1053,8 +1053,8 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
 /* 플로팅 글래스 네비: document.body 포털(#openRidingBottomGlassNavRoot) — 터치·z-index·pointer-events 규칙 유지 */
 #openRidingBottomGlassNavRoot {
   /* #openRidingRoomScreen 밖에 있어 동일 토큰을 여기서도 정의(높이·iOS 오프셋 계산용) */
-  --open-riding-glass-nav-inner-pad-y: calc(14px * 1.2 * 0.5 * 0.9);
-  --open-riding-glass-nav-row-min: calc(66px * 1.2 * 0.9);
+  --open-riding-glass-nav-inner-pad-y: calc(14px * 1.2 * 0.5 * 0.8);
+  --open-riding-glass-nav-row-min: calc(66px * 1.2 * 0.8);
   --open-riding-glass-nav-inner-fixed-height: calc(
     var(--open-riding-glass-nav-inner-pad-y) * 2 + var(--open-riding-glass-nav-row-min)
   );
