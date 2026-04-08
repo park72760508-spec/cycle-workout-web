@@ -127,15 +127,7 @@
         {/* Header */}
         <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-between">
-            <button
-              className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all"
-              onClick={function() { if (typeof showScreen === 'function') showScreen('myCareerScreen'); }}
-              aria-label="뒤로 가기"
-            >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
+            <span className="w-10 shrink-0" aria-hidden="true" />
             <div className="flex items-center gap-3 flex-1 justify-center">
               {WkgGradeIndicator && React.createElement(WkgGradeIndicator, {
                 wkg: stats.wkg,
