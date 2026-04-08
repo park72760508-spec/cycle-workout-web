@@ -18748,6 +18748,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         setTimeout(function() {
           if (typeof window.bindGlobalBackToTopForScreenId === 'function') window.bindGlobalBackToTopForScreenId(screenId);
         }, 150);
+
+        if (typeof window.updateGlobalHubGlassNavVisibility === 'function') {
+          window.updateGlobalHubGlassNavVisibility(screenId);
+        }
+        setTimeout(function() {
+          if (typeof window.updateGlobalHubGlassNavVisibility === 'function') {
+            window.updateGlobalHubGlassNavVisibility(screenId);
+          }
+        }, 160);
       };
       
       // 래핑 완료 플래그 설정
@@ -18950,6 +18959,109 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <button type="button" id="globalBackToTopBtn" class="global-back-to-top-btn" onclick="if(typeof handleGlobalBackToTop==='function')handleGlobalBackToTop();" aria-label="맨 위로 가기" title="맨 위로 가기">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </button>
+
+  <!-- 랭킹·대시보드·라이딩 일지·프로필: 라이딩 모임과 동일 글래스 스타일 5메뉴 하단 네비 -->
+  <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true">
+    <div class="open-riding-bottom-glass-nav__pill">
+      <div class="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true"></div>
+      <div class="open-riding-bottom-glass-nav__pill-surface">
+        <div class="open-riding-bottom-glass-nav__inner">
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
+              <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">메인</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="ranking" aria-label="랭킹보드">
+              <img src="assets/img/mrank1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">랭킹</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
+              <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">분석</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="journal" aria-label="라이딩 일지">
+              <img src="assets/img/mrank3.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">기록</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="profile" aria-label="프로필 선택">
+              <img src="assets/img/user.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">마이</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <script>
+    (function () {
+      var HUB_NAV_MAP = {
+        stelvioRankingScreen: 'ranking',
+        performanceDashboardScreen: 'analysis',
+        trainingJournalScreen: 'journal',
+        profileScreen: 'profile'
+      };
+      function hubNavIsIOSPhone() {
+        var ua = navigator.userAgent || '';
+        if (/android/i.test(ua)) return false;
+        if (/iPhone|iPod/.test(ua)) return true;
+        if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+        return false;
+      }
+      function hubNavGoMain() {
+        if (typeof handleMyCareerClick === 'function') handleMyCareerClick();
+        else if (typeof showMyCareerScreenWithLoading === 'function') showMyCareerScreenWithLoading();
+        else if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      }
+      function bindHubGlassNav() {
+        var root = document.getElementById('globalHubBottomGlassNavRoot');
+        if (!root || root.getAttribute('data-hub-bound') === '1') return;
+        root.setAttribute('data-hub-bound', '1');
+        root.addEventListener('click', function (e) {
+          var btn = e.target && e.target.closest && e.target.closest('[data-hub-nav]');
+          if (!btn || !root.contains(btn)) return;
+          var key = btn.getAttribute('data-hub-nav');
+          if (key === 'main') hubNavGoMain();
+          else if (key === 'ranking' && typeof showScreen === 'function') showScreen('stelvioRankingScreen');
+          else if (key === 'analysis' && typeof showScreen === 'function') showScreen('performanceDashboardScreen');
+          else if (key === 'journal' && typeof showScreen === 'function') showScreen('trainingJournalScreen');
+          else if (key === 'profile' && typeof showScreen === 'function') showScreen('profileScreen');
+        });
+      }
+      window.updateGlobalHubGlassNavVisibility = function (screenId) {
+        var root = document.getElementById('globalHubBottomGlassNavRoot');
+        var docEl = document.documentElement;
+        if (!root) return;
+        bindHubGlassNav();
+        var tab = HUB_NAV_MAP[screenId];
+        var visible = !!tab;
+        docEl.classList.toggle('global-hub-glass-nav-active', visible);
+        docEl.classList.toggle('global-hub-glass-nav-ios-phone', visible && hubNavIsIOSPhone());
+        root.style.display = visible ? 'block' : 'none';
+        root.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        var buttons = root.querySelectorAll('[data-hub-nav]');
+        for (var i = 0; i < buttons.length; i++) {
+          var b = buttons[i];
+          var k = b.getAttribute('data-hub-nav');
+          var on = k === tab;
+          if (on) {
+            b.classList.add('open-riding-bottom-glass-nav__btn--active');
+            b.setAttribute('aria-current', 'page');
+          } else {
+            b.classList.remove('open-riding-bottom-glass-nav__btn--active');
+            b.removeAttribute('aria-current');
+          }
+        }
+      };
+    })();
+  </script>
 
   <!-- 추월하기 분석 리포트 모달 -->
   <div id="stelvioOvertakeReportModal" class="training-detail-modal stelvio-ios-popup hidden" onclick="if(event.target === this) closeStelvioOvertakeReportModal();">
