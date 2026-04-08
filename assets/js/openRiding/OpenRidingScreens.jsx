@@ -2880,7 +2880,7 @@ function OpenRidingCalendarMain(props) {
   function renderInvitedRidesCompactSection() {
     return (
       <section
-        className="rounded-2xl p-3 border border-emerald-200/70 bg-emerald-50 shadow-sm open-riding-invited-rides-panel"
+        className="rounded-2xl p-3 border border-emerald-200/70 bg-white shadow-sm open-riding-invited-rides-panel"
         aria-labelledby="open-riding-invited-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
@@ -2888,7 +2888,7 @@ function OpenRidingCalendarMain(props) {
             id="open-riding-invited-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white/80 text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
           >
             [초대받은 라이딩]
           </span>
@@ -2916,7 +2916,7 @@ function OpenRidingCalendarMain(props) {
     if (!myHostedRidesSorted.length) return null;
     return (
       <section
-        className="rounded-2xl p-3 border border-violet-200/80 bg-violet-50 shadow-sm open-riding-my-hosted-panel"
+        className="rounded-2xl p-3 border border-violet-200/80 bg-white shadow-sm open-riding-my-hosted-panel"
         aria-labelledby="open-riding-my-hosted-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
@@ -2924,7 +2924,7 @@ function OpenRidingCalendarMain(props) {
             id="open-riding-my-hosted-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white/80 text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
           >
             [내가 주최한 라이딩]
           </span>
