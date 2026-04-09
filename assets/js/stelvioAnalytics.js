@@ -74,7 +74,7 @@
     deviceSettingScreen: '디바이스 설정',
     openRidingRoomScreen: '라이딩 벙',
     workoutScreen: '워크아웃',
-    trainingJournalScreen: '라이딩 일지',
+    trainingJournalScreen: '라이딩 기록',
     scheduleListScreen: '훈련 스케줄',
     performanceDashboardScreen: '대시보드',
     stelvioRankingScreen: '랭킹보드',
