@@ -13189,8 +13189,80 @@
       } catch (e) {}
       return false;
     }
+    /** Capacitor @capacitor/browser — 전용 앱 WebView에서 시스템 브라우저로 열기 */
+    function tryOpenCapacitorBrowser(url) {
+      try {
+        var cap = window.Capacitor;
+        if (!cap) return false;
+        var Browser = cap.Plugins && cap.Plugins.Browser;
+        if (Browser && typeof Browser.open === 'function') {
+          Browser.open({ url: url });
+          return true;
+        }
+        if (typeof cap.getPlugin === 'function') {
+          var P = cap.getPlugin('Browser');
+          if (P && typeof P.open === 'function') {
+            P.open({ url: url });
+            return true;
+          }
+        }
+      } catch (e) {}
+      return false;
+    }
+    /** Cordova InAppBrowser _system — 외부 브라우저 */
+    function tryOpenCordovaSystemBrowser(url) {
+      try {
+        var cordova = window.cordova;
+        if (!cordova || !cordova.InAppBrowser || typeof cordova.InAppBrowser.open !== 'function') return false;
+        cordova.InAppBrowser.open(url, '_system');
+        return true;
+      } catch (e) {}
+      return false;
+    }
+    /** iOS WKWebView: 앱이 주입한 messageHandler (앱 측에서 openURL 처리 필요) */
+    function tryIosExternalUrlBridge(url) {
+      try {
+        var wh = window.webkit && window.webkit.messageHandlers;
+        if (!wh) return false;
+        var names = ['openURL', 'openUrl', 'externalUrl', 'openExternalUrl', 'stelvioOpenExternal'];
+        for (var i = 0; i < names.length; i++) {
+          var h = wh[names[i]];
+          if (!h || typeof h.postMessage !== 'function') continue;
+          try {
+            h.postMessage(url);
+            return true;
+          } catch (e1) {
+            try {
+              h.postMessage({ url: url });
+              return true;
+            } catch (e2) {}
+          }
+        }
+      } catch (e) {}
+      return false;
+    }
+    /**
+     * Android WebView: VIEW Intent로 기본 브라우저 후보 열기
+     * (window.open이 막힌 경우; Chrome 미설치 시 browser_fallback_url로 https 이동)
+     */
+    function tryAndroidExternalViewIntent(url) {
+      try {
+        if (!/Android/i.test(navigator.userAgent || '')) return false;
+        var m = String(url).trim().match(/^(https?):\/\/([\s\S]+)$/i);
+        if (!m) return false;
+        var scheme = m[1].toLowerCase();
+        var rest = m[2].replace(/^\/+/, '');
+        var intent = 'intent://' + rest + '#Intent;scheme=' + scheme + ';action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+        window.location.href = intent;
+        return true;
+      } catch (e) {}
+      return false;
+    }
     function openStelvioExternalUrl(url) {
       if (!url || typeof url !== 'string') return;
+      if (tryOpenCapacitorBrowser(url)) return;
+      if (tryOpenCordovaSystemBrowser(url)) return;
+      if (tryIosExternalUrlBridge(url)) return;
       var a = null;
       try {
         a = document.createElement('a');
@@ -13215,6 +13287,7 @@
       } catch (e2) {
         /* ignore */
       }
+      if (tryAndroidExternalViewIntent(url)) return;
       if (openStelvioExternalUrlNeedsSameWindowFallback()) {
         try {
           window.location.assign(url);
