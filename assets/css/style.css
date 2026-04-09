@@ -1319,11 +1319,39 @@ html.global-hub-glass-nav-active #performance-dashboard-container {
   box-sizing: border-box;
 }
 html.global-hub-glass-nav-active #trainingJournalScreen.active {
-  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 24px);
   box-sizing: border-box;
 }
 html.global-hub-glass-nav-active #profileScreen.active {
-  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 40px);
+  box-sizing: border-box;
+}
+
+/*
+ * 허브 + 라이딩 일지: 펼침 시 journal-react-root padding-bottom:0 규칙을 덮어
+ * 상세 분석 차트·펼치기 버튼이 글래스 네비에 가리지 않도록 함
+ */
+html.global-hub-glass-nav-active #trainingJournalScreen #journal-react-root:has(.journal-accordion-expanded),
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-screen-content:has(.journal-accordion-expanded) {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 20px) !important;
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen #journal-react-root:not(:has(.journal-accordion-expanded)),
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-screen-content:not(:has(.journal-accordion-expanded)) {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 20px) !important;
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 28px) !important;
+  margin-bottom: 12px !important;
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-monthly-dashboard.journal-accordion-expanded {
+  padding-bottom: 16px !important;
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-monthly-dashboard:not(.journal-accordion-expanded) {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
   box-sizing: border-box;
 }
 
