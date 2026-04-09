@@ -1328,12 +1328,13 @@ html.global-hub-glass-nav-active #profileScreen.active {
 }
 
 /*
- * 허브 + 라이딩 일지: 펼침 시 journal-react-root padding-bottom:0 규칙을 덮어
- * 상세 분석 차트·펼치기 버튼이 글래스 네비에 가리지 않도록 함
+ * 허브 + 라이딩 일지: 펼침 시 journal-react-root 하단 패딩 없음
+ * (월간 분석이 #journal-react-root 형제로 렌더되므로, 여기 패딩이 힌트~차트 사이 빈 여백으로 보임)
+ * 네비 안전 여백은 #monthly-analysis-dashboard-root padding-bottom 에만 적용
  */
 html.global-hub-glass-nav-active #trainingJournalScreen #journal-react-root:has(.journal-accordion-expanded),
 html.global-hub-glass-nav-active #trainingJournalScreen .journal-screen-content:has(.journal-accordion-expanded) {
-  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 20px) !important;
+  padding-bottom: 0 !important;
   box-sizing: border-box;
 }
 html.global-hub-glass-nav-active #trainingJournalScreen #journal-react-root:not(:has(.journal-accordion-expanded)),
@@ -2240,9 +2241,23 @@ html.global-hub-glass-nav-active .global-back-to-top-btn.global-back-to-top-acti
 }
 #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
   margin-top: 0 !important;
+  padding-top: 0 !important;
 }
 #trainingJournalScreen:not(:has(.journal-accordion-expanded)) #monthly-analysis-dashboard-root {
   margin-top: 16px;
+}
+/* 힌트 문구 바로 아래 월간 분석 컨테이너 0 간격 */
+#trainingJournalScreen:has(.journal-accordion-expanded) .journal-accordion {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+#trainingJournalScreen:has(.journal-accordion-expanded) .journal-accordion-hint {
+  margin: 8px 0 0 0;
+  margin-bottom: 0 !important;
+  padding-bottom: 0;
+}
+#trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root > div:first-child {
+  margin-top: 0 !important;
 }
 #trainingJournalScreen .journal-daily-summary-actions {
   position: relative;
