@@ -1343,11 +1343,13 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-screen-content:
 }
 html.global-hub-glass-nav-active #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
   padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 28px) !important;
+  margin-top: 0 !important;
   margin-bottom: 12px !important;
   box-sizing: border-box;
 }
+/* 펼침 시: 대시보드 하단 패딩 제거 → 월간 분석 차트가 펼치기 메뉴 바로 아래 이어짐 */
 html.global-hub-glass-nav-active #trainingJournalScreen .journal-monthly-dashboard.journal-accordion-expanded {
-  padding-bottom: 16px !important;
+  padding-bottom: 0 !important;
   box-sizing: border-box;
 }
 html.global-hub-glass-nav-active #trainingJournalScreen .journal-monthly-dashboard:not(.journal-accordion-expanded) {
@@ -2237,7 +2239,10 @@ html.global-hub-glass-nav-active .global-back-to-top-btn.global-back-to-top-acti
   box-sizing: border-box;
 }
 #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
-  margin-top: 8px;
+  margin-top: 0 !important;
+}
+#trainingJournalScreen:not(:has(.journal-accordion-expanded)) #monthly-analysis-dashboard-root {
+  margin-top: 16px;
 }
 #trainingJournalScreen .journal-daily-summary-actions {
   position: relative;
