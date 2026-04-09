@@ -1468,8 +1468,13 @@
       max-width: 100%;
     }
     /* 차트 펼침 시: 펼치기 버튼과 차트 사이 간격 최소화 */
+    /* 펼침(접기 표시): 분석 차트를 메뉴 바로 아래 붙임 — 인라인 margin-top 과 충돌 없음 */
     #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
-      margin-top: 8px;
+      margin-top: 0 !important;
+    }
+    /* 접힘(펼치기 표시): 숨김(display:none)과 무관하게 DOM 기본 간격만 유지 */
+    #trainingJournalScreen:not(:has(.journal-accordion-expanded)) #monthly-analysis-dashboard-root {
+      margin-top: 16px;
     }
     /* React Journal 리팩터링: Daily Summary 카드 (STELVIO 주간 마일리지 TOP10 모달 스타일 적용) */
     #trainingJournalScreen .journal-daily-summary {
@@ -5221,7 +5226,7 @@
     <div id="journal-react-root" style="display: none; margin-top: 0;"></div>
     
     <!-- Monthly Training Analysis Dashboard (React, below calendar) -->
-    <div id="monthly-analysis-dashboard-root" style="margin-top: 16px; width: 100%; box-sizing: border-box;"></div>
+    <div id="monthly-analysis-dashboard-root" style="width: 100%; box-sizing: border-box;"></div>
   </div>
 
   <!-- Strava 동기화 모달 (grade=1 관리자용, STELVIO 디자인): MMP 수집만, 2개 버튼 -->
