@@ -96,7 +96,19 @@
       '&state=' + encodeURIComponent(state) +
       '&approval_prompt=force';
 
-    // Strava 로그인/승인 화면을 오버레이 팝업으로 띄움
+    var ua = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : '';
+    var preferExternalBrowser =
+      (typeof window.openStelvioExternalUrlNeedsSameWindowFallback === 'function' &&
+        window.openStelvioExternalUrlNeedsSameWindowFallback()) ||
+      /iPhone|iPad|iPod|Android/i.test(ua);
+
+    // iOS/Android PWA·WebView·모바일: 팝업 대신 새 브라우저/탭으로 열기 (index.html 선행 스크립트)
+    if (preferExternalBrowser && typeof window.openStelvioExternalUrl === 'function') {
+      window.openStelvioExternalUrl(url);
+      return;
+    }
+
+    // 데스크톱: Strava 로그인/승인을 크기 지정 팝업으로
     var w = 500, h = 650;
     var left = (window.screen.width - w) / 2;
     var top = (window.screen.height - h) / 2;
@@ -111,8 +123,9 @@
           }
         }
       }, 500);
+    } else if (typeof window.openStelvioExternalUrl === 'function') {
+      window.openStelvioExternalUrl(url);
     } else {
-      // 팝업 차단 시 기존처럼 현재 창에서 이동
       window.location.href = url;
     }
   }
