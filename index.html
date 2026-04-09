@@ -1471,6 +1471,19 @@
     /* 펼침(접기 표시): 분석 차트를 메뉴 바로 아래 붙임 — 인라인 margin-top 과 충돌 없음 */
     #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root {
       margin-top: 0 !important;
+      padding-top: 0 !important;
+    }
+    #trainingJournalScreen:has(.journal-accordion-expanded) .journal-accordion {
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    #trainingJournalScreen:has(.journal-accordion-expanded) .journal-accordion-hint {
+      margin: 8px 0 0 0;
+      margin-bottom: 0 !important;
+      padding-bottom: 0;
+    }
+    #trainingJournalScreen:has(.journal-accordion-expanded) #monthly-analysis-dashboard-root > div:first-child {
+      margin-top: 0 !important;
     }
     /* 접힘(펼치기 표시): 숨김(display:none)과 무관하게 DOM 기본 간격만 유지 */
     #trainingJournalScreen:not(:has(.journal-accordion-expanded)) #monthly-analysis-dashboard-root {
