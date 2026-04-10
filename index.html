@@ -19343,6 +19343,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         bindHubGlassNav();
         var visible = hubNavShowsForScreen(screenId);
         if (!visible) {
+          try {
+            var ae = document.activeElement;
+            if (ae && root.contains(ae) && typeof ae.blur === 'function') {
+              ae.blur();
+            }
+          } catch (eBlur) {}
           window.__hubNavModalTab = null;
         }
         var tab = visible ? (HUB_NAV_MAP[screenId] || null) : null;
