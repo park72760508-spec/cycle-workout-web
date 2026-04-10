@@ -3360,9 +3360,6 @@
   <!-- 3) 워크아웃 선택 화면 -->
   <div id="workoutScreen" class="screen workout-screen-dark">
     <div class="header workout-screen-header" id="workoutScreenHeader">
-      <button type="button" class="workout-screen-back-btn" id="workoutScreenBackBtn" aria-label="Manage Your Career로 이동">
-        <svg class="workout-screen-back-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-      </button>
       <div class="workout-screen-header-content">
         <h1 id="workoutScreenTitle">워크아웃</h1>
         <p class="subtitle workout-screen-subtitle" id="workoutScreenSubtitle">오늘의 훈련 프로그램을 선택하세요</p>
@@ -3409,9 +3406,7 @@
   <!-- AI 훈련 스케줄 메인 화면 (Route: /schedule, Manage Your Career > 훈련 스케줄) -->
   <div id="aiScheduleScreen" class="screen">
     <div class="header" style="display: flex; align-items: center; justify-content: space-between;">
-      <button type="button" class="p-2 rounded-lg" onclick="showScreen('myCareerScreen')" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-      </button>
+      <span class="ai-schedule-header-spacer" aria-hidden="true" style="width: 2.5em; flex-shrink: 0;"></span>
       <h1 style="margin: 0; flex: 1; text-align: center; font-weight: bold;"><img src="assets/img/calendar_n.gif" alt="캘린더" class="schedule-title-icon"> 훈련 스케줄</h1>
       <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
         <button type="button" class="p-2 rounded-lg" onclick="if(typeof openScheduleCreateAIModal==='function')openScheduleCreateAIModal()" aria-label="스케줄 작성" style="width: 2.5em; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer;">
@@ -5701,17 +5696,11 @@
         workoutViewState.selectedCategory = null;
         var catView = document.getElementById('workoutCategoryView');
         var listView = document.getElementById('workoutListView');
-        var backBtn = document.getElementById('workoutScreenBackBtn');
         var titleEl = document.getElementById('workoutScreenTitle');
         var subtitleEl = document.getElementById('workoutScreenSubtitle');
         var headerEl = document.getElementById('workoutScreenHeader');
         if (catView) { catView.style.display = 'block'; catView.removeAttribute('data-hidden'); }
         if (listView) { listView.style.display = 'none'; listView.setAttribute('data-hidden', 'true'); }
-        if (backBtn) {
-          backBtn.style.display = 'flex';
-          backBtn.setAttribute('aria-label', 'Manage Your Career로 이동');
-          backBtn.onclick = function() { if (typeof showScreen === 'function') showScreen('myCareerScreen'); };
-        }
         var newBtn = document.getElementById('workoutScreenNewBtn');
         if (newBtn) newBtn.style.display = 'none';
         if (titleEl) { titleEl.textContent = '워크아웃'; }
@@ -5735,14 +5724,8 @@
         workoutViewState.selectedCategory = categoryId;
         var catView = document.getElementById('workoutCategoryView');
         var listView = document.getElementById('workoutListView');
-        var backBtn = document.getElementById('workoutScreenBackBtn');
         if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
         if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
-        if (backBtn) {
-          backBtn.style.display = 'flex';
-          backBtn.setAttribute('aria-label', '카테고리로');
-          backBtn.onclick = function() { workoutViewShowCategory(); };
-        }
         var newBtn = document.getElementById('workoutScreenNewBtn');
         if (newBtn) newBtn.style.display = 'flex';
         var titleEl = document.getElementById('workoutScreenTitle');
