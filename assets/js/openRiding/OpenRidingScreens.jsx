@@ -1815,14 +1815,15 @@ function OpenRidingGlassNavPortal(p) {
 }
 
 /**
- * 라이딩 모임 하단 네비: main(홈·맞춤·주최·친구) | filter|create|friends(모임·맞춤·주최·친구)
+ * 라이딩 모임 하단 네비: 항상 홈·모임·맞춤·주최·친구 (5슬롯)
  */
 function OpenRidingBottomGlassNav(props) {
   var nv = props.navVariant || 'main';
   var navVariant =
     nv === 'filter' || nv === 'create' || nv === 'friends' ? nv : 'main';
-  var filterActive = props.activeTab === 'filter';
-  var createActive = props.activeTab === 'create';
+  var moimActive = navVariant === 'main';
+  var filterActive = navVariant === 'filter';
+  var createActive = navVariant === 'create';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
   var onFilter = props.onFilter || function () {};
@@ -1892,30 +1893,27 @@ function OpenRidingBottomGlassNav(props) {
   }
 
   var friendsActive = navVariant === 'friends';
-  var firstSlot = null;
-  if (navVariant === 'main') {
-    firstSlot = (
+
+  var innerContent = (
+    <>
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
           {iconHome()}
           <span className="open-riding-bottom-glass-nav__label">홈</span>
         </button>
       </OpenRidingGlassNavSlot>
-    );
-  } else {
-    firstSlot = (
       <OpenRidingGlassNavSlot>
-        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(moimActive)}
+          onClick={onMoim}
+          aria-current={moimActive ? 'page' : undefined}
+          aria-label="라이딩 모임 달력"
+        >
           {iconMoim()}
           <span className="open-riding-bottom-glass-nav__label">모임</span>
         </button>
       </OpenRidingGlassNavSlot>
-    );
-  }
-
-  var innerContent = (
-    <>
-      {firstSlot}
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
           {iconFilter()}
@@ -1941,14 +1939,23 @@ function OpenRidingBottomGlassNav(props) {
   return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 모임 하단 메뉴" />;
 }
 
-/** 상세 화면 하단: 모임·수정·취소·삭제 (기존 툴바 아이콘 재사용) */
+/** 상세 화면 하단: 홈·모임·수정·폭파·삭제 (기존 툴바 아이콘 재사용) */
 function OpenRidingDetailGlassNav(props) {
+  var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
   var onEdit = props.onEdit || function () {};
   var onCancel = props.onCancel || function () {};
   var onDelete = props.onDelete || function () {};
   var hostToolbarLocked = !!props.hostToolbarLocked;
   var showHostActions = !!props.showHostActions;
+
+  function iconHomeNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    );
+  }
 
   function iconMoimNav() {
     return (
@@ -1960,6 +1967,12 @@ function OpenRidingDetailGlassNav(props) {
 
   var innerContent = (
     <>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+          {iconHomeNav()}
+          <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </button>
+      </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력으로">
           {iconMoimNav()}
@@ -1991,17 +2004,17 @@ function OpenRidingDetailGlassNav(props) {
           className={openRidingGlassNavBtnClass(false)}
           onClick={onCancel}
           disabled={!showHostActions || hostToolbarLocked}
-          aria-label="라이딩 취소"
+          aria-label="라이딩 폭파"
           title={
             !showHostActions
               ? '방장 또는 관리자만 이용할 수 있습니다.'
               : hostToolbarLocked
-                ? '라이딩 일정일이 지나 취소할 수 없습니다.'
+                ? '라이딩 일정일이 지나 폭파할 수 없습니다.'
                 : undefined
           }
         >
           <img src="assets/img/cancel01.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
-          <span className="open-riding-bottom-glass-nav__label">취소</span>
+          <span className="open-riding-bottom-glass-nav__label">폭파</span>
         </button>
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
@@ -4586,6 +4599,7 @@ function OpenRidingDetail(props) {
   var userId = props.userId;
   var onBack = props.onBack || function () {};
   var onOpenEdit = props.onOpenEdit || function () {};
+  var onHome = props.onHome || function () {};
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
   if (typeof useOpenRideDetailFn !== 'function') {
@@ -5148,7 +5162,7 @@ function OpenRidingDetail(props) {
     );
   }
 
-  /* 상세 본문 루트 z-0, 방장 수정/취소/삭제는 하단 글래스 네비(OpenRidingDetailGlassNav) */
+  /* 상세 본문 루트 z-0, 방장 수정/폭파/삭제는 하단 글래스 네비(OpenRidingDetailGlassNav) */
   return (
     <>
     <div
@@ -5791,10 +5805,10 @@ function OpenRidingDetail(props) {
                 !
               </span>
               <h2 id="open-riding-bomb-title" className="text-base font-bold text-slate-800 m-0 leading-tight">
-                라이딩 취소
+                라이딩 폭파
               </h2>
             </div>
-            <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 취소하시겠습니까?</p>
+            <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 폭파하시겠습니까?</p>
             <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
             <div className="stelvio-exit-confirm-buttons">
               <button
@@ -5874,6 +5888,7 @@ function OpenRidingDetail(props) {
       ) : null}
     </div>
     <OpenRidingDetailGlassNav
+      onHome={onHome}
       onMoim={onBack}
       onEdit={onOpenEdit}
       onCancel={function () {
@@ -6725,6 +6740,9 @@ function OpenRidingRoomApp(props) {
         userId={userId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
+        onHome={function () {
+          if (typeof showScreen === 'function') showScreen('basecampScreen');
+        }}
       />
     );
   } else if (view === 'friends') {
@@ -6789,7 +6807,6 @@ function OpenRidingRoomApp(props) {
                     ? 'friends'
                     : 'main'
           }
-          activeTab={view === 'filter' ? 'filter' : view === 'create' ? 'create' : ''}
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
           }}
