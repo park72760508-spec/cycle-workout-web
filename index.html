@@ -19170,7 +19170,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </button>
 
-  <!-- 글래스 스타일 9메뉴 하단 네비(가로 스크롤·스크롤바 숨김) — 나의 기록 화면 제외 -->
+  <!-- 글래스 스타일 9메뉴 하단 네비(가로 스크롤·스크롤바 숨김) — 나의 기록 화면 제외, 홈=경로 선택(basecamp) -->
   <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true">
     <div class="open-riding-bottom-glass-nav__pill">
       <div class="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true"></div>
@@ -19178,9 +19178,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <div class="global-hub-glass-nav-scroll">
           <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--scroll">
             <div class="open-riding-bottom-glass-nav__slot">
-              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="home" aria-label="홈, 경로 선택 화면">
                 <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-                <span class="open-riding-bottom-glass-nav__label">메인</span>
+                <span class="open-riding-bottom-glass-nav__label">홈</span>
               </button>
             </div>
             <div class="open-riding-bottom-glass-nav__slot">
@@ -19265,10 +19265,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
         return false;
       }
-      function hubNavGoMain() {
-        if (typeof handleMyCareerClick === 'function') handleMyCareerClick();
-        else if (typeof showMyCareerScreenWithLoading === 'function') showMyCareerScreenWithLoading();
-        else if (typeof showScreen === 'function') showScreen('myCareerScreen');
+      function hubNavGoHome() {
+        if (typeof showScreen === 'function') showScreen('basecampScreen');
       }
       function hubNavGoTrain() {
         if (typeof showScreen === 'function') {
@@ -19329,7 +19327,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (typeof closeSubscribeOverlay === 'function') closeSubscribeOverlay();
           if (typeof closeSettingsModal === 'function') closeSettingsModal();
           window.__hubNavModalTab = null;
-          if (key === 'main') hubNavGoMain();
+          if (key === 'home') hubNavGoHome();
           else if (key === 'train') hubNavGoTrain();
           else if (key === 'plan') hubNavGoPlan();
           else if (key === 'ranking' && typeof showScreen === 'function') showScreen('stelvioRankingScreen');
