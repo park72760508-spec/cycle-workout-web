@@ -19170,73 +19170,67 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </button>
 
-  <!-- 글래스 스타일 5메뉴 하단 네비: 커리어(나의기록·훈련·계획·구독·설정) | 인사이트(메인·랭킹·분석·기록·마이) 자동 전환 -->
-  <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true" data-global-hub-variant="">
+  <!-- 글래스 스타일 9메뉴 하단 네비(가로 스크롤·스크롤바 숨김) — 나의 기록 화면 제외 -->
+  <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true">
     <div class="open-riding-bottom-glass-nav__pill">
       <div class="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true"></div>
       <div class="open-riding-bottom-glass-nav__pill-surface">
-        <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--career">
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
-              <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">메인</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="train" aria-label="워크아웃">
-              <img src="assets/img/train1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">훈련</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="plan" aria-label="훈련 스케줄">
-              <img src="assets/img/schedule1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">계획</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="subscribe" aria-label="정기 구독권 구매 안내">
-              <img src="assets/img/fee.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">구독</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="settings" aria-label="환경설정">
-              <img src="assets/img/setting1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">설정</span>
-            </button>
-          </div>
-        </div>
-        <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--insight">
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
-              <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">메인</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="ranking" aria-label="랭킹보드">
-              <img src="assets/img/mrank1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">랭킹</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
-              <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">분석</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="journal" aria-label="라이딩 기록">
-              <img src="assets/img/mrank3.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">기록</span>
-            </button>
-          </div>
-          <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="profile" aria-label="프로필 선택">
-              <img src="assets/img/user.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">마이</span>
-            </button>
+        <div class="global-hub-glass-nav-scroll">
+          <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--scroll">
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
+                <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">메인</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="ranking" aria-label="랭킹보드">
+                <img src="assets/img/mrank1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">랭킹</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
+                <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">분석</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="journal" aria-label="라이딩 기록">
+                <img src="assets/img/mrank3.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">기록</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="profile" aria-label="프로필 선택">
+                <img src="assets/img/user.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">마이</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="train" aria-label="워크아웃">
+                <img src="assets/img/train1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">훈련</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="plan" aria-label="훈련 스케줄">
+                <img src="assets/img/schedule1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">계획</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="subscribe" aria-label="정기 구독권 구매 안내">
+                <img src="assets/img/fee.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">구독</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="settings" aria-label="환경설정">
+                <img src="assets/img/setting1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">설정</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -19244,24 +19238,25 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   </nav>
   <script>
     (function () {
-      var HUB_NAV_MAP_CAREER = {
-        myCareerScreen: 'main',
-        workoutScreen: 'train',
-        aiScheduleScreen: 'plan'
-      };
-      var HUB_NAV_MAP_INSIGHT = {
+      var HUB_NAV_MAP = {
         stelvioRankingScreen: 'ranking',
         performanceDashboardScreen: 'analysis',
         trainingJournalScreen: 'journal',
-        profileScreen: 'profile'
+        profileScreen: 'profile',
+        workoutScreen: 'train',
+        aiScheduleScreen: 'plan'
       };
-      var HUB_NAV_SCREEN_IDS_CAREER = ['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'];
-      var HUB_NAV_SCREEN_IDS_INSIGHT = ['stelvioRankingScreen', 'performanceDashboardScreen', 'trainingJournalScreen', 'profileScreen'];
+      var HUB_NAV_SCREEN_IDS = [
+        'stelvioRankingScreen',
+        'performanceDashboardScreen',
+        'trainingJournalScreen',
+        'profileScreen',
+        'workoutScreen',
+        'aiScheduleScreen'
+      ];
       window.__hubNavModalTab = window.__hubNavModalTab || null;
-      function hubNavVariantForScreen(screenId) {
-        if (HUB_NAV_SCREEN_IDS_INSIGHT.indexOf(screenId) >= 0) return 'insight';
-        if (HUB_NAV_SCREEN_IDS_CAREER.indexOf(screenId) >= 0) return 'career';
-        return null;
+      function hubNavShowsForScreen(screenId) {
+        return HUB_NAV_SCREEN_IDS.indexOf(screenId) >= 0;
       }
       function hubNavIsIOSPhone() {
         var ua = navigator.userAgent || '';
@@ -19287,6 +19282,22 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           showScreen('aiScheduleScreen');
           if (typeof loadAIScheduleScreen === 'function') setTimeout(loadAIScheduleScreen, 200);
         }
+      }
+      function hubNavScrollActiveIntoView(root, activeBtn) {
+        if (!root || !activeBtn) return;
+        var sc = root.querySelector('.global-hub-glass-nav-scroll');
+        if (!sc) return;
+        requestAnimationFrame(function () {
+          try {
+            var br = activeBtn.getBoundingClientRect();
+            var sr = sc.getBoundingClientRect();
+            var btnCx = br.left + br.width / 2;
+            var scCx = sr.left + sr.width / 2;
+            var delta = btnCx - scCx;
+            var maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
+            sc.scrollLeft = Math.max(0, Math.min(sc.scrollLeft + delta, maxScroll));
+          } catch (err) {}
+        });
       }
       window.syncGlobalHubGlassNavForActiveScreen = function () {
         var el = document.querySelector('.screen.active');
@@ -19332,55 +19343,37 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var docEl = document.documentElement;
         if (!root) return;
         bindHubGlassNav();
-        var variant = hubNavVariantForScreen(screenId);
-        var visible = !!variant;
+        var visible = hubNavShowsForScreen(screenId);
         if (!visible) {
           window.__hubNavModalTab = null;
-          root.removeAttribute('data-global-hub-variant');
-        } else {
-          root.setAttribute('data-global-hub-variant', variant);
-          if (variant === 'insight') {
-            window.__hubNavModalTab = null;
-          }
         }
-        var tab = null;
-        if (visible) {
-          if (variant === 'career') {
-            tab = HUB_NAV_MAP_CAREER[screenId] || null;
-            if (window.__hubNavModalTab) {
-              tab = window.__hubNavModalTab;
-            }
-          } else {
-            tab = HUB_NAV_MAP_INSIGHT[screenId] || null;
-          }
+        var tab = visible ? (HUB_NAV_MAP[screenId] || null) : null;
+        if (visible && window.__hubNavModalTab) {
+          tab = window.__hubNavModalTab;
         }
         docEl.classList.toggle('global-hub-glass-nav-active', visible);
         docEl.classList.toggle('global-hub-glass-nav-ios-phone', visible && hubNavIsIOSPhone());
         root.style.display = visible ? 'block' : 'none';
         root.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        var selector =
-          variant === 'insight'
-            ? '.global-hub-glass-nav-inner--insight [data-hub-nav]'
-            : variant === 'career'
-              ? '.global-hub-glass-nav-inner--career [data-hub-nav]'
-              : null;
         var allNavButtons = root.querySelectorAll('[data-hub-nav]');
+        var activeBtn = null;
         for (var a = 0; a < allNavButtons.length; a++) {
-          allNavButtons[a].classList.remove('open-riding-bottom-glass-nav__btn--active');
-          allNavButtons[a].removeAttribute('aria-current');
+          var b = allNavButtons[a];
+          b.classList.remove('open-riding-bottom-glass-nav__btn--active');
+          b.removeAttribute('aria-current');
         }
-        if (selector) {
-          var buttons = root.querySelectorAll(selector);
-          for (var i = 0; i < buttons.length; i++) {
-            var b = buttons[i];
-            var k = b.getAttribute('data-hub-nav');
-            var on = k === tab;
-            if (on) {
-              b.classList.add('open-riding-bottom-glass-nav__btn--active');
-              b.setAttribute('aria-current', 'page');
+        if (visible && tab) {
+          for (var i = 0; i < allNavButtons.length; i++) {
+            var bb = allNavButtons[i];
+            if (bb.getAttribute('data-hub-nav') === tab) {
+              bb.classList.add('open-riding-bottom-glass-nav__btn--active');
+              bb.setAttribute('aria-current', 'page');
+              activeBtn = bb;
+              break;
             }
           }
         }
+        hubNavScrollActiveIntoView(root, activeBtn);
       };
       function hubNavSyncInitial() {
         try {
