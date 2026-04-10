@@ -1123,6 +1123,25 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   pointer-events: none !important;
 }
 
+/* 워크아웃(다크 배경) 전환 시에만: 허브 네비 글래스를 밝게(기본 투명도는 다른 화면에서 유지) */
+html.global-hub-glass-nav-workout-contrast #globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-bg {
+  background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+}
+html.global-hub-glass-nav-workout-contrast #globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill {
+  border-color: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.32),
+    0 4px 14px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+/* 정기 구독 안내 오버레이(z-index 999999)보다 위: 하단 허브 네비로 다른 화면 전환 가능 */
+html.global-hub-nav-over-subscribe #globalHubBottomGlassNavRoot {
+  z-index: 10000000 !important;
+}
+
 /* 버튼·Inner 전담 터치 레이어 */
 #openRidingBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-surface,
 #globalHubBottomGlassNavRoot .open-riding-bottom-glass-nav__pill-surface {
