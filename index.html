@@ -19175,8 +19175,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <div class="open-riding-bottom-glass-nav__pill">
       <div class="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true"></div>
       <div class="open-riding-bottom-glass-nav__pill-surface">
-        <div class="global-hub-glass-nav-scroll">
-          <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--scroll">
+        <div class="global-hub-glass-nav-scroll-wrap">
+          <div class="global-hub-glass-nav-scroll">
+            <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--scroll">
             <div class="open-riding-bottom-glass-nav__slot">
               <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="home" aria-label="홈, 경로 선택 화면">
                 <svg class="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -19234,6 +19235,21 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               </button>
             </div>
           </div>
+          </div>
+          <span class="global-hub-glass-nav-edge global-hub-glass-nav-edge--left" aria-hidden="true">
+            <span class="global-hub-glass-nav-edge__blob">
+              <svg class="global-hub-glass-nav-edge__svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </span>
+          </span>
+          <span class="global-hub-glass-nav-edge global-hub-glass-nav-edge--right" aria-hidden="true">
+            <span class="global-hub-glass-nav-edge__blob">
+              <svg class="global-hub-glass-nav-edge__svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </span>
+          </span>
         </div>
       </div>
     </div>
@@ -19283,6 +19299,56 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (typeof loadAIScheduleScreen === 'function') setTimeout(loadAIScheduleScreen, 200);
         }
       }
+      function hubNavUpdateScrollEdgeHints(root) {
+        if (!root) return;
+        var sc = root.querySelector('.global-hub-glass-nav-scroll');
+        var left = root.querySelector('.global-hub-glass-nav-edge--left');
+        var right = root.querySelector('.global-hub-glass-nav-edge--right');
+        if (!sc || !left || !right) return;
+        var epsilon = 3;
+        var maxScroll = sc.scrollWidth - sc.clientWidth;
+        if (maxScroll <= epsilon) {
+          left.classList.remove('global-hub-glass-nav-edge--visible');
+          right.classList.remove('global-hub-glass-nav-edge--visible');
+          return;
+        }
+        if (sc.scrollLeft <= epsilon) {
+          left.classList.remove('global-hub-glass-nav-edge--visible');
+        } else {
+          left.classList.add('global-hub-glass-nav-edge--visible');
+        }
+        if (sc.scrollLeft >= maxScroll - epsilon) {
+          right.classList.remove('global-hub-glass-nav-edge--visible');
+        } else {
+          right.classList.add('global-hub-glass-nav-edge--visible');
+        }
+      }
+      function hubNavEnsureScrollHintListeners(root) {
+        if (!root || root.getAttribute('data-hub-scroll-hint') === '1') return;
+        root.setAttribute('data-hub-scroll-hint', '1');
+        var sc = root.querySelector('.global-hub-glass-nav-scroll');
+        if (!sc) return;
+        sc.addEventListener(
+          'scroll',
+          function () {
+            hubNavUpdateScrollEdgeHints(root);
+          },
+          { passive: true }
+        );
+        window.addEventListener('resize', function () {
+          if (root.style.display === 'none') return;
+          hubNavUpdateScrollEdgeHints(root);
+        });
+        if (typeof ResizeObserver !== 'undefined') {
+          try {
+            var ro = new ResizeObserver(function () {
+              if (root.style.display === 'none') return;
+              hubNavUpdateScrollEdgeHints(root);
+            });
+            ro.observe(sc);
+          } catch (eRo) {}
+        }
+      }
       function hubNavScrollActiveIntoView(root, activeBtn) {
         if (!root || !activeBtn) return;
         var sc = root.querySelector('.global-hub-glass-nav-scroll');
@@ -19296,6 +19362,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var delta = btnCx - scCx;
             var maxScroll = Math.max(0, sc.scrollWidth - sc.clientWidth);
             sc.scrollLeft = Math.max(0, Math.min(sc.scrollLeft + delta, maxScroll));
+            hubNavUpdateScrollEdgeHints(root);
           } catch (err) {}
         });
       }
@@ -19310,6 +19377,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var root = document.getElementById('globalHubBottomGlassNavRoot');
         if (!root || root.getAttribute('data-hub-bound') === '1') return;
         root.setAttribute('data-hub-bound', '1');
+        hubNavEnsureScrollHintListeners(root);
         root.addEventListener('click', function (e) {
           var btn = e.target && e.target.closest && e.target.closest('[data-hub-nav]');
           if (!btn || !root.contains(btn)) return;
@@ -19380,6 +19448,20 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }
         }
         hubNavScrollActiveIntoView(root, activeBtn);
+        if (visible) {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              hubNavUpdateScrollEdgeHints(root);
+            });
+          });
+        } else {
+          try {
+            var l = root.querySelector('.global-hub-glass-nav-edge--left');
+            var r = root.querySelector('.global-hub-glass-nav-edge--right');
+            if (l) l.classList.remove('global-hub-glass-nav-edge--visible');
+            if (r) r.classList.remove('global-hub-glass-nav-edge--visible');
+          } catch (eH) {}
+        }
       };
       function hubNavSyncInitial() {
         try {
