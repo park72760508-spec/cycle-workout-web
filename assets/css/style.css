@@ -1326,6 +1326,18 @@ html.global-hub-glass-nav-active #profileScreen.active {
   padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 40px);
   box-sizing: border-box;
 }
+html.global-hub-glass-nav-active #myCareerScreen.active {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 24px);
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #workoutScreen.active {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 16px);
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #aiScheduleScreen.active {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 24px);
+  box-sizing: border-box;
+}
 
 /*
  * 허브 + 라이딩 일지: 펼침 시 journal-react-root 하단 패딩 없음
