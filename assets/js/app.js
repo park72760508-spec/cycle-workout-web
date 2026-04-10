@@ -16813,6 +16813,9 @@ function openSubscribeOverlay() {
     if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {
       window.syncGlobalHubGlassNavForActiveScreen();
     }
+    if (typeof window.syncGlobalHubNavOverSubscribeOverlay === 'function') {
+      window.syncGlobalHubNavOverSubscribeOverlay();
+    }
   } catch (eHub) {}
 }
 
@@ -16826,6 +16829,9 @@ function closeSubscribeOverlay() {
     window.__hubNavModalTab = null;
     if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {
       window.syncGlobalHubGlassNavForActiveScreen();
+    }
+    if (typeof window.syncGlobalHubNavOverSubscribeOverlay === 'function') {
+      window.syncGlobalHubNavOverSubscribeOverlay();
     }
   } catch (eHub) {}
 }
