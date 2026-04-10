@@ -13645,6 +13645,18 @@ function openSettingsModal() {
     accessRow.style.display = showAccess ? 'flex' : 'none';
   }
   ensureStelvioAdminAccessStatsButton();
+  try {
+    const act = document.querySelector('.screen.active');
+    const sid = act && act.id ? act.id : '';
+    if (['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'].indexOf(sid) >= 0) {
+      window.__hubNavModalTab = 'settings';
+    } else {
+      window.__hubNavModalTab = null;
+    }
+    if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {
+      window.syncGlobalHubGlassNavForActiveScreen();
+    }
+  } catch (eHub) {}
 }
 /** 환경설정을 DOM만 열고 openSettingsModal을 건너뛴 경우 — 접속통계 행 표시 동기화 */
 function refreshSettingsModalAdminExtras() {
@@ -13674,6 +13686,12 @@ function closeSettingsModal() {
   if (modal) {
     modal.style.display = 'none';
   }
+  try {
+    window.__hubNavModalTab = null;
+    if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {
+      window.syncGlobalHubGlassNavForActiveScreen();
+    }
+  } catch (eHub) {}
 }
 
 function openStravaSignupGuideModal() {
@@ -16766,6 +16784,18 @@ function openSubscribeOverlay() {
   if (modal) {
     modal.classList.remove('hidden');
   }
+  try {
+    const act = document.querySelector('.screen.active');
+    const sid = act && act.id ? act.id : '';
+    if (['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'].indexOf(sid) >= 0) {
+      window.__hubNavModalTab = 'subscribe';
+    } else {
+      window.__hubNavModalTab = null;
+    }
+    if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {
+      window.syncGlobalHubGlassNavForActiveScreen();
+    }
+  } catch (eHub) {}
 }
 
 /** 구독하기 안내 오버레이 닫기 */
@@ -16774,6 +16804,12 @@ function closeSubscribeOverlay() {
   if (modal) {
     modal.classList.add('hidden');
   }
+  try {
+    window.__hubNavModalTab = null;
+    if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {
+      window.syncGlobalHubGlassNavForActiveScreen();
+    }
+  } catch (eHub) {}
 }
 
 /** 사용자 만료일 체크 (grade=2만 적용, 관리자 제외) */
