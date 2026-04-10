@@ -13648,7 +13648,16 @@ function openSettingsModal() {
   try {
     const act = document.querySelector('.screen.active');
     const sid = act && act.id ? act.id : '';
-    if (['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'].indexOf(sid) >= 0) {
+    if (
+      [
+        'stelvioRankingScreen',
+        'performanceDashboardScreen',
+        'trainingJournalScreen',
+        'profileScreen',
+        'workoutScreen',
+        'aiScheduleScreen'
+      ].indexOf(sid) >= 0
+    ) {
       window.__hubNavModalTab = 'settings';
     } else {
       window.__hubNavModalTab = null;
@@ -16787,7 +16796,16 @@ function openSubscribeOverlay() {
   try {
     const act = document.querySelector('.screen.active');
     const sid = act && act.id ? act.id : '';
-    if (['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'].indexOf(sid) >= 0) {
+    if (
+      [
+        'stelvioRankingScreen',
+        'performanceDashboardScreen',
+        'trainingJournalScreen',
+        'profileScreen',
+        'workoutScreen',
+        'aiScheduleScreen'
+      ].indexOf(sid) >= 0
+    ) {
       window.__hubNavModalTab = 'subscribe';
     } else {
       window.__hubNavModalTab = null;
