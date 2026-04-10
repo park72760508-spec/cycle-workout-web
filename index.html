@@ -7665,6 +7665,8 @@
         return;
       } else if (screenId === 'trainingReadyScreen') scrollEl = document.getElementById('trainingReadyScreen');
       else if (screenId === 'performanceDashboardScreen') scrollEl = document.getElementById('performance-dashboard-container');
+      else if (screenId === 'myCareerScreen') scrollEl = document.getElementById('myCareerScreen');
+      else if (screenId === 'aiScheduleScreen') scrollEl = document.getElementById('aiScheduleScreen');
       else if (screenId === 'openRidingRoomScreen') {
         function tryBindOpenRiding() {
           var ob = document.querySelector('#openRidingRoomScreen .open-riding-app-body');
@@ -13189,24 +13191,44 @@
       } catch (e) {}
       return false;
     }
-    /** Capacitor @capacitor/browser — 전용 앱 WebView에서 시스템 브라우저로 열기 */
-    function tryOpenCapacitorBrowser(url) {
+    function isCapacitorShell() {
+      try {
+        return typeof window.Capacitor !== 'undefined';
+      } catch (e) {
+        return false;
+      }
+    }
+    /** @capacitor/browser — Promise 실패 시에만 이후 단계로 진행 */
+    function tryOpenCapacitorBrowserThen(url, onFallback) {
       try {
         var cap = window.Capacitor;
         if (!cap) return false;
         var Browser = cap.Plugins && cap.Plugins.Browser;
-        if (Browser && typeof Browser.open === 'function') {
-          Browser.open({ url: url });
-          return true;
-        }
-        if (typeof cap.getPlugin === 'function') {
-          var P = cap.getPlugin('Browser');
-          if (P && typeof P.open === 'function') {
-            P.open({ url: url });
+        var runOpen = function (B) {
+          if (!B || typeof B.open !== 'function') return false;
+          try {
+            var ret = B.open({ url: url });
+            if (ret && typeof ret.then === 'function') {
+              ret
+                .then(function () {})
+                .catch(function () {
+                  if (typeof onFallback === 'function') onFallback();
+                });
+            }
+          } catch (syncErr) {
+            if (typeof onFallback === 'function') onFallback();
             return true;
           }
+          return true;
+        };
+        if (runOpen(Browser)) return true;
+        if (typeof cap.getPlugin === 'function') {
+          if (runOpen(cap.getPlugin('Browser'))) return true;
         }
-      } catch (e) {}
+      } catch (e) {
+        if (typeof onFallback === 'function') onFallback();
+        return true;
+      }
       return false;
     }
     /** Cordova InAppBrowser _system — 외부 브라우저 */
@@ -13219,12 +13241,15 @@
       } catch (e) {}
       return false;
     }
-    /** iOS WKWebView: 앱이 주입한 messageHandler (앱 측에서 openURL 처리 필요) */
+    /** iOS WKWebView: 네이티브에서 UIApplication.open / SFSafariViewController 로 처리 */
     function tryIosExternalUrlBridge(url) {
       try {
         var wh = window.webkit && window.webkit.messageHandlers;
         if (!wh) return false;
-        var names = ['openURL', 'openUrl', 'externalUrl', 'openExternalUrl', 'stelvioOpenExternal'];
+        var names = [
+          'openURL', 'openUrl', 'externalUrl', 'openExternalUrl', 'stelvioOpenExternal',
+          'openInSafari', 'openExternalBrowser', 'bridge', 'native', 'ionicBridge', 'cordova_iab'
+        ];
         for (var i = 0; i < names.length; i++) {
           var h = wh[names[i]];
           if (!h || typeof h.postMessage !== 'function') continue;
@@ -13235,7 +13260,12 @@
             try {
               h.postMessage({ url: url });
               return true;
-            } catch (e2) {}
+            } catch (e2) {
+              try {
+                h.postMessage({ type: 'external', url: url });
+                return true;
+              } catch (e3) {}
+            }
           }
         }
       } catch (e) {}
@@ -13258,22 +13288,21 @@
       } catch (e) {}
       return false;
     }
-    function openStelvioExternalUrl(url) {
-      if (!url || typeof url !== 'string') return;
-      if (tryOpenCapacitorBrowser(url)) return;
-      if (tryOpenCordovaSystemBrowser(url)) return;
-      if (tryIosExternalUrlBridge(url)) return;
+    /** iOS/HTML: 일부 WKWebView는 display:none 링크 클릭을 무시 → 화면 밖 배치로 시도 */
+    function tryProgrammaticLinkOpen(url, useNoOpener) {
       var a = null;
       try {
         a = document.createElement('a');
         a.href = url;
         a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.style.display = 'none';
+        if (useNoOpener !== false) a.rel = 'noopener noreferrer';
+        a.setAttribute('referrerpolicy', 'no-referrer');
+        a.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0.01;pointer-events:auto;z-index:2147483647;';
         document.body.appendChild(a);
         if (typeof a.click === 'function') a.click();
+        return true;
       } catch (e1) {
-        /* ignore */
+        return false;
       } finally {
         if (a && a.parentNode) {
           try {
@@ -13281,14 +13310,55 @@
           } catch (ignore) {}
         }
       }
+    }
+    function tryWindowOpenVariants(url) {
       try {
         var w = window.open(url, '_blank', 'noopener,noreferrer');
-        if (w) return;
-      } catch (e2) {
-        /* ignore */
+        if (w) return true;
+      } catch (e) {}
+      try {
+        var w2 = window.open(url, '_blank');
+        if (w2) return true;
+      } catch (e2) {}
+      try {
+        if (window.top && window.top !== window) {
+          var w3 = window.top.open(url, '_blank');
+          if (w3) return true;
+        }
+      } catch (e3) {}
+      return false;
+    }
+    /** Capacitor 앱: 동일 WebView를 외부 스토어 URL로 채우면 앱이 비어 종료된 것처럼 보임 → 사용 안 함 */
+    function stelvioNotifyExternalUrlFallback(url) {
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          navigator.clipboard.writeText(url).then(function () {
+            alert('외부 브라우저를 열 수 없어 링크를 클립보드에 복사했습니다.\nSafari 또는 Chrome을 열고 주소창에 붙여넣기 해 주세요.');
+          }).catch(function () {
+            window.prompt('아래 링크를 복사해 Safari·Chrome에서 여세요:', url);
+          });
+        } else {
+          window.prompt('아래 링크를 복사해 Safari·Chrome에서 여세요:', url);
+        }
+      } catch (e) {
+        try {
+          window.prompt('아래 링크를 복사해 Safari·Chrome에서 여세요:', url);
+        } catch (e2) {}
       }
+    }
+    function openStelvioExternalUrlPhaseFallbacks(url) {
+      if (tryOpenCordovaSystemBrowser(url)) return;
+      if (tryIosExternalUrlBridge(url)) return;
+      tryProgrammaticLinkOpen(url, true);
+      if (tryWindowOpenVariants(url)) return;
+      tryProgrammaticLinkOpen(url, false);
+      if (tryWindowOpenVariants(url)) return;
       if (tryAndroidExternalViewIntent(url)) return;
       if (openStelvioExternalUrlNeedsSameWindowFallback()) {
+        if (isCapacitorShell()) {
+          stelvioNotifyExternalUrlFallback(url);
+          return;
+        }
         try {
           window.location.assign(url);
         } catch (e3) {
@@ -13297,6 +13367,15 @@
           } catch (e4) {}
         }
       }
+    }
+    function openStelvioExternalUrl(url) {
+      if (!url || typeof url !== 'string') return;
+      if (tryOpenCapacitorBrowserThen(url, function () {
+        openStelvioExternalUrlPhaseFallbacks(url);
+      })) {
+        return;
+      }
+      openStelvioExternalUrlPhaseFallbacks(url);
     }
     window.openStelvioExternalUrlNeedsSameWindowFallback = openStelvioExternalUrlNeedsSameWindowFallback;
     window.openStelvioExternalUrl = openStelvioExternalUrl;
@@ -19091,7 +19170,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </button>
 
-  <!-- 랭킹·대시보드·라이딩 일지·프로필: 라이딩 모임과 동일 글래스 스타일 5메뉴 하단 네비 -->
+  <!-- 나의 기록·워크아웃·훈련 스케줄·구독·환경설정: 글래스 스타일 5메뉴 하단 네비 -->
   <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true">
     <div class="open-riding-bottom-glass-nav__pill">
       <div class="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true"></div>
@@ -19104,27 +19183,27 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </button>
           </div>
           <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="ranking" aria-label="랭킹보드">
-              <img src="assets/img/mrank1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">랭킹</span>
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="train" aria-label="워크아웃">
+              <img src="assets/img/train1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">훈련</span>
             </button>
           </div>
           <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
-              <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">분석</span>
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="plan" aria-label="훈련 스케줄">
+              <img src="assets/img/schedule1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">계획</span>
             </button>
           </div>
           <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="journal" aria-label="라이딩 기록">
-              <img src="assets/img/mrank3.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">기록</span>
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="subscribe" aria-label="정기 구독권 구매 안내">
+              <img src="assets/img/fee.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">구독</span>
             </button>
           </div>
           <div class="open-riding-bottom-glass-nav__slot">
-            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="profile" aria-label="프로필 선택">
-              <img src="assets/img/user.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-              <span class="open-riding-bottom-glass-nav__label">마이</span>
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="settings" aria-label="환경설정">
+              <img src="assets/img/setting1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">설정</span>
             </button>
           </div>
         </div>
@@ -19134,11 +19213,15 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script>
     (function () {
       var HUB_NAV_MAP = {
-        stelvioRankingScreen: 'ranking',
-        performanceDashboardScreen: 'analysis',
-        trainingJournalScreen: 'journal',
-        profileScreen: 'profile'
+        myCareerScreen: 'main',
+        workoutScreen: 'train',
+        aiScheduleScreen: 'plan'
       };
+      var HUB_NAV_SCREEN_IDS = ['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'];
+      window.__hubNavModalTab = window.__hubNavModalTab || null;
+      function hubNavIsHubScreen(screenId) {
+        return HUB_NAV_SCREEN_IDS.indexOf(screenId) >= 0;
+      }
       function hubNavIsIOSPhone() {
         var ua = navigator.userAgent || '';
         if (/android/i.test(ua)) return false;
@@ -19151,6 +19234,26 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         else if (typeof showMyCareerScreenWithLoading === 'function') showMyCareerScreenWithLoading();
         else if (typeof showScreen === 'function') showScreen('myCareerScreen');
       }
+      function hubNavGoTrain() {
+        if (typeof showScreen === 'function') {
+          showScreen('workoutScreen');
+          if (typeof workoutViewInit === 'function') setTimeout(workoutViewInit, 150);
+          else if (typeof window.workoutViewInit === 'function') setTimeout(window.workoutViewInit, 150);
+        }
+      }
+      function hubNavGoPlan() {
+        if (typeof showScreen === 'function') {
+          showScreen('aiScheduleScreen');
+          if (typeof loadAIScheduleScreen === 'function') setTimeout(loadAIScheduleScreen, 200);
+        }
+      }
+      window.syncGlobalHubGlassNavForActiveScreen = function () {
+        var el = document.querySelector('.screen.active');
+        var sid = el && el.id ? el.id : '';
+        if (typeof window.updateGlobalHubGlassNavVisibility === 'function') {
+          window.updateGlobalHubGlassNavVisibility(sid);
+        }
+      };
       function bindHubGlassNav() {
         var root = document.getElementById('globalHubBottomGlassNavRoot');
         if (!root || root.getAttribute('data-hub-bound') === '1') return;
@@ -19159,11 +19262,24 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var btn = e.target && e.target.closest && e.target.closest('[data-hub-nav]');
           if (!btn || !root.contains(btn)) return;
           var key = btn.getAttribute('data-hub-nav');
+          if (key === 'subscribe') {
+            if (typeof closeSettingsModal === 'function') closeSettingsModal();
+            window.__hubNavModalTab = null;
+            if (typeof openSubscribeOverlay === 'function') openSubscribeOverlay();
+            return;
+          }
+          if (key === 'settings') {
+            if (typeof closeSubscribeOverlay === 'function') closeSubscribeOverlay();
+            window.__hubNavModalTab = null;
+            if (typeof openSettingsModal === 'function') openSettingsModal();
+            return;
+          }
+          if (typeof closeSubscribeOverlay === 'function') closeSubscribeOverlay();
+          if (typeof closeSettingsModal === 'function') closeSettingsModal();
+          window.__hubNavModalTab = null;
           if (key === 'main') hubNavGoMain();
-          else if (key === 'ranking' && typeof showScreen === 'function') showScreen('stelvioRankingScreen');
-          else if (key === 'analysis' && typeof showScreen === 'function') showScreen('performanceDashboardScreen');
-          else if (key === 'journal' && typeof showScreen === 'function') showScreen('trainingJournalScreen');
-          else if (key === 'profile' && typeof showScreen === 'function') showScreen('profileScreen');
+          else if (key === 'train') hubNavGoTrain();
+          else if (key === 'plan') hubNavGoPlan();
         });
       }
       window.updateGlobalHubGlassNavVisibility = function (screenId) {
@@ -19171,8 +19287,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var docEl = document.documentElement;
         if (!root) return;
         bindHubGlassNav();
-        var tab = HUB_NAV_MAP[screenId];
-        var visible = !!tab;
+        var visible = hubNavIsHubScreen(screenId);
+        if (!visible) {
+          window.__hubNavModalTab = null;
+        }
+        var tab = visible ? (HUB_NAV_MAP[screenId] || null) : null;
+        if (visible && window.__hubNavModalTab) {
+          tab = window.__hubNavModalTab;
+        }
         docEl.classList.toggle('global-hub-glass-nav-active', visible);
         docEl.classList.toggle('global-hub-glass-nav-ios-phone', visible && hubNavIsIOSPhone());
         root.style.display = visible ? 'block' : 'none';
@@ -19191,6 +19313,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           }
         }
       };
+      function hubNavSyncInitial() {
+        try {
+          var el = document.querySelector('.screen.active');
+          if (el && el.id && typeof window.updateGlobalHubGlassNavVisibility === 'function') {
+            window.updateGlobalHubGlassNavVisibility(el.id);
+          }
+        } catch (e) {}
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hubNavSyncInitial);
+      } else {
+        hubNavSyncInitial();
+      }
     })();
   </script>
 
@@ -19318,7 +19453,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var grade = getGradeForSubscribe();
         if (grade === '1') {
           openStelvioSubscribeStoreUrl(SUBSCRIBE_URL);
-          closeSubscribeOverlay();
+          /* iOS WebView: 모달 즉시 제거 시 링크 열기가 취소되는 경우 방지 */
+          setTimeout(function() { closeSubscribeOverlay(); }, 150);
         } else {
           closeSubscribeOverlay();
           openSubscribeComingSoonModal();
