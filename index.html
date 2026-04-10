@@ -19372,6 +19372,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           window.updateGlobalHubGlassNavVisibility(sid);
         }
       };
+      window.syncGlobalHubNavOverSubscribeOverlay = function () {
+        try {
+          var modal = document.getElementById('subscribeOverlayModal');
+          var open = modal && !modal.classList.contains('hidden');
+          document.documentElement.classList.toggle('global-hub-nav-over-subscribe', !!open);
+        } catch (e) {}
+      };
       function bindHubGlassNav() {
         var root = document.getElementById('globalHubBottomGlassNavRoot');
         if (!root || root.getAttribute('data-hub-bound') === '1') return;
@@ -19426,6 +19433,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         }
         docEl.classList.toggle('global-hub-glass-nav-active', visible);
         docEl.classList.toggle('global-hub-glass-nav-ios-phone', visible && hubNavIsIOSPhone());
+        docEl.classList.toggle('global-hub-glass-nav-workout-contrast', visible && screenId === 'workoutScreen');
         root.style.display = visible ? 'block' : 'none';
         root.setAttribute('aria-hidden', visible ? 'false' : 'true');
         var allNavButtons = root.querySelectorAll('[data-hub-nav]');
@@ -19460,6 +19468,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             if (l) l.classList.remove('global-hub-glass-nav-edge--visible');
             if (r) r.classList.remove('global-hub-glass-nav-edge--visible');
           } catch (eH) {}
+        }
+        if (typeof window.syncGlobalHubNavOverSubscribeOverlay === 'function') {
+          window.syncGlobalHubNavOverSubscribeOverlay();
         }
       };
       function hubNavSyncInitial() {
