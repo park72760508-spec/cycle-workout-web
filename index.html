@@ -19170,12 +19170,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
   </button>
 
-  <!-- 나의 기록·워크아웃·훈련 스케줄·구독·환경설정: 글래스 스타일 5메뉴 하단 네비 -->
-  <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true">
+  <!-- 글래스 스타일 5메뉴 하단 네비: 커리어(나의기록·훈련·계획·구독·설정) | 인사이트(메인·랭킹·분석·기록·마이) 자동 전환 -->
+  <nav id="globalHubBottomGlassNavRoot" class="open-riding-bottom-glass-nav" role="navigation" aria-label="주요 메뉴" style="display: none;" aria-hidden="true" data-global-hub-variant="">
     <div class="open-riding-bottom-glass-nav__pill">
       <div class="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true"></div>
       <div class="open-riding-bottom-glass-nav__pill-surface">
-        <div class="open-riding-bottom-glass-nav__inner">
+        <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--career">
           <div class="open-riding-bottom-glass-nav__slot">
             <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
               <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
@@ -19207,20 +19207,61 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             </button>
           </div>
         </div>
+        <div class="open-riding-bottom-glass-nav__inner global-hub-glass-nav-inner global-hub-glass-nav-inner--insight">
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="main" aria-label="메인, 나의 기록">
+              <img src="assets/img/main.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">메인</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="ranking" aria-label="랭킹보드">
+              <img src="assets/img/mrank1.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">랭킹</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
+              <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">분석</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="journal" aria-label="라이딩 기록">
+              <img src="assets/img/mrank3.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">기록</span>
+            </button>
+          </div>
+          <div class="open-riding-bottom-glass-nav__slot">
+            <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="profile" aria-label="프로필 선택">
+              <img src="assets/img/user.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+              <span class="open-riding-bottom-glass-nav__label">마이</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </nav>
   <script>
     (function () {
-      var HUB_NAV_MAP = {
+      var HUB_NAV_MAP_CAREER = {
         myCareerScreen: 'main',
         workoutScreen: 'train',
         aiScheduleScreen: 'plan'
       };
-      var HUB_NAV_SCREEN_IDS = ['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'];
+      var HUB_NAV_MAP_INSIGHT = {
+        stelvioRankingScreen: 'ranking',
+        performanceDashboardScreen: 'analysis',
+        trainingJournalScreen: 'journal',
+        profileScreen: 'profile'
+      };
+      var HUB_NAV_SCREEN_IDS_CAREER = ['myCareerScreen', 'workoutScreen', 'aiScheduleScreen'];
+      var HUB_NAV_SCREEN_IDS_INSIGHT = ['stelvioRankingScreen', 'performanceDashboardScreen', 'trainingJournalScreen', 'profileScreen'];
       window.__hubNavModalTab = window.__hubNavModalTab || null;
-      function hubNavIsHubScreen(screenId) {
-        return HUB_NAV_SCREEN_IDS.indexOf(screenId) >= 0;
+      function hubNavVariantForScreen(screenId) {
+        if (HUB_NAV_SCREEN_IDS_INSIGHT.indexOf(screenId) >= 0) return 'insight';
+        if (HUB_NAV_SCREEN_IDS_CAREER.indexOf(screenId) >= 0) return 'career';
+        return null;
       }
       function hubNavIsIOSPhone() {
         var ua = navigator.userAgent || '';
@@ -19280,6 +19321,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           if (key === 'main') hubNavGoMain();
           else if (key === 'train') hubNavGoTrain();
           else if (key === 'plan') hubNavGoPlan();
+          else if (key === 'ranking' && typeof showScreen === 'function') showScreen('stelvioRankingScreen');
+          else if (key === 'analysis' && typeof showScreen === 'function') showScreen('performanceDashboardScreen');
+          else if (key === 'journal' && typeof showScreen === 'function') showScreen('trainingJournalScreen');
+          else if (key === 'profile' && typeof showScreen === 'function') showScreen('profileScreen');
         });
       }
       window.updateGlobalHubGlassNavVisibility = function (screenId) {
@@ -19287,29 +19332,53 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var docEl = document.documentElement;
         if (!root) return;
         bindHubGlassNav();
-        var visible = hubNavIsHubScreen(screenId);
+        var variant = hubNavVariantForScreen(screenId);
+        var visible = !!variant;
         if (!visible) {
           window.__hubNavModalTab = null;
+          root.removeAttribute('data-global-hub-variant');
+        } else {
+          root.setAttribute('data-global-hub-variant', variant);
+          if (variant === 'insight') {
+            window.__hubNavModalTab = null;
+          }
         }
-        var tab = visible ? (HUB_NAV_MAP[screenId] || null) : null;
-        if (visible && window.__hubNavModalTab) {
-          tab = window.__hubNavModalTab;
+        var tab = null;
+        if (visible) {
+          if (variant === 'career') {
+            tab = HUB_NAV_MAP_CAREER[screenId] || null;
+            if (window.__hubNavModalTab) {
+              tab = window.__hubNavModalTab;
+            }
+          } else {
+            tab = HUB_NAV_MAP_INSIGHT[screenId] || null;
+          }
         }
         docEl.classList.toggle('global-hub-glass-nav-active', visible);
         docEl.classList.toggle('global-hub-glass-nav-ios-phone', visible && hubNavIsIOSPhone());
         root.style.display = visible ? 'block' : 'none';
         root.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        var buttons = root.querySelectorAll('[data-hub-nav]');
-        for (var i = 0; i < buttons.length; i++) {
-          var b = buttons[i];
-          var k = b.getAttribute('data-hub-nav');
-          var on = k === tab;
-          if (on) {
-            b.classList.add('open-riding-bottom-glass-nav__btn--active');
-            b.setAttribute('aria-current', 'page');
-          } else {
-            b.classList.remove('open-riding-bottom-glass-nav__btn--active');
-            b.removeAttribute('aria-current');
+        var selector =
+          variant === 'insight'
+            ? '.global-hub-glass-nav-inner--insight [data-hub-nav]'
+            : variant === 'career'
+              ? '.global-hub-glass-nav-inner--career [data-hub-nav]'
+              : null;
+        var allNavButtons = root.querySelectorAll('[data-hub-nav]');
+        for (var a = 0; a < allNavButtons.length; a++) {
+          allNavButtons[a].classList.remove('open-riding-bottom-glass-nav__btn--active');
+          allNavButtons[a].removeAttribute('aria-current');
+        }
+        if (selector) {
+          var buttons = root.querySelectorAll(selector);
+          for (var i = 0; i < buttons.length; i++) {
+            var b = buttons[i];
+            var k = b.getAttribute('data-hub-nav');
+            var on = k === tab;
+            if (on) {
+              b.classList.add('open-riding-bottom-glass-nav__btn--active');
+              b.setAttribute('aria-current', 'page');
+            }
           }
         }
       };
