@@ -1339,6 +1339,23 @@ html.global-hub-glass-nav-active #aiScheduleScreen.active {
   box-sizing: border-box;
 }
 
+/* 전역 허브 네비: 커리어(나의기록·훈련·계획·구독·설정) ↔ 인사이트(랭킹·대시보드·일지·프로필) 5버튼 세트 전환 */
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-inner--insight {
+  display: none;
+}
+#globalHubBottomGlassNavRoot[data-global-hub-variant='insight'] .global-hub-glass-nav-inner--career {
+  display: none !important;
+}
+#globalHubBottomGlassNavRoot[data-global-hub-variant='insight'] .global-hub-glass-nav-inner--insight {
+  display: flex !important;
+}
+#globalHubBottomGlassNavRoot[data-global-hub-variant='career'] .global-hub-glass-nav-inner--insight {
+  display: none !important;
+}
+#globalHubBottomGlassNavRoot[data-global-hub-variant='career'] .global-hub-glass-nav-inner--career {
+  display: flex !important;
+}
+
 /*
  * 허브 + 라이딩 일지: 펼침 시 journal-react-root 하단 패딩 없음
  * (월간 분석이 #journal-react-root 형제로 렌더되므로, 여기 패딩이 힌트~차트 사이 빈 여백으로 보임)
