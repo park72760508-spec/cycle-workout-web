@@ -1336,6 +1336,91 @@ html.global-hub-glass-nav-active #aiScheduleScreen.active {
 }
 
 /* 전역 허브 네비: 9메뉴 가로 스크롤(스크롤바 숨김), 보이는 폭 기준 약 5칸 */
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-scroll-wrap {
+  position: relative;
+  width: 100%;
+  pointer-events: none;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-scroll-wrap .global-hub-glass-nav-scroll {
+  pointer-events: auto !important;
+}
+/* 좌·우 스크롤 힌트(오버레이, 레이아웃·히트 영역 불변) */
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  pointer-events: none !important;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.22s ease,
+    visibility 0.22s ease;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge--left {
+  left: 1px;
+  padding-left: 1px;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge--right {
+  right: 1px;
+  padding-right: 1px;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge--visible {
+  opacity: 1;
+  visibility: visible;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge__blob {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #7c3aed;
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(109, 40, 217, 0.12);
+  transform: translateZ(0);
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge__svg {
+  flex-shrink: 0;
+  display: block;
+  opacity: 0.92;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge--visible.global-hub-glass-nav-edge--left .global-hub-glass-nav-edge__blob {
+  animation: global-hub-edge-nudge-l 1.35s ease-in-out infinite;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-edge--visible.global-hub-glass-nav-edge--right .global-hub-glass-nav-edge__blob {
+  animation: global-hub-edge-nudge-r 1.35s ease-in-out infinite;
+}
+@keyframes global-hub-edge-nudge-l {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-2px);
+  }
+}
+@keyframes global-hub-edge-nudge-r {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #globalHubBottomGlassNavRoot .global-hub-glass-nav-edge--visible .global-hub-glass-nav-edge__blob {
+    animation: none !important;
+  }
+}
 #globalHubBottomGlassNavRoot .global-hub-glass-nav-scroll {
   container-type: inline-size;
   container-name: global-hub-glass-nav;
