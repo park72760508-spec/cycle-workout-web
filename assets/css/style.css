@@ -1080,7 +1080,7 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   -webkit-touch-callout: none;
 }
 
-/* 허브 5메뉴: 라이딩 모임 4슬롯보다 가로 확장 */
+/* 허브 하단 네비(통합 메뉴): 라이딩 모임 4슬롯보다 가로 확장 */
 #globalHubBottomGlassNavRoot {
   width: calc(100% - 20px);
   max-width: min(720px, 100% - 16px);
@@ -1326,10 +1326,6 @@ html.global-hub-glass-nav-active #profileScreen.active {
   padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 40px);
   box-sizing: border-box;
 }
-html.global-hub-glass-nav-active #myCareerScreen.active {
-  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 24px);
-  box-sizing: border-box;
-}
 html.global-hub-glass-nav-active #workoutScreen.active {
   padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 16px);
   box-sizing: border-box;
@@ -1339,21 +1335,33 @@ html.global-hub-glass-nav-active #aiScheduleScreen.active {
   box-sizing: border-box;
 }
 
-/* 전역 허브 네비: 커리어(나의기록·훈련·계획·구독·설정) ↔ 인사이트(랭킹·대시보드·일지·프로필) 5버튼 세트 전환 */
-#globalHubBottomGlassNavRoot .global-hub-glass-nav-inner--insight {
+/* 전역 허브 네비: 9메뉴 가로 스크롤(스크롤바 숨김), 보이는 폭 기준 약 5칸 */
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-scroll {
+  container-type: inline-size;
+  container-name: global-hub-glass-nav;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  pointer-events: auto !important;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+}
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-scroll::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
-#globalHubBottomGlassNavRoot[data-global-hub-variant='insight'] .global-hub-glass-nav-inner--career {
-  display: none !important;
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-inner--scroll {
+  width: max-content !important;
+  max-width: none !important;
 }
-#globalHubBottomGlassNavRoot[data-global-hub-variant='insight'] .global-hub-glass-nav-inner--insight {
-  display: flex !important;
-}
-#globalHubBottomGlassNavRoot[data-global-hub-variant='career'] .global-hub-glass-nav-inner--insight {
-  display: none !important;
-}
-#globalHubBottomGlassNavRoot[data-global-hub-variant='career'] .global-hub-glass-nav-inner--career {
-  display: flex !important;
+#globalHubBottomGlassNavRoot .global-hub-glass-nav-inner--scroll > .open-riding-bottom-glass-nav__slot {
+  flex: 0 0 calc((100vw - 48px) / 5);
+  flex: 0 0 calc(100cqw / 5);
+  min-width: 0;
 }
 
 /*
