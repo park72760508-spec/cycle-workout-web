@@ -92,6 +92,137 @@ export function isUserPhoneInvitedToRide(userPhone, invitedList) {
   });
 }
 
+/** @param {number} n */
+function pad2Schedule(n) {
+  return String(n).padStart(2, '0');
+}
+
+function getTodaySeoulYmdSchedule() {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+    let y = '';
+    let m = '';
+    let d = '';
+    parts.forEach((p) => {
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') m = p.value;
+      if (p.type === 'day') d = p.value;
+    });
+    if (y && m && d) return `${y}-${m}-${d}`;
+  } catch (e) {
+    /* ignore */
+  }
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+/** @param {unknown} dateField */
+function coerceRideDateToDateSchedule(dateField) {
+  if (dateField == null) return null;
+  if (dateField instanceof Date && !Number.isNaN(dateField.getTime())) return dateField;
+  if (typeof dateField.toDate === 'function') {
+    try {
+      const t = dateField.toDate();
+      if (t instanceof Date && !Number.isNaN(t.getTime())) return t;
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  const sec = dateField.seconds != null ? dateField.seconds : dateField._seconds;
+  if (typeof sec === 'number' && Number.isFinite(sec)) return new Date(sec * 1000);
+  return null;
+}
+
+/** @param {{ date?: unknown }} ride */
+function getRideDateSeoulYmdFromData(ride) {
+  if (!ride || ride.date == null) return null;
+  const ts = coerceRideDateToDateSchedule(ride.date);
+  if (!ts) return null;
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(ts);
+    let y = '';
+    let m = '';
+    let d = '';
+    parts.forEach((p) => {
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') m = p.value;
+      if (p.type === 'day') d = p.value;
+    });
+    if (y && m && d) return `${y}-${m}-${d}`;
+  } catch (e) {
+    /* ignore */
+  }
+  return null;
+}
+
+/** @param {unknown} ymd */
+function normalizeYmdSchedule(ymd) {
+  if (ymd == null) return '';
+  const s = String(ymd).trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return s;
+  return `${m[1]}-${pad2Schedule(parseInt(m[2], 10))}-${pad2Schedule(parseInt(m[3], 10))}`;
+}
+
+/** @param {unknown} a @param {unknown} b */
+function ymdEqualSchedule(a, b) {
+  return normalizeYmdSchedule(a) === normalizeYmdSchedule(b);
+}
+
+const HOST_REVIEW_DIST_TOLERANCE = 0.1;
+const HOST_REVIEW_MIN_KM_IF_NO_PLANNED = 12;
+
+/**
+ * Whether hostPublicReviewSummary counts as completed group ride: same Seoul date as ride,
+ * and logged distance within ±10% of ride.distance (or min km if distance unset).
+ * @param {{ distance?: unknown; date?: unknown }} rideData
+ * @param {{ rideDateYmd?: unknown; summary?: unknown }} hostBlock
+ */
+export function openRidingHostSummaryQualifiesAsGroupRide(rideData, hostBlock) {
+  if (!rideData || !hostBlock || typeof hostBlock !== 'object') return false;
+  const s = hostBlock.summary;
+  if (!s || typeof s !== 'object') return false;
+  const rideYmd = getRideDateSeoulYmdFromData(rideData);
+  if (!rideYmd || !ymdEqualSchedule(hostBlock.rideDateYmd, rideYmd)) return false;
+  const logged = Number(s.distance_km != null ? s.distance_km : 0) || 0;
+  if (!(logged > 0)) return false;
+  const planned = Number(rideData.distance != null ? rideData.distance : 0) || 0;
+  if (planned > 0) {
+    const lo = planned * (1 - HOST_REVIEW_DIST_TOLERANCE);
+    const hi = planned * (1 + HOST_REVIEW_DIST_TOLERANCE);
+    return logged >= lo && logged <= hi;
+  }
+  return logged >= HOST_REVIEW_MIN_KM_IF_NO_PLANNED;
+}
+
+/** Join closed: cancelled, past date (Seoul), or today with host summary matching planned distance ±10%. */
+export function isRideJoinClosedBySchedule(rideData) {
+  if (!rideData || typeof rideData !== 'object') return false;
+  if (String(rideData.rideStatus || 'active') === 'cancelled') return true;
+  const rideYmd = getRideDateSeoulYmdFromData(rideData);
+  if (!rideYmd) return false;
+  const today = getTodaySeoulYmdSchedule();
+  if (rideYmd < today) return true;
+  if (rideYmd > today) return false;
+  const h = rideData.hostPublicReviewSummary;
+  if (!h || typeof h !== 'object') return false;
+  return openRidingHostSummaryQualifiesAsGroupRide(rideData, h);
+}
+
 /** Firestore map: uid -> 표시 이름 */
 function asParticipantDisplay(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
@@ -611,11 +742,11 @@ export async function fetchRideById(db, rideId) {
 }
 
 /**
- * 방장 후기 요약을 rides 문서에 저장 — 미��석자는 users/{host�� ��을 수 없으��로 이 필드로 공개한다.
+ * Persist host ride-review summary on the ride doc for guests (they cannot read users/{hostUid}/logs).
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
- * @param {string} rideDateYmd Seoul YYYY-MM-DD
- * @param {object} mergedLog openRidingMergeLogsForReviewSummary 결과
+ * @param {string} rideDateYmd Seoul calendar YYYY-MM-DD
+ * @param {object} mergedLog from openRidingMergeLogsForReviewSummary
  */
 export function sanitizeHostPublicReviewSummaryPayload(mergedLog) {
   if (!mergedLog || typeof mergedLog !== 'object') return null;
@@ -680,6 +811,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
+    if (isRideJoinClosedBySchedule(data)) throw new Error('RIDE_JOIN_CLOSED');
     const isPrivate = !!data.isPrivate;
     const invitedList = asStringArray(data.invitedList);
     const hostUid = String(data.hostUserId || '');
@@ -887,6 +1019,8 @@ if (typeof window !== 'undefined') {
     computeHostRideDateKeys,
     normalizePhoneDigits,
     isUserPhoneInvitedToRide,
-    normalizePackRidingRules
+    normalizePackRidingRules,
+    isRideJoinClosedBySchedule,
+    openRidingHostSummaryQualifiesAsGroupRide
   };
 }

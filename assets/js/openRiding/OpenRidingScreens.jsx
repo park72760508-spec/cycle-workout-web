@@ -828,6 +828,40 @@ function rideDocHostSummaryMatchesRideDate(ride, ymd) {
   return openRidingYmdEqual(h.rideDateYmd, ymd);
 }
 
+/** Delegates to openRidingService (single source of truth for ±10% rules). */
+function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.openRidingHostSummaryQualifiesAsGroupRide === 'function') {
+    return svc.openRidingHostSummaryQualifiesAsGroupRide(rideData, hostBlock);
+  }
+  if (!rideData || !hostBlock || typeof hostBlock !== 'object') return false;
+  var s = hostBlock.summary;
+  if (!s || typeof s !== 'object') return false;
+  var rideYmd = getRideDateSeoulYmd(rideData);
+  if (!rideYmd || !openRidingYmdEqual(hostBlock.rideDateYmd, rideYmd)) return false;
+  var logged = Number(s.distance_km != null ? s.distance_km : 0) || 0;
+  if (!(logged > 0)) return false;
+  var planned = Number(rideData.distance != null ? rideData.distance : 0) || 0;
+  if (planned > 0) {
+    var lo = planned * 0.9;
+    var hi = planned * 1.1;
+    return logged >= lo && logged <= hi;
+  }
+  return logged >= 12;
+}
+
+function openRidingIsJoinClosedByScheduleUi(ride) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.isRideJoinClosedBySchedule === 'function') {
+    return svc.isRideJoinClosedBySchedule(ride);
+  }
+  if (!ride) return false;
+  if (String(ride.rideStatus || 'active') === 'cancelled') return true;
+  var ry = getRideDateSeoulYmd(ride);
+  if (!ry) return false;
+  return ry < getTodaySeoulYmd();
+}
+
 /** Training log date → Seoul YYYY-MM-DD (journal / open-riding review sync) */
 function openRidingLogYmdSeoul(log) {
   if (!log || log.date == null) return '';
@@ -857,48 +891,36 @@ function openRidingLogIsStrava(log) {
 }
 
 /**
- * Host review: if multiple Strava activities on the same day, pick one closest to ride.distance (km).
- * Short commutes only: use the longest single activity (do not sum).
+ * Host Strava logs same day: keep only activities within ±10% of ride.distance (km).
+ * No match => [] (commute-only / wrong distance => no public sync).
+ * If ride.distance unset: use single longest activity.
  * @param {object[]} dayLogs filtered same-day Strava logs
  * @param {object} ride
  */
 function openRidingPickStravaLogsForHostReview(dayLogs, ride) {
-  if (!dayLogs || dayLogs.length === 0) return dayLogs || [];
-  if (dayLogs.length === 1) return dayLogs;
+  if (!dayLogs || dayLogs.length === 0) return [];
   var p = Number(ride && ride.distance != null ? ride.distance : 0) || 0;
-  if (!(p > 0)) return dayLogs;
-  var lo = Math.max(0, p * 0.42);
-  var hi = p * 1.58;
+  var tol = 0.1;
+  if (!(p > 0)) {
+    if (dayLogs.length === 1) return dayLogs;
+    var sortedFallback = dayLogs.slice().sort(function (a, b) {
+      return (Number(b.distance_km) || 0) - (Number(a.distance_km) || 0);
+    });
+    return [sortedFallback[0]];
+  }
+  var lo = p * (1 - tol);
+  var hi = p * (1 + tol);
   var band = dayLogs.filter(function (l) {
     var d = Number(l.distance_km != null ? l.distance_km : 0) || 0;
     return d >= lo && d <= hi;
   });
-  if (band.length === 1) return band;
-  if (band.length > 1) {
-    band.sort(function (a, b) {
-      var da = Math.abs((Number(a.distance_km) || 0) - p);
-      var db = Math.abs((Number(b.distance_km) || 0) - p);
-      return da - db;
-    });
-    return [band[0]];
-  }
-  var minSimilar = Math.max(8, p * 0.32);
-  var longEn = dayLogs.filter(function (l) {
-    return (Number(l.distance_km != null ? l.distance_km : 0) || 0) >= minSimilar;
+  if (band.length === 0) return [];
+  band.sort(function (a, b) {
+    var da = Math.abs((Number(a.distance_km) || 0) - p);
+    var db = Math.abs((Number(b.distance_km) || 0) - p);
+    return da - db;
   });
-  if (longEn.length === 1) return longEn;
-  if (longEn.length > 1) {
-    longEn.sort(function (a, b) {
-      var da = Math.abs((Number(a.distance_km) || 0) - p);
-      var db = Math.abs((Number(b.distance_km) || 0) - p);
-      return da - db;
-    });
-    return [longEn[0]];
-  }
-  var sorted = dayLogs.slice().sort(function (a, b) {
-    return (Number(b.distance_km) || 0) - (Number(a.distance_km) || 0);
-  });
-  return [sorted[0]];
+  return [band[0]];
 }
 
 function openRidingReviewFormatDuration(sec) {
@@ -4855,9 +4877,11 @@ function OpenRidingDetail(props) {
           setReviewLogsLoading(false);
           return undefined;
         }
-        var summaryFromRideProp = rideDocHostSummaryMatchesRideDate(ride, ymd)
-          ? openRidingReviewLogFromStoredSummary(ride.hostPublicReviewSummary.summary, ymd)
-          : null;
+        var hProp = ride.hostPublicReviewSummary;
+        var summaryFromRideProp =
+          rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp)
+            ? openRidingReviewLogFromStoredSummary(hProp.summary, ymd)
+            : null;
         if (summaryFromRideProp) {
           setReviewMergedLog(summaryFromRideProp);
         }
@@ -4869,7 +4893,12 @@ function OpenRidingDetail(props) {
             var h = fresh && fresh.hostPublicReviewSummary;
             var s = h && h.summary;
             var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
-            if (s && typeof s === 'object' && openRidingYmdEqual(d, ymd)) {
+            if (
+              s &&
+              typeof s === 'object' &&
+              openRidingYmdEqual(d, ymd) &&
+              openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
+            ) {
               setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
             } else if (summaryFromRideProp) {
               setReviewMergedLog(summaryFromRideProp);
@@ -4965,9 +4994,11 @@ function OpenRidingDetail(props) {
       if (useOwnOrHostTrainingLogs2 || !hostReviewPublicWindow2 || !rideId || !fetchRideByIdFn2 || !db2) {
         return undefined;
       }
-      var summaryFromRideProp2 = rideDocHostSummaryMatchesRideDate(ride, ymd2)
-        ? openRidingReviewLogFromStoredSummary(ride.hostPublicReviewSummary.summary, ymd2)
-        : null;
+      var hProp2 = ride.hostPublicReviewSummary;
+      var summaryFromRideProp2 =
+        rideDocHostSummaryMatchesRideDate(ride, ymd2) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp2)
+          ? openRidingReviewLogFromStoredSummary(hProp2.summary, ymd2)
+          : null;
       var cancelledEx = false;
       fetchRideByIdFn2(db2, rideId)
         .then(function (fresh) {
@@ -4975,7 +5006,12 @@ function OpenRidingDetail(props) {
           var h = fresh && fresh.hostPublicReviewSummary;
           var s = h && h.summary;
           var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
-          if (s && typeof s === 'object' && openRidingYmdEqual(d, ymd2)) {
+          if (
+            s &&
+            typeof s === 'object' &&
+            openRidingYmdEqual(d, ymd2) &&
+            openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
+          ) {
             setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd2));
           } else if (summaryFromRideProp2) {
             setReviewMergedLog(summaryFromRideProp2);
@@ -5375,11 +5411,14 @@ function OpenRidingDetail(props) {
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
   var maskContacts = shouldMaskOpenRidingContacts(ride);
+  var joinApplyClosedBySchedule = openRidingIsJoinClosedByScheduleUi(ride);
   /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
   var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
   var rideYmdHint = getRideDateSeoulYmd(ride);
   var guestHostSummaryOnRide =
-    role !== 'participant' && !!rideYmdHint && rideDocHostSummaryMatchesRideDate(ride, rideYmdHint);
+    role !== 'participant' &&
+    !!rideYmdHint &&
+    openRidingHostSummaryQualifiesAsGroupRideUi(ride, ride.hostPublicReviewSummary);
   /** 서울 기준 일정일이 지난 뒤에는 방장도 수정/취소/삭제 불가 — grade=1 관리자는 예외 */
   var _loginGr =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
@@ -5984,14 +6023,24 @@ function OpenRidingDetail(props) {
                   <button
                     type="button"
                     className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
-                    disabled={isActionBusy || !userId || !joinInviteOk}
-                    title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
+                    disabled={isActionBusy || !userId || !joinInviteOk || joinApplyClosedBySchedule}
+                    title={
+                      joinApplyClosedBySchedule
+                        ? '일정이 지났거나, 오늘 모임은 방장 라이딩 기록(모임 거리 ±10%)이 확인되어 종료되었습니다'
+                        : !joinInviteOk
+                          ? '초대된 연락처 또는 입장 비밀번호가 필요합니다'
+                          : undefined
+                    }
                     onClick={function () {
-                      if (!joinInviteOk) return;
+                      if (!joinInviteOk || joinApplyClosedBySchedule) return;
                       setJoinShareModalOpen(true);
                     }}
                   >
-                    {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
+                    {joinApplyClosedBySchedule
+                      ? '참석 신청 마감'
+                      : joinInviteOk
+                        ? '참석 신청'
+                        : '참석 신청 (입장 조건)'}
                   </button>
                 ) : null}
               </div>
