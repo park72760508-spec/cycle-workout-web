@@ -3012,17 +3012,34 @@ function OpenRidingCalendarMain(props) {
     });
   }
 
-  /** 주� 목록: 방장 �� 참석 확정 인원(본인 ��) 또는 대기열 신청이 있는지 */
+  /* Hosted-list green badge: guest in participants, waitlist, or participantDisplay */
+  function openRideIdsFromFirestoreListField(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object' && !Array.isArray(v)) return Object.keys(v);
+    return [];
+  }
   function openRideHostHasAttendanceApplications(r) {
     if (String(r.rideStatus || 'active') === 'cancelled') return false;
-    var host = String(r.hostUserId || '').trim();
-    var parts = Array.isArray(r.participants) ? r.participants : [];
-    var hasNonHostParticipant = parts.some(function (p) {
-      return String(p).trim() && String(p) !== host;
-    });
-    if (hasNonHostParticipant) return true;
-    var waits = Array.isArray(r.waitlist) ? r.waitlist : [];
-    return waits.length > 0;
+    var hostNorm = String(r.hostUserId || '').trim();
+    function uidNotHost(uid) {
+      var u = String(uid != null ? uid : '').trim();
+      return u && u !== hostNorm;
+    }
+    var parts = openRideIdsFromFirestoreListField(r.participants);
+    if (parts.some(function (p) { return uidNotHost(p); })) return true;
+    var waits = openRideIdsFromFirestoreListField(r.waitlist);
+    if (waits.some(function (w) { return String(w != null ? w : '').trim(); })) return true;
+    var pd =
+      r.participantDisplay && typeof r.participantDisplay === 'object' && !Array.isArray(r.participantDisplay)
+        ? r.participantDisplay
+        : null;
+    if (pd) {
+      var pk;
+      for (pk in pd) {
+        if (Object.prototype.hasOwnProperty.call(pd, pk) && uidNotHost(pk)) return true;
+      }
+    }
+    return false;
   }
 
   /** extra.showRideDate: 월간 합성 목록에서 일자 표시 */
