@@ -11863,6 +11863,84 @@ html.is-android #trainingDetailModal .training-detail-body {
   transform: translateY(0);
 }
 
+/* 라이딩 모임 안내 (베이스캠프 → 모임 화면, STELVIO 글래스 네비보다 위) */
+.riding-moim-intro-modal:not(.hidden) {
+  display: flex !important;
+}
+.riding-moim-intro-content {
+  position: relative;
+  text-align: left;
+  max-width: min(400px, 92vw);
+  padding: 24px 22px 20px;
+}
+.riding-moim-intro-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #4c51bf;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.riding-moim-intro-close:hover {
+  background: rgba(102, 126, 234, 0.18);
+  color: #4338ca;
+}
+.riding-moim-intro-title {
+  margin: 0 40px 16px 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e1b4b;
+  line-height: 1.35;
+  text-align: center;
+}
+.riding-moim-intro-body {
+  margin: 0 0 18px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.55;
+}
+.riding-moim-intro-body p {
+  margin: 0 0 10px;
+}
+.riding-moim-intro-body p:last-child {
+  margin-bottom: 0;
+}
+.riding-moim-intro-body-lead {
+  white-space: pre-line;
+}
+.riding-moim-intro-dismiss-today {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-family: inherit;
+}
+.riding-moim-intro-dismiss-today:hover {
+  color: #4c51bf;
+}
+
 /* 센서 연결 초기화 확인 팝업 (iOS 안내 팝업 디자인, STELVIO 스타일) */
 .device-reset-confirm-modal:not(.hidden) {
   display: flex !important;
