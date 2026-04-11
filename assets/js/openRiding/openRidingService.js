@@ -820,6 +820,34 @@ export function sanitizeHostPublicReviewSummaryPayload(mergedLog) {
 export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, mergedLog, chartProfile) {
   const summary = sanitizeHostPublicReviewSummaryPayload(mergedLog);
   if (!db || !rideId || !rideDateYmd || !summary) return;
+  const yparts = String(rideDateYmd).trim().split('-');
+  const peakYear = parseInt(yparts[0], 10);
+  const uidForPeak =
+    chartProfile && typeof chartProfile === 'object'
+      ? String(chartProfile.uid != null ? chartProfile.uid : chartProfile.id != null ? chartProfile.id : '').trim()
+      : '';
+  let resolvedPeakHr = null;
+  if (
+    uidForPeak &&
+    Number.isFinite(peakYear) &&
+    peakYear >= 2000 &&
+    typeof globalThis !== 'undefined' &&
+    typeof globalThis.fetchMaxHrForYear === 'function'
+  ) {
+    try {
+      const hr = await globalThis.fetchMaxHrForYear(uidForPeak, peakYear);
+      if (hr != null && hr > 0) resolvedPeakHr = hr;
+    } catch (_e) {
+      /* caller may lack permission; chartProfile fallback below */
+    }
+  }
+  if (resolvedPeakHr == null && chartProfile && Number(chartProfile.max_hr) > 0) {
+    resolvedPeakHr = Number(chartProfile.max_hr);
+  }
+  if (resolvedPeakHr != null && resolvedPeakHr > 0) {
+    summary.zone_ref_max_hr = resolvedPeakHr;
+    summary.zone_ref_year = peakYear;
+  }
   const block = {
     rideDateYmd: String(rideDateYmd).trim(),
     summary: summary,
@@ -829,10 +857,16 @@ export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, merge
     const uid = String(chartProfile.uid != null ? chartProfile.uid : chartProfile.id != null ? chartProfile.id : '')
       .trim();
     if (uid) {
+      const maxHr =
+        resolvedPeakHr != null && resolvedPeakHr > 0
+          ? resolvedPeakHr
+          : Number(chartProfile.max_hr) > 0
+            ? Number(chartProfile.max_hr)
+            : 190;
       block.chartProfile = {
         uid: uid,
         ftp: Number(chartProfile.ftp) > 0 ? Number(chartProfile.ftp) : 200,
-        max_hr: Number(chartProfile.max_hr) > 0 ? Number(chartProfile.max_hr) : 190
+        max_hr: maxHr
       };
     }
   }

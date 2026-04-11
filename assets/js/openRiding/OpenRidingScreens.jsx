@@ -1110,6 +1110,8 @@ function openRidingReviewLogFromStoredSummary(stored, rideDateYmd) {
     avg_cadence: stored.avg_cadence,
     avg_hr: stored.avg_hr,
     max_hr: stored.max_hr,
+    zone_ref_max_hr: stored.zone_ref_max_hr,
+    zone_ref_year: stored.zone_ref_year,
     avg_watts: stored.avg_watts,
     weighted_watts: stored.weighted_watts,
     max_watts: stored.max_watts,
@@ -1158,7 +1160,20 @@ function openRidingNormalizeChartProfileFromFirestore(cp) {
 function openRidingResolveReviewChartUserProfile(log, reviewMergedLogSource, ride) {
   if (reviewMergedLogSource === 'host_public' || reviewMergedLogSource === 'host_fallback') {
     var h = ride && ride.hostPublicReviewSummary;
+    var zoneRef = log && Number(log.zone_ref_max_hr) > 0 ? Number(log.zone_ref_max_hr) : 0;
+    if (zoneRef <= 0 && h && h.summary && Number(h.summary.zone_ref_max_hr) > 0) {
+      zoneRef = Number(h.summary.zone_ref_max_hr);
+    }
     var cp = h && openRidingNormalizeChartProfileFromFirestore(h.chartProfile);
+    if (zoneRef > 0) {
+      if (cp) {
+        return { id: cp.id, uid: cp.uid, ftp: cp.ftp, max_hr: zoneRef };
+      }
+      var hostUidZ = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      if (hostUidZ) {
+        return { id: hostUidZ, uid: hostUidZ, ftp: 200, max_hr: zoneRef };
+      }
+    }
     if (cp) return cp;
     var hostUid = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
     if (hostUid) {
@@ -5084,36 +5099,11 @@ function OpenRidingDetail(props) {
                 typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
               if (syncFn0) {
                 var chartProfBase = getOpenRidingJournalUserProfileForCharts();
-                var ypartsPeak = String(ymd).split('-');
-                var peakYear = parseInt(ypartsPeak[0], 10);
-                var uidPeak = String(chartProfBase.uid || chartProfBase.id || '').trim();
-                function runHostReviewSync(chartProf) {
-                  syncFn0(db, rideId, ymd, merged, chartProf).catch(function (e) {
-                    if (typeof console !== 'undefined' && console.warn) {
-                      console.warn('[openRiding] syncHostPublicReviewSummary', e);
-                    }
-                  });
-                }
-                if (
-                  uidPeak &&
-                  Number.isFinite(peakYear) &&
-                  peakYear >= 2000 &&
-                  typeof window.fetchMaxHrForYear === 'function'
-                ) {
-                  window
-                    .fetchMaxHrForYear(uidPeak, peakYear)
-                    .then(function (hr) {
-                      if (cancelled) return;
-                      var cp = Object.assign({}, chartProfBase);
-                      if (hr != null && hr > 0) cp.max_hr = hr;
-                      runHostReviewSync(cp);
-                    })
-                    .catch(function () {
-                      if (!cancelled) runHostReviewSync(chartProfBase);
-                    });
-                } else {
-                  runHostReviewSync(chartProfBase);
-                }
+                syncFn0(db, rideId, ymd, merged, chartProfBase).catch(function (e) {
+                  if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[openRiding] syncHostPublicReviewSummary', e);
+                  }
+                });
               }
             }
             if (!cancelled) setReviewLogsLoading(false);
