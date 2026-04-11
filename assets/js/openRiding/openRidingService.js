@@ -15,6 +15,7 @@ import {
   orderBy,
   limit,
   runTransaction,
+  onSnapshot,
   Timestamp,
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
@@ -188,7 +189,7 @@ const HOST_REVIEW_MIN_KM_IF_NO_PLANNED = 12;
 
 /**
  * Whether hostPublicReviewSummary counts as completed group ride: same Seoul date as ride,
- * and logged distance within ±10% of ride.distance (or min km if distance unset).
+ * and logged distance within ±10% of ride.distance, or strictly longer than planned km (or min km if distance unset).
  * @param {{ distance?: unknown; date?: unknown }} rideData
  * @param {{ rideDateYmd?: unknown; summary?: unknown }} hostBlock
  */
@@ -204,12 +205,14 @@ export function openRidingHostSummaryQualifiesAsGroupRide(rideData, hostBlock) {
   if (planned > 0) {
     const lo = planned * (1 - HOST_REVIEW_DIST_TOLERANCE);
     const hi = planned * (1 + HOST_REVIEW_DIST_TOLERANCE);
-    return logged >= lo && logged <= hi;
+    const inToleranceBand = logged >= lo && logged <= hi;
+    const longerThanPlanned = logged > planned;
+    return inToleranceBand || longerThanPlanned;
   }
   return logged >= HOST_REVIEW_MIN_KM_IF_NO_PLANNED;
 }
 
-/** Join closed: cancelled, past date (Seoul), or today with host summary matching planned distance ±10%. */
+/** Join closed: cancelled, past date (Seoul), or today with qualifying host summary (±10% or longer than planned). */
 export function isRideJoinClosedBySchedule(rideData) {
   if (!rideData || typeof rideData !== 'object') return false;
   if (String(rideData.rideStatus || 'active') === 'cancelled') return true;
@@ -742,6 +745,35 @@ export async function fetchRideById(db, rideId) {
 }
 
 /**
+ * Ride detail: live subscription so hostPublicReviewSummary updates reach guests without reload.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {(data: (Record<string, unknown> & { id: string }) | null) => void} onNext
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function subscribeRideById(db, rideId, onNext, onError) {
+  if (!db || rideId == null || String(rideId).trim() === '') {
+    onNext(null);
+    return function () {};
+  }
+  const ref = doc(db, 'rides', String(rideId).trim());
+  return onSnapshot(
+    ref,
+    (snap) => {
+      if (!snap.exists()) onNext(null);
+      else onNext({ id: snap.id, ...snap.data() });
+    },
+    onError ||
+      function (err) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[openRiding] subscribeRideById', err);
+        }
+      }
+  );
+}
+
+/**
  * Persist host ride-review summary on the ride doc for guests (they cannot read users/{hostUid}/logs).
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
@@ -1006,6 +1038,7 @@ if (typeof window !== 'undefined') {
     uploadRideGpx,
     fetchRidesInDateRange,
     fetchRideById,
+    subscribeRideById,
     syncHostPublicReviewSummary,
     sanitizeHostPublicReviewSummaryPayload,
     joinRideTransaction,

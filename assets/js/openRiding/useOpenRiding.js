@@ -15,7 +15,8 @@ import {
   computeHostRideDateKeys,
   joinRideTransaction,
   leaveRideTransaction,
-  fetchRideById
+  fetchRideById,
+  subscribeRideById
 } from './openRidingService.js';
 
 /**
@@ -127,18 +128,36 @@ export function useOpenRideDetail(db, rideId, userId) {
       setLoading(false);
       return;
     }
-    setLoading(true);
     try {
       const r = await fetchRideById(db, rideId);
       setRide(r);
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] reload', e);
     }
   }, [db, rideId]);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    if (!db || !rideId) {
+      setRide(null);
+      setLoading(false);
+      return undefined;
+    }
+    setLoading(true);
+    const unsub = subscribeRideById(
+      db,
+      rideId,
+      (r) => {
+        setRide(r);
+        setLoading(false);
+      },
+      () => {
+        setLoading(false);
+      }
+    );
+    return function () {
+      unsub();
+    };
+  }, [db, rideId]);
 
   const join = useCallback(async (joinOptions) => {
     if (!db || !rideId || !userId) return;
