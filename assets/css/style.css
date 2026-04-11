@@ -11872,11 +11872,37 @@ html.is-android #trainingDetailModal .training-detail-body {
   text-align: left;
   max-width: min(400px, 92vw);
   padding: 24px 22px 20px;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* 팝업 카드 중앙 워터마크 — 본문 가독성 유지(저명도·블러·히트 비통과) */
+.riding-moim-intro-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+}
+.riding-moim-intro-bg img {
+  width: min(260px, 70%);
+  max-height: 55%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.065;
+  filter: blur(2px) grayscale(0.25);
+  user-select: none;
+}
+.riding-moim-intro-foreground {
+  position: relative;
+  z-index: 1;
 }
 .riding-moim-intro-close {
   position: absolute;
   top: 10px;
   right: 12px;
+  z-index: 2;
   width: 36px;
   height: 36px;
   margin: 0;
@@ -11905,12 +11931,31 @@ html.is-android #trainingDetailModal .training-detail-body {
   line-height: 1.35;
   text-align: center;
 }
+.riding-moim-intro-title-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  text-align: left;
+}
+.riding-moim-intro-bike-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 30px;
+  color: #5b21b6;
+  opacity: 0.92;
+}
+.riding-moim-intro-title-text {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 1px 0 rgba(255, 255, 255, 0.9);
+}
 .riding-moim-intro-body {
   margin: 0 0 18px;
   font-size: 15px;
   font-weight: 500;
   color: #334155;
   line-height: 1.55;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.88), 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 .riding-moim-intro-body p {
   margin: 0 0 10px;
