@@ -785,7 +785,29 @@ function getRideDateSeoulYmd(ride) {
   return null;
 }
 
-/** 훈련 로그 date → 서울 기준 YYYY-MM-DD (일지·상세 후기 동기화용) */
+/** Normalize YYYY-M-D vs YYYY-MM-DD for compare */
+function openRidingNormalizeYmdString(ymd) {
+  if (ymd == null) return '';
+  var s = String(ymd).trim();
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return s;
+  return m[1] + '-' + pad2(parseInt(m[2], 10)) + '-' + pad2(parseInt(m[3], 10));
+}
+
+function openRidingYmdEqual(a, b) {
+  return openRidingNormalizeYmdString(a) === openRidingNormalizeYmdString(b);
+}
+
+/** rides.hostPublicReviewSummary matches ride schedule date */
+function rideDocHostSummaryMatchesRideDate(ride, ymd) {
+  var h = ride && ride.hostPublicReviewSummary;
+  if (!h || !ymd) return false;
+  var s = h.summary;
+  if (!s || typeof s !== 'object') return false;
+  return openRidingYmdEqual(h.rideDateYmd, ymd);
+}
+
+/** Training log date → Seoul YYYY-MM-DD (journal / open-riding review sync) */
 function openRidingLogYmdSeoul(log) {
   if (!log || log.date == null) return '';
   var d = log.date;
@@ -1118,6 +1140,12 @@ function isOpenRidingRideDayOnOrBeforeTodaySeoul(ride) {
   var rideYmd = getRideDateSeoulYmd(ride);
   if (!rideYmd) return false;
   return rideYmd <= getTodaySeoulYmd();
+}
+
+/** Ride schedule date is today (Seoul) */
+function openRidingIsRideScheduleDayTodaySeoul(ride) {
+  var ry = getRideDateSeoulYmd(ride);
+  return !!ry && openRidingYmdEqual(ry, getTodaySeoulYmd());
 }
 
 
@@ -4658,7 +4686,6 @@ function OpenRidingDetail(props) {
     String(ride.hostUserId != null ? ride.hostUserId : '').trim() === String(userId != null ? userId : '').trim()
   );
   var hostIdpSyncTmRef = useRef(null);
-  var hostReviewLastSyncedSigRef = useRef('');
 
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
@@ -4719,7 +4746,6 @@ function OpenRidingDetail(props) {
       setParticipantListExpanded(false);
       setReviewExpanded(false);
       setReviewMergedLog(null);
-      hostReviewLastSyncedSigRef.current = '';
     },
     [rideId]
   );
@@ -4763,6 +4789,9 @@ function OpenRidingDetail(props) {
           setReviewLogsLoading(false);
           return undefined;
         }
+        if (rideDocHostSummaryMatchesRideDate(ride, ymd)) {
+          setReviewMergedLog(openRidingReviewLogFromStoredSummary(ride.hostPublicReviewSummary.summary, ymd));
+        }
         var cancelledPub = false;
         setReviewLogsLoading(true);
         fetchRideByIdFn(db, rideId)
@@ -4771,7 +4800,7 @@ function OpenRidingDetail(props) {
             var h = fresh && fresh.hostPublicReviewSummary;
             var s = h && h.summary;
             var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
-            if (s && typeof s === 'object' && d === ymd) {
+            if (s && typeof s === 'object' && openRidingYmdEqual(d, ymd)) {
               setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
             } else {
               setReviewMergedLog(null);
@@ -4802,9 +4831,29 @@ function OpenRidingDetail(props) {
         .then(function (logs) {
           if (cancelled) return;
           var dayLogs = (logs || []).filter(function (log) {
-            return openRidingLogYmdSeoul(log) === ymd && openRidingLogIsStrava(log);
+            return openRidingYmdEqual(openRidingLogYmdSeoul(log), ymd) && openRidingLogIsStrava(log);
           });
-          setReviewMergedLog(openRidingMergeLogsForReviewSummary(dayLogs));
+          var merged = openRidingMergeLogsForReviewSummary(dayLogs);
+          setReviewMergedLog(merged);
+          if (
+            !cancelled &&
+            hostViewingOwnRide &&
+            hostReviewPublicWindow &&
+            merged &&
+            rideId &&
+            db
+          ) {
+            var svcSync = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+            var syncFn0 =
+              typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
+            if (syncFn0) {
+              syncFn0(db, rideId, ymd, merged).catch(function (e) {
+                if (typeof console !== 'undefined' && console.warn) {
+                  console.warn('[openRiding] syncHostPublicReviewSummary', e);
+                }
+              });
+            }
+          }
         })
         .catch(function () {
           if (!cancelled) setReviewMergedLog(null);
@@ -4819,45 +4868,43 @@ function OpenRidingDetail(props) {
     [firestore, userId, rideId, loading, role, ride]
   );
 
+  /** Non-participants: refetch rides when expanding review (host may have just synced summary). */
   useEffect(
     function () {
-      if (!isHost || !ride || loading || !firestore || !rideId) return undefined;
-      var rideCancelled = String(ride.rideStatus || 'active') === 'cancelled';
-      var hostReviewPublicWindow = !rideCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
-      if (!hostReviewPublicWindow || !reviewMergedLog) return undefined;
-      var ymd = getRideDateSeoulYmd(ride);
-      if (!ymd) return undefined;
-      var svcOr = typeof window !== 'undefined' ? window.openRidingService || {} : {};
-      var syncFn = typeof svcOr.syncHostPublicReviewSummary === 'function' ? svcOr.syncHostPublicReviewSummary : null;
-      var sanitizeFn =
-        typeof svcOr.sanitizeHostPublicReviewSummaryPayload === 'function'
-          ? svcOr.sanitizeHostPublicReviewSummaryPayload
-          : null;
-      if (!syncFn || !sanitizeFn) return undefined;
-      var payload = sanitizeFn(reviewMergedLog);
-      var sig = '';
-      try {
-        sig = JSON.stringify(payload);
-      } catch (eSig) {
+      if (!reviewExpanded) return undefined;
+      if (!userId || !ride || loading) return undefined;
+      var ymd2 = getRideDateSeoulYmd(ride);
+      if (!ymd2) return undefined;
+      var db2 = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      var svcOr2 = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var fetchRideByIdFn2 = typeof svcOr2.fetchRideById === 'function' ? svcOr2.fetchRideById : null;
+      var rideCancelled2 = String(ride.rideStatus || 'active') === 'cancelled';
+      var hostReviewPublicWindow2 = !rideCancelled2 && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
+      var hostUid2 = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      var uidTrim2 = String(userId != null ? userId : '').trim();
+      var hostViewingOwnRide2 = !!hostUid2 && uidTrim2 === hostUid2;
+      var useOwnOrHostTrainingLogs2 =
+        role === 'participant' || (hostReviewPublicWindow2 && hostViewingOwnRide2);
+      if (useOwnOrHostTrainingLogs2 || !hostReviewPublicWindow2 || !rideId || !fetchRideByIdFn2 || !db2) {
         return undefined;
       }
-      if (!sig || sig === hostReviewLastSyncedSigRef.current) return undefined;
-      var t = setTimeout(function () {
-        syncFn(firestore, rideId, ymd, reviewMergedLog)
-          .then(function () {
-            hostReviewLastSyncedSigRef.current = sig;
-          })
-          .catch(function (e) {
-            if (typeof console !== 'undefined' && console.warn) {
-              console.warn('[openRiding] syncHostPublicReviewSummary', e);
-            }
-          });
-      }, 600);
+      var cancelledEx = false;
+      fetchRideByIdFn2(db2, rideId)
+        .then(function (fresh) {
+          if (cancelledEx) return;
+          var h = fresh && fresh.hostPublicReviewSummary;
+          var s = h && h.summary;
+          var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
+          if (s && typeof s === 'object' && openRidingYmdEqual(d, ymd2)) {
+            setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd2));
+          }
+        })
+        .catch(function () {});
       return function () {
-        clearTimeout(t);
+        cancelledEx = true;
       };
     },
-    [isHost, ride, rideId, firestore, loading, reviewMergedLog]
+    [reviewExpanded, firestore, userId, rideId, loading, role, ride]
   );
 
   useEffect(
@@ -5248,6 +5295,9 @@ function OpenRidingDetail(props) {
   var maskContacts = shouldMaskOpenRidingContacts(ride);
   /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
   var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
+  var rideYmdHint = getRideDateSeoulYmd(ride);
+  var guestHostSummaryOnRide =
+    role !== 'participant' && !!rideYmdHint && rideDocHostSummaryMatchesRideDate(ride, rideYmdHint);
   /** 서울 기준 일정일이 지난 뒤에는 방장도 수정/취소/삭제 불가 — grade=1 관리자는 예외 */
   var _loginGr =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
@@ -5758,9 +5808,13 @@ function OpenRidingDetail(props) {
             <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
               <span className="text-xs text-slate-500 leading-tight font-medium">
                 {reviewMergedLog
-                  ? '펼쳐보기 하면 라이딩 후기를 확인하실 수 있습니다.'
+                  ? '펼치어보기 하면 라이딩 후기를 확인하실 수 있습니다.'
                   : role !== 'participant' && hostPublicReviewWindow
-                    ? '방장 후기가 등록되면 요약이 표시됩니다.'
+                    ? openRidingIsRideScheduleDayTodaySeoul(ride) &&
+                      !guestHostSummaryOnRide &&
+                      !isOpenRidingPastBySeoulDate(ride)
+                      ? '오늘 일정입니다. 방장의 훈련일지에 라이딩이 반영되면 종료로 보고 방장 후기 요약이 표시됩니다. (+)를 다시 눌러 최신 상태를 불러오세요.'
+                      : '방장 후기가 등록되면 요약이 표시됩니다.'
                     : '라이딩이 종료되면 후기 자동 작성됩니다.'}
               </span>
             </div>
@@ -5791,7 +5845,9 @@ function OpenRidingDetail(props) {
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                    방장 후기가 아직 등록되지 않았습니다. 해당 일정일(서울 기준)에 방장의 STRAVA 라이딩 기록이 훈련일지에 반영되면 여기에 표시됩니다.
+                    {openRidingIsRideScheduleDayTodaySeoul(ride)
+                      ? '오늘 일정입니다. 방장의 STRAVA 라이딩 기록이 훈련일지에 반영되면 방장 후기 요약이 여기에 표시됩니다. 이미 반영되었다면 후기 (+)를 다시 눌러 최신 내용을 불러오세요.'
+                      : '방장 후기가 아직 등록되지 않았습니다. 해당 일정일(서울 기준)에 방장의 STRAVA 라이딩 기록이 훈련일지에 반영되면 여기에 표시됩니다.'}
                   </p>
                 )
               ) : (
