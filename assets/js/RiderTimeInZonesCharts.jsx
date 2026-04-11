@@ -441,10 +441,15 @@ function DailyTimeInZonesCharts(props) {
     var fh = Number(userProfile && userProfile.max_hr) || 0;
     if (fh > 0) setMaxHr(fh);
   }, [userProfile && userProfile.max_hr, userProfile && (userProfile.id || userProfile.uid)]);
+  React.useEffect(function() {
+    var zr = log && Number(log.zone_ref_max_hr) || 0;
+    if (zr > 0) setMaxHr(zr);
+  }, [log && log.zone_ref_max_hr]);
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
-  var hrSourceCaption = (maxHr > 0 && logYear) ? '영역 기준: yearly_peaks/' + logYear + ' max_hr ' + maxHr + 'bpm' : null;
+  var capYear = (log && Number(log.zone_ref_year) > 0 ? Number(log.zone_ref_year) : 0) || logYear;
+  var hrSourceCaption = (maxHr > 0 && capYear) ? '영역 기준: yearly_peaks/' + capYear + ' max_hr ' + maxHr + 'bpm' : null;
   var sectionHeadingClass =
     typeof p.sectionTitleClassName === 'string' && p.sectionTitleClassName.trim()
       ? p.sectionTitleClassName.trim()
