@@ -766,6 +766,20 @@ function getTodaySeoulYmd() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
+/** YYYY-MM-DD → 서울 기준 요일 (일=0 … 토=6) — 달력 기본 일·토 색상용 */
+function seoulDowSun0FromYmd(ymd) {
+  var s = String(ymd || '').trim().substring(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return 0;
+  try {
+    var inst = new Date(s + 'T12:00:00+09:00');
+    var w = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(inst);
+    var map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return map[w] !== undefined ? map[w] : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
 /** Coerce Firestore Timestamp / {seconds} / Date to Date or null */
 function openRidingCoerceRideDateToDate(rideDateField) {
   if (rideDateField == null) return null;
@@ -3204,8 +3218,13 @@ function OpenRidingCalendarMain(props) {
 
   function renderListSection() {
     return (
-      <section className={(compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
-        <h2 className="text-sm font-semibold text-slate-700 mb-2">
+      <section
+        className={
+          (compact ? 'rounded-xl p-3 ' : 'rounded-2xl p-4 ') +
+          'border-2 border-slate-400 bg-slate-50/80 shadow-sm open-riding-selected-day-list-panel'
+        }
+      >
+        <h2 className="text-sm font-semibold text-slate-800 mb-2">
           {selectedKey ? formatMdDowFromYmdSeoul(selectedKey) || selectedKey : '날짜를 선택하세요'}
         </h2>
         {!selectedKey ? (
@@ -3226,7 +3245,7 @@ function OpenRidingCalendarMain(props) {
   function renderInvitedRidesCompactSection() {
     return (
       <section
-        className="rounded-2xl p-3 border border-emerald-200/70 bg-white shadow-sm open-riding-invited-rides-panel"
+        className="rounded-2xl p-3 border-2 border-emerald-500 bg-white shadow-sm open-riding-invited-rides-panel"
         aria-labelledby="open-riding-invited-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
@@ -3262,7 +3281,7 @@ function OpenRidingCalendarMain(props) {
     if (!myHostedRidesSorted.length) return null;
     return (
       <section
-        className="rounded-2xl p-3 border border-violet-200/80 bg-white shadow-sm open-riding-my-hosted-panel"
+        className="rounded-2xl p-3 border-2 border-violet-700 bg-white shadow-md open-riding-my-hosted-panel"
         aria-labelledby="open-riding-my-hosted-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
@@ -3333,8 +3352,16 @@ function OpenRidingCalendarMain(props) {
             <button type="button" className="text-slate-600 shrink-0" onClick={function () { setViewMonth(new Date(year, month + 1, 1)); }}>{'›'}</button>
           </div>
           {loadingRides ? <p className="text-sm text-slate-400">불러오는 중…</p> : null}
-          <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
-            {['일', '월', '화', '수', '목', '금', '토'].map(function (w) { return <div key={w}>{w}</div>; })}
+          <div className="grid grid-cols-7 gap-1 text-center text-xs mb-1 font-semibold">
+            {['일', '월', '화', '수', '목', '금', '토'].map(function (w) {
+              var wc =
+                w === '일' ? 'text-red-600' : w === '토' ? 'text-blue-600' : 'text-slate-500';
+              return (
+                <div key={w} className={wc}>
+                  {w}
+                </div>
+              );
+            })}
           </div>
           <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5">
             {days.map(function (day, idx) {
@@ -3355,7 +3382,14 @@ function OpenRidingCalendarMain(props) {
               } else if (showOtherOnly) {
                 dayNumClass += 'text-slate-500 font-medium';
               } else {
-                dayNumClass += 'text-slate-800';
+                var dowPlain = seoulDowSun0FromYmd(key);
+                if (dowPlain === 0) {
+                  dayNumClass += isPastCell ? 'text-red-600/55 font-medium' : 'text-red-600 font-semibold';
+                } else if (dowPlain === 6) {
+                  dayNumClass += isPastCell ? 'text-blue-600/55 font-medium' : 'text-blue-600 font-semibold';
+                } else {
+                  dayNumClass += 'text-slate-800';
+                }
               }
               return (
                 <button
