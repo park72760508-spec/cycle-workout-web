@@ -2531,6 +2531,54 @@ async function getMaxHRForYear(db, userId, year) {
   }
 }
 
+/** Max HR from user logs in the last 365 days (server local date). */
+async function getMaxHRRolling365FromLogs(db, userId) {
+  if (!db || !userId) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  const localYmd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const end = new Date();
+  const start = new Date(end.getTime());
+  start.setDate(start.getDate() - 365);
+  const startStr = localYmd(start);
+  const endStr = localYmd(end);
+  const coll = db.collection("users").doc(userId).collection("logs");
+  const seen = new Set();
+  let bestHr = 0;
+  const consider = (docSnap) => {
+    const d = docSnap.data() || {};
+    const hr = Math.max(
+      Number(d.max_hr_5sec) || 0,
+      Number(d.max_hr) || 0,
+      Number(d.max_heartrate) || 0
+    );
+    if (hr > 0 && hr <= HR_MAX_BPM && hr > bestHr) bestHr = hr;
+  };
+  try {
+    const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+    const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+    const snap1 = await coll
+      .where("date", ">=", admin.firestore.Timestamp.fromDate(startDate))
+      .where("date", "<=", admin.firestore.Timestamp.fromDate(endDate))
+      .get();
+    snap1.forEach((doc) => {
+      seen.add(doc.id);
+      consider(doc);
+    });
+  } catch (e) {
+    console.warn("[getMaxHRRolling365FromLogs] Timestamp query:", e.message);
+  }
+  try {
+    const snap2 = await coll.where("date", ">=", startStr).where("date", "<=", endStr).get();
+    snap2.forEach((doc) => {
+      if (seen.has(doc.id)) return;
+      consider(doc);
+    });
+  } catch (e) {
+    console.warn("[getMaxHRRolling365FromLogs] string query:", e.message);
+  }
+  return bestHr > 0 ? bestHr : null;
+}
+
 /**
  * FTP Fallback: 사용자 프로필 FTP 없으면 20분 MMP의 95% 또는 기본값 150W
  * @param {Object} userData - users 문서 데이터
@@ -2627,12 +2675,12 @@ function calculateTimeInHRZones(hrArray, maxHr) {
 
 /**
  * 스트림 데이터로 Power/HR 존 시간 계산.
- * yearly_peaks/{year} max_hr 존재 시 반드시 사용 (스트림 값으로 덮어쓰지 않음).
+ * HR max: rolling 365d from user logs; current stream can raise it.
  * @param {Object} opts - { wattsArray, hrArray, ftp, userId, db, dateStr }
  * @returns {Promise<{ power: Object, hr: Object }>}
  */
 async function calculateZoneTimesFromStreams(opts) {
-  const { wattsArray, hrArray, ftp, userId, db, dateStr } = opts;
+  const { wattsArray, hrArray, ftp, userId, db } = opts;
   const powerZones = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
   const hrZones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
 
@@ -2643,20 +2691,15 @@ async function calculateZoneTimesFromStreams(opts) {
   }
 
   let maxHr = DEFAULT_MAX_HR;
-  let usedYearlyPeaks = false;
-  if (dateStr && userId && db) {
-    const year = parseInt(String(dateStr).substring(0, 4), 10);
-    if (!isNaN(year)) {
-      const fromDb = await getMaxHRForYear(db, userId, year);
-      if (fromDb != null && fromDb > 0) {
-        maxHr = fromDb;
-        usedYearlyPeaks = true;
-      }
-    }
+  let rollingHr = 0;
+  if (userId && db) {
+    const fromRolling = await getMaxHRRolling365FromLogs(db, userId);
+    if (fromRolling != null && fromRolling > 0) rollingHr = fromRolling;
   }
-  if (!usedYearlyPeaks && hrArray && hrArray.length > 0) {
+  if (rollingHr > 0) maxHr = rollingHr;
+  if (hrArray && hrArray.length > 0) {
     const fromStream = Math.max(...hrArray.map((v) => Number(v) || 0).filter((v) => v > 0 && v <= HR_MAX_BPM));
-    if (fromStream > 0) maxHr = fromStream;
+    if (fromStream > maxHr) maxHr = fromStream;
   }
   if (hrArray && hrArray.length > 0) {
     Object.assign(hrZones, calculateTimeInHRZones(hrArray, maxHr));
