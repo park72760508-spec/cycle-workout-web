@@ -1112,6 +1112,7 @@ function openRidingReviewLogFromStoredSummary(stored, rideDateYmd) {
     max_hr: stored.max_hr,
     zone_ref_max_hr: stored.zone_ref_max_hr,
     zone_ref_year: stored.zone_ref_year,
+    zone_ref_window: stored.zone_ref_window,
     avg_watts: stored.avg_watts,
     weighted_watts: stored.weighted_watts,
     max_watts: stored.max_watts,

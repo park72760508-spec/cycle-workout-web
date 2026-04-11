@@ -820,25 +820,21 @@ export function sanitizeHostPublicReviewSummaryPayload(mergedLog) {
 export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, mergedLog, chartProfile) {
   const summary = sanitizeHostPublicReviewSummaryPayload(mergedLog);
   if (!db || !rideId || !rideDateYmd || !summary) return;
-  const yparts = String(rideDateYmd).trim().split('-');
-  const peakYear = parseInt(yparts[0], 10);
   const uidForPeak =
     chartProfile && typeof chartProfile === 'object'
       ? String(chartProfile.uid != null ? chartProfile.uid : chartProfile.id != null ? chartProfile.id : '').trim()
       : '';
   let resolvedPeakHr = null;
-  if (
-    uidForPeak &&
-    Number.isFinite(peakYear) &&
-    peakYear >= 2000 &&
-    typeof globalThis !== 'undefined' &&
-    typeof globalThis.fetchMaxHrForYear === 'function'
-  ) {
-    try {
-      const hr = await globalThis.fetchMaxHrForYear(uidForPeak, peakYear);
-      if (hr != null && hr > 0) resolvedPeakHr = hr;
-    } catch (_e) {
-      /* caller may lack permission; chartProfile fallback below */
+  if (uidForPeak && typeof globalThis !== 'undefined') {
+    const rollFn = globalThis.fetchMaxHrRolling365Days || globalThis.getMaxHrFromLogsRolling365Days;
+    if (typeof rollFn === 'function') {
+      try {
+        const res = await rollFn(uidForPeak);
+        const hr = res && res.maxHr != null ? Number(res.maxHr) : NaN;
+        if (hr > 0) resolvedPeakHr = hr;
+      } catch (_e) {
+        /* host-only; chartProfile fallback below */
+      }
     }
   }
   if (resolvedPeakHr == null && chartProfile && Number(chartProfile.max_hr) > 0) {
@@ -846,7 +842,7 @@ export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, merge
   }
   if (resolvedPeakHr != null && resolvedPeakHr > 0) {
     summary.zone_ref_max_hr = resolvedPeakHr;
-    summary.zone_ref_year = peakYear;
+    summary.zone_ref_window = '365d';
   }
   const block = {
     rideDateYmd: String(rideDateYmd).trim(),
