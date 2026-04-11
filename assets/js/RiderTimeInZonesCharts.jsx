@@ -27,6 +27,20 @@ const HR_ZONE_COLORS = [
   { z: 'Z5', color: 'rgba(239, 68, 68, 0.55)', label: 'Z5', pct: '90~100%' }
 ];
 
+/** Logged-in user id — skip fetching other users yearly_peaks (permission + HR caption match). */
+function getChartViewerUserId() {
+  var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
+  if (!u) {
+    try {
+      u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (e) {
+      u = null;
+    }
+  }
+  if (!u) return '';
+  return String(u.id != null ? u.id : u.uid != null ? u.uid : '').trim();
+}
+
 function getPowerZoneRanges(ftp) {
   const f = Number(ftp) || 0;
   if (f <= 0) {
@@ -364,6 +378,8 @@ function RiderTimeInZonesCharts(props) {
     var userId = userProfile && (userProfile.id || userProfile.uid);
     var year = today.getFullYear();
     if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    var viewerId = getChartViewerUserId();
+    if (viewerId && String(userId) !== String(viewerId)) return;
     window.fetchMaxHrForYear(userId, year).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
@@ -412,10 +428,19 @@ function DailyTimeInZonesCharts(props) {
   React.useEffect(function() {
     var userId = (userProfile && (userProfile.id || userProfile.uid)) || (log && (log.user_id || log.userId));
     if (!userId || !logYear || typeof window.fetchMaxHrForYear !== 'function') return;
+    var viewerId = getChartViewerUserId();
+    if (viewerId && String(userId) !== String(viewerId)) return;
     window.fetchMaxHrForYear(userId, logYear).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
   }, [userProfile && (userProfile.id || userProfile.uid), log && (log.user_id || log.userId), logYear]);
+  React.useEffect(function() {
+    var profileUserId = (userProfile && (userProfile.id || userProfile.uid)) || '';
+    var viewerId = getChartViewerUserId();
+    if (!profileUserId || !viewerId || String(profileUserId) === String(viewerId)) return;
+    var fh = Number(userProfile && userProfile.max_hr) || 0;
+    if (fh > 0) setMaxHr(fh);
+  }, [userProfile && userProfile.max_hr, userProfile && (userProfile.id || userProfile.uid)]);
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
@@ -491,10 +516,19 @@ function JournalTimeInZonesCharts(props) {
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
     if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    var viewerId = getChartViewerUserId();
+    if (viewerId && String(userId) !== String(viewerId)) return;
     window.fetchMaxHrForYear(userId, year).then(function(hr) {
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
   }, [userProfile && (userProfile.id || userProfile.uid), year]);
+  React.useEffect(function() {
+    var profileUserId = (userProfile && (userProfile.id || userProfile.uid)) || '';
+    var viewerId = getChartViewerUserId();
+    if (!profileUserId || !viewerId || String(profileUserId) === String(viewerId)) return;
+    var fh = Number(userProfile && userProfile.max_hr) || 0;
+    if (fh > 0) setMaxHr(fh);
+  }, [userProfile && userProfile.max_hr, userProfile && (userProfile.id || userProfile.uid)]);
   var titleClass = 'text-sm font-semibold text-gray-700 mb-2';
   var hasAny = powerData.some(function(d) { return d.seconds > 0; }) || hrData.some(function(d) { return d.seconds > 0; });
   if (!hasAny) return null;

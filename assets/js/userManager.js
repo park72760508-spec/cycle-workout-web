@@ -2197,7 +2197,13 @@ async function fetchMaxHrForYear(userId, year) {
     }
     return null;
   } catch (e) {
-    console.warn('[UserManager] fetchMaxHrForYear 실패:', userId, year, e);
+    var perm =
+      e &&
+      (e.code === 'permission-denied' ||
+        (String(e.message || '').indexOf('Missing or insufficient permissions') >= 0));
+    if (!perm && typeof console !== 'undefined' && console.warn) {
+      console.warn('[UserManager] fetchMaxHrForYear 실패:', userId, year, e);
+    }
     return null;
   }
 }
