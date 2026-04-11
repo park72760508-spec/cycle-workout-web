@@ -3082,6 +3082,19 @@ function OpenRidingCalendarMain(props) {
     var attendeeCheckCircleClass = useInviteHostedRow
       ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25'
       : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30';
+    var spectatorBrowseCircleClass =
+      'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-slate-300/90 text-slate-700 shadow-sm ring-1 ring-slate-400/35';
+    var showSpectatorBrowseIcon = false;
+    if (userId && !isCancelled) {
+      var appliedJoin = isUserParticipantConfirmedForRide(r) || isUserWaitlistedForRide(r);
+      if (!appliedJoin) {
+        if (!ex.compactInviteOrHostedList) {
+          showSpectatorBrowseIcon = true;
+        } else if (ex.compactInviteOrHostedList && !ex.hostedListSection) {
+          showSpectatorBrowseIcon = true;
+        }
+      }
+    }
     return (
       <li key={r.id}>
         <button
@@ -3100,6 +3113,17 @@ function OpenRidingCalendarMain(props) {
                 className={attendeeCheckCircleClass}
                 title={attendeeCheckTitle}
                 aria-label={attendeeCheckAria}
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" />
+                </svg>
+              </span>
+            ) : null}
+            {showSpectatorBrowseIcon ? (
+              <span
+                className={spectatorBrowseCircleClass}
+                title="구경 하기"
+                aria-label="참석·대기 신청 전, 구경 하기"
               >
                 <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M2.5 6L5 8.5L9.5 3.5" />
