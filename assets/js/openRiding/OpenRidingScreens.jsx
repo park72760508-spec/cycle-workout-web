@@ -5083,12 +5083,37 @@ function OpenRidingDetail(props) {
               var syncFn0 =
                 typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
               if (syncFn0) {
-                var chartProf = getOpenRidingJournalUserProfileForCharts();
-                syncFn0(db, rideId, ymd, merged, chartProf).catch(function (e) {
-                  if (typeof console !== 'undefined' && console.warn) {
-                    console.warn('[openRiding] syncHostPublicReviewSummary', e);
-                  }
-                });
+                var chartProfBase = getOpenRidingJournalUserProfileForCharts();
+                var ypartsPeak = String(ymd).split('-');
+                var peakYear = parseInt(ypartsPeak[0], 10);
+                var uidPeak = String(chartProfBase.uid || chartProfBase.id || '').trim();
+                function runHostReviewSync(chartProf) {
+                  syncFn0(db, rideId, ymd, merged, chartProf).catch(function (e) {
+                    if (typeof console !== 'undefined' && console.warn) {
+                      console.warn('[openRiding] syncHostPublicReviewSummary', e);
+                    }
+                  });
+                }
+                if (
+                  uidPeak &&
+                  Number.isFinite(peakYear) &&
+                  peakYear >= 2000 &&
+                  typeof window.fetchMaxHrForYear === 'function'
+                ) {
+                  window
+                    .fetchMaxHrForYear(uidPeak, peakYear)
+                    .then(function (hr) {
+                      if (cancelled) return;
+                      var cp = Object.assign({}, chartProfBase);
+                      if (hr != null && hr > 0) cp.max_hr = hr;
+                      runHostReviewSync(cp);
+                    })
+                    .catch(function () {
+                      if (!cancelled) runHostReviewSync(chartProfBase);
+                    });
+                } else {
+                  runHostReviewSync(chartProfBase);
+                }
               }
             }
             if (!cancelled) setReviewLogsLoading(false);
