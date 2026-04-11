@@ -105,7 +105,7 @@ function openRidingPackRulesDisplay(prNorm) {
   if (g.helmet) gearLines.push('헬멧(미착용 참석 불가)');
   if (g.lights) gearLines.push('전/후미등');
   if (g.puncture) gearLines.push('펑크 대비 용품');
-  if (g.water) gearLines.push('식수/개인용');
+  if (g.water) gearLines.push('식수/개인용(파워젤 및 보급)');
   var minors =
     pr.minorsAllowed === 'yes' ? '예' : pr.minorsAllowed === 'no' ? '아니오' : '';
   return {
@@ -766,9 +766,30 @@ function getTodaySeoulYmd() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
-/** 라이딩 문서 date → 서울 기준 YYYY-MM-DD */
+/** Coerce Firestore Timestamp / {seconds} / Date to Date or null */
+function openRidingCoerceRideDateToDate(rideDateField) {
+  if (rideDateField == null) return null;
+  if (rideDateField instanceof Date && !Number.isNaN(rideDateField.getTime())) return rideDateField;
+  if (typeof rideDateField.toDate === 'function') {
+    try {
+      var t = rideDateField.toDate();
+      if (t instanceof Date && !Number.isNaN(t.getTime())) return t;
+    } catch (eCoerce) {}
+  }
+  var sec = Number(
+    rideDateField.seconds != null
+      ? rideDateField.seconds
+      : rideDateField._seconds != null
+        ? rideDateField._seconds
+        : NaN
+  );
+  if (Number.isFinite(sec)) return new Date(sec * 1000);
+  return null;
+}
+
+/** Ride date -> Seoul calendar YYYY-MM-DD */
 function getRideDateSeoulYmd(ride) {
-  var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  var ts = ride && ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   if (!ts) return null;
   try {
     var parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(ts);
@@ -785,7 +806,88 @@ function getRideDateSeoulYmd(ride) {
   return null;
 }
 
-/** 훈련 로그 date → 서울 기준 YYYY-MM-DD (일지·상세 후기 동기화용) */
+/** Normalize YYYY-M-D vs YYYY-MM-DD for compare */
+function openRidingNormalizeYmdString(ymd) {
+  if (ymd == null) return '';
+  var s = String(ymd).trim();
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return s;
+  return m[1] + '-' + pad2(parseInt(m[2], 10)) + '-' + pad2(parseInt(m[3], 10));
+}
+
+function openRidingYmdEqual(a, b) {
+  return openRidingNormalizeYmdString(a) === openRidingNormalizeYmdString(b);
+}
+
+/** rides.hostPublicReviewSummary matches ride schedule date */
+function rideDocHostSummaryMatchesRideDate(ride, ymd) {
+  var h = ride && ride.hostPublicReviewSummary;
+  if (!h || !ymd) return false;
+  var s = h.summary;
+  if (!s || typeof s !== 'object') return false;
+  return openRidingYmdEqual(h.rideDateYmd, ymd);
+}
+
+/** Stable fingerprint of hostPublicReviewSummary (ignores updatedAt) for effect deps. */
+function openRidingHostPublicSummaryStableKey(h) {
+  if (!h || typeof h !== 'object') return '';
+  var rd = h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
+  var s = h.summary;
+  if (!s || typeof s !== 'object') return rd;
+  var dist = s.distance_km != null ? String(Number(s.distance_km)) : '';
+  var dur =
+    s.duration_sec != null
+      ? String(Number(s.duration_sec))
+      : s.time != null
+        ? String(Number(s.time))
+        : '';
+  var tss = s.tss != null ? String(Number(s.tss)) : '';
+  var spd = s.avg_speed_kmh != null ? String(Number(s.avg_speed_kmh)) : '';
+  return [rd, dist, dur, tss, spd].join('|');
+}
+
+/** Delegates to openRidingService (single source of truth for ±10% or longer-than-planned rules). */
+function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.openRidingHostSummaryQualifiesAsGroupRide === 'function') {
+    return svc.openRidingHostSummaryQualifiesAsGroupRide(rideData, hostBlock);
+  }
+  if (!rideData || !hostBlock || typeof hostBlock !== 'object') return false;
+  var s = hostBlock.summary;
+  if (!s || typeof s !== 'object') return false;
+  var rideYmd = getRideDateSeoulYmd(rideData);
+  if (!rideYmd || !openRidingYmdEqual(hostBlock.rideDateYmd, rideYmd)) return false;
+  var logged = Number(s.distance_km != null ? s.distance_km : 0) || 0;
+  if (!(logged > 0)) return false;
+  var planned = Number(rideData.distance != null ? rideData.distance : 0) || 0;
+  if (planned > 0) {
+    var lo = planned * 0.9;
+    var hi = planned * 1.1;
+    return (logged >= lo && logged <= hi) || logged > planned;
+  }
+  return logged >= 12;
+}
+
+function openRidingIsJoinClosedByScheduleUi(ride) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.isOpenRidingScheduleEnded === 'function') {
+    return svc.isOpenRidingScheduleEnded(ride);
+  }
+  if (typeof svc.isRideJoinClosedBySchedule === 'function') {
+    return svc.isRideJoinClosedBySchedule(ride);
+  }
+  if (!ride) return false;
+  if (String(ride.rideStatus || 'active') === 'cancelled') return true;
+  var ry = getRideDateSeoulYmd(ride);
+  if (!ry) return false;
+  var today = getTodaySeoulYmd();
+  if (ry < today) return true;
+  if (ry > today) return false;
+  var h = ride.hostPublicReviewSummary;
+  return !!(h && typeof h === 'object' && openRidingHostSummaryQualifiesAsGroupRideUi(ride, h));
+}
+
+/** Training log date → Seoul YYYY-MM-DD (journal / open-riding review sync) */
 function openRidingLogYmdSeoul(log) {
   if (!log || log.date == null) return '';
   var d = log.date;
@@ -811,6 +913,39 @@ function openRidingLogYmdSeoul(log) {
 function openRidingLogIsStrava(log) {
   var s = log && log.source != null ? String(log.source).toLowerCase().trim() : '';
   return s === 'strava';
+}
+
+/**
+ * Host Strava logs same day: activities within ±10% of ride.distance (km), or distance > planned.
+ * Among matches, pick the one closest to planned km (avoids picking a random ultra when a ~P ride exists).
+ * If ride.distance unset: use single longest activity.
+ * @param {object[]} dayLogs filtered same-day Strava logs
+ * @param {object} ride
+ */
+function openRidingPickStravaLogsForHostReview(dayLogs, ride) {
+  if (!dayLogs || dayLogs.length === 0) return [];
+  var p = Number(ride && ride.distance != null ? ride.distance : 0) || 0;
+  var tol = 0.1;
+  if (!(p > 0)) {
+    if (dayLogs.length === 1) return dayLogs;
+    var sortedFallback = dayLogs.slice().sort(function (a, b) {
+      return (Number(b.distance_km) || 0) - (Number(a.distance_km) || 0);
+    });
+    return [sortedFallback[0]];
+  }
+  var lo = p * (1 - tol);
+  var hi = p * (1 + tol);
+  var candidates = dayLogs.filter(function (l) {
+    var d = Number(l.distance_km != null ? l.distance_km : 0) || 0;
+    return (d >= lo && d <= hi) || d > p;
+  });
+  if (candidates.length === 0) return [];
+  candidates.sort(function (a, b) {
+    var da = Math.abs((Number(a.distance_km) || 0) - p);
+    var db = Math.abs((Number(b.distance_km) || 0) - p);
+    return da - db;
+  });
+  return [candidates[0]];
 }
 
 function openRidingReviewFormatDuration(sec) {
@@ -844,6 +979,11 @@ function openRidingReviewFormatElevationM(v) {
 function openRidingReviewFormatCadenceRpm(v) {
   if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
   return Math.round(Number(v)) + ' rpm';
+}
+
+function openRidingReviewFormatWatts(v) {
+  if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+  return Math.round(Number(v)) + ' W';
 }
 
 /**
@@ -951,6 +1091,36 @@ function openRidingMergeLogsForReviewSummary(logs) {
   };
 }
 
+/** rides.hostPublicReviewSummary.summary → 후기 UI용 log 객체 */
+function openRidingReviewLogFromStoredSummary(stored, rideDateYmd) {
+  if (!stored || typeof stored !== 'object') return null;
+  var sec = Number(stored.duration_sec != null ? stored.duration_sec : stored.time) || 0;
+  var dist0 = stored.distance_km != null ? Number(stored.distance_km) : 0;
+  var spdStored0 = stored.avg_speed_kmh != null ? Number(stored.avg_speed_kmh) : null;
+  var spd0 = spdStored0 != null && spdStored0 > 0 ? spdStored0 : openRidingReviewAvgSpeedKmh(dist0, sec);
+  return {
+    date: stored.date != null ? stored.date : rideDateYmd,
+    distance_km: stored.distance_km,
+    duration_sec: sec,
+    tss: stored.tss,
+    if: stored.if,
+    kilojoules: stored.kilojoules,
+    elevation_gain: stored.elevation_gain != null ? Number(stored.elevation_gain) : null,
+    avg_speed_kmh: spd0,
+    avg_cadence: stored.avg_cadence,
+    avg_hr: stored.avg_hr,
+    max_hr: stored.max_hr,
+    zone_ref_max_hr: stored.zone_ref_max_hr,
+    zone_ref_year: stored.zone_ref_year,
+    zone_ref_window: stored.zone_ref_window,
+    avg_watts: stored.avg_watts,
+    weighted_watts: stored.weighted_watts,
+    max_watts: stored.max_watts,
+    time_in_zones: stored.time_in_zones,
+    source: stored.source != null ? stored.source : 'strava'
+  };
+}
+
 function getOpenRidingJournalUserProfileForCharts() {
   var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
   if (!u) {
@@ -969,9 +1139,59 @@ function getOpenRidingJournalUserProfileForCharts() {
   };
 }
 
+/** Firestore hostPublicReviewSummary.chartProfile → DailyTimeInZonesCharts용 */
+function openRidingNormalizeChartProfileFromFirestore(cp) {
+  if (!cp || typeof cp !== 'object') return null;
+  var uid = String(cp.uid != null ? cp.uid : cp.id != null ? cp.id : '').trim();
+  if (!uid) return null;
+  return {
+    id: uid,
+    uid: uid,
+    ftp: Number(cp.ftp) > 0 ? Number(cp.ftp) : 200,
+    max_hr: Number(cp.max_hr) > 0 ? Number(cp.max_hr) : 190
+  };
+}
+
+/**
+ * Host-public review: zone charts use the host (review owner), not the viewer.
+ * @param {object|null} log
+ * @param {'self'|'host_public'|'host_fallback'|null} reviewMergedLogSource
+ * @param {object|null} ride
+ */
+function openRidingResolveReviewChartUserProfile(log, reviewMergedLogSource, ride) {
+  if (reviewMergedLogSource === 'host_public' || reviewMergedLogSource === 'host_fallback') {
+    var h = ride && ride.hostPublicReviewSummary;
+    var zoneRef = log && Number(log.zone_ref_max_hr) > 0 ? Number(log.zone_ref_max_hr) : 0;
+    if (zoneRef <= 0 && h && h.summary && Number(h.summary.zone_ref_max_hr) > 0) {
+      zoneRef = Number(h.summary.zone_ref_max_hr);
+    }
+    var cp = h && openRidingNormalizeChartProfileFromFirestore(h.chartProfile);
+    if (zoneRef > 0) {
+      if (cp) {
+        return { id: cp.id, uid: cp.uid, ftp: cp.ftp, max_hr: zoneRef };
+      }
+      var hostUidZ = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      if (hostUidZ) {
+        return { id: hostUidZ, uid: hostUidZ, ftp: 200, max_hr: zoneRef };
+      }
+    }
+    if (cp) return cp;
+    var hostUid = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+    if (hostUid) {
+      return {
+        id: hostUid,
+        uid: hostUid,
+        ftp: 200,
+        max_hr: log && Number(log.max_hr) > 0 ? Number(log.max_hr) : 190
+      };
+    }
+  }
+  return getOpenRidingJournalUserProfileForCharts();
+}
+
 /** 서울 기준 라이딩일 → M/D (요일) 예: 4/7 (화) */
 function formatRideDateMdDowSeoul(ride) {
-  var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  var ts = ride && ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   if (!ts) return '';
   try {
     var parts = new Intl.DateTimeFormat('en-US', {
@@ -1082,6 +1302,23 @@ function isOpenRidingPastBySeoulDate(ride) {
   if (!rideYmd) return false;
   return getTodaySeoulYmd() > rideYmd;
 }
+
+
+/**
+ * Seoul calendar: ride YMD <= today YMD (today included). Host review for non-participants.
+ */
+function isOpenRidingRideDayOnOrBeforeTodaySeoul(ride) {
+  var rideYmd = getRideDateSeoulYmd(ride);
+  if (!rideYmd) return false;
+  return rideYmd <= getTodaySeoulYmd();
+}
+
+/** Ride schedule date is today (Seoul) */
+function openRidingIsRideScheduleDayTodaySeoul(ride) {
+  var ry = getRideDateSeoulYmd(ride);
+  return !!ry && openRidingYmdEqual(ry, getTodaySeoulYmd());
+}
+
 
 /** 서울 달력상 라이딩일이 지난 경우(다음날부터) 상세 연락처 마스킹 */
 function shouldMaskOpenRidingContacts(ride) {
@@ -1759,13 +1996,71 @@ function parseHmFromDeparture(s) {
   return { h: h, mi: mi };
 }
 
+function openRidingGlassNavBtnClass(isActive) {
+  return (
+    'open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent' +
+    (isActive ? ' open-riding-bottom-glass-nav__btn--active' : '')
+  );
+}
+
+/** iOS 휴대폰(Android 제외). 포털 네비 하단 추가 오프셋·본문 패딩 보정용 */
+function openRidingIsIOSPhoneUA() {
+  if (typeof navigator === 'undefined') return false;
+  var ua = navigator.userAgent || '';
+  if (/android/i.test(ua)) return false;
+  if (/iPhone|iPod/.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
+function OpenRidingGlassNavSlot(p) {
+  return <div className="open-riding-bottom-glass-nav__slot">{p.children}</div>;
+}
+
+/** body 포털 + 동일 글래스 DOM — 터치 레이어 규칙은 style.css(#openRidingBottomGlassNavRoot)에 일괄 정의 */
+function OpenRidingGlassNavPortal(p) {
+  var innerContent = p.innerContent;
+  var ariaLabel = p.ariaLabel || '하단 메뉴';
+
+  useEffect(
+    function () {
+      if (!openRidingIsIOSPhoneUA()) return undefined;
+      var el = document.documentElement;
+      el.classList.add('open-riding-glass-nav-ios-phone');
+      return function () {
+        el.classList.remove('open-riding-glass-nav-ios-phone');
+      };
+    },
+    []
+  );
+
+  var navEl = (
+    <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label={ariaLabel}>
+      <div className="open-riding-bottom-glass-nav__pill">
+        <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
+        <div className="open-riding-bottom-glass-nav__pill-surface">
+          <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
+        </div>
+      </div>
+    </nav>
+  );
+  var rd = typeof ReactDOM !== 'undefined' ? ReactDOM : typeof window !== 'undefined' ? window.ReactDOM : undefined;
+  if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
+    return rd.createPortal(navEl, document.body);
+  }
+  return navEl;
+}
+
 /**
- * 라이딩 모임 하단 네비: 2중 레이어(Outer=글래스+Safe Area / Inner=대칭 패딩+버튼 행).
- * navVariant: main(홈|모임·맞춤·주최·친구) | create(홈·모임·맞춤·친구) | friends(홈·모임·맞춤·주최)
+ * 라이딩 모임 하단 네비: 항상 홈·모임·맞춤·주최·친구 (5슬롯)
  */
 function OpenRidingBottomGlassNav(props) {
-  var navVariant = props.navVariant === 'create' || props.navVariant === 'friends' ? props.navVariant : 'main';
-  var filterActive = props.activeTab === 'filter';
+  var nv = props.navVariant || 'main';
+  var navVariant =
+    nv === 'filter' || nv === 'create' || nv === 'friends' ? nv : 'main';
+  var moimActive = navVariant === 'main';
+  var filterActive = navVariant === 'filter';
+  var createActive = navVariant === 'create';
   var onHome = props.onHome || function () {};
   var onMoim = props.onMoim || function () {};
   var onFilter = props.onFilter || function () {};
@@ -1773,15 +2068,6 @@ function OpenRidingBottomGlassNav(props) {
   var onFriends = props.onFriends || function () {};
   var pendingIncomingCount = typeof props.pendingIncomingCount === 'number' ? props.pendingIncomingCount : 0;
   var userId = props.userId || '';
-
-  function itemClass(isActive) {
-    return 'open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent' + (isActive ? ' open-riding-bottom-glass-nav__btn--active' : '');
-  }
-
-  /** 터치: flex 4등분 슬롯 + 버튼이 슬롯 전체를 히트박스로 채움 (데드존 방지) */
-  function NavSlot(props) {
-    return <div className="open-riding-bottom-glass-nav__slot">{props.children}</div>;
-  }
 
   function iconHome() {
     return (
@@ -1818,133 +2104,248 @@ function OpenRidingBottomGlassNav(props) {
   function renderFriendsButton(isActive) {
     if (!userId) {
       return (
-        <NavSlot>
-          <button type="button" className={itemClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
-            <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+        <OpenRidingGlassNavSlot>
+          <button type="button" className={openRidingGlassNavBtnClass(false)} disabled aria-disabled="true" title="로그인 후 이용 가능합니다">
+            <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             <span className="open-riding-bottom-glass-nav__label">친구</span>
           </button>
-        </NavSlot>
+        </OpenRidingGlassNavSlot>
       );
     }
     return (
-      <NavSlot>
-        <button type="button" className={itemClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(isActive)} onClick={onFriends} aria-current={isActive ? 'page' : undefined} aria-label={'친구' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}>
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
-            <img src="assets/img/friends.png" alt="" width={22} height={22} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
+            <img src="assets/img/friends.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" onError={function (e) { e.currentTarget.src = 'assets/img/friends.svg'; e.currentTarget.onerror = null; }} />
             {pendingIncomingCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '15px', height: '15px', fontSize: pendingIncomingCount > 9 ? 8 : 9, paddingLeft: pendingIncomingCount > 9 ? 3 : 4, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '13px', height: '13px', fontSize: pendingIncomingCount > 9 ? 7 : 8, paddingLeft: pendingIncomingCount > 9 ? 3 : 3, paddingRight: pendingIncomingCount > 9 ? 3 : 4, top: 0, right: 0, transform: 'translate(45%, -40%)' }} aria-hidden="true">
                 {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
               </span>
             ) : null}
           </span>
           <span className="open-riding-bottom-glass-nav__label">친구</span>
         </button>
-      </NavSlot>
+      </OpenRidingGlassNavSlot>
     );
   }
 
-  var innerContent = null;
-  if (navVariant === 'create') {
-    innerContent = (
-      <>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
-            {iconHome()}
-            <span className="open-riding-bottom-glass-nav__label">홈</span>
-          </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
-            {iconMoim()}
-            <span className="open-riding-bottom-glass-nav__label">모임</span>
-          </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-            {iconFilter()}
-            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-          </button>
-        </NavSlot>
-        {renderFriendsButton(false)}
-      </>
-    );
-  } else if (navVariant === 'friends') {
-    innerContent = (
-      <>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
-            {iconHome()}
-            <span className="open-riding-bottom-glass-nav__label">홈</span>
-          </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력">
-            {iconMoim()}
-            <span className="open-riding-bottom-glass-nav__label">모임</span>
-          </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-            {iconFilter()}
-            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-          </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-            {iconJuchey()}
-            <span className="open-riding-bottom-glass-nav__label">주최</span>
-          </button>
-        </NavSlot>
-      </>
-    );
-  } else {
-    innerContent = (
-      <>
-        <NavSlot>
-          {filterActive ? (
-            <button type="button" className={itemClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력 화면으로">
-              {iconMoim()}
-              <span className="open-riding-bottom-glass-nav__label">모임</span>
-            </button>
-          ) : (
-            <button type="button" className={itemClass(false)} onClick={onHome} aria-label="홈 — 그룹 훈련·개인 훈련·나의 기록·라이딩 모임">
-              {iconHome()}
-              <span className="open-riding-bottom-glass-nav__label">홈</span>
-            </button>
-          )}
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined}>
-            {iconFilter()}
-            <span className="open-riding-bottom-glass-nav__label">맞춤</span>
-          </button>
-        </NavSlot>
-        <NavSlot>
-          <button type="button" className={itemClass(false)} onClick={onCreate} aria-label="라이딩 주최">
-            {iconJuchey()}
-            <span className="open-riding-bottom-glass-nav__label">주최</span>
-          </button>
-        </NavSlot>
-        {renderFriendsButton(false)}
-      </>
-    );
-  }
+  var friendsActive = navVariant === 'friends';
 
-  var navEl = (
-    <nav id="openRidingBottomGlassNavRoot" className="open-riding-bottom-glass-nav" role="navigation" aria-label="라이딩 모임 하단 메뉴">
-      <div className="open-riding-bottom-glass-nav__pill">
-        <div className="open-riding-bottom-glass-nav__pill-bg" aria-hidden="true" />
-        <div className="open-riding-bottom-glass-nav__pill-surface">
-          <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
-        </div>
-      </div>
-    </nav>
+  var innerContent = (
+    <>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+          {iconHome()}
+          <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(moimActive)}
+          onClick={onMoim}
+          aria-current={moimActive ? 'page' : undefined}
+          aria-label="라이딩 모임 달력"
+        >
+          {iconMoim()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
+          {iconFilter()}
+          <span className="open-riding-bottom-glass-nav__label">맞춤</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(createActive)}
+          onClick={onCreate}
+          aria-current={createActive ? 'page' : undefined}
+          aria-label="라이딩 주최"
+        >
+          {iconJuchey()}
+          <span className="open-riding-bottom-glass-nav__label">주최</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      {renderFriendsButton(friendsActive)}
+    </>
   );
-  var rd = typeof ReactDOM !== 'undefined' ? ReactDOM : typeof window !== 'undefined' ? window.ReactDOM : undefined;
-  if (typeof document !== 'undefined' && rd && typeof rd.createPortal === 'function') {
-    return rd.createPortal(navEl, document.body);
+
+  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 모임 하단 메뉴" />;
+}
+
+/** 상세 화면 하단: 홈·모임·수정·폭파·삭제 (기존 툴바 아이콘 재사용) */
+function OpenRidingDetailGlassNav(props) {
+  var onHome = props.onHome || function () {};
+  var onMoim = props.onMoim || function () {};
+  var onEdit = props.onEdit || function () {};
+  var onCancel = props.onCancel || function () {};
+  var onDelete = props.onDelete || function () {};
+  var hostToolbarLocked = !!props.hostToolbarLocked;
+  var showHostActions = !!props.showHostActions;
+
+  function iconHomeNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    );
   }
-  return navEl;
+
+  function iconMoimNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+
+  var innerContent = (
+    <>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onHome} aria-label="홈 — 베이스캠프">
+          {iconHomeNav()}
+          <span className="open-riding-bottom-glass-nav__label">홈</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력으로">
+          {iconMoimNav()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onEdit}
+          disabled={!showHostActions || hostToolbarLocked}
+          aria-label="라이딩 수정"
+          title={
+            !showHostActions
+              ? '방장 또는 관리자만 이용할 수 있습니다.'
+              : hostToolbarLocked
+                ? '라이딩 일정일이 지나 수정할 수 없습니다.'
+                : undefined
+          }
+        >
+          <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
+          <span className="open-riding-bottom-glass-nav__label">수정</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onCancel}
+          disabled={!showHostActions || hostToolbarLocked}
+          aria-label="라이딩 폭파"
+          title={
+            !showHostActions
+              ? '방장 또는 관리자만 이용할 수 있습니다.'
+              : hostToolbarLocked
+                ? '라이딩 일정일이 지나 폭파할 수 없습니다.'
+                : undefined
+          }
+        >
+          <img src="assets/img/cancel01.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">폭파</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onDelete}
+          disabled={!showHostActions || hostToolbarLocked}
+          aria-label="라이딩 삭제"
+          title={
+            !showHostActions
+              ? '방장 또는 관리자만 이용할 수 있습니다.'
+              : hostToolbarLocked
+                ? '라이딩 일정일이 지나 삭제할 수 없습니다.'
+                : undefined
+          }
+        >
+          <img src="assets/img/delete2.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">삭제</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    </>
+  );
+
+  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 상세 하단 메뉴" />;
+}
+
+/** 수정 폼 하단: 모임·수정(상세)·삭제·저장 */
+function OpenRidingEditGlassNav(props) {
+  var onMoim = props.onMoim || function () {};
+  var onEdit = props.onEdit || function () {};
+  var onDelete = props.onDelete || function () {};
+  var onSave = props.onSave || function () {};
+  var isBusy = !!props.isBusy;
+  var hostToolbarLocked = !!props.hostToolbarLocked;
+
+  function iconMoimNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+  function iconSaveNav() {
+    return (
+      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+      </svg>
+    );
+  }
+
+  var innerContent = (
+    <>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onMoim} aria-label="라이딩 모임 달력으로">
+          {iconMoimNav()}
+          <span className="open-riding-bottom-glass-nav__label">모임</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(true)}
+          onClick={onEdit}
+          aria-current="page"
+          aria-label="세부 내용 화면으로"
+        >
+          <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
+          <span className="open-riding-bottom-glass-nav__label">수정</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button
+          type="button"
+          className={openRidingGlassNavBtnClass(false)}
+          onClick={onDelete}
+          disabled={hostToolbarLocked}
+          aria-label="라이딩 삭제"
+          title={hostToolbarLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
+        >
+          <img src="assets/img/delete2.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
+          <span className="open-riding-bottom-glass-nav__label">삭제</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+      <OpenRidingGlassNavSlot>
+        <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onSave} disabled={isBusy} aria-label="저장">
+          {iconSaveNav()}
+          <span className="open-riding-bottom-glass-nav__label">저장</span>
+        </button>
+      </OpenRidingGlassNavSlot>
+    </>
+  );
+
+  return <OpenRidingGlassNavPortal innerContent={innerContent} ariaLabel="라이딩 수정 하단 메뉴" />;
 }
 
 /** 달력 그리드 + 녹색 마커(맞춤 필터 일치 일자) */
@@ -2590,29 +2991,21 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  /* Hosted-list green badge: guest in participants, waitlist, or participantDisplay */
   function openRideIdsFromFirestoreListField(v) {
     if (Array.isArray(v)) return v;
     if (v && typeof v === 'object' && !Array.isArray(v)) return Object.keys(v);
     return [];
   }
 
-  /* Moim spectator badge: grade 1–3; tolerate getLoginUserGrade + never throw */
   function openRidingMoimSpectatorBadgeGradeOk() {
     if (typeof window === 'undefined') return true;
     if (typeof window.getLoginUserGrade !== 'function') return true;
-    try {
-      var g = window.getLoginUserGrade();
-      if (g == null || g === '') return true;
-      if (typeof g === 'number' && !isNaN(g)) {
-        return g === 1 || g === 2 || g === 3;
-      }
-      var s = String(g).trim().replace(/^['"]+|['"]+$/g, '');
-      if (s === '1' || s === '2' || s === '3') return true;
-      var n = Number(s);
-      return n === 1 || n === 2 || n === 3;
-    } catch (eGrade) {
-      return true;
-    }
+    var g = window.getLoginUserGrade();
+    if (g == null || g === '') return true;
+    var s = String(g).trim();
+    var n = Number(s);
+    return s === '1' || s === '2' || s === '3' || n === 1 || n === 2 || n === 3;
   }
 
   function isUserParticipantConfirmedForRide(r) {
@@ -2625,6 +3018,7 @@ function OpenRidingCalendarMain(props) {
     });
   }
 
+  /** 현재 사용자가 해당 라이��� 대기열(waitlist)에 있는지 */
   function isUserWaitlistedForRide(r) {
     var uid = String(userId || '');
     if (!uid) return false;
@@ -2643,13 +3037,9 @@ function OpenRidingCalendarMain(props) {
       return u && u !== hostNorm;
     }
     var parts = openRideIdsFromFirestoreListField(r.participants);
-    if (parts.some(function (p) {
-      return uidNotHost(p);
-    })) return true;
+    if (parts.some(function (p) { return uidNotHost(p); })) return true;
     var waits = openRideIdsFromFirestoreListField(r.waitlist);
-    if (waits.some(function (w) {
-      return String(w != null ? w : '').trim();
-    })) return true;
+    if (waits.some(function (w) { return String(w != null ? w : '').trim(); })) return true;
     var pd =
       r.participantDisplay && typeof r.participantDisplay === 'object' && !Array.isArray(r.participantDisplay)
         ? r.participantDisplay
@@ -2699,19 +3089,10 @@ function OpenRidingCalendarMain(props) {
     var attendeeCheckTitle = '참석 확정';
     var attendeeCheckAria = '참석 확정';
     if (ex.compactInviteOrHostedList && ex.hostedListSection) {
-      /* Hosted list: green badge for host rows (no grade gate) */
-      if (userId) {
+      if (openRideHostHasAttendanceApplications(r)) {
         showParticipantConfirmedIcon = true;
-        if (openRideHostHasAttendanceApplications(r)) {
-          attendeeCheckTitle = '참석/대기 신청 있음';
-          attendeeCheckAria = '참석 확정 인원 또는 대기열 신청이 있습니다';
-        } else if (isCancelled) {
-          attendeeCheckTitle = '내가 주최한 라이딩 (취소)';
-          attendeeCheckAria = '취소된 모임 · 내가 주최한 라이딩';
-        } else {
-          attendeeCheckTitle = '내가 주최한 라이딩';
-          attendeeCheckAria = '내가 주최한 라이딩';
-        }
+        attendeeCheckTitle = '참석/대기 신청 있음';
+        attendeeCheckAria = '참석 확정 인원 또는 대기열 신청이 있습니다';
       }
     } else if (ex.compactInviteOrHostedList) {
       if (isUserParticipantConfirmedForRide(r)) {
@@ -2843,22 +3224,19 @@ function OpenRidingCalendarMain(props) {
   }
 
   function renderInvitedRidesCompactSection() {
-    var invitedTitlePillStyle = {
-      borderColor: 'rgba(22, 101, 52, 0.38)',
-      color: '#166534',
-      background: 'rgba(34, 197, 94, 0.12)'
-    };
     return (
-      <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-invited-rides-panel" aria-labelledby="open-riding-invited-heading">
+      <section
+        className="rounded-2xl p-3 border border-emerald-200/70 bg-white shadow-sm open-riding-invited-rides-panel"
+        aria-labelledby="open-riding-invited-heading"
+      >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
             id="open-riding-invited-heading"
             role="heading"
             aria-level={2}
-            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
-            style={invitedTitlePillStyle}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
           >
-            초대받은 라이딩
+            [초대받은 라이딩]
           </span>
         </div>
         {!userId ? (
@@ -2870,7 +3248,7 @@ function OpenRidingCalendarMain(props) {
         ) : invitedRidesSorted.length === 0 ? (
           <p className="text-sm text-slate-400">이번 달 초대받은 라이딩이 없습니다.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+          <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
             {invitedRidesSorted.map(function (r) {
               return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
             })}
@@ -2882,25 +3260,22 @@ function OpenRidingCalendarMain(props) {
 
   function renderMyHostedRidesCompactSection() {
     if (!myHostedRidesSorted.length) return null;
-    var hostedTitlePillStyle = {
-      borderColor: 'rgba(109, 40, 217, 0.4)',
-      color: '#5b21b6',
-      background: 'rgba(139, 92, 246, 0.12)'
-    };
     return (
-      <section className="rounded-xl p-3 border border-slate-200 bg-white shadow-sm open-riding-my-hosted-panel" aria-labelledby="open-riding-my-hosted-heading">
+      <section
+        className="rounded-2xl p-3 border border-violet-200/80 bg-white shadow-sm open-riding-my-hosted-panel"
+        aria-labelledby="open-riding-my-hosted-heading"
+      >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
             id="open-riding-my-hosted-heading"
             role="heading"
             aria-level={2}
-            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
-            style={hostedTitlePillStyle}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
           >
-            내가 주최한 라이딩
+            [내가 주최한 라이딩]
           </span>
         </div>
-        <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
+        <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
           {myHostedRidesSorted.map(function (r) {
             return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true, hostedListSection: true });
           })}
@@ -2930,37 +3305,11 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  var calendarTodayYmd = getTodaySeoulYmd();
+
   return (
     <div className={compact ? 'open-riding-compact w-full max-w-full space-y-3 text-left' : 'open-riding-main max-w-4xl mx-auto p-4 space-y-6'}>
-      {compact ? (
-        <div className="open-riding-compact-toolbar grid grid-cols-3 items-center gap-x-1 sm:gap-x-2 w-full min-w-0">
-          <div className="flex justify-start items-center min-w-0">
-            <button
-              type="button"
-              className="open-riding-filter-launch-btn inline-flex items-center justify-center rounded-lg border-2 border-violet-600 bg-white px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold text-violet-700 shadow-sm hover:bg-violet-50 whitespace-nowrap max-w-full"
-              onClick={onOpenFilterPage}
-              aria-label="맞춤 설정"
-            >
-              맞춤 설정 (+)
-            </button>
-          </div>
-          <div className="flex justify-center items-center min-w-0 px-0.5">
-            <span className="text-xs font-medium text-slate-800 truncate text-center block w-full" title={userLabel}>
-              {userLabel}
-            </span>
-          </div>
-          <div className="flex justify-end items-center min-w-0">
-            <button
-              type="button"
-              className="open-riding-create-btn inline-flex items-center justify-center rounded-lg bg-violet-600 text-white px-1.5 sm:px-2 py-1.5 text-[10px] sm:text-[11px] font-semibold shadow hover:bg-violet-700 whitespace-nowrap max-w-full"
-              onClick={onOpenCreate}
-              aria-label="라이딩 주최"
-            >
-              라이딩 주최 (+)
-            </button>
-          </div>
-        </div>
-      ) : (
+      {!compact ? (
       <header className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="open-riding-main-screen-title">라이딩 모임</h1>
@@ -2974,7 +3323,7 @@ function OpenRidingCalendarMain(props) {
           라이딩 주최 (+)
         </button>
       </header>
-      )}
+      ) : null}
 
       <div className={compact ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}>
         <section className={(compact ? 'rounded-xl p-3 ' : 'md:col-span-2 rounded-2xl p-4 ') + 'border border-slate-200 bg-white shadow-sm'}>
@@ -2987,73 +3336,114 @@ function OpenRidingCalendarMain(props) {
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-slate-500 mb-1">
             {['일', '월', '화', '수', '목', '금', '토'].map(function (w) { return <div key={w}>{w}</div>; })}
           </div>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1 overflow-visible pt-0.5">
             {days.map(function (day, idx) {
               if (day == null) return <div key={'e' + idx} className={emptyH} />;
               var key = dateKey(year, month, day);
+              var isPastCell = key < calendarTodayYmd;
               var isHostDay = hostDateKeys.has(key);
               var hasMatch = matchingDateKeys.has(key);
               var hasAnyRide = allRideDateKeys.has(key);
               var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
               var isSel = selectedKey === key;
               var isConfirmedDay = participantConfirmedDateKeys.has(key);
+              var dayNumClass = 'relative z-10 tabular-nums ';
+              if (isHostDay) {
+                dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
+              } else if (hasMatch) {
+                dayNumClass += isPastCell ? 'text-emerald-800/50 font-medium' : 'text-emerald-950 font-semibold';
+              } else if (showOtherOnly) {
+                dayNumClass += 'text-slate-500 font-medium';
+              } else {
+                dayNumClass += 'text-slate-800';
+              }
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={function () { setSelectedKey(key); }}
                   className={
-                    'relative ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
+                    'relative overflow-visible ' + cellH + ' rounded-lg text-sm flex items-center justify-center transition ' +
                     (isSel ? 'ring-2 ring-violet-500 font-semibold ' : '') +
                     ' hover:bg-slate-50'
                   }
                 >
                   {isHostDay ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-violet-300/50 border border-violet-400/40 pointer-events-none"
+                      className={
+                        'absolute inset-1 z-[1] rounded-md pointer-events-none border ' +
+                        (isPastCell
+                          ? 'bg-violet-200/45 border-violet-300/40'
+                          : 'bg-violet-600 border-violet-700/45')
+                      }
                       aria-hidden
                     />
                   ) : hasMatch ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-emerald-400/35 pointer-events-none"
+                      className={
+                        'absolute inset-1 z-[1] rounded-md pointer-events-none border ' +
+                        (isPastCell
+                          ? 'bg-emerald-200/45 border-emerald-400/35'
+                          : 'bg-emerald-400/80 border-emerald-600/40')
+                      }
                       aria-hidden
                     />
                   ) : showOtherOnly ? (
                     <span
-                      className="absolute inset-1 z-[1] rounded-md bg-slate-300/45 border border-slate-400/35 pointer-events-none"
+                      className="absolute inset-1 z-[1] rounded-md bg-slate-200/60 border border-slate-400/35 pointer-events-none"
                       aria-hidden
                     />
                   ) : null}
                   {isConfirmedDay ? (
                     <span
-                      className="absolute inset-0 z-[8] rounded-lg border-2 border-red-600 pointer-events-none box-border"
+                      className={
+                        'open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
+                        (isPastCell ? 'bg-red-400/75 opacity-90' : 'bg-red-600')
+                      }
+                      style={{ width: '11px', height: '11px', top: '50%', right: '4px', transform: 'translate(50%, -50%)' }}
+                      title="참석 확정"
                       aria-hidden
-                    />
+                    >
+                      <svg className="block" width={7} height={7} viewBox="0 0 12 12" fill="none" aria-hidden>
+                        <path
+                          d="M2.5 6L5 8.5L9.5 3.5"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
                   ) : null}
-                  <span className="relative z-10">{day}</span>
+                  <span className={dayNumClass}>{day}</span>
                 </button>
               );
             })}
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-600 items-center">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="inline-block w-3 h-3 rounded-sm bg-emerald-400/90 shrink-0 border border-emerald-600/25" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">참석 가능 라이딩</span>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-[10px] sm:text-[11px] text-slate-600 leading-snug open-riding-calendar-legend">
+            <div className="flex gap-2 items-center min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-emerald-400/90 border border-emerald-600/25" aria-hidden />
+              <span className="font-semibold text-slate-700 min-w-0">참석 가능</span>
             </div>
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex gap-2 items-center min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-violet-600 border border-violet-800/30" aria-hidden />
+              <span className="font-semibold text-slate-700 min-w-0">내가 주최</span>
+            </div>
+            <div className="flex gap-2 items-center min-w-0">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm shrink-0 bg-slate-300/90 border border-slate-400/35" aria-hidden />
+              <span className="font-semibold text-slate-700 min-w-0">구경 하기</span>
+            </div>
+            <div className="flex gap-2 items-center min-w-0">
               <span
-                className="inline-block w-3 h-3 rounded-sm shrink-0 border-2 border-red-600 bg-white box-border"
+                className="open-riding-cal-legend-badge shrink-0 inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm"
+                style={{ width: '12px', height: '12px' }}
                 aria-hidden
-              />
-              <span className="text-slate-500 min-w-0 leading-tight">참석 확정 라이딩</span>
-            </div>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="inline-block w-3 h-3 rounded-sm bg-violet-300/90 shrink-0 border border-violet-500/35" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">내가 주최한 라이딩</span>
-            </div>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="inline-block w-3 h-3 rounded-sm bg-slate-300/90 shrink-0 border border-slate-500/30" aria-hidden />
-              <span className="text-slate-500 min-w-0 leading-tight">구경해 볼 라이딩</span>
+              >
+                <svg className="block" width={8} height={8} viewBox="0 0 12 12" fill="none">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span className="font-semibold text-slate-700 min-w-0 leading-tight">참석 확정</span>
             </div>
           </div>
         </section>
@@ -3099,6 +3489,11 @@ function OpenRidingCreateForm(props) {
   var editRideId = props.editRideId || null;
   var onCreated = props.onCreated || function () {};
   var onEditSaved = props.onEditSaved || function () {};
+  var onEditNavMoim = props.onEditNavMoim;
+  var onEditNavDetail = props.onEditNavDetail;
+  var onEditNavDelete = props.onEditNavDelete;
+
+  var formRef = useRef(null);
 
   var st = useState(function () {
     var prof = getOpenRidingProfileDefaults();
@@ -3287,7 +3682,7 @@ function OpenRidingCreateForm(props) {
             setEditHydrated(true);
             return;
           }
-          var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+          var ts = ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
           var ymd = ts ? dateKey(ts.getFullYear(), ts.getMonth(), ts.getDate()) : getTodaySeoulYmd();
           var prof = getOpenRidingProfileDefaults();
           var _svcN = getOpenRidingServiceFns();
@@ -3681,9 +4076,22 @@ function OpenRidingCreateForm(props) {
     return <div className="py-12 text-center text-sm text-slate-500">불러오는 중…</div>;
   }
 
+  var _loginGrForm =
+    typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
+  var _isAdmin1Form =
+    typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function'
+      ? window.isStelvioAdminGrade(_loginGrForm)
+      : false;
+  var editGlassNavPastLocked =
+    !!editRideId &&
+    !!form.date &&
+    String(form.date) < getTodaySeoulYmd() &&
+    !_isAdmin1Form;
+
   /* 폼 루트 z-0, 하단 CTA는 style.css에서 z-5(고정 로고바 10000 미만)로 본문보다만 위 — 스크롤 시 고정바 뒤로 가려짐 */
   return (
-    <form className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
+    <>
+    <form ref={formRef} id="open-riding-ride-form" className="open-riding-create-form-root w-full max-w-lg mx-auto space-y-3 pb-1 text-sm text-slate-700 relative z-0" onSubmit={submit} noValidate>
       {!storage ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50/95 text-amber-900 text-xs px-3 py-2 leading-snug m-0">
           Firebase Storage에 연결되지 않았습니다. GPX 파일은 업로드·저장되지 않습니다. 페이지를 새로고침한 뒤에도 동일하면 Firebase Console에서 Storage 사용 여부와 보안 규칙(쓰기 허용)을 확인해 주세요.
@@ -4242,7 +4650,7 @@ function OpenRidingCreateForm(props) {
               checked={!!form.packGearWater}
               onChange={function (e) { set('packGearWater', e.target.checked); }}
             />
-            <span>식수/개인용</span>
+            <span>식수/개인용(파워젤 및 보급)</span>
           </label>
         </div>
 
@@ -4312,12 +4720,13 @@ function OpenRidingCreateForm(props) {
       </label>
       <p className="text-xs text-slate-500 -mt-1">방장명·연락처는 프로필에서 가져옵니다. 연락처는 참석 신청 후 확정된 참가자에게만 표시됩니다.</p>
 
-      {/* Safe Area + 터치 타깃: 하단 CTA — style.css (고정바보다 낮은 z-index) */}
-      <div className="open-riding-bottom-actions">
-        <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
-          {isBusy ? '저장 중…' : editRideId ? '저장' : '생성'}
-        </button>
-      </div>
+      {!editRideId ? (
+        <div className="open-riding-bottom-actions">
+          <button type="submit" className="open-riding-create-submit open-riding-action-btn h-11 inline-flex items-center justify-center w-full flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50" disabled={isBusy}>
+            {isBusy ? '저장 중…' : '생성'}
+          </button>
+        </div>
+      ) : null}
 
       {dateModalOpen ? (
         <div
@@ -4413,6 +4822,38 @@ function OpenRidingCreateForm(props) {
         </div>
       ) : null}
     </form>
+    {editRideId && isBusy ? (
+      <div
+        className="fixed left-1/2 z-[99990] flex -translate-x-1/2 flex-col items-center gap-1.5 px-4 pointer-events-none"
+        style={{ bottom: 'calc(88px + env(safe-area-inset-bottom, 0px))' }}
+      >
+        <div className="flex flex-col items-center gap-1 rounded-2xl border border-emerald-200/90 bg-white/95 px-4 py-3 shadow-lg">
+          <span
+            className="inline-block h-9 w-9 rounded-full border-[3px] border-emerald-200 border-t-emerald-600 animate-spin"
+            style={{ animationDuration: '0.85s' }}
+            role="status"
+            aria-live="polite"
+            aria-label="저장 중"
+          />
+          <span className="text-[11px] font-semibold text-emerald-800">저장 중…</span>
+        </div>
+      </div>
+    ) : null}
+    {editRideId ? (
+      <OpenRidingEditGlassNav
+        onMoim={typeof onEditNavMoim === 'function' ? onEditNavMoim : function () {}}
+        onEdit={typeof onEditNavDetail === 'function' ? onEditNavDetail : function () {}}
+        onDelete={typeof onEditNavDelete === 'function' ? onEditNavDelete : function () {}}
+        onSave={function () {
+          if (formRef.current && typeof formRef.current.requestSubmit === 'function') {
+            formRef.current.requestSubmit();
+          }
+        }}
+        isBusy={isBusy}
+        hostToolbarLocked={editGlassNavPastLocked}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -4430,6 +4871,7 @@ function OpenRidingDashboardEditIcon(props) {
 /** 라이딩 상세 후기: 일지 Summary 탭과 동일 지표 + 존 차트(가능 시) */
 function OpenRidingRideReviewSummaryContent(props) {
   var log = props.log;
+  var chartUserProfile = props.chartUserProfile;
   if (!log) return null;
   var spd =
     log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
@@ -4439,6 +4881,9 @@ function OpenRidingRideReviewSummaryContent(props) {
     { label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-' },
     { label: '라이딩 시간', value: openRidingReviewFormatDuration(log.duration_sec) },
     { label: '평균 속도', value: openRidingReviewFormatSpeedKmh(spd) },
+    { label: '평균 파워', value: openRidingReviewFormatWatts(log.avg_watts) },
+    { label: 'NP', value: openRidingReviewFormatWatts(log.weighted_watts) },
+    { label: '최대 파워', value: openRidingReviewFormatWatts(log.max_watts) },
     { label: '상승고도', value: openRidingReviewFormatElevationM(log.elevation_gain) },
     { label: '평균 케이던스', value: openRidingReviewFormatCadenceRpm(log.avg_cadence) },
     { label: 'TSS', value: log.tss != null && log.tss > 0 ? String(Math.round(log.tss)) : '-' },
@@ -4446,7 +4891,10 @@ function OpenRidingRideReviewSummaryContent(props) {
     { label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-' }
   ];
   var DailyCharts = typeof window !== 'undefined' ? window.DailyTimeInZonesCharts : null;
-  var up = getOpenRidingJournalUserProfileForCharts();
+  var up =
+    chartUserProfile && typeof chartUserProfile === 'object' && (chartUserProfile.uid || chartUserProfile.id)
+      ? chartUserProfile
+      : getOpenRidingJournalUserProfileForCharts();
   var tizEl = null;
   if (log.time_in_zones && DailyCharts) {
     tizEl = (
@@ -4491,6 +4939,7 @@ function OpenRidingDetail(props) {
   var userId = props.userId;
   var onBack = props.onBack || function () {};
   var onOpenEdit = props.onOpenEdit || function () {};
+  var onHome = props.onHome || function () {};
   var _hooksD = getOpenRidingHooks();
   var useOpenRideDetailFn = _hooksD.useOpenRideDetail;
   if (typeof useOpenRideDetailFn !== 'function') {
@@ -4557,9 +5006,22 @@ function OpenRidingDetail(props) {
   var _revMerged = useState(null);
   var reviewMergedLog = _revMerged[0];
   var setReviewMergedLog = _revMerged[1];
+  /** 'self' | 'host_public' | 'host_fallback' — who the merged review log represents */
+  var _revSrc = useState(null);
+  var reviewMergedLogSource = _revSrc[0];
+  var setReviewMergedLogSource = _revSrc[1];
   var _revLd = useState(false);
   var reviewLogsLoading = _revLd[0];
   var setReviewLogsLoading = _revLd[1];
+
+  /** Snapshot updates change ride reference; review fetch effect deps use primitives only. */
+  var rideYmdRv = ride ? getRideDateSeoulYmd(ride) : '';
+  var rideStatusRv = ride ? String(ride.rideStatus || 'active') : '';
+  var rideHostRv = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+  var rideDistRv =
+    ride && ride.distance != null && Number.isFinite(Number(ride.distance)) ? Number(ride.distance) : null;
+  var hStableRv = openRidingHostPublicSummaryStableKey(ride && ride.hostPublicReviewSummary);
+  var todayRv = getTodaySeoulYmd();
 
   useEffect(
     function () {
@@ -4571,6 +5033,7 @@ function OpenRidingDetail(props) {
       setParticipantListExpanded(false);
       setReviewExpanded(false);
       setReviewMergedLog(null);
+      setReviewMergedLogSource(null);
     },
     [rideId]
   );
@@ -4578,11 +5041,8 @@ function OpenRidingDetail(props) {
   useEffect(
     function () {
       setReviewMergedLog(null);
+      setReviewMergedLogSource(null);
       if (!userId || !ride || loading) {
-        setReviewLogsLoading(false);
-        return undefined;
-      }
-      if (role !== 'participant') {
         setReviewLogsLoading(false);
         return undefined;
       }
@@ -4600,31 +5060,264 @@ function OpenRidingDetail(props) {
       }
       var getRng = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
       var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      if (!getRng || !db) {
+      var svcOr = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var fetchRideByIdFn = typeof svcOr.fetchRideById === 'function' ? svcOr.fetchRideById : null;
+      if (!db) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var rideCancelled = String(ride.rideStatus || 'active') === 'cancelled';
+      var hostReviewPublicWindow = !rideCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
+      var hostUid = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      var uidTrim = String(userId != null ? userId : '').trim();
+      var hostViewingOwnRide = !!hostUid && uidTrim === hostUid;
+      var useOwnOrHostTrainingLogs =
+        role === 'participant' || (hostReviewPublicWindow && hostViewingOwnRide);
+      if (!useOwnOrHostTrainingLogs) {
+        if (!hostReviewPublicWindow || !hostUid || !rideId || !fetchRideByIdFn) {
+          setReviewLogsLoading(false);
+          return undefined;
+        }
+        var hProp = ride.hostPublicReviewSummary;
+        var summaryFromRideProp =
+          rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp)
+            ? openRidingReviewLogFromStoredSummary(hProp.summary, ymd)
+            : null;
+        if (summaryFromRideProp) {
+          setReviewMergedLog(summaryFromRideProp);
+          setReviewMergedLogSource('host_public');
+        }
+        var cancelledPub = false;
+        setReviewLogsLoading(true);
+        fetchRideByIdFn(db, rideId)
+          .then(function (fresh) {
+            if (cancelledPub) return;
+            var h = fresh && fresh.hostPublicReviewSummary;
+            var s = h && h.summary;
+            var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
+            if (
+              s &&
+              typeof s === 'object' &&
+              openRidingYmdEqual(d, ymd) &&
+              openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
+            ) {
+              setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
+              setReviewMergedLogSource('host_public');
+            } else if (summaryFromRideProp) {
+              setReviewMergedLog(summaryFromRideProp);
+              setReviewMergedLogSource('host_public');
+            } else {
+              setReviewMergedLog(null);
+              setReviewMergedLogSource(null);
+            }
+          })
+          .catch(function () {
+            if (!cancelledPub) {
+              if (summaryFromRideProp) {
+                setReviewMergedLog(summaryFromRideProp);
+                setReviewMergedLogSource('host_public');
+              } else {
+                setReviewMergedLog(null);
+                setReviewMergedLogSource(null);
+              }
+            }
+          })
+          .finally(function () {
+            if (!cancelledPub) setReviewLogsLoading(false);
+          });
+        return function () {
+          cancelledPub = true;
+        };
+      }
+      if (!getRng) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var reviewLogUserId = role === 'participant' ? String(userId) : hostUid;
+      if (!reviewLogUserId) {
         setReviewLogsLoading(false);
         return undefined;
       }
       var cancelled = false;
       setReviewLogsLoading(true);
-      getRng(String(userId), year, month, db)
+      function applyHostPublicSummaryDoc(rideDoc, summaryPropFallback) {
+        if (cancelled) return;
+        var h0 = rideDoc && rideDoc.hostPublicReviewSummary;
+        var s0 = h0 && h0.summary;
+        var d0 = h0 && h0.rideDateYmd != null ? String(h0.rideDateYmd).trim() : '';
+        if (
+          s0 &&
+          typeof s0 === 'object' &&
+          openRidingYmdEqual(d0, ymd) &&
+          openRidingHostSummaryQualifiesAsGroupRideUi(rideDoc, { rideDateYmd: d0, summary: s0 })
+        ) {
+          setReviewMergedLog(openRidingReviewLogFromStoredSummary(s0, ymd));
+          if (role === 'participant' && !hostViewingOwnRide) {
+            setReviewMergedLogSource('host_fallback');
+          } else {
+            setReviewMergedLogSource('self');
+          }
+          return;
+        }
+        if (summaryPropFallback) {
+          setReviewMergedLog(summaryPropFallback);
+          if (role === 'participant' && !hostViewingOwnRide) {
+            setReviewMergedLogSource('host_fallback');
+          } else {
+            setReviewMergedLogSource('self');
+          }
+          return;
+        }
+        setReviewMergedLog(null);
+        setReviewMergedLogSource(null);
+      }
+      getRng(reviewLogUserId, year, month, db)
         .then(function (logs) {
           if (cancelled) return;
           var dayLogs = (logs || []).filter(function (log) {
-            return openRidingLogYmdSeoul(log) === ymd && openRidingLogIsStrava(log);
+            return openRidingYmdEqual(openRidingLogYmdSeoul(log), ymd) && openRidingLogIsStrava(log);
           });
-          setReviewMergedLog(openRidingMergeLogsForReviewSummary(dayLogs));
+          if (String(reviewLogUserId) === String(hostUid) && hostUid) {
+            dayLogs = openRidingPickStravaLogsForHostReview(dayLogs, ride);
+          }
+          var merged = openRidingMergeLogsForReviewSummary(dayLogs);
+          if (merged) {
+            setReviewMergedLog(merged);
+            setReviewMergedLogSource('self');
+            if (
+              !cancelled &&
+              hostViewingOwnRide &&
+              hostReviewPublicWindow &&
+              rideId &&
+              db
+            ) {
+              var svcSync = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+              var syncFn0 =
+                typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
+              if (syncFn0) {
+                var chartProfBase = getOpenRidingJournalUserProfileForCharts();
+                syncFn0(db, rideId, ymd, merged, chartProfBase).catch(function (e) {
+                  if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[openRiding] syncHostPublicReviewSummary', e);
+                  }
+                });
+              }
+            }
+            if (!cancelled) setReviewLogsLoading(false);
+            return;
+          }
+          if (!hostReviewPublicWindow || !fetchRideByIdFn || !rideId) {
+            setReviewMergedLog(null);
+            setReviewMergedLogSource(null);
+            if (!cancelled) setReviewLogsLoading(false);
+            return;
+          }
+          var hProp2 = ride.hostPublicReviewSummary;
+          var summaryFromRideProp2 =
+            rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp2)
+              ? openRidingReviewLogFromStoredSummary(hProp2.summary, ymd)
+              : null;
+          fetchRideByIdFn(db, rideId)
+            .then(function (fresh) {
+              applyHostPublicSummaryDoc(fresh || ride, summaryFromRideProp2);
+            })
+            .catch(function () {
+              applyHostPublicSummaryDoc(ride, summaryFromRideProp2);
+            })
+            .finally(function () {
+              if (!cancelled) setReviewLogsLoading(false);
+            });
         })
         .catch(function () {
-          if (!cancelled) setReviewMergedLog(null);
-        })
-        .finally(function () {
-          if (!cancelled) setReviewLogsLoading(false);
+          if (!cancelled) {
+            setReviewMergedLog(null);
+            setReviewMergedLogSource(null);
+            setReviewLogsLoading(false);
+          }
         });
       return function () {
         cancelled = true;
       };
     },
-    [firestore, userId, rideId, loading, role, ride]
+    [
+      firestore,
+      userId,
+      rideId,
+      loading,
+      role,
+      rideYmdRv,
+      rideStatusRv,
+      rideHostRv,
+      rideDistRv,
+      hStableRv,
+      todayRv
+    ]
+  );
+
+  /** Non-participants: refetch rides when expanding review (host may have just synced summary). */
+  useEffect(
+    function () {
+      if (!reviewExpanded) return undefined;
+      if (!userId || !ride || loading) return undefined;
+      var ymd2 = getRideDateSeoulYmd(ride);
+      if (!ymd2) return undefined;
+      var db2 = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      var svcOr2 = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var fetchRideByIdFn2 = typeof svcOr2.fetchRideById === 'function' ? svcOr2.fetchRideById : null;
+      var rideCancelled2 = String(ride.rideStatus || 'active') === 'cancelled';
+      var hostReviewPublicWindow2 = !rideCancelled2 && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
+      var hostUid2 = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      var uidTrim2 = String(userId != null ? userId : '').trim();
+      var hostViewingOwnRide2 = !!hostUid2 && uidTrim2 === hostUid2;
+      var useOwnOrHostTrainingLogs2 =
+        role === 'participant' || (hostReviewPublicWindow2 && hostViewingOwnRide2);
+      if (useOwnOrHostTrainingLogs2 || !hostReviewPublicWindow2 || !rideId || !fetchRideByIdFn2 || !db2) {
+        return undefined;
+      }
+      var hProp2 = ride.hostPublicReviewSummary;
+      var summaryFromRideProp2 =
+        rideDocHostSummaryMatchesRideDate(ride, ymd2) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp2)
+          ? openRidingReviewLogFromStoredSummary(hProp2.summary, ymd2)
+          : null;
+      var cancelledEx = false;
+      fetchRideByIdFn2(db2, rideId)
+        .then(function (fresh) {
+          if (cancelledEx) return;
+          var h = fresh && fresh.hostPublicReviewSummary;
+          var s = h && h.summary;
+          var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
+          if (
+            s &&
+            typeof s === 'object' &&
+            openRidingYmdEqual(d, ymd2) &&
+            openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
+          ) {
+            setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd2));
+            setReviewMergedLogSource('host_public');
+          } else if (summaryFromRideProp2) {
+            setReviewMergedLog(summaryFromRideProp2);
+            setReviewMergedLogSource('host_public');
+          }
+        })
+        .catch(function () {});
+      return function () {
+        cancelledEx = true;
+      };
+    },
+    [
+      reviewExpanded,
+      firestore,
+      userId,
+      rideId,
+      loading,
+      role,
+      rideYmdRv,
+      rideStatusRv,
+      rideHostRv,
+      rideDistRv,
+      hStableRv,
+      todayRv
+    ]
   );
 
   useEffect(
@@ -4968,7 +5661,7 @@ function OpenRidingDetail(props) {
     );
   }
 
-  var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  var ts = ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   var dateStr = ts ? ts.toLocaleDateString('ko-KR') : '';
 
   var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
@@ -4984,6 +5677,8 @@ function OpenRidingDetail(props) {
   var phoneInvited = !!(
     typeof _svcInv.isUserPhoneInvitedToRide === 'function' && _svcInv.isUserPhoneInvitedToRide(myPhoneForInvite, invitedListArr)
   );
+  /** (+) 펼침: 방장 또는 (전화 초대 대상이면서 참석·대기 신청 완료) */
+  var inviteListToggleEnabled = isHost || (!!userId && phoneInvited && hasApplied);
   var pwdStored = String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
     .replace(/\D/g, '')
     .slice(0, 4);
@@ -5011,6 +5706,14 @@ function OpenRidingDetail(props) {
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
   var maskContacts = shouldMaskOpenRidingContacts(ride);
+  var joinApplyClosedBySchedule = openRidingIsJoinClosedByScheduleUi(ride);
+  /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
+  var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
+  var rideYmdHint = getRideDateSeoulYmd(ride);
+  var guestHostSummaryOnRide =
+    role !== 'participant' &&
+    !!rideYmdHint &&
+    openRidingHostSummaryQualifiesAsGroupRideUi(ride, ride.hostPublicReviewSummary);
   /** 서울 기준 일정일이 지난 뒤에는 방장도 수정/취소/삭제 불가 — grade=1 관리자는 예외 */
   var _loginGr =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
@@ -5051,8 +5754,9 @@ function OpenRidingDetail(props) {
     );
   }
 
-  /* 상세 본문 루트 z-0, 하단 CTA는 고정 로고바보다 낮은 스택(style.css). 수정/취소 행·게스트 상단 추가 여백 없음 */
+  /* 상세 본문 루트 z-0, 방장 수정/폭파/삭제는 하단 글래스 네비(OpenRidingDetailGlassNav) */
   return (
+    <>
     <div
       className={
         'open-riding-detail-content-root max-w-lg mx-auto w-full relative z-0 ' +
@@ -5063,62 +5767,6 @@ function OpenRidingDetail(props) {
         <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2 m-0">
           이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
         </p>
-      ) : null}
-
-      {isHost && !isCancelled ? (
-        <div className="flex justify-end items-center gap-2 flex-wrap min-w-0 open-riding-detail-host-actions px-1">
-          <button
-            type="button"
-            disabled={hostToolbarPastLocked}
-            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined}
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-800 shadow-sm hover:bg-violet-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
-            onClick={onOpenEdit}
-            aria-label="라이딩 수정"
-          >
-            <OpenRidingDashboardEditIcon className="w-5 h-5 shrink-0 text-violet-700" />
-            <span>수정</span>
-          </button>
-          <button
-            type="button"
-            disabled={hostToolbarPastLocked}
-            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined}
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
-            onClick={function () {
-              setBombOpen(true);
-            }}
-            aria-label="라이딩 취소"
-          >
-            <img
-              src="assets/img/cancel01.png"
-              alt=""
-              width={20}
-              height={20}
-              className="block object-contain shrink-0"
-              decoding="async"
-            />
-            <span>취소</span>
-          </button>
-          <button
-            type="button"
-            disabled={hostToolbarPastLocked}
-            title={hostToolbarPastLocked ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined}
-            className="open-riding-host-toolbar-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 active:opacity-90 transition-colors shrink-0 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:opacity-45"
-            onClick={function () {
-              setDeleteModalOpen(true);
-            }}
-            aria-label="라이딩 삭제"
-          >
-            <img
-              src="assets/img/delete2.png"
-              alt=""
-              width={20}
-              height={20}
-              className="block object-contain shrink-0"
-              decoding="async"
-            />
-            <span>삭제</span>
-          </button>
-        </div>
       ) : null}
 
       <div className={'open-riding-detail-stat-panel rounded-xl overflow-hidden' + detailMuted}>
@@ -5317,8 +5965,20 @@ function OpenRidingDetail(props) {
               <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
                 <button
                   type="button"
-                  className="m-0 p-0 bg-transparent border-0 cursor-pointer text-left text-sm font-semibold leading-[1.25rem] text-[#6d28d9] hover:text-[#5b21b6] focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded"
+                  disabled={!inviteListToggleEnabled}
+                  title={
+                    !inviteListToggleEnabled && !isHost
+                      ? '초대받은 뒤 참석(또는 대기) 신청을 완료한 경우에만 펼칠 수 있습니다.'
+                      : undefined
+                  }
+                  className={
+                    'm-0 p-0 bg-transparent border-0 text-left text-sm font-semibold leading-[1.25rem] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ' +
+                    (inviteListToggleEnabled
+                      ? 'cursor-pointer text-[#6d28d9] hover:text-[#5b21b6]'
+                      : 'cursor-not-allowed text-slate-400 opacity-70')
+                  }
                   onClick={function () {
+                    if (!inviteListToggleEnabled) return;
                     setInviteListExpanded(function (v) {
                       return !v;
                     });
@@ -5564,8 +6224,24 @@ function OpenRidingDetail(props) {
             <div className="open-riding-detail-stat-value min-w-0 flex flex-col items-end text-right gap-0.5">
               <span className="text-xs text-slate-500 leading-tight font-medium">
                 {reviewMergedLog
-                  ? '펼쳐보기 하면 라이딩 후기를 확인하실 수 있습니다.'
-                  : '라이딩이 종료되면 후기 자동 작성됩니다.'}
+                  ? '펼치어보기 하면 라이딩 후기를 확인하실 수 있습니다.'
+                  : role === 'participant' && hostPublicReviewWindow
+                    ? joinApplyClosedBySchedule
+                      ? "종료된 일정입니다. (+)를 눌러 후기 요약을 확인하세요."
+                      : openRidingIsRideScheduleDayTodaySeoul(ride) &&
+                          !rideDocHostSummaryMatchesRideDate(ride, rideYmdHint) &&
+                          !isOpenRidingPastBySeoulDate(ride)
+                        ? "오늘 일정입니다. 훈련일지에 라이딩이 반영되면 종료·후기 요약이 표시될 수 있습니다. (+)를 다시 눌러 최신 상태를 불러오세요."
+                        : "해당 일정일 STRAVA 기록이 훈련일지에 반영되면 본인 후기가 표시되고, 없으면 방장 후기가 표시됩니다."
+                    : role !== 'participant' && hostPublicReviewWindow
+                      ? joinApplyClosedBySchedule
+                        ? '종료된 일정입니다. (+)를 눌러 방장 후기 요약을 확인하세요.'
+                        : openRidingIsRideScheduleDayTodaySeoul(ride) &&
+                            !guestHostSummaryOnRide &&
+                            !isOpenRidingPastBySeoulDate(ride)
+                          ? "오늘 일정입니다. 방장의 훈련일지에 라이딩이 반영되면 종료로 보고 방장 후기 요약이 표시됩니다. (+)를 다시 눌러 최신 상태를 불러오세요."
+                          : "방장 후기가 등록되면 요약이 표시됩니다."
+                      : "라이딩이 종료되면 후기 자동 작성됩니다."}
               </span>
             </div>
           </div>
@@ -5575,17 +6251,53 @@ function OpenRidingDetail(props) {
               role="region"
               aria-labelledby="open-riding-review-toggle"
             >
-              {role !== 'participant' ? (
-                <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다.
-                </p>
-              ) : reviewLogsLoading ? (
-                <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
-              ) : reviewMergedLog ? (
-                <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+              {role === 'participant' ? (
+                reviewLogsLoading ? (
+                  <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
+                ) : reviewMergedLog ? (
+                  <div className="w-full min-w-0 space-y-2">
+                    {reviewMergedLogSource === 'host_fallback' ? (
+                      <p className="text-xs text-slate-600 m-0 font-semibold">방장 후기 (본인 STRAVA 기록 없음)</p>
+                    ) : null}
+                    <OpenRidingRideReviewSummaryContent
+                      log={reviewMergedLog}
+                      chartUserProfile={openRidingResolveReviewChartUserProfile(
+                        reviewMergedLog,
+                        reviewMergedLogSource,
+                        ride
+                      )}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                    이 일정일에 본인 STRAVA 라이딩 기록이 없고, 방장 공개 후기도 아직 없거나 종료 조건에 해당하지 않습니다.
+                  </p>
+                )
+              ) : hostPublicReviewWindow ? (
+                reviewLogsLoading ? (
+                  <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
+                ) : reviewMergedLog ? (
+                  <div className="w-full min-w-0 space-y-2">
+                    <p className="text-xs text-slate-600 m-0 font-semibold">방장 후기(공개)</p>
+                    <OpenRidingRideReviewSummaryContent
+                      log={reviewMergedLog}
+                      chartUserProfile={openRidingResolveReviewChartUserProfile(
+                        reviewMergedLog,
+                        reviewMergedLogSource,
+                        ride
+                      )}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                    {openRidingIsRideScheduleDayTodaySeoul(ride)
+                      ? '오늘 일정입니다. 방장의 STRAVA 라이딩 기록이 훈련일지에 반영되면 방장 후기 요약이 여기에 표시됩니다. 이미 반영되었다면 후기 (+)를 다시 눌러 최신 내용을 불러오세요.'
+                      : '방장 후기가 아직 등록되지 않았습니다. 해당 일정일(서울 기준)에 방장의 STRAVA 라이딩 기록이 훈련일지에 반영되면 여기에 표시됩니다.'}
+                  </p>
+                )
               ) : (
                 <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  이 일정일에 STRAVA 라이딩 기록이 없거나 아직 라이딩이 종료되지 않았습니다.
+                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다. 모임 일정일이 도래한 날부터는 방장 후기가 등록되면 요약을 확인할 수 있습니다.
                 </p>
               )}
             </div>
@@ -5635,14 +6347,24 @@ function OpenRidingDetail(props) {
                   <button
                     type="button"
                     className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
-                    disabled={isActionBusy || !userId || !joinInviteOk}
-                    title={!joinInviteOk ? '초대된 연락처 또는 입장 비밀번호가 필요합니다' : undefined}
+                    disabled={isActionBusy || !userId || !joinInviteOk || joinApplyClosedBySchedule}
+                    title={
+                      joinApplyClosedBySchedule
+                        ? '일정이 지났거나, 오늘 모임은 방장 라이딩 기록(모임 거리 ±10% 또는 모임보다 긴 거리)이 확인되어 종료되었습니다'
+                        : !joinInviteOk
+                          ? '초대된 연락처 또는 입장 비밀번호가 필요합니다'
+                          : undefined
+                    }
                     onClick={function () {
-                      if (!joinInviteOk) return;
+                      if (!joinInviteOk || joinApplyClosedBySchedule) return;
                       setJoinShareModalOpen(true);
                     }}
                   >
-                    {joinInviteOk ? '참석 신청' : '참석 신청 (입장 조건)'}
+                    {joinApplyClosedBySchedule
+                      ? '참석 신청 마감'
+                      : joinInviteOk
+                        ? '참석 신청'
+                        : '참석 신청 (입장 조건)'}
                   </button>
                 ) : null}
               </div>
@@ -5737,10 +6459,10 @@ function OpenRidingDetail(props) {
                 !
               </span>
               <h2 id="open-riding-bomb-title" className="text-base font-bold text-slate-800 m-0 leading-tight">
-                라이딩 취소
+                라이딩 폭파
               </h2>
             </div>
-            <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 취소하시겠습니까?</p>
+            <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 폭파하시겠습니까?</p>
             <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
             <div className="stelvio-exit-confirm-buttons">
               <button
@@ -5819,6 +6541,20 @@ function OpenRidingDetail(props) {
         </div>
       ) : null}
     </div>
+    <OpenRidingDetailGlassNav
+      onHome={onHome}
+      onMoim={onBack}
+      onEdit={onOpenEdit}
+      onCancel={function () {
+        setBombOpen(true);
+      }}
+      onDelete={function () {
+        setDeleteModalOpen(true);
+      }}
+      hostToolbarLocked={hostToolbarPastLocked}
+      showHostActions={!isCancelled && (isHost || _isAdmin1)}
+    />
+    </>
   );
 }
 
@@ -6575,21 +7311,21 @@ function OpenRidingRoomApp(props) {
     [firestore, userId, view]
   );
 
-  function handleTopBack() {
-    if (view === 'main') {
-      if (typeof showScreen === 'function') showScreen('basecampScreen');
-    } else if (view === 'friends') {
-      setView('main');
-    } else if (view === 'filter') {
-      setView('main');
-    } else if (view === 'edit') {
-      setView('detail');
-    } else if (view === 'create') {
-      setView('main');
-    } else {
-      setDetailRideId(null);
-      setView('main');
-    }
+  function handleEditNavDeleteRide() {
+    if (!firestore || !userId || !detailRideId) return;
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (typeof svc.deleteRideByHost !== 'function') return;
+    if (!window.confirm('등록한 라이딩을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) return;
+    svc
+      .deleteRideByHost(firestore, detailRideId, userId)
+      .then(function () {
+        setDetailRideId(null);
+        setView('main');
+      })
+      .catch(function (err) {
+        console.warn('[openRiding] deleteRideByHost', err);
+        alert('삭제에 실패했습니다.');
+      });
   }
 
   var headerTitle =
@@ -6598,7 +7334,7 @@ function OpenRidingRoomApp(props) {
       : view === 'edit'
         ? '라이딩 수정'
         : view === 'detail'
-          ? '라이딩 일정 상세'
+          ? '세부 내용'
           : view === 'filter'
             ? '맞춤 필터 설정'
             : view === 'friends'
@@ -6606,7 +7342,13 @@ function OpenRidingRoomApp(props) {
               : '라이딩 모임';
 
   var useGlassBottomNavSpacer = !!(
-    firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends')
+    firestore &&
+    (view === 'main' ||
+      view === 'filter' ||
+      view === 'create' ||
+      view === 'friends' ||
+      (view === 'detail' && detailRideId) ||
+      (view === 'edit' && detailRideId))
   );
 
   var inner = null;
@@ -6634,6 +7376,13 @@ function OpenRidingRoomApp(props) {
         editRideId={detailRideId}
         onCreated={function () { setView('main'); }}
         onEditSaved={function () { setView('detail'); }}
+        onEditNavMoim={function () {
+          setView('main');
+        }}
+        onEditNavDetail={function () {
+          setView('detail');
+        }}
+        onEditNavDelete={handleEditNavDeleteRide}
       />
     );
   } else if (view === 'detail' && detailRideId) {
@@ -6645,6 +7394,9 @@ function OpenRidingRoomApp(props) {
         userId={userId}
         onBack={function () { setView('main'); }}
         onOpenEdit={function () { setView('edit'); }}
+        onHome={function () {
+          if (typeof showScreen === 'function') showScreen('basecampScreen');
+        }}
       />
     );
   } else if (view === 'friends') {
@@ -6676,89 +7428,13 @@ function OpenRidingRoomApp(props) {
   return (
     <div className="open-riding-app-root relative z-0">
       <div className="open-riding-inner-header">
-        {view === 'detail' ? (
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
-            <div className="flex justify-start min-w-0 shrink-0">
-              <button
-                type="button"
-                className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-                style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                onClick={handleTopBack}
-                aria-label="미니 달력 화면으로"
-              >
-                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            </div>
-            <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
-              {headerTitle}
-            </h1>
-            <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
-          </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all shrink-0"
-              style={{ width: '2.5em', padding: 8, borderRadius: 8, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={handleTopBack}
-              aria-label={view === 'main' ? '경로 선택' : '미니 달력 화면으로'}
-            >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: 24, height: 24, color: '#4b5563' }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h1 className="open-riding-screen-title flex-1 text-center m-0">
-              {headerTitle}
-            </h1>
-            {view === 'main' && userId ? (
-              <div className="relative shrink-0 w-[2.5em] h-[2.5em] flex items-center justify-center">
-                <button
-                  type="button"
-                  className="p-1 rounded-lg hover:bg-gray-100 border-0 bg-transparent cursor-pointer flex items-center justify-center w-full h-full"
-                  onClick={function () {
-                    setView('friends');
-                  }}
-                  aria-label={'친구 관리' + (pendingIncomingCount > 0 ? ' (새 요청 ' + pendingIncomingCount + '건)' : '')}
-                >
-                  <img
-                    src="assets/img/friends.png"
-                    alt=""
-                    width={26}
-                    height={26}
-                    className="block object-contain"
-                    decoding="async"
-                    onError={function (e) {
-                      e.currentTarget.src = 'assets/img/friends.svg';
-                      e.currentTarget.onerror = null;
-                    }}
-                  />
-                </button>
-                {pendingIncomingCount > 0 ? (
-                  <span
-                    className="absolute pointer-events-none flex items-center justify-center rounded-full bg-violet-600 text-white font-bold leading-none border-2 border-white shadow-sm z-10"
-                    style={{
-                      minWidth: '15px',
-                      height: '15px',
-                      fontSize: pendingIncomingCount > 9 ? 8 : 9,
-                      paddingLeft: pendingIncomingCount > 9 ? 3 : 4,
-                      paddingRight: pendingIncomingCount > 9 ? 3 : 4,
-                      top: '0',
-                      right: '0',
-                      transform: 'translate(20%, -35%)'
-                    }}
-                    aria-hidden="true"
-                  >
-                    {pendingIncomingCount > 99 ? '99+' : pendingIncomingCount}
-                  </span>
-                ) : null}
-              </div>
-            ) : (
-              <span className="shrink-0 inline-block" style={{ width: '2.5em' }} aria-hidden="true" />
-            )}
-          </>
-        )}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full min-w-0 flex-1 gap-x-1">
+          <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+          <h1 className="open-riding-screen-title m-0 min-w-0 px-0.5 text-center truncate" title={headerTitle}>
+            {headerTitle}
+          </h1>
+          <span className="shrink-0 inline-block w-[2.5em]" aria-hidden="true" />
+        </div>
       </div>
       {/* 스크롤 전용 본문: pseudo는 pointer-events:none. 메인·필터는 글래스 하단 네비만큼 하단 여백(style.css) */}
       <div
@@ -6774,8 +7450,17 @@ function OpenRidingRoomApp(props) {
       </div>
       {firestore && (view === 'main' || view === 'filter' || view === 'create' || view === 'friends') ? (
         <OpenRidingBottomGlassNav
-          navVariant={view === 'create' ? 'create' : view === 'friends' ? 'friends' : 'main'}
-          activeTab={view === 'filter' ? 'filter' : ''}
+          navVariant={
+            view === 'main'
+              ? 'main'
+              : view === 'filter'
+                ? 'filter'
+                : view === 'create'
+                  ? 'create'
+                  : view === 'friends'
+                    ? 'friends'
+                    : 'main'
+          }
           onHome={function () {
             if (typeof showScreen === 'function') showScreen('basecampScreen');
           }}
