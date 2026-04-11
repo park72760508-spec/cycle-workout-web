@@ -105,7 +105,7 @@ function openRidingPackRulesDisplay(prNorm) {
   if (g.helmet) gearLines.push('헬멧(미착용 참석 불가)');
   if (g.lights) gearLines.push('전/후미등');
   if (g.puncture) gearLines.push('펑크 대비 용품');
-  if (g.water) gearLines.push('식수/개인용');
+  if (g.water) gearLines.push('식수/개인용(파워젤 및 보급)');
   var minors =
     pr.minorsAllowed === 'yes' ? '예' : pr.minorsAllowed === 'no' ? '아니오' : '';
   return {
@@ -2259,7 +2259,7 @@ function OpenRidingEditGlassNav(props) {
           className={openRidingGlassNavBtnClass(true)}
           onClick={onEdit}
           aria-current="page"
-          aria-label="일정 상세 화면으로"
+          aria-label="세부 내용 화면으로"
         >
           <OpenRidingDashboardEditIcon className="open-riding-bottom-glass-nav__icon text-violet-600 shrink-0" />
           <span className="open-riding-bottom-glass-nav__label">수정</span>
@@ -4496,7 +4496,7 @@ function OpenRidingCreateForm(props) {
               checked={!!form.packGearWater}
               onChange={function (e) { set('packGearWater', e.target.checked); }}
             />
-            <span>식수/개인용</span>
+            <span>식수/개인용(파워젤 및 보급)</span>
           </label>
         </div>
 
@@ -7158,7 +7158,7 @@ function OpenRidingRoomApp(props) {
       : view === 'edit'
         ? '라이딩 수정'
         : view === 'detail'
-          ? '라이딩 일정 상세'
+          ? '세부 내용'
           : view === 'filter'
             ? '맞춤 필터 설정'
             : view === 'friends'
