@@ -828,7 +828,7 @@ function rideDocHostSummaryMatchesRideDate(ride, ymd) {
   return openRidingYmdEqual(h.rideDateYmd, ymd);
 }
 
-/** Delegates to openRidingService (single source of truth for ±10% rules). */
+/** Delegates to openRidingService (single source of truth for ±10% or longer-than-planned rules). */
 function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
   if (typeof svc.openRidingHostSummaryQualifiesAsGroupRide === 'function') {
@@ -845,7 +845,7 @@ function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
   if (planned > 0) {
     var lo = planned * 0.9;
     var hi = planned * 1.1;
-    return logged >= lo && logged <= hi;
+    return (logged >= lo && logged <= hi) || logged > planned;
   }
   return logged >= 12;
 }
@@ -891,8 +891,8 @@ function openRidingLogIsStrava(log) {
 }
 
 /**
- * Host Strava logs same day: keep only activities within ±10% of ride.distance (km).
- * No match => [] (commute-only / wrong distance => no public sync).
+ * Host Strava logs same day: activities within ±10% of ride.distance (km), or distance > planned.
+ * Among matches, pick the one closest to planned km (avoids picking a random ultra when a ~P ride exists).
  * If ride.distance unset: use single longest activity.
  * @param {object[]} dayLogs filtered same-day Strava logs
  * @param {object} ride
@@ -910,17 +910,17 @@ function openRidingPickStravaLogsForHostReview(dayLogs, ride) {
   }
   var lo = p * (1 - tol);
   var hi = p * (1 + tol);
-  var band = dayLogs.filter(function (l) {
+  var candidates = dayLogs.filter(function (l) {
     var d = Number(l.distance_km != null ? l.distance_km : 0) || 0;
-    return d >= lo && d <= hi;
+    return (d >= lo && d <= hi) || d > p;
   });
-  if (band.length === 0) return [];
-  band.sort(function (a, b) {
+  if (candidates.length === 0) return [];
+  candidates.sort(function (a, b) {
     var da = Math.abs((Number(a.distance_km) || 0) - p);
     var db = Math.abs((Number(b.distance_km) || 0) - p);
     return da - db;
   });
-  return [band[0]];
+  return [candidates[0]];
 }
 
 function openRidingReviewFormatDuration(sec) {
@@ -6026,7 +6026,7 @@ function OpenRidingDetail(props) {
                     disabled={isActionBusy || !userId || !joinInviteOk || joinApplyClosedBySchedule}
                     title={
                       joinApplyClosedBySchedule
-                        ? '일정이 지났거나, 오늘 모임은 방장 라이딩 기록(모임 거리 ±10%)이 확인되어 종료되었습니다'
+                        ? '일정이 지났거나, 오늘 모임은 방장 라이딩 기록(모임 거리 ±10% 또는 모임보다 긴 거리)이 확인되어 종료되었습니다'
                         : !joinInviteOk
                           ? '초대된 연락처 또는 입장 비밀번호가 필요합니다'
                           : undefined
