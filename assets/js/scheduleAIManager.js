@@ -917,7 +917,6 @@
     scheduleLog('START', '스케줄 생성 시작', {});
 
     var btn = document.getElementById('btnGenerateAISchedule');
-    var btnRow = document.getElementById('aiScheduleBtnRow');
     var userId = getUserId();
     var rtdbUid = getUserIdForRTDB();
     scheduleLog('USER', 'getUserId=' + (userId || '(없음)') + ', getUserIdForRTDB=' + (rtdbUid || '(없음)'), { userId: userId, rtdbUid: rtdbUid });
@@ -978,7 +977,6 @@
     var isEliteOrPro = goal === 'Elite' || goal === 'Pro';
 
     if (btn) { btn.disabled = true; btn.textContent = '생성 중...'; }
-    if (btnRow) btnRow.style.display = 'none';
     showAiScheduleLoadingOverlay(true);
     updateScheduleProgress(true, '사용자 목표 분석 중...', '');
 
@@ -1005,7 +1003,6 @@
       showAiScheduleLoadingOverlay(false);
       updateScheduleProgress(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
-      if (btnRow) btnRow.style.display = 'flex';
       if (typeof showToast === 'function') showToast('대회 일정이 과거입니다.', 'error');
       return;
     }
@@ -1037,7 +1034,6 @@
       showAiScheduleLoadingOverlay(false);
       updateScheduleProgress(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
-      if (btnRow) btnRow.style.display = 'flex';
       if (typeof showToast === 'function') showToast('인도어 또는 아웃도어 요일을 최소 하나씩 선택해주세요.', 'error');
       return;
     }
@@ -1355,7 +1351,6 @@ ${workoutsContext}
     } finally {
       showAiScheduleLoadingOverlay(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
-      if (btnRow) btnRow.style.display = 'flex';
     }
   };
 
