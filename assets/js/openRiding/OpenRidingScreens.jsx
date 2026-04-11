@@ -4691,10 +4691,6 @@ function OpenRidingDetail(props) {
         setReviewLogsLoading(false);
         return undefined;
       }
-      if (role !== 'participant') {
-        setReviewLogsLoading(false);
-        return undefined;
-      }
       var ymd = getRideDateSeoulYmd(ride);
       if (!ymd) {
         setReviewLogsLoading(false);
@@ -4713,9 +4709,22 @@ function OpenRidingDetail(props) {
         setReviewLogsLoading(false);
         return undefined;
       }
+      /** Review summary source: participant -> own logs; ended ride + non-participant -> host logs (public). */
+      var rideEnded = isOpenRidingPastBySeoulDate(ride);
+      var reviewLogUserId = '';
+      if (role === 'participant') {
+        reviewLogUserId = String(userId);
+      } else if (rideEnded) {
+        var hostUid = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+        if (hostUid) reviewLogUserId = hostUid;
+      }
+      if (!reviewLogUserId) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
       var cancelled = false;
       setReviewLogsLoading(true);
-      getRng(String(userId), year, month, db)
+      getRng(reviewLogUserId, year, month, db)
         .then(function (logs) {
           if (cancelled) return;
           var dayLogs = (logs || []).filter(function (log) {
@@ -5643,17 +5652,32 @@ function OpenRidingDetail(props) {
               role="region"
               aria-labelledby="open-riding-review-toggle"
             >
-              {role !== 'participant' ? (
-                <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다.
-                </p>
-              ) : reviewLogsLoading ? (
-                <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
-              ) : reviewMergedLog ? (
-                <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+              {role === 'participant' ? (
+                reviewLogsLoading ? (
+                  <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
+                ) : reviewMergedLog ? (
+                  <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+                ) : (
+                  <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                    이 일정일에 STRAVA 라이딩 기록이 없거나 아직 라이딩이 종료되지 않았습니다.
+                  </p>
+                )
+              ) : isOpenRidingPastBySeoulDate(ride) ? (
+                reviewLogsLoading ? (
+                  <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
+                ) : reviewMergedLog ? (
+                  <div className="w-full min-w-0 space-y-2">
+                    <p className="text-xs text-slate-600 m-0 font-semibold">방장 후기(공개)</p>
+                    <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                    종료된 모임입니다. 해당 일정일(서울 기준)에 방장의 STRAVA 라이딩 기록이 훈련일지에 없어 요약을 표시할 수 없습니다.
+                  </p>
+                )
               ) : (
                 <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  이 일정일에 STRAVA 라이딩 기록이 없거나 아직 라이딩이 종료되지 않았습니다.
+                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다. 모임 종료 후에는 방장의 후기 요약을 확인할 수 있습니다.
                 </p>
               )}
             </div>
