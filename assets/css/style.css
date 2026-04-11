@@ -1574,7 +1574,7 @@ html.global-hub-glass-nav-active .global-back-to-top-btn.global-back-to-top-acti
   z-index: 0;
 }
 
-/* 라이딩 일정 상세: 루트·본문 상단 패딩·스택 간격·게스트 상단·방장 수정/취소 행 상하 마진 제거(0) */
+/* 세부 내용: 루트·본문 상단 패딩·스택 간격·게스트 상단·방장 수정/취소 행 상하 마진 제거(0) */
 #openRidingRoomScreen .open-riding-app-body--riding-detail {
   padding-top: 0;
 }
@@ -13719,6 +13719,60 @@ html.is-android #trainingDetailModal .training-detail-body {
   width: min(480px, calc(100vw - 24px));
   max-height: 90vh;
   margin: 12px;
+}
+
+/* AI 스케줄 생성 — 전체 화면 (하단 글래스 네비 여백 반영) */
+#scheduleCreateAIModal.ai-schedule-fullscreen {
+  align-items: stretch;
+  justify-content: stretch;
+  background: #fff;
+  padding: 0;
+  z-index: 100005;
+}
+
+#scheduleCreateAIModal.ai-schedule-fullscreen .ai-schedule-fullscreen-overlay {
+  display: none !important;
+}
+
+#scheduleCreateAIModal.ai-schedule-fullscreen .ai-schedule-modal-content.modal-content {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  min-height: 100%;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+#scheduleCreateAIModal.ai-schedule-fullscreen .ai-schedule-modal-header {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#scheduleCreateAIModal.ai-schedule-fullscreen .ai-schedule-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  padding-bottom: calc(16px + var(--hub-glass-nav-scroll-pad, 88px) + 48px + env(safe-area-inset-bottom, 0px));
+}
+
+.ai-schedule-generate-wrap {
+  margin-top: 12px;
+}
+
+.ai-schedule-generate-wrap .ai-schedule-generate-submit.stelvio-ranking-board-entry-btn {
+  max-width: none;
+  width: 100%;
+  margin-bottom: 0;
+  padding: 14px 18px;
+  font-size: 1rem;
+  min-height: 48px;
 }
 
 .ai-schedule-modal-body {
