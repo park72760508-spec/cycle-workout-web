@@ -382,6 +382,19 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
     console.warn('[saveTrainingSession] ⚠️ weighted_watts(NP)가 0 이하입니다:', np);
   }
   
+  let rollingHrBeforeTx = null;
+  if (
+    userId &&
+    typeof window !== 'undefined' &&
+    typeof window.getMaxHrFromLogsRolling365Days === 'function'
+  ) {
+    try {
+      rollingHrBeforeTx = await window.getMaxHrFromLogsRolling365Days(userId);
+    } catch (eRoll) {
+      console.warn('[saveTrainingSession] rolling 365d max HR 조회 실패:', eRoll && eRoll.message);
+    }
+  }
+
   try {
     // Transaction 실행
     const result = await runTransaction(db, async (transaction) => {
@@ -525,38 +538,25 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         ? (np / trainingData.avg_hr) 
         : null;
       
-      // Max HR: yearly_peaks/{year} 존재 시 반드시 사용, 없을 때만 스트림 최대값 → 기본 190
+      // Max HR: local today, max HR from logs in last 365 days; current session stream can raise it
       const now = new Date();
       const dateStrForLog = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const year = now.getFullYear();
       let maxHr = DEFAULT_MAX_HR;
-      let usedYearlyPeaks = false;
-      if (userId) {
-        try {
-          const yearlyPeakRef = doc(db, 'users', userId, 'yearly_peaks', String(year));
-          const yearlySnap = await transaction.get(yearlyPeakRef);
-          if (yearlySnap.exists()) {
-            const yp = yearlySnap.data() || {};
-            const v = Number(yp?.max_hr ?? yp?.max_heartrate ?? 0);
-            if (v > 0) {
-              maxHr = v;
-              usedYearlyPeaks = true;
-            }
-          }
-        } catch (e) {
-          console.warn('[saveTrainingSession] yearly_peaks 조회 실패:', e.message);
-        }
+      const rollingMax =
+        rollingHrBeforeTx && Number(rollingHrBeforeTx.maxHr) > 0 ? Number(rollingHrBeforeTx.maxHr) : 0;
+      if (rollingMax > 0) {
+        maxHr = rollingMax;
       }
       const hrOneHz = trainingData.hrData && trainingData.hrData.length > 0
         ? streamSamplesToOneHzSeconds(trainingData.hrData, durationSec)
         : [];
 
-      if (!usedYearlyPeaks && hrOneHz.length > 0) {
+      if (hrOneHz.length > 0) {
         const fromStream = Math.max(...hrOneHz.filter((v) => v > 0 && v <= HR_MAX_BPM));
-        if (fromStream > 0) maxHr = fromStream;
+        if (fromStream > maxHr) maxHr = fromStream;
       }
-      
-      // 존 분포 계산 (Power: z0~z7, HR: z1~z5)
+
+      // Zone time: power z0~z7, HR z1~z5
       const powerZones = { z0: 0, z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, z6: 0, z7: 0 };
       const hrZones = { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 };
       if (rawWattsForFtp.length > 0) {

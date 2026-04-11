@@ -27,7 +27,7 @@ const HR_ZONE_COLORS = [
   { z: 'Z5', color: 'rgba(239, 68, 68, 0.55)', label: 'Z5', pct: '90~100%' }
 ];
 
-/** Logged-in user id — skip fetching other users yearly_peaks (permission + HR caption match). */
+/** Logged-in user id — skip fetching other users' logs for rolling max HR (permission). */
 function getChartViewerUserId() {
   var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
   if (!u) {
@@ -376,11 +376,11 @@ function RiderTimeInZonesCharts(props) {
   var setMaxHr = _useState[1];
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
-    var year = today.getFullYear();
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    if (!userId || typeof window.fetchMaxHrRolling365Days !== 'function') return;
     var viewerId = getChartViewerUserId();
     if (viewerId && String(userId) !== String(viewerId)) return;
-    window.fetchMaxHrForYear(userId, year).then(function(hr) {
+    window.fetchMaxHrRolling365Days(userId).then(function(res) {
+      var hr = res && res.maxHr;
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
   }, [userProfile && (userProfile.id || userProfile.uid)]);
@@ -424,16 +424,16 @@ function DailyTimeInZonesCharts(props) {
   var _useState = React.useState(fallbackMaxHr);
   var maxHr = _useState[0];
   var setMaxHr = _useState[1];
-  var logYear = getYearFromLogDate(log && log.date);
   React.useEffect(function() {
     var userId = (userProfile && (userProfile.id || userProfile.uid)) || (log && (log.user_id || log.userId));
-    if (!userId || !logYear || typeof window.fetchMaxHrForYear !== 'function') return;
+    if (!userId || typeof window.fetchMaxHrRolling365Days !== 'function') return;
     var viewerId = getChartViewerUserId();
     if (viewerId && String(userId) !== String(viewerId)) return;
-    window.fetchMaxHrForYear(userId, logYear).then(function(hr) {
+    window.fetchMaxHrRolling365Days(userId).then(function(res) {
+      var hr = res && res.maxHr;
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
-  }, [userProfile && (userProfile.id || userProfile.uid), log && (log.user_id || log.userId), logYear]);
+  }, [userProfile && (userProfile.id || userProfile.uid), log && (log.user_id || log.userId)]);
   React.useEffect(function() {
     var profileUserId = (userProfile && (userProfile.id || userProfile.uid)) || '';
     var viewerId = getChartViewerUserId();
@@ -448,8 +448,7 @@ function DailyTimeInZonesCharts(props) {
   var hasPower = powerData.some(function(d) { return d.seconds > 0; });
   var hasHr = hrData.some(function(d) { return d.seconds > 0; });
   if (!hasPower && !hasHr) return null;
-  var capYear = (log && Number(log.zone_ref_year) > 0 ? Number(log.zone_ref_year) : 0) || logYear;
-  var hrSourceCaption = (maxHr > 0 && capYear) ? '영역 기준: yearly_peaks/' + capYear + ' max_hr ' + maxHr + 'bpm' : null;
+  var hrSourceCaption = maxHr > 0 ? '영역 기준: 최근 365일 max_hr ' + maxHr + 'bpm' : null;
   var sectionHeadingClass =
     typeof p.sectionTitleClassName === 'string' && p.sectionTitleClassName.trim()
       ? p.sectionTitleClassName.trim()
@@ -520,13 +519,14 @@ function JournalTimeInZonesCharts(props) {
   var setMaxHr = _useState[1];
   React.useEffect(function() {
     var userId = userProfile && (userProfile.id || userProfile.uid);
-    if (!userId || typeof window.fetchMaxHrForYear !== 'function') return;
+    if (!userId || typeof window.fetchMaxHrRolling365Days !== 'function') return;
     var viewerId = getChartViewerUserId();
     if (viewerId && String(userId) !== String(viewerId)) return;
-    window.fetchMaxHrForYear(userId, year).then(function(hr) {
+    window.fetchMaxHrRolling365Days(userId).then(function(res) {
+      var hr = res && res.maxHr;
       if (hr != null && hr > 0) setMaxHr(hr);
     }).catch(function() {});
-  }, [userProfile && (userProfile.id || userProfile.uid), year]);
+  }, [userProfile && (userProfile.id || userProfile.uid)]);
   React.useEffect(function() {
     var profileUserId = (userProfile && (userProfile.id || userProfile.uid)) || '';
     var viewerId = getChartViewerUserId();
@@ -537,7 +537,7 @@ function JournalTimeInZonesCharts(props) {
   var titleClass = 'text-sm font-semibold text-gray-700 mb-2';
   var hasAny = powerData.some(function(d) { return d.seconds > 0; }) || hrData.some(function(d) { return d.seconds > 0; });
   if (!hasAny) return null;
-  var hrSourceCaption = (maxHr > 0 && year) ? '영역 기준: yearly_peaks/' + year + ' max_hr ' + maxHr + 'bpm' : null;
+  var hrSourceCaption = maxHr > 0 ? '영역 기준: 최근 365일 max_hr ' + maxHr + 'bpm' : null;
   return React.createElement('div', { className: 'space-y-4 mb-4' },
     React.createElement('h4', { className: titleClass }, '영역별 누적시간(' + dateRangeShort + ')'),
     React.createElement('div', { className: 'grid grid-cols-1 gap-3' },

@@ -2209,6 +2209,109 @@ async function fetchMaxHrForYear(userId, year) {
 }
 if (typeof window !== 'undefined') window.fetchMaxHrForYear = fetchMaxHrForYear;
 
+var HR_ROLLING_MAX_BPM = 220;
+
+/**
+ * Max HR from training logs in the last 365 days (local today), same basis as HR time_in_zones.
+ * Uses max of max_hr_5sec, max_hr, max_heartrate per log.
+ * @param {string} userId
+ * @returns {Promise<{ maxHr: number, maxHrDate?: string|null }|null>}
+ */
+async function fetchMaxHrRolling365Days(userId) {
+  if (!userId || !window.firestoreV9) return null;
+  try {
+    var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+    var collection = fsMod.collection;
+    var query = fsMod.query;
+    var where = fsMod.where;
+    var getDocs = fsMod.getDocs;
+    var Timestamp = fsMod.Timestamp;
+    if (!collection || !query || !where || !getDocs || !Timestamp) return null;
+    var db = window.firestoreV9;
+    var pad2 = function (n) {
+      return String(n).padStart(2, '0');
+    };
+    var localYmd = function (d) {
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    };
+    var end = new Date();
+    var start = new Date(end.getTime());
+    start.setDate(start.getDate() - 365);
+    var startStr = localYmd(start);
+    var endStr = localYmd(end);
+    var userLogsRef = collection(db, 'users', userId, 'logs');
+    var seen = {};
+    var bestHr = 0;
+    var bestDate = null;
+    var considerData = function (data) {
+      var d = data || {};
+      var hr = Math.max(
+        Number(d.max_hr_5sec) || 0,
+        Number(d.max_hr) || 0,
+        Number(d.max_heartrate) || 0
+      );
+      if (hr > 0 && hr <= HR_ROLLING_MAX_BPM && hr > bestHr) {
+        bestHr = hr;
+        var ds = '';
+        if (d.date != null && typeof d.date === 'string') {
+          ds = String(d.date).trim().slice(0, 10);
+        } else if (d.date && typeof d.date.toDate === 'function') {
+          try {
+            ds = localYmd(d.date.toDate());
+          } catch (eD) {
+            ds = '';
+          }
+        }
+        bestDate = ds || null;
+      }
+    };
+    try {
+      var startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+      var endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+      var qTs = query(
+        userLogsRef,
+        where('date', '>=', Timestamp.fromDate(startDate)),
+        where('date', '<=', Timestamp.fromDate(endDate))
+      );
+      var snapTs = await getDocs(qTs);
+      snapTs.forEach(function (docSnap) {
+        seen[docSnap.id] = true;
+        considerData(docSnap.data());
+      });
+    } catch (eTs) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[UserManager] fetchMaxHrRolling365Days Timestamp query:', eTs);
+      }
+    }
+    try {
+      var qStr = query(userLogsRef, where('date', '>=', startStr), where('date', '<=', endStr));
+      var snapStr = await getDocs(qStr);
+      snapStr.forEach(function (docSnap) {
+        if (seen[docSnap.id]) return;
+        considerData(docSnap.data());
+      });
+    } catch (eStr) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[UserManager] fetchMaxHrRolling365Days string date query:', eStr);
+      }
+    }
+    return bestHr > 0 ? { maxHr: bestHr, maxHrDate: bestDate } : null;
+  } catch (e) {
+    var perm =
+      e &&
+      (e.code === 'permission-denied' ||
+        (String(e.message || '').indexOf('Missing or insufficient permissions') >= 0));
+    if (!perm && typeof console !== 'undefined' && console.warn) {
+      console.warn('[UserManager] fetchMaxHrRolling365Days 실패:', userId, e);
+    }
+    return null;
+  }
+}
+if (typeof window !== 'undefined') {
+  window.fetchMaxHrRolling365Days = fetchMaxHrRolling365Days;
+  window.getMaxHrFromLogsRolling365Days = fetchMaxHrRolling365Days;
+}
+
 /**
  * yearly_peaks/{year} 전체 문서 조회 (PR 표시용)
  * @param {string} userId - 사용자 ID
@@ -2342,44 +2445,11 @@ function isPrField(log, yearlyPeaks, field, userWeight) {
 if (typeof window !== 'undefined') window.isPrField = isPrField;
 
 /**
- * yearly_peaks에서 최대 심박수 조회 (오늘 기준 최대 1년 = 당해+전년)
- * - users/{userId}/yearly_peaks/{year} 문서 2개만 조회 (당해·전년) → 로그 스캔 없이 경량
- * - max_hr는 onUserLogWritten 트리거·backfillYearlyPeaks로 yearly_peaks에 반영됨
- * @returns {{ maxHr: number, maxHrDate?: string }|null} maxHr과 max_hr_date(YYYY-MM-DD, 있으면)
+ * Profile/dashboard: same as fetchMaxHrRolling365Days (rolling 365d max HR from logs).
+ * @returns {{ maxHr: number, maxHrDate?: string|null }|null}
  */
 async function fetchMaxHrFromYearlyPeaks(userId) {
-  if (!userId || !window.firestoreV9) return null;
-  try {
-    var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-    var getDoc = fsMod && fsMod.getDoc;
-    var doc = fsMod && fsMod.doc;
-    const db = window.firestoreV9;
-    const thisYear = new Date().getFullYear();
-    const prevYear = thisYear - 1;
-    var promiseResults = await Promise.all([
-      getDoc(doc(db, 'users', userId, 'yearly_peaks', String(thisYear))),
-      getDoc(doc(db, 'users', userId, 'yearly_peaks', String(prevYear)))
-    ]);
-    var curSnap = promiseResults && promiseResults[0];
-    var prevSnap = promiseResults && promiseResults[1];
-    let bestHr = 0;
-    let bestDate = null;
-    const consider = (snap) => {
-      if (!snap || !snap.exists) return;
-      const d = snap.data() || {};
-      const hr = (d && d != null) ? (Number(d.max_hr) || 0) : 0;
-      if (hr > bestHr) {
-        bestHr = hr;
-        bestDate = (d.max_hr_date && String(d.max_hr_date).trim()) || (d.year != null ? String(d.year) : null) || (snap.ref && snap.ref.id ? String(snap.ref.id) : null);
-      }
-    };
-    consider(curSnap);
-    consider(prevSnap);
-    return bestHr > 0 ? { maxHr: bestHr, maxHrDate: bestDate } : null;
-  } catch (e) {
-    console.warn('[UserManager] fetchMaxHrFromYearlyPeaks 실패:', userId, e);
-    return null;
-  }
+  return fetchMaxHrRolling365Days(userId);
 }
 
 if (typeof window !== 'undefined') {
