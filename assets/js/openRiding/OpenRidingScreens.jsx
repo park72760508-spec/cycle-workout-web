@@ -828,6 +828,24 @@ function rideDocHostSummaryMatchesRideDate(ride, ymd) {
   return openRidingYmdEqual(h.rideDateYmd, ymd);
 }
 
+/** Stable fingerprint of hostPublicReviewSummary (ignores updatedAt) for effect deps. */
+function openRidingHostPublicSummaryStableKey(h) {
+  if (!h || typeof h !== 'object') return '';
+  var rd = h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
+  var s = h.summary;
+  if (!s || typeof s !== 'object') return rd;
+  var dist = s.distance_km != null ? String(Number(s.distance_km)) : '';
+  var dur =
+    s.duration_sec != null
+      ? String(Number(s.duration_sec))
+      : s.time != null
+        ? String(Number(s.time))
+        : '';
+  var tss = s.tss != null ? String(Number(s.tss)) : '';
+  var spd = s.avg_speed_kmh != null ? String(Number(s.avg_speed_kmh)) : '';
+  return [rd, dist, dur, tss, spd].join('|');
+}
+
 /** Delegates to openRidingService (single source of truth for ±10% or longer-than-planned rules). */
 function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -4835,6 +4853,15 @@ function OpenRidingDetail(props) {
   var reviewLogsLoading = _revLd[0];
   var setReviewLogsLoading = _revLd[1];
 
+  /** Snapshot updates change ride reference; review fetch effect deps use primitives only. */
+  var rideYmdRv = ride ? getRideDateSeoulYmd(ride) : '';
+  var rideStatusRv = ride ? String(ride.rideStatus || 'active') : '';
+  var rideHostRv = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+  var rideDistRv =
+    ride && ride.distance != null && Number.isFinite(Number(ride.distance)) ? Number(ride.distance) : null;
+  var hStableRv = openRidingHostPublicSummaryStableKey(ride && ride.hostPublicReviewSummary);
+  var todayRv = getTodaySeoulYmd();
+
   useEffect(
     function () {
       setJoinPasswordInput('');
@@ -5050,7 +5077,19 @@ function OpenRidingDetail(props) {
         cancelled = true;
       };
     },
-    [firestore, userId, rideId, loading, role, ride]
+    [
+      firestore,
+      userId,
+      rideId,
+      loading,
+      role,
+      rideYmdRv,
+      rideStatusRv,
+      rideHostRv,
+      rideDistRv,
+      hStableRv,
+      todayRv
+    ]
   );
 
   /** Non-participants: refetch rides when expanding review (host may have just synced summary). */
@@ -5103,7 +5142,20 @@ function OpenRidingDetail(props) {
         cancelledEx = true;
       };
     },
-    [reviewExpanded, firestore, userId, rideId, loading, role, ride]
+    [
+      reviewExpanded,
+      firestore,
+      userId,
+      rideId,
+      loading,
+      role,
+      rideYmdRv,
+      rideStatusRv,
+      rideHostRv,
+      rideDistRv,
+      hStableRv,
+      todayRv
+    ]
   );
 
   useEffect(
