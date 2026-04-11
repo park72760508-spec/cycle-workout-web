@@ -766,9 +766,30 @@ function getTodaySeoulYmd() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
-/** 라이딩 문서 date → 서울 기준 YYYY-MM-DD */
+/** Coerce Firestore Timestamp / {seconds} / Date to Date or null */
+function openRidingCoerceRideDateToDate(rideDateField) {
+  if (rideDateField == null) return null;
+  if (rideDateField instanceof Date && !Number.isNaN(rideDateField.getTime())) return rideDateField;
+  if (typeof rideDateField.toDate === 'function') {
+    try {
+      var t = rideDateField.toDate();
+      if (t instanceof Date && !Number.isNaN(t.getTime())) return t;
+    } catch (eCoerce) {}
+  }
+  var sec = Number(
+    rideDateField.seconds != null
+      ? rideDateField.seconds
+      : rideDateField._seconds != null
+        ? rideDateField._seconds
+        : NaN
+  );
+  if (Number.isFinite(sec)) return new Date(sec * 1000);
+  return null;
+}
+
+/** Ride date -> Seoul calendar YYYY-MM-DD */
 function getRideDateSeoulYmd(ride) {
-  var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  var ts = ride && ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   if (!ts) return null;
   try {
     var parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(ts);
@@ -833,6 +854,51 @@ function openRidingLogYmdSeoul(log) {
 function openRidingLogIsStrava(log) {
   var s = log && log.source != null ? String(log.source).toLowerCase().trim() : '';
   return s === 'strava';
+}
+
+/**
+ * Host review: if multiple Strava activities on the same day, pick one closest to ride.distance (km).
+ * Short commutes only: use the longest single activity (do not sum).
+ * @param {object[]} dayLogs filtered same-day Strava logs
+ * @param {object} ride
+ */
+function openRidingPickStravaLogsForHostReview(dayLogs, ride) {
+  if (!dayLogs || dayLogs.length === 0) return dayLogs || [];
+  if (dayLogs.length === 1) return dayLogs;
+  var p = Number(ride && ride.distance != null ? ride.distance : 0) || 0;
+  if (!(p > 0)) return dayLogs;
+  var lo = Math.max(0, p * 0.42);
+  var hi = p * 1.58;
+  var band = dayLogs.filter(function (l) {
+    var d = Number(l.distance_km != null ? l.distance_km : 0) || 0;
+    return d >= lo && d <= hi;
+  });
+  if (band.length === 1) return band;
+  if (band.length > 1) {
+    band.sort(function (a, b) {
+      var da = Math.abs((Number(a.distance_km) || 0) - p);
+      var db = Math.abs((Number(b.distance_km) || 0) - p);
+      return da - db;
+    });
+    return [band[0]];
+  }
+  var minSimilar = Math.max(8, p * 0.32);
+  var longEn = dayLogs.filter(function (l) {
+    return (Number(l.distance_km != null ? l.distance_km : 0) || 0) >= minSimilar;
+  });
+  if (longEn.length === 1) return longEn;
+  if (longEn.length > 1) {
+    longEn.sort(function (a, b) {
+      var da = Math.abs((Number(a.distance_km) || 0) - p);
+      var db = Math.abs((Number(b.distance_km) || 0) - p);
+      return da - db;
+    });
+    return [longEn[0]];
+  }
+  var sorted = dayLogs.slice().sort(function (a, b) {
+    return (Number(b.distance_km) || 0) - (Number(a.distance_km) || 0);
+  });
+  return [sorted[0]];
 }
 
 function openRidingReviewFormatDuration(sec) {
@@ -1020,7 +1086,7 @@ function getOpenRidingJournalUserProfileForCharts() {
 
 /** 서울 기준 라이딩일 → M/D (요일) 예: 4/7 (화) */
 function formatRideDateMdDowSeoul(ride) {
-  var ts = ride && ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  var ts = ride && ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   if (!ts) return '';
   try {
     var parts = new Intl.DateTimeFormat('en-US', {
@@ -3415,7 +3481,7 @@ function OpenRidingCreateForm(props) {
             setEditHydrated(true);
             return;
           }
-          var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+          var ts = ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
           var ymd = ts ? dateKey(ts.getFullYear(), ts.getMonth(), ts.getDate()) : getTodaySeoulYmd();
           var prof = getOpenRidingProfileDefaults();
           var _svcN = getOpenRidingServiceFns();
@@ -4789,8 +4855,11 @@ function OpenRidingDetail(props) {
           setReviewLogsLoading(false);
           return undefined;
         }
-        if (rideDocHostSummaryMatchesRideDate(ride, ymd)) {
-          setReviewMergedLog(openRidingReviewLogFromStoredSummary(ride.hostPublicReviewSummary.summary, ymd));
+        var summaryFromRideProp = rideDocHostSummaryMatchesRideDate(ride, ymd)
+          ? openRidingReviewLogFromStoredSummary(ride.hostPublicReviewSummary.summary, ymd)
+          : null;
+        if (summaryFromRideProp) {
+          setReviewMergedLog(summaryFromRideProp);
         }
         var cancelledPub = false;
         setReviewLogsLoading(true);
@@ -4802,12 +4871,17 @@ function OpenRidingDetail(props) {
             var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
             if (s && typeof s === 'object' && openRidingYmdEqual(d, ymd)) {
               setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
+            } else if (summaryFromRideProp) {
+              setReviewMergedLog(summaryFromRideProp);
             } else {
               setReviewMergedLog(null);
             }
           })
           .catch(function () {
-            if (!cancelledPub) setReviewMergedLog(null);
+            if (!cancelledPub) {
+              if (summaryFromRideProp) setReviewMergedLog(summaryFromRideProp);
+              else setReviewMergedLog(null);
+            }
           })
           .finally(function () {
             if (!cancelledPub) setReviewLogsLoading(false);
@@ -4833,6 +4907,9 @@ function OpenRidingDetail(props) {
           var dayLogs = (logs || []).filter(function (log) {
             return openRidingYmdEqual(openRidingLogYmdSeoul(log), ymd) && openRidingLogIsStrava(log);
           });
+          if (String(reviewLogUserId) === String(hostUid) && hostUid) {
+            dayLogs = openRidingPickStravaLogsForHostReview(dayLogs, ride);
+          }
           var merged = openRidingMergeLogsForReviewSummary(dayLogs);
           setReviewMergedLog(merged);
           if (
@@ -4888,6 +4965,9 @@ function OpenRidingDetail(props) {
       if (useOwnOrHostTrainingLogs2 || !hostReviewPublicWindow2 || !rideId || !fetchRideByIdFn2 || !db2) {
         return undefined;
       }
+      var summaryFromRideProp2 = rideDocHostSummaryMatchesRideDate(ride, ymd2)
+        ? openRidingReviewLogFromStoredSummary(ride.hostPublicReviewSummary.summary, ymd2)
+        : null;
       var cancelledEx = false;
       fetchRideByIdFn2(db2, rideId)
         .then(function (fresh) {
@@ -4897,6 +4977,8 @@ function OpenRidingDetail(props) {
           var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
           if (s && typeof s === 'object' && openRidingYmdEqual(d, ymd2)) {
             setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd2));
+          } else if (summaryFromRideProp2) {
+            setReviewMergedLog(summaryFromRideProp2);
           }
         })
         .catch(function () {});
@@ -5248,7 +5330,7 @@ function OpenRidingDetail(props) {
     );
   }
 
-  var ts = ride.date && typeof ride.date.toDate === 'function' ? ride.date.toDate() : null;
+  var ts = ride.date != null ? openRidingCoerceRideDateToDate(ride.date) : null;
   var dateStr = ts ? ts.toLocaleDateString('ko-KR') : '';
 
   var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
