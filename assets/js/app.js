@@ -6727,6 +6727,7 @@ async function handleStrava6MonthSyncYes() {
 
 window.showScreen = function(screenId) {
   console.log(`🔵 [Step 1] showScreen 함수 진입: '${screenId}'`);
+  var __origShowScreenId = screenId;
   // TOP10 등 "인증 후에만 노출" 로직용: 리다이렉트 여부 플래그 (index.html 래퍼에서 사용)
   window.__showScreenRedirectedToAuth = false;
 
@@ -6746,6 +6747,9 @@ window.showScreen = function(screenId) {
 
   if (isWelcomeModalActive) {
     console.log('⏸️ 환영 오버레이 활성화 중 - 화면 전환 차단:', screenId);
+    if (__origShowScreenId === 'openRidingRoomScreen' && window.__rideMoimIntroFromBasecampPending) {
+      window.__rideMoimIntroFromBasecampPending = false;
+    }
     return; // 화면 전환 자체를 차단
   }
 
@@ -6774,6 +6778,9 @@ window.showScreen = function(screenId) {
       if (typeof showToast === 'function') {
         showToast('오픈 라이딩방은 1·2·3등급 회원만 이용할 수 있습니다.');
       }
+      if (window.__rideMoimIntroFromBasecampPending) {
+        window.__rideMoimIntroFromBasecampPending = false;
+      }
       return;
     }
   }
@@ -6783,6 +6790,10 @@ window.showScreen = function(screenId) {
     console.log('⚠️ 인증되지 않은 상태 - 인증 화면으로 리다이렉트');
     window.__showScreenRedirectedToAuth = true;
     screenId = 'authScreen';
+  }
+
+  if (__origShowScreenId === 'openRidingRoomScreen' && screenId !== 'openRidingRoomScreen' && window.__rideMoimIntroFromBasecampPending) {
+    window.__rideMoimIntroFromBasecampPending = false;
   }
   
   // 훈련일지 화면을 나갈 때 fetch 카운트/플래그 초기화 (다음에 훈련일지 열 때 로딩 재시도 가능)
@@ -6864,6 +6875,17 @@ window.showScreen = function(screenId) {
         } catch (e) {}
       }, 0);
     }
+
+    if (screenId === 'openRidingRoomScreen' && window.__rideMoimIntroFromBasecampPending) {
+      window.__rideMoimIntroFromBasecampPending = false;
+      setTimeout(function () {
+        if (typeof window.tryShowRidingMoimIntroFromBasecamp === 'function') {
+          window.tryShowRidingMoimIntroFromBasecamp();
+        }
+      }, 480);
+    }
+  } else if (__origShowScreenId === 'openRidingRoomScreen' && window.__rideMoimIntroFromBasecampPending) {
+    window.__rideMoimIntroFromBasecampPending = false;
   }
 };
 
@@ -13754,6 +13776,81 @@ function closeOpenRidingGrade2NoticeModal() {
   }
   document.body.style.overflow = '';
 }
+
+/** 한국(Asia/Seoul) 기준 오늘 YYYY-MM-DD — 라이딩 모임 안내 "오늘 그만 보기" */
+function getStelvioSeoulYmdForStorage() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch (eYmd) {
+    var d = new Date();
+    var m = String(d.getMonth() + 1);
+    var day = String(d.getDate());
+    return d.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (day.length < 2 ? '0' + day : day);
+  }
+}
+
+function isRidingMoimIntroDismissedToday() {
+  try {
+    return localStorage.getItem('stelvioRidingMoimIntroDismissYmd') === getStelvioSeoulYmdForStorage();
+  } catch (eLs) {
+    return false;
+  }
+}
+
+function showRidingMoimIntroModal() {
+  var modal = document.getElementById('ridingMoimIntroModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+/** @param {boolean} suppressToday — true면 당일 재표시 안 함 */
+function closeRidingMoimIntroModal(suppressToday) {
+  var modal = document.getElementById('ridingMoimIntroModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
+  document.body.style.overflow = '';
+  if (suppressToday === true) {
+    try {
+      localStorage.setItem('stelvioRidingMoimIntroDismissYmd', getStelvioSeoulYmdForStorage());
+    } catch (eSave) {}
+  }
+}
+
+function tryShowRidingMoimIntroFromBasecamp() {
+  var scr = document.getElementById('openRidingRoomScreen');
+  if (!scr || !scr.classList.contains('active')) {
+    return;
+  }
+  if (isRidingMoimIntroDismissedToday()) {
+    return;
+  }
+  showRidingMoimIntroModal();
+}
+
+/** 베이스캠프 "라이딩 모임" 버튼 — 진입 후 안내 오버레이 1회(오늘 그만 보기 시 당일 스킵) */
+function navigateToRidingMoimFromBasecamp() {
+  window.__rideMoimIntroFromBasecampPending = true;
+  if (typeof window.showScreen === 'function') {
+    window.showScreen('openRidingRoomScreen');
+  }
+}
+
+window.getStelvioSeoulYmdForStorage = getStelvioSeoulYmdForStorage;
+window.isRidingMoimIntroDismissedToday = isRidingMoimIntroDismissedToday;
+window.showRidingMoimIntroModal = showRidingMoimIntroModal;
+window.closeRidingMoimIntroModal = closeRidingMoimIntroModal;
+window.tryShowRidingMoimIntroFromBasecamp = tryShowRidingMoimIntroFromBasecamp;
+window.navigateToRidingMoimFromBasecamp = navigateToRidingMoimFromBasecamp;
 
 function openGeminiApiSettingsFromModal() {
   closeGeminiApiNotRegisteredModal();
