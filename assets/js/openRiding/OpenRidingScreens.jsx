@@ -6020,11 +6020,13 @@ function OpenRidingDetail(props) {
                         ? "오늘 일정입니다. 훈련일지에 라이딩이 반영되면 종료·후기 요약이 표시될 수 있습니다. (+)를 다시 눌러 최신 상태를 불러오세요."
                         : "해당 일정일 STRAVA 기록이 훈련일지에 반영되면 본인 후기가 표시되고, 없으면 방장 후기가 표시됩니다."
                     : role !== 'participant' && hostPublicReviewWindow
-                      ? openRidingIsRideScheduleDayTodaySeoul(ride) &&
-                          !guestHostSummaryOnRide &&
-                          !isOpenRidingPastBySeoulDate(ride)
-                        ? "오늘 일정입니다. 방장의 훈련일지에 라이딩이 반영되면 종료로 보고 방장 후기 요약이 표시됩니다. (+)를 다시 눌러 최신 상태를 불러오세요."
-                        : "방장 후기가 등록되면 요약이 표시됩니다."
+                      ? joinApplyClosedBySchedule
+                        ? '종료된 일정입니다. (+)를 눌러 방장 후기 요약을 확인하세요.'
+                        : openRidingIsRideScheduleDayTodaySeoul(ride) &&
+                            !guestHostSummaryOnRide &&
+                            !isOpenRidingPastBySeoulDate(ride)
+                          ? "오늘 일정입니다. 방장의 훈련일지에 라이딩이 반영되면 종료로 보고 방장 후기 요약이 표시됩니다. (+)를 다시 눌러 최신 상태를 불러오세요."
+                          : "방장 후기가 등록되면 요약이 표시됩니다."
                       : "라이딩이 종료되면 후기 자동 작성됩니다."}
               </span>
             </div>
