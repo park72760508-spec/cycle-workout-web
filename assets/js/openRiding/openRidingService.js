@@ -611,6 +611,51 @@ export async function fetchRideById(db, rideId) {
 }
 
 /**
+ * 방장 후기 요약을 rides 문서에 저장 — 미��석자는 users/{host�� ��을 수 없으��로 이 필드로 공개한다.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} rideDateYmd Seoul YYYY-MM-DD
+ * @param {object} mergedLog openRidingMergeLogsForReviewSummary 결과
+ */
+export function sanitizeHostPublicReviewSummaryPayload(mergedLog) {
+  if (!mergedLog || typeof mergedLog !== 'object') return null;
+  try {
+    const raw = {
+      distance_km: mergedLog.distance_km,
+      duration_sec: mergedLog.duration_sec,
+      tss: mergedLog.tss,
+      if: mergedLog.if,
+      kilojoules: mergedLog.kilojoules,
+      elevation_gain: mergedLog.elevation_gain,
+      avg_speed_kmh: mergedLog.avg_speed_kmh,
+      avg_cadence: mergedLog.avg_cadence,
+      avg_hr: mergedLog.avg_hr,
+      max_hr: mergedLog.max_hr,
+      avg_watts: mergedLog.avg_watts,
+      weighted_watts: mergedLog.weighted_watts,
+      max_watts: mergedLog.max_watts,
+      time_in_zones: mergedLog.time_in_zones,
+      source: mergedLog.source != null ? String(mergedLog.source) : 'strava'
+    };
+    return JSON.parse(JSON.stringify(raw));
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, mergedLog) {
+  const summary = sanitizeHostPublicReviewSummaryPayload(mergedLog);
+  if (!db || !rideId || !rideDateYmd || !summary) return;
+  await updateDoc(doc(db, 'rides', rideId), {
+    hostPublicReviewSummary: {
+      rideDateYmd: String(rideDateYmd).trim(),
+      summary: summary,
+      updatedAt: serverTimestamp()
+    }
+  });
+}
+
+/**
  * 참석 신청: 정원이 차면 대기열 끝에 추가
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
@@ -829,6 +874,8 @@ if (typeof window !== 'undefined') {
     uploadRideGpx,
     fetchRidesInDateRange,
     fetchRideById,
+    syncHostPublicReviewSummary,
+    sanitizeHostPublicReviewSummaryPayload,
     joinRideTransaction,
     leaveRideTransaction,
     updateRideByHost,

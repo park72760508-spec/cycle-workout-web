@@ -951,6 +951,33 @@ function openRidingMergeLogsForReviewSummary(logs) {
   };
 }
 
+/** rides.hostPublicReviewSummary.summary → 후기 UI용 log 객체 */
+function openRidingReviewLogFromStoredSummary(stored, rideDateYmd) {
+  if (!stored || typeof stored !== 'object') return null;
+  var sec = Number(stored.duration_sec != null ? stored.duration_sec : stored.time) || 0;
+  var dist0 = stored.distance_km != null ? Number(stored.distance_km) : 0;
+  var spdStored0 = stored.avg_speed_kmh != null ? Number(stored.avg_speed_kmh) : null;
+  var spd0 = spdStored0 != null && spdStored0 > 0 ? spdStored0 : openRidingReviewAvgSpeedKmh(dist0, sec);
+  return {
+    date: stored.date != null ? stored.date : rideDateYmd,
+    distance_km: stored.distance_km,
+    duration_sec: sec,
+    tss: stored.tss,
+    if: stored.if,
+    kilojoules: stored.kilojoules,
+    elevation_gain: stored.elevation_gain != null ? Number(stored.elevation_gain) : null,
+    avg_speed_kmh: spd0,
+    avg_cadence: stored.avg_cadence,
+    avg_hr: stored.avg_hr,
+    max_hr: stored.max_hr,
+    avg_watts: stored.avg_watts,
+    weighted_watts: stored.weighted_watts,
+    max_watts: stored.max_watts,
+    time_in_zones: stored.time_in_zones,
+    source: stored.source != null ? stored.source : 'strava'
+  };
+}
+
 function getOpenRidingJournalUserProfileForCharts() {
   var u = typeof window !== 'undefined' && window.currentUser ? window.currentUser : null;
   if (!u) {
@@ -4631,6 +4658,7 @@ function OpenRidingDetail(props) {
     String(ride.hostUserId != null ? ride.hostUserId : '').trim() === String(userId != null ? userId : '').trim()
   );
   var hostIdpSyncTmRef = useRef(null);
+  var hostReviewLastSyncedSigRef = useRef('');
 
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
@@ -4691,6 +4719,7 @@ function OpenRidingDetail(props) {
       setParticipantListExpanded(false);
       setReviewExpanded(false);
       setReviewMergedLog(null);
+      hostReviewLastSyncedSigRef.current = '';
     },
     [rideId]
   );
@@ -4716,20 +4745,53 @@ function OpenRidingDetail(props) {
       }
       var getRng = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
       var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      if (!getRng || !db) {
+      var svcOr = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var fetchRideByIdFn = typeof svcOr.fetchRideById === 'function' ? svcOr.fetchRideById : null;
+      if (!db) {
         setReviewLogsLoading(false);
         return undefined;
       }
-      /** Review summary: participant=own logs; non-participant=host logs when ride day <= today (Seoul) and not cancelled */
       var rideCancelled = String(ride.rideStatus || 'active') === 'cancelled';
       var hostReviewPublicWindow = !rideCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
-      var reviewLogUserId = '';
-      if (role === 'participant') {
-        reviewLogUserId = String(userId);
-      } else if (hostReviewPublicWindow) {
-        var hostUid = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
-        if (hostUid) reviewLogUserId = hostUid;
+      var hostUid = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      var uidTrim = String(userId != null ? userId : '').trim();
+      var hostViewingOwnRide = !!hostUid && uidTrim === hostUid;
+      var useOwnOrHostTrainingLogs =
+        role === 'participant' || (hostReviewPublicWindow && hostViewingOwnRide);
+      if (!useOwnOrHostTrainingLogs) {
+        if (!hostReviewPublicWindow || !hostUid || !rideId || !fetchRideByIdFn) {
+          setReviewLogsLoading(false);
+          return undefined;
+        }
+        var cancelledPub = false;
+        setReviewLogsLoading(true);
+        fetchRideByIdFn(db, rideId)
+          .then(function (fresh) {
+            if (cancelledPub) return;
+            var h = fresh && fresh.hostPublicReviewSummary;
+            var s = h && h.summary;
+            var d = h && h.rideDateYmd != null ? String(h.rideDateYmd).trim() : '';
+            if (s && typeof s === 'object' && d === ymd) {
+              setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
+            } else {
+              setReviewMergedLog(null);
+            }
+          })
+          .catch(function () {
+            if (!cancelledPub) setReviewMergedLog(null);
+          })
+          .finally(function () {
+            if (!cancelledPub) setReviewLogsLoading(false);
+          });
+        return function () {
+          cancelledPub = true;
+        };
       }
+      if (!getRng) {
+        setReviewLogsLoading(false);
+        return undefined;
+      }
+      var reviewLogUserId = role === 'participant' ? String(userId) : hostUid;
       if (!reviewLogUserId) {
         setReviewLogsLoading(false);
         return undefined;
@@ -4755,6 +4817,47 @@ function OpenRidingDetail(props) {
       };
     },
     [firestore, userId, rideId, loading, role, ride]
+  );
+
+  useEffect(
+    function () {
+      if (!isHost || !ride || loading || !firestore || !rideId) return undefined;
+      var rideCancelled = String(ride.rideStatus || 'active') === 'cancelled';
+      var hostReviewPublicWindow = !rideCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
+      if (!hostReviewPublicWindow || !reviewMergedLog) return undefined;
+      var ymd = getRideDateSeoulYmd(ride);
+      if (!ymd) return undefined;
+      var svcOr = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var syncFn = typeof svcOr.syncHostPublicReviewSummary === 'function' ? svcOr.syncHostPublicReviewSummary : null;
+      var sanitizeFn =
+        typeof svcOr.sanitizeHostPublicReviewSummaryPayload === 'function'
+          ? svcOr.sanitizeHostPublicReviewSummaryPayload
+          : null;
+      if (!syncFn || !sanitizeFn) return undefined;
+      var payload = sanitizeFn(reviewMergedLog);
+      var sig = '';
+      try {
+        sig = JSON.stringify(payload);
+      } catch (eSig) {
+        return undefined;
+      }
+      if (!sig || sig === hostReviewLastSyncedSigRef.current) return undefined;
+      var t = setTimeout(function () {
+        syncFn(firestore, rideId, ymd, reviewMergedLog)
+          .then(function () {
+            hostReviewLastSyncedSigRef.current = sig;
+          })
+          .catch(function (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[openRiding] syncHostPublicReviewSummary', e);
+            }
+          });
+      }, 600);
+      return function () {
+        clearTimeout(t);
+      };
+    },
+    [isHost, ride, rideId, firestore, loading, reviewMergedLog]
   );
 
   useEffect(
