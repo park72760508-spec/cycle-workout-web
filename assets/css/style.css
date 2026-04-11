@@ -11890,8 +11890,9 @@ html.is-android #trainingDetailModal .training-detail-body {
   max-height: 55%;
   height: auto;
   object-fit: contain;
-  opacity: 0.065;
-  filter: blur(2px) grayscale(0.25);
+  /* 기준 대비 약 30% 더 선명: 명도↑·블러·채도 감쇠 완화 */
+  opacity: 0.085;
+  filter: blur(1.4px) grayscale(0.175);
   user-select: none;
 }
 .riding-moim-intro-foreground {
