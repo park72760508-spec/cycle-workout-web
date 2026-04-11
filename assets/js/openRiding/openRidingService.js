@@ -817,15 +817,27 @@ export function sanitizeHostPublicReviewSummaryPayload(mergedLog) {
   }
 }
 
-export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, mergedLog) {
+export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, mergedLog, chartProfile) {
   const summary = sanitizeHostPublicReviewSummaryPayload(mergedLog);
   if (!db || !rideId || !rideDateYmd || !summary) return;
-  await updateDoc(doc(db, 'rides', rideId), {
-    hostPublicReviewSummary: {
-      rideDateYmd: String(rideDateYmd).trim(),
-      summary: summary,
-      updatedAt: serverTimestamp()
+  const block = {
+    rideDateYmd: String(rideDateYmd).trim(),
+    summary: summary,
+    updatedAt: serverTimestamp()
+  };
+  if (chartProfile && typeof chartProfile === 'object') {
+    const uid = String(chartProfile.uid != null ? chartProfile.uid : chartProfile.id != null ? chartProfile.id : '')
+      .trim();
+    if (uid) {
+      block.chartProfile = {
+        uid: uid,
+        ftp: Number(chartProfile.ftp) > 0 ? Number(chartProfile.ftp) : 200,
+        max_hr: Number(chartProfile.max_hr) > 0 ? Number(chartProfile.max_hr) : 190
+      };
     }
+  }
+  await updateDoc(doc(db, 'rides', rideId), {
+    hostPublicReviewSummary: block
   });
 }
 

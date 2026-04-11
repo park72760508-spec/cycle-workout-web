@@ -981,6 +981,11 @@ function openRidingReviewFormatCadenceRpm(v) {
   return Math.round(Number(v)) + ' rpm';
 }
 
+function openRidingReviewFormatWatts(v) {
+  if (v == null || !Number.isFinite(Number(v)) || Number(v) <= 0) return '-';
+  return Math.round(Number(v)) + ' W';
+}
+
 /**
  * 일지 JournalDetailBottomSheet.mergeLogsForDetail 와 동일 규칙 — Summary 탭용 단일 로그
  * @param {object[]} logs 해당 일·STRAVA만 필터된 배열
@@ -1129,6 +1134,43 @@ function getOpenRidingJournalUserProfileForCharts() {
     ftp: Number(u && u.ftp) || 200,
     max_hr: Number(u && (u.max_hr != null ? u.max_hr : u.maxHr)) || 190
   };
+}
+
+/** Firestore hostPublicReviewSummary.chartProfile → DailyTimeInZonesCharts용 */
+function openRidingNormalizeChartProfileFromFirestore(cp) {
+  if (!cp || typeof cp !== 'object') return null;
+  var uid = String(cp.uid != null ? cp.uid : cp.id != null ? cp.id : '').trim();
+  if (!uid) return null;
+  return {
+    id: uid,
+    uid: uid,
+    ftp: Number(cp.ftp) > 0 ? Number(cp.ftp) : 200,
+    max_hr: Number(cp.max_hr) > 0 ? Number(cp.max_hr) : 190
+  };
+}
+
+/**
+ * Host-public review: zone charts use the host (review owner), not the viewer.
+ * @param {object|null} log
+ * @param {'self'|'host_public'|'host_fallback'|null} reviewMergedLogSource
+ * @param {object|null} ride
+ */
+function openRidingResolveReviewChartUserProfile(log, reviewMergedLogSource, ride) {
+  if (reviewMergedLogSource === 'host_public' || reviewMergedLogSource === 'host_fallback') {
+    var h = ride && ride.hostPublicReviewSummary;
+    var cp = h && openRidingNormalizeChartProfileFromFirestore(h.chartProfile);
+    if (cp) return cp;
+    var hostUid = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+    if (hostUid) {
+      return {
+        id: hostUid,
+        uid: hostUid,
+        ftp: 200,
+        max_hr: log && Number(log.max_hr) > 0 ? Number(log.max_hr) : 190
+      };
+    }
+  }
+  return getOpenRidingJournalUserProfileForCharts();
 }
 
 /** 서울 기준 라이딩일 → M/D (요일) 예: 4/7 (화) */
@@ -4717,6 +4759,7 @@ function OpenRidingDashboardEditIcon(props) {
 /** 라이딩 상세 후기: 일지 Summary 탭과 동일 지표 + 존 차트(가능 시) */
 function OpenRidingRideReviewSummaryContent(props) {
   var log = props.log;
+  var chartUserProfile = props.chartUserProfile;
   if (!log) return null;
   var spd =
     log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
@@ -4726,6 +4769,9 @@ function OpenRidingRideReviewSummaryContent(props) {
     { label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-' },
     { label: '라이딩 시간', value: openRidingReviewFormatDuration(log.duration_sec) },
     { label: '평균 속도', value: openRidingReviewFormatSpeedKmh(spd) },
+    { label: '평균 파워', value: openRidingReviewFormatWatts(log.avg_watts) },
+    { label: 'NP', value: openRidingReviewFormatWatts(log.weighted_watts) },
+    { label: '최대 파워', value: openRidingReviewFormatWatts(log.max_watts) },
     { label: '상승고도', value: openRidingReviewFormatElevationM(log.elevation_gain) },
     { label: '평균 케이던스', value: openRidingReviewFormatCadenceRpm(log.avg_cadence) },
     { label: 'TSS', value: log.tss != null && log.tss > 0 ? String(Math.round(log.tss)) : '-' },
@@ -4733,7 +4779,10 @@ function OpenRidingRideReviewSummaryContent(props) {
     { label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-' }
   ];
   var DailyCharts = typeof window !== 'undefined' ? window.DailyTimeInZonesCharts : null;
-  var up = getOpenRidingJournalUserProfileForCharts();
+  var up =
+    chartUserProfile && typeof chartUserProfile === 'object' && (chartUserProfile.uid || chartUserProfile.id)
+      ? chartUserProfile
+      : getOpenRidingJournalUserProfileForCharts();
   var tizEl = null;
   if (log.time_in_zones && DailyCharts) {
     tizEl = (
@@ -5034,7 +5083,8 @@ function OpenRidingDetail(props) {
               var syncFn0 =
                 typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
               if (syncFn0) {
-                syncFn0(db, rideId, ymd, merged).catch(function (e) {
+                var chartProf = getOpenRidingJournalUserProfileForCharts();
+                syncFn0(db, rideId, ymd, merged, chartProf).catch(function (e) {
                   if (typeof console !== 'undefined' && console.warn) {
                     console.warn('[openRiding] syncHostPublicReviewSummary', e);
                   }
@@ -6097,7 +6147,14 @@ function OpenRidingDetail(props) {
                     {reviewMergedLogSource === 'host_fallback' ? (
                       <p className="text-xs text-slate-600 m-0 font-semibold">방장 후기 (본인 STRAVA 기록 없음)</p>
                     ) : null}
-                    <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+                    <OpenRidingRideReviewSummaryContent
+                      log={reviewMergedLog}
+                      chartUserProfile={openRidingResolveReviewChartUserProfile(
+                        reviewMergedLog,
+                        reviewMergedLogSource,
+                        ride
+                      )}
+                    />
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 m-0 leading-relaxed">
@@ -6110,7 +6167,14 @@ function OpenRidingDetail(props) {
                 ) : reviewMergedLog ? (
                   <div className="w-full min-w-0 space-y-2">
                     <p className="text-xs text-slate-600 m-0 font-semibold">방장 후기(공개)</p>
-                    <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+                    <OpenRidingRideReviewSummaryContent
+                      log={reviewMergedLog}
+                      chartUserProfile={openRidingResolveReviewChartUserProfile(
+                        reviewMergedLog,
+                        reviewMergedLogSource,
+                        ride
+                      )}
+                    />
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 m-0 leading-relaxed">
