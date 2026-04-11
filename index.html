@@ -3641,11 +3641,17 @@
         </div>
         <div class="form-group ai-schedule-form-group">
           <label>훈련 시작일 *</label>
-          <input type="date" id="aiScheduleStartDate" class="ai-schedule-date-input" required />
+          <input type="hidden" id="aiScheduleStartDate" value="" />
+          <button type="button" class="ai-schedule-korean-date-btn" id="btnAiSchedulePickStart" onclick="if(typeof openAiScheduleKoreanDatePicker==='function')openAiScheduleKoreanDatePicker('aiScheduleStartDate')" aria-haspopup="dialog" aria-expanded="false" aria-controls="aiScheduleDatePickerRoot">
+            <span id="aiScheduleStartDateLabel" class="ai-schedule-korean-date-btn__text">날짜 선택</span>
+          </button>
         </div>
         <div class="form-group ai-schedule-form-group">
           <label>대회 일정 *</label>
-          <input type="date" id="aiScheduleEventDate" class="ai-schedule-date-input" required />
+          <input type="hidden" id="aiScheduleEventDate" value="" />
+          <button type="button" class="ai-schedule-korean-date-btn" id="btnAiSchedulePickEvent" onclick="if(typeof openAiScheduleKoreanDatePicker==='function')openAiScheduleKoreanDatePicker('aiScheduleEventDate')" aria-haspopup="dialog" aria-expanded="false" aria-controls="aiScheduleDatePickerRoot">
+            <span id="aiScheduleEventDateLabel" class="ai-schedule-korean-date-btn__text">날짜 선택</span>
+          </button>
         </div>
         <div class="form-group ai-schedule-form-group">
           <label>대회 거리 (km) *</label>
@@ -3714,6 +3720,22 @@
           <div id="aiScheduleProgressText" style="font-size: 0.95em; font-weight: 600; color: #334155;">스케줄 분석 중...</div>
           <div id="aiScheduleProgressDetail" style="font-size: 0.85em; color: #64748b; margin-top: 4px;"></div>
         </div>
+      </div>
+    </div>
+    <!-- 한글 달력 (서울 기준, STELVIO 톤) — 글래스 네비보다 낮은 레이어 안에서만 표시 -->
+    <div id="aiScheduleDatePickerRoot" class="ai-schedule-korean-picker" style="display: none;" role="dialog" aria-modal="true" aria-label="날짜 선택">
+      <div class="ai-schedule-korean-picker__backdrop" onclick="if(typeof closeAiScheduleKoreanDatePicker==='function')closeAiScheduleKoreanDatePicker()"></div>
+      <div class="ai-schedule-korean-picker__panel" onclick="event.stopPropagation();">
+        <div class="ai-schedule-korean-picker__header">
+          <button type="button" class="ai-schedule-korean-picker__nav" onclick="if(typeof aiScheduleKoreanPickerShiftMonth==='function')aiScheduleKoreanPickerShiftMonth(-1)" aria-label="이전 달">‹</button>
+          <span id="aiScheduleKoreanPickerTitle" class="ai-schedule-korean-picker__title">2026년 4월</span>
+          <button type="button" class="ai-schedule-korean-picker__nav" onclick="if(typeof aiScheduleKoreanPickerShiftMonth==='function')aiScheduleKoreanPickerShiftMonth(1)" aria-label="다음 달">›</button>
+        </div>
+        <div class="ai-schedule-korean-picker__weekdays" aria-hidden="true">
+          <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div id="aiScheduleKoreanPickerGrid" class="ai-schedule-korean-picker__grid"></div>
+        <button type="button" class="ai-schedule-korean-picker__close-footer" onclick="if(typeof closeAiScheduleKoreanDatePicker==='function')closeAiScheduleKoreanDatePicker()">닫기</button>
       </div>
     </div>
   </div>
