@@ -442,11 +442,21 @@
     document.querySelectorAll('input[name="aiOutdoorDays"][value="0"], input[name="aiOutdoorDays"][value="6"]').forEach(cb => cb.checked = true);
 
     modal.style.display = 'flex';
+    if (typeof window.updateGlobalHubGlassNavVisibility === 'function') {
+      window.updateGlobalHubGlassNavVisibility('aiScheduleScreen');
+    }
   };
 
   window.closeScheduleCreateAIModal = function () {
     const modal = document.getElementById('scheduleCreateAIModal');
     if (modal) modal.style.display = 'none';
+    try {
+      var active = document.querySelector('.screen.active');
+      var sid = active && active.id ? active.id : '';
+      if (sid && typeof window.updateGlobalHubGlassNavVisibility === 'function') {
+        window.updateGlobalHubGlassNavVisibility(sid);
+      }
+    } catch (e) {}
   };
 
   /**
