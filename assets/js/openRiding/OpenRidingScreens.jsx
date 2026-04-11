@@ -3001,6 +3001,30 @@ function OpenRidingCalendarMain(props) {
     });
   }
 
+  /** 현재 사용자가 해당 라이��� 대기열(waitlist)에 있는지 */
+  function isUserWaitlistedForRide(r) {
+    var uid = String(userId || '');
+    if (!uid) return false;
+    if (String(r.rideStatus || 'active') === 'cancelled') return false;
+    var waits = Array.isArray(r.waitlist) ? r.waitlist : [];
+    return waits.some(function (w) {
+      return String(w) === uid;
+    });
+  }
+
+  /** 주� 목록: 방장 �� 참석 확정 인원(본인 ��) 또는 대기열 신청이 있는지 */
+  function openRideHostHasAttendanceApplications(r) {
+    if (String(r.rideStatus || 'active') === 'cancelled') return false;
+    var host = String(r.hostUserId || '').trim();
+    var parts = Array.isArray(r.participants) ? r.participants : [];
+    var hasNonHostParticipant = parts.some(function (p) {
+      return String(p).trim() && String(p) !== host;
+    });
+    if (hasNonHostParticipant) return true;
+    var waits = Array.isArray(r.waitlist) ? r.waitlist : [];
+    return waits.length > 0;
+  }
+
   /** extra.showRideDate: 월간 합성 목록에서 일자 표시 */
   function renderMonthRideListRow(r, extra) {
     var ex = extra || {};
@@ -3033,8 +3057,28 @@ function OpenRidingCalendarMain(props) {
     var regionShort = formatOpenRidingRegionShort(regionFull);
     var placeLabel = regionShort;
     var regionTitleAttr = regionFull ? regionFull : undefined;
-    var showParticipantConfirmedIcon =
-      isUserParticipantConfirmedForRide(r) && !(ex.compactInviteOrHostedList && ex.hostedListSection);
+    var showParticipantConfirmedIcon = false;
+    var attendeeCheckTitle = '참석 확정';
+    var attendeeCheckAria = '참석 확정';
+    if (ex.compactInviteOrHostedList && ex.hostedListSection) {
+      if (openRideHostHasAttendanceApplications(r)) {
+        showParticipantConfirmedIcon = true;
+        attendeeCheckTitle = '참석/대기 신청 있음';
+        attendeeCheckAria = '참석 확정 인원 또는 대기열 신청이 있습니다';
+      }
+    } else if (ex.compactInviteOrHostedList) {
+      if (isUserParticipantConfirmedForRide(r)) {
+        showParticipantConfirmedIcon = true;
+        attendeeCheckTitle = '참석 확정';
+        attendeeCheckAria = '참석 확정';
+      } else if (isUserWaitlistedForRide(r)) {
+        showParticipantConfirmedIcon = true;
+        attendeeCheckTitle = '대기열 신청';
+        attendeeCheckAria = '대기열 신청 완료';
+      }
+    } else {
+      showParticipantConfirmedIcon = isUserParticipantConfirmedForRide(r);
+    }
     var attendeeCheckCircleClass = useInviteHostedRow
       ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25'
       : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30';
@@ -3054,8 +3098,8 @@ function OpenRidingCalendarMain(props) {
             {showParticipantConfirmedIcon ? (
               <span
                 className={attendeeCheckCircleClass}
-                title="참석 확정"
-                aria-label="참석 확정"
+                title={attendeeCheckTitle}
+                aria-label={attendeeCheckAria}
               >
                 <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M2.5 6L5 8.5L9.5 3.5" />
