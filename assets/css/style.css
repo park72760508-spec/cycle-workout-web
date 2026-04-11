@@ -14035,6 +14035,35 @@ html.is-android #trainingDetailModal .training-detail-body {
   flex-shrink: 0;
 }
 
+/* AI 스케줄 생성: 인도어·아웃도어 요일 체크 — STELVIO 보라 악센트 */
+#scheduleCreateAIModal .ai-schedule-weekday-row .ai-schedule-weekday-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: #764ba2;
+  border-radius: 5px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+#scheduleCreateAIModal .ai-schedule-weekday-row .ai-schedule-weekday-label:has(input:checked) span {
+  color: #5b21b6;
+  font-weight: 700;
+}
+#scheduleCreateAIModal .ai-schedule-weekday-row .ai-schedule-weekday-label:has(input:checked) {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.14) 0%, rgba(118, 75, 162, 0.16) 100%);
+  border: 1px solid rgba(118, 75, 162, 0.4);
+  border-radius: 10px;
+  padding: 4px 10px 4px 6px;
+  margin: -2px 2px -2px 0;
+  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.18);
+}
+#scheduleCreateAIModal .ai-schedule-weekday-row .ai-schedule-weekday-label:has(input:focus-visible) {
+  outline: 2px solid rgba(102, 126, 234, 0.55);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
 /* 스케줄 목록 */
 .schedule-list {
   display: flex;
