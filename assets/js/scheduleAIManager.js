@@ -156,6 +156,156 @@
     }
   }
 
+  /** YYYY-MM-DD → 서울 기준 요일 (일=0 … 토=6) */
+  function seoulWeekdaySun0FromYmd(ymd) {
+    var s = String(ymd || '').trim().substring(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return 0;
+    try {
+      var inst = new Date(s + 'T12:00:00+09:00');
+      var w = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(inst);
+      var map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      return map[w] !== undefined ? map[w] : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function daysInMonthYearMonthIndex(y, monthIndex0) {
+    return new Date(y, monthIndex0 + 1, 0).getDate();
+  }
+
+  function ymdFromYmdParts(y, monthIndex0, day) {
+    return y + '-' + String(monthIndex0 + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+
+  /** 한글 날짜 표기 (서울) — 버튼 라벨용 */
+  function formatAiScheduleKoreanDateLong(ymd) {
+    if (!ymd || String(ymd).length < 8) return '날짜 선택';
+    try {
+      return new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'short'
+      }).format(new Date(String(ymd).trim().substring(0, 10) + 'T12:00:00+09:00'));
+    } catch (e) {
+      return String(ymd);
+    }
+  }
+
+  var _aiDatePickerTargetId = null;
+  var _pickerYear = new Date().getFullYear();
+  var _pickerMonth = new Date().getMonth() + 1;
+
+  function syncAiScheduleDateButtonLabels() {
+    var startIn = document.getElementById('aiScheduleStartDate');
+    var eventIn = document.getElementById('aiScheduleEventDate');
+    var startLb = document.getElementById('aiScheduleStartDateLabel');
+    var eventLb = document.getElementById('aiScheduleEventDateLabel');
+    if (startLb) startLb.textContent = formatAiScheduleKoreanDateLong(startIn && startIn.value);
+    if (eventLb) eventLb.textContent = formatAiScheduleKoreanDateLong(eventIn && eventIn.value);
+  }
+
+  function setAiSchedulePickerAriaExpanded(open) {
+    var b1 = document.getElementById('btnAiSchedulePickStart');
+    var b2 = document.getElementById('btnAiSchedulePickEvent');
+    if (b1) b1.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (b2) b2.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function updateAiScheduleKoreanPickerTitle() {
+    var el = document.getElementById('aiScheduleKoreanPickerTitle');
+    if (el) el.textContent = _pickerYear + '년 ' + _pickerMonth + '월';
+  }
+
+  function renderAiScheduleKoreanPickerGrid() {
+    var grid = document.getElementById('aiScheduleKoreanPickerGrid');
+    if (!grid) return;
+    var y = _pickerYear;
+    var m0 = _pickerMonth - 1;
+    var dim = daysInMonthYearMonthIndex(y, m0);
+    var firstYmd = ymdFromYmdParts(y, m0, 1);
+    var startPad = seoulWeekdaySun0FromYmd(firstYmd);
+    var targetEl = _aiDatePickerTargetId ? document.getElementById(_aiDatePickerTargetId) : null;
+    var selected = targetEl && targetEl.value ? String(targetEl.value).trim().substring(0, 10) : '';
+    var today = getTodayStrLocal();
+    var parts = [];
+    var i;
+    for (i = 0; i < startPad; i++) {
+      parts.push('<div class="ai-schedule-korean-picker__cell ai-schedule-korean-picker__cell--empty"></div>');
+    }
+    for (var day = 1; day <= dim; day++) {
+      var cellYmd = ymdFromYmdParts(y, m0, day);
+      var isSel = cellYmd === selected;
+      var isToday = cellYmd === today;
+      var dow = seoulWeekdaySun0FromYmd(cellYmd);
+      var cls = 'ai-schedule-korean-picker__day';
+      if (dow === 0) cls += ' ai-schedule-korean-picker__day--sun';
+      if (dow === 6) cls += ' ai-schedule-korean-picker__day--sat';
+      if (isSel) cls += ' ai-schedule-korean-picker__day--selected';
+      if (isToday && !isSel) cls += ' ai-schedule-korean-picker__day--today';
+      parts.push('<button type="button" class="' + cls + '" data-ymd="' + cellYmd + '">' + day + '</button>');
+    }
+    grid.innerHTML = parts.join('');
+    grid.onclick = function (ev) {
+      var btn = ev.target && ev.target.closest && ev.target.closest('.ai-schedule-korean-picker__day[data-ymd]');
+      if (!btn || !grid.contains(btn)) return;
+      var v = btn.getAttribute('data-ymd');
+      if (targetEl && v) targetEl.value = v;
+      syncAiScheduleDateButtonLabels();
+      if (typeof window.closeAiScheduleKoreanDatePicker === 'function') window.closeAiScheduleKoreanDatePicker();
+    };
+  }
+
+  window.openAiScheduleKoreanDatePicker = function (inputId) {
+    var root = document.getElementById('aiScheduleDatePickerRoot');
+    if (!root) return;
+    _aiDatePickerTargetId = inputId || 'aiScheduleStartDate';
+    var inp = document.getElementById(_aiDatePickerTargetId);
+    var v = inp && inp.value ? String(inp.value).trim().substring(0, 10) : '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      _pickerYear = parseInt(v.substring(0, 4), 10);
+      _pickerMonth = parseInt(v.substring(5, 7), 10);
+    } else {
+      var t = getTodayStrLocal();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+        _pickerYear = parseInt(t.substring(0, 4), 10);
+        _pickerMonth = parseInt(t.substring(5, 7), 10);
+      }
+    }
+    if (_pickerMonth < 1) _pickerMonth = 1;
+    if (_pickerMonth > 12) _pickerMonth = 12;
+    updateAiScheduleKoreanPickerTitle();
+    renderAiScheduleKoreanPickerGrid();
+    root.style.display = 'flex';
+    setAiSchedulePickerAriaExpanded(true);
+  };
+
+  window.closeAiScheduleKoreanDatePicker = function () {
+    var root = document.getElementById('aiScheduleDatePickerRoot');
+    if (root) root.style.display = 'none';
+    _aiDatePickerTargetId = null;
+    setAiSchedulePickerAriaExpanded(false);
+  };
+
+  window.aiScheduleKoreanPickerShiftMonth = function (delta) {
+    var d = parseInt(delta, 10) || 0;
+    _pickerMonth += d;
+    while (_pickerMonth > 12) {
+      _pickerMonth -= 12;
+      _pickerYear += 1;
+    }
+    while (_pickerMonth < 1) {
+      _pickerMonth += 12;
+      _pickerYear -= 1;
+    }
+    if (_pickerYear < 1990) _pickerYear = 1990;
+    if (_pickerYear > 2100) _pickerYear = 2100;
+    updateAiScheduleKoreanPickerTitle();
+    renderAiScheduleKoreanPickerGrid();
+  };
+
   /**
    * 해당 날짜·워크아웃의 훈련 완료 여부 조회 (Cloud Firestore users/{userId}/logs)
    * 판단 기준: date와 workoutId(또는 workout_id)가 일치하는 log가 있으면 완수
@@ -429,6 +579,7 @@
       d.setMonth(d.getMonth() + 2);
       eventDateEl.value = getDateStrInKorea(d) || (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
     }
+    syncAiScheduleDateButtonLabels();
 
     var distEl = document.getElementById('aiScheduleEventDistance');
     if (distEl) distEl.value = 100;
@@ -448,6 +599,7 @@
   };
 
   window.closeScheduleCreateAIModal = function () {
+    if (typeof window.closeAiScheduleKoreanDatePicker === 'function') window.closeAiScheduleKoreanDatePicker();
     const modal = document.getElementById('scheduleCreateAIModal');
     if (modal) modal.style.display = 'none';
     try {
