@@ -1083,6 +1083,17 @@ function isOpenRidingPastBySeoulDate(ride) {
   return getTodaySeoulYmd() > rideYmd;
 }
 
+
+/**
+ * Seoul calendar: ride YMD <= today YMD (today included). Host review for non-participants.
+ */
+function isOpenRidingRideDayOnOrBeforeTodaySeoul(ride) {
+  var rideYmd = getRideDateSeoulYmd(ride);
+  if (!rideYmd) return false;
+  return rideYmd <= getTodaySeoulYmd();
+}
+
+
 /** 서울 달력상 라이딩일이 지난 경우(다음날부터) 상세 연락처 마스킹 */
 function shouldMaskOpenRidingContacts(ride) {
   return isOpenRidingPastBySeoulDate(ride);
@@ -4709,12 +4720,13 @@ function OpenRidingDetail(props) {
         setReviewLogsLoading(false);
         return undefined;
       }
-      /** Review summary source: participant -> own logs; ended ride + non-participant -> host logs (public). */
-      var rideEnded = isOpenRidingPastBySeoulDate(ride);
+      /** Review summary: participant=own logs; non-participant=host logs when ride day <= today (Seoul) and not cancelled */
+      var rideCancelled = String(ride.rideStatus || 'active') === 'cancelled';
+      var hostReviewPublicWindow = !rideCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
       var reviewLogUserId = '';
       if (role === 'participant') {
         reviewLogUserId = String(userId);
-      } else if (rideEnded) {
+      } else if (hostReviewPublicWindow) {
         var hostUid = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
         if (hostUid) reviewLogUserId = hostUid;
       }
@@ -5131,6 +5143,8 @@ function OpenRidingDetail(props) {
   var parts = Array.isArray(ride.participants) ? ride.participants : [];
   var waits = Array.isArray(ride.waitlist) ? ride.waitlist : [];
   var maskContacts = shouldMaskOpenRidingContacts(ride);
+  /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
+  var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
   /** 서울 기준 일정일이 지난 뒤에는 방장도 수정/취소/삭제 불가 — grade=1 관리자는 예외 */
   var _loginGr =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
@@ -5642,7 +5656,9 @@ function OpenRidingDetail(props) {
               <span className="text-xs text-slate-500 leading-tight font-medium">
                 {reviewMergedLog
                   ? '펼쳐보기 하면 라이딩 후기를 확인하실 수 있습니다.'
-                  : '라이딩이 종료되면 후기 자동 작성됩니다.'}
+                  : role !== 'participant' && hostPublicReviewWindow
+                    ? '방장 후기가 등록되면 요약이 표시됩니다.'
+                    : '라이딩이 종료되면 후기 자동 작성됩니다.'}
               </span>
             </div>
           </div>
@@ -5662,7 +5678,7 @@ function OpenRidingDetail(props) {
                     이 일정일에 STRAVA 라이딩 기록이 없거나 아직 라이딩이 종료되지 않았습니다.
                   </p>
                 )
-              ) : isOpenRidingPastBySeoulDate(ride) ? (
+              ) : hostPublicReviewWindow ? (
                 reviewLogsLoading ? (
                   <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
                 ) : reviewMergedLog ? (
@@ -5672,12 +5688,12 @@ function OpenRidingDetail(props) {
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                    종료된 모임입니다. 해당 일정일(서울 기준)에 방장의 STRAVA 라이딩 기록이 훈련일지에 없어 요약을 표시할 수 없습니다.
+                    방장 후기가 아직 등록되지 않았습니다. 해당 일정일(서울 기준)에 방장의 STRAVA 라이딩 기록이 훈련일지에 반영되면 여기에 표시됩니다.
                   </p>
                 )
               ) : (
                 <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다. 모임 종료 후에는 방장의 후기 요약을 확인할 수 있습니다.
+                  참석 확정인 경우, 해당 일정일(서울 기준)에 STRAVA로 수집된 라이딩 기록이 훈련일지에 반영되어 있으면 아래에 요약이 표시됩니다. 모임 일정일이 도래한 날부터는 방장 후기가 등록되면 요약을 확인할 수 있습니다.
                 </p>
               )}
             </div>
