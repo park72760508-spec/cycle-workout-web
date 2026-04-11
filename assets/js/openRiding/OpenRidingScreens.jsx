@@ -2991,11 +2991,28 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
+  /* Hosted-list green badge: guest in participants, waitlist, or participantDisplay */
+  function openRideIdsFromFirestoreListField(v) {
+    if (Array.isArray(v)) return v;
+    if (v && typeof v === 'object' && !Array.isArray(v)) return Object.keys(v);
+    return [];
+  }
+
+  function openRidingMoimSpectatorBadgeGradeOk() {
+    if (typeof window === 'undefined') return true;
+    if (typeof window.getLoginUserGrade !== 'function') return true;
+    var g = window.getLoginUserGrade();
+    if (g == null || g === '') return true;
+    var s = String(g).trim();
+    var n = Number(s);
+    return s === '1' || s === '2' || s === '3' || n === 1 || n === 2 || n === 3;
+  }
+
   function isUserParticipantConfirmedForRide(r) {
     var uid = String(userId || '');
     if (!uid) return false;
     if (String(r.rideStatus || 'active') === 'cancelled') return false;
-    var parts = Array.isArray(r.participants) ? r.participants : [];
+    var parts = openRideIdsFromFirestoreListField(r.participants);
     return parts.some(function (p) {
       return String(p) === uid;
     });
@@ -3006,18 +3023,12 @@ function OpenRidingCalendarMain(props) {
     var uid = String(userId || '');
     if (!uid) return false;
     if (String(r.rideStatus || 'active') === 'cancelled') return false;
-    var waits = Array.isArray(r.waitlist) ? r.waitlist : [];
+    var waits = openRideIdsFromFirestoreListField(r.waitlist);
     return waits.some(function (w) {
       return String(w) === uid;
     });
   }
 
-  /* Hosted-list green badge: guest in participants, waitlist, or participantDisplay */
-  function openRideIdsFromFirestoreListField(v) {
-    if (Array.isArray(v)) return v;
-    if (v && typeof v === 'object' && !Array.isArray(v)) return Object.keys(v);
-    return [];
-  }
   function openRideHostHasAttendanceApplications(r) {
     if (String(r.rideStatus || 'active') === 'cancelled') return false;
     var hostNorm = String(r.hostUserId || '').trim();
@@ -3102,7 +3113,7 @@ function OpenRidingCalendarMain(props) {
     var spectatorBrowseCircleClass =
       'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-slate-300/90 text-slate-700 shadow-sm ring-1 ring-slate-400/35';
     var showSpectatorBrowseIcon = false;
-    if (userId && !isCancelled) {
+    if (userId && !isCancelled && openRidingMoimSpectatorBadgeGradeOk()) {
       var appliedJoin = isUserParticipantConfirmedForRide(r) || isUserWaitlistedForRide(r);
       if (!appliedJoin) {
         if (!ex.compactInviteOrHostedList) {
