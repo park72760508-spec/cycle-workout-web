@@ -852,6 +852,9 @@ function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
 
 function openRidingIsJoinClosedByScheduleUi(ride) {
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.isOpenRidingScheduleEnded === 'function') {
+    return svc.isOpenRidingScheduleEnded(ride);
+  }
   if (typeof svc.isRideJoinClosedBySchedule === 'function') {
     return svc.isRideJoinClosedBySchedule(ride);
   }
@@ -859,7 +862,11 @@ function openRidingIsJoinClosedByScheduleUi(ride) {
   if (String(ride.rideStatus || 'active') === 'cancelled') return true;
   var ry = getRideDateSeoulYmd(ride);
   if (!ry) return false;
-  return ry < getTodaySeoulYmd();
+  var today = getTodaySeoulYmd();
+  if (ry < today) return true;
+  if (ry > today) return false;
+  var h = ride.hostPublicReviewSummary;
+  return !!(h && typeof h === 'object' && openRidingHostSummaryQualifiesAsGroupRideUi(ride, h));
 }
 
 /** Training log date → Seoul YYYY-MM-DD (journal / open-riding review sync) */
@@ -4820,6 +4827,10 @@ function OpenRidingDetail(props) {
   var _revMerged = useState(null);
   var reviewMergedLog = _revMerged[0];
   var setReviewMergedLog = _revMerged[1];
+  /** 'self' | 'host_public' | 'host_fallback' — who the merged review log represents */
+  var _revSrc = useState(null);
+  var reviewMergedLogSource = _revSrc[0];
+  var setReviewMergedLogSource = _revSrc[1];
   var _revLd = useState(false);
   var reviewLogsLoading = _revLd[0];
   var setReviewLogsLoading = _revLd[1];
@@ -4834,6 +4845,7 @@ function OpenRidingDetail(props) {
       setParticipantListExpanded(false);
       setReviewExpanded(false);
       setReviewMergedLog(null);
+      setReviewMergedLogSource(null);
     },
     [rideId]
   );
@@ -4841,6 +4853,7 @@ function OpenRidingDetail(props) {
   useEffect(
     function () {
       setReviewMergedLog(null);
+      setReviewMergedLogSource(null);
       if (!userId || !ride || loading) {
         setReviewLogsLoading(false);
         return undefined;
@@ -4884,6 +4897,7 @@ function OpenRidingDetail(props) {
             : null;
         if (summaryFromRideProp) {
           setReviewMergedLog(summaryFromRideProp);
+          setReviewMergedLogSource('host_public');
         }
         var cancelledPub = false;
         setReviewLogsLoading(true);
@@ -4900,16 +4914,24 @@ function OpenRidingDetail(props) {
               openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
             ) {
               setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd));
+              setReviewMergedLogSource('host_public');
             } else if (summaryFromRideProp) {
               setReviewMergedLog(summaryFromRideProp);
+              setReviewMergedLogSource('host_public');
             } else {
               setReviewMergedLog(null);
+              setReviewMergedLogSource(null);
             }
           })
           .catch(function () {
             if (!cancelledPub) {
-              if (summaryFromRideProp) setReviewMergedLog(summaryFromRideProp);
-              else setReviewMergedLog(null);
+              if (summaryFromRideProp) {
+                setReviewMergedLog(summaryFromRideProp);
+                setReviewMergedLogSource('host_public');
+              } else {
+                setReviewMergedLog(null);
+                setReviewMergedLogSource(null);
+              }
             }
           })
           .finally(function () {
@@ -4930,6 +4952,37 @@ function OpenRidingDetail(props) {
       }
       var cancelled = false;
       setReviewLogsLoading(true);
+      function applyHostPublicSummaryDoc(rideDoc, summaryPropFallback) {
+        if (cancelled) return;
+        var h0 = rideDoc && rideDoc.hostPublicReviewSummary;
+        var s0 = h0 && h0.summary;
+        var d0 = h0 && h0.rideDateYmd != null ? String(h0.rideDateYmd).trim() : '';
+        if (
+          s0 &&
+          typeof s0 === 'object' &&
+          openRidingYmdEqual(d0, ymd) &&
+          openRidingHostSummaryQualifiesAsGroupRideUi(rideDoc, { rideDateYmd: d0, summary: s0 })
+        ) {
+          setReviewMergedLog(openRidingReviewLogFromStoredSummary(s0, ymd));
+          if (role === 'participant' && !hostViewingOwnRide) {
+            setReviewMergedLogSource('host_fallback');
+          } else {
+            setReviewMergedLogSource('self');
+          }
+          return;
+        }
+        if (summaryPropFallback) {
+          setReviewMergedLog(summaryPropFallback);
+          if (role === 'participant' && !hostViewingOwnRide) {
+            setReviewMergedLogSource('host_fallback');
+          } else {
+            setReviewMergedLogSource('self');
+          }
+          return;
+        }
+        setReviewMergedLog(null);
+        setReviewMergedLogSource(null);
+      }
       getRng(reviewLogUserId, year, month, db)
         .then(function (logs) {
           if (cancelled) return;
@@ -4940,32 +4993,58 @@ function OpenRidingDetail(props) {
             dayLogs = openRidingPickStravaLogsForHostReview(dayLogs, ride);
           }
           var merged = openRidingMergeLogsForReviewSummary(dayLogs);
-          setReviewMergedLog(merged);
-          if (
-            !cancelled &&
-            hostViewingOwnRide &&
-            hostReviewPublicWindow &&
-            merged &&
-            rideId &&
-            db
-          ) {
-            var svcSync = typeof window !== 'undefined' ? window.openRidingService || {} : {};
-            var syncFn0 =
-              typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
-            if (syncFn0) {
-              syncFn0(db, rideId, ymd, merged).catch(function (e) {
-                if (typeof console !== 'undefined' && console.warn) {
-                  console.warn('[openRiding] syncHostPublicReviewSummary', e);
-                }
-              });
+          if (merged) {
+            setReviewMergedLog(merged);
+            setReviewMergedLogSource('self');
+            if (
+              !cancelled &&
+              hostViewingOwnRide &&
+              hostReviewPublicWindow &&
+              rideId &&
+              db
+            ) {
+              var svcSync = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+              var syncFn0 =
+                typeof svcSync.syncHostPublicReviewSummary === 'function' ? svcSync.syncHostPublicReviewSummary : null;
+              if (syncFn0) {
+                syncFn0(db, rideId, ymd, merged).catch(function (e) {
+                  if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[openRiding] syncHostPublicReviewSummary', e);
+                  }
+                });
+              }
             }
+            if (!cancelled) setReviewLogsLoading(false);
+            return;
           }
+          if (!hostReviewPublicWindow || !fetchRideByIdFn || !rideId) {
+            setReviewMergedLog(null);
+            setReviewMergedLogSource(null);
+            if (!cancelled) setReviewLogsLoading(false);
+            return;
+          }
+          var hProp2 = ride.hostPublicReviewSummary;
+          var summaryFromRideProp2 =
+            rideDocHostSummaryMatchesRideDate(ride, ymd) && openRidingHostSummaryQualifiesAsGroupRideUi(ride, hProp2)
+              ? openRidingReviewLogFromStoredSummary(hProp2.summary, ymd)
+              : null;
+          fetchRideByIdFn(db, rideId)
+            .then(function (fresh) {
+              applyHostPublicSummaryDoc(fresh || ride, summaryFromRideProp2);
+            })
+            .catch(function () {
+              applyHostPublicSummaryDoc(ride, summaryFromRideProp2);
+            })
+            .finally(function () {
+              if (!cancelled) setReviewLogsLoading(false);
+            });
         })
         .catch(function () {
-          if (!cancelled) setReviewMergedLog(null);
-        })
-        .finally(function () {
-          if (!cancelled) setReviewLogsLoading(false);
+          if (!cancelled) {
+            setReviewMergedLog(null);
+            setReviewMergedLogSource(null);
+            setReviewLogsLoading(false);
+          }
         });
       return function () {
         cancelled = true;
@@ -5013,8 +5092,10 @@ function OpenRidingDetail(props) {
             openRidingHostSummaryQualifiesAsGroupRideUi(fresh, { rideDateYmd: d, summary: s })
           ) {
             setReviewMergedLog(openRidingReviewLogFromStoredSummary(s, ymd2));
+            setReviewMergedLogSource('host_public');
           } else if (summaryFromRideProp2) {
             setReviewMergedLog(summaryFromRideProp2);
+            setReviewMergedLogSource('host_public');
           }
         })
         .catch(function () {});
@@ -5930,13 +6011,21 @@ function OpenRidingDetail(props) {
               <span className="text-xs text-slate-500 leading-tight font-medium">
                 {reviewMergedLog
                   ? '펼치어보기 하면 라이딩 후기를 확인하실 수 있습니다.'
-                  : role !== 'participant' && hostPublicReviewWindow
-                    ? openRidingIsRideScheduleDayTodaySeoul(ride) &&
-                      !guestHostSummaryOnRide &&
-                      !isOpenRidingPastBySeoulDate(ride)
-                      ? '오늘 일정입니다. 방장의 훈련일지에 라이딩이 반영되면 종료로 보고 방장 후기 요약이 표시됩니다. (+)를 다시 눌러 최신 상태를 불러오세요.'
-                      : '방장 후기가 등록되면 요약이 표시됩니다.'
-                    : '라이딩이 종료되면 후기 자동 작성됩니다.'}
+                  : role === 'participant' && hostPublicReviewWindow
+                    ? joinApplyClosedBySchedule
+                      ? "종료된 일정입니다. (+)를 눌러 후기 요약을 확인하세요."
+                      : openRidingIsRideScheduleDayTodaySeoul(ride) &&
+                          !rideDocHostSummaryMatchesRideDate(ride, rideYmdHint) &&
+                          !isOpenRidingPastBySeoulDate(ride)
+                        ? "오늘 일정입니다. 훈련일지에 라이딩이 반영되면 종료·후기 요약이 표시될 수 있습니다. (+)를 다시 눌러 최신 상태를 불러오세요."
+                        : "해당 일정일 STRAVA 기록이 훈련일지에 반영되면 본인 후기가 표시되고, 없으면 방장 후기가 표시됩니다."
+                    : role !== 'participant' && hostPublicReviewWindow
+                      ? openRidingIsRideScheduleDayTodaySeoul(ride) &&
+                          !guestHostSummaryOnRide &&
+                          !isOpenRidingPastBySeoulDate(ride)
+                        ? "오늘 일정입니다. 방장의 훈련일지에 라이딩이 반영되면 종료로 보고 방장 후기 요약이 표시됩니다. (+)를 다시 눌러 최신 상태를 불러오세요."
+                        : "방장 후기가 등록되면 요약이 표시됩니다."
+                      : "라이딩이 종료되면 후기 자동 작성됩니다."}
               </span>
             </div>
           </div>
@@ -5950,10 +6039,15 @@ function OpenRidingDetail(props) {
                 reviewLogsLoading ? (
                   <p className="text-xs text-slate-500 m-0">불러오는 중…</p>
                 ) : reviewMergedLog ? (
-                  <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+                  <div className="w-full min-w-0 space-y-2">
+                    {reviewMergedLogSource === 'host_fallback' ? (
+                      <p className="text-xs text-slate-600 m-0 font-semibold">방장 후기 (본인 STRAVA 기록 없음)</p>
+                    ) : null}
+                    <OpenRidingRideReviewSummaryContent log={reviewMergedLog} />
+                  </div>
                 ) : (
                   <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                    이 일정일에 STRAVA 라이딩 기록이 없거나 아직 라이딩이 종료되지 않았습니다.
+                    이 일정일에 본인 STRAVA 라이딩 기록이 없고, 방장 공개 후기도 아직 없거나 종료 조건에 해당하지 않습니다.
                   </p>
                 )
               ) : hostPublicReviewWindow ? (

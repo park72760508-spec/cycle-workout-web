@@ -212,8 +212,14 @@ export function openRidingHostSummaryQualifiesAsGroupRide(rideData, hostBlock) {
   return logged >= HOST_REVIEW_MIN_KM_IF_NO_PLANNED;
 }
 
-/** Join closed: cancelled, past date (Seoul), or today with qualifying host summary (±10% or longer than planned). */
-export function isRideJoinClosedBySchedule(rideData) {
+/**
+ * Ride is "ended" for join closure and ended-state UI (Seoul calendar date).
+ * 1) Cancelled
+ * 2) Ride date (Seoul YMD) is before today
+ * 3) Ride date is today: hostPublicReviewSummary matches ride date and distance qualifies (±10% band or longer than planned)
+ * @param {{ rideStatus?: unknown; date?: unknown; distance?: unknown; hostPublicReviewSummary?: unknown }} rideData
+ */
+export function isOpenRidingScheduleEnded(rideData) {
   if (!rideData || typeof rideData !== 'object') return false;
   if (String(rideData.rideStatus || 'active') === 'cancelled') return true;
   const rideYmd = getRideDateSeoulYmdFromData(rideData);
@@ -224,6 +230,11 @@ export function isRideJoinClosedBySchedule(rideData) {
   const h = rideData.hostPublicReviewSummary;
   if (!h || typeof h !== 'object') return false;
   return openRidingHostSummaryQualifiesAsGroupRide(rideData, h);
+}
+
+/** @deprecated use isOpenRidingScheduleEnded — join closed === schedule ended */
+export function isRideJoinClosedBySchedule(rideData) {
+  return isOpenRidingScheduleEnded(rideData);
 }
 
 /** Firestore map: uid -> 표시 이름 */
@@ -843,7 +854,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
-    if (isRideJoinClosedBySchedule(data)) throw new Error('RIDE_JOIN_CLOSED');
+    if (isOpenRidingScheduleEnded(data)) throw new Error('RIDE_JOIN_CLOSED');
     const isPrivate = !!data.isPrivate;
     const invitedList = asStringArray(data.invitedList);
     const hostUid = String(data.hostUserId || '');
@@ -1054,6 +1065,7 @@ if (typeof window !== 'undefined') {
     isUserPhoneInvitedToRide,
     normalizePackRidingRules,
     isRideJoinClosedBySchedule,
+    isOpenRidingScheduleEnded,
     openRidingHostSummaryQualifiesAsGroupRide
   };
 }
