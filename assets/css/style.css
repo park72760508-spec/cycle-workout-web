@@ -13722,12 +13722,13 @@ html.is-android #trainingDetailModal .training-detail-body {
 }
 
 /* AI 스케줄 생성 — 전체 화면 (하단 글래스 네비 여백 반영) */
+/* z-index: 글래스 네비(#globalHubBottomGlassNavRoot 99999)보다 낮게 — AI 생성 화면에서도 하단 네비 노출 */
 #scheduleCreateAIModal.ai-schedule-fullscreen {
   align-items: stretch;
   justify-content: stretch;
   background: #fff;
   padding: 0;
-  z-index: 100005;
+  z-index: 99950;
 }
 
 #scheduleCreateAIModal.ai-schedule-fullscreen .ai-schedule-fullscreen-overlay {
