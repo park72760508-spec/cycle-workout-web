@@ -3137,6 +3137,123 @@ function OpenRidingCalendarMain(props) {
     });
   }
 
+  /** 날짜 선택 패널: 참석 신청 가능(공개·초대·입장 비번) — 등급과 무관 */
+  function canUserApplyOpenRidingDayList(ride) {
+    if (!ride || String(ride.rideStatus || 'active') === 'cancelled') return false;
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (typeof svc.isOpenRidingScheduleEnded === 'function' && svc.isOpenRidingScheduleEnded(ride)) return false;
+    if (!userId) return false;
+    if (isUserParticipantConfirmedForRide(ride)) return false;
+    if (isUserWaitlistedForRide(ride)) return false;
+    if (!ride.isPrivate) return true;
+    var phone = String(inviteCheckPhone || '').trim();
+    if (phone && typeof svc.isUserPhoneInvitedToRide === 'function' && svc.isUserPhoneInvitedToRide(phone, ride.invitedList)) {
+      return true;
+    }
+    var pwd = String(ride.rideJoinPassword != null ? ride.rideJoinPassword : '')
+      .replace(/\D/g, '')
+      .slice(0, 4);
+    return pwd.length === 4;
+  }
+
+  /** 라이딩 모임 > 날짜 선택 목록 전용 — 아이콘만 (취소·참석확정·참석가능·구경) */
+  function renderSelectedDayListPanelTitleIcons(ride) {
+    var isCancelled = String(ride.rideStatus || 'active') === 'cancelled';
+    var isPast = isOpenRidingPastBySeoulDate(ride);
+    var fade = isPast ? ' opacity-45' : '';
+    var fadeLock = isPast ? ' opacity-45' : '';
+    var chkSvg = (
+      <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M2.5 6L5 8.5L9.5 3.5" />
+      </svg>
+    );
+    if (isCancelled) {
+      return (
+        <span
+          className={
+            'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-900/30' +
+            fade
+          }
+          title="취소된 라이딩"
+          aria-label="취소된 라이딩"
+        >
+          <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" aria-hidden="true">
+            <path d="M3 3l6 6M9 3L3 9" />
+          </svg>
+        </span>
+      );
+    }
+    var stIcon;
+    if (isUserParticipantConfirmedForRide(ride)) {
+      stIcon = (
+        <span
+          className={
+            'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30' +
+            fade
+          }
+          title="참석 확정"
+          aria-label="참석 확정"
+        >
+          {chkSvg}
+        </span>
+      );
+    } else if (isUserWaitlistedForRide(ride)) {
+      stIcon = (
+        <span
+          className={
+            'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30' +
+            fade
+          }
+          title="대기열 신청"
+          aria-label="대기열 신청"
+        >
+          {chkSvg}
+        </span>
+      );
+    } else if (canUserApplyOpenRidingDayList(ride)) {
+      stIcon = (
+        <span
+          className={
+            'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25' +
+            fade
+          }
+          title="참석 가능"
+          aria-label="참석 가능"
+        >
+          {chkSvg}
+        </span>
+      );
+    } else {
+      stIcon = (
+        <span
+          className={
+            'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-slate-300/90 text-slate-700 shadow-sm ring-1 ring-slate-400/35' +
+            fade
+          }
+          title="구경 하기"
+          aria-label="구경 하기"
+        >
+          {chkSvg}
+        </span>
+      );
+    }
+    return (
+      <>
+        {ride.isPrivate ? (
+          <img
+            src="assets/img/lock.png"
+            alt=""
+            className={'w-4 h-4 shrink-0 object-contain' + fadeLock}
+            width={16}
+            height={16}
+            decoding="async"
+          />
+        ) : null}
+        {stIcon}
+      </>
+    );
+  }
+
   function openRideHostHasAttendanceApplications(r) {
     if (String(r.rideStatus || 'active') === 'cancelled') return false;
     var hostNorm = String(r.hostUserId || '').trim();
@@ -3183,6 +3300,11 @@ function OpenRidingCalendarMain(props) {
     } else {
       titleRowClass += 'text-slate-800';
     }
+    var isSelectedDayListPanel = !!ex.selectedDayListPanel;
+    var isPastDayListFade = isSelectedDayListPanel && isOpenRidingPastBySeoulDate(r);
+    if (isPastDayListFade) {
+      titleRowClass += ' opacity-[0.72]';
+    }
     var rideYmd = getRideDateSeoulYmd(r);
     var useInviteHostedRow = !!ex.compactInviteOrHostedList;
     var dateLabel = '';
@@ -3210,7 +3332,7 @@ function OpenRidingCalendarMain(props) {
         attendeeCheckTitle = '대기열 신청';
         attendeeCheckAria = '대기열 신청 완료';
       }
-    } else {
+    } else if (!isSelectedDayListPanel) {
       showParticipantConfirmedIcon = isUserParticipantConfirmedForRide(r);
     }
     var attendeeCheckCircleClass = useInviteHostedRow
@@ -3219,7 +3341,12 @@ function OpenRidingCalendarMain(props) {
     var spectatorBrowseCircleClass =
       'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-slate-300/90 text-slate-700 shadow-sm ring-1 ring-slate-400/35';
     var showSpectatorBrowseIcon = false;
-    if (userId && !isCancelled && openRidingMoimSpectatorBadgeGradeOk()) {
+    if (
+      !isSelectedDayListPanel &&
+      userId &&
+      !isCancelled &&
+      openRidingMoimSpectatorBadgeGradeOk()
+    ) {
       var appliedJoin = isUserParticipantConfirmedForRide(r) || isUserWaitlistedForRide(r);
       if (!appliedJoin) {
         if (!ex.compactInviteOrHostedList) {
@@ -3237,6 +3364,10 @@ function OpenRidingCalendarMain(props) {
           onClick={function () { onSelectRide(r.id); }}
         >
           <div className={titleRowClass}>
+            {isSelectedDayListPanel ? (
+              renderSelectedDayListPanelTitleIcons(r)
+            ) : (
+              <>
             {isCancelled ? (
               <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
             ) : r.isPrivate ? (
@@ -3279,12 +3410,15 @@ function OpenRidingCalendarMain(props) {
                 </svg>
               </span>
             ) : null}
+              </>
+            )}
             <span className="truncate">{r.title}</span>
           </div>
           <div
             className={
               'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' +
-              (hostedCancelledMine ? 'text-slate-600' : isCancelled ? 'text-slate-400' : 'text-slate-600')
+              (hostedCancelledMine ? 'text-slate-600' : isCancelled ? 'text-slate-400' : 'text-slate-600') +
+              (isPastDayListFade ? ' opacity-60' : '')
             }
           >
             {ex.showRideDate && dateLabel ? (
@@ -3341,7 +3475,7 @@ function OpenRidingCalendarMain(props) {
         ) : (
           <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto">
             {ridesForDay.map(function (r) {
-              return renderMonthRideListRow(r, {});
+              return renderMonthRideListRow(r, { selectedDayListPanel: true });
             })}
           </ul>
         )}
