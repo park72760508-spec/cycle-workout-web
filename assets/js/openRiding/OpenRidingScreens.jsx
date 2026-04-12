@@ -1317,6 +1317,70 @@ function isOpenRidingPastBySeoulDate(ride) {
   return getTodaySeoulYmd() > rideYmd;
 }
 
+function parseOpenRidingDepartureHm(str) {
+  var s = String(str || '').trim();
+  var m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return { h: 0, mi: 0 };
+  var h = parseInt(m[1], 10);
+  var mi = parseInt(m[2], 10);
+  if (!Number.isFinite(h) || h < 0) h = 0;
+  if (!Number.isFinite(mi) || mi < 0) mi = 0;
+  h = Math.min(23, h);
+  mi = Math.min(59, mi);
+  return { h: h, mi: mi };
+}
+
+function getSeoulClockHourMinuteNow() {
+  try {
+    var parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(new Date());
+    var h = 0;
+    var mi = 0;
+    parts.forEach(function (p) {
+      if (p.type === 'hour') h = parseInt(p.value, 10) || 0;
+      if (p.type === 'minute') mi = parseInt(p.value, 10) || 0;
+    });
+    return { h: h, mi: mi };
+  } catch (e) {
+    var d = new Date();
+    return { h: d.getHours(), mi: d.getMinutes() };
+  }
+}
+
+/** 거리 기반 예상 라이딩 소요(분): 그룹 라이딩 가정 + 여유 버퍼 */
+function openRidingEstimatedRideDurationMinutes(ride) {
+  var km = Number(ride != null ? ride.distance : 0) || 0;
+  if (!(km > 0)) return 180;
+  var rideMin = Math.ceil((km / 22) * 60);
+  return Math.min(780, Math.max(45, rideMin + 30));
+}
+
+/**
+ * [내가 주최한 라이딩] 제목 앞 체크: 연한 녹색 = 일정상 종료.
+ * — 당일: 호스트 공개 요약이 '종료'로 인정되거나, 출발 시각+예상 소요가 지난 경우
+ * — 취소된 라이딩은 취소 아이콘만 사용
+ */
+function isHostedRideScheduleEndedForListIcon(ride) {
+  if (!ride || String(ride.rideStatus || 'active') === 'cancelled') return false;
+  var ry = getRideDateSeoulYmd(ride);
+  if (!ry) return false;
+  if (!openRidingYmdEqual(ry, getTodaySeoulYmd())) return false;
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.isOpenRidingScheduleEnded === 'function' && svc.isOpenRidingScheduleEnded(ride)) return true;
+  var dep = parseOpenRidingDepartureHm(ride.departureTime);
+  var depMin = dep.h * 60 + dep.mi;
+  var now = getSeoulClockHourMinuteNow();
+  var nowMin = now.h * 60 + now.mi;
+  var dur = openRidingEstimatedRideDurationMinutes(ride);
+  var endMin = depMin + dur;
+  if (endMin < 24 * 60) return nowMin >= endMin;
+  return nowMin >= depMin || nowMin < endMin - 24 * 60;
+}
+
 
 /**
  * Seoul calendar: ride YMD <= today YMD (today included). Host review for non-participants.
@@ -2467,6 +2531,25 @@ function OpenRidingCalendarMain(props) {
     [ridesMonth, userId]
   );
 
+  /** 주최 목록의 종료(연한 녹색) 표시가 출발+예상 시각 경과 시 갱신되도록 1분마다 리렌더 */
+  var _hostedClock = useState(0);
+  var hostedListClockBump = _hostedClock[0];
+  var setHostedListClockBump = _hostedClock[1];
+  useEffect(
+    function () {
+      var id = typeof window !== 'undefined' ? window.setInterval(function () {
+        setHostedListClockBump(function (n) {
+          return n + 1;
+        });
+      }, 60000) : 0;
+      return function () {
+        if (id) window.clearInterval(id);
+      };
+    },
+    []
+  );
+  void hostedListClockBump;
+
   /** 해당 월에서 내가 참석 확정(participants)인 라이딩이 있는 날짜 */
   var participantConfirmedDateKeys = useMemo(function () {
     var uid = String(userId || '');
@@ -3102,12 +3185,10 @@ function OpenRidingCalendarMain(props) {
     var showParticipantConfirmedIcon = false;
     var attendeeCheckTitle = '참석 확정';
     var attendeeCheckAria = '참석 확정';
+    var showHostedListTitleCheck = !!(ex.compactInviteOrHostedList && ex.hostedListSection && !isCancelled);
+    var hostedListTitleCheckMuted = showHostedListTitleCheck && isHostedRideScheduleEndedForListIcon(r);
     if (ex.compactInviteOrHostedList && ex.hostedListSection) {
-      if (openRideHostHasAttendanceApplications(r)) {
-        showParticipantConfirmedIcon = true;
-        attendeeCheckTitle = '참석/대기 신청 있음';
-        attendeeCheckAria = '참석 확정 인원 또는 대기열 신청이 있습니다';
-      }
+      /* 주최 목록: 제목 앞 전용 녹색 체크(등급 무관) — 참석 신청 유무 아이콘은 사용하지 않음 */
     } else if (ex.compactInviteOrHostedList) {
       if (isUserParticipantConfirmedForRide(r)) {
         showParticipantConfirmedIcon = true;
@@ -3149,6 +3230,21 @@ function OpenRidingCalendarMain(props) {
               <img src="assets/img/rcancel.svg" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
             ) : r.isPrivate ? (
               <img src="assets/img/lock.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
+            ) : null}
+            {showHostedListTitleCheck ? (
+              <span
+                className={
+                  hostedListTitleCheckMuted
+                    ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-200 text-emerald-800 shadow-sm ring-1 ring-emerald-400/55'
+                    : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25'
+                }
+                title={hostedListTitleCheckMuted ? '라이딩 일정이 종료되었습니다' : '진행 예정·진행 중'}
+                aria-label={hostedListTitleCheckMuted ? '라이딩 일정 종료' : '진행 예정 또는 진행 중'}
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" />
+                </svg>
+              </span>
             ) : null}
             {showParticipantConfirmedIcon ? (
               <span
