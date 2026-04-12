@@ -4500,9 +4500,10 @@ button[aria-disabled="true"] {
   justify-content: center;
   box-shadow: 0 1px 4px rgba(185, 28, 28, 0.45);
   pointer-events: none;
+  /* 날짜 영역 중심 기준 시계 12시↔3시 사이(1시 30분) 방향 바깥쪽 — 단위벡터 (1,-1) 정규화 */
   left: 50%;
   top: 50%;
-  transform: translate(8%, -58%);
+  transform: translate(-50%, -50%) translate(11px, -11px);
 }
 
 @media (min-width: 380px) {
@@ -4512,7 +4513,7 @@ button[aria-disabled="true"] {
     min-width: 16px;
     min-height: 16px;
     font-size: 7.5px;
-    transform: translate(10%, -60%);
+    transform: translate(-50%, -50%) translate(12px, -12px);
   }
 }
 
