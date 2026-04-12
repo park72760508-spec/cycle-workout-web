@@ -1553,6 +1553,19 @@ html.global-hub-glass-nav-active .global-back-to-top-btn.global-back-to-top-acti
   position: relative;
   z-index: 1;
 }
+
+/* 라이딩 일지 상세 바텀시트: 전역 허브 글래스 네비 상단선 위에 맞춤(하단 탭·푸터가 네비에 가리지 않음) */
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-overlay {
+  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet {
+  max-height: min(85vh, calc(100dvh - var(--hub-glass-nav-scroll-pad) - 32px));
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-footer {
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
 .training-detail-footer .btn {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
