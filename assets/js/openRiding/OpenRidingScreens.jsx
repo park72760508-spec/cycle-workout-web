@@ -6630,6 +6630,10 @@ function OpenRidingFriendsManage(props) {
   var _fe = useState(true);
   var friendsExpanded = _fe[0];
   var setFriendsExpanded = _fe[1];
+  /** 친구 수락: native alert 대신 STELVIO 모달 — success는 확인 시 목록 반영 */
+  var _fad = useState(null);
+  var friendAcceptDialog = _fad[0];
+  var setFriendAcceptDialog = _fad[1];
 
   function refresh() {
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
@@ -7245,21 +7249,25 @@ function OpenRidingFriendsManage(props) {
                                 disabled={actionBusy}
                                 onClick={function () {
                                   if (!acceptProfMemo.toContact) {
-                                    alert('수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.');
+                                    setFriendAcceptDialog({ type: 'needContact' });
                                     return;
                                   }
                                   var fr = window.openRidingFriendsService || {};
                                   if (typeof fr.acceptFriendRequest !== 'function') return;
                                   setActionBusy(true);
-                                  fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo).then(function () {
-                                    applyLocalStateAfterAccept(row, from);
-                                    setFriendsExpanded(true);
-                                    return refresh();
-                                  }).catch(function (e) {
-                                    alert(e && e.message ? e.message : '수락 실패');
-                                  }).finally(function () {
-                                    setActionBusy(false);
-                                  });
+                                  fr.acceptFriendRequest(firestore, from, userId, acceptProfMemo)
+                                    .then(function () {
+                                      setFriendAcceptDialog({ type: 'success', row: row, fromUid: from });
+                                    })
+                                    .catch(function (e) {
+                                      setFriendAcceptDialog({
+                                        type: 'error',
+                                        message: e && e.message ? String(e.message) : '수락 실패'
+                                      });
+                                    })
+                                    .finally(function () {
+                                      setActionBusy(false);
+                                    });
                                 }}
                               >
                                 수락
@@ -7303,6 +7311,76 @@ function OpenRidingFriendsManage(props) {
 
         {bundle.err ? <p className="text-xs text-red-600 m-0 px-1">{bundle.err}</p> : null}
       </div>
+
+      {friendAcceptDialog ? (
+        <div
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200060] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-friend-accept-dialog-title"
+          onClick={function (ev) {
+            if (ev.target !== ev.currentTarget) return;
+            if (friendAcceptDialog && friendAcceptDialog.type === 'success') return;
+            setFriendAcceptDialog(null);
+          }}
+        >
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-7 px-8 text-center"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <div className="flex items-center justify-center gap-2.5 mb-4 pb-4 border-b border-slate-200">
+              <span
+                className={
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold border ' +
+                  (friendAcceptDialog.type === 'success'
+                    ? 'bg-violet-50 text-violet-700 border-violet-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-100')
+                }
+                aria-hidden
+              >
+                {friendAcceptDialog.type === 'success' ? '✓' : '!'}
+              </span>
+              <h2
+                id="open-riding-friend-accept-dialog-title"
+                className="text-base font-bold text-slate-800 m-0 leading-tight"
+              >
+                {friendAcceptDialog.type === 'success'
+                  ? '친구 수락'
+                  : friendAcceptDialog.type === 'needContact'
+                    ? '안내'
+                    : '알림'}
+              </h2>
+            </div>
+            <p className="stelvio-exit-confirm-message text-center m-0">
+              {friendAcceptDialog.type === 'success'
+                ? '친구수락이 완료되었습니다.'
+                : friendAcceptDialog.type === 'needContact'
+                  ? '수락 시 상대에게 공개할 연락처가 필요합니다. 프로필에서 등록해 주세요.'
+                  : friendAcceptDialog.message || '수락에 실패했습니다.'}
+            </p>
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok inline-flex items-center justify-center min-w-[8rem] px-6"
+                onClick={function () {
+                  setFriendAcceptDialog(function (prev) {
+                    if (prev && prev.type === 'success' && prev.row && prev.fromUid) {
+                      applyLocalStateAfterAccept(prev.row, prev.fromUid);
+                      setFriendsExpanded(true);
+                      refresh();
+                    }
+                    return null;
+                  });
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
