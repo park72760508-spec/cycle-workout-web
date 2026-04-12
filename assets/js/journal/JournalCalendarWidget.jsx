@@ -276,12 +276,7 @@
             style: { position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: 2, lineHeight: 1.2, color: '#6b7280' }
           },
             React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot outdoor' }), React.createElement('span', null, 'Outdoor')),
-            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot indoor' }), React.createElement('span', null, 'Indoor')),
-            React.createElement(
-              'span',
-              { className: 'legend-row', title: 'PR', role: 'img', 'aria-label': 'PR' },
-              React.createElement('span', { className: 'legend-dot pr', 'aria-hidden': true }, 'PR')
-            )
+            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot indoor' }), React.createElement('span', null, 'Indoor'))
           )
         )
       )
