@@ -9364,7 +9364,14 @@
     function createCalendarDayJournal(day, className, dateKey) {
       const dayEl = document.createElement('div');
       dayEl.className = `mini-calendar-day ${className}`.trim();
-      dayEl.innerHTML = `<span class="day-number">${day}</span>`;
+      if (className.indexOf('journal-has-pr') >= 0) {
+        dayEl.innerHTML =
+          '<span class="day-number-wrap"><span class="day-number">' +
+          day +
+          '</span><span class="journal-pr-corner-badge" aria-label="PR">PR</span></span>';
+      } else {
+        dayEl.innerHTML = `<span class="day-number">${day}</span>`;
+      }
       
       // 훈련 기록이 있는 날짜는 클릭 가능
       if (className.includes('has-training')) {
