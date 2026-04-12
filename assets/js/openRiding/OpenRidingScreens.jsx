@@ -480,6 +480,17 @@ function buildOpenRidingInviteDisplayMap(inviteSelected) {
   return out;
 }
 
+/** 라이딩 생성 폼 초대 행 { name, phone, key } — 표시명 기준 한글 가나다순 */
+function sortOpenRidingInviteRowsByDisplayNameKo(rows) {
+  return (rows || []).slice().sort(function (a, b) {
+    var na = String(a && a.name != null ? a.name : '').trim();
+    var nb = String(b && b.name != null ? b.name : '').trim();
+    var cmp = na.localeCompare(nb, 'ko', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return String((a && a.phone) || '').localeCompare(String((b && b.phone) || ''), 'ko');
+  });
+}
+
 /**
  * 상세 초대 명단 한 줄 표시명: inviteDisplayByPhone(주소록/users)의 users 측 → 조회 캐시 → 본인 → 폴백
  */
@@ -4432,7 +4443,7 @@ function OpenRidingCreateForm(props) {
               <p className="text-xs text-slate-400 py-2">주소록에서 추가하거나, 친구목록에서 추가하세요.</p>
             ) : (
               <ul className="space-y-1 max-h-36 overflow-y-auto">
-                {(form.invitePending || []).map(function (row) {
+                {sortOpenRidingInviteRowsByDisplayNameKo(form.invitePending).map(function (row) {
                   return (
                     <li key={row.key}>
                       <button
@@ -4452,8 +4463,10 @@ function OpenRidingCreateForm(props) {
                           });
                         }}
                       >
-                        <span className="font-medium text-slate-800">{row.name}</span>
-                        <span className="block text-xs text-slate-500">{row.phone}</span>
+                        <span className="block min-w-0 truncate">
+                          <span className="font-medium text-slate-800">{row.name}</span>
+                          <span className="text-xs text-slate-500"> {row.phone}</span>
+                        </span>
                       </button>
                     </li>
                   );
@@ -4467,12 +4480,12 @@ function OpenRidingCreateForm(props) {
               <p className="text-xs text-slate-400 py-2">모임에 초대할 사람을 초대 목록에서 추가하세요</p>
             ) : (
               <ul className="space-y-1 max-h-36 overflow-y-auto">
-                {(form.inviteSelected || []).map(function (row) {
+                {sortOpenRidingInviteRowsByDisplayNameKo(form.inviteSelected).map(function (row) {
                   return (
                     <li key={row.key} className="flex items-start gap-2 rounded-md bg-violet-50/80 px-2 py-1.5 text-sm">
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 truncate">
                         <span className="font-medium text-slate-800">{row.name}</span>
-                        <span className="block text-xs text-slate-600">{row.phone}</span>
+                        <span className="text-xs text-slate-600"> {row.phone}</span>
                       </div>
                       <button
                         type="button"
