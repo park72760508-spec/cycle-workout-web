@@ -3737,7 +3737,7 @@
           </div>
         </div>
         <div class="ai-schedule-generate-wrap" id="aiScheduleBtnRow">
-          <button type="button" class="stelvio-purple-btn stelvio-ranking-board-entry-btn ai-schedule-generate-submit" id="btnGenerateAISchedule" onclick="if(typeof generateScheduleWithGemini==='function')generateScheduleWithGemini()">스케줄 생성</button>
+          <button type="button" class="stelvio-purple-btn stelvio-ranking-board-entry-btn ai-schedule-generate-submit" id="btnGenerateAISchedule" onclick="if(typeof generateScheduleWithGemini==='function'){var _p=generateScheduleWithGemini();if(_p&&typeof _p.catch==='function')_p.catch(function(_e){console.error('[AI스케줄]',_e);var _m='스케줄 생성 중 오류가 발생했습니다.'+(_e&&_e.message?' '+_e.message:'');if(typeof showToast==='function')showToast(_m,'error');else if(typeof alert==='function')alert(_m);});}">스케줄 생성</button>
         </div>
         <div id="aiScheduleProgressSection" style="display: none; margin-top: 16px; padding: 16px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
           <div class="loading-spinner" style="margin-bottom: 8px;">
