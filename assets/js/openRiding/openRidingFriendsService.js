@@ -481,7 +481,8 @@ export async function acceptFriendRequest(db, fromUid, toUid, accepterProfile) {
     { merge: true }
   );
   await batch.commit();
-  await syncFriendsFromAcceptedRequests(db, String(fromUid));
+  // 상대(fromUid)의 users/.../friends 는 본인 인증으로만 쓸 수 있음. 수락자 클라이언트에서 동기화하면 권한 오류(Missing or insufficient permissions).
+  // 발신자는 친구 관리·초대 목록 로드 시 fetchFriendManagementSnapshot / loadFriendsForInviteMerge 가 자신 uid로 syncFriendsFromAcceptedRequests 를 수행함.
 }
 
 export async function rejectFriendRequest(db, fromUid, toUid) {
