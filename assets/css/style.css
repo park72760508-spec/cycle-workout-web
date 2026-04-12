@@ -1553,6 +1553,26 @@ html.global-hub-glass-nav-active .global-back-to-top-btn.global-back-to-top-acti
   position: relative;
   z-index: 1;
 }
+
+/* 라이딩 일지 상세 바텀시트: 허브 글래스 네비 상단선 위에 맞춤 */
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-overlay {
+  padding-bottom: var(--hub-glass-nav-scroll-pad);
+  box-sizing: border-box;
+}
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet {
+  max-height: min(85vh, calc(100dvh - var(--hub-glass-nav-scroll-pad) - 32px));
+  /* 네비 오프셋은 오버레이 패딩으로 처리 — 시트 내부 safe-area 중복 제거 */
+  padding-bottom: 0;
+  box-sizing: border-box;
+}
+/* Powered by Strava: 로고~카드 하단 소여백만(네비·홈 인디케이터는 오버레이의 --hub-glass-nav-scroll-pad가 담당) */
+html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-footer {
+  padding-top: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 0;
+  box-sizing: border-box;
+}
+
 .training-detail-footer .btn {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
