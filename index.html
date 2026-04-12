@@ -1443,10 +1443,28 @@
     #trainingJournalScreen .journal-legend .legend-dot.indoor {
       background: rgba(34, 197, 94, 0.82);
     }
+    /* PR: 달력 코너 배지와 동일(빨간 원 + 흰 PR), 범례 사각(8×8)과 동일 외곽 크기 */
     #trainingJournalScreen .journal-legend .legend-dot.pr {
-      background: transparent;
-      border: 1.5px solid #dc2626;
-      border-radius: 3px;
+      width: 8px;
+      height: 8px;
+      min-width: 8px;
+      min-height: 8px;
+      border-radius: 50%;
+      background: #dc2626;
+      border: none;
+      box-shadow: 0 0 0 0.5px rgba(185, 28, 28, 0.35);
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 3.5px;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.06em;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      box-sizing: border-box;
+      overflow: hidden;
     }
     /* 라이딩 일지 콘텐츠: 하단 버튼이 safe-area/뷰포트 엣지에 가리지 않도록 여백 확보 (접힌 상태에서만) */
     #trainingJournalScreen #journal-react-root:not(:has(.journal-accordion-expanded)),
@@ -5284,7 +5302,7 @@
         <div class="journal-legend" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; line-height: 1.2; color: #6b7280;">
           <span class="legend-row"><span class="legend-dot outdoor"></span><span>Outdoor</span></span>
           <span class="legend-row"><span class="legend-dot indoor"></span><span>Indoor</span></span>
-          <span class="legend-row"><span class="legend-dot pr"></span><span>PR</span></span>
+          <span class="legend-row" title="PR" role="img" aria-label="PR"><span class="legend-dot pr" aria-hidden="true">PR</span></span>
         </div>
       </div>
     </div>
