@@ -148,6 +148,41 @@
         });
     }, []);
 
+    // 로드 직후 달력 하단 요약이 바로 보이도록: 사용자가 날짜를 누르기 전에 기본 선택일 설정
+    useEffect(function autoSelectDefaultJournalDate() {
+      if (loading) return;
+      var tl = trainingLogs || {};
+      var keys = Object.keys(tl);
+      if (keys.length === 0) return;
+      setSelectedDate(function (prev) {
+        if (prev != null) return prev;
+        var now = new Date();
+        var todayKey =
+          now.getFullYear() +
+          '-' +
+          String(now.getMonth() + 1).padStart(2, '0') +
+          '-' +
+          String(now.getDate()).padStart(2, '0');
+        if (tl[todayKey] && tl[todayKey].length > 0) return todayKey;
+        var y = currentYear;
+        var m = currentMonth;
+        var inMonth = keys
+          .filter(function (k) {
+            var p = k.split('-');
+            if (p.length < 3) return false;
+            return Number(p[0]) === y && Number(p[1]) === m + 1;
+          })
+          .sort(function (a, b) {
+            return b.localeCompare(a);
+          });
+        if (inMonth.length > 0) return inMonth[0];
+        var sorted = keys.slice().sort(function (a, b) {
+          return b.localeCompare(a);
+        });
+        return sorted[0];
+      });
+    }, [loading, trainingLogs, currentYear, currentMonth]);
+
     // 월별 네비게이션
     var navigateMonth = useCallback(function(direction) {
       setCurrentMonth(function(prev) {
