@@ -277,7 +277,11 @@
           },
             React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot outdoor' }), React.createElement('span', null, 'Outdoor')),
             React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot indoor' }), React.createElement('span', null, 'Indoor')),
-            React.createElement('span', { className: 'legend-row' }, React.createElement('span', { className: 'legend-dot pr' }), React.createElement('span', null, 'PR'))
+            React.createElement(
+              'span',
+              { className: 'legend-row', title: 'PR', role: 'img', 'aria-label': 'PR' },
+              React.createElement('span', { className: 'legend-dot pr', 'aria-hidden': true }, 'PR')
+            )
           )
         )
       )
