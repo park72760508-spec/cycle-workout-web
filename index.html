@@ -8322,7 +8322,7 @@
      * Gemini API로 추월하기 분석 코멘트 생성 (시스템 계산값 기반, 수치 변경 금지)
      */
     async function callGeminiOvertakeAnalysis(items, apiKey) {
-      var modelNames = [localStorage.getItem('geminiModelName') || 'gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-1.5-flash'];
+      var modelNames = [localStorage.getItem('geminiModelName') || 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var prompt = '당신은 실내 사이클링 코치입니다. 아래는 **시스템이 이미 정확히 계산한 수치**입니다.\n\n' +
         '## 제공된 계산값 (절대 임의로 계산하거나 변경하지 말 것)\n' +
