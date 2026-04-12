@@ -232,13 +232,26 @@
         ),
         React.createElement('div', { className: 'mini-calendar-grid journal-calendar-grid' },
           cells.map(function(cell) {
+            var hasPrCls = cell.className.indexOf('journal-has-pr') >= 0;
+            var dayInner = hasPrCls
+              ? React.createElement(
+                  'span',
+                  { className: 'day-number-wrap' },
+                  React.createElement('span', { className: 'day-number' }, cell.day),
+                  React.createElement(
+                    'span',
+                    { className: 'journal-pr-corner-badge', 'aria-label': 'PR' },
+                    'PR'
+                  )
+                )
+              : React.createElement('span', { className: 'day-number' }, cell.day);
             return React.createElement('div', {
               key: cell.key,
               className: 'mini-calendar-day ' + cell.className,
               style: (cell.hasTraining || cell.isOtherMonth) ? { cursor: 'pointer' } : {},
               onClick: function() { handleCellClick(cell); },
               role: cell.hasTraining ? 'button' : undefined
-            }, React.createElement('span', { className: 'day-number' }, cell.day));
+            }, dayInner);
           })
         ),
         React.createElement('div', {
