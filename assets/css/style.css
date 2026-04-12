@@ -4464,6 +4464,58 @@ button[aria-disabled="true"] {
   box-shadow: 0 0 0 1px #dc2626;
 }
 
+/* PR 코너 배지: 날짜 숫자 기준 북동(45°) 방향, 원의 약 2/3가 날짜와 겹침 */
+#trainingJournalScreen .mini-calendar-day.journal-has-pr .day-number-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#trainingJournalScreen .mini-calendar-day.has-training .day-number-wrap .day-number {
+  position: relative;
+  z-index: 1;
+}
+
+#trainingJournalScreen .journal-pr-corner-badge {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 17px;
+  height: 17px;
+  min-width: 15px;
+  min-height: 15px;
+  padding: 0;
+  border-radius: 50%;
+  background: #dc2626;
+  color: #ffffff;
+  /* 날짜(한글·숫자)와 동일 글꼴 패밀리 — 크기만 조금 작게 */
+  font-family: inherit;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(185, 28, 28, 0.45);
+  pointer-events: none;
+  left: 50%;
+  top: 50%;
+  transform: translate(8%, -58%);
+}
+
+@media (min-width: 380px) {
+  #trainingJournalScreen .journal-pr-corner-badge {
+    width: 18px;
+    height: 18px;
+    min-width: 16px;
+    min-height: 16px;
+    font-size: 7.5px;
+    transform: translate(10%, -60%);
+  }
+}
+
 .mini-calendar-day.has-indoor.has-outdoor.outdoor-weekday .day-number {
   color: #f97316;
 }
