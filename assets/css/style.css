@@ -4716,7 +4716,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-weight: 600; /* 대시보드 추천 디자인: font-semibold */
 }
 
-/* PR(개인기록) 배지: 빨강 바탕 + 흰색 글씨 */
+/* PR(개인기록) 배지: 빨강 바탕 + 흰색 글씨 — 상세 본문(한글·숫자)과 동일 글꼴 */
 .training-detail-pr-badge {
   display: inline-flex;
   align-items: center;
@@ -4725,6 +4725,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   height: 1.25em;
   padding: 0 6px;
   margin-left: 4px;
+  font-family: inherit;
   font-size: 0.7rem;
   font-weight: 700;
   color: #ffffff;
