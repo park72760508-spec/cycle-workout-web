@@ -17,7 +17,13 @@
   }
 
   function getUserId() {
-    return (window.currentUser && window.currentUser.id) || (function () { try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch (e) { return null; } }())?.id || '';
+    var fromWin = (window.currentUser && window.currentUser.id) ? window.currentUser.id : '';
+    if (fromWin) return fromWin;
+    try {
+      var parsedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (parsedUser && parsedUser.id) return parsedUser.id;
+    } catch (e) {}
+    return '';
   }
 
   function getUserIdForRTDB() {
@@ -388,7 +394,13 @@
     if (daysNeedingSync.length > 0) {
       await Promise.all(daysNeedingSync.map(async function (dateStr) {
         var day = aiScheduleData.days[dateStr];
-        var wid = (day && (day.workoutId ?? day.workout_id) != null) ? String(day.workoutId ?? day.workout_id).trim() : '';
+        var widRaw =
+          day && day.workoutId != null && day.workoutId !== ''
+            ? day.workoutId
+            : day && day.workout_id != null && day.workout_id !== ''
+              ? day.workout_id
+              : null;
+        var wid = widRaw != null ? String(widRaw).trim() : '';
         var completed = await getIsCompletedForDate(firestoreUserId, dateStr, wid);
         completionByDate[dateStr] = completed;
         if (aiScheduleData.days[dateStr].isCompleted !== completed) {
@@ -778,6 +790,74 @@
   }
 
   /**
+   * Gemini generateContent 호출 — 모바일(Android) 불안정 네트워크 대응: 타임아웃, HTTP 오류, 비JSON 본문 처리
+   * @param {string} apiKey
+   * @param {string} modelName
+   * @param {{ contents: unknown[], generationConfig?: object }} bodyObj
+   * @param {number} [timeoutMs]
+   * @returns {Promise<object>}
+   */
+  function geminiGenerateContentRequest(apiKey, modelName, bodyObj, timeoutMs) {
+    var tMs = timeoutMs || 120000;
+    var url =
+      'https://generativelanguage.googleapis.com/v1beta/models/' +
+      modelName +
+      ':generateContent?key=' +
+      encodeURIComponent(apiKey);
+    var bodyStr = JSON.stringify(bodyObj);
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timerId = null;
+    var fetchOpts = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: bodyStr
+    };
+    if (controller) {
+      fetchOpts.signal = controller.signal;
+      timerId = setTimeout(function () {
+        try {
+          controller.abort();
+        } catch (abortErr) {}
+      }, tMs);
+    }
+    return fetch(url, fetchOpts)
+      .then(function (res) {
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+        return res.text().then(function (text) {
+          var json = null;
+          try {
+            json = text && String(text).trim() ? JSON.parse(text) : null;
+          } catch (parseHead) {
+            throw new Error('API 응답을 해석할 수 없습니다. 네트워크·VPN을 확인한 뒤 다시 시도해 주세요.');
+          }
+          if (!res.ok) {
+            var errMsg = 'HTTP ' + res.status;
+            if (json && json.error) {
+              if (json.error.message) errMsg = String(json.error.message);
+              else if (json.error.status) errMsg = String(json.error.status);
+            }
+            throw new Error(errMsg);
+          }
+          return json;
+        });
+      })
+      .catch(function (err) {
+        if (timerId) {
+          clearTimeout(timerId);
+          timerId = null;
+        }
+        if (err && err.name === 'AbortError') {
+          throw new Error('AI 응답 대기 시간이 초과되었습니다. Wi-Fi·데이터 연결을 확인하고 다시 시도해 주세요.');
+        }
+        if (err && err.message) throw err;
+        throw new Error('네트워크 오류로 요청에 실패했습니다. 연결을 확인해 주세요.');
+      });
+  }
+
+  /**
    * 해당 월의 스케줄을 Gemini에 요청하여 생성 (generateMonthlySchedule)
    */
   function generateMonthlySchedule(apiKey, opts) {
@@ -787,7 +867,6 @@
     var prompt = opts.prompt;
     var modelName = opts.modelName || 'gemini-2.0-flash-exp';
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
     var body = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -797,26 +876,25 @@
       }
     };
 
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function (res) { return res.json(); }).then(function (json) {
-      if (json?.error) {
-        console.error('[AI스케줄] Gemini API 오류', { error: json.error, code: json.error?.code, message: json.error?.message });
-        throw new Error(json.error.message || 'Gemini API 오류');
+    return geminiGenerateContentRequest(apiKey, modelName, body, 120000).then(function (json) {
+      if (json && json.error) {
+        console.error('[AI스케줄] Gemini API 오류', json.error);
+        throw new Error((json.error && json.error.message) || 'Gemini API 오류');
       }
-      var text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      var text = '';
+      var c0 = json && json.candidates && json.candidates[0];
+      var parts = c0 && c0.content && c0.content.parts;
+      if (parts && parts[0] && parts[0].text) text = String(parts[0].text);
       if (!text) {
-        console.error('[AI스케줄] Gemini 응답 텍스트 없음', { json: json, candidates: json?.candidates });
-        throw new Error('Gemini 응답에 텍스트가 없습니다.');
+        console.error('[AI스케줄] Gemini 응답 텍스트 없음', json);
+        throw new Error('Gemini 응답에 텍스트가 없습니다. 잠시 후 다시 시도해 주세요.');
       }
       try {
         var parsed = parseGeminiScheduleJson(text);
         if (!Array.isArray(parsed)) throw new Error('배열 형식이 아닙니다.');
         return parsed;
       } catch (parseErr) {
-        console.error('[AI스케줄] Gemini 응답 파싱 실패', { parseErr: parseErr, textPreview: text.substring(0, 800) });
+        console.error('[AI스케줄] Gemini 응답 파싱 실패', parseErr, text.substring(0, 800));
         throw parseErr;
       }
     });
@@ -898,17 +976,20 @@
 ]
 반드시 유효한 JSON 배열만 출력. 작은따옴표 금지, trailing comma 금지.`;
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    return geminiGenerateContentRequest(
+      apiKey,
+      modelName,
+      {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.6, maxOutputTokens: 4096, responseMimeType: 'application/json' }
-      })
-    }).then(function (r) { return r.json(); }).then(function (json) {
-      if (json?.error) throw new Error(json.error.message || 'Gemini API 오류');
-      var text2 = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      },
+      120000
+    ).then(function (json) {
+      if (json && json.error) throw new Error((json.error.message) || 'Gemini API 오류');
+      var text2 = '';
+      var c0 = json && json.candidates && json.candidates[0];
+      var parts = c0 && c0.content && c0.content.parts;
+      if (parts && parts[0] && parts[0].text) text2 = String(parts[0].text);
       var parsed = parseMacroStrategyJson(text2);
       return parsed;
     });
@@ -1332,12 +1413,31 @@ ${workoutsContext}
 ]`;
 
         scheduleLog('GEMINI', label + ' API 요청 (' + monthDates.length + '일)', { count: monthDates.length });
-        var parsed = await generateMonthlySchedule(apiKey, {
+        var monthOpts = {
           year: parseInt(ymKey.substring(0, 4), 10),
           month: parseInt(ymKey.substring(5, 7), 10) - 1,
           prompt: baseContext,
           modelName: modelName
-        });
+        };
+        var parsed;
+        try {
+          parsed = await generateMonthlySchedule(apiKey, monthOpts);
+        } catch (geminiMonthErr) {
+          var gemMsg = geminiMonthErr && geminiMonthErr.message ? String(geminiMonthErr.message) : '';
+          var mayRetry =
+            /네트워크|시간이 초과|초과되었|연결|fetch|Failed|Network|abort|HTTP\s*52|HTTP\s*53|502|503|504|해석할 수 없/i.test(
+              gemMsg
+            );
+          if (mayRetry) {
+            scheduleLog('GEMINI_RETRY', label + ' 1차 실패 후 재시도', { message: gemMsg });
+            await new Promise(function (r) {
+              setTimeout(r, 1800);
+            });
+            parsed = await generateMonthlySchedule(apiKey, monthOpts);
+          } else {
+            throw geminiMonthErr;
+          }
+        }
 
         scheduleLog('GEMINI', label + ' 응답: ' + (parsed ? parsed.length : 0) + '건 (예상 ' + monthDates.length + '건)', { parsedCount: parsed ? parsed.length : 0, expected: monthDates.length });
 
@@ -1484,32 +1584,52 @@ ${workoutsContext}
 
       var subHeader = document.getElementById('aiScheduleSubHeader');
       if (subHeader) subHeader.textContent = scheduleName;
-      renderAIScheduleCalendar();
+      try {
+        await renderAIScheduleCalendar();
+      } catch (renderErr) {
+        console.error('[AI스케줄] 캘린더 갱신 오류:', renderErr);
+        scheduleLog('RENDER_ERR', String(renderErr && renderErr.message ? renderErr.message : renderErr), {});
+        if (typeof showToast === 'function') {
+          showToast('스케줄은 저장되었으나 캘린더를 갱신하지 못했습니다. 화면을 새로고침해 주세요.');
+        }
+      }
 
       var taperDaysCount = trainingDates.filter(function (t) { return t.taper; }).length;
 
       setTimeout(function () {
-        updateScheduleProgress(false);
-        closeScheduleCreateAIModal();
-        if (typeof showAIScheduleResultModal === 'function') {
-          showAIScheduleResultModal({
-            scheduleName: scheduleName,
-            days: allDays,
-            meta: meta,
-            taperDaysCount: taperDaysCount,
-            taperStartStr: taperStartStr,
-            macroStrategy: macroStrategy,
-            totalWeeks: totalWeeks
-          });
+        try {
+          updateScheduleProgress(false);
+          if (typeof closeScheduleCreateAIModal === 'function') closeScheduleCreateAIModal();
+          if (typeof showAIScheduleResultModal === 'function') {
+            showAIScheduleResultModal({
+              scheduleName: scheduleName,
+              days: allDays,
+              meta: meta,
+              taperDaysCount: taperDaysCount,
+              taperStartStr: taperStartStr,
+              macroStrategy: macroStrategy,
+              totalWeeks: totalWeeks
+            });
+          }
+          if (typeof showToast === 'function') showToast('스케줄이 생성되었습니다.');
+        } catch (deferErr) {
+          console.error('[AI스케줄] 완료 UI 처리 오류:', deferErr);
+          scheduleLog('DEFER_UI_ERR', String(deferErr && deferErr.message ? deferErr.message : deferErr), {});
+          if (typeof showToast === 'function') {
+            showToast('스케줄 저장은 완료되었습니다. 모달을 닫고 캘린더에서 일정을 확인해 주세요.');
+          } else if (typeof alert === 'function') {
+            alert('스케줄 저장은 완료되었습니다. 화면을 새로고침해 주세요.');
+          }
         }
-        if (typeof showToast === 'function') showToast('스케줄이 생성되었습니다.');
       }, 800);
     } catch (err) {
       scheduleLog('ERROR', '스케줄 생성 실패: ' + (err.message || err), { error: err, stack: err && err.stack });
       console.error('[AI스케줄] generateScheduleWithGemini 오류', err);
       updateScheduleProgress(false);
       showAiScheduleLoadingOverlay(false);
-      if (typeof showToast === 'function') showToast('스케줄 생성 실패: ' + (err.message || '오류'), 'error');
+      var failMsg = '스케줄 생성 실패: ' + (err && err.message ? err.message : '오류');
+      if (typeof showToast === 'function') showToast(failMsg, 'error');
+      else if (typeof alert === 'function') alert(failMsg);
     } finally {
       showAiScheduleLoadingOverlay(false);
       if (btn) { btn.disabled = false; btn.textContent = '스케줄 생성'; }
