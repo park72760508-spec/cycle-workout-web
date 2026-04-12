@@ -857,6 +857,92 @@
       });
   }
 
+  /** 스케줄 생성용 기본 모델 (gemini-2.0-flash-exp 등은 generateContent 미지원·단종) */
+  var SCHEDULE_GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+  var SCHEDULE_GEMINI_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+
+  function stripGeminiModelPrefix(name) {
+    return String(name || '').replace(/^models\//, '').trim();
+  }
+
+  function isDeprecatedScheduleGeminiModelId(id) {
+    var p = stripGeminiModelPrefix(id);
+    if (!p) return false;
+    return /gemini-2\.0-flash-exp|gemini-2\.0-flash-thinking-exp|gemini-exp-/i.test(p);
+  }
+
+  function isGeminiModelUnsupportedForGenerateContent(msg) {
+    var s = String(msg || '');
+    if (/not supported for generateContent/i.test(s)) return true;
+    if (/ListModels to see the list of available models/i.test(s)) return true;
+    if (/is not supported.*generateContent/i.test(s)) return true;
+    if (/models\/[\w.-]+\s+is not supported/i.test(s)) return true;
+    if (/Requested entity was not found|NOT_FOUND.*model|404.*model/i.test(s)) return true;
+    return false;
+  }
+
+  function buildScheduleGeminiModelCandidates(preferred) {
+    var seen = {};
+    var out = [];
+    function add(m) {
+      var x = stripGeminiModelPrefix(m);
+      if (!x || seen[x]) return;
+      seen[x] = true;
+      out.push(x);
+    }
+    var p = stripGeminiModelPrefix(preferred);
+    if (p && !isDeprecatedScheduleGeminiModelId(p)) add(p);
+    for (var fi = 0; fi < SCHEDULE_GEMINI_FALLBACK_MODELS.length; fi++) {
+      add(SCHEDULE_GEMINI_FALLBACK_MODELS[fi]);
+    }
+    if (out.length === 0) add(SCHEDULE_GEMINI_DEFAULT_MODEL);
+    return out;
+  }
+
+  /**
+   * 모델 단종·미지원 시 후보 모델 순차 시도, 성공 시 localStorage 에 유효 모델 저장
+   */
+  function geminiGenerateContentRequestWithFallbacks(apiKey, preferredModel, bodyObj, timeoutMs) {
+    var candidates = buildScheduleGeminiModelCandidates(preferredModel);
+    function attempt(index) {
+      if (index >= candidates.length) {
+        return Promise.reject(
+          new Error(
+            'Gemini 모델을 사용할 수 없습니다. API 키를 확인하거나, 다른 모델이 generateContent 를 지원하는지 확인해 주세요.'
+          )
+        );
+      }
+      var m = candidates[index];
+      return geminiGenerateContentRequest(apiKey, m, bodyObj, timeoutMs)
+        .then(function (json) {
+          if (json && json.error && json.error.message) {
+            var em = String(json.error.message);
+            if (isGeminiModelUnsupportedForGenerateContent(em)) {
+              scheduleLog('GEMINI_MODEL_FALLBACK', m + ' API 본문 오류 → 다음 모델', { message: em });
+              return attempt(index + 1);
+            }
+            throw new Error(em);
+          }
+          if (index > 0 && typeof localStorage !== 'undefined') {
+            try {
+              localStorage.setItem('geminiModelName', m);
+            } catch (ePersist) {}
+            scheduleLog('GEMINI_MODEL_PERSIST', '스케줄 생성용 모델을 ' + m + '(으)로 저장(이전 모델 미지원)', {});
+          }
+          return json;
+        })
+        .catch(function (err) {
+          var msg = err && err.message ? String(err.message) : '';
+          if (isGeminiModelUnsupportedForGenerateContent(msg)) {
+            scheduleLog('GEMINI_MODEL_FALLBACK', m + ' 요청 실패 → 다음 모델', { message: msg });
+            return attempt(index + 1);
+          }
+          throw err;
+        });
+    }
+    return attempt(0);
+  }
+
   /**
    * 해당 월의 스케줄을 Gemini에 요청하여 생성 (generateMonthlySchedule)
    */
@@ -865,7 +951,7 @@
     var month = opts.month;
     var month1Indexed = month + 1;
     var prompt = opts.prompt;
-    var modelName = opts.modelName || 'gemini-2.0-flash-exp';
+    var modelName = opts.modelName || SCHEDULE_GEMINI_DEFAULT_MODEL;
 
     var body = {
       contents: [{ parts: [{ text: prompt }] }],
@@ -876,7 +962,7 @@
       }
     };
 
-    return geminiGenerateContentRequest(apiKey, modelName, body, 120000).then(function (json) {
+    return geminiGenerateContentRequestWithFallbacks(apiKey, modelName, body, 120000).then(function (json) {
       if (json && json.error) {
         console.error('[AI스케줄] Gemini API 오류', json.error);
         throw new Error((json.error && json.error.message) || 'Gemini API 오류');
@@ -937,7 +1023,7 @@
     var goal = opts.goal || 'Fitness';
     var eventGoal = opts.eventGoal || '완주';
     var eventDistance = opts.eventDistance || 100;
-    var modelName = opts.modelName || 'gemini-2.0-flash-exp';
+    var modelName = opts.modelName || SCHEDULE_GEMINI_DEFAULT_MODEL;
 
     var eventSpecificity = '';
     var g = String(eventGoal).toLowerCase();
@@ -976,7 +1062,7 @@
 ]
 반드시 유효한 JSON 배열만 출력. 작은따옴표 금지, trailing comma 금지.`;
 
-    return geminiGenerateContentRequest(
+    return geminiGenerateContentRequestWithFallbacks(
       apiKey,
       modelName,
       {
@@ -1301,7 +1387,17 @@
     scheduleLog('MONTHS', '월별 분할: ' + monthKeys.join(', ') + ' (총 ' + trainingDates.length + '일)', { byMonth: monthKeys.map(function (mk) { return mk + ':' + byMonth[mk].length + '일'; }) });
     updateScheduleProgress(true, 'Phase 1 매크로 전략 생성 중...', totalWeeks + '주 주기화 설계');
 
-    var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.0-flash-exp';
+    var modelName = '';
+    try {
+      modelName = localStorage.getItem('geminiModelName') || '';
+    } catch (eLs) {}
+    modelName = stripGeminiModelPrefix(modelName);
+    if (!modelName || isDeprecatedScheduleGeminiModelId(modelName)) {
+      modelName = SCHEDULE_GEMINI_DEFAULT_MODEL;
+      try {
+        localStorage.setItem('geminiModelName', modelName);
+      } catch (eLs2) {}
+    }
     var scheduleName = eventGoal + ' ' + eventDistance + 'km (' + eventDateStr + ')';
     var allDays = {};
     var macroStrategy = [];
