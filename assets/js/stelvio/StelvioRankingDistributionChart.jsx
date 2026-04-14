@@ -298,7 +298,7 @@
         var b4 = wFn(35, w);
         if (b1 == null || b2 == null || b3 == null || b4 == null) return [];
         return [
-          { x0: xMin, x1: b1, label: '입문', speedHint: '~25 km/h', color: 'rgba(250, 204, 21, 0.42)' },
+          { x0: xMin, x1: b1, label: '입문', speedHint: '~25km/h', color: 'rgba(253, 224, 71, 0.72)' },
           { x0: b1, x1: b2, label: '초급', speedHint: '~28 km/h', color: 'rgba(190, 242, 100, 0.46)' },
           { x0: b2, x1: b3, label: '중급', speedHint: '~32 km/h', color: 'rgba(168, 85, 247, 0.4)' },
           { x0: b3, x1: b4, label: '중상급', speedHint: '~35 km/h', color: 'rgba(249, 115, 22, 0.42)' },
@@ -627,7 +627,7 @@
                 if (xb <= xa) return null;
                 var leftPct = ((xa - xMin) / span) * 100;
                 var wPct = Math.max(0.5, ((xb - xa) / span) * 100);
-                var beginnerOnly = si === 0;
+                var isBeginnerBand = si === 0;
                 return (
                   <div
                     key={'open-tier-' + si}
@@ -640,12 +640,26 @@
                       borderRight: '1px solid rgba(255,255,255,0.5)',
                     }}
                   >
-                    {beginnerOnly ? null : (
-                      <>
-                        <span className="text-[9px] font-bold text-slate-900/95 leading-tight">{seg.label}</span>
-                        <span className="text-[8px] font-semibold text-slate-800/95 leading-tight">{seg.speedHint}</span>
-                      </>
-                    )}
+                    <span
+                      className={
+                        'leading-tight ' +
+                        (isBeginnerBand
+                          ? 'text-[10px] font-bold text-amber-950/95'
+                          : 'text-[9px] font-bold text-slate-900/95')
+                      }
+                    >
+                      {seg.label}
+                    </span>
+                    <span
+                      className={
+                        'leading-tight ' +
+                        (isBeginnerBand
+                          ? 'text-[9px] font-semibold text-amber-900/95'
+                          : 'text-[8px] font-semibold text-slate-800/95')
+                      }
+                    >
+                      {seg.speedHint}
+                    </span>
                   </div>
                 );
               })}
