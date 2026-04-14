@@ -254,7 +254,7 @@ export function useOpenRideDetail(db, rideId, userId) {
               ? '이 모임은 일정이 지났거나, 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다.'
               : raw;
       setActionError(msg);
-      throw e;
+      return undefined;
     }
   }, [db, rideId, userId, reload]);
 
@@ -272,7 +272,7 @@ export function useOpenRideDetail(db, rideId, userId) {
           ? '이 모임은 일정이 지났거나, 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다.'
           : raw;
       setActionError(msg);
-      throw e;
+      return undefined;
     }
   }, [db, rideId, userId, reload]);
 

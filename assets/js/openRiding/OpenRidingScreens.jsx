@@ -6014,11 +6014,11 @@ function OpenRidingDetail(props) {
   async function confirmJoinWithContactShare(contactPublic) {
     setBusy(true);
     try {
-      await join({
+      var jres = await join({
         contactPublicToParticipants: !!contactPublic,
         joinPasswordAttempt: joinPasswordInput
       });
-      setJoinShareModalOpen(false);
+      if (jres && jres.status) setJoinShareModalOpen(false);
     } finally {
       setBusy(false);
     }
@@ -6769,8 +6769,21 @@ function OpenRidingDetail(props) {
             <div className="open-riding-bottom-actions">
               <div className="open-riding-bottom-actions-row flex gap-2">
                 {role && !isHost ? (
-                  <button type="button" className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none" disabled={isActionBusy} onClick={onLeave}>
-                    참석 취소
+                  <button
+                    type="button"
+                    className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none disabled:opacity-50"
+                    disabled={isActionBusy || joinApplyClosedBySchedule}
+                    title={
+                      joinApplyClosedBySchedule
+                        ? '일정이 지났거나 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다'
+                        : undefined
+                    }
+                    onClick={function () {
+                      if (joinApplyClosedBySchedule || isActionBusy) return;
+                      onLeave();
+                    }}
+                  >
+                    {joinApplyClosedBySchedule ? '참석 변경 마감' : '참석 취소'}
                   </button>
                 ) : !role && !isHost ? (
                   <button
@@ -6779,7 +6792,7 @@ function OpenRidingDetail(props) {
                     disabled={isActionBusy || !userId || !joinInviteOk || joinApplyClosedBySchedule}
                     title={
                       joinApplyClosedBySchedule
-                        ? '일정이 지났거나, 오늘 모임은 방장 라이딩 기록(모임 거리 ±10% 또는 모임보다 긴 거리)이 확인되어 종료되었습니다'
+                        ? '일정이 지났거나 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다'
                         : !joinInviteOk
                           ? '초대된 연락처 또는 입장 비밀번호가 필요합니다'
                           : undefined
