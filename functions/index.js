@@ -2253,6 +2253,33 @@ async function getWeeklyTssForUser(db, userId, startStr, endStr) {
   return total;
 }
 
+/** 사용자 로그에서 기간 내 라이딩 거리 합계(km). 일별 Strava 합 우선·없으면 Stelvio 합(getWeeklyTssForUser와 동일 일별 규칙). isCyclingForMmp만 합산. */
+async function getRolling30dCyclingKmForUser(db, userId, startStr, endStr) {
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", startStr)
+    .where("date", "<=", endStr)
+    .get();
+  const byDate = {};
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    if (!isCyclingForMmp(d)) return;
+    const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
+    const km = Number(d.distance_km != null ? d.distance_km : d.distance || 0) || 0;
+    const isStrava = String(d.source || "").toLowerCase() === "strava";
+    if (!byDate[dateStr]) byDate[dateStr] = { strava: 0, stelvio: 0 };
+    if (isStrava) byDate[dateStr].strava += km;
+    else byDate[dateStr].stelvio += km;
+  });
+  let total = 0;
+  Object.keys(byDate).forEach((dateStr) => {
+    const o = byDate[dateStr];
+    const dayKm = o.strava > 0 ? o.strava : o.stelvio;
+    total += dayKm;
+  });
+  return total;
+}
+
 /** 해당 주간에 1일 500 이상 TSS가 있는지 여부 (포인트 적립 제외 판단용) */
 async function hasWeeklyTssCheatDay(db, userId, startStr, endStr) {
   const snapshot = await db.collection("users").doc(userId).collection("logs")
@@ -3145,6 +3172,136 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
   return { entries: withRank, byCategory };
 }
 
+/** 개인: 최근 30일(서울) 라이딩 거리 합 — 성별·리그 분류는 주간 TSS 랭킹과 동일 */
+async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, genderFilter) {
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs;
+  const entries = [];
+  for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
+    const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(async (doc) => {
+        const userId = doc.id;
+        const data = doc.data();
+        const name = data.name || "(이름 없음)";
+        const gender = String(data.gender || data.sex || "").toLowerCase();
+        if (genderFilter && genderFilter !== "all") {
+          const g = genderFilter === "M" || genderFilter === "male" || genderFilter === "남" ? "male" : "female";
+          const match = gender === "m" || gender === "male" || gender === "남" ? "male" : (gender === "f" || gender === "female" || gender === "여" ? "female" : null);
+          if (match !== g) return null;
+        }
+        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+        const challenge = data.challenge || "Fitness";
+        const leagueCategory = getLeagueCategory(challenge, birthYear);
+        if (!leagueCategory) return null;
+        const totalKmRaw = await getRolling30dCyclingKmForUser(db, userId, startStr, endStr);
+        if (totalKmRaw <= 0) return null;
+        const totalKm = Math.round(totalKmRaw * 100) / 100;
+        return {
+          userId,
+          name,
+          totalKm,
+          ageCategory: leagueCategory,
+          gender,
+          is_private: data.is_private === true,
+        };
+      })
+    );
+    results.forEach((r) => { if (r) entries.push(r); });
+  }
+  entries.sort((a, b) => b.totalKm - a.totalKm);
+  const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  withRank.forEach((e) => {
+    if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+  });
+  return { entries: withRank, byCategory };
+}
+
+/** rides.date → 서울 YYYY-MM-DD */
+function rideDocDateToSeoulYmd(rideDate) {
+  if (!rideDate) return "";
+  try {
+    let d;
+    if (typeof rideDate.toDate === "function") d = rideDate.toDate();
+    else if (rideDate instanceof admin.firestore.Timestamp) d = rideDate.toDate();
+    else if (rideDate instanceof Date) d = rideDate;
+    else if (typeof rideDate === "string") return String(rideDate).slice(0, 10);
+    else return "";
+    if (!d || isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  } catch (_e) {
+    return "";
+  }
+}
+
+/**
+ * 그룹: 최근 30일 내 오픈 라이딩을 방장(hostUserId)별로 합산.
+ * 각 일정의 점수 = 해당 일정일에 확정 참가자 각각의 라이딩 거리(일별 규칙 동일) 합.
+ */
+async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, viewerUid) {
+  const memo = new Map();
+  async function dailyKmCached(uid, ymd) {
+    const key = `${uid}|${ymd}`;
+    if (memo.has(key)) return memo.get(key);
+    const v = await getRolling30dCyclingKmForUser(db, uid, ymd, ymd);
+    memo.set(key, v);
+    return v;
+  }
+  const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
+  const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
+  const ridesSnap = await db.collection("rides")
+    .where("date", ">=", tsStart)
+    .where("date", "<=", tsEnd)
+    .get();
+  const byHost = new Map();
+  const viewer = viewerUid ? String(viewerUid).trim() : "";
+  for (const doc of ridesSnap.docs) {
+    const r = doc.data();
+    if (String(r.rideStatus || "active") === "cancelled") continue;
+    const hostKey = String(r.hostUserId || "").trim();
+    if (!hostKey) continue;
+    const ymd = rideDocDateToSeoulYmd(r.date);
+    if (!ymd || ymd < startStr || ymd > endStr) continue;
+    const partsRaw = Array.isArray(r.participants) ? r.participants : [];
+    const parts = [...new Set(partsRaw.map((x) => String(x).trim()).filter(Boolean))];
+    let rideScore = 0;
+    for (const pUid of parts) {
+      rideScore += await dailyKmCached(pUid, ymd);
+    }
+    if (rideScore <= 0) continue;
+    if (!byHost.has(hostKey)) {
+      byHost.set(hostKey, {
+        hostUserId: hostKey,
+        name: String(r.hostName || "(이름 없음)").trim().slice(0, 80) || "(이름 없음)",
+        totalKm: 0,
+        participated: false,
+      });
+    }
+    const agg = byHost.get(hostKey);
+    agg.totalKm += rideScore;
+    if (viewer && parts.includes(viewer)) agg.participated = true;
+  }
+  const entries = [];
+  for (const [, v] of byHost) {
+    entries.push({
+      userId: v.hostUserId,
+      hostUserId: v.hostUserId,
+      name: v.name,
+      totalKm: Math.round(v.totalKm * 100) / 100,
+      ageCategory: "Supremo",
+      gender: "",
+      is_private: false,
+      rankingKind: "group",
+      currentUserParticipated: !!v.participated,
+    });
+  }
+  entries.sort((a, b) => b.totalKm - a.totalKm);
+  const withRank = entries.map((e, i) => ({ ...e, rank: i + 1 }));
+  const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+  return { entries: withRank, byCategory };
+}
+
 /** 동기부여 메시지 (주간 TSS 랭킹) */
 function buildMotivationMessageTss(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
@@ -3152,6 +3309,15 @@ function buildMotivationMessageTss(currentUser, nextUser) {
   if (diffTss <= 0) return null;
   const need = Math.ceil(diffTss);
   return `${currentUser.name}님 현재 ${currentUser.rank}위! 앞선 사용자와의 차이는 ${diffTss.toFixed(1)} TSS입니다. 주간 합계를 ${need} TSS 이상 더 올리면 추월할 수 있습니다. 도전해 보세요!`;
+}
+
+/** 동기부여 메시지 (30일 거리 랭킹 — 개인·그룹 공통) */
+function buildMotivationMessageKm(currentUser, nextUser) {
+  if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
+  const diffKm = Number(nextUser.totalKm) - Number(currentUser.totalKm);
+  if (diffKm <= 0) return null;
+  const need = Math.ceil(diffKm * 10) / 10;
+  return `${currentUser.name}님 현재 ${currentUser.rank}위! 앞선 사용자와의 차이는 ${diffKm.toFixed(1)} km입니다. ${need.toFixed(1)} km 이상 더 올리면 추월할 수 있습니다. 도전해 보세요!`;
 }
 
 /** 훈련일지 5주차 구간 (오늘-6일 ~ 오늘, Asia/Seoul) — Weekly TSS Load와 동일 */
@@ -3199,6 +3365,9 @@ function computeOvertakeMetrics(myData, rivalData, myWeightKg) {
 /** 동기부여 메시지 생성 */
 function buildMotivationMessage(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
+  if (currentUser.totalKm != null && nextUser.totalKm != null) {
+    return buildMotivationMessageKm(currentUser, nextUser);
+  }
   if (currentUser.totalTss != null && nextUser.totalTss != null) {
     return buildMotivationMessageTss(currentUser, nextUser);
   }
@@ -3294,6 +3463,148 @@ exports.getPeakPowerRanking = onRequest(
             nextUser = idx > 0 ? arr[idx - 1] : null;
             break;
           }
+        }
+        if (current) {
+          out.currentUser = current;
+          out.motivationMessage = buildMotivationMessage(current, nextUser);
+        }
+      }
+      return res.status(200).json(out);
+    }
+
+    /** 개인: 최근 30일(서울) 라이딩 거리(km) 랭킹 */
+    if (durationType === "personal_dist") {
+      const { startStr, endStr } = getRolling30DaysRangeSeoul();
+      const cacheKey = `peakRanking_personal_dist_30d_${gender}_${startStr}_${endStr}`;
+      const cacheRef = db.collection("cache").doc(cacheKey);
+      const cacheSnap = await cacheRef.get();
+      const nowMs = Date.now();
+      if (cacheSnap.exists) {
+        const data = cacheSnap.data();
+        const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+        if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
+          const out = {
+            success: true,
+            byCategory: data.byCategory,
+            entries: Array.isArray(data.entries) ? data.entries : [],
+            startStr,
+            endStr,
+            period: "rolling30",
+            durationType: "personal_dist",
+            gender,
+            cached: true,
+          };
+          if (uid) {
+            let current = null; let nextUser = null;
+            const cat = data.byCategory;
+            for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+              const arr = cat?.[c] || [];
+              const idx = arr.findIndex((e) => e.userId === uid);
+              if (idx >= 0) {
+                current = arr[idx];
+                nextUser = idx > 0 ? arr[idx - 1] : null;
+                break;
+              }
+            }
+            if (current) {
+              out.currentUser = current;
+              out.motivationMessage = buildMotivationMessage(current, nextUser);
+            }
+          }
+          return res.status(200).json(out);
+        }
+      }
+
+      const { entries, byCategory } = await getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, gender);
+      await cacheRef.set({
+        byCategory,
+        entries,
+        startStr,
+        endStr,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling30", durationType: "personal_dist", gender };
+      if (uid) {
+        let current = null; let nextUser = null;
+        for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+          const arr = byCategory[c] || [];
+          const idx = arr.findIndex((e) => e.userId === uid);
+          if (idx >= 0) {
+            current = arr[idx];
+            nextUser = idx > 0 ? arr[idx - 1] : null;
+            break;
+          }
+        }
+        if (current) {
+          out.currentUser = current;
+          out.motivationMessage = buildMotivationMessage(current, nextUser);
+        }
+      }
+      return res.status(200).json(out);
+    }
+
+    /** 그룹: 방장별 최근 30일 오픈 라이딩 합산(일정당 참가자 당일 라이딩 거리 합) */
+    if (durationType === "group_dist") {
+      const { startStr, endStr } = getRolling30DaysRangeSeoul();
+      const cacheKey = `peakRanking_group_dist_30d_${startStr}_${endStr}`;
+      const cacheRef = db.collection("cache").doc(cacheKey);
+      const cacheSnap = await cacheRef.get();
+      const nowMs = Date.now();
+      if (cacheSnap.exists) {
+        const data = cacheSnap.data();
+        const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+        if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
+          const byCategory = data.byCategory;
+          const arrAll = byCategory?.Supremo || [];
+          const out = {
+            success: true,
+            byCategory,
+            entries: Array.isArray(data.entries) ? data.entries : [],
+            startStr,
+            endStr,
+            period: "rolling30",
+            durationType: "group_dist",
+            gender: "all",
+            cached: true,
+          };
+          if (uid) {
+            const participated = arrAll.filter((e) => e.currentUserParticipated || e.userId === uid);
+            let current = null;
+            if (participated.length) {
+              current = participated.reduce((best, e) => (!best || e.rank < best.rank ? e : best));
+            }
+            let nextUser = null;
+            if (current && current.rank > 1) {
+              nextUser = arrAll.find((e) => e.rank === current.rank - 1) || null;
+            }
+            if (current) {
+              out.currentUser = current;
+              out.motivationMessage = buildMotivationMessage(current, nextUser);
+            }
+          }
+          return res.status(200).json(out);
+        }
+      }
+
+      const { entries, byCategory } = await getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, uid);
+      await cacheRef.set({
+        byCategory,
+        entries,
+        startStr,
+        endStr,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling30", durationType: "group_dist", gender: "all" };
+      if (uid) {
+        const arrAll = byCategory.Supremo || [];
+        const participated = arrAll.filter((e) => e.currentUserParticipated || e.userId === uid);
+        let current = null;
+        if (participated.length) {
+          current = participated.reduce((best, e) => (!best || e.rank < best.rank ? e : best));
+        }
+        let nextUser = null;
+        if (current && current.rank > 1) {
+          nextUser = arrAll.find((e) => e.rank === current.rank - 1) || null;
         }
         if (current) {
           out.currentUser = current;
