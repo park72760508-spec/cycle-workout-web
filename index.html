@@ -8108,6 +8108,8 @@
             name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
           }
           var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+          var groupHostStripe =
+            stelvioIsGroupDistanceRanking() && isCurrent;
           var groupAttended =
             stelvioIsGroupDistanceRanking() &&
             item.currentUserParticipated &&
@@ -8115,6 +8117,7 @@
           var rowClass =
             'stelvio-rank-row' +
             (isCurrent ? ' stelvio-rank-current' : '') +
+            (groupHostStripe ? ' stelvio-rank-group-host' : '') +
             (groupAttended ? ' stelvio-rank-group-attended' : '') +
             extraRowClass;
           var h = '<div class="' + rowClass + '">';
@@ -8316,12 +8319,16 @@
         }
         var globalPart = '';
         var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
+        var groupHostStripeCat = stelvioIsGroupDistanceRanking() && isCurrent;
         var groupAttendedCat =
           stelvioIsGroupDistanceRanking() &&
           item.currentUserParticipated &&
           !(currentUserId && String(item.userId || '') === String(currentUserId));
         var rowClass =
-          'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '') + (groupAttendedCat ? ' stelvio-rank-group-attended' : '');
+          'stelvio-rank-row' +
+          (isCurrent ? ' stelvio-rank-current' : '') +
+          (groupHostStripeCat ? ' stelvio-rank-group-host' : '') +
+          (groupAttendedCat ? ' stelvio-rank-group-attended' : '');
         html += '<div class="' + rowClass + '">';
         if (categoryRank <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[categoryRank - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
         html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
@@ -8343,7 +8350,12 @@
         var mrCanSeeFull = currentUserId && mr.userId === currentUserId || isAdmin;
         if (mrIsPrivate && !mrCanSeeFull) { mrName = mrRawName.length >= 2 ? mrRawName.charAt(0) + '**' : '**'; }
         var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-        html += '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo">';
+        var mrGroupHost =
+          stelvioIsGroupDistanceRanking() && currentUserId && mr && String(mr.userId || '') === String(currentUserId);
+        html +=
+          '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo' +
+          (mrGroupHost ? ' stelvio-rank-group-host' : '') +
+          '">';
         html += '<span class="stelvio-rank-pos">' + (userIdx + 1) + '위</span>';
         html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + mrRawName + '">' + mrName + '</span>' + mrBadgePart + '</span>';
         html += '<span class="stelvio-rank-wkg">' + mrVal + '</span>';
