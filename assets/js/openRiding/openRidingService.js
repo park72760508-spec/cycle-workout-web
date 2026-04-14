@@ -213,10 +213,26 @@ export function openRidingHostSummaryQualifiesAsGroupRide(rideData, hostBlock) {
 }
 
 /**
+ * 방장 공개 후기가 해당 일정일에 작성·동기화된 경우(참석·취소 잠금).
+ * ±10% 거리 규칙(openRidingHostSummaryQualifiesAsGroupRide)과 별개로, 요약 거리만 있으면 후기 작성으로 본다.
+ * @param {{ distance?: unknown; date?: unknown }} rideData
+ * @param {{ rideDateYmd?: unknown; summary?: unknown }} hostBlock
+ */
+export function openRidingHostPublicReviewWritten(rideData, hostBlock) {
+  if (!rideData || !hostBlock || typeof hostBlock !== 'object') return false;
+  const s = hostBlock.summary;
+  if (!s || typeof s !== 'object') return false;
+  const rideYmd = getRideDateSeoulYmdFromData(rideData);
+  if (!rideYmd || !ymdEqualSchedule(hostBlock.rideDateYmd, rideYmd)) return false;
+  const logged = Number(s.distance_km != null ? s.distance_km : 0) || 0;
+  return logged > 0;
+}
+
+/**
  * Ride is "ended" for join closure and ended-state UI (Seoul calendar date).
  * 1) Cancelled
  * 2) Ride date (Seoul YMD) is before today
- * 3) Ride date is today: hostPublicReviewSummary matches ride date and distance qualifies (±10% band or longer than planned)
+ * 3) Ride date is today: hostPublicReviewSummary가 해당 일에 작성되고 거리 기록이 있음(방장 후기 = 라이딩 종료)
  * @param {{ rideStatus?: unknown; date?: unknown; distance?: unknown; hostPublicReviewSummary?: unknown }} rideData
  */
 export function isOpenRidingScheduleEnded(rideData) {
@@ -229,7 +245,7 @@ export function isOpenRidingScheduleEnded(rideData) {
   if (rideYmd > today) return false;
   const h = rideData.hostPublicReviewSummary;
   if (!h || typeof h !== 'object') return false;
-  return openRidingHostSummaryQualifiesAsGroupRide(rideData, h);
+  return openRidingHostPublicReviewWritten(rideData, h);
 }
 
 /** @deprecated use isOpenRidingScheduleEnded — join closed === schedule ended */
@@ -1050,6 +1066,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
     const snap = await transaction.get(rideRef);
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
+    if (isOpenRidingScheduleEnded(data)) throw new Error('RIDE_JOIN_CLOSED');
     let participants = asStringArray(data.participants);
     let waitlist = asStringArray(data.waitlist);
 
@@ -1189,6 +1206,7 @@ if (typeof window !== 'undefined') {
     normalizePackRidingRules,
     isRideJoinClosedBySchedule,
     isOpenRidingScheduleEnded,
+    openRidingHostPublicReviewWritten,
     openRidingHostSummaryQualifiesAsGroupRide
   };
 }

@@ -893,6 +893,21 @@ function openRidingHostSummaryQualifiesAsGroupRideUi(rideData, hostBlock) {
   return logged >= 12;
 }
 
+/** 방장 공개 후기가 해당 일정일에 기록됨(참석·취소 잠금). 서비스 미로드 시 로컬 폴백. */
+function openRidingHostPublicReviewWrittenUi(rideData, hostBlock) {
+  var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+  if (typeof svc.openRidingHostPublicReviewWritten === 'function') {
+    return svc.openRidingHostPublicReviewWritten(rideData, hostBlock);
+  }
+  if (!rideData || !hostBlock || typeof hostBlock !== 'object') return false;
+  var s = hostBlock.summary;
+  if (!s || typeof s !== 'object') return false;
+  var rideYmd = getRideDateSeoulYmd(rideData);
+  if (!rideYmd || !openRidingYmdEqual(hostBlock.rideDateYmd, rideYmd)) return false;
+  var logged = Number(s.distance_km != null ? s.distance_km : 0) || 0;
+  return logged > 0;
+}
+
 function openRidingIsJoinClosedByScheduleUi(ride) {
   var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
   if (typeof svc.isOpenRidingScheduleEnded === 'function') {
@@ -909,7 +924,7 @@ function openRidingIsJoinClosedByScheduleUi(ride) {
   if (ry < today) return true;
   if (ry > today) return false;
   var h = ride.hostPublicReviewSummary;
-  return !!(h && typeof h === 'object' && openRidingHostSummaryQualifiesAsGroupRideUi(ride, h));
+  return !!(h && typeof h === 'object' && openRidingHostPublicReviewWrittenUi(ride, h));
 }
 
 /** Training log date → Seoul YYYY-MM-DD (journal / open-riding review sync) */

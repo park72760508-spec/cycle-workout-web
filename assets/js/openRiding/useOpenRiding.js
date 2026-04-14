@@ -251,7 +251,7 @@ export function useOpenRideDetail(db, rideId, userId) {
           : raw === 'INVITE_ONLY'
             ? '초대받은 사용자만 참석 신청할 수 있습니다.'
             : raw === 'RIDE_JOIN_CLOSED'
-              ? '이 모임은 일정이 지났거나, 오늘 일정은 방장 라이딩 기록(모임 거리 ±10% 또는 모임보다 긴 거리)이 확인되어 참석 신청이 마감되었습니다.'
+              ? '이 모임은 일정이 지났거나, 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다.'
               : raw;
       setActionError(msg);
       throw e;
@@ -266,7 +266,11 @@ export function useOpenRideDetail(db, rideId, userId) {
       await reload();
       return res;
     } catch (e) {
-      const msg = (e && e.message) || 'leave_failed';
+      const raw = (e && e.message) || 'leave_failed';
+      const msg =
+        raw === 'RIDE_JOIN_CLOSED'
+          ? '이 모임은 일정이 지났거나, 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다.'
+          : raw;
       setActionError(msg);
       throw e;
     }
