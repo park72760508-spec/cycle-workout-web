@@ -5159,7 +5159,7 @@ function OpenRidingRideReviewSummaryContent(props) {
   if (participantsStravaCumulativeKm !== undefined) {
     var ckm = Number(participantsStravaCumulativeKm);
     cumRow = {
-      label: '누적거리',
+      label: '누적거리(참석자 거리 합계)',
       value:
         participantsStravaCumulativeKm != null && Number.isFinite(ckm) && ckm > 0 ? ckm.toFixed(1) + ' km' : '-'
     };
