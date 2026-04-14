@@ -5149,12 +5149,23 @@ function OpenRidingDashboardEditIcon(props) {
 function OpenRidingRideReviewSummaryContent(props) {
   var log = props.log;
   var chartUserProfile = props.chartUserProfile;
+  var participantsStravaCumulativeKm = props.participantsStravaCumulativeKm;
   if (!log) return null;
   var spd =
     log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : openRidingReviewAvgSpeedKmh(log.distance_km, log.duration_sec);
+  var cumRow = null;
+  if (participantsStravaCumulativeKm !== undefined) {
+    var ckm = Number(participantsStravaCumulativeKm);
+    cumRow = {
+      label: '누적거리',
+      value:
+        participantsStravaCumulativeKm != null && Number.isFinite(ckm) && ckm > 0 ? ckm.toFixed(1) + ' km' : '-'
+    };
+  }
   var rows = [
+    ...(cumRow ? [cumRow] : []),
     { label: '거리', value: log.distance_km != null && log.distance_km > 0 ? log.distance_km.toFixed(1) + ' km' : '-' },
     { label: '라이딩 시간', value: openRidingReviewFormatDuration(log.duration_sec) },
     { label: '평균 속도', value: openRidingReviewFormatSpeedKmh(spd) },
@@ -5290,6 +5301,9 @@ function OpenRidingDetail(props) {
   var _revLd = useState(false);
   var reviewLogsLoading = _revLd[0];
   var setReviewLogsLoading = _revLd[1];
+  var _revCum = useState(null);
+  var reviewParticipantsStravaCumulativeKm = _revCum[0];
+  var setReviewParticipantsStravaCumulativeKm = _revCum[1];
 
   /** Snapshot updates change ride reference; review fetch effect deps use primitives only. */
   var rideYmdRv = ride ? getRideDateSeoulYmd(ride) : '';
@@ -5311,8 +5325,50 @@ function OpenRidingDetail(props) {
       setReviewExpanded(false);
       setReviewMergedLog(null);
       setReviewMergedLogSource(null);
+      setReviewParticipantsStravaCumulativeKm(null);
     },
     [rideId]
+  );
+
+  useEffect(
+    function () {
+      if (!reviewExpanded || !rideId) {
+        setReviewParticipantsStravaCumulativeKm(null);
+        return undefined;
+      }
+      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      var ymd = rideYmdRv;
+      if (!db || !ymd) {
+        setReviewParticipantsStravaCumulativeKm(null);
+        return undefined;
+      }
+      var svcOr = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var subFn =
+        typeof svcOr.subscribeParticipantStravaReviewSumKm === 'function'
+          ? svcOr.subscribeParticipantStravaReviewSumKm
+          : null;
+      if (!subFn) {
+        setReviewParticipantsStravaCumulativeKm(null);
+        return undefined;
+      }
+      setReviewParticipantsStravaCumulativeKm(null);
+      var unsub = subFn(
+        db,
+        String(rideId).trim(),
+        ymd,
+        function (sum) {
+          var s = Number(sum);
+          setReviewParticipantsStravaCumulativeKm(Number.isFinite(s) ? s : 0);
+        },
+        function () {
+          setReviewParticipantsStravaCumulativeKm(null);
+        }
+      );
+      return function () {
+        if (typeof unsub === 'function') unsub();
+      };
+    },
+    [reviewExpanded, rideId, rideYmdRv, firestore]
   );
 
   useEffect(
@@ -5478,6 +5534,26 @@ function OpenRidingDetail(props) {
                     console.warn('[openRiding] syncHostPublicReviewSummary', e);
                   }
                 });
+              }
+            }
+            if (!cancelled && rideId && db && !rideCancelled) {
+              var svcPart = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+              var syncPartFn =
+                typeof svcPart.syncParticipantStravaReviewContribution === 'function'
+                  ? svcPart.syncParticipantStravaReviewContribution
+                  : null;
+              if (syncPartFn) {
+                var partsForCum = Array.isArray(ride.participants) ? ride.participants : [];
+                var uidInParticipants = partsForCum.some(function (p) {
+                  return String(p).trim() === String(reviewLogUserId).trim();
+                });
+                if (uidInParticipants) {
+                  syncPartFn(db, rideId, reviewLogUserId, ymd, merged).catch(function (e) {
+                    if (typeof console !== 'undefined' && console.warn) {
+                      console.warn('[openRiding] syncParticipantStravaReviewContribution', e);
+                    }
+                  });
+                }
               }
             }
             if (!cancelled) setReviewLogsLoading(false);
@@ -6543,6 +6619,7 @@ function OpenRidingDetail(props) {
                         reviewMergedLogSource,
                         ride
                       )}
+                      participantsStravaCumulativeKm={reviewParticipantsStravaCumulativeKm}
                     />
                   </div>
                 ) : (
@@ -6563,6 +6640,7 @@ function OpenRidingDetail(props) {
                         reviewMergedLogSource,
                         ride
                       )}
+                      participantsStravaCumulativeKm={reviewParticipantsStravaCumulativeKm}
                     />
                   </div>
                 ) : (

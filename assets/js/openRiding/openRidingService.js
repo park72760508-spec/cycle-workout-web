@@ -872,6 +872,71 @@ export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, merge
 }
 
 /**
+ * 참석자(방장 포함) STRAVA 일지 거리를 라이딩별로 저장 — 후기 화면 누적거리 합산용
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} userId
+ * @param {string} rideDateYmd Seoul YYYY-MM-DD
+ * @param {{ distance_km?: number, source?: string }} mergedLog openRidingMergeLogsForReviewSummary 결과
+ */
+export async function syncParticipantStravaReviewContribution(db, rideId, userId, rideDateYmd, mergedLog) {
+  if (!db || !rideId || !userId || !rideDateYmd || !mergedLog || typeof mergedLog !== 'object') return;
+  const src = String(mergedLog.source != null ? mergedLog.source : '').toLowerCase();
+  if (src !== 'strava') return;
+  const dist = Number(mergedLog.distance_km);
+  if (!Number.isFinite(dist) || dist <= 0) return;
+  const ref = doc(db, 'rides', String(rideId).trim(), 'participantStravaReview', String(userId).trim());
+  await setDoc(
+    ref,
+    {
+      rideDateYmd: String(rideDateYmd).trim(),
+      distanceKm: dist,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * 해당 라이딩 일자에 맞는 참석자 STRAVA 거리 합 — 실시간 구독
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {string} rideDateYmd
+ * @param {(sumKm: number) => void} onNext
+ * @param {(err: Error) => void} [onError]
+ * @returns {() => void} unsubscribe
+ */
+export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, onNext, onError) {
+  if (!db || rideId == null || String(rideId).trim() === '' || !rideDateYmd || String(rideDateYmd).trim() === '') {
+    if (typeof onNext === 'function') onNext(0);
+    return function () {};
+  }
+  const ymd = String(rideDateYmd).trim();
+  const colRef = collection(db, 'rides', String(rideId).trim(), 'participantStravaReview');
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      let sum = 0;
+      snap.forEach((d) => {
+        const data = d.data();
+        const dYmd = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
+        if (dYmd === ymd) {
+          sum += Number(data.distanceKm != null ? data.distanceKm : 0) || 0;
+        }
+      });
+      if (typeof onNext === 'function') onNext(sum);
+    },
+    onError ||
+      function (err) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[openRiding] subscribeParticipantStravaReviewSumKm', err);
+        }
+        if (typeof onNext === 'function') onNext(0);
+      }
+  );
+}
+
+/**
  * 참석 신청: 정원이 차면 대기열 끝에 추가
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
@@ -1093,6 +1158,8 @@ if (typeof window !== 'undefined') {
     fetchRideById,
     subscribeRideById,
     syncHostPublicReviewSummary,
+    syncParticipantStravaReviewContribution,
+    subscribeParticipantStravaReviewSumKm,
     sanitizeHostPublicReviewSummaryPayload,
     joinRideTransaction,
     leaveRideTransaction,
