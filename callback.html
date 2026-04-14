@@ -165,7 +165,7 @@
         }
         
         const currentUser = JSON.parse(currentUserStr);
-        const userId = currentUser.id || currentUser.userId;
+        const userId = currentUser.id || currentUser.userId || currentUser.uid;
         console.log('[callback.html] 📋 localStorage에서 userId 추출:', userId);
         
         if (!userId) {
@@ -400,14 +400,48 @@
           console.log('[callback.html] ⚠️ Strava 콜백이 이미 처리되었습니다.');
           return;
         }
+
+        /**
+         * Strava OAuth state에 이미 userId(Firebase uid)가 들어 있고,
+         * exchangeStravaCode는 Cloud Functions(Admin)로 Firestore를 갱신하므로
+         * 이 경로에서는 callback 탭에 Firebase 웹 세션이 없어도 연동이 가능해야 함.
+         * (외부 브라우저·PWA·시크릿 모드에서 localStorage 비밀번호 복원 실패로 막히던 문제)
+         */
+        var stravaParams = new URLSearchParams(window.location.search);
+        var stravaCode = stravaParams.get('code');
+        var stravaState = stravaParams.get('state');
+        var stravaOAuthError = stravaParams.get('error');
+        var stateUserId = (stravaState != null && String(stravaState).trim() !== '') ? String(stravaState).trim() : '';
+        /**
+         * Strava가 돌려준 code 또는 error가 있으면 OAuth 콜백으로 본다.
+         * state(Firebase uid)가 있으면 handleStravaCallback이 userId로 처리하며,
+         * Cloud Function·GAS는 Admin/서버 권한으로 Firestore를 갱신하므로
+         * 이 탭에 Firebase 웹 로그인 세션이 없어도 된다.
+         */
+        var isStravaOAuthCallback = !!(stravaCode || stravaOAuthError);
+
+        if (isStravaOAuthCallback) {
+          if (stravaCode && stateUserId) {
+            window.currentUser = window.currentUser || { id: stateUserId };
+            console.log('[callback.html] ✅ Strava OAuth 콜백 — 클라이언트 Firebase 세션 없이 처리 시도 (userId:', stateUserId.slice(0, 8) + '...)');
+          } else {
+            console.log('[callback.html] ✅ Strava OAuth 콜백 — code 또는 state 없음, handleStravaCallback에서 메시지 처리');
+          }
+          callbackProcessed = true;
+          handleStravaCallback(
+            function () { showSuccess(); },
+            function (err) { showError(err); }
+          );
+          return;
+        }
         
-        // 인증 상태 확인 및 복원 대기
+        // 인증 상태 확인 및 복원 대기 (클라이언트 Firestore 폴백·기타 경로)
         let currentUser = firebase.auth().currentUser;
         if (!currentUser) {
           console.log('[callback.html] ⚠️ Firebase Auth 사용자가 없습니다. 인증 복원 대기...');
           
-          // 인증 복원 대기 (최대 5초)
-          const maxWaitTime = 5000;
+          // 인증 복원 대기 (최대 12초 — 느린 기기·네트워크 여유)
+          const maxWaitTime = 12000;
           const checkInterval = 100;
           let waited = 0;
           
