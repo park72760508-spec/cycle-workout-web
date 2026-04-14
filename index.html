@@ -7574,7 +7574,18 @@
     var stelvioRankingCurrentUserId = null;
     var stelvioMyRankSupremo = null;
     var stelvioCurrentUser = null;
-    var STELVIO_DURATION_LABELS = { 'tss': 'TSS', '1min': '1분', '5min': '5분', '10min': '10분', '20min': '20분', '40min': '40분', '60min': '60분', 'max': 'Max' };
+    var STELVIO_DURATION_LABELS = {
+      'tss': 'TSS',
+      'personal_dist': '개인',
+      'group_dist': '그룹',
+      '1min': '1분',
+      '5min': '5분',
+      '10min': '10분',
+      '20min': '20분',
+      '40min': '40분',
+      '60min': '60분',
+      'max': 'Max'
+    };
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체순위)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
     var stelvioBackToTopScrollHandler = null;
@@ -7746,21 +7757,44 @@
     function stelvioIsTssRankingMode() {
       return stelvioRankingState.duration === 'tss';
     }
+    function stelvioIsPersonalDistanceRanking() {
+      return stelvioRankingState.duration === 'personal_dist';
+    }
+    function stelvioIsGroupDistanceRanking() {
+      return stelvioRankingState.duration === 'group_dist';
+    }
+    function stelvioIsKmDistanceRanking() {
+      return stelvioIsPersonalDistanceRanking() || stelvioIsGroupDistanceRanking();
+    }
+    function stelvioIsRollingWindowDurationRanking() {
+      return stelvioIsTssRankingMode() || stelvioIsKmDistanceRanking();
+    }
+    function stelvioUpdateGroupRankingFilterUi() {
+      var isGroup = stelvioIsGroupDistanceRanking();
+      var gWrap = document.querySelector('.stelvio-gender-dropdown');
+      var cWrap = document.querySelector('.stelvio-category-dropdown');
+      if (gWrap) gWrap.classList.toggle('hidden', isGroup);
+      if (cWrap) cWrap.classList.toggle('hidden', isGroup);
+      var ot = document.getElementById('stelvioOvertakeBtn');
+      if (ot) ot.classList.toggle('hidden', stelvioIsKmDistanceRanking());
+    }
     function stelvioApplyDurationModeUi() {
       var label = document.getElementById('stelvioPeriodLabel');
       var sel = document.getElementById('stelvioPeriodSelect');
       if (!label || !sel) return;
-      if (stelvioIsTssRankingMode()) {
-        label.textContent = '주간';
+      if (stelvioIsRollingWindowDurationRanking()) {
+        if (stelvioIsTssRankingMode()) label.textContent = '주간';
+        else if (stelvioIsKmDistanceRanking()) label.textContent = '최근 30일';
         sel.disabled = true;
       } else {
         sel.disabled = false;
         label.textContent = stelvioRankingState.period === 'yearly' ? '명예의 전당' : '월간';
         sel.value = stelvioRankingState.period;
       }
+      stelvioUpdateGroupRankingFilterUi();
     }
     function stelvioOnPeriodChange(val) {
-      if (stelvioIsTssRankingMode()) return;
+      if (stelvioIsRollingWindowDurationRanking()) return;
       stelvioRankingState.period = val;
       var label = document.getElementById('stelvioPeriodLabel');
       if (label) label.textContent = val === 'yearly' ? '명예의 전당' : '월간';
@@ -7768,6 +7802,7 @@
       fetchStelvioPeakPowerRanking();
     }
     function stelvioOnGenderChange(val) {
+      if (stelvioIsGroupDistanceRanking()) return;
       stelvioRankingState.gender = val;
       var label = document.getElementById('stelvioGenderLabel');
       if (label) label.textContent = val === 'M' ? '남성' : (val === 'F' ? '여성' : '전체');
@@ -7777,6 +7812,7 @@
     window.stelvioOnPeriodChange = stelvioOnPeriodChange;
     window.stelvioOnGenderChange = stelvioOnGenderChange;
     function stelvioOnCategoryChange(val) {
+      if (stelvioIsGroupDistanceRanking()) return;
       stelvioRankingState.activeCategory = val;
       var label = document.getElementById('stelvioCategoryLabel');
       if (label) label.textContent = STELVIO_CATEGORY_LABELS[val] || val;
@@ -7826,6 +7862,15 @@
           tabs.forEach(function(b) { b.classList.remove('active'); });
           btn.classList.add('active');
           stelvioRankingState.duration = btn.getAttribute('data-duration');
+          if (stelvioRankingState.duration === 'group_dist') {
+            stelvioRankingState.gender = 'all';
+            stelvioRankingState.activeCategory = 'Supremo';
+            var gSel0 = document.getElementById('stelvioGenderSelect');
+            if (gSel0) gSel0.value = 'all';
+            var gLab0 = document.getElementById('stelvioGenderLabel');
+            if (gLab0) gLab0.textContent = '전체';
+            stelvioSyncCategorySelectUi();
+          }
           stelvioApplyDurationModeUi();
           stelvioScrollRankingBoardToTopSmooth();
           fetchStelvioPeakPowerRanking();
@@ -7849,10 +7894,11 @@
         });
       });
       var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
+      var genderParam = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
       var params = new URLSearchParams({
         period: stelvioRankingState.period,
         duration: stelvioRankingState.duration,
-        gender: stelvioRankingState.gender
+        gender: genderParam
       });
       if (uid) params.set('uid', uid);
       try {
@@ -7896,6 +7942,7 @@
       var durLabel = STELVIO_DURATION_LABELS[stelvioRankingState.duration] || stelvioRankingState.duration;
       var userName = (window.currentUser && window.currentUser.name) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.name ? u.name : null; } catch(e){ return null; } })() || '사용자';
       var cu = currentUser || myRankSupremo;
+      var uidHero = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
       if (!cu) {
         hero.classList.add('hidden');
         return;
@@ -7910,7 +7957,23 @@
         if (idx >= 0) categoryRank = idx + 1;
       }
       var msg;
-      if (stelvioIsTssRankingMode()) {
+      if (stelvioIsGroupDistanceRanking()) {
+        var kmG = (cu.totalKm != null ? Number(cu.totalKm) : 0).toFixed(1);
+        var hostNm = (cu.name || '방장').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (uidHero && String(cu.userId || '') === String(uidHero)) {
+          msg = userName + '님은 그룹(방장) 거리 전체 ' + globalRank + '위(' + kmG + ' km)입니다.';
+        } else {
+          msg = userName + '님이 참석한 모임 중 최고 ' + globalRank + '위입니다. (' + hostNm + ' · ' + kmG + ' km)';
+        }
+      } else if (stelvioIsPersonalDistanceRanking()) {
+        var kmP = (cu.totalKm != null ? Number(cu.totalKm) : 0).toFixed(1);
+        if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
+          msg = userName + '님은 최근 30일 ' + durLabel + ' 전체 ' + globalRank + '위(' + kmP + ' km)입니다.';
+        } else {
+          var catPartKm = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + kmP + ' km)' : kmP + ' km';
+          msg = userName + '님은 최근 30일 ' + durLabel + ' ' + catPartKm + ', 전체 ' + globalRank + '위입니다.';
+        }
+      } else if (stelvioIsTssRankingMode()) {
         var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           msg = userName + '님은 주간 ' + durLabel + ' 전체 ' + globalRank + '위(' + tssVal + ' TSS)입니다.';
@@ -7932,12 +7995,23 @@
 
     function renderStelvioActiveCategory() {
       if (!stelvioRankingByCategory) return;
+      if (stelvioIsGroupDistanceRanking()) {
+        stelvioRankingState.activeCategory = 'Supremo';
+      }
       var cat = stelvioRankingState.activeCategory;
       var titleEl = document.getElementById('stelvioListCategoryTitle');
       var bodyEl = document.getElementById('stelvioRankingListBody');
       var unitEl = document.querySelector('#stelvioRankingContent .stelvio-category-header-unit');
-      if (titleEl) titleEl.textContent = STELVIO_CATEGORY_TITLES[cat] || (STELVIO_CATEGORY_LABELS[cat] || cat) + ' 순위';
-      if (unitEl) unitEl.textContent = stelvioIsTssRankingMode() ? 'TSS' : 'W/kg';
+      if (stelvioIsGroupDistanceRanking()) {
+        if (titleEl) titleEl.textContent = '그룹 (방장별 30일 합산)';
+      } else {
+        if (titleEl) titleEl.textContent = STELVIO_CATEGORY_TITLES[cat] || (STELVIO_CATEGORY_LABELS[cat] || cat) + ' 순위';
+      }
+      if (unitEl) {
+        if (stelvioIsKmDistanceRanking()) unitEl.textContent = 'km';
+        else if (stelvioIsTssRankingMode()) unitEl.textContent = 'TSS';
+        else unitEl.textContent = 'W/kg';
+      }
       renderStelvioRankingOneCategory(cat, stelvioRankingByCategory, stelvioRankingCurrentUserId, stelvioMyRankSupremo, bodyEl);
       refreshStelvioDistributionChartMounted();
     }
@@ -7971,6 +8045,9 @@
     window.handleStelvioRankingGapSet = handleStelvioRankingGapSet;
 
     function stelvioFormatRankCell(item) {
+      if (stelvioIsKmDistanceRanking()) {
+        return (item.totalKm != null ? Number(item.totalKm) : 0).toFixed(1);
+      }
       if (stelvioIsTssRankingMode()) {
         return (item.totalTss != null ? Number(item.totalTss) : 0).toFixed(1);
       }
@@ -7991,7 +8068,18 @@
       /* ----- 전체(Supremo): 연령대 탭과 동일한 생략·펼침 UX (상단 일부 + 내 주변 + 전체 랭킹 ±) — API 전체 목록 전제 ----- */
       if (cat === 'Supremo') {
         var maxNameLenS = 12;
-        var userIdxS = currentUserId ? arr.findIndex(function(item) { return item.userId === currentUserId; }) : -1;
+        var userIdxS = -1;
+        if (currentUserId) {
+          if (stelvioIsGroupDistanceRanking() && typeof stelvioCurrentUser !== 'undefined' && stelvioCurrentUser && stelvioCurrentUser.rank != null) {
+            userIdxS = arr.findIndex(function (item) {
+              return item.rank === stelvioCurrentUser.rank && String(item.userId || '') === String(stelvioCurrentUser.userId || '');
+            });
+          } else {
+            userIdxS = arr.findIndex(function (item) {
+              return item.userId === currentUserId;
+            });
+          }
+        }
         var htmlS = '';
         var TOP_N = 5;
         var NEIGH = 3;
@@ -8020,7 +8108,15 @@
             name = rawName.length > maxNameLenS ? rawName.substring(0, maxNameLenS - 2) + '..' : rawName;
           }
           var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-          var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '') + extraRowClass;
+          var groupAttended =
+            stelvioIsGroupDistanceRanking() &&
+            item.currentUserParticipated &&
+            !(currentUserId && String(item.userId || '') === String(currentUserId));
+          var rowClass =
+            'stelvio-rank-row' +
+            (isCurrent ? ' stelvio-rank-current' : '') +
+            (groupAttended ? ' stelvio-rank-group-attended' : '') +
+            extraRowClass;
           var h = '<div class="' + rowClass + '">';
           if (categoryRank <= 3) {
             h += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[categoryRank - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
@@ -8171,7 +8267,18 @@
       }
 
       /* ----- 연령·선수부 등: 기존 로직 유지 (10명 단위 펼침 등) ----- */
-      var userIdx = currentUserId ? arr.findIndex(function(item) { return item.userId === currentUserId; }) : -1;
+      var userIdx = -1;
+      if (currentUserId) {
+        if (stelvioIsGroupDistanceRanking() && typeof stelvioCurrentUser !== 'undefined' && stelvioCurrentUser && stelvioCurrentUser.rank != null) {
+          userIdx = arr.findIndex(function (item) {
+            return item.rank === stelvioCurrentUser.rank && String(item.userId || '') === String(stelvioCurrentUser.userId || '');
+          });
+        } else {
+          userIdx = arr.findIndex(function (item) {
+            return item.userId === currentUserId;
+          });
+        }
+      }
       var html = '';
       var maxNameLen = 12;
       var displayArr = arr;
@@ -8209,7 +8316,12 @@
         }
         var globalPart = '';
         var badgePart = (isPrivate && canSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
-        var rowClass = 'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '');
+        var groupAttendedCat =
+          stelvioIsGroupDistanceRanking() &&
+          item.currentUserParticipated &&
+          !(currentUserId && String(item.userId || '') === String(currentUserId));
+        var rowClass =
+          'stelvio-rank-row' + (isCurrent ? ' stelvio-rank-current' : '') + (groupAttendedCat ? ' stelvio-rank-group-attended' : '');
         html += '<div class="' + rowClass + '">';
         if (categoryRank <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[categoryRank - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
         html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
@@ -8259,6 +8371,9 @@
      * 추월하기 분석: API 호출 → AI 코멘트 생성 → 리포트 모달 표시
      */
     async function handleStelvioOvertakeClick() {
+      if (stelvioIsKmDistanceRanking()) {
+        return;
+      }
       var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
       if (!uid) {
         alert('로그인이 필요합니다.');
@@ -19162,6 +19277,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
               <button type="button" class="stelvio-duration-tab active" data-duration="tss">TSS</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">개인</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="group_dist">그룹</button>
               <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="5min">5분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
