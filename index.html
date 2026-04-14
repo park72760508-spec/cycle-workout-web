@@ -8114,11 +8114,16 @@
             stelvioIsGroupDistanceRanking() &&
             item.currentUserParticipated &&
             !(currentUserId && String(item.userId || '') === String(currentUserId));
+          var groupUnjoined =
+            stelvioIsGroupDistanceRanking() &&
+            !groupHostStripe &&
+            !groupAttended;
           var rowClass =
             'stelvio-rank-row' +
             (isCurrent ? ' stelvio-rank-current' : '') +
             (groupHostStripe ? ' stelvio-rank-group-host' : '') +
             (groupAttended ? ' stelvio-rank-group-attended' : '') +
+            (groupUnjoined ? ' stelvio-rank-group-unjoined' : '') +
             extraRowClass;
           var h = '<div class="' + rowClass + '">';
           if (categoryRank <= 3) {
@@ -8324,11 +8329,16 @@
           stelvioIsGroupDistanceRanking() &&
           item.currentUserParticipated &&
           !(currentUserId && String(item.userId || '') === String(currentUserId));
+        var groupUnjoinedCat =
+          stelvioIsGroupDistanceRanking() &&
+          !groupHostStripeCat &&
+          !groupAttendedCat;
         var rowClass =
           'stelvio-rank-row' +
           (isCurrent ? ' stelvio-rank-current' : '') +
           (groupHostStripeCat ? ' stelvio-rank-group-host' : '') +
-          (groupAttendedCat ? ' stelvio-rank-group-attended' : '');
+          (groupAttendedCat ? ' stelvio-rank-group-attended' : '') +
+          (groupUnjoinedCat ? ' stelvio-rank-group-unjoined' : '');
         html += '<div class="' + rowClass + '">';
         if (categoryRank <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[categoryRank - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
         html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
@@ -8352,9 +8362,15 @@
         var mrBadgePart = (mrIsPrivate && mrCanSeeFull) ? '<span class="ranking-private-badge ranking-private-badge-admin" title="비공개">비</span>' : '';
         var mrGroupHost =
           stelvioIsGroupDistanceRanking() && currentUserId && mr && String(mr.userId || '') === String(currentUserId);
+        var mrGroupAttended =
+          stelvioIsGroupDistanceRanking() &&
+          mr &&
+          mr.currentUserParticipated &&
+          !(currentUserId && String(mr.userId || '') === String(currentUserId));
         html +=
           '<div class="stelvio-rank-row stelvio-rank-current stelvio-rank-my-supremo' +
           (mrGroupHost ? ' stelvio-rank-group-host' : '') +
+          (mrGroupAttended ? ' stelvio-rank-group-attended' : '') +
           '">';
         html += '<span class="stelvio-rank-pos">' + (userIdx + 1) + '위</span>';
         html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + mrRawName + '">' + mrName + '</span>' + mrBadgePart + '</span>';
