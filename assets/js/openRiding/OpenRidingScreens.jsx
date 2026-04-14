@@ -5379,10 +5379,12 @@ function OpenRidingDetail(props) {
         return undefined;
       }
       setReviewParticipantsStravaCumulativeKm(null);
+      var hostUidForCum = rideHostRv && String(rideHostRv).trim() ? String(rideHostRv).trim() : '';
       var unsub = subFn(
         db,
         String(rideId).trim(),
         ymd,
+        hostUidForCum,
         function (sum) {
           var s = Number(sum);
           setReviewParticipantsStravaCumulativeKm(Number.isFinite(s) ? s : 0);
@@ -5395,12 +5397,12 @@ function OpenRidingDetail(props) {
         if (typeof unsub === 'function') unsub();
       };
     },
-    [reviewExpanded, rideId, rideYmdRv, firestore]
+    [reviewExpanded, rideId, rideYmdRv, rideHostRv, firestore]
   );
 
   /**
    * 후기에 표시된 본인 STRAVA 병합 로그가 있으면 항상 participantStravaReview에 기록해
-   * '함께 달린 거리' 구독 합계에 반영 (일지 fetch 경로를 타지 않은 방장·저장 요약만 보는 경우 포함)
+   * '함께 달린 거리'에 반영. 합계는 방장 공개 후기(ride.hostPublicReviewSummary) 거리 + 서브컬렉션 참석자 합(서비스에서 병합).
    */
   useEffect(
     function () {

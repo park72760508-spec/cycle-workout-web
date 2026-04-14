@@ -898,6 +898,23 @@ function normalizeParticipantReviewYmd(ymd) {
 }
 
 /**
+ * 라이딩 일정일과 맞는 방장 공개 후기 요약 거리(km). participantStravaReview에 방장 문서가 없을 때 합산에 사용.
+ * @param {unknown} rideData rides 문서
+ * @param {string} rideDateYmdNorm normalizeParticipantReviewYmd 결과
+ */
+function hostPublicReviewDistanceKmForRideSchedule(rideData, rideDateYmdNorm) {
+  if (!rideDateYmdNorm || !rideData || typeof rideData !== 'object') return 0;
+  const h = rideData.hostPublicReviewSummary;
+  if (!h || typeof h !== 'object') return 0;
+  const s = h.summary;
+  if (!s || typeof s !== 'object') return 0;
+  const dYmd = normalizeParticipantReviewYmd(String(h.rideDateYmd != null ? h.rideDateYmd : '').trim());
+  if (!dYmd || dYmd !== rideDateYmdNorm) return 0;
+  const dist = Number(s.distance_km != null ? s.distance_km : 0) || 0;
+  return dist > 0 ? dist : 0;
+}
+
+/**
  * 참석자(방장 포함) STRAVA 일지 거리를 라이딩별로 저장 — 후기 화면 누적거리 합산용
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
@@ -925,45 +942,116 @@ export async function syncParticipantStravaReviewContribution(db, rideId, userId
 }
 
 /**
- * 해당 라이딩 일자에 맞는 참석자 STRAVA 거리 합 — 실시간 구독
+ * 후기「함께 달린 거리」: 방장 공개 후기 거리(일정일 일치) + participantStravaReview 합계.
+ * 방장 문서가 서브컬렉션에도 있으면 공개 후기 거리로 대체해 이중 합산하지 않음.
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} rideId
  * @param {string} rideDateYmd
+ * @param {string} [hostUserId] 방장 uid (없으면 서브컬렉션 합만). 생략 시 (db, rideId, ymd, onNext, onError) 5인자 호환
  * @param {(sumKm: number) => void} onNext
  * @param {(err: Error) => void} [onError]
  * @returns {() => void} unsubscribe
  */
-export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, onNext, onError) {
+export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, hostUserId, onNext, onError) {
+  const legacy5 = typeof hostUserId === 'function';
+  let hostUid = '';
+  let onCb = onNext;
+  let errCb = onError;
+  if (legacy5) {
+    onCb = hostUserId;
+    errCb = typeof onNext === 'function' ? onNext : undefined;
+  } else {
+    hostUid = String(hostUserId != null ? hostUserId : '').trim();
+    onCb = onNext;
+    errCb = onError;
+  }
   if (!db || rideId == null || String(rideId).trim() === '' || !rideDateYmd || String(rideDateYmd).trim() === '') {
-    if (typeof onNext === 'function') onNext(0);
+    if (typeof onCb === 'function') onCb(0);
     return function () {};
   }
   const ymdNorm = normalizeParticipantReviewYmd(rideDateYmd);
-  const colRef = collection(db, 'rides', String(rideId).trim(), 'participantStravaReview');
-  return onSnapshot(
+  const rideIdTrim = String(rideId).trim();
+  const colRef = collection(db, 'rides', rideIdTrim, 'participantStravaReview');
+
+  const errHandler =
+    errCb ||
+    function (err) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[openRiding] subscribeParticipantStravaReviewSumKm', err);
+      }
+      if (typeof onCb === 'function') onCb(0);
+    };
+
+  if (legacy5) {
+    return onSnapshot(
+      colRef,
+      (snap) => {
+        let sum = 0;
+        snap.forEach((d) => {
+          const data = d.data();
+          const dYmdRaw = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
+          const dYmd = normalizeParticipantReviewYmd(dYmdRaw);
+          const dist = Number(data.distanceKm != null ? data.distanceKm : 0) || 0;
+          if (dist <= 0) return;
+          if (!dYmdRaw || dYmd === ymdNorm) {
+            sum += dist;
+          }
+        });
+        if (typeof onCb === 'function') onCb(sum);
+      },
+      errHandler
+    );
+  }
+
+  const rideRef = doc(db, 'rides', rideIdTrim);
+
+  /** @type {import('firebase/firestore').QuerySnapshot | null} */
+  let latestColSnap = null;
+  /** @type {unknown} */
+  let latestRideData = null;
+
+  function emitTogether() {
+    if (latestColSnap == null) return;
+    let sumAll = 0;
+    let hostSubKm = 0;
+    latestColSnap.forEach((d) => {
+      const data = d.data();
+      const dYmdRaw = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
+      const dYmd = normalizeParticipantReviewYmd(dYmdRaw);
+      const dist = Number(data.distanceKm != null ? data.distanceKm : 0) || 0;
+      if (dist <= 0) return;
+      if (!dYmdRaw || dYmd === ymdNorm) {
+        sumAll += dist;
+        if (hostUid && d.id === hostUid) hostSubKm = dist;
+      }
+    });
+    const hostSummaryKm = hostPublicReviewDistanceKmForRideSchedule(latestRideData, ymdNorm);
+    const together = sumAll + Math.max(0, hostSummaryKm - hostSubKm);
+    if (typeof onCb === 'function') onCb(together);
+  }
+
+  const unsubRide = onSnapshot(
+    rideRef,
+    (rideSnap) => {
+      latestRideData = rideSnap.exists() ? rideSnap.data() : null;
+      emitTogether();
+    },
+    errHandler
+  );
+
+  const unsubCol = onSnapshot(
     colRef,
     (snap) => {
-      let sum = 0;
-      snap.forEach((d) => {
-        const data = d.data();
-        const dYmdRaw = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
-        const dYmd = normalizeParticipantReviewYmd(dYmdRaw);
-        const dist = Number(data.distanceKm != null ? data.distanceKm : 0) || 0;
-        if (dist <= 0) return;
-        if (!dYmdRaw || dYmd === ymdNorm) {
-          sum += dist;
-        }
-      });
-      if (typeof onNext === 'function') onNext(sum);
+      latestColSnap = snap;
+      emitTogether();
     },
-    onError ||
-      function (err) {
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[openRiding] subscribeParticipantStravaReviewSumKm', err);
-        }
-        if (typeof onNext === 'function') onNext(0);
-      }
+    errHandler
   );
+
+  return function () {
+    unsubCol();
+    unsubRide();
+  };
 }
 
 /**
