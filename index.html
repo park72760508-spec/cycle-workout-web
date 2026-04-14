@@ -8929,10 +8929,17 @@
       return logsByDate;
     }
 
-    async function fetchTrainingLogsForCalendarJournal(userId) {
+    async function fetchTrainingLogsForCalendarJournal(userId, options) {
+      options = options || {};
+      var forceRefresh = options.force === true;
+      if (forceRefresh && typeof window !== 'undefined') {
+        window.__journalFetchInProgress = false;
+        window.__journalFetchCallCount = 0;
+        window.__journalEmptyRetryDone = false;
+      }
       var jStep = window.setJournalLoadStatus;
       if (jStep) jStep('7-1. fetchTrainingLogsForCalendarJournal 시작', false);
-      console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId);
+      console.log('[MiniCalendarJournal] fetchTrainingLogsForCalendarJournal 시작 - userId:', userId, forceRefresh ? '(force)' : '');
       if (typeof window !== 'undefined') window.__journalLoadFailed = false;
 
       if (window.__journalFetchInProgress) {
