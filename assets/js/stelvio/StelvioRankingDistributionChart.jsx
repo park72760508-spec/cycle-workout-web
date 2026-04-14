@@ -24,6 +24,8 @@
 
   var STELVIO_DURATION_LABELS = {
     tss: 'TSS',
+    personal_dist: '개인 30일',
+    group_dist: '그룹 30일',
     '1min': '1분',
     '5min': '5분',
     '10min': '10분',
@@ -103,14 +105,21 @@
   /**
    * 선택 카테고리 배열에서 내 W/kg·TSS가 몇 위인지 (동점은 표준 경기 순위: 더 큰 값만 선행)
    */
-  function rankInCategoryByValue(categoryRows, myVal, isTssMode) {
+  function rowMetricValue(row, duration) {
+    if (!row) return NaN;
+    if (duration === 'tss') return Number(row.totalTss);
+    if (duration === 'personal_dist' || duration === 'group_dist') return Number(row.totalKm);
+    return Number(row.wkg);
+  }
+
+  function rankInCategoryByValue(categoryRows, myVal, duration) {
     if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
-    var eps = isTssMode ? 1e-6 : 1e-9;
+    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' ? 1e-6 : 1e-9;
     var strictlyGreater = 0;
     for (var i = 0; i < categoryRows.length; i++) {
       var row = categoryRows[i];
       if (!row) continue;
-      var v = isTssMode ? Number(row.totalTss) : Number(row.wkg);
+      var v = rowMetricValue(row, duration);
       if (isFinite(v) && v > myVal + eps) strictlyGreater++;
     }
     return strictlyGreater + 1;
@@ -194,10 +203,16 @@
     var chartSubNoteOverride = p.chartSubNoteOverride;
 
     var isTss = duration === 'tss';
-    var durLabel = isTss ? '주간 TSS' : STELVIO_DURATION_LABELS[duration] || duration;
+    var isKmMode = duration === 'personal_dist' || duration === 'group_dist';
+    var isHistLike = isTss || isKmMode;
+    var durLabel = isTss
+      ? '주간 TSS'
+      : isKmMode
+      ? (duration === 'group_dist' ? '그룹 30일 거리' : '개인 30일 거리')
+      : STELVIO_DURATION_LABELS[duration] || duration;
     /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
     var overrideMyWkg =
-      !isTss && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
+      !isTss && !isKmMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
     if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
     var chartWrapRef = useRef(null);
@@ -236,17 +251,19 @@
     var values = useMemo(
       function () {
         return cohort.map(function (e) {
-          return isTss ? Number(e.totalTss) : Number(e.wkg);
+          if (isTss) return Number(e.totalTss);
+          if (isKmMode) return Number(e.totalKm);
+          return Number(e.wkg);
         });
       },
-      [cohort, isTss]
+      [cohort, isTss, isKmMode]
     );
 
     var binPack = useMemo(
       function () {
-        return buildBins(values, isTss);
+        return buildBins(values, isHistLike);
       },
-      [values, isTss]
+      [values, isHistLike]
     );
 
     var gid = useMemo(
@@ -262,6 +279,7 @@
 
     var openRidingTierBandWeightKg =
       !isTss &&
+      !isKmMode &&
       p.openRidingTierBandWeightKg != null &&
       isFinite(Number(p.openRidingTierBandWeightKg)) &&
       Number(p.openRidingTierBandWeightKg) > 0
@@ -287,29 +305,41 @@
           { x0: b4, x1: xMax, label: '상급', speedHint: '35+ km/h', color: 'rgba(239, 68, 68, 0.42)' },
         ];
       },
-      [openRidingTierBandWeightKg, isTss, xMin, xMax]
+      [openRidingTierBandWeightKg, isTss, isKmMode, xMin, xMax]
     );
 
     var chartXAxisBottomMargin = openRidingTierBandWeightKg ? 33 : 8;
     var openRidingTierStripOverlapPx = openRidingTierBandWeightKg && openRidingTierBandSegments.length > 0 ? 15 : 0;
 
     var myRaw = null;
-    if (overrideMyWkg != null && !isTss) {
+    if (overrideMyWkg != null && !isTss && !isKmMode) {
       myRaw = overrideMyWkg;
     }
     if (myRaw == null && currentUserId && cohort.length) {
       var mine = cohort.filter(function (e) {
+        if (duration === 'group_dist') {
+          return e.userId === currentUserId || e.currentUserParticipated === true;
+        }
         return e.userId === currentUserId;
       })[0];
       if (mine) {
-        myRaw = isTss ? Number(mine.totalTss) : Number(mine.wkg);
+        myRaw = isTss ? Number(mine.totalTss) : isKmMode ? Number(mine.totalKm) : Number(mine.wkg);
       }
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUserId && myRankSupremo && myRankSupremo.userId === currentUserId) {
-      myRaw = isTss ? Number(myRankSupremo.totalTss) : Number(myRankSupremo.wkg);
+      myRaw = isTss ? Number(myRankSupremo.totalTss) : isKmMode ? Number(myRankSupremo.totalKm) : Number(myRankSupremo.wkg);
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUser && currentUser.userId === currentUserId) {
-      myRaw = isTss ? Number(currentUser.totalTss) : Number(currentUser.wkg);
+      myRaw = isTss ? Number(currentUser.totalTss) : isKmMode ? Number(currentUser.totalKm) : Number(currentUser.wkg);
+    }
+    if (
+      (myRaw == null || isNaN(myRaw)) &&
+      isKmMode &&
+      currentUserId &&
+      currentUser &&
+      (currentUser.totalKm != null || currentUser.totalTss != null)
+    ) {
+      myRaw = Number(currentUser.totalKm != null ? currentUser.totalKm : currentUser.totalTss);
     }
 
     var myX = myRaw != null && !isNaN(myRaw) ? Math.min(xMax, Math.max(xMin, myRaw)) : null;
@@ -331,13 +361,16 @@
       var heroArr = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
       var heroIdx = currentUserId
         ? heroArr.findIndex(function (e) {
+            if (duration === 'group_dist') {
+              return e.userId === currentUserId || e.currentUserParticipated === true;
+            }
             return e.userId === currentUserId;
           })
         : -1;
       if (heroIdx >= 0) displayRank = heroIdx + 1;
     } else {
       var compareArr = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
-      var rawRank = rankInCategoryByValue(compareArr, myRaw, isTss);
+      var rawRank = rankInCategoryByValue(compareArr, myRaw, duration);
       if (rawRank != null) displayRank = rankDisplayForChart(rawRank);
     }
 
@@ -345,6 +378,8 @@
       myRaw != null && !isNaN(myRaw)
         ? isTss
           ? myRaw.toFixed(1) + ' TSS'
+          : isKmMode
+          ? myRaw.toFixed(1) + ' km'
           : myRaw.toFixed(2) + ' W/kg'
         : '';
 
@@ -353,9 +388,9 @@
       : '나의 FTP';
     var refValueNote =
       typeof p.overrideReferenceValueNote === 'string' ? p.overrideReferenceValueNote : ' (프로필)';
-    var badgeMain = overrideMyWkg != null && !isTss ? refBadgeTitle : '나의 위치';
+    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode ? refBadgeTitle : '나의 위치';
     var badgeSub =
-      overrideMyWkg != null && !isTss && valueFmt
+      overrideMyWkg != null && !isTss && !isKmMode && valueFmt
         ? '· ' + valueFmt + (refValueNote || '')
         : displayRank != null && valueFmt
         ? '· ' + displayRank + '위 · ' + valueFmt
@@ -390,10 +425,11 @@
       if (!pl || pl.count == null) return null;
       var x0 = pl.x0;
       var x1 = pl.x1;
-      var rng =
-        isTss
-          ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' TSS'
-          : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' W/kg';
+      var rng = isTss
+        ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' TSS'
+        : isKmMode
+        ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' km'
+        : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' W/kg';
       return (
         <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50">
           <div className="font-semibold text-slate-700 mb-0.5">{rng}</div>
