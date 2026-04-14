@@ -6791,6 +6791,7 @@ window.showScreen = function(screenId) {
     if (typeof window !== 'undefined') {
       window.__journalFetchCallCount = 0;
       window.__journalFetchInProgress = false;
+      window.__journalEmptyRetryDone = false;
     }
     console.log('[훈련일지] 화면 이탈 - fetch 카운트/플래그 초기화');
   }
@@ -7004,6 +7005,8 @@ function initializeCurrentScreen(screenId) {
       
       case 'trainingJournalScreen':
       // 훈련일지 화면: React 리팩터링 우선, 없으면 레거시 미니 달력
+      var _journalReactRootEl = document.getElementById('journal-react-root');
+      var _journalReactWasMounted = !!(_journalReactRootEl && _journalReactRootEl._journalRoot);
       console.log('[Journal Init] ========== trainingJournalScreen 케이스 진입 ==========');
       if (typeof window !== 'undefined') {
         window.__journalInitInProgress = false;
@@ -7020,7 +7023,14 @@ function initializeCurrentScreen(screenId) {
         retryCount = retryCount || 0;
         if (typeof window.initTrainingJournalReact === 'function') {
           console.log('[Journal Init] React 리팩터링 버전 사용 (initTrainingJournalReact)');
-          setTimeout(function() { window.initTrainingJournalReact(); }, 100);
+          setTimeout(function() {
+            window.initTrainingJournalReact();
+            if (_journalReactWasMounted) {
+              setTimeout(function() {
+                window.dispatchEvent(new CustomEvent('journal-training-logs-refresh', { detail: { force: true } }));
+              }, 0);
+            }
+          }, 100);
           return;
         }
         if (retryCount < 20) {
