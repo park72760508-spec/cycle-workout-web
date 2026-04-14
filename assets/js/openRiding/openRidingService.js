@@ -871,6 +871,16 @@ export async function syncHostPublicReviewSummary(db, rideId, rideDateYmd, merge
   });
 }
 
+/** YYYY-M-D / YYYY-MM-DD 등을 YYYY-MM-DD로 맞춤 (합산·저장 시 일자 불일치 방지) */
+function normalizeParticipantReviewYmd(ymd) {
+  if (ymd == null) return '';
+  const s = String(ymd).trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return s;
+  const pad2 = (n) => String(Number(n)).padStart(2, '0');
+  return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+}
+
 /**
  * 참석자(방장 포함) STRAVA 일지 거리를 라이딩별로 저장 — 후기 화면 누적거리 합산용
  * @param {import('firebase/firestore').Firestore} db
@@ -886,10 +896,11 @@ export async function syncParticipantStravaReviewContribution(db, rideId, userId
   const dist = Number(mergedLog.distance_km);
   if (!Number.isFinite(dist) || dist <= 0) return;
   const ref = doc(db, 'rides', String(rideId).trim(), 'participantStravaReview', String(userId).trim());
+  const ymdStored = normalizeParticipantReviewYmd(rideDateYmd) || String(rideDateYmd).trim();
   await setDoc(
     ref,
     {
-      rideDateYmd: String(rideDateYmd).trim(),
+      rideDateYmd: ymdStored,
       distanceKm: dist,
       updatedAt: serverTimestamp()
     },
@@ -911,7 +922,7 @@ export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, o
     if (typeof onNext === 'function') onNext(0);
     return function () {};
   }
-  const ymd = String(rideDateYmd).trim();
+  const ymdNorm = normalizeParticipantReviewYmd(rideDateYmd);
   const colRef = collection(db, 'rides', String(rideId).trim(), 'participantStravaReview');
   return onSnapshot(
     colRef,
@@ -919,9 +930,12 @@ export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, o
       let sum = 0;
       snap.forEach((d) => {
         const data = d.data();
-        const dYmd = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
-        if (dYmd === ymd) {
-          sum += Number(data.distanceKm != null ? data.distanceKm : 0) || 0;
+        const dYmdRaw = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
+        const dYmd = normalizeParticipantReviewYmd(dYmdRaw);
+        const dist = Number(data.distanceKm != null ? data.distanceKm : 0) || 0;
+        if (dist <= 0) return;
+        if (!dYmdRaw || dYmd === ymdNorm) {
+          sum += dist;
         }
       });
       if (typeof onNext === 'function') onNext(sum);

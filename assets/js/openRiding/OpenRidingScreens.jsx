@@ -5161,7 +5161,9 @@ function OpenRidingRideReviewSummaryContent(props) {
     cumRow = {
       label: '함께 달린 거리',
       value:
-        participantsStravaCumulativeKm != null && Number.isFinite(ckm) && ckm > 0 ? ckm.toFixed(1) + ' km' : '-'
+        participantsStravaCumulativeKm != null && Number.isFinite(ckm)
+          ? ckm.toFixed(1) + ' km'
+          : '-'
     };
   }
   var rows = [
@@ -5309,6 +5311,16 @@ function OpenRidingDetail(props) {
   var rideYmdRv = ride ? getRideDateSeoulYmd(ride) : '';
   var rideStatusRv = ride ? String(ride.rideStatus || 'active') : '';
   var rideHostRv = ride && ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+  var rideParticipantsKeyRv =
+    ride && Array.isArray(ride.participants)
+      ? ride.participants
+          .map(function (p) {
+            return String(p != null ? p : '').trim();
+          })
+          .filter(Boolean)
+          .sort()
+          .join('|')
+      : '';
   var rideDistRv =
     ride && ride.distance != null && Number.isFinite(Number(ride.distance)) ? Number(ride.distance) : null;
   var hStableRv = openRidingHostPublicSummaryStableKey(ride && ride.hostPublicReviewSummary);
@@ -5369,6 +5381,51 @@ function OpenRidingDetail(props) {
       };
     },
     [reviewExpanded, rideId, rideYmdRv, firestore]
+  );
+
+  /**
+   * 후기에 표시된 본인 STRAVA 병합 로그가 있으면 항상 participantStravaReview에 기록해
+   * '함께 달린 거리' 구독 합계에 반영 (일지 fetch 경로를 타지 않은 방장·저장 요약만 보는 경우 포함)
+   */
+  useEffect(
+    function () {
+      if (!reviewMergedLog || typeof reviewMergedLog !== 'object') return undefined;
+      if (reviewMergedLogSource !== 'self') return undefined;
+      if (String(reviewMergedLog.source || '').toLowerCase() !== 'strava') return undefined;
+      var dist = Number(reviewMergedLog.distance_km);
+      if (!Number.isFinite(dist) || dist <= 0) return undefined;
+      if (!rideId || !userId || !ride) return undefined;
+      if (String(ride.rideStatus || 'active') === 'cancelled') return undefined;
+      var ymd = getRideDateSeoulYmd(ride);
+      if (!ymd) return undefined;
+      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      if (!db) return undefined;
+      var uid = String(userId).trim();
+      var parts = Array.isArray(ride.participants) ? ride.participants : [];
+      var inParts = parts.some(function (p) {
+        return String(p).trim() === uid;
+      });
+      if (!inParts) return undefined;
+      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var fn = svc.syncParticipantStravaReviewContribution;
+      if (typeof fn !== 'function') return undefined;
+      fn(db, String(rideId).trim(), uid, ymd, reviewMergedLog).catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[openRiding] syncParticipantStravaReviewContribution (후기 표시 동기화)', e);
+        }
+      });
+      return undefined;
+    },
+    [
+      reviewMergedLog,
+      reviewMergedLogSource,
+      rideId,
+      userId,
+      firestore,
+      rideYmdRv,
+      rideStatusRv,
+      rideParticipantsKeyRv
+    ]
   );
 
   useEffect(
