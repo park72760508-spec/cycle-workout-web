@@ -24,7 +24,7 @@
 
   var STELVIO_DURATION_LABELS = {
     tss: 'TSS',
-    personal_dist: '개인 30일',
+    personal_dist: '거리 30일',
     group_dist: '그룹 30일',
     '1min': '1분',
     '5min': '5분',
@@ -208,7 +208,7 @@
     var durLabel = isTss
       ? '주간 TSS'
       : isKmMode
-      ? (duration === 'group_dist' ? '그룹 30일 거리' : '개인 30일 거리')
+      ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
       : STELVIO_DURATION_LABELS[duration] || duration;
     /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
     var overrideMyWkg =
