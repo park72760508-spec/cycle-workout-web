@@ -5505,6 +5505,14 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin: 2px -4px;
   padding: 10px 4px;
 }
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-group-attended,
+.stelvio-rank-row.stelvio-rank-group-attended {
+  background: linear-gradient(90deg, rgba(251, 146, 60, 0.24) 0%, rgba(253, 224, 71, 0.1) 100%);
+  border-radius: 8px;
+  margin: 2px -4px;
+  padding: 10px 4px;
+  border-left: 3px solid rgba(249, 115, 22, 0.9);
+}
 .stelvio-rank-crown {
   width: 24px;
   height: 24px;
