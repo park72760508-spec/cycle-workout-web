@@ -107,7 +107,7 @@
     }, [currentYear]);
 
     // 훈련 로그 로드
-    useEffect(function loadLogs() {
+    var runTrainingLogsFetch = useCallback(function(forceRefresh) {
       var userId = getCurrentUserId();
       if (!userId) {
         setError('로그인이 필요합니다.');
@@ -129,7 +129,8 @@
         return;
       }
 
-      fetchFn(userId)
+      var fetchOpts = forceRefresh ? { force: true } : undefined;
+      fetchFn(userId, fetchOpts)
         .then(function(logsByDate) {
           setTrainingLogs(logsByDate || {});
           setError(null);
@@ -148,7 +149,21 @@
         });
     }, []);
 
-    // 로드 직후 달력 하단 요약이 바로 보이도록: 사용자가 날짜를 누르기 전에 기본 선택일 설정
+    useEffect(function loadLogsOnMount() {
+      runTrainingLogsFetch(false);
+    }, [runTrainingLogsFetch]);
+
+    useEffect(function subscribeJournalRefreshEvent() {
+      function onRefresh(ev) {
+        var force = !(ev && ev.detail && ev.detail.force === false);
+        runTrainingLogsFetch(force);
+      }
+      window.addEventListener('journal-training-logs-refresh', onRefresh);
+      return function() {
+        window.removeEventListener('journal-training-logs-refresh', onRefresh);
+      };
+    }, [runTrainingLogsFetch]);
+
     useEffect(function autoSelectDefaultJournalDate() {
       if (loading) return;
       var tl = trainingLogs || {};
@@ -183,7 +198,7 @@
       });
     }, [loading, trainingLogs, currentYear, currentMonth]);
 
-    // 월별 네비게이션
+    // 월별 네비게이션 (달 이동 시 서버 훈련 로그 재조회)
     var navigateMonth = useCallback(function(direction) {
       setCurrentMonth(function(prev) {
         var next = direction === 'prev' ? prev - 1 : prev + 1;
@@ -197,7 +212,10 @@
         }
         return next;
       });
-    }, []);
+      setTimeout(function() {
+        runTrainingLogsFetch(true);
+      }, 0);
+    }, [runTrainingLogsFetch]);
 
     // 선택된 날짜의 로그
     var logsForSelectedDate = selectedDate && trainingLogs[selectedDate] ? trainingLogs[selectedDate] : [];
@@ -227,25 +245,12 @@
         window.__journalFetchCallCount = 0;
         window.__journalEmptyRetryDone = false;
       }
-      var uid = getCurrentUserId();
-      if (!uid) {
+      if (!getCurrentUserId()) {
         setError('로그인 상태를 확인해 주세요.');
         return;
       }
-      if (typeof window.fetchTrainingLogsForCalendarJournal === 'function') {
-        setLoading(true);
-        window.fetchTrainingLogsForCalendarJournal(uid)
-          .then(function(logsByDate) {
-            setTrainingLogs(logsByDate || {});
-            setError(null);
-            if (typeof window.updateJournalSubtitle === 'function') {
-              window.updateJournalSubtitle('(' + Object.keys(logsByDate || {}).length + '일 훈련 기록)');
-            }
-          })
-          .catch(function(err) { setError(err && err.message ? err.message : '로드 실패'); })
-          .finally(function() { setLoading(false); });
-      }
-    }, []);
+      runTrainingLogsFetch(true);
+    }, [runTrainingLogsFetch]);
 
     var userWeightForPr = userProfile && userProfile.weight != null ? Number(userProfile.weight) : (function() {
       try { var cu = JSON.parse(localStorage.getItem('currentUser') || 'null'); return Number(cu && (cu.weight || cu.weightKg)) || 0; } catch(e) { return 0; }
