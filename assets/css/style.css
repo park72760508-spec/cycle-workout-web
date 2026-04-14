@@ -5513,6 +5513,20 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 10px 4px;
   border-left: 3px solid rgba(249, 115, 22, 0.9);
 }
+/* 그룹 랭킹: 내가 방장인 행 — 참석 띠와 동형, 보라색 띠 */
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-group-host,
+.stelvio-rank-row.stelvio-rank-group-host {
+  border-radius: 8px;
+  margin: 2px -4px;
+  padding: 10px 4px;
+  border-left: 3px solid rgba(124, 58, 237, 0.95);
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.22) 0%, rgba(196, 181, 253, 0.1) 100%);
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-current.stelvio-rank-group-host,
+.stelvio-rank-row.stelvio-rank-current.stelvio-rank-group-host {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.22) 0%, rgba(102, 126, 234, 0.12) 50%, transparent 100%);
+  border-left: 3px solid rgba(124, 58, 237, 0.95);
+}
 .stelvio-rank-crown {
   width: 24px;
   height: 24px;
