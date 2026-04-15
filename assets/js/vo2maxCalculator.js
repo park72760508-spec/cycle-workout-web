@@ -313,6 +313,75 @@
   }
 
   /**
+   * 대시보드 성장 추이·30주 주간 TSS와 동일한 30개 주 합계의 산술평균을 기여(본인 문서만).
+   * Cloud Function이 weekly_tss_demographic_samples → stats_weekly_tss_stelvio_rolling 을 집계.
+   * @param {Object} userProfile
+   * @param {Array<{ tss?: number }>} weeklyTssRows
+   * @returns {Promise<void>}
+   */
+  function persistWeeklyTssDemographicSampleAsync(userProfile, weeklyTssRows) {
+    var uid = userProfile && userProfile.id;
+    var db = global.firestoreV9;
+    if (!uid || !db || !Array.isArray(weeklyTssRows) || weeklyTssRows.length === 0) {
+      return Promise.resolve();
+    }
+    var vals = [];
+    for (var wi = 0; wi < weeklyTssRows.length; wi++) {
+      var tv = Number(weeklyTssRows[wi].tss);
+      if (isFinite(tv) && tv >= 0 && tv <= 50000) vals.push(tv);
+    }
+    if (vals.length === 0) return Promise.resolve();
+    var avgW =
+      vals.reduce(function (a, b) {
+        return a + b;
+      }, 0) / vals.length;
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        return mod.setDoc(
+          mod.doc(db, 'weekly_tss_demographic_samples', uid),
+          {
+            avgThirtyWeekWindowTss: Math.round(avgW * 10) / 10,
+            updatedAt: mod.serverTimestamp()
+          },
+          { merge: true }
+        );
+      })
+      .catch(function () {});
+  }
+
+  /**
+   * 전체 사용자 평균 주간 TSS(30주 창 샘플 기반) — stats_weekly_tss_stelvio_rolling: all_all
+   * @returns {Promise<{ avgWeeklyTss: number, userCount: number }|null>}
+   */
+  function fetchStelvioRollingWeeklyTssStatsGlobal() {
+    var db = global.firestoreV9;
+    if (!db) return Promise.resolve(null);
+    return getFirestoreModVo2Stats()
+      .then(function (mod) {
+        return mod.getDoc(mod.doc(db, 'stats_weekly_tss_stelvio_rolling', 'all_all'));
+      })
+      .then(function (snap) {
+        if (!docSnapExists(snap)) return null;
+        var d = snap.data();
+        if (!d || d.minSamplesMet !== true) return null;
+        var avg = Number(d.avgWeeklyTss);
+        if (!isFinite(avg) || avg < 0) return null;
+        return {
+          avgWeeklyTss: Math.round(avg * 10) / 10,
+          userCount: Math.max(0, Math.floor(Number(d.userCount) || 0))
+        };
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  /** 집계 문서가 없을 때 점선 폴백(주간 목표 중간값 근처) */
+  function getStelvioUserAvgWeeklyTssFallback() {
+    return 280;
+  }
+
+  /**
    * @param {number|null} age - 만 나이
    * @param {string|null} gender - 남/여 등
    * @param {number|null} vo2max - ml/kg/min
@@ -437,6 +506,9 @@
   global.persistVo2DemographicSampleAsync = persistVo2DemographicSampleAsync;
   global.persistFitnessDemographicSampleAsync = persistFitnessDemographicSampleAsync;
   global.fetchStelvioRollingFitnessStatsGlobal = fetchStelvioRollingFitnessStatsGlobal;
+  global.persistWeeklyTssDemographicSampleAsync = persistWeeklyTssDemographicSampleAsync;
+  global.fetchStelvioRollingWeeklyTssStatsGlobal = fetchStelvioRollingWeeklyTssStatsGlobal;
+  global.getStelvioUserAvgWeeklyTssFallback = getStelvioUserAvgWeeklyTssFallback;
 
   // --- STELVIO VO2 Max (260327_V1 원본 로직) ---------------------------------
 
