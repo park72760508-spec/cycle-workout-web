@@ -2,7 +2,7 @@
  * DashboardDetailTabs - Level 3 탭 구조
  * Tab 1: 나의 성향 (RiderDashboardProfile, RiderPowerProfileTrendCharts)
  * Tab 2: 최근 훈련 (TrainingTrendChart, RiderTimeInZonesCharts, RiderHeartRateProfileTrendCharts)
- * Tab 3: 성장 추이 (나의 성장 트렌드 → VO₂max 트렌드 → 년간 파워PR)
+ * Tab 3: 성장 추이 (나의 성장 트렌드 → 훈련 부하 TSS → VO₂max 트렌드 → 년간 파워PR)
  *
  * 번들러 없이 CDN 사용 환경이므로 React.lazy 대신 조건부 마운트(탭 전환 시에만 렌더)로 성능 최적화
  */
@@ -128,6 +128,7 @@
     var recentLogs = p.recentLogs || [];
     var fitnessData = p.fitnessData || [];
     var vo2TrendData = p.vo2TrendData || [];
+    var weeklyTssTrendData = p.weeklyTssTrendData || [];
     var growthTrendData = p.growthTrendData || [];
     var yearlyPowerPrData = p.yearlyPowerPrData || [];
     var logsLoading = p.logsLoading;
@@ -166,6 +167,7 @@
     var RiderTimeInZonesCharts = window.RiderTimeInZonesCharts;
     var RiderHeartRateProfileTrendCharts = window.RiderHeartRateProfileTrendCharts;
     var Vo2MaxTrendChart = window.Vo2MaxTrendChart;
+    var TrainingLoadTssTrendChart = window.TrainingLoadTssTrendChart;
     var GrowthTrendChart = window.GrowthTrendChart;
     var YearlyPowerPrChart = window.YearlyPowerPrChart;
     var WkgGradeIndicator = window.WkgGradeIndicator;
@@ -238,6 +240,18 @@
             { title: '나의 성장 트렌드' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
           ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData, userProfile: userProfile }),
+          logsLoading ? React.createElement(
+            DashboardCard,
+            { title: '훈련 부하 트렌드 (TSS)' },
+            React.createElement('div', { className: 'h-[200px] flex flex-col items-center justify-center' },
+              React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
+              React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
+            )
+          ) : logsLoadError ? React.createElement(
+            DashboardCard,
+            { title: '훈련 부하 트렌드 (TSS)' },
+            React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
+          ) : TrainingLoadTssTrendChart && React.createElement(TrainingLoadTssTrendChart, { data: weeklyTssTrendData }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: 'VO₂max 트렌드' },
