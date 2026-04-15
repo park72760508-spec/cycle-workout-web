@@ -82,6 +82,10 @@
     var vo2TrendData = _useState14[0];
     var setVo2TrendData = _useState14[1];
 
+    var _useState14b = useState([]);
+    var weeklyTssTrendData = _useState14b[0];
+    var setWeeklyTssTrendData = _useState14b[1];
+
     var _useState15 = useState([]);
     var growthTrendData = _useState15[0];
     var setGrowthTrendData = _useState15[1];
@@ -534,6 +538,67 @@
             window.persistVo2DemographicSampleAsync(userProfile, vo2Rows).catch(function() {});
           }
 
+          var tssRangeStart = sixMonthsStr;
+          var tssRangeEnd = todayStr;
+          var rawForWeeklyTss = raw.filter(function(log) {
+            var dsT = parseDate(log.date);
+            return dsT && dsT >= tssRangeStart && dsT <= tssRangeEnd;
+          });
+          var byDayTssBuckets = {};
+          rawForWeeklyTss.forEach(function(log) {
+            var dsT = parseDate(log.date);
+            if (!dsT) return;
+            if (!byDayTssBuckets[dsT]) byDayTssBuckets[dsT] = { strava: [], stelvio: [] };
+            var srcT = String(log.source || '').toLowerCase();
+            var tssOne = Number(log.tss) || 0;
+            if (srcT === 'strava') byDayTssBuckets[dsT].strava.push(tssOne);
+            else byDayTssBuckets[dsT].stelvio.push(tssOne);
+          });
+          var dayTssTotals = {};
+          Object.keys(byDayTssBuckets).forEach(function(dsT) {
+            var buck = byDayTssBuckets[dsT];
+            var tot = 0;
+            if (buck.strava.length > 0) buck.strava.forEach(function(t) { tot += t; });
+            else if (buck.stelvio.length > 0) buck.stelvio.forEach(function(t) { tot += t; });
+            dayTssTotals[dsT] = tot;
+          });
+          var rsParts = tssRangeStart.split('-');
+          var rsDate = new Date(parseInt(rsParts[0], 10), parseInt(rsParts[1], 10) - 1, parseInt(rsParts[2], 10));
+          rsDate.setHours(0, 0, 0, 0);
+          var dayRs = rsDate.getDay();
+          var diffToMon = dayRs === 0 ? -6 : 1 - dayRs;
+          var weekCursor = new Date(rsDate);
+          weekCursor.setDate(rsDate.getDate() + diffToMon);
+          weekCursor.setHours(0, 0, 0, 0);
+          var endParts = tssRangeEnd.split('-');
+          var endDate = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
+          endDate.setHours(0, 0, 0, 0);
+          var weeklyTssRows = [];
+          while (weekCursor.getTime() <= endDate.getTime()) {
+            var wkS = new Date(weekCursor);
+            var wkE = new Date(weekCursor);
+            wkE.setDate(wkE.getDate() + 6);
+            var wkStartStr = wkS.getFullYear() + '-' + pad2(wkS.getMonth() + 1) + '-' + pad2(wkS.getDate());
+            var wkEndStr = wkE.getFullYear() + '-' + pad2(wkE.getMonth() + 1) + '-' + pad2(wkE.getDate());
+            var effStart = wkStartStr >= tssRangeStart ? wkStartStr : tssRangeStart;
+            var effEnd = wkEndStr <= tssRangeEnd ? wkEndStr : tssRangeEnd;
+            var weekSum = 0;
+            if (effStart <= effEnd) {
+              Object.keys(dayTssTotals).forEach(function(dsT) {
+                if (dsT >= effStart && dsT <= effEnd) weekSum += dayTssTotals[dsT];
+              });
+            }
+            var wm = wkS.getMonth() + 1;
+            var wd = wkS.getDate();
+            weeklyTssRows.push({
+              weekLabel: wm + '/' + wd,
+              sortKey: wkStartStr,
+              tss: Math.round(weekSum)
+            });
+            weekCursor.setDate(weekCursor.getDate() + 7);
+          }
+          if (isMounted) setWeeklyTssTrendData(weeklyTssRows);
+
           var currentYear = today.getFullYear();
           var yearStart = currentYear + '-01-01';
           var logsYear = raw.filter(function(log) {
@@ -587,6 +652,7 @@
             setLogsLoadError((e && e.message) || '훈련 로그 로드 실패');
             setLogsLoaded(true);
             setRecentLogs([]);
+            setWeeklyTssTrendData([]);
           }
         } finally {
           if (isMounted) setLogsLoading(false);
@@ -860,6 +926,7 @@
       streamingComment,
       fitnessData,
       vo2TrendData,
+      weeklyTssTrendData,
       growthTrendData,
       yearlyPowerPrData,
       stravaStatus,

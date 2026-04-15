@@ -134,6 +134,7 @@
     var retryLogsRef = data.retryLogsRef;
     var fitnessData = data.fitnessData || [];
     var vo2TrendData = data.vo2TrendData || [];
+    var weeklyTssTrendData = data.weeklyTssTrendData || [];
     var growthTrendData = data.growthTrendData || [];
     var yearlyPowerPrData = data.yearlyPowerPrData || [];
     var recentLogs = data.recentLogs || [];
@@ -449,6 +450,7 @@
               recentLogs: recentLogs,
               fitnessData: fitnessData,
               vo2TrendData: vo2TrendData,
+              weeklyTssTrendData: weeklyTssTrendData,
               growthTrendData: growthTrendData,
               yearlyPowerPrData: yearlyPowerPrData,
               stats: stats,
