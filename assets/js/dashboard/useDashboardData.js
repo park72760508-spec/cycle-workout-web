@@ -586,6 +586,9 @@
             });
           }
           if (isMounted) setWeeklyTssTrendData(weeklyTssRows);
+          if (isMounted && userProfile && typeof window.persistWeeklyTssDemographicSampleAsync === 'function') {
+            window.persistWeeklyTssDemographicSampleAsync(userProfile, weeklyTssRows).catch(function () {});
+          }
 
           var currentYear = today.getFullYear();
           var yearStart = currentYear + '-01-01';
