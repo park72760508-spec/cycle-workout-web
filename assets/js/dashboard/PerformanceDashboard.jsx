@@ -92,6 +92,32 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
+  function calculateSpeedOnFlatFallback(power, weight) {
+    var P = Number(power);
+    var m = Number(weight);
+    if (!isFinite(P) || P <= 0 || !isFinite(m) || m <= 0) return 0;
+    var rho = 1.225;
+    var g = 9.81;
+    var crr = 0.0045;
+    var cda = 0.328 + (m - 70) * 0.0012;
+    if (cda < 0.22) cda = 0.22;
+    if (cda > 0.42) cda = 0.42;
+    function powerAt(vMs) {
+      var aero = 0.5 * rho * cda * vMs * vMs * vMs;
+      var roll = crr * m * g * vMs;
+      return aero + roll;
+    }
+    var lo = 0.1;
+    var hi = 40;
+    var i;
+    for (i = 0; i < 55; i++) {
+      var mid = (lo + hi) / 2;
+      if (powerAt(mid) < P) lo = mid;
+      else hi = mid;
+    }
+    return ((lo + hi) / 2) * 3.6;
+  }
+
   function PerformanceDashboard() {
     var data = typeof window.useDashboardData === 'function' ? window.useDashboardData() : {};
 
@@ -125,14 +151,40 @@
 
     var todayYmd = getSeoulTodayYmd();
     var start30Ymd = shiftYmd(todayYmd, -29);
-    var ftpVal = Number(stats && stats.ftp != null ? stats.ftp : userProfile && userProfile.ftp != null ? userProfile.ftp : 0) || 0;
-    var weightVal = Number(stats && stats.weight != null ? stats.weight : userProfile && userProfile.weight != null ? userProfile.weight : 0) || 0;
+    var ftpVal = Number(
+      stats && stats.ftp != null ? stats.ftp :
+      userProfile && userProfile.ftp != null ? userProfile.ftp :
+      userProfile && userProfile.ftp_watts != null ? userProfile.ftp_watts :
+      0
+    ) || 0;
+    var weightVal = Number(
+      stats && stats.weight != null ? stats.weight :
+      userProfile && userProfile.weight != null ? userProfile.weight :
+      userProfile && userProfile.weightKg != null ? userProfile.weightKg :
+      userProfile && userProfile.weight_kg != null ? userProfile.weight_kg :
+      0
+    ) || 0;
     var last30Peak60Watts = 0;
     var last30PeakDate = '';
     (Array.isArray(recentLogs) ? recentLogs : []).forEach(function(log) {
       var ymd = getSeoulYmdFromUnknown(log && log.date);
       if (!ymd || ymd < start30Ymd || ymd > todayYmd) return;
       var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
+      if (!(w60 > 0)) {
+        var sec = Number(
+          log && log.duration_sec != null ? log.duration_sec :
+          log && log.time != null ? log.time :
+          log && log.duration != null ? log.duration :
+          0
+        ) || 0;
+        if (sec >= 50 * 60) {
+          w60 = Number(
+            log && log.avg_watts != null ? log.avg_watts :
+            log && log.weighted_watts != null ? log.weighted_watts :
+            0
+          ) || 0;
+        }
+      }
       if (w60 > last30Peak60Watts) {
         last30Peak60Watts = w60;
         last30PeakDate = ymd;
@@ -141,7 +193,7 @@
     var useFallbackFtp93 = !(last30Peak60Watts > 0) && ftpVal > 0;
     var referenceWattsRaw = last30Peak60Watts > 0 ? last30Peak60Watts : useFallbackFtp93 ? ftpVal * 0.93 : 0;
     var referenceWatts = referenceWattsRaw > 0 ? Math.round(referenceWattsRaw * 10) / 10 : 0;
-    var calcSpeed = typeof window.calculateSpeedOnFlat === 'function' ? window.calculateSpeedOnFlat : null;
+    var calcSpeed = typeof window.calculateSpeedOnFlat === 'function' ? window.calculateSpeedOnFlat : calculateSpeedOnFlatFallback;
     var soloSpeedRaw = calcSpeed && referenceWatts > 0 && weightVal > 0 ? Number(calcSpeed(referenceWatts, weightVal)) : 0;
     var soloSpeed = soloSpeedRaw > 0 ? Math.round(soloSpeedRaw * 10) / 10 : 0;
     var estimatedGroupSpeed = soloSpeed > 0 ? Math.round(soloSpeed * 1.2 * 10) / 10 : 0;
@@ -567,9 +619,17 @@
                   React.createElement('div', { className: 'text-slate-500 text-[10px]' }, useFallbackFtp93 ? 'W/kg (FTP×93%)' : 'W/kg (60분 피크)'),
                   React.createElement('div', { className: 'font-semibold text-indigo-700 tabular-nums' }, referenceWkg > 0 ? referenceWkg.toFixed(2) : '-')
                 ),
-                React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3 open-riding-filter-realistic-solo-highlight' },
-                  React.createElement('div', { className: 'text-slate-700 text-[10px] font-semibold' }, useFallbackFtp93 ? '평지 개인 평속 (FTP×93% 투입) — 현실 지표 핵심' : '평지 개인 평속 (60분 피크 투입) — 현실 지표 핵심'),
-                  React.createElement('div', { className: 'font-bold text-slate-900 tabular-nums text-sm' }, soloSpeed > 0 ? soloSpeed + ' km/h' : '-')
+                React.createElement('div', {
+                  className: 'rounded-xl border px-3 py-3 col-span-2 sm:col-span-3 open-riding-filter-realistic-solo-highlight',
+                  style: {
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(124,58,237,0.08) 100%)',
+                    borderColor: 'rgba(99,102,241,0.35)',
+                    boxShadow: '0 8px 20px rgba(99,102,241,0.12)'
+                  }
+                },
+                  React.createElement('div', { className: 'text-indigo-900 text-[11px] font-semibold' }, useFallbackFtp93 ? '평지 개인 평속 (FTP×93% 투입) — 현실 지표 핵심' : '평지 개인 평속 (60분 피크 투입) — 현실 지표 핵심'),
+                  React.createElement('div', { className: 'font-extrabold text-indigo-950 tabular-nums text-4xl leading-none mt-1 tracking-tight' }, soloSpeed > 0 ? soloSpeed.toFixed(1) : '-'),
+                  React.createElement('div', { className: 'text-indigo-800 text-sm font-bold mt-1' }, 'km/h')
                 ),
                 React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5 col-span-2 sm:col-span-3' },
                   React.createElement('div', { className: 'text-slate-500 text-[10px]' }, '예상 그룹 평속 (×1.2)'),
