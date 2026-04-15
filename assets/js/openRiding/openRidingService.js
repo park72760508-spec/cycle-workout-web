@@ -1010,11 +1010,27 @@ export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, h
   /** @type {unknown} */
   let latestRideData = null;
 
+  /** 참석 확정자만 합산(이탈·잔존 문서 혼선 방지). participants 필드가 없으면 필터 생략. */
+  function participantsUidSetForStravaSum(rideData) {
+    if (!rideData || typeof rideData !== 'object') return null;
+    if (!Array.isArray(rideData.participants)) return null;
+    const s = new Set();
+    rideData.participants.forEach((x) => {
+      const u = String(x != null ? x : '').trim();
+      if (u) s.add(u);
+    });
+    return s;
+  }
+
   function emitTogether() {
     if (latestColSnap == null) return;
     let sumAll = 0;
     let hostSubKm = 0;
+    const allowedUids = participantsUidSetForStravaSum(latestRideData);
+    const hostUidTrim = hostUid ? String(hostUid).trim() : '';
     latestColSnap.forEach((d) => {
+      const docUid = String(d.id != null ? d.id : '').trim();
+      if (allowedUids != null && docUid && !allowedUids.has(docUid)) return;
       const data = d.data();
       const dYmdRaw = String(data.rideDateYmd != null ? data.rideDateYmd : '').trim();
       const dYmd = normalizeParticipantReviewYmd(dYmdRaw);
@@ -1022,7 +1038,7 @@ export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, h
       if (dist <= 0) return;
       if (!dYmdRaw || dYmd === ymdNorm) {
         sumAll += dist;
-        if (hostUid && d.id === hostUid) hostSubKm = dist;
+        if (hostUidTrim && docUid === hostUidTrim) hostSubKm = dist;
       }
     });
     const hostSummaryKm = hostPublicReviewDistanceKmForRideSchedule(latestRideData, ymdNorm);

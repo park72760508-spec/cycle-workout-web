@@ -278,10 +278,11 @@ export function useOpenRideDetail(db, rideId, userId) {
 
   const role = useMemo(() => {
     if (!ride || !userId) return null;
+    const uid = String(userId).trim();
     const p = Array.isArray(ride.participants) ? ride.participants : [];
     const w = Array.isArray(ride.waitlist) ? ride.waitlist : [];
-    if (p.includes(userId)) return 'participant';
-    const wi = w.indexOf(userId);
+    if (p.some((id) => String(id != null ? id : '').trim() === uid)) return 'participant';
+    const wi = w.findIndex((id) => String(id != null ? id : '').trim() === uid);
     if (wi >= 0) return { type: 'waitlist', position: wi + 1 };
     return null;
   }, [ride, userId]);

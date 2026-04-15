@@ -5401,6 +5401,73 @@ function OpenRidingDetail(props) {
   );
 
   /**
+   * 상세 화면 진입만 한 참가자도 후기 (+)를 펼치지 않아도 일지→participantStravaReview 동기화.
+   * (이전에는 후기 로드 effect와 겹치지만, 펼침 전·로딩 타이밍 누락을 보강)
+   */
+  useEffect(
+    function () {
+      if (!userId || !ride || loading || !rideId) return undefined;
+      if (String(ride.rideStatus || 'active') === 'cancelled') return undefined;
+      var ymd = getRideDateSeoulYmd(ride);
+      if (!ymd || !isOpenRidingRideDayOnOrBeforeTodaySeoul(ride)) return undefined;
+      var uid = String(userId).trim();
+      var parts = Array.isArray(ride.participants) ? ride.participants : [];
+      var inParts = parts.some(function (p) {
+        return String(p != null ? p : '').trim() === uid;
+      });
+      if (!inParts) return undefined;
+      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      var getRng = typeof window.getTrainingLogsByDateRange === 'function' ? window.getTrainingLogsByDateRange : null;
+      var svcPart = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var syncPartFn =
+        typeof svcPart.syncParticipantStravaReviewContribution === 'function'
+          ? svcPart.syncParticipantStravaReviewContribution
+          : null;
+      if (!db || !getRng || !syncPartFn) return undefined;
+      var yParts = String(ymd).split('-');
+      var year = parseInt(yParts[0], 10);
+      var month = parseInt(yParts[1], 10) - 1;
+      if (!Number.isFinite(year) || !Number.isFinite(month)) return undefined;
+      var hostUid = ride.hostUserId != null ? String(ride.hostUserId).trim() : '';
+      var cancelled = false;
+      getRng(uid, year, month, db)
+        .then(function (logs) {
+          if (cancelled) return;
+          var dayLogs = (logs || []).filter(function (log) {
+            return openRidingYmdEqual(openRidingLogYmdSeoul(log), ymd) && openRidingLogIsStrava(log);
+          });
+          if (hostUid && uid === hostUid) {
+            dayLogs = openRidingPickStravaLogsForHostReview(dayLogs, ride);
+          }
+          var merged = openRidingMergeLogsForReviewSummary(dayLogs);
+          if (!merged || String(merged.source || '').toLowerCase() !== 'strava') return;
+          var dist = Number(merged.distance_km);
+          if (!Number.isFinite(dist) || dist <= 0) return;
+          syncPartFn(db, String(rideId).trim(), uid, ymd, merged).catch(function (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[openRiding] syncParticipantStravaReviewContribution (상세 진입)', e);
+            }
+          });
+        })
+        .catch(function () {});
+      return function () {
+        cancelled = true;
+      };
+    },
+    [
+      userId,
+      rideId,
+      loading,
+      firestore,
+      rideYmdRv,
+      rideParticipantsKeyRv,
+      rideStatusRv,
+      rideHostRv,
+      rideDistRv
+    ]
+  );
+
+  /**
    * 후기에 표시된 본인 STRAVA 병합 로그가 있으면 항상 participantStravaReview에 기록해
    * '함께 달린 거리'에 반영. 합계는 방장 공개 후기(ride.hostPublicReviewSummary) 거리 + 서브컬렉션 참석자 합(서비스에서 병합).
    */
