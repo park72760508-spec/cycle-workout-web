@@ -3235,6 +3235,89 @@ function rideDocDateToSeoulYmd(rideDate) {
   }
 }
 
+/** users/{uid}/logs 문서 date를 서울 YYYY-MM-DD로 정규화 */
+function normalizeLogDateToSeoulYmd(logDate) {
+  if (!logDate) return "";
+  try {
+    if (typeof logDate === "string") {
+      const s = String(logDate).trim();
+      const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (!m) return s.slice(0, 10);
+      return `${m[1]}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
+    }
+    let d = null;
+    if (typeof logDate.toDate === "function") d = logDate.toDate();
+    else if (logDate instanceof admin.firestore.Timestamp) d = logDate.toDate();
+    else if (logDate instanceof Date) d = logDate;
+    if (!d || isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  } catch (_e) {
+    return "";
+  }
+}
+
+/** 로그 거리 km 추출 (legacy distance meters 가능성 보정) */
+function extractLogDistanceKm(logData) {
+  const km = Number(logData && logData.distance_km);
+  if (Number.isFinite(km) && km > 0) return km;
+  const raw = Number(logData && logData.distance);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  // legacy 필드가 m 단위인 경우를 보정
+  if (raw >= 300) return Math.round((raw / 1000) * 100) / 100;
+  return raw;
+}
+
+/**
+ * users/{uid}/logs 쓰기 시 오픈 라이딩 합산용 participantStravaReview 자동 동기화.
+ * 앱 로그인/상세 진입 여부와 무관하게 서버(Admin SDK)에서 반영.
+ */
+async function syncOpenRidingParticipantDistanceByLog(db, userId, logData) {
+  const source = String(logData && logData.source ? logData.source : "").toLowerCase();
+  if (source !== "strava") return;
+  if (!isCyclingForMmp(logData || {})) return;
+  const ymd = normalizeLogDateToSeoulYmd(logData && logData.date);
+  if (!ymd) return;
+  const distKm = extractLogDistanceKm(logData || {});
+  if (!(distKm > 0)) return;
+
+  const startTs = admin.firestore.Timestamp.fromDate(new Date(`${ymd}T00:00:00+09:00`));
+  const endTs = admin.firestore.Timestamp.fromDate(new Date(`${ymd}T23:59:59.999+09:00`));
+  const ridesSnap = await db.collection("rides")
+    .where("participants", "array-contains", String(userId))
+    .where("date", ">=", startTs)
+    .where("date", "<=", endTs)
+    .get();
+  if (ridesSnap.empty) return;
+
+  let batch = db.batch();
+  let writes = 0;
+  for (const rideDoc of ridesSnap.docs) {
+    const ride = rideDoc.data() || {};
+    if (String(ride.rideStatus || "active") === "cancelled") continue;
+    const rideYmd = rideDocDateToSeoulYmd(ride.date);
+    if (!rideYmd || rideYmd !== ymd) continue;
+    const participants = Array.isArray(ride.participants) ? ride.participants : [];
+    const hasUser = participants.some((p) => String(p || "").trim() === String(userId).trim());
+    if (!hasUser) continue;
+    const partRef = db.collection("rides").doc(rideDoc.id).collection("participantStravaReview").doc(String(userId).trim());
+    batch.set(partRef, {
+      rideDateYmd: ymd,
+      distanceKm: distKm,
+      source: "strava",
+      syncedBy: "functions_onUserLogWritten",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    writes++;
+    if (writes % 450 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  if (writes % 450 !== 0) {
+    await batch.commit();
+  }
+}
+
 /**
  * 그룹: 최근 30일 내 오픈 라이딩을 방장(hostUserId)별로 합산.
  * 각 일정의 점수 = 해당 일정일에 확정 참가자 각각의 라이딩 거리(일별 규칙 동일) 합.
@@ -3850,6 +3933,11 @@ exports.onUserLogWritten = functions
       await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
     } catch (e) {
       console.warn("[onUserLogWritten] upsertYearlyPeakFromLog 실패:", userId, logId, e.message);
+    }
+    try {
+      await syncOpenRidingParticipantDistanceByLog(db, userId, logData);
+    } catch (e) {
+      console.warn("[onUserLogWritten] syncOpenRidingParticipantDistanceByLog 실패:", userId, logId, e.message);
     }
   });
 
