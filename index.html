@@ -15752,7 +15752,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
 
-    /** 훈련 부하: 성장·VO₂max와 동일 시작일(5개월 전 달 1일)~오늘 구간, 주간(월~일) TSS 합계 · 녹색 실선 / 기간 평균 녹색 점선 */
+    /** 훈련 부하: 라이딩 기록「주간 훈련 부하(TSS)」와 동일한 7일 주차(오늘~6일 전, 7~13일 전 …) × 30주, 녹색 곡선·기간 평균 녹색 점선 */
     function TrainingLoadTssTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -15811,6 +15811,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               chart.ctx.textAlign = 'center';
               meta.data.forEach(function (point, idx) {
                 if (!point || point.x == null || point.y == null) return;
+                var row = data[idx];
+                if (!row || !row.showValueLabel) return;
                 var value = values[idx];
                 if (value == null || isNaN(value)) return;
                 var y = point.y - 10;
@@ -15820,7 +15822,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               chart.ctx.restore();
             }
           };
-          chartInstanceRef.current = new Chart(ctx, {
+          var chartCfg = {
             type: 'line',
             data: {
               labels: data.map(function (d) {
@@ -15845,16 +15847,18 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   label: '주간 TSS 합계',
                   data: tssSeries,
                   borderColor: '#15803d',
-                  borderWidth: 2,
+                  borderWidth: 2.5,
                   backgroundColor: 'rgba(22, 163, 74, 0.12)',
-                  tension: 0.35,
-                  cubicInterpolationMode: 'default',
+                  tension: 0.48,
+                  cubicInterpolationMode: 'monotone',
                   stepped: false,
                   fill: true,
-                  pointRadius: 4,
-                  pointBackgroundColor: '#16a34a',
-                  pointBorderColor: '#fff',
-                  pointBorderWidth: 2
+                  pointRadius: 0,
+                  pointHoverRadius: 5,
+                  pointHoverBackgroundColor: '#16a34a',
+                  pointHitRadius: 10,
+                  pointBackgroundColor: 'transparent',
+                  pointBorderWidth: 0
                 }
               ]
             },
@@ -15920,10 +15924,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   ticks: {
                     font: { size: 10 },
                     color: '#6b7280',
-                    maxRotation: 45,
+                    maxRotation: 0,
                     minRotation: 0,
-                    autoSkip: true,
-                    maxTicksLimit: 16
+                    autoSkip: false,
+                    maxTicksLimit: 30
                   }
                 },
                 y: {
@@ -15936,7 +15940,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               }
             },
             plugins: [tssLabelPlugin]
-          });
+          };
+          chartInstanceRef.current = new Chart(ctx, chartCfg);
           return function cleanup() {
             if (chartInstanceRef.current) {
               chartInstanceRef.current.destroy();
@@ -15959,9 +15964,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <DashboardCard title="훈련 부하 트렌드 (TSS)">
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
-          </div>
-          <div className="mt-1 px-2 text-[11px] text-slate-600">
-            구간은 VO₂max·성장 트렌드와 같은 데이터 출처이며, 시작일은 5개월 전 달의 1일부터 오늘까지입니다. 주간 TSS는 월요일~일요일 합계이며, 녹색 점선은 이 기간 각 주 합계의 산술평균입니다.
           </div>
         </DashboardCard>
       );
