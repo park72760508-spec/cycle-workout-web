@@ -538,11 +538,12 @@
             window.persistVo2DemographicSampleAsync(userProfile, vo2Rows).catch(function() {});
           }
 
-          var tssRangeStart = sixMonthsStr;
-          var tssRangeEnd = todayStr;
+          var oldestStart = new Date(today);
+          oldestStart.setDate(today.getDate() - (29 * 7 + 6));
+          var tssRangeStartRolling = oldestStart.getFullYear() + '-' + pad2(oldestStart.getMonth() + 1) + '-' + pad2(oldestStart.getDate());
           var rawForWeeklyTss = raw.filter(function(log) {
             var dsT = parseDate(log.date);
-            return dsT && dsT >= tssRangeStart && dsT <= tssRangeEnd;
+            return dsT && dsT >= tssRangeStartRolling && dsT <= todayStr;
           });
           var byDayTssBuckets = {};
           rawForWeeklyTss.forEach(function(log) {
@@ -562,40 +563,27 @@
             else if (buck.stelvio.length > 0) buck.stelvio.forEach(function(t) { tot += t; });
             dayTssTotals[dsT] = tot;
           });
-          var rsParts = tssRangeStart.split('-');
-          var rsDate = new Date(parseInt(rsParts[0], 10), parseInt(rsParts[1], 10) - 1, parseInt(rsParts[2], 10));
-          rsDate.setHours(0, 0, 0, 0);
-          var dayRs = rsDate.getDay();
-          var diffToMon = dayRs === 0 ? -6 : 1 - dayRs;
-          var weekCursor = new Date(rsDate);
-          weekCursor.setDate(rsDate.getDate() + diffToMon);
-          weekCursor.setHours(0, 0, 0, 0);
-          var endParts = tssRangeEnd.split('-');
-          var endDate = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10));
-          endDate.setHours(0, 0, 0, 0);
           var weeklyTssRows = [];
-          while (weekCursor.getTime() <= endDate.getTime()) {
-            var wkS = new Date(weekCursor);
-            var wkE = new Date(weekCursor);
-            wkE.setDate(wkE.getDate() + 6);
-            var wkStartStr = wkS.getFullYear() + '-' + pad2(wkS.getMonth() + 1) + '-' + pad2(wkS.getDate());
-            var wkEndStr = wkE.getFullYear() + '-' + pad2(wkE.getMonth() + 1) + '-' + pad2(wkE.getDate());
-            var effStart = wkStartStr >= tssRangeStart ? wkStartStr : tssRangeStart;
-            var effEnd = wkEndStr <= tssRangeEnd ? wkEndStr : tssRangeEnd;
-            var weekSum = 0;
-            if (effStart <= effEnd) {
-              Object.keys(dayTssTotals).forEach(function(dsT) {
-                if (dsT >= effStart && dsT <= effEnd) weekSum += dayTssTotals[dsT];
-              });
-            }
-            var wm = wkS.getMonth() + 1;
-            var wd = wkS.getDate();
-            weeklyTssRows.push({
-              weekLabel: wm + '/' + wd,
-              sortKey: wkStartStr,
-              tss: Math.round(weekSum)
+          for (var wkOff = 29; wkOff >= 0; wkOff--) {
+            var endDw = new Date(today);
+            endDw.setDate(today.getDate() - wkOff * 7);
+            var startDw = new Date(today);
+            startDw.setDate(today.getDate() - (wkOff * 7 + 6));
+            var startStrW = startDw.getFullYear() + '-' + pad2(startDw.getMonth() + 1) + '-' + pad2(startDw.getDate());
+            var endStrW = endDw.getFullYear() + '-' + pad2(endDw.getMonth() + 1) + '-' + pad2(endDw.getDate());
+            var weekSumW = 0;
+            Object.keys(dayTssTotals).forEach(function(dsT) {
+              if (dsT >= startStrW && dsT <= endStrW) weekSumW += dayTssTotals[dsT];
             });
-            weekCursor.setDate(weekCursor.getDate() + 7);
+            var chartIdx = 29 - wkOff;
+            var showEveryFive = chartIdx % 5 === 0 || chartIdx === 29;
+            var tickLabel = showEveryFive ? endDw.getMonth() + 1 + '/' + endDw.getDate() : '';
+            weeklyTssRows.push({
+              weekLabel: tickLabel,
+              tss: Math.round(weekSumW),
+              sortKey: endStrW,
+              showValueLabel: showEveryFive
+            });
           }
           if (isMounted) setWeeklyTssTrendData(weeklyTssRows);
 
