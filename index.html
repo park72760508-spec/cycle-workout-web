@@ -15752,12 +15752,29 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
 
-    /** 훈련 부하: 라이딩 기록「주간 훈련 부하(TSS)」와 동일한 7일 주차(오늘~6일 전, 7~13일 전 …) × 30주, 녹색 곡선·기간 평균 녹색 점선 */
+    /** 훈련 부하: 라이딩 기록「주간 훈련 부하(TSS)」와 동일한 7일 주차 × 30주, 녹색 곡선 + 전체 사용자 평균(녹색 점선, stats_weekly_tss_stelvio_rolling) */
     function TrainingLoadTssTrendChart(props) {
       var p = props || {};
       var data = p.data;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
+      const [rollingWeeklyTssGlobal, setRollingWeeklyTssGlobal] = useState(null);
+      useEffect(
+        function () {
+          if (typeof window.fetchStelvioRollingWeeklyTssStatsGlobal !== 'function') {
+            setRollingWeeklyTssGlobal(null);
+            return;
+          }
+          var cancelled = false;
+          window.fetchStelvioRollingWeeklyTssStatsGlobal().then(function (row) {
+            if (!cancelled) setRollingWeeklyTssGlobal(row);
+          });
+          return function () {
+            cancelled = true;
+          };
+        },
+        []
+      );
       useEffect(
         function () {
           if (!data || data.length === 0) return;
@@ -15775,17 +15792,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           });
           var dataMin = validT.length > 0 ? Math.min.apply(null, validT) : 0;
           var dataMax = validT.length > 0 ? Math.max.apply(null, validT) : 0;
-          var periodAvg =
-            tssSeries.length > 0
-              ? Math.round(
-                  (tssSeries.reduce(function (a, b) {
-                    return a + b;
-                  }, 0) /
-                    tssSeries.length) *
-                    10
-                ) / 10
-              : 0;
-          var greenAvgY = periodAvg;
+          var greenGlobalY =
+            rollingWeeklyTssGlobal && typeof rollingWeeklyTssGlobal.avgWeeklyTss === 'number' && isFinite(rollingWeeklyTssGlobal.avgWeeklyTss)
+              ? rollingWeeklyTssGlobal.avgWeeklyTss
+              : typeof window.getStelvioUserAvgWeeklyTssFallback === 'function'
+                ? window.getStelvioUserAvgWeeklyTssFallback()
+                : 280;
+          var greenAvgY = greenGlobalY;
           var yMin = Math.max(0, Math.floor(Math.min(dataMin, greenAvgY) - Math.max(5, Math.round(greenAvgY * 0.05))));
           var yMax = Math.ceil(Math.max(dataMax, greenAvgY) + Math.max(10, Math.round(greenAvgY * 0.08)));
           if (!(yMax > yMin)) {
@@ -15831,7 +15844,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: '기간 평균 주간 TSS',
+                  label: '전체 사용자 평균 TSS',
                   data: lineAvg,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -15949,7 +15962,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data]
+        [data, rollingWeeklyTssGlobal]
       );
       if (!data || data.length === 0) {
         return (
@@ -15965,6 +15978,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
+          {rollingWeeklyTssGlobal && rollingWeeklyTssGlobal.userCount > 0 ? (
+            <div className="mt-1 px-2 text-[11px] text-slate-600">
+              녹색 점선은 대시보드와 동일한 30주 창 샘플을 모은 전체 사용자{' '}
+              <strong className="text-slate-800">{rollingWeeklyTssGlobal.userCount}명</strong> 기준 평균 주간 TSS입니다.
+            </div>
+          ) : null}
         </DashboardCard>
       );
     }
