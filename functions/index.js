@@ -3267,6 +3267,57 @@ function extractLogDistanceKm(logData) {
   return raw;
 }
 
+function pickHostRepresentativeDistanceKm(logs, plannedKm) {
+  const p = Number(plannedKm) || 0;
+  if (!(p > 0)) {
+    let maxKm = 0;
+    for (const l of logs) {
+      const d = extractLogDistanceKm(l);
+      if (d > maxKm) maxKm = d;
+    }
+    return maxKm;
+  }
+  const lo = p * 0.9;
+  const hi = p * 1.1;
+  const cands = [];
+  for (const l of logs) {
+    const d = extractLogDistanceKm(l);
+    if (d <= 0) continue;
+    if ((d >= lo && d <= hi) || d > p) cands.push(d);
+  }
+  if (cands.length === 0) return 0;
+  cands.sort((a, b) => Math.abs(a - p) - Math.abs(b - p));
+  return cands[0] || 0;
+}
+
+async function getUserStravaDistanceKmForRideDate(db, userId, ymd, rideData) {
+  const logsSnap = await db.collection("users").doc(String(userId).trim()).collection("logs")
+    .where("date", "==", ymd)
+    .where("source", "==", "strava")
+    .get();
+  if (logsSnap.empty) return 0;
+  const logs = [];
+  logsSnap.docs.forEach((doc) => {
+    const d = doc.data() || {};
+    if (!isCyclingForMmp(d)) return;
+    const km = extractLogDistanceKm(d);
+    if (km > 0) logs.push(d);
+  });
+  if (logs.length === 0) return 0;
+
+  const hostUid = String(rideData && rideData.hostUserId ? rideData.hostUserId : "").trim();
+  const uid = String(userId).trim();
+  if (hostUid && uid === hostUid) {
+    return pickHostRepresentativeDistanceKm(logs, Number(rideData && rideData.distance) || 0);
+  }
+
+  let sum = 0;
+  logs.forEach((l) => {
+    sum += extractLogDistanceKm(l);
+  });
+  return Math.round(sum * 100) / 100;
+}
+
 /**
  * users/{uid}/logs 쓰기 시 오픈 라이딩 합산용 participantStravaReview 자동 동기화.
  * 앱 로그인/상세 진입 여부와 무관하게 서버(Admin SDK)에서 반영.
@@ -3277,9 +3328,6 @@ async function syncOpenRidingParticipantDistanceByLog(db, userId, logData) {
   if (!isCyclingForMmp(logData || {})) return;
   const ymd = normalizeLogDateToSeoulYmd(logData && logData.date);
   if (!ymd) return;
-  const distKm = extractLogDistanceKm(logData || {});
-  if (!(distKm > 0)) return;
-
   const startTs = admin.firestore.Timestamp.fromDate(new Date(`${ymd}T00:00:00+09:00`));
   const endTs = admin.firestore.Timestamp.fromDate(new Date(`${ymd}T23:59:59.999+09:00`));
   const ridesSnap = await db.collection("rides")
@@ -3299,6 +3347,8 @@ async function syncOpenRidingParticipantDistanceByLog(db, userId, logData) {
     const participants = Array.isArray(ride.participants) ? ride.participants : [];
     const hasUser = participants.some((p) => String(p || "").trim() === String(userId).trim());
     if (!hasUser) continue;
+    const distKm = await getUserStravaDistanceKmForRideDate(db, userId, ymd, ride);
+    if (!(distKm > 0)) continue;
     const partRef = db.collection("rides").doc(rideDoc.id).collection("participantStravaReview").doc(String(userId).trim());
     batch.set(partRef, {
       rideDateYmd: ymd,
@@ -3317,6 +3367,140 @@ async function syncOpenRidingParticipantDistanceByLog(db, userId, logData) {
     await batch.commit();
   }
 }
+
+/**
+ * 과거 오픈 라이딩 participantStravaReview 백필.
+ * GET/POST ?secret=INTERNAL_SYNC_SECRET&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&rideId=선택&dryRun=1&cleanMissing=1&limit=300
+ */
+exports.backfillOpenRidingParticipantStravaReview = onRequest(
+  { cors: true, timeoutSeconds: 540 },
+  async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    res.set("Access-Control-Allow-Origin", "*");
+    const secret = req.query.secret || req.body?.secret || "";
+    if (secret !== INTERNAL_SYNC_SECRET) {
+      return res.status(403).json({ success: false, error: "인증 필요" });
+    }
+
+    const rideId = String(req.query.rideId || req.body?.rideId || "").trim();
+    const dryRun = String(req.query.dryRun || req.body?.dryRun || "0") === "1";
+    const cleanMissing = String(req.query.cleanMissing || req.body?.cleanMissing || "0") === "1";
+    const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit || req.body?.limit || "300", 10) || 300));
+    const startDate = String(req.query.startDate || req.body?.startDate || "").trim();
+    const endDate = String(req.query.endDate || req.body?.endDate || "").trim();
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+
+    const db = admin.firestore();
+    /** @type {admin.firestore.QuerySnapshot<admin.firestore.DocumentData>} */
+    let ridesSnap;
+    if (rideId) {
+      const one = await db.collection("rides").doc(rideId).get();
+      ridesSnap = {
+        docs: one.exists ? [one] : [],
+        size: one.exists ? 1 : 0,
+        empty: !one.exists,
+      };
+    } else {
+      let s = startDate;
+      let e = endDate;
+      if (!dateRe.test(s) || !dateRe.test(e)) {
+        const now = new Date();
+        const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+        const d = new Date(`${today}T00:00:00+09:00`);
+        const past = new Date(d.getTime() - (120 * 24 * 60 * 60 * 1000));
+        const pad = (n) => String(n).padStart(2, "0");
+        s = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())}`;
+        e = today;
+      }
+      const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${s}T00:00:00+09:00`));
+      const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${e}T23:59:59.999+09:00`));
+      ridesSnap = await db.collection("rides")
+        .where("date", ">=", tsStart)
+        .where("date", "<=", tsEnd)
+        .limit(limit)
+        .get();
+    }
+
+    let scannedRides = 0;
+    let processedRides = 0;
+    let participantScans = 0;
+    let writtenDocs = 0;
+    let deletedDocs = 0;
+    let skippedCancelled = 0;
+    let errors = 0;
+    let batch = db.batch();
+    let batchOps = 0;
+
+    for (const rideDoc of ridesSnap.docs) {
+      scannedRides++;
+      const ride = rideDoc.data() || {};
+      if (String(ride.rideStatus || "active") === "cancelled") {
+        skippedCancelled++;
+        continue;
+      }
+      const rideYmd = rideDocDateToSeoulYmd(ride.date);
+      if (!rideYmd) continue;
+      const participants = Array.isArray(ride.participants) ? ride.participants : [];
+      const uniqParticipants = [...new Set(participants.map((x) => String(x || "").trim()).filter(Boolean))];
+      if (uniqParticipants.length === 0) continue;
+      processedRides++;
+
+      for (const uid of uniqParticipants) {
+        participantScans++;
+        try {
+          const km = await getUserStravaDistanceKmForRideDate(db, uid, rideYmd, ride);
+          const partRef = db.collection("rides").doc(rideDoc.id).collection("participantStravaReview").doc(uid);
+          if (km > 0) {
+            if (!dryRun) {
+              batch.set(partRef, {
+                rideDateYmd: rideYmd,
+                distanceKm: km,
+                source: "strava",
+                syncedBy: "functions_backfillOpenRidingParticipantStravaReview",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+              batchOps++;
+            }
+            writtenDocs++;
+          } else if (cleanMissing) {
+            if (!dryRun) {
+              batch.delete(partRef);
+              batchOps++;
+            }
+            deletedDocs++;
+          }
+        } catch (e) {
+          errors++;
+          console.warn("[backfillOpenRidingParticipantStravaReview] participant 처리 실패:", rideDoc.id, uid, e.message);
+        }
+
+        if (!dryRun && batchOps >= 450) {
+          await batch.commit();
+          batch = db.batch();
+          batchOps = 0;
+        }
+      }
+    }
+
+    if (!dryRun && batchOps > 0) {
+      await batch.commit();
+    }
+
+    return res.status(200).json({
+      success: true,
+      dryRun,
+      cleanMissing,
+      rideId: rideId || null,
+      scannedRides,
+      processedRides,
+      participantScans,
+      writtenDocs,
+      deletedDocs,
+      skippedCancelled,
+      errors,
+    });
+  }
+);
 
 /**
  * 그룹: 최근 30일 내 오픈 라이딩을 방장(hostUserId)별로 합산.
@@ -4856,6 +5040,27 @@ exports.rebuildFitnessStelvioRollingStats = onSchedule(
       console.log("[rebuildFitnessStelvioRollingStats] ok", r);
     } catch (e) {
       console.error("[rebuildFitnessStelvioRollingStats]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
+// ---------- 주간 TSS(30주 창) 전 사용자 평균 (샘플 → stats_weekly_tss_stelvio_rolling) ----------
+const { rebuildWeeklyTssStelvioRollingStats } = require("./weeklyTssDemographicStats");
+exports.rebuildWeeklyTssStelvioRollingStats = onSchedule(
+  {
+    schedule: "45 4 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "512MiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      const r = await rebuildWeeklyTssStelvioRollingStats(db);
+      console.log("[rebuildWeeklyTssStelvioRollingStats] ok", r);
+    } catch (e) {
+      console.error("[rebuildWeeklyTssStelvioRollingStats]", e && e.message ? e.message : e);
       throw e;
     }
   }
