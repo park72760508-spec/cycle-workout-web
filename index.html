@@ -15751,6 +15751,221 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         </DashboardCard>
       );
     }
+
+    /** 훈련 부하: 성장·VO₂max와 동일 시작일(5개월 전 달 1일)~오늘 구간, 주간(월~일) TSS 합계 · 녹색 실선 / 기간 평균 녹색 점선 */
+    function TrainingLoadTssTrendChart(props) {
+      var p = props || {};
+      var data = p.data;
+      const chartRef = useRef(null);
+      const chartInstanceRef = useRef(null);
+      useEffect(
+        function () {
+          if (!data || data.length === 0) return;
+          var ctx = chartRef.current && chartRef.current.getContext('2d');
+          if (!ctx || typeof Chart === 'undefined') return;
+          if (chartInstanceRef.current) {
+            chartInstanceRef.current.destroy();
+            chartInstanceRef.current = null;
+          }
+          var tssSeries = data.map(function (d) {
+            return Number(d.tss) || 0;
+          });
+          var validT = tssSeries.filter(function (v) {
+            return typeof v === 'number' && !isNaN(v) && v >= 0;
+          });
+          var dataMin = validT.length > 0 ? Math.min.apply(null, validT) : 0;
+          var dataMax = validT.length > 0 ? Math.max.apply(null, validT) : 0;
+          var periodAvg =
+            tssSeries.length > 0
+              ? Math.round(
+                  (tssSeries.reduce(function (a, b) {
+                    return a + b;
+                  }, 0) /
+                    tssSeries.length) *
+                    10
+                ) / 10
+              : 0;
+          var greenAvgY = periodAvg;
+          var yMin = Math.max(0, Math.floor(Math.min(dataMin, greenAvgY) - Math.max(5, Math.round(greenAvgY * 0.05))));
+          var yMax = Math.ceil(Math.max(dataMax, greenAvgY) + Math.max(10, Math.round(greenAvgY * 0.08)));
+          if (!(yMax > yMin)) {
+            yMin = 0;
+            yMax = Math.max(50, greenAvgY + 20, dataMax + 10);
+          }
+          var n = data.length;
+          var lineAvg = [];
+          var i;
+          for (i = 0; i < n; i++) {
+            lineAvg.push(greenAvgY);
+          }
+          var tssLabelPlugin = {
+            id: 'tssValueLabels',
+            afterDatasetsDraw: function (chart) {
+              var meta = chart.getDatasetMeta(1);
+              if (!meta || !meta.data || meta.data.length === 0) return;
+              var dataset = chart.data && chart.data.datasets && chart.data.datasets[1];
+              var values = dataset && dataset.data ? dataset.data : [];
+              chart.ctx.save();
+              chart.ctx.font = '11px sans-serif';
+              chart.ctx.fillStyle = 'rgba(21, 128, 61, 0.92)';
+              chart.ctx.textAlign = 'center';
+              meta.data.forEach(function (point, idx) {
+                if (!point || point.x == null || point.y == null) return;
+                var value = values[idx];
+                if (value == null || isNaN(value)) return;
+                var y = point.y - 10;
+                if (y < 0) y = point.y + 16;
+                chart.ctx.fillText(String(Math.round(value)), point.x, y);
+              });
+              chart.ctx.restore();
+            }
+          };
+          chartInstanceRef.current = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: data.map(function (d) {
+                return d.weekLabel || '';
+              }),
+              datasets: [
+                {
+                  order: 1,
+                  label: '기간 평균 주간 TSS',
+                  data: lineAvg,
+                  borderColor: '#16a34a',
+                  borderWidth: 2,
+                  borderDash: [6, 4],
+                  backgroundColor: 'transparent',
+                  tension: 0,
+                  fill: false,
+                  pointRadius: 0,
+                  pointHoverRadius: 0
+                },
+                {
+                  order: 0,
+                  label: '주간 TSS 합계',
+                  data: tssSeries,
+                  borderColor: '#15803d',
+                  borderWidth: 2,
+                  backgroundColor: 'rgba(22, 163, 74, 0.12)',
+                  tension: 0.35,
+                  cubicInterpolationMode: 'default',
+                  stepped: false,
+                  fill: true,
+                  pointRadius: 4,
+                  pointBackgroundColor: '#16a34a',
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 2
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: {
+                  display: true,
+                  position: 'bottom',
+                  labels: {
+                    usePointStyle: true,
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    padding: 10,
+                    font: { size: 9 },
+                    color: '#475569',
+                    generateLabels: function (chart) {
+                      var datasets = chart.data.datasets;
+                      if (!datasets || !datasets.length) return [];
+                      var legColor = '#475569';
+                      var out = [];
+                      var di;
+                      for (di = 0; di < datasets.length; di++) {
+                        var ds = datasets[di];
+                        var hidden = typeof chart.isDatasetVisible === 'function' ? !chart.isDatasetVisible(di) : false;
+                        if (di === 1) {
+                          out.push({
+                            text: ds.label || '',
+                            fontColor: legColor,
+                            fillStyle: ds.pointBackgroundColor || '#16a34a',
+                            strokeStyle: ds.pointBorderColor || '#ffffff',
+                            lineWidth: ds.pointBorderWidth != null ? ds.pointBorderWidth : 2,
+                            lineDash: [],
+                            pointStyle: 'circle',
+                            hidden: hidden,
+                            datasetIndex: di
+                          });
+                        } else {
+                          out.push({
+                            text: ds.label || '',
+                            fontColor: legColor,
+                            fillStyle: ds.borderColor,
+                            strokeStyle: ds.borderColor,
+                            lineWidth: ds.borderWidth != null ? ds.borderWidth : 2,
+                            lineDash: ds.borderDash && ds.borderDash.length ? ds.borderDash.slice() : [],
+                            pointStyle: 'line',
+                            hidden: hidden,
+                            datasetIndex: di
+                          });
+                        }
+                      }
+                      return out;
+                    }
+                  }
+                },
+                tooltip: { enabled: false }
+              },
+              scales: {
+                x: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: {
+                    font: { size: 10 },
+                    color: '#6b7280',
+                    maxRotation: 45,
+                    minRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 16
+                  }
+                },
+                y: {
+                  grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                  ticks: { font: { size: 11 }, color: '#6b7280' },
+                  min: yMin,
+                  max: yMax,
+                  beginAtZero: false
+                }
+              }
+            },
+            plugins: [tssLabelPlugin]
+          });
+          return function cleanup() {
+            if (chartInstanceRef.current) {
+              chartInstanceRef.current.destroy();
+              chartInstanceRef.current = null;
+            }
+          };
+        },
+        [data]
+      );
+      if (!data || data.length === 0) {
+        return (
+          <DashboardCard title="훈련 부하 트렌드 (TSS)">
+            <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
+              데이터가 없습니다
+            </div>
+          </DashboardCard>
+        );
+      }
+      return (
+        <DashboardCard title="훈련 부하 트렌드 (TSS)">
+          <div className="h-[200px]">
+            <canvas ref={chartRef}></canvas>
+          </div>
+          <div className="mt-1 px-2 text-[11px] text-slate-600">
+            구간은 VO₂max·성장 트렌드와 같은 데이터 출처이며, 시작일은 5개월 전 달의 1일부터 오늘까지입니다. 주간 TSS는 월요일~일요일 합계이며, 녹색 점선은 이 기간 각 주 합계의 산술평균입니다.
+          </div>
+        </DashboardCard>
+      );
+    }
     
     // 나의 성장 트렌드: 구간 선택(Max~60분) · 좌측 통합 Y축 · 참고선: 전 성별·연령 코호트 피크 평균
     function growthTrendGetWattAt(d, slot) {
@@ -16408,6 +16623,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     // 대시보드 탭용 차트/프로필 컴포넌트 전역 노출 (DashboardDetailTabs에서 사용)
     window.TrainingTrendChart = TrainingTrendChart;
     window.Vo2MaxTrendChart = Vo2MaxTrendChart;
+    window.TrainingLoadTssTrendChart = TrainingLoadTssTrendChart;
     window.GrowthTrendChart = GrowthTrendChart;
     window.YearlyPowerPrChart = YearlyPowerPrChart;
     window.RiderDashboardProfile = RiderDashboardProfile;
