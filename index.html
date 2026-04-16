@@ -13354,14 +13354,32 @@
     window.showStelvioDeviceSettingsWebPopup = showStelvioDeviceSettingsWebPopup;
     window.closeStelvioDeviceSettingsWebPopup = closeStelvioDeviceSettingsWebPopup;
     
+    /** STELVIO 종료 확인 팝업 기본 문구 (닫을 때 복원) */
+    var __stelvioExitConfirmDefaults = {
+      message: '정말 종료하시겠습니까?',
+      cancelText: '취소',
+      okText: '확인'
+    };
+    function __applyStelvioExitConfirmTexts(modal, opts) {
+      if (!modal) return;
+      var o = opts && typeof opts === 'object' ? opts : {};
+      var msgEl = modal.querySelector('.stelvio-exit-confirm-message');
+      var cancelBtn = modal.querySelector('.stelvio-exit-confirm-btn-cancel');
+      var okBtn = modal.querySelector('.stelvio-exit-confirm-btn-ok');
+      if (msgEl) msgEl.textContent = o.message != null ? o.message : __stelvioExitConfirmDefaults.message;
+      if (cancelBtn) cancelBtn.textContent = o.cancelText != null ? o.cancelText : __stelvioExitConfirmDefaults.cancelText;
+      if (okBtn) okBtn.textContent = o.okText != null ? o.okText : __stelvioExitConfirmDefaults.okText;
+    }
     /**
      * 훈련 화면 종료 확인 팝업 표시 (확인 시 callback 실행 후 닫기, 취소/오버레이 시 닫기만)
      * @param {function} callback - 확인 클릭 시 실행할 함수 (예: function(){ showScreen('basecampScreen'); })
+     * @param {object} [options] - { message, cancelText, okText } 선택 (미지정 시 기본 STELVIO 문구)
      */
-    function showStelvioExitConfirmPopup(callback) {
+    function showStelvioExitConfirmPopup(callback, options) {
       window.__stelvioExitConfirmCallback = typeof callback === 'function' ? callback : function() {};
       var modal = document.getElementById('stelvioExitConfirmModal');
       if (modal) {
+        __applyStelvioExitConfirmTexts(modal, options);
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
@@ -13373,6 +13391,7 @@
         modal.classList.add('hidden');
         modal.style.display = 'none';
         document.body.style.overflow = '';
+        __applyStelvioExitConfirmTexts(modal, __stelvioExitConfirmDefaults);
       }
       window.__stelvioExitConfirmCallback = null;
     }

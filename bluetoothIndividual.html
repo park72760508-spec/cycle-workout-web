@@ -1550,10 +1550,26 @@
         };
         
         /* 훈련 화면 종료 확인 팝업 (STELVIO 스타일) */
-        function showStelvioExitConfirmPopup(callback) {
+        var __stelvioExitConfirmDefaultsBt = {
+            message: '정말 종료하시겠습니까?',
+            cancelText: '취소',
+            okText: '확인'
+        };
+        function __applyStelvioExitConfirmTextsBt(modal, opts) {
+            if (!modal) return;
+            var o = opts && typeof opts === 'object' ? opts : {};
+            var msgEl = modal.querySelector('.stelvio-exit-confirm-message');
+            var cancelBtn = modal.querySelector('.stelvio-exit-confirm-btn-cancel');
+            var okBtn = modal.querySelector('.stelvio-exit-confirm-btn-ok');
+            if (msgEl) msgEl.textContent = o.message != null ? o.message : __stelvioExitConfirmDefaultsBt.message;
+            if (cancelBtn) cancelBtn.textContent = o.cancelText != null ? o.cancelText : __stelvioExitConfirmDefaultsBt.cancelText;
+            if (okBtn) okBtn.textContent = o.okText != null ? o.okText : __stelvioExitConfirmDefaultsBt.okText;
+        }
+        function showStelvioExitConfirmPopup(callback, options) {
             window.__stelvioExitConfirmCallback = typeof callback === 'function' ? callback : function() {};
             var modal = document.getElementById('stelvioExitConfirmModal');
             if (modal) {
+                __applyStelvioExitConfirmTextsBt(modal, options);
                 modal.classList.remove('hidden');
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
@@ -1565,6 +1581,7 @@
                 modal.classList.add('hidden');
                 modal.style.display = 'none';
                 document.body.style.overflow = '';
+                __applyStelvioExitConfirmTextsBt(modal, __stelvioExitConfirmDefaultsBt);
             }
             window.__stelvioExitConfirmCallback = null;
         }
