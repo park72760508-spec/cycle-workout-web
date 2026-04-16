@@ -5381,13 +5381,24 @@ function runBluetoothIndividualScreenInit() {
         });
         console.log('[BluetoothIndividual] 연결 버튼 위임 핸들러 등록 완료');
     }
-    // 사용자 이름 클릭: 상단 좌측 < 버튼과 동일 — trainingRoomScreen으로 이동
+    // 사용자 이름 클릭: STELVIO 종료 확인 팝업 후 경로 선택 화면(베이스캠프)으로 이동 (취소 시 팝업만 닫힘)
     const userNameWrap = __indivEl('bluetooth-user-name-wrap');
     if (userNameWrap) {
         userNameWrap.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (typeof showScreen === 'function') showScreen('trainingRoomScreen');
+            function goRouteSelectScreen() {
+                if (typeof showScreen === 'function') {
+                    showScreen('basecampScreen');
+                } else {
+                    try { window.location.href = 'index.html'; } catch (err) {}
+                }
+            }
+            if (typeof window.showStelvioExitConfirmPopup === 'function') {
+                window.showStelvioExitConfirmPopup(goRouteSelectScreen);
+            } else {
+                goRouteSelectScreen();
+            }
         });
     }
     initializeIndividualIntensitySlider();
@@ -5439,10 +5450,26 @@ if (__indivIdPrefix) {
 
 // 통합 스크린(index.html)에서 사용: 훈련 종료 확인 팝업 (standalone은 HTML 인라인 스크립트에서 정의)
 if (typeof window.showStelvioExitConfirmPopup === 'undefined') {
-    window.showStelvioExitConfirmPopup = function (callback) {
+    var __stelvioExitConfirmPolyDefaults = {
+        message: '정말 종료하시겠습니까?',
+        cancelText: '취소',
+        okText: '확인'
+    };
+    function __applyStelvioExitConfirmPolyTexts(modal, opts) {
+        if (!modal) return;
+        var o = opts && typeof opts === 'object' ? opts : {};
+        var msgEl = modal.querySelector('.stelvio-exit-confirm-message') || modal.querySelector('.indiv-stelvio-exit-confirm-message');
+        var cancelBtn = modal.querySelector('.stelvio-exit-confirm-btn-cancel') || modal.querySelector('.indiv-stelvio-exit-confirm-btn-cancel');
+        var okBtn = modal.querySelector('.stelvio-exit-confirm-btn-ok') || modal.querySelector('.indiv-stelvio-exit-confirm-btn-ok');
+        if (msgEl) msgEl.textContent = o.message != null ? o.message : __stelvioExitConfirmPolyDefaults.message;
+        if (cancelBtn) cancelBtn.textContent = o.cancelText != null ? o.cancelText : __stelvioExitConfirmPolyDefaults.cancelText;
+        if (okBtn) okBtn.textContent = o.okText != null ? o.okText : __stelvioExitConfirmPolyDefaults.okText;
+    }
+    window.showStelvioExitConfirmPopup = function (callback, options) {
         window.__stelvioExitConfirmCallback = typeof callback === 'function' ? callback : function () {};
         var modal = __indivEl('stelvioExitConfirmModal');
         if (modal) {
+            __applyStelvioExitConfirmPolyTexts(modal, options);
             modal.classList.remove(__indivIdPrefix ? 'indiv-hidden' : 'hidden');
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
@@ -5454,6 +5481,7 @@ if (typeof window.showStelvioExitConfirmPopup === 'undefined') {
             modal.classList.add(__indivIdPrefix ? 'indiv-hidden' : 'hidden');
             modal.style.display = 'none';
             document.body.style.overflow = '';
+            __applyStelvioExitConfirmPolyTexts(modal, __stelvioExitConfirmPolyDefaults);
         }
         window.__stelvioExitConfirmCallback = null;
     };

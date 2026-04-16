@@ -5491,13 +5491,11 @@ document.addEventListener("DOMContentLoaded", () => {
     window.showLaptopTrainingResultPopup = showLaptopTrainingResultPopup;
   }
 
-  // 훈련 종료 (확인 후 종료 → 저장·포인트 적립 → 훈련결과 팝업 → 확인 시 훈련 준비 화면)
+  // 훈련 종료 (STELVIO 스타일 확인 후 종료 → 저장·포인트 적립 → 훈련결과 팝업 → 확인 시 훈련 준비 화면)
   const btnStopTraining = safeGetElement("btnStopTraining");
    if (btnStopTraining) {
      btnStopTraining.addEventListener("click", () => {
-       const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
-       if (!ok) return;
-
+       function runLaptopTrainingStopAndSave() {
        // 확인: 종료 처리
        stopSegmentLoop();
        // 노트북 훈련 전용 화면 꺼짐 방지 해제 (모바일과 독립)
@@ -5557,6 +5555,17 @@ document.addEventListener("DOMContentLoaded", () => {
              showScreen('trainingReadyScreen');
            }
          });
+       }
+       if (typeof showStelvioExitConfirmPopup === 'function') {
+         showStelvioExitConfirmPopup(runLaptopTrainingStopAndSave, {
+           message: '현재까지 진행된 훈련을 종료하고 저장하겠습니다.',
+           cancelText: '아니오',
+           okText: '예'
+         });
+       } else {
+         var okLegacy = window.confirm('정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.');
+         if (okLegacy) runLaptopTrainingStopAndSave();
+       }
      });
    }
 
@@ -18204,8 +18213,8 @@ function handleMobileStop() {
   if (!isMobileActive) {
     return;
   }
-  
-  if (confirm('훈련을 종료하시겠습니까?')) {
+
+  function runMobileStopSaveAndShowResult() {
     // 모바일 전용 타이머 정지
     const mts = window.mobileTrainingState;
     if (mts && mts.timerId) {
@@ -18219,7 +18228,7 @@ function handleMobileStop() {
       console.log('[Mobile Dashboard] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
     }
     
-    // 모바일 대시보드 전용: 결과 저장 → 초기화 → 결과 모달 표시 (개인훈련 대시보드와 동일한 로직)
+    // 모바일 대시보드 전용: 결과 저장 → 초기화 → 결과 모달 표시 (saveTrainingResultAtEnd: 포인트·일지 등 동일)
     Promise.resolve()
       .then(() => {
         console.log('[Mobile Dashboard] 🚀 1단계: 결과 저장 시작');
@@ -18231,7 +18240,6 @@ function handleMobileStop() {
       })
       .then(() => {
         console.log('[Mobile Dashboard] ✅ 2단계 완료: 결과 화면 초기화');
-        // 모바일 대시보드 결과 모달 표시
         if (typeof showMobileTrainingResultModal === 'function') {
           showMobileTrainingResultModal();
           console.log('[Mobile Dashboard] ✅ 3단계 완료: 결과 모달 표시');
@@ -18239,17 +18247,23 @@ function handleMobileStop() {
       })
       .catch((error) => {
         console.error('[Mobile Dashboard] ❌ 결과 저장/표시 중 오류:', error);
-        // 오류 발생 시에도 사용자에게 알림
         if (typeof showToast === 'function') {
           showToast('훈련 결과 저장 중 오류가 발생했습니다', 'error');
         }
       });
     
-    // 훈련 종료 후 초기 상태(Play 버튼)로 복구 (SVG <image> 요소는 href 속성 사용)
     const btnImg = document.getElementById('imgMobileToggle');
-    if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
-    
-    // 화면 꺼짐 방지: 훈련 종료 후에도 모바일 대시보드에 머무는 경우 유지 — 해제는 다른 화면으로 이동 시 StelvioWakeLock
+    if (btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
+  }
+
+  if (typeof showStelvioExitConfirmPopup === 'function') {
+    showStelvioExitConfirmPopup(runMobileStopSaveAndShowResult, {
+      message: '현재까지 진행된 훈련을 종료하고 저장하겠습니다.',
+      cancelText: '아니오',
+      okText: '예'
+    });
+  } else if (confirm('훈련을 종료하시겠습니까?')) {
+    runMobileStopSaveAndShowResult();
   }
 }
 
