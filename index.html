@@ -13283,9 +13283,10 @@
     }
     
     /**
-     * STELVIO App Download 박스 클릭: 접속 기기 자동 판단 (Android→다운로드, iOS→팝업)
+     * STELVIO App Download 박스 클릭: 접속 기기 자동 판단 (Android→APK, iOS→TestFlight)
      */
     var ANDROID_APP_DOWNLOAD_URL = 'https://firebasestorage.googleapis.com/v0/b/stelvio-ai.firebasestorage.app/o/app-release.apk?alt=media&token=db393f87-4858-44ba-89fb-404b146460c1';
+    var IOS_APP_TESTFLIGHT_URL = 'https://testflight.apple.com/join/YQm9dVHj';
     function handleAppDownloadClick(event) {
       var ua = navigator.userAgent || '';
       var isAndroid = /Android/i.test(ua);
@@ -13293,7 +13294,7 @@
       if (isAndroid) {
         window.open(ANDROID_APP_DOWNLOAD_URL, '_blank', 'noopener');
       } else if (isIOS) {
-        if (typeof showStelvioIosComingSoonPopup === 'function') showStelvioIosComingSoonPopup();
+        window.open(IOS_APP_TESTFLIGHT_URL, '_blank', 'noopener');
       } else {
         window.open(ANDROID_APP_DOWNLOAD_URL, '_blank', 'noopener');
       }
