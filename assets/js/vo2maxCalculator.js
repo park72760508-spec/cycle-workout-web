@@ -313,7 +313,8 @@
   }
 
   /**
-   * 대시보드 성장 추이·30주 주간 TSS와 동일한 30개 주 합계의 산술평균을 기여(본인 문서만).
+   * 대시보드 성장 추이·30주 주간 TSS 샘플(본인 문서만).
+   * weekTssList: 주차별 합계 TSS(0 포함) — 집계 시 각 주마다 TSS>0 인 사용자만 분모에 포함.
    * Cloud Function이 weekly_tss_demographic_samples → stats_weekly_tss_stelvio_rolling 을 집계.
    * @param {Object} userProfile
    * @param {Array<{ tss?: number }>} weeklyTssRows
@@ -325,21 +326,29 @@
     if (!uid || !db || !Array.isArray(weeklyTssRows) || weeklyTssRows.length === 0) {
       return Promise.resolve();
     }
-    var vals = [];
-    for (var wi = 0; wi < weeklyTssRows.length; wi++) {
-      var tv = Number(weeklyTssRows[wi].tss);
-      if (isFinite(tv) && tv >= 0 && tv <= 50000) vals.push(tv);
+    var slotCount = 30;
+    var weekTssList = [];
+    var wi;
+    for (wi = 0; wi < slotCount; wi++) {
+      var row = weeklyTssRows[wi];
+      var tv = row != null ? Number(row.tss) : NaN;
+      if (isFinite(tv) && tv >= 0 && tv <= 50000) {
+        weekTssList.push(Math.round(tv * 10) / 10);
+      } else {
+        weekTssList.push(0);
+      }
     }
-    if (vals.length === 0) return Promise.resolve();
-    var avgW =
-      vals.reduce(function (a, b) {
-        return a + b;
-      }, 0) / vals.length;
+    var sumW = weekTssList.reduce(function (a, b) {
+      return a + b;
+    }, 0);
+    if (sumW <= 0) return Promise.resolve();
+    var avgW = sumW / weekTssList.length;
     return getFirestoreModVo2Stats()
       .then(function (mod) {
         return mod.setDoc(
           mod.doc(db, 'weekly_tss_demographic_samples', uid),
           {
+            weekTssList: weekTssList,
             avgThirtyWeekWindowTss: Math.round(avgW * 10) / 10,
             updatedAt: mod.serverTimestamp()
           },
@@ -350,8 +359,9 @@
   }
 
   /**
-   * 전체 사용자 평균 주간 TSS(30주 창 샘플 기반) — stats_weekly_tss_stelvio_rolling: all_all
-   * @returns {Promise<{ avgWeeklyTss: number, userCount: number }|null>}
+   * 전체 사용자 주간 TSS 참고선 — stats_weekly_tss_stelvio_rolling: all_all
+   * weeklyCohortAvgTss: 주차별 코호트 평균(해당 주 TSS>0 인 사용자만 분모), 길이 30.
+   * @returns {Promise<{ avgWeeklyTss: number, userCount: number, weeklyCohortAvgTss?: (number|null)[] }|null>}
    */
   function fetchStelvioRollingWeeklyTssStatsGlobal() {
     var db = global.firestoreV9;
@@ -366,10 +376,26 @@
         if (!d || d.minSamplesMet !== true) return null;
         var avg = Number(d.avgWeeklyTss);
         if (!isFinite(avg) || avg < 0) return null;
-        return {
+        var out = {
           avgWeeklyTss: Math.round(avg * 10) / 10,
           userCount: Math.max(0, Math.floor(Number(d.userCount) || 0))
         };
+        var raw = d.weeklyCohortAvgTss;
+        if (Array.isArray(raw) && raw.length === 30) {
+          var mapped = [];
+          var ri;
+          for (ri = 0; ri < raw.length; ri++) {
+            var x = raw[ri];
+            if (x === null || x === undefined) {
+              mapped.push(null);
+            } else {
+              var n = Number(x);
+              mapped.push(isFinite(n) ? Math.round(n * 10) / 10 : null);
+            }
+          }
+          out.weeklyCohortAvgTss = mapped;
+        }
+        return out;
       })
       .catch(function () {
         return null;
