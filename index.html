@@ -15760,18 +15760,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
-          {stelvioRollingGlobal && stelvioRollingGlobal.userCount > 0 ? (
-            <div className="mt-1 px-2 text-[11px] text-slate-600">
-              녹색 점선(전체 사용자 평균)은 연령·성별 구분 없이 전체 사용자{' '}
-              <strong className="text-slate-800">{stelvioRollingGlobal.userCount}명</strong>의 최근 6개월 월별 VO₂
-              산술평균입니다.
-            </div>
-          ) : null}
         </DashboardCard>
       );
     }
 
-    /** 훈련 부하: 라이딩 기록「주간 훈련 부하(TSS)」와 동일한 7일 주차 × 30주, 녹색 곡선 + 전체 사용자 평균(녹색 점선, stats_weekly_tss_stelvio_rolling) */
+    /** 훈련 부하: 주간 TSS(30주) + 전체 사용자 코호트 평균(녹색 점선, stats_weekly_tss_stelvio_rolling) */
     function TrainingLoadTssTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -15817,18 +15810,34 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               : typeof window.getStelvioUserAvgWeeklyTssFallback === 'function'
                 ? window.getStelvioUserAvgWeeklyTssFallback()
                 : 280;
-          var greenAvgY = greenGlobalY;
-          var yMin = Math.max(0, Math.floor(Math.min(dataMin, greenAvgY) - Math.max(5, Math.round(greenAvgY * 0.05))));
-          var yMax = Math.ceil(Math.max(dataMax, greenAvgY) + Math.max(10, Math.round(greenAvgY * 0.08)));
-          if (!(yMax > yMin)) {
-            yMin = 0;
-            yMax = Math.max(50, greenAvgY + 20, dataMax + 10);
-          }
           var n = data.length;
+          var cohortSeries =
+            rollingWeeklyTssGlobal &&
+            Array.isArray(rollingWeeklyTssGlobal.weeklyCohortAvgTss) &&
+            rollingWeeklyTssGlobal.weeklyCohortAvgTss.length === n
+              ? rollingWeeklyTssGlobal.weeklyCohortAvgTss
+              : null;
           var lineAvg = [];
+          var cohortMin = null;
+          var cohortMax = null;
           var i;
           for (i = 0; i < n; i++) {
-            lineAvg.push(greenAvgY);
+            var cj = cohortSeries ? cohortSeries[i] : null;
+            var yPt = cj != null && isFinite(Number(cj)) ? Number(cj) : greenGlobalY;
+            lineAvg.push(yPt);
+            if (cj != null && isFinite(Number(cj))) {
+              var cjn = Number(cj);
+              cohortMin = cohortMin == null ? cjn : Math.min(cohortMin, cjn);
+              cohortMax = cohortMax == null ? cjn : Math.max(cohortMax, cjn);
+            }
+          }
+          var refLow = cohortMin != null ? Math.min(dataMin, cohortMin) : Math.min(dataMin, greenGlobalY);
+          var refHigh = cohortMax != null ? Math.max(dataMax, cohortMax) : Math.max(dataMax, greenGlobalY);
+          var yMin = Math.max(0, Math.floor(refLow - Math.max(5, Math.round(greenGlobalY * 0.05))));
+          var yMax = Math.ceil(refHigh + Math.max(10, Math.round(greenGlobalY * 0.08)));
+          if (!(yMax > yMin)) {
+            yMin = 0;
+            yMax = Math.max(50, greenGlobalY + 20, dataMax + 10);
           }
           var tssLabelPlugin = {
             id: 'tssValueLabels',
@@ -15997,12 +16006,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
           </div>
-          {rollingWeeklyTssGlobal && rollingWeeklyTssGlobal.userCount > 0 ? (
-            <div className="mt-1 px-2 text-[11px] text-slate-600">
-              녹색 점선은 대시보드와 동일한 30주 창 샘플을 모은 전체 사용자{' '}
-              <strong className="text-slate-800">{rollingWeeklyTssGlobal.userCount}명</strong> 기준 평균 주간 TSS입니다.
-            </div>
-          ) : null}
         </DashboardCard>
       );
     }
