@@ -15764,29 +15764,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
 
-    /** 훈련 부하: 주간 TSS(30주) + 전체 사용자 코호트 평균(녹색 점선, stats_weekly_tss_stelvio_rolling) */
+    /** 훈련 부하: 주간 TSS(30주) + 라이딩 지표와 동일한 주간 목표 TSS(녹색 점선, getWeeklyTargetTSS·stats.weeklyGoal) */
     function TrainingLoadTssTrendChart(props) {
       var p = props || {};
       var data = p.data;
+      var goalRaw = Number(p.weeklyGoalTss);
+      var goalTss =
+        isFinite(goalRaw) && goalRaw > 0
+          ? goalRaw
+          : typeof window.getWeeklyTargetTSS === 'function'
+            ? Number(window.getWeeklyTargetTSS('Fitness').target) || 225
+            : 225;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
-      const [rollingWeeklyTssGlobal, setRollingWeeklyTssGlobal] = useState(null);
-      useEffect(
-        function () {
-          if (typeof window.fetchStelvioRollingWeeklyTssStatsGlobal !== 'function') {
-            setRollingWeeklyTssGlobal(null);
-            return;
-          }
-          var cancelled = false;
-          window.fetchStelvioRollingWeeklyTssStatsGlobal().then(function (row) {
-            if (!cancelled) setRollingWeeklyTssGlobal(row);
-          });
-          return function () {
-            cancelled = true;
-          };
-        },
-        []
-      );
       useEffect(
         function () {
           if (!data || data.length === 0) return;
@@ -15804,40 +15794,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           });
           var dataMin = validT.length > 0 ? Math.min.apply(null, validT) : 0;
           var dataMax = validT.length > 0 ? Math.max.apply(null, validT) : 0;
-          var greenGlobalY =
-            rollingWeeklyTssGlobal && typeof rollingWeeklyTssGlobal.avgWeeklyTss === 'number' && isFinite(rollingWeeklyTssGlobal.avgWeeklyTss)
-              ? rollingWeeklyTssGlobal.avgWeeklyTss
-              : typeof window.getStelvioUserAvgWeeklyTssFallback === 'function'
-                ? window.getStelvioUserAvgWeeklyTssFallback()
-                : 280;
           var n = data.length;
-          var cohortSeries =
-            rollingWeeklyTssGlobal &&
-            Array.isArray(rollingWeeklyTssGlobal.weeklyCohortAvgTss) &&
-            rollingWeeklyTssGlobal.weeklyCohortAvgTss.length === n
-              ? rollingWeeklyTssGlobal.weeklyCohortAvgTss
-              : null;
           var lineAvg = [];
-          var cohortMin = null;
-          var cohortMax = null;
           var i;
           for (i = 0; i < n; i++) {
-            var cj = cohortSeries ? cohortSeries[i] : null;
-            var yPt = cj != null && isFinite(Number(cj)) ? Number(cj) : greenGlobalY;
-            lineAvg.push(yPt);
-            if (cj != null && isFinite(Number(cj))) {
-              var cjn = Number(cj);
-              cohortMin = cohortMin == null ? cjn : Math.min(cohortMin, cjn);
-              cohortMax = cohortMax == null ? cjn : Math.max(cohortMax, cjn);
-            }
+            lineAvg.push(goalTss);
           }
-          var refLow = cohortMin != null ? Math.min(dataMin, cohortMin) : Math.min(dataMin, greenGlobalY);
-          var refHigh = cohortMax != null ? Math.max(dataMax, cohortMax) : Math.max(dataMax, greenGlobalY);
-          var yMin = Math.max(0, Math.floor(refLow - Math.max(5, Math.round(greenGlobalY * 0.05))));
-          var yMax = Math.ceil(refHigh + Math.max(10, Math.round(greenGlobalY * 0.08)));
+          var refLow = Math.min(dataMin, goalTss);
+          var refHigh = Math.max(dataMax, goalTss);
+          var yMin = Math.max(0, Math.floor(refLow - Math.max(5, Math.round(goalTss * 0.05))));
+          var yMax = Math.ceil(refHigh + Math.max(10, Math.round(goalTss * 0.08)));
           if (!(yMax > yMin)) {
             yMin = 0;
-            yMax = Math.max(50, greenGlobalY + 20, dataMax + 10);
+            yMax = Math.max(50, goalTss + 20, dataMax + 10);
           }
           var tssLabelPlugin = {
             id: 'tssValueLabels',
@@ -15872,7 +15841,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               datasets: [
                 {
                   order: 1,
-                  label: '전체 사용자 평균 TSS',
+                  label: '목표 TSS',
                   data: lineAvg,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -15990,7 +15959,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data, rollingWeeklyTssGlobal]
+        [data, goalTss]
       );
       if (!data || data.length === 0) {
         return (
