@@ -251,7 +251,10 @@
             DashboardCard,
             { title: '훈련 부하 트렌드 (TSS)' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
-          ) : TrainingLoadTssTrendChart && React.createElement(TrainingLoadTssTrendChart, { data: weeklyTssTrendData }),
+          ) : TrainingLoadTssTrendChart && React.createElement(TrainingLoadTssTrendChart, {
+            data: weeklyTssTrendData,
+            weeklyGoalTss: Number(stats.weeklyGoal) > 0 ? Number(stats.weeklyGoal) : 225
+          }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: 'VO₂max 트렌드' },
