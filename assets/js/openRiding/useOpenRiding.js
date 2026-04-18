@@ -159,17 +159,42 @@ export function useOpenRideDetail(db, rideId, userId) {
     };
   }, [db, rideId]);
 
-  /** 일정일(서울)이 오늘보다 지난 뒤(isRideScheduleDatePastSeoul) 방장 단말에서 참석 검증 Callable 1회 */
+  /** 일정일(서울)이 오늘보다 지난 뒤: 방장이 상세를 열면 즉시 참석 검증 Callable 1회 */
   useEffect(() => {
     if (!db || !rideId || !ride || !userId) return undefined;
     if (String(ride.hostUserId || '').trim() !== String(userId).trim()) return undefined;
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
     if (typeof svc.triggerVerifyMeetingAttendanceForEndedRideIfHost !== 'function') return undefined;
+    if (typeof svc.isRideScheduleDatePastSeoul === 'function' && !svc.isRideScheduleDatePastSeoul(ride)) return undefined;
+    if (ride.attendanceVerificationRan === true) return undefined;
     var t = setTimeout(function () {
       svc.triggerVerifyMeetingAttendanceForEndedRideIfHost(db, rideId, ride).catch(function () {});
     }, 0);
     return function () {
       clearTimeout(t);
+    };
+  }, [db, rideId, userId, ride]);
+
+  /**
+   * 당일 일정(아직 isRideScheduleDatePastSeoul 아님): 서울 자정이 지나면 방장 단말에서 검증 1회.
+   * (앱/탭이 열려 있고 상세가 마운트된 경우에 한함 — 자정 스케줄 Cloud Function이 상시 처리)
+   */
+  useEffect(() => {
+    if (!db || !rideId || !ride || !userId) return undefined;
+    if (String(ride.hostUserId || '').trim() !== String(userId).trim()) return undefined;
+    if (ride.attendanceVerificationRan === true) return undefined;
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (typeof svc.isRideScheduleDatePastSeoul !== 'function' || typeof svc.getMillisecondsUntilSeoulMidnight !== 'function') {
+      return undefined;
+    }
+    if (typeof svc.triggerVerifyMeetingAttendanceForEndedRideIfHost !== 'function') return undefined;
+    if (svc.isRideScheduleDatePastSeoul(ride)) return undefined;
+    var ms = svc.getMillisecondsUntilSeoulMidnight();
+    var tid = setTimeout(function () {
+      svc.triggerVerifyMeetingAttendanceForEndedRideIfHost(db, rideId, ride).catch(function () {});
+    }, ms);
+    return function () {
+      clearTimeout(tid);
     };
   }, [db, rideId, userId, ride]);
 

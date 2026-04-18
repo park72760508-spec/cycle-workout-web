@@ -268,6 +268,38 @@ export function isRideScheduleDatePastSeoul(rideData) {
   return rideYmd < today;
 }
 
+/**
+ * 다음 서울 자정(00:00 KST)까지 남은 시간(ms). 최소 1초.
+ * 당일 일정 상세를 연 채로 자정이 지나면 참석 검증 트리거에 사용.
+ */
+export function getMillisecondsUntilSeoulMidnight() {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+    var y = '';
+    var mo = '';
+    var d = '';
+    parts.forEach(function (p) {
+      if (p.type === 'year') y = p.value;
+      if (p.type === 'month') mo = p.value;
+      if (p.type === 'day') d = p.value;
+    });
+    if (!y || !mo || !d) return 60 * 1000;
+    var yy = parseInt(y, 10);
+    var mm = parseInt(mo, 10) - 1;
+    var dd = parseInt(d, 10);
+    var nextMidnightUtcMs = Date.UTC(yy, mm, dd + 1, -9, 0, 0, 0);
+    var diff = nextMidnightUtcMs - Date.now();
+    return Math.max(1000, diff);
+  } catch (e) {
+    return 60 * 1000;
+  }
+}
+
 /** Firestore map: uid -> 표시 이름 */
 function asParticipantDisplay(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
@@ -1399,6 +1431,7 @@ if (typeof window !== 'undefined') {
     isRideJoinClosedBySchedule,
     isOpenRidingScheduleEnded,
     isRideScheduleDatePastSeoul,
+    getMillisecondsUntilSeoulMidnight,
     openRidingHostPublicReviewWritten,
     openRidingHostSummaryQualifiesAsGroupRide,
     triggerVerifyMeetingAttendanceForEndedRideIfHost
