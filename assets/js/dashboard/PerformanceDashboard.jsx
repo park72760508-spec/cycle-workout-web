@@ -151,7 +151,7 @@
     var setOneHourAbilityModalOpen = _aero[1];
 
     var todayYmd = getSeoulTodayYmd();
-    var start30Ymd = shiftYmd(todayYmd, -29);
+    var start6mYmd = shiftYmd(todayYmd, -182);
     var ftpVal = Number(
       stats && stats.ftp != null ? stats.ftp :
       userProfile && userProfile.ftp != null ? userProfile.ftp :
@@ -165,11 +165,11 @@
       userProfile && userProfile.weight_kg != null ? userProfile.weight_kg :
       0
     ) || 0;
-    var last30Peak60Watts = 0;
-    var last30PeakDate = '';
+    var last6mPeak60Watts = 0;
+    var last6mPeakDate = '';
     (Array.isArray(recentLogs) ? recentLogs : []).forEach(function(log) {
       var ymd = getSeoulYmdFromUnknown(log && log.date);
-      if (!ymd || ymd < start30Ymd || ymd > todayYmd) return;
+      if (!ymd || ymd < start6mYmd || ymd > todayYmd) return;
       var w60 = Number(log && log.max_60min_watts != null ? log.max_60min_watts : 0) || 0;
       if (!(w60 > 0)) {
         var sec = Number(
@@ -186,20 +186,20 @@
           ) || 0;
         }
       }
-      if (w60 > last30Peak60Watts) {
-        last30Peak60Watts = w60;
-        last30PeakDate = ymd;
+      if (w60 > last6mPeak60Watts) {
+        last6mPeak60Watts = w60;
+        last6mPeakDate = ymd;
       }
     });
-    var useFallbackFtp93 = !(last30Peak60Watts > 0) && ftpVal > 0;
-    var referenceWattsRaw = last30Peak60Watts > 0 ? last30Peak60Watts : useFallbackFtp93 ? ftpVal * 0.93 : 0;
+    var useFallbackFtp93 = !(last6mPeak60Watts > 0) && ftpVal > 0;
+    var referenceWattsRaw = last6mPeak60Watts > 0 ? last6mPeak60Watts : useFallbackFtp93 ? ftpVal * 0.93 : 0;
     var referenceWatts = referenceWattsRaw > 0 ? Math.round(referenceWattsRaw * 10) / 10 : 0;
     var calcSpeed = typeof window.calculateSpeedOnFlat === 'function' ? window.calculateSpeedOnFlat : calculateSpeedOnFlatFallback;
     var soloSpeedRaw = calcSpeed && referenceWatts > 0 && weightVal > 0 ? Number(calcSpeed(referenceWatts, weightVal)) : 0;
     var soloSpeed = soloSpeedRaw > 0 ? Math.round(soloSpeedRaw * 10) / 10 : 0;
     var estimatedGroupSpeed = soloSpeed > 0 ? Math.round(soloSpeed * 1.2 * 10) / 10 : 0;
     var referenceWkg = referenceWatts > 0 && weightVal > 0 ? Math.round((referenceWatts / weightVal) * 100) / 100 : 0;
-    var oneHourAbilityRangeLabel = start30Ymd && todayYmd ? start30Ymd + ' ~ ' + todayYmd : '';
+    var oneHourAbilityRangeLabel = start6mYmd && todayYmd ? start6mYmd + ' ~ ' + todayYmd : '';
 
     // 스크롤 초기화: useLayoutEffect로 DOM 마운트 직후 1회 실행 (기존 setTimeout 4회 폐기)
     useLayoutEffect(function() {
@@ -426,7 +426,7 @@
               ),
               React.createElement('li', { className: 'flex items-start gap-2' },
                 React.createElement('img', { src: 'assets/img/calendar.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
-                React.createElement('span', null, '현실 지표: 최근 30일 · 60분 최대 평균 파워 · 체중 반영')
+                React.createElement('span', null, '현실 지표: 최근 6개월 · 60분 최대 평균 파워 · 체중 반영')
               ),
               React.createElement('li', { className: 'flex items-start gap-2' },
                 React.createElement('img', { src: 'assets/img/clock.png', alt: '', className: 'w-4 h-4 mt-0.5 flex-shrink-0 object-contain', width: 16, height: 16, decoding: 'async' }),
@@ -600,13 +600,13 @@
             React.createElement('div', { style: { flex: '1 1 auto', minHeight: 0, overflowY: 'auto' } },
               React.createElement('h3', { className: 'text-lg font-semibold mb-2 text-gray-800', style: { borderBottom: '2px solid #7c3aed', paddingBottom: '10px' } }, '나의 1시간 항속 능력 산출'),
               React.createElement('p', { className: 'text-[11px] text-slate-600 mt-0 mb-3 leading-relaxed' },
-                '라이딩 모임 > 맞춤 필터 설정 > 현실 지표(30일, 60분 최대 평균 파워, 체중 반영)와 동일 로직입니다.'
+                '라이딩 모임 > 맞춤 필터 설정 > 현실 지표(6개월, 60분 최대 평균 파워, 체중 반영)와 동일 로직입니다.'
               ),
               React.createElement('p', { className: 'text-[10px] font-semibold text-slate-800 m-0 pb-2 border-b border-violet-100/80' },
-                '현실 지표 (최근 30일 · 60분 최대 평균 파워·체중, 랭킹보드와 동일 산출)',
+                '현실 지표 (최근 6개월 · 60분 최대 평균 파워·체중, 랭킹보드와 동일 산출)',
                 oneHourAbilityRangeLabel ? React.createElement('span', { className: 'font-normal text-slate-500' }, ' · ' + oneHourAbilityRangeLabel) : null
               ),
-              weightVal > 0 && (last30Peak60Watts > 0 || ftpVal > 0) ? React.createElement(
+              weightVal > 0 && (last6mPeak60Watts > 0 || ftpVal > 0) ? React.createElement(
                 'div',
                 { className: 'grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs mt-3' },
                 React.createElement('div', { className: 'rounded-lg bg-white/90 border border-slate-200 px-2 py-1.5' },
@@ -638,9 +638,9 @@
                   React.createElement('div', { className: 'font-semibold text-slate-800 tabular-nums' }, estimatedGroupSpeed > 0 ? estimatedGroupSpeed + ' km/h' : '-')
                 ),
                 useFallbackFtp93 ? React.createElement('p', { className: 'col-span-2 sm:col-span-3 text-[10px] text-slate-500 m-0 leading-snug' },
-                  '최근 30일 60분 피크가 없어 최대 능력치(프로필 FTP·체중)를 사용했고, 맞춤 필터 기준과 동일하게 FTP 기반 평속의 93%를 반영했습니다.'
+                  '최근 6개월 60분 피크가 없어 최대 능력치(프로필 FTP·체중)를 사용했고, 맞춤 필터 기준과 동일하게 FTP 기반 평속의 93%를 반영했습니다.'
                 ) : React.createElement('p', { className: 'col-span-2 sm:col-span-3 text-[10px] text-slate-500 m-0 leading-snug' },
-                  last30PeakDate ? ('60분 피크 반영일: ' + last30PeakDate) : '최근 30일 60분 피크를 반영했습니다.'
+                  last6mPeakDate ? ('60분 피크 반영일: ' + last6mPeakDate) : '최근 6개월 60분 피크를 반영했습니다.'
                 )
               ) : React.createElement('p', { className: 'text-[11px] text-slate-500 m-0 leading-snug mt-3' },
                 '프로필에 FTP·체중을 저장하면 1시간 항속 현실 지표를 계산해 표시합니다.'
