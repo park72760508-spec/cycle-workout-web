@@ -33,6 +33,7 @@ import {
   DEFAULT_SUBSCRIPTION_DAYS,
 } from "./subscriptionService";
 import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
+import { createVerifyMeetingAttendance } from "./verifyMeetingAttendance";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
@@ -591,3 +592,6 @@ export const stravaWebhook = onRequest(
     res.status(405).send("Method Not Allowed");
   }
 );
+
+/** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
+export const verifyMeetingAttendance = createVerifyMeetingAttendance(stravaClientSecret);
