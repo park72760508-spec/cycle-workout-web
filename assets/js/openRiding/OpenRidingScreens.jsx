@@ -1386,8 +1386,7 @@ function openRidingEstimatedRideDurationMinutes(ride) {
 }
 
 /**
- * [내가 주최한 라이딩] 제목 앞 체크: 연한 녹색 = 일정상 종료.
- * — 당일: 호스트 공개 요약이 '종료'로 인정되거나, 출발 시각+예상 소요가 지난 경우
+ * [나의 라이딩] 주최 행 보라 배지: 연한 보라 = 당일 일정상 종료(출발+예상 소요 경과 등).
  * — 취소된 라이딩은 취소 아이콘만 사용
  */
 function isHostedRideScheduleEndedForListIcon(ride) {
@@ -2512,44 +2511,7 @@ function OpenRidingCalendarMain(props) {
     [userId]
   );
 
-  var invitedRidesSorted = useMemo(
-    function () {
-      var uid = String(userId || '');
-      var phone = String(inviteCheckPhone || '').trim();
-      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
-      var isInv =
-        typeof svc.isUserPhoneInvitedToRide === 'function'
-          ? svc.isUserPhoneInvitedToRide
-          : function () {
-              return false;
-            };
-      if (!uid || !phone) return [];
-      var list = ridesMonth.filter(function (r) {
-        if (isOpenRidingPastBySeoulDate(r)) return false;
-        if (String(r.hostUserId || '') === uid) return false;
-        var il = Array.isArray(r.invitedList) ? r.invitedList : [];
-        if (!il.length) return false;
-        return isInv(phone, r.invitedList);
-      });
-      return sortOpenRidingListByDateTime(list);
-    },
-    [ridesMonth, userId, inviteCheckPhone]
-  );
-
-  var myHostedRidesSorted = useMemo(
-    function () {
-      var uid = String(userId || '');
-      if (!uid) return [];
-      var list = ridesMonth.filter(function (r) {
-        if (isOpenRidingPastBySeoulDate(r)) return false;
-        return String(r.hostUserId || '') === uid;
-      });
-      return sortOpenRidingListByDateTime(list);
-    },
-    [ridesMonth, userId]
-  );
-
-  /** 주최 목록의 종료(연한 녹색) 표시가 출발+예상 시각 경과 시 갱신되도록 1분마다 리렌더 */
+  /** 주최 목록의 종료(연한 보라) 표시가 출발+예상 시각 경과 시 갱신되도록 1분마다 리렌더 */
   var _hostedClock = useState(0);
   var hostedListClockBump = _hostedClock[0];
   var setHostedListClockBump = _hostedClock[1];
@@ -2587,6 +2549,75 @@ function OpenRidingCalendarMain(props) {
     });
     return s;
   }, [ridesMonth, userId]);
+
+  /**
+   * 컴팩트 라이딩 모임 [나의 라이딩]: 주최 · 전화 초대 · 그 외 참석 확정(비초대 경로)
+   * — 행별 kind로 원 체크 색 구분(보라/녹/빨)
+   */
+  var myRidesUnifiedRows = useMemo(
+    function () {
+      var uid = String(userId || '');
+      if (!uid) return [];
+      var phone = String(inviteCheckPhone || '').trim();
+      var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+      var isInv =
+        typeof svc.isUserPhoneInvitedToRide === 'function'
+          ? svc.isUserPhoneInvitedToRide
+          : function () {
+              return false;
+            };
+      var rows = [];
+      var seen = Object.create(null);
+      function addRow(r, kind) {
+        if (!r || r.id == null) return;
+        var id = String(r.id);
+        if (seen[id]) return;
+        if (isOpenRidingPastBySeoulDate(r)) return;
+        seen[id] = true;
+        rows.push({ r: r, kind: kind });
+      }
+      ridesMonth.forEach(function (r) {
+        if (String(r.hostUserId || '') === uid) {
+          addRow(r, 'host');
+        }
+      });
+      if (phone) {
+        ridesMonth.forEach(function (r) {
+          if (String(r.hostUserId || '') === uid) return;
+          var il = Array.isArray(r.invitedList) ? r.invitedList : [];
+          if (!il.length) return;
+          if (!isInv(phone, r.invitedList)) return;
+          addRow(r, 'invited');
+        });
+      }
+      ridesMonth.forEach(function (r) {
+        if (isOpenRidingPastBySeoulDate(r)) return;
+        if (String(r.hostUserId || '') === uid) return;
+        var id = r != null && r.id != null ? String(r.id) : '';
+        if (!id || seen[id]) return;
+        if (String(r.rideStatus || 'active') === 'cancelled') return;
+        var parts = openRideIdsFromFirestoreListField(r.participants);
+        var inPart = parts.some(function (p) {
+          return String(p) === uid;
+        });
+        if (!inPart) return;
+        var il = Array.isArray(r.invitedList) ? r.invitedList : [];
+        if (phone && il.length && isInv(phone, r.invitedList)) return;
+        addRow(r, 'other');
+      });
+      var sorted = sortOpenRidingListByDateTime(rows.map(function (x) {
+        return x.r;
+      }));
+      var kindById = Object.create(null);
+      rows.forEach(function (x) {
+        kindById[String(x.r.id)] = x.kind;
+      });
+      return sorted.map(function (r) {
+        return { r: r, kind: kindById[String(r.id)] };
+      });
+    },
+    [ridesMonth, userId, inviteCheckPhone]
+  );
 
   var _sel = useState(null);
   var selectedKey = _sel[0];
@@ -3290,15 +3321,16 @@ function OpenRidingCalendarMain(props) {
     var ex = extra || {};
     var isCancelled = String(r.rideStatus || 'active') === 'cancelled';
     var isMine = !!(userId && String(r.hostUserId || '') === String(userId));
+    var isCompactHostListRow = !!(ex.hostedListSection || (ex.myRidesUnifiedList && ex.myRideKind === 'host'));
     var titleRowClass = 'font-medium text-sm flex items-center gap-1.5 min-w-0 ';
-    var hostedCancelledMine = !!(ex.hostedListSection && isMine && isCancelled);
+    var hostedCancelledMine = !!(isCompactHostListRow && isMine && isCancelled);
     if (isCancelled) {
       titleRowClass += hostedCancelledMine
         ? 'text-slate-600'
         : isMine
           ? 'open-riding-list-title-cancelled-mine'
           : 'open-riding-list-title-cancelled';
-    } else if (isMine && ex.hostedListSection) {
+    } else if (isMine && isCompactHostListRow) {
       titleRowClass += 'text-black';
     } else if (isMine) {
       titleRowClass += 'open-riding-list-title-mine';
@@ -3313,7 +3345,7 @@ function OpenRidingCalendarMain(props) {
       titleRowClass += ' opacity-[0.72]';
     }
     var rideYmd = getRideDateSeoulYmd(r);
-    var useInviteHostedRow = !!ex.compactInviteOrHostedList;
+    var useInviteHostedRow = !!(ex.compactInviteOrHostedList || ex.myRidesUnifiedList);
     var dateLabel = '';
     if (ex.showRideDate) {
       dateLabel = useInviteHostedRow ? formatRideDateMdDowSeoul(r) : rideYmd && formatKoreanDateLabelFromYmd(rideYmd);
@@ -3325,30 +3357,33 @@ function OpenRidingCalendarMain(props) {
     var showParticipantConfirmedIcon = false;
     var attendeeCheckTitle = '참석 확정';
     var attendeeCheckAria = '참석 확정';
-    var showHostedListTitleCheck = !!(ex.compactInviteOrHostedList && ex.hostedListSection && !isCancelled);
-    var hostedListTitleCheckMuted = showHostedListTitleCheck && isHostedRideScheduleEndedForListIcon(r);
-    if (ex.compactInviteOrHostedList && ex.hostedListSection) {
-      /* 주최 목록: 제목 앞 전용 녹색 체크(등급 무관) — 참석 신청 유무 아이콘은 사용하지 않음 */
-    } else if (ex.compactInviteOrHostedList) {
-      if (isUserParticipantConfirmedForRide(r)) {
-        showParticipantConfirmedIcon = true;
-        attendeeCheckTitle = '참석 확정';
-        attendeeCheckAria = '참석 확정';
-      } else if (isUserWaitlistedForRide(r)) {
-        showParticipantConfirmedIcon = true;
-        attendeeCheckTitle = '대기열 신청';
-        attendeeCheckAria = '대기열 신청 완료';
+    var showMyRidePurpleHost = false;
+    var myRidePurpleMuted = false;
+    var showMyRideInvitedGreen = false;
+    var showMyRideRed = false;
+    if (ex.myRidesUnifiedList && ex.myRideKind && !isCancelled) {
+      if (ex.myRideKind === 'host') {
+        showMyRidePurpleHost = true;
+        myRidePurpleMuted = isHostedRideScheduleEndedForListIcon(r);
+      } else if (ex.myRideKind === 'invited') {
+        if (isUserParticipantConfirmedForRide(r)) {
+          showMyRideRed = true;
+        } else {
+          showMyRideInvitedGreen = true;
+        }
+      } else if (ex.myRideKind === 'other') {
+        showMyRideRed = true;
       }
     } else if (!isSelectedDayListPanel) {
       showParticipantConfirmedIcon = isUserParticipantConfirmedForRide(r);
     }
-    var attendeeCheckCircleClass = useInviteHostedRow
-      ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25'
-      : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30';
+    var attendeeCheckCircleClass =
+      'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30';
     var spectatorBrowseCircleClass =
       'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-slate-300/90 text-slate-700 shadow-sm ring-1 ring-slate-400/35';
     var showSpectatorBrowseIcon = false;
     if (
+      !ex.myRidesUnifiedList &&
       !isSelectedDayListPanel &&
       userId &&
       !isCancelled &&
@@ -3356,11 +3391,7 @@ function OpenRidingCalendarMain(props) {
     ) {
       var appliedJoin = isUserParticipantConfirmedForRide(r) || isUserWaitlistedForRide(r);
       if (!appliedJoin) {
-        if (!ex.compactInviteOrHostedList) {
-          showSpectatorBrowseIcon = true;
-        } else if (ex.compactInviteOrHostedList && !ex.hostedListSection) {
-          showSpectatorBrowseIcon = true;
-        }
+        showSpectatorBrowseIcon = true;
       }
     }
     return (
@@ -3380,15 +3411,37 @@ function OpenRidingCalendarMain(props) {
             ) : r.isPrivate ? (
               <img src="assets/img/lock.png" alt="" className="w-4 h-4 shrink-0 object-contain" width={16} height={16} decoding="async" />
             ) : null}
-            {showHostedListTitleCheck ? (
+            {showMyRidePurpleHost ? (
               <span
                 className={
-                  hostedListTitleCheckMuted
-                    ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-200 text-emerald-800 shadow-sm ring-1 ring-emerald-400/55'
-                    : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25'
+                  myRidePurpleMuted
+                    ? 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-violet-200 text-violet-900 shadow-sm ring-1 ring-violet-400/55'
+                    : 'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm ring-1 ring-violet-800/35'
                 }
-                title={hostedListTitleCheckMuted ? '라이딩 일정이 종료되었습니다' : '진행 예정·진행 중'}
-                aria-label={hostedListTitleCheckMuted ? '라이딩 일정 종료' : '진행 예정 또는 진행 중'}
+                title={myRidePurpleMuted ? '라이딩 일정이 종료되었습니다' : '내가 주최한 라이딩'}
+                aria-label={myRidePurpleMuted ? '라이딩 일정 종료' : '내가 주최한 라이딩'}
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" />
+                </svg>
+              </span>
+            ) : null}
+            {showMyRideInvitedGreen ? (
+              <span
+                className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25"
+                title="초대받은 라이딩 · 참석 미확정"
+                aria-label="초대받은 라이딩 · 참석 미확정"
+              >
+                <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M2.5 6L5 8.5L9.5 3.5" />
+                </svg>
+              </span>
+            ) : null}
+            {showMyRideRed ? (
+              <span
+                className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30"
+                title="참석 확정"
+                aria-label="참석 확정"
               >
                 <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M2.5 6L5 8.5L9.5 3.5" />
@@ -3490,63 +3543,47 @@ function OpenRidingCalendarMain(props) {
     );
   }
 
-  function renderInvitedRidesCompactSection() {
+  function renderMyRidesUnifiedSection() {
+    var phoneMissing = !!(userId && !String(inviteCheckPhone || '').trim());
     return (
       <section
-        className="rounded-2xl p-3 border-2 border-emerald-500 bg-white shadow-sm open-riding-invited-rides-panel"
-        aria-labelledby="open-riding-invited-heading"
+        className="rounded-2xl p-3 border-2 border-violet-600 bg-white shadow-sm open-riding-my-rides-panel"
+        aria-labelledby="open-riding-my-rides-heading"
       >
         <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
           <span
-            id="open-riding-invited-heading"
+            id="open-riding-my-rides-heading"
             role="heading"
             aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white text-emerald-900 shadow-sm shrink-0 tracking-tight open-riding-invited-title-pill"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-200 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-my-rides-title-pill"
           >
-            [초대받은 라이딩]
+            [나의 라이딩]
           </span>
         </div>
         {!userId ? (
-          <p className="text-sm text-slate-400">로그인 후 비공개 라이딩 초대 목록을 확인할 수 있습니다.</p>
-        ) : !String(inviteCheckPhone || '').trim() ? (
-          <p className="text-sm text-slate-400">
-            프로필·계정에 등록된 전화번호로 초대 여부를 확인합니다. 연락처를 등록한 뒤 새로고침해 주세요.
-          </p>
-        ) : invitedRidesSorted.length === 0 ? (
-          <p className="text-sm text-slate-400">이번 달 초대받은 라이딩이 없습니다.</p>
+          <p className="text-sm text-slate-400 m-0">로그인 후 나의 라이딩(주최·초대·참석 확정)을 확인할 수 있습니다.</p>
         ) : (
-          <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
-            {invitedRidesSorted.map(function (r) {
-              return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true });
-            })}
-          </ul>
+          <>
+            {phoneMissing ? (
+              <p className="text-[11px] text-slate-500 m-0 mb-2 leading-snug">
+                프로필·계정에 전화번호를 등록하면 초대받은 라이딩이 목록에 포함됩니다. (내가 주최한 라이딩·초대 없이 참석 확정한 라이딩은 연락처 없이도 표시됩니다.)
+              </p>
+            ) : null}
+            {myRidesUnifiedRows.length === 0 ? (
+              <p className="text-sm text-slate-400 m-0">이번 달 표시할 나의 라이딩이 없습니다.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
+                {myRidesUnifiedRows.map(function (row) {
+                  return renderMonthRideListRow(row.r, {
+                    showRideDate: true,
+                    myRidesUnifiedList: true,
+                    myRideKind: row.kind,
+                  });
+                })}
+              </ul>
+            )}
+          </>
         )}
-      </section>
-    );
-  }
-
-  function renderMyHostedRidesCompactSection() {
-    if (!myHostedRidesSorted.length) return null;
-    return (
-      <section
-        className="rounded-2xl p-3 border-2 border-violet-700 bg-white shadow-md open-riding-my-hosted-panel"
-        aria-labelledby="open-riding-my-hosted-heading"
-      >
-        <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
-          <span
-            id="open-riding-my-hosted-heading"
-            role="heading"
-            aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border-0 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-hosted-title-pill"
-          >
-            [내가 주최한 라이딩]
-          </span>
-        </div>
-        <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
-          {myHostedRidesSorted.map(function (r) {
-            return renderMonthRideListRow(r, { showRideDate: true, compactInviteOrHostedList: true, hostedListSection: true });
-          })}
-        </ul>
       </section>
     );
   }
@@ -3731,8 +3768,7 @@ function OpenRidingCalendarMain(props) {
         </section>
 
         {compact ? renderListSection() : null}
-        {compact ? renderInvitedRidesCompactSection() : null}
-        {compact ? renderMyHostedRidesCompactSection() : null}
+        {compact ? renderMyRidesUnifiedSection() : null}
 
         {!compact ? (
         <aside className="rounded-2xl p-4 border border-slate-200 bg-slate-50/80 space-y-4">
@@ -4688,7 +4724,7 @@ function OpenRidingCreateForm(props) {
               </p>
             ) : (
               <p className="text-xs text-slate-600">
-                지정한 전화번호(뒤 8자리 일치)로 로그인한 친구는 「초대받은 라이딩」에서 이 모임을 바로 볼 수 있습니다.
+                지정한 전화번호(뒤 8자리 일치)로 로그인한 친구는 「나의 라이딩」에서 이 모임을 바로 볼 수 있습니다.
               </p>
             )}
           </>
