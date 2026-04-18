@@ -2399,14 +2399,6 @@ function OpenRidingEditGlassNav(props) {
       </svg>
     );
   }
-  function iconSaveNav() {
-    return (
-      <svg className="open-riding-bottom-glass-nav__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-      </svg>
-    );
-  }
-
   var innerContent = (
     <>
       <OpenRidingGlassNavSlot>
@@ -2442,7 +2434,7 @@ function OpenRidingEditGlassNav(props) {
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(false)} onClick={onSave} disabled={isBusy} aria-label="저장">
-          {iconSaveNav()}
+          <img src="assets/img/save3.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
           <span className="open-riding-bottom-glass-nav__label">저장</span>
         </button>
       </OpenRidingGlassNavSlot>
