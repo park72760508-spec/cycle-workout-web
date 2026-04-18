@@ -2878,6 +2878,20 @@ function getRolling30DaysRangeSeoul() {
   return { startStr, endStr };
 }
 
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 약 6개월(183일, YYYY-MM-DD). 1시간 항속·맞춤 필터 60분 피크와 동일. */
+function getRolling183DaysRangeSeoul() {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const today = new Date(y, m - 1, d);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 182);
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  return { startStr, endStr };
+}
+
 /** Asia/Seoul 달력 기준 오늘 포함 역산 최근 365일 (YYYY-MM-DD). 명예의 전당(연간 탭) 피크 집계용. */
 function getRolling365DaysRangeSeoul() {
   const now = new Date();
@@ -3886,6 +3900,10 @@ exports.getPeakPowerRanking = onRequest(
       const r = getRolling365DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
+    } else if (period === "rolling6m" || period === "rolling183") {
+      const r = getRolling183DaysRangeSeoul();
+      startStr = r.startStr;
+      endStr = r.endStr;
     } else if (period === "rolling30" || period === "monthly") {
       const r = getRolling30DaysRangeSeoul();
       startStr = r.startStr;
@@ -3932,7 +3950,10 @@ exports.getPeakPowerRanking = onRequest(
 
     const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, durationType, gender);
     let cohortAvgHrBpm = null;
-    if ((period === "rolling30" || period === "monthly") && DURATION_HR_FIELDS[durationType]) {
+    if (
+      (period === "rolling30" || period === "monthly" || period === "rolling6m" || period === "rolling183") &&
+      DURATION_HR_FIELDS[durationType]
+    ) {
       cohortAvgHrBpm = await getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, gender);
     }
     await cacheRef.set({
