@@ -3584,6 +3584,41 @@ function OpenRidingCalendarMain(props) {
             )}
           </>
         )}
+        <div
+          className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap items-center justify-start gap-x-1.5 gap-y-1 text-[10px] sm:text-[11px] text-slate-600 leading-tight open-riding-my-rides-legend"
+          role="note"
+        >
+          <span className="inline-flex items-center gap-1 shrink-0">
+            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25">
+              <svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2.5 6L5 8.5L9.5 3.5" />
+              </svg>
+            </span>
+            <span className="text-slate-500">초대됨</span>
+          </span>
+          <span className="text-slate-300 shrink-0 px-1 select-none" aria-hidden="true">
+            |
+          </span>
+          <span className="inline-flex items-center gap-1 shrink-0">
+            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30">
+              <svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2.5 6L5 8.5L9.5 3.5" />
+              </svg>
+            </span>
+            <span className="text-slate-500">참석확정</span>
+          </span>
+          <span className="text-slate-300 shrink-0 px-1 select-none" aria-hidden="true">
+            |
+          </span>
+          <span className="inline-flex items-center gap-1 shrink-0">
+            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm ring-1 ring-violet-800/35">
+              <svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2.5 6L5 8.5L9.5 3.5" />
+              </svg>
+            </span>
+            <span className="text-slate-500">내가주최</span>
+          </span>
+        </div>
       </section>
     );
   }
