@@ -2879,6 +2879,34 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   gap: 6px !important;
 }
 
+/* 베이스캠프: 네이버 카페 바로가기 (아이콘 높이 = 링크 글자 크기 × 1.5) */
+.basecamp-footer-cafe-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #006400 !important;
+  text-decoration: none !important;
+}
+.basecamp-footer-cafe-link:hover {
+  text-decoration: underline !important;
+}
+.basecamp-footer-cafe-link:focus-visible {
+  outline: 2px solid #15803d;
+  outline-offset: 2px;
+}
+.basecamp-footer-cafe-icon {
+  height: 1.5em !important;
+  width: auto !important;
+  max-height: 1.5em !important;
+  object-fit: contain !important;
+  flex-shrink: 0 !important;
+  vertical-align: middle !important;
+  display: block !important;
+}
+
 /* 컴팩트한 블럭 구조 (사용자 인증 화면과 유사) */
 .connection-main-container {
   max-width: 500px;
