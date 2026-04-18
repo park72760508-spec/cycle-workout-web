@@ -253,6 +253,21 @@ export function isRideJoinClosedBySchedule(rideData) {
   return isOpenRidingScheduleEnded(rideData);
 }
 
+/**
+ * Strava 참석 검증 자동 실행 조건: 라이딩 일정일(서울 달력)이 **오늘보다 이전**일 때만 true.
+ * 당일 방장 후기 업로드와 무관 — 일정일이 지난 뒤(익일 0시 서울 이후)에만 검증되어, 당일 집 복귀 중인 참가자 활동 반영 시간을 확보한다.
+ * 취소된 모임은 검증하지 않음.
+ * @param {{ rideStatus?: unknown; date?: unknown }} rideData
+ */
+export function isRideScheduleDatePastSeoul(rideData) {
+  if (!rideData || typeof rideData !== 'object') return false;
+  if (String(rideData.rideStatus || 'active') === 'cancelled') return false;
+  const rideYmd = getRideDateSeoulYmdFromData(rideData);
+  if (!rideYmd) return false;
+  const today = getTodaySeoulYmdSchedule();
+  return rideYmd < today;
+}
+
 /** Firestore map: uid -> 표시 이름 */
 function asParticipantDisplay(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
@@ -1283,6 +1298,79 @@ export function computeHostRideDateKeys(rides, userId) {
   return dates;
 }
 
+/** 동일 rideId에 대해 방장 단말에서 Callable 중복 호출 방지(스냅샷 연속 갱신 대비) */
+const _openRidingAttendanceHostLocks = new Set();
+const _openRidingAttendanceHostSucceeded = new Set();
+
+/**
+ * 라이딩 일정일(서울)이 오늘보다 지난 뒤(isRideScheduleDatePastSeoul) 방장이 상세를 볼 때
+ * 참석 검증 Cloud Function(verifyMeetingAttendance)을 1회 호출합니다.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} rideId
+ * @param {Record<string, unknown>} ride
+ * @returns {Promise<{ skipped: boolean; reason?: string; result?: unknown; error?: string }>}
+ */
+export async function triggerVerifyMeetingAttendanceForEndedRideIfHost(db, rideId, ride) {
+  if (!db || !rideId || !ride || typeof ride !== 'object') return { skipped: true, reason: 'BAD_ARGS' };
+  if (!isRideScheduleDatePastSeoul(ride)) return { skipped: true, reason: 'SCHEDULE_DAY_NOT_PAST' };
+  if (ride.attendanceVerificationRan === true) return { skipped: true, reason: 'ALREADY_RAN' };
+
+  const lockKey = String(rideId).trim();
+  if (_openRidingAttendanceHostSucceeded.has(lockKey)) return { skipped: true, reason: 'ALREADY_SUCCEEDED_SESSION' };
+
+  var authU =
+    typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser
+      ? window.authV9.currentUser
+      : typeof window !== 'undefined' && window.auth && window.auth.currentUser
+        ? window.auth.currentUser
+        : null;
+  if (!authU || !authU.uid) return { skipped: true, reason: 'NOT_LOGGED_IN' };
+  if (String(ride.hostUserId || '').trim() !== String(authU.uid).trim()) return { skipped: true, reason: 'NOT_HOST' };
+
+  if (_openRidingAttendanceHostLocks.has(lockKey)) return { skipped: true, reason: 'IN_FLIGHT' };
+  _openRidingAttendanceHostLocks.add(lockKey);
+
+  try {
+    var funcs =
+      typeof window !== 'undefined' && window.functionsAsiaNortheast3V9
+        ? window.functionsAsiaNortheast3V9
+        : typeof window !== 'undefined' && window.functionsV9
+          ? window.functionsV9
+          : null;
+    if (!funcs) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] Functions 미초기화 — 참석 검증 생략');
+      return { skipped: true, reason: 'NO_FUNCTIONS' };
+    }
+    var funcMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js');
+    var httpsCallable = funcMod.httpsCallable;
+    if (typeof httpsCallable !== 'function') {
+      return { skipped: true, reason: 'NO_HTTPS_CALLABLE' };
+    }
+    var callable = httpsCallable(funcs, 'verifyMeetingAttendance');
+    var res = await callable({ meetingId: String(rideId).trim() });
+    var payload = res && res.data != null ? res.data : res;
+
+    await updateDoc(doc(db, 'rides', lockKey), {
+      attendanceVerificationRan: true,
+      attendanceVerificationAt: serverTimestamp(),
+      attendanceVerificationSummary: {
+        processedCount: payload && payload.processedCount != null ? payload.processedCount : null,
+        attendedCount: payload && payload.attendedCount != null ? payload.attendedCount : null,
+        missedCount: payload && payload.missedCount != null ? payload.missedCount : null,
+        skippedCount: payload && payload.skippedCount != null ? payload.skippedCount : null
+      }
+    });
+    _openRidingAttendanceHostSucceeded.add(lockKey);
+    return { skipped: false, result: payload };
+  } catch (err) {
+    var msg = err && err.message ? String(err.message) : String(err);
+    if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] 참석 검증 Callable 실패:', msg);
+    return { skipped: true, reason: 'CALLABLE_ERROR', error: msg };
+  } finally {
+    _openRidingAttendanceHostLocks.delete(lockKey);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.openRidingService = {
     saveUserOpenRidingPreferences,
@@ -1310,7 +1398,9 @@ if (typeof window !== 'undefined') {
     normalizePackRidingRules,
     isRideJoinClosedBySchedule,
     isOpenRidingScheduleEnded,
+    isRideScheduleDatePastSeoul,
     openRidingHostPublicReviewWritten,
-    openRidingHostSummaryQualifiesAsGroupRide
+    openRidingHostSummaryQualifiesAsGroupRide,
+    triggerVerifyMeetingAttendanceForEndedRideIfHost
   };
 }

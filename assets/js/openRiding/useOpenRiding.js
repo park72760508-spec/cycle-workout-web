@@ -159,6 +159,20 @@ export function useOpenRideDetail(db, rideId, userId) {
     };
   }, [db, rideId]);
 
+  /** 일정일(서울)이 오늘보다 지난 뒤(isRideScheduleDatePastSeoul) 방장 단말에서 참석 검증 Callable 1회 */
+  useEffect(() => {
+    if (!db || !rideId || !ride || !userId) return undefined;
+    if (String(ride.hostUserId || '').trim() !== String(userId).trim()) return undefined;
+    var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
+    if (typeof svc.triggerVerifyMeetingAttendanceForEndedRideIfHost !== 'function') return undefined;
+    var t = setTimeout(function () {
+      svc.triggerVerifyMeetingAttendanceForEndedRideIfHost(db, rideId, ride).catch(function () {});
+    }, 0);
+    return function () {
+      clearTimeout(t);
+    };
+  }, [db, rideId, userId, ride]);
+
   const join = useCallback(async (joinOptions) => {
     if (!db || !rideId || !userId) return;
     setActionError(null);
