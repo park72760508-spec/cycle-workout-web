@@ -5527,6 +5527,19 @@ body:has(#trainingDetailModal:not(.hidden)) {
   background: linear-gradient(90deg, rgba(139, 92, 246, 0.22) 0%, rgba(102, 126, 234, 0.12) 50%, transparent 100%);
   border-left: 3px solid rgba(124, 58, 237, 0.95);
 }
+/* 그룹 랭킹: 미참여 모임 — 방장/참석 행과 동일 높이(여백·좌측 띠 두께), 배경 하이라이트 없음·회색 띠만 */
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-group-unjoined,
+.stelvio-rank-row.stelvio-rank-group-unjoined {
+  border-radius: 8px;
+  margin: 2px -4px;
+  padding: 10px 4px;
+  border-left: 3px solid rgba(148, 163, 184, 0.92);
+  background: transparent;
+  box-shadow: none;
+}
+#stelvioRankingScreen .stelvio-rank-row.stelvio-rank-group-unjoined {
+  background: transparent;
+}
 .stelvio-rank-crown {
   width: 24px;
   height: 24px;
@@ -7514,6 +7527,24 @@ html.is-android #trainingDetailModal .training-detail-body {
   .workout-screen-header--list-view .workout-screen-back-btn {
     padding-left: 4px;
   }
+}
+
+/*
+ * 워크아웃 카테고리·리스트: 하단 허브 글래스 네비에 콘텐츠가 가려지지 않도록 스크롤 영역(#workoutScreen .workout-view-container)에 하단 패딩.
+ * (.screen.active:not(...) { padding-bottom:0 !important } 가 ID 다수로 특이도가 높아 #workoutScreen 외곽 패딩 규칙이 적용되지 않는 경우가 있음)
+ */
+#workoutScreen.screen.active .workout-view-container {
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#workoutScreen.screen.active .workout-view-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-container {
+  padding-bottom: calc(var(--hub-glass-nav-scroll-pad) + 8px);
 }
 
 /* 매우 좁은 화면 (360px~390px) */
