@@ -2716,7 +2716,7 @@ function OpenRidingCalendarMain(props) {
       });
       var uid = String(userId || '');
       var params = new URLSearchParams({
-        period: 'monthly',
+        period: 'rolling6m',
         duration: '60min',
         gender: 'all'
       });
@@ -2843,7 +2843,7 @@ function OpenRidingCalendarMain(props) {
         : '';
     var chartRefWkg = realisticStats ? realisticStats.wkg : baseStats ? baseStats.wkg : null;
     var chartRefBadgeTitle = realisticStats ? '나의 60분' : '나의 FTP';
-    var chartRefValueNote = realisticStats ? ' (최근 30일)' : ' (프로필)';
+    var chartRefValueNote = realisticStats ? ' (최근 6개월)' : ' (프로필)';
 
     var regionAndLevels = (
       <div className="space-y-4 text-left">
@@ -3007,7 +3007,7 @@ function OpenRidingCalendarMain(props) {
               </div>
 
               <p className="text-[10px] font-semibold text-slate-800 m-0 pt-1 border-t border-violet-100/80">
-                현실 지표 (최근 30일 · 60분 최대 평균 파워·체중, 랭킹보드와 동일 산출)
+                현실 지표 (최근 6개월 · 60분 최대 평균 파워·체중, 랭킹보드와 동일 산출)
                 {rangePeak ? (
                   <span className="font-normal text-slate-500"> · {rangePeak}</span>
                 ) : null}
@@ -3079,7 +3079,7 @@ function OpenRidingCalendarMain(props) {
                 peakWeightKg > 0 ? peakWeightKg : prof.ok && Number(prof.weight) > 0 ? Number(prof.weight) : null
               }
               titleOverride="전체 사용자 60분 W/kg 분포"
-              pillLabelOverride="전체 · 60분 W/kg · 최근 30일"
+              pillLabelOverride="전체 · 60분 W/kg · 최근 6개월"
               chartSubNoteOverride={false}
             />
           ) : (
@@ -4082,7 +4082,7 @@ function OpenRidingCreateForm(props) {
       }
 
       var params = new URLSearchParams({
-        period: 'monthly',
+        period: 'rolling6m',
         duration: '60min',
         gender: 'all'
       });
@@ -5866,7 +5866,7 @@ function OpenRidingDetail(props) {
       }
 
       var params = new URLSearchParams({
-        period: 'monthly',
+        period: 'rolling6m',
         duration: '60min',
         gender: 'all'
       });
