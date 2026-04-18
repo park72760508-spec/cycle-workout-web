@@ -3,6 +3,7 @@
  */
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import type { SecretParam } from "firebase-functions/lib/params/types";
 
 /** 집결지 반경 (미터) */
@@ -259,6 +260,95 @@ function extractMeetingLatLng(data: FirebaseFirestore.DocumentData): { lat: numb
   return null;
 }
 
+/** rides 문서: 집결 좌표 (선택 필드 — 없으면 검증 불가) */
+function extractRideDepartureLatLng(data: FirebaseFirestore.DocumentData): { lat: number; lng: number } | null {
+  const la = Number(data?.departureLatitude ?? data?.departureLat ?? data?.verificationStartLat);
+  const lo = Number(data?.departureLongitude ?? data?.departureLng ?? data?.verificationStartLng);
+  if (Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) {
+    return { lat: la, lng: lo };
+  }
+  const geo = data?.departureGeo ?? data?.verificationStartLatLng ?? data?.startLatLng;
+  if (geo == null) return null;
+  if (typeof (geo as { latitude?: number }).latitude === "number" && typeof (geo as { longitude?: number }).longitude === "number") {
+    return { lat: (geo as { latitude: number }).latitude, lng: (geo as { longitude: number }).longitude };
+  }
+  return null;
+}
+
+/** Firestore date 필드 → 서울 달력 YYYY-MM-DD */
+function getRideDateSeoulYmdFromFirestoreDate(dateField: unknown): string | null {
+  const ms = meetingTimeToMs(dateField as FirebaseFirestore.Timestamp);
+  if (ms == null) return null;
+  const d = new Date(ms);
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    let y = "";
+    let m = "";
+    let day = "";
+    for (const p of parts) {
+      if (p.type === "year") y = p.value;
+      if (p.type === "month") m = p.value;
+      if (p.type === "day") day = p.value;
+    }
+    if (y && m && day) return `${y}-${m}-${day}`;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** "7:30", "07:30", "7:30:00" 등 → 시·분 */
+function parseDepartureTimeToHourMinute(departureTime: unknown): { h: number; min: number } | null {
+  const s = String(departureTime != null ? departureTime : "").trim();
+  if (!s) return { h: 9, min: 0 };
+  const m = s.match(/^(\d{1,2})\s*:\s*(\d{2})(?::(\d{2}))?/);
+  if (!m) return { h: 9, min: 0 };
+  const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+  const min = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+  return { h, min };
+}
+
+/**
+ * 라이딩 일정일(서울) + 출발 시각 → 집결 기준 UTC epoch(ms). 한국은 UTC+9 고정으로 계산.
+ */
+function combineRideMeetingTimeMs(rideData: FirebaseFirestore.DocumentData): number | null {
+  const ymd = getRideDateSeoulYmdFromFirestoreDate(rideData.date);
+  if (!ymd) return null;
+  const parts = ymd.split("-").map((x) => parseInt(x, 10));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return null;
+  const { h, min } = parseDepartureTimeToHourMinute(rideData.departureTime) || { h: 9, min: 0 };
+  const [y, mo, day] = parts;
+  return Date.UTC(y, mo - 1, day, h - 9, min, 0, 0);
+}
+
+async function findStravaActivityIdForUserOnRideDate(
+  db: admin.firestore.Firestore,
+  userId: string,
+  rideDateYmd: string
+): Promise<string | null> {
+  const logsRef = db.collection("users").doc(userId).collection("logs");
+  let snap: FirebaseFirestore.QuerySnapshot;
+  try {
+    snap = await logsRef.where("date", "==", rideDateYmd).limit(25).get();
+  } catch (e) {
+    console.warn(`[verifyMeetingAttendance] logs 조회 실패 uid=${userId}:`, (e as Error).message);
+    return null;
+  }
+  for (const d of snap.docs) {
+    const data = d.data();
+    const src = String(data.source || "").toLowerCase();
+    if (src !== "strava") continue;
+    if (data.activity_id) return String(data.activity_id);
+    if (/^\d+$/.test(d.id)) return d.id;
+  }
+  return null;
+}
+
 function meetingTimeToMs(meetingTime: unknown): number | null {
   if (meetingTime == null) return null;
   if (typeof meetingTime === "object" && meetingTime !== null && "toMillis" in meetingTime) {
@@ -304,22 +394,31 @@ interface ParticipantDoc {
   stravaActivityId: string | null;
 }
 
+interface AttendanceBatchWrite {
+  ref: FirebaseFirestore.DocumentReference;
+  status: MeetingParticipantStatus;
+  meetingId: string;
+  userId: string;
+}
+
 async function verifyOneParticipant(
   db: admin.firestore.Firestore,
   p: ParticipantDoc,
   meetingMs: number,
   meetLat: number,
   meetLng: number,
-  clientSecret: string
+  clientSecret: string,
+  eventIdForDocs: string
 ): Promise<{
-  batchUpdate: { ref: FirebaseFirestore.DocumentReference; status: MeetingParticipantStatus } | null;
+  batchUpdate: AttendanceBatchWrite | null;
   detail: VerifyMeetingAttendanceUserDetail;
 }> {
   const baseDetail = { userId: p.userId, participantDocId: p.docId } as const;
+  const docMeta = { meetingId: eventIdForDocs, userId: p.userId };
 
   if (!p.stravaActivityId) {
     return {
-      batchUpdate: { ref: p.ref, status: "MISSED" },
+      batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
       detail: { ...baseDetail, outcome: "MISSED", note: "NO_STRAVA_ACTIVITY_ID" },
     };
   }
@@ -349,7 +448,7 @@ async function verifyOneParticipant(
     const streams = await fetchActivityLatLngTimeStreams(accessToken, p.stravaActivityId);
     if (!streams || streams.latlng.length === 0) {
       return {
-        batchUpdate: { ref: p.ref, status: "MISSED" },
+        batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
         detail: { ...baseDetail, outcome: "MISSED", note: "NO_LATLNG_STREAMS" },
       };
     }
@@ -357,12 +456,12 @@ async function verifyOneParticipant(
     const ok = wasNearMeetingStartDuringWindow(meetingMs, start.startMs, streams, meetLat, meetLng);
     if (ok) {
       return {
-        batchUpdate: { ref: p.ref, status: "ATTENDED" },
+        batchUpdate: { ref: p.ref, status: "ATTENDED", ...docMeta },
         detail: { ...baseDetail, outcome: "ATTENDED" },
       };
     }
     return {
-      batchUpdate: { ref: p.ref, status: "MISSED" },
+      batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
       detail: { ...baseDetail, outcome: "MISSED", note: "OUTSIDE_RADIUS_OR_TIME_WINDOW" },
     };
   } catch (e) {
@@ -375,12 +474,41 @@ async function verifyOneParticipant(
   }
 }
 
-function commitInChunks(
-  db: admin.firestore.Firestore,
-  updates: Array<{ ref: FirebaseFirestore.DocumentReference; status: MeetingParticipantStatus }>
-): Promise<void> {
+function getTodaySeoulYmdString(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  let y = "";
+  let m = "";
+  let day = "";
+  for (const p of parts) {
+    if (p.type === "year") y = p.value;
+    if (p.type === "month") m = p.value;
+    if (p.type === "day") day = p.value;
+  }
+  if (y && m && day) return `${y}-${m}-${day}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** 서울 달력 "오늘" 00:00:00 시각을 Firestore Timestamp (UTC 저장) */
+function getStartOfTodaySeoulTimestamp(): admin.firestore.Timestamp {
+  const ymd = getTodaySeoulYmdString();
+  const [y, mo, d] = ymd.split("-").map((x) => parseInt(x, 10));
+  const ms = Date.UTC(y, mo - 1, d, -9, 0, 0, 0);
+  return admin.firestore.Timestamp.fromMillis(ms);
+}
+
+function commitInChunks(db: admin.firestore.Firestore, updates: AttendanceBatchWrite[]): Promise<void> {
   const chunkSize = 450;
-  const chunks: typeof updates[] = [];
+  const chunks: AttendanceBatchWrite[][] = [];
   for (let i = 0; i < updates.length; i += chunkSize) {
     chunks.push(updates.slice(i, i + chunkSize));
   }
@@ -389,14 +517,177 @@ function commitInChunks(
       const batch = db.batch();
       const now = admin.firestore.FieldValue.serverTimestamp();
       for (const u of chunk) {
-        batch.update(u.ref, {
-          status: u.status,
-          attendanceVerifiedAt: now,
-        });
+        batch.set(
+          u.ref,
+          {
+            meetingId: u.meetingId,
+            userId: u.userId,
+            status: u.status,
+            attendanceVerifiedAt: now,
+          },
+          { merge: true }
+        );
       }
       await batch.commit();
     }
   })();
+}
+
+/**
+ * meetings 또는 rides(eventId)에 대한 참석 검증 실행.
+ * @param callerUid null 이면 방장 검사 생략(자정 스케줄러 전용). 문자열이면 해당 uid 가 방장과 일치해야 함.
+ */
+export async function executeVerifyAttendanceForEventId(
+  db: admin.firestore.Firestore,
+  eventId: string,
+  clientSecretTrim: string,
+  callerUid: string | null
+): Promise<VerifyMeetingAttendanceResult> {
+  const meetingId = String(eventId || "").trim();
+  if (!meetingId) {
+    throw new HttpsError("invalid-argument", "meetingId 가 필요합니다.");
+  }
+
+  const meetingRef = db.collection("meetings").doc(meetingId);
+  const meetingSnap = await meetingRef.get();
+  const rideRef = db.collection("rides").doc(meetingId);
+  const rideSnap = await rideRef.get();
+
+  let hostUserId = "";
+  let meetingMs: number | null = null;
+  let startLL: { lat: number; lng: number } | null = null;
+  let participants: ParticipantDoc[] = [];
+
+  if (meetingSnap.exists) {
+    const meetingData = meetingSnap.data() || {};
+    hostUserId = String(meetingData.hostUserId || "").trim();
+    meetingMs = meetingTimeToMs(meetingData.meetingTime);
+    startLL = extractMeetingLatLng(meetingData);
+
+    const participantsSnap = await db
+      .collection("meeting_participants")
+      .where("meetingId", "==", meetingId)
+      .where("status", "==", "APPLIED")
+      .get();
+
+    participants = participantsSnap.docs
+      .map((doc) => {
+        const d = doc.data();
+        return {
+          ref: doc.ref,
+          docId: doc.id,
+          userId: String(d.userId || ""),
+          stravaActivityId:
+            d.stravaActivityId != null && String(d.stravaActivityId).trim() !== "" ? String(d.stravaActivityId) : null,
+        };
+      })
+      .filter((p) => p.userId);
+  } else if (rideSnap.exists) {
+    const rideData = rideSnap.data() || {};
+    hostUserId = String(rideData.hostUserId || "").trim();
+    meetingMs = combineRideMeetingTimeMs(rideData);
+    startLL = extractRideDepartureLatLng(rideData);
+    const rideYmd = getRideDateSeoulYmdFromFirestoreDate(rideData.date);
+    if (!rideYmd) {
+      throw new HttpsError("failed-precondition", "rides 문서의 date 필드가 유효하지 않습니다.");
+    }
+    if (!startLL) {
+      throw new HttpsError(
+        "failed-precondition",
+        "오픈 라이딩 참석 검증을 하려면 rides 문서에 집결 좌표가 필요합니다. 예: departureLatitude, departureLongitude (숫자) 또는 GeoPoint departureGeo."
+      );
+    }
+    const uidList = (Array.isArray(rideData.participants) ? rideData.participants : [])
+      .map((x: unknown) => String(x != null ? x : "").trim())
+      .filter(Boolean);
+
+    const withActs = await Promise.all(
+      uidList.map(async (userId) => {
+        const stravaActivityId = await findStravaActivityIdForUserOnRideDate(db, userId, rideYmd);
+        return { userId, stravaActivityId };
+      })
+    );
+
+    participants = withActs.map(({ userId, stravaActivityId }) => {
+      const docKey = `${meetingId}__${userId}`;
+      return {
+        ref: db.collection("meeting_participants").doc(docKey),
+        docId: docKey,
+        userId,
+        stravaActivityId,
+      };
+    });
+  } else {
+    throw new HttpsError("not-found", "meetings 또는 rides 문서를 찾을 수 없습니다.");
+  }
+
+  if (!hostUserId) {
+    throw new HttpsError("failed-precondition", "hostUserId 가 없습니다.");
+  }
+  if (callerUid != null && String(callerUid).trim() !== hostUserId) {
+    throw new HttpsError("permission-denied", "모임 방장만 참석 검증을 실행할 수 있습니다.");
+  }
+
+  if (meetingMs == null) {
+    throw new HttpsError("failed-precondition", "모임(또는 라이딩) 기준 시각을 계산할 수 없습니다.");
+  }
+  if (!startLL) {
+    throw new HttpsError("failed-precondition", "집결 좌표(startLatLng 등)가 유효하지 않습니다.");
+  }
+
+  const results = await Promise.all(
+    participants.map((p) =>
+      verifyOneParticipant(db, p, meetingMs, startLL.lat, startLL.lng, clientSecretTrim, meetingId)
+    )
+  );
+
+  const batchUpdates: AttendanceBatchWrite[] = [];
+  const details: VerifyMeetingAttendanceUserDetail[] = [];
+
+  let attendedCount = 0;
+  let missedCount = 0;
+  let skippedCount = 0;
+
+  for (const r of results) {
+    details.push(r.detail);
+    if (r.detail.outcome === "ATTENDED") attendedCount++;
+    else if (r.detail.outcome === "MISSED") missedCount++;
+    else skippedCount++;
+
+    if (r.batchUpdate) batchUpdates.push(r.batchUpdate);
+  }
+
+  if (batchUpdates.length > 0) {
+    await commitInChunks(db, batchUpdates);
+  }
+
+  const result: VerifyMeetingAttendanceResult = {
+    success: true,
+    meetingId,
+    processedCount: batchUpdates.length,
+    attendedCount,
+    missedCount,
+    skippedCount,
+    details,
+  };
+
+  if (rideSnap.exists && !meetingSnap.exists) {
+    await rideRef.set(
+      {
+        attendanceVerificationRan: true,
+        attendanceVerificationAt: admin.firestore.FieldValue.serverTimestamp(),
+        attendanceVerificationSummary: {
+          processedCount: result.processedCount,
+          attendedCount: result.attendedCount,
+          missedCount: result.missedCount,
+          skippedCount: result.skippedCount,
+        },
+      },
+      { merge: true }
+    );
+  }
+
+  return result;
 }
 
 /**
@@ -412,94 +703,70 @@ export function createVerifyMeetingAttendance(stravaClientSecret: SecretParam) {
       memory: "512MiB",
     },
     async (request): Promise<VerifyMeetingAttendanceResult> => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+      const uid = request.auth?.uid;
+      if (!uid) {
+        throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+      }
+
+      const meetingId = String((request.data as { meetingId?: string })?.meetingId || "").trim();
+      if (!meetingId) {
+        throw new HttpsError("invalid-argument", "meetingId 가 필요합니다.");
+      }
+
+      const clientSecret = stravaClientSecret.value() || process.env.STRAVA_CLIENT_SECRET || "";
+      if (!clientSecret.trim()) {
+        throw new HttpsError("failed-precondition", "STRAVA_CLIENT_SECRET 이 설정되지 않았습니다.");
+      }
+
+      const db = admin.firestore();
+      return executeVerifyAttendanceForEventId(db, meetingId, clientSecret.trim(), uid);
     }
+  );
+}
 
-    const meetingId = String((request.data as { meetingId?: string })?.meetingId || "").trim();
-    if (!meetingId) {
-      throw new HttpsError("invalid-argument", "meetingId 가 필요합니다.");
-    }
-
-    const clientSecret = stravaClientSecret.value() || process.env.STRAVA_CLIENT_SECRET || "";
-    if (!clientSecret.trim()) {
-      throw new HttpsError("failed-precondition", "STRAVA_CLIENT_SECRET 이 설정되지 않았습니다.");
-    }
-
-    const db = admin.firestore();
-    const meetingRef = db.collection("meetings").doc(meetingId);
-    const meetingSnap = await meetingRef.get();
-    if (!meetingSnap.exists) {
-      throw new HttpsError("not-found", "모임을 찾을 수 없습니다.");
-    }
-    const meetingData = meetingSnap.data() || {};
-    const hostUserId = String(meetingData.hostUserId || "").trim();
-    if (!hostUserId) {
-      throw new HttpsError("failed-precondition", "모임 문서에 hostUserId 가 없습니다.");
-    }
-    if (hostUserId !== uid) {
-      throw new HttpsError("permission-denied", "모임 방장만 참석 검증을 실행할 수 있습니다.");
-    }
-
-    const meetingMs = meetingTimeToMs(meetingData.meetingTime);
-    if (meetingMs == null) {
-      throw new HttpsError("failed-precondition", "meetingTime 이 유효하지 않습니다.");
-    }
-    const startLL = extractMeetingLatLng(meetingData);
-    if (!startLL) {
-      throw new HttpsError("failed-precondition", "startLatLng 가 유효하지 않습니다.");
-    }
-
-    const participantsSnap = await db
-      .collection("meeting_participants")
-      .where("meetingId", "==", meetingId)
-      .where("status", "==", "APPLIED")
-      .get();
-
-    const participants: ParticipantDoc[] = participantsSnap.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        ref: doc.ref,
-        docId: doc.id,
-        userId: String(d.userId || ""),
-        stravaActivityId: d.stravaActivityId != null && String(d.stravaActivityId).trim() !== "" ? String(d.stravaActivityId) : null,
-      };
-    }).filter((p) => p.userId);
-
-    const results = await Promise.all(
-      participants.map((p) => verifyOneParticipant(db, p, meetingMs, startLL.lat, startLL.lng, clientSecret.trim()))
-    );
-
-    const batchUpdates: Array<{ ref: FirebaseFirestore.DocumentReference; status: MeetingParticipantStatus }> = [];
-    const details: VerifyMeetingAttendanceUserDetail[] = [];
-
-    let attendedCount = 0;
-    let missedCount = 0;
-    let skippedCount = 0;
-
-    for (const r of results) {
-      details.push(r.detail);
-      if (r.detail.outcome === "ATTENDED") attendedCount++;
-      else if (r.detail.outcome === "MISSED") missedCount++;
-      else skippedCount++;
-
-      if (r.batchUpdate) batchUpdates.push(r.batchUpdate);
-    }
-
-    if (batchUpdates.length > 0) {
-      await commitInChunks(db, batchUpdates);
-    }
-
-    return {
-      success: true,
-      meetingId,
-      processedCount: batchUpdates.length,
-      attendedCount,
-      missedCount,
-      skippedCount,
-      details,
-    };
+/**
+ * 매일 서울 자정 직후: 전날 이전 일정의 rides 중 미검증 건에 대해 참석 검증(방장 없이 서버 실행)
+ */
+export function createScheduledRideAttendanceVerification(stravaClientSecret: SecretParam) {
+  return onSchedule(
+    {
+      schedule: "5 0 * * *",
+      timeZone: "Asia/Seoul",
+      region: "asia-northeast3",
+      secrets: [stravaClientSecret],
+      timeoutSeconds: 540,
+      memory: "512MiB",
+    },
+    async () => {
+      const clientSecret = stravaClientSecret.value() || process.env.STRAVA_CLIENT_SECRET || "";
+      if (!clientSecret.trim()) {
+        console.error("[scheduledRideAttendanceVerification] STRAVA_CLIENT_SECRET 없음");
+        return;
+      }
+      const db = admin.firestore();
+      const startToday = getStartOfTodaySeoulTimestamp();
+      let snap: admin.firestore.QuerySnapshot;
+      try {
+        snap = await db.collection("rides").where("date", "<", startToday).limit(400).get();
+      } catch (e) {
+        console.error("[scheduledRideAttendanceVerification] rides 조회 실패:", (e as Error).message);
+        return;
+      }
+      let ok = 0;
+      let fail = 0;
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if (data.attendanceVerificationRan === true) continue;
+        if (String(data.rideStatus || "active") === "cancelled") continue;
+        try {
+          await executeVerifyAttendanceForEventId(db, doc.id, clientSecret.trim(), null);
+          ok++;
+        } catch (err) {
+          fail++;
+          console.warn("[scheduledRideAttendanceVerification] 건너뜀/실패:", doc.id, (err as Error).message);
+        }
+      }
+      console.log("[scheduledRideAttendanceVerification] 완료", { ok, fail, scanned: snap.size });
     }
   );
 }

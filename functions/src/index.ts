@@ -33,7 +33,7 @@ import {
   DEFAULT_SUBSCRIPTION_DAYS,
 } from "./subscriptionService";
 import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
-import { createVerifyMeetingAttendance } from "./verifyMeetingAttendance";
+import { createVerifyMeetingAttendance, createScheduledRideAttendanceVerification } from "./verifyMeetingAttendance";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
@@ -595,3 +595,6 @@ export const stravaWebhook = onRequest(
 
 /** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
 export const verifyMeetingAttendance = createVerifyMeetingAttendance(stravaClientSecret);
+
+/** 서울 자정 5분 후: 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
+export const scheduledRideAttendanceVerification = createScheduledRideAttendanceVerification(stravaClientSecret);
