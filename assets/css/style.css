@@ -11310,7 +11310,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   transition: box-shadow .25s ease, outline-color .25s ease;
 }
 
-/* W/kg 등급별 네온 (대시보드 표와 동일 임계값) */
+/* W/kg 등급별 네온 (PRO≥5.0, 엘리트≥4.2, 상급≥3.7, 중급≥3.2, 초급≥2.5, 입문<2.5 — 대시보드 표와 동일) */
 #trainingScreen #userPanel.neon-active.wkg-pro          { --neon-color: rgba(212, 175, 55, 0.95); } /* PRO: 금색 */
 #trainingScreen #userPanel.neon-active.wkg-elite        { --neon-color: rgba(255, 56, 56, 0.90); } /* 엘리트: 빨강 */
 #trainingScreen #userPanel.neon-active.wkg-advanced     { --neon-color: rgba(255, 149, 0, 0.90); } /* 상급: 주황 */
