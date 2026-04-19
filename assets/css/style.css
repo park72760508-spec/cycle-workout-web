@@ -11310,12 +11310,13 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   transition: box-shadow .25s ease, outline-color .25s ease;
 }
 
-/* 등급별 색상 (요청 기준) */
-#trainingScreen #userPanel.neon-active.wkg-elite        { --neon-color: rgba(255, 56, 56, 0.90); } /* 상급: 빨강 */
-#trainingScreen #userPanel.neon-active.wkg-advanced     { --neon-color: rgba(255,149,  0, 0.90); } /* 중급: 주황 */
-#trainingScreen #userPanel.neon-active.wkg-intermediate { --neon-color: rgba(168, 85,247, 0.90); } /* 초중급: 보라 */
-#trainingScreen #userPanel.neon-active.wkg-novice       { --neon-color: rgba( 34,197, 94, 0.90); } /* 초급: 초록 */
-#trainingScreen #userPanel.neon-active.wkg-beginner     { --neon-color: rgba(251,191, 36, 0.95); } /* 입문: 노랑 */
+/* W/kg 등급별 네온 (대시보드 표와 동일 임계값) */
+#trainingScreen #userPanel.neon-active.wkg-pro          { --neon-color: rgba(212, 175, 55, 0.95); } /* PRO: 금색 */
+#trainingScreen #userPanel.neon-active.wkg-elite        { --neon-color: rgba(255, 56, 56, 0.90); } /* 엘리트: 빨강 */
+#trainingScreen #userPanel.neon-active.wkg-advanced     { --neon-color: rgba(255, 149, 0, 0.90); } /* 상급: 주황 */
+#trainingScreen #userPanel.neon-active.wkg-intermediate { --neon-color: rgba(168, 85, 247, 0.90); } /* 중급: 보라 */
+#trainingScreen #userPanel.neon-active.wkg-beginner    { --neon-color: rgba(34, 197, 94, 0.90); } /* 초급: 초록 */
+#trainingScreen #userPanel.neon-active.wkg-novice       { --neon-color: rgba(251, 191, 36, 0.95); } /* 입문: 노랑 */
 
 /* 훈련 컨트롤 버튼 개선된 디자인 */
 .enhanced-control-btn {
