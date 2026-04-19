@@ -16667,16 +16667,16 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           glowColor: 'rgba(212,175,55,0.55)'
         };
       }
-      if (v >= 4.0) {
+      if (v >= 4.2) {
         return { grade: 'elite', label: '엘리트', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #f87171, #dc2626)', glowColor: 'rgba(239,68,68,0.5)' };
       }
-      if (v >= 3.5) {
+      if (v >= 3.7) {
         return { grade: 'advanced', label: '상급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #fb923c, #ea580c)', glowColor: 'rgba(249,115,22,0.5)' };
       }
-      if (v >= 3.0) {
+      if (v >= 3.2) {
         return { grade: 'intermediate', label: '중급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #c084fc, #6d28d9)', glowColor: 'rgba(168,85,247,0.55)' };
       }
-      if (v >= 2.2) {
+      if (v >= 2.5) {
         return { grade: 'beginner', label: '초급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #a3e635, #65a30d)', glowColor: 'rgba(132,204,22,0.5)' };
       }
       return { grade: 'novice', label: '입문', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #fde047, #ca8a04)', glowColor: 'rgba(234,179,8,0.55)' };
@@ -18369,10 +18369,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             glowColor: 'rgba(212,175,55,0.55)'
           };
         }
-        if (v >= 4.0) return { grade: 'elite', label: '엘리트', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #f87171, #dc2626)', glowColor: 'rgba(239,68,68,0.5)' };
-        if (v >= 3.5) return { grade: 'advanced', label: '상급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #fb923c, #ea580c)', glowColor: 'rgba(249,115,22,0.5)' };
-        if (v >= 3.0) return { grade: 'intermediate', label: '중급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #c084fc, #6d28d9)', glowColor: 'rgba(168,85,247,0.55)' };
-        if (v >= 2.2) return { grade: 'beginner', label: '초급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #a3e635, #65a30d)', glowColor: 'rgba(132,204,22,0.5)' };
+        if (v >= 4.2) return { grade: 'elite', label: '엘리트', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #f87171, #dc2626)', glowColor: 'rgba(239,68,68,0.5)' };
+        if (v >= 3.7) return { grade: 'advanced', label: '상급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #fb923c, #ea580c)', glowColor: 'rgba(249,115,22,0.5)' };
+        if (v >= 3.2) return { grade: 'intermediate', label: '중급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #c084fc, #6d28d9)', glowColor: 'rgba(168,85,247,0.55)' };
+        if (v >= 2.5) return { grade: 'beginner', label: '초급', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #a3e635, #65a30d)', glowColor: 'rgba(132,204,22,0.5)' };
         return { grade: 'novice', label: '입문', indicatorStyle: 'gradient', gradient: 'linear-gradient(to bottom right, #fde047, #ca8a04)', glowColor: 'rgba(234,179,8,0.55)' };
       };
       
@@ -18976,11 +18976,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     <thead><tr className="border-b border-gray-200"><th className="py-1 pr-2">등급</th><th className="py-1">W/kg 기준</th><th className="py-1 pl-2">표시등</th></tr></thead>
                     <tbody>
                       <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'pro' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">PRO</td><td>5.0 이상</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={5.2} size={10} /><span className="text-gray-500">블랙/골드</span></div></td></tr>
-                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'elite' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">엘리트</td><td>4.0 이상 ~ 5.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={4.5} size={10} /><span className="text-gray-500">빨강 (Red)</span></div></td></tr>
-                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'advanced' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">상급</td><td>3.5 이상 ~ 4.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={3.7} size={10} /><span className="text-gray-500">주황 (Orange)</span></div></td></tr>
-                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'intermediate' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">중급</td><td>3.0 이상 ~ 3.5 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={3.2} size={10} /><span className="text-gray-500">보라 (Purple)</span></div></td></tr>
-                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'beginner' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">초급</td><td>2.2 이상 ~ 3.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={2.5} size={10} /><span className="text-gray-500">초록 (Green)</span></div></td></tr>
-                      <tr className={myWkgTierGuide === 'novice' ? 'stelvio-dashboard-current-grade' : ''}><td className="py-1 pr-2">입문</td><td>2.2 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={1.8} size={10} /><span className="text-gray-500">노랑 (Yellow)</span></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'elite' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">엘리트</td><td>4.2 이상 ~ 5.0 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={4.5} size={10} /><span className="text-gray-500">빨강 (Red)</span></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'advanced' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">상급</td><td>3.7 이상 ~ 4.2 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={3.95} size={10} /><span className="text-gray-500">주황 (Orange)</span></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'intermediate' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">중급</td><td>3.2 이상 ~ 3.7 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={3.45} size={10} /><span className="text-gray-500">보라 (Purple)</span></div></td></tr>
+                      <tr className={'border-b border-gray-100' + (myWkgTierGuide === 'beginner' ? ' stelvio-dashboard-current-grade' : '')}><td className="py-1 pr-2">초급</td><td>2.5 이상 ~ 3.2 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={2.85} size={10} /><span className="text-gray-500">초록 (Green)</span></div></td></tr>
+                      <tr className={myWkgTierGuide === 'novice' ? 'stelvio-dashboard-current-grade' : ''}><td className="py-1 pr-2">입문</td><td>2.5 미만</td><td className="py-1 pl-2"><div className="inline-flex items-center gap-1.5 flex-wrap"><WkgGradeIndicator wkg={2.0} size={10} /><span className="text-gray-500">노랑 (Yellow)</span></div></td></tr>
                     </tbody>
                   </table>
                 </section>
