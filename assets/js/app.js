@@ -6159,17 +6159,18 @@ function updateUserPanelNeonByWkg(wkg) {
   if (!panel) return;
 
   // 기존 제거 로직은 유지
-  panel.classList.remove('neon-active','wkg-elite','wkg-advanced','wkg-intermediate','wkg-novice','wkg-beginner');
+  panel.classList.remove('neon-active', 'wkg-pro', 'wkg-elite', 'wkg-advanced', 'wkg-intermediate', 'wkg-beginner', 'wkg-novice');
 
   // 🔧 여기 변경: 값이 없으면 '그냥 아무것도 붙이지 않고' return
   if (!Number.isFinite(wkg) || wkg <= 0) return;
 
   let tier;
-  if (wkg >= 4.0)      tier = 'wkg-elite';
+  if (wkg >= 5.0) tier = 'wkg-pro';
+  else if (wkg >= 4.0) tier = 'wkg-elite';
   else if (wkg >= 3.5) tier = 'wkg-advanced';
   else if (wkg >= 3.0) tier = 'wkg-intermediate';
-  else if (wkg >= 2.2) tier = 'wkg-novice';
-  else                 tier = 'wkg-beginner';
+  else if (wkg >= 2.2) tier = 'wkg-beginner';
+  else tier = 'wkg-novice';
 
   panel.classList.add('neon-active', tier);
 }
