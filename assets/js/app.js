@@ -6166,10 +6166,10 @@ function updateUserPanelNeonByWkg(wkg) {
 
   let tier;
   if (wkg >= 5.0) tier = 'wkg-pro';
-  else if (wkg >= 4.0) tier = 'wkg-elite';
-  else if (wkg >= 3.5) tier = 'wkg-advanced';
-  else if (wkg >= 3.0) tier = 'wkg-intermediate';
-  else if (wkg >= 2.2) tier = 'wkg-beginner';
+  else if (wkg >= 4.2) tier = 'wkg-elite';
+  else if (wkg >= 3.7) tier = 'wkg-advanced';
+  else if (wkg >= 3.2) tier = 'wkg-intermediate';
+  else if (wkg >= 2.5) tier = 'wkg-beginner';
   else tier = 'wkg-novice';
 
   panel.classList.add('neon-active', tier);
