@@ -328,7 +328,7 @@
                     ),
                     React.createElement('tr', { className: 'border-b border-gray-100' + (userWkgTier === 'elite' ? ' stelvio-dashboard-current-grade' : '') },
                       React.createElement('td', { className: 'py-1 pr-2' }, '엘리트'),
-                      React.createElement('td', null, '4.0 이상 ~ 5.0 미만'),
+                      React.createElement('td', null, '4.2 이상 ~ 5.0 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center gap-1.5 flex-wrap' },
                         React.createElement(WkgGradeIndicator, { wkg: 4.5, size: 10 }),
                         React.createElement('span', { className: 'text-gray-500' }, '빨강 (Red)')
@@ -336,33 +336,33 @@
                     ),
                     React.createElement('tr', { className: 'border-b border-gray-100' + (userWkgTier === 'advanced' ? ' stelvio-dashboard-current-grade' : '') },
                       React.createElement('td', { className: 'py-1 pr-2' }, '상급'),
-                      React.createElement('td', null, '3.5 이상 ~ 4.0 미만'),
+                      React.createElement('td', null, '3.7 이상 ~ 4.2 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center gap-1.5 flex-wrap' },
-                        React.createElement(WkgGradeIndicator, { wkg: 3.7, size: 10 }),
+                        React.createElement(WkgGradeIndicator, { wkg: 3.95, size: 10 }),
                         React.createElement('span', { className: 'text-gray-500' }, '주황 (Orange)')
                       ) : null)
                     ),
                     React.createElement('tr', { className: 'border-b border-gray-100' + (userWkgTier === 'intermediate' ? ' stelvio-dashboard-current-grade' : '') },
                       React.createElement('td', { className: 'py-1 pr-2' }, '중급'),
-                      React.createElement('td', null, '3.0 이상 ~ 3.5 미만'),
+                      React.createElement('td', null, '3.2 이상 ~ 3.7 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center gap-1.5 flex-wrap' },
-                        React.createElement(WkgGradeIndicator, { wkg: 3.2, size: 10 }),
+                        React.createElement(WkgGradeIndicator, { wkg: 3.45, size: 10 }),
                         React.createElement('span', { className: 'text-gray-500' }, '보라 (Purple)')
                       ) : null)
                     ),
                     React.createElement('tr', { className: 'border-b border-gray-100' + (userWkgTier === 'beginner' ? ' stelvio-dashboard-current-grade' : '') },
                       React.createElement('td', { className: 'py-1 pr-2' }, '초급'),
-                      React.createElement('td', null, '2.2 이상 ~ 3.0 미만'),
+                      React.createElement('td', null, '2.5 이상 ~ 3.2 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center gap-1.5 flex-wrap' },
-                        React.createElement(WkgGradeIndicator, { wkg: 2.5, size: 10 }),
+                        React.createElement(WkgGradeIndicator, { wkg: 2.85, size: 10 }),
                         React.createElement('span', { className: 'text-gray-500' }, '초록 (Green)')
                       ) : null)
                     ),
                     React.createElement('tr', { className: (userWkgTier === 'novice' ? 'stelvio-dashboard-current-grade' : '') },
                       React.createElement('td', { className: 'py-1 pr-2' }, '입문'),
-                      React.createElement('td', null, '2.2 미만'),
+                      React.createElement('td', null, '2.5 미만'),
                       React.createElement('td', { className: 'py-1 pl-2' }, WkgGradeIndicator ? React.createElement('div', { className: 'inline-flex items-center gap-1.5 flex-wrap' },
-                        React.createElement(WkgGradeIndicator, { wkg: 1.8, size: 10 }),
+                        React.createElement(WkgGradeIndicator, { wkg: 2.0, size: 10 }),
                         React.createElement('span', { className: 'text-gray-500' }, '노랑 (Yellow)')
                       ) : null)
                     )
