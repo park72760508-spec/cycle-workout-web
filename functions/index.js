@@ -734,17 +734,18 @@ function isEmptyMmpValue(v) {
  * Strava Webhook 활동 생성 이벤트 처리 (비동기 호출용).
  * owner_id(Strava athlete ID)로 유저 조회 → Activity 상세 + Streams 병렬 호출 → MMP 계산 → TSS/포인트 정산 → 저장.
  */
-async function processStravaActivity(db, ownerId, objectId) {
+async function processStravaActivity(db, ownerId, objectId, options = {}) {
+  const skipPointUpdate = Boolean(options && options.skipPointUpdate);
   const ownerIdNum = Number(ownerId);
   const activityId = String(objectId);
   if (!ownerIdNum || !activityId) {
     console.warn("[processStravaActivity] owner_id 또는 object_id 없음:", { ownerId, objectId });
-    return;
+    return null;
   }
   const usersSnap = await db.collection("users").where("strava_athlete_id", "==", ownerIdNum).limit(1).get();
   if (usersSnap.empty) {
     console.warn("[processStravaActivity] strava_athlete_id=", ownerIdNum, "에 해당하는 유저 없음");
-    return;
+    return null;
   }
   const userDoc = usersSnap.docs[0];
   const userId = userDoc.id;
@@ -757,7 +758,7 @@ async function processStravaActivity(db, ownerId, objectId) {
     accessToken = tokenResult.accessToken;
   } catch (e) {
     console.error("[processStravaActivity] 토큰 갱신 실패:", userId, e.message);
-    return;
+    return null;
   }
 
   const [detailRes, streamsRes] = await Promise.all([
@@ -767,7 +768,7 @@ async function processStravaActivity(db, ownerId, objectId) {
 
   if (!detailRes.success || !detailRes.activity) {
     console.warn("[processStravaActivity] 활동 상세 조회 실패:", activityId, detailRes.error);
-    return;
+    return null;
   }
 
   const activity = detailRes.activity;
@@ -891,7 +892,7 @@ async function processStravaActivity(db, ownerId, objectId) {
     }
   }
 
-  if (userTss > 0) {
+  if (userTss > 0 && !skipPointUpdate) {
     try {
       await updateUserMileageInFirestore(db, userId, userTss);
     } catch (e) {
@@ -900,6 +901,7 @@ async function processStravaActivity(db, ownerId, objectId) {
   }
 
   console.log("[processStravaActivity] 완료:", { userId, activityId, isNew, userTss, max5minWatts, max10minWatts, max30minWatts });
+  return { userId, activityId, userTss, isNew };
 }
 
 function pickFirstFiniteNumberFromStravaActivity(obj, keys) {
@@ -5102,6 +5104,9 @@ if (fs.existsSync(libPath)) {
     }
     if (naverSubscription && naverSubscription.stravaWebhook) {
       exports.stravaWebhook = naverSubscription.stravaWebhook;
+    }
+    if (naverSubscription && naverSubscription.onIndoorLogCreatedReward) {
+      exports.onIndoorLogCreatedReward = naverSubscription.onIndoorLogCreatedReward;
     }
   } catch (e) {
     console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
