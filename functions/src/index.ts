@@ -5,6 +5,7 @@
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret, defineString, defineInt } from "firebase-functions/params";
 import {
   getAccessToken,
@@ -34,6 +35,7 @@ import {
 } from "./subscriptionService";
 import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
 import { createVerifyMeetingAttendance, createScheduledRideAttendanceVerification } from "./verifyMeetingAttendance";
+import { PointRewardService } from "./PointRewardService";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
@@ -54,6 +56,9 @@ const stravaWebhookVerifyToken = defineString("STRAVA_WEBHOOK_VERIFY_TOKEN", {
 
 // Strava Webhook: processStravaActivity에서 토큰 갱신 시 STRAVA_CLIENT_SECRET 필요
 const stravaClientSecret = defineSecret("STRAVA_CLIENT_SECRET");
+const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
+const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
+const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
 
 /** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
 function injectSmtpEnv(): void {
@@ -65,6 +70,17 @@ function injectSmtpEnv(): void {
     process.env.ADMIN_EMAIL = adminEmail.value() || process.env.ADMIN_EMAIL;
   } catch {
     // Secret 미설정 시 무시 (emailService에서 SMTP 미설정으로 처리)
+  }
+}
+
+/** 알리고 인증 Secret을 process.env로 주입 (PointRewardService가 동일 패턴으로 읽음) */
+function injectAligoEnv(): void {
+  try {
+    process.env.ALIGO_API_KEY = aligoApiKeySecret.value() || process.env.ALIGO_API_KEY;
+    process.env.ALIGO_USER_ID = aligoUserIdSecret.value() || process.env.ALIGO_USER_ID;
+    process.env.ALIGO_TOKEN = aligoTokenSecret.value() || process.env.ALIGO_TOKEN;
+  } catch {
+    // Secret 미설정 시 무시 (서비스 내부에서 설정 누락 에러 처리)
   }
 }
 
@@ -526,8 +542,36 @@ async function processStravaActivityAsync(
   ownerId: number,
   objectId: number
 ): Promise<void> {
+  injectAligoEnv();
   const mainModule = require("../index.js");
-  await mainModule.processStravaActivity(db, ownerId, objectId);
+  const legacyResult = await mainModule.processStravaActivity(db, ownerId, objectId, {
+    skipPointUpdate: true,
+  });
+  const userId = String(legacyResult?.userId || "").trim();
+  const userTss = Number(legacyResult?.userTss || 0);
+  const activityId = String(legacyResult?.activityId || objectId || "").trim();
+
+  if (!userId || !activityId || userTss <= 0) {
+    return;
+  }
+
+  const logRef = db.collection("users").doc(userId).collection("logs").doc(activityId);
+  const logSnap = await logRef.get();
+  if (logSnap.exists && logSnap.data()?.point_reward_v2_applied === true) {
+    return;
+  }
+
+  const rewardService = new PointRewardService(db);
+  const rewardResult = await rewardService.processRidingReward(userId, userTss, true);
+
+  await logRef.set(
+    {
+      point_reward_v2_applied: true,
+      point_reward_v2_history_id: rewardResult.historyId,
+      point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 /**
@@ -539,7 +583,7 @@ export const stravaWebhook = onRequest(
   {
     region: "asia-northeast3",
     cors: false,
-    secrets: [stravaClientSecret],
+    secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   },
   async (req, res) => {
     if (req.method === "GET") {
@@ -590,6 +634,50 @@ export const stravaWebhook = onRequest(
     }
 
     res.status(405).send("Method Not Allowed");
+  }
+);
+
+/**
+ * 인도어 세션 로그 생성 시 포인트 보상 처리.
+ * - users/{userId}/logs/{logId} 생성 이벤트에서 source!=strava 이고 tss>0 인 경우만 적립
+ * - point_reward_v2_applied 플래그로 중복 적립 방지
+ */
+export const onIndoorLogCreatedReward = onDocumentCreated(
+  {
+    document: "users/{userId}/logs/{logId}",
+    region: "asia-northeast3",
+    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+  },
+  async (event) => {
+    injectAligoEnv();
+
+    const snap = event.data;
+    if (!snap?.exists) return;
+
+    const logData = snap.data() as Record<string, unknown>;
+    const userId = String(event.params.userId || "").trim();
+    if (!userId) return;
+
+    // Strava 로그는 stravaWebhook 경로에서 별도 처리
+    const source = String(logData.source || "").toLowerCase();
+    if (source === "strava") return;
+
+    if (logData.point_reward_v2_applied === true) return;
+
+    const tss = Number(logData.tss || 0);
+    if (!Number.isFinite(tss) || tss <= 0) return;
+
+    const rewardService = new PointRewardService(db);
+    const rewardResult = await rewardService.processRidingReward(userId, tss, false);
+
+    await snap.ref.set(
+      {
+        point_reward_v2_applied: true,
+        point_reward_v2_history_id: rewardResult.historyId,
+        point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
   }
 );
 
