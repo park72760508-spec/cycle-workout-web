@@ -3546,48 +3546,49 @@ function OpenRidingCalendarMain(props) {
   function renderMyRidesUnifiedSection() {
     var phoneMissing = !!(userId && !String(inviteCheckPhone || '').trim());
     return (
-      <section
-        className="rounded-2xl p-3 border-2 border-violet-600 bg-white shadow-sm open-riding-my-rides-panel"
-        aria-labelledby="open-riding-my-rides-heading"
-      >
-        <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
-          <span
-            id="open-riding-my-rides-heading"
-            role="heading"
-            aria-level={2}
-            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-200 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-my-rides-title-pill"
-          >
-            [나의 라이딩]
-          </span>
-        </div>
-        {!userId ? (
-          <p className="text-sm text-slate-400 m-0">로그인 후 나의 라이딩(주최·초대·참석 확정)을 확인할 수 있습니다.</p>
-        ) : (
-          <>
-            {phoneMissing ? (
-              <p className="text-[11px] text-slate-500 m-0 mb-2 leading-snug">
-                프로필·계정에 전화번호를 등록하면 초대받은 라이딩이 목록에 포함됩니다. (내가 주최한 라이딩·초대 없이 참석 확정한 라이딩은 연락처 없이도 표시됩니다.)
-              </p>
-            ) : null}
-            {myRidesUnifiedRows.length === 0 ? (
-              <p className="text-sm text-slate-400 m-0">이번 달 표시할 나의 라이딩이 없습니다.</p>
-            ) : (
-              <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
-                {myRidesUnifiedRows.map(function (row) {
-                  return renderMonthRideListRow(row.r, {
-                    showRideDate: true,
-                    myRidesUnifiedList: true,
-                    myRideKind: row.kind,
-                  });
-                })}
-              </ul>
-            )}
-          </>
-        )}
-        <div
-          className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap items-center justify-start gap-x-1.5 gap-y-1 text-[10px] sm:text-[11px] text-slate-600 leading-tight open-riding-my-rides-legend"
-          role="note"
+      <>
+        <section
+          className="rounded-2xl p-3 border-2 border-violet-600 bg-white shadow-sm open-riding-my-rides-panel"
+          aria-labelledby="open-riding-my-rides-heading"
         >
+          <div className="flex items-center justify-start gap-2 mb-2 flex-wrap">
+            <span
+              id="open-riding-my-rides-heading"
+              role="heading"
+              aria-level={2}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl border border-violet-200 bg-white text-violet-900 shadow-sm shrink-0 tracking-tight open-riding-my-rides-title-pill"
+            >
+              [나의 라이딩]
+            </span>
+          </div>
+          {!userId ? (
+            <p className="text-sm text-slate-400 m-0">로그인 후 나의 라이딩(주최·초대·참석 확정)을 확인할 수 있습니다.</p>
+          ) : (
+            <>
+              {phoneMissing ? (
+                <p className="text-[11px] text-slate-500 m-0 mb-2 leading-snug">
+                  프로필·계정에 전화번호를 등록하면 초대받은 라이딩이 목록에 포함됩니다. (내가 주최한 라이딩·초대 없이 참석 확정한 라이딩은 연락처 없이도 표시됩니다.)
+                </p>
+              ) : null}
+              {myRidesUnifiedRows.length === 0 ? (
+                <p className="text-sm text-slate-400 m-0">이번 달 표시할 나의 라이딩이 없습니다.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto rounded-lg bg-white">
+                  {myRidesUnifiedRows.map(function (row) {
+                    return renderMonthRideListRow(row.r, {
+                      showRideDate: true,
+                      myRidesUnifiedList: true,
+                      myRideKind: row.kind,
+                    });
+                  })}
+                </ul>
+              )}
+            </>
+          )}
+          <div
+            className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap items-center justify-start gap-x-1.5 gap-y-1 text-[10px] sm:text-[11px] text-slate-600 leading-tight open-riding-my-rides-legend"
+            role="note"
+          >
           <span className="inline-flex items-center gap-1 shrink-0">
             <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25">
               <svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -3618,8 +3619,12 @@ function OpenRidingCalendarMain(props) {
             </span>
             <span className="text-slate-500">내가주최</span>
           </span>
-        </div>
-      </section>
+          </div>
+        </section>
+        <p className="mt-1.5 ml-1 text-[11px] sm:text-xs text-orange-400 leading-snug">
+          * 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트가 사용됩니다.
+        </p>
+      </>
     );
   }
 
