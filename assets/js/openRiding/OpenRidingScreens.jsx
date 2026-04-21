@@ -3621,8 +3621,8 @@ function OpenRidingCalendarMain(props) {
           </span>
           </div>
         </section>
-        <p className="mt-1.5 ml-1 text-[11px] sm:text-xs text-orange-400 leading-snug">
-          * 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트가 사용됩니다.
+        <p className="mt-1.5 ml-1 text-[11px] sm:text-xs text-slate-500 leading-snug">
+          * 라이딩 모임 생성(100SP) 및 참석(10SP)에 마일리지 포인트 사용
         </p>
       </>
     );
