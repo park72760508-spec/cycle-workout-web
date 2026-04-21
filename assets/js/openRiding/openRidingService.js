@@ -1248,6 +1248,8 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
   const rideRef = doc(db, 'rides', rideId);
   return runTransaction(db, async (transaction) => {
     const snap = await transaction.get(rideRef);
+    if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
+    const data = snap.data();
     const userRef = doc(db, 'users', String(userId).trim());
     const userSnap = await transaction.get(userRef);
     if (!userSnap.exists()) throw new Error('USER_NOT_FOUND');
@@ -1255,9 +1257,6 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
     const chargeSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
     if (userAcc < chargeSp) throw new Error('INSUFFICIENT_ACC_POINTS_JOIN');
-
-    if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
-    const data = snap.data();
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
     if (isOpenRidingScheduleEnded(data)) throw new Error('RIDE_JOIN_CLOSED');
     const isPrivate = !!data.isPrivate;
