@@ -760,7 +760,7 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
       const refundTargets = new Set();
       asStringArray(data.participants).forEach((uidRaw) => {
         const uid = String(uidRaw != null ? uidRaw : '').trim();
-        if (!uid) continue;
+        if (!uid) return;
         if (uid === String(data.hostUserId || '').trim()) return;
         refundTargets.add(uid);
       });
@@ -834,7 +834,7 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
       const refundTargets = new Set();
       asStringArray(data.participants).forEach((uidRaw) => {
         const uid = String(uidRaw != null ? uidRaw : '').trim();
-        if (!uid) continue;
+        if (!uid) return;
         if (uid === String(data.hostUserId || '').trim()) return;
         refundTargets.add(uid);
       });
