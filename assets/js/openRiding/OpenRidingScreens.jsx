@@ -5409,6 +5409,9 @@ function OpenRidingDetail(props) {
   var _cancelBusy = useState(false);
   var cancelBusy = _cancelBusy[0];
   var setCancelBusy = _cancelBusy[1];
+  var _hostRefundRemain = useState(null);
+  var hostRefundRemain = _hostRefundRemain[0];
+  var setHostRefundRemain = _hostRefundRemain[1];
   var _jpw = useState('');
   var joinPasswordInput = _jpw[0];
   var setJoinPasswordInput = _jpw[1];
@@ -6288,6 +6291,28 @@ function OpenRidingDetail(props) {
     }
   }
 
+  async function prepareHostRefundPreviewAndOpen(kind) {
+    var acc = null;
+    try {
+      if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function' && userId) {
+        var row = await window.getUserByUid(String(userId).trim());
+        var n = Number(row && row.acc_points != null ? row.acc_points : NaN);
+        if (Number.isFinite(n)) acc = n;
+      }
+    } catch (_e) {}
+    if (acc == null) {
+      try {
+        if (typeof window !== 'undefined' && window.currentUser) {
+          var n2 = Number(window.currentUser.acc_points != null ? window.currentUser.acc_points : NaN);
+          if (Number.isFinite(n2)) acc = n2;
+        }
+      } catch (_e2) {}
+    }
+    setHostRefundRemain(Number.isFinite(acc) ? Math.max(0, Math.floor(acc + 100)) : null);
+    if (kind === 'delete') setDeleteModalOpen(true);
+    else setBombOpen(true);
+  }
+
   if (loading) {
     return <div className="p-6 text-center text-slate-500">불러오는 중…</div>;
   }
@@ -7132,7 +7157,12 @@ function OpenRidingDetail(props) {
               </h2>
             </div>
             <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 폭파하시겠습니까?</p>
-            <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">참가자 문자·알림톡 일괄 발송은 추후 연동됩니다.</p>
+            <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
+              폭파 시 주최 시 차감된 누적 포인트 100SP가 환급 처리됩니다.
+            </p>
+            <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">
+              {hostRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + hostRefundRemain + ' SP)'}
+            </p>
             <div className="stelvio-exit-confirm-buttons">
               <button
                 type="button"
@@ -7185,7 +7215,12 @@ function OpenRidingDetail(props) {
               </h2>
             </div>
             <p className="stelvio-exit-confirm-message text-center m-0">등록한 라이딩을 삭제하시겠습니까?</p>
-            <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">삭제 후에는 복구할 수 없습니다.</p>
+            <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
+              삭제 시 주최 시 차감된 누적 포인트 100SP가 환급 처리됩니다.
+            </p>
+            <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">
+              {hostRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + hostRefundRemain + ' SP)'}
+            </p>
             <div className="stelvio-exit-confirm-buttons">
               <button
                 type="button"
@@ -7215,10 +7250,10 @@ function OpenRidingDetail(props) {
       onMoim={onBack}
       onEdit={onOpenEdit}
       onCancel={function () {
-        setBombOpen(true);
+        prepareHostRefundPreviewAndOpen('cancel');
       }}
       onDelete={function () {
-        setDeleteModalOpen(true);
+        prepareHostRefundPreviewAndOpen('delete');
       }}
       hostToolbarLocked={hostToolbarPastLocked}
       showHostActions={!isCancelled && (isHost || _isAdmin1)}

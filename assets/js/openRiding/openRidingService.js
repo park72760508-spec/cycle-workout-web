@@ -813,6 +813,23 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+    const shouldRefundHost =
+      data.hostPointCharged === true &&
+      data.hostPointRefunded !== true &&
+      Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) > 0;
+    if (shouldRefundHost) {
+      const hostRef = doc(db, 'users', String(hostUserId).trim());
+      const hostSnap = await transaction.get(hostRef);
+      if (hostSnap.exists()) {
+        const hostData = hostSnap.data() || {};
+        const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
+        const refundSp = Number(data.hostPointChargeSp != null ? data.hostPointChargeSp : HOST_CREATE_CHARGE_SP) || 0;
+        transaction.update(hostRef, {
+          acc_points: hostAcc + refundSp,
+          openRidingPointUpdatedAt: serverTimestamp()
+        });
+      }
+    }
     transaction.delete(rideRef);
   });
   return { deleted: true };
