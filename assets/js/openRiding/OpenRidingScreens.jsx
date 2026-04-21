@@ -7237,10 +7237,7 @@ function OpenRidingDetail(props) {
             </div>
             <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 폭파하시겠습니까?</p>
             <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
-              폭파 시 주최 시 차감된 누적 포인트 100SP가 환급 처리됩니다.
-            </p>
-            <p className="text-xs text-slate-500 mt-1 leading-snug m-0 text-center">
-              참석 신청자에게 차감된 10SP도 각 사용자 누적 포인트로 환급 처리됩니다.
+              모임 생성 시 차감되었던 100SP가 환급 처리됩니다.
             </p>
             <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">
               {hostRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + hostRefundRemain + ' SP)'}
@@ -7298,10 +7295,7 @@ function OpenRidingDetail(props) {
             </div>
             <p className="stelvio-exit-confirm-message text-center m-0">등록한 라이딩을 삭제하시겠습니까?</p>
             <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
-              삭제 시 주최 시 차감된 누적 포인트 100SP가 환급 처리됩니다.
-            </p>
-            <p className="text-xs text-slate-500 mt-1 leading-snug m-0 text-center">
-              참석 신청자에게 차감된 10SP도 각 사용자 누적 포인트로 환급 처리됩니다.
+              모임 생성 시 차감되었던 100SP가 환급 처리됩니다.
             </p>
             <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">
               {hostRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + hostRefundRemain + ' SP)'}
