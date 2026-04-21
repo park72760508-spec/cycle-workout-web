@@ -766,6 +766,27 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+    const joinRefundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
+    const joinChargedByUid = { ...asBooleanMap(data.participantJoinChargedByUid) };
+    const joinRefundedByUid = { ...asBooleanMap(data.participantJoinRefundedByUid) };
+    if (joinRefundSp > 0) {
+      for (const uidKey of Object.keys(joinChargedByUid)) {
+        const uid = String(uidKey != null ? uidKey : '').trim();
+        if (!uid) continue;
+        if (joinChargedByUid[uid] !== true) continue;
+        if (joinRefundedByUid[uid] === true) continue;
+        const userRef = doc(db, 'users', uid);
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists()) continue;
+        const userData = userSnap.data() || {};
+        const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
+        transaction.update(userRef, {
+          acc_points: userAcc + joinRefundSp,
+          openRidingPointUpdatedAt: serverTimestamp()
+        });
+        joinRefundedByUid[uid] = true;
+      }
+    }
     const shouldRefundHost =
       data.hostPointCharged === true &&
       data.hostPointRefunded !== true &&
@@ -791,6 +812,7 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     transaction.update(rideRef, {
       rideStatus: 'cancelled',
       hostPointRefunded: shouldRefundHost ? true : data.hostPointRefunded === true,
+      participantJoinRefundedByUid: joinRefundedByUid,
       cancelledAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -813,6 +835,27 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
     if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+    const joinRefundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
+    const joinChargedByUid = { ...asBooleanMap(data.participantJoinChargedByUid) };
+    const joinRefundedByUid = { ...asBooleanMap(data.participantJoinRefundedByUid) };
+    if (joinRefundSp > 0) {
+      for (const uidKey of Object.keys(joinChargedByUid)) {
+        const uid = String(uidKey != null ? uidKey : '').trim();
+        if (!uid) continue;
+        if (joinChargedByUid[uid] !== true) continue;
+        if (joinRefundedByUid[uid] === true) continue;
+        const userRef = doc(db, 'users', uid);
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists()) continue;
+        const userData = userSnap.data() || {};
+        const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
+        transaction.update(userRef, {
+          acc_points: userAcc + joinRefundSp,
+          openRidingPointUpdatedAt: serverTimestamp()
+        });
+        joinRefundedByUid[uid] = true;
+      }
+    }
     const shouldRefundHost =
       data.hostPointCharged === true &&
       data.hostPointRefunded !== true &&

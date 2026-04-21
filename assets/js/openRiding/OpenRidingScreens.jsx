@@ -5421,6 +5421,12 @@ function OpenRidingDetail(props) {
   var _joinChargeRemain = useState(null);
   var joinChargeRemain = _joinChargeRemain[0];
   var setJoinChargeRemain = _joinChargeRemain[1];
+  var _leaveRefundModal = useState(false);
+  var leaveRefundModalOpen = _leaveRefundModal[0];
+  var setLeaveRefundModalOpen = _leaveRefundModal[1];
+  var _leaveRefundRemain = useState(null);
+  var leaveRefundRemain = _leaveRefundRemain[0];
+  var setLeaveRefundRemain = _leaveRefundRemain[1];
   var _lvlPart = useState(null);
   var levelParticipation = _lvlPart[0];
   var setLevelParticipation = _lvlPart[1];
@@ -6258,6 +6264,26 @@ function OpenRidingDetail(props) {
       setBusy(false);
     }
   }
+  async function openLeaveRefundConfirmModal() {
+    var acc = null;
+    try {
+      if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function' && userId) {
+        var row = await window.getUserByUid(String(userId).trim());
+        var n = Number(row && row.acc_points != null ? row.acc_points : NaN);
+        if (Number.isFinite(n)) acc = n;
+      }
+    } catch (_e) {}
+    if (acc == null) {
+      try {
+        if (typeof window !== 'undefined' && window.currentUser) {
+          var n2 = Number(window.currentUser.acc_points != null ? window.currentUser.acc_points : NaN);
+          if (Number.isFinite(n2)) acc = n2;
+        }
+      } catch (_e2) {}
+    }
+    setLeaveRefundRemain(Number.isFinite(acc) ? Math.max(0, Math.floor(acc + 10)) : null);
+    setLeaveRefundModalOpen(true);
+  }
 
   async function confirmBombRide() {
     var svc = typeof window !== 'undefined' ? window.openRidingService || {} : {};
@@ -7029,7 +7055,7 @@ function OpenRidingDetail(props) {
                     }
                     onClick={function () {
                       if (joinApplyClosedBySchedule || isActionBusy) return;
-                      onLeave();
+                      openLeaveRefundConfirmModal();
                     }}
                   >
                     {joinApplyClosedBySchedule ? '참석 변경 마감' : '참석 취소'}
@@ -7128,6 +7154,54 @@ function OpenRidingDetail(props) {
           </div>
         </div>
       ) : null}
+      {leaveRefundModalOpen ? (
+        <div
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200076] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-leave-refund-title"
+          onClick={function () {
+            if (!isActionBusy) setLeaveRefundModalOpen(false);
+          }}
+        >
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-7 px-8 text-center"
+            onClick={function (e) { e.stopPropagation(); }}
+          >
+            <div className="flex items-center justify-center gap-2.5 mb-4 pb-4 border-b border-slate-200">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-700 text-sm font-bold border border-violet-200" aria-hidden>SP</span>
+              <h2 id="open-riding-leave-refund-title" className="text-base font-bold text-slate-800 m-0 leading-tight">
+                참석 취소
+              </h2>
+            </div>
+            <p className="stelvio-exit-confirm-message text-center m-0">참석 취소 시 차감된 누적 포인트 10SP가 환급 처리됩니다.</p>
+            <p className="text-xs text-slate-500 mt-2 mb-5 leading-snug text-center">
+              {leaveRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + leaveRefundRemain + ' SP)'}
+            </p>
+            <div className="stelvio-exit-confirm-buttons">
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel inline-flex items-center justify-center disabled:opacity-50"
+                disabled={isActionBusy}
+                onClick={function () { setLeaveRefundModalOpen(false); }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok inline-flex items-center justify-center disabled:opacity-50"
+                disabled={isActionBusy}
+                onClick={function () {
+                  setLeaveRefundModalOpen(false);
+                  onLeave();
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {bombOpen ? (
         <div
@@ -7159,6 +7233,9 @@ function OpenRidingDetail(props) {
             <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 폭파하시겠습니까?</p>
             <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
               폭파 시 주최 시 차감된 누적 포인트 100SP가 환급 처리됩니다.
+            </p>
+            <p className="text-xs text-slate-500 mt-1 leading-snug m-0 text-center">
+              참석 신청자에게 차감된 10SP도 각 사용자 누적 포인트로 환급 처리됩니다.
             </p>
             <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">
               {hostRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + hostRefundRemain + ' SP)'}
@@ -7217,6 +7294,9 @@ function OpenRidingDetail(props) {
             <p className="stelvio-exit-confirm-message text-center m-0">등록한 라이딩을 삭제하시겠습니까?</p>
             <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
               삭제 시 주최 시 차감된 누적 포인트 100SP가 환급 처리됩니다.
+            </p>
+            <p className="text-xs text-slate-500 mt-1 leading-snug m-0 text-center">
+              참석 신청자에게 차감된 10SP도 각 사용자 누적 포인트로 환급 처리됩니다.
             </p>
             <p className="text-xs text-slate-500 mb-5 leading-snug m-0 text-center">
               {hostRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + hostRefundRemain + ' SP)'}
