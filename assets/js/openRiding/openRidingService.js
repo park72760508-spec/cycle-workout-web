@@ -32,15 +32,6 @@ function asStringArray(v) {
 const HOST_CREATE_CHARGE_SP = 100;
 const JOIN_CHARGE_SP = 10;
 
-function asBooleanMap(v) {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-  const out = {};
-  Object.keys(v).forEach((k) => {
-    out[String(k)] = !!v[k];
-  });
-  return out;
-}
-
 /** @param {unknown} v @param {number} maxLen */
 function trimPackText(v, maxLen) {
   const t = String(v != null ? v : '').trim();
@@ -654,9 +645,7 @@ export async function createRide(db, hostUserId, input) {
     hostPointChargeSp: HOST_CREATE_CHARGE_SP,
     hostPointCharged: true,
     hostPointRefunded: false,
-    participantJoinChargeSp: JOIN_CHARGE_SP,
-    participantJoinChargedByUid: {},
-    participantJoinRefundedByUid: {}
+    participantJoinChargeSp: JOIN_CHARGE_SP
   };
   const ridesCol = collection(db, 'rides');
   const rideRef = doc(ridesCol);
@@ -767,14 +756,21 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
     const joinRefundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
-    const joinChargedByUid = { ...asBooleanMap(data.participantJoinChargedByUid) };
-    const joinRefundedByUid = { ...asBooleanMap(data.participantJoinRefundedByUid) };
     if (joinRefundSp > 0) {
-      for (const uidKey of Object.keys(joinChargedByUid)) {
-        const uid = String(uidKey != null ? uidKey : '').trim();
+      const refundTargets = new Set();
+      asStringArray(data.participants).forEach((uidRaw) => {
+        const uid = String(uidRaw != null ? uidRaw : '').trim();
         if (!uid) continue;
-        if (joinChargedByUid[uid] !== true) continue;
-        if (joinRefundedByUid[uid] === true) continue;
+        if (uid === String(data.hostUserId || '').trim()) return;
+        refundTargets.add(uid);
+      });
+      asStringArray(data.waitlist).forEach((uidRaw) => {
+        const uid = String(uidRaw != null ? uidRaw : '').trim();
+        if (!uid) return;
+        if (uid === String(data.hostUserId || '').trim()) return;
+        refundTargets.add(uid);
+      });
+      for (const uid of refundTargets) {
         const userRef = doc(db, 'users', uid);
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) continue;
@@ -784,7 +780,6 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
           acc_points: userAcc + joinRefundSp,
           openRidingPointUpdatedAt: serverTimestamp()
         });
-        joinRefundedByUid[uid] = true;
       }
     }
     const shouldRefundHost =
@@ -812,7 +807,6 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
     transaction.update(rideRef, {
       rideStatus: 'cancelled',
       hostPointRefunded: shouldRefundHost ? true : data.hostPointRefunded === true,
-      participantJoinRefundedByUid: joinRefundedByUid,
       cancelledAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
@@ -836,14 +830,21 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
     const data = snap.data();
     if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
     const joinRefundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
-    const joinChargedByUid = { ...asBooleanMap(data.participantJoinChargedByUid) };
-    const joinRefundedByUid = { ...asBooleanMap(data.participantJoinRefundedByUid) };
     if (joinRefundSp > 0) {
-      for (const uidKey of Object.keys(joinChargedByUid)) {
-        const uid = String(uidKey != null ? uidKey : '').trim();
+      const refundTargets = new Set();
+      asStringArray(data.participants).forEach((uidRaw) => {
+        const uid = String(uidRaw != null ? uidRaw : '').trim();
         if (!uid) continue;
-        if (joinChargedByUid[uid] !== true) continue;
-        if (joinRefundedByUid[uid] === true) continue;
+        if (uid === String(data.hostUserId || '').trim()) return;
+        refundTargets.add(uid);
+      });
+      asStringArray(data.waitlist).forEach((uidRaw) => {
+        const uid = String(uidRaw != null ? uidRaw : '').trim();
+        if (!uid) return;
+        if (uid === String(data.hostUserId || '').trim()) return;
+        refundTargets.add(uid);
+      });
+      for (const uid of refundTargets) {
         const userRef = doc(db, 'users', uid);
         const userSnap = await transaction.get(userRef);
         if (!userSnap.exists()) continue;
@@ -853,7 +854,6 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
           acc_points: userAcc + joinRefundSp,
           openRidingPointUpdatedAt: serverTimestamp()
         });
-        joinRefundedByUid[uid] = true;
       }
     }
     const shouldRefundHost =
@@ -1277,8 +1277,6 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     let participantDisplay = { ...asParticipantDisplay(data.participantDisplay) };
     let participantContact = { ...asParticipantContact(data.participantContact) };
     let participantContactPublic = { ...asParticipantContactPublic(data.participantContactPublic) };
-    let participantJoinChargedByUid = { ...asBooleanMap(data.participantJoinChargedByUid) };
-    let participantJoinRefundedByUid = { ...asBooleanMap(data.participantJoinRefundedByUid) };
     const max = Math.max(1, Number(data.maxParticipants) || 1);
 
     if (participants.includes(userId)) {
@@ -1297,8 +1295,6 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
 
     if (participants.length < max) {
       participants = [...participants, userId];
-      participantJoinChargedByUid[String(userId)] = true;
-      participantJoinRefundedByUid[String(userId)] = false;
       transaction.update(rideRef, {
         participants,
         participantDisplay,
@@ -1306,8 +1302,6 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
         participantContactPublic,
         inviteJoinedUidByPhone,
         inviteDisplayByPhone,
-        participantJoinChargedByUid,
-        participantJoinRefundedByUid,
         updatedAt: serverTimestamp()
       });
       transaction.update(userRef, {
@@ -1318,8 +1312,6 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     }
 
     waitlist = [...waitlist, userId];
-    participantJoinChargedByUid[String(userId)] = true;
-    participantJoinRefundedByUid[String(userId)] = false;
     transaction.update(rideRef, {
       waitlist,
       participantDisplay,
@@ -1327,8 +1319,6 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
       participantContactPublic,
       inviteJoinedUidByPhone,
       inviteDisplayByPhone,
-      participantJoinChargedByUid,
-      participantJoinRefundedByUid,
       updatedAt: serverTimestamp()
     });
     transaction.update(userRef, {
@@ -1361,11 +1351,7 @@ export async function leaveRideTransaction(db, rideId, userId) {
     const userData = userSnap.data() || {};
     const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
     const refundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
-    const participantJoinChargedByUid = { ...asBooleanMap(data.participantJoinChargedByUid) };
-    const participantJoinRefundedByUid = { ...asBooleanMap(data.participantJoinRefundedByUid) };
-    const charged = participantJoinChargedByUid[String(userId)] === true;
-    const refunded = participantJoinRefundedByUid[String(userId)] === true;
-    const shouldRefund = charged && !refunded && refundSp > 0;
+    const shouldRefund = refundSp > 0;
 
     const inWait = waitlist.includes(userId);
     const inPart = participants.includes(userId);
@@ -1383,9 +1369,6 @@ export async function leaveRideTransaction(db, rideId, userId) {
         participantContactPublic: omitParticipantContactPublic(data.participantContactPublic, userId),
         inviteJoinedUidByPhone,
         inviteDisplayByPhone,
-        participantJoinRefundedByUid: shouldRefund
-          ? Object.assign({}, participantJoinRefundedByUid, { [String(userId)]: true })
-          : participantJoinRefundedByUid,
         updatedAt: serverTimestamp()
       });
       if (shouldRefund) {
@@ -1421,9 +1404,6 @@ export async function leaveRideTransaction(db, rideId, userId) {
         participantContactPublic,
         inviteJoinedUidByPhone,
         inviteDisplayByPhone,
-        participantJoinRefundedByUid: shouldRefund
-          ? Object.assign({}, participantJoinRefundedByUid, { [String(userId)]: true })
-          : participantJoinRefundedByUid,
         updatedAt: serverTimestamp()
       });
       if (shouldRefund) {
