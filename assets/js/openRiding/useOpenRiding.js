@@ -289,6 +289,10 @@ export function useOpenRideDetail(db, rideId, userId) {
           ? '취소된 라이딩에는 참석할 수 없습니다.'
           : raw === 'INVITE_ONLY'
             ? '초대받은 사용자만 참석 신청할 수 있습니다.'
+            : raw === 'INSUFFICIENT_ACC_POINTS_JOIN'
+              ? '누적 포인트가 부족합니다. 참석 신청에는 10SP가 필요합니다.'
+              : raw === 'USER_NOT_FOUND'
+                ? '사용자 포인트 정보를 찾을 수 없습니다. 다시 로그인해 주세요.'
             : raw === 'RIDE_JOIN_CLOSED'
               ? '이 모임은 일정이 지났거나, 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다.'
               : raw;

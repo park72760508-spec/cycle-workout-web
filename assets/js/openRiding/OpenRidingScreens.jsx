@@ -3882,6 +3882,9 @@ function OpenRidingCreateForm(props) {
   var _valDlg = useState({ open: false, text: '' });
   var validationDlg = _valDlg[0];
   var setValidationDlg = _valDlg[1];
+  var _hostChargeDlg = useState({ open: false, remaining: null });
+  var hostChargeDlg = _hostChargeDlg[0];
+  var setHostChargeDlg = _hostChargeDlg[1];
 
   var _rideSido = useState('');
   var rideFormSidoPick = _rideSido[0];
@@ -4268,8 +4271,26 @@ function OpenRidingCreateForm(props) {
     openFormValidationDialog(body);
   }
 
-  async function submit(e) {
-    e.preventDefault();
+  async function fetchUserAccPointsForOpenRiding(uid) {
+    var key = String(uid != null ? uid : '').trim();
+    if (!key) return null;
+    try {
+      if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function') {
+        var row = await window.getUserByUid(key);
+        var n = Number(row && row.acc_points != null ? row.acc_points : NaN);
+        if (Number.isFinite(n)) return n;
+      }
+    } catch (_e) {}
+    try {
+      if (typeof window !== 'undefined' && window.currentUser) {
+        var n2 = Number(window.currentUser.acc_points != null ? window.currentUser.acc_points : NaN);
+        if (Number.isFinite(n2)) return n2;
+      }
+    } catch (_e2) {}
+    return null;
+  }
+
+  async function submitCore(skipHostChargeConfirm) {
     var distParsed = form.distance === '' || form.distance === null || form.distance === undefined ? NaN : Number(form.distance);
     var maxParsed =
       form.maxParticipants === '' || form.maxParticipants === null || form.maxParticipants === undefined
@@ -4303,6 +4324,16 @@ function OpenRidingCreateForm(props) {
     }
     if (checkList.length) {
       showFormValidationMessages(checkList);
+      return;
+    }
+    if (!editRideId && !skipHostChargeConfirm) {
+      var hostAcc = await fetchUserAccPointsForOpenRiding(hostUserId);
+      if (Number.isFinite(hostAcc) && hostAcc < 100) {
+        showFormValidationMessages(['누적 포인트가 부족합니다. 모임 주최에는 100SP가 필요합니다.']);
+        return;
+      }
+      var remain = Number.isFinite(hostAcc) ? Math.max(0, Math.floor(hostAcc - 100)) : null;
+      setHostChargeDlg({ open: true, remaining: remain });
       return;
     }
 
@@ -4420,9 +4451,21 @@ function OpenRidingCreateForm(props) {
         }
       }
       onCreated(rideId);
+    } catch (err) {
+      var rawMsg = err && err.message ? String(err.message) : '';
+      if (rawMsg === 'INSUFFICIENT_ACC_POINTS_HOST') {
+        showFormValidationMessages(['누적 포인트가 부족합니다. 모임 주최에는 100SP가 필요합니다.']);
+      } else {
+        showFormValidationMessages([rawMsg || '모임 생성 처리 중 오류가 발생했습니다.']);
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    await submitCore(false);
   }
 
   if (editRideId && !editHydrated) {
@@ -5176,6 +5219,28 @@ function OpenRidingCreateForm(props) {
           </div>
         </div>
       ) : null}
+      {hostChargeDlg.open ? (
+        <div className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200073] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="open-riding-host-charge-title">
+          <div className="open-riding-bomb-modal-panel w-full max-w-sm py-7 px-8 text-center" onClick={function (e) { e.stopPropagation(); }}>
+            <div className="flex items-center justify-center gap-2.5 mb-4 pb-4 border-b border-slate-200">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-700 text-sm font-bold border border-violet-200" aria-hidden>SP</span>
+              <h2 id="open-riding-host-charge-title" className="text-base font-bold text-slate-800 m-0 leading-tight">라이딩 모임 주최</h2>
+            </div>
+            <p className="stelvio-exit-confirm-message text-center m-0">라이딩 모임 주최 시 TSS 마일리지 누적 포인트에서 100SP 차감됩니다.</p>
+            <p className="text-xs text-slate-500 mt-2 mb-5 leading-snug text-center">
+              {hostChargeDlg.remaining == null ? '(차감 후 잔여 포인트는 생성 후 반영됩니다.)' : '(차감후 잔여 포인트는 ' + hostChargeDlg.remaining + ' SP)'}
+            </p>
+            <div className="stelvio-exit-confirm-buttons">
+              <button type="button" className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel inline-flex items-center justify-center" onClick={function () { setHostChargeDlg({ open: false, remaining: null }); }}>
+                취소
+              </button>
+              <button type="button" className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok inline-flex items-center justify-center" onClick={function () { setHostChargeDlg({ open: false, remaining: null }); submitCore(true); }}>
+                생성
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
     {editRideId && isBusy ? (
       <div
@@ -5350,6 +5415,9 @@ function OpenRidingDetail(props) {
   var _jsm = useState(false);
   var joinShareModalOpen = _jsm[0];
   var setJoinShareModalOpen = _jsm[1];
+  var _joinChargeRemain = useState(null);
+  var joinChargeRemain = _joinChargeRemain[0];
+  var setJoinChargeRemain = _joinChargeRemain[1];
   var _lvlPart = useState(null);
   var levelParticipation = _lvlPart[0];
   var setLevelParticipation = _lvlPart[1];
@@ -6153,6 +6221,32 @@ function OpenRidingDetail(props) {
       setBusy(false);
     }
   }
+  async function openJoinChargeConfirmModal() {
+    var acc = null;
+    try {
+      if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function' && userId) {
+        var row = await window.getUserByUid(String(userId).trim());
+        var n = Number(row && row.acc_points != null ? row.acc_points : NaN);
+        if (Number.isFinite(n)) acc = n;
+      }
+    } catch (_e) {}
+    if (acc == null) {
+      try {
+        if (typeof window !== 'undefined' && window.currentUser) {
+          var n2 = Number(window.currentUser.acc_points != null ? window.currentUser.acc_points : NaN);
+          if (Number.isFinite(n2)) acc = n2;
+        }
+      } catch (_e2) {}
+    }
+    if (Number.isFinite(acc) && acc < 10) {
+      if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert('누적 포인트가 부족합니다. 참석 신청에는 10SP가 필요합니다.');
+      }
+      return;
+    }
+    setJoinChargeRemain(Number.isFinite(acc) ? Math.max(0, Math.floor(acc - 10)) : null);
+    setJoinShareModalOpen(true);
+  }
   async function onLeave() {
     setBusy(true);
     try {
@@ -6929,7 +7023,7 @@ function OpenRidingDetail(props) {
                     }
                     onClick={function () {
                       if (!joinInviteOk || joinApplyClosedBySchedule) return;
-                      setJoinShareModalOpen(true);
+                      openJoinChargeConfirmModal();
                     }}
                   >
                     {joinApplyClosedBySchedule
@@ -6974,12 +7068,15 @@ function OpenRidingDetail(props) {
           >
             <div className="open-riding-share-contact-header px-4 py-3 border-b border-violet-100">
               <h2 id="open-riding-share-contact-title" className="text-base font-bold text-violet-900 m-0">
-                참석자에게 연락처 표시
+                라이딩 모임 참석 신청
               </h2>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-sm text-slate-800 font-medium m-0">연락처를 공개하시겠습니까?</p>
-              <p className="text-xs text-slate-500 m-0 leading-relaxed">(라이딩에 참석자에게만 공개됩니다.)</p>
+              <p className="text-sm text-slate-800 font-medium m-0">라이딩 모임 참석 시 TSS 마일리지 누적 포인트에서 10SP 차감됩니다.</p>
+              <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                {joinChargeRemain == null ? '(차감 후 잔여 포인트는 신청 후 반영됩니다.)' : '(차감후 잔여 포인트는 ' + joinChargeRemain + ' SP)'}
+              </p>
+              <p className="text-xs text-slate-500 m-0 leading-relaxed">(참석자에게 연락처를 공개할지 선택해 주세요.)</p>
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
