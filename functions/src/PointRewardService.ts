@@ -129,6 +129,19 @@ function buildAlimtalkMessage(params: {
 ※ 이 메시지는 고객님의 STELVIO 서비스 이용(라이딩 완료)에 따른 거래관계로 지급된 포인트 안내 메시지입니다.`;
 }
 
+/**
+ * 알리고 카카오 알림톡(akv10) 응답: code === 0 이 성공. 구 SMS API result_code=1 은 하위호환.
+ */
+function isAligoAlimtalkApiSuccess(data: Record<string, unknown>): boolean {
+  if (data.code !== undefined) {
+    return Number(data.code) === 0;
+  }
+  if (data.result_code !== undefined) {
+    return String(data.result_code) === "1";
+  }
+  return false;
+}
+
 export class PointRewardService {
   constructor(private readonly db: Firestore) {}
 
@@ -159,13 +172,22 @@ export class PointRewardService {
     };
   }
 
-  /** aligoapi.alimtalkSend(req, AuthData) 호출 래퍼 */
-  private async sendAlimtalk(receiverPhone: string, subject: string, message: string): Promise<void> {
+  /**
+   * aligoapi.alimtalkSend(req, auth) — npm 패키지는 콜백 미지원, Promise 응답 body만 유효.
+   * @see https://kakaoapi.aligo.in/akv10/alimtalk/send/
+   */
+  private async sendAlimtalk(
+    receiverPhone: string,
+    displayName: string,
+    subject: string,
+    message: string
+  ): Promise<void> {
     const cfg = await this.loadAligoConfig();
     const receiver = normalizeReceiverPhone(receiverPhone);
     if (!receiver) {
       throw new Error("알림톡 수신자 번호가 비어 있습니다.");
     }
+    const recvName = (displayName || "회원").trim() || "회원";
 
     const req = {
       body: {
@@ -173,6 +195,7 @@ export class PointRewardService {
         tpl_code: cfg.tpl_code,
         sender: cfg.sender,
         receiver_1: receiver,
+        recvname_1: recvName,
         subject_1: subject,
         message_1: message,
       },
@@ -183,25 +206,16 @@ export class PointRewardService {
       token: cfg.token,
     };
 
-    await new Promise<void>((resolve, reject) => {
-      try {
-        const maybePromise = aligoapi.alimtalkSend(req, authData, (response: unknown) => {
-          const raw = response as { result_code?: number | string; message?: string };
-          const code = String(raw?.result_code ?? "");
-          if (code && code !== "1") {
-            reject(new Error(`알림톡 발송 실패(result_code=${code}, message=${raw?.message ?? "-"})`));
-            return;
-          }
-          resolve();
-        });
-
-        if (maybePromise && typeof maybePromise.then === "function") {
-          (maybePromise as Promise<unknown>).then(() => resolve()).catch(reject);
-        }
-      } catch (error) {
-        reject(error);
-      }
-    });
+    const raw = (await aligoapi.alimtalkSend(req, authData)) as Record<string, unknown>;
+    if (!isAligoAlimtalkApiSuccess(raw)) {
+      const msg = String(
+        (raw as { message?: string; Message?: string }).message ??
+          (raw as { Message?: string }).Message ??
+          "알 수 없는 응답"
+      );
+      const c = raw?.code ?? raw?.result_code;
+      throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}`);
+    }
   }
 
   /**
@@ -311,12 +325,22 @@ export class PointRewardService {
         expiryDateAfter: txResult.result.expiryDateAfter,
         remPointsAfter: txResult.result.pointsAfter,
       });
-      await this.sendAlimtalk(
-        txResult.receiverPhone,
-        "STELVIO 포인트 적립 및 구독 연장 안내",
-        message
-      );
-      alimtalkSent = true;
+      const subject = "STELVIO 포인트 적립 및 구독 연장 안내";
+      try {
+        if (!normalizeReceiverPhone(txResult.receiverPhone)) {
+          console.warn(
+            `[PointReward] userId=${txResult.result.userId} 구독 연장 알림톡 생략: users 문서에 휴대전화 없음 (contact/phone/phoneNumber/tel)`
+          );
+        } else {
+          await this.sendAlimtalk(txResult.receiverPhone, txResult.userName, subject, message);
+          alimtalkSent = true;
+        }
+      } catch (err) {
+        console.error(
+          `[PointReward] userId=${txResult.result.userId} 알림톡 발송 실패(적립/연장은 이미 반영됨):`,
+          err
+        );
+      }
     }
 
     return {
