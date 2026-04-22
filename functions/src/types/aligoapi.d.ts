@@ -18,13 +18,8 @@ declare module "aligoapi" {
     token: string;
   }
 
-  type AlimtalkCallback = (response: unknown) => void;
-
-  function alimtalkSend(
-    req: AlimtalkRequest,
-    authData: AligoAuthData,
-    callback?: AlimtalkCallback
-  ): Promise<unknown> | void;
+  /** aligoapi 1.1.x: (req, auth)만 지원, 응답 JSON은 Promise로 반환 */
+  function alimtalkSend(req: AlimtalkRequest, authData: AligoAuthData): Promise<unknown>;
 
   const _default: {
     alimtalkSend: typeof alimtalkSend;
