@@ -381,6 +381,85 @@ export class PointRewardService {
   }
 
   /**
+   * `saveTrainingSession`이 먼저 `users`를 갱신한 뒤이므로 `processRidingReward`를 쓰지 않는 대신
+   * `point_history`만 남긴다(이중 적립 방지). rem은 클라이언트 기준, 이전 rem은 역산.
+   * 문서 id를 `stelvio_mileage_{userId}_{logId}`로 고정해 트리거 재시도 시 중복 기록을 방지한다.
+   */
+  async appendPointHistoryForStelvioClientMileage(
+    userId: string,
+    logData: Record<string, unknown>,
+    trainingLogId: string
+  ): Promise<string> {
+    if (!userId || !userId.trim()) {
+      throw new Error("userId가 비어 있습니다.");
+    }
+    if (!trainingLogId) {
+      throw new Error("trainingLogId가 비어 있습니다.");
+    }
+    const userRef = this.db.collection(USERS_COLLECTION).doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      throw new Error(`사용자를 찾을 수 없습니다: ${userId}`);
+    }
+    const userData = userSnap.data() ?? {};
+    const tss = Math.max(0, Number(logData.tss || 0));
+    const earnedPoints = Math.max(
+      0,
+      Math.floor(Number(logData.earned_points ?? tss * POINTS_PER_TSS))
+    );
+    const extendedDays = Math.floor(Number(logData.subscription_extended_days ?? 0));
+    const remAfter = Math.round(Number(userData.rem_points || 0));
+    const pointsUsed = extendedDays * SUBSCRIPTION_POINT_THRESHOLD;
+    let pointsBefore = Math.round(remAfter - earnedPoints + pointsUsed);
+    if (pointsBefore < 0) {
+      console.warn(
+        `[PointReward] appendPointHistoryForStelvioClientMileage: pointsBefore<0 이 역산(${
+          pointsBefore
+        }) → 0으로 보정 userId=${userId} logId=${trainingLogId}`
+      );
+      pointsBefore = 0;
+    }
+    const pointsAfter = remAfter;
+
+    let expiryDateBefore = String(logData.subscription_expiry_date_before ?? "").trim();
+    let expiryDateAfter = String(logData.subscription_expiry_date_after ?? "").trim();
+    if (!expiryDateBefore) {
+      expiryDateBefore = toYmdSeoul(userData.expiry_date ?? userData.subscription_end_date ?? "");
+    }
+    if (!expiryDateAfter) {
+      expiryDateAfter = toYmdSeoul(userData.expiry_date ?? userData.subscription_end_date ?? "");
+    }
+
+    const historyDocId = `stelvio_mileage_${userId}_${trainingLogId}`.replace(/[/#]/g, "_");
+    const pointHistoryRef = this.db.collection(POINT_HISTORY_COLLECTION).doc(historyDocId);
+    await pointHistoryRef.set(
+      {
+        user_id: userId,
+        source: "indoor",
+        is_strava: false,
+        client_mileage_from_stelvio_log: true,
+        users_training_log_id: trainingLogId,
+        tss,
+        earned_points: earnedPoints,
+        points_before: pointsBefore,
+        points_after: pointsAfter,
+        points_used_for_subscription: pointsUsed,
+        subscription_threshold: SUBSCRIPTION_POINT_THRESHOLD,
+        extension_count: extendedDays,
+        extended_days: extendedDays,
+        expiry_date_before: expiryDateBefore || null,
+        expiry_date_after: expiryDateAfter || null,
+        subscription_extended_days: extendedDays,
+        subscription_expiry_date_before: expiryDateBefore || null,
+        subscription_expiry_date_after: expiryDateAfter || null,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return pointHistoryRef.id;
+  }
+
+  /**
    * 실내 STELVIO 훈련: `saveTrainingSession`이 트랜잭션에서 이미 rem/acc/만료일을 반영한 뒤 로그가 생성됨.
    * 이 경우 `processRidingReward`를 호출하면 동일 TSS가 다시 더해져 이중 적립되고,
    * 서버가 읽는 잔여 포인트는 이미 500이 차감된 뒤라 extendedDays=0이 되어 알림톡이 절대 나가지 않음.

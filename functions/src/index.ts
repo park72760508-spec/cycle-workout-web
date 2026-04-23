@@ -674,6 +674,15 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
     const hasClientMileageMeta =
       logData.subscription_extended_days != null || logData.subscription_expiry_date_before != null;
     if (source === "stelvio" || (source === "indoor" && hasClientMileageMeta)) {
+      const logId = String((event.params as { logId?: string }).logId || snap.id || "").trim();
+      let historyId: string;
+      try {
+        // users는 이미 클라이언트가 반영함. point_history만 Strava 경로와 동일하게 남김(이중 적립 없음).
+        historyId = await rewardService.appendPointHistoryForStelvioClientMileage(userId, logData, logId);
+      } catch (err) {
+        console.error("[onIndoorLogCreatedReward] point_history 기록 실패:", err);
+        throw err;
+      }
       let notifyResult: { alimtalkSent: boolean; skipped: string | null } = {
         alimtalkSent: false,
         skipped: null,
@@ -686,6 +695,7 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
       await snap.ref.set(
         {
           point_reward_v2_applied: true,
+          point_reward_v2_history_id: historyId,
           point_reward_v2_alimtalk_sent: notifyResult.alimtalkSent,
           point_reward_v2_alimtalk_skip: notifyResult.skipped || null,
           point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
