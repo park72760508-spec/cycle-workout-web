@@ -668,6 +668,33 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
     if (!Number.isFinite(tss) || tss <= 0) return;
 
     const rewardService = new PointRewardService(db);
+
+    // 실내 source=stelvio(또는 subscription_*가 있는 source=indoor): `saveTrainingSession`이 먼저 users·포인트·만료를 반영함.
+    // `processRidingReward`는 TSS를 한 번 더 더하며, point_history 쪽 source=indoor 기록이 잘못 잡힘.
+    const hasClientMileageMeta =
+      logData.subscription_extended_days != null || logData.subscription_expiry_date_before != null;
+    if (source === "stelvio" || (source === "indoor" && hasClientMileageMeta)) {
+      let notifyResult: { alimtalkSent: boolean; skipped: string | null } = {
+        alimtalkSent: false,
+        skipped: null,
+      };
+      try {
+        notifyResult = await rewardService.sendAlimtalkForStelvioIndoorLog(userId, logData);
+      } catch (err) {
+        console.error("[onIndoorLogCreatedReward] 실내(클라 마일리지) 알림톡 처리 실패(포인트는 클라이언트에 이미 반영됨):", err);
+      }
+      await snap.ref.set(
+        {
+          point_reward_v2_applied: true,
+          point_reward_v2_alimtalk_sent: notifyResult.alimtalkSent,
+          point_reward_v2_alimtalk_skip: notifyResult.skipped || null,
+          point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      return;
+    }
+
     const rewardResult = await rewardService.processRidingReward(userId, tss, false);
 
     await snap.ref.set(
