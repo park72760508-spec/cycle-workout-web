@@ -44,6 +44,31 @@ interface RidingRewardTxOutput {
   result: ProcessRidingRewardResult;
 }
 
+/** appendPointHistory와 동일 스냅샷으로 알림톡 전송(훈련 로그 필드 타입/누락으로 send만 실패하는 것 방지) */
+export interface StelvioIndoorAlimtalkPayload {
+  userId: string;
+  extendedDays: number;
+  earnedPoints: number;
+  expiryBefore: string;
+  expiryAfter: string;
+  remPointsAfter: number;
+  userName: string;
+  receiverPhone: string;
+}
+
+export interface StelvioMileageAppendResult {
+  historyId: string;
+  /** 구독 연장이 없으면 null (알림톡 불필요) */
+  alimtalkPayload: StelvioIndoorAlimtalkPayload | null;
+}
+
+export interface StelvioIndoorAlimtalkSendResult {
+  alimtalkSent: boolean;
+  skipped: string | null;
+  /** Functions 트리거 로그·훈련 로그 merge용 */
+  errorDetail?: string;
+}
+
 /** Firestore/문자/Date → Asia/Seoul 달력 YYYY-MM-DD (Strava·실내 `saveTrainingSession`과 동일 스킴) */
 function toYmdSeoul(value: unknown): string {
   if (value == null || value === "") return "";
@@ -122,6 +147,37 @@ function normalizeReceiverPhone(phone: string): string {
   return (phone || "").replace(/\D/g, "");
 }
 
+/** Firestore Int/Long/문자 등 → 정수 (subscription_extended_days 등) */
+function coerceToInt(value: unknown, defaultVal = 0): number {
+  if (value === null || value === undefined) return defaultVal;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = parseInt(value, 10);
+    return Number.isNaN(n) ? defaultVal : n;
+  }
+  const withToNumber = value as { toNumber?: () => number };
+  if (typeof withToNumber?.toNumber === "function") {
+    try {
+      const n = withToNumber.toNumber();
+      return Number.isFinite(n) ? Math.trunc(n) : defaultVal;
+    } catch {
+      /* ignore */
+    }
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : defaultVal;
+}
+
+function diffCalendarDaysSeoulYmd(ymdBefore: string, ymdAfter: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymdBefore) || !/^\d{4}-\d{2}-\d{2}$/.test(ymdAfter)) return 0;
+  const t0 = new Date(`${ymdBefore}T00:00:00+09:00`).getTime();
+  const t1 = new Date(`${ymdAfter}T00:00:00+09:00`).getTime();
+  if (Number.isNaN(t0) || Number.isNaN(t1)) return 0;
+  return Math.round((t1 - t0) / (24 * 60 * 60 * 1000));
+}
+
 /** 카카오 승인 템플릿과 동일한 문구로 알림톡 본문 생성 */
 function buildAlimtalkMessage(params: {
   userName: string;
@@ -155,14 +211,23 @@ function buildAlimtalkMessage(params: {
 ※ 이 메시지는 고객님의 STELVIO 서비스 이용(라이딩 완료)에 따른 거래관계로 지급된 포인트 안내 메시지입니다.`;
 }
 
+/** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 */
+function maybeStripAlimtalkEmojiForTemplate(message: string): string {
+  const strip = String(process.env.KAKAO_ALIMTALK_STRIP_EMOJI || "").toLowerCase();
+  if (strip === "1" || strip === "true" || strip === "yes") {
+    return message.replace(/\p{Extended_Pictographic}/gu, "").replace(/\u200d/g, "");
+  }
+  return message;
+}
+
 /**
  * 알리고 카카오 알림톡(akv10) 응답: code === 0 이 성공. 구 SMS API result_code=1 은 하위호환.
  */
 function isAligoAlimtalkApiSuccess(data: Record<string, unknown>): boolean {
-  if (data.code !== undefined) {
+  if (data.code !== undefined && data.code !== null) {
     return Number(data.code) === 0;
   }
-  if (data.result_code !== undefined) {
+  if (data.result_code !== undefined && data.result_code !== null) {
     return String(data.result_code) === "1";
   }
   return false;
@@ -214,6 +279,7 @@ export class PointRewardService {
       throw new Error("알림톡 수신자 번호가 비어 있습니다.");
     }
     const recvName = (displayName || "회원").trim() || "회원";
+    const messageOut = maybeStripAlimtalkEmojiForTemplate(message);
 
     const req = {
       body: {
@@ -223,7 +289,8 @@ export class PointRewardService {
         receiver_1: receiver,
         recvname_1: recvName,
         subject_1: subject,
-        message_1: message,
+        message_1: messageOut,
+        failover: "N",
       },
     };
     const authData = {
@@ -234,12 +301,19 @@ export class PointRewardService {
 
     const raw = (await aligoapi.alimtalkSend(req, authData)) as Record<string, unknown>;
     if (!isAligoAlimtalkApiSuccess(raw)) {
+      let detail = "";
+      try {
+        detail = JSON.stringify(raw);
+      } catch {
+        detail = String(raw);
+      }
       const msg = String(
         (raw as { message?: string; Message?: string }).message ??
           (raw as { Message?: string }).Message ??
           "알 수 없는 응답"
       );
       const c = raw?.code ?? raw?.result_code;
+      console.error("[Aligo] alimtalkSend 비성공 응답:", detail);
       throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}`);
     }
   }
@@ -389,7 +463,7 @@ export class PointRewardService {
     userId: string,
     logData: Record<string, unknown>,
     trainingLogId: string
-  ): Promise<string> {
+  ): Promise<StelvioMileageAppendResult> {
     if (!userId || !userId.trim()) {
       throw new Error("userId가 비어 있습니다.");
     }
@@ -402,24 +476,14 @@ export class PointRewardService {
       throw new Error(`사용자를 찾을 수 없습니다: ${userId}`);
     }
     const userData = userSnap.data() ?? {};
-    const tss = Math.max(0, Number(logData.tss || 0));
-    const earnedPoints = Math.max(
-      0,
-      Math.floor(Number(logData.earned_points ?? tss * POINTS_PER_TSS))
+    const tss = Math.max(0, Math.round(Number(logData.tss) || 0));
+    const earnedPoints =
+      logData.earned_points != null && String(logData.earned_points) !== ""
+        ? Math.max(0, coerceToInt(logData.earned_points))
+        : Math.max(0, Math.floor(tss * POINTS_PER_TSS));
+    const remAfter = Math.round(
+      coerceToInt(userData.rem_points) || Number(userData.rem_points) || 0
     );
-    const extendedDays = Math.floor(Number(logData.subscription_extended_days ?? 0));
-    const remAfter = Math.round(Number(userData.rem_points || 0));
-    const pointsUsed = extendedDays * SUBSCRIPTION_POINT_THRESHOLD;
-    let pointsBefore = Math.round(remAfter - earnedPoints + pointsUsed);
-    if (pointsBefore < 0) {
-      console.warn(
-        `[PointReward] appendPointHistoryForStelvioClientMileage: pointsBefore<0 이 역산(${
-          pointsBefore
-        }) → 0으로 보정 userId=${userId} logId=${trainingLogId}`
-      );
-      pointsBefore = 0;
-    }
-    const pointsAfter = remAfter;
 
     let expiryDateBefore = String(logData.subscription_expiry_date_before ?? "").trim();
     let expiryDateAfter = String(logData.subscription_expiry_date_after ?? "").trim();
@@ -429,6 +493,29 @@ export class PointRewardService {
     if (!expiryDateAfter) {
       expiryDateAfter = toYmdSeoul(userData.expiry_date ?? userData.subscription_end_date ?? "");
     }
+
+    const extendedFromLog = coerceToInt(logData.subscription_extended_days);
+    const fromDateDiff =
+      expiryDateBefore && expiryDateAfter
+        ? diffCalendarDaysSeoulYmd(expiryDateBefore, expiryDateAfter)
+        : 0;
+    const extendedDays = Math.max(extendedFromLog, fromDateDiff, 0);
+
+    const pointsUsed = extendedDays * SUBSCRIPTION_POINT_THRESHOLD;
+    let pointsBefore = Math.round(remAfter - earnedPoints + pointsUsed);
+    if (pointsBefore < 0) {
+      console.warn(
+        `[PointReward] appendPointHistoryForStelvioClientMileage: pointsBefore<0 → 0 보정 userId=${userId} logId=${trainingLogId}`,
+        { remAfter, earnedPoints, pointsBefore, extendedDays, extendedFromLog, fromDateDiff }
+      );
+      pointsBefore = 0;
+    }
+    const pointsAfter = remAfter;
+
+    const userName = String(userData.name || userData.user_name || "회원").trim() || "회원";
+    const receiverPhone = String(
+      userData.contact || userData.phoneNumber || userData.phone || userData.tel || ""
+    ).trim();
 
     const historyDocId = `stelvio_mileage_${userId}_${trainingLogId}`.replace(/[/#]/g, "_");
     const pointHistoryRef = this.db.collection(POINT_HISTORY_COLLECTION).doc(historyDocId);
@@ -456,64 +543,59 @@ export class PointRewardService {
       },
       { merge: true }
     );
-    return pointHistoryRef.id;
+
+    const alimtalkPayload: StelvioIndoorAlimtalkPayload | null =
+      extendedDays > 0
+        ? {
+            userId,
+            extendedDays,
+            earnedPoints: earnedPoints,
+            expiryBefore: expiryDateBefore,
+            expiryAfter: expiryDateAfter,
+            remPointsAfter: remAfter,
+            userName,
+            receiverPhone,
+          }
+        : null;
+
+    return { historyId: pointHistoryRef.id, alimtalkPayload };
   }
 
   /**
-   * 실내 STELVIO 훈련: `saveTrainingSession`이 트랜잭션에서 이미 rem/acc/만료일을 반영한 뒤 로그가 생성됨.
-   * 이 경우 `processRidingReward`를 호출하면 동일 TSS가 다시 더해져 이중 적립되고,
-   * 서버가 읽는 잔여 포인트는 이미 500이 차감된 뒤라 extendedDays=0이 되어 알림톡이 절대 나가지 않음.
-   * 클라이언트가 logs에 남긴 `subscription_*` 메타로 연장이 있을 때만 알리고 알림톡을 발송한다.
+   * `appendPointHistoryForStelvioClientMileage`의 `alimtalkPayload`로만 발송(훈련 로그 재파싱·타입 이슈 제거).
+   * API 실패 시 예외를 던지지 않고 `aligo_error` + errorDetail로 반환(Functions가 멈추지 않음).
    */
-  async sendAlimtalkForStelvioIndoorLog(
-    userId: string,
-    logData: Record<string, unknown>
-  ): Promise<{ alimtalkSent: boolean; skipped: string | null }> {
-    if (!userId || !userId.trim()) {
-      throw new Error("userId가 비어 있습니다.");
-    }
-    const extendedDays = Math.floor(Number(logData.subscription_extended_days ?? 0));
-    if (extendedDays <= 0) {
+  async sendStelvioIndoorAlimtalkFromPayload(
+    payload: StelvioIndoorAlimtalkPayload | null
+  ): Promise<StelvioIndoorAlimtalkSendResult> {
+    if (!payload) {
       return { alimtalkSent: false, skipped: "no_subscription_extension" };
     }
-
-    const earned = Math.max(0, Math.floor(Number(logData.earned_points ?? logData.tss ?? 0)));
-    const expiryBefore = String(logData.subscription_expiry_date_before ?? "").trim();
-    const expiryAfter = String(logData.subscription_expiry_date_after ?? "").trim();
-
-    const userRef = this.db.collection(USERS_COLLECTION).doc(userId);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      return { alimtalkSent: false, skipped: "user_not_found" };
+    if (payload.extendedDays <= 0) {
+      return { alimtalkSent: false, skipped: "no_subscription_extension" };
     }
-    const userData = userSnap.data() ?? {};
-    const userName = String(userData.name || userData.user_name || "회원").trim() || "회원";
-    const receiverPhone = String(
-      userData.contact || userData.phoneNumber || userData.phone || userData.tel || ""
-    ).trim();
-    const remPointsAfter = Math.round(Number(userData.rem_points || 0));
-
+    if (!normalizeReceiverPhone(payload.receiverPhone)) {
+      console.warn(
+        `[PointReward] userId=${payload.userId} 구독 연장 알림톡 생략: users에 휴대전화 없음 (contact/phone/phoneNumber/tel)`
+      );
+      return { alimtalkSent: false, skipped: "no_phone" };
+    }
     const message = buildAlimtalkMessage({
-      userName,
-      earnedPoints: earned,
-      extendedDays,
-      expiryDateBefore: expiryBefore,
-      expiryDateAfter: expiryAfter,
-      remPointsAfter,
+      userName: payload.userName,
+      earnedPoints: payload.earnedPoints,
+      extendedDays: payload.extendedDays,
+      expiryDateBefore: payload.expiryBefore,
+      expiryDateAfter: payload.expiryAfter,
+      remPointsAfter: payload.remPointsAfter,
     });
     const subject = "STELVIO 포인트 적립 및 구독 연장 안내";
     try {
-      if (!normalizeReceiverPhone(receiverPhone)) {
-        console.warn(
-          `[PointReward] userId=${userId} (stelvio indoor) 구독 연장 알림톡 생략: users 문서에 휴대전화 없음 (contact/phone/phoneNumber/tel)`
-        );
-        return { alimtalkSent: false, skipped: "no_phone" };
-      }
-      await this.sendAlimtalk(receiverPhone, userName, subject, message);
+      await this.sendAlimtalk(payload.receiverPhone, payload.userName, subject, message);
       return { alimtalkSent: true, skipped: null };
     } catch (err) {
-      console.error(`[PointReward] userId=${userId} (stelvio indoor) 알림톡 실패:`, err);
-      throw err;
+      const m = err instanceof Error ? err.message : String(err);
+      console.error(`[PointReward] stelvio indoor 알림톡 API userId=${payload.userId}:`, err);
+      return { alimtalkSent: false, skipped: "aligo_error", errorDetail: m };
     }
   }
 }

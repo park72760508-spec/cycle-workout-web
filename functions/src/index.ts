@@ -35,7 +35,7 @@ import {
 } from "./subscriptionService";
 import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
 import { createVerifyMeetingAttendance, createScheduledRideAttendanceVerification } from "./verifyMeetingAttendance";
-import { PointRewardService } from "./PointRewardService";
+import { PointRewardService, type StelvioMileageAppendResult } from "./PointRewardService";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
@@ -676,28 +676,23 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
     if (source === "stelvio" || (source === "indoor" && hasClientMileageMeta)) {
       const logId = String((event.params as { logId?: string }).logId || snap.id || "").trim();
       let historyId: string;
+      let appendResult: StelvioMileageAppendResult;
       try {
-        // users는 이미 클라이언트가 반영함. point_history만 Strava 경로와 동일하게 남김(이중 적립 없음).
-        historyId = await rewardService.appendPointHistoryForStelvioClientMileage(userId, logData, logId);
+        // users는 이미 클라이언트가 반영함. point_history + 알림톡용 페이로드는 append에서 한 번에 산출.
+        appendResult = await rewardService.appendPointHistoryForStelvioClientMileage(userId, logData, logId);
+        historyId = appendResult.historyId;
       } catch (err) {
         console.error("[onIndoorLogCreatedReward] point_history 기록 실패:", err);
         throw err;
       }
-      let notifyResult: { alimtalkSent: boolean; skipped: string | null } = {
-        alimtalkSent: false,
-        skipped: null,
-      };
-      try {
-        notifyResult = await rewardService.sendAlimtalkForStelvioIndoorLog(userId, logData);
-      } catch (err) {
-        console.error("[onIndoorLogCreatedReward] 실내(클라 마일리지) 알림톡 처리 실패(포인트는 클라이언트에 이미 반영됨):", err);
-      }
+      const notifyResult = await rewardService.sendStelvioIndoorAlimtalkFromPayload(appendResult.alimtalkPayload);
       await snap.ref.set(
         {
           point_reward_v2_applied: true,
           point_reward_v2_history_id: historyId,
           point_reward_v2_alimtalk_sent: notifyResult.alimtalkSent,
           point_reward_v2_alimtalk_skip: notifyResult.skipped || null,
+          point_reward_v2_alimtalk_error: notifyResult.errorDetail || null,
           point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
