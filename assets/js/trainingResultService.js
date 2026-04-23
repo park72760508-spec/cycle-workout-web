@@ -499,6 +499,10 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         expiryDateAsDate = new Date(todayStart.getTime());
       }
       
+      // Cloud Function 알림톡용: 이번 세션에서 500SP 연장 전 만료일(서버는 클라이언트가 이미 반영한 rem을 읽으면
+      // processRidingReward로는 연장·알림톡이 누락됨 → 로그에 메타로 남김)
+      const subscriptionExpiryDateBefore = expiryDateAsDate.toISOString().split('T')[0];
+      
       // 구독 연장 루프: rem_points가 500 이상인 경우
       // 500 포인트당 1일 연장, 연장한 만큼 rem_points에서 500씩 차감
       while (newRemPoints >= 500) {
@@ -637,7 +641,12 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         time_in_zones: timeInZones,
         
         // 주관적 느낌 (RPE)
-        rpe: trainingData.rpe || null // 90% ~ 110% 몸상태
+        rpe: trainingData.rpe || null, // 90% ~ 110% 몸상태
+        
+        // Cloud Function(onIndoorLogCreatedReward) 알림톡: 구독 연장 1일 이상 시 발송
+        subscription_extended_days: extendedDays,
+        subscription_expiry_date_before: subscriptionExpiryDateBefore,
+        subscription_expiry_date_after: newExpiryDate
       };
       
       // 7. 트랜잭션 내에서 로그 문서 저장 (실패 시 user 업데이트도 롤백 → 재시도 시 포인트 중복 없음)
