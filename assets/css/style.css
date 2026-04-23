@@ -21991,9 +21991,10 @@ body.bluetooth-individual-screen-active {
 }
 
 /* 모바일 대시보드가 활성화되었을 때만 표시 */
+/* 글래스 하단 네비(#globalHubBottomGlassNavRoot 99999) 위에 쌓여야 훈련 하단 슬라이더(특히 가로 트랙 중앙) 터치가 먹힘—부모(1000)는 자식 z로 네비를 뚫을 수 없음 */
 #mobileDashboardScreen.active {
   display: flex !important;
-  z-index: 1000 !important;
+  z-index: 100100 !important;
 }
 
 /* 모바일 대시보드 내부 요소들 */
@@ -23017,6 +23018,7 @@ body.bluetooth-individual-screen-active {
 /* display:flex는 active일 때만 적용 — 비활성 시 showScreen의 display:none이 덮어쓰이지 않도록 (오버레이 방지) */
 #bluetoothIndividualScreen.indiv-screen-wrap.active {
   display: flex !important;
+  z-index: 100100 !important;
 }
 #bluetoothIndividualScreen.indiv-screen-wrap {
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
@@ -23024,6 +23026,11 @@ body.bluetooth-individual-screen-active {
   padding: 0 !important;
   width: 100%;
   box-sizing: border-box;
+}
+/* 정기 구독 모드에서 네비가 10000000으로 올라갈 때에도 훈련 전체화면·하단 슬라이더가 네비에 가리지 않도록 */
+html.global-hub-nav-over-subscribe #mobileDashboardScreen.active,
+html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.active {
+  z-index: 10000001 !important;
 }
 #bluetoothIndividualScreen .indiv-header {
   display: flex;
