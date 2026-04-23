@@ -7408,6 +7408,9 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   z-index: 9999;
   animation: fadeIn 0.2s ease;
   min-height: 200px;
+  /* 메인 스레드 바쁠 때도 합성 레이어에서 페이드/스피너가 끊기지 않도록 */
+  isolation: isolate;
+  contain: layout style paint;
 }
 
 .workout-loading-overlay .workout-loading-spinner {
@@ -7422,6 +7425,9 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   animation: spin 0.9s linear infinite;
   margin-bottom: 20px;
   box-shadow: 0 0 20px rgba(46, 204, 113, 0.3);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
 .workout-loading-overlay .workout-loading-progress {
