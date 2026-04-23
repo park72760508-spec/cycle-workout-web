@@ -15,6 +15,9 @@ const POINT_HISTORY_COLLECTION = "point_history";
 const APP_CONFIG_COLLECTION = "appConfig";
 const ALIGO_CONFIG_DOC = "aligo";
 
+/** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […]과 짝 */
+const ALIMTALK_SUBJECT_KO = "STELVIO 라이딩 미션 달성 및 구독 연장 안내";
+
 interface AligoConfig {
   senderkey: string;
   tpl_code: string;
@@ -178,7 +181,10 @@ function diffCalendarDaysSeoulYmd(ymdBefore: string, ymdAfter: string): number {
   return Math.round((t1 - t0) / (24 * 60 * 60 * 1000));
 }
 
-/** 카카오 승인 템플릿과 동일한 문구로 알림톡 본문 생성 */
+/**
+ * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지 포함)해야 발송 성공.
+ * 이모지(🚴‍♂️)는 승인서에 있으면 그대로 둔다(검수에 없는데 넣으면 거절).
+ */
 function buildAlimtalkMessage(params: {
   userName: string;
   earnedPoints: number;
@@ -187,12 +193,14 @@ function buildAlimtalkMessage(params: {
   expiryDateAfter: string;
   remPointsAfter: number;
 }): string {
-  return `[STELVIO 포인트 적립 및 구독 연장 안내]
-
+  // 샘플: #{expiry_date_before}=YYYY-MM-DD, #{expiry_date_after_kr}=한글일자
+  const beforeLine = toYmdSeoul(params.expiryDateBefore) || formatDateKo(params.expiryDateBefore);
+  const afterKr = formatDateKo(params.expiryDateAfter);
+  return `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
 안녕하세요 ${params.userName}님,
-오늘도 STELVIO와 함께 멋진 라이딩을 완료하셨습니다! 🚴‍♂️
+오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
 
-이번 라이딩(TSS) 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
+이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
 
 ▶ 이번 라이딩 보상
 획득 포인트 : ${params.earnedPoints} SP
@@ -200,15 +208,15 @@ function buildAlimtalkMessage(params: {
 ▶ 구독 연장 혜택 적용
 500 SP 자동 사용으로 인하여 구독 기간이 ${params.extendedDays}일 추가 연장되었습니다.
 
-기존 만료일 : ${formatDateKo(params.expiryDateBefore)}
-변경 만료일 : ${formatDateKo(params.expiryDateAfter)}
+기존 만료일 : ${beforeLine}
+변경 만료일 : ${afterKr}
 
 ▶ 내 포인트 현황
 사용 후 잔여 포인트 : ${params.remPointsAfter} SP
 
 오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!
 
-※ 이 메시지는 고객님의 STELVIO 서비스 이용(라이딩 완료)에 따른 거래관계로 지급된 포인트 안내 메시지입니다.`;
+※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
 }
 
 /** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 */
@@ -430,7 +438,7 @@ export class PointRewardService {
         expiryDateAfter: txResult.result.expiryDateAfter,
         remPointsAfter: txResult.result.pointsAfter,
       });
-      const subject = "STELVIO 포인트 적립 및 구독 연장 안내";
+      const subject = ALIMTALK_SUBJECT_KO;
       try {
         if (!normalizeReceiverPhone(txResult.receiverPhone)) {
           console.warn(
@@ -588,7 +596,7 @@ export class PointRewardService {
       expiryDateAfter: payload.expiryAfter,
       remPointsAfter: payload.remPointsAfter,
     });
-    const subject = "STELVIO 포인트 적립 및 구독 연장 안내";
+    const subject = ALIMTALK_SUBJECT_KO;
     try {
       await this.sendAlimtalk(payload.receiverPhone, payload.userName, subject, message);
       return { alimtalkSent: true, skipped: null };
