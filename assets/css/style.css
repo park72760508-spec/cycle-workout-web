@@ -12359,6 +12359,10 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 
 /* 훈련 화면 종료 확인 팝업 (STELVIO 스타일 - 확인/취소) */
+/* #mobileDashboardScreen·#bluetoothIndividualScreen(100100)·구독 훈련(10000001)보다 위(인라인 10004 덮어씀) */
+#stelvioExitConfirmModal.stelvio-exit-confirm-modal {
+  z-index: 10020000 !important;
+}
 .stelvio-exit-confirm-modal.hidden {
   display: none !important;
 }
@@ -22507,7 +22511,8 @@ body.bluetooth-individual-screen-active {
   border-radius: 8px;
   padding: 8px;
   min-width: 280px; /* 스마트 트레이너 미연결이 1줄로 표시되도록 넓이 확대 */
-  z-index: 10002; /* 세그먼트 그래프(z-index: 1)와 헤더(z-index: 10001) 위에 표시되도록 z-index 증가 */
+  /* 헤더(100200) 내부·isolate 이후에도 훈련 콘텐츠 위에 노출 */
+  z-index: 100400 !important;
   display: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
@@ -23133,7 +23138,7 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   border-radius: 8px;
   padding: 8px;
   min-width: 200px;
-  z-index: 1000;
+  z-index: 100400 !important;
   display: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
@@ -23450,7 +23455,8 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10004;
+  /* 훈련 전체(100100)·구독(10000001)과 동일 이유: 고정 뷰포트 대비 최상위 */
+  z-index: 10020000 !important;
 }
 #bluetoothIndividualScreen .indiv-stelvio-exit-confirm-modal.indiv-hidden { display: none !important; }
 #bluetoothIndividualScreen .indiv-stelvio-exit-confirm-overlay {
