@@ -2348,6 +2348,35 @@ exports.getWeeklyRanking = onRequest(
     const userIdParam = (req.query && req.query.userId) || "";
     const usePrevWeek = weekParam === "prev";
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
+    const weeklyAggKey = `weekly_ranking_full_${startStr}_${endStr}`;
+    const weeklyAgg = await readRankingAggregatePayloadIfFresh(db, weeklyAggKey);
+    if (weeklyAgg && Array.isArray(weeklyAgg.fullEntries) && weeklyAgg.fullEntries.length > 0) {
+      const entries = weeklyAgg.fullEntries;
+      const top10 = entries.slice(0, 10).map((e, i) => ({
+        rank: i + 1,
+        userId: e.userId,
+        name: e.name,
+        totalTss: Math.round(e.totalTss * 100) / 100,
+        is_private: e.is_private === true,
+      }));
+      let myRank = null;
+      if (userIdParam) {
+        const userIdx = entries.findIndex((e) => e.userId === userIdParam);
+        if (userIdx >= 10) {
+          const e = entries[userIdx];
+          myRank = {
+            rank: userIdx + 1,
+            userId: e.userId,
+            name: e.name,
+            totalTss: Math.round(e.totalTss * 100) / 100,
+            is_private: e.is_private === true,
+          };
+        }
+      }
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "public, max-age=120");
+      return res.status(200).json({ success: true, ranking: top10, startStr, endStr, myRank: myRank || undefined, precomputed: true });
+    }
     const cacheRef = db.collection("cache").doc(usePrevWeek ? "weeklyRankingPrev" : "weeklyRanking");
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
@@ -2377,6 +2406,12 @@ exports.getWeeklyRanking = onRequest(
       startStr,
       endStr,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await writeRankingAggregatePayload(db, weeklyAggKey, {
+      fullEntries: entries,
+      ranking: top10,
+      startStr,
+      endStr,
     });
     let myRank = null;
     if (userIdParam) {
@@ -3585,6 +3620,390 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
   return { entries: withRank, byCategory };
 }
 
+// ---------- 랭킹 사전 집계 (스케줄러) + ranking_aggregates (HTTP 빠른 읽기) ----------
+const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
+/** 스케줄러 갱신 주기(6분)보다 넉넉히 — API는 집계가 있으면 전체 스캔 대신 1회 읽기 */
+const RANKING_AGG_MAX_STALE_MS = 45 * 60 * 1000;
+const RANKING_REBUILD_CRON = "*/6 * * * *";
+const RANKING_ONE_PASS_BATCH = 50;
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} cacheKey
+ * @returns {Promise<object|null>} payload
+ */
+async function readRankingAggregatePayloadIfFresh(db, cacheKey) {
+  if (!db || !cacheKey) return null;
+  try {
+    const ref = db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey);
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    const d = snap.data() || {};
+    const updatedAt = d.updatedAt && (d.updatedAt.toMillis ? d.updatedAt.toMillis() : d.updatedAt);
+    if (!updatedAt || (Date.now() - updatedAt > RANKING_AGG_MAX_STALE_MS)) return null;
+    return d.payload && typeof d.payload === "object" ? d.payload : null;
+  } catch (e) {
+    console.warn("[readRankingAggregatePayloadIfFresh]", cacheKey, e.message);
+    return null;
+  }
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} cacheKey
+ * @param {object} payload
+ */
+async function writeRankingAggregatePayload(db, cacheKey, payload) {
+  if (!db || !cacheKey || !payload) return;
+  const ref = db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey);
+  await ref.set({
+    payload,
+    version: 1,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * 기간·로그 스냅샷에서 구간별 최고 W(동시 계산) — getPeakPowerForUser(로그 경로)와 동일 규칙
+ * @param {string} startStr
+ * @param {string} endStr
+ */
+function computeUserPeaksAllDurationsFromSnapshot(userData, snapshot, startStr, endStr) {
+  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  if (rawWeight <= 0) return null;
+  const weightKg = Math.max(rawWeight, 45);
+  const maxW = {};
+  for (const dt of Object.keys(DURATION_FIELDS)) maxW[dt] = 0;
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    if (!isCyclingForMmp(d)) return;
+    const dateStr = typeof d.date === "string"
+      ? d.date
+      : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
+    for (const dt of Object.keys(DURATION_FIELDS)) {
+      const field = DURATION_FIELDS[dt];
+      const watts = Number(d[field]) || 0;
+      if (watts <= 0) continue;
+      if (!validatePeakPowerRecord(dt, watts, weightKg)) continue;
+      if (watts > maxW[dt]) maxW[dt] = watts;
+    }
+  });
+  const peaks = {};
+  for (const dt of Object.keys(DURATION_FIELDS)) {
+    const mw = maxW[dt];
+    if (mw > 0) {
+      peaks[dt] = { watts: mw, wkg: Math.round((mw / weightKg) * 100) / 100, weightKg };
+    }
+  }
+  return Object.keys(peaks).length ? { weightKg, peaks } : null;
+}
+
+/** 코호트 평균 심박(구간별): 동일 기간·로그에서 HR 필드 최댓값 */
+function maxHrByDurationFromSnapshot(snapshot, startStr, endStr) {
+  const out = {};
+  for (const dt of Object.keys(DURATION_HR_FIELDS)) out[dt] = 0;
+  snapshot.docs.forEach((doc) => {
+    const d = doc.data();
+    if (!isCyclingForMmp(d)) return;
+    const dateStr = typeof d.date === "string"
+      ? d.date
+      : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
+    for (const dt of Object.keys(DURATION_HR_FIELDS)) {
+      const field = DURATION_HR_FIELDS[dt];
+      const hr = Number(d[field]) || 0;
+      if (hr < 40 || hr > HR_MAX_BPM) continue;
+      if (hr > out[dt]) out[dt] = hr;
+    }
+  });
+  return out;
+}
+
+function genderKeyFromUserData(data) {
+  const gender = String(data.gender || data.sex || "").toLowerCase();
+  return gender === "m" || gender === "male" || gender === "남" ? "M" : (gender === "f" || gender === "female" || gender === "여" ? "F" : null);
+}
+
+/**
+ * 성별 3종(all, M, F) 동시·로그 1회/사용자 (스케줄러 부하 절감)
+ * @returns {Promise<Record<string, Record<string, { entries: any[], byCategory: object, cohortAvgHrBpm: number|null }>>>}
+ *         outer: gender "all"|"M"|"F", inner: durationType
+ */
+async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr) {
+  const genders = ["all", "M", "F"];
+  const byGenderDur = {};
+  genders.forEach((g) => {
+    byGenderDur[g] = {};
+    for (const dt of Object.keys(DURATION_FIELDS)) {
+      byGenderDur[g][dt] = { raw: [] };
+    }
+  });
+  const cohortSum = { all: {}, M: {}, F: {} };
+  const cohortN = { all: {}, M: {}, F: {} };
+  genders.forEach((g) => {
+    for (const dt of Object.keys(DURATION_HR_FIELDS)) {
+      cohortSum[g][dt] = 0;
+      cohortN[g][dt] = 0;
+    }
+  });
+
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs;
+  for (let i = 0; i < docs.length; i += RANKING_ONE_PASS_BATCH) {
+    const batch = docs.slice(i, i + RANKING_ONE_PASS_BATCH);
+    await Promise.all(
+      batch.map(async (udoc) => {
+        const userId = udoc.id;
+        const data = udoc.data();
+        const name = data.name || "(이름 없음)";
+        const gKey = genderKeyFromUserData(data);
+        const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+        const challenge = data.challenge || "Fitness";
+        const leagueCategory = getLeagueCategory(challenge, birthYear);
+        if (!leagueCategory) return;
+
+        const logSnap = await db.collection("users").doc(userId).collection("logs")
+          .where("date", ">=", startStr)
+          .where("date", "<=", endStr)
+          .get();
+        const peakMap = computeUserPeaksAllDurationsFromSnapshot(data, logSnap, startStr, endStr);
+        const hrMax = maxHrByDurationFromSnapshot(logSnap, startStr, endStr);
+        for (const slot of genders) {
+          if (slot === "M" && gKey !== "M") continue;
+          if (slot === "F" && gKey !== "F") continue;
+          for (const dth of Object.keys(DURATION_HR_FIELDS)) {
+            if (hrMax[dth] > 0) {
+              cohortSum[slot][dth] += hrMax[dth];
+              cohortN[slot][dth] += 1;
+            }
+          }
+        }
+        if (!peakMap) return;
+        for (const dt of Object.keys(peakMap.peaks)) {
+          const p = peakMap.peaks[dt];
+          if (!p || p.wkg <= 0) continue;
+          const row = {
+            userId,
+            name,
+            wkg: p.wkg,
+            watts: p.watts,
+            weightKg: p.weightKg,
+            ageCategory: leagueCategory,
+            gender: String(data.gender || data.sex || "").toLowerCase(),
+            is_private: data.is_private === true,
+          };
+          for (const slot of genders) {
+            if (slot === "M" && gKey !== "M") continue;
+            if (slot === "F" && gKey !== "F") continue;
+            byGenderDur[slot][dt].raw.push({ ...row });
+          }
+        }
+      })
+    );
+  }
+
+  const out = { all: {}, M: {}, F: {} };
+  genders.forEach((g) => {
+    for (const dt of Object.keys(DURATION_FIELDS)) {
+      const raw = byGenderDur[g][dt].raw;
+      raw.sort((a, b) => b.wkg - a.wkg);
+      const withRank = raw.map((e, j) => ({ ...e, rank: j + 1 }));
+      const byCategory = { Supremo: withRank, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+      withRank.forEach((e) => {
+        if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e);
+      });
+      let cohortAvgHrBpm = null;
+      if (DURATION_HR_FIELDS[dt] && cohortN[g][dt] > 0) {
+        cohortAvgHrBpm = Math.round((cohortSum[g][dt] / cohortN[g][dt]) * 10) / 10;
+      }
+      out[g][dt] = { entries: withRank, byCategory, cohortAvgHrBpm: cohortAvgHrBpm != null && !isNaN(cohortAvgHrBpm) ? cohortAvgHrBpm : null };
+    }
+  });
+  return out;
+}
+
+/**
+ * uid가 참가한 방장 id 집합(최근 30일·서울, rides 스캔 1회)
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} uid
+ */
+async function getHostUserIdsForOpenRidesParticipation(db, uid, startStr, endStr) {
+  const out = new Set();
+  if (!uid) return out;
+  const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
+  const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
+  const uidStr = String(uid).trim();
+  const ridesSnap = await db.collection("rides")
+    .where("date", ">=", tsStart)
+    .where("date", "<=", tsEnd)
+    .get();
+  ridesSnap.forEach((rdoc) => {
+    const r = rdoc.data() || {};
+    if (String(r.rideStatus || "active") === "cancelled") return;
+    const ymd = rideDocDateToSeoulYmd(r.date);
+    if (!ymd || ymd < startStr || ymd > endStr) return;
+    const parts = Array.isArray(r.participants) ? r.participants : [];
+    if (!parts.some((p) => String(p || "").trim() === uidStr)) return;
+    const h = String(r.hostUserId || "").trim();
+    if (h) out.add(h);
+  });
+  return out;
+}
+
+/**
+ * 그룹 랭킹 응답(집계본)에 참가 여부·랭크만 뷰어에 맞게 덮어쓰기
+ * @param {string|null} uid
+ */
+async function applyGroupRankingParticipationForViewer(db, byCategory, entries, startStr, endStr, uid) {
+  if (!byCategory || !Array.isArray(entries)) return;
+  const hostSet = await getHostUserIdsForOpenRidesParticipation(db, uid, startStr, endStr);
+  const sup = byCategory.Supremo;
+  if (Array.isArray(sup)) {
+    for (const row of sup) {
+      if (row && row.userId) {
+        row.currentUserParticipated = hostSet.has(String(row.userId).trim());
+      }
+    }
+  }
+  for (const row of entries) {
+    if (row && row.userId) {
+      row.currentUserParticipated = hostSet.has(String(row.userId).trim());
+    }
+  }
+}
+
+/** @param {FirebaseFirestore.Firestore} db */
+async function runRebuildRankingAggregatesCore(db) {
+  const t0 = Date.now();
+  let wrote = 0;
+  const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+  const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
+  const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
+  const { startStr: r365s, endStr: r365e } = getRolling365DaysRangeSeoul();
+
+  for (const gender of ["all", "M", "F"]) {
+    const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender);
+    const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
+    await writeRankingAggregatePayload(db, keyTss, {
+      byCategory: tss.byCategory,
+      entries: tss.entries,
+      startStr: wStart,
+      endStr: wEnd,
+    });
+    wrote++;
+
+    const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender);
+    const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
+    await writeRankingAggregatePayload(db, keyD, {
+      byCategory: dist.byCategory,
+      entries: dist.entries,
+      startStr: r30s,
+      endStr: r30e,
+    });
+    wrote++;
+  }
+
+  const group = await getRolling30dGroupDistanceByHostEntries(db, r30s, r30e, null);
+  const keyG = `peakRanking_group_dist_30d_${r30s}_${r30e}`;
+  await writeRankingAggregatePayload(db, keyG, {
+    byCategory: group.byCategory,
+    entries: group.entries,
+    startStr: r30s,
+    endStr: r30e,
+  });
+  wrote++;
+
+  const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r30s, r30e);
+  for (const gender of ["all", "M", "F"]) {
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      const pack = allDurMonthly[gender][durationType];
+      const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r30s}_${r30e}`;
+      await writeRankingAggregatePayload(db, ckey, {
+        byCategory: pack.byCategory,
+        entries: pack.entries,
+        startStr: r30s,
+        endStr: r30e,
+        cohortAvgHrBpm: pack.cohortAvgHrBpm,
+      });
+      wrote++;
+    }
+  }
+
+  const allDurYear = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r365s, r365e);
+  for (const gender of ["all", "M", "F"]) {
+    for (const durationType of Object.keys(DURATION_FIELDS)) {
+      const pack = allDurYear[gender][durationType];
+      const ckey = `peakRanking_v2_yearly_${durationType}_${gender}_${r365s}_${r365e}`;
+      await writeRankingAggregatePayload(db, ckey, {
+        byCategory: pack.byCategory,
+        entries: pack.entries,
+        startStr: r365s,
+        endStr: r365e,
+        cohortAvgHrBpm: pack.cohortAvgHrBpm,
+      });
+      wrote++;
+    }
+  }
+
+  const entriesCurrent = await getWeeklyRankingEntries(db, wStart, wEnd);
+  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
+    rank: i + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+  }));
+  const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
+  await writeRankingAggregatePayload(db, weeklyKey, {
+    fullEntries: entriesCurrent,
+    ranking: top10Current,
+    startStr: wStart,
+    endStr: wEnd,
+  });
+  wrote++;
+
+  const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE);
+  const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
+    rank: i + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+  }));
+  const weeklyKeyPrev = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
+  await writeRankingAggregatePayload(db, weeklyKeyPrev, {
+    fullEntries: entriesPrev,
+    ranking: top10Prev,
+    startStr: wPrevS,
+    endStr: wPrevE,
+  });
+  wrote++;
+
+  const ms = Date.now() - t0;
+  console.log("[runRebuildRankingAggregatesCore] done", { wrote, ms });
+  return { wrote, ms };
+}
+
+/** 6분마다 랭킹 집계 갱신 (사용자 요청 시 전체 스캔 대신 1 doc 읽기) */
+exports.rebuildRankingAggregates = onSchedule(
+  {
+    schedule: RANKING_REBUILD_CRON,
+    timeZone: "Asia/Seoul",
+    memory: "1GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      await runRebuildRankingAggregatesCore(db);
+    } catch (e) {
+      console.error("[rebuildRankingAggregates]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
 /** 동기부여 메시지 (주간 TSS 랭킹) */
 function buildMotivationMessageTss(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
@@ -3687,6 +4106,37 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "tss") {
       const { startStr, endStr } = getWeekRangeSeoul();
       const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
+      const aggTss = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      if (aggTss && aggTss.byCategory) {
+        let out = {
+          success: true,
+          byCategory: aggTss.byCategory,
+          startStr,
+          endStr,
+          period: "weekly",
+          durationType: "tss",
+          gender,
+          precomputed: true,
+        };
+        if (uid) {
+          const cat = aggTss.byCategory;
+          let current = null; let nextUser = null;
+          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+            const arr = cat?.[c] || [];
+            const idx = arr.findIndex((e) => e.userId === uid);
+            if (idx >= 0) {
+              current = arr[idx];
+              nextUser = idx > 0 ? arr[idx - 1] : null;
+              break;
+            }
+          }
+          if (current) {
+            out.currentUser = current;
+            out.motivationMessage = buildMotivationMessage(current, nextUser);
+          }
+        }
+        return res.status(200).json(out);
+      }
       const cacheRef = db.collection("cache").doc(cacheKey);
       const cacheSnap = await cacheRef.get();
       const nowMs = Date.now();
@@ -3734,6 +4184,7 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
 
       let out = { success: true, byCategory, startStr, endStr, period: "weekly", durationType: "tss", gender };
       if (uid) {
@@ -3759,6 +4210,38 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "personal_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_personal_dist_30d_${gender}_${startStr}_${endStr}`;
+      const aggPd = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      if (aggPd && aggPd.byCategory) {
+        let out = {
+          success: true,
+          byCategory: aggPd.byCategory,
+          entries: Array.isArray(aggPd.entries) ? aggPd.entries : [],
+          startStr,
+          endStr,
+          period: "rolling30",
+          durationType: "personal_dist",
+          gender,
+          precomputed: true,
+        };
+        if (uid) {
+          const cat = aggPd.byCategory;
+          let current = null; let nextUser = null;
+          for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+            const arr = cat?.[c] || [];
+            const idx = arr.findIndex((e) => e.userId === uid);
+            if (idx >= 0) {
+              current = arr[idx];
+              nextUser = idx > 0 ? arr[idx - 1] : null;
+              break;
+            }
+          }
+          if (current) {
+            out.currentUser = current;
+            out.motivationMessage = buildMotivationMessage(current, nextUser);
+          }
+        }
+        return res.status(200).json(out);
+      }
       const cacheRef = db.collection("cache").doc(cacheKey);
       const cacheSnap = await cacheRef.get();
       const nowMs = Date.now();
@@ -3806,6 +4289,7 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling30", durationType: "personal_dist", gender };
       if (uid) {
         let current = null; let nextUser = null;
@@ -3830,6 +4314,40 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "group_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_group_dist_30d_${startStr}_${endStr}`;
+      const aggG = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+      if (aggG && aggG.byCategory) {
+        const byCategory = JSON.parse(JSON.stringify(aggG.byCategory));
+        const entries = JSON.parse(JSON.stringify(Array.isArray(aggG.entries) ? aggG.entries : []));
+        await applyGroupRankingParticipationForViewer(db, byCategory, entries, startStr, endStr, uid);
+        const arrAll = byCategory?.Supremo || [];
+        const out = {
+          success: true,
+          byCategory,
+          entries,
+          startStr,
+          endStr,
+          period: "rolling30",
+          durationType: "group_dist",
+          gender: "all",
+          precomputed: true,
+        };
+        if (uid) {
+          const participated = arrAll.filter((e) => e.currentUserParticipated || e.userId === uid);
+          let current = null;
+          if (participated.length) {
+            current = participated.reduce((best, e) => (!best || e.rank < best.rank ? e : best));
+          }
+          let nextUser = null;
+          if (current && current.rank > 1) {
+            nextUser = arrAll.find((e) => e.rank === current.rank - 1) || null;
+          }
+          if (current) {
+            out.currentUser = current;
+            out.motivationMessage = buildMotivationMessage(current, nextUser);
+          }
+        }
+        return res.status(200).json(out);
+      }
       const cacheRef = db.collection("cache").doc(cacheKey);
       const cacheSnap = await cacheRef.get();
       const nowMs = Date.now();
@@ -3877,6 +4395,10 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      const byCategoryAgg = JSON.parse(JSON.stringify(byCategory));
+      const entriesAgg = JSON.parse(JSON.stringify(entries));
+      await applyGroupRankingParticipationForViewer(db, byCategoryAgg, entriesAgg, startStr, endStr, null);
+      await writeRankingAggregatePayload(db, cacheKey, { byCategory: byCategoryAgg, entries: entriesAgg, startStr, endStr });
       const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling30", durationType: "group_dist", gender: "all" };
       if (uid) {
         const arrAll = byCategory.Supremo || [];
@@ -3917,6 +4439,40 @@ exports.getPeakPowerRanking = onRequest(
     }
 
     const cacheKey = `peakRanking_v2_${period}_${durationType}_${gender}_${startStr}_${endStr}`;
+    const aggPeak = await readRankingAggregatePayloadIfFresh(db, cacheKey);
+    if (aggPeak && aggPeak.byCategory) {
+      let out = {
+        success: true,
+        byCategory: aggPeak.byCategory,
+        startStr,
+        endStr,
+        period,
+        durationType,
+        gender,
+        precomputed: true,
+      };
+      if (aggPeak.cohortAvgHrBpm != null && !isNaN(Number(aggPeak.cohortAvgHrBpm))) {
+        out.cohortAvgHrBpm = Number(aggPeak.cohortAvgHrBpm);
+      }
+      if (uid) {
+        const cat = aggPeak.byCategory;
+        let current = null, nextUser = null;
+        for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+          const arr = cat?.[c] || [];
+          const idx = arr.findIndex((e) => e.userId === uid);
+          if (idx >= 0) {
+            current = arr[idx];
+            nextUser = idx > 0 ? arr[idx - 1] : null;
+            break;
+          }
+        }
+        if (current) {
+          out.currentUser = current;
+          out.motivationMessage = buildMotivationMessage(current, nextUser);
+        }
+      }
+      return res.status(200).json(out);
+    }
     const cacheRef = db.collection("cache").doc(cacheKey);
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
@@ -3965,6 +4521,13 @@ exports.getPeakPowerRanking = onRequest(
       endStr,
       cohortAvgHrBpm: cohortAvgHrBpm != null ? cohortAvgHrBpm : null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await writeRankingAggregatePayload(db, cacheKey, {
+      byCategory,
+      entries,
+      startStr,
+      endStr,
+      cohortAvgHrBpm: cohortAvgHrBpm != null ? cohortAvgHrBpm : null,
     });
 
     let out = { success: true, byCategory, startStr, endStr, period, durationType, gender, cohortAvgHrBpm };
