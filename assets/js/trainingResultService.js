@@ -56,17 +56,42 @@ function calculateTSS(durationSec, weightedWatts, ftp) {
   return Math.round(tss);
 }
 
+/** Asia/Seoul 달력 기준 YYYY-MM-DD (toISOString UTC·로컬 혼용으로 before/after가 겹치는 오류 방지) */
+function formatYmdSeoul(d) {
+  if (!d || !(d instanceof Date) || isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
+}
+
+function ymdTodaySeoul() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
+function ymdCompare(a, b) {
+  if (!a || !b) return 0;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /**
- * 날짜에 일수 추가 (구독 연장)
- * 
- * @param {Date} currentDate - 현재 만료일
- * @param {number} days - 추가할 일수
- * @returns {Date} 연장된 날짜
+ * users.expiry_date / Timestamp / Date → KST YYYY-MM-DD
+ * - 문자열만 있을 땐 T12:00:00+09:00으로 파싱(일자 안정)
  */
-function addDaysToDate(currentDate, days) {
-  const newDate = new Date(currentDate);
-  newDate.setDate(newDate.getDate() + days);
-  return newDate;
+function expiryToYmdSeoul(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[0];
+  }
+  const d = raw && typeof raw.toDate === "function" ? raw.toDate() : raw instanceof Date ? raw : null;
+  if (!d || isNaN(d.getTime())) return null;
+  return formatYmdSeoul(d);
+}
+
+function addOneCalendarDayYmdSeoul(ymd) {
+  if (!ymd || !/^(\d{4})-(\d{2})-(\d{2})$/.test(ymd)) return ymd;
+  const t = new Date(ymd + "T00:00:00+09:00");
+  if (isNaN(t.getTime())) return ymd;
+  t.setTime(t.getTime() + 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(t);
 }
 
 /** 노이즈 필터 상수 */
@@ -465,54 +490,26 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       // 잔여 포인트: 기존 값 + earned_points
       let newRemPoints = currentRemPoints + earnedPoints;
       
-      // 4. 구독 연장 처리
-      let newExpiryDate = currentExpiryDate;
+      // 4. 구독 연장 처리 — 만료/연장일은 Asia/Seoul 달력(YYYY-MM-DD)만 사용 (toISOString UTC + 로컬 Date 혼용 시 before=after 꼬임 방지)
       let extendedDays = 0;
-      
-      // expiry_date가 Timestamp인 경우 Date로 변환
-      let expiryDateAsDate;
-      if (currentExpiryDate) {
-        if (currentExpiryDate.toDate) {
-          // Firestore Timestamp
-          expiryDateAsDate = currentExpiryDate.toDate();
-        } else if (currentExpiryDate instanceof Date) {
-          expiryDateAsDate = currentExpiryDate;
-        } else if (typeof currentExpiryDate === 'string') {
-          expiryDateAsDate = new Date(currentExpiryDate);
-        } else {
-          // 기본값: 오늘부터 3개월
-          expiryDateAsDate = new Date();
-          expiryDateAsDate.setMonth(expiryDateAsDate.getMonth() + 3);
-        }
-      } else {
-        // expiry_date가 없으면 오늘부터 3개월로 설정
-        expiryDateAsDate = new Date();
-        expiryDateAsDate.setMonth(expiryDateAsDate.getMonth() + 3);
+      let baseYmd = expiryToYmdSeoul(currentExpiryDate);
+      if (!baseYmd) {
+        const future = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+        baseYmd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(future);
       }
-      
-      // 이미 만료된 사용자: 오늘 기준으로 연장. 미만료: 기존 만료일 기준
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const expiryStart = new Date(expiryDateAsDate);
-      expiryStart.setHours(0, 0, 0, 0);
-      if (expiryStart.getTime() < todayStart.getTime()) {
-        expiryDateAsDate = new Date(todayStart.getTime());
+      const todayYmd = ymdTodaySeoul();
+      if (ymdCompare(baseYmd, todayYmd) < 0) {
+        baseYmd = todayYmd;
       }
-      
-      // Cloud Function 알림톡용: 이번 세션에서 500SP 연장 전 만료일(서버는 클라이언트가 이미 반영한 rem을 읽으면
-      // processRidingReward로는 연장·알림톡이 누락됨 → 로그에 메타로 남김)
-      const subscriptionExpiryDateBefore = expiryDateAsDate.toISOString().split('T')[0];
-      
-      // 구독 연장 루프: rem_points가 500 이상인 경우
-      // 500 포인트당 1일 연장, 연장한 만큼 rem_points에서 500씩 차감
+      // 500SP 연장 루프 직전 만료 캘린더(알림톡·로그: subscription_expiry_date_before)
+      const subscriptionExpiryDateBefore = baseYmd;
+      let expiryYmd = baseYmd;
       while (newRemPoints >= 500) {
         extendedDays += 1;
         newRemPoints -= 500;
-        expiryDateAsDate = addDaysToDate(expiryDateAsDate, 1);
+        expiryYmd = addOneCalendarDayYmdSeoul(expiryYmd);
       }
-      
-      // YYYY-MM-DD 형식으로 변환 (Timestamp 대신 문자열 형식 사용)
-      newExpiryDate = expiryDateAsDate.toISOString().split('T')[0];
+      const newExpiryDate = expiryYmd;
       
       console.log('[saveTrainingSession] 포인트 및 구독 연장:', {
         earnedPoints,
