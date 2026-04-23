@@ -22146,6 +22146,43 @@ body.bluetooth-individual-screen-active {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/*
+ * 훈련대시보드(모바일) 하단 목표값 슬라이더: 글래스 하단 네비와 동일 터치/히트 규칙
+ * (자식 span이 히트를 가로채지 않게·range에 터치 최적화). 레이아웃·여백·배경 스타일 불변.
+ */
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider-wrapper {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+}
+#mobileDashboardScreen
+  .mobile-individual-intensity-adjustment-slider-wrapper
+  .mobile-individual-intensity-adjustment-min,
+#mobileDashboardScreen
+  .mobile-individual-intensity-adjustment-slider-wrapper
+  .mobile-individual-intensity-adjustment-max {
+  pointer-events: none;
+}
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-label span {
+  pointer-events: none;
+}
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider {
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
 /* 모바일 대시보드 결과 모달 버튼 호버 효과 */
 .mobile-result-close-btn:hover {
   background: linear-gradient(135deg, #00e8c2 0%, #00d4aa 100%);
@@ -23136,6 +23173,9 @@ body.bluetooth-individual-screen-active {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-label span {
+  pointer-events: none;
+}
 #bluetoothIndividualScreen .indiv-individual-intensity-adjustment-value {
   font-size: 16px;
   font-weight: 700;
@@ -23150,6 +23190,15 @@ body.bluetooth-individual-screen-active {
   gap: 10px;
   width: 100%;
   max-width: 400px;
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
 }
 #bluetoothIndividualScreen .indiv-individual-intensity-adjustment-slider {
   flex: 1;
@@ -23160,10 +23209,19 @@ body.bluetooth-individual-screen-active {
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
 }
 #bluetoothIndividualScreen .indiv-individual-intensity-adjustment-min,
 #bluetoothIndividualScreen .indiv-individual-intensity-adjustment-max {
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
+  pointer-events: none;
 }
 #bluetoothIndividualScreen .indiv-gauge-container svg text {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
