@@ -22003,6 +22003,37 @@ body.bluetooth-individual-screen-active {
   z-index: 1;
 }
 
+/* 훈련 전체 z-index(100100) + 하단 슬라이더 isolate 이후에도 상단(좌·우 버튼) 히트가 먹도록 헤더만 스택 최상단 + 네비와 동일 터치 규칙 */
+#mobileDashboardScreen.active .mobile-dashboard-header {
+  z-index: 100200 !important;
+  position: relative;
+  pointer-events: auto;
+  isolation: isolate;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-timer,
+#mobileDashboardScreen.active #mobile-main-timer {
+  pointer-events: none;
+}
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn,
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap {
+  position: relative;
+  z-index: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn .mobile-bluetooth-icon,
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn > span,
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-user-name-icon,
+#mobileDashboardScreen.active .mobile-dashboard-header #mobile-dashboard-user-name {
+  pointer-events: none;
+}
+
 /* 모바일 훈련화면: TARGET, WATTS, CADENCE, LAP AVG, HEART RATE, rpm, w, bpm, 목표값 조절 % 한글 폰트 통일 */
 #mobileDashboardScreen .mobile-stat-label,
 #mobileDashboardScreen .mobile-stat-value,
@@ -23041,6 +23072,34 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   border-bottom: 1px solid #333;
   position: relative;
   flex-shrink: 0;
+}
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-header {
+  z-index: 100200 !important;
+  pointer-events: auto;
+  isolation: isolate;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-timer,
+#bluetoothIndividualScreen.indiv-screen-wrap.active #indiv-main-timer {
+  pointer-events: none;
+}
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-user-name-wrap,
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-connect-btn {
+  position: relative;
+  z-index: 1;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-user-name-wrap .indiv-bluetooth-user-name-icon,
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-user-name-wrap #indiv-bluetooth-dashboard-user-name,
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-connect-btn .indiv-bluetooth-icon,
+#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-connect-btn > span {
+  pointer-events: none;
 }
 #bluetoothIndividualScreen .indiv-timer {
   font-size: 1.5em;
