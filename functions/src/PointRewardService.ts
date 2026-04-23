@@ -44,56 +44,82 @@ interface RidingRewardTxOutput {
   result: ProcessRidingRewardResult;
 }
 
-/** 문자열/타임스탬프/Date 입력을 YYYY-MM-DD로 표준화 */
-function toIsoDate(value: unknown): string {
-  if (!value) return "";
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString().split("T")[0];
+/** Firestore/문자/Date → Asia/Seoul 달력 YYYY-MM-DD (Strava·실내 `saveTrainingSession`과 동일 스킴) */
+function toYmdSeoul(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value === "string") {
+    const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[0];
   }
-
   const ts = value as Timestamp;
   if (ts && typeof ts.toDate === "function") {
     const d = ts.toDate();
-    if (!Number.isNaN(d.getTime())) return d.toISOString().split("T")[0];
+    if (!Number.isNaN(d.getTime())) {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
+    }
   }
-
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(value);
+  }
   const raw = String(value).trim();
   if (!raw) return "";
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().split("T")[0];
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(parsed);
 }
 
-/** 한국형 날짜 포맷: YYYY년 MM월 DD일 */
+function ymdTodaySeoul(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
+function ymdCompare(a: string, b: string): number {
+  if (!a || !b) return 0;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** KST YMD에 calendar days일 더함 (toISOString UTC + 로컬 Date 혼용 금지) */
+function addCalendarDaysYmdSeoul(ymd: string, days: number): string {
+  if (!ymd || !/^(\d{4})-(\d{2})-(\d{2})$/.test(ymd)) return ymd;
+  const t = new Date(`${ymd}T00:00:00+09:00`);
+  if (Number.isNaN(t.getTime())) return ymd;
+  t.setTime(t.getTime() + days * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(t);
+}
+
+/**
+ * rem+TSS로 extensionDays만큼 구독 끝을 연장할 때, 연장 직전 기준일(before)과 연장 반영 후(after).
+ * - 만료일이 오늘(Seoul) 이전이면 기준을 오늘로 맞춤 (기존 computeExtendedExpiryDate와 동일 의도).
+ * - 만료일이 비어 있으면 오늘(Seoul)을 기준으로 둠.
+ */
+function computeSubscriptionExpiryBeforeAfterSeoul(
+  userExpiryRaw: unknown,
+  extensionDays: number
+): { before: string; after: string } {
+  const todayYmd = ymdTodaySeoul();
+  let baseYmd = toYmdSeoul(userExpiryRaw);
+  if (!baseYmd) {
+    baseYmd = todayYmd;
+  }
+  if (ymdCompare(baseYmd, todayYmd) < 0) {
+    baseYmd = todayYmd;
+  }
+  const before = baseYmd;
+  const after =
+    extensionDays > 0 ? addCalendarDaysYmdSeoul(before, extensionDays) : before;
+  return { before, after };
+}
+
+/** 한국형 날짜 포맷: YYYY년 MM월 DD일 (Seoul YMD 기준) */
 function formatDateKo(value: string): string {
-  const iso = toIsoDate(value);
-  if (!iso) return "-";
-  const [y, m, d] = iso.split("-");
+  const ymd = toYmdSeoul(value);
+  if (!ymd) return "-";
+  const [y, m, d] = ymd.split("-");
   return `${y}년 ${m}월 ${d}일`;
 }
 
 /** 휴대폰 숫자만 추출하여 알림톡 수신자 형태(11자리)로 정규화 */
 function normalizeReceiverPhone(phone: string): string {
   return (phone || "").replace(/\D/g, "");
-}
-
-/** 기존 만료일(미래면 유지, 과거/없음이면 오늘)을 기준으로 일수 연장 */
-function computeExtendedExpiryDate(currentExpiryDate: string, addDays: number): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const base = new Date(today);
-  const current = toIsoDate(currentExpiryDate);
-  if (current) {
-    const currentDate = new Date(current);
-    currentDate.setHours(0, 0, 0, 0);
-    if (currentDate.getTime() >= today.getTime()) {
-      base.setTime(currentDate.getTime());
-    }
-  }
-
-  base.setDate(base.getDate() + addDays);
-  return base.toISOString().split("T")[0];
 }
 
 /** 카카오 승인 템플릿과 동일한 문구로 알림톡 본문 생성 */
@@ -252,10 +278,11 @@ export class PointRewardService {
       const pointsAfter = totalPoints - pointsUsed;
       const extendedDays = extensionCount * SUBSCRIPTION_DAYS_PER_THRESHOLD;
 
-      const expiryDateBefore = toIsoDate(userData.expiry_date ?? userData.subscription_end_date ?? "");
-      const expiryDateAfter = extendedDays > 0
-        ? computeExtendedExpiryDate(expiryDateBefore, extendedDays)
-        : expiryDateBefore;
+      const expiryRaw = userData.expiry_date ?? userData.subscription_end_date ?? "";
+      const { before: expiryDateBefore, after: expiryDateAfter } = computeSubscriptionExpiryBeforeAfterSeoul(
+        expiryRaw,
+        extendedDays
+      );
 
       const currentAccPoints = Number(userData.acc_points || 0);
       const updatePayload: Record<string, unknown> = {
@@ -288,6 +315,10 @@ export class PointRewardService {
         extended_days: extendedDays,
         expiry_date_before: expiryDateBefore || null,
         expiry_date_after: expiryDateAfter || null,
+        // 실내 훈련 로그(`subscription_*`)와 동일 의미·Seoul YMD (Strava/Outdoor 포함)
+        subscription_extended_days: extendedDays,
+        subscription_expiry_date_before: expiryDateBefore || null,
+        subscription_expiry_date_after: expiryDateAfter || null,
         created_at: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -347,5 +378,63 @@ export class PointRewardService {
       ...txResult.result,
       alimtalkSent,
     };
+  }
+
+  /**
+   * 실내 STELVIO 훈련: `saveTrainingSession`이 트랜잭션에서 이미 rem/acc/만료일을 반영한 뒤 로그가 생성됨.
+   * 이 경우 `processRidingReward`를 호출하면 동일 TSS가 다시 더해져 이중 적립되고,
+   * 서버가 읽는 잔여 포인트는 이미 500이 차감된 뒤라 extendedDays=0이 되어 알림톡이 절대 나가지 않음.
+   * 클라이언트가 logs에 남긴 `subscription_*` 메타로 연장이 있을 때만 알리고 알림톡을 발송한다.
+   */
+  async sendAlimtalkForStelvioIndoorLog(
+    userId: string,
+    logData: Record<string, unknown>
+  ): Promise<{ alimtalkSent: boolean; skipped: string | null }> {
+    if (!userId || !userId.trim()) {
+      throw new Error("userId가 비어 있습니다.");
+    }
+    const extendedDays = Math.floor(Number(logData.subscription_extended_days ?? 0));
+    if (extendedDays <= 0) {
+      return { alimtalkSent: false, skipped: "no_subscription_extension" };
+    }
+
+    const earned = Math.max(0, Math.floor(Number(logData.earned_points ?? logData.tss ?? 0)));
+    const expiryBefore = String(logData.subscription_expiry_date_before ?? "").trim();
+    const expiryAfter = String(logData.subscription_expiry_date_after ?? "").trim();
+
+    const userRef = this.db.collection(USERS_COLLECTION).doc(userId);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      return { alimtalkSent: false, skipped: "user_not_found" };
+    }
+    const userData = userSnap.data() ?? {};
+    const userName = String(userData.name || userData.user_name || "회원").trim() || "회원";
+    const receiverPhone = String(
+      userData.contact || userData.phoneNumber || userData.phone || userData.tel || ""
+    ).trim();
+    const remPointsAfter = Math.round(Number(userData.rem_points || 0));
+
+    const message = buildAlimtalkMessage({
+      userName,
+      earnedPoints: earned,
+      extendedDays,
+      expiryDateBefore: expiryBefore,
+      expiryDateAfter: expiryAfter,
+      remPointsAfter,
+    });
+    const subject = "STELVIO 포인트 적립 및 구독 연장 안내";
+    try {
+      if (!normalizeReceiverPhone(receiverPhone)) {
+        console.warn(
+          `[PointReward] userId=${userId} (stelvio indoor) 구독 연장 알림톡 생략: users 문서에 휴대전화 없음 (contact/phone/phoneNumber/tel)`
+        );
+        return { alimtalkSent: false, skipped: "no_phone" };
+      }
+      await this.sendAlimtalk(receiverPhone, userName, subject, message);
+      return { alimtalkSent: true, skipped: null };
+    } catch (err) {
+      console.error(`[PointReward] userId=${userId} (stelvio indoor) 알림톡 실패:`, err);
+      throw err;
+    }
   }
 }
