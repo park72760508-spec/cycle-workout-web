@@ -14198,8 +14198,17 @@ async function selectWorkoutForTrainingReady(workout, options) {
         });
     })();
     
-    // 훈련 준비 화면 업데이트
-    updateTrainingReadyScreenWithWorkout(normalizedWorkout);
+    // 훈련 준비 화면 업데이트: 동기 캔버스/DOM이 메인 스레드를 오래 잡으면 (워크아웃 로딩) 스피너가 멈춤 → 다음 페인트/프레임에 지연
+    (function scheduleUpdateTrainingReadyUI() {
+      const run = function () { updateTrainingReadyScreenWithWorkout(normalizedWorkout); };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(run);
+        });
+      } else {
+        setTimeout(run, 0);
+      }
+    })();
     
     if (!skipToast && typeof showToast === 'function') {
       showToast(`"${normalizedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');

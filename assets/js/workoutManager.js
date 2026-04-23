@@ -4300,6 +4300,21 @@ function handleWorkoutCardClick(event, workoutId) {
   if (workoutId) selectWorkout(workoutId);
 }
 
+/**
+ * 스피너·오버레이가 DOM에 그려지도록 다음 페인트(또는 2프레임) 이후에 이어질 작업 실행 (메인 스레드 점유 시 애니메이션 정지 방지)
+ */
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    } else {
+      setTimeout(resolve, 32);
+    }
+  });
+}
+
 async function selectWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -4320,10 +4335,12 @@ async function selectWorkout(workoutId) {
   var workoutLoadingProgress = document.getElementById('workoutLoadingProgress');
   if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'flex'; }
   if (workoutLoadingProgress) { workoutLoadingProgress.textContent = 'Workout Loading ....'; }
+  await waitForNextPaint();
   
   try {
     console.log('Selecting workout with ID:', workoutId);
     const result = await apiGetWorkout(workoutId);
+    await waitForNextPaint();
     
     if (!result || !result.success) {
       console.error('Failed to get workout:', result?.error);
