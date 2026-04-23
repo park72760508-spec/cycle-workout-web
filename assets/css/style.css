@@ -21984,6 +21984,12 @@ body.bluetooth-individual-screen-active {
     opacity: 0.3;
     pointer-events: none;
   }
+  /* 가로 잠금 시에도 상단(뒤로·연결)은 동작 — 세로 전환 안내는 ::before */
+  #mobileDashboardScreen.active .mobile-dashboard-header,
+  #mobileDashboardScreen.active .mobile-dashboard-header * {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 #mobileDashboardScreen.screen {
@@ -22026,12 +22032,6 @@ body.bluetooth-individual-screen-active {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   pointer-events: auto;
-}
-#mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn .mobile-bluetooth-icon,
-#mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn > span,
-#mobileDashboardScreen.active .mobile-dashboard-header .mobile-user-name-icon,
-#mobileDashboardScreen.active .mobile-dashboard-header #mobile-dashboard-user-name {
-  pointer-events: none;
 }
 
 /* 모바일 훈련화면: TARGET, WATTS, CADENCE, LAP AVG, HEART RATE, rpm, w, bpm, 목표값 조절 % 한글 폰트 통일 */
@@ -23094,12 +23094,6 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   pointer-events: auto;
-}
-#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-user-name-wrap .indiv-bluetooth-user-name-icon,
-#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-user-name-wrap #indiv-bluetooth-dashboard-user-name,
-#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-connect-btn .indiv-bluetooth-icon,
-#bluetoothIndividualScreen.indiv-screen-wrap.active .indiv-bluetooth-connect-btn > span {
-  pointer-events: none;
 }
 #bluetoothIndividualScreen .indiv-timer {
   font-size: 1.5em;
