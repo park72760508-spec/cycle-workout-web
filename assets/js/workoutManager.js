@@ -4315,6 +4315,23 @@ function waitForNextPaint() {
   });
 }
 
+/**
+ * loadWorkouts 로딩 후 display:none → 워크아웃 첫 선택 시 display:flex로 다시 켤 때
+ * .workout-loading-spinner의 animation: spin 이 재시작되지 않고 멈춘 것처럼 보이는 WebView/Safari/Chrome 이슈 대응
+ */
+function restartWorkoutLoadingOverlaySpinner(overlay) {
+  if (!overlay) return;
+  const spin = overlay.querySelector('.workout-loading-spinner');
+  if (!spin) return;
+  try {
+    spin.style.animation = 'none';
+    void spin.offsetWidth;
+    spin.style.removeProperty('animation');
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 async function selectWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -4335,6 +4352,7 @@ async function selectWorkout(workoutId) {
   var workoutLoadingProgress = document.getElementById('workoutLoadingProgress');
   if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'flex'; }
   if (workoutLoadingProgress) { workoutLoadingProgress.textContent = 'Workout Loading ....'; }
+  restartWorkoutLoadingOverlaySpinner(workoutLoadingOverlay);
   await waitForNextPaint();
   
   try {
