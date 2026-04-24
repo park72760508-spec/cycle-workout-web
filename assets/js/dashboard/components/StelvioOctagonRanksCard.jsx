@@ -224,20 +224,20 @@
     }, 0) / 8;
     if (!isFinite(pTotal)) pTotal = 100;
     var tier;
-    if (pTotal <= 1) {
+    if (pTotal <= 5) {
       tier = { id: 'HC', text: 'HC', labelShort: 'HC' };
-    } else if (pTotal <= 5) {
+    } else if (pTotal <= 10) {
       tier = { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
     } else if (pTotal <= 15) {
       tier = { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
     } else if (pTotal <= 30) {
       tier = { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
-    } else if (pTotal <= 50) {
+    } else if (pTotal <= 60) {
       tier = { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
-    } else if (pTotal <= 75) {
+    } else if (pTotal <= 80) {
       tier = { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
     } else {
-      tier = { id: 'BASE', text: 'Base', labelShort: 'Base' };
+      tier = { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
     }
     return { itemP: itemP, pTotal: pTotal, tier: tier };
   }
@@ -249,11 +249,16 @@
     C3: { color: '#e8c547', shadow: '0 0 8px rgba(232,197,71,0.6)' },
     C4: { color: '#9fe870', shadow: '0 0 8px rgba(140,200,100,0.5)' },
     C5: { color: '#94a3b8', shadow: '0 0 6px rgba(148,163,184,0.5)' },
-    BASE: { color: '#7c8aa0', shadow: '0 0 4px rgba(100,110,120,0.4)' }
+    C6: { color: '#7c8aa0', shadow: '0 0 4px rgba(100,110,120,0.4)' }
   };
 
   function tierStyleForId(id) {
-    return TIER_STYLE[id] || TIER_STYLE.BASE;
+    return TIER_STYLE[id] || TIER_STYLE.C6;
+  }
+
+  function tierBadgeImageSrc(tierId) {
+    var m = { HC: 'hc.svg', C1: 'c1.svg', C2: 'c2.svg', C3: 'c3.svg', C4: 'c4.svg', C5: 'c5.svg', C6: 'c6.svg' };
+    return 'assets/img/' + (m[tierId] || 'c6.svg');
   }
 
   function OctagonTierCenterOverlay(props) {
@@ -261,32 +266,54 @@
     var _d = useState(false);
     var showPct = _d[0];
     var setShowPct = _d[1];
+    var _img = useState(false);
+    var imgError = _img[0];
+    var setImgError = _img[1];
+    var tid = summary && summary.tier ? summary.tier.id : '';
+    var pMarker = summary && summary.pTotal != null ? summary.pTotal : -1;
+    useEffect(
+      function() {
+        setImgError(false);
+      },
+      [tid, pMarker]
+    );
     if (!summary || !summary.tier) return null;
-    var tid = summary.tier.id;
     var st = tierStyleForId(tid);
     var label = summary.tier.labelShort || summary.tier.text;
+    var src = tierBadgeImageSrc(tid);
+
     return (
       <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
-        <div className="stelvio-octagon-tier-inner">
+        <div className="stelvio-octagon-tier-inner stelvio-octagon-tier-inner--img">
           <button
             type="button"
-            className={
-              'stelvio-octagon-tier-btn stelvio-octagon-tier-btn--' +
-              tid +
-              (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')
-            }
+            className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
             aria-pressed={showPct}
-            style={
-              tid === 'HC'
-                ? { textShadow: st.shadow }
-                : { color: st.color, textShadow: st.shadow }
-            }
+            aria-label={label + ', 상위 ' + summary.pTotal.toFixed(1) + '%. 탭하면 백분위 표시'}
             onClick={function() {
               setShowPct(!showPct);
             }}
             title="탭하여 종합 백분위 보기"
           >
-            {label}
+            {!imgError ? (
+              <img
+                className="stelvio-octagon-tier-img"
+                src={src}
+                alt={label}
+                draggable={false}
+                decoding="async"
+                onError={function() {
+                  setImgError(true);
+                }}
+              />
+            ) : (
+              <span
+                className={'stelvio-octagon-tier-fallback stelvio-octagon-tier-btn--' + tid + (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')}
+                style={tid === 'HC' ? { textShadow: st.shadow } : { color: st.color, textShadow: st.shadow }}
+              >
+                {label}
+              </span>
+            )}
           </button>
           <div
             className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
