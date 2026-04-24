@@ -5270,7 +5270,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   cursor: pointer;
 }
 
-/* 대시보드 STELVIO 옥타곤: 그래프 보조용 컴팩트 필터(랭킹 전용 화면과 시각적 계층 분리) */
+/* 대시보드 STELVIO 헵타곤: 그래프 보조용 컴팩트 필터(랭킹 전용 화면과 시각적 계층 분리) */
 .stelvio-octagon-filters {
   display: flex;
   justify-content: center;
@@ -5369,7 +5369,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   }
 }
 
-/* 옥타곤 SVG 래퍼 + 중앙 종합 등급 오버레이(그래프 SVG 마크업은 JS에서 불변) */
+/* 헵타곤(7축) SVG 래퍼 + 중앙 종합 등급 오버레이(그래프 SVG 마크업은 JS에서 불변) */
 .stelvio-octagon-chart-shell {
   position: relative;
   z-index: 0;
