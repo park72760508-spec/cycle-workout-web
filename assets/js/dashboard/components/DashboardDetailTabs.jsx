@@ -321,49 +321,6 @@
                   React.createElement('li', null, '대시보드 "파워" 카드에 ', React.createElement('code', { className: 'bg-gray-100 px-1 rounded' }, wkgVal + ' W/kg'), ' 로 표시')
                 )
               ),
-              React.createElement(
-                'section',
-                { className: 'border-t border-gray-100 pt-4 mt-1' },
-                React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, 'STELVIO 옥타곤 등급표'),
-                React.createElement(
-                  'p',
-                  { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                  '성장 추이 옥타곤(랭킹 기준)에서 사용. 코호트 내 (평균 순위 ÷ n) × 100%에 해당하는 구간입니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
-                ),
-                React.createElement('table', { className: 'w-full text-left border-collapse' },
-                  React.createElement('thead', null,
-                    React.createElement('tr', { className: 'border-b border-gray-200' },
-                      React.createElement('th', { className: 'py-1.5 pr-2 w-[22%]' }, '구분'),
-                      React.createElement('th', { className: 'py-1.5' }, '범위(%)'),
-                      React.createElement('th', { className: 'py-1.5 pl-2 w-[88px]' }, '표시')
-                    )
-                  ),
-                  React.createElement(
-                    'tbody',
-                    null,
-                    STELVIO_OCTAGON_TIER_GUIDE_ROWS.map(function(row) {
-                      return React.createElement(
-                        'tr',
-                        { key: 'stelvio-octagon-tier-' + row.key, className: 'border-b border-gray-100' },
-                        React.createElement('td', { className: 'py-1.5 pr-2 font-medium text-gray-800' }, row.label),
-                        React.createElement('td', { className: 'py-1.5 text-gray-600' }, row.range),
-                        React.createElement(
-                          'td',
-                          { className: 'py-1.5 pl-2 align-middle' },
-                          React.createElement('img', {
-                            src: row.src,
-                            alt: row.label,
-                            className: 'h-9 w-9 object-contain',
-                            loading: 'lazy',
-                            decoding: 'async',
-                            draggable: false
-                          })
-                        )
-                      );
-                    })
-                  )
-                )
-              ),
               React.createElement('section', null,
                 React.createElement('div', { className: 'font-semibold text-gray-800 mb-2' }, 'W/kg 기반 등급 (네온/패널용)'),
                 React.createElement('table', { className: 'w-full text-left border-collapse' },
@@ -453,6 +410,53 @@
                   React.createElement('li', null, React.createElement('strong', null, '1'), ': 💎 Diamond (관리자)'),
                   React.createElement('li', null, React.createElement('strong', null, '2'), ': ⭐ Member (일반 회원)'),
                   React.createElement('li', null, React.createElement('strong', null, '3'), ': 👑 Admin (코치/관리)')
+                )
+              )
+            )
+          ),
+          React.createElement(
+            'div',
+            {
+              className: 'rounded-xl border border-gray-200 bg-white overflow-hidden'
+            },
+            React.createElement('div', { className: 'px-4 py-3 text-xs text-gray-600' },
+              React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, 'STELVIO 옥타곤 등급표'),
+              React.createElement(
+                'p',
+                { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
+                '성장 추이 옥타곤(랭킹 기준)에서 사용. 코호트 내 (평균 순위 ÷ n) × 100%에 해당하는 구간입니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
+              ),
+              React.createElement('table', { className: 'w-full text-left border-collapse' },
+                React.createElement('thead', null,
+                  React.createElement('tr', { className: 'border-b border-gray-200' },
+                    React.createElement('th', { className: 'py-1.5 pr-2 w-[22%]' }, '구분'),
+                    React.createElement('th', { className: 'py-1.5' }, '범위(%)'),
+                    React.createElement('th', { className: 'py-1.5 pl-2 w-[88px]' }, '표시')
+                  )
+                ),
+                React.createElement(
+                  'tbody',
+                  null,
+                  STELVIO_OCTAGON_TIER_GUIDE_ROWS.map(function(row) {
+                    return React.createElement(
+                      'tr',
+                      { key: 'stelvio-octagon-tier-card-' + row.key, className: 'border-b border-gray-100' },
+                      React.createElement('td', { className: 'py-1.5 pr-2 font-medium text-gray-800' }, row.label),
+                      React.createElement('td', { className: 'py-1.5 text-gray-600' }, row.range),
+                      React.createElement(
+                        'td',
+                        { className: 'py-1.5 pl-2 align-middle' },
+                        React.createElement('img', {
+                          src: row.src,
+                          alt: row.label,
+                          className: 'h-9 w-9 object-contain',
+                          loading: 'lazy',
+                          decoding: 'async',
+                          draggable: false
+                        })
+                      )
+                    );
+                  })
                 )
               )
             )
