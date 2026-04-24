@@ -1,5 +1,6 @@
 /**
- * STELVIO 옥타곤(레벨 포지션) — 랭킹보드와 동일 getPeakPowerRanking + 성별·카테고리 필터
+ * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + StelvioRankingDistributionChart와 동일한
+ * 참가자 분포(나의 위치)용 순위: 전체 rank / 나의 부문 index+1 / 타 부문 value 기준
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -64,18 +65,74 @@
     return RANKING_BASE + '?' + p.toString();
   }
 
+  function safeFloorRank(n) {
+    var r = Number(n);
+    return isFinite(r) && r >= 1 ? Math.floor(r) : null;
+  }
+
+  /** StelvioRankingDistributionChart와 동일: 2위 표기만 3으로(차트 뱃지) */
+  function rankDisplayForChart(n) {
+    var r = Number(n);
+    if (r !== 2) return r;
+    return 3;
+  }
+
+  function rowMetricValue(row, duration) {
+    if (!row) return NaN;
+    if (duration === 'tss') return Number(row.totalTss);
+    if (duration === 'personal_dist' || duration === 'group_dist') return Number(row.totalKm);
+    return Number(row.wkg);
+  }
+
   /**
-   * 랭킹보드 `renderStelvioHeroCard` / 부문 리스트와 동일: 선택한 카테고리 배열에서 사용자 인덱스+1
+   * StelvioRankingDistributionChart `displayRank`와 동일
+   * - Supremo: currentUser.rank(전체 정렬 기준)
+   * - 나의 ageCategory === 선택: 해당 부문 배열에서 findIndex+1
+   * - 그 외(다른 부문 열람): 값 기준 rankInCategoryByValue(동점은 엄밀한 비교)
    */
-  function parseRankInCategory(data, uid, category) {
+  function rankInCategoryByValue(categoryRows, myVal, duration) {
+    if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
+    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' ? 1e-6 : 1e-9;
+    var strictlyGreater = 0;
+    for (var i = 0; i < categoryRows.length; i++) {
+      var row = categoryRows[i];
+      if (!row) continue;
+      var v = rowMetricValue(row, duration);
+      if (isFinite(v) && v > myVal + eps) strictlyGreater++;
+    }
+    return strictlyGreater + 1;
+  }
+
+  function computeDisplayRankLikeDistribution(data, uid, category, duration) {
     if (!data || !data.success || !data.byCategory || !uid) return null;
-    var arr = data.byCategory[category];
-    if (!Array.isArray(arr) || !arr.length) return null;
-    var idx = arr.findIndex(function(e) {
-      return e && String(e.userId) === String(uid);
-    });
-    if (idx < 0) return null;
-    return idx + 1;
+    var cu = data.currentUser;
+    if (!cu || String(cu.userId) !== String(uid)) return null;
+    var byCategory = data.byCategory;
+    var userAgeCat = cu.ageCategory;
+
+    if (category === 'Supremo') {
+      if (cu.rank == null) return null;
+      return safeFloorRank(cu.rank);
+    }
+
+    if (userAgeCat && category === userAgeCat) {
+      var heroArr = byCategory[category] || [];
+      var heroIdx = heroArr.findIndex(function(e) {
+        if (!e) return false;
+        if (duration === 'group_dist') {
+          return e.userId === uid || e.currentUserParticipated === true;
+        }
+        return String(e.userId) === String(uid);
+      });
+      if (heroIdx >= 0) return heroIdx + 1;
+      return null;
+    }
+
+    var compareArr = byCategory[category] || [];
+    var myRaw = rowMetricValue(cu, duration);
+    var rawRank = rankInCategoryByValue(compareArr, myRaw, duration);
+    if (rawRank != null) return rankDisplayForChart(rawRank);
+    return null;
   }
 
   function fetchRankingPayload(uid, duration, period, gender) {
@@ -91,7 +148,7 @@
     return Promise.all(
       DURATIONS.map(function(d) {
         return fetchRankingPayload(uid, d, period, gender).then(function(data) {
-          return parseRankInCategory(data, uid, category);
+          return computeDisplayRankLikeDistribution(data, uid, category, d);
         });
       })
     );
