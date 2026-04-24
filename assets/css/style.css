@@ -5270,6 +5270,53 @@ body:has(#trainingDetailModal:not(.hidden)) {
   cursor: pointer;
 }
 
+/* 대시보드 STELVIO 옥타곤: 랭킹보드와 동일한 성별·카테고리 드롭다운 */
+.stelvio-octagon-ranking-filters .stelvio-period-dropdown,
+.stelvio-octagon-ranking-filters .stelvio-gender-dropdown,
+.stelvio-octagon-ranking-filters .stelvio-category-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: #fff;
+  border: 1.5px solid #7c3aed;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.14);
+  min-width: 70px;
+}
+.stelvio-octagon-ranking-filters .stelvio-category-dropdown {
+  min-width: 108px;
+}
+.stelvio-octagon-ranking-filters .stelvio-dropdown-caption {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #374151;
+  margin-right: 6px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+.stelvio-octagon-ranking-filters .stelvio-dropdown-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #374151;
+  margin-right: 2px;
+}
+.stelvio-octagon-ranking-filters .stelvio-dropdown-chevron {
+  font-size: 0.75em;
+  color: #374151;
+}
+.stelvio-octagon-ranking-filters .stelvio-dropdown-select {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+}
+
 /* ② 내 랭킹 요약 Hero 카드 */
 .stelvio-hero-card {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.1) 100%);
