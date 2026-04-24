@@ -1,6 +1,6 @@
 /**
- * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + StelvioRankingDistributionChart와 동일한
- * 참가자 분포(나의 위치)용 순위: 전체 rank / 나의 부문 index+1 / 타 부문 value 기준
+ * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
+ * 등급(배지): 8축 순위의 평균(반올림)을 코호트 n(각 축 max n)으로 나눈 %로 HC~Cat6 구간 적용(성별·카테고리는 API 코호트 반영)
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -155,13 +155,24 @@
 
   /**
    * 항목별: (해당 필터 코호트 내 나의 순위 / 전체 n) * 100 — 값이 낮을수록 상위
-   * 순위·n 없을 때: 보수적으로 100(하위)로 취급
+   * 순위 없음: 해당 축 n명 중 맨 뒤로 간주(순위 n)
    */
   function itemPercentileFromRankAndN(rank, n) {
     var nn = n | 0;
     if (nn < 1) return 100;
     if (rank == null || !isFinite(rank) || rank < 1) return 100;
     return (Number(rank) / nn) * 100;
+  }
+
+  /** 해당 축에서 부동 순위 → 리스트 끄트머리(상대 비율 산정용) */
+  function effectiveRankForAverage(rank, n) {
+    var nn = n | 0;
+    if (nn < 1) return null;
+    if (rank == null || !isFinite(rank) || rank < 1) return nn;
+    var r = Math.floor(Number(rank));
+    if (r < 1) r = 1;
+    if (r > nn) r = nn;
+    return r;
   }
 
   function fetchRanksSet(uid, period, gender, category) {
@@ -211,18 +222,44 @@
     return s + ' Z';
   }
 
+  /**
+   * 등급: 8개 축 **순위**를 1~n(축마다)에서 구한 뒤 **산술평균(반올림)** →
+   * 공통 기준 n = max(각 축 n)로 (평균순위 / n) × 100% 구간에 매핑.
+   * (예: n=100이면 1~5%→HC, 5%초과~10%→Cat1 … 전체/카테고리/성별은 fetch 시 코호트가 바뀌면 동일 규칙으로 재계산)
+   */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
     if (!ranks || !cohortNPerAxis || ranks.length !== 8 || cohortNPerAxis.length !== 8) {
       return null;
     }
-    var itemP = [];
-    for (var i = 0; i < 8; i++) {
-      itemP.push(itemPercentileFromRankAndN(ranks[i], cohortNPerAxis[i]));
+    var nRef = 0;
+    for (var k = 0; k < 8; k++) {
+      var nk = cohortNPerAxis[k] | 0;
+      if (nk > nRef) nRef = nk;
     }
-    var pTotal = itemP.reduce(function(a, b) {
-      return a + b;
-    }, 0) / 8;
+    if (nRef < 1) return null;
+
+    var itemP = [];
+    var sumR = 0;
+    var allOk = true;
+    for (var i = 0; i < 8; i++) {
+      var ni = (cohortNPerAxis[i] | 0) > 0 ? cohortNPerAxis[i] : nRef;
+      var er = effectiveRankForAverage(ranks[i], ni);
+      if (er == null) {
+        allOk = false;
+        break;
+      }
+      itemP.push(itemPercentileFromRankAndN(ranks[i], ni));
+      sumR += er;
+    }
+    if (!allOk) return null;
+
+    var rAvg = Math.round(sumR / 8);
+    if (rAvg < 1) rAvg = 1;
+    if (rAvg > nRef) rAvg = nRef;
+
+    var pTotal = (rAvg / nRef) * 100;
     if (!isFinite(pTotal)) pTotal = 100;
+
     var tier;
     if (pTotal <= 5) {
       tier = { id: 'HC', text: 'HC', labelShort: 'HC' };
@@ -239,7 +276,7 @@
     } else {
       tier = { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
     }
-    return { itemP: itemP, pTotal: pTotal, tier: tier };
+    return { itemP: itemP, pTotal: pTotal, rankAverage: rAvg, cohortN: nRef, tier: tier };
   }
 
   var TIER_STYLE = {
