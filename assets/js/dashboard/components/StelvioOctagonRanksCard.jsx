@@ -1,6 +1,5 @@
 /**
- * STELVIO 옥타곤(레벨 포지션) — TSS(주간) + Max·1~60분(최근30일 보라 / 365일 초록)
- * API: getPeakPowerRanking
+ * STELVIO 옥타곤(레벨 포지션) — 랭킹보드와 동일 getPeakPowerRanking + 성별·카테고리 필터
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -13,7 +12,35 @@
 
   var RANKING_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
 
-  /** 12시 기준 시계방향: TSS → Max → 1분 → 5분 → … → 60분 */
+  /** index.html 랭킹보드 #stelvioGenderSelect / #stelvioCategorySelect 와 동일 */
+  var GENDER_OPTIONS = [
+    { value: 'all', label: '전체' },
+    { value: 'M', label: '남성' },
+    { value: 'F', label: '여성' }
+  ];
+  var CATEGORY_OPTIONS = [
+    { value: 'Supremo', label: '전체' },
+    { value: 'Assoluto', label: '선수부' },
+    { value: 'Bianco', label: '30대 이하' },
+    { value: 'Rosa', label: '40대' },
+    { value: 'Infinito', label: '50대' },
+    { value: 'Leggenda', label: '60대 이상' }
+  ];
+
+  function labelForGender(v) {
+    for (var i = 0; i < GENDER_OPTIONS.length; i++) {
+      if (GENDER_OPTIONS[i].value === v) return GENDER_OPTIONS[i].label;
+    }
+    return '전체';
+  }
+  function labelForCategory(v) {
+    for (var j = 0; j < CATEGORY_OPTIONS.length; j++) {
+      if (CATEGORY_OPTIONS[j].value === v) return CATEGORY_OPTIONS[j].label;
+    }
+    return '전체';
+  }
+
+  /** 12시 기준 시계방향: TSS → Max → 1분 → … → 60분 */
   var AXES = [
     { key: 'tss', label: 'TSS' },
     { key: 'max', label: 'Max' },
@@ -24,23 +51,50 @@
     { key: '40min', label: '40분' },
     { key: '60min', label: '60분' }
   ];
-  var DURATIONS = AXES.map(function(a) { return a.key; });
+  var DURATIONS = AXES.map(function(a) {
+    return a.key;
+  });
 
-  function buildRankingUrl(uid, duration, periodForPeak) {
+  function buildRankingUrl(uid, duration, periodForPeak, gender) {
     var p = new URLSearchParams();
-    p.set('gender', 'all');
+    p.set('gender', gender == null || gender === '' ? 'all' : gender);
     p.set('duration', duration);
     if (uid) p.set('uid', String(uid));
     if (duration !== 'tss') p.set('period', periodForPeak || 'monthly');
     return RANKING_BASE + '?' + p.toString();
   }
 
-  function parseRankFromResponse(data) {
-    if (!data || !data.success) return null;
-    if (data.currentUser && data.currentUser.rank != null) return Number(data.currentUser.rank);
-    if (data.myRank && data.myRank.rank != null) return Number(data.myRank.rank);
-    if (data.myRankSupremo && data.myRankSupremo.rank != null) return Number(data.myRankSupremo.rank);
-    return null;
+  /**
+   * 랭킹보드 `renderStelvioHeroCard` / 부문 리스트와 동일: 선택한 카테고리 배열에서 사용자 인덱스+1
+   */
+  function parseRankInCategory(data, uid, category) {
+    if (!data || !data.success || !data.byCategory || !uid) return null;
+    var arr = data.byCategory[category];
+    if (!Array.isArray(arr) || !arr.length) return null;
+    var idx = arr.findIndex(function(e) {
+      return e && String(e.userId) === String(uid);
+    });
+    if (idx < 0) return null;
+    return idx + 1;
+  }
+
+  function fetchRankingPayload(uid, duration, period, gender) {
+    return fetch(buildRankingUrl(uid, duration, period, gender), { method: 'GET', mode: 'cors' })
+      .then(function(res) {
+        return res.json().catch(function() {
+          return { success: false };
+        });
+      });
+  }
+
+  function fetchRanksSet(uid, period, gender, category) {
+    return Promise.all(
+      DURATIONS.map(function(d) {
+        return fetchRankingPayload(uid, d, period, gender).then(function(data) {
+          return parseRankInCategory(data, uid, category);
+        });
+      })
+    );
   }
 
   /** 순위(1=최고) → 반지름 비율 0.06~0.98 (가운데=뒤쪽 순위) */
@@ -52,21 +106,7 @@
     return r;
   }
 
-  function fetchRank(uid, duration, period) {
-    return fetch(buildRankingUrl(uid, duration, period), { method: 'GET', mode: 'cors' })
-      .then(function(res) { return res.json().catch(function() { return { success: false }; }); })
-      .then(function(data) { return parseRankFromResponse(data); });
-  }
-
-  function fetchRanksSet(uid, period) {
-    return Promise.all(
-      DURATIONS.map(function(d) {
-        return fetchRank(uid, d, period);
-      })
-    );
-  }
-
-  /** i번째 축 각도(라디안), y 아래로 증가(화면) */
+  /** i번째 축 각도(라디안) */
   function axisAngle(i) {
     return -Math.PI / 2 + Math.PI / 8 - (i * 2 * Math.PI) / 8;
   }
@@ -94,6 +134,13 @@
     var DashboardCard = p.DashboardCard;
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
 
+    var _g = useState('all');
+    var gender = _g[0];
+    var setGender = _g[1];
+    var _c = useState('Supremo');
+    var category = _c[0];
+    var setCategory = _c[1];
+
     var _s = useState({ loading: true, err: null, monthly: null, hof: null });
     var state = _s[0];
     var setState = _s[1];
@@ -105,7 +152,7 @@
           return;
         }
         setState({ loading: true, err: null, monthly: null, hof: null });
-        Promise.all([fetchRanksSet(uid, 'monthly'), fetchRanksSet(uid, 'yearly')])
+        Promise.all([fetchRanksSet(uid, 'monthly', gender, category), fetchRanksSet(uid, 'yearly', gender, category)])
           .then(function(results) {
             var monthlyRanks = results[0];
             var hofRanks = results[1];
@@ -125,7 +172,7 @@
             setState({ loading: false, err: 'fetch', monthly: null, hof: null });
           });
       },
-      [uid]
+      [uid, gender, category]
     );
 
     var svg = useMemo(
@@ -138,9 +185,7 @@
         var mPts = pathFromPoints(octagonPoints(state.monthly.norm, cx, cy, rMax));
         var hPts = pathFromPoints(octagonPoints(state.hof.norm, cx, cy, rMax));
         var grid = [0.25, 0.5, 0.75, 1].map(function(g) {
-          return pathFromPoints(
-            octagonPoints([g, g, g, g, g, g, g, g], cx, cy, rMax)
-          );
+          return pathFromPoints(octagonPoints([g, g, g, g, g, g, g, g], cx, cy, rMax));
         });
         return (
           <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 옥타곤 레벨 포지션">
@@ -191,7 +236,9 @@
               var hr = state.hof.ranks[i];
               var sub2 =
                 i === 0
-                  ? (mr != null ? '(주간) ' + mr + '위' : '(주간) —')
+                  ? mr != null
+                    ? '(주간) ' + mr + '위'
+                    : '(주간) —'
                   : (mr != null ? 'M' + mr : 'M—') + ' ' + (hr != null ? 'Y' + hr : 'Y—') + '위';
               return (
                 <text
@@ -216,26 +263,82 @@
       [state]
     );
 
-    var inner = null;
+    var filterRow = null;
+    if (uid) {
+      filterRow = (
+        <div className="stelvio-filter-bar-wrap stelvio-octagon-ranking-filters mb-3">
+          <div className="stelvio-filter-bar">
+            <div className="stelvio-gender-dropdown">
+              <span className="stelvio-dropdown-caption">성별</span>
+              <span className="stelvio-dropdown-label">{labelForGender(gender)}</span>
+              <span className="stelvio-dropdown-chevron" aria-hidden="true">
+                ▾
+              </span>
+              <select
+                className="stelvio-dropdown-select"
+                value={gender}
+                onChange={function(e) {
+                  setGender(e.target.value);
+                }}
+                aria-label="성별"
+              >
+                {GENDER_OPTIONS.map(function(o) {
+                  return (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="stelvio-category-dropdown">
+              <span className="stelvio-dropdown-caption">카테고리</span>
+              <span className="stelvio-dropdown-label">{labelForCategory(category)}</span>
+              <span className="stelvio-dropdown-chevron" aria-hidden="true">
+                ▾
+              </span>
+              <select
+                className="stelvio-dropdown-select"
+                value={category}
+                onChange={function(e) {
+                  setCategory(e.target.value);
+                }}
+                aria-label="카테고리"
+              >
+                {CATEGORY_OPTIONS.map(function(o) {
+                  return (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    var body = null;
     if (!uid) {
-      inner = (
+      body = (
         <div className="h-[200px] flex items-center justify-center text-gray-500 text-sm text-center px-2">
           사용자 ID가 없으면 순위를 불러올 수 없습니다.
         </div>
       );
     } else if (state.loading) {
-      inner = (
+      body = (
         <div className="h-[220px] flex flex-col items-center justify-center">
           <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
           <span className="text-sm text-gray-500">옥타곤 로딩…</span>
         </div>
       );
     } else if (state.err === 'fetch') {
-      inner = (
+      body = (
         <div className="h-[180px] flex items-center justify-center text-gray-500 text-sm">랭킹을 불러오지 못했습니다. 네트워크를 확인해 주세요.</div>
       );
     } else {
-      inner = (
+      body = (
         <div>
           {svg}
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
@@ -254,12 +357,18 @@
     }
 
     if (DashboardCard) {
-      return <DashboardCard title="STELVIO 옥타곤 (레벨 포지션)">{inner}</DashboardCard>;
+      return (
+        <DashboardCard title="STELVIO 옥타곤 (레벨 포지션)">
+          {filterRow}
+          {body}
+        </DashboardCard>
+      );
     }
     return (
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 옥타곤 (레벨 포지션)</h3>
-        {inner}
+        {filterRow}
+        {body}
       </div>
     );
   }
