@@ -1,7 +1,8 @@
 /**
- * dashboardAICache.js - 대시보드 AI 분석 결과 캐시
- * - 컨디션 분석, AI 라이딩 인사이트, 추천 워크아웃 결과를 localStorage에 캐시
- * - 캐시 무효화: 날짜 변경, 훈련 로그 업데이트/업로드 시
+ * dashboardAICache.js - 대시보드 AI·옥타곤 캐시
+ * - 컨디션 분석, AI 인사이트, 추천 워크아웃, **STELVIO 옥타곤(8축 getPeakPowerRanking)**
+ * - 옥타곤: local 날짜·사용자·성별·카테고리 단위. 코호트가 커도 동일 8요청을 재호출하지 않도록 저장.
+ * - 캐시 무효화: 날짜/필터 변경 시 키가 달라짐(트레이닝 로그는 옥타곤 API와 별개)
  */
 (function() {
   'use strict';
@@ -112,6 +113,40 @@
   window.setDashboardWorkoutRecommendationCache = function(userId, dateStr, logsSignature, recommendationData, workoutDetails) {
     var key = getCacheKey('workout', userId, dateStr + '_' + (logsSignature || ''));
     return setCache(key, { recommendationData: recommendationData, workoutDetails: workoutDetails });
+  };
+
+  var OCTAGON_CACHE_PAYLOAD_V = 1;
+
+  /**
+   * STELVIO 옥타곤 — 8축 API 결과만 저장(ranks+코호트). norm은 클라이언트에서 재계산.
+   * @returns {{v:number, monthly:{ranks:Array, cohortSizePerAxis:Array}, hof:{ranks:Array}}|null}
+   */
+  window.getStelvioOctagonRanksCache = function(userId, gender, category, todayStr) {
+    if (!userId) return null;
+    var g = gender == null || gender === '' ? 'all' : String(gender);
+    var c = category == null || category === '' ? 'Supremo' : String(category);
+    var d = todayStr || getTodayStr();
+    var key = getCacheKey('octagon', userId, g + '_' + c + '_' + d);
+    var data = getCached(key);
+    if (!data || data.v !== OCTAGON_CACHE_PAYLOAD_V || !data.monthly || !data.hof) return null;
+    if (!Array.isArray(data.monthly.ranks) || data.monthly.ranks.length !== 8) return null;
+    if (!Array.isArray(data.monthly.cohortSizePerAxis) || data.monthly.cohortSizePerAxis.length !== 8) return null;
+    if (!Array.isArray(data.hof.ranks) || data.hof.ranks.length !== 8) return null;
+    return data;
+  };
+
+  window.setStelvioOctagonRanksCache = function(userId, gender, category, todayStr, monthlyRanks, cohortSizePerAxis, hofRanks) {
+    if (!userId) return false;
+    var g = gender == null || gender === '' ? 'all' : String(gender);
+    var c = category == null || category === '' ? 'Supremo' : String(category);
+    var d = todayStr || getTodayStr();
+    var key = getCacheKey('octagon', userId, g + '_' + c + '_' + d);
+    var payload = {
+      v: OCTAGON_CACHE_PAYLOAD_V,
+      monthly: { ranks: monthlyRanks, cohortSizePerAxis: cohortSizePerAxis },
+      hof: { ranks: hofRanks }
+    };
+    return setCache(key, payload);
   };
 
   window.buildLogsSignatureForCache = buildLogsSignature;
