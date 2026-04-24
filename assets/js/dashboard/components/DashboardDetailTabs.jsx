@@ -28,7 +28,7 @@
     { id: 'wkgGuide', label: '라이딩 지표' }
   ];
 
-  /** STELVIO 옥타곤(랭킹 상대%) — `StelvioOctagonRanksCard` computePTotalAndTier 구간과 동일 */
+  /** STELVIO 옥타곤(랭킹 상대%) — N≥100일 때 아래 범·표. N<100은 K·모수 보정(코드: `stelvioOctagonPercentCutoffs`) */
   var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
     { key: 'hc', label: '레벨1', range: '5% 이하', src: 'assets/img/hc.png' },
     { key: 'c1', label: '레벨2', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.png' },
@@ -424,7 +424,7 @@
               React.createElement(
                 'p',
                 { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                '성장 추이 옥타곤(랭킹 기준)에서 사용. 코호트 내 (평균 순위 ÷ n) × 100%에 해당하는 구간입니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
+                '성장 추이 옥타곤(랭킹 기준)에서 사용. 지표(평균 순위 ÷ n) × 100%에 대한 등급입니다. 모수 n이 100 이상(대수)이면 본문 비율을 그대로 쓰고, 100 미만(소수)이면 N에 따른 K 보정과 n 기반 상한이 적용됩니다(차트·코호트와 일치). 성별·카테고리에 따라 n이 달라질 수 있습니다.'
               ),
               React.createElement('table', { className: 'w-full text-left border-collapse' },
                 React.createElement('thead', null,

@@ -1,6 +1,7 @@
 /**
  * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
- * 등급(배지): 8축 순위의 평균(반올림)을 코호트 n(각 축 max n)으로 나눈 %로 HC~Cat6 구간 적용(성별·카테고리는 API 코호트 반영)
+ * 등급(배지): 8축 순위 평균(반올림) → (평균순위÷n)×100%로 구간. 모수 n=max 코호트.
+ * N≥100(대수): 5/10/20/40/60/80% 경계(표준). N<100(소수): K 보정(7명→1.87, 100→1 선형) + (B/5)·(100/n) 상한을 병행.
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -223,8 +224,69 @@
   }
 
   /**
-   * 등급: 8개 축 순위 산술평균(반올림) → (평균순위/n)×100% 로 구간 매핑 (n=max 코호트)
-   * HC≤5% | (5,10] Cat1 | (10,20] Cat2 | (20,40] Cat3 | (40,60] Cat4 | (60,80] Cat5 | >80% Cat6
+   * 소집단(N<100) 보정: K(7)=1.87, K(100)=1 — K = 1 + 0.87·(100−N)/93
+   */
+  function stelvioOctagonSmallGroupK(n) {
+    var N = n | 0;
+    if (N < 1) N = 1;
+    if (N >= 100) return 1;
+    return 1 + (0.87 * (100 - N)) / 93;
+  }
+
+  /**
+   * 6개 상한(%) = 레벨1~7 구간(레벨1=HC) 기준. 이후 잔여=레벨7.
+   * N≥100: 5,10,20,40,60,80. N<100: max(min(100, B·K), (B/5)·(100/N)) 뒤 단조 증가.
+   */
+  function stelvioOctagonPercentCutoffs(nRef) {
+    var N = nRef | 0;
+    if (N < 1) N = 1;
+    if (N >= 100) {
+      return { k: 1, isLarge: true, cutoffs: [5, 10, 20, 40, 60, 80] };
+    }
+    var k = stelvioOctagonSmallGroupK(N);
+    var bases = [5, 10, 20, 40, 60, 80];
+    var cut = [];
+    for (var i = 0; i < bases.length; i++) {
+      var B = bases[i];
+      var sc = B * k;
+      if (sc > 100) sc = 100;
+      var fl = (B / 5) * (100 / N);
+      var v = Math.max(sc, fl);
+      if (v > 100) v = 100;
+      if (i > 0) {
+        if (v <= cut[i - 1]) v = cut[i - 1] + 0.0001;
+        if (v > 100) v = 100;
+        if (v <= cut[i - 1]) v = 100;
+      }
+      cut.push(v);
+    }
+    return { k: k, isLarge: false, cutoffs: cut };
+  }
+
+  function tierIdFromPAndPercentCutoffs(pTotal, co) {
+    if (pTotal <= co[0]) {
+      return { id: 'HC', text: 'HC', labelShort: 'HC' };
+    }
+    if (pTotal <= co[1]) {
+      return { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
+    }
+    if (pTotal <= co[2]) {
+      return { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
+    }
+    if (pTotal <= co[3]) {
+      return { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
+    }
+    if (pTotal <= co[4]) {
+      return { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
+    }
+    if (pTotal <= co[5]) {
+      return { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
+    }
+    return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
+  }
+
+  /**
+   * 등급: 8개 축 순위 산술평균(반올림) → (평균순위/n)×100% 로, 모수 N=nRef(축 n max)에 따라 상한% 매핑.
    */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
     if (!ranks || !cohortNPerAxis || ranks.length !== 8 || cohortNPerAxis.length !== 8) {
@@ -259,23 +321,18 @@
     var pTotal = (rAvg / nRef) * 100;
     if (!isFinite(pTotal)) pTotal = 100;
 
-    var tier;
-    if (pTotal <= 5) {
-      tier = { id: 'HC', text: 'HC', labelShort: 'HC' };
-    } else if (pTotal <= 10) {
-      tier = { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
-    } else if (pTotal <= 20) {
-      tier = { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
-    } else if (pTotal <= 40) {
-      tier = { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
-    } else if (pTotal <= 60) {
-      tier = { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
-    } else if (pTotal <= 80) {
-      tier = { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
-    } else {
-      tier = { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
-    }
-    return { itemP: itemP, pTotal: pTotal, rankAverage: rAvg, cohortN: nRef, tier: tier };
+    var cspec = stelvioOctagonPercentCutoffs(nRef);
+    var tier = tierIdFromPAndPercentCutoffs(pTotal, cspec.cutoffs);
+    return {
+      itemP: itemP,
+      pTotal: pTotal,
+      rankAverage: rAvg,
+      cohortN: nRef,
+      tier: tier,
+      kAdjust: cspec.k,
+      isLargeCohort: cspec.isLarge,
+      tierPercentCutoffs: cspec.cutoffs
+    };
   }
 
   var TIER_STYLE = {
@@ -297,10 +354,10 @@
     return 'assets/img/' + (m[tierId] || 'c6.png');
   }
 
-  /** 옥타곤 중앙 이미지 하단 표기용(등급 파일명과 1:1) */
+  /** 옥타곤 중앙 이미지 하단 표기용(레벨1=HC) */
   function tierLevelDisplayName(tierId) {
-    var m = { HC: '례벨1', C1: '례벨2', C2: '례벨3', C3: '례벨4', C4: '례벨5', C5: '례벨6', C6: '례벨7' };
-    return m[tierId] || '례벨7';
+    var m = { HC: '레벨1', C1: '레벨2', C2: '레벨3', C3: '레벨4', C4: '레벨5', C5: '레벨6', C6: '레벨7' };
+    return m[tierId] || '레벨7';
   }
 
   function OctagonTierCenterOverlay(props) {
