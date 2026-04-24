@@ -147,11 +147,31 @@
       });
   }
 
+  function cohortSizeForCategory(data, category) {
+    if (!data || !data.success || !data.byCategory) return 0;
+    var arr = data.byCategory[category];
+    return Array.isArray(arr) ? arr.length : 0;
+  }
+
+  /**
+   * 항목별: (해당 필터 코호트 내 나의 순위 / 전체 n) * 100 — 값이 낮을수록 상위
+   * 순위·n 없을 때: 보수적으로 100(하위)로 취급
+   */
+  function itemPercentileFromRankAndN(rank, n) {
+    var nn = n | 0;
+    if (nn < 1) return 100;
+    if (rank == null || !isFinite(rank) || rank < 1) return 100;
+    return (Number(rank) / nn) * 100;
+  }
+
   function fetchRanksSet(uid, period, gender, category) {
     return Promise.all(
       DURATIONS.map(function(d) {
         return fetchRankingPayload(uid, d, period, gender).then(function(data) {
-          return computeDisplayRankLikeDistribution(data, uid, category, d);
+          return {
+            rank: computeDisplayRankLikeDistribution(data, uid, category, d),
+            n: cohortSizeForCategory(data, category)
+          };
         });
       })
     );
@@ -191,6 +211,94 @@
     return s + ' Z';
   }
 
+  function computePTotalAndTier(ranks, cohortNPerAxis) {
+    if (!ranks || !cohortNPerAxis || ranks.length !== 8 || cohortNPerAxis.length !== 8) {
+      return null;
+    }
+    var itemP = [];
+    for (var i = 0; i < 8; i++) {
+      itemP.push(itemPercentileFromRankAndN(ranks[i], cohortNPerAxis[i]));
+    }
+    var pTotal = itemP.reduce(function(a, b) {
+      return a + b;
+    }, 0) / 8;
+    if (!isFinite(pTotal)) pTotal = 100;
+    var tier;
+    if (pTotal <= 1) {
+      tier = { id: 'HC', text: 'HC', labelShort: 'HC' };
+    } else if (pTotal <= 5) {
+      tier = { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
+    } else if (pTotal <= 15) {
+      tier = { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
+    } else if (pTotal <= 30) {
+      tier = { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
+    } else if (pTotal <= 50) {
+      tier = { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
+    } else if (pTotal <= 75) {
+      tier = { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
+    } else {
+      tier = { id: 'BASE', text: 'Base', labelShort: 'Base' };
+    }
+    return { itemP: itemP, pTotal: pTotal, tier: tier };
+  }
+
+  var TIER_STYLE = {
+    HC: { color: '#ff1a1a', shadow: '0 0 12px #ff1a1a, 0 0 20px rgba(255,0,0,0.45)' },
+    C1: { color: '#ff6b3d', shadow: '0 0 12px rgba(255,107,61,0.85), 0 0 24px rgba(255,60,0,0.4)' },
+    C2: { color: '#ffb020', shadow: '0 0 10px rgba(255,176,32,0.7), 0 0 20px rgba(200,100,0,0.35)' },
+    C3: { color: '#e8c547', shadow: '0 0 8px rgba(232,197,71,0.6)' },
+    C4: { color: '#9fe870', shadow: '0 0 8px rgba(140,200,100,0.5)' },
+    C5: { color: '#94a3b8', shadow: '0 0 6px rgba(148,163,184,0.5)' },
+    BASE: { color: '#7c8aa0', shadow: '0 0 4px rgba(100,110,120,0.4)' }
+  };
+
+  function tierStyleForId(id) {
+    return TIER_STYLE[id] || TIER_STYLE.BASE;
+  }
+
+  function OctagonTierCenterOverlay(props) {
+    var summary = props.summary;
+    var _d = useState(false);
+    var showPct = _d[0];
+    var setShowPct = _d[1];
+    if (!summary || !summary.tier) return null;
+    var tid = summary.tier.id;
+    var st = tierStyleForId(tid);
+    var label = summary.tier.labelShort || summary.tier.text;
+    return (
+      <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
+        <div className="stelvio-octagon-tier-inner">
+          <button
+            type="button"
+            className={
+              'stelvio-octagon-tier-btn stelvio-octagon-tier-btn--' +
+              tid +
+              (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')
+            }
+            aria-pressed={showPct}
+            style={
+              tid === 'HC'
+                ? { textShadow: st.shadow }
+                : { color: st.color, textShadow: st.shadow }
+            }
+            onClick={function() {
+              setShowPct(!showPct);
+            }}
+            title="탭하여 종합 백분위 보기"
+          >
+            {label}
+          </button>
+          <div
+            className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
+            role="status"
+          >
+            상위 {summary.pTotal.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function StelvioOctagonRanksCard(props) {
     var p = props || {};
     var userProfile = p.userProfile;
@@ -217,8 +325,17 @@
         setState({ loading: true, err: null, monthly: null, hof: null });
         Promise.all([fetchRanksSet(uid, 'monthly', gender, category), fetchRanksSet(uid, 'yearly', gender, category)])
           .then(function(results) {
-            var monthlyRanks = results[0];
-            var hofRanks = results[1];
+            var mRows = results[0];
+            var hRows = results[1];
+            var monthlyRanks = mRows.map(function(x) {
+              return x.rank;
+            });
+            var cohortSizePerAxis = mRows.map(function(x) {
+              return x.n;
+            });
+            var hofRanks = hRows.map(function(x) {
+              return x.rank;
+            });
             var mRat = monthlyRanks.map(rankToRadiusNorm);
             var hRat = hofRanks.map(function(r, i) {
               if (i === 0) return mRat[0];
@@ -227,7 +344,7 @@
             setState({
               loading: false,
               err: null,
-              monthly: { ranks: monthlyRanks, norm: mRat },
+              monthly: { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis },
               hof: { ranks: hofRanks, norm: hRat }
             });
           })
@@ -236,6 +353,14 @@
           });
       },
       [uid, gender, category]
+    );
+
+    var tierSummary = useMemo(
+      function() {
+        if (state.loading || !state.monthly || !state.monthly.cohortSizePerAxis) return null;
+        return computePTotalAndTier(state.monthly.ranks, state.monthly.cohortSizePerAxis);
+      },
+      [state.loading, state.monthly]
     );
 
     var svg = useMemo(
@@ -403,7 +528,10 @@
     } else {
       body = (
         <div>
-          {svg}
+          <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px]">
+            {svg}
+            {tierSummary ? <OctagonTierCenterOverlay summary={tierSummary} /> : null}
+          </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
