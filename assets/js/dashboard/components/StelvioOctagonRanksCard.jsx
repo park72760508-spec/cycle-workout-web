@@ -223,9 +223,8 @@
   }
 
   /**
-   * 등급: 8개 축 **순위**를 1~n(축마다)에서 구한 뒤 **산술평균(반올림)** →
-   * 공통 기준 n = max(각 축 n)로 (평균순위 / n) × 100% 구간에 매핑.
-   * (예: n=100이면 1~5%→HC, 5%초과~10%→Cat1 … 전체/카테고리/성별은 fetch 시 코호트가 바뀌면 동일 규칙으로 재계산)
+   * 등급: 8개 축 순위 산술평균(반올림) → (평균순위/n)×100% 로 구간 매핑 (n=max 코호트)
+   * HC≤5% | (5,10] Cat1 | (10,20] Cat2 | (20,40] Cat3 | (40,60] Cat4 | (60,80] Cat5 | >80% Cat6
    */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
     if (!ranks || !cohortNPerAxis || ranks.length !== 8 || cohortNPerAxis.length !== 8) {
@@ -265,9 +264,9 @@
       tier = { id: 'HC', text: 'HC', labelShort: 'HC' };
     } else if (pTotal <= 10) {
       tier = { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
-    } else if (pTotal <= 15) {
+    } else if (pTotal <= 20) {
       tier = { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' };
-    } else if (pTotal <= 30) {
+    } else if (pTotal <= 40) {
       tier = { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' };
     } else if (pTotal <= 60) {
       tier = { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
