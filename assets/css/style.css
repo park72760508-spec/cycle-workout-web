@@ -5369,6 +5369,105 @@ body:has(#trainingDetailModal:not(.hidden)) {
   }
 }
 
+/* 옥타곤 SVG 래퍼 + 중앙 종합 등급 오버레이(그래프 SVG 마크업은 JS에서 불변) */
+.stelvio-octagon-chart-shell {
+  position: relative;
+  z-index: 0;
+}
+.stelvio-octagon-tier-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+.stelvio-octagon-tier-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 55%;
+  pointer-events: auto;
+  text-align: center;
+}
+.stelvio-octagon-tier-btn {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.stelvio-octagon-tier-btn:active {
+  transform: scale(0.97);
+}
+.stelvio-octagon-tier-btn--HC {
+  font-size: clamp(1.1rem, 4.2vw, 1.7rem);
+}
+.stelvio-octagon-tier-btn--C1 {
+  font-size: clamp(0.95rem, 3.4vw, 1.3rem);
+}
+.stelvio-octagon-tier-btn--C2 {
+  font-size: clamp(0.9rem, 3.1vw, 1.2rem);
+}
+.stelvio-octagon-tier-btn--C3 {
+  font-size: clamp(0.85rem, 2.9vw, 1.1rem);
+}
+.stelvio-octagon-tier-btn--C4,
+.stelvio-octagon-tier-btn--C5 {
+  font-size: clamp(0.8rem, 2.7vw, 1.05rem);
+}
+.stelvio-octagon-tier-btn--BASE {
+  font-size: clamp(0.75rem, 2.4vw, 0.95rem);
+}
+/* HC: 레드 + 폴카닷 느낌 박스 + 강한 글로우(텍스트는 단색) */
+.stelvio-octagon-tier--hc {
+  color: #ff1a1a;
+  background: radial-gradient(circle, rgba(255, 50, 50, 0.45) 1px, transparent 1.1px) 0 0 / 3px 3px repeat, rgba(15, 23, 42, 0.35);
+  border-radius: 6px;
+  padding: 3px 8px 4px;
+  box-shadow: 0 0 16px rgba(255, 0, 0, 0.5), 0 0 32px rgba(255, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 100, 100, 0.25);
+}
+.stelvio-octagon-tier-hint {
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  color: #e2e8f0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.22s ease, margin 0.22s ease, padding
+    0.22s ease;
+}
+.stelvio-octagon-tier-hint--visible {
+  opacity: 1;
+  max-height: 2.5rem;
+  margin-top: 4px;
+  padding: 6px 12px;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
 /* ② 내 랭킹 요약 Hero 카드 */
 .stelvio-hero-card {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.1) 100%);
