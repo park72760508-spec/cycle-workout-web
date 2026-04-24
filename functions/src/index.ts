@@ -568,6 +568,9 @@ async function processStravaActivityAsync(
     {
       point_reward_v2_applied: true,
       point_reward_v2_history_id: rewardResult.historyId,
+      point_reward_v2_alimtalk_sent: rewardResult.alimtalkSent,
+      point_reward_v2_alimtalk_skip: rewardResult.alimtalkSkip,
+      point_reward_v2_alimtalk_error: rewardResult.alimtalkError,
       point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -583,6 +586,9 @@ export const stravaWebhook = onRequest(
   {
     region: "asia-northeast3",
     cors: false,
+    /** 알리고(카카오) API: 네이버 결제 연동과 동일 VPC + 고정 NAT IP(34.64.250.77)로 아웃바운드 */
+    vpcConnector: "stelvio-connector",
+    vpcConnectorEgressSettings: "ALL_TRAFFIC",
     secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   },
   async (req, res) => {
@@ -646,6 +652,9 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
   {
     document: "users/{userId}/logs/{logId}",
     region: "asia-northeast3",
+    /** 알리고(카카오) API: stravaWebhook·네이버 스케줄과 동일 고정 IP(34.64.250.77) */
+    vpcConnector: "stelvio-connector",
+    vpcConnectorEgressSettings: "ALL_TRAFFIC",
     secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   },
   async (event) => {
@@ -706,6 +715,9 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
       {
         point_reward_v2_applied: true,
         point_reward_v2_history_id: rewardResult.historyId,
+        point_reward_v2_alimtalk_sent: rewardResult.alimtalkSent,
+        point_reward_v2_alimtalk_skip: rewardResult.alimtalkSkip,
+        point_reward_v2_alimtalk_error: rewardResult.alimtalkError,
         point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
