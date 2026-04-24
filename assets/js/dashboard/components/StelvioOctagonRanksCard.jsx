@@ -189,6 +189,35 @@
     );
   }
 
+  /** 8축 rank 배열 + 코호트 n → charts에 쓰는 state(차트·면적·레벨 동일) */
+  function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks) {
+    var mRat = monthlyRanks.map(rankToRadiusNorm);
+    var hRat = hofRanks.map(function(r, i) {
+      if (i === 0) return mRat[0];
+      return rankToRadiusNorm(r);
+    });
+    return {
+      loading: false,
+      err: null,
+      monthly: { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis },
+      hof: { ranks: hofRanks, norm: hRat }
+    };
+  }
+
+  function stateFromApiRows(mRows, hRows) {
+    return stateFromRanksArray(
+      mRows.map(function(x) {
+        return x.rank;
+      }),
+      mRows.map(function(x) {
+        return x.n;
+      }),
+      hRows.map(function(x) {
+        return x.rank;
+      })
+    );
+  }
+
   /** 순위(1=최고) → 반지름 비율 0.06~0.98 (가운데=뒤쪽 순위) */
   function rankToRadiusNorm(rank) {
     if (rank == null || !isFinite(rank) || rank < 1) return 0.12;
@@ -524,6 +553,26 @@
           setState({ loading: false, err: 'noUser', monthly: null, hof: null });
           return;
         }
+        var todayStr =
+          typeof window.getTodayStrForCache === 'function'
+            ? window.getTodayStrForCache()
+            : (function() {
+                var t = new Date();
+                return (
+                  t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
+                );
+              })();
+
+        if (typeof window.getStelvioOctagonRanksCache === 'function') {
+          var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
+          if (cached && cached.monthly && cached.hof) {
+            setState(
+              stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
+            );
+            return;
+          }
+        }
+
         setState({ loading: true, err: null, monthly: null, hof: null });
         Promise.all([fetchRanksSet(uid, 'monthly', gender, category), fetchRanksSet(uid, 'yearly', gender, category)])
           .then(function(results) {
@@ -538,17 +587,14 @@
             var hofRanks = hRows.map(function(x) {
               return x.rank;
             });
-            var mRat = monthlyRanks.map(rankToRadiusNorm);
-            var hRat = hofRanks.map(function(r, i) {
-              if (i === 0) return mRat[0];
-              return rankToRadiusNorm(r);
-            });
-            setState({
-              loading: false,
-              err: null,
-              monthly: { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis },
-              hof: { ranks: hofRanks, norm: hRat }
-            });
+            setState(stateFromApiRows(mRows, hRows));
+            if (typeof window.setStelvioOctagonRanksCache === 'function') {
+              try {
+                window.setStelvioOctagonRanksCache(uid, gender, category, todayStr, monthlyRanks, cohortSizePerAxis, hofRanks);
+              } catch (e) {
+                console.warn('[StelvioOctagon] cache write failed:', e && e.message);
+              }
+            }
           })
           .catch(function() {
             setState({ loading: false, err: 'fetch', monthly: null, hof: null });
