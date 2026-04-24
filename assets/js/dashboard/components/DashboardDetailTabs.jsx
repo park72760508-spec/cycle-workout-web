@@ -2,7 +2,7 @@
  * DashboardDetailTabs - Level 3 탭 구조
  * Tab 1: 나의 성향 (RiderDashboardProfile, RiderPowerProfileTrendCharts)
  * Tab 2: 최근 훈련 (TrainingTrendChart, RiderTimeInZonesCharts, RiderHeartRateProfileTrendCharts)
- * Tab 3: 성장 추이 (STELVIO 옥타곤(랭킹) → 나의 성장 트렌드 → 훈련 부하 TSS → VO₂max 트렌드 → 년간 파워PR)
+ * Tab 3: 성장 추이 (STELVIO 옥타곤(레벨) → 나의 성장 트렌드 → 훈련 부하 TSS → VO₂max 트렌드 → 년간 파워PR)
  *
  * 번들러 없이 CDN 사용 환경이므로 React.lazy 대신 조건부 마운트(탭 전환 시에만 렌더)로 성능 최적화
  */

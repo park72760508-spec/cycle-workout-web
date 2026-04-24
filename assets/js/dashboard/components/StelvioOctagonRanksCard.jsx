@@ -1,7 +1,6 @@
 /**
- * STELVIO 옥타곤 — 랭킹보드 TSS(주간) + 1/5/10/20/40/60분/Max(월간 보라 / 명예 연간 초록)
- * 가운데에 가까울수록 순위가 낮고(큰 숫자), 바깥일수록 1위에 가깝습니다.
- * API: getPeakPowerRanking (index.html 랭킹보드와 동일)
+ * STELVIO 옥타곤(레벨 포지션) — TSS(주간) + Max·1~60분(최근30일 보라 / 365일 초록)
+ * API: getPeakPowerRanking
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -14,16 +13,16 @@
 
   var RANKING_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
 
-  /** 12시 기준 시계방향: 첫 축(12 오른쪽 첫 점) TSS → 1분 → … → Max (랭킹보드 탭 순서와 동일) */
+  /** 12시 기준 시계방향: TSS → Max → 1분 → 5분 → … → 60분 */
   var AXES = [
-    { key: 'tss', label: 'TSS', sub: '주간' },
-    { key: '1min', label: '1분', sub: '월/연' },
-    { key: '5min', label: '5분', sub: '월/연' },
-    { key: '10min', label: '10분', sub: '월/연' },
-    { key: '20min', label: '20분', sub: '월/연' },
-    { key: '40min', label: '40분', sub: '월/연' },
-    { key: '60min', label: '60분', sub: '월/연' },
-    { key: 'max', label: 'Max', sub: '월/연' }
+    { key: 'tss', label: 'TSS' },
+    { key: 'max', label: 'Max' },
+    { key: '1min', label: '1분' },
+    { key: '5min', label: '5분' },
+    { key: '10min', label: '10분' },
+    { key: '20min', label: '20분' },
+    { key: '40min', label: '40분' },
+    { key: '60min', label: '60분' }
   ];
   var DURATIONS = AXES.map(function(a) { return a.key; });
 
@@ -144,7 +143,7 @@
           );
         });
         return (
-          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[280px] touch-manipulation" role="img" aria-label="STELVIO 랭킹 옥타곤">
+          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 옥타곤 레벨 포지션">
             {grid.map(function(d, idx) {
               return (
                 <path
@@ -193,7 +192,7 @@
               var sub2 =
                 i === 0
                   ? (mr != null ? '(주간) ' + mr + '위' : '(주간) —')
-                  : (mr != null ? 'M' + mr : 'M—') + ' ' + (hr != null ? 'H' + hr : 'H—') + '위';
+                  : (mr != null ? 'M' + mr : 'M—') + ' ' + (hr != null ? 'Y' + hr : 'Y—') + '위';
               return (
                 <text
                   key={ax.key + '-lbl'}
@@ -211,9 +210,6 @@
                 </text>
               );
             })}
-            <text x="100" y="198" textAnchor="middle" className="fill-slate-500" style={{ fontSize: '7px' }}>
-              안쪽=순위 낮음(숫자 큼) · M 월간(보라) · H 명예·연간(초록)
-            </text>
           </svg>
         );
       },
@@ -231,7 +227,7 @@
       inner = (
         <div className="h-[220px] flex flex-col items-center justify-center">
           <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
-          <span className="text-sm text-gray-500">랭킹·옥타곤 로딩…</span>
+          <span className="text-sm text-gray-500">옥타곤 로딩…</span>
         </div>
       );
     } else if (state.err === 'fetch') {
@@ -241,28 +237,28 @@
     } else {
       inner = (
         <div>
-          <p className="text-xs text-gray-500 mb-1 px-0.5">랭킹보드·전체(Supremo) 기준, 바깥에 가까울수록 상위 순위입니다.</p>
           {svg}
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
-              <span>보라: 월간(W/kg·롤링30) + TSS 주간</span>
+              <span>최근 30일 + TSS 주간</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(16, 185, 129, 0.4)', border: '1px solid #059669' }} />
-              <span>초록: 명예의 전당(최근365일) · TSS는 주간(동일선)</span>
+              <span>최근365일 · TSS는 주간(동일선)</span>
             </div>
           </div>
+          <p className="text-center text-xs text-gray-500 mt-2 mb-0 px-1">! 바깥에 가까울수록 상위 레벨</p>
         </div>
       );
     }
 
     if (DashboardCard) {
-      return <DashboardCard title="STELVIO 옥타곤 (랭킹 포지션)">{inner}</DashboardCard>;
+      return <DashboardCard title="STELVIO 옥타곤 (레벨 포지션)">{inner}</DashboardCard>;
     }
     return (
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 옥타곤 (랭킹 포지션)</h3>
+        <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 옥타곤 (레벨 포지션)</h3>
         {inner}
       </div>
     );
