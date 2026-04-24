@@ -1,7 +1,7 @@
 /**
  * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
- * 등급(배지): 8축 순위 평균(반올림) → (평균순위÷n)×100%로 구간. 모수 n=max 코호트.
- * N≥100(대수): 5/10/20/40/60/80% 경계(표준). N<100(소수): K=1+(100−N)/(100+N) + (B/5)·(100/n) 상한 병행.
+ * 중앙 ‘상위 n%’: 8축 **순위로 그려진 옥타곤(반지름=rankToRadiusNorm)의 면적**으로 종합(넓을수록 상위) → n_ref 기준 (r/n)·100% 표기.
+ * 등급(배지/레벨): 기존과 동일, **8축 순위 산술평균(반올림)** → (평균÷n)·100% + 구간(대수/소수 K).
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -223,6 +223,57 @@
     return s + ' Z';
   }
 
+  /** 닫힌 다각형 면적(좌표 단위²), 시계/반시계 무관 */
+  function shoelaceAreaXY(pts) {
+    if (!pts || pts.length < 3) return 0;
+    var n = pts.length;
+    var s = 0;
+    for (var i = 0; i < n; i++) {
+      var j = (i + 1) % n;
+      s += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
+    }
+    return Math.abs(s) / 2;
+  }
+
+  function polygonAreaFromNormRatios(ratioArr, rMax) {
+    var cx = 100;
+    var cy = 100;
+    var pts = octagonPoints(ratioArr, cx, cy, rMax);
+    return shoelaceAreaXY(pts);
+  }
+
+  /**
+   * 화면과 동일한 꼭짓점(각 축 rankToRadiusNorm)으로 면적 A 산출 후,
+   * [전축 1위·전축 n_ref위]의 면적 사이에 선형 보간해 **종합 순위(상위%와 동일 축)**: 넓을수록 1에 가깝.
+   * 반환: pComprehensive = (rSynth/nRef)*100, rSynthetic
+   */
+  function comprehensivePercentFromDisplayNorm(norm, nRef) {
+    if (!norm || norm.length !== 8 || nRef < 1) return null;
+    var rMax = 1;
+    var A = polygonAreaFromNormRatios(norm, rMax);
+    if (!isFinite(A)) return null;
+    var r1 = rankToRadiusNorm(1);
+    var rW = rankToRadiusNorm(nRef);
+    var allBest = [r1, r1, r1, r1, r1, r1, r1, r1];
+    var allWorst = [rW, rW, rW, rW, rW, rW, rW, rW];
+    var aMax = polygonAreaFromNormRatios(allBest, rMax);
+    var aMin = polygonAreaFromNormRatios(allWorst, rMax);
+    if (!(aMax > aMin) || !isFinite(aMax) || !isFinite(aMin)) return null;
+    var t = (A - aMin) / (aMax - aMin);
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    var rSynth = 1 + (1 - t) * (nRef - 1);
+    if (rSynth < 1) rSynth = 1;
+    if (rSynth > nRef) rSynth = nRef;
+    return {
+      area: A,
+      aMax: aMax,
+      aMin: aMin,
+      rSynthetic: rSynth,
+      pComprehensive: (rSynth / nRef) * 100
+    };
+  }
+
   /**
    * 소집단(N<100) 100분위 보정: K = 1 + (100−N)/(100+N). 예) N=40 → K=1+60/140≈1.4286. N≥100이면 large 분기·K=1
    */
@@ -286,7 +337,7 @@
   }
 
   /**
-   * 등급: 8개 축 순위 산술평균(반올림) → (평균순위/n)×100% 로, 모수 N=nRef(축 n max)에 따라 상한% 매핑.
+   * 레벨: 8축 순위 산술평균(반올림) → (평균/n)×100% + 기존 구간. 종합 표시%: 옥타곤 면적 기반 pComprehensive.
    */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
     if (!ranks || !cohortNPerAxis || ranks.length !== 8 || cohortNPerAxis.length !== 8) {
@@ -302,6 +353,8 @@
     var itemP = [];
     var sumR = 0;
     var allOk = true;
+    /** 차트와 동일: 각 축 API 순위 → rankToRadiusNorm (면적 산출용) */
+    var displayNorm = [];
     for (var i = 0; i < 8; i++) {
       var ni = (cohortNPerAxis[i] | 0) > 0 ? cohortNPerAxis[i] : nRef;
       var er = effectiveRankForAverage(ranks[i], ni);
@@ -311,6 +364,7 @@
       }
       itemP.push(itemPercentileFromRankAndN(ranks[i], ni));
       sumR += er;
+      displayNorm.push(rankToRadiusNorm(ranks[i]));
     }
     if (!allOk) return null;
 
@@ -323,6 +377,9 @@
 
     var cspec = stelvioOctagonPercentCutoffs(nRef);
     var tier = tierIdFromPAndPercentCutoffs(pTotal, cspec.cutoffs);
+
+    var comp = comprehensivePercentFromDisplayNorm(displayNorm, nRef);
+    var pComprehensive = comp && isFinite(comp.pComprehensive) ? comp.pComprehensive : pTotal;
     return {
       itemP: itemP,
       pTotal: pTotal,
@@ -331,7 +388,13 @@
       tier: tier,
       kAdjust: cspec.k,
       isLargeCohort: cspec.isLarge,
-      tierPercentCutoffs: cspec.cutoffs
+      tierPercentCutoffs: cspec.cutoffs,
+      displayNorm: displayNorm,
+      octagonArea: comp ? comp.area : null,
+      octagonAreaMax: comp ? comp.aMax : null,
+      octagonAreaMin: comp ? comp.aMin : null,
+      comprehensiveRank: comp ? comp.rSynthetic : rAvg,
+      pComprehensive: pComprehensive
     };
   }
 
@@ -369,12 +432,17 @@
     var imgError = _img[0];
     var setImgError = _img[1];
     var tid = summary && summary.tier ? summary.tier.id : '';
-    var pMarker = summary && summary.pTotal != null ? summary.pTotal : -1;
+    var pShow =
+      summary && summary.pComprehensive != null && isFinite(summary.pComprehensive)
+        ? summary.pComprehensive
+        : summary && summary.pTotal != null
+          ? summary.pTotal
+          : -1;
     useEffect(
       function() {
         setImgError(false);
       },
-      [tid, pMarker]
+      [tid, pShow]
     );
     if (!summary || !summary.tier) return null;
     var st = tierStyleForId(tid);
@@ -389,11 +457,18 @@
             type="button"
             className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
             aria-pressed={showPct}
-            aria-label={levelName + ', ' + label + ', 상위 ' + summary.pTotal.toFixed(1) + '%. 탭하면 백분위 표시'}
+            aria-label={
+              levelName +
+              ', ' +
+              label +
+              ', 면적 기준 종합 상위 ' +
+              pShow.toFixed(1) +
+              '%. 탭하면 백분위 표시'
+            }
             onClick={function() {
               setShowPct(!showPct);
             }}
-            title="탭하여 종합 백분위 보기"
+            title="탭하여 면적 기준 종합 백분위 보기"
           >
             <div className="stelvio-octagon-tier-btn-stack">
               {!imgError ? (
@@ -424,7 +499,7 @@
             className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
             role="status"
           >
-            상위 {summary.pTotal.toFixed(1)}%
+            면적 기준 상위 {pShow.toFixed(1)}%
           </div>
         </div>
       </div>
