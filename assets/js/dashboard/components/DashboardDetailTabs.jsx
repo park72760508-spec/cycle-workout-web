@@ -424,7 +424,7 @@
               React.createElement(
                 'p',
                 { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                '성장 추이 옥타곤(랭킹 기준)에서 사용. 지표(평균 순위 ÷ n) × 100%에 대한 등급입니다. 모수 n이 100 이상(대수)이면 본문 비율을 그대로 쓰고, 100 미만(소수)이면 N에 따른 K 보정과 n 기반 상한이 적용됩니다(차트·코호트와 일치). 성별·카테고리에 따라 n이 달라질 수 있습니다.'
+                '성장 추이 옥타곤(랭킹 기준)에서 사용. 지표(평균 순위 ÷ n) × 100%에 대한 등급입니다. 모수 n이 100 이상(대수)이면 5/10/20/40/60/80%를 그대로 쓰고, 100 미만(소수)이면 K=1+(100−n)/(100+n) 보정과 n 기반 상한이 적용됩니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
               ),
               React.createElement('table', { className: 'w-full text-left border-collapse' },
                 React.createElement('thead', null,
