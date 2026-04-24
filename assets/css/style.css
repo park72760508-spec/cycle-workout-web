@@ -5392,6 +5392,31 @@ body:has(#trainingDetailModal:not(.hidden)) {
   pointer-events: auto;
   text-align: center;
 }
+/* 내접 0.25 그리드(반지름 0.25×rMax) ≈ viewBox 35/200 → 래퍼의 17.5% */
+.stelvio-octagon-tier-inner--img {
+  max-width: 130px;
+  width: 17.5%;
+  min-width: 48px;
+}
+.stelvio-octagon-tier-btn--image {
+  padding: 0;
+  background: transparent !important;
+  width: 100%;
+  line-height: 0;
+  box-shadow: none !important;
+}
+.stelvio-octagon-tier-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 자산에 검은 배경이 있을 때 뒤 옥타 그래프가 비치게(검정=#000 를 투과에 가깝게) */
+  mix-blend-mode: screen;
+}
+.stelvio-octagon-tier-fallback {
+  display: inline-block;
+  line-height: 1;
+  padding: 2px 4px;
+}
 .stelvio-octagon-tier-btn {
   font-weight: 800;
   letter-spacing: -0.04em;
@@ -5423,7 +5448,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-octagon-tier-btn--C5 {
   font-size: clamp(0.8rem, 2.7vw, 1.05rem);
 }
-.stelvio-octagon-tier-btn--BASE {
+.stelvio-octagon-tier-btn--C6 {
   font-size: clamp(0.75rem, 2.4vw, 0.95rem);
 }
 /* HC: 레드 + 폴카닷 느낌 박스 + 강한 글로우(텍스트는 단색) */
