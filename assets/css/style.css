@@ -5369,7 +5369,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   }
 }
 
-/* 옥타곤 SVG 래퍼 + 중앙 종합 등급 오버레이(그래프 SVG 마크업은 JS에서 불변) */
+/* 옥타곤 SVG 래퍼 + 중앙 종합 등급(금·은·동·특급 티어 배지) — SVG 그래프 자체는 비변경 */
 .stelvio-octagon-chart-shell {
   position: relative;
   z-index: 0;
@@ -5388,63 +5388,321 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  max-width: 55%;
+  max-width: 58%;
+  min-width: 0;
   pointer-events: auto;
   text-align: center;
 }
-.stelvio-octagon-tier-btn {
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  background: none;
-  border: none;
+/* 메달+티어+필터 기준 한 덩어리 */
+.stelvio-octagon-tier-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   margin: 0;
-  padding: 2px 4px;
+  padding: 7px 10px 8px;
+  min-width: 0;
+  max-width: 11rem;
+  width: 100%;
+  border: none;
+  border-radius: 16px;
   cursor: pointer;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  transition: transform 0.16s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
-.stelvio-octagon-tier-btn:active {
-  transform: scale(0.97);
+.stelvio-octagon-tier-pill:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
-.stelvio-octagon-tier-btn--HC {
-  font-size: clamp(1.1rem, 4.2vw, 1.7rem);
+.stelvio-octagon-tier-pill:active {
+  transform: scale(0.98);
 }
-.stelvio-octagon-tier-btn--C1 {
-  font-size: clamp(0.95rem, 3.4vw, 1.3rem);
+/* 작은 메달 링(원형) + 글리프(등급 느낌) */
+.stelvio-octagon-tier-medal {
+  position: relative;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin-bottom: 1px;
+  flex-shrink: 0;
 }
-.stelvio-octagon-tier-btn--C2 {
-  font-size: clamp(0.9rem, 3.1vw, 1.2rem);
+.stelvio-octagon-tier-medal-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.15);
 }
-.stelvio-octagon-tier-btn--C3 {
-  font-size: clamp(0.85rem, 2.9vw, 1.1rem);
+.stelvio-octagon-tier-medal-glyph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
 }
-.stelvio-octagon-tier-btn--C4,
-.stelvio-octagon-tier-btn--C5 {
-  font-size: clamp(0.8rem, 2.7vw, 1.05rem);
+/* === HC: 산악 투어 특급 — 딥 틸/버건디 + 금테 === */
+.stelvio-octagon-tier-pill--HC {
+  background: linear-gradient(160deg, #1a0a12 0%, #3d1520 45%, #0f172a 100%);
+  border: 1.5px solid rgba(250, 204, 21, 0.75);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.2), 0 4px 20px rgba(120, 20, 40, 0.45),
+    0 0 28px rgba(220, 38, 38, 0.25);
 }
-.stelvio-octagon-tier-btn--BASE {
-  font-size: clamp(0.75rem, 2.4vw, 0.95rem);
+.stelvio-octagon-tier-medal--HC .stelvio-octagon-tier-medal-ring {
+  background: conic-gradient(from 210deg, #f59e0b, #fbbf24, #fef3c7, #b45309, #f59e0b);
+  box-shadow: inset 0 0 0 2px rgba(15, 20, 30, 0.85);
 }
-/* HC: 레드 + 폴카닷 느낌 박스 + 강한 글로우(텍스트는 단색) */
-.stelvio-octagon-tier--hc {
-  color: #ff1a1a;
-  background: radial-gradient(circle, rgba(255, 50, 50, 0.45) 1px, transparent 1.1px) 0 0 / 3px 3px repeat, rgba(15, 23, 42, 0.35);
-  border-radius: 6px;
-  padding: 3px 8px 4px;
-  box-shadow: 0 0 16px rgba(255, 0, 0, 0.5), 0 0 32px rgba(255, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 100, 100, 0.25);
+.stelvio-octagon-tier-medal--HC .stelvio-octagon-tier-medal-glyph::after {
+  content: "◆";
+  font-size: 0.6rem;
+  color: #fffbeb;
+  text-shadow: 0 0 6px #f59e0b, 0 0 2px #7f1d1d;
 }
+/* Cat 1 — 금메달 */
+.stelvio-octagon-tier-pill--C1 {
+  background: linear-gradient(180deg, #fffbeb 0%, #fcd34d 45%, #c9960c 100%);
+  border: 1.5px solid #b8860b;
+  box-shadow: 0 2px 12px rgba(180, 130, 20, 0.35);
+}
+.stelvio-octagon-tier-medal--C1 .stelvio-octagon-tier-medal-ring {
+  background: linear-gradient(140deg, #fffef0 0%, #f0c14b 50%, #9a7209 100%);
+  border: 1px solid #6b4e0a;
+}
+.stelvio-octagon-tier-medal--C1 .stelvio-octagon-tier-medal-glyph::after {
+  content: "★";
+  font-size: 0.8rem;
+  color: #3d2a05;
+  text-shadow: 0 0.5px 0 #fff4cc;
+}
+/* Cat 2 — 은메달 */
+.stelvio-octagon-tier-pill--C2 {
+  background: linear-gradient(180deg, #f8fafc 0%, #d4dce6 50%, #9ca3b8 100%);
+  border: 1.5px solid #6b7280;
+  box-shadow: 0 2px 12px rgba(70, 80, 100, 0.25);
+}
+.stelvio-octagon-tier-medal--C2 .stelvio-octagon-tier-medal-ring {
+  background: linear-gradient(140deg, #ffffff 0%, #b8c0ce 50%, #64748b 100%);
+  border: 1px solid #475569;
+}
+.stelvio-octagon-tier-medal--C2 .stelvio-octagon-tier-medal-glyph::after {
+  content: "✦";
+  font-size: 0.8rem;
+  color: #1e293b;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* Cat 3 — 동메달 */
+.stelvio-octagon-tier-pill--C3 {
+  background: linear-gradient(180deg, #fef3e2 0%, #d4a574 50%, #8b4d2a 100%);
+  border: 1.5px solid #6b3c1e;
+  box-shadow: 0 2px 12px rgba(100, 50, 30, 0.3);
+}
+.stelvio-octagon-tier-medal--C3 .stelvio-octagon-tier-medal-ring {
+  background: linear-gradient(140deg, #e8b896 0%, #a85c2e 50%, #5c2e10 100%);
+  border: 1px solid #3d1f0a;
+}
+.stelvio-octagon-tier-medal--C3 .stelvio-octagon-tier-medal-glyph::after {
+  content: "●";
+  font-size: 0.7rem;
+  color: #2d0f05;
+  text-shadow: 0 0.5px 0 rgba(255, 255, 255, 0.3);
+}
+/* Cat 4 — 은빛 청록(4위 느낌) */
+.stelvio-octagon-tier-pill--C4 {
+  background: linear-gradient(180deg, #ecfeff 0%, #a5f3fc 40%, #22d3ee 100%);
+  border: 1.5px solid #0891b2;
+  box-shadow: 0 2px 10px rgba(6, 120, 140, 0.28);
+}
+.stelvio-octagon-tier-medal--C4 .stelvio-octagon-tier-medal-ring {
+  background: linear-gradient(150deg, #cffafe, #0e7490 90%);
+  border: 1px solid #155e75;
+}
+.stelvio-octagon-tier-medal--C4 .stelvio-octagon-tier-medal-glyph::after {
+  content: "Ⅳ";
+  font-size: 0.58rem;
+  color: #0c2e35;
+  font-weight: 800;
+  font-family: ui-serif, Georgia, serif;
+}
+/* Cat 5 — 스틸 */
+.stelvio-octagon-tier-pill--C5 {
+  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 55%, #94a3b8 100%);
+  border: 1.5px solid #64748b;
+  box-shadow: 0 2px 8px rgba(50, 60, 80, 0.2);
+}
+.stelvio-octagon-tier-medal--C5 .stelvio-octagon-tier-medal-ring {
+  background: linear-gradient(160deg, #e2e8f0, #64748b);
+  border: 1px solid #334155;
+}
+.stelvio-octagon-tier-medal--C5 .stelvio-octagon-tier-medal-glyph::after {
+  content: "Ⅴ";
+  font-size: 0.58rem;
+  color: #0f172a;
+  font-weight: 800;
+  font-family: ui-serif, Georgia, serif;
+}
+/* Base */
+.stelvio-octagon-tier-pill--BASE {
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+}
+.stelvio-octagon-tier-medal--BASE .stelvio-octagon-tier-medal-ring {
+  background: #e2e8f0;
+  border: 1px solid #94a3b8;
+  box-shadow: inset 0 1px 1px #fff;
+}
+.stelvio-octagon-tier-medal--BASE .stelvio-octagon-tier-medal-glyph::after {
+  content: "·";
+  font-size: 1.1rem;
+  color: #64748b;
+  line-height: 0.6;
+}
+/* 라벨: 등급명 — 대비 강한 텍스트 */
+.stelvio-octagon-tier-pill-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+  padding: 0 2px;
+}
+.stelvio-octagon-tier-pill--HC .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--HC .stelvio-octagon-tier-pill-line2 {
+  color: #fffbeb;
+  text-shadow: 0 0 12px rgba(250, 204, 21, 0.7), 0 1px 2px #0f172a;
+}
+.stelvio-octagon-tier-pill--HC .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.95rem, 3.2vw, 1.2rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+.stelvio-octagon-tier-pill--C1 .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--C1 .stelvio-octagon-tier-pill-line2 {
+  color: #271c0a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.stelvio-octagon-tier-pill--C1 .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.8rem, 2.6vw, 1.05rem);
+  font-weight: 800;
+}
+.stelvio-octagon-tier-pill--C2 .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--C2 .stelvio-octagon-tier-pill-line2 {
+  color: #0f172a;
+}
+.stelvio-octagon-tier-pill--C2 .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.78rem, 2.5vw, 1rem);
+  font-weight: 800;
+}
+.stelvio-octagon-tier-pill--C3 .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--C3 .stelvio-octagon-tier-pill-line2 {
+  color: #1a0a00;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.stelvio-octagon-tier-pill--C3 .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.75rem, 2.4vw, 0.98rem);
+  font-weight: 800;
+}
+.stelvio-octagon-tier-pill--C4 .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--C4 .stelvio-octagon-tier-pill-line2 {
+  color: #083344;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.stelvio-octagon-tier-pill--C4 .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.72rem, 2.2vw, 0.95rem);
+  font-weight: 800;
+}
+.stelvio-octagon-tier-pill--C5 .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--C5 .stelvio-octagon-tier-pill-line2 {
+  color: #0f172a;
+}
+.stelvio-octagon-tier-pill--C5 .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.7rem, 2.1vw, 0.92rem);
+  font-weight: 800;
+}
+.stelvio-octagon-tier-pill--BASE .stelvio-octagon-tier-pill-line1,
+.stelvio-octagon-tier-pill--BASE .stelvio-octagon-tier-pill-line2 {
+  color: #334155;
+}
+.stelvio-octagon-tier-pill--BASE .stelvio-octagon-tier-pill-line1 {
+  font-size: clamp(0.68rem, 2vw, 0.9rem);
+  font-weight: 700;
+}
+.stelvio-octagon-tier-pill-line1 {
+  display: block;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+}
+.stelvio-octagon-tier-pill-line2 {
+  display: block;
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  opacity: 0.92;
+  line-height: 1.1;
+  margin-top: 1px;
+  text-transform: none;
+}
+/* 필터(성별·부문) — 이 기준이라는 걸 눈으로 확인 */
+.stelvio-octagon-tier-pill-scope {
+  display: block;
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin-top: 2px;
+  padding: 0 1px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.88;
+}
+.stelvio-octagon-tier-pill--HC .stelvio-octagon-tier-pill-scope {
+  color: #fde68a;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  opacity: 0.95;
+}
+.stelvio-octagon-tier-pill--C1 .stelvio-octagon-tier-pill-scope {
+  color: #4a3208;
+  opacity: 0.9;
+}
+.stelvio-octagon-tier-pill--C2 .stelvio-octagon-tier-pill-scope {
+  color: #334155;
+  opacity: 0.85;
+}
+.stelvio-octagon-tier-pill--C3 .stelvio-octagon-tier-pill-scope {
+  color: #3d1f0c;
+  opacity: 0.88;
+}
+.stelvio-octagon-tier-pill--C4 .stelvio-octagon-tier-pill-scope {
+  color: #0c4a5a;
+  opacity: 0.88;
+}
+.stelvio-octagon-tier-pill--C5 .stelvio-octagon-tier-pill-scope {
+  color: #1e293b;
+  opacity: 0.82;
+}
+.stelvio-octagon-tier-pill--BASE .stelvio-octagon-tier-pill-scope {
+  color: #475569;
+  opacity: 0.85;
+}
+/* 백분위 툴팁 */
 .stelvio-octagon-tier-hint {
   margin-top: 4px;
   padding: 6px 12px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(10px) saturate(1.1);
   -webkit-backdrop-filter: blur(10px) saturate(1.1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  color: #e2e8f0;
-  font-size: 0.68rem;
+  color: #f1f5f9;
+  font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.2;
