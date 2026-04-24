@@ -1,8 +1,8 @@
 /**
- * dashboardAICache.js - 대시보드 AI·옥타곤 캐시
- * - 컨디션 분석, AI 인사이트, 추천 워크아웃, **STELVIO 옥타곤(피크 W/kg 7축)**
- * - 옥타곤: local 날짜·사용자·성별·카테고리 단위. 동일 7요청(월간+연간) 재호출 방지
- * - 캐시 무효화: 날짜/필터 변경 시 키가 달라짐(트레이닝 로그는 옥타곤 API와 별개)
+ * dashboardAICache.js - 대시보드 AI·헵타곤(7축) 캐시
+ * - 컨디션 분석, AI 인사이트, 추천 워크아웃, **STELVIO 헵타곤(피크 W/kg 7축)**
+ * - 헵타곤: local 날짜·사용자·성별·카테고리 단위. 동일 7요청(월간+연간) 재호출 방지
+ * - 캐시 무효화: 날짜/필터 변경 시 키가 달라짐(트레이닝 로그는 랭킹 API와 별개)
  */
 (function() {
   'use strict';
@@ -119,7 +119,7 @@
   var OCTAGON_CACHE_PAYLOAD_V = 3;
 
   /**
-   * STELVIO 옥타곤 — 7축(피크 W/kg) API 결과만 저장(ranks+코호트). norm은 클라이언트에서 재계산.
+   * STELVIO 헵타곤 — 7축(피크 W/kg) API 결과만 저장(ranks+코호트). norm은 클라이언트에서 재계산.
    * @returns {{v:number, monthly:{ranks:Array, cohortSizePerAxis:Array}, hof:{ranks:Array}}|null}
    */
   window.getStelvioOctagonRanksCache = function(userId, gender, category, todayStr) {
