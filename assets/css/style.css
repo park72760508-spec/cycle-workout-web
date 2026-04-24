@@ -5405,6 +5405,23 @@ body:has(#trainingDetailModal:not(.hidden)) {
   line-height: 0;
   box-shadow: none !important;
 }
+.stelvio-octagon-tier-btn-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  line-height: 0;
+}
+.stelvio-octagon-tier-level-name {
+  color: #ff1a1a;
+  font-size: clamp(0.6rem, 2vw, 0.75rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin-top: 2px;
+  letter-spacing: -0.02em;
+  text-align: center;
+  width: 100%;
+}
 .stelvio-octagon-tier-img {
   display: block;
   width: 100%;
