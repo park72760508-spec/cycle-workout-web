@@ -323,16 +323,18 @@
     var filterRow = null;
     if (uid) {
       filterRow = (
-        <div className="stelvio-filter-bar-wrap stelvio-octagon-ranking-filters mb-3">
-          <div className="stelvio-filter-bar">
-            <div className="stelvio-gender-dropdown">
-              <span className="stelvio-dropdown-caption">성별</span>
-              <span className="stelvio-dropdown-label">{labelForGender(gender)}</span>
-              <span className="stelvio-dropdown-chevron" aria-hidden="true">
-                ▾
-              </span>
+        <div
+          className="stelvio-octagon-filters"
+          role="group"
+          aria-label="랭킹 기준(성별·부문) 선택"
+        >
+          <div className="stelvio-octagon-filter-joined">
+            <div className="stelvio-octagon-filter-cell stelvio-octagon-gender">
+              <span className="stelvio-octagon-filter-cap">성별</span>
+              <span className="stelvio-octagon-filter-val">{labelForGender(gender)}</span>
+              <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
               <select
-                className="stelvio-dropdown-select"
+                className="stelvio-octagon-filter-select"
                 value={gender}
                 onChange={function(e) {
                   setGender(e.target.value);
@@ -348,14 +350,12 @@
                 })}
               </select>
             </div>
-            <div className="stelvio-category-dropdown">
-              <span className="stelvio-dropdown-caption">카테고리</span>
-              <span className="stelvio-dropdown-label">{labelForCategory(category)}</span>
-              <span className="stelvio-dropdown-chevron" aria-hidden="true">
-                ▾
-              </span>
+            <div className="stelvio-octagon-filter-cell stelvio-octagon-category">
+              <span className="stelvio-octagon-filter-cap">카테고리</span>
+              <span className="stelvio-octagon-filter-val">{labelForCategory(category)}</span>
+              <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
               <select
-                className="stelvio-dropdown-select"
+                className="stelvio-octagon-filter-select"
                 value={category}
                 onChange={function(e) {
                   setCategory(e.target.value);
