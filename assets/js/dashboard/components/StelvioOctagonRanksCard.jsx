@@ -1,7 +1,7 @@
 /**
  * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
- * 중앙 ‘상위 n%’: 8축 **순위로 그려진 옥타곤(반지름=rankToRadiusNorm)의 면적**으로 종합(넓을수록 상위) → n_ref 기준 (r/n)·100% 표기.
- * 등급(배지/레벨): 기존과 동일, **8축 순위 산술평균(반올림)** → (평균÷n)·100% + 구간(대수/소수 K).
+ * 중앙 ‘상위 n%’: **피크 W/kg 7구간** 순위로 그린 레이더(면적) 기준 종합% (TSS 제외, 순수 W/kg).
+ * 등급(배지/레벨): **7축** 순위 산술평균(반올림) → (평균÷n)·100% + 기존 구간(대수/소수 K).
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -43,11 +43,10 @@
   }
 
   /**
-   * 꼭짓점·데이터·라벨 순서 고정: 12시=TSS, 시계방향 TSS → Max → 1분 → … → 60분
-   * (필터 변경 시에도 이 순서·인덱스는 변하지 않음)
+   * getPeakPowerRanking 피크 파워: **W/kg만** (TSS·주간 적산 제외 — 순위 왜곡 방지)
+   * 12시=Max, 시계방향 Max → 1·5·10·20·40·60분
    */
   var AXES = [
-    { key: 'tss', label: 'TSS' },
     { key: 'max', label: 'Max' },
     { key: '1min', label: '1분' },
     { key: '5min', label: '5분' },
@@ -59,6 +58,7 @@
   var DURATIONS = AXES.map(function(a) {
     return a.key;
   });
+  var N_WKG_AXES = DURATIONS.length;
 
   function buildRankingUrl(uid, duration, periodForPeak, gender) {
     var p = new URLSearchParams();
@@ -189,13 +189,10 @@
     );
   }
 
-  /** 8축 rank 배열 + 코호트 n → charts에 쓰는 state(차트·면적·레벨 동일) */
+  /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n → 차트·면적·레벨 동일 */
   function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks) {
     var mRat = monthlyRanks.map(rankToRadiusNorm);
-    var hRat = hofRanks.map(function(r, i) {
-      if (i === 0) return mRat[0];
-      return rankToRadiusNorm(r);
-    });
+    var hRat = hofRanks.map(rankToRadiusNorm);
     return {
       loading: false,
       err: null,
@@ -228,17 +225,17 @@
   }
 
   /**
-   * i=0 → 12시(위), +i마다 45°씩 **시계방향**(SVG: y+ 아래, θ 증가 = 시계방향)
-   * AXES[i] 꼭짓점·방사선·라벨이 동일 인덱스로 정렬됨
+   * i=0 → 12시(위), n각형: 축마다 360/n ° 시계방향
    */
-  function axisAngle(i) {
-    return -Math.PI / 2 + (i * 2 * Math.PI) / 8;
+  function axisAngle(i, n) {
+    return -Math.PI / 2 + (i * 2 * Math.PI) / n;
   }
 
-  function octagonPoints(ratioArr, cx, cy, rMax) {
+  function radarPolygonPoints(ratioArr, cx, cy, rMax) {
+    var n = ratioArr && ratioArr.length > 0 ? ratioArr.length : 0;
     var pts = [];
-    for (var i = 0; i < 8; i++) {
-      var t = axisAngle(i);
+    for (var i = 0; i < n; i++) {
+      var t = axisAngle(i, n);
       var ri = (ratioArr[i] != null ? ratioArr[i] : 0.1) * rMax;
       pts.push([cx + ri * Math.cos(t), cy + ri * Math.sin(t)]);
     }
@@ -267,7 +264,7 @@
   function polygonAreaFromNormRatios(ratioArr, rMax) {
     var cx = 100;
     var cy = 100;
-    var pts = octagonPoints(ratioArr, cx, cy, rMax);
+    var pts = radarPolygonPoints(ratioArr, cx, cy, rMax);
     return shoelaceAreaXY(pts);
   }
 
@@ -277,14 +274,19 @@
    * 반환: pComprehensive = (rSynth/nRef)*100, rSynthetic
    */
   function comprehensivePercentFromDisplayNorm(norm, nRef) {
-    if (!norm || norm.length !== 8 || nRef < 1) return null;
+    if (!norm || norm.length < 3 || nRef < 1) return null;
+    var nVert = norm.length;
     var rMax = 1;
     var A = polygonAreaFromNormRatios(norm, rMax);
     if (!isFinite(A)) return null;
     var r1 = rankToRadiusNorm(1);
     var rW = rankToRadiusNorm(nRef);
-    var allBest = [r1, r1, r1, r1, r1, r1, r1, r1];
-    var allWorst = [rW, rW, rW, rW, rW, rW, rW, rW];
+    var allBest = [];
+    var allWorst = [];
+    for (var z = 0; z < nVert; z++) {
+      allBest.push(r1);
+      allWorst.push(rW);
+    }
     var aMax = polygonAreaFromNormRatios(allBest, rMax);
     var aMin = polygonAreaFromNormRatios(allWorst, rMax);
     if (!(aMax > aMin) || !isFinite(aMax) || !isFinite(aMin)) return null;
@@ -366,14 +368,14 @@
   }
 
   /**
-   * 레벨: 8축 순위 산술평균(반올림) → (평균/n)×100% + 기존 구간. 종합 표시%: 옥타곤 면적 기반 pComprehensive.
+   * 레벨: W/kg 피크 **7축** 순위 산술평균(반올림) → (평균/n)×100% + 기존 구간. 종합%: 면적 기반 pComprehensive.
    */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
-    if (!ranks || !cohortNPerAxis || ranks.length !== 8 || cohortNPerAxis.length !== 8) {
+    if (!ranks || !cohortNPerAxis || ranks.length !== N_WKG_AXES || cohortNPerAxis.length !== N_WKG_AXES) {
       return null;
     }
     var nRef = 0;
-    for (var k = 0; k < 8; k++) {
+    for (var k = 0; k < N_WKG_AXES; k++) {
       var nk = cohortNPerAxis[k] | 0;
       if (nk > nRef) nRef = nk;
     }
@@ -384,7 +386,7 @@
     var allOk = true;
     /** 차트와 동일: 각 축 API 순위 → rankToRadiusNorm (면적 산출용) */
     var displayNorm = [];
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < N_WKG_AXES; i++) {
       var ni = (cohortNPerAxis[i] | 0) > 0 ? cohortNPerAxis[i] : nRef;
       var er = effectiveRankForAverage(ranks[i], ni);
       if (er == null) {
@@ -397,7 +399,7 @@
     }
     if (!allOk) return null;
 
-    var rAvg = Math.round(sumR / 8);
+    var rAvg = Math.round(sumR / N_WKG_AXES);
     if (rAvg < 1) rAvg = 1;
     if (rAvg > nRef) rAvg = nRef;
 
@@ -618,13 +620,16 @@
         var cy = 100;
         var rLabel = 88;
         var rMax = 70;
-        var mPts = pathFromPoints(octagonPoints(state.monthly.norm, cx, cy, rMax));
-        var hPts = pathFromPoints(octagonPoints(state.hof.norm, cx, cy, rMax));
+        var nAxis = N_WKG_AXES;
+        var mPts = pathFromPoints(radarPolygonPoints(state.monthly.norm, cx, cy, rMax));
+        var hPts = pathFromPoints(radarPolygonPoints(state.hof.norm, cx, cy, rMax));
         var grid = [0.25, 0.5, 0.75, 1].map(function(g) {
-          return pathFromPoints(octagonPoints([g, g, g, g, g, g, g, g], cx, cy, rMax));
+          var gr = [];
+          for (var gi = 0; gi < nAxis; gi++) gr.push(g);
+          return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
         });
         return (
-          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 옥타곤 레벨 포지션">
+          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 W/kg 7축 레이더 레벨 포지션">
             {grid.map(function(d, idx) {
               return (
                 <path
@@ -637,7 +642,7 @@
               );
             })}
             {AXES.map(function(ax, i) {
-              var t = axisAngle(i);
+              var t = axisAngle(i, nAxis);
               return (
                 <line
                   key={ax.key}
@@ -665,17 +670,12 @@
               strokeLinejoin="round"
             />
             {AXES.map(function(ax, i) {
-              var t = axisAngle(i);
+              var t = axisAngle(i, nAxis);
               var lx = cx + rLabel * Math.cos(t);
               var ly = cy + rLabel * Math.sin(t);
               var mr = state.monthly.ranks[i];
               var hr = state.hof.ranks[i];
-              var sub2 =
-                i === 0
-                  ? mr != null
-                    ? '(주간) ' + mr + '위'
-                    : '(주간) —'
-                  : (mr != null ? 'M' + mr : 'M—') + ' ' + (hr != null ? 'Y' + hr : 'Y—') + '위';
+              var sub2 = (mr != null ? 'M' + mr : 'M—') + ' ' + (hr != null ? 'Y' + hr : 'Y—') + '위';
               return (
                 <text
                   key={ax.key + '-lbl'}
@@ -685,7 +685,7 @@
                   className="fill-slate-800"
                 >
                   <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>
-                    {i === 0 ? 'TSS' : ax.label}
+                    {ax.label}
                   </tspan>
                   <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
                     {sub2}
@@ -783,11 +783,11 @@
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
-              <span>최근 30일 + TSS 주간</span>
+              <span>최근 30일 (피크 W/kg·월간)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(16, 185, 129, 0.4)', border: '1px solid #059669' }} />
-              <span>최근365일 · TSS는 주간(동일선)</span>
+              <span>최근 365일 (피크 W/kg·연간)</span>
             </div>
           </div>
         </div>
