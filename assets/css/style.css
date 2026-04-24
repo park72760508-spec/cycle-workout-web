@@ -5413,14 +5413,19 @@ body:has(#trainingDetailModal:not(.hidden)) {
   line-height: 0;
 }
 .stelvio-octagon-tier-level-name {
-  color: #333333;
+  display: inline-block;
+  align-self: center;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #7c3aed;
+  color: #fff;
   font-size: clamp(0.6rem, 2vw, 0.75rem);
   font-weight: 800;
-  line-height: 1.15;
-  margin-top: 2px;
+  line-height: 1.2;
   letter-spacing: -0.02em;
   text-align: center;
-  width: 100%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 .stelvio-octagon-tier-img {
   display: block;
