@@ -16,6 +16,82 @@
   var useState = React.useState;
   var useEffect = React.useEffect;
   var useRef = React.useRef;
+  var useMemo = React.useMemo;
+  if (!useMemo) {
+    console.warn('[useDashboardData] useMemo not available, AI cache trigger may re-run on each render');
+    useMemo = function(factory) {
+      return factory();
+    };
+  }
+
+  function parseDateForCoachAnalysis(date) {
+    if (!date) return null;
+    var d = null;
+    if (date.toDate && typeof date.toDate === 'function') d = date.toDate();
+    else if (date instanceof Date) d = date;
+    else if (typeof date === 'string') {
+      var ds0 = (date.split('T')[0] || '').trim();
+      d = /^\d{4}-\d{2}-\d{2}$/.test(ds0) ? new Date(ds0 + 'T00:00:00') : new Date(date);
+    }
+    if (!d || isNaN(d.getTime())) return null;
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  /**
+   * todayStr, logsToSend, 7일 TSS, buildLogsSignatureForCache용 시그니처를 일관되게 계산한다.
+   * useMemo 트리거 키와 effect 본문이 항상 동일한 캐시 키를 쓰도록 공유한다.
+   */
+  function buildCoachContextForCoachAnalysis(recentLogs) {
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var out = { today: today, todayStr: todayStr, logsToSend: [], last7TSS: 0, logsSignature: '0' };
+    if (!recentLogs || !Array.isArray(recentLogs) || !recentLogs.length) {
+      return out;
+    }
+    var thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 29);
+    var thirtyStr =
+      thirtyDaysAgo.getFullYear() +
+      '-' +
+      String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(thirtyDaysAgo.getDate()).padStart(2, '0');
+    var logsToSend = recentLogs
+      .filter(function(log) {
+        var ds = parseDateForCoachAnalysis(log.date);
+        return ds && ds >= thirtyStr && ds <= todayStr;
+      })
+      .sort(function(a, b) {
+        return (parseDateForCoachAnalysis(a.date) || '').localeCompare(parseDateForCoachAnalysis(b.date) || '');
+      });
+    out.logsToSend = logsToSend;
+    var start7 = new Date(today);
+    start7.setDate(today.getDate() - 6);
+    var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
+    var byDate7 = {};
+    logsToSend.forEach(function(log) {
+      var ds = parseDateForCoachAnalysis(log.date);
+      if (!ds || ds < start7Str || ds > todayStr) return;
+      if (!byDate7[ds]) byDate7[ds] = { strava: [], stelvio: [] };
+      var src = String(log.source || '').toLowerCase();
+      var tss = Number(log.tss) || 0;
+      if (src === 'strava') byDate7[ds].strava.push(tss);
+      else byDate7[ds].stelvio.push(tss);
+    });
+    var last7TSS = 0;
+    Object.keys(byDate7).forEach(function(ds) {
+      var day = byDate7[ds];
+      if (day.strava.length > 0) day.strava.forEach(function(t) { last7TSS += t; });
+      else if (day.stelvio.length > 0) day.stelvio.forEach(function(t) { last7TSS += t; });
+    });
+    last7TSS = Math.round(last7TSS);
+    out.last7TSS = last7TSS;
+    out.logsSignature =
+      typeof window.buildLogsSignatureForCache === 'function'
+        ? window.buildLogsSignatureForCache(logsToSend, last7TSS)
+        : logsToSend.length + '_' + last7TSS;
+    return out;
+  }
 
   function useDashboardData() {
     var _useState = useState(null);
@@ -112,6 +188,20 @@
 
     var retryLogsRef = useRef(null);
     var aiAnalysisInProgressRef = useRef(false);
+
+    /** effect 의존성에 recentLogs 배열 ref 대신 'uid|날짜|로그시그니처'만 두어, 데이터 동일 시 재실행·재분석을 막는다. */
+    var coachAnalysisTriggerKey = useMemo(
+      function() {
+        var uid = userProfile && userProfile.id;
+        if (!uid) return '';
+        if (!logsLoaded || logsLoading) return 'loading';
+        if (logsLoadError) return 'err|' + String(uid);
+        if (!recentLogs || !recentLogs.length) return 'nologs|' + String(uid);
+        var ctx0 = buildCoachContextForCoachAnalysis(recentLogs);
+        return String(uid) + '|' + ctx0.todayStr + '|' + ctx0.logsSignature;
+      },
+      [userProfile && userProfile.id, logsLoaded, logsLoading, logsLoadError, recentLogs]
+    );
 
     // --- Profile Load ---
     useEffect(function profileLoadEffect() {
@@ -682,49 +772,12 @@
         return;
       }
 
-      function parseDateForCoach(date) {
-        if (!date) return null;
-        var d = null;
-        if (date.toDate && typeof date.toDate === 'function') d = date.toDate();
-        else if (date instanceof Date) d = date;
-        else if (typeof date === 'string') {
-          var ds = (date.split('T')[0] || '').trim();
-          d = /^\d{4}-\d{2}-\d{2}$/.test(ds) ? new Date(ds + 'T00:00:00') : new Date(date);
-        }
-        if (!d || isNaN(d.getTime())) return null;
-        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      }
-      var today = new Date();
-      var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-      var thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 29);
-      var thirtyStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
-      var logsToSend = recentLogs.filter(function(log) {
-        var ds = parseDateForCoach(log.date);
-        return ds && ds >= thirtyStr && ds <= todayStr;
-      }).sort(function(a, b) { return (parseDateForCoach(a.date) || '').localeCompare(parseDateForCoach(b.date) || ''); });
-      var start7 = new Date(today);
-      start7.setDate(today.getDate() - 6);
-      var start7Str = start7.getFullYear() + '-' + String(start7.getMonth() + 1).padStart(2, '0') + '-' + String(start7.getDate()).padStart(2, '0');
-      var byDate7 = {};
-      logsToSend.forEach(function(log) {
-        var ds = parseDateForCoach(log.date);
-        if (!ds || ds < start7Str || ds > todayStr) return;
-        if (!byDate7[ds]) byDate7[ds] = { strava: [], stelvio: [] };
-        var src = String(log.source || '').toLowerCase();
-        var tss = Number(log.tss) || 0;
-        if (src === 'strava') byDate7[ds].strava.push(tss); else byDate7[ds].stelvio.push(tss);
-      });
-      var last7TSS = 0;
-      Object.keys(byDate7).forEach(function(ds) {
-        var day = byDate7[ds];
-        if (day.strava.length > 0) day.strava.forEach(function(t) { last7TSS += t; });
-        else if (day.stelvio.length > 0) day.stelvio.forEach(function(t) { last7TSS += t; });
-      });
-      last7TSS = Math.round(last7TSS);
-      var logsSignature = typeof window.buildLogsSignatureForCache === 'function'
-        ? window.buildLogsSignatureForCache(logsToSend, last7TSS)
-        : (logsToSend.length + '_' + last7TSS);
+      var ctx = buildCoachContextForCoachAnalysis(recentLogs);
+      var today = ctx.today;
+      var todayStr = ctx.todayStr;
+      var logsToSend = ctx.logsToSend;
+      var last7TSS = ctx.last7TSS;
+      var logsSignature = ctx.logsSignature;
 
       /* 캐시: 같은 local 날짜 + 동일 logsSignature(로그/7일TSS/30일TSS)일 때만. 수동 재분석(runConditionAnalysis)은 스킵 */
       if (!runConditionAnalysis && retryCoach === 0 && typeof window.getDashboardCoachCache === 'function') {
@@ -897,7 +950,7 @@
           setRetryCoach(0);
         }
       })();
-    }, [userProfile, logsLoaded, logsLoading, logsLoadError, recentLogs, runConditionAnalysis, retryCoach]);
+    }, [coachAnalysisTriggerKey, runConditionAnalysis, retryCoach, userProfile && userProfile.id]);
 
     return {
       userProfile,
