@@ -458,17 +458,12 @@
             className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
             aria-pressed={showPct}
             aria-label={
-              levelName +
-              ', ' +
-              label +
-              ', 면적 기준 종합 상위 ' +
-              pShow.toFixed(1) +
-              '%. 탭하면 백분위 표시'
+              levelName + ', ' + label + ', 상위 ' + pShow.toFixed(1) + '%. 탭하면 백분위 표시'
             }
             onClick={function() {
               setShowPct(!showPct);
             }}
-            title="탭하여 면적 기준 종합 백분위 보기"
+            title="탭하여 백분위 보기"
           >
             <div className="stelvio-octagon-tier-btn-stack">
               {!imgError ? (
@@ -499,7 +494,7 @@
             className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
             role="status"
           >
-            면적 기준 상위 {pShow.toFixed(1)}%
+            상위 {pShow.toFixed(1)}%
           </div>
         </div>
       </div>
