@@ -41,7 +41,10 @@
     return '전체';
   }
 
-  /** 12시 기준 시계방향: TSS → Max → 1분 → … → 60분 */
+  /**
+   * 꼭짓점·데이터·라벨 순서 고정: 12시=TSS, 시계방향 TSS → Max → 1분 → … → 60분
+   * (필터 변경 시에도 이 순서·인덱스는 변하지 않음)
+   */
   var AXES = [
     { key: 'tss', label: 'TSS' },
     { key: 'max', label: 'Max' },
@@ -163,9 +166,12 @@
     return r;
   }
 
-  /** i번째 축 각도(라디안) */
+  /**
+   * i=0 → 12시(위), +i마다 45°씩 **시계방향**(SVG: y+ 아래, θ 증가 = 시계방향)
+   * AXES[i] 꼭짓점·방사선·라벨이 동일 인덱스로 정렬됨
+   */
   function axisAngle(i) {
-    return -Math.PI / 2 + Math.PI / 8 - (i * 2 * Math.PI) / 8;
+    return -Math.PI / 2 + (i * 2 * Math.PI) / 8;
   }
 
   function octagonPoints(ratioArr, cx, cy, rMax) {
@@ -408,7 +414,6 @@
               <span>최근365일 · TSS는 주간(동일선)</span>
             </div>
           </div>
-          <p className="text-center text-xs text-gray-500 mt-2 mb-0 px-1">! 바깥에 가까울수록 상위 레벨</p>
         </div>
       );
     }
