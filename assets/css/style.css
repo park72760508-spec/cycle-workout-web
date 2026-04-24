@@ -5413,7 +5413,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   line-height: 0;
 }
 .stelvio-octagon-tier-level-name {
-  color: #ff1a1a;
+  color: #fff;
   font-size: clamp(0.6rem, 2vw, 0.75rem);
   font-weight: 800;
   line-height: 1.15;
