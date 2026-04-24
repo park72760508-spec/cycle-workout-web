@@ -297,6 +297,12 @@
     return 'assets/img/' + (m[tierId] || 'c6.png');
   }
 
+  /** 옥타곤 중앙 이미지 하단 표기용(등급 파일명과 1:1) */
+  function tierLevelDisplayName(tierId) {
+    var m = { HC: '례벨1', C1: '례벨2', C2: '례벨3', C3: '례벨4', C4: '례벨5', C5: '례벨6', C6: '례벨7' };
+    return m[tierId] || '례벨7';
+  }
+
   function OctagonTierCenterOverlay(props) {
     var summary = props.summary;
     var _d = useState(false);
@@ -316,6 +322,7 @@
     if (!summary || !summary.tier) return null;
     var st = tierStyleForId(tid);
     var label = summary.tier.labelShort || summary.tier.text;
+    var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
 
     return (
@@ -325,31 +332,36 @@
             type="button"
             className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
             aria-pressed={showPct}
-            aria-label={label + ', 상위 ' + summary.pTotal.toFixed(1) + '%. 탭하면 백분위 표시'}
+            aria-label={levelName + ', ' + label + ', 상위 ' + summary.pTotal.toFixed(1) + '%. 탭하면 백분위 표시'}
             onClick={function() {
               setShowPct(!showPct);
             }}
             title="탭하여 종합 백분위 보기"
           >
-            {!imgError ? (
-              <img
-                className="stelvio-octagon-tier-img"
-                src={src}
-                alt={label}
-                draggable={false}
-                decoding="async"
-                onError={function() {
-                  setImgError(true);
-                }}
-              />
-            ) : (
-              <span
-                className={'stelvio-octagon-tier-fallback stelvio-octagon-tier-btn--' + tid + (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')}
-                style={tid === 'HC' ? { textShadow: st.shadow } : { color: st.color, textShadow: st.shadow }}
-              >
-                {label}
+            <div className="stelvio-octagon-tier-btn-stack">
+              {!imgError ? (
+                <img
+                  className="stelvio-octagon-tier-img"
+                  src={src}
+                  alt={levelName}
+                  draggable={false}
+                  decoding="async"
+                  onError={function() {
+                    setImgError(true);
+                  }}
+                />
+              ) : (
+                <span
+                  className={'stelvio-octagon-tier-fallback stelvio-octagon-tier-btn--' + tid + (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')}
+                  style={tid === 'HC' ? { textShadow: st.shadow } : { color: st.color, textShadow: st.shadow }}
+                >
+                  {label}
+                </span>
+              )}
+              <span className="stelvio-octagon-tier-level-name" aria-hidden="true">
+                {levelName}
               </span>
-            )}
+            </div>
           </button>
           <div
             className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
