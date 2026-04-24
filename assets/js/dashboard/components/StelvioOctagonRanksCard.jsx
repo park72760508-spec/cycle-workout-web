@@ -242,57 +242,58 @@
     return { itemP: itemP, pTotal: pTotal, tier: tier };
   }
 
-  var TIER_STYLE = {
-    HC: { color: '#ff1a1a', shadow: '0 0 12px #ff1a1a, 0 0 20px rgba(255,0,0,0.45)' },
-    C1: { color: '#ff6b3d', shadow: '0 0 12px rgba(255,107,61,0.85), 0 0 24px rgba(255,60,0,0.4)' },
-    C2: { color: '#ffb020', shadow: '0 0 10px rgba(255,176,32,0.7), 0 0 20px rgba(200,100,0,0.35)' },
-    C3: { color: '#e8c547', shadow: '0 0 8px rgba(232,197,71,0.6)' },
-    C4: { color: '#9fe870', shadow: '0 0 8px rgba(140,200,100,0.5)' },
-    C5: { color: '#94a3b8', shadow: '0 0 6px rgba(148,163,184,0.5)' },
-    BASE: { color: '#7c8aa0', shadow: '0 0 4px rgba(100,110,120,0.4)' }
+  /** 메달·배지용 등급별 짧은 보조 문구(아이콘 캡션) */
+  var TIER_MEDAL_CAPTION = {
+    HC: '특급',
+    C1: '1위급',
+    C2: '2위급',
+    C3: '3위급',
+    C4: '4위급',
+    C5: '5위급',
+    BASE: '베이스'
   };
-
-  function tierStyleForId(id) {
-    return TIER_STYLE[id] || TIER_STYLE.BASE;
-  }
 
   function OctagonTierCenterOverlay(props) {
     var summary = props.summary;
+    var filterSummary = (props && props.filterSummary) || '';
     var _d = useState(false);
     var showPct = _d[0];
     var setShowPct = _d[1];
     if (!summary || !summary.tier) return null;
     var tid = summary.tier.id;
-    var st = tierStyleForId(tid);
     var label = summary.tier.labelShort || summary.tier.text;
+    var cap = TIER_MEDAL_CAPTION[tid] || '';
     return (
       <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
         <div className="stelvio-octagon-tier-inner">
           <button
             type="button"
-            className={
-              'stelvio-octagon-tier-btn stelvio-octagon-tier-btn--' +
-              tid +
-              (tid === 'HC' ? ' stelvio-octagon-tier--hc' : '')
-            }
+            className={'stelvio-octagon-tier-pill stelvio-octagon-tier-pill--' + tid}
             aria-pressed={showPct}
-            style={
-              tid === 'HC'
-                ? { textShadow: st.shadow }
-                : { color: st.color, textShadow: st.shadow }
-            }
             onClick={function() {
               setShowPct(!showPct);
             }}
-            title="탭하여 종합 백분위 보기"
+            title="탭하여 이 기준(성별·카테고리)의 종합 백분위 보기"
           >
-            {label}
+            <span className={'stelvio-octagon-tier-medal stelvio-octagon-tier-medal--' + tid} aria-hidden="true">
+              <span className="stelvio-octagon-tier-medal-ring" />
+              <span className="stelvio-octagon-tier-medal-glyph" />
+            </span>
+            <span className="stelvio-octagon-tier-pill-text">
+              <span className="stelvio-octagon-tier-pill-line1">{label}</span>
+              {cap ? <span className="stelvio-octagon-tier-pill-line2">{cap}</span> : null}
+            </span>
+            {filterSummary ? (
+              <span className="stelvio-octagon-tier-pill-scope" title="현재 등급 산정 기준">
+                {filterSummary}
+              </span>
+            ) : null}
           </button>
           <div
             className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
             role="status"
           >
-            상위 {summary.pTotal.toFixed(1)}%
+            이 기준 합산 상위 {summary.pTotal.toFixed(1)}%
           </div>
         </div>
       </div>
@@ -355,12 +356,13 @@
       [uid, gender, category]
     );
 
+    /** 성별·카테고리 필터는 fetch(랭킹 API)에 반영됨 → 월간 랭크·코호트 n이 바뀌면 등급도 자동 재계산 */
     var tierSummary = useMemo(
       function() {
         if (state.loading || !state.monthly || !state.monthly.cohortSizePerAxis) return null;
         return computePTotalAndTier(state.monthly.ranks, state.monthly.cohortSizePerAxis);
       },
-      [state.loading, state.monthly]
+      [state.loading, state.monthly, gender, category]
     );
 
     var svg = useMemo(
@@ -530,7 +532,12 @@
         <div>
           <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px]">
             {svg}
-            {tierSummary ? <OctagonTierCenterOverlay summary={tierSummary} /> : null}
+            {tierSummary ? (
+              <OctagonTierCenterOverlay
+                summary={tierSummary}
+                filterSummary={labelForGender(gender) + ' · ' + labelForCategory(category)}
+              />
+            ) : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
