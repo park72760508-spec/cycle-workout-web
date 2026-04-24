@@ -281,6 +281,10 @@
       var sixtyDaysAgo = new Date(today);
       sixtyDaysAgo.setDate(today.getDate() - 60);
       var sixtyDaysStr = sixtyDaysAgo.getFullYear() + '-' + pad2(sixtyDaysAgo.getMonth() + 1) + '-' + pad2(sixtyDaysAgo.getDate());
+      var rollingSixMonthStart = new Date(today);
+      rollingSixMonthStart.setDate(today.getDate() - 182);
+      var rollingSixMonthStr =
+        rollingSixMonthStart.getFullYear() + '-' + pad2(rollingSixMonthStart.getMonth() + 1) + '-' + pad2(rollingSixMonthStart.getDate());
       var sixMonthsAgo = new Date(today);
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
       sixMonthsAgo.setDate(1);
@@ -299,7 +303,7 @@
           }
           if (raw.length === 0 && window.firestore) {
             try {
-              var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(200).get();
+              var snap = await window.firestore.collection('users').doc(userProfile.id).collection('logs').orderBy('date', 'desc').limit(400).get();
               snap.docs.forEach(function(doc) {
                 var dd = doc.data();
                 var o = { id: doc.id };
@@ -311,7 +315,7 @@
 
           var logs = raw.filter(function(log) {
             var ds = parseDate(log.date);
-            return ds && ds >= sixtyDaysStr && ds <= todayStr;
+            return ds && ds >= rollingSixMonthStr && ds <= todayStr;
           });
           logs.sort(function(a, b) {
             var da = parseDate(a.date) || '';
@@ -722,18 +726,14 @@
         ? window.buildLogsSignatureForCache(logsToSend, last7TSS)
         : (logsToSend.length + '_' + last7TSS);
 
-      /* 캐시 조회: 같은 날짜·같은 로그 상태이면 캐시 사용 (runConditionAnalysis가 true면 강제 재분석) */
-      if (!runConditionAnalysis && typeof window.getDashboardCoachCache === 'function') {
+      /* 캐시: 같은 local 날짜 + 동일 logsSignature(로그/7일TSS/30일TSS)일 때만. 수동 재분석(runConditionAnalysis)은 스킵 */
+      if (!runConditionAnalysis && retryCoach === 0 && typeof window.getDashboardCoachCache === 'function') {
         var cached = window.getDashboardCoachCache(userProfile.id, todayStr, logsSignature);
         if (cached && cached.condition_score != null && !cached.error_reason) {
           setCoachData(cached);
           setAiLoading(false);
           return;
         }
-      }
-      if (coachData && !coachData.error_reason && !runConditionAnalysis) {
-        setAiLoading(false);
-        return;
       }
       if (aiAnalysisInProgressRef.current) return;
 
@@ -894,9 +894,10 @@
           setAiLoading(false);
           aiAnalysisInProgressRef.current = false;
           setRunConditionAnalysis(false);
+          setRetryCoach(0);
         }
       })();
-    }, [userProfile, logsLoaded, logsLoading, logsLoadError, recentLogs.length, runConditionAnalysis]);
+    }, [userProfile, logsLoaded, logsLoading, logsLoadError, recentLogs, runConditionAnalysis, retryCoach]);
 
     return {
       userProfile,

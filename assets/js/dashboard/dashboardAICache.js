@@ -7,7 +7,7 @@
   'use strict';
 
   var CACHE_PREFIX = 'stelvio_dashboard_ai_';
-  var CACHE_VERSION = '1'; // 캐시 구조 변경 시 증가
+  var CACHE_VERSION = '2'; // 2: 로그 시그니처에 30일/7일 TSS 모두 반영(이전 v1 캐시 자동 미사용)
 
   function getTodayStr() {
     var d = new Date();
@@ -20,7 +20,7 @@
    * @param {number} [last7TSS] - 최근 7일 TSS (선택)
    */
   function buildLogsSignature(recentLogs, last7TSS) {
-    if (!recentLogs || recentLogs.length === 0) return '0_0';
+    if (!recentLogs || recentLogs.length === 0) return '0_0_0_0';
     var totalTSS = 0;
     var latestDate = '';
     var parseDate = function(d) {
@@ -34,8 +34,9 @@
       if (ds && (!latestDate || ds > latestDate)) latestDate = ds;
       totalTSS += Number(recentLogs[i].tss) || 0;
     }
-    var tssPart = (typeof last7TSS === 'number' ? last7TSS : totalTSS);
-    return recentLogs.length + '_' + latestDate + '_' + Math.round(tssPart);
+    var t30 = Math.round(totalTSS);
+    var t7 = typeof last7TSS === 'number' && !isNaN(last7TSS) ? Math.round(last7TSS) : t30;
+    return recentLogs.length + '_' + latestDate + '_7' + t7 + '_30' + t30;
   }
 
   /**
