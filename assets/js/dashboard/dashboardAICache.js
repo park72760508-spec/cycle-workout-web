@@ -10,6 +10,25 @@
   var CACHE_PREFIX = 'stelvio_dashboard_ai_';
   var CACHE_VERSION = '2'; // 2: 로그 시그니처에 30일/7일 TSS 모두 반영(이전 v1 캐시 자동 미사용)
 
+  /**
+   * 로그 날짜 → 로컬 YYYY-MM-DD (useDashboardData / 코치와 동일 기준)
+   * iOS에서 Firestore toDate()를 toISOString(UTC)로만 쓰면 'latestDate'가 PC와 야간대에 달라져 시그니처·캐시 키가 어긋날 수 있음
+   */
+  function parseLogDateToLocalYMD(d) {
+    if (!d) return null;
+    var v = d;
+    if (v && typeof v.toDate === 'function') v = v.toDate();
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return null;
+      return v.getFullYear() + '-' + String(v.getMonth() + 1).padStart(2, '0') + '-' + String(v.getDate()).padStart(2, '0');
+    }
+    if (typeof d === 'string') return (d.split('T')[0] || '').trim().slice(0, 10) || null;
+    return null;
+  }
+
+  /** localStorage 쓰기 실패·ITP(미사용 삭제) 대비: 같은 탭·세션 내 조회/복구용 */
+  var _readThroughMemory = Object.create(null);
+
   function getTodayStr() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -24,14 +43,10 @@
     if (!recentLogs || recentLogs.length === 0) return '0_0_0_0';
     var totalTSS = 0;
     var latestDate = '';
-    var parseDate = function(d) {
-      if (!d) return null;
-      if (d.toDate && typeof d.toDate === 'function') return d.toDate().toISOString().slice(0, 10);
-      if (typeof d === 'string') return d.slice(0, 10);
-      return null;
-    };
     for (var i = 0; i < recentLogs.length; i++) {
-      var ds = parseDate(recentLogs[i].date || recentLogs[i].completed_at);
+      var logEntry = recentLogs[i];
+      var raw = logEntry && (logEntry.date != null ? logEntry.date : logEntry.completed_at);
+      var ds = parseLogDateToLocalYMD(raw);
       if (ds && (!latestDate || ds > latestDate)) latestDate = ds;
       totalTSS += Number(recentLogs[i].tss) || 0;
     }
@@ -54,26 +69,65 @@
   }
 
   function getCached(key) {
+    if (!key) return null;
+    try {
+      if (_readThroughMemory[key] != null) {
+        return _readThroughMemory[key].data;
+      }
+    } catch (e) {}
+    var parsed = null;
     try {
       var raw = localStorage.getItem(key);
-      if (!raw) return null;
-      var parsed = JSON.parse(raw);
-      if (!parsed || !parsed.data) return null;
-      return parsed.data;
-    } catch (e) {
-      return null;
-    }
+      if (raw) {
+        parsed = JSON.parse(raw);
+        if (parsed && parsed.data != null) {
+          _readThroughMemory[key] = parsed;
+          return parsed.data;
+        }
+      }
+    } catch (e) {}
+    try {
+      var rawS = sessionStorage.getItem(key);
+      if (rawS) {
+        parsed = JSON.parse(rawS);
+        if (parsed && parsed.data != null) {
+          _readThroughMemory[key] = parsed;
+          return parsed.data;
+        }
+      }
+    } catch (e) {}
+    return null;
   }
 
   function setCache(key, data) {
+    if (!key) return false;
+    var payload = { data: data, cachedAt: new Date().toISOString() };
+    var str = null;
     try {
-      var payload = { data: data, cachedAt: new Date().toISOString() };
-      localStorage.setItem(key, JSON.stringify(payload));
-      return true;
+      str = JSON.stringify(payload);
     } catch (e) {
-      console.warn('[DashboardAICache] setCache failed:', e && e.message);
       return false;
     }
+    _readThroughMemory[key] = payload;
+    var localOk = false;
+    try {
+      localStorage.setItem(key, str);
+      localOk = true;
+    } catch (e) {
+      try {
+        console.warn('[DashboardAICache] localStorage setItem failed (iOS quota / private / ITP):', e && e.message);
+      } catch (w) {}
+    }
+    try {
+      sessionStorage.setItem(key, str);
+    } catch (e) {
+      if (!localOk) {
+        try {
+          console.warn('[DashboardAICache] sessionStorage also failed; cache only in memory for this tab.', e && e.message);
+        } catch (w) {}
+      }
+    }
+    return true;
   }
 
   /**
