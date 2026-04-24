@@ -30,13 +30,13 @@
 
   /** STELVIO 옥타곤(랭킹 상대%) — `StelvioOctagonRanksCard` computePTotalAndTier 구간과 동일 */
   var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
-    { key: 'hc', label: 'HC', range: '5% 이하', src: 'assets/img/hc.svg' },
-    { key: 'c1', label: 'Cat 1', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.svg' },
-    { key: 'c2', label: 'Cat 2', range: '10% 초과 ~ 20% 이하', src: 'assets/img/c2.svg' },
-    { key: 'c3', label: 'Cat 3', range: '20% 초과 ~ 40% 이하', src: 'assets/img/c3.svg' },
-    { key: 'c4', label: 'Cat 4', range: '40% 초과 ~ 60% 이하', src: 'assets/img/c4.svg' },
-    { key: 'c5', label: 'Cat 5', range: '60% 초과 ~ 80% 이하', src: 'assets/img/c5.svg' },
-    { key: 'c6', label: 'Cat 6', range: '80% 초과', src: 'assets/img/c6.svg' }
+    { key: 'hc', label: 'HC', range: '5% 이하', src: 'assets/img/hc.png' },
+    { key: 'c1', label: 'Cat 1', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.png' },
+    { key: 'c2', label: 'Cat 2', range: '10% 초과 ~ 20% 이하', src: 'assets/img/c2.png' },
+    { key: 'c3', label: 'Cat 3', range: '20% 초과 ~ 40% 이하', src: 'assets/img/c3.png' },
+    { key: 'c4', label: 'Cat 4', range: '40% 초과 ~ 60% 이하', src: 'assets/img/c4.png' },
+    { key: 'c5', label: 'Cat 5', range: '60% 초과 ~ 80% 이하', src: 'assets/img/c5.png' },
+    { key: 'c6', label: 'Cat 6', range: '80% 초과', src: 'assets/img/c6.png' }
   ];
 
   /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「라이딩 지표」탭 상단 */

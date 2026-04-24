@@ -293,8 +293,8 @@
   }
 
   function tierBadgeImageSrc(tierId) {
-    var m = { HC: 'hc.svg', C1: 'c1.svg', C2: 'c2.svg', C3: 'c3.svg', C4: 'c4.svg', C5: 'c5.svg', C6: 'c6.svg' };
-    return 'assets/img/' + (m[tierId] || 'c6.svg');
+    var m = { HC: 'hc.png', C1: 'c1.png', C2: 'c2.png', C3: 'c3.png', C4: 'c4.png', C5: 'c5.png', C6: 'c6.png' };
+    return 'assets/img/' + (m[tierId] || 'c6.png');
   }
 
   function OctagonTierCenterOverlay(props) {
