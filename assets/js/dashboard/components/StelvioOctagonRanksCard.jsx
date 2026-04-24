@@ -1,5 +1,5 @@
 /**
- * STELVIO 옥타곤(레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
+ * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * 중앙 ‘상위 n%’: **피크 W/kg 7구간** 순위로 그린 레이더(면적) 기준 종합% (TSS 제외, 순수 W/kg).
  * 등급(배지/레벨): **7축** 순위 산술평균(반올림) → (평균÷n)·100% + 기존 구간(대수/소수 K).
  */
@@ -448,7 +448,7 @@
     return 'assets/img/' + (m[tierId] || 'c6.png');
   }
 
-  /** 옥타곤 중앙 이미지 하단 표기용(레벨1=HC) */
+  /** 헵타곤 중앙 이미지 하단 표기용(레벨1=HC) */
   function tierLevelDisplayName(tierId) {
     var m = { HC: '레벨1', C1: '레벨2', C2: '레벨3', C3: '레벨4', C4: '레벨5', C5: '레벨6', C6: '레벨7' };
     return m[tierId] || '레벨7';
@@ -629,7 +629,7 @@
           return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
         });
         return (
-          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 W/kg 7축 레이더 레벨 포지션">
+          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
             {grid.map(function(d, idx) {
               return (
                 <path
@@ -766,7 +766,7 @@
       body = (
         <div className="h-[220px] flex flex-col items-center justify-center">
           <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
-          <span className="text-sm text-gray-500">옥타곤 로딩…</span>
+          <span className="text-sm text-gray-500">헵타곤 로딩…</span>
         </div>
       );
     } else if (state.err === 'fetch') {
@@ -783,11 +783,11 @@
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
-              <span>최근 30일 (피크 W/kg·월간)</span>
+              <span>최근 30일 피크 파워</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(16, 185, 129, 0.4)', border: '1px solid #059669' }} />
-              <span>최근 365일 (피크 W/kg·연간)</span>
+              <span>최근 365일 피크 파워</span>
             </div>
           </div>
         </div>
@@ -796,7 +796,7 @@
 
     if (DashboardCard) {
       return (
-        <DashboardCard title="STELVIO 옥타곤 (레벨 포지션)">
+        <DashboardCard title="STELVIO 헵타곤 (레벨 포지션)">
           {filterRow}
           {body}
         </DashboardCard>
@@ -804,7 +804,7 @@
     }
     return (
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 옥타곤 (레벨 포지션)</h3>
+        <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헵타곤 (레벨 포지션)</h3>
         {filterRow}
         {body}
       </div>

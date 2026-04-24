@@ -2,7 +2,7 @@
  * DashboardDetailTabs - Level 3 탭 구조
  * Tab 1: 나의 성향 (RiderDashboardProfile, RiderPowerProfileTrendCharts)
  * Tab 2: 최근 훈련 (TrainingTrendChart, RiderTimeInZonesCharts, RiderHeartRateProfileTrendCharts)
- * Tab 3: 성장 추이 (STELVIO 옥타곤(레벨) → 나의 성장 트렌드 → 훈련 부하 TSS → VO₂max 트렌드 → 년간 파워PR)
+ * Tab 3: 성장 추이 (STELVIO 헵타곤(레벨) → 나의 성장 트렌드 → 훈련 부하 TSS → VO₂max 트렌드 → 년간 파워PR)
  *
  * 번들러 없이 CDN 사용 환경이므로 React.lazy 대신 조건부 마운트(탭 전환 시에만 렌더)로 성능 최적화
  */
@@ -28,7 +28,7 @@
     { id: 'wkgGuide', label: '라이딩 지표' }
   ];
 
-  /** STELVIO 옥타곤(랭킹 상대%) — N≥100일 때 아래 범·표. N<100은 K·모수 보정(코드: `stelvioOctagonPercentCutoffs`) */
+  /** STELVIO 헵타곤(랭킹 상대%) — N≥100일 때 아래 범·표. N<100은 K·모수 보정(코드: `stelvioOctagonPercentCutoffs`) */
   var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
     { key: 'hc', label: '레벨1', range: '5% 이하', src: 'assets/img/hc.png' },
     { key: 'c1', label: '레벨2', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.png' },
@@ -420,11 +420,11 @@
               className: 'rounded-xl border border-gray-200 bg-white overflow-hidden'
             },
             React.createElement('div', { className: 'px-4 py-3 text-xs text-gray-600' },
-              React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, 'STELVIO 옥타곤 등급표'),
+              React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, 'STELVIO 헵타곤 등급표'),
               React.createElement(
                 'p',
                 { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                '성장 추이 옥타곤(랭킹 기준)에서 사용. 지표(평균 순위 ÷ n) × 100%에 대한 등급입니다. 모수 n이 100 이상(대수)이면 5/10/20/40/60/80%를 그대로 쓰고, 100 미만(소수)이면 K=1+(100−n)/(100+n) 보정과 n 기반 상한이 적용됩니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
+                '성장 추이 헵타곤(랭킹 기준)에서 사용. 지표(평균 순위 ÷ n) × 100%에 대한 등급입니다. 모수 n이 100 이상(대수)이면 5/10/20/40/60/80%를 그대로 쓰고, 100 미만(소수)이면 K=1+(100−n)/(100+n) 보정과 n 기반 상한이 적용됩니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
               ),
               React.createElement('table', { className: 'w-full text-left border-collapse' },
                 React.createElement('thead', null,
