@@ -28,6 +28,17 @@
     { id: 'wkgGuide', label: '라이딩 지표' }
   ];
 
+  /** STELVIO 옥타곤(랭킹 상대%) — 옥타곤 카드 `computePTotalAndTier` 구간과 동일 */
+  var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
+    { key: 'hc', label: 'HC', range: '5% 이하', src: 'assets/img/hc.svg' },
+    { key: 'c1', label: 'Cat 1', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.svg' },
+    { key: 'c2', label: 'Cat 2', range: '10% 초과 ~ 15% 이하', src: 'assets/img/c2.svg' },
+    { key: 'c3', label: 'Cat 3', range: '15% 초과 ~ 30% 이하', src: 'assets/img/c3.svg' },
+    { key: 'c4', label: 'Cat 4', range: '30% 초과 ~ 60% 이하', src: 'assets/img/c4.svg' },
+    { key: 'c5', label: 'Cat 5', range: '60% 초과 ~ 80% 이하', src: 'assets/img/c5.svg' },
+    { key: 'c6', label: 'Cat 6', range: '80% 초과', src: 'assets/img/c6.svg' }
+  ];
+
   /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「라이딩 지표」탭 상단 */
   function RidingMetricsZoneTables(props) {
     var userProfile = props.userProfile;
@@ -308,6 +319,49 @@
                 React.createElement('ul', { className: 'space-y-1 pl-4 list-disc' },
                   React.createElement('li', null, React.createElement('strong', null, '계산식'), ': W/kg = FTP(와트) ÷ 체중(kg) — 소수점 둘째자리'),
                   React.createElement('li', null, '대시보드 "파워" 카드에 ', React.createElement('code', { className: 'bg-gray-100 px-1 rounded' }, wkgVal + ' W/kg'), ' 로 표시')
+                )
+              ),
+              React.createElement(
+                'section',
+                { className: 'border-t border-gray-100 pt-4 mt-1' },
+                React.createElement('div', { className: 'font-semibold text-gray-800 mb-1' }, 'STELVIO 옥타곤 등급표'),
+                React.createElement(
+                  'p',
+                  { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
+                  '성장 추이 옥타곤(랭킹 기준)에서 사용. 코호트 내 (평균 순위 ÷ n) × 100%에 해당하는 구간입니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
+                ),
+                React.createElement('table', { className: 'w-full text-left border-collapse' },
+                  React.createElement('thead', null,
+                    React.createElement('tr', { className: 'border-b border-gray-200' },
+                      React.createElement('th', { className: 'py-1.5 pr-2 w-[22%]' }, '구분'),
+                      React.createElement('th', { className: 'py-1.5' }, '범위(%)'),
+                      React.createElement('th', { className: 'py-1.5 pl-2 w-[88px]' }, '표시')
+                    )
+                  ),
+                  React.createElement(
+                    'tbody',
+                    null,
+                    STELVIO_OCTAGON_TIER_GUIDE_ROWS.map(function(row) {
+                      return React.createElement(
+                        'tr',
+                        { key: 'stelvio-octagon-tier-' + row.key, className: 'border-b border-gray-100' },
+                        React.createElement('td', { className: 'py-1.5 pr-2 font-medium text-gray-800' }, row.label),
+                        React.createElement('td', { className: 'py-1.5 text-gray-600' }, row.range),
+                        React.createElement(
+                          'td',
+                          { className: 'py-1.5 pl-2 align-middle' },
+                          React.createElement('img', {
+                            src: row.src,
+                            alt: row.label,
+                            className: 'h-9 w-9 object-contain',
+                            loading: 'lazy',
+                            decoding: 'async',
+                            draggable: false
+                          })
+                        )
+                      );
+                    })
+                  )
                 )
               ),
               React.createElement('section', null,
