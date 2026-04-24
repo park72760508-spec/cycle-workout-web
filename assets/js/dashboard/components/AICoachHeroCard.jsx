@@ -206,10 +206,14 @@
             type: 'button',
             onClick: function() {
               try {
-                var prefix = 'coach_analysis_v3_' + (userProfile.id || '') + '_';
-                Object.keys(localStorage).forEach(function(k) {
-                  if (k.indexOf(prefix) === 0) localStorage.removeItem(k);
-                });
+                var uid = String(userProfile.id || '');
+                if (uid) {
+                  Object.keys(localStorage).forEach(function(k) {
+                    if (k.indexOf('stelvio_dashboard_ai_coach_') === 0 && k.indexOf('_' + uid + '_') !== -1) {
+                      localStorage.removeItem(k);
+                    }
+                  });
+                }
               } catch (e) {}
               if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
               if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
