@@ -2,7 +2,7 @@
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
  * **집계 순위·레벨%·중앙 배지**: 카드(및 항목별 순위 모달)의 **선택 `gender`·`category`** 로 `heptagon_cohort_ranks` “동일 조건·월(환산) 점수”와 동기화. 7각형 W/kg 레이더는 **건드리지 않음**.
- * **레벨%** `heptagonLevelPercentForRankN`: `finalN` = (가상이면 n+1, 아니면 n), n≥100 → (r/finalN)×100, n<100 → ((r/finalN)/(100/finalN))×100.
+ * **레벨%** `heptagonLevelPercentForRankN`: **모수 n**(카테고리 집계) 기준, 순위 r·클램프(가상 1‥n+1, 실 1‥n). n≥100 → (r÷n)×100, n<100 → n₂=100÷n, ((r÷n)÷n₂)×100(≈n<100은 r과 동일), p는 0~100.
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
  */
@@ -436,7 +436,7 @@
   }
 
   /**
-   * 집계 레벨%: isVirt면 finalN = n+1, 아니면 n. finalN≥100 → (r/finalN)×100, 미만 → 스케일 식. 등급: ≤3%·…
+   * 집계 레벨%: **모수 n**(코호트 인원)으로 분기. n≥100 → (r÷n)×100. n<100 → n₂=100÷n, ((r÷n)÷n₂)×100(=r와 동일·부동소수). 순위 r는 가상이면 1‥(n+1)까지, 실집계면 1‥n. 등급(동물)은 ≤3%·…`heptagonBoardTierIdFromLevelPercent`.
    */
   var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
 
@@ -446,15 +446,17 @@
     var isVirt = isVirtualCohort === true;
     var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
     if (r < 1) r = 1;
-    var finalN = isVirt ? Nc + 1 : Nc;
-    if (r > finalN) r = finalN;
+    var rMax = isVirt ? Nc + 1 : Nc;
+    if (r > rMax) r = rMax;
     var p;
-    if (finalN >= 100) {
-      p = (r / finalN) * 100;
+    if (Nc >= 100) {
+      p = (r / Nc) * 100;
     } else {
-      var n2 = 100 / finalN;
-      p = ((r / finalN) / n2) * 100;
+      var n2 = 100 / Nc;
+      p = ((r / Nc) / n2) * 100;
     }
+    if (!isFinite(p) || p < 0) p = 0;
+    if (p > 100) p = 100;
     return p;
   }
 
@@ -1356,11 +1358,11 @@
                 className="stelvio-heptagon-detail-modal__summary-row"
                 title={
                   isVirtPct
-                    ? '가상: finalN=n+1, 모수≥100 → (r÷finalN)×100, 미만 → ((r÷finalN)÷(100÷finalN))×100'
-                    : '실집계: finalN=n, 위와 동일 식(본인이 모수에 포함)'
+                    ? '가상: 순위 1~n+1(모집 n). n≥100 → (r÷n)×100, n<100 → n₂=100÷n, ((r÷n)÷n₂)×100(상한 100).'
+                    : '실집계: 순위 1~n(모집 n). n≥100 → (r÷n)×100, n<100 → ((r÷n)÷(100÷n))×100'
                 }
               >
-                <span>레벨 % {isVirtPct ? '(가상·finalN=n+1)' : '(실집계·finalN=n)'}</span>
+                <span>레벨 % {isVirtPct ? '(가상, 순위~n+1)' : '(실집계, 1~n)'}</span>
                 <strong>{pT.toFixed(2)}%</strong>
               </div>
             ) : null}
@@ -1380,7 +1382,7 @@
               <div className="stelvio-heptagon-detail-modal__summary-foot">
                 <span className="stelvio-heptagon-detail-modal__nref">
                   참조 코호트(집계) 모수 n = {nC}. <strong>대시보드 헵타곤 중앙</strong>은 카드에서 선택한 성별·부문과
-                  동일·동기화되며, 이 상단 요약은 아래 “동일 조건”과 같은 필터입니다(가상일 때 finalN = n+1).
+                  동일·동기화되며, 이 상단 요약은 아래 “동일 조건”과 같은 필터입니다(가상이면 집계 순위는 1~n+1, 레벨%는 위 모수 n·식).
                 </span>
               </div>
             ) : null}
@@ -1572,8 +1574,8 @@
             <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>7축 환산 합(전면)</strong>이 모든 부문·성별
             문서에 동일 값으로 저장됩니다. 집계 순위(해당 부문이면
             <strong> 본인 정식 순위</strong>, 그렇지 않으면 Supremo 환산 합을 해당 부문 500명 목록에 삽입한
-            <strong> 가상 순위</strong>)과 레벨%는 <code>heptagonLevelPercentForRankN</code>·finalN(실집계 n, 가상 n+1),
-            모수 100 기준으로 나눈 식을 씁니다. <strong>7구간 표(위)</strong>는 W/kg 7축(카드·랭킹과 동일 필터),
+            <strong> 가상 순위</strong>)과 레벨%는 <code>heptagonLevelPercentForRankN</code> — 모집 n 기준(실집계 1~n, 가상 1~n+1)으로
+            n≥100 → (r÷n)×100, n<100 → n₂=100÷n, ((r÷n)÷n₂)×100. <strong>7구간 표(위)</strong>는 W/kg 7축(카드·랭킹과 동일 필터),
             <strong> 대시보드 중앙 배지</strong>는 카드의 성별·부문 필터와 이 화면 “동일 조건”이 일치할 때 동일
             수치로 맞춰집니다.
           </p>
@@ -1599,7 +1601,6 @@
     var _img = useState(false);
     var imgError = _img[0];
     var setImgError = _img[1];
-    var tid = summary && summary.tier ? summary.tier.id : '';
     var rankForUi = null;
     var pShow = -1;
     var nCohortHint = null;
@@ -1610,7 +1611,7 @@
       pShow = hct.pPct >= 0 && isFinite(hct.pPct) ? hct.pPct : -1;
       nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
       nCohortLine = nCohortHint != null ? String(nCohortHint) : '—';
-      virtLabel = hct.isVirtual ? '가상·finalN=n+1' : '실집계·finalN=n';
+      virtLabel = hct.isVirtual ? '가상(순위 1~n+1, 레벨%는 n 기준)' : '실집계(1~n, 모수 n)';
     } else if (hct.kind === 'board_partial') {
       rankForUi = hct.rank != null ? hct.rank : null;
       nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
@@ -1623,6 +1624,10 @@
         ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
         : '';
     var cohortOvlLoading = props.cohortOvlLoading === true || hct.kind === 'board_loading';
+    /** 집계 순위·n·레벨%(`hct.pPct`) → 등급·동물(7축 W/kg 티어가 아닌 동일 조건·월(환산) 점수 기준) */
+    var useCohortRankTier = hct.kind === 'ok' && pShow >= 0 && isFinite(pShow);
+    var cohortTierIdObj = useCohortRankTier ? heptagonBoardTierIdFromLevelPercent(pShow) : null;
+    var tid = cohortTierIdObj ? cohortTierIdObj.id : summary && summary.tier ? summary.tier.id : '';
     useEffect(
       function() {
         setImgError(false);
@@ -1631,7 +1636,9 @@
     );
     if (!summary || !summary.tier) return null;
     var st = tierStyleForId(tid);
-    var label = summary.tier.labelShort || summary.tier.text;
+    var label = cohortTierIdObj
+      ? cohortTierIdObj.labelShort || cohortTierIdObj.text
+      : summary.tier.labelShort || summary.tier.text;
     var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
 
@@ -2694,7 +2701,7 @@
         <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
           <span className="font-medium text-slate-600">집계:</span> 위 <strong>성별·카테고리</strong> = STELVIO 헵타곤 항목별 순위
           <strong>「동일 조건·월(환산) 점수 순위」</strong>·<code>heptagon_cohort_ranks</code>와 연동합니다. 레벨%는
-          <strong> 그 순위</strong>·<strong>대상자 모수 n</strong>·(가상 시 finalN=n+1)로 산출합니다.{nHintLine}
+          <strong> 그 순위 r</strong>·<strong>대상자 모수 n</strong> — n≥100 (r÷n)×100, n<100 n₂=100÷n ((r÷n)÷n₂)×100(가상은 r≤n+1).{nHintLine}
         </p>
       ) : null;
 
