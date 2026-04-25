@@ -1155,14 +1155,8 @@
     var isVirtPct = summary.heptagonBoardVirtualCohort === true;
     var tid = summary.tier.id;
     var nC = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
-    var nCapR = nC > 0 ? (isVirtPct ? nC + 1 : nC) : 0;
-    var rComp = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
-    var rUi =
-      !isNaN(rComp) && nCapR > 0
-        ? Math.max(1, Math.min(nCapR, Math.floor(rComp + 0.5)))
-        : summary.rankAverage != null && isFinite(Number(summary.rankAverage))
-          ? Math.max(1, nCapR > 0 ? Math.min(nCapR, Math.floor(Number(summary.rankAverage) + 0.5)) : Math.floor(Number(summary.rankAverage) + 0.5))
-          : '—';
+    var rUiN = comprehensiveRankUiFromTierSummary(summary);
+    var rUi = rUiN != null ? rUiN : '—';
     var pT =
       summary.pTier != null && isFinite(Number(summary.pTier)) ? Number(summary.pTier) : null;
     var sumP = summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores)) ? Number(summary.sumPositionScores) : null;
@@ -1390,12 +1384,14 @@
                       viewerUserId,
                       viewerGrade
                     );
-                    var rankCell =
-                      row.displayRank != null && isFinite(row.displayRank)
-                        ? String(row.displayRank) + '위'
-                        : row.boardRank != null && isFinite(row.boardRank)
-                          ? String(row.boardRank) + '위'
-                          : '—';
+                    var rankCell;
+                    if (row.boardRank != null && isFinite(row.boardRank)) {
+                      rankCell = String(Math.floor(Number(row.boardRank))) + '위';
+                    } else if (row.displayRank != null && isFinite(row.displayRank)) {
+                      rankCell = String(row.displayRank) + '위';
+                    } else {
+                      rankCell = '—';
+                    }
                     return (
                       <tr
                         key={row.isMe && row.isInserted ? 'me-ins' : 'br-' + (row.userId || idx)}
@@ -1491,14 +1487,7 @@
     var label = summary.tier.labelShort || summary.tier.text;
     var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
-    var nCohort = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
-    var isVirtBoard = summary.heptagonBoardVirtualCohort === true;
-    var rankCap = nCohort > 0 ? (isVirtBoard ? nCohort + 1 : nCohort) : 0;
-    var rSynth = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
-    var rFallback = summary.rankAverage != null && isFinite(Number(summary.rankAverage)) ? Math.round(Number(summary.rankAverage)) : null;
-    var rankForUi = !isNaN(rSynth)
-      ? Math.max(1, rankCap > 0 ? Math.min(rankCap, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)))
-      : rFallback;
+    var rankForUi = comprehensiveRankUiFromTierSummary(summary);
 
     return (
       <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
