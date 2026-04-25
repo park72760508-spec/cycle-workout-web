@@ -57,10 +57,44 @@
     return null;
   }
 
-  /** 동일 조건 표의 n(`heptagonCardBoard.nCohort`)과 집계 ovl `nTotal` 중 유효 값(카테고리·가상 모두) */
-  function heptagonEffectiveCohortNFromBoardAndOvl(boardNCohort, ovl) {
-    var b = boardNCohort | 0;
-    if (b >= 1) return b;
+  /**
+   * 필터된 동일 조건 표 `rows`만으로도 모수 추정: max(boardRank) vs 행 수 중 큰 값(쿼리 n 실패·500명 밖 본인 삽입 등).
+   */
+  function nCohortFromHeptagonBoardRows(boardState) {
+    if (!boardState || boardState.err) {
+      return 0;
+    }
+    var rows = boardState.rows;
+    if (!rows || !rows.length) {
+      return 0;
+    }
+    var maxR = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var br = rows[i] && rows[i].boardRank != null && isFinite(rows[i].boardRank) ? Math.floor(Number(rows[i].boardRank)) : 0;
+      if (br > maxR) {
+        maxR = br;
+      }
+    }
+    var nList = rows.length;
+    return Math.max(maxR, nList) | 0;
+  }
+
+  /** 동일 조건 표 n → 표 rows 산출 → ovl nTotal(집계·가상) 순(카테고리 필터) */
+  function heptagonEffectiveCohortNFromBoardAndOvl(boardState, ovl) {
+    if (!boardState || boardState.err) {
+      if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
+        return ovl.nTotal | 0;
+      }
+      return 0;
+    }
+    var b = boardState.nCohort | 0;
+    if (b >= 1) {
+      return b;
+    }
+    b = nCohortFromHeptagonBoardRows(boardState);
+    if (b >= 1) {
+      return b;
+    }
     if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
       return ovl.nTotal | 0;
     }
@@ -997,7 +1031,10 @@
     if (nQ > 0 && nQ > listN) {
       return listN;
     }
-    return nQ;
+    if (nQ >= 1) {
+      return nQ;
+    }
+    return listN;
   }
 
   /**
@@ -1950,7 +1987,7 @@
           var mineBR = getMyRankFromHeptagonBoardRows(heptagonCardBoard);
           if (mineBR && mineBR.boardRank != null && mineBR.boardRank >= 1) {
             var ovlL = stelvioCohortOvl;
-            var nEff = heptagonEffectiveCohortNFromBoardAndOvl(mineBR.nCohort, ovlL);
+            var nEff = heptagonEffectiveCohortNFromBoardAndOvl(heptagonCardBoard, ovlL);
             if (ovlL && ovlL.loading && nEff < 1) {
               return {
                 kind: 'board_partial',
@@ -2271,7 +2308,9 @@
             var items2 = resA.items || [];
             var nRe2 = reconcileHeptagonCohortNFromList(nTot2, items2);
             var built2 = buildHeptagonModalBoardRows(items2, uidIn, myD, myDS);
-            setBoard({ loading: false, err: null, rows: built2.rows, meInList: built2.meInList, nCohort: nRe2 });
+            var nReFromRows = nCohortFromHeptagonBoardRows({ rows: built2.rows, nCohort: 0, err: null });
+            var nReFinal = Math.max(nRe2, nReFromRows);
+            setBoard({ loading: false, err: null, rows: built2.rows, meInList: built2.meInList, nCohort: nReFinal | 0 });
           } else {
             setBoard({
               loading: false,
