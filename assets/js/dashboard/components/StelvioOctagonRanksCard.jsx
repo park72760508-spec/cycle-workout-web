@@ -902,9 +902,9 @@
     var rComp = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
     var rUi =
       !isNaN(rComp) && nC > 0
-        ? Math.max(1, Math.min(nC, Math.round(rComp)))
+        ? Math.max(1, Math.min(nC, Math.floor(rComp + 0.5)))
         : summary.rankAverage != null && isFinite(Number(summary.rankAverage))
-          ? Math.max(1, nC > 0 ? Math.min(nC, Math.round(Number(summary.rankAverage))) : Math.round(Number(summary.rankAverage)))
+          ? Math.max(1, nC > 0 ? Math.min(nC, Math.floor(Number(summary.rankAverage) + 0.5)) : Math.floor(Number(summary.rankAverage) + 0.5))
           : '—';
     var pT =
       summary.pTier != null && isFinite(Number(summary.pTier)) ? Number(summary.pTier) : null;
@@ -934,7 +934,9 @@
             <div>
               <h3 className="stelvio-heptagon-detail-modal__title" id="stelvio-heptagon-detail-title">STELVIO 헵타곤 · 항목별 순위</h3>
               <p className="stelvio-heptagon-detail-modal__meta">
-                {categoryLabel} · {genderLabel} · {periodLabel}
+                <span>
+                  집계 필터 — 부문(카테고리): {categoryLabel} · 성별: {genderLabel} · {periodLabel}
+                </span>
               </p>
             </div>
             <button
@@ -947,17 +949,23 @@
             </button>
           </div>
           <div className="stelvio-heptagon-detail-modal__summary">
-            <div className="stelvio-heptagon-detail-modal__summary-row">
+            <div className="stelvio-heptagon-detail-modal__summary-row" title="레벨 % 값으로 누적 상위% 구간에 따라 표시">
               <span>레벨</span>
               <strong>{tierLevelDisplayName(tid)}</strong>
             </div>
-            <div className="stelvio-heptagon-detail-modal__summary-row">
+            <div
+              className="stelvio-heptagon-detail-modal__summary-row"
+              title="아래 동일 필터 heptagon_cohort_ranks 집계 표에 나온 나의 순위(부문=전체·성별=전체이면 ‘전면’ 코호트 집계)"
+            >
               <span>종합(환산) 순위</span>
               <strong>{rUi !== '—' ? String(rUi) + '위' : '—'}</strong>
             </div>
             {pT != null ? (
-              <div className="stelvio-heptagon-detail-modal__summary-row">
-                <span>레벨 % (집계 순위)</span>
+              <div
+                className="stelvio-heptagon-detail-modal__summary-row"
+                title="(나의 집계 순위 ÷ 집계 모수 n) × 100 — 선택한 부문·성별 코호트 기준(부문을 바꾸면 나의 순위·n도 그 코호트 기준)"
+              >
+                <span>레벨 % (나의 순위 ÷ 모수 × 100)</span>
                 <strong>{pT.toFixed(2)}%</strong>
               </div>
             ) : null}
@@ -1165,13 +1173,13 @@
             <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
-            레벨%는 (집계 순위 ÷ 모수) × 100이며, 등급은 상위 3%·10%·20%·40%·70%·90%·100% 누적 구간(레벨1~7)으로 정합니다. 모수 100명 이상은
-            이 %로, 모수 100명 미만은 동일 누적%를 랭크에 맞게
-            <code> ceil(누적%×모수/100) </code>
-            식의 상한으로 나누어 등급이 배정됩니다. 7구간 항목별 표는(위) 7축 랭킹 합 S 기반(표기 N위)이며, 아래 집계 표는
-            <code> heptagon_cohort_ranks</code>의 동일 월·필터 환산 점수 합 순(최대 500행)입니다. ‘전체(Supremo)’가 아닐 때는 그 부문 소속 집계
-            뿐입니다. 본인이 상위 500에 없으면
-            <code> boardRank</code>에 맞춰 본인 행을 끼워 넣어 표시합니다.
+            <strong>요약(상단)</strong>: 레벨·레벨%·종합(환산) 순위는 모두 상단
+            <strong>「집계 필터 — 부문·성별」</strong>에 맞는 <code>heptagon_cohort_ranks</code> 한 코호트(동일 월) 기준입니다. 레벨% = (나의
+            집계 순위 ÷ 모수 n) × 100, 레벨은 그 %로 누적 상한(3,10,20,40,70,90) 구간에 맞게 부여합니다(모수 100명 미만은
+            <code>ceil(누적%×n/100)</code> 랭크로 구간). 부문(카테고리)을 바꾸면 그 부문·성별에 속한 인원만의 표에서 순위가
+            1,2,3…이며, 요약의 순위·%·레벨도 <strong>그 동일 집계</strong>에 맞춰집니다(전체+전체=전면 코호트).
+            <strong>7구간 표</strong>는(위) 7축 W/kg 합 S 기반이고, <strong>아래 표</strong>는 환산 점수 합 집계(최대 500행)입니다. 목록
+            500에 없을 때 <code>boardRank</code>에 맞춰 본인 행을 끼워 넣습니다.
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
