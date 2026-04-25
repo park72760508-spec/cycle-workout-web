@@ -1,8 +1,8 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
- * **집계 순위·레벨%·이미지(중앙)**: `heptagon_cohort_ranks` **선택 성별 + 선택 카테고리(부문)** 문서와 동일(항목별 순위 팝업 `동일 조건·월(환산) 점수 순위`와 대응). 성별=전체·카테고리=전체(Supremo)이면 **종합(전면) 순위·모수**; 부문/성별을 바꾸면 **해당 필터의 boardRank·n**. 환산 합(점수)은 전면 집계값이 코호트 문서에 공통 저장됨.
- * **레벨%**: 모수 n≥100 → (순위÷n)×100. n<100 → (순위÷n) ÷ (100÷n) × 100(= 항목별 순위 팝업과 동일).
+ * **집계 순위·레벨%·이미지(중앙—헵타곤)**: `동일 조건·월(환산) 점수 순위`와 **동일**한 `heptagon_cohort_ranks` 조회, 단 **성별=전체·부문=전체(Supremo)만** 사용(본인 `boardRank`·코호트 모수 n). 7각형 W/kg·필터는 **선택 성별·부문** 그대로.
+ * **레벨%**: (순위 r ÷ (코호트 모수 n + 1)) × 100 — “나”를 모수+1에 반영. (팝업 상단 요약은 항목별 순위 화면의 필터별 동일 쿼리)
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
  */
@@ -397,7 +397,7 @@
   }
 
   /**
-   * 집계 레벨%: n≥100 → (r÷n)×100. n<100 → (r÷n)÷(100÷n)×100(= r와 동일 스케일 1~100, 소집단 보정).
+   * 집계 레벨%: (r ÷ (n + 1)) × 100 — 코호트 모수 n에 본인(1)을 더한 분모(항목별 순위·heptagon_cohort_ranks와 동일).
    * 등급: ≤3%·(3,7]·…·(90,100] → HC~C6(레벨1~7).
    */
   var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
@@ -408,11 +408,8 @@
     var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
     if (r < 1) r = 1;
     if (r > Nc) r = Nc;
-    if (Nc >= 100) {
-      return (r / Nc) * 100;
-    }
-    var nScale = 100 / Nc;
-    return (r / Nc) / nScale;
+    var denom = Nc + 1;
+    return (r / denom) * 100;
   }
 
   function heptagonBoardTierIdFromLevelPercent(p) {
@@ -1055,7 +1052,7 @@
           <div className="stelvio-heptagon-detail-modal__summary">
             <div
               className="stelvio-heptagon-detail-modal__summary-row"
-              title="3·7·20·40·60·90% 경계(레벨1~7). 집계 순위·레벨%·모수 n은 선택한 성별·부문(heptagon_cohort_ranks)과 동일"
+              title="3·7·20·40·60·90% 경계(레벨1~7). 집계 순위·레벨%·n은 이 화면에서 선택한 성별·부문(heptagon_cohort_ranks)과 동일. 본인 부문이면 집계(boardRank) 순위, 그 밖이면 환산 합 비교·삽입 순위"
             >
               <span>레벨</span>
               <strong>{tierLevelDisplayName(tid)}</strong>
@@ -1064,8 +1061,8 @@
               className="stelvio-heptagon-detail-modal__summary-row"
               title={
                 isBoardSupremoAll
-                  ? '성별·부문(전체) 기준 전면(종합) 집계 순위 — 환산 합은 Supremo와 동일 값'
-                  : '선택 부문·성별 코호트에서의 환산 합(전면과 동일 점수) 집계 순위'
+                  ? '다른 필터: 동일한 환산 합(전면)으로 전·후면(종합) 집계 순위'
+                  : '선택 부문·성별에서 동일한 환산 합(전면)으로 코호트 내 순위 — 본인 부문이면 본인 집계 순위'
               }
             >
               <span>{isBoardSupremoAll ? '종합(환산) 순위' : '집계 순위 (필터)'}</span>
@@ -1074,13 +1071,9 @@
             {pT != null ? (
               <div
                 className="stelvio-heptagon-detail-modal__summary-row"
-                title={
-                  nC >= 100
-                    ? '레벨% = (순위 r ÷ 모수 n) × 100'
-                    : '모수 n<100: 보정 n₂=100÷n, 레벨% = (r÷n)÷n₂ (순위 팝업과 동일)'
-                }
+                title="레벨% = (순위 r ÷ (모수 n + 1)) × 100 — 본인 1을 모수에 반영 (n+1 분모)"
               >
-                <span>레벨 % {nC >= 100 || nC < 1 ? '(순위÷모수×100)' : '(소집단 보정)'}</span>
+                <span>레벨 % (순위÷(n+1)×100)</span>
                 <strong>{pT.toFixed(2)}%</strong>
               </div>
             ) : null}
@@ -1098,13 +1091,10 @@
             ) : null}
             {nC > 0 ? (
               <div className="stelvio-heptagon-detail-modal__summary-foot">
-                <span className="stelvio-heptagon-detail-modal__nref">참조 코호트(집계) 모수 n = {nC}</span>
-              </div>
-            ) : null}
-            {nC > 0 && nC < 100 ? (
-              <div className="stelvio-heptagon-detail-modal__summary-foot">
                 <span className="stelvio-heptagon-detail-modal__nref">
-                  모수 n이 100명 미만: n₂=100÷n, 레벨%=(순위÷n)÷n₂. 위 3·7·20·40·60·90% 경계로 레벨1~7을 정합니다(항목별 순위·동일 조건과 일치).
+                  참조 코호트(집계) 모수 n = {nC}. 대시보드 <strong>헵타곤(레벨 포지션)</strong> 중앙 배지는
+                  <strong> 성별·부문 ‘전체’</strong> 집계(레벨%는 순위÷(n+1)×100%와 동일 식)이며, 이 상단 요약은
+                  “동일 조건”에 선택한 필터 기준입니다.
                 </span>
               </div>
             ) : null}
@@ -1295,11 +1285,12 @@
             <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
-            <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>7축 환산 합(전면 랭크 기준)</strong>이 모든 부문·성별
-            문서에 동일 값으로 저장됩니다. 선택한 부문·성별에서 그 합으로 내림차순 1,2,3… 집계 순위(헵타곤 중앙·레벨%와 동일)입니다. 레벨%는
-            모수 n≥100일 때 (순위÷n)×100%, n{'<'}100일 때 (순위÷n)÷(100÷n)×100%입니다. <strong>7구간 표(위)</strong>는 W/kg
-            7축(랭킹보드와 동일 필터), <strong>아래 표</strong>는 동일 조건·환산 합(최대 500행)입니다. 목록 밖이면
-            <code>boardRank</code>에 맞게 본인 행을 삽입해 순위를 맞춥니다.
+            <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>7축 환산 합(전면)</strong>이 모든 부문·성별
+            문서에 동일 값으로 저장됩니다. 선택한 부문·성별에서 그 합으로 집계 순위(본인이 해당 부문이면
+            <strong> 본인 정식 순위</strong>, 열람만 하면 본인 환산 합을 끼워 넣은 순위)이며, 레벨%는
+            (순위 ÷ (모수 n+1)) × 100%입니다. <strong>7구간 표(위)</strong>는 W/kg 7축(랭킹보드·카드와 동일 필터),
+            <strong>아래 표</strong>는 동일 조건·환산 합(최대 500행)입니다. <strong>헵타곤(레벨 포지션) 중앙 배지</strong>는
+            <strong> 성별·부문 둘 다 전체</strong>일 때의 순위·레벨%·레벨을 표기합니다(대시보드).
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
@@ -1389,10 +1380,10 @@
               aria-pressed={showPct}
               aria-label={
                 (rankForUi != null
-                  ? levelName + ', 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                  ? levelName + ', 전면·성별전체 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '% (순위÷(n+1)×100). '
                   : levelName + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '클릭하여 순위·% 힌트 표시/숨김'
               }
-              title="클릭: 순위·레벨% 툴팁"
+              title="전면·성별전체 집계 순위·레벨% — 클릭: 툴팁"
               onClick={function(e) {
                 e.stopPropagation();
                 setShowPct(!showPct);
@@ -1509,13 +1500,13 @@
         var prE = window.getStelvioHeptagonCohortEntry({
           userId: uid,
           monthKey: mk,
-          filterCategory: category,
-          filterGender: gender
+          filterCategory: 'Supremo',
+          filterGender: 'all'
         });
         var prN = window.queryStelvioHeptagonCohortBoardN({
           monthKey: mk,
-          filterCategory: category,
-          filterGender: gender
+          filterCategory: 'Supremo',
+          filterGender: 'all'
         });
         Promise.all([prE, prN])
           .then(function(pair) {
@@ -1545,7 +1536,7 @@
             setStelvioCohortOvl({ loading: false, err: true, skip: true });
           });
       },
-      [uid, gender, category]
+      [uid]
     );
 
     useEffect(
@@ -1665,12 +1656,12 @@
         if (!heptagonDetailOpen) {
           return stelvioCohortOvl;
         }
-        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+        if (heptagonModalGender === 'all' && heptagonModalCategory === 'Supremo') {
           return stelvioCohortOvl;
         }
         return stelvioCohortOvlModal;
       },
-      [heptagonDetailOpen, heptagonModalGender, heptagonModalCategory, gender, category, stelvioCohortOvl, stelvioCohortOvlModal]
+      [heptagonDetailOpen, heptagonModalGender, heptagonModalCategory, stelvioCohortOvl, stelvioCohortOvlModal]
     );
 
     var heptagonModalHeaderSummary = useMemo(
@@ -1739,7 +1730,7 @@
         if (!heptagonDetailOpen || !uid) {
           return;
         }
-        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+        if (heptagonModalGender === 'all' && heptagonModalCategory === 'Supremo') {
           setStelvioCohortOvlModal({ useCard: true, loading: false });
           return;
         }
@@ -1788,7 +1779,7 @@
             setStelvioCohortOvlModal({ loading: false, err: true, skip: true, useCard: false });
           });
       },
-      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category]
+      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory]
     );
 
     useEffect(
@@ -2217,10 +2208,19 @@
       );
     }
 
+    var heptagonLevelHint =
+      uid ? (
+        <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
+          <span className="font-medium text-slate-600">레벨·순위·%:</span> 부문·성별 <strong>전체</strong> 집계(동일 조건·환산 점수 순위와
+          동일 쿼리) · 레벨% = 순위÷(n+1)×100%
+        </p>
+      ) : null;
+
     if (DashboardCard) {
       return (
         <DashboardCard title="STELVIO 헵타곤 (레벨 포지션)">
           {filterRow}
+          {heptagonLevelHint}
           {body}
           {heptagonDetailModal}
         </DashboardCard>
@@ -2230,6 +2230,7 @@
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헵타곤 (레벨 포지션)</h3>
         {filterRow}
+        {heptagonLevelHint}
         {body}
         {heptagonDetailModal}
       </div>
