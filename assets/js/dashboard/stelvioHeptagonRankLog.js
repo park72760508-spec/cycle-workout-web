@@ -12,6 +12,20 @@
   var COL_COHORT = 'heptagon_cohort_ranks';
 
   /** `scheduledHeptagonCohortRanks`가 쓰는 문서 ID — 이웃 표 집계 순위용 */
+  /**
+   * Supremo가 아닐 때: 문서의 ageCategory가 선택 부문과 같을 때만 집계 행으로 인정(구버전 가상부문 문서 제외).
+   */
+  function stelvioCohortRowMatchesFilter(cohortData, filterCategory) {
+    if (!cohortData) return false;
+    var f = String(filterCategory != null ? filterCategory : 'Supremo');
+    if (f === 'Supremo') return true;
+    var ac = cohortData.ageCategory != null ? String(cohortData.ageCategory) : '';
+    if (f === 'Assoluto') {
+      return ac === 'Assoluto';
+    }
+    return ac === f;
+  }
+
   function heptagonCohortDocId(monthKey, filterCategory, filterGender, userId) {
     var m = String(monthKey || '');
     var c = String(filterCategory != null ? filterCategory : 'Supremo');
@@ -49,7 +63,11 @@
         if (typeof snap.exists !== 'boolean') {
           return { ok: false, data: null, error: 'no-snap' };
         }
-        return { ok: true, exists: true, data: snap.data() || null };
+        var d = snap.data() || null;
+        if (d && !stelvioCohortRowMatchesFilter(d, o.filterCategory)) {
+          return { ok: true, exists: false, data: null };
+        }
+        return { ok: true, exists: true, data: d };
       })
       .catch(function (e) {
         if (typeof console !== 'undefined' && console.warn) {
@@ -169,6 +187,9 @@
         var items = [];
         qs.forEach(function (d) {
           var x = d.data();
+          if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
+            return;
+          }
           x._id = d.id;
           items.push(x);
         });
@@ -278,6 +299,9 @@
         var qsDown = ress[1];
         var mapItem = function (doc) {
           var d = doc.data() || {};
+          if (!stelvioCohortRowMatchesFilter(d, filterCategory)) {
+            return null;
+          }
           return {
             userId: d.userId != null ? String(d.userId) : doc.id,
             displayName: (d.displayName && String(d.displayName).trim()) || '—',
@@ -298,7 +322,10 @@
             if (!d || !d.id) return;
             var rowUid = d.data() && d.data().userId != null ? String(d.data().userId) : '';
             if (myUserId && rowUid === String(myUserId)) return;
-            above.push(mapItem(d));
+            var item = mapItem(d);
+            if (item) {
+              above.push(item);
+            }
           });
         }
         if (qsDown && qsDown.forEach) {
@@ -306,7 +333,10 @@
             if (!d || !d.id) return;
             var rowUid2 = d.data() && d.data().userId != null ? String(d.data().userId) : '';
             if (myUserId && rowUid2 === String(myUserId)) return;
-            below.push(mapItem(d));
+            var item2 = mapItem(d);
+            if (item2) {
+              below.push(item2);
+            }
           });
         }
         // sum > mySum, orderBy sum asc 쿼리 결과 — 표시: 나에 **가장 가까운(점수 차 작은)** 이웃이 먼저(위쪽)
@@ -338,4 +368,5 @@
   };
   window.getStelvioHeptagonCohortEntry = getStelvioHeptagonCohortEntry;
   window.heptagonCohortDocId = heptagonCohortDocId;
+  window.stelvioCohortRowMatchesFilter = stelvioCohortRowMatchesFilter;
 })();
