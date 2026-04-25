@@ -528,6 +528,12 @@
     var label = summary.tier.labelShort || summary.tier.text;
     var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
+    var nCohort = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
+    var rSynth = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
+    var rFallback = summary.rankAverage != null && isFinite(Number(summary.rankAverage)) ? Math.round(Number(summary.rankAverage)) : null;
+    var rankForUi = !isNaN(rSynth)
+      ? Math.max(1, nCohort > 0 ? Math.min(nCohort, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)))
+      : rFallback;
 
     return (
       <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
@@ -537,12 +543,14 @@
             className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
             aria-pressed={showPct}
             aria-label={
-              levelName + ', ' + label + ', 상위 ' + pShow.toFixed(1) + '%. 탭하면 백분위 표시'
+              (rankForUi != null
+                ? levelName + ', ' + label + ', 종합 ' + String(rankForUi) + '위, ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                : levelName + ', ' + label + ', ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '탭하여 상세 표시'
             }
             onClick={function() {
               setShowPct(!showPct);
             }}
-            title="탭하여 백분위 보기"
+            title="탭하여 순위·% 표시"
           >
             <div className="stelvio-octagon-tier-btn-stack">
               {!imgError ? (
@@ -570,10 +578,23 @@
             </div>
           </button>
           <div
-            className={'stelvio-octagon-tier-hint ' + (showPct ? 'stelvio-octagon-tier-hint--visible' : '')}
+            className={
+              'stelvio-octagon-tier-hint ' +
+              (rankForUi != null ? 'stelvio-octagon-tier-hint--split ' : '') +
+              (showPct ? 'stelvio-octagon-tier-hint--visible' : '')
+            }
             role="status"
           >
-            상위 {pShow.toFixed(1)}%
+            {rankForUi != null ? (
+              <span className="stelvio-octagon-tier-hint-split">
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">{String(rankForUi) + '위'}</span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
+                  {pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) : '—'}%
+                </span>
+              </span>
+            ) : (
+              <span>{pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) + '%' : '—'}</span>
+            )}
           </div>
         </div>
       </div>
