@@ -1827,13 +1827,6 @@
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
     var userAgeCatStr = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
 
-    var _g = useState('all');
-    var gender = _g[0];
-    var setGender = _g[1];
-    var _c = useState('Supremo');
-    var category = _c[0];
-    var setCategory = _c[1];
-
     var _rankMeta = useState({ ageCategory: '', loaded: false });
     var rankingMeta = _rankMeta[0];
     var setRankingMeta = _rankMeta[1];
@@ -1863,6 +1856,13 @@
       },
       [rankingMeta.ageCategory, userAgeCatStr]
     );
+
+    var _g = useState('all');
+    var gender = _g[0];
+    var setGender = _g[1];
+    var _c = useState('Supremo');
+    var category = _c[0];
+    var setCategory = _c[1];
 
     var _s = useState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
     var state = _s[0];
@@ -2024,12 +2024,35 @@
                 );
               })();
 
-        /**
-         * getStelvioOctagonRanksCache 랭킹-only 캐시는 화면에 쓰지 않고(W/kg·norm), 성공 시 set만.
-         * 늦은 Promise가 앞서 완료된 setState를 덮지 않게 — 공유 ref+시작/cleanup 이중 ++는 완료 시점에 mySeq !== ref로 **성공 setState가 전부 막힐 수** 있어,
-         * effect 인스턴스별 cancelled만 사용(카테고리/성별 변경·Strict 언마운트 시 이전 비동기 무효).
-         */
-        var cancelled = false;
+        if (typeof window.getStelvioOctagonRanksCache === 'function') {
+          var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
+          if (cached && cached.monthly && cached.hof) {
+            setState(
+              stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
+            );
+            fetchRanksSet(uid, 'monthly', gender, 'Supremo')
+              .then(function(sRows) {
+                setState(function(prev) {
+                  if (!prev || !prev.monthly) {
+                    return prev;
+                  }
+                  return Object.assign({}, prev, {
+                    supremoMonthly: {
+                      ranks: sRows.map(function(x) {
+                        return x.rank;
+                      }),
+                      cohortSizePerAxis: sRows.map(function(x) {
+                        return x.n;
+                      })
+                    }
+                  });
+                });
+              })
+              .catch(function() {});
+            return;
+          }
+        }
+
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
         Promise.all([
           fetchRanksSet(uid, 'monthly', gender, category),
@@ -2037,9 +2060,6 @@
           fetchRanksSet(uid, 'monthly', gender, 'Supremo')
         ])
           .then(function(results) {
-            if (cancelled) {
-              return;
-            }
             var mRows = results[0];
             var hRows = results[1];
             var sRows = results[2];
@@ -2062,29 +2082,8 @@
             }
           })
           .catch(function() {
-            if (cancelled) {
-              return;
-            }
-            var cPayload = null;
-            if (typeof window.getStelvioOctagonRanksCache === 'function') {
-              cPayload = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
-            }
-            if (cPayload && cPayload.monthly && cPayload.hof) {
-              setState(
-                stateFromRanksArray(
-                  cPayload.monthly.ranks,
-                  cPayload.monthly.cohortSizePerAxis,
-                  cPayload.hof.ranks
-                )
-              );
-            } else {
-              setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
-            }
+            setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
           });
-
-        return function stelvioOctaFetchCleanup() {
-          cancelled = true;
-        };
       },
       [uid, gender, category]
     );
