@@ -2,7 +2,8 @@
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
  * **레벨(배지)**: 항목별 **포지션 점수** 0~100 (1등→100, 꼴등→0, 중간=선형) → 7개 합·평균 → `pTier=100-평균`
- *   (상위% 유사) + `stelvioOctagonPercentCutoffs(N)`(N<100 K 보정) → HC~Cat6. 면적 기반 pComprehensive는 보조.
+ *   (상위% 유사) + `stelvioOctagonPercentCutoffs(N)`(N<100 K 보정) → HC~Cat6.
+ * **종합 N위**는 7축 **유효순위(effective rank)의 산술평균**(반올림) — 레이더 면적 보간(nRef까지 붕괴)은 사용하지 않음.
  * Firestore: `heptagon_rank_log/{uid}` — `saveStelvioHeptagonRankLog` / `getStelvioHeptagonRankLog`
  * (종합 N위 `comprehensiveRank`·티어 캐시, 로딩 시 선표시).
  */
@@ -299,9 +300,8 @@
   }
 
   /**
-   * 화면과 동일한 꼭짓점(각 축 rankToRadiusNorm)으로 면적 A 산출 후,
-   * [전축 1위·전축 n_ref위]의 면적 사이에 선형 보간해 **종합 순위(상위%와 동일 축)**: 넓을수록 1에 가깝.
-   * 반환: pComprehensive = (rSynth/nRef)*100, rSynthetic
+   * 레이더 꼭짓점(norm = 각 축 rankToRadiusNorm)으로 다각형 면적 A만 산출(차트/참고).
+   * 종합 N위·% 표시는 **7축 유효순위 산술평균**을 사용하며, 이 면적 보간값은 **표시·종합순위에 쓰지 않음** (과거엔 rSynth로 nRef 꼴찌가 나올 수 있음).
    */
   function comprehensivePercentFromDisplayNorm(norm, nRef) {
     if (!norm || norm.length < 3 || nRef < 1) return null;
@@ -399,7 +399,8 @@
 
   /**
    * 레벨: 7축 **포지션 점수** 합(0~700)·평균(0~100) → `pTier = 100 - 평균` (낮을수록 상위) + 구간(소수 n은 K·상한).
-   * 면적 기반 pComprehensive·rankAverage(참고)는 유지. 그래프 `displayNorm`는 기존 log 스케일.
+   * **종합 N위(`comprehensiveRank`)** = 축마다 `effectiveRankForAverage` 합/7(실수; UI는 반올림), 항상 1~nRef 띠 안에서 해석.
+   * `pComprehensive` = (위 평균 / nRef)·100, 면적과 독립. 그래프 `displayNorm`는 기존 log 스케일.
    */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
     if (!ranks || !cohortNPerAxis || ranks.length !== N_WKG_AXES || cohortNPerAxis.length !== N_WKG_AXES) {
@@ -429,7 +430,9 @@
     }
     if (!allOk) return null;
 
-    var rAvg = Math.round(sumR / N_WKG_AXES);
+    var rMean = sumR / N_WKG_AXES;
+    if (!isFinite(rMean)) return null;
+    var rAvg = Math.round(rMean);
     if (rAvg < 1) rAvg = 1;
     if (rAvg > nRef) rAvg = nRef;
 
@@ -450,7 +453,7 @@
     var tier = tierIdFromPAndPercentCutoffs(pTier, cspec.cutoffs);
 
     var comp = comprehensivePercentFromDisplayNorm(displayNorm, nRef);
-    var pComprehensive = comp && isFinite(comp.pComprehensive) ? comp.pComprehensive : pTier;
+    var pComprehensive = nRef >= 1 ? (rMean / nRef) * 100 : pTier;
 
     return {
       itemP: posScores,
@@ -459,8 +462,8 @@
       avgPositionScore: avgPos,
       pTotal: pTier,
       pTier: pTier,
-      /** 구 방식(평균순위/n) 참고 */
-      pLegacyRankAvg: (rAvg / nRef) * 100,
+      /** 평균 유효순위 / nRef · 100 (면적·rSynth와 무관) */
+      pLegacyRankAvg: pComprehensive,
       rankAverage: rAvg,
       cohortN: nRef,
       tier: tier,
@@ -471,7 +474,8 @@
       octagonArea: comp ? comp.area : null,
       octagonAreaMax: comp ? comp.aMax : null,
       octagonAreaMin: comp ? comp.aMin : null,
-      comprehensiveRank: comp ? comp.rSynthetic : rAvg,
+      /** 7축 유효순위 산술평균(실수) — 툴팁 N위·Firestore는 반올림/클램프 */
+      comprehensiveRank: rMean,
       pComprehensive: pComprehensive
     };
   }
