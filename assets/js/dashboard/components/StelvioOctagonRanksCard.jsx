@@ -2,7 +2,7 @@
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
  * **집계 순위·레벨%·이미지(중앙—헵타곤)**: `동일 조건·월(환산) 점수 순위`와 **동일**한 `heptagon_cohort_ranks` 조회, 단 **성별=전체·부문=전체(Supremo)만** 사용(본인 `boardRank`·코호트 모수 n). 7각형 W/kg·필터는 **선택 성별·부문** 그대로.
- * **레벨%**: (순위 r ÷ (코호트 모수 n + 1)) × 100 — “나”를 모수+1에 반영. (팝업 상단 요약은 항목별 순위 화면의 필터별 동일 쿼리)
+ * **레벨%**: 실집계(Supremo·해당 부문에 본인 포함) → (r÷n)×100. 타 부문 **가상** 순위만 (r÷(n+1))×100. (팝업 상단은 필터·동일 쿼리)
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
  */
@@ -397,19 +397,23 @@
   }
 
   /**
-   * 집계 레벨%: (r ÷ (n + 1)) × 100 — 코호트 모수 n에 본인(1)을 더한 분모(항목별 순위·heptagon_cohort_ranks와 동일).
-   * 등급: ≤3%·(3,7]·…·(90,100] → HC~C6(레벨1~7).
+   * 집계 레벨%: `isVirtualCohort`가 아니면 (r÷n)×100 — Supremo·본인 부문 실집계에 본인이 n에 이미 포함.
+   * 가상 순위(다른 부문 열람)일 때만 (r÷(n+1))×100. 등급: ≤3%·(3,7]·…·(90,100] → HC~C6(레벨1~7).
    */
   var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
 
-  function heptagonLevelPercentForRankN(boardRank, n) {
+  function heptagonLevelPercentForRankN(boardRank, n, isVirtualCohort) {
     var Nc = n | 0;
     if (Nc < 1) return 0;
+    var isVirt = isVirtualCohort === true;
     var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
     if (r < 1) r = 1;
+    if (isVirt) {
+      if (r > Nc + 1) r = Nc + 1;
+      return (r / (Nc + 1)) * 100;
+    }
     if (r > Nc) r = Nc;
-    var denom = Nc + 1;
-    return (r / denom) * 100;
+    return (r / Nc) * 100;
   }
 
   function heptagonBoardTierIdFromLevelPercent(p) {
@@ -437,19 +441,20 @@
     return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
   }
 
-  function heptagonBoardTierObjectFromRankN(boardRank, n) {
+  function heptagonBoardTierObjectFromRankN(boardRank, n, isVirtualCohort) {
     var Nc = n | 0;
     if (Nc < 1) {
       return { tier: { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' }, mode: 'none', pRank: 0, upperRankBounds: null };
     }
-    var p = heptagonLevelPercentForRankN(boardRank, Nc);
+    var p = heptagonLevelPercentForRankN(boardRank, Nc, isVirtualCohort);
     return { tier: heptagonBoardTierIdFromLevelPercent(p), mode: 'percent', pRank: p, upperRankBounds: null };
   }
 
   /**
    * `heptagon_cohort_ranks` 집계(월·필터): 전면 환산 합 기준 집계 순위, 레벨%·레벨은 `heptagonBoardTierObjectFromRankN`.
    * @param {object|null} tierBase 7축·합산(포지션 점수) 기반 요약
-   * @param {{ loading?: boolean, skip?: boolean, err?: boolean, nTotal?: number, boardRank?: number, cohortData?: object }} ovl
+   * @param {{ loading?: boolean, skip?: boolean, err?: boolean, nTotal?: number, boardRank?: number, cohortData?: object, isVirtualCohort?: boolean }} ovl
+   *         `isVirtualCohort`: 타 부문 가상 순위로 합성할 때만 true → 레벨% (r÷(n+1))×100. Firestore 실문서·Supremo·본인 부문은 false.
    */
   function applyCohortBoardMerge(tierBase, ovl) {
     if (!tierBase) {
@@ -479,8 +484,13 @@
     if (br == null || !isFinite(br)) {
       return tierBase;
     }
-    br = Math.max(1, Math.min(nTot, Math.floor(Number(br))));
-    var hb = heptagonBoardTierObjectFromRankN(br, nTot);
+    var isVirt = ovl.isVirtualCohort === true;
+    if (!isVirt) {
+      br = Math.max(1, Math.min(nTot, Math.floor(Number(br))));
+    } else {
+      br = Math.max(1, Math.min(nTot + 1, Math.floor(Number(br))));
+    }
+    var hb = heptagonBoardTierObjectFromRankN(br, nTot, isVirt);
     var pRank = hb.pRank;
     var out = Object.assign({}, tierBase);
     out.pTier = pRank;
@@ -489,6 +499,7 @@
     out.comprehensiveRank = br;
     out.rankAverage = br;
     out.cohortN = nTot;
+    out.heptagonBoardVirtualCohort = isVirt;
     out.tier = hb.tier;
     out.tierPercentCutoffs = HEPTAGON_BOARD_PCT_CUTS;
     out.kAdjust = 1;
@@ -998,6 +1009,7 @@
       return null;
     }
     var isBoardSupremoAll = String(boardG) === 'all' && String(boardC) === 'Supremo';
+    var isVirtPct = summary.heptagonBoardVirtualCohort === true;
     var tid = summary.tier.id;
     var nC = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
     var rComp = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
@@ -1071,9 +1083,13 @@
             {pT != null ? (
               <div
                 className="stelvio-heptagon-detail-modal__summary-row"
-                title="레벨% = (순위 r ÷ (모수 n + 1)) × 100 — 본인 1을 모수에 반영 (n+1 분모)"
+                title={
+                  isVirtPct
+                    ? '가상 순위(타 부문): 레벨% = (순위 r ÷ (n+1))×100'
+                    : '실집계(Supremo·본인 부문): 레벨% = (순위 r ÷ n)×100 (본인이 모수 n에 포함)'
+                }
               >
-                <span>레벨 % (순위÷(n+1)×100)</span>
+                <span>레벨 % {isVirtPct ? '(가상: 순위÷(n+1)×100)' : '(실집계: 순위÷n×100)'}</span>
                 <strong>{pT.toFixed(2)}%</strong>
               </div>
             ) : null}
@@ -1092,9 +1108,9 @@
             {nC > 0 ? (
               <div className="stelvio-heptagon-detail-modal__summary-foot">
                 <span className="stelvio-heptagon-detail-modal__nref">
-                  참조 코호트(집계) 모수 n = {nC}. 대시보드 <strong>헵타곤(레벨 포지션)</strong> 중앙 배지는
-                  <strong> 성별·부문 ‘전체’</strong> 집계(레벨%는 순위÷(n+1)×100%와 동일 식)이며, 이 상단 요약은
-                  “동일 조건”에 선택한 필터 기준입니다.
+                  참조 코호트(집계) 모수 n = {nC}. 대시보드 <strong>헵타곤(레벨 포지션)</strong> 중앙은
+                  <strong> Supremo·성별전체</strong> 실집계(레벨% 순위÷n×100)입니다. 이 상단은 아래
+                  “동일 조건” 필터이며, 타 부문 열람(가상)일 때만 레벨%에 (n+1) 분모를 씁니다.
                 </span>
               </div>
             ) : null}
@@ -1286,11 +1302,12 @@
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
             <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>7축 환산 합(전면)</strong>이 모든 부문·성별
-            문서에 동일 값으로 저장됩니다. 선택한 부문·성별에서 그 합으로 집계 순위(본인이 해당 부문이면
-            <strong> 본인 정식 순위</strong>, 열람만 하면 본인 환산 합을 끼워 넣은 순위)이며, 레벨%는
-            (순위 ÷ (모수 n+1)) × 100%입니다. <strong>7구간 표(위)</strong>는 W/kg 7축(랭킹보드·카드와 동일 필터),
-            <strong>아래 표</strong>는 동일 조건·환산 합(최대 500행)입니다. <strong>헵타곤(레벨 포지션) 중앙 배지</strong>는
-            <strong> 성별·부문 둘 다 전체</strong>일 때의 순위·레벨%·레벨을 표기합니다(대시보드).
+            문서에 동일 값으로 저장됩니다. 선택한 부문·성별에서 그 합으로             집계 순위(본인이 해당 부문이면
+            <strong> 본인 정식 순위</strong>, 열람만 하면 본인 환산 합을 끼워 넣은 가상 순위)이며, 레벨%는
+            <strong> 실집계(Supremo·본인 부문)는 (순위÷n)×100% </strong>, <strong>타 부문 열람(가상)은 (순위÷(n+1))×100% </strong>
+            입니다. <strong>7구간 표(위)</strong>는 W/kg 7축(랭킹보드·카드와 동일 필터), <strong>아래 표</strong>는 동일
+            조건·환산 합(최대 500행)입니다. <strong>헵타곤(레벨 포지션) 중앙</strong>은
+            <strong> Supremo·성별전체</strong> 실집계 순위·레벨%·레벨입니다.
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
@@ -1380,10 +1397,10 @@
               aria-pressed={showPct}
               aria-label={
                 (rankForUi != null
-                  ? levelName + ', 전면·성별전체 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '% (순위÷(n+1)×100). '
+                  ? levelName + ', 전면·성별전체 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '% (순위÷n×100, 실집계). '
                   : levelName + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '클릭하여 순위·% 힌트 표시/숨김'
               }
-              title="전면·성별전체 집계 순위·레벨% — 클릭: 툴팁"
+              title="전면·성별전체 실집계 — 레벨% 순위÷n×100 — 클릭: 툴팁"
               onClick={function(e) {
                 e.stopPropagation();
                 setShowPct(!showPct);
@@ -2211,8 +2228,8 @@
     var heptagonLevelHint =
       uid ? (
         <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
-          <span className="font-medium text-slate-600">레벨·순위·%:</span> 부문·성별 <strong>전체</strong> 집계(동일 조건·환산 점수 순위와
-          동일 쿼리) · 레벨% = 순위÷(n+1)×100%
+          <span className="font-medium text-slate-600">레벨·순위·%:</span> 부문·성별 <strong>전체</strong> 집계(동일 조건·환산 점수) ·
+          레벨% = <strong>순위÷n×100</strong> (본인이 모수에 포함) · 타 부문 열람 가상일 때만 (n+1) 분모
         </p>
       ) : null;
 
