@@ -6,7 +6,7 @@
  * **종합 N위**는 7축 **포지션 점수(0~100·축·코호트)** 를 합산(0~700)한 `sumPositionScores`로,
  * `1 + (1 - S/700)·(nRef-1)` 이식을 적용해 1~nRef 띠에 대응(합이 클수록 상위, 면적·rSynth 미사용).
  * Firestore: `heptagon_rank_log/{uid}` — `saveStelvioHeptagonRankLog` / `getStelvioHeptagonRankLog`
- * (종합 N위 `comprehensiveRank`·티어 캐시, 로딩 시 선표시).
+ * (종합 N위 `comprehensiveRank`·티어 캐시, 로딩 시 선표시). 레벨 클릭 → 항목별 순위·환산(0~100) 팝업.
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -597,11 +597,218 @@
     return m[tierId] || '레벨7';
   }
 
+  /** 축별 표용 행(랭킹 동기화 완료 시) */
+  function buildHeptagonDetailRows(monthly, tierSummary) {
+    if (!monthly || !monthly.ranks || !monthly.cohortSizePerAxis || !tierSummary) return null;
+    var ranks = monthly.ranks;
+    var ns = monthly.cohortSizePerAxis;
+    var ps = tierSummary.positionScores100 || tierSummary.itemP || [];
+    if (!Array.isArray(ranks) || ranks.length !== N_WKG_AXES) return null;
+    var nRef = tierSummary.cohortN != null && isFinite(Number(tierSummary.cohortN)) ? Math.max(0, Math.floor(Number(tierSummary.cohortN))) : 0;
+    var out = [];
+    for (var i = 0; i < N_WKG_AXES; i++) {
+      var nAxis = (ns[i] | 0) > 0 ? ns[i] | 0 : nRef;
+      out.push({
+        key: AXES[i].key,
+        label: AXES[i].label,
+        rank: ranks[i] != null && isFinite(Number(ranks[i])) ? Number(ranks[i]) : null,
+        n: nAxis,
+        score: ps[i] != null && isFinite(Number(ps[i])) ? Number(ps[i]) : null
+      });
+    }
+    return out;
+  }
+
+  /** Firestore heptagon_rank_log 본(로딩 중 직전 저장값) */
+  function buildHeptagonDetailRowsFromLog(d, nowMonthKey, g, c) {
+    if (!d || d.monthKey !== nowMonthKey || d.filterGender !== g || d.filterCategory !== c) {
+      return null;
+    }
+    var ranks = d.ranks;
+    var ns = d.cohortNPerAxis;
+    var ps = d.positionScores100;
+    if (!Array.isArray(ranks) || ranks.length !== N_WKG_AXES) return null;
+    var nRef = d.nRef != null && isFinite(Number(d.nRef)) ? Math.max(0, Math.floor(Number(d.nRef))) : 0;
+    var out = [];
+    for (var i = 0; i < N_WKG_AXES; i++) {
+      var nAxis = Array.isArray(ns) && (ns[i] | 0) > 0 ? ns[i] | 0 : nRef;
+      var score = null;
+      if (Array.isArray(ps) && ps[i] != null && isFinite(Number(ps[i]))) {
+        score = Number(ps[i]);
+      }
+      out.push({
+        key: AXES[i].key,
+        label: AXES[i].label,
+        rank: ranks[i] != null && isFinite(Number(ranks[i])) ? Number(ranks[i]) : null,
+        n: nAxis,
+        score: score
+      });
+    }
+    return out;
+  }
+
+  function HeptagonRankDetailModal(props) {
+    var onClose = props.onClose;
+    var genderLabel = props.genderLabel;
+    var categoryLabel = props.categoryLabel;
+    var periodLabel = props.periodLabel;
+    var rows = props.rows;
+    var summary = props.tierSummary;
+    useEffect(
+      function() {
+        if (!onClose) return;
+        var h = function(e) {
+          if (e.key === 'Escape') {
+            onClose();
+          }
+        };
+        window.addEventListener('keydown', h);
+        return function() {
+          window.removeEventListener('keydown', h);
+        };
+      },
+      [onClose]
+    );
+    if (!summary || !summary.tier) {
+      return null;
+    }
+    var tid = summary.tier.id;
+    var nC = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
+    var rComp = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
+    var rUi =
+      !isNaN(rComp) && nC > 0
+        ? Math.max(1, Math.min(nC, Math.round(rComp)))
+        : summary.rankAverage != null && isFinite(Number(summary.rankAverage))
+          ? Math.max(1, nC > 0 ? Math.min(nC, Math.round(Number(summary.rankAverage))) : Math.round(Number(summary.rankAverage)))
+          : '—';
+    var pT =
+      summary.pTier != null && isFinite(Number(summary.pTier)) ? Number(summary.pTier) : null;
+    var sumP = summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores)) ? Number(summary.sumPositionScores) : null;
+    var avgP = summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore)) ? Number(summary.avgPositionScore) : null;
+
+    return (
+      <div
+        className="stelvio-heptagon-detail-modal"
+        style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+        onClick={function(e) {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
+        role="presentation"
+      >
+        <div
+          className="stelvio-heptagon-detail-modal__panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stelvio-heptagon-detail-title"
+          onClick={function(e) {
+            e.stopPropagation();
+          }}
+        >
+          <div className="stelvio-heptagon-detail-modal__head">
+            <div>
+              <h3 className="stelvio-heptagon-detail-modal__title" id="stelvio-heptagon-detail-title">STELVIO 헵타곤 · 항목별 순위</h3>
+              <p className="stelvio-heptagon-detail-modal__meta">
+                {categoryLabel} · {genderLabel} · {periodLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="stelvio-heptagon-detail-modal__close"
+              onClick={onClose}
+              aria-label="닫기"
+            >
+              ×
+            </button>
+          </div>
+          <div className="stelvio-heptagon-detail-modal__summary">
+            <div className="stelvio-heptagon-detail-modal__summary-row">
+              <span>레벨</span>
+              <strong>
+                {tierLevelDisplayName(tid)} · {summary.tier.labelShort || summary.tier.text}
+              </strong>
+            </div>
+            <div className="stelvio-heptagon-detail-modal__summary-row">
+              <span>종합(환산) 순위</span>
+              <strong>{rUi !== '—' ? String(rUi) + '위' : '—'}</strong>
+            </div>
+            {pT != null ? (
+              <div className="stelvio-heptagon-detail-modal__summary-row">
+                <span>레벨 % (pTier)</span>
+                <strong>{pT.toFixed(2)}%</strong>
+              </div>
+            ) : null}
+            {sumP != null ? (
+              <div className="stelvio-heptagon-detail-modal__summary-row">
+                <span>7축 점수 합 (0~700)</span>
+                <strong>
+                  {sumP.toFixed(1)}
+                  {avgP != null ? ' (평균 ' + avgP.toFixed(2) + ')' : ''}
+                </strong>
+              </div>
+            ) : null}
+            {nC > 0 ? (
+              <div className="stelvio-heptagon-detail-modal__summary-foot">
+                <span className="stelvio-heptagon-detail-modal__nref">참조 코호트 최대 n = {nC}</span>
+              </div>
+            ) : null}
+          </div>
+          {rows && rows.length ? (
+            <div className="stelvio-heptagon-detail-modal__tablewrap">
+              <table className="stelvio-heptagon-detail-modal__table" role="grid">
+                <caption className="stelvio-heptagon-detail-modal__caption">카테고리·부문별 7구간 피크 파워 순위와 환산 점수</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">구간</th>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      순위
+                    </th>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      인원(n)
+                    </th>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      환산(0~100)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(function(row) {
+                    return (
+                      <tr key={row.key || row.label}>
+                        <td>{row.label}</td>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.rank != null && isFinite(row.rank) ? String(Math.floor(row.rank)) + '위' : '—'}
+                        </td>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.n != null && (row.n | 0) > 0 ? String(row.n) : '—'}
+                        </td>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.score != null && isFinite(row.score) ? row.score.toFixed(1) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="stelvio-heptagon-detail-modal__empty">항목별 순위·점수는 랭킹 동기화 직후 표시됩니다.</p>
+          )}
+          <p className="stelvio-heptagon-detail-modal__note">환산 점수: 1위=100, 꼴등=0 (해당 구간·코호트 기준 선형). 종합 N위는 7개 합·nRef 띠 이식.</p>
+          <div className="stelvio-heptagon-detail-modal__actions">
+            <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
+              닫기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function OctagonTierCenterOverlay(props) {
     var summary = props.summary;
-    var _d = useState(false);
-    var showPct = _d[0];
-    var setShowPct = _d[1];
+    var onOpenDetail = props.onOpenDetail;
     var _img = useState(false);
     var imgError = _img[0];
     var setImgError = _img[1];
@@ -638,16 +845,20 @@
           <button
             type="button"
             className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
-            aria-pressed={showPct}
+            aria-expanded={onOpenDetail ? 'false' : undefined}
+            aria-haspopup={onOpenDetail ? 'dialog' : undefined}
             aria-label={
               (rankForUi != null
                 ? levelName + ', ' + label + ', 종합 ' + String(rankForUi) + '위, ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
-                : levelName + ', ' + label + ', ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '탭하여 상세 표시'
+                : levelName + ', ' + label + ', ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') +
+              (onOpenDetail ? '클릭하여 항목별 순위·환산 점수 보기' : '')
             }
             onClick={function() {
-              setShowPct(!showPct);
+              if (typeof onOpenDetail === 'function') {
+                onOpenDetail();
+              }
             }}
-            title="탭하여 순위·% 표시"
+            title={onOpenDetail ? '클릭: 항목별 순위·환산 점수' : undefined}
           >
             <div className="stelvio-octagon-tier-btn-stack">
               {!imgError ? (
@@ -678,7 +889,7 @@
             className={
               'stelvio-octagon-tier-hint ' +
               (rankForUi != null ? 'stelvio-octagon-tier-hint--split ' : '') +
-              (showPct ? 'stelvio-octagon-tier-hint--visible' : '')
+              'stelvio-octagon-tier-hint--visible'
             }
             role="status"
           >
@@ -719,6 +930,9 @@
     var _hLog = useState(null);
     var heptagonRankLog = _hLog[0];
     var setHeptagonRankLog = _hLog[1];
+    var _dOpen = useState(false);
+    var heptagonDetailOpen = _dOpen[0];
+    var setHeptagonDetailOpen = _dOpen[1];
 
     useEffect(
       function() {
@@ -818,6 +1032,31 @@
         return computePTotalAndTier(state.monthly.ranks, state.monthly.cohortSizePerAxis);
       },
       [state.loading, state.monthly]
+    );
+
+    var heptagonModalSummary =
+      state.monthly && tierSummary
+        ? tierSummary
+        : heptagonSummaryCache;
+
+    var heptagonDetailRows = useMemo(
+      function() {
+        if (state.monthly && tierSummary) {
+          return buildHeptagonDetailRows(state.monthly, tierSummary);
+        }
+        if (heptagonRankLog) {
+          return buildHeptagonDetailRowsFromLog(heptagonRankLog, currentMonthKeyKst(), gender, category);
+        }
+        return null;
+      },
+      [state.monthly, tierSummary, heptagonRankLog, gender, category]
+    );
+
+    useEffect(
+      function() {
+        setHeptagonDetailOpen(false);
+      },
+      [gender, category, uid]
     );
 
     useEffect(
@@ -1034,6 +1273,26 @@
       );
     }
 
+    var onHeptagonOpenDetail = function() {
+      if (heptagonModalSummary) {
+        setHeptagonDetailOpen(true);
+      }
+    };
+
+    var heptagonDetailModal =
+      heptagonDetailOpen && heptagonModalSummary ? (
+        <HeptagonRankDetailModal
+          onClose={function() {
+            setHeptagonDetailOpen(false);
+          }}
+          tierSummary={heptagonModalSummary}
+          rows={heptagonDetailRows}
+          genderLabel={labelForGender(gender)}
+          categoryLabel={labelForCategory(category)}
+          periodLabel="최근 30일 피크 파워(월)"
+        />
+      ) : null;
+
     var body = null;
     if (!uid) {
       body = (
@@ -1046,7 +1305,7 @@
         body = (
           <div className="h-[220px] flex flex-col items-center justify-center">
             <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px] flex items-center justify-center min-h-[200px]">
-              <OctagonTierCenterOverlay summary={heptagonSummaryCache} />
+              <OctagonTierCenterOverlay summary={heptagonSummaryCache} onOpenDetail={onHeptagonOpenDetail} />
             </div>
             <p className="text-xs text-center text-slate-500 mt-0 px-2">최신 헵타곤 순위를 동기화하는 중… (직전 저장값 표시)</p>
             <div
@@ -1072,7 +1331,7 @@
         <div>
           <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px]">
             {svg}
-            {tierSummary ? <OctagonTierCenterOverlay summary={tierSummary} /> : null}
+            {tierSummary ? <OctagonTierCenterOverlay summary={tierSummary} onOpenDetail={onHeptagonOpenDetail} /> : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
@@ -1093,6 +1352,7 @@
         <DashboardCard title="STELVIO 헵타곤 (레벨 포지션)">
           {filterRow}
           {body}
+          {heptagonDetailModal}
         </DashboardCard>
       );
     }
@@ -1101,6 +1361,7 @@
         <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헵타곤 (레벨 포지션)</h3>
         {filterRow}
         {body}
+        {heptagonDetailModal}
       </div>
     );
   }
