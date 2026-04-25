@@ -11,6 +11,54 @@
   /** 랭킹·이웃: Cloud Function `scheduledHeptagonCohortRanks`가 채움 */
   var COL_COHORT = 'heptagon_cohort_ranks';
 
+  /** `scheduledHeptagonCohortRanks`가 쓰는 문서 ID — 이웃 표 집계 순위용 */
+  function heptagonCohortDocId(monthKey, filterCategory, filterGender, userId) {
+    var m = String(monthKey || '');
+    var c = String(filterCategory != null ? filterCategory : 'Supremo');
+    var g = String(filterGender != null ? filterGender : 'all');
+    var u = String(userId != null ? userId : '').replace(/\//g, '_');
+    return m + '_' + c + '_' + g + '_' + u;
+  }
+
+  /**
+   * @param {{ userId: string, monthKey?: string, filterCategory?: string, filterGender?: string }} o
+   * @returns {Promise<{ ok: boolean, exists?: boolean, data?: object|null, error?: string }>}
+   */
+  function getStelvioHeptagonCohortEntry(o) {
+    o = o || {};
+    if (!o.userId || !window.firestoreV9) {
+      return Promise.resolve({ ok: false, data: null, error: 'no-uid' });
+    }
+    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+      .then(function (mod) {
+        if (!mod || !mod.getDoc || !mod.doc || !mod.collection) {
+          return { __cohortErr: 'no-mod' };
+        }
+        var id = heptagonCohortDocId(o.monthKey, o.filterCategory, o.filterGender, o.userId);
+        var ref = mod.doc(mod.collection(window.firestoreV9, COL_COHORT), id);
+        return mod.getDoc(ref);
+      })
+      .then(function (snap) {
+        if (snap && snap.__cohortErr) {
+          return { ok: false, data: null, error: snap.__cohortErr };
+        }
+        if (snap == null) return { ok: false, data: null, error: 'no-snap' };
+        if (typeof snap.exists === 'boolean' && !snap.exists) {
+          return { ok: true, exists: false, data: null };
+        }
+        if (typeof snap.exists !== 'boolean') {
+          return { ok: false, data: null, error: 'no-snap' };
+        }
+        return { ok: true, exists: true, data: snap.data() || null };
+      })
+      .catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[getStelvioHeptagonCohortEntry]', e && e.message ? e.message : e);
+        }
+        return { ok: false, data: null, error: String(e && e.message ? e.message : e) };
+      });
+  }
+
   function monthKeyKst() {
     var t = new Date();
     var y = t.getFullYear();
@@ -204,18 +252,18 @@
         var col = mod.collection(window.firestoreV9, COL_COHORT);
         var qUp = mod.query(
           col,
-          mod.where('monthKey', '==', monthKey),
           mod.where('filterCategory', '==', filterCategory),
           mod.where('filterGender', '==', filterGender),
+          mod.where('monthKey', '==', monthKey),
           mod.where('sumPositionScores', '>', mySum),
           mod.orderBy('sumPositionScores', 'asc'),
           mod.limit(lim)
         );
         var qDown = mod.query(
           col,
-          mod.where('monthKey', '==', monthKey),
           mod.where('filterCategory', '==', filterCategory),
           mod.where('filterGender', '==', filterGender),
+          mod.where('monthKey', '==', monthKey),
           mod.where('sumPositionScores', '<', mySum),
           mod.orderBy('sumPositionScores', 'desc'),
           mod.limit(lim)
@@ -261,12 +309,13 @@
             below.push(mapItem(d));
           });
         }
+        // sum > mySum, orderBy sum asc 쿼리 결과 — 표시: 나에 **가장 가까운(점수 차 작은)** 이웃이 먼저(위쪽)
         above.sort(function (a, b) {
           var sa = a.sumPositionScores;
           var sb = b.sumPositionScores;
           if (sa == null) return 1;
           if (sb == null) return -1;
-          return sb - sa;
+          return sa - sb;
         });
         return { ok: true, above: above, below: below, error: null };
       })
@@ -287,4 +336,6 @@
   window.getStelvioHeptagonCohortCollectionName = function () {
     return COL_COHORT;
   };
+  window.getStelvioHeptagonCohortEntry = getStelvioHeptagonCohortEntry;
+  window.heptagonCohortDocId = heptagonCohortDocId;
 })();
