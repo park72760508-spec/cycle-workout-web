@@ -1868,7 +1868,6 @@
     var state = _s[0];
     var setState = _s[1];
     var saveKeyRef = useRef('');
-    var stelvioOctaFetchSeqRef = useRef(0);
     var heptagonLogReqRef = useRef(0);
     var stelvioOvlReqRef = useRef(0);
     var stelvioOvlModalReqRef = useRef(0);
@@ -2012,7 +2011,6 @@
     useEffect(
       function() {
         if (!uid) {
-          stelvioOctaFetchSeqRef.current = stelvioOctaFetchSeqRef.current + 1;
           setState({ loading: false, err: 'noUser', monthly: null, hof: null, supremoMonthly: null });
           return;
         }
@@ -2027,11 +2025,11 @@
               })();
 
         /**
-         * 랭킹-only localStorage 캐시(getStelvioOctagonRanksCache)는 W/kg이 없어 면·norm이 틀어짐 — 화면에는 **쓰지 않음**. 성공 시 setStelvioOctagonRanksCache만.
-         * 카테고리/성별을 바꾸면 effect가 겹쳐 **늦게 도착한 Promise**가 최신 setState를 덮는 문제 → 시퀀스 ref로 최신 run만 반영(예전: 다른 부문 fetch 완료가 전체·전체 화면을 덮어쌈).
+         * getStelvioOctagonRanksCache 랭킹-only 캐시는 화면에 쓰지 않고(W/kg·norm), 성공 시 set만.
+         * 늦은 Promise가 앞서 완료된 setState를 덮지 않게 — 공유 ref+시작/cleanup 이중 ++는 완료 시점에 mySeq !== ref로 **성공 setState가 전부 막힐 수** 있어,
+         * effect 인스턴스별 cancelled만 사용(카테고리/성별 변경·Strict 언마운트 시 이전 비동기 무효).
          */
-        stelvioOctaFetchSeqRef.current = stelvioOctaFetchSeqRef.current + 1;
-        var mySeq = stelvioOctaFetchSeqRef.current;
+        var cancelled = false;
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
         Promise.all([
           fetchRanksSet(uid, 'monthly', gender, category),
@@ -2039,7 +2037,7 @@
           fetchRanksSet(uid, 'monthly', gender, 'Supremo')
         ])
           .then(function(results) {
-            if (mySeq !== stelvioOctaFetchSeqRef.current) {
+            if (cancelled) {
               return;
             }
             var mRows = results[0];
@@ -2064,7 +2062,7 @@
             }
           })
           .catch(function() {
-            if (mySeq !== stelvioOctaFetchSeqRef.current) {
+            if (cancelled) {
               return;
             }
             var cPayload = null;
@@ -2085,7 +2083,7 @@
           });
 
         return function stelvioOctaFetchCleanup() {
-          stelvioOctaFetchSeqRef.current = stelvioOctaFetchSeqRef.current + 1;
+          cancelled = true;
         };
       },
       [uid, gender, category]
