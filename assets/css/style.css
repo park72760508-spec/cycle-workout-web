@@ -5551,7 +5551,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-heptagon-detail-modal__panel {
   width: 100%;
-  max-width: 22rem;
+  max-width: 26rem;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -5704,6 +5704,39 @@ body:has(#trainingDetailModal:not(.hidden)) {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+.stelvio-heptagon-detail-modal__neighborhead {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4c1d95;
+  margin: 0.5rem 0 0.35rem 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid #e9d5ff;
+}
+.stelvio-heptagon-detail-modal__tablewrap--neighbor {
+  max-height: 12rem;
+}
+.stelvio-heptagon-detail-modal__tr--me td {
+  background: #f5f3ff;
+  border-top: 1px solid #ddd6fe;
+  border-bottom: 1px solid #ddd6fe;
+}
+.stelvio-heptagon-detail-modal__tr--me strong {
+  color: #5b21b6;
+}
+.stelvio-heptagon-detail-modal__neighborload,
+.stelvio-heptagon-detail-modal__neighboreq {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #94a3b8;
+  margin: 0.3rem 0 0.4rem 0;
+}
+.stelvio-heptagon-detail-modal__neighboreq {
+  color: #b45309;
+  background: #fffbeb;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.35rem;
+  border: 1px solid #fde68a;
 }
 
 /* ② 내 랭킹 요약 Hero 카드 */
