@@ -165,7 +165,104 @@
   }
 
   window.saveStelvioHeptagonRankLog = saveStelvioHeptagonRankLog;
+  /**
+   * 모달: 동일 month·필터에서 환산점수 합(sumPositionScores)이 나보다 **바로** 높/낮은 사용자 최대 3명씩.
+   * - 위: sum > mySum, orderBy sum ASC(가장 낮은 증가부터=나에 가장 가까운 3) → UI에서 점수 높은 순으로 표시
+   * - 아래: sum < mySum, orderBy sum DESC(가장 높은 감소부터=가장 가까운 3)
+   */
+  function queryStelvioHeptagonSumNeighbors(o) {
+    o = o || {};
+    if (!window.firestoreV9) {
+      return Promise.resolve({ ok: false, above: [], below: [], error: 'no-db' });
+    }
+    var mySum = Number(o.mySum);
+    if (!isFinite(mySum)) {
+      return Promise.resolve({ ok: false, above: [], below: [], error: 'bad-sum' });
+    }
+    var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
+    var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
+    var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
+    var myUserId = o.myUserId != null ? String(o.myUserId) : '';
+    var lim = o.limit | 0;
+    if (lim < 1) lim = 3;
+    if (lim > 10) lim = 10;
+
+    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+      .then(function (mod) {
+        if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
+          return { ok: false, above: [], below: [], error: 'no-mod' };
+        }
+        var col = mod.collection(window.firestoreV9, COL);
+        var qUp = mod.query(
+          col,
+          mod.where('monthKey', '==', monthKey),
+          mod.where('filterCategory', '==', filterCategory),
+          mod.where('filterGender', '==', filterGender),
+          mod.where('sumPositionScores', '>', mySum),
+          mod.orderBy('sumPositionScores', 'asc'),
+          mod.limit(lim)
+        );
+        var qDown = mod.query(
+          col,
+          mod.where('monthKey', '==', monthKey),
+          mod.where('filterCategory', '==', filterCategory),
+          mod.where('filterGender', '==', filterGender),
+          mod.where('sumPositionScores', '<', mySum),
+          mod.orderBy('sumPositionScores', 'desc'),
+          mod.limit(lim)
+        );
+        return Promise.all([mod.getDocs(qUp), mod.getDocs(qDown)]);
+      })
+      .then(function (ress) {
+        if (!ress || ress.length < 2) {
+          return { ok: false, above: [], below: [], error: 'no-result' };
+        }
+        var qsUp = ress[0];
+        var qsDown = ress[1];
+        var mapItem = function (doc) {
+          var d = doc.data() || {};
+          return {
+            userId: d.userId != null ? String(d.userId) : doc.id,
+            displayName: (d.displayName && String(d.displayName).trim()) || '—',
+            sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : null,
+            rank: d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank)) ? Math.floor(Number(d.comprehensiveRank)) : null
+          };
+        };
+        var above = [];
+        var below = [];
+        if (qsUp && qsUp.forEach) {
+          qsUp.forEach(function (d) {
+            if (!d || !d.id) return;
+            if (myUserId && d.id === myUserId) return;
+            above.push(mapItem(d));
+          });
+        }
+        if (qsDown && qsDown.forEach) {
+          qsDown.forEach(function (d) {
+            if (!d || !d.id) return;
+            if (myUserId && d.id === myUserId) return;
+            below.push(mapItem(d));
+          });
+        }
+        above.sort(function (a, b) {
+          var sa = a.sumPositionScores;
+          var sb = b.sumPositionScores;
+          if (sa == null) return 1;
+          if (sb == null) return -1;
+          return sb - sa;
+        });
+        return { ok: true, above: above, below: below, error: null };
+      })
+      .catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[queryStelvioHeptagonSumNeighbors]', e && e.message ? e.message : e);
+        }
+        return { ok: false, above: [], below: [], error: String(e && e.message ? e.message : e) };
+      });
+  }
+
   window.getStelvioHeptagonRankLog = getStelvioHeptagonRankLog;
+  window.queryStelvioHeptagonSumNeighbors = queryStelvioHeptagonSumNeighbors;
   window.queryStelvioHeptagonRankTop = queryStelvioHeptagonRankTop;
   window.getStelvioHeptagonRankLogCollectionName = function () {
     return COL;
