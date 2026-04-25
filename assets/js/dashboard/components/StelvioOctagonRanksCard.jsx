@@ -1,7 +1,7 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
- * **레벨(배지)·레벨%**: `heptagon_cohort_ranks` 집계 — 전면(Supremo) 환산 합 `sumPositionScores`가 부문 공통·부문 내 순위·레벨%만 `boardRank/모수`·보정%로 7구간(3·7·20·40·60·90%) → HC~C6(레벨1~7). 모수<100: 레벨% = (r/n)·100·(100/n).
+ * **레벨(배지)·레벨%**: 전면 환산 합으로 전체 정렬 후 카테고리·성별만 필터 → 그 코호트에서의 `boardRank`·모수 n으로 **레벨% = (순위÷n)×100%**(모수 100 미만도 동일). 3·7·20·40·60·90% 구간 → HC~C6(레벨1~7).
  * **7축** 면적·로컬 `compute` 티어는 `applyCohortBoardMerge`로 **집계** 레벨(위)이 덮어씀.
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업에서 성별·부문 선택 → 해당 필터 `heptagon_cohort_ranks` 순위표.
  */
@@ -396,7 +396,7 @@
   }
 
   /**
-   * 집계 레벨%: n≥100 → (r/n)·100, n<100 → (r/n)·100·(100/n). 등급: ≤3%·(3,7]·(7,20]·(20,40]·(40,60]·(60,90]·(90,100] → HC~C6(레벨1~7).
+   * 집계 레벨%: 항상 (순위 r ÷ 필터 코호트 모수 n) × 100. 등급: ≤3%·(3,7]·…·(90,100] → HC~C6(레벨1~7).
    */
   var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
 
@@ -406,9 +406,7 @@
     var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
     if (r < 1) r = 1;
     if (r > Nc) r = Nc;
-    var raw = (r / Nc) * 100;
-    if (Nc >= 100) return raw;
-    return raw * (100 / Nc);
+    return (r / Nc) * 100;
   }
 
   function heptagonBoardTierIdFromLevelPercent(p) {
@@ -490,7 +488,7 @@
     out.cohortN = nTot;
     out.tier = hb.tier;
     out.tierPercentCutoffs = HEPTAGON_BOARD_PCT_CUTS;
-    out.kAdjust = nTot < 100 ? 100 / nTot : 1;
+    out.kAdjust = 1;
     out.isLargeCohort = nTot >= 100;
     out.heptagonBoardTierMode = hb.mode;
     out.heptagonBoardUpperRankBounds = hb.upperRankBounds;
@@ -914,7 +912,7 @@
     out0.tier = hb0.tier;
     out0.tierPercentCutoffs = HEPTAGON_BOARD_PCT_CUTS;
     out0.isLargeCohort = nC >= 100;
-    out0.kAdjust = nC < 100 ? 100 / nC : 1;
+    out0.kAdjust = 1;
     out0.heptagonBoardTierMode = hb0.mode;
     out0.heptagonBoardUpperRankBounds = hb0.upperRankBounds;
     if (me0.sumPositionScores != null && isFinite(Number(me0.sumPositionScores))) {
@@ -1035,9 +1033,9 @@
             {pT != null ? (
               <div
                 className="stelvio-heptagon-detail-modal__summary-row"
-                title="n≥100: (r÷n)×100% — n&lt;100: (r÷n)×100%×(100÷n) 보정"
+                title="필터된 순위 r, 필터된 모수 n — 레벨% = (r÷n)×100%"
               >
-                <span>레벨 % (카테고리순위÷모수×100, n&lt;100 시 보정)</span>
+                <span>레벨 % (필터 순위÷필터 모수×100)</span>
                 <strong>{pT.toFixed(2)}%</strong>
               </div>
             ) : null}
@@ -1065,7 +1063,7 @@
             {nC > 0 && nC < 100 ? (
               <div className="stelvio-heptagon-detail-modal__summary-foot">
                 <span className="stelvio-heptagon-detail-modal__nref">
-                  모수 n &lt; 100: 레벨%에 <code>×(100÷n)</code> 보정 후 위 3·7·20·40·60·90% 경계로 레벨을 정합니다.
+                  모수 100명 미만이어도 레벨%는 (필터 순위÷필터 모수)×100%로 산정한 뒤, 위 3·7·20·40·60·90% 경계로 레벨을 정합니다.
                 </span>
               </div>
             ) : null}
@@ -1254,8 +1252,8 @@
           <p className="stelvio-heptagon-detail-modal__note">
             <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>전면(Supremo) 7축 환산 합</strong>이 모든 부문·성별
             문서에 동일하게 저장됩니다. 부문을 바꾸면 그 부문(및 성별) 인원만 모아 <strong>그 동일한 합</strong>으로 내림차순
-            1,2,3… 순위를 씁니다(별도 환산·재계산 없음). 레벨%는 카테고리(집계) 기준: n≥100은 (순위÷n)×100%,
-            n&lt;100은 <code>×(100÷n)</code> 보정 후 위 구간(3·7·20·40·60·90%)에 따라 레벨1~7을 정합니다. <strong>7구간 표(위)</strong>는
+            1,2,3… 순위를 씁니다(별도 환산·재계산 없음). 레벨%는 <strong>필터된 순위·필터된 모수</strong>로 항상 (순위÷n)×100%이며,
+            모수가 100명 미만이어도 동일 식입니다. 그 값으로 3·7·20·40·60·90% 구간에 따라 레벨1~7을 정합니다. <strong>7구간 표(위)</strong>는
             W/kg 7축, <strong>아래 표</strong>는 집계 환산 합(최대 500행)입니다. 목록 밖이면 <code>boardRank</code> 위치에 본인 행을
             끼워 넣습니다.
           </p>
