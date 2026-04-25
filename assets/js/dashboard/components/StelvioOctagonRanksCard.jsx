@@ -1,8 +1,8 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
- * **레벨(배지)·레벨%**: 7축 합/평균 → 가교 후, `heptagon_cohort_ranks` 집계(월·필터) **boardRank / 코호트 인원 N** →
- *   (boardRank / N)·100%로 `pTier`·`HC~Cat6` ( `stelvioOctagonPercentCutoffs(N)` , N<100 K 보정).
+ * **레벨(배지)·레벨%**: `heptagon_cohort_ranks` 집계 (boardRank/N)·100% + 상위 누적 3·10·20·40·70·90% (레벨1~6 경계) → HC~C5, 나머지 C6.
+ *   N<100: 동일 누적%로 `ceil(누적%*N/100)` 랭크 상한(단조)으로 구간 배정. 대시보드 7축 `compute` 티어는 `applyCohortBoardMerge`로 덮어씀.
  * **7축 내부** 순위/환산은 기존 포지션 점수; 코호트 탭과 일치하도록 `applyCohortBoardMerge`.
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업에서 성별·부문 선택 → 해당 필터 `heptagon_cohort_ranks` 순위표.
  */
@@ -397,7 +397,63 @@
   }
 
   /**
-   * `heptagon_cohort_ranks` 집계(월·필터): 레벨% = (boardRank / N)·100, 레벨은 `stelvioOctagonPercentCutoffs(N)` (N<100 보정).
+   * STELVIO 헵타곤 집계 레벨% = (boardRank/모수)·100. 등급은 누적 상위% (3,10,20,40,70,90) 구간.
+   * N≥100: %만으로 비교. N<100: 동일 누적%에 대응하는 **랭크 상한**(ceil(누적%*N/100), 단조)으로 구간 배정.
+   */
+  var HEPTAGON_BOARD_CUM_PCT = [3, 10, 20, 40, 70, 90];
+
+  function heptagonBoardTierObjectFromRankN(boardRank, n) {
+    var Nc = n | 0;
+    if (Nc < 1) {
+      return { tier: { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' }, mode: 'none', pRank: 0, upperRankBounds: null };
+    }
+    var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
+    if (r < 1) {
+      r = 1;
+    }
+    if (r > Nc) {
+      r = Nc;
+    }
+    var p = (r / Nc) * 100;
+    if (Nc >= 100) {
+      return {
+        tier: tierIdFromPAndPercentCutoffs(p, HEPTAGON_BOARD_CUM_PCT),
+        mode: 'percent',
+        pRank: p,
+        upperRankBounds: null
+      };
+    }
+    var u = [];
+    for (var k = 0; k < 6; k++) {
+      u.push(Math.min(Nc, Math.ceil((HEPTAGON_BOARD_CUM_PCT[k] * Nc) / 100)));
+    }
+    for (var t = 1; t < 6; t++) {
+      if (u[t] < u[t - 1]) u[t] = u[t - 1];
+    }
+    if (Nc >= 1 && u[0] < 1) u[0] = 1;
+    if (r <= u[0]) {
+      return { tier: { id: 'HC', text: 'HC', labelShort: 'HC' }, mode: 'rank', pRank: p, upperRankBounds: u };
+    }
+    if (r <= u[1]) {
+      return { tier: { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' }, mode: 'rank', pRank: p, upperRankBounds: u };
+    }
+    if (r <= u[2]) {
+      return { tier: { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' }, mode: 'rank', pRank: p, upperRankBounds: u };
+    }
+    if (r <= u[3]) {
+      return { tier: { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' }, mode: 'rank', pRank: p, upperRankBounds: u };
+    }
+    if (r <= u[4]) {
+      return { tier: { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' }, mode: 'rank', pRank: p, upperRankBounds: u };
+    }
+    if (r <= u[5]) {
+      return { tier: { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' }, mode: 'rank', pRank: p, upperRankBounds: u };
+    }
+    return { tier: { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' }, mode: 'rank', pRank: p, upperRankBounds: u };
+  }
+
+  /**
+   * `heptagon_cohort_ranks` 집계(월·필터): 레벨% = (boardRank / N)·100, 레벨은 `heptagonBoardTierObjectFromRankN` (N<100 랭크 경계).
    * @param {object|null} tierBase 7축·합산(포지션 점수) 기반 요약
    * @param {{ loading?: boolean, skip?: boolean, err?: boolean, nTotal?: number, boardRank?: number, cohortData?: object }} ovl
    */
@@ -430,9 +486,8 @@
       return tierBase;
     }
     br = Math.max(1, Math.min(nTot, Math.floor(Number(br))));
-    var pRank = (br / nTot) * 100;
-    var cspec = stelvioOctagonPercentCutoffs(nTot);
-    var tier = tierIdFromPAndPercentCutoffs(pRank, cspec.cutoffs);
+    var hb = heptagonBoardTierObjectFromRankN(br, nTot);
+    var pRank = hb.pRank;
     var out = Object.assign({}, tierBase);
     out.pTier = pRank;
     out.pTotal = pRank;
@@ -440,10 +495,12 @@
     out.comprehensiveRank = br;
     out.rankAverage = br;
     out.cohortN = nTot;
-    out.tier = tier;
-    out.tierPercentCutoffs = cspec.cutoffs;
-    out.kAdjust = cspec.k;
-    out.isLargeCohort = cspec.isLarge;
+    out.tier = hb.tier;
+    out.tierPercentCutoffs = HEPTAGON_BOARD_CUM_PCT;
+    out.kAdjust = nTot < 100 ? 100 / nTot : 1;
+    out.isLargeCohort = nTot >= 100;
+    out.heptagonBoardTierMode = hb.mode;
+    out.heptagonBoardUpperRankBounds = hb.upperRankBounds;
     var d = ovl.cohortData;
     if (d) {
       if (d.sumPositionScores != null && isFinite(Number(d.sumPositionScores))) {
@@ -915,7 +972,14 @@
             ) : null}
             {nC > 0 ? (
               <div className="stelvio-heptagon-detail-modal__summary-foot">
-                <span className="stelvio-heptagon-detail-modal__nref">참조 코호트 최대 n = {nC}</span>
+                <span className="stelvio-heptagon-detail-modal__nref">참조 코호트(집계) 모수 n = {nC}</span>
+              </div>
+            ) : null}
+            {nC > 0 && nC < 100 && summary.heptagonBoardTierMode === 'rank' ? (
+              <div className="stelvio-heptagon-detail-modal__summary-foot">
+                <span className="stelvio-heptagon-detail-modal__nref">
+                  종합 순위·레벨: 위 n 기준 <code>heptagon_cohort_ranks</code> 집계 순서이며, 등급은 누적%의 랭크 경계(ceil)로 구간이 나눠집니다.
+                </span>
               </div>
             ) : null}
           </div>
@@ -964,44 +1028,52 @@
           )}
 
           <div className="stelvio-heptagon-detail-modal__boardhead">
-            <div className="stelvio-heptagon-detail-modal__neighborhead stelvio-heptagon-detail-modal__boardhead-t">동일 조건·월 종합(환산) 점수 순위</div>
-            <div className="stelvio-heptagon-detail-modal__board-filters" role="group" aria-label="순위표 부문·성별">
-              <select
-                className="stelvio-octagon-filter-select stelvio-heptagon-board-mini"
-                value={boardG}
-                onChange={function(e) {
-                  if (typeof onBoardFilterChange === 'function') {
-                    onBoardFilterChange(e.target.value, boardC);
-                  }
-                }}
-                aria-label="순위표 성별"
-              >
-                {GENDER_OPTIONS.map(function(o) {
-                  return (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  );
-                })}
-              </select>
-              <select
-                className="stelvio-octagon-filter-select stelvio-heptagon-board-mini"
-                value={boardC}
-                onChange={function(e) {
-                  if (typeof onBoardFilterChange === 'function') {
-                    onBoardFilterChange(boardG, e.target.value);
-                  }
-                }}
-                aria-label="순위표 부문(카테고리)"
-              >
-                {CATEGORY_OPTIONS.map(function(o2) {
-                  return (
-                    <option key={o2.value} value={o2.value}>
-                      {o2.label}
-                    </option>
-                  );
-                })}
-              </select>
+            <div className="stelvio-heptagon-detail-modal__boardhead-titlerow">
+              <span className="stelvio-heptagon-detail-modal__boardhead-t">동일 조건·월(환산) 점수 순위</span>
+              <div className="stelvio-heptagon-detail-modal__board-filters" role="group" aria-label="순위표 부문·성별">
+                <div className="stelvio-heptagon-board-btngroup" role="group" aria-label="성별">
+                  {GENDER_OPTIONS.map(function(og) {
+                    var gActive = String(boardG) === String(og.value);
+                    return (
+                      <button
+                        key={og.value + '-g'}
+                        type="button"
+                        className={'stelvio-heptagon-board-pill' + (gActive ? ' stelvio-heptagon-board-pill--active' : '')}
+                        onClick={function() {
+                          if (typeof onBoardFilterChange === 'function' && !gActive) {
+                            onBoardFilterChange(og.value, boardC);
+                          }
+                        }}
+                        aria-pressed={gActive}
+                        aria-label={'성별 ' + og.label}
+                      >
+                        {og.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="stelvio-heptagon-board-btngroup" role="group" aria-label="부문(카테고리)">
+                  {CATEGORY_OPTIONS.map(function(oc) {
+                    var cActive = String(boardC) === String(oc.value);
+                    return (
+                      <button
+                        key={oc.value + '-c'}
+                        type="button"
+                        className={'stelvio-heptagon-board-pill' + (cActive ? ' stelvio-heptagon-board-pill--active' : '')}
+                        onClick={function() {
+                          if (typeof onBoardFilterChange === 'function' && !cActive) {
+                            onBoardFilterChange(boardG, oc.value);
+                          }
+                        }}
+                        aria-pressed={cActive}
+                        aria-label={'부문 ' + oc.label}
+                      >
+                        {oc.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
           {boardState.loading ? (
@@ -1093,10 +1165,13 @@
             <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
-            환산 점수: 1위=100, 꼴등=0(구간·코호트). 상단 「종합(환산) 순위」는 7축 합 S로 nRef 띠에 이식한 N위(표시)이며, 아래 표의 순위는 Firestore
-            <code> heptagon_cohort_ranks</code>에서 동일 월·필터(카테·부문)로 환산 점수 합을 랭킹보드와 같이 1, 2, 3… 정렬한 집계 순위입니다(카테고리가
-            ‘전체(Supremo)’가 아닐 때는 그 부문에 속한 사용자만). 상단 N위(표시)와 집계 순위는 정의가 달라 서로 다를 수 있습니다. 표는 점수 합이 높은
-            쪽부터 최대 500행이며, 본인이 그 안에 없으면 집계 <code>boardRank</code>에 맞는 위치에 본인 행을 넣어 보여줍니다.
+            레벨%는 (집계 순위 ÷ 모수) × 100이며, 등급은 상위 3%·10%·20%·40%·70%·90%·100% 누적 구간(레벨1~7)으로 정합니다. 모수 100명 이상은
+            이 %로, 모수 100명 미만은 동일 누적%를 랭크에 맞게
+            <code> ceil(누적%×모수/100) </code>
+            식의 상한으로 나누어 등급이 배정됩니다. 7구간 항목별 표는(위) 7축 랭킹 합 S 기반(표기 N위)이며, 아래 집계 표는
+            <code> heptagon_cohort_ranks</code>의 동일 월·필터 환산 점수 합 순(최대 500행)입니다. ‘전체(Supremo)’가 아닐 때는 그 부문 소속 집계
+            뿐입니다. 본인이 상위 500에 없으면
+            <code> boardRank</code>에 맞춰 본인 행을 끼워 넣어 표시합니다.
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
