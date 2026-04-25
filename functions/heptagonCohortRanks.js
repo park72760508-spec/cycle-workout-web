@@ -147,7 +147,7 @@ function tierIdFromP(pTotal, co) {
 }
 
 /**
- * 레벨%: (r ÷ (n + 1)) × 100 — 코호트 모수 n에 본인(1) 반영(대시보드와 동일).
+ * 레벨% (실집계): (r ÷ L) × 100 — Supremo·부문별 코호트에 본인이 이미 포함(L명). 가상 순위는 클라이언트만 +1 분기.
  */
 function heptagonLevelPercentForRankN(boardRank, nCohort) {
   const Nc = nCohort | 0;
@@ -155,8 +155,7 @@ function heptagonLevelPercentForRankN(boardRank, nCohort) {
   let r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
   if (r < 1) r = 1;
   if (r > Nc) r = Nc;
-  const denom = Nc + 1;
-  return (r / denom) * 100;
+  return (r / Nc) * 100;
 }
 
 /**
