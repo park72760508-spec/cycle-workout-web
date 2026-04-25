@@ -204,6 +204,62 @@
   }
 
   /**
+   * 헵타곤 팝업: 동일 월·필터에서 **환산 점수 합** 높은 순(1,2,3…). 랭킹보드와 동일 집계 소스.
+   * 인덱스: filterCategory, filterGender, monthKey, sumPositionScores desc
+   * @param {{ monthKey: string, filterCategory: string, filterGender: string, limit?: number }} o
+   */
+  function queryStelvioHeptagonCohortBySumDesc(o) {
+    o = o || {};
+    if (!window.firestoreV9) {
+      return Promise.resolve({ ok: false, items: [] });
+    }
+    var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
+    var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
+    var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
+    var lim = o.limit | 0;
+    if (lim < 1) {
+      lim = 200;
+    }
+    if (lim > 500) {
+      lim = 500;
+    }
+    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+      .then(function (mod) {
+        if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
+          return { ok: false, items: [] };
+        }
+        var col = mod.collection(window.firestoreV9, COL_COHORT);
+        var qy = mod.query(
+          col,
+          mod.where('filterCategory', '==', filterCategory),
+          mod.where('filterGender', '==', filterGender),
+          mod.where('monthKey', '==', monthKey),
+          mod.orderBy('sumPositionScores', 'desc'),
+          mod.limit(lim)
+        );
+        return mod.getDocs(qy);
+      })
+      .then(function (qs) {
+        var items = [];
+        qs.forEach(function (d) {
+          var x = d.data();
+          if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
+            return;
+          }
+          x._id = d.id;
+          items.push(x);
+        });
+        return { ok: true, items: items };
+      })
+      .catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[queryStelvioHeptagonCohortBySumDesc]', e && e.message ? e.message : e);
+        }
+        return { ok: false, items: [], error: String(e && e.message ? e.message : e) };
+      });
+  }
+
+  /**
    * 본인 문서 읽기(종합 N위·티어 캐시). 룰: read public.
    * @param {string} userId
    * @returns {Promise<{ ok: boolean, exists?: boolean, data?: object|null, error?: string }>}
@@ -360,6 +416,7 @@
   window.getStelvioHeptagonRankLog = getStelvioHeptagonRankLog;
   window.queryStelvioHeptagonSumNeighbors = queryStelvioHeptagonSumNeighbors;
   window.queryStelvioHeptagonRankTop = queryStelvioHeptagonRankTop;
+  window.queryStelvioHeptagonCohortBySumDesc = queryStelvioHeptagonCohortBySumDesc;
   window.getStelvioHeptagonRankLogCollectionName = function () {
     return COL;
   };
