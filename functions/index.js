@@ -4004,6 +4004,32 @@ exports.rebuildRankingAggregates = onSchedule(
   }
 );
 
+// ---------- STELVIO 헵타곤: 전원 코호트 순위 → heptagon_cohort_ranks (이웃·랭킹 탑 쿼리) ----------
+const heptagonCohortRanks = require("./heptagonCohortRanks");
+exports.scheduledHeptagonCohortRanks = onSchedule(
+  {
+    schedule: "0 3 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "2GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      const r = await heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
+        getPeakPowerRankingEntries,
+        getLeagueCategory,
+        getRolling30DaysRangeSeoul,
+        admin,
+      });
+      console.log("[scheduledHeptagonCohortRanks] ok", r);
+    } catch (e) {
+      console.error("[scheduledHeptagonCohortRanks]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
 /** 동기부여 메시지 (주간 TSS 랭킹) */
 function buildMotivationMessageTss(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
