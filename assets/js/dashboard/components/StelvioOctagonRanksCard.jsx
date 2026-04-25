@@ -701,6 +701,33 @@
   }
 
   /**
+   * 동일 조건·월(환산) 점수 집계: 순위·대상자 모수 n·가상 여부 → `heptagonLevelPercentForRankN` 레벨% (툴팁·힌트).
+   */
+  function heptagonCohortTooltipFromSummary(s) {
+    if (!s || s.heptagonCohortBoardRankApplied !== true) {
+      return { ok: false, rank: null, nCohort: 0, pPct: -1, isVirtual: false };
+    }
+    var nC = s.cohortN != null && isFinite(Number(s.cohortN)) ? Math.max(0, Math.floor(Number(s.cohortN))) : 0;
+    var isV = s.heptagonBoardVirtualCohort === true;
+    if (nC < 1) {
+      return { ok: false, rank: heptagonCardRankFromSummary(s), nCohort: 0, pPct: -1, isVirtual: isV };
+    }
+    var br0 = s.heptagonCohortBoardRank;
+    if (br0 == null && s.comprehensiveRank != null && isFinite(Number(s.comprehensiveRank))) {
+      br0 = Number(s.comprehensiveRank);
+    }
+    if (br0 == null || !isFinite(br0)) {
+      return { ok: false, rank: null, nCohort: nC, pPct: -1, isVirtual: isV };
+    }
+    var pPct = heptagonLevelPercentForRankN(br0, nC, isV);
+    var rankU = heptagonCardRankFromSummary(s);
+    if (rankU == null) {
+      return { ok: false, rank: null, nCohort: nC, pPct: pPct, isVirtual: isV };
+    }
+    return { ok: true, rank: rankU, nCohort: nC, pPct: pPct, isVirtual: isV };
+  }
+
+  /**
    * 월·필터가 일치하고 `comprehensiveRank`·`tierId`가 있을 때만 중앙 오버레이용 요약(로딩 스텁).
    */
   function summaryFromHeptagonRankLogIfMatch(d, nowMonthKey, g, c) {
@@ -1190,12 +1217,9 @@
     var isVirtPct = summary.heptagonBoardVirtualCohort === true;
     var tid = summary.tier.id;
     var nC = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
-    var rUiN = heptagonCardRankFromSummary(summary);
-    var rUi = rUiN != null ? rUiN : '—';
-    var pT =
-      summary.heptagonCohortBoardRankApplied === true && summary.pTier != null && isFinite(Number(summary.pTier))
-        ? Number(summary.pTier)
-        : null;
+    var ttModal = heptagonCohortTooltipFromSummary(summary);
+    var rUi = ttModal.ok && ttModal.rank != null ? ttModal.rank : '—';
+    var pT = ttModal.ok && ttModal.pPct >= 0 && isFinite(ttModal.pPct) ? ttModal.pPct : null;
     var sumP = summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores)) ? Number(summary.sumPositionScores) : null;
     var avgP = summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore)) ? Number(summary.avgPositionScore) : null;
     return (
@@ -1494,6 +1518,8 @@
   function OctagonTierCenterOverlay(props) {
     var summary = props.summary;
     var onOpenDetail = props.onOpenDetail;
+    var filterGenderLabel = props.filterGenderLabel != null && String(props.filterGenderLabel).trim() !== '' ? String(props.filterGenderLabel).trim() : '';
+    var filterCategoryLabel = props.filterCategoryLabel != null && String(props.filterCategoryLabel).trim() !== '' ? String(props.filterCategoryLabel).trim() : '';
     var _pct = useState(false);
     var showPct = _pct[0];
     var setShowPct = _pct[1];
@@ -1501,24 +1527,27 @@
     var imgError = _img[0];
     var setImgError = _img[1];
     var tid = summary && summary.tier ? summary.tier.id : '';
-    var boardApp = summary && summary.heptagonCohortBoardRankApplied === true;
-    var pShow = boardApp
-      ? summary.pTier != null && isFinite(summary.pTier)
-        ? summary.pTier
-        : -1
-      : -1;
+    var tt = heptagonCohortTooltipFromSummary(summary);
+    var rankForUi = tt.ok ? tt.rank : null;
+    var pShow = tt.ok && tt.pPct >= 0 && isFinite(tt.pPct) ? tt.pPct : -1;
+    var nCohortHint = tt.ok && tt.nCohort > 0 ? tt.nCohort : null;
+    var virtLabel = tt.isVirtual ? '가상·finalN=n+1' : '실집계·finalN=n';
+    var filterContext =
+      filterGenderLabel && filterCategoryLabel
+        ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
+        : '';
+    var cohortOvlLoading = props.cohortOvlLoading === true;
     useEffect(
       function() {
         setImgError(false);
       },
-      [tid, pShow, boardApp]
+      [tid, pShow, rankForUi, nCohortHint]
     );
     if (!summary || !summary.tier) return null;
     var st = tierStyleForId(tid);
     var label = summary.tier.labelShort || summary.tier.text;
     var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
-    var rankForUi = heptagonCardRankFromSummary(summary);
 
     return (
       <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
@@ -1528,7 +1557,7 @@
               type="button"
               className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--beast"
               aria-label={levelName + ' 배지 · 클릭 시 항목별 순위·환산 점수 팝업'}
-              title="클릭: 항목별 순위·환산 점수"
+              title={filterContext + 'STELVIO 헵타곤 · 동일 조건·월(환산) 점수 순위 (클릭: 상세)'}
               onClick={function(e) {
                 e.stopPropagation();
                 if (typeof onOpenDetail === 'function') {
@@ -1561,11 +1590,12 @@
               className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag"
               aria-pressed={showPct}
               aria-label={
-                (rankForUi != null
-                  ? levelName + ', 동일 조건·환산 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
-                  : levelName + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '클릭하여 순위·% 힌트 표시/숨김'
+                filterContext +
+                (rankForUi != null && nCohortHint != null
+                  ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + String(nCohortHint) + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                  : levelName + ', 집계 로딩·동일 조건 표와 동기화 후 표시. ') + '클릭: 툴팁'
               }
-              title="동일 조건(카드 필터) 집계 · 레벨% — 클릭: 툴팁"
+              title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
               onClick={function(e) {
                 e.stopPropagation();
                 setShowPct(!showPct);
@@ -1582,15 +1612,25 @@
             }
             role="status"
           >
-            {rankForUi != null ? (
-              <span className="stelvio-octagon-tier-hint-split">
+            {rankForUi != null && nCohortHint != null ? (
+              <span className="stelvio-octagon-tier-hint-split stelvio-octagon-tier-hint-split--cohort" title={virtLabel + ' · 집계 대상자 수 n'}>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">{String(rankForUi) + '위'}</span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">n={String(nCohortHint)}</span>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
                   {pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) : '—'}%
                 </span>
               </span>
             ) : (
-              <span>{pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) + '%' : '—'}</span>
+              <span
+                className="stelvio-octagon-tier-hint-pending"
+                title={
+                  cohortOvlLoading
+                    ? 'heptagon_cohort_ranks 집계(동일 조건·성별·부문) 로딩 중'
+                    : '동일 조건·월(환산) 점수 집계를 쓰려면 랭킹/코호트 동기화가 필요하거나, 필터·월 문서를 확인하세요'
+                }
+              >
+                {cohortOvlLoading ? '집계 동기화…' : '— · — · —'}
+              </span>
             )}
           </div>
         </div>
@@ -2347,6 +2387,9 @@
               <OctagonTierCenterOverlay
                 summary={heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache}
                 onOpenDetail={onHeptagonOpenDetail}
+                filterGenderLabel={labelForGender(gender)}
+                filterCategoryLabel={labelForCategory(category)}
+                cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
               />
             </div>
             <p className="text-xs text-center text-slate-500 mt-0 px-2">최신 헵타곤 순위를 동기화하는 중… (직전 저장값 표시)</p>
@@ -2374,7 +2417,13 @@
           <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px]">
             {svg}
             {tierForCard ? (
-              <OctagonTierCenterOverlay summary={tierForCard} onOpenDetail={onHeptagonOpenDetail} />
+              <OctagonTierCenterOverlay
+                summary={tierForCard}
+                onOpenDetail={onHeptagonOpenDetail}
+                filterGenderLabel={labelForGender(gender)}
+                filterCategoryLabel={labelForCategory(category)}
+                cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
+              />
             ) : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
@@ -2391,11 +2440,16 @@
       );
     }
 
+    var nHintLine =
+      uid && tierForCard && tierForCard.heptagonCohortBoardRankApplied && (tierForCard.cohortN | 0) > 0
+        ? ' 현재: ' + labelForGender(gender) + ' · ' + labelForCategory(category) + ' — 집계 모수 n=' + String(tierForCard.cohortN | 0) + ' — 순위·레벨%는 모달「동일 조건·월(환산) 점수 순위」와 동일·같은 식. '
+        : '';
     var heptagonLevelHint =
       uid ? (
         <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
-          <span className="font-medium text-slate-600">레벨·순위·%:</span> 위 필터(성별·부문) = 동일 조건·환산 점수
-          집계 · finalN(실집계 n / 가상 n+1) 기준, 모수 100 이상·미만에 따라 레벨% 식이 달라짐
+          <span className="font-medium text-slate-600">집계:</span> 위 <strong>성별·카테고리</strong> = STELVIO 헵타곤 항목별 순위
+          <strong>「동일 조건·월(환산) 점수 순위」</strong>·<code>heptagon_cohort_ranks</code>와 연동합니다. 레벨%는
+          <strong> 그 순위</strong>·<strong>대상자 모수 n</strong>·(가상 시 finalN=n+1)로 산출합니다.{nHintLine}
         </p>
       ) : null;
 
