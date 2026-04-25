@@ -1869,7 +1869,6 @@
     var state = _s[0];
     var setState = _s[1];
     var saveKeyRef = useRef('');
-    var octagonRanksReqRef = useRef(0);
     var heptagonLogReqRef = useRef(0);
     var stelvioOvlReqRef = useRef(0);
     var stelvioOvlModalReqRef = useRef(0);
@@ -2026,9 +2025,7 @@
                 );
               })();
 
-        octagonRanksReqRef.current = octagonRanksReqRef.current + 1;
-        var octRid = octagonRanksReqRef.current;
-        /** 캐시는 **표시(낙관적)** 에 쓰지 않음(순위-only norm ↔ API+W/kg norm 혼용 시 잠시 후 모양이 바뀌거나, Strict 경합으로 캐시가 다시 덮는 문제). 실패 시에만 폴백. */
+        /** 캐시는 표시에 쓰지 않고, 네트워크 실패 시에만 폴백. 무효화는 ref 비교 대신 effect 인스턴스별 `cancelled`(Strict/탭 전환 시 ref 오프셋으로 then이 영구 스킵되는 문제 방지). */
         var cachePayload = null;
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
@@ -2037,6 +2034,7 @@
           }
         }
 
+        var cancelled = false;
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
 
         Promise.all([
@@ -2045,7 +2043,7 @@
           fetchRanksSet(uid, 'monthly', gender, 'Supremo')
         ])
           .then(function(results) {
-            if (octagonRanksReqRef.current !== octRid) {
+            if (cancelled) {
               return;
             }
             var mRows = results[0];
@@ -2070,7 +2068,7 @@
             }
           })
           .catch(function() {
-            if (octagonRanksReqRef.current !== octRid) {
+            if (cancelled) {
               return;
             }
             if (cachePayload) {
@@ -2087,7 +2085,7 @@
           });
 
         return function stelvioOctagonRanksCleanup() {
-          octagonRanksReqRef.current = octagonRanksReqRef.current + 1;
+          cancelled = true;
         };
       },
       [uid, gender, category]
