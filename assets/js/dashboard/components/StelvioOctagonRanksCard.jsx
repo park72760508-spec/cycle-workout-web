@@ -937,6 +937,9 @@
     });
     for (var k = 0; k < work.length; k++) {
       work[k].displayRank = k + 1;
+      if (work[k].isMe && (work[k].boardRank == null || !isFinite(work[k].boardRank))) {
+        work[k].boardRank = k + 1;
+      }
     }
     return { rows: work, meInList: true };
   }
@@ -1098,8 +1101,8 @@
         var built = buildHeptagonModalBoardRows(itemsRaw, uid, null, crS.data);
         var dr = null;
         for (var hi = 0; hi < (built.rows || []).length; hi++) {
-          if (built.rows[hi].isMe && built.rows[hi].displayRank != null) {
-            dr = built.rows[hi].displayRank;
+          if (built.rows[hi].isMe && built.rows[hi].boardRank != null && isFinite(built.rows[hi].boardRank)) {
+            dr = Math.floor(Number(built.rows[hi].boardRank));
             break;
           }
         }
@@ -1384,14 +1387,10 @@
                       viewerUserId,
                       viewerGrade
                     );
-                    var rankCell;
-                    if (row.boardRank != null && isFinite(row.boardRank)) {
-                      rankCell = String(Math.floor(Number(row.boardRank))) + '위';
-                    } else if (row.displayRank != null && isFinite(row.displayRank)) {
-                      rankCell = String(row.displayRank) + '위';
-                    } else {
-                      rankCell = '—';
-                    }
+                    var rankCell =
+                      row.boardRank != null && isFinite(row.boardRank)
+                        ? String(Math.floor(Number(row.boardRank))) + '위'
+                        : '—';
                     return (
                       <tr
                         key={row.isMe && row.isInserted ? 'me-ins' : 'br-' + (row.userId || idx)}
