@@ -244,7 +244,8 @@
   }
 
   /**
-   * Neff=n+1·레벨%·n 표기: **가상(타 연령 부문)** + Supremo(전체) 아님 + 본인 부문 아님. 전체·본인 부문은 항상 집계 n.
+   * Neff=n+1: API `isVirtualCohort`가 true이고(타 부문 가상) **전체(Supremo) 아님**이며,
+   * **프로필/랭킹으로 확인되는 연령 부문이 필터와 같으면(본인 부문)** → 절대 +1 하지 않음.
    */
   function heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirtualCohort) {
     if (isVirtualCohort !== true) {
@@ -254,7 +255,8 @@
     if (f === 'Supremo') {
       return false;
     }
-    if (isUserInCohortForFilter(f, userAgeCategory)) {
+    var ac = userAgeCategory != null ? String(userAgeCategory).trim() : '';
+    if (ac && isUserInCohortForFilter(f, ac)) {
       return false;
     }
     return true;
@@ -1086,7 +1088,11 @@
       mySum = Number(myCohortDataSupr.sumPositionScores);
     }
     if (mySum == null || !isFinite(mySum)) {
-      return buildHeptagonModalBoardRowsByBoardRankOnly(leadersRaw, myUid, myCohortDataFilter);
+      return buildHeptagonModalBoardRowsByBoardRankOnly(
+        leadersRaw,
+        myUid,
+        myCohortDataFilter != null ? myCohortDataFilter : myCohortDataSupr
+      );
     }
     var leaders = (leadersRaw || []).map(function(d) {
       return mapHeptagonCohortToBoardRow(d, myUid);
@@ -1297,10 +1303,27 @@
         if (!crS || !crS.ok || !crS.exists || !crS.data) {
           return { ok: true, skip: true, nTotal: nRec };
         }
-        if (crS.data.sumPositionScores == null || !isFinite(Number(crS.data.sumPositionScores))) {
+        if (!res || !res.ok) {
           return { ok: true, skip: true, nTotal: nRec };
         }
-        if (!res || !res.ok) {
+        var sumOk = crS.data.sumPositionScores != null && isFinite(Number(crS.data.sumPositionScores));
+        if (!sumOk) {
+          var brFb =
+            crS.data.boardRank != null && isFinite(crS.data.boardRank)
+              ? Math.floor(Number(crS.data.boardRank))
+              : crS.data.comprehensiveRank != null && isFinite(crS.data.comprehensiveRank)
+                ? Math.floor(Number(crS.data.comprehensiveRank))
+                : null;
+          if (brFb != null && brFb >= 1) {
+            return {
+              ok: true,
+              skip: false,
+              nTotal: nRec,
+              boardRank: brFb,
+              cohortData: crS.data,
+              isVirtualCohort: true
+            };
+          }
           return { ok: true, skip: true, nTotal: nRec };
         }
         var built = buildHeptagonModalBoardRows(itemsRaw, uid, null, crS.data);
@@ -1309,6 +1332,17 @@
           if (built.rows[hi].isMe && built.rows[hi].boardRank != null && isFinite(built.rows[hi].boardRank)) {
             dr = Math.floor(Number(built.rows[hi].boardRank));
             break;
+          }
+        }
+        if (dr == null) {
+          var brFb2 =
+            crS.data.boardRank != null && isFinite(crS.data.boardRank)
+              ? Math.floor(Number(crS.data.boardRank))
+              : crS.data.comprehensiveRank != null && isFinite(crS.data.comprehensiveRank)
+                ? Math.floor(Number(crS.data.comprehensiveRank))
+                : null;
+          if (brFb2 != null && brFb2 >= 1) {
+            dr = brFb2;
           }
         }
         if (dr == null) {
@@ -1821,6 +1855,36 @@
     var uid = userProfile && userProfile.id != null ? String(userProfile.id) : null;
     var userAgeCatStr = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
 
+    var _rankMeta = useState({ ageCategory: '', loaded: false });
+    var rankingMeta = _rankMeta[0];
+    var setRankingMeta = _rankMeta[1];
+    useEffect(
+      function() {
+        if (!uid) {
+          setRankingMeta({ ageCategory: '', loaded: true });
+          return;
+        }
+        fetchRankingUserMeta(uid, gender)
+          .then(function(m) {
+            setRankingMeta({
+              ageCategory: m && m.ageCategory != null ? String(m.ageCategory) : '',
+              loaded: true
+            });
+          })
+          .catch(function() {
+            setRankingMeta({ ageCategory: '', loaded: true });
+          });
+      },
+      [uid, gender]
+    );
+    var viewerAc = useMemo(
+      function() {
+        var fromM = rankingMeta.ageCategory != null && String(rankingMeta.ageCategory).trim() !== '' ? String(rankingMeta.ageCategory).trim() : '';
+        return fromM || userAgeCatStr;
+      },
+      [rankingMeta.ageCategory, userAgeCatStr]
+    );
+
     var _g = useState('all');
     var gender = _g[0];
     var setGender = _g[1];
@@ -1903,8 +1967,7 @@
         var reqId = stelvioOvlReqRef.current;
         setStelvioCohortOvl({ loading: true });
         var mk = currentMonthKeyKst();
-        var ageHint = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
-        loadStelvioCohortOvlData(uid, mk, gender, category, ageHint)
+        loadStelvioCohortOvlData(uid, mk, gender, category, viewerAc)
           .then(function(result) {
             if (stelvioOvlReqRef.current !== reqId) {
               return;
@@ -1937,7 +2000,7 @@
             setStelvioCohortOvl({ loading: false, err: true, skip: true });
           });
       },
-      [uid, gender, category, userProfile && userProfile.ageCategory]
+      [uid, gender, category, viewerAc]
     );
 
     useEffect(
@@ -2019,9 +2082,9 @@
         if (!tierSummaryComputed) {
           return null;
         }
-        return applyCohortBoardMerge(tierSummaryComputed, stelvioCohortOvl, category, userAgeCatStr);
+        return applyCohortBoardMerge(tierSummaryComputed, stelvioCohortOvl, category, viewerAc);
       },
-      [tierSummaryComputed, stelvioCohortOvl, category, userAgeCatStr]
+      [tierSummaryComputed, stelvioCohortOvl, category, viewerAc]
     );
 
     /** 카드 필터 = 팝업「동일 조건」표 — 리스트 본인 순위·모수 n(표 또는 ovl nTotal) → 레벨% */
@@ -2039,7 +2102,7 @@
             if (ovlL && !ovlL.loading && ovlL.skip !== true && ovlL.isVirtualCohort != null) {
               isVb = ovlL.isVirtualCohort === true;
             } else {
-              isVb = !isUserInCohortForFilter(category, userAgeCatStr);
+              isVb = viewerAc ? !isUserInCohortForFilter(category, viewerAc) : false;
             }
             if (ovlL && ovlL.loading && nEff < 1) {
               return {
@@ -2062,12 +2125,12 @@
                 isVirtual: isVb
               };
             }
-            var pBx = heptagonLevelPercentForRankN(mineBR.boardRank, nEff, isVb, category, userAgeCatStr);
+            var pBx = heptagonLevelPercentForRankN(mineBR.boardRank, nEff, isVb, category, viewerAc);
             return {
               kind: 'ok',
               source: 'board',
               rank: mineBR.boardRank,
-              nCohort: heptagonCohortNDisplay(nEff, category, userAgeCatStr, isVb),
+              nCohort: heptagonCohortNDisplay(nEff, category, viewerAc, isVb),
               pPct: pBx,
               isVirtual: isVb
             };
@@ -2075,14 +2138,14 @@
           if (heptagonCardBoard && heptagonCardBoard.err) {
             return { kind: 'board_err' };
           }
-          var ovlE = stelvioOvlBoardRankNForDisplay(stelvioCohortOvl, category, userAgeCatStr);
+          var ovlE = stelvioOvlBoardRankNForDisplay(stelvioCohortOvl, category, viewerAc);
           if (ovlE) {
-            var pE = heptagonLevelPercentForRankN(ovlE.br, ovlE.nTot, ovlE.isVirt, category, userAgeCatStr);
+            var pE = heptagonLevelPercentForRankN(ovlE.br, ovlE.nTot, ovlE.isVirt, category, viewerAc);
             return {
               kind: 'ok',
               source: 'cohort_ovl',
               rank: ovlE.br,
-              nCohort: heptagonCohortNDisplay(ovlE.nTot, category, userAgeCatStr, ovlE.isVirt),
+              nCohort: heptagonCohortNDisplay(ovlE.nTot, category, viewerAc, ovlE.isVirt),
               pPct: pE,
               isVirtual: ovlE.isVirt
             };
@@ -2091,7 +2154,7 @@
             return { kind: 'board_loading' };
           }
         }
-        var ttF = heptagonCohortTooltipFromSummary(tierForCard, category, userAgeCatStr);
+        var ttF = heptagonCohortTooltipFromSummary(tierForCard, category, viewerAc);
         if (ttF && ttF.ok) {
           return {
             kind: 'ok',
@@ -2107,7 +2170,7 @@
         }
         return { kind: 'none' };
       },
-      [uid, heptagonCardBoard, stelvioCohortOvl, tierForCard, userProfile, category, userAgeCatStr]
+      [uid, heptagonCardBoard, stelvioCohortOvl, tierForCard, userProfile, category, viewerAc]
     );
 
     var heptagonSummaryCacheMerged = useMemo(
@@ -2115,9 +2178,9 @@
         if (!heptagonSummaryCache) {
           return null;
         }
-        return applyCohortBoardMerge(heptagonSummaryCache, stelvioCohortOvl, category, userAgeCatStr);
+        return applyCohortBoardMerge(heptagonSummaryCache, stelvioCohortOvl, category, viewerAc);
       },
-      [heptagonSummaryCache, stelvioCohortOvl, category, userAgeCatStr]
+      [heptagonSummaryCache, stelvioCohortOvl, category, viewerAc]
     );
 
     var heptagonModalSummary =
@@ -2156,9 +2219,9 @@
         if (!heptagonModalBaseTier) {
           return null;
         }
-        return applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, userAgeCatStr);
+        return applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc);
       },
-      [heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, userAgeCatStr]
+      [heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc]
     );
 
     var heptagonDetailRows = useMemo(
@@ -2229,8 +2292,7 @@
         var mReq = stelvioOvlModalReqRef.current;
         setStelvioCohortOvlModal({ loading: true });
         var mk = currentMonthKeyKst();
-        var ageHintM = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
-        loadStelvioCohortOvlData(uid, mk, heptagonModalGender, heptagonModalCategory, ageHintM)
+        loadStelvioCohortOvlData(uid, mk, heptagonModalGender, heptagonModalCategory, viewerAc)
           .then(function(result) {
             if (stelvioOvlModalReqRef.current !== mReq) {
               return;
@@ -2265,7 +2327,7 @@
             setStelvioCohortOvlModal({ loading: false, err: true, skip: true, useCard: false });
           });
       },
-      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category, userProfile && userProfile.ageCategory]
+      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category, viewerAc]
     );
 
     useEffect(
@@ -2422,9 +2484,9 @@
         if (sk === saveKeyRef.current) return;
         saveKeyRef.current = sk;
         var monthKeyKst = currentMonthKeyKst();
-        var rankForSave = heptagonCardRankFromSummary(tierForCard, category, userAgeCatStr);
+        var rankForSave = heptagonCardRankFromSummary(tierForCard, category, viewerAc);
         if (rankForSave == null) {
-          rankForSave = comprehensiveRankUiFromTierSummary(tierForCard, category, userAgeCatStr);
+          rankForSave = comprehensiveRankUiFromTierSummary(tierForCard, category, viewerAc);
         }
         var disp =
           (userProfile && (userProfile.name || userProfile.displayName)) != null
@@ -2476,7 +2538,7 @@
             });
           });
       },
-      [state.loading, state.err, state.monthly, tierForCard, uid, gender, category, userProfile, userAgeCatStr]
+      [state.loading, state.err, state.monthly, tierForCard, uid, gender, category, userProfile, viewerAc]
     );
 
     var svg = useMemo(
@@ -2704,7 +2766,7 @@
           }
           viewerUserId={uid}
           viewerGrade={userProfile && userProfile.grade != null ? String(userProfile.grade) : '2'}
-          viewerAgeCategory={userAgeCatStr}
+          viewerAgeCategory={viewerAc}
         />
       ) : null;
 
@@ -2789,12 +2851,12 @@
               heptagonCohortNDisplay(
                 tierForCard.cohortN | 0,
                 category,
-                userAgeCatStr,
+                viewerAc,
                 tierForCard.heptagonBoardVirtualCohort === true
               )
             ) +
             ' — 순위·레벨%는 모달「동일 조건·월(환산) 점수 순위」와 동일' +
-            (heptagonUseNeffNPlusOne(category, userAgeCatStr, tierForCard.heptagonBoardVirtualCohort === true)
+            (heptagonUseNeffNPlusOne(category, viewerAc, tierForCard.heptagonBoardVirtualCohort === true)
               ? ' (가상·타 부문: 표기 n=집계' + String(tierForCard.cohortN | 0) + '+1). '
               : '. ')
         : '';
