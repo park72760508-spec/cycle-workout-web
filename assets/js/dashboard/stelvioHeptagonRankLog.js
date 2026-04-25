@@ -33,6 +33,7 @@
    * @param {string} p.tierId
    * @param {number} p.nRef
    * @param {number} [p.pComprehensive]
+   * @param {number} [p.comprehensiveRank] 화면 툴팁과 동일한 **종합 N위**(정수, 1~nRef)
    */
   function saveStelvioHeptagonRankLog(p) {
     if (!p || !p.userId) return Promise.resolve(false);
@@ -61,6 +62,12 @@
         };
         if (p.pComprehensive != null && isFinite(Number(p.pComprehensive))) {
           data.pComprehensive = Number(p.pComprehensive);
+        }
+        if (p.comprehensiveRank != null && isFinite(Number(p.comprehensiveRank))) {
+          var crr = Math.floor(Number(p.comprehensiveRank));
+          if (crr >= 1) {
+            data.comprehensiveRank = crr;
+          }
         }
         return mod.setDoc(ref, data, { merge: true });
       })
@@ -118,7 +125,47 @@
       });
   }
 
+  /**
+   * 본인 문서 읽기(종합 N위·티어 캐시). 룰: read public.
+   * @param {string} userId
+   * @returns {Promise<{ ok: boolean, exists?: boolean, data?: object|null, error?: string }>}
+   */
+  function getStelvioHeptagonRankLog(userId) {
+    if (!userId || !window.firestoreV9) {
+      return Promise.resolve({ ok: false, data: null, error: 'no-uid' });
+    }
+    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+      .then(function (mod) {
+        if (!mod || !mod.getDoc || !mod.doc || !mod.collection) {
+          return { __heptagonGetErr: 'no-mod' };
+        }
+        var ref = mod.doc(mod.collection(window.firestoreV9, COL), String(userId));
+        return mod.getDoc(ref);
+      })
+      .then(function (snap) {
+        if (snap && snap.__heptagonGetErr) {
+          return { ok: false, data: null, error: snap.__heptagonGetErr };
+        }
+        if (snap == null) return { ok: false, data: null, error: 'no-snap' };
+        if (typeof snap.exists === 'boolean' && !snap.exists) {
+          return { ok: true, exists: false, data: null };
+        }
+        if (typeof snap.exists !== 'boolean') {
+          return { ok: false, data: null, error: 'no-snap' };
+        }
+        var d = snap.data() || null;
+        return { ok: true, exists: true, data: d };
+      })
+      .catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[getStelvioHeptagonRankLog]', e && e.message ? e.message : e);
+        }
+        return { ok: false, data: null, error: String(e && e.message ? e.message : e) };
+      });
+  }
+
   window.saveStelvioHeptagonRankLog = saveStelvioHeptagonRankLog;
+  window.getStelvioHeptagonRankLog = getStelvioHeptagonRankLog;
   window.queryStelvioHeptagonRankTop = queryStelvioHeptagonRankTop;
   window.getStelvioHeptagonRankLogCollectionName = function () {
     return COL;
