@@ -650,6 +650,21 @@
   /**
    * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
    */
+  /** HeptagonRankDetailModal — 이웃 쿼리 오류 문구(인덱스 대기 / 미배포 구분) */
+  function stelvioHeptagonNeighborErrorMessage(err) {
+    if (err == null) {
+      return '이웃 목록을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
+    }
+    var s = String(err).toLowerCase();
+    if (s.indexOf('building') >= 0 || s.indexOf('cannot be used yet') >= 0) {
+      return '복합 인덱스가 Firestore에 아직 구축 중입니다. 콘솔 → Firestore → 인덱스에서 해당 인덱스가 Enabled(준비됨)으로 바뀐 뒤(수 분~십수 분) 다시 열어 주세요.';
+    }
+    if (s.indexOf('index') >= 0) {
+      return '복합 인덱스가 아직 없거나 쿼리와 맞지 않습니다. `firestore.indexes.json` 배포 후 인덱스가 완성될 때까지 기다리거나, 콘솔 오류에 나온 링크로 인덱스를 생성하세요.';
+    }
+    return '이웃 목록을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
+  }
+
   function stelvioNeighborNameParts(rawName, isPrivate, rowUserId, viewerUserId, viewerGrade) {
     var maxNameLenS = 12;
     var raw = rawName == null || String(rawName).trim() === '' ? '(이름 없음)' : String(rawName);
@@ -756,9 +771,7 @@
           <div className="stelvio-heptagon-detail-modal__summary">
             <div className="stelvio-heptagon-detail-modal__summary-row">
               <span>레벨</span>
-              <strong>
-                {tierLevelDisplayName(tid)} · {summary.tier.labelShort || summary.tier.text}
-              </strong>
+              <strong>{tierLevelDisplayName(tid)}</strong>
             </div>
             <div className="stelvio-heptagon-detail-modal__summary-row">
               <span>종합(환산) 순위</span>
@@ -832,11 +845,7 @@
             <p className="stelvio-heptagon-detail-modal__neighborload">이웃 순위를 불러오는 중…</p>
           ) : null}
           {!neighborState.loading && neighborState.err && neighborState.err !== 'no-sum' && neighborState.err !== 'no-fn' ? (
-            <p className="stelvio-heptagon-detail-modal__neighboreq">
-              {String(neighborState.err).indexOf('index') >= 0
-                ? 'Firestore 복합 인덱스가 필요할 수 있습니다. `firestore.indexes.json` 배포 후 잠시 뒤 다시 시도해 주세요.'
-                : '이웃 목록을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.'}
-            </p>
+            <p className="stelvio-heptagon-detail-modal__neighboreq">{stelvioHeptagonNeighborErrorMessage(neighborState.err)}</p>
           ) : null}
           {!neighborState.loading && neighborState.err === 'no-sum' ? (
             <p className="stelvio-heptagon-detail-modal__neighborload">7축 점수 합이 없어 이웃을 표시할 수 없습니다.</p>
