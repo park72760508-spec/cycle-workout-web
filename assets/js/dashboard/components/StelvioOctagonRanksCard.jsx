@@ -1000,56 +1000,6 @@
     return m[tierId] || '레벨7';
   }
 
-  /** 축별 표용 행(랭킹 동기화 완료 시) */
-  function buildHeptagonDetailRows(monthly, tierSummary) {
-    if (!monthly || !monthly.ranks || !monthly.cohortSizePerAxis || !tierSummary) return null;
-    var ranks = monthly.ranks;
-    var ns = monthly.cohortSizePerAxis;
-    var ps = tierSummary.positionScores100 || tierSummary.itemP || [];
-    if (!Array.isArray(ranks) || ranks.length !== N_WKG_AXES) return null;
-    var nRef = tierSummary.cohortN != null && isFinite(Number(tierSummary.cohortN)) ? Math.max(0, Math.floor(Number(tierSummary.cohortN))) : 0;
-    var out = [];
-    for (var i = 0; i < N_WKG_AXES; i++) {
-      var nAxis = (ns[i] | 0) > 0 ? ns[i] | 0 : nRef;
-      out.push({
-        key: AXES[i].key,
-        label: AXES[i].label,
-        rank: ranks[i] != null && isFinite(Number(ranks[i])) ? Number(ranks[i]) : null,
-        n: nAxis,
-        score: ps[i] != null && isFinite(Number(ps[i])) ? Number(ps[i]) : null
-      });
-    }
-    return out;
-  }
-
-  /** Firestore heptagon_rank_log 본(로딩 중 직전 저장값) */
-  function buildHeptagonDetailRowsFromLog(d, nowMonthKey, g, c) {
-    if (!d || d.monthKey !== nowMonthKey || d.filterGender !== g || d.filterCategory !== c) {
-      return null;
-    }
-    var ranks = d.ranks;
-    var ns = d.cohortNPerAxis;
-    var ps = d.positionScores100;
-    if (!Array.isArray(ranks) || ranks.length !== N_WKG_AXES) return null;
-    var nRef = d.nRef != null && isFinite(Number(d.nRef)) ? Math.max(0, Math.floor(Number(d.nRef))) : 0;
-    var out = [];
-    for (var i = 0; i < N_WKG_AXES; i++) {
-      var nAxis = Array.isArray(ns) && (ns[i] | 0) > 0 ? ns[i] | 0 : nRef;
-      var score = null;
-      if (Array.isArray(ps) && ps[i] != null && isFinite(Number(ps[i]))) {
-        score = Number(ps[i]);
-      }
-      out.push({
-        key: AXES[i].key,
-        label: AXES[i].label,
-        rank: ranks[i] != null && isFinite(Number(ranks[i])) ? Number(ranks[i]) : null,
-        n: nAxis,
-        score: score
-      });
-    }
-    return out;
-  }
-
   /**
    * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
    */
@@ -1448,8 +1398,6 @@
     var genderLabel = props.genderLabel;
     var categoryLabel = props.categoryLabel;
     var periodLabel = props.periodLabel;
-    var rows = props.rows;
-    var axisRowsLoading = props.axisRowsLoading;
     var summary = props.tierSummary;
     var boardState = props.boardState || { loading: false, err: null, rows: [] };
     var onBoardFilterChange = props.onBoardFilterChange;
@@ -1558,7 +1506,7 @@
             {sumP != null ? (
               <div
                 className="stelvio-heptagon-detail-modal__summary-row"
-                title="7축 합(0~700)은 전면(Supremo) 랭크로만 산출된 합(모든 부문 문서에 동일). 아래 7구간 표는 랭킹보드 필터별 W/kg"
+                title="7축 합(0~700)은 전면(Supremo) 랭크로만 산출된 합(모든 부문 문서에 동일)"
               >
                 <span>7축 점수 합 (0~700)</span>
                 <strong>
@@ -1568,49 +1516,6 @@
               </div>
             ) : null}
           </div>
-          {axisRowsLoading ? (
-            <p className="stelvio-heptagon-detail-modal__neighborload">선택한 부문·성별 7구간 데이터를 불러오는 중…</p>
-          ) : rows && rows.length ? (
-            <div className="stelvio-heptagon-detail-modal__tablewrap">
-              <table className="stelvio-heptagon-detail-modal__table" role="grid">
-                <caption className="stelvio-heptagon-detail-modal__caption">카테고리·부문별 7구간 피크 파워 순위와 환산 점수</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">구간</th>
-                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
-                      순위
-                    </th>
-                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
-                      인원(n)
-                    </th>
-                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
-                      환산(0~100)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(function(row) {
-                    return (
-                      <tr key={row.key || row.label}>
-                        <td>{row.label}</td>
-                        <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.rank != null && isFinite(row.rank) ? String(Math.floor(row.rank)) + '위' : '—'}
-                        </td>
-                        <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.n != null && (row.n | 0) > 0 ? String(row.n) : '—'}
-                        </td>
-                        <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.score != null && isFinite(row.score) ? row.score.toFixed(1) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="stelvio-heptagon-detail-modal__empty">항목별 순위·점수는 랭킹 동기화 직후 표시됩니다.</p>
-          )}
 
           <div className="stelvio-heptagon-detail-modal__boardhead">
             <p className="stelvio-heptagon-detail-modal__boardhead-t m-0 mb-2 text-center w-full">동일 조건·월(환산) 점수 순위</p>
@@ -2346,39 +2251,6 @@
       [heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc]
     );
 
-    var heptagonDetailRows = useMemo(
-      function() {
-        if (state.monthly && tierSummaryComputed) {
-          return buildHeptagonDetailRows(state.monthly, tierSummaryComputed);
-        }
-        if (heptagonRankLog) {
-          return buildHeptagonDetailRowsFromLog(heptagonRankLog, currentMonthKeyKst(), gender, category);
-        }
-        return null;
-      },
-      [state.monthly, tierSummaryComputed, heptagonRankLog, gender, category]
-    );
-
-    var heptagonModalDetailRows = useMemo(
-      function() {
-        if (heptagonModalGender === gender && heptagonModalCategory === category) {
-          return heptagonDetailRows;
-        }
-        if (heptagonModalRanks && heptagonModalRanks.tierUnmerged && heptagonModalRanks.monthly) {
-          return buildHeptagonDetailRows(heptagonModalRanks.monthly, heptagonModalRanks.tierUnmerged);
-        }
-        return null;
-      },
-      [
-        heptagonDetailRows,
-        heptagonModalGender,
-        heptagonModalCategory,
-        gender,
-        category,
-        heptagonModalRanks
-      ]
-    );
-
     useEffect(
       function() {
         setHeptagonDetailOpen(false);
@@ -2888,15 +2760,6 @@
             setHeptagonDetailOpen(false);
           }}
           tierSummary={heptagonModalShowSummary}
-          rows={
-            heptagonModalGender !== gender || heptagonModalCategory !== category
-              ? heptagonModalDetailRows
-              : heptagonDetailRows
-          }
-          axisRowsLoading={
-            (heptagonModalGender !== gender || heptagonModalCategory !== category) &&
-            !!(heptagonModalRanks && heptagonModalRanks.loading)
-          }
           genderLabel={labelForGender(heptagonModalGender)}
           categoryLabel={labelForCategory(heptagonModalCategory)}
           periodLabel="최근 30일 피크 파워(월)"
