@@ -147,7 +147,7 @@ function tierIdFromP(pTotal, co) {
 }
 
 /**
- * 레벨%: n≥100 → (r÷n)×100. n<100 → (r÷n)÷(100÷n)×100 (대시보드·팝업과 동일, 소집단 보정).
+ * 레벨%: (r ÷ (n + 1)) × 100 — 코호트 모수 n에 본인(1) 반영(대시보드와 동일).
  */
 function heptagonLevelPercentForRankN(boardRank, nCohort) {
   const Nc = nCohort | 0;
@@ -155,11 +155,8 @@ function heptagonLevelPercentForRankN(boardRank, nCohort) {
   let r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
   if (r < 1) r = 1;
   if (r > Nc) r = Nc;
-  if (Nc >= 100) {
-    return (r / Nc) * 100;
-  }
-  const nScale = 100 / Nc;
-  return (r / Nc) / nScale;
+  const denom = Nc + 1;
+  return (r / denom) * 100;
 }
 
 /**
