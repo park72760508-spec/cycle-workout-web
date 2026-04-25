@@ -65,6 +65,16 @@
       ]
     },
     {
+      "collectionGroup": "heptagon_cohort_ranks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "filterCategory", "order": "ASCENDING" },
+        { "fieldPath": "filterGender", "order": "ASCENDING" },
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "boardRank", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "schedule_results",
       "queryScope": "COLLECTION",
       "fields": [
