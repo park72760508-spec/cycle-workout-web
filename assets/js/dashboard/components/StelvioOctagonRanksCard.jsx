@@ -563,6 +563,38 @@
   }
 
   /**
+   * `loadStelvioCohortOvlData` / 동일 집계(카드 ovl)에서 순위·n — 리스트에 본인 행이 없어도 표·툴팁에 반영.
+   * `applyCohortBoardMerge`와 동일한 rank·n·가상 여부(클램프) 사용.
+   */
+  function stelvioOvlBoardRankNForDisplay(ovl) {
+    if (!ovl || ovl.loading || ovl.err || ovl.skip) {
+      return null;
+    }
+    var nTot = ovl.nTotal != null && isFinite(ovl.nTotal) ? Math.max(0, Math.floor(Number(ovl.nTotal))) : 0;
+    if (nTot < 1) {
+      return null;
+    }
+    var br = ovl.boardRank;
+    if (br == null && ovl.cohortData) {
+      var d0 = ovl.cohortData;
+      br = d0.boardRank;
+      if (br == null && d0.comprehensiveRank != null) {
+        br = d0.comprehensiveRank;
+      }
+    }
+    if (br == null || !isFinite(br)) {
+      return null;
+    }
+    var isVirt = ovl.isVirtualCohort === true;
+    if (!isVirt) {
+      br = Math.max(1, Math.min(nTot, Math.floor(Number(br))));
+    } else {
+      br = Math.max(1, Math.min(nTot + 1, Math.floor(Number(br))));
+    }
+    return { br: br, nTot: nTot, isVirt: isVirt };
+  }
+
+  /**
    * 레벨: 7축 **포지션 점수** 합(0~700)·평균(0~100) → `pTier = 100 - 평균` (낮을수록 상위) + 구간(소수 n은 K·상한).
    * **종합 N위** `comprehensiveRank` = 7축 100분위(포지션) **합 S**·`0~700` → 동일 nRef 띠에서
    * `1 + (1 - S/700)(nRef-1)` (S↑ → 1위에 가깝게). `pComprehensive` = (그 값 / nRef)·100. 면적과 독립.
@@ -1572,15 +1604,18 @@
     var pShow = -1;
     var nCohortHint = null;
     var virtLabel = '';
+    var nCohortLine = '';
     if (hct.kind === 'ok') {
       rankForUi = hct.rank != null ? hct.rank : null;
       pShow = hct.pPct >= 0 && isFinite(hct.pPct) ? hct.pPct : -1;
       nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
+      nCohortLine = nCohortHint != null ? String(nCohortHint) : '—';
       virtLabel = hct.isVirtual ? '가상·finalN=n+1' : '실집계·finalN=n';
     } else if (hct.kind === 'board_partial') {
       rankForUi = hct.rank != null ? hct.rank : null;
       nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
       pShow = -1;
+      nCohortLine = nCohortHint != null ? String(nCohortHint) : '…';
       virtLabel = '집계 동기화 중(%)';
     }
     var filterContext =
@@ -1642,8 +1677,8 @@
               aria-pressed={showPct}
               aria-label={
                 filterContext +
-                (rankForUi != null && nCohortHint != null
-                  ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + String(nCohortHint) + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                (rankForUi != null
+                  ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + nCohortLine + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
                   : levelName + ', 동일 조건·월(환산) 점수 표(팝업과 동일) 로딩·동기화 후 표시. ') + '클릭: 툴팁'
               }
               title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
@@ -1663,10 +1698,10 @@
             }
             role="status"
           >
-            {rankForUi != null && nCohortHint != null ? (
+            {rankForUi != null ? (
               <span className="stelvio-octagon-tier-hint-split stelvio-octagon-tier-hint-split--cohort" title={virtLabel + ' · 집계 대상자 수 n(카드=팝업 동일 조건 표)'}>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-rank">{String(rankForUi) + '위'}</span>
-                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">n={String(nCohortHint)}</span>
+                <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-nref">n={nCohortLine}</span>
                 <span className="stelvio-octagon-tier-hint-line stelvio-octagon-tier-hint-pct">
                   {pShow >= 0 && isFinite(pShow) ? pShow.toFixed(2) : hct.kind === 'board_partial' ? '…' : '—'}%
                 </span>
@@ -1949,6 +1984,21 @@
           }
           if (heptagonCardBoard && heptagonCardBoard.err) {
             return { kind: 'board_err' };
+          }
+          var ovlE = stelvioOvlBoardRankNForDisplay(stelvioCohortOvl);
+          if (ovlE) {
+            var pE = heptagonLevelPercentForRankN(ovlE.br, ovlE.nTot, ovlE.isVirt);
+            return {
+              kind: 'ok',
+              source: 'cohort_ovl',
+              rank: ovlE.br,
+              nCohort: ovlE.nTot,
+              pPct: pE,
+              isVirtual: ovlE.isVirt
+            };
+          }
+          if (stelvioCohortOvl && stelvioCohortOvl.loading) {
+            return { kind: 'board_loading' };
           }
         }
         var ttF = heptagonCohortTooltipFromSummary(tierForCard);
