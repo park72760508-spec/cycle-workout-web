@@ -654,6 +654,8 @@
     var periodLabel = props.periodLabel;
     var rows = props.rows;
     var summary = props.tierSummary;
+    var neighborState = props.neighborState || { loading: false, err: null, above: [], below: [] };
+    var myDisplayName = (props.myDisplayName && String(props.myDisplayName).trim()) || '나';
     useEffect(
       function() {
         if (!onClose) return;
@@ -795,7 +797,87 @@
           ) : (
             <p className="stelvio-heptagon-detail-modal__empty">항목별 순위·점수는 랭킹 동기화 직후 표시됩니다.</p>
           )}
-          <p className="stelvio-heptagon-detail-modal__note">환산 점수: 1위=100, 꼴등=0 (해당 구간·코호트 기준 선형). 종합 N위는 7개 합·nRef 띠 이식.</p>
+
+          <div className="stelvio-heptagon-detail-modal__neighborhead">나 기준 (점수 합) 이웃</div>
+          {neighborState.loading ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">이웃 순위를 불러오는 중…</p>
+          ) : null}
+          {!neighborState.loading && neighborState.err && neighborState.err !== 'no-sum' && neighborState.err !== 'no-fn' ? (
+            <p className="stelvio-heptagon-detail-modal__neighboreq">
+              {String(neighborState.err).indexOf('index') >= 0
+                ? 'Firestore 복합 인덱스가 필요할 수 있습니다. `firestore.indexes.json` 배포 후 잠시 뒤 다시 시도해 주세요.'
+                : '이웃 목록을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.'}
+            </p>
+          ) : null}
+          {!neighborState.loading && neighborState.err === 'no-sum' ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">7축 점수 합이 없어 이웃을 표시할 수 없습니다.</p>
+          ) : null}
+          {!neighborState.loading && neighborState.err === 'no-fn' ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">이웃 조회 모듈이 로드되지 않았습니다.</p>
+          ) : null}
+          {!neighborState.loading && sumP != null && !neighborState.err ? (
+            <div className="stelvio-heptagon-detail-modal__tablewrap stelvio-heptagon-detail-modal__tablewrap--neighbor">
+              <table className="stelvio-heptagon-detail-modal__table" role="grid">
+                <caption className="stelvio-heptagon-detail-modal__caption">
+                  동일 필터·월에서 환산점수 합(0~700) 기준 바로 위·아래 최대 3명
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      순위
+                    </th>
+                    <th scope="col">이름</th>
+                    <th scope="col" className="stelvio-heptagon-detail-modal__thnum">
+                      환산점수 합계
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(neighborState.above || []).map(function (row, idx) {
+                    return (
+                      <tr key={'ab-' + (row.userId || idx)}>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.rank != null ? String(row.rank) + '위' : '—'}
+                        </td>
+                        <td>{row.displayName || '—'}</td>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? row.sumPositionScores.toFixed(1) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr className="stelvio-heptagon-detail-modal__tr--me">
+                    <td className="stelvio-heptagon-detail-modal__tdnum">
+                      {rUi !== '—' ? String(rUi) + '위' : '—'}
+                    </td>
+                    <td>
+                      <strong>{myDisplayName}</strong>
+                    </td>
+                    <td className="stelvio-heptagon-detail-modal__tdnum">
+                      <strong>{sumP != null ? sumP.toFixed(1) : '—'}</strong>
+                    </td>
+                  </tr>
+                  {(neighborState.below || []).map(function (row, idx) {
+                    return (
+                      <tr key={'be-' + (row.userId || idx)}>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.rank != null ? String(row.rank) + '위' : '—'}
+                        </td>
+                        <td>{row.displayName || '—'}</td>
+                        <td className="stelvio-heptagon-detail-modal__tdnum">
+                          {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? row.sumPositionScores.toFixed(1) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {sumP != null && !neighborState.loading && !neighborState.err && (!neighborState.above || !neighborState.above.length) && (!neighborState.below || !neighborState.below.length) ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">이웃으로 표시할 다른 사용자가 없습니다. (동일 조건·저장 기준)</p>
+          ) : null}
+          <p className="stelvio-heptagon-detail-modal__note">환산 점수: 1위=100, 꼴등=0 (해당 구간·코호트 기준 선형). 종합 N위는 7개 합·nRef 띠 이식. 이웃 표는 heptagon_rank_log에 저장된 점수 합 기준이며, 순위는 문서에 기록된 종합 N위입니다.</p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
               닫기
@@ -933,6 +1015,9 @@
     var _dOpen = useState(false);
     var heptagonDetailOpen = _dOpen[0];
     var setHeptagonDetailOpen = _dOpen[1];
+    var _nb = useState({ loading: false, err: null, above: [], below: [] });
+    var heptagonNeighbors = _nb[0];
+    var setHeptagonNeighbors = _nb[1];
 
     useEffect(
       function() {
@@ -1057,6 +1142,57 @@
         setHeptagonDetailOpen(false);
       },
       [gender, category, uid]
+    );
+
+    useEffect(
+      function() {
+        if (!heptagonDetailOpen) {
+          return;
+        }
+        if (!uid) {
+          setHeptagonNeighbors({ loading: false, err: null, above: [], below: [] });
+          return;
+        }
+        if (!heptagonModalSummary) {
+          setHeptagonNeighbors({ loading: false, err: 'no-sum', above: [], below: [] });
+          return;
+        }
+        if (!isFinite(Number(heptagonModalSummary.sumPositionScores))) {
+          setHeptagonNeighbors({ loading: false, err: 'no-sum', above: [], below: [] });
+          return;
+        }
+        if (typeof window.queryStelvioHeptagonSumNeighbors !== 'function') {
+          setHeptagonNeighbors({ loading: false, err: 'no-fn', above: [], below: [] });
+          return;
+        }
+        setHeptagonNeighbors({ loading: true, err: null, above: [], below: [] });
+        var s = Number(heptagonModalSummary.sumPositionScores);
+        window
+          .queryStelvioHeptagonSumNeighbors({
+            mySum: s,
+            myUserId: uid,
+            monthKey: currentMonthKeyKst(),
+            filterCategory: category,
+            filterGender: gender,
+            limit: 3
+          })
+          .then(function(res) {
+            if (res && res.ok) {
+              setHeptagonNeighbors({ loading: false, err: null, above: res.above || [], below: res.below || [] });
+            } else {
+              setHeptagonNeighbors({
+                loading: false,
+                err: (res && res.error) || 'fetch',
+                above: [],
+                below: []
+              });
+            }
+          })
+          .catch(function() {
+            setHeptagonNeighbors({ loading: false, err: 'catch', above: [], below: [] });
+          });
+      },
+      [heptagonDetailOpen, uid, heptagonModalSummary, category, gender]
     );
 
     useEffect(
@@ -1290,6 +1426,12 @@
           genderLabel={labelForGender(gender)}
           categoryLabel={labelForCategory(category)}
           periodLabel="최근 30일 피크 파워(월)"
+          neighborState={heptagonNeighbors}
+          myDisplayName={
+            userProfile && (userProfile.name || userProfile.displayName) != null
+              ? String(userProfile.name || userProfile.displayName)
+              : ''
+          }
         />
       ) : null;
 
