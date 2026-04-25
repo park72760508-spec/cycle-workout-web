@@ -5728,33 +5728,74 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border-top: 1px solid #e9d5ff;
 }
 .stelvio-heptagon-detail-modal__boardhead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
   margin: 0.5rem 0 0.35rem 0;
   padding-top: 0.4rem;
   border-top: 1px solid #e9d5ff;
 }
+.stelvio-heptagon-detail-modal__boardhead-titlerow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.6rem;
+  width: 100%;
+}
 .stelvio-heptagon-detail-modal__boardhead-t {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4c1d95;
   margin: 0;
-  border-top: 0;
-  padding-top: 0;
-  flex: 1 1 auto;
-  min-width: 7rem;
+  line-height: 1.3;
+  flex: 0 1 auto;
+  min-width: min(10rem, 100%);
+  padding-right: 0.25rem;
 }
 .stelvio-heptagon-detail-modal__board-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.45rem 0.55rem;
   align-items: center;
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
-.stelvio-heptagon-board-mini {
-  font-size: 0.72rem !important;
-  padding: 0.2rem 0.4rem !important;
-  min-height: 1.65rem;
-  max-width: 9rem;
+.stelvio-heptagon-board-btngroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  align-items: center;
+  border: 1px solid #e9d5ff;
+  background: #faf5ff;
+  border-radius: 0.4rem;
+  padding: 0.15rem;
+}
+.stelvio-heptagon-board-pill {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.3rem 0.4rem;
+  border-radius: 0.3rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #5b4b8a;
+  cursor: pointer;
+  max-width: 5.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stelvio-heptagon-board-pill:hover {
+  background: #ede9fe;
+  color: #4c1d95;
+}
+.stelvio-heptagon-board-pill--active {
+  background: #6d28d9;
+  color: #fff;
+  border-color: #5b21b6;
+  box-shadow: 0 0 0 1px rgba(91, 33, 182, 0.2);
+}
+.stelvio-heptagon-board-pill--active:hover {
+  background: #5b21b6;
+  color: #fff;
 }
 .stelvio-heptagon-detail-modal__tablewrap--neighbor {
   max-height: 12rem;
