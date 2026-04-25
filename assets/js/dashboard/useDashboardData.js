@@ -258,7 +258,8 @@
           acc_points: selectedUser.acc_points || 0,
           rem_points: selectedUser.rem_points || 0,
           strava_refresh_token: selectedUser.strava_refresh_token,
-          strava_last_sync: selectedUser.strava_last_sync
+          strava_last_sync: selectedUser.strava_last_sync,
+          is_private: selectedUser.is_private === true
         });
         setStats({
           ftp: ftp,
@@ -300,7 +301,8 @@
               grade: d.grade || '2',
               challenge: ch,
               acc_points: d.acc_points || 0,
-              rem_points: d.rem_points || 0
+              rem_points: d.rem_points || 0,
+              is_private: d.is_private === true
             });
             setStats(function(prev) {
               var next = Object.assign({}, prev);

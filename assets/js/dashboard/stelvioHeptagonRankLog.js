@@ -34,6 +34,7 @@
    * @param {number} p.nRef
    * @param {number} [p.pComprehensive]
    * @param {number} [p.comprehensiveRank] 화면 툴팁과 동일한 **종합 N위**(정수, 1~nRef)
+   * @param {boolean} [p.isPrivate] 프로필 이름 비공개(랭킹보드 표기와 연동)
    */
   function saveStelvioHeptagonRankLog(p) {
     if (!p || !p.userId) return Promise.resolve(false);
@@ -68,6 +69,11 @@
           if (crr >= 1) {
             data.comprehensiveRank = crr;
           }
+        }
+        if (p.isPrivate === true) {
+          data.is_private = true;
+        } else {
+          data.is_private = false;
         }
         return mod.setDoc(ref, data, { merge: true });
       })
@@ -225,7 +231,8 @@
             userId: d.userId != null ? String(d.userId) : doc.id,
             displayName: (d.displayName && String(d.displayName).trim()) || '—',
             sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : null,
-            rank: d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank)) ? Math.floor(Number(d.comprehensiveRank)) : null
+            rank: d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank)) ? Math.floor(Number(d.comprehensiveRank)) : null,
+            isPrivate: d.is_private === true
           };
         };
         var above = [];
