@@ -33,6 +33,38 @@
       ]
     },
     {
+      "collectionGroup": "heptagon_cohort_ranks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "filterCategory", "order": "ASCENDING" },
+        { "fieldPath": "filterGender", "order": "ASCENDING" },
+        { "fieldPath": "avgPositionScore", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "heptagon_cohort_ranks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "filterCategory", "order": "ASCENDING" },
+        { "fieldPath": "filterGender", "order": "ASCENDING" },
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "sumPositionScores", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "heptagon_cohort_ranks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "filterCategory", "order": "ASCENDING" },
+        { "fieldPath": "filterGender", "order": "ASCENDING" },
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "sumPositionScores", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "schedule_results",
       "queryScope": "COLLECTION",
       "fields": [
