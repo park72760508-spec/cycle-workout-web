@@ -1575,7 +1575,7 @@
             문서에 동일 값으로 저장됩니다. 집계 순위(해당 부문이면
             <strong> 본인 정식 순위</strong>, 그렇지 않으면 Supremo 환산 합을 해당 부문 500명 목록에 삽입한
             <strong> 가상 순위</strong>)과 레벨%는 <code>heptagonLevelPercentForRankN</code> — 모집 n 기준(실집계 1~n, 가상 1~n+1)으로
-            n≥100 → (r÷n)×100, n<100 → n₂=100÷n, ((r÷n)÷n₂)×100. <strong>7구간 표(위)</strong>는 W/kg 7축(카드·랭킹과 동일 필터),
+            n≥100 → (r÷n)×100, n{'<'}100 → n₂=100÷n, ((r÷n)÷n₂)×100. <strong>7구간 표(위)</strong>는 W/kg 7축(카드·랭킹과 동일 필터),
             <strong> 대시보드 중앙 배지</strong>는 카드의 성별·부문 필터와 이 화면 “동일 조건”이 일치할 때 동일
             수치로 맞춰집니다.
           </p>
@@ -2701,7 +2701,7 @@
         <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
           <span className="font-medium text-slate-600">집계:</span> 위 <strong>성별·카테고리</strong> = STELVIO 헵타곤 항목별 순위
           <strong>「동일 조건·월(환산) 점수 순위」</strong>·<code>heptagon_cohort_ranks</code>와 연동합니다. 레벨%는
-          <strong> 그 순위 r</strong>·<strong>대상자 모수 n</strong> — n≥100 (r÷n)×100, n<100 n₂=100÷n ((r÷n)÷n₂)×100(가상은 r≤n+1).{nHintLine}
+          <strong> 그 순위 r</strong>·<strong>대상자 모수 n</strong> — n≥100 (r÷n)×100, n{'<'}100 n₂=100÷n ((r÷n)÷n₂)×100(가상은 r≤n+1).{nHintLine}
         </p>
       ) : null;
 
