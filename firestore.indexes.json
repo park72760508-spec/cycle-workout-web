@@ -29,7 +29,7 @@
         { "fieldPath": "filterGender", "order": "ASCENDING" },
         { "fieldPath": "monthKey", "order": "ASCENDING" },
         { "fieldPath": "sumPositionScores", "order": "DESCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
