@@ -700,6 +700,8 @@
     var myDisplayName = (props.myDisplayName && String(props.myDisplayName).trim()) || '나';
     var viewerUserId = props.viewerUserId != null ? String(props.viewerUserId) : '';
     var viewerGrade = props.viewerGrade != null ? props.viewerGrade : '2';
+    /** 이웃 표: 서버 heptagon_cohort_ranks의 집계 순위(없으면 띠 이식 rUi) */
+    var selfCohortBoardRank = props.selfCohortBoardRank;
     useEffect(
       function() {
         if (!onClose) return;
@@ -731,6 +733,16 @@
       summary.pTier != null && isFinite(Number(summary.pTier)) ? Number(summary.pTier) : null;
     var sumP = summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores)) ? Number(summary.sumPositionScores) : null;
     var avgP = summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore)) ? Number(summary.avgPositionScore) : null;
+    var rUiNeighbor;
+    if (selfCohortBoardRank != null && isFinite(Number(selfCohortBoardRank))) {
+      rUiNeighbor = Math.max(1, Math.floor(Number(selfCohortBoardRank)));
+    } else {
+      rUiNeighbor = rUi;
+    }
+    var neighborRankLabel =
+      rUiNeighbor !== '—' && rUiNeighbor != null && rUiNeighbor !== ''
+        ? String(rUiNeighbor) + '위'
+        : '—';
 
     return (
       <div
@@ -902,7 +914,7 @@
                   })}
                   <tr className="stelvio-heptagon-detail-modal__tr--me">
                     <td className="stelvio-heptagon-detail-modal__tdnum">
-                      {rUi !== '—' ? String(rUi) + '위' : '—'}
+                      {neighborRankLabel}
                     </td>
                     <td>
                       <strong>{myDisplayName}</strong>
@@ -947,7 +959,11 @@
           {sumP != null && !neighborState.loading && !neighborState.err && (!neighborState.above || !neighborState.above.length) && (!neighborState.below || !neighborState.below.length) ? (
             <p className="stelvio-heptagon-detail-modal__neighborload">이웃으로 표시할 다른 사용자가 없습니다. (동일 조건·저장 기준)</p>
           ) : null}
-          <p className="stelvio-heptagon-detail-modal__note">환산 점수: 1위=100, 꼴등=0 (해당 구간·코호트 기준 선형). 종합 N위는 7개 합·nRef 띠 이식. 이웃 표는 heptagon_rank_log에 저장된 점수 합 기준이며, 순위는 문서에 기록된 종합 N위입니다.</p>
+          <p className="stelvio-heptagon-detail-modal__note">
+            환산 점수: 1위=100, 꼴등=0(구간·코호트). 상단 「종합(환산) 순위」는 7축 합 S로 nRef 띠에 이식한 N위(표시)이며, 이웃 표의 순위·본인(집계)은 Firestore
+            <code> heptagon_cohort_ranks</code> 점수 합 1~N(동일 필터)입니다. 둘은 정의가 달라 숫자가 다를 수 있습니다. 이웃 행은 DB에 있는 점수 중 나보다 합이 바로
+            위·아래(각 최대 3명)입니다. 위쪽 목록은 나와 점수가 가까운 사람부터(동일 구간에서 합이 낮은 순) 표시됩니다.
+          </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
               닫기
@@ -1099,6 +1115,9 @@
     var _nb = useState({ loading: false, err: null, above: [], below: [] });
     var heptagonNeighbors = _nb[0];
     var setHeptagonNeighbors = _nb[1];
+    var _hbr = useState(null);
+    var heptagonSelfBoardRank = _hbr[0];
+    var setHeptagonSelfBoardRank = _hbr[1];
 
     useEffect(
       function() {
@@ -1228,36 +1247,72 @@
     useEffect(
       function() {
         if (!heptagonDetailOpen) {
+          setHeptagonSelfBoardRank(null);
+        }
+      },
+      [heptagonDetailOpen]
+    );
+
+    useEffect(
+      function() {
+        if (!heptagonDetailOpen) {
           return;
         }
         if (!uid) {
           setHeptagonNeighbors({ loading: false, err: null, above: [], below: [] });
+          setHeptagonSelfBoardRank(null);
           return;
         }
         if (!heptagonModalSummary) {
           setHeptagonNeighbors({ loading: false, err: 'no-sum', above: [], below: [] });
+          setHeptagonSelfBoardRank(null);
           return;
         }
         if (!isFinite(Number(heptagonModalSummary.sumPositionScores))) {
           setHeptagonNeighbors({ loading: false, err: 'no-sum', above: [], below: [] });
+          setHeptagonSelfBoardRank(null);
           return;
         }
         if (typeof window.queryStelvioHeptagonSumNeighbors !== 'function') {
           setHeptagonNeighbors({ loading: false, err: 'no-fn', above: [], below: [] });
+          setHeptagonSelfBoardRank(null);
           return;
         }
         setHeptagonNeighbors({ loading: true, err: null, above: [], below: [] });
+        setHeptagonSelfBoardRank(null);
         var s = Number(heptagonModalSummary.sumPositionScores);
-        window
-          .queryStelvioHeptagonSumNeighbors({
-            mySum: s,
-            myUserId: uid,
-            monthKey: currentMonthKeyKst(),
-            filterCategory: category,
-            filterGender: gender,
-            limit: 3
-          })
-          .then(function(res) {
+        var mk = currentMonthKeyKst();
+        var prNeighbor = window.queryStelvioHeptagonSumNeighbors({
+          mySum: s,
+          myUserId: uid,
+          monthKey: mk,
+          filterCategory: category,
+          filterGender: gender,
+          limit: 3
+        });
+        var prCohort =
+          typeof window.getStelvioHeptagonCohortEntry === 'function'
+            ? window.getStelvioHeptagonCohortEntry({
+                userId: uid,
+                monthKey: mk,
+                filterCategory: category,
+                filterGender: gender
+              })
+            : Promise.resolve({ ok: false, exists: false, data: null });
+        Promise.all([prCohort, prNeighbor])
+          .then(function (pair) {
+            var cr = pair[0];
+            var res = pair[1];
+            if (cr && cr.ok && cr.exists && cr.data) {
+              var brr = cr.data.boardRank;
+              if (brr != null && isFinite(Number(brr))) {
+                setHeptagonSelfBoardRank(Math.max(1, Math.floor(Number(brr))));
+              } else {
+                setHeptagonSelfBoardRank(null);
+              }
+            } else {
+              setHeptagonSelfBoardRank(null);
+            }
             if (res && res.ok) {
               setHeptagonNeighbors({ loading: false, err: null, above: res.above || [], below: res.below || [] });
             } else {
@@ -1270,6 +1325,7 @@
             }
           })
           .catch(function() {
+            setHeptagonSelfBoardRank(null);
             setHeptagonNeighbors({ loading: false, err: 'catch', above: [], below: [] });
           });
       },
@@ -1510,6 +1566,7 @@
           categoryLabel={labelForCategory(category)}
           periodLabel="최근 30일 피크 파워(월)"
           neighborState={heptagonNeighbors}
+          selfCohortBoardRank={heptagonSelfBoardRank}
           myDisplayName={
             userProfile && (userProfile.name || userProfile.displayName) != null
               ? String(userProfile.name || userProfile.displayName)
