@@ -1,6 +1,6 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
- * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
+ * **그래프(면도)**: 축마다 30d·365d W/kg가 있으면 **동일 축** 정규화(롤링 365d≥30d)로 반지름; 없으면 순위→반지름 + 365d≥30d `max` 보정(순위만으로는 기간·코호트가 달라 보라·녹 역전 가능).
  * **집계 순위·레벨%·중앙 배지**: 카드(및 항목별 순위 모달)의 **선택 `gender`·`category`** 로 `heptagon_cohort_ranks` “동일 조건·월(환산) 점수”와 동기화. 7각형 W/kg 레이더는 **건드리지 않음**.
  * **레벨%** / **n 표기**: `heptagonUseNeffNPlusOne` — **가상·타 연령 부문**에만 Neff=n+1. **전체(Supremo)**·**본인 부문**은 집계 n만. Neff·n≥100 / Neff·n<100 식, r 1‥Neff.
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
@@ -313,19 +313,48 @@
     return Promise.all(
       DURATIONS.map(function(d) {
         return fetchRankingPayload(uid, d, period, gender).then(function(data) {
+          var cu = data && data.currentUser;
+          var wk =
+            cu && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
           return {
             rank: computeDisplayRankLikeDistribution(data, uid, category, d),
-            n: cohortSizeForCategory(data, category)
+            n: cohortSizeForCategory(data, category),
+            wkg: wk
           };
         });
       })
     );
   }
 
-  /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n → 차트·면적·레벨 동일 */
-  function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks, supremoRanks, supremoCohortNPerAxis) {
-    var mRat = monthlyRanks.map(rankToRadiusNorm);
-    var hRat = hofRanks.map(rankToRadiusNorm);
+  /**
+   * 30d(보라) vs 365d(녹) 레이더: W/kg이 있으면 **동일 축** max 기준으로 스케일(365≥30 물리 정합);
+   * 없을 때(캐시·구버전)는 순위 반지름에 축마다 `max(년, 월)` — 순위만 쓰면 기간·코호트 차로 역전 가능.
+   */
+  function heptagonRadarDisplayNorms(monthlyRanks, hofRanks, monthlyWkgs, hofWkgs) {
+    var outM = [];
+    var outH = [];
+    for (var i = 0; i < N_WKG_AXES; i++) {
+      var rm = monthlyRanks && monthlyRanks[i];
+      var ry = hofRanks && hofRanks[i];
+      var wm = monthlyWkgs && monthlyWkgs[i] != null && isFinite(Number(monthlyWkgs[i])) ? Number(monthlyWkgs[i]) : null;
+      var wy = hofWkgs && hofWkgs[i] != null && isFinite(Number(hofWkgs[i])) ? Number(hofWkgs[i]) : null;
+      if (wm != null && wy != null) {
+        var wmc = wm >= 0 ? wm : 0;
+        var wyc = Math.max(wmc, wy);
+        var denom = Math.max(wmc, wyc, 1e-9);
+        outM[i] = Math.min(0.99, Math.max(0.08, 0.08 + 0.91 * (wmc / denom)));
+        outH[i] = Math.min(0.99, Math.max(0.08, 0.08 + 0.91 * (wyc / denom)));
+      } else {
+        outM[i] = rankToRadiusNorm(rm);
+        outH[i] = Math.max(rankToRadiusNorm(ry), outM[i]);
+      }
+    }
+    return { m: outM, h: outH };
+  }
+
+  /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n + (선택) w/kg 축 → 차트 norm */
+  function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks, supremoRanks, supremoCohortNPerAxis, monthlyWkgs, hofWkgs) {
+    var pair = heptagonRadarDisplayNorms(monthlyRanks, hofRanks, monthlyWkgs, hofWkgs);
     var supremoMonthly = null;
     if (
       supremoRanks &&
@@ -338,8 +367,8 @@
     return {
       loading: false,
       err: null,
-      monthly: { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis },
-      hof: { ranks: hofRanks, norm: hRat },
+      monthly: { ranks: monthlyRanks, norm: pair.m, cohortSizePerAxis: cohortSizePerAxis, wkg: monthlyWkgs || null },
+      hof: { ranks: hofRanks, norm: pair.h, wkg: hofWkgs || null },
       supremoMonthly: supremoMonthly
     };
   }
@@ -355,6 +384,12 @@
           return x.n;
         })
       : null;
+    var mw = mRows.map(function(x) {
+      return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+    });
+    var hw = hRows.map(function(x) {
+      return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+    });
     return stateFromRanksArray(
       mRows.map(function(x) {
         return x.rank;
@@ -366,7 +401,9 @@
         return x.rank;
       }),
       sr,
-      sc
+      sc,
+      mw,
+      hw
     );
   }
 
@@ -2951,40 +2988,10 @@
       );
     }
 
-    var nHintLine =
-      uid && tierForCard && tierForCard.heptagonCohortBoardRankApplied && (tierForCard.cohortN | 0) > 0
-        ? ' 현재: ' +
-            labelForGender(gender) +
-            ' · ' +
-            labelForCategory(category) +
-            ' — n(표기)=' +
-            String(
-              heptagonCohortNDisplay(
-                tierForCard.cohortN | 0,
-                category,
-                viewerAc,
-                tierForCard.heptagonBoardVirtualCohort === true
-              )
-            ) +
-            ' — 순위·레벨%는 모달「동일 조건·월(환산) 점수 순위」와 동일' +
-            (heptagonUseNeffNPlusOne(category, viewerAc, tierForCard.heptagonBoardVirtualCohort === true)
-              ? ' (가상·타 부문: 표기 n=집계' + String(tierForCard.cohortN | 0) + '+1). '
-              : '. ')
-        : '';
-    var heptagonLevelHint =
-      uid ? (
-        <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
-          <span className="font-medium text-slate-600">집계:</span> 위 <strong>성별·카테고리</strong> = STELVIO 헵타곤 항목별 순위
-          <strong>「동일 조건·월(환산) 점수 순위」</strong>·<code>heptagon_cohort_ranks</code>와 연동합니다. 레벨%는
-          <strong> 그 순위 r</strong>·<strong>표기 n</strong> — 전체·본인 부문: 집계 n. 타 부문(가상): Neff=n+1. Neff(또는 n)로 100·미만 식.{nHintLine}
-        </p>
-      ) : null;
-
     if (DashboardCard) {
       return (
         <DashboardCard title="STELVIO 헵타곤 (레벨 포지션)">
           {filterRow}
-          {heptagonLevelHint}
           {body}
           {heptagonDetailModal}
         </DashboardCard>
@@ -2994,7 +3001,6 @@
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <h3 className="text-sm font-bold text-gray-800 mb-2">STELVIO 헵타곤 (레벨 포지션)</h3>
         {filterRow}
-        {heptagonLevelHint}
         {body}
         {heptagonDetailModal}
       </div>
