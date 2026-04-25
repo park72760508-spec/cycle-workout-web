@@ -1,8 +1,8 @@
 /**
- * STELVIO 헵타곤: 코호트별(월·성별·부문) 환산점수 합 기준 순위 → Firestore `heptagon_cohort_ranks` 배치 저장.
- * - Supremo: 전 구간(전체) 집계. Bianco/Rosa/…/Assoluto: 해당 부문 **소속** 사용자만(타 부문 열람용 가상 순위 제외).
+ * STELVIO 헵타곤: 코호트별(월·성별·부문) **전면(Supremo) 환산 점수 합**이 동일한 값으로 모든 부문에 저장되고,
+ * 각 부문 코호트에서는 이 값만으로 **내림차순** 정렬해 `boardRank`를 부여한다(부문마다 별도 환산 합을 계산하지 않음).
  * - 기간: `getRolling30DaysRangeSeoul` (최근 30일, 서울)
- * - 7축 순위: `getPeakPowerRankingEntries` (대시보드와 동일 표시순위 규칙)
+ * - 7축 `sumPositionScores`: 항상 `computeDisplayRankForUser(..., "Supremo", ...)` 랭크로만 산출
  */
 
 const HEPTAGON_DURATIONS = ["max", "1min", "5min", "10min", "20min", "40min", "60min"];
@@ -146,6 +146,33 @@ function tierIdFromP(pTotal, co) {
   return "C6";
 }
 
+/** 레벨%: n≥100 → (r/n)·100, n<100 → (r/n)·100·(100/n) — 대시보드 StelvioOctagonRanksCard 와 동일 */
+function heptagonLevelPercentForRankN(boardRank, nCohort) {
+  const Nc = nCohort | 0;
+  if (Nc < 1) return 0;
+  let r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
+  if (r < 1) r = 1;
+  if (r > Nc) r = Nc;
+  const raw = (r / Nc) * 100;
+  if (Nc >= 100) return raw;
+  return raw * (100 / Nc);
+}
+
+/**
+ * STELVIO 헵타곤 등급(표시: 레벨1~7 ↔ HC~C6)
+ * ≤3% L1, (3,7] L2, (7,20] L3, (20,40] L4, (40,60] L5, (60,90] L6, >90% L7
+ */
+function heptagonCohortBoardTierIdFromLevelPercent(p) {
+  if (!isFinite(p)) return "C6";
+  if (p <= 3) return "HC";
+  if (p <= 7) return "C1";
+  if (p <= 20) return "C2";
+  if (p <= 40) return "C3";
+  if (p <= 60) return "C4";
+  if (p <= 90) return "C5";
+  return "C6";
+}
+
 function comprehensiveRankFromSumPosition100(sum0to700, nRef) {
   const n = nRef | 0;
   if (n < 1) return NaN;
@@ -257,52 +284,69 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     batchCount = 0;
   };
 
+  /** filterGender — userId — 전면(Supremo) 기준 7축·합 (모든 부문이 동일 sum 공유) */
+  const supRowByUser = {};
+  for (const filterGender of HEPTAGON_GENDERS) {
+    const supMap = new Map();
+    for (const [userId, meta] of userMeta) {
+      if (!isUserInCohortForFilter("Supremo", meta.ageCategory)) {
+        continue;
+      }
+      const ranks = [];
+      const ns = [];
+      let ok = true;
+      for (const d of HEPTAGON_DURATIONS) {
+        const { byCategory } = cache[filterGender][d];
+        const dr = computeDisplayRankForUser(byCategory, userId, "Supremo", meta.ageCategory);
+        if (dr == null || dr.rank == null || !isFinite(Number(dr.rank))) {
+          ok = false;
+          break;
+        }
+        ranks.push(Number(dr.rank));
+        ns.push(Number(dr.n) | 0);
+      }
+      if (!ok) continue;
+      const tier = computePTotalAndTierHeptagon(ranks, ns);
+      if (!tier) continue;
+      supMap.set(userId, {
+        userId,
+        displayName: meta.displayName,
+        ageCategory: meta.ageCategory,
+        is_private: meta.is_private,
+        ranks,
+        cohortNPerAxis: ns,
+        ...tier,
+      });
+    }
+    supRowByUser[filterGender] = supMap;
+  }
+
   for (const filterGender of HEPTAGON_GENDERS) {
     for (const filterCategory of HEPTAGON_CATEGORIES) {
       const rows = [];
+      const supMap = supRowByUser[filterGender];
       for (const [userId, meta] of userMeta) {
         if (!isUserInCohortForFilter(filterCategory, meta.ageCategory)) {
           continue;
         }
-        const ranks = [];
-        const ns = [];
-        let ok = true;
-        for (const d of HEPTAGON_DURATIONS) {
-          const { byCategory } = cache[filterGender][d];
-          const dr = computeDisplayRankForUser(byCategory, userId, filterCategory, meta.ageCategory);
-          if (dr == null || dr.rank == null || !isFinite(Number(dr.rank))) {
-            ok = false;
-            break;
-          }
-          ranks.push(Number(dr.rank));
-          ns.push(Number(dr.n) | 0);
-        }
-        if (!ok) continue;
-        const tier = computePTotalAndTierHeptagon(ranks, ns);
-        if (!tier) continue;
-        rows.push({
-          userId,
-          displayName: meta.displayName,
-          ageCategory: meta.ageCategory,
-          is_private: meta.is_private,
-          filterCategory,
-          filterGender,
-          monthKey,
-          ranks,
-          cohortNPerAxis: ns,
-          ...tier,
-        });
+        const pre = supMap.get(userId);
+        if (!pre) continue;
+        rows.push({ ...pre });
       }
       rows.sort((a, b) => {
         if (b.sumPositionScores !== a.sumPositionScores) return b.sumPositionScores - a.sumPositionScores;
         return String(a.userId).localeCompare(String(b.userId));
       });
+      const L = rows.length;
       for (let i = 0; i < rows.length; i++) {
         const boardRank = i + 1;
         const r = rows[i];
         const docId = `${monthKey}_${filterCategory}_${filterGender}_${r.userId}`.replace(/\//g, "_");
         const ref = db.collection(HEPTAGON_COHORT_COL).doc(docId);
-        const crSynth = isFinite(r.comprehensiveRankSynthetic) ? Math.max(1, Math.min(r.nRef, Math.round(r.comprehensiveRankSynthetic))) : null;
+        const pCohort = heptagonLevelPercentForRankN(boardRank, L);
+        const boardTierId = heptagonCohortBoardTierIdFromLevelPercent(pCohort);
+        const crSynth = comprehensiveRankFromSumPosition100(r.sumPositionScores, L);
+        const crSynthI = isFinite(crSynth) ? Math.max(1, Math.min(L, Math.round(crSynth))) : null;
         batch.set(
           ref,
           {
@@ -314,8 +358,8 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
             userId: r.userId,
             displayName: r.displayName,
             ageCategory: r.ageCategory,
-            filterCategory: r.filterCategory,
-            filterGender: r.filterGender,
+            filterCategory,
+            filterGender,
             boardRank,
             comprehensiveRank: boardRank,
             sumPositionScores: r.sumPositionScores,
@@ -323,11 +367,11 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
             positionScores100: r.positionScores100,
             ranks: r.ranks,
             cohortNPerAxis: r.cohortNPerAxis,
-            pTier: r.pTier,
-            tierId: r.tierId,
-            nRef: r.nRef,
-            pComprehensive: r.pComprehensive,
-            comprehensiveRankSynthetic: crSynth,
+            pTier: pCohort,
+            tierId: boardTierId,
+            nRef: L,
+            pComprehensive: pCohort,
+            comprehensiveRankSynthetic: crSynthI,
             is_private: r.is_private === true,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
