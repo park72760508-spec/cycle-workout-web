@@ -1,7 +1,9 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
- * 중앙 ‘상위 n%’: **피크 W/kg 7구간** 순위로 그린 레이더(면적) 기준 종합% (TSS 제외, 순수 W/kg).
- * 등급(배지/레벨): **7축** 순위 산술평균(반올림) → (평균÷n)·100% + 기존 구간(대수/소수 K).
+ * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
+ * **레벨(배지)**: 항목별 **포지션 점수** 0~100 (1등→100, 꼴등→0, 중간=선형) → 7개 합·평균 → `pTier=100-평균`
+ *   (상위% 유사) + `stelvioOctagonPercentCutoffs(N)`(N<100 K 보정) → HC~Cat6. 면적 기반 pComprehensive는 보조.
+ * Firestore: `heptagon_rank_log/{uid}` — `saveStelvioHeptagonRankLog` (성별·부문·avgPositionScore 등).
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -11,6 +13,7 @@
   var useState = React.useState;
   var useEffect = React.useEffect;
   var useMemo = React.useMemo;
+  var useRef = React.useRef;
 
   var RANKING_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking';
 
@@ -148,6 +151,18 @@
       });
   }
 
+  /** 랭킹 API에서 나의 ageCategory(부문) 등 */
+  function fetchRankingUserMeta(uid, gender) {
+    return fetchRankingPayload(uid, 'max', 'monthly', gender).then(function(data) {
+      var cu = data && data.currentUser;
+      if (!cu) return { ageCategory: '', displayName: '' };
+      return {
+        ageCategory: cu.ageCategory != null ? String(cu.ageCategory) : '',
+        displayName: cu.name != null ? String(cu.name) : ''
+      };
+    });
+  }
+
   function cohortSizeForCategory(data, category) {
     if (!data || !data.success || !data.byCategory) return 0;
     var arr = data.byCategory[category];
@@ -155,8 +170,22 @@
   }
 
   /**
-   * 항목별: (해당 필터 코호트 내 나의 순위 / 전체 n) * 100 — 값이 낮을수록 상위
-   * 순위 없음: 해당 축 n명 중 맨 뒤로 간주(순위 n)
+   * 항목별 **포지션 점수** 0~100: 1등=100, 꼴등=0, 중간=선형 (등수 n명 기준, r=1..n).
+   * positionRatio = (n - r) / (n - 1) (n>1), n===1 → 100.
+   */
+  function positionScore100FromRank(rank, n) {
+    var ni = n | 0;
+    if (ni < 1) return 0;
+    if (rank == null || !isFinite(rank) || rank < 1) return 0;
+    var r = Math.floor(Number(rank));
+    if (r < 1) r = 1;
+    if (r > ni) r = ni;
+    if (ni === 1) return 100;
+    return (100 * (ni - r)) / (ni - 1);
+  }
+
+  /**
+   * @deprecated 테이블·레벨엔 `positionScore100FromRank` 사용. (구) 순위/인원 비
    */
   function itemPercentileFromRankAndN(rank, n) {
     var nn = n | 0;
@@ -368,7 +397,8 @@
   }
 
   /**
-   * 레벨: W/kg 피크 **7축** 순위 산술평균(반올림) → (평균/n)×100% + 기존 구간. 종합%: 면적 기반 pComprehensive.
+   * 레벨: 7축 **포지션 점수** 합(0~700)·평균(0~100) → `pTier = 100 - 평균` (낮을수록 상위) + 구간(소수 n은 K·상한).
+   * 면적 기반 pComprehensive·rankAverage(참고)는 유지. 그래프 `displayNorm`는 기존 log 스케일.
    */
   function computePTotalAndTier(ranks, cohortNPerAxis) {
     if (!ranks || !cohortNPerAxis || ranks.length !== N_WKG_AXES || cohortNPerAxis.length !== N_WKG_AXES) {
@@ -376,15 +406,14 @@
     }
     var nRef = 0;
     for (var k = 0; k < N_WKG_AXES; k++) {
-      var nk = cohortNPerAxis[k] | 0;
-      if (nk > nRef) nRef = nk;
+      var nk0 = cohortNPerAxis[k] | 0;
+      if (nk0 > nRef) nRef = nk0;
     }
     if (nRef < 1) return null;
 
-    var itemP = [];
+    var posScores = [];
     var sumR = 0;
     var allOk = true;
-    /** 차트와 동일: 각 축 API 순위 → rankToRadiusNorm (면적 산출용) */
     var displayNorm = [];
     for (var i = 0; i < N_WKG_AXES; i++) {
       var ni = (cohortNPerAxis[i] | 0) > 0 ? cohortNPerAxis[i] : nRef;
@@ -393,7 +422,7 @@
         allOk = false;
         break;
       }
-      itemP.push(itemPercentileFromRankAndN(ranks[i], ni));
+      posScores.push(positionScore100FromRank(ranks[i], ni));
       sumR += er;
       displayNorm.push(rankToRadiusNorm(ranks[i]));
     }
@@ -403,17 +432,34 @@
     if (rAvg < 1) rAvg = 1;
     if (rAvg > nRef) rAvg = nRef;
 
-    var pTotal = (rAvg / nRef) * 100;
-    if (!isFinite(pTotal)) pTotal = 100;
+    var sumPos = 0;
+    for (var j = 0; j < posScores.length; j++) sumPos += posScores[j];
+    var avgPos = sumPos / N_WKG_AXES;
+    if (!isFinite(avgPos)) avgPos = 0;
+    if (avgPos < 0) avgPos = 0;
+    if (avgPos > 100) avgPos = 100;
+
+    /** ‘상위%’ 티어 매핑(낮을수록 상위): 평균 포지션이 높을수록 pTier 낮음 */
+    var pTier = 100 - avgPos;
+    if (!isFinite(pTier)) pTier = 100;
+    if (pTier < 0) pTier = 0;
+    if (pTier > 100) pTier = 100;
 
     var cspec = stelvioOctagonPercentCutoffs(nRef);
-    var tier = tierIdFromPAndPercentCutoffs(pTotal, cspec.cutoffs);
+    var tier = tierIdFromPAndPercentCutoffs(pTier, cspec.cutoffs);
 
     var comp = comprehensivePercentFromDisplayNorm(displayNorm, nRef);
-    var pComprehensive = comp && isFinite(comp.pComprehensive) ? comp.pComprehensive : pTotal;
+    var pComprehensive = comp && isFinite(comp.pComprehensive) ? comp.pComprehensive : pTier;
+
     return {
-      itemP: itemP,
-      pTotal: pTotal,
+      itemP: posScores,
+      positionScores100: posScores,
+      sumPositionScores: sumPos,
+      avgPositionScore: avgPos,
+      pTotal: pTier,
+      pTier: pTier,
+      /** 구 방식(평균순위/n) 참고 */
+      pLegacyRankAvg: (rAvg / nRef) * 100,
       rankAverage: rAvg,
       cohortN: nRef,
       tier: tier,
@@ -464,11 +510,13 @@
     var setImgError = _img[1];
     var tid = summary && summary.tier ? summary.tier.id : '';
     var pShow =
-      summary && summary.pComprehensive != null && isFinite(summary.pComprehensive)
-        ? summary.pComprehensive
-        : summary && summary.pTotal != null
-          ? summary.pTotal
-          : -1;
+      summary && summary.pTier != null && isFinite(summary.pTier)
+        ? summary.pTier
+        : summary && summary.pComprehensive != null && isFinite(summary.pComprehensive)
+          ? summary.pComprehensive
+          : summary && summary.pTotal != null
+            ? summary.pTotal
+            : -1;
     useEffect(
       function() {
         setImgError(false);
@@ -548,6 +596,7 @@
     var _s = useState({ loading: true, err: null, monthly: null, hof: null });
     var state = _s[0];
     var setState = _s[1];
+    var saveKeyRef = useRef('');
 
     useEffect(
       function() {
@@ -611,6 +660,78 @@
         return computePTotalAndTier(state.monthly.ranks, state.monthly.cohortSizePerAxis);
       },
       [state.loading, state.monthly]
+    );
+
+    useEffect(
+      function() {
+        if (state.loading || !uid || !tierSummary || !state.monthly) return;
+        if (state.err) return;
+        if (typeof window.saveStelvioHeptagonRankLog !== 'function') return;
+        var sk =
+          uid +
+          '|' +
+          gender +
+          '|' +
+          category +
+          '|' +
+          (state.monthly.ranks
+            ? state.monthly.ranks.join(',')
+            : '') +
+          '|' +
+          (tierSummary.pTier != null ? String(tierSummary.pTier) : '');
+        if (sk === saveKeyRef.current) return;
+        saveKeyRef.current = sk;
+        var monthKeyKst = (function () {
+          var t = new Date();
+          return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+        })();
+        var disp =
+          (userProfile && (userProfile.name || userProfile.displayName)) != null
+            ? String(userProfile.name || userProfile.displayName)
+            : '';
+        fetchRankingUserMeta(uid, gender)
+          .then(function(meta) {
+            return window.saveStelvioHeptagonRankLog({
+              userId: uid,
+              displayName: disp || (meta && meta.displayName) || '',
+              filterGender: gender,
+              filterCategory: category,
+              ageCategory: (meta && meta.ageCategory) || (userProfile && userProfile.ageCategory) || '',
+              period: 'monthly',
+              monthKey: monthKeyKst,
+              ranks: state.monthly.ranks || [],
+              cohortNPerAxis: state.monthly.cohortSizePerAxis || [],
+              positionScores100: tierSummary.positionScores100 || tierSummary.itemP || [],
+              sumPositionScores: tierSummary.sumPositionScores,
+              avgPositionScore: tierSummary.avgPositionScore,
+              pTier: tierSummary.pTier,
+              tierId: tierSummary.tier && tierSummary.tier.id,
+              nRef: tierSummary.cohortN,
+              pComprehensive: tierSummary.pComprehensive
+            });
+          })
+          .catch(function() {
+            return window.saveStelvioHeptagonRankLog({
+              userId: uid,
+              displayName: disp,
+              filterGender: gender,
+              filterCategory: category,
+              ageCategory: (userProfile && userProfile.ageCategory) || '',
+              period: 'monthly',
+              monthKey: monthKeyKst,
+              ranks: state.monthly.ranks || [],
+              cohortNPerAxis: state.monthly.cohortSizePerAxis || [],
+              positionScores100: tierSummary.positionScores100 || tierSummary.itemP || [],
+              sumPositionScores: tierSummary.sumPositionScores,
+              avgPositionScore: tierSummary.avgPositionScore,
+              pTier: tierSummary.pTier,
+              tierId: tierSummary.tier && tierSummary.tier.id,
+              nRef: tierSummary.cohortN,
+              pComprehensive: tierSummary.pComprehensive
+            });
+          });
+      },
+      [state.loading, state.err, state.monthly, tierSummary, uid, gender, category, userProfile]
     );
 
     var svg = useMemo(

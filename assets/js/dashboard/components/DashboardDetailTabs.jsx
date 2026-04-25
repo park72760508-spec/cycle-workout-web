@@ -28,7 +28,7 @@
     { id: 'wkgGuide', label: '라이딩 지표' }
   ];
 
-  /** STELVIO 헵타곤(랭킹 상대%) — N≥100일 때 아래 범·표. N<100은 K·모수 보정(코드: `stelvioOctagonPercentCutoffs`) */
+  /** STELVIO 헵타곤(랭킹 상대%) — 등급은 7축 **포지션 점수**(1등=100…꼴등=0) 평균 → pTier(100-평균) + 아래. N≥100. N<100은 K·모수(코드: `stelvioOctagonPercentCutoffs`) */
   var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
     { key: 'hc', label: '레벨1', range: '5% 이하', src: 'assets/img/hc.png' },
     { key: 'c1', label: '레벨2', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.png' },
@@ -424,7 +424,7 @@
               React.createElement(
                 'p',
                 { className: 'text-gray-500 mb-2 text-[11px] leading-relaxed' },
-                '성장 추이 헵타곤(랭킹 기준)에서 사용. 지표(평균 순위 ÷ n) × 100%에 대한 등급입니다. 모수 n이 100 이상(대수)이면 5/10/20/40/60/80%를 그대로 쓰고, 100 미만(소수)이면 K=1+(100−n)/(100+n) 보정과 n 기반 상한이 적용됩니다. 성별·카테고리에 따라 n이 달라질 수 있습니다.'
+                '성장 추이 헵타곤: 지표는 항목별 (n−순위)/(n−1)×100(1등=100)의 **평균**을 100에서 뺀 pTier%로 등급합니다. n≥100이면 5/10/20/40/60/80% 컷, n<100이면 K·상한 보정. 종합 순위표는 heptagon_rank_log(성별·부문·avgPositionScore)로 쿼리하세요.'
               ),
               React.createElement('table', { className: 'w-full text-left border-collapse' },
                 React.createElement('thead', null,
