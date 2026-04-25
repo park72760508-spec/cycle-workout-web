@@ -3,7 +3,8 @@
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
  * **레벨(배지)**: 항목별 **포지션 점수** 0~100 (1등→100, 꼴등→0, 중간=선형) → 7개 합·평균 → `pTier=100-평균`
  *   (상위% 유사) + `stelvioOctagonPercentCutoffs(N)`(N<100 K 보정) → HC~Cat6. 면적 기반 pComprehensive는 보조.
- * Firestore: `heptagon_rank_log/{uid}` — `saveStelvioHeptagonRankLog` (성별·부문·avgPositionScore 등).
+ * Firestore: `heptagon_rank_log/{uid}` — `saveStelvioHeptagonRankLog` / `getStelvioHeptagonRankLog`
+ * (종합 N위 `comprehensiveRank`·티어 캐시, 로딩 시 선표시).
  */
 /* global React, useState, useEffect, useMemo, window */
 (function() {
@@ -475,6 +476,82 @@
     };
   }
 
+  function currentMonthKeyKst() {
+    var t = new Date();
+    return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+  }
+
+  function tierObjectFromStelvioId(id) {
+    var m = {
+      HC: { id: 'HC', text: 'HC', labelShort: 'HC' },
+      C1: { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' },
+      C2: { id: 'C2', text: 'Cat 2', labelShort: 'Cat 2' },
+      C3: { id: 'C3', text: 'Cat 3', labelShort: 'Cat 3' },
+      C4: { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' },
+      C5: { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' },
+      C6: { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' }
+    };
+    return m[id] || m.C6;
+  }
+
+  /**
+   * 툴팁 N위(정수)와 동일. 저장·Firestore `comprehensiveRank`에 사용.
+   */
+  function comprehensiveRankUiFromTierSummary(ts) {
+    if (!ts) return null;
+    var nC = ts.cohortN != null && isFinite(Number(ts.cohortN)) ? Math.max(0, Math.floor(Number(ts.cohortN))) : 0;
+    var rSynth = ts.comprehensiveRank != null && isFinite(Number(ts.comprehensiveRank)) ? Number(ts.comprehensiveRank) : NaN;
+    if (isNaN(rSynth) && ts.rankAverage != null && isFinite(Number(ts.rankAverage))) {
+      rSynth = Number(ts.rankAverage);
+    }
+    if (isNaN(rSynth)) return null;
+    return Math.max(1, nC > 0 ? Math.min(nC, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)));
+  }
+
+  /**
+   * 월·필터가 일치하고 `comprehensiveRank`·`tierId`가 있을 때만 중앙 오버레이용 요약(로딩 스텁).
+   */
+  function summaryFromHeptagonRankLogIfMatch(d, nowMonthKey, g, c) {
+    if (!d || d.monthKey !== nowMonthKey || d.filterGender !== g || d.filterCategory !== c) {
+      return null;
+    }
+    if (d.comprehensiveRank == null || !isFinite(Number(d.comprehensiveRank)) || d.tierId == null) {
+      return null;
+    }
+    var nRef = d.nRef != null && isFinite(Number(d.nRef)) ? Math.max(0, Math.floor(Number(d.nRef))) : 0;
+    var pTier =
+      d.pTier != null && isFinite(Number(d.pTier))
+        ? Number(d.pTier)
+        : d.pComprehensive != null && isFinite(Number(d.pComprehensive))
+          ? Number(d.pComprehensive)
+          : -1;
+    if (pTier < 0) {
+      return null;
+    }
+    var pC =
+      d.pComprehensive != null && isFinite(Number(d.pComprehensive)) ? Number(d.pComprehensive) : pTier;
+    return {
+      itemP: d.positionScores100,
+      positionScores100: d.positionScores100,
+      sumPositionScores: d.sumPositionScores,
+      avgPositionScore: d.avgPositionScore,
+      pTotal: pTier,
+      pTier: pTier,
+      pComprehensive: pC,
+      rankAverage: d.comprehensiveRank,
+      cohortN: nRef,
+      tier: tierObjectFromStelvioId(String(d.tierId)),
+      kAdjust: 1,
+      isLargeCohort: nRef >= 100,
+      tierPercentCutoffs: null,
+      displayNorm: null,
+      octagonArea: null,
+      octagonAreaMax: null,
+      octagonAreaMin: null,
+      comprehensiveRank: Number(d.comprehensiveRank)
+    };
+  }
+
   var TIER_STYLE = {
     HC: { color: '#ff1a1a', shadow: '0 0 12px #ff1a1a, 0 0 20px rgba(255,0,0,0.45)' },
     C1: { color: '#ff6b3d', shadow: '0 0 12px rgba(255,107,61,0.85), 0 0 24px rgba(255,60,0,0.4)' },
@@ -618,6 +695,36 @@
     var state = _s[0];
     var setState = _s[1];
     var saveKeyRef = useRef('');
+    var heptagonLogReqRef = useRef(0);
+    var _hLog = useState(null);
+    var heptagonRankLog = _hLog[0];
+    var setHeptagonRankLog = _hLog[1];
+
+    useEffect(
+      function() {
+        if (!uid) {
+          setHeptagonRankLog(null);
+          return;
+        }
+        if (typeof window.getStelvioHeptagonRankLog !== 'function') {
+          setHeptagonRankLog(null);
+          return;
+        }
+        heptagonLogReqRef.current = heptagonLogReqRef.current + 1;
+        var myRid = heptagonLogReqRef.current;
+        window.getStelvioHeptagonRankLog(uid).then(function(res) {
+          if (heptagonLogReqRef.current !== myRid) {
+            return;
+          }
+          if (res && res.ok) {
+            setHeptagonRankLog(res.exists && res.data ? res.data : null);
+          } else {
+            setHeptagonRankLog(null);
+          }
+        });
+      },
+      [uid, gender, category]
+    );
 
     useEffect(
       function() {
@@ -675,6 +782,16 @@
       [uid, gender, category]
     );
 
+    var heptagonSummaryCache = useMemo(
+      function() {
+        if (!heptagonRankLog) {
+          return null;
+        }
+        return summaryFromHeptagonRankLogIfMatch(heptagonRankLog, currentMonthKeyKst(), gender, category);
+      },
+      [heptagonRankLog, gender, category]
+    );
+
     var tierSummary = useMemo(
       function() {
         if (state.loading || !state.monthly || !state.monthly.cohortSizePerAxis) return null;
@@ -702,10 +819,8 @@
           (tierSummary.pTier != null ? String(tierSummary.pTier) : '');
         if (sk === saveKeyRef.current) return;
         saveKeyRef.current = sk;
-        var monthKeyKst = (function () {
-          var t = new Date();
-          return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
-        })();
+        var monthKeyKst = currentMonthKeyKst();
+        var rankForSave = comprehensiveRankUiFromTierSummary(tierSummary);
         var disp =
           (userProfile && (userProfile.name || userProfile.displayName)) != null
             ? String(userProfile.name || userProfile.displayName)
@@ -728,7 +843,8 @@
               pTier: tierSummary.pTier,
               tierId: tierSummary.tier && tierSummary.tier.id,
               nRef: tierSummary.cohortN,
-              pComprehensive: tierSummary.pComprehensive
+              pComprehensive: tierSummary.pComprehensive,
+              comprehensiveRank: rankForSave
             });
           })
           .catch(function() {
@@ -748,7 +864,8 @@
               pTier: tierSummary.pTier,
               tierId: tierSummary.tier && tierSummary.tier.id,
               nRef: tierSummary.cohortN,
-              pComprehensive: tierSummary.pComprehensive
+              pComprehensive: tierSummary.pComprehensive,
+              comprehensiveRank: rankForSave
             });
           });
       },
@@ -905,12 +1022,27 @@
         </div>
       );
     } else if (state.loading) {
-      body = (
-        <div className="h-[220px] flex flex-col items-center justify-center">
-          <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
-          <span className="text-sm text-gray-500">헵타곤 로딩…</span>
-        </div>
-      );
+      if (heptagonSummaryCache) {
+        body = (
+          <div className="h-[220px] flex flex-col items-center justify-center">
+            <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px] flex items-center justify-center min-h-[200px]">
+              <OctagonTierCenterOverlay summary={heptagonSummaryCache} />
+            </div>
+            <p className="text-xs text-center text-slate-500 mt-0 px-2">최신 헵타곤 순위를 동기화하는 중… (직전 저장값 표시)</p>
+            <div
+              className="w-8 h-8 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mt-2"
+              aria-hidden="true"
+            />
+          </div>
+        );
+      } else {
+        body = (
+          <div className="h-[220px] flex flex-col items-center justify-center">
+            <div className="w-10 h-10 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin mb-3" />
+            <span className="text-sm text-gray-500">헵타곤 로딩…</span>
+          </div>
+        );
+      }
     } else if (state.err === 'fetch') {
       body = (
         <div className="h-[180px] flex items-center justify-center text-gray-500 text-sm">랭킹을 불러오지 못했습니다. 네트워크를 확인해 주세요.</div>
