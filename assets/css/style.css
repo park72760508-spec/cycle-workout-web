@@ -5727,6 +5727,35 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding-top: 0.4rem;
   border-top: 1px solid #e9d5ff;
 }
+.stelvio-heptagon-detail-modal__boardhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0.35rem 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid #e9d5ff;
+}
+.stelvio-heptagon-detail-modal__boardhead-t {
+  margin: 0;
+  border-top: 0;
+  padding-top: 0;
+  flex: 1 1 auto;
+  min-width: 7rem;
+}
+.stelvio-heptagon-detail-modal__board-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.stelvio-heptagon-board-mini {
+  font-size: 0.72rem !important;
+  padding: 0.2rem 0.4rem !important;
+  min-height: 1.65rem;
+  max-width: 9rem;
+}
 .stelvio-heptagon-detail-modal__tablewrap--neighbor {
   max-height: 12rem;
 }
