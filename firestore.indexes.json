@@ -71,7 +71,8 @@
         { "fieldPath": "filterCategory", "order": "ASCENDING" },
         { "fieldPath": "filterGender", "order": "ASCENDING" },
         { "fieldPath": "monthKey", "order": "ASCENDING" },
-        { "fieldPath": "boardRank", "order": "DESCENDING" }
+        { "fieldPath": "boardRank", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
