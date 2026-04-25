@@ -647,6 +647,33 @@
     return out;
   }
 
+  /**
+   * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
+   */
+  function stelvioNeighborNameParts(rawName, isPrivate, rowUserId, viewerUserId, viewerGrade) {
+    var maxNameLenS = 12;
+    var raw = rawName == null || String(rawName).trim() === '' ? '(이름 없음)' : String(rawName);
+    var vg = viewerGrade != null ? String(viewerGrade) : '2';
+    var isAdmin = vg === '1' || Number(vg) === 1;
+    var isCurrent = viewerUserId && rowUserId && String(viewerUserId) === String(rowUserId);
+    var canSeeFull = isCurrent || isAdmin;
+    if (isPrivate) {
+      if (canSeeFull) {
+        return {
+          text: raw.length > maxNameLenS ? raw.substring(0, maxNameLenS - 2) + '..' : raw,
+          showPrivateBadge: true,
+          title: raw
+        };
+      }
+      return { text: raw.length >= 2 ? raw.charAt(0) + '**' : '**', showPrivateBadge: false, title: '' };
+    }
+    return {
+      text: raw.length > maxNameLenS ? raw.substring(0, maxNameLenS - 2) + '..' : raw,
+      showPrivateBadge: false,
+      title: raw
+    };
+  }
+
   function HeptagonRankDetailModal(props) {
     var onClose = props.onClose;
     var genderLabel = props.genderLabel;
@@ -656,6 +683,8 @@
     var summary = props.tierSummary;
     var neighborState = props.neighborState || { loading: false, err: null, above: [], below: [] };
     var myDisplayName = (props.myDisplayName && String(props.myDisplayName).trim()) || '나';
+    var viewerUserId = props.viewerUserId != null ? String(props.viewerUserId) : '';
+    var viewerGrade = props.viewerGrade != null ? props.viewerGrade : '2';
     useEffect(
       function() {
         if (!onClose) return;
@@ -834,12 +863,28 @@
                 </thead>
                 <tbody>
                   {(neighborState.above || []).map(function (row, idx) {
+                    var np = stelvioNeighborNameParts(
+                      row.displayName,
+                      row.isPrivate === true,
+                      row.userId,
+                      viewerUserId,
+                      viewerGrade
+                    );
                     return (
                       <tr key={'ab-' + (row.userId || idx)}>
                         <td className="stelvio-heptagon-detail-modal__tdnum">
                           {row.rank != null ? String(row.rank) + '위' : '—'}
                         </td>
-                        <td>{row.displayName || '—'}</td>
+                        <td>
+                          <span className="stelvio-heptagon-detail-modal__namecell" title={np.title || undefined}>
+                            {np.text}
+                          </span>
+                          {np.showPrivateBadge ? (
+                            <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
+                              비
+                            </span>
+                          ) : null}
+                        </td>
                         <td className="stelvio-heptagon-detail-modal__tdnum">
                           {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? row.sumPositionScores.toFixed(1) : '—'}
                         </td>
@@ -858,12 +903,28 @@
                     </td>
                   </tr>
                   {(neighborState.below || []).map(function (row, idx) {
+                    var np2 = stelvioNeighborNameParts(
+                      row.displayName,
+                      row.isPrivate === true,
+                      row.userId,
+                      viewerUserId,
+                      viewerGrade
+                    );
                     return (
                       <tr key={'be-' + (row.userId || idx)}>
                         <td className="stelvio-heptagon-detail-modal__tdnum">
                           {row.rank != null ? String(row.rank) + '위' : '—'}
                         </td>
-                        <td>{row.displayName || '—'}</td>
+                        <td>
+                          <span className="stelvio-heptagon-detail-modal__namecell" title={np2.title || undefined}>
+                            {np2.text}
+                          </span>
+                          {np2.showPrivateBadge ? (
+                            <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
+                              비
+                            </span>
+                          ) : null}
+                        </td>
                         <td className="stelvio-heptagon-detail-modal__tdnum">
                           {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? row.sumPositionScores.toFixed(1) : '—'}
                         </td>
@@ -891,6 +952,9 @@
   function OctagonTierCenterOverlay(props) {
     var summary = props.summary;
     var onOpenDetail = props.onOpenDetail;
+    var _pct = useState(false);
+    var showPct = _pct[0];
+    var setShowPct = _pct[1];
     var _img = useState(false);
     var imgError = _img[0];
     var setImgError = _img[1];
@@ -924,30 +988,24 @@
     return (
       <div className="stelvio-octagon-tier-wrap" aria-hidden={false}>
         <div className="stelvio-octagon-tier-inner stelvio-octagon-tier-inner--img">
-          <button
-            type="button"
-            className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--image"
-            aria-expanded={onOpenDetail ? 'false' : undefined}
-            aria-haspopup={onOpenDetail ? 'dialog' : undefined}
-            aria-label={
-              (rankForUi != null
-                ? levelName + ', ' + label + ', 종합 ' + String(rankForUi) + '위, ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
-                : levelName + ', ' + label + ', ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') +
-              (onOpenDetail ? '클릭하여 항목별 순위·환산 점수 보기' : '')
-            }
-            onClick={function() {
-              if (typeof onOpenDetail === 'function') {
-                onOpenDetail();
-              }
-            }}
-            title={onOpenDetail ? '클릭: 항목별 순위·환산 점수' : undefined}
-          >
-            <div className="stelvio-octagon-tier-btn-stack">
+          <div className="stelvio-octagon-tier-btn-stack">
+            <button
+              type="button"
+              className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--beast"
+              aria-label={levelName + ' 배지 · 클릭 시 항목별 순위·환산 점수 팝업'}
+              title="클릭: 항목별 순위·환산 점수"
+              onClick={function(e) {
+                e.stopPropagation();
+                if (typeof onOpenDetail === 'function') {
+                  onOpenDetail();
+                }
+              }}
+            >
               {!imgError ? (
                 <img
                   className="stelvio-octagon-tier-img"
                   src={src}
-                  alt={levelName}
+                  alt=""
                   draggable={false}
                   decoding="async"
                   onError={function() {
@@ -962,16 +1020,30 @@
                   {label}
                 </span>
               )}
-              <span className="stelvio-octagon-tier-level-name" aria-hidden="true">
-                {levelName}
-              </span>
-            </div>
-          </button>
+            </button>
+            <button
+              type="button"
+              className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag"
+              aria-pressed={showPct}
+              aria-label={
+                (rankForUi != null
+                  ? levelName + ', 종합 ' + String(rankForUi) + '위, ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                  : levelName + ', ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '클릭하여 순위·% 힌트 표시/숨김'
+              }
+              title="클릭: 순위·% 툴팁"
+              onClick={function(e) {
+                e.stopPropagation();
+                setShowPct(!showPct);
+              }}
+            >
+              <span className="stelvio-octagon-tier-level-name">{levelName}</span>
+            </button>
+          </div>
           <div
             className={
               'stelvio-octagon-tier-hint ' +
               (rankForUi != null ? 'stelvio-octagon-tier-hint--split ' : '') +
-              'stelvio-octagon-tier-hint--visible'
+              (showPct ? 'stelvio-octagon-tier-hint--visible' : '')
             }
             role="status"
           >
@@ -1239,7 +1311,8 @@
               tierId: tierSummary.tier && tierSummary.tier.id,
               nRef: tierSummary.cohortN,
               pComprehensive: tierSummary.pComprehensive,
-              comprehensiveRank: rankForSave
+              comprehensiveRank: rankForSave,
+              isPrivate: userProfile && userProfile.is_private === true
             });
           })
           .catch(function() {
@@ -1260,7 +1333,8 @@
               tierId: tierSummary.tier && tierSummary.tier.id,
               nRef: tierSummary.cohortN,
               pComprehensive: tierSummary.pComprehensive,
-              comprehensiveRank: rankForSave
+              comprehensiveRank: rankForSave,
+              isPrivate: userProfile && userProfile.is_private === true
             });
           });
       },
@@ -1432,6 +1506,8 @@
               ? String(userProfile.name || userProfile.displayName)
               : ''
           }
+          viewerUserId={uid}
+          viewerGrade={userProfile && userProfile.grade != null ? String(userProfile.grade) : '2'}
         />
       ) : null;
 
