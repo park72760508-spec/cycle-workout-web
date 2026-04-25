@@ -1,9 +1,9 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
- * **모달 상단·레벨 툴팁**: **전면(Supremo)** 집계 순위·모수·레벨%·7축 합 **고정**(성별은 모달/필터와 동기).
- * **하단 순위표**: 필터(성별·카테고리)별로 **전면 환산 합** 기준 정렬·본인 행 삽입, **표시 순위 = 정렬 후 위치**. 레벨% = (순위÷n)×100%.
- * **7축** 면도는 부문별 `compute`(로컬); 집계 레벨은 전면 병합과 별개로 읽을 수 있음.
+ * **집계 순위·레벨%·7축 환산 합(요약)**: `heptagon_cohort_ranks` **전면(Supremo) + 성별** 문서로만 `applyCohortBoardMerge` (카테고리/부문 필터는 7구간 랭킹·표 탐색에만 사용, 순위/레벨% 산정에는 사용하지 않음).
+ * **하단 보드**: 필터(성별·부문)별로 환산 합 정렬·본인 `sum` (필터 문서·없으면 Supremo 문서).
+ * **7축** 면적·표는 선택 부문·성별 `getPeakPowerRanking` 기준.
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업에서 성별·부문 선택 → 해당 필터 `heptagon_cohort_ranks` 순위표.
  */
 /* global React, useState, useEffect, useMemo, window */
@@ -1445,9 +1445,6 @@
     var _stOvlM = useState({ loading: true });
     var stelvioCohortOvlModal = _stOvlM[0];
     var setStelvioCohortOvlModal = _stOvlM[1];
-    var _stOvlS = useState({ loading: true });
-    var stelvioCohortOvlSupremo = _stOvlS[0];
-    var setStelvioCohortOvlSupremo = _stOvlS[1];
     var _hmg = useState('all');
     var heptagonModalGender = _hmg[0];
     var setHeptagonModalGender = _hmg[1];
@@ -1499,12 +1496,12 @@
         var prE = window.getStelvioHeptagonCohortEntry({
           userId: uid,
           monthKey: mk,
-          filterCategory: category,
+          filterCategory: 'Supremo',
           filterGender: gender
         });
         var prN = window.queryStelvioHeptagonCohortBoardN({
           monthKey: mk,
-          filterCategory: category,
+          filterCategory: 'Supremo',
           filterGender: gender
         });
         Promise.all([prE, prN])
@@ -1535,62 +1532,7 @@
             setStelvioCohortOvl({ loading: false, err: true, skip: true });
           });
       },
-      [uid, gender, category]
-    );
-
-    useEffect(
-      function() {
-        if (!uid) {
-          setStelvioCohortOvlSupremo({ loading: false, skip: true });
-          return;
-        }
-        if (typeof window.getStelvioHeptagonCohortEntry !== 'function' || typeof window.queryStelvioHeptagonCohortBoardN !== 'function') {
-          setStelvioCohortOvlSupremo({ loading: false, skip: true });
-          return;
-        }
-        setStelvioCohortOvlSupremo({ loading: true });
-        var effG = heptagonDetailOpen ? heptagonModalGender : gender;
-        var mkS = currentMonthKeyKst();
-        var prES = window.getStelvioHeptagonCohortEntry({
-          userId: uid,
-          monthKey: mkS,
-          filterCategory: 'Supremo',
-          filterGender: effG
-        });
-        var prNS = window.queryStelvioHeptagonCohortBoardN({
-          monthKey: mkS,
-          filterCategory: 'Supremo',
-          filterGender: effG
-        });
-        Promise.all([prES, prNS])
-          .then(function(pairS) {
-            var ceS = pairS[0];
-            var cnS = pairS[1];
-            var nTotalS = cnS && cnS.ok && cnS.nTotal > 0 ? Math.floor(cnS.nTotal) : 0;
-            if (!nTotalS) {
-              setStelvioCohortOvlSupremo({ loading: false, nTotal: 0, skip: true });
-              return;
-            }
-            if (!ceS || !ceS.ok || !ceS.exists || !ceS.data) {
-              setStelvioCohortOvlSupremo({ loading: false, nTotal: nTotalS, skip: true });
-              return;
-            }
-            var dS = ceS.data;
-            var brS = dS.boardRank;
-            if (brS == null && dS.comprehensiveRank != null) {
-              brS = dS.comprehensiveRank;
-            }
-            if (brS == null || !isFinite(brS)) {
-              setStelvioCohortOvlSupremo({ loading: false, nTotal: nTotalS, skip: true });
-              return;
-            }
-            setStelvioCohortOvlSupremo({ loading: false, nTotal: nTotalS, boardRank: brS, cohortData: dS, skip: false });
-          })
-          .catch(function() {
-            setStelvioCohortOvlSupremo({ loading: false, err: true, skip: true });
-          });
-      },
-      [uid, gender, heptagonDetailOpen, heptagonModalGender]
+      [uid, gender]
     );
 
     useEffect(
@@ -1705,25 +1647,27 @@
       [heptagonModalGender, heptagonModalCategory, gender, category, tierSummaryComputed, heptagonSummaryCache, heptagonModalRanks]
     );
 
+    var heptCohortOvlForModalHeader = useMemo(
+      function() {
+        if (!heptagonDetailOpen) {
+          return stelvioCohortOvl;
+        }
+        if (heptagonModalGender === gender) {
+          return stelvioCohortOvl;
+        }
+        return stelvioCohortOvlModal;
+      },
+      [heptagonDetailOpen, heptagonModalGender, gender, stelvioCohortOvl, stelvioCohortOvlModal]
+    );
+
     var heptagonModalHeaderSummary = useMemo(
       function() {
         if (!heptagonModalBaseTier) {
           return null;
         }
-        return applyCohortBoardMerge(heptagonModalBaseTier, stelvioCohortOvlSupremo);
+        return applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader);
       },
-      [heptagonModalBaseTier, stelvioCohortOvlSupremo]
-    );
-
-    var tierForGlobalOverlay = useMemo(
-      function() {
-        var baseOv = heptagonDetailOpen ? heptagonModalBaseTier : tierSummaryComputed || heptagonSummaryCache;
-        if (!baseOv) {
-          return null;
-        }
-        return applyCohortBoardMerge(baseOv, stelvioCohortOvlSupremo);
-      },
-      [heptagonDetailOpen, heptagonModalBaseTier, tierSummaryComputed, heptagonSummaryCache, stelvioCohortOvlSupremo]
+      [heptagonModalBaseTier, heptCohortOvlForModalHeader]
     );
 
     var heptagonDetailRows = useMemo(
@@ -1782,7 +1726,7 @@
         if (!heptagonDetailOpen || !uid) {
           return;
         }
-        if (heptagonModalGender === gender && heptagonModalCategory === category) {
+        if (heptagonModalGender === gender) {
           setStelvioCohortOvlModal({ useCard: true, loading: false });
           return;
         }
@@ -1795,12 +1739,12 @@
         var prE = window.getStelvioHeptagonCohortEntry({
           userId: uid,
           monthKey: mk,
-          filterCategory: heptagonModalCategory,
+          filterCategory: 'Supremo',
           filterGender: heptagonModalGender
         });
         var prN = window.queryStelvioHeptagonCohortBoardN({
           monthKey: mk,
-          filterCategory: heptagonModalCategory,
+          filterCategory: 'Supremo',
           filterGender: heptagonModalGender
         });
         Promise.all([prE, prN])
@@ -1831,7 +1775,7 @@
             setStelvioCohortOvlModal({ loading: false, err: true, skip: true, useCard: false });
           });
       },
-      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category]
+      [heptagonDetailOpen, uid, heptagonModalGender, gender]
     );
 
     useEffect(
@@ -2214,13 +2158,7 @@
           <div className="h-[220px] flex flex-col items-center justify-center">
             <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px] flex items-center justify-center min-h-[200px]">
               <OctagonTierCenterOverlay
-                summary={
-                  tierForGlobalOverlay != null
-                    ? tierForGlobalOverlay
-                    : heptagonSummaryCacheMerged != null
-                      ? heptagonSummaryCacheMerged
-                      : heptagonSummaryCache
-                }
+                summary={heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache}
                 onOpenDetail={onHeptagonOpenDetail}
               />
             </div>
@@ -2249,10 +2187,7 @@
           <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px]">
             {svg}
             {tierForCard ? (
-              <OctagonTierCenterOverlay
-                summary={tierForGlobalOverlay != null ? tierForGlobalOverlay : tierForCard}
-                onOpenDetail={onHeptagonOpenDetail}
-              />
+              <OctagonTierCenterOverlay summary={tierForCard} onOpenDetail={onHeptagonOpenDetail} />
             ) : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
