@@ -5758,6 +5758,11 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex: 1 1 auto;
   justify-content: flex-end;
 }
+/* 팝업 내 동일조건 필터: 카드와 동일 `stelvio-octagon-filters` 조인 셀 */
+.stelvio-heptagon-detail-modal__board-oct-filters {
+  margin-left: auto;
+  margin-right: auto;
+}
 .stelvio-heptagon-board-btngroup {
   display: flex;
   flex-wrap: wrap;
