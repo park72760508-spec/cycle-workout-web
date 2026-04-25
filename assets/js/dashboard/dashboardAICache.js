@@ -169,12 +169,12 @@
     return setCache(key, { recommendationData: recommendationData, workoutDetails: workoutDetails });
   };
 
-  /** 3: TSS 제외, 피크 W/kg 7축만 / 4: 월간·년간 7축 W/kg(축마다) 포함 — heptagonRadarDisplayNorms 동일축 정규화 */
-  var OCTAGON_CACHE_PAYLOAD_V = 4;
+  /** 3: TSS 제외, 피크 W/kg 7축만(이전 8·7축 캐시 무효) */
+  var OCTAGON_CACHE_PAYLOAD_V = 3;
 
   /**
-   * STELVIO 헵타곤 — 7축 ranks+코호트 + (v4) monthly/hof 7축 W/kg. norm은 클라이언트에서 heptagonRadarDisplayNorms로 재계산.
-   * @returns {{v:number, monthly:{ranks:Array, cohortSizePerAxis:Array, wkgs:Array}, hof:{ranks:Array, wkgs:Array}}|null}
+   * STELVIO 헵타곤 — 7축(피크 W/kg) API 결과만 저장(ranks+코호트). norm은 클라이언트에서 재계산.
+   * @returns {{v:number, monthly:{ranks:Array, cohortSizePerAxis:Array}, hof:{ranks:Array}}|null}
    */
   window.getStelvioOctagonRanksCache = function(userId, gender, category, todayStr) {
     if (!userId) return null;
@@ -187,39 +187,10 @@
     if (!Array.isArray(data.monthly.ranks) || data.monthly.ranks.length !== 7) return null;
     if (!Array.isArray(data.monthly.cohortSizePerAxis) || data.monthly.cohortSizePerAxis.length !== 7) return null;
     if (!Array.isArray(data.hof.ranks) || data.hof.ranks.length !== 7) return null;
-    if (!Array.isArray(data.monthly.wkgs) || data.monthly.wkgs.length !== 7) return null;
-    if (!Array.isArray(data.hof.wkgs) || data.hof.wkgs.length !== 7) return null;
     return data;
   };
 
-  /**
-   * @param {Array} monthlyWkgs - 7축 월간 currentUser w/kg (null 허용)
-   * @param {Array} hofWkgs - 7축 연간 currentUser w/kg (null 허용)
-   */
-  function pad7Wkgs(arr) {
-    var out = [];
-    var i;
-    for (i = 0; i < 7; i++) {
-      if (arr && arr[i] != null && isFinite(Number(arr[i]))) {
-        out.push(Number(arr[i]));
-      } else {
-        out.push(null);
-      }
-    }
-    return out;
-  }
-
-  window.setStelvioOctagonRanksCache = function(
-    userId,
-    gender,
-    category,
-    todayStr,
-    monthlyRanks,
-    cohortSizePerAxis,
-    hofRanks,
-    monthlyWkgs,
-    hofWkgs
-  ) {
+  window.setStelvioOctagonRanksCache = function(userId, gender, category, todayStr, monthlyRanks, cohortSizePerAxis, hofRanks) {
     if (!userId) return false;
     var g = gender == null || gender === '' ? 'all' : String(gender);
     var c = category == null || category === '' ? 'Supremo' : String(category);
@@ -227,15 +198,8 @@
     var key = getCacheKey('octagon', userId, g + '_' + c + '_' + d);
     var payload = {
       v: OCTAGON_CACHE_PAYLOAD_V,
-      monthly: {
-        ranks: monthlyRanks,
-        cohortSizePerAxis: cohortSizePerAxis,
-        wkgs: pad7Wkgs(Array.isArray(monthlyWkgs) ? monthlyWkgs : null)
-      },
-      hof: {
-        ranks: hofRanks,
-        wkgs: pad7Wkgs(Array.isArray(hofWkgs) ? hofWkgs : null)
-      }
+      monthly: { ranks: monthlyRanks, cohortSizePerAxis: cohortSizePerAxis },
+      hof: { ranks: hofRanks }
     };
     return setCache(key, payload);
   };
