@@ -650,10 +650,10 @@
   /**
    * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
    */
-  /** HeptagonRankDetailModal — 이웃 쿼리 오류 문구(인덱스 대기 / 미배포 구분) */
-  function stelvioHeptagonNeighborErrorMessage(err) {
+  /** HeptagonRankDetailModal — 코호트 랭킹(점수 합) 조회 오류 문구(인덱스 대기 / 미배포 구분) */
+  function stelvioHeptagonRankListErrorMessage(err) {
     if (err == null) {
-      return '이웃 목록을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
+      return '순위표를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
     }
     var s = String(err).toLowerCase();
     if (s.indexOf('building') >= 0 || s.indexOf('cannot be used yet') >= 0) {
@@ -662,7 +662,7 @@
     if (s.indexOf('index') >= 0) {
       return '복합 인덱스가 아직 없거나 쿼리와 맞지 않습니다. `firestore.indexes.json` 배포 후 인덱스가 완성될 때까지 기다리거나, 콘솔 오류에 나온 링크로 인덱스를 생성하세요.';
     }
-    return '이웃 목록을 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
+    return '순위표를 불러오지 못했습니다. 잠시 후 다시 열어 주세요.';
   }
 
   function stelvioNeighborNameParts(rawName, isPrivate, rowUserId, viewerUserId, viewerGrade) {
@@ -689,6 +689,66 @@
     };
   }
 
+  function mapHeptagonCohortToBoardRow(d, myUid) {
+    return {
+      userId: d.userId != null ? String(d.userId) : '',
+      displayName: (d.displayName && String(d.displayName).trim()) || '—',
+      boardRank: d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null,
+      sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : null,
+      isPrivate: d.is_private === true,
+      isMe: !!(myUid && d.userId != null && String(d.userId) === String(myUid)),
+      isInserted: false
+    };
+  }
+
+  /**
+   * 랭킹보드와 동일 소스(heptagon_cohort_ranks)에서 sum 내림차순 상위 N명 + 본인이 목록에 없으면
+   * boardRank(집계 1~N) 위치에 본인 행 삽입
+   */
+  function buildHeptagonModalBoardRows(leadersRaw, myUid, myCohortData) {
+    var leaders = (leadersRaw || []).map(function(d) {
+      return mapHeptagonCohortToBoardRow(d, myUid);
+    });
+    if (!myUid) {
+      return { rows: leaders, meInList: false };
+    }
+    for (var j = 0; j < leaders.length; j++) {
+      if (leaders[j].isMe) {
+        return { rows: leaders, meInList: true };
+      }
+    }
+    if (!myCohortData) {
+      return { rows: leaders, meInList: false };
+    }
+    var myR = myCohortData.boardRank != null && isFinite(Number(myCohortData.boardRank)) ? Math.max(1, Math.floor(Number(myCohortData.boardRank))) : 0;
+    if (!myR) {
+      return { rows: leaders, meInList: false };
+    }
+    var meRow = {
+      userId: String(myUid),
+      displayName: (myCohortData.displayName && String(myCohortData.displayName).trim()) || '—',
+      boardRank: myR,
+      sumPositionScores: myCohortData.sumPositionScores != null && isFinite(Number(myCohortData.sumPositionScores)) ? Number(myCohortData.sumPositionScores) : null,
+      isPrivate: myCohortData.is_private === true,
+      isMe: true,
+      isInserted: true
+    };
+    var out = [];
+    var ins = false;
+    for (var i = 0; i < leaders.length; i++) {
+      var br = leaders[i].boardRank != null && isFinite(Number(leaders[i].boardRank)) ? leaders[i].boardRank : 999999;
+      if (!ins && br > myR) {
+        out.push(meRow);
+        ins = true;
+      }
+      out.push(leaders[i]);
+    }
+    if (!ins) {
+      out.push(meRow);
+    }
+    return { rows: out, meInList: false };
+  }
+
   function HeptagonRankDetailModal(props) {
     var onClose = props.onClose;
     var genderLabel = props.genderLabel;
@@ -696,12 +756,10 @@
     var periodLabel = props.periodLabel;
     var rows = props.rows;
     var summary = props.tierSummary;
-    var neighborState = props.neighborState || { loading: false, err: null, above: [], below: [] };
+    var boardState = props.boardState || { loading: false, err: null, rows: [] };
     var myDisplayName = (props.myDisplayName && String(props.myDisplayName).trim()) || '나';
     var viewerUserId = props.viewerUserId != null ? String(props.viewerUserId) : '';
     var viewerGrade = props.viewerGrade != null ? props.viewerGrade : '2';
-    /** 이웃 표: 서버 heptagon_cohort_ranks의 집계 순위(없으면 띠 이식 rUi) */
-    var selfCohortBoardRank = props.selfCohortBoardRank;
     useEffect(
       function() {
         if (!onClose) return;
@@ -733,17 +791,6 @@
       summary.pTier != null && isFinite(Number(summary.pTier)) ? Number(summary.pTier) : null;
     var sumP = summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores)) ? Number(summary.sumPositionScores) : null;
     var avgP = summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore)) ? Number(summary.avgPositionScore) : null;
-    var rUiNeighbor;
-    if (selfCohortBoardRank != null && isFinite(Number(selfCohortBoardRank))) {
-      rUiNeighbor = Math.max(1, Math.floor(Number(selfCohortBoardRank)));
-    } else {
-      rUiNeighbor = rUi;
-    }
-    var neighborRankLabel =
-      rUiNeighbor !== '—' && rUiNeighbor != null && rUiNeighbor !== ''
-        ? String(rUiNeighbor) + '위'
-        : '—';
-
     return (
       <div
         className="stelvio-heptagon-detail-modal"
@@ -852,24 +899,25 @@
             <p className="stelvio-heptagon-detail-modal__empty">항목별 순위·점수는 랭킹 동기화 직후 표시됩니다.</p>
           )}
 
-          <div className="stelvio-heptagon-detail-modal__neighborhead">나 기준 (점수 합) 이웃</div>
-          {neighborState.loading ? (
-            <p className="stelvio-heptagon-detail-modal__neighborload">이웃 순위를 불러오는 중…</p>
+          <div className="stelvio-heptagon-detail-modal__neighborhead">동일 조건·월 종합(환산) 점수 순위</div>
+          {boardState.loading ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">순위표를 불러오는 중…</p>
           ) : null}
-          {!neighborState.loading && neighborState.err && neighborState.err !== 'no-sum' && neighborState.err !== 'no-fn' ? (
-            <p className="stelvio-heptagon-detail-modal__neighboreq">{stelvioHeptagonNeighborErrorMessage(neighborState.err)}</p>
+          {!boardState.loading && boardState.err && boardState.err !== 'no-sum' && boardState.err !== 'no-fn' ? (
+            <p className="stelvio-heptagon-detail-modal__neighboreq">{stelvioHeptagonRankListErrorMessage(boardState.err)}</p>
           ) : null}
-          {!neighborState.loading && neighborState.err === 'no-sum' ? (
-            <p className="stelvio-heptagon-detail-modal__neighborload">7축 점수 합이 없어 이웃을 표시할 수 없습니다.</p>
+          {!boardState.loading && boardState.err === 'no-sum' ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">7축 점수 합이 없어 순위표를 표시할 수 없습니다.</p>
           ) : null}
-          {!neighborState.loading && neighborState.err === 'no-fn' ? (
-            <p className="stelvio-heptagon-detail-modal__neighborload">이웃 조회 모듈이 로드되지 않았습니다.</p>
+          {!boardState.loading && boardState.err === 'no-fn' ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">코호트 랭킹 모듈이 로드되지 않았습니다.</p>
           ) : null}
-          {!neighborState.loading && sumP != null && !neighborState.err ? (
+          {!boardState.loading && sumP != null && !boardState.err ? (
             <div className="stelvio-heptagon-detail-modal__tablewrap stelvio-heptagon-detail-modal__tablewrap--neighbor">
               <table className="stelvio-heptagon-detail-modal__table" role="grid">
                 <caption className="stelvio-heptagon-detail-modal__caption">
-                  동일 필터·월에서 환산점수 합(0~700) 기준 바로 위·아래 최대 3명
+                  {categoryLabel} · {genderLabel} — 환산점수 합(0~700)이 높은 순(랭킹보드·
+                  <code>heptagon_cohort_ranks</code> 집계, 상위 200명 표시, 본인은 목록에 없을 때 집계 순위 위치에 삽입)
                 </caption>
                 <thead>
                   <tr>
@@ -883,71 +931,52 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {(neighborState.above || []).map(function (row, idx) {
-                    var np = stelvioNeighborNameParts(
-                      row.displayName,
+                  {(boardState.rows || []).map(function(row, idx) {
+                    var npb = stelvioNeighborNameParts(
+                      row.isMe ? myDisplayName : row.displayName,
                       row.isPrivate === true,
                       row.userId,
                       viewerUserId,
                       viewerGrade
                     );
+                    var rankCell =
+                      row.boardRank != null && isFinite(row.boardRank) ? String(row.boardRank) + '위' : '—';
                     return (
-                      <tr key={'ab-' + (row.userId || idx)}>
-                        <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.rank != null ? String(row.rank) + '위' : '—'}
-                        </td>
+                      <tr
+                        key={row.isMe && row.isInserted ? 'me-ins' : 'br-' + (row.userId || idx)}
+                        className={row.isMe ? 'stelvio-heptagon-detail-modal__tr--me' : ''}
+                      >
+                        <td className="stelvio-heptagon-detail-modal__tdnum">{rankCell}</td>
                         <td>
-                          <span className="stelvio-heptagon-detail-modal__namecell" title={np.title || undefined}>
-                            {np.text}
-                          </span>
-                          {np.showPrivateBadge ? (
+                          {row.isMe ? (
+                            <strong>
+                              <span className="stelvio-heptagon-detail-modal__namecell" title={npb.title || undefined}>
+                                {npb.text}
+                              </span>
+                            </strong>
+                          ) : (
+                            <span>
+                              <span className="stelvio-heptagon-detail-modal__namecell" title={npb.title || undefined}>
+                                {npb.text}
+                              </span>
+                            </span>
+                          )}
+                          {npb.showPrivateBadge ? (
                             <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
                               비
                             </span>
                           ) : null}
                         </td>
                         <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? row.sumPositionScores.toFixed(1) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="stelvio-heptagon-detail-modal__tr--me">
-                    <td className="stelvio-heptagon-detail-modal__tdnum">
-                      {neighborRankLabel}
-                    </td>
-                    <td>
-                      <strong>{myDisplayName}</strong>
-                    </td>
-                    <td className="stelvio-heptagon-detail-modal__tdnum">
-                      <strong>{sumP != null ? sumP.toFixed(1) : '—'}</strong>
-                    </td>
-                  </tr>
-                  {(neighborState.below || []).map(function (row, idx) {
-                    var np2 = stelvioNeighborNameParts(
-                      row.displayName,
-                      row.isPrivate === true,
-                      row.userId,
-                      viewerUserId,
-                      viewerGrade
-                    );
-                    return (
-                      <tr key={'be-' + (row.userId || idx)}>
-                        <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.rank != null ? String(row.rank) + '위' : '—'}
-                        </td>
-                        <td>
-                          <span className="stelvio-heptagon-detail-modal__namecell" title={np2.title || undefined}>
-                            {np2.text}
-                          </span>
-                          {np2.showPrivateBadge ? (
-                            <span className="ranking-private-badge ranking-private-badge-admin" title="비공개">
-                              비
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="stelvio-heptagon-detail-modal__tdnum">
-                          {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? row.sumPositionScores.toFixed(1) : '—'}
+                          {row.sumPositionScores != null && isFinite(row.sumPositionScores) ? (
+                            row.isMe ? (
+                              <strong>{row.sumPositionScores.toFixed(1)}</strong>
+                            ) : (
+                              row.sumPositionScores.toFixed(1)
+                            )
+                          ) : (
+                            '—'
+                          )}
                         </td>
                       </tr>
                     );
@@ -956,13 +985,14 @@
               </table>
             </div>
           ) : null}
-          {sumP != null && !neighborState.loading && !neighborState.err && (!neighborState.above || !neighborState.above.length) && (!neighborState.below || !neighborState.below.length) ? (
-            <p className="stelvio-heptagon-detail-modal__neighborload">이웃으로 표시할 다른 사용자가 없습니다. (동일 조건·저장 기준)</p>
+          {sumP != null && !boardState.loading && !boardState.err && (!boardState.rows || !boardState.rows.length) ? (
+            <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
-            환산 점수: 1위=100, 꼴등=0(구간·코호트). 상단 「종합(환산) 순위」는 7축 합 S로 nRef 띠에 이식한 N위(표시)이며, 이웃 표의 순위·본인(집계)은 Firestore
-            <code> heptagon_cohort_ranks</code> 점수 합 1~N(동일 필터)입니다(카테고리가 ‘전체(Supremo)’가 아닐 때는 그 부문 소속 사용자만). 둘은 정의가 달라 숫자가 다를 수 있습니다. 이웃 행은 DB에 있는 점수 중 나보다 합이 바로
-            위·아래(각 최대 3명)입니다. 위쪽 목록은 나와 점수가 가까운 사람부터(동일 구간에서 합이 낮은 순) 표시됩니다.
+            환산 점수: 1위=100, 꼴등=0(구간·코호트). 상단 「종합(환산) 순위」는 7축 합 S로 nRef 띠에 이식한 N위(표시)이며, 아래 표의 순위는 Firestore
+            <code> heptagon_cohort_ranks</code>에서 동일 월·필터(카테·부문)로 환산 점수 합을 랭킹보드와 같이 1, 2, 3… 정렬한 집계 순위입니다(카테고리가
+            ‘전체(Supremo)’가 아닐 때는 그 부문에 속한 사용자만). 상단 N위(표시)와 집계 순위는 정의가 달라 서로 다를 수 있습니다. 표는 점수 합이 높은
+            쪽부터 최대 200행이며, 본인이 그 안에 없으면 집계 <code>boardRank</code>에 맞는 위치에 본인 행을 넣어 보여줍니다.
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
@@ -1112,13 +1142,9 @@
     var _dOpen = useState(false);
     var heptagonDetailOpen = _dOpen[0];
     var setHeptagonDetailOpen = _dOpen[1];
-    var _nb = useState({ loading: false, err: null, above: [], below: [] });
-    var heptagonNeighbors = _nb[0];
-    var setHeptagonNeighbors = _nb[1];
-    var _hbr = useState(null);
-    var heptagonSelfBoardRank = _hbr[0];
-    var setHeptagonSelfBoardRank = _hbr[1];
-
+    var _hb = useState({ loading: false, err: null, rows: [] });
+    var heptagonBoard = _hb[0];
+    var setHeptagonBoard = _hb[1];
     useEffect(
       function() {
         if (!uid) {
@@ -1247,48 +1273,31 @@
     useEffect(
       function() {
         if (!heptagonDetailOpen) {
-          setHeptagonSelfBoardRank(null);
-        }
-      },
-      [heptagonDetailOpen]
-    );
-
-    useEffect(
-      function() {
-        if (!heptagonDetailOpen) {
           return;
         }
         if (!uid) {
-          setHeptagonNeighbors({ loading: false, err: null, above: [], below: [] });
-          setHeptagonSelfBoardRank(null);
+          setHeptagonBoard({ loading: false, err: null, rows: [] });
           return;
         }
         if (!heptagonModalSummary) {
-          setHeptagonNeighbors({ loading: false, err: 'no-sum', above: [], below: [] });
-          setHeptagonSelfBoardRank(null);
+          setHeptagonBoard({ loading: false, err: 'no-sum', rows: [] });
           return;
         }
         if (!isFinite(Number(heptagonModalSummary.sumPositionScores))) {
-          setHeptagonNeighbors({ loading: false, err: 'no-sum', above: [], below: [] });
-          setHeptagonSelfBoardRank(null);
+          setHeptagonBoard({ loading: false, err: 'no-sum', rows: [] });
           return;
         }
-        if (typeof window.queryStelvioHeptagonSumNeighbors !== 'function') {
-          setHeptagonNeighbors({ loading: false, err: 'no-fn', above: [], below: [] });
-          setHeptagonSelfBoardRank(null);
+        if (typeof window.queryStelvioHeptagonCohortBySumDesc !== 'function') {
+          setHeptagonBoard({ loading: false, err: 'no-fn', rows: [] });
           return;
         }
-        setHeptagonNeighbors({ loading: true, err: null, above: [], below: [] });
-        setHeptagonSelfBoardRank(null);
-        var s = Number(heptagonModalSummary.sumPositionScores);
+        setHeptagonBoard({ loading: true, err: null, rows: [] });
         var mk = currentMonthKeyKst();
-        var prNeighbor = window.queryStelvioHeptagonSumNeighbors({
-          mySum: s,
-          myUserId: uid,
+        var prBoard = window.queryStelvioHeptagonCohortBySumDesc({
           monthKey: mk,
           filterCategory: category,
           filterGender: gender,
-          limit: 3
+          limit: 200
         });
         var prCohort =
           typeof window.getStelvioHeptagonCohortEntry === 'function'
@@ -1299,34 +1308,24 @@
                 filterGender: gender
               })
             : Promise.resolve({ ok: false, exists: false, data: null });
-        Promise.all([prCohort, prNeighbor])
-          .then(function (pair) {
+        Promise.all([prCohort, prBoard])
+          .then(function(pair) {
             var cr = pair[0];
             var res = pair[1];
-            if (cr && cr.ok && cr.exists && cr.data) {
-              var brr = cr.data.boardRank;
-              if (brr != null && isFinite(Number(brr))) {
-                setHeptagonSelfBoardRank(Math.max(1, Math.floor(Number(brr))));
-              } else {
-                setHeptagonSelfBoardRank(null);
-              }
-            } else {
-              setHeptagonSelfBoardRank(null);
-            }
             if (res && res.ok) {
-              setHeptagonNeighbors({ loading: false, err: null, above: res.above || [], below: res.below || [] });
+              var myData = cr && cr.ok && cr.exists && cr.data ? cr.data : null;
+              var built = buildHeptagonModalBoardRows(res.items || [], uid, myData);
+              setHeptagonBoard({ loading: false, err: null, rows: built.rows, meInList: built.meInList });
             } else {
-              setHeptagonNeighbors({
+              setHeptagonBoard({
                 loading: false,
                 err: (res && res.error) || 'fetch',
-                above: [],
-                below: []
+                rows: []
               });
             }
           })
           .catch(function() {
-            setHeptagonSelfBoardRank(null);
-            setHeptagonNeighbors({ loading: false, err: 'catch', above: [], below: [] });
+            setHeptagonBoard({ loading: false, err: 'catch', rows: [] });
           });
       },
       [heptagonDetailOpen, uid, heptagonModalSummary, category, gender]
@@ -1565,8 +1564,7 @@
           genderLabel={labelForGender(gender)}
           categoryLabel={labelForCategory(category)}
           periodLabel="최근 30일 피크 파워(월)"
-          neighborState={heptagonNeighbors}
-          selfCohortBoardRank={heptagonSelfBoardRank}
+          boardState={heptagonBoard}
           myDisplayName={
             userProfile && (userProfile.name || userProfile.displayName) != null
               ? String(userProfile.name || userProfile.displayName)
