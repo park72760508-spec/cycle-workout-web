@@ -5514,6 +5514,29 @@ body:has(#trainingDetailModal:not(.hidden)) {
   transform: translateY(0);
   pointer-events: auto;
 }
+/* 헵타곤 레벨: 순위 + pTier% 두 줄 */
+.stelvio-octagon-tier-hint--split.stelvio-octagon-tier-hint--visible {
+  max-height: 4rem;
+}
+.stelvio-octagon-tier-hint-split {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+.stelvio-octagon-tier-hint-rank {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+.stelvio-octagon-tier-hint-pct {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+}
 
 /* ② 내 랭킹 요약 Hero 카드 */
 .stelvio-hero-card {
