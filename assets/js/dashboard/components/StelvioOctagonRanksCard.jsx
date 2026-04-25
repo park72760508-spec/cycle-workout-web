@@ -199,7 +199,11 @@
   }
 
   function fetchRankingPayload(uid, duration, period, gender) {
-    return fetch(buildRankingUrl(uid, duration, period, gender), { method: 'GET', mode: 'cors' })
+    return fetch(buildRankingUrl(uid, duration, period, gender), {
+      method: 'GET',
+      mode: 'cors',
+      cache: 'no-store'
+    })
       .then(function(res) {
         return res.json().catch(function() {
           return { success: false };
@@ -1869,6 +1873,8 @@
     var state = _s[0];
     var setState = _s[1];
     var saveKeyRef = useRef('');
+    /** getPeakPowerRanking 다중 요청·탭 전환·uid 해제 시 지난 Promise가 setState 하지 않도록 단조 증가 시퀀스(클로저 cancel 대비) */
+    var stelvioOctaFetchSeqRef = useRef(0);
     var heptagonLogReqRef = useRef(0);
     var stelvioOvlReqRef = useRef(0);
     var stelvioOvlModalReqRef = useRef(0);
@@ -2012,6 +2018,7 @@
     useEffect(
       function() {
         if (!uid) {
+          stelvioOctaFetchSeqRef.current = stelvioOctaFetchSeqRef.current + 1;
           setState({ loading: false, err: 'noUser', monthly: null, hof: null, supremoMonthly: null });
           return;
         }
@@ -2025,7 +2032,7 @@
                 );
               })();
 
-        /** 캐시는 표시에 쓰지 않고, 네트워크 실패 시에만 폴백. 무효화는 ref 비교 대신 effect 인스턴스별 `cancelled`(Strict/탭 전환 시 ref 오프셋으로 then이 영구 스킵되는 문제 방지). */
+        /** 캐시는 표시에 쓰지 않고, 네트워크 실패 시에만 폴백. */
         var cachePayload = null;
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
@@ -2034,7 +2041,8 @@
           }
         }
 
-        var cancelled = false;
+        stelvioOctaFetchSeqRef.current = stelvioOctaFetchSeqRef.current + 1;
+        var myFetchSeq = stelvioOctaFetchSeqRef.current;
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
 
         Promise.all([
@@ -2043,7 +2051,7 @@
           fetchRanksSet(uid, 'monthly', gender, 'Supremo')
         ])
           .then(function(results) {
-            if (cancelled) {
+            if (myFetchSeq !== stelvioOctaFetchSeqRef.current) {
               return;
             }
             var mRows = results[0];
@@ -2068,7 +2076,7 @@
             }
           })
           .catch(function() {
-            if (cancelled) {
+            if (myFetchSeq !== stelvioOctaFetchSeqRef.current) {
               return;
             }
             if (cachePayload) {
@@ -2085,7 +2093,7 @@
           });
 
         return function stelvioOctagonRanksCleanup() {
-          cancelled = true;
+          stelvioOctaFetchSeqRef.current = stelvioOctaFetchSeqRef.current + 1;
         };
       },
       [uid, gender, category]
@@ -2581,8 +2589,22 @@
           for (var gi = 0; gi < nAxis; gi++) gr.push(g);
           return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
         });
+        var svgDataKey =
+          String(gender) +
+          '|' +
+          String(category) +
+          '|' +
+          (state.monthly && state.monthly.ranks ? state.monthly.ranks.join(',') : '') +
+          '|' +
+          (state.hof && state.hof.ranks ? state.hof.ranks.join(',') : '');
         return (
-          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
+          <svg
+            key={svgDataKey}
+            viewBox="0 0 200 200"
+            className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation"
+            role="img"
+            aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션"
+          >
             {grid.map(function(d, idx) {
               return (
                 <path
@@ -2649,7 +2671,7 @@
           </svg>
         );
       },
-      [state]
+      [state.loading, state.err, state.monthly, state.hof, gender, category]
     );
 
     var filterRow = null;
