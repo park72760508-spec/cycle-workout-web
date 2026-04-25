@@ -1,8 +1,8 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
- * **집계 순위·레벨%·이미지(중앙—헵타곤)**: `동일 조건·월(환산) 점수 순위`와 **동일**한 `heptagon_cohort_ranks` 조회, 단 **성별=전체·부문=전체(Supremo)만** 사용(본인 `boardRank`·코호트 모수 n). 7각형 W/kg·필터는 **선택 성별·부문** 그대로.
- * **레벨%**: 실집계(Supremo·해당 부문에 본인 포함) → (r÷n)×100. 타 부문 **가상** 순위만 (r÷(n+1))×100. (팝업 상단은 필터·동일 쿼리)
+ * **집계 순위·레벨%·중앙 배지**: 카드(및 항목별 순위 모달)의 **선택 `gender`·`category`** 로 `heptagon_cohort_ranks` “동일 조건·월(환산) 점수”와 동기화. 7각형 W/kg 레이더는 **건드리지 않음**.
+ * **레벨%** `heptagonLevelPercentForRankN`: `finalN` = (가상이면 n+1, 아니면 n), n≥100 → (r/finalN)×100, n<100 → ((r/finalN)/(100/finalN))×100.
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
  */
@@ -168,6 +168,24 @@
     if (!data || !data.success || !data.byCategory) return 0;
     var arr = data.byCategory[category];
     return Array.isArray(arr) ? arr.length : 0;
+  }
+
+  /**
+   * `heptagon_cohort_ranks` / 랭킹과 동일: 사용자가 선택 부문·코호트에 “소속”되는지(전체 Supremo는 항상 true).
+   */
+  function isUserInCohortForFilter(filterCategory, userAgeCategory) {
+    var f = String(filterCategory != null ? filterCategory : 'Supremo');
+    var ac = String(userAgeCategory != null ? userAgeCategory : '');
+    if (f === 'Supremo') {
+      return true;
+    }
+    if (f === 'Assoluto') {
+      return ac === 'Assoluto';
+    }
+    if (!ac) {
+      return false;
+    }
+    return ac === f;
   }
 
   /**
@@ -397,8 +415,7 @@
   }
 
   /**
-   * 집계 레벨%: `isVirtualCohort`가 아니면 (r÷n)×100 — Supremo·본인 부문 실집계에 본인이 n에 이미 포함.
-   * 가상 순위(다른 부문 열람)일 때만 (r÷(n+1))×100. 등급: ≤3%·(3,7]·…·(90,100] → HC~C6(레벨1~7).
+   * 집계 레벨%: isVirt면 finalN = n+1, 아니면 n. finalN≥100 → (r/finalN)×100, 미만 → 스케일 식. 등급: ≤3%·…
    */
   var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
 
@@ -408,12 +425,16 @@
     var isVirt = isVirtualCohort === true;
     var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
     if (r < 1) r = 1;
-    if (isVirt) {
-      if (r > Nc + 1) r = Nc + 1;
-      return (r / (Nc + 1)) * 100;
+    var finalN = isVirt ? Nc + 1 : Nc;
+    if (r > finalN) r = finalN;
+    var p;
+    if (finalN >= 100) {
+      p = (r / finalN) * 100;
+    } else {
+      var n2 = 100 / finalN;
+      p = ((r / finalN) / n2) * 100;
     }
-    if (r > Nc) r = Nc;
-    return (r / Nc) * 100;
+    return p;
   }
 
   function heptagonBoardTierIdFromLevelPercent(p) {
@@ -454,7 +475,7 @@
    * `heptagon_cohort_ranks` 집계(월·필터): 전면 환산 합 기준 집계 순위, 레벨%·레벨은 `heptagonBoardTierObjectFromRankN`.
    * @param {object|null} tierBase 7축·합산(포지션 점수) 기반 요약
    * @param {{ loading?: boolean, skip?: boolean, err?: boolean, nTotal?: number, boardRank?: number, cohortData?: object, isVirtualCohort?: boolean }} ovl
-   *         `isVirtualCohort`: 타 부문 가상 순위로 합성할 때만 true → 레벨% (r÷(n+1))×100. Firestore 실문서·Supremo·본인 부문은 false.
+   *         `isVirtualCohort`: 타 부문 열람(가상)만 true, Supremo·본인 부문 실문서는 false. 레벨% → `heptagonLevelPercentForRankN`.
    */
   function applyCohortBoardMerge(tierBase, ovl) {
     if (!tierBase) {
@@ -503,7 +524,7 @@
     out.tier = hb.tier;
     out.tierPercentCutoffs = HEPTAGON_BOARD_PCT_CUTS;
     out.kAdjust = 1;
-    out.isLargeCohort = nTot >= 100;
+    out.isLargeCohort = (isVirt ? nTot + 1 : nTot) >= 100;
     out.heptagonBoardTierMode = hb.mode;
     out.heptagonBoardUpperRankBounds = hb.upperRankBounds;
     var d = ovl.cohortData;
@@ -640,12 +661,14 @@
   function comprehensiveRankUiFromTierSummary(ts) {
     if (!ts) return null;
     var nC = ts.cohortN != null && isFinite(Number(ts.cohortN)) ? Math.max(0, Math.floor(Number(ts.cohortN))) : 0;
+    var isV = ts.heptagonBoardVirtualCohort === true;
+    var cap = nC > 0 ? (isV ? nC + 1 : nC) : 0;
     var rSynth = ts.comprehensiveRank != null && isFinite(Number(ts.comprehensiveRank)) ? Number(ts.comprehensiveRank) : NaN;
     if (isNaN(rSynth) && ts.rankAverage != null && isFinite(Number(ts.rankAverage))) {
       rSynth = Number(ts.rankAverage);
     }
     if (isNaN(rSynth)) return null;
-    return Math.max(1, nC > 0 ? Math.min(nC, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)));
+    return Math.max(1, cap > 0 ? Math.min(cap, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)));
   }
 
   /**
@@ -975,6 +998,126 @@
     return { rows: out2, meInList: false };
   }
 
+  /**
+   * 대시보드·모달 공통: 선택 gender·category 로 “동일 조건·환산 점수” 코호트 집계 또는 Supremo+삽입 가상 순위.
+   * @returns {Promise<{ ok: boolean, skip?: boolean, nTotal?: number, boardRank?: number, cohortData?: object, isVirtualCohort?: boolean }>}
+   */
+  function loadStelvioCohortOvlData(uid, monthKey, gender, category, ageCategoryHint) {
+    var getE = window.getStelvioHeptagonCohortEntry;
+    var qN = window.queryStelvioHeptagonCohortBoardN;
+    var qList = window.queryStelvioHeptagonCohortBySumDesc;
+    if (typeof getE !== 'function' || typeof qN !== 'function') {
+      return Promise.resolve({ ok: false, skip: true });
+    }
+    return fetchRankingUserMeta(uid, gender).then(function(meta) {
+      var ac = ageCategoryHint != null && String(ageCategoryHint).trim() !== '' ? String(ageCategoryHint) : '';
+      if ((!ac || ac === '') && meta && meta.ageCategory) {
+        ac = String(meta.ageCategory);
+      }
+      if (isUserInCohortForFilter(category, ac)) {
+        return Promise.all([
+          getE({
+            userId: uid,
+            monthKey: monthKey,
+            filterCategory: category,
+            filterGender: gender
+          }),
+          qN({
+            monthKey: monthKey,
+            filterCategory: category,
+            filterGender: gender
+          })
+        ]).then(function(pair) {
+          var ce = pair[0];
+          var cn = pair[1];
+          var nTotal = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
+          if (nTotal < 1) {
+            return { ok: true, skip: true, nTotal: 0 };
+          }
+          if (!ce || !ce.ok || !ce.exists || !ce.data) {
+            return { ok: true, skip: true, nTotal: nTotal };
+          }
+          var d = ce.data;
+          var br = d.boardRank;
+          if (br == null && d.comprehensiveRank != null) {
+            br = d.comprehensiveRank;
+          }
+          if (br == null || !isFinite(br)) {
+            return { ok: true, skip: true, nTotal: nTotal };
+          }
+          return {
+            ok: true,
+            skip: false,
+            nTotal: nTotal,
+            boardRank: br,
+            cohortData: d,
+            isVirtualCohort: false
+          };
+        });
+      }
+      if (typeof qList !== 'function') {
+        return { ok: false, skip: true };
+      }
+      return Promise.all([
+        getE({
+          userId: uid,
+          monthKey: monthKey,
+          filterCategory: 'Supremo',
+          filterGender: gender
+        }),
+        qN({
+          monthKey: monthKey,
+          filterCategory: category,
+          filterGender: gender
+        }),
+        qList({
+          monthKey: monthKey,
+          filterCategory: category,
+          filterGender: gender,
+          limit: 500
+        })
+      ]).then(function(triple) {
+        var crS = triple[0];
+        var cn = triple[1];
+        var res = triple[2];
+        var nFromQ = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
+        var itemsRaw = res && res.ok ? res.items || [] : [];
+        var nRec = reconcileHeptagonCohortNFromList(nFromQ, itemsRaw);
+        if (nRec < 1) {
+          return { ok: true, skip: true, nTotal: 0 };
+        }
+        if (!crS || !crS.ok || !crS.exists || !crS.data) {
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        if (crS.data.sumPositionScores == null || !isFinite(Number(crS.data.sumPositionScores))) {
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        if (!res || !res.ok) {
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        var built = buildHeptagonModalBoardRows(itemsRaw, uid, null, crS.data);
+        var dr = null;
+        for (var hi = 0; hi < (built.rows || []).length; hi++) {
+          if (built.rows[hi].isMe && built.rows[hi].displayRank != null) {
+            dr = built.rows[hi].displayRank;
+            break;
+          }
+        }
+        if (dr == null) {
+          return { ok: true, skip: true, nTotal: nRec };
+        }
+        return {
+          ok: true,
+          skip: false,
+          nTotal: nRec,
+          boardRank: dr,
+          cohortData: { sumPositionScores: Number(crS.data.sumPositionScores) },
+          isVirtualCohort: true
+        };
+      });
+    });
+  }
+
   function HeptagonRankDetailModal(props) {
     var onClose = props.onClose;
     var genderLabel = props.genderLabel;
@@ -1012,12 +1155,13 @@
     var isVirtPct = summary.heptagonBoardVirtualCohort === true;
     var tid = summary.tier.id;
     var nC = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
+    var nCapR = nC > 0 ? (isVirtPct ? nC + 1 : nC) : 0;
     var rComp = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
     var rUi =
-      !isNaN(rComp) && nC > 0
-        ? Math.max(1, Math.min(nC, Math.floor(rComp + 0.5)))
+      !isNaN(rComp) && nCapR > 0
+        ? Math.max(1, Math.min(nCapR, Math.floor(rComp + 0.5)))
         : summary.rankAverage != null && isFinite(Number(summary.rankAverage))
-          ? Math.max(1, nC > 0 ? Math.min(nC, Math.floor(Number(summary.rankAverage) + 0.5)) : Math.floor(Number(summary.rankAverage) + 0.5))
+          ? Math.max(1, nCapR > 0 ? Math.min(nCapR, Math.floor(Number(summary.rankAverage) + 0.5)) : Math.floor(Number(summary.rankAverage) + 0.5))
           : '—';
     var pT =
       summary.pTier != null && isFinite(Number(summary.pTier)) ? Number(summary.pTier) : null;
@@ -1085,11 +1229,11 @@
                 className="stelvio-heptagon-detail-modal__summary-row"
                 title={
                   isVirtPct
-                    ? '가상 순위(타 부문): 레벨% = (순위 r ÷ (n+1))×100'
-                    : '실집계(Supremo·본인 부문): 레벨% = (순위 r ÷ n)×100 (본인이 모수 n에 포함)'
+                    ? '가상: finalN=n+1, 모수≥100 → (r÷finalN)×100, 미만 → ((r÷finalN)÷(100÷finalN))×100'
+                    : '실집계: finalN=n, 위와 동일 식(본인이 모수에 포함)'
                 }
               >
-                <span>레벨 % {isVirtPct ? '(가상: 순위÷(n+1)×100)' : '(실집계: 순위÷n×100)'}</span>
+                <span>레벨 % {isVirtPct ? '(가상·finalN=n+1)' : '(실집계·finalN=n)'}</span>
                 <strong>{pT.toFixed(2)}%</strong>
               </div>
             ) : null}
@@ -1108,9 +1252,8 @@
             {nC > 0 ? (
               <div className="stelvio-heptagon-detail-modal__summary-foot">
                 <span className="stelvio-heptagon-detail-modal__nref">
-                  참조 코호트(집계) 모수 n = {nC}. 대시보드 <strong>헵타곤(레벨 포지션)</strong> 중앙은
-                  <strong> Supremo·성별전체</strong> 실집계(레벨% 순위÷n×100)입니다. 이 상단은 아래
-                  “동일 조건” 필터이며, 타 부문 열람(가상)일 때만 레벨%에 (n+1) 분모를 씁니다.
+                  참조 코호트(집계) 모수 n = {nC}. <strong>대시보드 헵타곤 중앙</strong>은 카드에서 선택한 성별·부문과
+                  동일·동기화되며, 이 상단 요약은 아래 “동일 조건”과 같은 필터입니다(가상일 때 finalN = n+1).
                 </span>
               </div>
             ) : null}
@@ -1302,12 +1445,12 @@
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
             <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>7축 환산 합(전면)</strong>이 모든 부문·성별
-            문서에 동일 값으로 저장됩니다. 선택한 부문·성별에서 그 합으로             집계 순위(본인이 해당 부문이면
-            <strong> 본인 정식 순위</strong>, 열람만 하면 본인 환산 합을 끼워 넣은 가상 순위)이며, 레벨%는
-            <strong> 실집계(Supremo·본인 부문)는 (순위÷n)×100% </strong>, <strong>타 부문 열람(가상)은 (순위÷(n+1))×100% </strong>
-            입니다. <strong>7구간 표(위)</strong>는 W/kg 7축(랭킹보드·카드와 동일 필터), <strong>아래 표</strong>는 동일
-            조건·환산 합(최대 500행)입니다. <strong>헵타곤(레벨 포지션) 중앙</strong>은
-            <strong> Supremo·성별전체</strong> 실집계 순위·레벨%·레벨입니다.
+            문서에 동일 값으로 저장됩니다. 집계 순위(해당 부문이면
+            <strong> 본인 정식 순위</strong>, 그렇지 않으면 Supremo 환산 합을 해당 부문 500명 목록에 삽입한
+            <strong> 가상 순위</strong>)과 레벨%는 <code>heptagonLevelPercentForRankN</code>·finalN(실집계 n, 가상 n+1),
+            모수 100 기준으로 나눈 식을 씁니다. <strong>7구간 표(위)</strong>는 W/kg 7축(카드·랭킹과 동일 필터),
+            <strong> 대시보드 중앙 배지</strong>는 카드의 성별·부문 필터와 이 화면 “동일 조건”이 일치할 때 동일
+            수치로 맞춰집니다.
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
@@ -1349,10 +1492,12 @@
     var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
     var nCohort = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
+    var isVirtBoard = summary.heptagonBoardVirtualCohort === true;
+    var rankCap = nCohort > 0 ? (isVirtBoard ? nCohort + 1 : nCohort) : 0;
     var rSynth = summary.comprehensiveRank != null && isFinite(Number(summary.comprehensiveRank)) ? Number(summary.comprehensiveRank) : NaN;
     var rFallback = summary.rankAverage != null && isFinite(Number(summary.rankAverage)) ? Math.round(Number(summary.rankAverage)) : null;
     var rankForUi = !isNaN(rSynth)
-      ? Math.max(1, nCohort > 0 ? Math.min(nCohort, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)))
+      ? Math.max(1, rankCap > 0 ? Math.min(rankCap, Math.round(rSynth)) : Math.max(1, Math.round(rSynth)))
       : rFallback;
 
     return (
@@ -1397,10 +1542,10 @@
               aria-pressed={showPct}
               aria-label={
                 (rankForUi != null
-                  ? levelName + ', 전면·성별전체 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '% (순위÷n×100, 실집계). '
+                  ? levelName + ', 동일 조건·환산 집계 ' + String(rankForUi) + '위, 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
                   : levelName + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. ') + '클릭하여 순위·% 힌트 표시/숨김'
               }
-              title="전면·성별전체 실집계 — 레벨% 순위÷n×100 — 클릭: 툴팁"
+              title="동일 조건(카드 필터) 집계 · 레벨% — 클릭: 툴팁"
               onClick={function(e) {
                 e.stopPropagation();
                 setShowPct(!showPct);
@@ -1451,6 +1596,8 @@
     var setState = _s[1];
     var saveKeyRef = useRef('');
     var heptagonLogReqRef = useRef(0);
+    var stelvioOvlReqRef = useRef(0);
+    var stelvioOvlModalReqRef = useRef(0);
     var _hLog = useState(null);
     var heptagonRankLog = _hLog[0];
     var setHeptagonRankLog = _hLog[1];
@@ -1512,48 +1659,45 @@
           setStelvioCohortOvl({ loading: false, skip: true });
           return;
         }
+        stelvioOvlReqRef.current = stelvioOvlReqRef.current + 1;
+        var reqId = stelvioOvlReqRef.current;
         setStelvioCohortOvl({ loading: true });
         var mk = currentMonthKeyKst();
-        var prE = window.getStelvioHeptagonCohortEntry({
-          userId: uid,
-          monthKey: mk,
-          filterCategory: 'Supremo',
-          filterGender: 'all'
-        });
-        var prN = window.queryStelvioHeptagonCohortBoardN({
-          monthKey: mk,
-          filterCategory: 'Supremo',
-          filterGender: 'all'
-        });
-        Promise.all([prE, prN])
-          .then(function(pair) {
-            var ce = pair[0];
-            var cn = pair[1];
-            var nTotal = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
-            if (!nTotal) {
-              setStelvioCohortOvl({ loading: false, nTotal: 0, skip: true });
+        var ageHint = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
+        loadStelvioCohortOvlData(uid, mk, gender, category, ageHint)
+          .then(function(result) {
+            if (stelvioOvlReqRef.current !== reqId) {
               return;
             }
-            if (!ce || !ce.ok || !ce.exists || !ce.data) {
-              setStelvioCohortOvl({ loading: false, nTotal: nTotal, skip: true });
+            if (!result || !result.ok) {
+              setStelvioCohortOvl({ loading: false, skip: true });
               return;
             }
-            var d = ce.data;
-            var br = d.boardRank;
-            if (br == null && d.comprehensiveRank != null) {
-              br = d.comprehensiveRank;
-            }
-            if (br == null || !isFinite(br)) {
-              setStelvioCohortOvl({ loading: false, nTotal: nTotal, skip: true });
+            if (result.skip) {
+              setStelvioCohortOvl({
+                loading: false,
+                skip: true,
+                nTotal: result.nTotal != null ? result.nTotal : 0
+              });
               return;
             }
-            setStelvioCohortOvl({ loading: false, nTotal: nTotal, boardRank: br, cohortData: d, skip: false });
+            setStelvioCohortOvl({
+              loading: false,
+              nTotal: result.nTotal,
+              boardRank: result.boardRank,
+              cohortData: result.cohortData,
+              skip: false,
+              isVirtualCohort: result.isVirtualCohort === true
+            });
           })
           .catch(function() {
+            if (stelvioOvlReqRef.current !== reqId) {
+              return;
+            }
             setStelvioCohortOvl({ loading: false, err: true, skip: true });
           });
       },
-      [uid]
+      [uid, gender, category, userProfile && userProfile.ageCategory]
     );
 
     useEffect(
@@ -1673,12 +1817,12 @@
         if (!heptagonDetailOpen) {
           return stelvioCohortOvl;
         }
-        if (heptagonModalGender === 'all' && heptagonModalCategory === 'Supremo') {
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
           return stelvioCohortOvl;
         }
         return stelvioCohortOvlModal;
       },
-      [heptagonDetailOpen, heptagonModalGender, heptagonModalCategory, stelvioCohortOvl, stelvioCohortOvlModal]
+      [heptagonDetailOpen, heptagonModalGender, heptagonModalCategory, gender, category, stelvioCohortOvl, stelvioCohortOvlModal]
     );
 
     var heptagonModalHeaderSummary = useMemo(
@@ -1747,7 +1891,7 @@
         if (!heptagonDetailOpen || !uid) {
           return;
         }
-        if (heptagonModalGender === 'all' && heptagonModalCategory === 'Supremo') {
+        if (heptagonModalGender === gender && heptagonModalCategory === category) {
           setStelvioCohortOvlModal({ useCard: true, loading: false });
           return;
         }
@@ -1755,48 +1899,47 @@
           setStelvioCohortOvlModal({ loading: false, skip: true });
           return;
         }
+        stelvioOvlModalReqRef.current = stelvioOvlModalReqRef.current + 1;
+        var mReq = stelvioOvlModalReqRef.current;
         setStelvioCohortOvlModal({ loading: true });
         var mk = currentMonthKeyKst();
-        var prE = window.getStelvioHeptagonCohortEntry({
-          userId: uid,
-          monthKey: mk,
-          filterCategory: heptagonModalCategory,
-          filterGender: heptagonModalGender
-        });
-        var prN = window.queryStelvioHeptagonCohortBoardN({
-          monthKey: mk,
-          filterCategory: heptagonModalCategory,
-          filterGender: heptagonModalGender
-        });
-        Promise.all([prE, prN])
-          .then(function(pair) {
-            var ce = pair[0];
-            var cn = pair[1];
-            var nTotal = cn && cn.ok && cn.nTotal > 0 ? Math.floor(cn.nTotal) : 0;
-            if (!nTotal) {
-              setStelvioCohortOvlModal({ loading: false, nTotal: 0, skip: true });
+        var ageHintM = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
+        loadStelvioCohortOvlData(uid, mk, heptagonModalGender, heptagonModalCategory, ageHintM)
+          .then(function(result) {
+            if (stelvioOvlModalReqRef.current !== mReq) {
               return;
             }
-            if (!ce || !ce.ok || !ce.exists || !ce.data) {
-              setStelvioCohortOvlModal({ loading: false, nTotal: nTotal, skip: true });
+            if (!result || !result.ok) {
+              setStelvioCohortOvlModal({ loading: false, skip: true, useCard: false });
               return;
             }
-            var d = ce.data;
-            var br = d.boardRank;
-            if (br == null && d.comprehensiveRank != null) {
-              br = d.comprehensiveRank;
-            }
-            if (br == null || !isFinite(br)) {
-              setStelvioCohortOvlModal({ loading: false, nTotal: nTotal, skip: true });
+            if (result.skip) {
+              setStelvioCohortOvlModal({
+                loading: false,
+                skip: true,
+                nTotal: result.nTotal != null ? result.nTotal : 0,
+                useCard: false
+              });
               return;
             }
-            setStelvioCohortOvlModal({ loading: false, nTotal: nTotal, boardRank: br, cohortData: d, skip: false, useCard: false });
+            setStelvioCohortOvlModal({
+              loading: false,
+              nTotal: result.nTotal,
+              boardRank: result.boardRank,
+              cohortData: result.cohortData,
+              skip: false,
+              isVirtualCohort: result.isVirtualCohort === true,
+              useCard: false
+            });
           })
           .catch(function() {
+            if (stelvioOvlModalReqRef.current !== mReq) {
+              return;
+            }
             setStelvioCohortOvlModal({ loading: false, err: true, skip: true, useCard: false });
           });
       },
-      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory]
+      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category, userProfile && userProfile.ageCategory]
     );
 
     useEffect(
@@ -2228,8 +2371,8 @@
     var heptagonLevelHint =
       uid ? (
         <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
-          <span className="font-medium text-slate-600">레벨·순위·%:</span> 부문·성별 <strong>전체</strong> 집계(동일 조건·환산 점수) ·
-          레벨% = <strong>순위÷n×100</strong> (본인이 모수에 포함) · 타 부문 열람 가상일 때만 (n+1) 분모
+          <span className="font-medium text-slate-600">레벨·순위·%:</span> 위 필터(성별·부문) = 동일 조건·환산 점수
+          집계 · finalN(실집계 n / 가상 n+1) 기준, 모수 100 이상·미만에 따라 레벨% 식이 달라짐
         </p>
       ) : null;
 
