@@ -1517,6 +1517,7 @@
             ) : null}
           </div>
 
+          <div className="stelvio-heptagon-detail-modal__boardbody">
           <div className="stelvio-heptagon-detail-modal__boardhead">
             <p className="stelvio-heptagon-detail-modal__boardhead-t m-0 mb-2 text-center w-full">동일 조건·월(환산) 점수 순위</p>
             <div
@@ -1664,6 +1665,7 @@
           {sumP != null && !boardState.loading && !boardState.err && (!boardState.rows || !boardState.rows.length) ? (
             <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
+          </div>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
               닫기
