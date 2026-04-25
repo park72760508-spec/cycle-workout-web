@@ -1,7 +1,8 @@
 /**
- * STELVIO 헵타곤: 코호트별(월·성별·부문) 환산점수 합 기준 **전원** 순위 → Firestore `heptagon_cohort_ranks` 배치 저장.
- * - 기간: 대시보드/랭킹 API `monthly`와 동일하게 `getRolling30DaysRangeSeoul` (최근 30일, 서울)
- * - 7축 순위: `getPeakPowerRankingEntries` (클라 StelvioOctagonRanksCard와 동일한 표시순위 규칙)
+ * STELVIO 헵타곤: 코호트별(월·성별·부문) 환산점수 합 기준 순위 → Firestore `heptagon_cohort_ranks` 배치 저장.
+ * - Supremo: 전 구간(전체) 집계. Bianco/Rosa/…/Assoluto: 해당 부문 **소속** 사용자만(타 부문 열람용 가상 순위 제외).
+ * - 기간: `getRolling30DaysRangeSeoul` (최근 30일, 서울)
+ * - 7축 순위: `getPeakPowerRankingEntries` (대시보드와 동일 표시순위 규칙)
  */
 
 const HEPTAGON_DURATIONS = ["max", "1min", "5min", "10min", "20min", "40min", "60min"];
@@ -9,6 +10,19 @@ const HEPTAGON_GENDERS = ["all", "M", "F"];
 const HEPTAGON_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda"];
 const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
+
+/**
+ * Supremo: 전 기간(전체) 집계. 그 외: 선택 부문 **소속**만(타 부문 열람용 가상 순위 제외).
+ * Assoluto: ageCategory === Assoluto.
+ */
+function isUserInCohortForFilter(filterCategory, userAgeCategory) {
+  const f = String(filterCategory || "Supremo");
+  const ac = String(userAgeCategory || "");
+  if (f === "Supremo") return true;
+  if (f === "Assoluto") return ac === "Assoluto";
+  if (!ac) return false;
+  return ac === f;
+}
 
 /** 대시보드 StelvioOctagonRanksCard `currentMonthKeyKst`와 동일: 서울 달력 월(YYYY-MM) */
 function getMonthKeyKstNow() {
@@ -247,6 +261,9 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     for (const filterCategory of HEPTAGON_CATEGORIES) {
       const rows = [];
       for (const [userId, meta] of userMeta) {
+        if (!isUserInCohortForFilter(filterCategory, meta.ageCategory)) {
+          continue;
+        }
         const ranks = [];
         const ns = [];
         let ok = true;
