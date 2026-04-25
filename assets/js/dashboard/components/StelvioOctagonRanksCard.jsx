@@ -2,7 +2,7 @@
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: `rankToRadiusNorm` (기존 로그 스케일) — 7각형 W/kg·레이더.
  * **집계 순위·레벨%·중앙 배지**: 카드(및 항목별 순위 모달)의 **선택 `gender`·`category`** 로 `heptagon_cohort_ranks` “동일 조건·월(환산) 점수”와 동기화. 7각형 W/kg 레이더는 **건드리지 않음**.
- * **레벨%** `heptagonLevelPercentForRankN`: **모수 n**(카테고리 집계) 기준, 순위 r·클램프(가상 1‥n+1, 실 1‥n). n≥100 → (r÷n)×100, n<100 → n₂=100÷n, ((r÷n)÷n₂)×100(≈n<100은 r과 동일), p는 0~100.
+ * **레벨%** `heptagonLevelPercentForRankN`: 집계 **n**·가상이면 **Neff=n+1**로 식·표기 통일. Neff≥100 → (r÷Neff)×100, Neff<100 → n₂=100÷Neff, ((r÷Neff)÷n₂)×100. 순위 r 1‥Neff. p 0~100.
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
  */
@@ -99,6 +99,17 @@
       return ovl.nTotal | 0;
     }
     return 0;
+  }
+
+  /**
+   * 툴팁·모달 n= 표기: 본인 부문이면 집계 모수 n, **타 부문(가상)**이면 n+1(레벨% 식 `Neff`과 동일).
+   */
+  function heptagonCohortNDisplay(nRaw, isVirtualCohort) {
+    var n = nRaw | 0;
+    if (n < 1) {
+      return 0;
+    }
+    return isVirtualCohort === true ? n + 1 : n;
   }
 
   /**
@@ -470,7 +481,8 @@
   }
 
   /**
-   * 집계 레벨%: **모수 n**(코호트 인원)으로 분기. n≥100 → (r÷n)×100. n<100 → n₂=100÷n, ((r÷n)÷n₂)×100(=r와 동일·부동소수). 순위 r는 가상이면 1‥(n+1)까지, 실집계면 1‥n. 등급(동물)은 ≤3%·…`heptagonBoardTierIdFromLevelPercent`.
+   * 집계 레벨%: `n`은 **실집계 코호트 인원**. 가상(타 부문)이면 `Neff=n+1`로 100·미만 식·표시 n과 통일(순위 r는 1‥Neff).
+   * Neff≥100 → (r÷Neff)×100, Neff<100 → n₂=100÷Neff, ((r÷Neff)÷n₂)×100. 등급(동물)은 `heptagonBoardTierIdFromLevelPercent`.
    */
   var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
 
@@ -480,14 +492,14 @@
     var isVirt = isVirtualCohort === true;
     var r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
     if (r < 1) r = 1;
-    var rMax = isVirt ? Nc + 1 : Nc;
-    if (r > rMax) r = rMax;
+    var Neff = isVirt ? Nc + 1 : Nc;
+    if (r > Neff) r = Neff;
     var p;
-    if (Nc >= 100) {
-      p = (r / Nc) * 100;
+    if (Neff >= 100) {
+      p = (r / Neff) * 100;
     } else {
-      var n2 = 100 / Nc;
-      p = ((r / Nc) / n2) * 100;
+      var n2 = 100 / Neff;
+      p = ((r / Neff) / n2) * 100;
     }
     if (!isFinite(p) || p < 0) p = 0;
     if (p > 100) p = 100;
@@ -806,14 +818,14 @@
       br0 = Number(s.comprehensiveRank);
     }
     if (br0 == null || !isFinite(br0)) {
-      return { ok: false, rank: null, nCohort: nC, pPct: -1, isVirtual: isV };
+      return { ok: false, rank: null, nCohort: heptagonCohortNDisplay(nC, isV), pPct: -1, isVirtual: isV };
     }
     var pPct = heptagonLevelPercentForRankN(br0, nC, isV);
     var rankU = heptagonCardRankFromSummary(s);
     if (rankU == null) {
-      return { ok: false, rank: null, nCohort: nC, pPct: pPct, isVirtual: isV };
+      return { ok: false, rank: null, nCohort: heptagonCohortNDisplay(nC, isV), pPct: pPct, isVirtual: isV };
     }
-    return { ok: true, rank: rankU, nCohort: nC, pPct: pPct, isVirtual: isV };
+    return { ok: true, rank: rankU, nCohort: heptagonCohortNDisplay(nC, isV), pPct: pPct, isVirtual: isV };
   }
 
   /**
@@ -1395,8 +1407,8 @@
                 className="stelvio-heptagon-detail-modal__summary-row"
                 title={
                   isVirtPct
-                    ? '가상: 순위 1~n+1(모집 n). n≥100 → (r÷n)×100, n<100 → n₂=100÷n, ((r÷n)÷n₂)×100(상한 100).'
-                    : '실집계: 순위 1~n(모집 n). n≥100 → (r÷n)×100, n<100 → ((r÷n)÷(100÷n))×100'
+                    ? '가상: 집계 모집 n, 표시·레벨% Neff=n+1. Neff≥100 → (r÷Neff)×100, Neff<100 → n₂=100÷Neff, ((r÷Neff)÷n₂)×100(상한 100).'
+                    : '실집계: Neff=n. n≥100 → (r÷n)×100, n<100 → ((r÷n)÷(100÷n))×100'
                 }
               >
                 <span>레벨 % {isVirtPct ? '(가상, 순위~n+1)' : '(실집계, 1~n)'}</span>
@@ -1418,8 +1430,16 @@
             {nC > 0 ? (
               <div className="stelvio-heptagon-detail-modal__summary-foot">
                 <span className="stelvio-heptagon-detail-modal__nref">
-                  참조 코호트(집계) 모수 n = {nC}. <strong>대시보드 헵타곤 중앙</strong>은 카드에서 선택한 성별·부문과
-                  동일·동기화되며, 이 상단 요약은 아래 “동일 조건”과 같은 필터입니다(가상이면 집계 순위는 1~n+1, 레벨%는 위 모수 n·식).
+                  참조: 집계 코호트 인원(실집계) n = {nC}
+                  {isVirtPct ? (
+                    <span>
+                      {', 표시·레벨% 산정 '}
+                      <strong>n = {nC + 1}</strong>
+                      {'(가상, Neff)'}
+                    </span>
+                  ) : null}
+                  . <strong>대시보드 헵타곤 중앙</strong>은 카드에서 선택한 성별·부문과 동일·동기화됩니다(가상: Supremo 환산 합·해당
+                  부문 목록 삽입 순위, Neff=n+1).
                 </span>
               </div>
             ) : null}
@@ -1648,7 +1668,7 @@
       pShow = hct.pPct >= 0 && isFinite(hct.pPct) ? hct.pPct : -1;
       nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
       nCohortLine = nCohortHint != null ? String(nCohortHint) : '—';
-      virtLabel = hct.isVirtual ? '가상(순위 1~n+1, 레벨%는 n 기준)' : '실집계(1~n, 모수 n)';
+      virtLabel = hct.isVirtual ? '가상(Neff=n+1, 환산합·삽입 순위, 레벨%·n 동일)' : '실집계(1~n, 집계 모수 n)';
     } else if (hct.kind === 'board_partial') {
       rankForUi = hct.rank != null ? hct.rank : null;
       nCohortHint = hct.nCohort > 0 ? hct.nCohort : null;
@@ -1988,13 +2008,20 @@
           if (mineBR && mineBR.boardRank != null && mineBR.boardRank >= 1) {
             var ovlL = stelvioCohortOvl;
             var nEff = heptagonEffectiveCohortNFromBoardAndOvl(heptagonCardBoard, ovlL);
+            var isVb;
+            if (ovlL && !ovlL.loading && ovlL.skip !== true && ovlL.isVirtualCohort != null) {
+              isVb = ovlL.isVirtualCohort === true;
+            } else {
+              var acT = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
+              isVb = !isUserInCohortForFilter(category, acT);
+            }
             if (ovlL && ovlL.loading && nEff < 1) {
               return {
                 kind: 'board_partial',
                 rank: mineBR.boardRank,
-                nCohort: mineBR.nCohort > 0 ? mineBR.nCohort : 0,
+                nCohort: 0,
                 pPct: -1,
-                isVirtual: false
+                isVirtual: isVb
               };
             }
             if (nEff < 1) {
@@ -2006,22 +2033,15 @@
                 rank: mineBR.boardRank,
                 nCohort: 0,
                 pPct: -1,
-                isVirtual: false
+                isVirtual: isVb
               };
-            }
-            var isVb;
-            if (ovlL && !ovlL.loading && ovlL.skip !== true && ovlL.isVirtualCohort != null) {
-              isVb = ovlL.isVirtualCohort === true;
-            } else {
-              var acT = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
-              isVb = !isUserInCohortForFilter(category, acT);
             }
             var pBx = heptagonLevelPercentForRankN(mineBR.boardRank, nEff, isVb);
             return {
               kind: 'ok',
               source: 'board',
               rank: mineBR.boardRank,
-              nCohort: nEff,
+              nCohort: heptagonCohortNDisplay(nEff, isVb),
               pPct: pBx,
               isVirtual: isVb
             };
@@ -2036,7 +2056,7 @@
               kind: 'ok',
               source: 'cohort_ovl',
               rank: ovlE.br,
-              nCohort: ovlE.nTot,
+              nCohort: heptagonCohortNDisplay(ovlE.nTot, ovlE.isVirt),
               pPct: pE,
               isVirtual: ovlE.isVirt
             };
@@ -2733,14 +2753,27 @@
 
     var nHintLine =
       uid && tierForCard && tierForCard.heptagonCohortBoardRankApplied && (tierForCard.cohortN | 0) > 0
-        ? ' 현재: ' + labelForGender(gender) + ' · ' + labelForCategory(category) + ' — 집계 모수 n=' + String(tierForCard.cohortN | 0) + ' — 순위·레벨%는 모달「동일 조건·월(환산) 점수 순위」와 동일·같은 식. '
+        ? ' 현재: ' +
+            labelForGender(gender) +
+            ' · ' +
+            labelForCategory(category) +
+            ' — n(표기)=' +
+            String(
+              heptagonCohortNDisplay(
+                tierForCard.cohortN | 0,
+                tierForCard.heptagonBoardVirtualCohort === true
+              )
+            ) +
+            ' (가상이면 집계 ' +
+            String(tierForCard.cohortN | 0) +
+            '+1) — 순위·레벨%는 모달「동일 조건·월(환산) 점수 순위」와 동일. '
         : '';
     var heptagonLevelHint =
       uid ? (
         <p className="text-[11px] text-slate-500 text-center m-0 mb-1 px-1 leading-snug">
           <span className="font-medium text-slate-600">집계:</span> 위 <strong>성별·카테고리</strong> = STELVIO 헵타곤 항목별 순위
           <strong>「동일 조건·월(환산) 점수 순위」</strong>·<code>heptagon_cohort_ranks</code>와 연동합니다. 레벨%는
-          <strong> 그 순위 r</strong>·<strong>대상자 모수 n</strong> — n≥100 (r÷n)×100, n{'<'}100 n₂=100÷n ((r÷n)÷n₂)×100(가상은 r≤n+1).{nHintLine}
+          <strong> 그 순위 r</strong>·<strong>표기 n</strong>(실집계 n, 가상 Neff=n+1) — Neff≥100 (r÷Neff)×100, Neff{'<'}100 식 동일.{nHintLine}
         </p>
       ) : null;
 
