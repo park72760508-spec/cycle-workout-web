@@ -2027,29 +2027,37 @@
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
           if (cached && cached.monthly && cached.hof) {
-            setState(
-              stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
-            );
-            fetchRanksSet(uid, 'monthly', gender, 'Supremo')
-              .then(function(sRows) {
-                setState(function(prev) {
-                  if (!prev || !prev.monthly) {
-                    return prev;
-                  }
-                  return Object.assign({}, prev, {
-                    supremoMonthly: {
-                      ranks: sRows.map(function(x) {
-                        return x.rank;
-                      }),
-                      cohortSizePerAxis: sRows.map(function(x) {
-                        return x.n;
-                      })
+            /**
+             * 성별·전체 + 카테고리·전체(Supremo) 최초 진입: 캐시는 순위+코호트만 있어 norm이 순위·로그 뿐( W/kg 기반 heptagonRadarDisplayNorms 미적용) → 틀어진 7각형.
+             * 다른 부문/캐시 Miss와 동일하게 아래 Promise.all(stateFromApiRows)로만 그래프를 채운다(카테고리만 바꿔도 정상이던 이유: 다른 키는 캐시가 없어 풀 fetch만 탐).
+             */
+            var skipRankOnlyCache =
+              (gender === 'all' || gender == null || gender === '') && String(category) === 'Supremo';
+            if (!skipRankOnlyCache) {
+              setState(
+                stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
+              );
+              fetchRanksSet(uid, 'monthly', gender, 'Supremo')
+                .then(function(sRows) {
+                  setState(function(prev) {
+                    if (!prev || !prev.monthly) {
+                      return prev;
                     }
+                    return Object.assign({}, prev, {
+                      supremoMonthly: {
+                        ranks: sRows.map(function(x) {
+                          return x.rank;
+                        }),
+                        cohortSizePerAxis: sRows.map(function(x) {
+                          return x.n;
+                        })
+                      }
+                    });
                   });
-                });
-              })
-              .catch(function() {});
-            return;
+                })
+                .catch(function() {});
+              return;
+            }
           }
         }
 
