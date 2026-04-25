@@ -46,6 +46,27 @@
     return '전체';
   }
 
+  /** 프로필 `ageCategory`가 카드 부문 옵션과 일치할 때만 (나의 순위가 실집계로 묶이는 부문) */
+  function categoryValueMatchingUserAge(userProfile) {
+    if (!userProfile || userProfile.ageCategory == null) return null;
+    var ac = String(userProfile.ageCategory).trim();
+    if (!ac) return null;
+    for (var ci = 0; ci < CATEGORY_OPTIONS.length; ci++) {
+      if (CATEGORY_OPTIONS[ci].value === ac) return ac;
+    }
+    return null;
+  }
+
+  /** 동일 조건 표의 n(`heptagonCardBoard.nCohort`)과 집계 ovl `nTotal` 중 유효 값(카테고리·가상 모두) */
+  function heptagonEffectiveCohortNFromBoardAndOvl(boardNCohort, ovl) {
+    var b = boardNCohort | 0;
+    if (b >= 1) return b;
+    if (ovl && !ovl.loading && ovl.nTotal != null && isFinite(ovl.nTotal) && (ovl.nTotal | 0) >= 1) {
+      return ovl.nTotal | 0;
+    }
+    return 0;
+  }
+
   /**
    * getPeakPowerRanking 피크 파워: **W/kg만** (TSS·주간 적산 제외 — 순위 왜곡 방지)
    * 12시=Max, 시계방향 Max → 1·5·10·20·40·60분
@@ -1877,7 +1898,7 @@
       [tierSummaryComputed, stelvioCohortOvl]
     );
 
-    /** 카드 필터 = 팝업「동일 조건」표 — 표에서 본인 순위·n → 레벨%; 없으면 요약+ovl 병합 복구 */
+    /** 카드 필터 = 팝업「동일 조건」표 — 리스트 본인 순위·모수 n(표 또는 ovl nTotal) → 레벨% */
     var stelvioCardTooltip = useMemo(
       function() {
         if (uid) {
@@ -1885,13 +1906,26 @@
             return { kind: 'board_loading' };
           }
           var mineBR = getMyRankFromHeptagonBoardRows(heptagonCardBoard);
-          if (mineBR && mineBR.nCohort >= 1) {
+          if (mineBR && mineBR.boardRank != null && mineBR.boardRank >= 1) {
             var ovlL = stelvioCohortOvl;
-            if (ovlL && ovlL.loading) {
+            var nEff = heptagonEffectiveCohortNFromBoardAndOvl(mineBR.nCohort, ovlL);
+            if (ovlL && ovlL.loading && nEff < 1) {
               return {
                 kind: 'board_partial',
                 rank: mineBR.boardRank,
-                nCohort: mineBR.nCohort,
+                nCohort: mineBR.nCohort > 0 ? mineBR.nCohort : 0,
+                pPct: -1,
+                isVirtual: false
+              };
+            }
+            if (nEff < 1) {
+              if (heptagonCardBoard && heptagonCardBoard.err) {
+                return { kind: 'board_err' };
+              }
+              return {
+                kind: 'board_partial',
+                rank: mineBR.boardRank,
+                nCohort: 0,
                 pPct: -1,
                 isVirtual: false
               };
@@ -1903,12 +1937,12 @@
               var acT = userProfile && userProfile.ageCategory != null ? String(userProfile.ageCategory) : '';
               isVb = !isUserInCohortForFilter(category, acT);
             }
-            var pBx = heptagonLevelPercentForRankN(mineBR.boardRank, mineBR.nCohort, isVb);
+            var pBx = heptagonLevelPercentForRankN(mineBR.boardRank, nEff, isVb);
             return {
               kind: 'ok',
               source: 'board',
               rank: mineBR.boardRank,
-              nCohort: mineBR.nCohort,
+              nCohort: nEff,
               pPct: pBx,
               isVirtual: isVb
             };
@@ -2441,6 +2475,31 @@
               </select>
             </div>
           </div>
+          {(() => {
+            var myCat = categoryValueMatchingUserAge(userProfile);
+            if (!myCat) {
+              return null;
+            }
+            return (
+              <div className="stelvio-octagon-filter-verify mt-1.5 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-600">
+                {category !== myCat ? (
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded-lg border border-violet-200 bg-violet-50/90 text-violet-900 font-medium hover:bg-violet-100 shadow-sm"
+                    onClick={function() {
+                      setCategory(myCat);
+                    }}
+                  >
+                    나의 부문(검증): {labelForCategory(myCat)}
+                  </button>
+                ) : (
+                  <span className="px-1 text-center leading-snug">
+                    동일 조건·월(환산) 순위: <strong>나의 부문</strong>({labelForCategory(myCat)}) — 리스트·툴팁과 동기
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
       );
     }
