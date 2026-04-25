@@ -199,7 +199,7 @@
   }
 
   function fetchRankingPayload(uid, duration, period, gender) {
-    return fetch(buildRankingUrl(uid, duration, period, gender), { method: 'GET', mode: 'cors' })
+    return fetch(buildRankingUrl(uid, duration, period, gender), { method: 'GET', mode: 'cors', cache: 'no-store' })
       .then(function(res) {
         return res.json().catch(function() {
           return { success: false };
@@ -2028,11 +2028,12 @@
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
           if (cached && cached.monthly && cached.hof) {
             /**
-             * 성별·전체 + 카테고리·전체(Supremo) 최초 진입: 캐시는 순위+코호트만 있어 norm이 순위·로그 뿐( W/kg 기반 heptagonRadarDisplayNorms 미적용) → 틀어진 7각형.
-             * 다른 부문/캐시 Miss와 동일하게 아래 Promise.all(stateFromApiRows)로만 그래프를 채운다(카테고리만 바꿔도 정상이던 이유: 다른 키는 캐시가 없어 풀 fetch만 탐).
+             * heptagon 캐시(v3)는 순위+코호트만 저장 → W/kg 없이 norm은 rankToRadiusNorm만 쓰여 면이 어긋남. 풀 API(stateFromApiRows)는 축 W/kg로 heptagonRadarDisplayNorms 적용.
+             * 대시 getStelvioOctagonRanksCache와 동일 g/c 정규화 후, Supremo(라벨 "전체")는 **항상** 풀 fetch만(성별 all/M/F 모두, 라벨만 다름).
+             * 부문(Bianco 등)만 캐시로 빠른 그림 → Supremo만 캐시 early-return 사용 안 함.
              */
-            var skipRankOnlyCache =
-              (gender === 'all' || gender == null || gender === '') && String(category) === 'Supremo';
+            var cNorm = category == null || String(category).trim() === '' ? 'Supremo' : String(category).trim();
+            var skipRankOnlyCache = cNorm === 'Supremo';
             if (!skipRankOnlyCache) {
               setState(
                 stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
