@@ -323,18 +323,38 @@
   }
 
   /** N_WKG_AXES 축(피크 W/kg) rank + 코호트 n → 차트·면적·레벨 동일 */
-  function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks) {
+  function stateFromRanksArray(monthlyRanks, cohortSizePerAxis, hofRanks, supremoRanks, supremoCohortNPerAxis) {
     var mRat = monthlyRanks.map(rankToRadiusNorm);
     var hRat = hofRanks.map(rankToRadiusNorm);
+    var supremoMonthly = null;
+    if (
+      supremoRanks &&
+      supremoCohortNPerAxis &&
+      supremoRanks.length === supremoCohortNPerAxis.length &&
+      supremoRanks.length > 0
+    ) {
+      supremoMonthly = { ranks: supremoRanks, cohortSizePerAxis: supremoCohortNPerAxis };
+    }
     return {
       loading: false,
       err: null,
       monthly: { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis },
-      hof: { ranks: hofRanks, norm: hRat }
+      hof: { ranks: hofRanks, norm: hRat },
+      supremoMonthly: supremoMonthly
     };
   }
 
-  function stateFromApiRows(mRows, hRows) {
+  function stateFromApiRows(mRows, hRows, sRows) {
+    var sr = sRows
+      ? sRows.map(function(x) {
+          return x.rank;
+        })
+      : null;
+    var sc = sRows
+      ? sRows.map(function(x) {
+          return x.n;
+        })
+      : null;
     return stateFromRanksArray(
       mRows.map(function(x) {
         return x.rank;
@@ -344,7 +364,9 @@
       }),
       hRows.map(function(x) {
         return x.rank;
-      })
+      }),
+      sr,
+      sc
     );
   }
 
@@ -1213,10 +1235,27 @@
   }
 
   /**
+   * 본인 부문 외(가상): 대시보드 **전체(Supremo) 7축**에서 계산한 환산 합(전체랭킹)을 우선 비교에 쓰고, 없을 때 `heptagon_cohort_ranks` Supremo 문서의 합.
+   * @param {number|null|undefined} chartSupremoSum `computePTotalAndTier` 를 `fetchRanksSet(..., 'Supremo')` 로 얻은 합
+   * @param {object|null} crSData Firestore getEntry(Supremo)
+   * @returns {number|null}
+   */
+  function heptagonVirtualCompareSumFromSources(chartSupremoSum, crSData) {
+    if (chartSupremoSum != null && isFinite(Number(chartSupremoSum))) {
+      return Number(chartSupremoSum);
+    }
+    if (crSData && crSData.sumPositionScores != null && isFinite(Number(crSData.sumPositionScores))) {
+      return Number(crSData.sumPositionScores);
+    }
+    return null;
+  }
+
+  /**
    * 대시보드·모달 공통: 선택 gender·category 로 “동일 조건·환산 점수” 코호트 집계 또는 Supremo+삽입 가상 순위.
+   * @param {number|null|undefined} chartSupremoSum — 가상(타 부문)일 때: 전체(Supremo) 랭킹 기준 환산 합(우선)
    * @returns {Promise<{ ok: boolean, skip?: boolean, nTotal?: number, boardRank?: number, cohortData?: object, isVirtualCohort?: boolean }>}
    */
-  function loadStelvioCohortOvlData(uid, monthKey, gender, category, ageCategoryHint) {
+  function loadStelvioCohortOvlData(uid, monthKey, gender, category, ageCategoryHint, chartSupremoSum) {
     var getE = window.getStelvioHeptagonCohortEntry;
     var qN = window.queryStelvioHeptagonCohortBoardN;
     var qList = window.queryStelvioHeptagonCohortBySumDesc;
@@ -1300,33 +1339,37 @@
         if (nRec < 1) {
           return { ok: true, skip: true, nTotal: 0 };
         }
-        if (!crS || !crS.ok || !crS.exists || !crS.data) {
-          return { ok: true, skip: true, nTotal: nRec };
-        }
         if (!res || !res.ok) {
           return { ok: true, skip: true, nTotal: nRec };
         }
-        var sumOk = crS.data.sumPositionScores != null && isFinite(Number(crS.data.sumPositionScores));
-        if (!sumOk) {
-          var brFb =
-            crS.data.boardRank != null && isFinite(crS.data.boardRank)
-              ? Math.floor(Number(crS.data.boardRank))
-              : crS.data.comprehensiveRank != null && isFinite(crS.data.comprehensiveRank)
-                ? Math.floor(Number(crS.data.comprehensiveRank))
-                : null;
-          if (brFb != null && brFb >= 1) {
-            return {
-              ok: true,
-              skip: false,
-              nTotal: nRec,
-              boardRank: brFb,
-              cohortData: crS.data,
-              isVirtualCohort: true
-            };
+        var hasCrS = crS && crS.ok && crS.exists && crS.data;
+        var dSup = hasCrS ? crS.data : null;
+        var sumForVirtual = heptagonVirtualCompareSumFromSources(chartSupremoSum, dSup);
+        if (sumForVirtual == null || !isFinite(sumForVirtual)) {
+          if (dSup) {
+            var brFb0 =
+              dSup.boardRank != null && isFinite(dSup.boardRank)
+                ? Math.floor(Number(dSup.boardRank))
+                : dSup.comprehensiveRank != null && isFinite(dSup.comprehensiveRank)
+                  ? Math.floor(Number(dSup.comprehensiveRank))
+                  : null;
+            if (brFb0 != null && brFb0 >= 1) {
+              return {
+                ok: true,
+                skip: false,
+                nTotal: nRec,
+                boardRank: brFb0,
+                cohortData: dSup,
+                isVirtualCohort: true
+              };
+            }
           }
           return { ok: true, skip: true, nTotal: nRec };
         }
-        var built = buildHeptagonModalBoardRows(itemsRaw, uid, null, crS.data);
+        var mergedData = dSup
+          ? Object.assign({}, dSup, { sumPositionScores: sumForVirtual })
+          : { sumPositionScores: sumForVirtual, displayName: '—' };
+        var built = buildHeptagonModalBoardRows(itemsRaw, uid, null, mergedData);
         var dr = null;
         for (var hi = 0; hi < (built.rows || []).length; hi++) {
           if (built.rows[hi].isMe && built.rows[hi].boardRank != null && isFinite(built.rows[hi].boardRank)) {
@@ -1335,12 +1378,13 @@
           }
         }
         if (dr == null) {
-          var brFb2 =
-            crS.data.boardRank != null && isFinite(crS.data.boardRank)
-              ? Math.floor(Number(crS.data.boardRank))
-              : crS.data.comprehensiveRank != null && isFinite(crS.data.comprehensiveRank)
-                ? Math.floor(Number(crS.data.comprehensiveRank))
-                : null;
+          var brFb2 = dSup
+            ? dSup.boardRank != null && isFinite(dSup.boardRank)
+              ? Math.floor(Number(dSup.boardRank))
+              : dSup.comprehensiveRank != null && isFinite(dSup.comprehensiveRank)
+                ? Math.floor(Number(dSup.comprehensiveRank))
+                : null
+            : null;
           if (brFb2 != null && brFb2 >= 1) {
             dr = brFb2;
           }
@@ -1353,7 +1397,9 @@
           skip: false,
           nTotal: nRec,
           boardRank: dr,
-          cohortData: { sumPositionScores: Number(crS.data.sumPositionScores) },
+          cohortData: dSup
+            ? Object.assign({}, dSup, { sumPositionScores: sumForVirtual })
+            : { sumPositionScores: sumForVirtual },
           isVirtualCohort: true
         };
       });
@@ -1892,7 +1938,7 @@
     var category = _c[0];
     var setCategory = _c[1];
 
-    var _s = useState({ loading: true, err: null, monthly: null, hof: null });
+    var _s = useState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
     var state = _s[0];
     var setState = _s[1];
     var saveKeyRef = useRef('');
@@ -1927,6 +1973,39 @@
     var heptagonModalRanks = _hmr[0];
     var setHeptagonModalRanks = _hmr[1];
     var heptagonPrevOpenRef = useRef(false);
+
+    /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
+    var chartSupremoSumFromGlobalRanking = useMemo(
+      function() {
+        if (state.loading || !state.supremoMonthly) {
+          return null;
+        }
+        var t0 = computePTotalAndTier(state.supremoMonthly.ranks, state.supremoMonthly.cohortSizePerAxis);
+        if (!t0 || t0.sumPositionScores == null || !isFinite(t0.sumPositionScores)) {
+          return null;
+        }
+        return Number(t0.sumPositionScores);
+      },
+      [state.loading, state.supremoMonthly]
+    );
+
+    /** 팝업이 카드와 다른 **성별**이면, 해당 성별 `fetchRanksSet(..., 'Supremo')` 기준 환산 합 */
+    var chartSupremoSumForModalVirtualOvl = useMemo(
+      function() {
+        if (heptagonModalGender === gender) {
+          return chartSupremoSumFromGlobalRanking;
+        }
+        if (heptagonModalRanks && heptagonModalRanks.tierSupremoForVirtual) {
+          var ts = heptagonModalRanks.tierSupremoForVirtual;
+          if (ts && ts.sumPositionScores != null && isFinite(ts.sumPositionScores)) {
+            return Number(ts.sumPositionScores);
+          }
+        }
+        return null;
+      },
+      [heptagonModalGender, gender, chartSupremoSumFromGlobalRanking, heptagonModalRanks]
+    );
+
     useEffect(
       function() {
         if (!uid) {
@@ -1967,7 +2046,7 @@
         var reqId = stelvioOvlReqRef.current;
         setStelvioCohortOvl({ loading: true });
         var mk = currentMonthKeyKst();
-        loadStelvioCohortOvlData(uid, mk, gender, category, viewerAc)
+        loadStelvioCohortOvlData(uid, mk, gender, category, viewerAc, chartSupremoSumFromGlobalRanking)
           .then(function(result) {
             if (stelvioOvlReqRef.current !== reqId) {
               return;
@@ -2000,13 +2079,13 @@
             setStelvioCohortOvl({ loading: false, err: true, skip: true });
           });
       },
-      [uid, gender, category, viewerAc]
+      [uid, gender, category, viewerAc, chartSupremoSumFromGlobalRanking]
     );
 
     useEffect(
       function() {
         if (!uid) {
-          setState({ loading: false, err: 'noUser', monthly: null, hof: null });
+          setState({ loading: false, err: 'noUser', monthly: null, hof: null, supremoMonthly: null });
           return;
         }
         var todayStr =
@@ -2025,15 +2104,39 @@
             setState(
               stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
             );
+            fetchRanksSet(uid, 'monthly', gender, 'Supremo')
+              .then(function(sRows) {
+                setState(function(prev) {
+                  if (!prev || !prev.monthly) {
+                    return prev;
+                  }
+                  return Object.assign({}, prev, {
+                    supremoMonthly: {
+                      ranks: sRows.map(function(x) {
+                        return x.rank;
+                      }),
+                      cohortSizePerAxis: sRows.map(function(x) {
+                        return x.n;
+                      })
+                    }
+                  });
+                });
+              })
+              .catch(function() {});
             return;
           }
         }
 
-        setState({ loading: true, err: null, monthly: null, hof: null });
-        Promise.all([fetchRanksSet(uid, 'monthly', gender, category), fetchRanksSet(uid, 'yearly', gender, category)])
+        setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
+        Promise.all([
+          fetchRanksSet(uid, 'monthly', gender, category),
+          fetchRanksSet(uid, 'yearly', gender, category),
+          fetchRanksSet(uid, 'monthly', gender, 'Supremo')
+        ])
           .then(function(results) {
             var mRows = results[0];
             var hRows = results[1];
+            var sRows = results[2];
             var monthlyRanks = mRows.map(function(x) {
               return x.rank;
             });
@@ -2043,7 +2146,7 @@
             var hofRanks = hRows.map(function(x) {
               return x.rank;
             });
-            setState(stateFromApiRows(mRows, hRows));
+            setState(stateFromApiRows(mRows, hRows, sRows));
             if (typeof window.setStelvioOctagonRanksCache === 'function') {
               try {
                 window.setStelvioOctagonRanksCache(uid, gender, category, todayStr, monthlyRanks, cohortSizePerAxis, hofRanks);
@@ -2053,7 +2156,7 @@
             }
           })
           .catch(function() {
-            setState({ loading: false, err: 'fetch', monthly: null, hof: null });
+            setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
           });
       },
       [uid, gender, category]
@@ -2292,7 +2395,7 @@
         var mReq = stelvioOvlModalReqRef.current;
         setStelvioCohortOvlModal({ loading: true });
         var mk = currentMonthKeyKst();
-        loadStelvioCohortOvlData(uid, mk, heptagonModalGender, heptagonModalCategory, viewerAc)
+        loadStelvioCohortOvlData(uid, mk, heptagonModalGender, heptagonModalCategory, viewerAc, chartSupremoSumForModalVirtualOvl)
           .then(function(result) {
             if (stelvioOvlModalReqRef.current !== mReq) {
               return;
@@ -2327,7 +2430,7 @@
             setStelvioCohortOvlModal({ loading: false, err: true, skip: true, useCard: false });
           });
       },
-      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category, viewerAc]
+      [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category, viewerAc, chartSupremoSumForModalVirtualOvl]
     );
 
     useEffect(
@@ -2340,8 +2443,13 @@
           return;
         }
         setHeptagonModalRanks({ loading: true });
-        fetchRanksSet(uid, 'monthly', heptagonModalGender, heptagonModalCategory)
-          .then(function(mRows) {
+        Promise.all([
+          fetchRanksSet(uid, 'monthly', heptagonModalGender, heptagonModalCategory),
+          fetchRanksSet(uid, 'monthly', heptagonModalGender, 'Supremo')
+        ])
+          .then(function(pair) {
+            var mRows = pair[0];
+            var sRows = pair[1];
             var monthlyRanks = mRows.map(function(x) {
               return x.rank;
             });
@@ -2351,7 +2459,14 @@
             var mRat = monthlyRanks.map(rankToRadiusNorm);
             var monthly = { ranks: monthlyRanks, norm: mRat, cohortSizePerAxis: cohortSizePerAxis };
             var tUn = computePTotalAndTier(monthlyRanks, cohortSizePerAxis);
-            setHeptagonModalRanks({ loading: false, monthly: monthly, tierUnmerged: tUn });
+            var sR = sRows.map(function(x) {
+              return x.rank;
+            });
+            var sN = sRows.map(function(x) {
+              return x.n;
+            });
+            var tSup = computePTotalAndTier(sR, sN);
+            setHeptagonModalRanks({ loading: false, monthly: monthly, tierUnmerged: tUn, tierSupremoForVirtual: tSup });
           })
           .catch(function() {
             setHeptagonModalRanks({ loading: false, err: true });
@@ -2360,7 +2475,7 @@
       [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category]
     );
 
-    function runHeptagonCohortBoardFetch(uidIn, gIn, cIn, setBoard) {
+    function runHeptagonCohortBoardFetch(uidIn, gIn, cIn, setBoard, chartSupremoSumForVirtual) {
       if (!uidIn) {
         setBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
         return;
@@ -2413,6 +2528,14 @@
           if (resA && resA.ok) {
             var myD = crA && crA.ok && crA.exists && crA.data ? crA.data : null;
             var myDS = crSA && crSA.ok && crSA.exists && crSA.data ? crSA.data : null;
+            if (chartSupremoSumForVirtual != null && isFinite(Number(chartSupremoSumForVirtual))) {
+              var sv = Number(chartSupremoSumForVirtual);
+              if (myDS) {
+                myDS = Object.assign({}, myDS, { sumPositionScores: sv });
+              } else {
+                myDS = { sumPositionScores: sv, displayName: '—' };
+              }
+            }
             var items2 = resA.items || [];
             var nRe2 = reconcileHeptagonCohortNFromList(nTot2, items2);
             var built2 = buildHeptagonModalBoardRows(items2, uidIn, myD, myDS);
@@ -2440,9 +2563,9 @@
           setHeptagonCardBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
           return;
         }
-        runHeptagonCohortBoardFetch(uid, gender, category, setHeptagonCardBoard);
+        runHeptagonCohortBoardFetch(uid, gender, category, setHeptagonCardBoard, chartSupremoSumFromGlobalRanking);
       },
-      [uid, gender, category]
+      [uid, gender, category, chartSupremoSumFromGlobalRanking]
     );
 
     useEffect(
@@ -2459,9 +2582,15 @@
           setHeptagonModalBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
           return;
         }
-        runHeptagonCohortBoardFetch(uid, heptagonModalGender, heptagonModalCategory, setHeptagonModalBoard);
+        var chartS =
+          heptagonModalGender === gender
+            ? chartSupremoSumFromGlobalRanking
+            : heptagonModalRanks && heptagonModalRanks.tierSupremoForVirtual
+              ? heptagonModalRanks.tierSupremoForVirtual.sumPositionScores
+              : null;
+        runHeptagonCohortBoardFetch(uid, heptagonModalGender, heptagonModalCategory, setHeptagonModalBoard, chartS);
       },
-      [heptagonDetailOpen, uid, heptagonModalCategory, heptagonModalGender, gender, category]
+      [heptagonDetailOpen, uid, heptagonModalCategory, heptagonModalGender, gender, category, chartSupremoSumFromGlobalRanking, heptagonModalRanks]
     );
 
     useEffect(
