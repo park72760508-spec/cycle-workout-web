@@ -1442,7 +1442,6 @@
     var isBoardSupremoAll = String(boardG) === 'all' && String(boardC) === 'Supremo';
     var isVirtPct = summary.heptagonBoardVirtualCohort === true;
     var tid = summary.tier.id;
-    var nC = summary.cohortN != null && isFinite(Number(summary.cohortN)) ? Math.max(0, Math.floor(Number(summary.cohortN))) : 0;
     var viewerAgeCategory = props.viewerAgeCategory != null ? String(props.viewerAgeCategory) : '';
     var ttModal = heptagonCohortTooltipFromSummary(summary, boardC, viewerAgeCategory);
     var rUi = ttModal.ok && ttModal.rank != null ? ttModal.rank : '—';
@@ -1531,22 +1530,6 @@
                 </strong>
               </div>
             ) : null}
-            {nC > 0 ? (
-              <div className="stelvio-heptagon-detail-modal__summary-foot">
-                <span className="stelvio-heptagon-detail-modal__nref">
-                  참조: 집계 코호트 인원(실집계) n = {nC}
-                  {heptagonUseNeffNPlusOne(boardC, viewerAgeCategory, isVirtPct) ? (
-                    <span>
-                      {', 표시·레벨% 산정 '}
-                      <strong>n = {nC + 1}</strong>
-                      {'(가상·타 부문, Neff)'}
-                    </span>
-                  ) : null}
-                  . <strong>대시보드 헵타곤 중앙</strong>은 카드에서 선택한 성별·부문과 동일·동기화됩니다(가상: 전면(Supremo) 환산 합·해당
-                  부문에 삽입한 순위).
-                </span>
-              </div>
-            ) : null}
           </div>
           {axisRowsLoading ? (
             <p className="stelvio-heptagon-detail-modal__neighborload">선택한 부문·성별 7구간 데이터를 불러오는 중…</p>
@@ -1593,50 +1576,58 @@
           )}
 
           <div className="stelvio-heptagon-detail-modal__boardhead">
-            <div className="stelvio-heptagon-detail-modal__boardhead-titlerow">
-              <span className="stelvio-heptagon-detail-modal__boardhead-t">동일 조건·월(환산) 점수 순위</span>
-              <div className="stelvio-heptagon-detail-modal__board-filters" role="group" aria-label="순위표 부문·성별">
-                <div className="stelvio-heptagon-board-btngroup" role="group" aria-label="성별">
-                  {GENDER_OPTIONS.map(function(og) {
-                    var gActive = String(boardG) === String(og.value);
-                    return (
-                      <button
-                        key={og.value + '-g'}
-                        type="button"
-                        className={'stelvio-heptagon-board-pill' + (gActive ? ' stelvio-heptagon-board-pill--active' : '')}
-                        onClick={function() {
-                          if (typeof onBoardFilterChange === 'function' && !gActive) {
-                            onBoardFilterChange(og.value, boardC);
-                          }
-                        }}
-                        aria-pressed={gActive}
-                        aria-label={'성별 ' + og.label}
-                      >
-                        {og.label}
-                      </button>
-                    );
-                  })}
+            <p className="stelvio-heptagon-detail-modal__boardhead-t m-0 mb-2 text-center w-full">동일 조건·월(환산) 점수 순위</p>
+            <div
+              className="stelvio-octagon-filters stelvio-heptagon-detail-modal__board-oct-filters w-full max-w-full justify-center"
+              role="group"
+              aria-label="순위표 부문·성별"
+            >
+              <div className="stelvio-octagon-filter-joined">
+                <div className="stelvio-octagon-filter-cell stelvio-octagon-gender">
+                  <span className="stelvio-octagon-filter-cap">성별</span>
+                  <span className="stelvio-octagon-filter-val">{labelForGender(boardG)}</span>
+                  <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
+                  <select
+                    className="stelvio-octagon-filter-select"
+                    value={boardG}
+                    onChange={function(e) {
+                      if (typeof onBoardFilterChange === 'function') {
+                        onBoardFilterChange(e.target.value, boardC);
+                      }
+                    }}
+                    aria-label="성별"
+                  >
+                    {GENDER_OPTIONS.map(function(o) {
+                      return (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
-                <div className="stelvio-heptagon-board-btngroup" role="group" aria-label="부문(카테고리)">
-                  {CATEGORY_OPTIONS.map(function(oc) {
-                    var cActive = String(boardC) === String(oc.value);
-                    return (
-                      <button
-                        key={oc.value + '-c'}
-                        type="button"
-                        className={'stelvio-heptagon-board-pill' + (cActive ? ' stelvio-heptagon-board-pill--active' : '')}
-                        onClick={function() {
-                          if (typeof onBoardFilterChange === 'function' && !cActive) {
-                            onBoardFilterChange(boardG, oc.value);
-                          }
-                        }}
-                        aria-pressed={cActive}
-                        aria-label={'부문 ' + oc.label}
-                      >
-                        {oc.label}
-                      </button>
-                    );
-                  })}
+                <div className="stelvio-octagon-filter-cell stelvio-octagon-category">
+                  <span className="stelvio-octagon-filter-cap">카테고리</span>
+                  <span className="stelvio-octagon-filter-val">{labelForCategory(boardC)}</span>
+                  <span className="stelvio-octagon-filter-chev" aria-hidden="true" />
+                  <select
+                    className="stelvio-octagon-filter-select"
+                    value={boardC}
+                    onChange={function(e) {
+                      if (typeof onBoardFilterChange === 'function') {
+                        onBoardFilterChange(boardG, e.target.value);
+                      }
+                    }}
+                    aria-label="카테고리"
+                  >
+                    {CATEGORY_OPTIONS.map(function(o) {
+                      return (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
             </div>
@@ -1731,15 +1722,6 @@
           {sumP != null && !boardState.loading && !boardState.err && (!boardState.rows || !boardState.rows.length) ? (
             <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
-          <p className="stelvio-heptagon-detail-modal__note">
-            <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>7축 환산 합(전면)</strong>이 모든 부문·성별
-            문서에 동일 값으로 저장됩니다. 집계 순위(해당 부문이면
-            <strong> 본인 정식 순위</strong>, 그렇지 않으면 Supremo 환산 합을 해당 부문 500명 목록에 삽입한
-            <strong> 가상 순위</strong>)과 레벨%는 <code>heptagonLevelPercentForRankN</code> — 모집 n 기준(실집계 1~n, 가상 1~n+1)으로
-            n≥100 → (r÷n)×100, n{'<'}100 → n₂=100÷n, ((r÷n)÷n₂)×100. <strong>7구간 표(위)</strong>는 W/kg 7축(카드·랭킹과 동일 필터),
-            <strong> 대시보드 중앙 배지</strong>는 카드의 성별·부문 필터와 이 화면 “동일 조건”이 일치할 때 동일
-            수치로 맞춰집니다.
-          </p>
           <div className="stelvio-heptagon-detail-modal__actions">
             <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
               닫기
