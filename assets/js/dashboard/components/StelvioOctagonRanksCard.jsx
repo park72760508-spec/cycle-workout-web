@@ -505,31 +505,6 @@
     return out;
   }
 
-  function hasValidCohortBoardOverlay(ovl) {
-    if (!ovl || ovl.loading || ovl.err || ovl.skip) {
-      return false;
-    }
-    var nTot = ovl.nTotal != null && isFinite(ovl.nTotal) ? Math.max(0, Math.floor(Number(ovl.nTotal))) : 0;
-    if (nTot < 1) {
-      return false;
-    }
-    var br = ovl.boardRank;
-    if (br == null && ovl.cohortData) {
-      br = ovl.cohortData.boardRank;
-      if (br == null && ovl.cohortData.comprehensiveRank != null) {
-        br = ovl.cohortData.comprehensiveRank;
-      }
-    }
-    return br != null && isFinite(br);
-  }
-
-  function applyCohortBoardMergeStrict(tierBase, ovl) {
-    if (!tierBase || !hasValidCohortBoardOverlay(ovl)) {
-      return null;
-    }
-    return applyCohortBoardMerge(tierBase, ovl);
-  }
-
   /**
    * 레벨: 7축 **포지션 점수** 합(0~700)·평균(0~100) → `pTier = 100 - 평균` (낮을수록 상위) + 구간(소수 n은 K·상한).
    * **종합 N위** `comprehensiveRank` = 7축 100분위(포지션) **합 S**·`0~700` → 동일 nRef 띠에서
@@ -1307,9 +1282,8 @@
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
             <strong>요약(상단)</strong>: <code>heptagon_cohort_ranks</code>는 <strong>전면(Supremo) 7축 환산 합</strong>이 모든 부문·성별
-            문서에 동일하게 저장됩니다. 화면 툴팁과 상단 요약의 순위·레벨%는 항상 <strong>전면(Supremo) 순위·전면 모수</strong>로
-            산정합니다. 아래 표는 부문을 바꾸면 그 부문(및 성별) 인원만 모아 <strong>그 동일한 합</strong>으로 내림차순
-            1,2,3… 순위를 씁니다(별도 환산·재계산 없음). 레벨%는 <strong>전면 순위·전면 모수</strong>로 항상 (순위÷n)×100%이며,
+            문서에 동일하게 저장됩니다. 부문을 바꾸면 그 부문(및 성별) 인원만 모아 <strong>그 동일한 합</strong>으로 내림차순
+            1,2,3… 순위를 씁니다(별도 환산·재계산 없음). 레벨%는 <strong>필터된 순위·필터된 모수</strong>로 항상 (순위÷n)×100%이며,
             모수가 100명 미만이어도 동일 식입니다. 그 값으로 3·7·20·40·60·90% 구간에 따라 레벨1~7을 정합니다. <strong>7구간 표(위)</strong>는
             W/kg 7축, <strong>아래 표</strong>는 집계 환산 합(최대 500행)입니다. 목록 밖이면 <code>boardRank</code> 위치에 본인 행을
             끼워 넣습니다.
@@ -1640,7 +1614,7 @@
         if (!tierSummaryComputed) {
           return null;
         }
-        return applyCohortBoardMergeStrict(tierSummaryComputed, stelvioCohortOvl);
+        return applyCohortBoardMerge(tierSummaryComputed, stelvioCohortOvl);
       },
       [tierSummaryComputed, stelvioCohortOvl]
     );
@@ -1650,7 +1624,7 @@
         if (!heptagonSummaryCache) {
           return null;
         }
-        return applyCohortBoardMergeStrict(heptagonSummaryCache, stelvioCohortOvl);
+        return applyCohortBoardMerge(heptagonSummaryCache, stelvioCohortOvl);
       },
       [heptagonSummaryCache, stelvioCohortOvl]
     );
@@ -1691,7 +1665,7 @@
         if (!heptagonModalBaseTier) {
           return null;
         }
-        return applyCohortBoardMergeStrict(heptagonModalBaseTier, heptCohortOvlForModalHeader);
+        return applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader);
       },
       [heptagonModalBaseTier, heptCohortOvlForModalHeader]
     );
@@ -2128,7 +2102,7 @@
     }
 
     var onHeptagonOpenDetail = function() {
-      if (heptagonModalSummary) {
+      if (heptagonModalBaseTier || heptagonModalSummary) {
         setHeptagonDetailOpen(true);
       }
     };
@@ -2179,11 +2153,14 @@
         </div>
       );
     } else if (state.loading) {
-      if (heptagonSummaryCacheMerged) {
+      if (heptagonSummaryCache) {
         body = (
           <div className="h-[220px] flex flex-col items-center justify-center">
             <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px] flex items-center justify-center min-h-[200px]">
-              <OctagonTierCenterOverlay summary={heptagonSummaryCacheMerged} onOpenDetail={onHeptagonOpenDetail} />
+              <OctagonTierCenterOverlay
+                summary={heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache}
+                onOpenDetail={onHeptagonOpenDetail}
+              />
             </div>
             <p className="text-xs text-center text-slate-500 mt-0 px-2">최신 헵타곤 순위를 동기화하는 중… (직전 저장값 표시)</p>
             <div
