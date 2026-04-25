@@ -2028,21 +2028,16 @@
 
         octagonRanksReqRef.current = octagonRanksReqRef.current + 1;
         var octRid = octagonRanksReqRef.current;
-        var hadOctCache = false;
-
+        /** 캐시는 **표시(낙관적)** 에 쓰지 않음(순위-only norm ↔ API+W/kg norm 혼용 시 잠시 후 모양이 바뀌거나, Strict 경합으로 캐시가 다시 덮는 문제). 실패 시에만 폴백. */
+        var cachePayload = null;
         if (typeof window.getStelvioOctagonRanksCache === 'function') {
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
           if (cached && cached.monthly && cached.hof) {
-            setState(
-              stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
-            );
-            hadOctCache = true;
+            cachePayload = cached;
           }
         }
 
-        if (!hadOctCache) {
-          setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
-        }
+        setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
 
         Promise.all([
           fetchRanksSet(uid, 'monthly', gender, category),
@@ -2078,10 +2073,22 @@
             if (octagonRanksReqRef.current !== octRid) {
               return;
             }
-            if (!hadOctCache) {
+            if (cachePayload) {
+              setState(
+                stateFromRanksArray(
+                  cachePayload.monthly.ranks,
+                  cachePayload.monthly.cohortSizePerAxis,
+                  cachePayload.hof.ranks
+                )
+              );
+            } else {
               setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
             }
           });
+
+        return function stelvioOctagonRanksCleanup() {
+          octagonRanksReqRef.current = octagonRanksReqRef.current + 1;
+        };
       },
       [uid, gender, category]
     );
