@@ -146,16 +146,14 @@ function tierIdFromP(pTotal, co) {
   return "C6";
 }
 
-/** 레벨%: n≥100 → (r/n)·100, n<100 → (r/n)·100·(100/n) — 대시보드 StelvioOctagonRanksCard 와 동일 */
+/** 레벨%: (순위÷필터 코호트 모수)×100 — 모수 100 미만도 동일(대시보드와 일치) */
 function heptagonLevelPercentForRankN(boardRank, nCohort) {
   const Nc = nCohort | 0;
   if (Nc < 1) return 0;
   let r = boardRank == null || !isFinite(boardRank) ? 1 : Math.floor(Number(boardRank));
   if (r < 1) r = 1;
   if (r > Nc) r = Nc;
-  const raw = (r / Nc) * 100;
-  if (Nc >= 100) return raw;
-  return raw * (100 / Nc);
+  return (r / Nc) * 100;
 }
 
 /**
