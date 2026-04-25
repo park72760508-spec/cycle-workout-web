@@ -14,20 +14,22 @@
       "collectionGroup": "heptagon_rank_log",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "monthKey", "order": "ASCENDING" },
         { "fieldPath": "filterCategory", "order": "ASCENDING" },
         { "fieldPath": "filterGender", "order": "ASCENDING" },
-        { "fieldPath": "sumPositionScores", "order": "ASCENDING" }
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "sumPositionScores", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "heptagon_rank_log",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "monthKey", "order": "ASCENDING" },
         { "fieldPath": "filterCategory", "order": "ASCENDING" },
         { "fieldPath": "filterGender", "order": "ASCENDING" },
-        { "fieldPath": "sumPositionScores", "order": "DESCENDING" }
+        { "fieldPath": "monthKey", "order": "ASCENDING" },
+        { "fieldPath": "sumPositionScores", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
