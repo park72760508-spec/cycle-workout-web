@@ -2028,7 +2028,15 @@
           var cached = window.getStelvioOctagonRanksCache(uid, gender, category, todayStr);
           if (cached && cached.monthly && cached.hof) {
             setState(
-              stateFromRanksArray(cached.monthly.ranks, cached.monthly.cohortSizePerAxis, cached.hof.ranks)
+              stateFromRanksArray(
+                cached.monthly.ranks,
+                cached.monthly.cohortSizePerAxis,
+                cached.hof.ranks,
+                null,
+                null,
+                cached.monthly.wkgs,
+                cached.hof.wkgs
+              )
             );
             fetchRanksSet(uid, 'monthly', gender, 'Supremo')
               .then(function(sRows) {
@@ -2075,7 +2083,23 @@
             setState(stateFromApiRows(mRows, hRows, sRows));
             if (typeof window.setStelvioOctagonRanksCache === 'function') {
               try {
-                window.setStelvioOctagonRanksCache(uid, gender, category, todayStr, monthlyRanks, cohortSizePerAxis, hofRanks);
+                var mwForCache = mRows.map(function(x) {
+                  return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                });
+                var hwForCache = hRows.map(function(x) {
+                  return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                });
+                window.setStelvioOctagonRanksCache(
+                  uid,
+                  gender,
+                  category,
+                  todayStr,
+                  monthlyRanks,
+                  cohortSizePerAxis,
+                  hofRanks,
+                  mwForCache,
+                  hwForCache
+                );
               } catch (e) {
                 console.warn('[StelvioOctagon] cache write failed:', e && e.message);
               }
