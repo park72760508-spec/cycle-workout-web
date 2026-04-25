@@ -1324,7 +1324,7 @@
     var _dOpen = useState(false);
     var heptagonDetailOpen = _dOpen[0];
     var setHeptagonDetailOpen = _dOpen[1];
-    var _hb = useState({ loading: false, err: null, rows: [] });
+    var _hb = useState({ loading: false, err: null, rows: [], nCohort: 0 });
     var heptagonBoard = _hb[0];
     var setHeptagonBoard = _hb[1];
     var _stOvl = useState({ loading: true });
@@ -1708,23 +1708,23 @@
           return;
         }
         if (!uid) {
-          setHeptagonBoard({ loading: false, err: null, rows: [] });
+          setHeptagonBoard({ loading: false, err: null, rows: [], nCohort: 0 });
           return;
         }
         var eff = tierForModal && heptagonDetailOpen ? tierForModal : heptagonModalSummary;
         if (!eff) {
-          setHeptagonBoard({ loading: false, err: 'no-sum', rows: [] });
+          setHeptagonBoard({ loading: false, err: 'no-sum', rows: [], nCohort: 0 });
           return;
         }
         if (!isFinite(Number(eff.sumPositionScores))) {
-          setHeptagonBoard({ loading: false, err: 'no-sum', rows: [] });
+          setHeptagonBoard({ loading: false, err: 'no-sum', rows: [], nCohort: 0 });
           return;
         }
         if (typeof window.queryStelvioHeptagonCohortBySumDesc !== 'function') {
-          setHeptagonBoard({ loading: false, err: 'no-fn', rows: [] });
+          setHeptagonBoard({ loading: false, err: 'no-fn', rows: [], nCohort: 0 });
           return;
         }
-        setHeptagonBoard({ loading: true, err: null, rows: [] });
+        setHeptagonBoard({ loading: true, err: null, rows: [], nCohort: 0 });
         var mk = currentMonthKeyKst();
         var prBoard = window.queryStelvioHeptagonCohortBySumDesc({
           monthKey: mk,
@@ -1741,24 +1741,35 @@
                 filterGender: heptagonModalGender
               })
             : Promise.resolve({ ok: false, exists: false, data: null });
-        Promise.all([prCohort, prBoard])
-          .then(function(pair) {
-            var cr = pair[0];
-            var res = pair[1];
+        var prN =
+          typeof window.queryStelvioHeptagonCohortBoardN === 'function'
+            ? window.queryStelvioHeptagonCohortBoardN({
+                monthKey: mk,
+                filterCategory: heptagonModalCategory,
+                filterGender: heptagonModalGender
+              })
+            : Promise.resolve({ ok: false, nTotal: 0 });
+        Promise.all([prCohort, prBoard, prN])
+          .then(function(triple) {
+            var cr = triple[0];
+            var res = triple[1];
+            var nRes = triple[2];
+            var nTotal = nRes && nRes.ok && nRes.nTotal > 0 ? Math.floor(nRes.nTotal) : 0;
             if (res && res.ok) {
               var myData = cr && cr.ok && cr.exists && cr.data ? cr.data : null;
               var built = buildHeptagonModalBoardRows(res.items || [], uid, myData);
-              setHeptagonBoard({ loading: false, err: null, rows: built.rows, meInList: built.meInList });
+              setHeptagonBoard({ loading: false, err: null, rows: built.rows, meInList: built.meInList, nCohort: nTotal });
             } else {
               setHeptagonBoard({
                 loading: false,
                 err: (res && res.error) || 'fetch',
-                rows: []
+                rows: [],
+                nCohort: 0
               });
             }
           })
           .catch(function() {
-            setHeptagonBoard({ loading: false, err: 'catch', rows: [] });
+            setHeptagonBoard({ loading: false, err: 'catch', rows: [], nCohort: 0 });
           });
       },
       [heptagonDetailOpen, uid, heptagonModalSummary, tierForModal, heptagonModalCategory, heptagonModalGender]
@@ -1987,13 +1998,73 @@
     };
 
     var heptagonModalShowSummary = tierForModal || heptagonModalSummary;
+
+    /**
+     * 모달 상단(레벨·순위·%)은 7축 `compute` 값이 섞이면(병합 실패) 표와 어긋난다.
+     * 동일 조건·월(환산) 점수 순위 표가 로드되면, 집계 n + 표에 찍힌 본인 boardRank로 덮어 맞춘다.
+     */
+    var heptagonModalDisplaySummary = useMemo(
+      function() {
+        if (!heptagonModalShowSummary) {
+          return null;
+        }
+        if (!heptagonDetailOpen) {
+          return heptagonModalShowSummary;
+        }
+        if (!heptagonBoard || heptagonBoard.loading) {
+          return heptagonModalShowSummary;
+        }
+        if (heptagonBoard.err) {
+          return heptagonModalShowSummary;
+        }
+        var nC =
+          heptagonBoard.nCohort != null && isFinite(Number(heptagonBoard.nCohort))
+            ? Math.max(0, Math.floor(Number(heptagonBoard.nCohort)))
+            : 0;
+        if (nC < 1) {
+          return heptagonModalShowSummary;
+        }
+        var rows = heptagonBoard.rows || [];
+        var me = null;
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i] && rows[i].isMe) {
+            me = rows[i];
+            break;
+          }
+        }
+        if (!me || me.boardRank == null || !isFinite(me.boardRank)) {
+          return heptagonModalShowSummary;
+        }
+        var br = Math.max(1, Math.min(nC, Math.floor(Number(me.boardRank))));
+        var hb = heptagonBoardTierObjectFromRankN(br, nC);
+        var out = Object.assign({}, heptagonModalShowSummary);
+        out.pTier = hb.pRank;
+        out.pTotal = hb.pRank;
+        out.pComprehensive = hb.pRank;
+        out.comprehensiveRank = br;
+        out.rankAverage = br;
+        out.cohortN = nC;
+        out.tier = hb.tier;
+        out.tierPercentCutoffs = HEPTAGON_BOARD_PCT_CUTS;
+        out.isLargeCohort = nC >= 100;
+        out.kAdjust = nC < 100 ? 100 / nC : 1;
+        out.heptagonBoardTierMode = hb.mode;
+        out.heptagonBoardUpperRankBounds = hb.upperRankBounds;
+        if (me.sumPositionScores != null && isFinite(Number(me.sumPositionScores))) {
+          out.sumPositionScores = Number(me.sumPositionScores);
+        }
+        return out;
+      },
+      [heptagonDetailOpen, heptagonModalShowSummary, heptagonBoard]
+    );
+
     var heptagonDetailModal =
       heptagonDetailOpen && heptagonModalShowSummary ? (
         <HeptagonRankDetailModal
           onClose={function() {
             setHeptagonDetailOpen(false);
           }}
-          tierSummary={heptagonModalShowSummary}
+          tierSummary={heptagonModalDisplaySummary != null ? heptagonModalDisplaySummary : heptagonModalShowSummary}
           rows={
             heptagonModalGender !== gender || heptagonModalCategory !== category
               ? heptagonModalDetailRows
