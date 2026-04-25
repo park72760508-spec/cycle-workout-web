@@ -5566,6 +5566,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-heptagon-detail-modal__panel {
   width: 100%;
   max-width: 26rem;
+  min-height: min(32rem, 90vh);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -5574,6 +5575,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
   border: 1px solid #e2e8f0;
   padding: 1.15rem 1.25rem 1rem;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .stelvio-heptagon-detail-modal__head {
   display: flex;
@@ -5583,6 +5587,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-bottom: 0.75rem;
   border-bottom: 2px solid #e9d5ff;
   padding-bottom: 0.65rem;
+  flex-shrink: 0;
 }
 .stelvio-heptagon-detail-modal__title {
   margin: 0 0 0.2rem 0;
@@ -5596,6 +5601,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-size: 0.7rem;
   color: #64748b;
   line-height: 1.35;
+  min-height: 2.1rem;
 }
 .stelvio-heptagon-detail-modal__close {
   flex-shrink: 0;
@@ -5622,6 +5628,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   font-size: 0.8rem;
   color: #475569;
   margin-bottom: 0.65rem;
+  min-height: 5.5rem;
+  flex-shrink: 0;
 }
 .stelvio-heptagon-detail-modal__summary-row {
   display: flex;
@@ -5690,9 +5698,10 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-heptagon-detail-modal__actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 0.2rem;
+  margin-top: auto;
   padding-top: 0.5rem;
   border-top: 1px solid #f1f5f9;
+  flex-shrink: 0;
 }
 .stelvio-heptagon-detail-modal__btn {
   padding: 0.45rem 0.9rem;
@@ -5763,6 +5772,22 @@ body:has(#trainingDetailModal:not(.hidden)) {
   margin-left: auto;
   margin-right: auto;
 }
+/* 성별·부문 변경 시에도 팝업 전체·표 영역 높이가 흔들리지 않도록 */
+.stelvio-heptagon-detail-modal__boardbody {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 16rem;
+  min-width: 0;
+  overflow: hidden;
+}
+.stelvio-heptagon-detail-modal__boardbody .stelvio-heptagon-detail-modal__neighborload,
+.stelvio-heptagon-detail-modal__boardbody .stelvio-heptagon-detail-modal__neighboreq {
+  min-height: 2.5rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+  flex-shrink: 0;
+}
 .stelvio-heptagon-board-btngroup {
   display: flex;
   flex-wrap: wrap;
@@ -5803,7 +5828,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   color: #fff;
 }
 .stelvio-heptagon-detail-modal__tablewrap--neighbor {
+  min-height: 12rem;
   max-height: 12rem;
+  flex: 0 0 auto;
 }
 .stelvio-heptagon-detail-modal__tr--me td {
   background: #f5f3ff;
