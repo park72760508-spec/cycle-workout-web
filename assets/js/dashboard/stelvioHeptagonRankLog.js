@@ -260,6 +260,68 @@
   }
 
   /**
+   * 동일 월·필터 코호트의 **최고 boardRank(=집계 인원 N)**. 집계 레벨% = (boardRank / N)·100 에 사용.
+   * 인덱스: filterCategory, filterGender, monthKey, boardRank desc
+   * @param {{ monthKey: string, filterCategory: string, filterGender: string }} o
+   * @returns {Promise<{ ok: boolean, nTotal: number, error?: string }>}
+   */
+  function queryStelvioHeptagonCohortBoardN(o) {
+    o = o || {};
+    if (!window.firestoreV9) {
+      return Promise.resolve({ ok: false, nTotal: 0 });
+    }
+    var monthKey = o.monthKey != null ? String(o.monthKey) : monthKeyKst();
+    var filterCategory = o.filterCategory != null ? String(o.filterCategory) : 'Supremo';
+    var filterGender = o.filterGender != null ? String(o.filterGender) : 'all';
+    return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+      .then(function (mod) {
+        if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
+          return { __empty: 'no-mod' };
+        }
+        var col = mod.collection(window.firestoreV9, COL_COHORT);
+        var qy = mod.query(
+          col,
+          mod.where('filterCategory', '==', filterCategory),
+          mod.where('filterGender', '==', filterGender),
+          mod.where('monthKey', '==', monthKey),
+          mod.orderBy('boardRank', 'desc'),
+          mod.limit(1)
+        );
+        return mod.getDocs(qy);
+      })
+      .then(function (qs) {
+        if (qs && qs.__empty) {
+          return { ok: false, nTotal: 0 };
+        }
+        if (!qs || !qs.size || !qs.forEach) {
+          return { ok: true, nTotal: 0 };
+        }
+        var maxN = 0;
+        qs.forEach(function (d) {
+          var x = d.data();
+          if (!x || !stelvioCohortRowMatchesFilter(x, filterCategory)) {
+            return;
+          }
+          var b = x.boardRank;
+          if (b == null && x.comprehensiveRank != null) {
+            b = x.comprehensiveRank;
+          }
+          if (b != null && isFinite(b)) {
+            var bi = Math.floor(Number(b));
+            if (bi > maxN) maxN = bi;
+          }
+        });
+        return { ok: true, nTotal: maxN };
+      })
+      .catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[queryStelvioHeptagonCohortBoardN]', e && e.message ? e.message : e);
+        }
+        return { ok: false, nTotal: 0, error: String(e && e.message ? e.message : e) };
+      });
+  }
+
+  /**
    * 본인 문서 읽기(종합 N위·티어 캐시). 룰: read public.
    * @param {string} userId
    * @returns {Promise<{ ok: boolean, exists?: boolean, data?: object|null, error?: string }>}
@@ -417,6 +479,7 @@
   window.queryStelvioHeptagonSumNeighbors = queryStelvioHeptagonSumNeighbors;
   window.queryStelvioHeptagonRankTop = queryStelvioHeptagonRankTop;
   window.queryStelvioHeptagonCohortBySumDesc = queryStelvioHeptagonCohortBySumDesc;
+  window.queryStelvioHeptagonCohortBoardN = queryStelvioHeptagonCohortBoardN;
   window.getStelvioHeptagonRankLogCollectionName = function () {
     return COL;
   };
