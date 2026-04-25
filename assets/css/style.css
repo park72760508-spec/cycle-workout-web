@@ -5398,12 +5398,26 @@ body:has(#trainingDetailModal:not(.hidden)) {
   width: 17.5%;
   min-width: 48px;
 }
-.stelvio-octagon-tier-btn--image {
+.stelvio-octagon-tier-btn--image,
+.stelvio-octagon-tier-btn--beast {
   padding: 0;
   background: transparent !important;
   width: 100%;
   line-height: 0;
   box-shadow: none !important;
+  cursor: pointer;
+}
+.stelvio-octagon-tier-btn--leveltag {
+  margin-top: 4px;
+  padding: 0;
+  background: transparent !important;
+  border: none;
+  box-shadow: none !important;
+  cursor: pointer;
+  line-height: 0;
+  width: auto;
+  max-width: 100%;
+  align-self: center;
 }
 .stelvio-octagon-tier-btn-stack {
   display: flex;
@@ -5724,19 +5738,33 @@ body:has(#trainingDetailModal:not(.hidden)) {
 .stelvio-heptagon-detail-modal__tr--me strong {
   color: #5b21b6;
 }
-.stelvio-heptagon-detail-modal__neighborload,
-.stelvio-heptagon-detail-modal__neighboreq {
+.stelvio-heptagon-detail-modal__neighborload {
   font-size: 0.72rem;
   line-height: 1.4;
   color: #94a3b8;
   margin: 0.3rem 0 0.4rem 0;
 }
 .stelvio-heptagon-detail-modal__neighboreq {
+  font-size: 0.72rem;
+  line-height: 1.4;
   color: #b45309;
   background: #fffbeb;
   padding: 0.4rem 0.5rem;
   border-radius: 0.35rem;
   border: 1px solid #fde68a;
+  margin: 0.3rem 0 0.4rem 0;
+}
+.stelvio-heptagon-detail-modal__namecell {
+  display: inline;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+.stelvio-heptagon-detail-modal__table .ranking-private-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 2px;
+  font-size: 0.55rem;
+  margin-top: 0;
 }
 
 /* ② 내 랭킹 요약 Hero 카드 */
