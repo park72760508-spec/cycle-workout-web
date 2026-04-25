@@ -1,12 +1,15 @@
 /**
  * STELVIO 헵타곤 7축·종합(포지션 점수) — Firestore heptagon_rank_log 동기화
- * - 랭킹보드/필터(성별·부문)용: gender, ageCategory(부문), monthKey, avgPositionScore(높을수록 상위) 등
+ * - `heptagon_cohort_ranks`: 서버 일괄 집계(전원 순위·이웃/탑 쿼리)
+ * - `heptagon_rank_log/{uid}`: 대시보드가 마지막으로 캐시한 본인 요약(merge)
  */
 /* global window */
 (function () {
   'use strict';
 
   var COL = 'heptagon_rank_log';
+  /** 랭킹·이웃: Cloud Function `scheduledHeptagonCohortRanks`가 채움 */
+  var COL_COHORT = 'heptagon_cohort_ranks';
 
   function monthKeyKst() {
     var t = new Date();
@@ -105,7 +108,7 @@
       .then(function (mod) {
         if (!mod || !mod.query || !mod.getDocs) return { ok: false, items: [] };
         var qy = mod.query(
-          mod.collection(window.firestoreV9, COL),
+          mod.collection(window.firestoreV9, COL_COHORT),
           mod.where('monthKey', '==', monthKey),
           mod.where('filterCategory', '==', filterCategory),
           mod.where('filterGender', '==', filterGender),
@@ -198,7 +201,7 @@
         if (!mod || !mod.query || !mod.getDocs || !mod.collection) {
           return { ok: false, above: [], below: [], error: 'no-mod' };
         }
-        var col = mod.collection(window.firestoreV9, COL);
+        var col = mod.collection(window.firestoreV9, COL_COHORT);
         var qUp = mod.query(
           col,
           mod.where('monthKey', '==', monthKey),
@@ -231,7 +234,12 @@
             userId: d.userId != null ? String(d.userId) : doc.id,
             displayName: (d.displayName && String(d.displayName).trim()) || '—',
             sumPositionScores: d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : null,
-            rank: d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank)) ? Math.floor(Number(d.comprehensiveRank)) : null,
+            rank:
+              d.boardRank != null && isFinite(Number(d.boardRank))
+                ? Math.floor(Number(d.boardRank))
+                : d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank))
+                  ? Math.floor(Number(d.comprehensiveRank))
+                  : null,
             isPrivate: d.is_private === true
           };
         };
@@ -240,14 +248,16 @@
         if (qsUp && qsUp.forEach) {
           qsUp.forEach(function (d) {
             if (!d || !d.id) return;
-            if (myUserId && d.id === myUserId) return;
+            var rowUid = d.data() && d.data().userId != null ? String(d.data().userId) : '';
+            if (myUserId && rowUid === String(myUserId)) return;
             above.push(mapItem(d));
           });
         }
         if (qsDown && qsDown.forEach) {
           qsDown.forEach(function (d) {
             if (!d || !d.id) return;
-            if (myUserId && d.id === myUserId) return;
+            var rowUid2 = d.data() && d.data().userId != null ? String(d.data().userId) : '';
+            if (myUserId && rowUid2 === String(myUserId)) return;
             below.push(mapItem(d));
           });
         }
@@ -273,5 +283,8 @@
   window.queryStelvioHeptagonRankTop = queryStelvioHeptagonRankTop;
   window.getStelvioHeptagonRankLogCollectionName = function () {
     return COL;
+  };
+  window.getStelvioHeptagonCohortCollectionName = function () {
+    return COL_COHORT;
   };
 })();
