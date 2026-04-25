@@ -961,7 +961,7 @@
           ) : null}
           <p className="stelvio-heptagon-detail-modal__note">
             환산 점수: 1위=100, 꼴등=0(구간·코호트). 상단 「종합(환산) 순위」는 7축 합 S로 nRef 띠에 이식한 N위(표시)이며, 이웃 표의 순위·본인(집계)은 Firestore
-            <code> heptagon_cohort_ranks</code> 점수 합 1~N(동일 필터)입니다. 둘은 정의가 달라 숫자가 다를 수 있습니다. 이웃 행은 DB에 있는 점수 중 나보다 합이 바로
+            <code> heptagon_cohort_ranks</code> 점수 합 1~N(동일 필터)입니다(카테고리가 ‘전체(Supremo)’가 아닐 때는 그 부문 소속 사용자만). 둘은 정의가 달라 숫자가 다를 수 있습니다. 이웃 행은 DB에 있는 점수 중 나보다 합이 바로
             위·아래(각 최대 3명)입니다. 위쪽 목록은 나와 점수가 가까운 사람부터(동일 구간에서 합이 낮은 순) 표시됩니다.
           </p>
           <div className="stelvio-heptagon-detail-modal__actions">
