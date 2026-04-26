@@ -209,6 +209,8 @@ function PowerProfileCurveChart(props) {
 
 // ========== 최근 1개월 파워 (Stelvio 참가자분포 MeBadge·ReferenceLine과 동일 톤, 상단 고정 판넬 + 클릭 점선, 호버 툴팁 없음) ==========
 var PP_REF_LINE = '#7c3aed';
+/** 참가자 분포 Tooltip cursor 와 동일(브론즈 가이드) */
+var PP_CHART_TOOLTIP_CURSOR = { stroke: '#b87333', strokeWidth: 1, strokeDasharray: '4 4' };
 /** Stelvio StelvioRankingDistributionChart: MeBadge 테두리·강조색 + ReferenceLine */
 var PP_REF_STROKE_W = 3;
 var PP_REF_DASH = '6 4';
@@ -300,6 +302,7 @@ function PowerProfileMonthCurveChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var ReferenceLine = Recharts && Recharts.ReferenceLine;
+  var Tooltip = Recharts && Recharts.Tooltip;
   var cid = nextChartId();
   var data = monthCurveData || [];
 
@@ -319,7 +322,6 @@ function PowerProfileMonthCurveChart(props) {
   }
   var dataKey = selItem.dataKey;
   var selColor = selItem.color;
-  var hrKeyForApi = 'hr' + selectedApi;
 
   var hasAnyWeek = data.length > 0 && data.some(function(r) {
     return (r.power1min || r.power5min || r.power10min || r.power20min || r.power40min || r.power60min) > 0;
@@ -370,23 +372,17 @@ function PowerProfileMonthCurveChart(props) {
         setSelectedXIndex(null);
         return;
       }
-      var best = 0;
-      var bestVal = -1;
-      for (var i = 0; i < data.length; i++) {
-        var v = Number(data[i][dataKey]) || 0;
-        if (v > bestVal) {
-          bestVal = v;
-          best = i;
-        }
-      }
-      if (bestVal <= 0) {
-        setSelectedXIndex(null);
-        return;
-      }
-      setSelectedXIndex(best);
+      setSelectedXIndex(data.length - 1);
     },
     [dataKey, data.length]
   );
+
+  function monthPowerApplyChartPointerState(st) {
+    if (!st || !data.length) return;
+    var idx = st.activeTooltipIndex;
+    if (typeof idx !== 'number' || !isFinite(idx) || idx < 0 || idx >= data.length) return;
+    setSelectedXIndex(idx);
+  }
 
   if (!Recharts || !hasAnyWeek) {
     return (
@@ -411,7 +407,6 @@ function PowerProfileMonthCurveChart(props) {
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mfbRow = data[selectedXIndex];
     var _mfwv = Math.round(Number(_mfbRow[dataKey]) || 0);
-    var _mfHr = Math.round(Number(_mfbRow[hrKeyForApi]) || 0);
     var _mfMm = monthPowerBadgeMmDd(_mfbRow);
     var _mfSub = selItem.label + ' | ' + _mfMm;
     if (_mfSub.length > 22) {
@@ -448,7 +443,7 @@ function PowerProfileMonthCurveChart(props) {
           }}
         >
           <div style={{ fontSize: 10, fontWeight: 700, color: PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
-            {_mfwv} W{_mfHr > 0 ? ' / ' + _mfHr + ' bpm' : ''}
+            {_mfwv} W
           </div>
           <div
             style={{
@@ -517,15 +512,32 @@ function PowerProfileMonthCurveChart(props) {
         }}
       >
         {monthPowerStelvioTopPanel}
-        <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1 }}>
+        <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1, touchAction: 'none' }}>
           <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: MONTH_PLOT_M_TOP, right: MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
+          <AreaChart
+            data={data}
+            margin={{ top: MONTH_PLOT_M_TOP, right: MONTH_PLOT_M_R, left: 0, bottom: 0 }}
+            onMouseMove={monthPowerApplyChartPointerState}
+            onTouchMove={monthPowerApplyChartPointerState}
+            onMouseLeave={function() {
+              if (data.length) setSelectedXIndex(data.length - 1);
+            }}
+          >
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
                 <stop offset="100%" stopColor={selColor} stopOpacity={0} />
               </linearGradient>
             </defs>
+            {Tooltip ? (
+              <Tooltip
+                content={function() {
+                  return null;
+                }}
+                cursor={PP_CHART_TOOLTIP_CURSOR}
+                isAnimationActive={false}
+              />
+            ) : null}
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="name"
@@ -561,12 +573,9 @@ function PowerProfileMonthCurveChart(props) {
               dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor, data.length)}
               connectNulls
               isAnimationActive={false}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'crosshair' }}
               onClick={function(_d, i) {
-                if (i == null || !data[i]) return;
-                setSelectedXIndex(function(prev) {
-                  return prev === i ? null : i;
-                });
+                if (i != null && data[i]) setSelectedXIndex(i);
               }}
             />
             {refXVal != null && ReferenceLine ? (

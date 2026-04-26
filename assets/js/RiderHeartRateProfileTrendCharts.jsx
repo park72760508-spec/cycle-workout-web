@@ -131,6 +131,8 @@ function buildMonthHeartRateCurveData(intervalHR, intervalMMP) {
 
 // ——— 최근 1개월 심박: 클릭 가이드 + 프로스티드 배지 (RiderPowerProfileTrendCharts PowerProfileMonthCurveChart와 동일 토큰) ———
 var HR_PP_REF_LINE = '#7c3aed';
+/** 참가자 분포 Tooltip cursor 와 동일 */
+var HR_CHART_TOOLTIP_CURSOR = { stroke: '#b87333', strokeWidth: 1, strokeDasharray: '4 4' };
 var HR_PP_REF_STROKE_W = 3;
 var HR_PP_REF_DASH = '6 4';
 var HR_STELVIO_ME_BADGE_W = 104;
@@ -268,6 +270,7 @@ function HeartRateProfileMonthCurveChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var ReferenceLine = Recharts && Recharts.ReferenceLine;
+  var Tooltip = Recharts && Recharts.Tooltip;
   var cid = nextHrChartId();
   var data = monthCurveData || [];
 
@@ -287,7 +290,6 @@ function HeartRateProfileMonthCurveChart(props) {
   }
   var dataKey = selItem.dataKey;
   var selColor = selItem.color;
-  var powerKeyForApi = 'power' + selectedApi;
 
   var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
 
@@ -332,23 +334,17 @@ function HeartRateProfileMonthCurveChart(props) {
         setSelectedXIndex(null);
         return;
       }
-      var best = 0;
-      var bestVal = -1;
-      for (var i = 0; i < data.length; i++) {
-        var v = Number(data[i][dataKey]) || 0;
-        if (v > bestVal) {
-          bestVal = v;
-          best = i;
-        }
-      }
-      if (bestVal <= 0) {
-        setSelectedXIndex(null);
-        return;
-      }
-      setSelectedXIndex(best);
+      setSelectedXIndex(data.length - 1);
     },
     [dataKey, data.length]
   );
+
+  function monthHrApplyChartPointerState(st) {
+    if (!st || !data.length) return;
+    var idx = st.activeTooltipIndex;
+    if (typeof idx !== 'number' || !isFinite(idx) || idx < 0 || idx >= data.length) return;
+    setSelectedXIndex(idx);
+  }
 
   if (!Recharts || !hasData) {
     return (
@@ -372,7 +368,6 @@ function HeartRateProfileMonthCurveChart(props) {
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mhRow = data[selectedXIndex];
     var _mhbv = Math.round(Number(_mhRow[dataKey]) || 0);
-    var _mhPw = Math.round(Number(_mhRow[powerKeyForApi]) || 0);
     var _mhMm = monthHrChartMmDd(_mhRow);
     var _mhSub = selItem.label + ' | ' + _mhMm;
     if (_mhSub.length > 22) {
@@ -409,7 +404,7 @@ function HeartRateProfileMonthCurveChart(props) {
           }}
         >
           <div style={{ fontSize: 10, fontWeight: 700, color: HR_PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
-            {_mhbv} bpm{_mhPw > 0 ? ' / ' + _mhPw + ' W' : ''}
+            {_mhbv} bpm
           </div>
           <div
             style={{
@@ -477,15 +472,32 @@ function HeartRateProfileMonthCurveChart(props) {
         }}
       >
         {monthHrStelvioTopPanel}
-        <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1 }}>
+        <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1, touchAction: 'none' }}>
           <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: HR_MONTH_PLOT_M_TOP, right: HR_MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
+          <AreaChart
+            data={data}
+            margin={{ top: HR_MONTH_PLOT_M_TOP, right: HR_MONTH_PLOT_M_R, left: 0, bottom: 0 }}
+            onMouseMove={monthHrApplyChartPointerState}
+            onTouchMove={monthHrApplyChartPointerState}
+            onMouseLeave={function() {
+              if (data.length) setSelectedXIndex(data.length - 1);
+            }}
+          >
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
                 <stop offset="100%" stopColor={selColor} stopOpacity={0} />
               </linearGradient>
             </defs>
+            {Tooltip ? (
+              <Tooltip
+                content={function() {
+                  return null;
+                }}
+                cursor={HR_CHART_TOOLTIP_CURSOR}
+                isAnimationActive={false}
+              />
+            ) : null}
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="name"
@@ -521,12 +533,9 @@ function HeartRateProfileMonthCurveChart(props) {
               dot={growthStyleHrPrDot(ReactForDot, prIdx, prBpm, selColor, data.length)}
               connectNulls
               isAnimationActive={false}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'crosshair' }}
               onClick={function(_d, i) {
-                if (i == null || !data[i]) return;
-                setSelectedXIndex(function(prev) {
-                  return prev === i ? null : i;
-                });
+                if (i != null && data[i]) setSelectedXIndex(i);
               }}
             />
             {refXVal != null && ReferenceLine ? (
