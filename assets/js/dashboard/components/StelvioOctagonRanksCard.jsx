@@ -169,14 +169,26 @@
   function computeDisplayRankLikeDistribution(data, uid, category, duration) {
     if (!data || !data.success || !data.byCategory || !uid) return null;
     var cu = data.currentUser;
-    if (!cu || String(cu.userId) !== String(uid)) return null;
     var byCategory = data.byCategory;
-    var userAgeCat = cu.ageCategory;
+    var cuValid = cu && String(cu.userId) === String(uid);
+    var userAgeCat = cuValid ? cu.ageCategory : null;
 
     if (category === 'Supremo') {
-      if (cu.rank == null) return null;
-      return safeFloorRank(cu.rank);
+      /* cu.rank 우선 사용. null/0이면 byCategory.Supremo에서 userId로 직접 검색 (own-category 로직과 동일).
+       * cu.rank가 반환되지 않는 경우(API 미집계·비어있는 duration 등)에도 레이더 폴리곤이 올바르게 표시됨. */
+      if (cuValid && cu.rank != null) {
+        var supremoRank = safeFloorRank(cu.rank);
+        if (supremoRank != null) return supremoRank;
+      }
+      var supArr = byCategory.Supremo || [];
+      var supIdx = supArr.findIndex(function(e) {
+        return e && String(e.userId) === String(uid);
+      });
+      if (supIdx >= 0) return supIdx + 1;
+      return null;
     }
+
+    if (!cuValid) return null;
 
     if (userAgeCat && category === userAgeCat) {
       var heroArr = byCategory[category] || [];
@@ -314,8 +326,16 @@
       DURATIONS.map(function(d) {
         return fetchRankingPayload(uid, d, period, gender).then(function(data) {
           var cu = data && data.currentUser;
-          var wk =
-            cu && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
+          var cuValid = cu && String(cu.userId) === String(uid);
+          var wk = cuValid && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
+          /* cu가 없거나 userId 불일치 시 byCategory.Supremo에서 W/kg 폴백 */
+          if (wk == null && data && data.byCategory) {
+            var supArr2 = data.byCategory.Supremo || [];
+            var supEntry = supArr2.find(function(e) { return e && String(e.userId) === String(uid); });
+            if (supEntry && supEntry.wkg != null && isFinite(Number(supEntry.wkg))) {
+              wk = Number(supEntry.wkg);
+            }
+          }
           return {
             rank: computeDisplayRankLikeDistribution(data, uid, category, d),
             n: cohortSizeForCategory(data, category),
