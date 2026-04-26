@@ -2776,22 +2776,36 @@
         var rMax = 70;
         var nAxis = N_WKG_AXES;
 
-        /* 순위 비율 직접 계산: (n - rank + 1) / n
-         * rank 1위 → 0.99(최대), 꼴찌 → 0.08(최소), 데이터 없음(null) → 0.08 */
+        /* ── 모수(n) 결정 ──────────────────────────────────────────────────────
+         * 툴팁에 표시되는 모수와 동일한 값을 사용한다.
+         * 우선순위: tierForCard.cohortN(Firestore 집계 or API max) > max(cohortSizePerAxis) > 1
+         * ──────────────────────────────────────────────────────────────────── */
+        var nRef = (tierForCard && tierForCard.cohortN != null && (tierForCard.cohortN | 0) > 0)
+          ? (tierForCard.cohortN | 0)
+          : 0;
+        if (nRef < 1) {
+          var perAxis = state.monthly.cohortSizePerAxis || [];
+          for (var pi = 0; pi < perAxis.length; pi++) {
+            var pn = (perAxis[pi] | 0);
+            if (pn > nRef) nRef = pn;
+          }
+        }
+        if (nRef < 1) nRef = 1;
+
+        /* 순위 비율 직접 계산: (nRef - rank + 1) / nRef
+         * rank 1위 → 0.99(최대), 꼴찌 → ~0.08(최소), 데이터 없음(null) → 0.08 */
         var rankNorms = [];
         var ranks = state.monthly.ranks || [];
-        var cohortN = state.monthly.cohortSizePerAxis || [];
         for (var ni = 0; ni < nAxis; ni++) {
           var r = ranks[ni];
-          var n = (cohortN[ni] | 0) > 0 ? (cohortN[ni] | 0) : 1;
           var norm;
           if (r == null || !isFinite(r) || r < 1) {
             norm = 0.08;
           } else {
             var rr = Math.floor(Number(r));
             if (rr < 1) rr = 1;
-            if (rr > n) rr = n;
-            norm = (n - rr + 1) / n;
+            if (rr > nRef) rr = nRef;
+            norm = (nRef - rr + 1) / nRef;
             if (norm > 0.99) norm = 0.99;
             if (norm < 0.08) norm = 0.08;
           }
@@ -2863,7 +2877,7 @@
           </svg>
         );
       },
-      [state]
+      [state, tierForCard]
     );
 
     var filterRow = null;
