@@ -421,39 +421,42 @@ function PowerProfileMonthCurveChart(props) {
     var _mfBg = ppHexToRgba(selColor, PP_TINT_A_BG);
     var _mfBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
     var _mfTx = ppBadgeTextStyle(selColor);
+    // 플롯 상단·가로 중앙 고정(세로 점선 X와 무관). AreaChart: margin top 52, YAxis 36, right 12
     monthPowerFixedSelectBadge = (
-      <div
-        className="pointer-events-none absolute left-1/2 top-0 z-[5] flex h-10 w-[min(100%,10.5rem)] max-w-[min(18rem,95vw)] -translate-x-1/2 flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
-        style={{
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-          border: '1.5px solid ' + _mfBd,
-          background: PP_FROST + ', ' + _mfBg,
-          backdropFilter: PP_BLUR,
-          WebkitBackdropFilter: PP_BLUR,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.45)',
-        }}
-      >
+      <div className="pointer-events-none absolute top-[52px] left-9 right-3 z-[5] flex justify-center">
         <div
-          className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
-          style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+          className="flex h-10 w-[min(100%,10.5rem)] max-w-[min(18rem,95%)] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
+          style={{
+            fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            border: '1.5px solid ' + _mfBd,
+            background: PP_FROST + ', ' + _mfBg,
+            backdropFilter: PP_BLUR,
+            WebkitBackdropFilter: PP_BLUR,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.45)',
+          }}
         >
-          {_mfwv} W
-        </div>
-        <div
-          className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
-          style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
-        >
-          <span
-            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-            style={{
-              backgroundColor: selColor,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
-            }}
-            aria-hidden
-          />
-          <span>
-            {selItem.label} | {_mfMm}
-          </span>
+          <div
+            className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
+            style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+          >
+            {_mfwv} W
+          </div>
+          <div
+            className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
+            style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+          >
+            <span
+              className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+              style={{
+                backgroundColor: selColor,
+                boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
+              }}
+              aria-hidden
+            />
+            <span>
+              {selItem.label} | {_mfMm}
+            </span>
+          </div>
         </div>
       </div>
     );
