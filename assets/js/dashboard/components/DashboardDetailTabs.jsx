@@ -159,6 +159,7 @@
 
     var tabReadyTimerRef = useRef(null);
     var tabRefs = useRef([]);
+    var containerRef = useRef(null);
 
     useEffect(function() {
       setShowSkeleton(true);
@@ -469,7 +470,7 @@
 
     return React.createElement(
       'div',
-      { className: 'DashboardDetailTabs' },
+      { className: 'DashboardDetailTabs', ref: containerRef },
       React.createElement(
         'div',
         {
@@ -489,12 +490,23 @@
               onClick: function() {
                 setActiveIndex(i);
                 setTimeout(function() {
+                  /* 탭 버튼 가로 스크롤 */
                   var refs = tabRefs.current;
-                  if (!refs || !Array.isArray(refs)) return;
-                  var targetIdx = i <= 1 ? 0 : 3;
-                  var el = refs[targetIdx];
-                  if (el && typeof el.scrollIntoView === 'function') {
-                    el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
+                  if (refs && Array.isArray(refs)) {
+                    var targetIdx = i <= 1 ? 0 : 3;
+                    var el = refs[targetIdx];
+                    if (el && typeof el.scrollIntoView === 'function') {
+                      el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
+                    }
+                  }
+                  /* 탭 컨테이너 최상단으로 세로 스크롤 */
+                  var container = containerRef.current;
+                  if (container) {
+                    var rect = container.getBoundingClientRect();
+                    var scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+                    var targetY = scrollTop + rect.top - 8;
+                    if (targetY < scrollTop) targetY = scrollTop;
+                    window.scrollTo({ top: targetY, behavior: 'smooth' });
                   }
                 }, 50);
               },
