@@ -105,9 +105,11 @@ function buildHeartRateCurveData(logs) {
   }).filter(function(r) { return r.hr > 0; });
 }
 
-/** 최근 1개월 구간별 심박 데이터 (1·5·10·20·40·60분) — 구간 내 로그별 피크의 최댓값 */
-function buildMonthHeartRateCurveData(intervalHR) {
-  return (intervalHR || []).map(function(row) {
+/** 최근 1개월 구간별 심박+파워(동일 주차 index) — 구간 내 로그별 피크의 최댓값 */
+function buildMonthHeartRateCurveData(intervalHR, intervalMMP) {
+  var pwrRows = intervalMMP || [];
+  return (intervalHR || []).map(function(row, i) {
+    var pw = pwrRows[i] || {};
     return {
       name: row.name,
       endStr: row.endStr != null && String(row.endStr).length ? String(row.endStr) : null,
@@ -116,7 +118,13 @@ function buildMonthHeartRateCurveData(intervalHR) {
       hr10min: Number(row.max_hr_10min) || 0,
       hr20min: Number(row.max_hr_20min) || 0,
       hr40min: Number(row.max_hr_40min) || 0,
-      hr60min: Number(row.max_hr_60min) || 0
+      hr60min: Number(row.max_hr_60min) || 0,
+      power1min: Number(pw.max_1min_watts) || 0,
+      power5min: Number(pw.max_5min_watts) || 0,
+      power10min: Number(pw.max_10min_watts) || 0,
+      power20min: Number(pw.max_20min_watts) || 0,
+      power40min: Number(pw.max_40min_watts) || 0,
+      power60min: Number(pw.max_60min_watts) || 0
     };
   });
 }
@@ -127,7 +135,7 @@ var HR_PP_REF_STROKE_W = 3;
 var HR_PP_REF_DASH = '6 4';
 var HR_STELVIO_ME_BADGE_W = 104;
 var HR_STELVIO_ME_BADGE_SUB = '#64748b';
-var HR_MONTH_PLOT_M_TOP = 52;
+var HR_MONTH_PLOT_M_TOP = 10;
 var HR_MONTH_PLOT_M_R = 12;
 var HR_PP_TINT_A_BG = 0.28;
 var HR_PP_TINT_A_BORDER = 0.58;
@@ -279,6 +287,7 @@ function HeartRateProfileMonthCurveChart(props) {
   }
   var dataKey = selItem.dataKey;
   var selColor = selItem.color;
+  var powerKeyForApi = 'power' + selectedApi;
 
   var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
 
@@ -317,6 +326,30 @@ function HeartRateProfileMonthCurveChart(props) {
   }
   var ReactForDot = window.React;
 
+  useEffect(
+    function() {
+      if (!data.length) {
+        setSelectedXIndex(null);
+        return;
+      }
+      var best = 0;
+      var bestVal = -1;
+      for (var i = 0; i < data.length; i++) {
+        var v = Number(data[i][dataKey]) || 0;
+        if (v > bestVal) {
+          bestVal = v;
+          best = i;
+        }
+      }
+      if (bestVal <= 0) {
+        setSelectedXIndex(null);
+        return;
+      }
+      setSelectedXIndex(best);
+    },
+    [dataKey, data.length]
+  );
+
   if (!Recharts || !hasData) {
     return (
       <DashboardCard>
@@ -339,6 +372,7 @@ function HeartRateProfileMonthCurveChart(props) {
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mhRow = data[selectedXIndex];
     var _mhbv = Math.round(Number(_mhRow[dataKey]) || 0);
+    var _mhPw = Math.round(Number(_mhRow[powerKeyForApi]) || 0);
     var _mhMm = monthHrChartMmDd(_mhRow);
     var _mhSub = selItem.label + ' | ' + _mhMm;
     if (_mhSub.length > 22) {
@@ -375,7 +409,7 @@ function HeartRateProfileMonthCurveChart(props) {
           }}
         >
           <div style={{ fontSize: 10, fontWeight: 700, color: HR_PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
-            {_mhbv} bpm
+            {_mhbv} bpm{_mhPw > 0 ? ' / ' + _mhPw + ' W' : ''}
           </div>
           <div
             style={{
@@ -407,7 +441,7 @@ function HeartRateProfileMonthCurveChart(props) {
               <button
                 key={it.api}
                 type="button"
-                onClick={function() { setSelectedApi(it.api); setSelectedXIndex(null); }}
+                onClick={function() { setSelectedApi(it.api); }}
                 className={
                   'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
                   (active ? activeRing : 'border-white/30 hover:brightness-95')
@@ -435,7 +469,12 @@ function HeartRateProfileMonthCurveChart(props) {
           (isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') +
           ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
         }
-        style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: isFullWidth ? 200 : 160,
+          height: isFullWidth ? 'min(180px, 45vw)' : 'min(140px, 31.5vw)',
+        }}
       >
         {monthHrStelvioTopPanel}
         <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1 }}>
@@ -481,6 +520,8 @@ function HeartRateProfileMonthCurveChart(props) {
               name={selItem.label + ' 심박'}
               dot={growthStyleHrPrDot(ReactForDot, prIdx, prBpm, selColor, data.length)}
               connectNulls
+              isAnimationActive={false}
+              style={{ cursor: 'pointer' }}
               onClick={function(_d, i) {
                 if (i == null || !data[i]) return;
                 setSelectedXIndex(function(prev) {
@@ -496,6 +537,7 @@ function HeartRateProfileMonthCurveChart(props) {
                 strokeOpacity={1}
                 strokeDasharray={HR_PP_REF_DASH}
                 isFront={true}
+                ifOverflow="visible"
               />
             ) : null}
           </AreaChart>
@@ -537,9 +579,11 @@ function RiderHeartRateProfileTrendCharts(props) {
 
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
   var getIntervalHR = window.getIntervalHRFromLogs;
+  var getIntervalMMP = window.getIntervalMMPFromLogs;
   var intervalHR = getIntervalHR ? getIntervalHR(logs, 30, 6) : [];
+  var intervalMMPForMonth = getIntervalMMP ? getIntervalMMP(logs, 30, 6) : [];
   var heartRateCurveData = buildHeartRateCurveData(logs);
-  var monthCurveData = buildMonthHeartRateCurveData(intervalHR);
+  var monthCurveData = buildMonthHeartRateCurveData(intervalHR, intervalMMPForMonth);
 
   return (
     <div className="space-y-4">

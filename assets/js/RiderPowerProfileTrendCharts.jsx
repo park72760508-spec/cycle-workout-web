@@ -70,9 +70,11 @@ function getDateStr(offsetDays) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-/** 최근 1개월 구간별 파워 데이터 (1·5·10·20·40·60분) — 구간 내 로그별 피크의 최댓값 */
-function buildMonthPowerCurveData(intervalMMP) {
-  return (intervalMMP || []).map(function(row) {
+/** 최근 1개월 구간별 파워+심박(동일 주차 index) — 구간 내 로그별 피크의 최댓값 */
+function buildMonthPowerCurveData(intervalMMP, intervalHR) {
+  var hrRows = intervalHR || [];
+  return (intervalMMP || []).map(function(row, i) {
+    var hr = hrRows[i] || {};
     return {
       name: row.name,
       endStr: row.endStr != null && String(row.endStr).length ? String(row.endStr) : null,
@@ -81,7 +83,13 @@ function buildMonthPowerCurveData(intervalMMP) {
       power10min: Number(row.max_10min_watts) || 0,
       power20min: Number(row.max_20min_watts) || 0,
       power40min: Number(row.max_40min_watts) || 0,
-      power60min: Number(row.max_60min_watts) || 0
+      power60min: Number(row.max_60min_watts) || 0,
+      hr1min: Number(hr.max_hr_1min) || 0,
+      hr5min: Number(hr.max_hr_5min) || 0,
+      hr10min: Number(hr.max_hr_10min) || 0,
+      hr20min: Number(hr.max_hr_20min) || 0,
+      hr40min: Number(hr.max_hr_40min) || 0,
+      hr60min: Number(hr.max_hr_60min) || 0
     };
   });
 }
@@ -207,8 +215,8 @@ var PP_REF_DASH = '6 4';
 /** Stelvio MeBadge: rect 너비 half*2, 높이 36, sub 텍스트 #64748b */
 var STELVIO_ME_BADGE_W = 104;
 var STELVIO_ME_BADGE_SUB = '#64748b';
-/** 최근 1개월 AreaChart: margin(선택 점선은 Recharts) */
-var MONTH_PLOT_M_TOP = 52;
+/** 최근 1개월 AreaChart: 상단 판넬은 차트 밖 HTML — plot 상단 여백만 소폭 */
+var MONTH_PLOT_M_TOP = 10;
 var MONTH_PLOT_M_R = 12;
 /** 배지/툴팁: 구간색 투명 + 강한 블러로 곡선이 흐릿히 비침( 본문 대비는 ppBadgeTextStyle·서리 그라데이션으로 유지) */
 var PP_TINT_A_BG = 0.28;
@@ -311,6 +319,7 @@ function PowerProfileMonthCurveChart(props) {
   }
   var dataKey = selItem.dataKey;
   var selColor = selItem.color;
+  var hrKeyForApi = 'hr' + selectedApi;
 
   var hasAnyWeek = data.length > 0 && data.some(function(r) {
     return (r.power1min || r.power5min || r.power10min || r.power20min || r.power40min || r.power60min) > 0;
@@ -355,6 +364,30 @@ function PowerProfileMonthCurveChart(props) {
 
   var ReactForDot = window.React;
 
+  useEffect(
+    function() {
+      if (!data.length) {
+        setSelectedXIndex(null);
+        return;
+      }
+      var best = 0;
+      var bestVal = -1;
+      for (var i = 0; i < data.length; i++) {
+        var v = Number(data[i][dataKey]) || 0;
+        if (v > bestVal) {
+          bestVal = v;
+          best = i;
+        }
+      }
+      if (bestVal <= 0) {
+        setSelectedXIndex(null);
+        return;
+      }
+      setSelectedXIndex(best);
+    },
+    [dataKey, data.length]
+  );
+
   if (!Recharts || !hasAnyWeek) {
     return (
       <DashboardCard>
@@ -378,6 +411,7 @@ function PowerProfileMonthCurveChart(props) {
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mfbRow = data[selectedXIndex];
     var _mfwv = Math.round(Number(_mfbRow[dataKey]) || 0);
+    var _mfHr = Math.round(Number(_mfbRow[hrKeyForApi]) || 0);
     var _mfMm = monthPowerBadgeMmDd(_mfbRow);
     var _mfSub = selItem.label + ' | ' + _mfMm;
     if (_mfSub.length > 22) {
@@ -414,7 +448,7 @@ function PowerProfileMonthCurveChart(props) {
           }}
         >
           <div style={{ fontSize: 10, fontWeight: 700, color: PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
-            {_mfwv} W
+            {_mfwv} W{_mfHr > 0 ? ' / ' + _mfHr + ' bpm' : ''}
           </div>
           <div
             style={{
@@ -447,7 +481,7 @@ function PowerProfileMonthCurveChart(props) {
               <button
                 key={it.api}
                 type="button"
-                onClick={function() { setSelectedApi(it.api); setSelectedXIndex(null); }}
+                onClick={function() { setSelectedApi(it.api); }}
                 className={
                   'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
                   (active ? activeRing : 'border-white/30 hover:brightness-95')
@@ -475,7 +509,12 @@ function PowerProfileMonthCurveChart(props) {
           (isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') +
           ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
         }
-        style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: isFullWidth ? 200 : 160,
+          height: isFullWidth ? 'min(180px, 45vw)' : 'min(140px, 31.5vw)',
+        }}
       >
         {monthPowerStelvioTopPanel}
         <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1 }}>
@@ -521,6 +560,8 @@ function PowerProfileMonthCurveChart(props) {
               name={selItem.label + ' 파워'}
               dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor, data.length)}
               connectNulls
+              isAnimationActive={false}
+              style={{ cursor: 'pointer' }}
               onClick={function(_d, i) {
                 if (i == null || !data[i]) return;
                 setSelectedXIndex(function(prev) {
@@ -536,6 +577,7 @@ function PowerProfileMonthCurveChart(props) {
                 strokeOpacity={1}
                 strokeDasharray={PP_REF_DASH}
                 isFront={true}
+                ifOverflow="visible"
               />
             ) : null}
           </AreaChart>
@@ -585,8 +627,10 @@ function RiderPowerProfileTrendCharts(props) {
   var logs = Array.isArray(recentLogs) ? recentLogs : [];
   var powerCurveData = buildPowerCurveData(logs, goals);
   var getIntervalMMP = window.getIntervalMMPFromLogs;
+  var getIntervalHR = window.getIntervalHRFromLogs;
   var intervalMMP = getIntervalMMP ? getIntervalMMP(logs, 30, 6) : [];
-  var monthCurveData = buildMonthPowerCurveData(intervalMMP);
+  var intervalHRForMonth = getIntervalHR ? getIntervalHR(logs, 30, 6) : [];
+  var monthCurveData = buildMonthPowerCurveData(intervalMMP, intervalHRForMonth);
 
   return (
     <div className="space-y-4">
