@@ -15856,7 +15856,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             ? Number(window.getWeeklyTargetTSS('Fitness').target) || 225
             : 225;
       var TSS_PANEL_REF_LINE = '#7c3aed';
-      var TSS_PANEL_BADGE_W = 104;
+      var TSS_PANEL_BADGE_W = 120;
       var TSS_PANEL_SUB = '#64748b';
       var chartRef = useRef(null);
       var chartInstanceRef = useRef(null);
@@ -16165,7 +16165,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var row = displayData[gi];
             var tssVal = Math.round(Number(row.tss) || 0);
             var mode = row.tssPanelMode || tssGranularity;
-            var subPre = mode === 'month' ? '4주 합계' : '주간';
+            var subPre = mode === 'month' ? '월간' : '주간';
             var subRest =
               tssFormatMmDd(row.tssPanelStart) + ' ~ ' + tssFormatMmDd(row.tssPanelEnd);
             var gSub = subPre + ' | ' + subRest;
@@ -16209,16 +16209,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   'div',
                   {
                     style: {
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: 700,
                       color: TSS_PANEL_REF_LINE,
                       lineHeight: 1.15,
                       WebkitFontSmoothing: 'antialiased',
                       textAlign: 'center',
-                      maxWidth: '100%'
+                      maxWidth: '100%',
+                      fontVariantNumeric: 'tabular-nums'
                     }
                   },
-                  tssVal + ' TSS'
+                  tssVal.toLocaleString('ko-KR') + ' TSS'
                 ),
                 React.createElement(
                   'div',
@@ -16297,7 +16298,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var setGrowthHoverIdx = _growthHover[1];
       /** 최근 1개월 파워 그래프와 동일: 보라 세로 점선 */
       var GROWTH_PANEL_REF_LINE = '#7c3aed';
-      var GROWTH_PANEL_BADGE_W = 104;
+      var GROWTH_PANEL_BADGE_W = 118;
       var GROWTH_PANEL_SUB = '#64748b';
       useEffect(
         function () {
@@ -16740,13 +16741,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   'div',
                   {
                     style: {
-                      fontSize: 10,
+                      fontSize: 13,
                       fontWeight: 700,
                       color: GROWTH_PANEL_REF_LINE,
                       lineHeight: 1.15,
                       WebkitFontSmoothing: 'antialiased',
                       textAlign: 'center',
                       maxWidth: '100%',
+                      fontVariantNumeric: 'tabular-nums',
                     },
                   },
                   gLine1
