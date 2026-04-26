@@ -1690,6 +1690,32 @@ function openRidingDownsampleLatLngs(latlngs, maxPts) {
   return out;
 }
 
+/** Leaflet: 본문 스크롤과 충돌하지 않도록 OFF일 때 드래그·휠·터치 줌 등 비활성화(+/- 컨트롤은 유지) */
+function applyOpenRidingMapInteractionMode(map, enabled) {
+  if (!map) return;
+  try {
+    var names = ['scrollWheelZoom', 'touchZoom', 'doubleClickZoom', 'boxZoom', 'keyboard'];
+    var ni;
+    for (ni = 0; ni < names.length; ni++) {
+      var h = map[names[ni]];
+      if (h && typeof h.enable === 'function' && typeof h.disable === 'function') {
+        if (enabled) h.enable();
+        else h.disable();
+      }
+    }
+    if (map.dragging && typeof map.dragging.enable === 'function') {
+      if (enabled) map.dragging.enable();
+      else map.dragging.disable();
+    }
+    if (map.tap && typeof map.tap.enable === 'function') {
+      if (enabled) map.tap.enable();
+      else map.tap.disable();
+    }
+  } catch (eM) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('[OpenRiding map interact]', eM);
+  }
+}
+
 /**
  * GPX URL 또는 로컬 File → Leaflet 지도 + Chart.js 고도표 (코스 설명 블록 하단용)
  * @param {{ gpxUrl?: string|null, file?: File|null, showEmptyMessage?: boolean, storage?: import('firebase/storage').FirebaseStorage | null }} props
@@ -1713,6 +1739,12 @@ function OpenRidingGpxCoursePanel(props) {
   var _mk = useState(0);
   var mapRemountKey = _mk[0];
   var setMapRemountKey = _mk[1];
+  /** false = OFF(기본): 지도 고정 · 페이지 스크롤 우선 / true = ON: 이동·휠·터치 줌 허용 */
+  var _mi = useState(false);
+  var mapInteractOn = _mi[0];
+  var setMapInteractOn = _mi[1];
+  var mapInteractOnRef = useRef(false);
+  mapInteractOnRef.current = mapInteractOn;
 
   useEffect(
     function () {
@@ -1865,6 +1897,7 @@ function OpenRidingGpxCoursePanel(props) {
         }).addTo(map);
         map.fitBounds(poly.getBounds(), { padding: [18, 18], maxZoom: tileCap });
         mapInstRef.current = map;
+        applyOpenRidingMapInteractionMode(map, mapInteractOnRef.current);
         var t0 = setTimeout(function () {
           try {
             map.invalidateSize();
@@ -1884,6 +1917,15 @@ function OpenRidingGpxCoursePanel(props) {
       }
     },
     [loadState.status, loadState.track, mapRemountKey]
+  );
+
+  useEffect(
+    function () {
+      var m = mapInstRef.current;
+      if (!m) return;
+      applyOpenRidingMapInteractionMode(m, mapInteractOn);
+    },
+    [mapInteractOn]
   );
 
   useEffect(
@@ -2023,10 +2065,62 @@ function OpenRidingGpxCoursePanel(props) {
   return (
     <div className="open-riding-gpx-panel w-full max-w-full space-y-3">
       <div
-        className="w-full rounded-xl overflow-hidden border border-violet-200/80 bg-slate-100 shadow-sm open-riding-gpx-map-wrap"
+        className="relative w-full rounded-xl overflow-hidden border border-violet-200/80 bg-slate-100 shadow-sm open-riding-gpx-map-wrap"
         style={{ height: 'clamp(220px, 42vh, 300px)', width: '100%' }}
       >
-        <div ref={mapRef} className="open-riding-gpx-map-inner w-full h-full" style={{ height: '100%', minHeight: '220px' }} />
+        <div
+          ref={mapRef}
+          className={
+            'open-riding-gpx-map-inner w-full h-full' + (!mapInteractOn ? ' open-riding-gpx-map-inner--scroll-lock' : '')
+          }
+          style={{ height: '100%', minHeight: '220px' }}
+        />
+        <div
+          className="absolute z-[1000] pointer-events-none flex flex-col gap-1 open-riding-gpx-map-interact-toggle-wrap"
+          style={{ top: '4.75rem', left: '10px' }}
+        >
+          <div
+            className="pointer-events-auto flex rounded-md border border-slate-300/90 bg-white shadow-md overflow-hidden text-[11px] font-bold select-none"
+            onPointerDown={function (ev) {
+              ev.stopPropagation();
+            }}
+            onPointerUp={function (ev) {
+              ev.stopPropagation();
+            }}
+            onClick={function (ev) {
+              ev.stopPropagation();
+            }}
+            role="group"
+            aria-label="지도 확대·이동 허용"
+          >
+            <button
+              type="button"
+              aria-pressed={!mapInteractOn}
+              className={
+                'px-2.5 py-1 min-w-[2.25rem] transition ' +
+                (!mapInteractOn ? 'bg-violet-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50')
+              }
+              onClick={function () {
+                setMapInteractOn(false);
+              }}
+            >
+              OFF
+            </button>
+            <button
+              type="button"
+              aria-pressed={mapInteractOn}
+              className={
+                'px-2.5 py-1 min-w-[2.25rem] border-l border-slate-200 transition ' +
+                (mapInteractOn ? 'bg-violet-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50')
+              }
+              onClick={function () {
+                setMapInteractOn(true);
+              }}
+            >
+              ON
+            </button>
+          </div>
+        </div>
       </div>
       <div
         className="w-full rounded-xl border border-violet-200/80 bg-white p-2 shadow-sm open-riding-gpx-chart-wrap"
