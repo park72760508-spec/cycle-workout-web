@@ -2172,22 +2172,20 @@ function OpenRidingGpxCoursePanel(props) {
         className="relative w-full rounded-xl overflow-hidden border border-violet-200/80 bg-slate-100 shadow-sm open-riding-gpx-map-wrap"
         style={{ height: 'clamp(220px, 42vh, 300px)', width: '100%' }}
       >
-        <div ref={mapRef} className="open-riding-gpx-map-inner w-full h-full" style={{ height: '100%', minHeight: '220px' }} />
+        {/*
+          z-index:0 wrapper → 독립 stacking context 생성.
+          veil(z-2000)은 이 wrapper 안에 갇혀, 외부 toggle(z-10)이 항상 위에 위치.
+        */}
+        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+          <div ref={mapRef} className="open-riding-gpx-map-inner w-full h-full" style={{ height: '100%', minHeight: '220px' }} />
+        </div>
+        {/* toggle: 외부 stacking context z-10 → Leaflet wrapper(z-0) 전체보다 위 */}
         <div
-          className="absolute z-[1000] pointer-events-none flex flex-col gap-1 open-riding-gpx-map-interact-toggle-wrap"
-          style={{ top: '4.75rem', left: '10px' }}
+          className="absolute pointer-events-none flex flex-col gap-1 open-riding-gpx-map-interact-toggle-wrap"
+          style={{ top: '4.75rem', left: '10px', zIndex: 10 }}
         >
           <div
             className="pointer-events-auto flex rounded-md border border-slate-300/90 bg-white shadow-md overflow-hidden text-[11px] font-bold select-none"
-            onPointerDown={function (ev) {
-              ev.stopPropagation();
-            }}
-            onPointerUp={function (ev) {
-              ev.stopPropagation();
-            }}
-            onClick={function (ev) {
-              ev.stopPropagation();
-            }}
             role="group"
             aria-label="지도 확대·이동 허용"
           >
