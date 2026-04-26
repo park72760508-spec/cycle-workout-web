@@ -1952,7 +1952,7 @@
         step = 10;
       }
     }
-    return { lv: lv, step: step };
+    return { lv: lv, lvIdx: lvIdx, step: step };
   }
 
   function LevelProgressBar(props) {
@@ -1960,6 +1960,7 @@
     if (!summary || !summary.tier) return null;
     var result = computeLevelBarStep(summary);
     var lv = result.lv;
+    var lvIdx = result.lvIdx;
     var step = result.step;
     var blocks = [];
     for (var bi = 0; bi < 10; bi++) {
