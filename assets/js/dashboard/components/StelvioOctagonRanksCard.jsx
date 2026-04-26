@@ -1932,9 +1932,10 @@
     { id: 'C6', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
   ];
 
-  function computeLevelBarStep(summary) {
-    if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], step: 1 };
-    var tid = summary.tier.id;
+  function computeLevelBarStep(summary, overrideTierId) {
+    if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 1 };
+    /* overrideTierId: OctagonTierCenterOverlay와 동일한 tid를 외부에서 주입 */
+    var tid = overrideTierId || summary.tier.id;
     var p = summary.pTotal != null && isFinite(summary.pTotal) ? summary.pTotal
           : summary.pComprehensive != null && isFinite(summary.pComprehensive) ? summary.pComprehensive
           : null;
@@ -1957,8 +1958,9 @@
 
   function LevelProgressBar(props) {
     var summary = props.summary;
+    var tierId = props.tierId; /* 배지와 동일한 effective tier ID (선택적) */
     if (!summary || !summary.tier) return null;
-    var result = computeLevelBarStep(summary);
+    var result = computeLevelBarStep(summary, tierId);
     var lv = result.lv;
     var lvIdx = result.lvIdx;
     var step = result.step;
@@ -3071,7 +3073,15 @@
                 />
               ) : null}
             </div>
-            {tierForCard ? <LevelProgressBar summary={tierForCard} /> : null}
+            {tierForCard ? (function() {
+              /* OctagonTierCenterOverlay가 표시하는 tid와 동일하게 계산 */
+              var hct = stelvioCardTooltip || {};
+              var pShow = hct.kind === 'ok' && hct.pPct != null && isFinite(hct.pPct) && hct.pPct >= 0 ? hct.pPct : -1;
+              var barTierId = (pShow >= 0)
+                ? (heptagonBoardTierIdFromLevelPercent(pShow) || {}).id || tierForCard.tier.id
+                : tierForCard.tier.id;
+              return <LevelProgressBar summary={tierForCard} tierId={barTierId} />;
+            })() : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
