@@ -1090,10 +1090,10 @@
     return 'assets/img/' + (m[tierId] || 'c6.png');
   }
 
-  /** 헵타곤 중앙 이미지 하단 표기용(레벨1=HC) */
+  /** 헵타곤 중앙 이미지 하단 표기용(레벨A=HC) */
   function tierLevelDisplayName(tierId) {
-    var m = { HC: '레벨1', C1: '레벨2', C2: '레벨3', C3: '레벨4', C4: '레벨5', C5: '레벨6', C6: '레벨7' };
-    return m[tierId] || '레벨7';
+    var m = { HC: '레벨A', C1: '레벨B', C2: '레벨C', C3: '레벨D', C4: '레벨E', C5: '레벨F', C6: '레벨G' };
+    return m[tierId] || '레벨G';
   }
 
   /**
@@ -1921,15 +1921,15 @@
    * pTotal: 백분위(낮을수록 상위). 레벨 내 상한·하한을 10등분하여
    * 아래부터 위로 채워지는 블록으로 표시.
    * ────────────────────────────────────────────────────────────── */
-  /* 레벨바 색상: 녹색 계열 (레벨1 진녹 → 레벨7 연녹/회녹) */
+  /* 레벨바 색상: 녹색 계열 (레벨A 진녹 → 레벨G 연녹/회녹) */
   var LEVEL_BAR_DEFS = [
-    { id: 'HC', name: '레벨1', lower: 0,   upper: 5,   color: '#059669', bg: 'rgba(5,150,105,0.18)' },
-    { id: 'C1', name: '레벨2', lower: 5,   upper: 10,  color: '#10b981', bg: 'rgba(16,185,129,0.18)' },
-    { id: 'C2', name: '레벨3', lower: 10,  upper: 20,  color: '#34d399', bg: 'rgba(52,211,153,0.18)' },
-    { id: 'C3', name: '레벨4', lower: 20,  upper: 40,  color: '#6ee7b7', bg: 'rgba(110,231,183,0.18)' },
-    { id: 'C4', name: '레벨5', lower: 40,  upper: 60,  color: '#86efac', bg: 'rgba(134,239,172,0.18)' },
-    { id: 'C5', name: '레벨6', lower: 60,  upper: 80,  color: '#bbf7d0', bg: 'rgba(187,247,208,0.18)' },
-    { id: 'C6', name: '레벨7', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
+    { id: 'HC', lower: 0,   upper: 5,   color: '#059669', bg: 'rgba(5,150,105,0.18)' },
+    { id: 'C1', lower: 5,   upper: 10,  color: '#10b981', bg: 'rgba(16,185,129,0.18)' },
+    { id: 'C2', lower: 10,  upper: 20,  color: '#34d399', bg: 'rgba(52,211,153,0.18)' },
+    { id: 'C3', lower: 20,  upper: 40,  color: '#6ee7b7', bg: 'rgba(110,231,183,0.18)' },
+    { id: 'C4', lower: 40,  upper: 60,  color: '#86efac', bg: 'rgba(134,239,172,0.18)' },
+    { id: 'C5', lower: 60,  upper: 80,  color: '#bbf7d0', bg: 'rgba(187,247,208,0.18)' },
+    { id: 'C6', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
   ];
 
   function computeLevelBarStep(summary) {
@@ -1983,18 +1983,18 @@
         />
       );
     }
-    /* 레벨1(진녹)은 색상 그대로, 레벨5~7(연녹)은 텍스트 가독성을 위해 진녹으로 고정 */
-    var labelColor = lvIdx >= 4 ? '#059669' : lv.color;
+    /* 상단·하단 텍스트 모두 진한 녹색(#065f46)으로 고정 */
+    var darkGreen = '#065f46';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: '4px', paddingBottom: '4px', gap: 0 }}>
-        <div style={{ fontSize: '9px', fontWeight: 700, color: labelColor, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
-          {lv.name}
+        <div style={{ fontSize: '9px', fontWeight: 700, color: darkGreen, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+          {tierLevelDisplayName(lv.id)}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
           {blocks}
         </div>
-        <div style={{ fontSize: '9px', color: '#059669', marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
-          {step}<span style={{ color: '#6ee7b7' }}>/10</span>
+        <div style={{ fontSize: '9px', color: darkGreen, marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
+          {step}<span style={{ color: darkGreen, opacity: 0.6 }}>/10</span>
         </div>
       </div>
     );
