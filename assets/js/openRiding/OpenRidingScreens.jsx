@@ -1690,61 +1690,25 @@ function openRidingDownsampleLatLngs(latlngs, maxPts) {
   return out;
 }
 
-/** 핸들러 전환 후 OSM 타일·판이 다시 그려지도록 (ON 시 타일만 보이고 코스만 남는 현상 방지) */
-function openRidingMapRefreshAfterInteractToggle(map) {
-  if (!map) return;
-  function run() {
-    try {
-      map.invalidateSize({ animate: false });
-    } catch (e0) {}
-    try {
-      var c = map.getCenter();
-      var z = map.getZoom();
-      if (c && typeof z === 'number' && !isNaN(z)) map.setView(c, z, { animate: false });
-    } catch (eV) {}
-    try {
-      var Lg = typeof window !== 'undefined' ? window.L : null;
-      map.eachLayer(function (ly) {
-        if (!ly || typeof ly.redraw !== 'function' || !Lg) return;
-        if (ly instanceof Lg.TileLayer) ly.redraw();
-      });
-    } catch (e1) {}
-  }
-  try {
-    if (typeof requestAnimationFrame !== 'undefined') {
-      requestAnimationFrame(function () {
-        run();
-        setTimeout(run, 100);
-      });
-    } else {
-      run();
+/** GPX 지도: 스크롤 가능한 조상(페이지 본문 등) — veil 위 휠 시 전달 */
+function openRidingFindScrollableAncestor(el) {
+  var p = el;
+  var i;
+  for (i = 0; i < 32 && p; i++) {
+    if (p === document.body || p === document.documentElement) {
+      return document.scrollingElement || document.documentElement;
     }
-  } catch (e2) {}
+    try {
+      var st = window.getComputedStyle(p);
+      var oy = st.overflowY;
+      if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && p.scrollHeight > p.clientHeight + 1) return p;
+    } catch (e0) {}
+    p = p.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
 }
 
-/** Leaflet: 본문 스크롤과 충돌하지 않도록 OFF일 때 드래그·휠·터치 줌 등 비활성화(+/- 컨트롤은 유지) */
-function applyOpenRidingMapInteractionMode(map, enabled) {
-  if (!map) return;
-  try {
-    var names = ['scrollWheelZoom', 'touchZoom', 'doubleClickZoom', 'boxZoom', 'keyboard'];
-    var ni;
-    for (ni = 0; ni < names.length; ni++) {
-      var h = map[names[ni]];
-      if (h && typeof h.enable === 'function' && typeof h.disable === 'function') {
-        if (enabled) h.enable();
-        else h.disable();
-      }
-    }
-    if (map.dragging && typeof map.dragging.enable === 'function') {
-      if (enabled) map.dragging.enable();
-      else map.dragging.disable();
-    }
-    /** tap 은 1.9에서 켜면 일부 WebKit에서 타일 레이어와 충돌할 수 있어 조작하지 않음 */
-  } catch (eM) {
-    if (typeof console !== 'undefined' && console.warn) console.warn('[OpenRiding map interact]', eM);
-  }
-  openRidingMapRefreshAfterInteractToggle(map);
-}
+var OPEN_RIDING_GPX_VEIL_CLASS = 'open-riding-gpx-map-interact-veil';
 
 /**
  * GPX URL 또는 로컬 File → Leaflet 지도 + Chart.js 고도표 (코스 설명 블록 하단용)
@@ -1773,8 +1737,6 @@ function OpenRidingGpxCoursePanel(props) {
   var _mi = useState(false);
   var mapInteractOn = _mi[0];
   var setMapInteractOn = _mi[1];
-  var mapInteractOnRef = useRef(false);
-  mapInteractOnRef.current = mapInteractOn;
 
   useEffect(
     function () {
@@ -1927,7 +1889,6 @@ function OpenRidingGpxCoursePanel(props) {
         }).addTo(map);
         map.fitBounds(poly.getBounds(), { padding: [18, 18], maxZoom: tileCap });
         mapInstRef.current = map;
-        applyOpenRidingMapInteractionMode(map, mapInteractOnRef.current);
         var t0 = setTimeout(function () {
           try {
             map.invalidateSize();
@@ -1949,13 +1910,55 @@ function OpenRidingGpxCoursePanel(props) {
     [loadState.status, loadState.track, mapRemountKey]
   );
 
+  /**
+   * OFF: Leaflet 핸들러는 건드리지 않고, 컨테이너 위에 투명 veil로 포인터만 차단 → 타일 레이어 깨짐 없음.
+   * veil z-index 500, Leaflet 컨트롤 z-index 1000 근처 → +/- 유지. ON: veil 제거.
+   */
   useEffect(
     function () {
-      var m = mapInstRef.current;
-      if (!m) return;
-      applyOpenRidingMapInteractionMode(m, mapInteractOn);
+      var map = mapInstRef.current;
+      var container = map && map.getContainer ? map.getContainer() : null;
+      if (!container) return undefined;
+
+      function removeAllVeils() {
+        var found = container.querySelectorAll('.' + OPEN_RIDING_GPX_VEIL_CLASS);
+        var fi;
+        for (fi = 0; fi < found.length; fi++) {
+          try {
+            found[fi].remove();
+          } catch (er) {}
+        }
+      }
+
+      removeAllVeils();
+
+      if (!mapInteractOn) {
+        var veil = document.createElement('div');
+        veil.className = OPEN_RIDING_GPX_VEIL_CLASS;
+        veil.setAttribute('aria-hidden', 'true');
+        veil.style.cssText =
+          'position:absolute;left:0;top:0;right:0;bottom:0;z-index:500;' +
+          'touch-action:pan-y;cursor:default;background:transparent;pointer-events:auto;';
+        var scrollEl = openRidingFindScrollableAncestor(container);
+        var onWheel = function (ev) {
+          if (!scrollEl) return;
+          scrollEl.scrollTop += ev.deltaY;
+        };
+        veil.addEventListener('wheel', onWheel, { passive: true });
+        container.appendChild(veil);
+        return function () {
+          try {
+            veil.removeEventListener('wheel', onWheel);
+          } catch (ew) {}
+          removeAllVeils();
+        };
+      }
+
+      return function () {
+        removeAllVeils();
+      };
     },
-    [mapInteractOn]
+    [mapInteractOn, loadState.status, loadState.track, mapRemountKey]
   );
 
   useEffect(
@@ -2098,13 +2101,7 @@ function OpenRidingGpxCoursePanel(props) {
         className="relative w-full rounded-xl overflow-hidden border border-violet-200/80 bg-slate-100 shadow-sm open-riding-gpx-map-wrap"
         style={{ height: 'clamp(220px, 42vh, 300px)', width: '100%' }}
       >
-        <div
-          ref={mapRef}
-          className={
-            'open-riding-gpx-map-inner w-full h-full' + (!mapInteractOn ? ' open-riding-gpx-map-inner--scroll-lock' : '')
-          }
-          style={{ height: '100%', minHeight: '220px' }}
-        />
+        <div ref={mapRef} className="open-riding-gpx-map-inner w-full h-full" style={{ height: '100%', minHeight: '220px' }} />
         <div
           className="absolute z-[1000] pointer-events-none flex flex-col gap-1 open-riding-gpx-map-interact-toggle-wrap"
           style={{ top: '4.75rem', left: '10px' }}
