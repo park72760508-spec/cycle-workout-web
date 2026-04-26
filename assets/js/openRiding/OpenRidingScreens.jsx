@@ -1690,6 +1690,38 @@ function openRidingDownsampleLatLngs(latlngs, maxPts) {
   return out;
 }
 
+/** 핸들러 전환 후 OSM 타일·판이 다시 그려지도록 (ON 시 타일만 보이고 코스만 남는 현상 방지) */
+function openRidingMapRefreshAfterInteractToggle(map) {
+  if (!map) return;
+  function run() {
+    try {
+      map.invalidateSize({ animate: false });
+    } catch (e0) {}
+    try {
+      var c = map.getCenter();
+      var z = map.getZoom();
+      if (c && typeof z === 'number' && !isNaN(z)) map.setView(c, z, { animate: false });
+    } catch (eV) {}
+    try {
+      var Lg = typeof window !== 'undefined' ? window.L : null;
+      map.eachLayer(function (ly) {
+        if (!ly || typeof ly.redraw !== 'function' || !Lg) return;
+        if (ly instanceof Lg.TileLayer) ly.redraw();
+      });
+    } catch (e1) {}
+  }
+  try {
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(function () {
+        run();
+        setTimeout(run, 100);
+      });
+    } else {
+      run();
+    }
+  } catch (e2) {}
+}
+
 /** Leaflet: 본문 스크롤과 충돌하지 않도록 OFF일 때 드래그·휠·터치 줌 등 비활성화(+/- 컨트롤은 유지) */
 function applyOpenRidingMapInteractionMode(map, enabled) {
   if (!map) return;
@@ -1707,13 +1739,11 @@ function applyOpenRidingMapInteractionMode(map, enabled) {
       if (enabled) map.dragging.enable();
       else map.dragging.disable();
     }
-    if (map.tap && typeof map.tap.enable === 'function') {
-      if (enabled) map.tap.enable();
-      else map.tap.disable();
-    }
+    /** tap 은 1.9에서 켜면 일부 WebKit에서 타일 레이어와 충돌할 수 있어 조작하지 않음 */
   } catch (eM) {
     if (typeof console !== 'undefined' && console.warn) console.warn('[OpenRiding map interact]', eM);
   }
+  openRidingMapRefreshAfterInteractToggle(map);
 }
 
 /**
