@@ -185,6 +185,44 @@ function PowerProfileCurveChart(props) {
 var PP_SEL_BADGE_HALF = 70;
 var PP_SEL_BADGE_EDGE = 6;
 var PP_REF_LINE = '#7c3aed';
+/** 흰 배지/툴팁: 구간색 + 알파 (그래프 비침) */
+var PP_TINT_A_BG = 0.42;
+var PP_TINT_A_BORDER = 0.7;
+
+function ppHexToRgbParts(hex) {
+  var h = String(hex || '').replace('#', '');
+  if (h.length === 3) {
+    h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  }
+  if (h.length !== 6) return { r: 100, g: 116, b: 139 };
+  var n = parseInt(h, 16);
+  if (isNaN(n)) return { r: 100, g: 116, b: 139 };
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function ppHexToRgba(hex, a) {
+  var c = ppHexToRgbParts(hex);
+  return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
+}
+
+/** 구간 색(채도/명도)에 따라 본문 대비(명시성) */
+function ppBadgeTextStyle(hex) {
+  var c = ppHexToRgbParts(hex);
+  var r = c.r / 255;
+  var g = c.g / 255;
+  var b = c.b / 255;
+  var L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (L > 0.55) {
+    return {
+      color: '#0f172a',
+      textShadow: '0 0 4px #fff, 0 0 8px rgba(255,255,255,0.95), 0 1px 0 rgba(255,255,255,0.9)',
+    };
+  }
+  return {
+    color: '#fff',
+    textShadow: '0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.5)',
+  };
+}
 
 /** endStr(YYYY-MM-DD) 또는 ~M/D → MM-DD */
 function monthPowerBadgeMmDd(row) {
@@ -341,15 +379,36 @@ function PowerProfileMonthCurveChart(props) {
     if (!pl) return null;
     var w = Math.round(Number(pl[dataKey]) || 0);
     var mmdd2 = monthPowerBadgeMmDd(pl);
+    var tB = ppHexToRgba(selColor, PP_TINT_A_BG);
+    var tBr = ppHexToRgba(selColor, PP_TINT_A_BORDER);
+    var tP = ppBadgeTextStyle(selColor);
     return (
-      <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50 text-center">
-        <div className="font-bold text-slate-800 tabular-nums text-[13px] leading-tight">
+      <div
+        className="rounded-xl px-3 py-2 text-xs z-50 text-center"
+        style={{
+          border: '1px solid ' + tBr,
+          backgroundColor: tB,
+          backdropFilter: 'saturate(1.1) blur(10px)',
+          WebkitBackdropFilter: 'saturate(1.1) blur(10px)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.3)',
+        }}
+      >
+        <div
+          className="font-bold tabular-nums text-[13px] leading-tight"
+          style={{ color: tP.color, textShadow: tP.textShadow }}
+        >
           {w} W
         </div>
-        <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-slate-600 font-medium">
+        <div
+          className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium"
+          style={{ color: tP.color, textShadow: tP.textShadow, opacity: 0.95 }}
+        >
           <span
-            className="inline-block w-2 h-2 rounded-full border border-white/90 shadow-sm flex-shrink-0"
-            style={{ backgroundColor: selColor }}
+            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+            style={{
+              backgroundColor: selColor,
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.2)',
+            }}
             aria-hidden
           />
           <span>
@@ -389,33 +448,41 @@ function PowerProfileMonthCurveChart(props) {
     var wv = Math.round(Number(row[dataKey]) || 0);
     var mmdd = monthPowerBadgeMmDd(row);
     var lab = selItem.label;
+    var tintBg = ppHexToRgba(selColor, PP_TINT_A_BG);
+    var tintBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
+    var txP = ppBadgeTextStyle(selColor);
     return (
-      <g>
-        <rect
-          x={cx - half}
-          y={6}
-          rx="10"
-          ry="10"
-          width={half * 2}
-          height="40"
-          fill="white"
-          stroke={PP_REF_LINE}
-          strokeWidth="1.5"
-          filter={'url(#' + cid + '-pp-sel-shadow)'}
-        />
+      <g filter={'url(#' + cid + '-pp-sel-shadow)'}>
         <foreignObject x={cx - half} y={6} width={half * 2} height="40" style={{ overflow: 'visible' }}>
           <div
             xmlns="http://www.w3.org/1999/xhtml"
             className="flex h-[40px] w-full flex-col items-center justify-center gap-0.5 px-1.5 box-border"
-            style={{ fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
+            style={{
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              borderRadius: 10,
+              border: '1.5px solid ' + tintBd,
+              backgroundColor: tintBg,
+              backdropFilter: 'saturate(1.15) blur(10px)',
+              WebkitBackdropFilter: 'saturate(1.15) blur(10px)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+            }}
           >
-            <div className="font-bold text-[12px] text-slate-900 tabular-nums leading-none tracking-tight">
+            <div
+              className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
+              style={{ color: txP.color, textShadow: txP.textShadow }}
+            >
               {wv} W
             </div>
-            <div className="flex items-center justify-center gap-1 text-[9px] text-slate-600 font-medium leading-tight">
+            <div
+              className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
+              style={{ color: txP.color, textShadow: txP.textShadow, opacity: 0.95 }}
+            >
               <span
-                className="inline-block w-2 h-2 rounded-full border border-white/90 flex-shrink-0 shadow-sm"
-                style={{ backgroundColor: selColor }}
+                className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: selColor,
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
+                }}
                 aria-hidden
               />
               <span>
