@@ -14,7 +14,6 @@ if (!window.React) {
 var ReactObj = window.React || {};
 var useState = ReactObj.useState || null;
 var useEffect = ReactObj.useEffect || null;
-var useRef = ReactObj.useRef || null;
 
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
 let _chartId = 0;
@@ -201,8 +200,6 @@ function PowerProfileCurveChart(props) {
 }
 
 // ========== 최근 1개월 파워 그래프 (랭킹보드 참가자 분포와 동일: 클릭 → 세로 점선 + Stelvio식 배지; 호버 → DistTooltip) ==========
-var PP_SEL_BADGE_HALF = 70;
-var PP_SEL_BADGE_EDGE = 6;
 var PP_REF_LINE = '#7c3aed';
 /** 배지/툴팁: 구간색 투명 + 강한 블러로 곡선이 흐릿히 비침( 본문 대비는 ppBadgeTextStyle·서리 그라데이션으로 유지) */
 var PP_TINT_A_BG = 0.28;
@@ -296,32 +293,6 @@ function PowerProfileMonthCurveChart(props) {
   var _xPick = useState(null);
   var selectedXIndex = _xPick[0];
   var setSelectedXIndex = _xPick[1];
-
-  var chartWrapRef = useRef ? useRef(null) : { current: null };
-  var _cw = useState(0);
-  var chartContainerW = _cw[0];
-  var setChartContainerW = _cw[1];
-  useEffect(
-    function() {
-      var el = chartWrapRef && chartWrapRef.current;
-      if (!el) return;
-      function measure() {
-        try {
-          var r = el.getBoundingClientRect();
-          if (r && r.width) setChartContainerW(Math.max(0, Math.floor(r.width)));
-        } catch (e) {}
-      }
-      measure();
-      var ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-      if (ro) ro.observe(el);
-      window.addEventListener('resize', measure);
-      return function() {
-        if (ro) ro.disconnect();
-        window.removeEventListener('resize', measure);
-      };
-    },
-    []
-  );
 
   var selItem = MONTH_POWER_CURVE_ITEMS[0];
   for (var _si = 0; _si < MONTH_POWER_CURVE_ITEMS.length; _si++) {
@@ -442,79 +413,49 @@ function PowerProfileMonthCurveChart(props) {
     );
   }
 
-  function ClickVerticalBadge(lbProps) {
-    var viewBox = lbProps.viewBox;
-    if (!viewBox) return null;
-    var lineX = viewBox.x;
-    var half = PP_SEL_BADGE_HALF;
-    var edge = PP_SEL_BADGE_EDGE;
-    var cx = lineX;
-    var pv = lbProps.parentViewBox;
-    var areaLeft;
-    var areaW;
-    if (pv && typeof pv.width === 'number' && pv.width > 0 && typeof pv.x === 'number') {
-      areaLeft = pv.x;
-      areaW = pv.width;
-    } else {
-      var yAxisW = 36;
-      var marginR = 12;
-      areaLeft = yAxisW;
-      areaW = Math.max(0, chartContainerW - yAxisW - marginR);
-    }
-    var minCenter = areaLeft + half + edge;
-    var maxCenter = areaLeft + areaW - half - edge;
-    if (areaW > 0 && maxCenter > minCenter) {
-      cx = Math.min(maxCenter, Math.max(minCenter, lineX));
-    }
-    var row = selectedXIndex != null && data[selectedXIndex] ? data[selectedXIndex] : null;
-    if (!row) return null;
-    var wv = Math.round(Number(row[dataKey]) || 0);
-    var mmdd = monthPowerBadgeMmDd(row);
-    var lab = selItem.label;
-    var tintBg = ppHexToRgba(selColor, PP_TINT_A_BG);
-    var tintBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
-    var txP = ppBadgeTextStyle(selColor);
-    return (
-      <g filter={'url(#' + cid + '-pp-sel-shadow)'}>
-        <foreignObject x={cx - half} y={6} width={half * 2} height="40" style={{ overflow: 'visible' }}>
-          <div
-            xmlns="http://www.w3.org/1999/xhtml"
-            className="flex h-[40px] w-full flex-col items-center justify-center gap-0.5 px-1.5 box-border"
+  var monthPowerFixedSelectBadge = null;
+  if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
+    var _mfbRow = data[selectedXIndex];
+    var _mfwv = Math.round(Number(_mfbRow[dataKey]) || 0);
+    var _mfMm = monthPowerBadgeMmDd(_mfbRow);
+    var _mfBg = ppHexToRgba(selColor, PP_TINT_A_BG);
+    var _mfBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
+    var _mfTx = ppBadgeTextStyle(selColor);
+    monthPowerFixedSelectBadge = (
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 z-[5] flex h-10 w-[min(100%,10.5rem)] max-w-[min(18rem,95vw)] -translate-x-1/2 flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
+        style={{
+          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+          border: '1.5px solid ' + _mfBd,
+          background: PP_FROST + ', ' + _mfBg,
+          backdropFilter: PP_BLUR,
+          WebkitBackdropFilter: PP_BLUR,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.45)',
+        }}
+      >
+        <div
+          className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
+          style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+        >
+          {_mfwv} W
+        </div>
+        <div
+          className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
+          style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
             style={{
-              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-              borderRadius: 10,
-              border: '1.5px solid ' + tintBd,
-              background: PP_FROST + ', ' + tintBg,
-              backdropFilter: PP_BLUR,
-              WebkitBackdropFilter: PP_BLUR,
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
+              backgroundColor: selColor,
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
             }}
-          >
-            <div
-              className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
-              style={{ color: txP.color, textShadow: txP.textShadow, WebkitFontSmoothing: 'antialiased' }}
-            >
-              {wv} W
-            </div>
-            <div
-              className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
-              style={{ color: txP.color, textShadow: txP.textShadow, WebkitFontSmoothing: 'antialiased' }}
-            >
-              <span
-                className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                style={{
-                  backgroundColor: selColor,
-                  boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
-                }}
-                aria-hidden
-              />
-              <span>
-                {lab} | {mmdd}
-              </span>
-            </div>
-          </div>
-        </foreignObject>
-      </g>
+            aria-hidden
+          />
+          <span>
+            {selItem.label} | {_mfMm}
+          </span>
+        </div>
+      </div>
     );
   }
 
@@ -554,9 +495,12 @@ function PowerProfileMonthCurveChart(props) {
         </div>
       </div>
       <div
-        ref={chartWrapRef}
-        className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'}
+        className={
+          (isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') +
+          ' relative -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
+        }
       >
+        {monthPowerFixedSelectBadge}
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 52, right: 12, left: 0, bottom: 0 }}>
             <defs>
@@ -564,9 +508,6 @@ function PowerProfileMonthCurveChart(props) {
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
                 <stop offset="100%" stopColor={selColor} stopOpacity={0} />
               </linearGradient>
-              <filter id={cid + '-pp-sel-shadow'} x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
-              </filter>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
@@ -611,14 +552,7 @@ function PowerProfileMonthCurveChart(props) {
               }}
             />
             {refXVal != null && ReferenceLine ? (
-              <ReferenceLine
-                x={refXVal}
-                stroke={PP_REF_LINE}
-                strokeWidth={3}
-                strokeDasharray="6 4"
-                isFront={true}
-                label={function(lp) { return React.createElement(ClickVerticalBadge, lp); }}
-              />
+              <ReferenceLine x={refXVal} stroke={PP_REF_LINE} strokeWidth={3} strokeDasharray="6 4" />
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
