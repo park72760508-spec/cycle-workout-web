@@ -2609,14 +2609,13 @@
 
     var svg = useMemo(
       function() {
-        if (state.loading || !state.monthly || !state.hof) return null;
+        if (state.loading || !state.monthly) return null;
         var cx = 100;
         var cy = 100;
         var rLabel = 88;
         var rMax = 70;
         var nAxis = N_WKG_AXES;
         var mPts = pathFromPoints(radarPolygonPoints(state.monthly.norm, cx, cy, rMax));
-        var hPts = pathFromPoints(radarPolygonPoints(state.hof.norm, cx, cy, rMax));
         var grid = [0.25, 0.5, 0.75, 1].map(function(g) {
           var gr = [];
           for (var gi = 0; gi < nAxis; gi++) gr.push(g);
@@ -2650,13 +2649,6 @@
               );
             })}
             <path
-              d={hPts}
-              fill="rgba(16, 185, 129, 0.18)"
-              stroke="rgb(5, 150, 105)"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-            <path
               d={mPts}
               fill="rgba(124, 58, 237, 0.22)"
               stroke="rgb(109, 40, 217)"
@@ -2668,8 +2660,6 @@
               var lx = cx + rLabel * Math.cos(t);
               var ly = cy + rLabel * Math.sin(t);
               var mr = state.monthly.ranks[i];
-              var hr = state.hof.ranks[i];
-              var sub2 = (mr != null ? 'M' + mr : 'M—') + ' ' + (hr != null ? 'Y' + hr : 'Y—') + '위';
               return (
                 <text
                   key={ax.key + '-lbl'}
@@ -2682,7 +2672,7 @@
                     {ax.label}
                   </tspan>
                   <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
-                    {sub2}
+                    {mr != null ? mr + '위' : '—'}
                   </tspan>
                 </text>
               );
@@ -2887,10 +2877,6 @@
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
               <span>최근 30일 피크 파워</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(16, 185, 129, 0.4)', border: '1px solid #059669' }} />
-              <span>최근 365일 피크 파워</span>
             </div>
           </div>
         </div>
