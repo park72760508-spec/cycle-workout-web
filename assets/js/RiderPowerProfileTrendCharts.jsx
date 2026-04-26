@@ -202,7 +202,8 @@ function PowerProfileCurveChart(props) {
 // ========== 최근 1개월 파워 그래프 (랭킹보드 참가자 분포와 동일: 클릭 → 세로 점선 + Stelvio식 배지; 호버 → DistTooltip) ==========
 var PP_REF_LINE = '#7c3aed';
 /** Stelvio 참가자분포 "나의 위치" 점선과 동일(픽셀 고정, Tailwind 누락·SVG 가림에도 대응) */
-var PP_REF_STROKE_W = 3;
+/** 선택 세로 점선: 랭킹 보라(#7c3aed) + 요청에 따라 기본 3px의 3배 */
+var PP_REF_STROKE_W = 9;
 var PP_REF_DASH = '6 4';
 /** 최근 1개월 AreaChart: 배지(HTML) 위치 = margin/ Y축과 수치 동기 — 반드시 인라인 style (CDN Tailwind는 JSX 소스를 안 봄) */
 var MONTH_PLOT_M_TOP = 52;
@@ -433,7 +434,7 @@ function PowerProfileMonthCurveChart(props) {
       <div
         style={{
           position: 'absolute',
-          zIndex: 5,
+          zIndex: 30,
           top: MONTH_PLOT_M_TOP,
           left: MONTH_PLOT_Y_W,
           right: MONTH_PLOT_M_R,
@@ -523,7 +524,6 @@ function PowerProfileMonthCurveChart(props) {
           ' relative -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
         }
       >
-        {monthPowerFixedSelectBadge}
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: MONTH_PLOT_M_TOP, right: MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
             <defs>
@@ -535,6 +535,8 @@ function PowerProfileMonthCurveChart(props) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="name"
+              type="category"
+              allowDuplicatedCategory={false}
               interval={0}
               tickMargin={6}
               stroke="#6b7280"
@@ -556,7 +558,10 @@ function PowerProfileMonthCurveChart(props) {
               <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
             {Tooltip ? (
-              <Tooltip content={monthPowerDistTooltip} cursor={false} />
+              <Tooltip
+                content={monthPowerDistTooltip}
+                cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
+              />
             ) : null}
             <Area
               type="monotone"
@@ -582,11 +587,11 @@ function PowerProfileMonthCurveChart(props) {
                 strokeOpacity={1}
                 strokeDasharray={PP_REF_DASH}
                 isFront={true}
-                ifOverflow="visible"
               />
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
+        {monthPowerFixedSelectBadge}
       </div>
     </DashboardCard>
   );

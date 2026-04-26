@@ -123,7 +123,7 @@ function buildMonthHeartRateCurveData(intervalHR) {
 
 // ——— 최근 1개월 심박: 클릭 가이드 + 프로스티드 배지 (RiderPowerProfileTrendCharts PowerProfileMonthCurveChart와 동일 토큰) ———
 var HR_PP_REF_LINE = '#7c3aed';
-var HR_PP_REF_STROKE_W = 3;
+var HR_PP_REF_STROKE_W = 9;
 var HR_PP_REF_DASH = '6 4';
 var HR_MONTH_PLOT_M_TOP = 52;
 var HR_MONTH_PLOT_M_R = 12;
@@ -396,7 +396,7 @@ function HeartRateProfileMonthCurveChart(props) {
       <div
         style={{
           position: 'absolute',
-          zIndex: 5,
+          zIndex: 30,
           top: HR_MONTH_PLOT_M_TOP,
           left: HR_MONTH_PLOT_Y_W,
           right: HR_MONTH_PLOT_M_R,
@@ -485,7 +485,6 @@ function HeartRateProfileMonthCurveChart(props) {
           ' relative -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
         }
       >
-        {monthHrFixedSelectBadge}
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: HR_MONTH_PLOT_M_TOP, right: HR_MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
             <defs>
@@ -497,6 +496,8 @@ function HeartRateProfileMonthCurveChart(props) {
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis
               dataKey="name"
+              type="category"
+              allowDuplicatedCategory={false}
               interval={0}
               tickMargin={6}
               stroke="#6b7280"
@@ -518,7 +519,10 @@ function HeartRateProfileMonthCurveChart(props) {
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
             {Tooltip ? (
-              <Tooltip content={monthHrDistTooltip} cursor={false} />
+              <Tooltip
+                content={monthHrDistTooltip}
+                cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
+              />
             ) : null}
             <Area
               type="monotone"
@@ -544,11 +548,11 @@ function HeartRateProfileMonthCurveChart(props) {
                 strokeOpacity={1}
                 strokeDasharray={HR_PP_REF_DASH}
                 isFront={true}
-                ifOverflow="visible"
               />
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
+        {monthHrFixedSelectBadge}
       </div>
     </DashboardCard>
   );
