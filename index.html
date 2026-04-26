@@ -16013,9 +16013,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var userProfile = p.userProfile;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
+      const growthPanelIndexRef = useRef(0);
       var _slotState = useState(4);
       var selectedSlot = _slotState[0];
       var setSelectedSlot = _slotState[1];
+      var _growthHover = useState(0);
+      var growthHoverIdx = _growthHover[0];
+      var setGrowthHoverIdx = _growthHover[1];
+      /** 최근 1개월 파워 그래프와 동일: 보라 세로 점선 */
+      var GROWTH_PANEL_REF_LINE = '#7c3aed';
+      var GROWTH_PANEL_BADGE_W = 104;
+      var GROWTH_PANEL_SUB = '#64748b';
       useEffect(
         function () {
           if (!data || data.length === 0) return;
@@ -16026,6 +16034,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             chartInstanceRef.current = null;
           }
           var slot = selectedSlot;
+          var defaultIdx = Math.max(0, data.length - 1);
+          growthPanelIndexRef.current = defaultIdx;
+          setGrowthHoverIdx(defaultIdx);
           var labels = data.map(function (d) {
             return d.dateLabel || d.monthLabel || '';
           });
@@ -16140,6 +16151,31 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               c.restore();
             }
           };
+          var growthPurpleVertPlugin = {
+            id: 'growthTrendPurpleVert',
+            afterDraw: function (chart) {
+              var idx = growthPanelIndexRef.current;
+              if (typeof idx !== 'number' || idx < 0 || !chart.chartArea) return;
+              var meta = chart.getDatasetMeta(3);
+              if (!meta || !meta.data || idx >= meta.data.length) return;
+              var pt = meta.data[idx];
+              if (!pt || pt.x == null) return;
+              var x = pt.x;
+              var top = chart.chartArea.top;
+              var bottom = chart.chartArea.bottom;
+              var c2 = chart.ctx;
+              c2.save();
+              c2.beginPath();
+              c2.setLineDash([6, 4]);
+              c2.strokeStyle = GROWTH_PANEL_REF_LINE;
+              c2.lineWidth = 3;
+              c2.moveTo(x, top);
+              c2.lineTo(x, bottom);
+              c2.stroke();
+              c2.setLineDash([]);
+              c2.restore();
+            }
+          };
           chartInstanceRef.current = new Chart(ctx, {
             type: 'line',
             data: {
@@ -16207,6 +16243,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               responsive: true,
               maintainAspectRatio: false,
               interaction: { mode: 'index', intersect: false },
+              onHover: function (event, elements, chart) {
+                var lastIx = Math.max(0, data.length - 1);
+                var ix = elements && elements.length > 0 && elements[0].index != null ? elements[0].index : lastIx;
+                growthPanelIndexRef.current = ix;
+                setGrowthHoverIdx(function (prev) {
+                  return prev === ix ? prev : ix;
+                });
+                try {
+                  chart.update('none');
+                } catch (e2) {}
+              },
               plugins: {
                 legend: { display: false },
                 tooltip: { enabled: false }
@@ -16239,7 +16286,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }
               }
             },
-            plugins: [growthPrPlugin]
+            plugins: [growthPrPlugin, growthPurpleVertPlugin]
           });
           return function cleanup() {
             if (chartInstanceRef.current) {
@@ -16292,8 +16339,99 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               );
             })}
           </div>
-          <div className="h-[200px]">
-            <canvas ref={chartRef}></canvas>
+          {function () {
+            var gi = growthHoverIdx;
+            if (gi == null || gi < 0 || gi >= data.length) gi = Math.max(0, data.length - 1);
+            var gRow = data[gi];
+            var gW = growthTrendGetWattAt(gRow, selectedSlot);
+            var gH = growthTrendGetHrAt(gRow, selectedSlot);
+            var gLine1 =
+              (gW != null && gW > 0 ? Math.round(gW) + ' W' : '— W') +
+              ' / ' +
+              (gH != null && gH > 0 ? Math.round(gH) + ' bpm' : '— bpm');
+            var gLab = GROWTH_PR_CIRCLE_LABELS[selectedSlot] || '';
+            var gDate = (gRow && (gRow.dateLabel || gRow.monthLabel)) || '—';
+            var gSub = gLab + ' | ' + gDate;
+            if (gSub.length > 22) gSub = gSub.slice(0, 20) + '…';
+            return React.createElement(
+              'div',
+              {
+                style: {
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                  paddingBottom: 4,
+                  pointerEvents: 'none',
+                },
+              },
+              React.createElement(
+                'div',
+                {
+                  style: {
+                    width: GROWTH_PANEL_BADGE_W,
+                    minHeight: 36,
+                    boxSizing: 'border-box',
+                    background: '#fff',
+                    border: '1.5px solid ' + GROWTH_PANEL_REF_LINE,
+                    borderRadius: 10,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                    padding: '4px 6px 5px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+                  },
+                },
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: GROWTH_PANEL_REF_LINE,
+                      lineHeight: 1.15,
+                      WebkitFontSmoothing: 'antialiased',
+                      textAlign: 'center',
+                      maxWidth: '100%',
+                    },
+                  },
+                  gLine1
+                ),
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      fontSize: 9,
+                      fontWeight: 400,
+                      color: GROWTH_PANEL_SUB,
+                      lineHeight: 1.2,
+                      marginTop: 2,
+                      textAlign: 'center',
+                      maxWidth: '100%',
+                      wordBreak: 'break-all',
+                    },
+                  },
+                  gSub
+                )
+              )
+            );
+          }()}
+          <div
+            className="min-h-0 w-full"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 200,
+              height: 'min(200px, 45vw)',
+            }}
+          >
+            <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1, touchAction: 'none' }}>
+              <canvas ref={chartRef}></canvas>
+            </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-gray-600 px-2">
             <span className="inline-flex items-center gap-1.5">
