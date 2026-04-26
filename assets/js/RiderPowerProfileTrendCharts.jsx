@@ -215,7 +215,7 @@ var PP_CHART_TOOLTIP_CURSOR = { stroke: '#b87333', strokeWidth: 1, strokeDasharr
 var PP_REF_STROKE_W = 3;
 var PP_REF_DASH = '6 4';
 /** Stelvio MeBadge: rect 너비 half*2, 높이 36, sub 텍스트 #64748b */
-var STELVIO_ME_BADGE_W = 104;
+var STELVIO_ME_BADGE_W = 118;
 var STELVIO_ME_BADGE_SUB = '#64748b';
 /** 최근 1개월 AreaChart: 상단 판넬은 차트 밖 HTML — plot 상단 여백만 소폭 */
 var MONTH_PLOT_M_TOP = 10;
@@ -449,7 +449,7 @@ function PowerProfileMonthCurveChart(props) {
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
           }}
         >
-          <div style={{ fontSize: 10, fontWeight: 700, color: PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased', fontVariantNumeric: 'tabular-nums' }}>
             {_mfwv} W / {_mfHr > 0 ? _mfHr + ' bpm' : '— bpm'}
           </div>
           <div

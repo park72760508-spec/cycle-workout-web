@@ -135,7 +135,7 @@ var HR_PP_REF_LINE = '#7c3aed';
 var HR_CHART_TOOLTIP_CURSOR = { stroke: '#b87333', strokeWidth: 1, strokeDasharray: '4 4' };
 var HR_PP_REF_STROKE_W = 3;
 var HR_PP_REF_DASH = '6 4';
-var HR_STELVIO_ME_BADGE_W = 104;
+var HR_STELVIO_ME_BADGE_W = 118;
 var HR_STELVIO_ME_BADGE_SUB = '#64748b';
 var HR_MONTH_PLOT_M_TOP = 10;
 var HR_MONTH_PLOT_M_R = 12;
@@ -408,7 +408,7 @@ function HeartRateProfileMonthCurveChart(props) {
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
           }}
         >
-          <div style={{ fontSize: 10, fontWeight: 700, color: HR_PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: HR_PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased', fontVariantNumeric: 'tabular-nums' }}>
             {_mhbv} bpm
           </div>
           <div
