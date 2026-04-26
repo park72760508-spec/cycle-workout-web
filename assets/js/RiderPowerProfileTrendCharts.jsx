@@ -75,6 +75,7 @@ function buildMonthPowerCurveData(intervalMMP) {
   return (intervalMMP || []).map(function(row) {
     return {
       name: row.name,
+      endStr: row.endStr != null && String(row.endStr).length ? String(row.endStr) : null,
       power1min: Number(row.max_1min_watts) || 0,
       power5min: Number(row.max_5min_watts) || 0,
       power10min: Number(row.max_10min_watts) || 0,
@@ -95,9 +96,11 @@ var MONTH_POWER_CURVE_ITEMS = [
   { api: '60min', dataKey: 'power60min', label: '60분', color: '#22c55e' }
 ];
 
-/** 성장 트렌드 차트와 동일: PR 원·라벨 (파워) */
-function growthStylePowerPrDot(R, prIdx, prWatts, lineColor) {
+/** 성장 트렌드 차트와 동일: PR 원·라벨 (파워) + 구간 끝일(피크 유효일) */
+function growthStylePowerPrDot(R, prIdx, prWatts, lineColor, prEndStr) {
   var smallFill = lineColor || '#3b82f6';
+  var endText =
+    prEndStr && String(prEndStr).trim() ? String(prEndStr).trim() : null;
   return function(dotProps) {
     if (!R || !dotProps || dotProps.cx == null || dotProps.cy == null) return null;
     var cx = dotProps.cx;
@@ -110,6 +113,9 @@ function growthStylePowerPrDot(R, prIdx, prWatts, lineColor) {
       'g',
       null,
       R.createElement('text', { x: cx, y: cy - 20, textAnchor: 'middle', fill: '#1d4ed8', fontSize: 9, fontWeight: 'bold' }, Math.round(prWatts) + ' W'),
+      endText
+        ? R.createElement('text', { x: cx, y: cy - 32, textAnchor: 'middle', fill: '#64748b', fontSize: 8, fontWeight: 600 }, '· ' + endText)
+        : null,
       R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: '#3b82f6', stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 }),
       R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR')
     );
@@ -256,7 +262,67 @@ function PowerProfileMonthCurveChart(props) {
   if (yDomainMax <= yDomainMin) {
     yDomainMax = yDomainMin + 20;
   }
+  var ySpan = yDomainMax - yDomainMin;
+  var pctInDomain = function(w) {
+    var v = Number(w);
+    if (!isFinite(v) || ySpan <= 0) return 50;
+    var p = ((v - yDomainMin) / ySpan) * 100;
+    if (p < 0) return 0;
+    if (p > 100) return 100;
+    return p;
+  };
+  var prEndStr = prIdx >= 0 && data[prIdx] && data[prIdx].endStr != null && String(data[prIdx].endStr).length ? String(data[prIdx].endStr) : null;
+  var cohortAsOfDisplay =
+    typeof p.cohortFetchedAt === 'string' && p.cohortFetchedAt.trim() ? p.cohortFetchedAt.trim() : null;
+
   var ReactForDot = window.React;
+  var Rdot = window.React;
+  var COHORT_BADGE_HALF = 58;
+  var COHORT_GUIDE = '#9ca3af';
+  var PP_BADGE_H = 36;
+
+  function CohortGuideLineLabel(lprops) {
+    if (!Rdot) return null;
+    var viewBox = lprops.viewBox;
+    if (!viewBox) return null;
+    var lineY = viewBox.y;
+    var lineLeft = viewBox.x;
+    var lineW = viewBox.width;
+    if (lineY == null || !isFinite(lineY) || lineLeft == null || !isFinite(lineW) || lineW <= 0) return null;
+    var parentViewBox = lprops.parentViewBox;
+    var cx = lineLeft + lineW - COHORT_BADGE_HALF - 6;
+    if (parentViewBox && parentViewBox.width > 0 && parentViewBox.x != null) {
+      var pLeft = parentViewBox.x;
+      var pW = parentViewBox.width;
+      var minC = pLeft + COHORT_BADGE_HALF + 4;
+      var maxC = pLeft + pW - COHORT_BADGE_HALF - 4;
+      if (maxC > minC) {
+        var targetRight = lineLeft + lineW - COHORT_BADGE_HALF - 4;
+        cx = Math.min(maxC, Math.max(minC, targetRight));
+      }
+    }
+    var rectTop = lineY - PP_BADGE_H - 4;
+    var wTxt = (cohortAvgPower != null ? Math.round(cohortAvgPower) : 0) + ' W';
+    var subLine = wTxt + (cohortAsOfDisplay ? ' · 갱신 ' + cohortAsOfDisplay : '');
+    return Rdot.createElement(
+      'g',
+      null,
+      Rdot.createElement('rect', {
+        x: cx - COHORT_BADGE_HALF,
+        y: rectTop,
+        rx: 10,
+        ry: 10,
+        width: COHORT_BADGE_HALF * 2,
+        height: PP_BADGE_H,
+        fill: 'white',
+        stroke: COHORT_GUIDE,
+        strokeWidth: 1.5,
+        filter: 'url(#' + cid + '-pp-badge-shadow)',
+      }),
+      Rdot.createElement('text', { x: cx, y: rectTop + 16, textAnchor: 'middle', fill: '#64748b', fontSize: 10, fontWeight: 700 }, '전체 평균'),
+      Rdot.createElement('text', { x: cx, y: rectTop + 30, textAnchor: 'middle', fill: '#64748b', fontSize: 9 }, subLine.length > 32 ? subLine.slice(0, 30) + '…' : subLine)
+    );
+  }
 
   if (!Recharts || !hasAnyWeek) {
     return (
@@ -271,6 +337,20 @@ function PowerProfileMonthCurveChart(props) {
 
   var fillGradId = cid + '-fillSel';
   var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
+  var stripCohortTitle =
+    cohortAvgPower != null && cohortAvgPower > 0
+      ? '전체 평균 ' + Math.round(cohortAvgPower) + 'W' + (cohortAsOfDisplay ? ' · 갱신 ' + cohortAsOfDisplay : '')
+      : '';
+  var stripPrTitle =
+    prWatts > 0
+      ? 'PR ' + Math.round(prWatts) + 'W' + (prEndStr ? ' · 구간 끝 ' + prEndStr : '')
+      : '';
+  var cohortStripLeftPct = cohortAvgPower != null && cohortAvgPower > 0 ? pctInDomain(cohortAvgPower) : -1;
+  var prStripLeftPct = prWatts > 0 ? pctInDomain(prWatts) : -1;
+  var stripOverlapNudge = false;
+  if (cohortStripLeftPct >= 0 && prStripLeftPct >= 0) {
+    stripOverlapNudge = Math.abs(cohortStripLeftPct - prStripLeftPct) < 1.2;
+  }
 
   return (
     <DashboardCard>
@@ -307,33 +387,100 @@ function PowerProfileMonthCurveChart(props) {
           </span>
         </div>
       </div>
-      <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 26, right: 12, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
-                <stop offset="100%" stopColor={selColor} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
-            <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[yDomainMin, yDomainMax]} />
-            {cohortAvgPower != null && cohortAvgPower > 0 && ReferenceLine ? (
-              <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
-            ) : null}
-            <Area
-              type="monotone"
-              dataKey={dataKey}
-              stroke={selColor}
-              fill={'url(#' + fillGradId + ')'}
-              strokeWidth={2}
-              name={selItem.label + ' 파워'}
-              dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor)}
-              connectNulls
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+      <div className="-mx-2 flex flex-col gap-0">
+        <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' min-h-0 w-full'}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 30, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={selColor} stopOpacity={0} />
+                </linearGradient>
+                <filter id={cid + '-pp-badge-shadow'} x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
+                </filter>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis
+                dataKey="name"
+                interval={0}
+                tickMargin={6}
+                stroke="#6b7280"
+                tick={function() {
+                  var len = data.length;
+                  var fs = 11;
+                  return function(props) {
+                    var x = props.x;
+                    var y = props.y;
+                    var payload = props.payload;
+                    var index = props.index;
+                    var isLast = index === len - 1;
+                    return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value);
+                  };
+                }()}
+              />
+              <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[yDomainMin, yDomainMax]} />
+              {cohortAvgPower != null && cohortAvgPower > 0 && ReferenceLine ? (
+                <ReferenceLine
+                  y={cohortAvgPower}
+                  stroke={COHORT_GUIDE}
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  isFront={true}
+                  label={function(lp) {
+                    return Rdot ? Rdot.createElement(CohortGuideLineLabel, lp) : null;
+                  }}
+                />
+              ) : null}
+              <Area
+                type="monotone"
+                dataKey={dataKey}
+                stroke={selColor}
+                fill={'url(#' + fillGradId + ')'}
+                strokeWidth={2}
+                name={selItem.label + ' 파워'}
+                dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor, prEndStr)}
+                connectNulls
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        {hasAnyWeek && ySpan > 0 ? (
+          <div className="w-full pr-0 pl-0">
+            <div
+              className="relative z-0 h-[30px] w-full overflow-hidden border border-slate-200/90 box-border rounded-b-md leading-normal mt-0 shrink-0"
+              style={{ marginLeft: 36, marginRight: 12, width: 'calc(100% - 48px)' }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-200/30 via-slate-100/50 to-white" />
+              {cohortStripLeftPct >= 0 ? (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 -translate-x-1/2 z-[1] rounded-sm"
+                  style={{
+                    left: (stripOverlapNudge ? Math.max(0, cohortStripLeftPct - 0.8) : cohortStripLeftPct) + '%',
+                    backgroundColor: COHORT_GUIDE,
+                  }}
+                  title={stripCohortTitle}
+                />
+              ) : null}
+              {prStripLeftPct >= 0 ? (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 -translate-x-1/2 z-[2] rounded-sm"
+                  style={{
+                    left: (stripOverlapNudge ? Math.min(100, prStripLeftPct + 0.8) : prStripLeftPct) + '%',
+                    backgroundColor: selColor,
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.9)',
+                  }}
+                  title={stripPrTitle}
+                />
+              ) : null}
+              <div className="absolute left-0 right-0 bottom-0.5 flex justify-between text-[8px] tabular-nums text-slate-500 pointer-events-none px-0.5">
+                <span>{yDomainMin}W</span>
+                <span>{yDomainMax}W</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 text-center m-0 mt-1 px-1">위 그래프 Y축(선택 구간)과 동일한 스케일로, 전체 평균(회색 막대)과 PR(색 막대)의 상대 위치를 표시합니다. 막대에 마우스를 올리면 수치·갱신일(평균)을 확인할 수 있습니다.</p>
+          </div>
+        ) : null}
       </div>
     </DashboardCard>
   );
@@ -352,6 +499,7 @@ function RiderPowerProfileTrendCharts(props) {
 
   var [goals, setGoals] = useState({});
   var [avgWkgByDuration, setAvgWkgByDuration] = useState({});
+  var [cohortFetchedAt, setCohortFetchedAt] = useState(null);
 
   useEffect(function() {
     var mounted = true;
@@ -359,17 +507,24 @@ function RiderPowerProfileTrendCharts(props) {
     if (typeof fetchCohort !== 'function') {
       setGoals({});
       setAvgWkgByDuration({});
+      setCohortFetchedAt(null);
       return function() { mounted = false; };
     }
-    fetchCohort(userId || null, userWeight).then(function(res) {
-      if (!mounted) return;
-      setGoals((res && res.goals) || {});
-      setAvgWkgByDuration((res && res.avgWkgByDuration) || {});
-    }).catch(function() {
-      if (!mounted) return;
-      setGoals({});
-      setAvgWkgByDuration({});
-    });
+    fetchCohort(userId || null, userWeight)
+      .then(function(res) {
+        if (!mounted) return;
+        setGoals((res && res.goals) || {});
+        setAvgWkgByDuration((res && res.avgWkgByDuration) || {});
+        setCohortFetchedAt(
+          new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
+        );
+      })
+      .catch(function() {
+        if (!mounted) return;
+        setGoals({});
+        setAvgWkgByDuration({});
+        setCohortFetchedAt(null);
+      });
     return function() { mounted = false; };
   }, [userId, userWeight]);
 
@@ -401,6 +556,7 @@ function RiderPowerProfileTrendCharts(props) {
             avgWkgByDuration={avgWkgByDuration}
             userWeight={userWeight}
             userProfile={userProfile}
+            cohortFetchedAt={cohortFetchedAt}
             isFullWidth
           />
         </div>

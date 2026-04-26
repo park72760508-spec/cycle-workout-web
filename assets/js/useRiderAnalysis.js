@@ -209,7 +209,7 @@ function getWeeklyMMPFromLogs(logs, numWeeks) {
  * @param {Array} logs - 훈련 로그 배열
  * @param {number} numDays - 총 일수 (기본 30, 오늘 포함 역산)
  * @param {number} numIntervals - 구간 수 (기본 6)
- * @returns {Array<{ name, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_40min_watts, max_60min_watts }>}
+ * @returns {Array<{ name, endStr, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_40min_watts, max_60min_watts }>}
  */
 function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
   numDays = numDays || 30;
@@ -229,6 +229,7 @@ function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
     const name = '~' + (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       name: name,
+      endStr: endStr,
       max_watts: agg.max_watts,
       max_1min_watts: agg.max_1min_watts,
       max_5min_watts: agg.max_5min_watts,
