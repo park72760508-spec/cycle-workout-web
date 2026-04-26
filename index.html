@@ -15230,6 +15230,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     var GROWTH_PR_CIRCLE_LABELS = ['Max', '1분', '5분', '10분', '20분', '40분', '60분'];
     /** 나의 성장 트렌드 범례 표시 순서: 1분~60분 후 Max(슬롯 인덱스는 그대로) */
     var GROWTH_PR_LEGEND_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+    /** 원형 구간색(rgba) → 정보 판넬용 아주 연한 틴트 */
+    function growthPanelTintFromZoneColor(rgbaStr, alpha) {
+      var a = alpha == null ? 0.11 : alpha;
+      var m = String(rgbaStr || '').match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (!m) return 'rgba(255,255,255,0)';
+      return 'rgba(' + m[1] + ',' + m[2] + ',' + m[3] + ',' + a + ')';
+    }
     
     // 년간 파워PR 그래프 (2026년 yearly_peaks 기반, 달성일 매칭)
     function YearlyPowerPrChart(props) {
@@ -16353,6 +16360,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var gDate = (gRow && (gRow.dateLabel || gRow.monthLabel)) || '—';
             var gSub = gLab + ' | ' + gDate;
             if (gSub.length > 22) gSub = gSub.slice(0, 20) + '…';
+            var gZoneTint = YEARLY_PR_ZONE_COLORS[selectedSlot] || 'rgba(156,163,175,0.7)';
+            var gPanelBg =
+              'linear-gradient(180deg, ' +
+              growthPanelTintFromZoneColor(gZoneTint, 0.12) +
+              ' 0%, ' +
+              growthPanelTintFromZoneColor(gZoneTint, 0.06) +
+              ' 100%), #fff';
             return React.createElement(
               'div',
               {
@@ -16374,7 +16388,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     width: GROWTH_PANEL_BADGE_W,
                     minHeight: 36,
                     boxSizing: 'border-box',
-                    background: '#fff',
+                    background: gPanelBg,
                     border: '1.5px solid ' + GROWTH_PANEL_REF_LINE,
                     borderRadius: 10,
                     boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
