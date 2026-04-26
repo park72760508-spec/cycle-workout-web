@@ -97,9 +97,13 @@ var MONTH_POWER_CURVE_ITEMS = [
   { api: '60min', dataKey: 'power60min', label: '60분', color: '#22c55e' }
 ];
 
-/** 성장 트렌드 차트와 동일: PR 원·라벨 (파워) */
-function growthStylePowerPrDot(R, prIdx, prWatts, lineColor) {
+/**
+ * PR 큰 점 + 상단 파워(W) — 좌/우/상단 끝에서 잘리지 않도록 앵커·Y 보정
+ * @param {number} dataLen - data.length (첫/끝 주차 PR 시 좌우 정렬)
+ */
+function growthStylePowerPrDot(R, prIdx, prWatts, lineColor, dataLen) {
   var smallFill = lineColor || '#3b82f6';
+  var len = dataLen == null || dataLen < 1 ? 1 : dataLen;
   return function(dotProps) {
     if (!R || !dotProps || dotProps.cx == null || dotProps.cy == null) return null;
     var cx = dotProps.cx;
@@ -108,13 +112,28 @@ function growthStylePowerPrDot(R, prIdx, prWatts, lineColor) {
     if (prIdx < 0 || prWatts <= 0 || idx !== prIdx) {
       return R.createElement('circle', { cx: cx, cy: cy, r: 3, fill: smallFill, stroke: '#fff', strokeWidth: 1 });
     }
-    return R.createElement(
-      'g',
-      null,
-      R.createElement('text', { x: cx, y: cy - 20, textAnchor: 'middle', fill: '#1d4ed8', fontSize: 9, fontWeight: 'bold' }, Math.round(prWatts) + ' W'),
-      R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: smallFill, stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 }),
-      R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR')
-    );
+    var wTxt = String(Math.round(prWatts)) + ' W';
+    var isFirst = prIdx === 0;
+    var isLast = prIdx === len - 1 && len > 1;
+    var anchor = 'middle';
+    var tx = cx;
+    if (isFirst) {
+      anchor = 'start';
+      tx = cx + 8;
+    } else if (isLast) {
+      anchor = 'end';
+      tx = cx - 8;
+    }
+    var labelAboveY = cy - 18;
+    var useLabelBelow = labelAboveY < 12;
+    var powerY = useLabelBelow ? cy + 20 : labelAboveY;
+    var tPower = R.createElement('text', { x: tx, y: powerY, textAnchor: anchor, fill: '#1d4ed8', fontSize: 9, fontWeight: 'bold' }, wTxt);
+    var cBig = R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: smallFill, stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 });
+    var tPr = R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR');
+    if (useLabelBelow) {
+      return R.createElement('g', null, cBig, tPr, tPower);
+    }
+    return R.createElement('g', null, tPower, cBig, tPr);
   };
 }
 
@@ -185,9 +204,11 @@ function PowerProfileCurveChart(props) {
 var PP_SEL_BADGE_HALF = 70;
 var PP_SEL_BADGE_EDGE = 6;
 var PP_REF_LINE = '#7c3aed';
-/** 흰 배지/툴팁: 구간색 + 알파 (그래프 비침) */
-var PP_TINT_A_BG = 0.42;
-var PP_TINT_A_BORDER = 0.7;
+/** 배지/툴팁: 구간색 투명 + 강한 블러로 곡선이 흐릿히 비침( 본문 대비는 ppBadgeTextStyle·서리 그라데이션으로 유지) */
+var PP_TINT_A_BG = 0.28;
+var PP_TINT_A_BORDER = 0.58;
+var PP_FROST = 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 100%)';
+var PP_BLUR = 'saturate(1.2) blur(16px)';
 
 function ppHexToRgbParts(hex) {
   var h = String(hex || '').replace('#', '');
@@ -205,7 +226,7 @@ function ppHexToRgba(hex, a) {
   return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
 }
 
-/** 구간 색(채도/명도)에 따라 본문 대비(명시성) */
+/** 구간 색에 따른 본문 색 + 다층 그림자(흐릿한 배경에서도 시인성 유지) */
 function ppBadgeTextStyle(hex) {
   var c = ppHexToRgbParts(hex);
   var r = c.r / 255;
@@ -214,13 +235,15 @@ function ppBadgeTextStyle(hex) {
   var L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   if (L > 0.55) {
     return {
-      color: '#0f172a',
-      textShadow: '0 0 4px #fff, 0 0 8px rgba(255,255,255,0.95), 0 1px 0 rgba(255,255,255,0.9)',
+      color: '#0a0f1a',
+      textShadow:
+        '0 0 6px #fff, 0 0 10px #fff, 0 0 1px #fff, 0 1px 2px rgba(255,255,255,0.95), 0 1px 3px rgba(0,0,0,0.15)',
     };
   }
   return {
     color: '#fff',
-    textShadow: '0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.5)',
+    textShadow:
+      '0 0 1px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.45), 0 0 12px rgba(0,0,0,0.35)',
   };
 }
 
@@ -387,27 +410,27 @@ function PowerProfileMonthCurveChart(props) {
         className="rounded-xl px-3 py-2 text-xs z-50 text-center"
         style={{
           border: '1px solid ' + tBr,
-          backgroundColor: tB,
-          backdropFilter: 'saturate(1.1) blur(10px)',
-          WebkitBackdropFilter: 'saturate(1.1) blur(10px)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.3)',
+          background: PP_FROST + ', ' + tB,
+          backdropFilter: PP_BLUR,
+          WebkitBackdropFilter: PP_BLUR,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4)',
         }}
       >
         <div
           className="font-bold tabular-nums text-[13px] leading-tight"
-          style={{ color: tP.color, textShadow: tP.textShadow }}
+          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
         >
           {w} W
         </div>
         <div
           className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium"
-          style={{ color: tP.color, textShadow: tP.textShadow, opacity: 0.95 }}
+          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
         >
           <span
             className="inline-block w-2 h-2 rounded-full flex-shrink-0"
             style={{
               backgroundColor: selColor,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.2)',
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.25)',
             }}
             aria-hidden
           />
@@ -461,21 +484,21 @@ function PowerProfileMonthCurveChart(props) {
               fontFamily: 'ui-sans-serif, system-ui, sans-serif',
               borderRadius: 10,
               border: '1.5px solid ' + tintBd,
-              backgroundColor: tintBg,
-              backdropFilter: 'saturate(1.15) blur(10px)',
-              WebkitBackdropFilter: 'saturate(1.15) blur(10px)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+              background: PP_FROST + ', ' + tintBg,
+              backdropFilter: PP_BLUR,
+              WebkitBackdropFilter: PP_BLUR,
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
             }}
           >
             <div
               className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
-              style={{ color: txP.color, textShadow: txP.textShadow }}
+              style={{ color: txP.color, textShadow: txP.textShadow, WebkitFontSmoothing: 'antialiased' }}
             >
               {wv} W
             </div>
             <div
               className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
-              style={{ color: txP.color, textShadow: txP.textShadow, opacity: 0.95 }}
+              style={{ color: txP.color, textShadow: txP.textShadow, WebkitFontSmoothing: 'antialiased' }}
             >
               <span
                 className="inline-block w-2 h-2 rounded-full flex-shrink-0"
@@ -535,7 +558,7 @@ function PowerProfileMonthCurveChart(props) {
         className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 44, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 52, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
@@ -578,7 +601,7 @@ function PowerProfileMonthCurveChart(props) {
               fill={'url(#' + fillGradId + ')'}
               strokeWidth={2}
               name={selItem.label + ' 파워'}
-              dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor)}
+              dot={growthStylePowerPrDot(ReactForDot, prIdx, prWatts, selColor, data.length)}
               connectNulls
               onClick={function(_d, i) {
                 if (i == null || !data[i]) return;
