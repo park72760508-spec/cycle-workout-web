@@ -199,11 +199,14 @@ function PowerProfileCurveChart(props) {
   );
 }
 
-// ========== 최근 1개월 파워 그래프 (랭킹보드 참가자 분포와 동일: 클릭 → 세로 점선 + Stelvio식 배지; 호버 → DistTooltip) ==========
+// ========== 최근 1개월 파워 (Stelvio 참가자분포 MeBadge·ReferenceLine과 동일 톤, 상단 고정 판넬 + 클릭 점선, 호버 툴팁 없음) ==========
 var PP_REF_LINE = '#7c3aed';
-/** Stelvio StelvioRankingDistributionChart(참가자분포) ReferenceLine: stroke 3, dash 6 4, #7c3aed */
+/** Stelvio StelvioRankingDistributionChart: MeBadge 테두리·강조색 + ReferenceLine */
 var PP_REF_STROKE_W = 3;
 var PP_REF_DASH = '6 4';
+/** Stelvio MeBadge: rect 너비 half*2, 높이 36, sub 텍스트 #64748b */
+var STELVIO_ME_BADGE_W = 104;
+var STELVIO_ME_BADGE_SUB = '#64748b';
 /** 최근 1개월 AreaChart: margin(선택 점선은 Recharts) */
 var MONTH_PLOT_M_TOP = 52;
 var MONTH_PLOT_M_R = 12;
@@ -289,7 +292,6 @@ function PowerProfileMonthCurveChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var ReferenceLine = Recharts && Recharts.ReferenceLine;
-  var Tooltip = Recharts && Recharts.Tooltip;
   var cid = nextChartId();
   var data = monthCurveData || [];
 
@@ -371,122 +373,62 @@ function PowerProfileMonthCurveChart(props) {
       ? data[selectedXIndex].name
       : null;
 
-  /** 호버 전용(마우스를 따라다님) — 프로스티 배지와 동일 룩을 쓰면 ‘점선 따라 배지’로 오해됨. 단순 흰 툴팁만 사용. */
-  function monthPowerChartHoverTip(tipProps) {
-    var active = tipProps.active;
-    var payload = tipProps.payload;
-    if (!active || !payload || !payload.length) return null;
-    var pl = payload[0].payload;
-    if (!pl) return null;
-    var w = Math.round(Number(pl[dataKey]) || 0);
-    var mmdd2 = monthPowerBadgeMmDd(pl);
-    return (
-      <div
-        style={{
-          padding: '6px 10px',
-          fontSize: 12,
-          lineHeight: 1.3,
-          color: '#334155',
-          background: 'rgba(255,255,255,0.96)',
-          border: '1px solid #e2e8f0',
-          borderRadius: 8,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          textAlign: 'center',
-        }}
-      >
-        {w} W · {selItem.label} · {mmdd2}
-      </div>
-    );
-  }
-
-  var monthPowerFixedSelectBadge = null;
+  /** Stelvio 참가자분포 MeBadge와 동일: 흰 배경, 보라 테 1.5px, 1행 강조 10px, 2행 #64748b 9px — 수평만 가운데 */
+  var monthPowerStelvioTopPanel = null;
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mfbRow = data[selectedXIndex];
     var _mfwv = Math.round(Number(_mfbRow[dataKey]) || 0);
     var _mfMm = monthPowerBadgeMmDd(_mfbRow);
-    var _mfBg = ppHexToRgba(selColor, PP_TINT_A_BG);
-    var _mfBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
-    var _mfTx = ppBadgeTextStyle(selColor);
-    // 그래프 영역(래퍼) 맨 위 가로 중앙 — Recharts·점선과 완전 분리(고정), 서식=기존 프로스티 배지
-    monthPowerFixedSelectBadge = (
+    var _mfSub = selItem.label + ' | ' + _mfMm;
+    if (_mfSub.length > 22) {
+      _mfSub = _mfSub.slice(0, 20) + '…';
+    }
+    monthPowerStelvioTopPanel = (
       <div
         style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          zIndex: 50,
+          width: '100%',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
+          flexShrink: 0,
           boxSizing: 'border-box',
+          paddingBottom: 4,
           pointerEvents: 'none',
         }}
       >
         <div
           style={{
+            width: STELVIO_ME_BADGE_W,
+            minHeight: 36,
+            boxSizing: 'border-box',
+            background: '#fff',
+            border: '1.5px solid ' + PP_REF_LINE,
+            borderRadius: 10,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+            padding: '4px 6px 5px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 2,
-            minHeight: 40,
-            width: '100%',
-            maxWidth: 'min(10.5rem, 95%)',
-            padding: '0 6px',
-            boxSizing: 'border-box',
-            borderRadius: 10,
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-            border: '1.5px solid ' + _mfBd,
-            background: PP_FROST + ', ' + _mfBg,
-            backdropFilter: PP_BLUR,
-            WebkitBackdropFilter: PP_BLUR,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.45)',
           }}
         >
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: 12,
-              fontFeatureSettings: '"tnum"',
-              lineHeight: 1,
-              letterSpacing: '-0.02em',
-              color: _mfTx.color,
-              textShadow: _mfTx.textShadow,
-              WebkitFontSmoothing: 'antialiased',
-            }}
-          >
+          <div style={{ fontSize: 10, fontWeight: 700, color: PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
             {_mfwv} W
           </div>
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
               fontSize: 9,
-              fontWeight: 500,
+              fontWeight: 400,
+              color: STELVIO_ME_BADGE_SUB,
               lineHeight: 1.2,
-              color: _mfTx.color,
-              textShadow: _mfTx.textShadow,
-              WebkitFontSmoothing: 'antialiased',
+              marginTop: 2,
+              textAlign: 'center',
+              maxWidth: '100%',
+              wordBreak: 'break-all',
             }}
           >
-            <span
-              style={{
-                display: 'inline-block',
-                width: 8,
-                height: 8,
-                borderRadius: 8,
-                flexShrink: 0,
-                backgroundColor: selColor,
-                boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
-              }}
-              aria-hidden
-            />
-            <span>
-              {selItem.label} | {_mfMm}
-            </span>
+            {_mfSub}
           </div>
         </div>
       </div>
@@ -531,10 +473,13 @@ function PowerProfileMonthCurveChart(props) {
       <div
         className={
           (isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') +
-          ' relative -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
+          ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
         }
+        style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
-        <ResponsiveContainer width="100%" height="100%">
+        {monthPowerStelvioTopPanel}
+        <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1 }}>
+          <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: MONTH_PLOT_M_TOP, right: MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
@@ -567,9 +512,6 @@ function PowerProfileMonthCurveChart(props) {
             {cohortAvgPower != null && cohortAvgPower > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
-            {Tooltip ? (
-              <Tooltip content={monthPowerChartHoverTip} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 3' }} />
-            ) : null}
             <Area
               type="monotone"
               dataKey={dataKey}
@@ -598,7 +540,7 @@ function PowerProfileMonthCurveChart(props) {
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
-        {monthPowerFixedSelectBadge}
+        </div>
       </div>
     </DashboardCard>
   );

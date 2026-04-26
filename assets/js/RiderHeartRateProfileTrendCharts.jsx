@@ -125,6 +125,8 @@ function buildMonthHeartRateCurveData(intervalHR) {
 var HR_PP_REF_LINE = '#7c3aed';
 var HR_PP_REF_STROKE_W = 3;
 var HR_PP_REF_DASH = '6 4';
+var HR_STELVIO_ME_BADGE_W = 104;
+var HR_STELVIO_ME_BADGE_SUB = '#64748b';
 var HR_MONTH_PLOT_M_TOP = 52;
 var HR_MONTH_PLOT_M_R = 12;
 var HR_PP_TINT_A_BG = 0.28;
@@ -258,7 +260,6 @@ function HeartRateProfileMonthCurveChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var ReferenceLine = Recharts && Recharts.ReferenceLine;
-  var Tooltip = Recharts && Recharts.Tooltip;
   var cid = nextHrChartId();
   var data = monthCurveData || [];
 
@@ -334,121 +335,61 @@ function HeartRateProfileMonthCurveChart(props) {
       ? data[selectedXIndex].name
       : null;
 
-  /** 호버 전용 — 프로스티 판넬(선택 고정)과 룩을 같게 하면 Recharts 툴팁이 ‘점선 따라다니는 배지’로 보임 */
-  function monthHrChartHoverTip(tipProps) {
-    var active = tipProps.active;
-    var payload = tipProps.payload;
-    if (!active || !payload || !payload.length) return null;
-    var pl = payload[0].payload;
-    if (!pl) return null;
-    var b = Math.round(Number(pl[dataKey]) || 0);
-    var mmdd2 = monthHrChartMmDd(pl);
-    return (
-      <div
-        style={{
-          padding: '6px 10px',
-          fontSize: 12,
-          lineHeight: 1.3,
-          color: '#334155',
-          background: 'rgba(255,255,255,0.96)',
-          border: '1px solid #e2e8f0',
-          borderRadius: 8,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          textAlign: 'center',
-        }}
-      >
-        {b} bpm · {selItem.label} · {mmdd2}
-      </div>
-    );
-  }
-
-  var monthHrFixedSelectBadge = null;
+  var monthHrStelvioTopPanel = null;
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mhRow = data[selectedXIndex];
     var _mhbv = Math.round(Number(_mhRow[dataKey]) || 0);
     var _mhMm = monthHrChartMmDd(_mhRow);
-    var _mhBg = hrPpHexToRgba(selColor, HR_PP_TINT_A_BG);
-    var _mhBd = hrPpHexToRgba(selColor, HR_PP_TINT_A_BORDER);
-    var _mhTx = hrPpBadgeTextStyle(selColor);
-    monthHrFixedSelectBadge = (
+    var _mhSub = selItem.label + ' | ' + _mhMm;
+    if (_mhSub.length > 22) {
+      _mhSub = _mhSub.slice(0, 20) + '…';
+    }
+    monthHrStelvioTopPanel = (
       <div
         style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          zIndex: 50,
+          width: '100%',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
+          flexShrink: 0,
           boxSizing: 'border-box',
+          paddingBottom: 4,
           pointerEvents: 'none',
         }}
       >
         <div
           style={{
+            width: HR_STELVIO_ME_BADGE_W,
+            minHeight: 36,
+            boxSizing: 'border-box',
+            background: '#fff',
+            border: '1.5px solid ' + HR_PP_REF_LINE,
+            borderRadius: 10,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+            padding: '4px 6px 5px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 2,
-            minHeight: 40,
-            width: '100%',
-            maxWidth: 'min(10.5rem, 95%)',
-            padding: '0 6px',
-            boxSizing: 'border-box',
-            borderRadius: 10,
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-            border: '1.5px solid ' + _mhBd,
-            background: HR_PP_FROST + ', ' + _mhBg,
-            backdropFilter: HR_PP_BLUR,
-            WebkitBackdropFilter: HR_PP_BLUR,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.45)',
           }}
         >
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: 12,
-              fontFeatureSettings: '"tnum"',
-              lineHeight: 1,
-              letterSpacing: '-0.02em',
-              color: _mhTx.color,
-              textShadow: _mhTx.textShadow,
-              WebkitFontSmoothing: 'antialiased',
-            }}
-          >
+          <div style={{ fontSize: 10, fontWeight: 700, color: HR_PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
             {_mhbv} bpm
           </div>
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
               fontSize: 9,
-              fontWeight: 500,
+              fontWeight: 400,
+              color: HR_STELVIO_ME_BADGE_SUB,
               lineHeight: 1.2,
-              color: _mhTx.color,
-              textShadow: _mhTx.textShadow,
-              WebkitFontSmoothing: 'antialiased',
+              marginTop: 2,
+              textAlign: 'center',
+              maxWidth: '100%',
+              wordBreak: 'break-all',
             }}
           >
-            <span
-              style={{
-                display: 'inline-block',
-                width: 8,
-                height: 8,
-                borderRadius: 8,
-                flexShrink: 0,
-                backgroundColor: selColor,
-                boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
-              }}
-              aria-hidden
-            />
-            <span>
-              {selItem.label} | {_mhMm}
-            </span>
+            {_mhSub}
           </div>
         </div>
       </div>
@@ -492,10 +433,13 @@ function HeartRateProfileMonthCurveChart(props) {
       <div
         className={
           (isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') +
-          ' relative -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
+          ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
         }
+        style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
       >
-        <ResponsiveContainer width="100%" height="100%">
+        {monthHrStelvioTopPanel}
+        <div style={{ position: 'relative', width: '100%', minHeight: 0, flex: 1 }}>
+          <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: HR_MONTH_PLOT_M_TOP, right: HR_MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
@@ -528,9 +472,6 @@ function HeartRateProfileMonthCurveChart(props) {
             {cohortAvgHr != null && cohortAvgHr > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
-            {Tooltip ? (
-              <Tooltip content={monthHrChartHoverTip} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 3' }} />
-            ) : null}
             <Area
               type="monotone"
               dataKey={dataKey}
@@ -559,7 +500,7 @@ function HeartRateProfileMonthCurveChart(props) {
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
-        {monthHrFixedSelectBadge}
+        </div>
       </div>
     </DashboardCard>
   );
