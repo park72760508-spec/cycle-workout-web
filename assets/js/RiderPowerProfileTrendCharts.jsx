@@ -432,7 +432,12 @@ function PowerProfileMonthCurveChart(props) {
             width: STELVIO_ME_BADGE_W,
             minHeight: 36,
             boxSizing: 'border-box',
-            background: '#fff',
+            background:
+              'linear-gradient(180deg, ' +
+              ppHexToRgba(selColor, 0.12) +
+              ' 0%, ' +
+              ppHexToRgba(selColor, 0.06) +
+              ' 100%), #fff',
             border: '1.5px solid ' + PP_REF_LINE,
             borderRadius: 10,
             boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
