@@ -174,21 +174,91 @@
     var userAgeCat = cuValid ? cu.ageCategory : null;
 
     if (category === 'Supremo') {
-      /* cu.rank 우선 사용. null/0이면 byCategory.Supremo에서 userId로 직접 검색 (own-category 로직과 동일).
-       * cu.rank가 반환되지 않는 경우(API 미집계·비어있는 duration 등)에도 레이더 폴리곤이 올바르게 표시됨. */
+      var supArr = byCategory.Supremo || [];
+
+      /* [1] cu.rank — API가 사용자를 찾아 돌려준 Supremo 순위(가장 정확) */
       if (cuValid && cu.rank != null) {
         var supremoRank = safeFloorRank(cu.rank);
         if (supremoRank != null) return supremoRank;
       }
-      var supArr = byCategory.Supremo || [];
+
+      /* [2] byCategory.Supremo 배열에서 userId 직접 검색
+       *     → API lookup order 이슈나 cuValid 불일치 시에도 동작 */
       var supIdx = supArr.findIndex(function(e) {
         return e && String(e.userId) === String(uid);
       });
       if (supIdx >= 0) return supIdx + 1;
+
+      /* [3] cu.wkg 값을 Supremo 배열과 비교해 순위 추정
+       *     byCategory.Supremo는 전체 참가자 목록이므로 추정이 아닌 실제 순위
+       *     cu.rank가 null이어도 wkg가 있으면(=데이터는 있으나 API rank 미반영) 사용 */
+      if (cuValid && supArr.length > 0) {
+        var myWkg = rowMetricValue(cu, duration);
+        if (myWkg != null && isFinite(myWkg) && myWkg > 0) {
+          var estRank = rankInCategoryByValue(supArr, myWkg, duration);
+          if (estRank != null) return estRank;
+        }
+      }
+
+      /* [4] cu가 없더라도(userId 불일치·API 미반환) 해당 duration에 age-category 배열에서
+       *     userId를 찾을 수 있으면 그 entry의 wkg로 Supremo 위치를 추정 */
+      if (!cuValid && supArr.length > 0) {
+        var ageCats = Object.keys(byCategory);
+        for (var ai = 0; ai < ageCats.length; ai++) {
+          var ac = ageCats[ai];
+          if (ac === 'Supremo') continue;
+          var acArr = byCategory[ac] || [];
+          var acEntry = null;
+          for (var aj = 0; aj < acArr.length; aj++) {
+            if (acArr[aj] && String(acArr[aj].userId) === String(uid)) {
+              acEntry = acArr[aj];
+              break;
+            }
+          }
+          if (acEntry) {
+            /* entry.rank = Supremo 배열 내 순위(서버가 부여) */
+            if (acEntry.rank != null) {
+              var aer = safeFloorRank(acEntry.rank);
+              if (aer != null) return aer;
+            }
+            var acWkg = rowMetricValue(acEntry, duration);
+            if (acWkg != null && isFinite(acWkg) && acWkg > 0) {
+              var acEst = rankInCategoryByValue(supArr, acWkg, duration);
+              if (acEst != null) return acEst;
+            }
+            break;
+          }
+        }
+      }
+
       return null;
     }
 
-    if (!cuValid) return null;
+    /* ── Supremo 외 부문 ── */
+    if (!cuValid) {
+      /* cuValid 실패 시에도 byCategory에서 uid 검색 후 rank 반환 */
+      var acCats2 = Object.keys(byCategory);
+      for (var bi = 0; bi < acCats2.length; bi++) {
+        var bc = acCats2[bi];
+        var bcArr = byCategory[bc] || [];
+        for (var bj = 0; bj < bcArr.length; bj++) {
+          if (bcArr[bj] && String(bcArr[bj].userId) === String(uid)) {
+            var bcEntry = bcArr[bj];
+            /* 요청 category의 배열인 경우에만 위치 순위 사용 */
+            if (bc === category) return bj + 1;
+            /* category 배열에서 wkg 비교로 추정 */
+            var catArr = byCategory[category] || [];
+            var bcWkg = rowMetricValue(bcEntry, duration);
+            if (bcWkg != null && isFinite(bcWkg) && bcWkg > 0 && catArr.length > 0) {
+              var bcEst = rankInCategoryByValue(catArr, bcWkg, duration);
+              if (bcEst != null) return rankDisplayForChart(bcEst);
+            }
+            break;
+          }
+        }
+      }
+      return null;
+    }
 
     if (userAgeCat && category === userAgeCat) {
       var heroArr = byCategory[category] || [];
@@ -328,12 +398,18 @@
           var cu = data && data.currentUser;
           var cuValid = cu && String(cu.userId) === String(uid);
           var wk = cuValid && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
-          /* cu가 없거나 userId 불일치 시 byCategory.Supremo에서 W/kg 폴백 */
+          /* W/kg 폴백: byCategory 전체를 탐색하여 uid와 일치하는 entry의 wkg 사용 */
           if (wk == null && data && data.byCategory) {
-            var supArr2 = data.byCategory.Supremo || [];
-            var supEntry = supArr2.find(function(e) { return e && String(e.userId) === String(uid); });
-            if (supEntry && supEntry.wkg != null && isFinite(Number(supEntry.wkg))) {
-              wk = Number(supEntry.wkg);
+            var allCats = Object.keys(data.byCategory);
+            for (var ci = 0; ci < allCats.length && wk == null; ci++) {
+              var catArr3 = data.byCategory[allCats[ci]] || [];
+              for (var cj = 0; cj < catArr3.length; cj++) {
+                var ce = catArr3[cj];
+                if (ce && String(ce.userId) === String(uid) && ce.wkg != null && isFinite(Number(ce.wkg))) {
+                  wk = Number(ce.wkg);
+                  break;
+                }
+              }
             }
           }
           return {
@@ -1845,14 +1921,15 @@
    * pTotal: 백분위(낮을수록 상위). 레벨 내 상한·하한을 10등분하여
    * 아래부터 위로 채워지는 블록으로 표시.
    * ────────────────────────────────────────────────────────────── */
+  /* 레벨바 색상: 녹색 계열 (레벨1 진녹 → 레벨7 연녹/회녹) */
   var LEVEL_BAR_DEFS = [
-    { id: 'HC', name: '레벨1', lower: 0,   upper: 5,   color: '#ff1a1a', bg: 'rgba(255,26,26,0.18)' },
-    { id: 'C1', name: '레벨2', lower: 5,   upper: 10,  color: '#ff6b3d', bg: 'rgba(255,107,61,0.18)' },
-    { id: 'C2', name: '레벨3', lower: 10,  upper: 20,  color: '#ffb020', bg: 'rgba(255,176,32,0.18)' },
-    { id: 'C3', name: '레벨4', lower: 20,  upper: 40,  color: '#e8c547', bg: 'rgba(232,197,71,0.18)' },
-    { id: 'C4', name: '레벨5', lower: 40,  upper: 60,  color: '#9fe870', bg: 'rgba(159,232,112,0.18)' },
-    { id: 'C5', name: '레벨6', lower: 60,  upper: 80,  color: '#94a3b8', bg: 'rgba(148,163,184,0.18)' },
-    { id: 'C6', name: '레벨7', lower: 80,  upper: 100, color: '#7c8aa0', bg: 'rgba(124,138,160,0.18)' }
+    { id: 'HC', name: '레벨1', lower: 0,   upper: 5,   color: '#059669', bg: 'rgba(5,150,105,0.18)' },
+    { id: 'C1', name: '레벨2', lower: 5,   upper: 10,  color: '#10b981', bg: 'rgba(16,185,129,0.18)' },
+    { id: 'C2', name: '레벨3', lower: 10,  upper: 20,  color: '#34d399', bg: 'rgba(52,211,153,0.18)' },
+    { id: 'C3', name: '레벨4', lower: 20,  upper: 40,  color: '#6ee7b7', bg: 'rgba(110,231,183,0.18)' },
+    { id: 'C4', name: '레벨5', lower: 40,  upper: 60,  color: '#86efac', bg: 'rgba(134,239,172,0.18)' },
+    { id: 'C5', name: '레벨6', lower: 60,  upper: 80,  color: '#bbf7d0', bg: 'rgba(187,247,208,0.18)' },
+    { id: 'C6', name: '레벨7', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
   ];
 
   function computeLevelBarStep(summary) {
@@ -1897,24 +1974,26 @@
             width: '28px',
             height: '18px',
             borderRadius: '4px',
-            background: filled ? lv.color : 'rgba(148,163,184,0.10)',
-            border: filled ? ('1px solid ' + lv.color) : '1px solid rgba(148,163,184,0.22)',
+            background: filled ? lv.color : 'rgba(16,185,129,0.06)',
+            border: filled ? ('1px solid ' + lv.color) : '1px solid rgba(16,185,129,0.20)',
             opacity: blockOpacity,
             flexShrink: 0
           }}
         />
       );
     }
+    /* 레벨1(진녹)은 색상 그대로, 레벨5~7(연녹)은 텍스트 가독성을 위해 진녹으로 고정 */
+    var labelColor = lvIdx >= 4 ? '#059669' : lv.color;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: '4px', paddingBottom: '4px', gap: 0 }}>
-        <div style={{ fontSize: '9px', fontWeight: 700, color: lv.color, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: '9px', fontWeight: 700, color: labelColor, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
           {lv.name}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
           {blocks}
         </div>
-        <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
-          {step}<span style={{ color: '#cbd5e1' }}>/10</span>
+        <div style={{ fontSize: '9px', color: '#059669', marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
+          {step}<span style={{ color: '#6ee7b7' }}>/10</span>
         </div>
       </div>
     );
