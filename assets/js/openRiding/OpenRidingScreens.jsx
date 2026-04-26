@@ -1911,8 +1911,9 @@ function OpenRidingGpxCoursePanel(props) {
   );
 
   /**
-   * OFF: Leaflet 핸들러는 건드리지 않고, 컨테이너 위에 투명 veil로 포인터만 차단 → 타일 레이어 깨짐 없음.
-   * veil z-index 500, Leaflet 컨트롤 z-index 1000 근처 → +/- 유지. ON: veil 제거.
+   * OFF: Leaflet 핸들러는 건드리지 않고 투명 veil로 이벤트 차단(타일 유지).
+   * z-index 2000 > 타일·벡터·Leaflet +/-(~1000) → OFF에서 지도 클릭·드래그·휠·핀치·줌 버튼 모두 차단.
+   * ON/OFF 토글은 leaflet 밖 형제 노드(z-index 1000)라 계속 클릭 가능.
    */
   useEffect(
     function () {
@@ -1937,19 +1938,89 @@ function OpenRidingGpxCoursePanel(props) {
         veil.className = OPEN_RIDING_GPX_VEIL_CLASS;
         veil.setAttribute('aria-hidden', 'true');
         veil.style.cssText =
-          'position:absolute;left:0;top:0;right:0;bottom:0;z-index:500;' +
-          'touch-action:pan-y;cursor:default;background:transparent;pointer-events:auto;';
+          'position:absolute;left:0;top:0;right:0;bottom:0;z-index:2000;' +
+          'touch-action:none;cursor:default;background:transparent;pointer-events:auto;';
         var scrollEl = openRidingFindScrollableAncestor(container);
+
+        function stopBubble(ev) {
+          ev.stopPropagation();
+        }
+
+        var blockTypes = ['pointerdown', 'pointerup', 'pointercancel', 'click', 'dblclick', 'contextmenu', 'mousedown', 'mouseup'];
+        var bi;
+        for (bi = 0; bi < blockTypes.length; bi++) {
+          veil.addEventListener(blockTypes[bi], stopBubble, true);
+        }
+
         var onWheel = function (ev) {
-          if (!scrollEl) return;
-          scrollEl.scrollTop += ev.deltaY;
+          ev.stopPropagation();
+          if (scrollEl) scrollEl.scrollTop += ev.deltaY;
         };
         veil.addEventListener('wheel', onWheel, { passive: true });
+
+        var lastTouchY = null;
+        function onTouchStart(ev) {
+          stopBubble(ev);
+          if (ev.touches.length === 1) lastTouchY = ev.touches[0].clientY;
+          else lastTouchY = null;
+        }
+        function onTouchMove(ev) {
+          stopBubble(ev);
+          if (ev.touches.length >= 2) {
+            try {
+              ev.preventDefault();
+            } catch (ep) {}
+            return;
+          }
+          if (!scrollEl || ev.touches.length !== 1 || lastTouchY == null) return;
+          var y = ev.touches[0].clientY;
+          var dy = lastTouchY - y;
+          lastTouchY = y;
+          scrollEl.scrollTop += dy;
+        }
+        function onTouchEnd(ev) {
+          stopBubble(ev);
+          if (!ev.touches || ev.touches.length === 0) lastTouchY = null;
+          else if (ev.touches.length === 1) lastTouchY = ev.touches[0].clientY;
+        }
+        veil.addEventListener('touchstart', onTouchStart, { passive: false, capture: true });
+        veil.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+        veil.addEventListener('touchend', onTouchEnd, { passive: false, capture: true });
+        veil.addEventListener('touchcancel', onTouchEnd, { passive: false, capture: true });
+
+        function onGestureBlock(ev) {
+          try {
+            ev.preventDefault();
+          } catch (eg) {}
+        }
+        if (typeof veil.addEventListener === 'function') {
+          try {
+            veil.addEventListener('gesturestart', onGestureBlock, { passive: false });
+            veil.addEventListener('gesturechange', onGestureBlock, { passive: false });
+            veil.addEventListener('gestureend', onGestureBlock, { passive: false });
+          } catch (eg2) {}
+        }
+
         container.appendChild(veil);
         return function () {
+          var bj;
+          for (bj = 0; bj < blockTypes.length; bj++) {
+            try {
+              veil.removeEventListener(blockTypes[bj], stopBubble, true);
+            } catch (e1) {}
+          }
           try {
             veil.removeEventListener('wheel', onWheel);
           } catch (ew) {}
+          try {
+            veil.removeEventListener('touchstart', onTouchStart, true);
+            veil.removeEventListener('touchmove', onTouchMove, true);
+            veil.removeEventListener('touchend', onTouchEnd, true);
+            veil.removeEventListener('touchcancel', onTouchEnd, true);
+            veil.removeEventListener('gesturestart', onGestureBlock);
+            veil.removeEventListener('gesturechange', onGestureBlock);
+            veil.removeEventListener('gestureend', onGestureBlock);
+          } catch (et) {}
           removeAllVeils();
         };
       }
