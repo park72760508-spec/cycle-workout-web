@@ -123,6 +123,11 @@ function buildMonthHeartRateCurveData(intervalHR) {
 
 // ——— 최근 1개월 심박: 클릭 가이드 + 프로스티드 배지 (RiderPowerProfileTrendCharts PowerProfileMonthCurveChart와 동일 토큰) ———
 var HR_PP_REF_LINE = '#7c3aed';
+var HR_PP_REF_STROKE_W = 3;
+var HR_PP_REF_DASH = '6 4';
+var HR_MONTH_PLOT_M_TOP = 52;
+var HR_MONTH_PLOT_M_R = 12;
+var HR_MONTH_PLOT_Y_W = 36;
 var HR_PP_TINT_A_BG = 0.28;
 var HR_PP_TINT_A_BORDER = 0.58;
 var HR_PP_FROST = 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 100%)';
@@ -386,12 +391,25 @@ function HeartRateProfileMonthCurveChart(props) {
     var _mhBg = hrPpHexToRgba(selColor, HR_PP_TINT_A_BG);
     var _mhBd = hrPpHexToRgba(selColor, HR_PP_TINT_A_BORDER);
     var _mhTx = hrPpBadgeTextStyle(selColor);
-    // 플롯 상단·가로 중앙 고정(세로 점선 X와 무관). AreaChart: margin top 52, YAxis 36, right 12
+    // 플롯 상단·가로 중앙 고정 — 인라인 style (CDN Tailwind가 .jsx 소스를 스캔하지 않음)
     monthHrFixedSelectBadge = (
-      <div className="pointer-events-none absolute top-[52px] left-9 right-3 z-[5] flex justify-center">
+      <div
+        style={{
+          position: 'absolute',
+          zIndex: 5,
+          top: HR_MONTH_PLOT_M_TOP,
+          left: HR_MONTH_PLOT_Y_W,
+          right: HR_MONTH_PLOT_M_R,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          pointerEvents: 'none',
+        }}
+      >
         <div
-          className="flex h-10 w-[min(100%,10.5rem)] max-w-[min(18rem,95%)] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
+          className="flex h-10 w-full max-w-[10.5rem] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
           style={{
+            maxWidth: 'min(10.5rem, 95%)',
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             border: '1.5px solid ' + _mhBd,
             background: HR_PP_FROST + ', ' + _mhBg,
@@ -469,7 +487,7 @@ function HeartRateProfileMonthCurveChart(props) {
       >
         {monthHrFixedSelectBadge}
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 52, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: HR_MONTH_PLOT_M_TOP, right: HR_MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
@@ -500,7 +518,7 @@ function HeartRateProfileMonthCurveChart(props) {
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
             {Tooltip ? (
-              <Tooltip content={monthHrDistTooltip} cursor={{ stroke: HR_PP_REF_LINE, strokeWidth: 1, strokeDasharray: '4 4' }} />
+              <Tooltip content={monthHrDistTooltip} cursor={false} />
             ) : null}
             <Area
               type="monotone"
@@ -519,7 +537,15 @@ function HeartRateProfileMonthCurveChart(props) {
               }}
             />
             {refXVal != null && ReferenceLine ? (
-              <ReferenceLine x={refXVal} stroke={HR_PP_REF_LINE} strokeWidth={3} strokeDasharray="6 4" />
+              <ReferenceLine
+                x={refXVal}
+                stroke={HR_PP_REF_LINE}
+                strokeWidth={HR_PP_REF_STROKE_W}
+                strokeOpacity={1}
+                strokeDasharray={HR_PP_REF_DASH}
+                isFront={true}
+                ifOverflow="visible"
+              />
             ) : null}
           </AreaChart>
         </ResponsiveContainer>

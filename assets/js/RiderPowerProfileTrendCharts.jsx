@@ -201,6 +201,13 @@ function PowerProfileCurveChart(props) {
 
 // ========== 최근 1개월 파워 그래프 (랭킹보드 참가자 분포와 동일: 클릭 → 세로 점선 + Stelvio식 배지; 호버 → DistTooltip) ==========
 var PP_REF_LINE = '#7c3aed';
+/** Stelvio 참가자분포 "나의 위치" 점선과 동일(픽셀 고정, Tailwind 누락·SVG 가림에도 대응) */
+var PP_REF_STROKE_W = 3;
+var PP_REF_DASH = '6 4';
+/** 최근 1개월 AreaChart: 배지(HTML) 위치 = margin/ Y축과 수치 동기 — 반드시 인라인 style (CDN Tailwind는 JSX 소스를 안 봄) */
+var MONTH_PLOT_M_TOP = 52;
+var MONTH_PLOT_M_R = 12;
+var MONTH_PLOT_Y_W = 36;
 /** 배지/툴팁: 구간색 투명 + 강한 블러로 곡선이 흐릿히 비침( 본문 대비는 ppBadgeTextStyle·서리 그라데이션으로 유지) */
 var PP_TINT_A_BG = 0.28;
 var PP_TINT_A_BORDER = 0.58;
@@ -421,12 +428,25 @@ function PowerProfileMonthCurveChart(props) {
     var _mfBg = ppHexToRgba(selColor, PP_TINT_A_BG);
     var _mfBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
     var _mfTx = ppBadgeTextStyle(selColor);
-    // 플롯 상단·가로 중앙 고정(세로 점선 X와 무관). AreaChart: margin top 52, YAxis 36, right 12
+    // 플롯 상단·가로 중앙 고정(세로 점선 X·SVG와 완전 분리, 클릭 점선만 이동)
     monthPowerFixedSelectBadge = (
-      <div className="pointer-events-none absolute top-[52px] left-9 right-3 z-[5] flex justify-center">
+      <div
+        style={{
+          position: 'absolute',
+          zIndex: 5,
+          top: MONTH_PLOT_M_TOP,
+          left: MONTH_PLOT_Y_W,
+          right: MONTH_PLOT_M_R,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          pointerEvents: 'none',
+        }}
+      >
         <div
-          className="flex h-10 w-[min(100%,10.5rem)] max-w-[min(18rem,95%)] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
+          className="flex h-10 w-full max-w-[10.5rem] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
           style={{
+            maxWidth: 'min(10.5rem, 95%)',
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             border: '1.5px solid ' + _mfBd,
             background: PP_FROST + ', ' + _mfBg,
@@ -505,7 +525,7 @@ function PowerProfileMonthCurveChart(props) {
       >
         {monthPowerFixedSelectBadge}
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 52, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: MONTH_PLOT_M_TOP, right: MONTH_PLOT_M_R, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
@@ -536,7 +556,7 @@ function PowerProfileMonthCurveChart(props) {
               <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
             {Tooltip ? (
-              <Tooltip content={monthPowerDistTooltip} cursor={{ stroke: PP_REF_LINE, strokeWidth: 1, strokeDasharray: '4 4' }} />
+              <Tooltip content={monthPowerDistTooltip} cursor={false} />
             ) : null}
             <Area
               type="monotone"
@@ -555,7 +575,15 @@ function PowerProfileMonthCurveChart(props) {
               }}
             />
             {refXVal != null && ReferenceLine ? (
-              <ReferenceLine x={refXVal} stroke={PP_REF_LINE} strokeWidth={3} strokeDasharray="6 4" />
+              <ReferenceLine
+                x={refXVal}
+                stroke={PP_REF_LINE}
+                strokeWidth={PP_REF_STROKE_W}
+                strokeOpacity={1}
+                strokeDasharray={PP_REF_DASH}
+                isFront={true}
+                ifOverflow="visible"
+              />
             ) : null}
           </AreaChart>
         </ResponsiveContainer>
