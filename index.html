@@ -16089,10 +16089,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             afterDatasetsDraw: function (chart) {
               var d = chart.data;
               if (!d || !d.datasets || d.datasets.length < 4) return;
+              var ca = chart.chartArea;
+              if (!ca) return;
               var hrDs = d.datasets[2];
               var wDs = d.datasets[3];
               var hrData = hrDs && hrDs.data ? hrDs.data : [];
               var wData = wDs && wDs.data ? wDs.data : [];
+              var dataLen = wData.length;
               var metaHr = chart.getDatasetMeta(2);
               var metaW = chart.getDatasetMeta(3);
               var prWIdx = -1;
@@ -16114,17 +16117,78 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   prHIdx = ii;
                 }
               }
+              /** PR 숫자 라벨: 상단·좌우 잘림 방지 (위/아래 전환, textAlign) */
+              function growthPrLabelLayout(px, py, idx, stackPair) {
+                var edgeX = 52;
+                var lineH = 11;
+                var marginT = ca.top + lineH;
+                var marginB = ca.bottom - lineH;
+                var singleOff = 20;
+                var pairOuter = 26;
+                var pairInner = 14;
+                var isFirst = idx === 0;
+                var isLast = idx === dataLen - 1 && dataLen > 1;
+                var tx = px;
+                var align = 'center';
+                if (isFirst) {
+                  align = 'left';
+                  tx = Math.min(px + 8, ca.right - edgeX);
+                } else if (isLast) {
+                  align = 'right';
+                  tx = Math.max(px - 8, ca.left + edgeX);
+                }
+                var useBelow;
+                if (stackPair) {
+                  var topY = py - pairOuter;
+                  useBelow = topY - lineH / 2 < marginT;
+                } else {
+                  useBelow = py - singleOff - lineH / 2 < marginT;
+                }
+                var yPower;
+                var yHr;
+                if (stackPair) {
+                  if (useBelow) {
+                    yHr = py + pairInner;
+                    yPower = py + pairOuter;
+                  } else {
+                    yPower = py - pairOuter;
+                    yHr = py - pairInner;
+                  }
+                } else {
+                  var ySingle = useBelow ? py + singleOff : py - singleOff;
+                  if (useBelow && ySingle + lineH / 2 > marginB) {
+                    ySingle = py - singleOff;
+                  } else if (!useBelow && ySingle - lineH / 2 < marginT) {
+                    ySingle = py + singleOff;
+                  } else if (!useBelow && ySingle + lineH / 2 > marginB) {
+                    ySingle = py + singleOff;
+                  } else if (useBelow && ySingle - lineH / 2 < marginT) {
+                    ySingle = py - singleOff;
+                  }
+                  yPower = ySingle;
+                  yHr = ySingle;
+                }
+                if (stackPair && useBelow) {
+                  if (yPower + lineH / 2 > marginB) {
+                    yPower = py - pairOuter;
+                    yHr = py - pairInner;
+                  }
+                }
+                return { tx: tx, align: align, yPower: yPower, yHr: yHr, useBelow: useBelow };
+              }
               var c = chart.ctx;
               c.save();
-              c.textAlign = 'center';
               c.textBaseline = 'middle';
               var sameIdx = prWIdx >= 0 && prHIdx >= 0 && prWIdx === prHIdx;
               if (prWIdx >= 0 && metaW && metaW.data && metaW.data[prWIdx]) {
                 var ptW = metaW.data[prWIdx];
                 if (ptW && ptW.x != null && ptW.y != null) {
+                  var layW = growthPrLabelLayout(ptW.x, ptW.y, prWIdx, sameIdx);
                   c.font = 'bold 9px sans-serif';
                   c.fillStyle = '#1d4ed8';
-                  c.fillText(Math.round(maxW) + ' W', ptW.x, ptW.y - (sameIdx ? 26 : 20));
+                  c.textAlign = layW.align;
+                  c.fillText(Math.round(maxW) + ' W', layW.tx, layW.yPower);
+                  c.textAlign = 'center';
                   c.font = 'bold 8px sans-serif';
                   c.fillStyle = '#3b82f6';
                   c.beginPath();
@@ -16140,9 +16204,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               if (prHIdx >= 0 && metaHr && metaHr.data && metaHr.data[prHIdx]) {
                 var ptH = metaHr.data[prHIdx];
                 if (ptH && ptH.x != null && ptH.y != null) {
+                  var layH = growthPrLabelLayout(ptH.x, ptH.y, prHIdx, sameIdx);
                   c.font = 'bold 9px sans-serif';
                   c.fillStyle = '#be185d';
-                  c.fillText(Math.round(maxH) + ' bpm', ptH.x, ptH.y - (sameIdx ? 14 : 20));
+                  c.textAlign = layH.align;
+                  c.fillText(Math.round(maxH) + ' bpm', layH.tx, layH.yHr);
+                  c.textAlign = 'center';
                   c.font = 'bold 8px sans-serif';
                   c.fillStyle = '#ec4899';
                   c.beginPath();
@@ -16249,6 +16316,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             options: {
               responsive: true,
               maintainAspectRatio: false,
+              layout: { padding: { top: 16, left: 6, right: 8, bottom: 2 } },
               interaction: { mode: 'index', intersect: false },
               onHover: function (event, elements, chart) {
                 var lastIx = Math.max(0, data.length - 1);
