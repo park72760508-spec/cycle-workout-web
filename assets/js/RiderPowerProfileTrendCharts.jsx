@@ -182,10 +182,30 @@ function PowerProfileCurveChart(props) {
 }
 
 // ========== 최근 1개월 파워 그래프 (랭킹보드 참가자 분포와 동일: 클릭 → 세로 점선 + Stelvio식 배지; 호버 → DistTooltip) ==========
-var PP_SEL_BADGE_HALF = 52;
+var PP_SEL_BADGE_HALF = 70;
 var PP_SEL_BADGE_EDGE = 6;
 var PP_REF_LINE = '#7c3aed';
-var PP_BRONZE = '#b87333';
+
+/** endStr(YYYY-MM-DD) 또는 ~M/D → MM-DD */
+function monthPowerBadgeMmDd(row) {
+  if (!row) return '—';
+  var es = row.endStr;
+  if (es && String(es).length >= 8) {
+    var p = String(es).split('-');
+    if (p.length >= 3) {
+      return String(p[1]).padStart(2, '0') + '-' + String(p[2]).padStart(2, '0');
+    }
+  }
+  var nm = row.name;
+  if (nm) {
+    var s = String(nm).replace(/^\s*~\s*/, '');
+    var m = s.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      return String(m[1]).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
+    }
+  }
+  return '—';
+}
 
 function PowerProfileMonthCurveChart(props) {
   var p = props || {};
@@ -320,17 +340,21 @@ function PowerProfileMonthCurveChart(props) {
     var pl = payload[0].payload;
     if (!pl) return null;
     var w = Math.round(Number(pl[dataKey]) || 0);
-    var dStr = pl.endStr ? String(pl.endStr) : String(pl.name || '');
+    var mmdd2 = monthPowerBadgeMmDd(pl);
     return (
-      <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50">
-        <div className="font-semibold text-slate-700 mb-0.5">
-          {selItem.label} · {dStr}
+      <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50 text-center">
+        <div className="font-bold text-slate-800 tabular-nums text-[13px] leading-tight">
+          {w} W
         </div>
-        <div className="text-slate-500">
-          <span style={{ color: PP_BRONZE }} className="font-medium tabular-nums">
-            {w}
+        <div className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-slate-600 font-medium">
+          <span
+            className="inline-block w-2 h-2 rounded-full border border-white/90 shadow-sm flex-shrink-0"
+            style={{ backgroundColor: selColor }}
+            aria-hidden
+          />
+          <span>
+            {selItem.label} | {mmdd2}
           </span>
-          W
         </div>
       </div>
     );
@@ -363,9 +387,8 @@ function PowerProfileMonthCurveChart(props) {
     var row = selectedXIndex != null && data[selectedXIndex] ? data[selectedXIndex] : null;
     if (!row) return null;
     var wv = Math.round(Number(row[dataKey]) || 0);
-    var dLine = row.endStr ? String(row.endStr) : String(row.name || '');
-    var sub = '· ' + wv + ' W · ' + dLine;
-    if (sub.length > 32) sub = sub.slice(0, 30) + '…';
+    var mmdd = monthPowerBadgeMmDd(row);
+    var lab = selItem.label;
     return (
       <g>
         <rect
@@ -374,18 +397,33 @@ function PowerProfileMonthCurveChart(props) {
           rx="10"
           ry="10"
           width={half * 2}
-          height="36"
+          height="40"
           fill="white"
           stroke={PP_REF_LINE}
           strokeWidth="1.5"
           filter={'url(#' + cid + '-pp-sel-shadow)'}
         />
-        <text x={cx} y={22} textAnchor="middle" fill={PP_REF_LINE} fontSize="10" fontWeight="700">
-          나의 위치
-        </text>
-        <text x={cx} y={34} textAnchor="middle" fill="#64748b" fontSize="9">
-          {sub}
-        </text>
+        <foreignObject x={cx - half} y={6} width={half * 2} height="40" style={{ overflow: 'visible' }}>
+          <div
+            xmlns="http://www.w3.org/1999/xhtml"
+            className="flex h-[40px] w-full flex-col items-center justify-center gap-0.5 px-1.5 box-border"
+            style={{ fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}
+          >
+            <div className="font-bold text-[12px] text-slate-900 tabular-nums leading-none tracking-tight">
+              {wv} W
+            </div>
+            <div className="flex items-center justify-center gap-1 text-[9px] text-slate-600 font-medium leading-tight">
+              <span
+                className="inline-block w-2 h-2 rounded-full border border-white/90 flex-shrink-0 shadow-sm"
+                style={{ backgroundColor: selColor }}
+                aria-hidden
+              />
+              <span>
+                {lab} | {mmdd}
+              </span>
+            </div>
+          </div>
+        </foreignObject>
       </g>
     );
   }
@@ -424,9 +462,6 @@ function PowerProfileMonthCurveChart(props) {
             ) : null}
           </span>
         </div>
-        <p className="text-[10px] text-slate-500 text-center m-0 mt-1.5 px-1">
-          그래프(곡선·영역)을 클릭하면 참가자 분포와 같이 세로 점선·툴팁·배지가 표시됩니다. 동일한 주차를 다시 클릭하면 해제됩니다.
-        </p>
       </div>
       <div
         ref={chartWrapRef}
