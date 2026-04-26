@@ -2775,7 +2775,30 @@
         var rLabel = 88;
         var rMax = 70;
         var nAxis = N_WKG_AXES;
-        var mPts = pathFromPoints(radarPolygonPoints(state.monthly.norm, cx, cy, rMax));
+
+        /* 순위 비율 직접 계산: (n - rank + 1) / n
+         * rank 1위 → 0.99(최대), 꼴찌 → 0.08(최소), 데이터 없음(null) → 0.08 */
+        var rankNorms = [];
+        var ranks = state.monthly.ranks || [];
+        var cohortN = state.monthly.cohortSizePerAxis || [];
+        for (var ni = 0; ni < nAxis; ni++) {
+          var r = ranks[ni];
+          var n = (cohortN[ni] | 0) > 0 ? (cohortN[ni] | 0) : 1;
+          var norm;
+          if (r == null || !isFinite(r) || r < 1) {
+            norm = 0.08;
+          } else {
+            var rr = Math.floor(Number(r));
+            if (rr < 1) rr = 1;
+            if (rr > n) rr = n;
+            norm = (n - rr + 1) / n;
+            if (norm > 0.99) norm = 0.99;
+            if (norm < 0.08) norm = 0.08;
+          }
+          rankNorms.push(norm);
+        }
+
+        var mPts = pathFromPoints(radarPolygonPoints(rankNorms, cx, cy, rMax));
         var grid = [0.25, 0.5, 0.75, 1].map(function(g) {
           var gr = [];
           for (var gi = 0; gi < nAxis; gi++) gr.push(g);
