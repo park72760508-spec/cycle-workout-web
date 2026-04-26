@@ -1904,7 +1904,12 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   border-radius: 12px;
   font-family: inherit;
 }
-/* GPX 지도: OFF 시 포인터 차단은 JS로 삽입하는 .open-riding-gpx-map-interact-veil (Leaflet 타일은 비활성화하지 않음) */
+/* GPX 지도: OFF 시 .open-riding-gpx-map-interact-veil (JS 삽입, z-index 높게 — 터치 제스처 이중 방지) */
+#openRidingRoomScreen .open-riding-gpx-map-interact-veil {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 지도·차트 블록을 본문 스택(z-0)에 묶어 폼 하단 CTA보다 위로 새지 않게 함 */
 #openRidingRoomScreen .open-riding-gpx-panel {
   position: relative;
