@@ -1904,18 +1904,7 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   border-radius: 12px;
   font-family: inherit;
 }
-/* GPX 지도 OFF(스크롤 잠금): 본문 세로 스크롤 우선, 드래그 커서 완화 */
-#openRidingRoomScreen .open-riding-gpx-map-inner--scroll-lock .leaflet-container {
-  cursor: default;
-  touch-action: pan-y;
-}
-#openRidingRoomScreen .open-riding-gpx-map-inner--scroll-lock .leaflet-dragging .leaflet-container {
-  cursor: default;
-}
-/* ON(잠금 해제): Leaflet 기본 터치·타일 합성이 되도록 명시 */
-#openRidingRoomScreen .open-riding-gpx-map-inner:not(.open-riding-gpx-map-inner--scroll-lock) .leaflet-container {
-  touch-action: auto;
-}
+/* GPX 지도: OFF 시 포인터 차단은 JS로 삽입하는 .open-riding-gpx-map-interact-veil (Leaflet 타일은 비활성화하지 않음) */
 /* 🚀 투명 레이어 클릭 가로채기 원천 차단: 지도·차트 블록을 본문 스택(z-0)에 묶어 폼 하단 CTA보다 위로 새지 않게 함 */
 #openRidingRoomScreen .open-riding-gpx-panel {
   position: relative;
