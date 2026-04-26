@@ -15190,6 +15190,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     var useState = ReactObj.useState || null;
     var useEffect = ReactObj.useEffect || null;
     var useRef = ReactObj.useRef || null;
+    var useMemo = ReactObj.useMemo || null;
     
     // 포인트 포맷팅 유틸리티
     function formatPoints(points) {
@@ -15786,7 +15787,64 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       );
     }
 
-    /** 훈련 부하: 주간 TSS(30주) + 라이딩 지표와 동일한 주간 목표 TSS(녹색 점선, getWeeklyTargetTSS·stats.weeklyGoal) */
+    /** 주간 TSS 행(sortKey=주 말일) → 패널용 구간 시작일(ISO) */
+    function tssWeekStartIsoFromEndIso(endStr) {
+      if (!endStr || String(endStr).length < 10) return endStr;
+      var p = String(endStr).split('-');
+      var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+      if (isNaN(d.getTime())) return endStr;
+      d.setDate(d.getDate() - 6);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function tssFormatMmDd(iso) {
+      if (!iso || String(iso).length < 10) return '—';
+      var p = String(iso).split('-');
+      return String(p[1]).padStart(2, '0') + '-' + String(p[2]).padStart(2, '0');
+    }
+    function tssWeekLabelFromSortKey(sk) {
+      if (!sk || String(sk).length < 10) return '';
+      var p = String(sk).split('-');
+      return parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+    }
+    /** 30주 배열(과거→현재)을 4주 묶음으로 합산 — 좌측이 가장 오래된 블록 */
+    function tssAggregateFourWeekBlocks(weeklyRows) {
+      if (!weeklyRows || weeklyRows.length === 0) return [];
+      var out = [];
+      var i = 0;
+      var n = weeklyRows.length;
+      while (i < n) {
+        var endIdx = Math.min(i + 3, n - 1);
+        var sum = 0;
+        var j;
+        for (j = i; j <= endIdx; j++) sum += Number(weeklyRows[j].tss) || 0;
+        var first = weeklyRows[i];
+        var last = weeklyRows[endIdx];
+        var bucketIdx = out.length;
+        var showTick = bucketIdx % 2 === 0 || endIdx === n - 1;
+        out.push({
+          weekLabel: showTick ? tssWeekLabelFromSortKey(last.sortKey) : '',
+          tss: Math.round(sum),
+          sortKey: last.sortKey,
+          showValueLabel: showTick,
+          tssPanelMode: 'month',
+          tssPanelStart: tssWeekStartIsoFromEndIso(first.sortKey),
+          tssPanelEnd: last.sortKey
+        });
+        i = endIdx + 1;
+      }
+      return out;
+    }
+    function tssEnrichWeeklyDisplayRows(weeklyRows) {
+      return weeklyRows.map(function (row) {
+        return Object.assign({}, row, {
+          tssPanelMode: 'week',
+          tssPanelStart: tssWeekStartIsoFromEndIso(row.sortKey),
+          tssPanelEnd: row.sortKey
+        });
+      });
+    }
+
+    /** 훈련 부하: 주간 TSS(30주) + 4주 합산(월단위) + 상단 판넬·보라 세로 점선(최근 1개월 파워와 동일 UX) */
     function TrainingLoadTssTrendChart(props) {
       var p = props || {};
       var data = p.data;
@@ -15797,18 +15855,45 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           : typeof window.getWeeklyTargetTSS === 'function'
             ? Number(window.getWeeklyTargetTSS('Fitness').target) || 225
             : 225;
-      const chartRef = useRef(null);
-      const chartInstanceRef = useRef(null);
+      var TSS_PANEL_REF_LINE = '#7c3aed';
+      var TSS_PANEL_BADGE_W = 104;
+      var TSS_PANEL_SUB = '#64748b';
+      var chartRef = useRef(null);
+      var chartInstanceRef = useRef(null);
+      var tssPanelIndexRef = useRef(0);
+      var _granState = useState('month');
+      var tssGranularity = _granState[0];
+      var setTssGranularity = _granState[1];
+      var _hoverState = useState(0);
+      var tssHoverIdx = _hoverState[0];
+      var setTssHoverIdx = _hoverState[1];
+
+      var displayData = useMemo
+        ? useMemo(
+            function () {
+              if (!data || !data.length) return [];
+              return tssGranularity === 'week' ? tssEnrichWeeklyDisplayRows(data) : tssAggregateFourWeekBlocks(data);
+            },
+            [data, tssGranularity]
+          )
+        : !data || !data.length
+          ? []
+          : tssGranularity === 'week'
+            ? tssEnrichWeeklyDisplayRows(data)
+            : tssAggregateFourWeekBlocks(data);
+
       useEffect(
         function () {
-          if (!data || data.length === 0) return;
+          if (!displayData || displayData.length === 0) return;
           var ctx = chartRef.current && chartRef.current.getContext('2d');
           if (!ctx || typeof Chart === 'undefined') return;
           if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
             chartInstanceRef.current = null;
           }
-          var tssSeries = data.map(function (d) {
+          var chartRows = displayData;
+          var periodGoal = tssGranularity === 'month' ? goalTss * 4 : goalTss;
+          var tssSeries = chartRows.map(function (d) {
             return Number(d.tss) || 0;
           });
           var validT = tssSeries.filter(function (v) {
@@ -15816,20 +15901,27 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           });
           var dataMin = validT.length > 0 ? Math.min.apply(null, validT) : 0;
           var dataMax = validT.length > 0 ? Math.max.apply(null, validT) : 0;
-          var n = data.length;
+          var n = chartRows.length;
           var lineAvg = [];
           var i;
           for (i = 0; i < n; i++) {
-            lineAvg.push(goalTss);
+            lineAvg.push(periodGoal);
           }
-          var refLow = Math.min(dataMin, goalTss);
-          var refHigh = Math.max(dataMax, goalTss);
-          var yMin = Math.max(0, Math.floor(refLow - Math.max(5, Math.round(goalTss * 0.05))));
-          var yMax = Math.ceil(refHigh + Math.max(10, Math.round(goalTss * 0.08)));
+          var refLow = Math.min(dataMin, periodGoal);
+          var refHigh = Math.max(dataMax, periodGoal);
+          var yMin = Math.max(0, Math.floor(refLow - Math.max(5, Math.round(periodGoal * 0.05))));
+          var yMax = Math.ceil(refHigh + Math.max(10, Math.round(periodGoal * 0.08)));
           if (!(yMax > yMin)) {
             yMin = 0;
-            yMax = Math.max(50, goalTss + 20, dataMax + 10);
+            yMax = Math.max(50, periodGoal + 20, dataMax + 10);
           }
+          var lastIx = Math.max(0, chartRows.length - 1);
+          tssPanelIndexRef.current = lastIx;
+          setTssHoverIdx(lastIx);
+
+          var goalLegendLabel = tssGranularity === 'month' ? '4주 목표 TSS' : '목표 TSS';
+          var tssLegendLabel = tssGranularity === 'month' ? '4주 TSS 합계' : '주간 TSS 합계';
+
           var tssLabelPlugin = {
             id: 'tssValueLabels',
             afterDatasetsDraw: function (chart) {
@@ -15843,7 +15935,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               chart.ctx.textAlign = 'center';
               meta.data.forEach(function (point, idx) {
                 if (!point || point.x == null || point.y == null) return;
-                var row = data[idx];
+                var row = chartRows[idx];
                 if (!row || !row.showValueLabel) return;
                 var value = values[idx];
                 if (value == null || isNaN(value)) return;
@@ -15854,16 +15946,41 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               chart.ctx.restore();
             }
           };
+          var tssPurpleVertPlugin = {
+            id: 'tssTrendPurpleVert',
+            afterDraw: function (chart) {
+              var idx = tssPanelIndexRef.current;
+              if (typeof idx !== 'number' || idx < 0 || !chart.chartArea) return;
+              var meta = chart.getDatasetMeta(1);
+              if (!meta || !meta.data || idx >= meta.data.length) return;
+              var pt = meta.data[idx];
+              if (!pt || pt.x == null) return;
+              var x = pt.x;
+              var top = chart.chartArea.top;
+              var bottom = chart.chartArea.bottom;
+              var c2 = chart.ctx;
+              c2.save();
+              c2.beginPath();
+              c2.setLineDash([6, 4]);
+              c2.strokeStyle = TSS_PANEL_REF_LINE;
+              c2.lineWidth = 3;
+              c2.moveTo(x, top);
+              c2.lineTo(x, bottom);
+              c2.stroke();
+              c2.setLineDash([]);
+              c2.restore();
+            }
+          };
           var chartCfg = {
             type: 'line',
             data: {
-              labels: data.map(function (d) {
+              labels: chartRows.map(function (d) {
                 return d.weekLabel || '';
               }),
               datasets: [
                 {
                   order: 1,
-                  label: '목표 TSS',
+                  label: goalLegendLabel,
                   data: lineAvg,
                   borderColor: '#16a34a',
                   borderWidth: 2,
@@ -15876,12 +15993,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 },
                 {
                   order: 0,
-                  label: '주간 TSS 합계',
+                  label: tssLegendLabel,
                   data: tssSeries,
                   borderColor: '#15803d',
                   borderWidth: 2.5,
                   backgroundColor: 'rgba(22, 163, 74, 0.12)',
-                  tension: 0.48,
+                  tension: n <= 12 ? 0.35 : 0.48,
                   cubicInterpolationMode: 'monotone',
                   stepped: false,
                   fill: true,
@@ -15897,7 +16014,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             options: {
               responsive: true,
               maintainAspectRatio: false,
+              layout: { padding: { top: 8, left: 4, right: 6, bottom: 2 } },
               interaction: { mode: 'index', intersect: false },
+              onHover: function (event, elements, chart) {
+                var lastI = Math.max(0, chartRows.length - 1);
+                var ix = elements && elements.length > 0 && elements[0].index != null ? elements[0].index : lastI;
+                tssPanelIndexRef.current = ix;
+                setTssHoverIdx(function (prev) {
+                  return prev === ix ? prev : ix;
+                });
+                try {
+                  chart.update('none');
+                } catch (e2) {}
+              },
               plugins: {
                 legend: {
                   display: true,
@@ -15959,7 +16088,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                     maxRotation: 0,
                     minRotation: 0,
                     autoSkip: false,
-                    maxTicksLimit: 30
+                    maxTicksLimit: 40
                   }
                 },
                 y: {
@@ -15971,7 +16100,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 }
               }
             },
-            plugins: [tssLabelPlugin]
+            plugins: [tssLabelPlugin, tssPurpleVertPlugin]
           };
           chartInstanceRef.current = new Chart(ctx, chartCfg);
           return function cleanup() {
@@ -15981,23 +16110,162 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             }
           };
         },
-        [data, goalTss]
+        [displayData, goalTss, tssGranularity]
       );
-      if (!data || data.length === 0) {
-        return (
-          <DashboardCard title="훈련 부하 트렌드 (TSS)">
-            <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
-              데이터가 없습니다
-            </div>
-          </DashboardCard>
+
+      function tssHeaderAndPanel() {
+        var btnBase =
+          'px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition shrink-0 ';
+        return React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(
+            'div',
+            { className: 'flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0' },
+            React.createElement('h3', { className: 'text-sm font-semibold text-gray-600 truncate' }, '훈련 부하 트렌드 (TSS)'),
+            React.createElement(
+              'div',
+              { className: 'flex items-center gap-1 shrink-0' },
+              React.createElement(
+                'button',
+                {
+                  type: 'button',
+                  onClick: function () {
+                    setTssGranularity('week');
+                  },
+                  className:
+                    btnBase +
+                    (tssGranularity === 'week'
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
+                },
+                '주단위'
+              ),
+              React.createElement(
+                'button',
+                {
+                  type: 'button',
+                  onClick: function () {
+                    setTssGranularity('month');
+                  },
+                  className:
+                    btnBase +
+                    (tssGranularity === 'month'
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
+                },
+                '월단위'
+              )
+            )
+          ),
+          function () {
+            if (!displayData || displayData.length === 0) return null;
+            var gi = tssHoverIdx;
+            if (gi == null || gi < 0 || gi >= displayData.length) gi = Math.max(0, displayData.length - 1);
+            var row = displayData[gi];
+            var tssVal = Math.round(Number(row.tss) || 0);
+            var mode = row.tssPanelMode || tssGranularity;
+            var subPre = mode === 'month' ? '4주 합계' : '주간';
+            var subRest =
+              tssFormatMmDd(row.tssPanelStart) + ' ~ ' + tssFormatMmDd(row.tssPanelEnd);
+            var gSub = subPre + ' | ' + subRest;
+            if (gSub.length > 24) gSub = gSub.slice(0, 22) + '…';
+            var panelBg =
+              'linear-gradient(180deg, rgba(21,128,61,0.11) 0%, rgba(21,128,61,0.05) 100%), #fff';
+            return React.createElement(
+              'div',
+              {
+                style: {
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                  paddingBottom: 4,
+                  pointerEvents: 'none'
+                }
+              },
+              React.createElement(
+                'div',
+                {
+                  style: {
+                    width: TSS_PANEL_BADGE_W,
+                    minHeight: 36,
+                    boxSizing: 'border-box',
+                    background: panelBg,
+                    border: '1.5px solid ' + TSS_PANEL_REF_LINE,
+                    borderRadius: 10,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                    padding: '4px 6px 5px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+                  }
+                },
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: TSS_PANEL_REF_LINE,
+                      lineHeight: 1.15,
+                      WebkitFontSmoothing: 'antialiased',
+                      textAlign: 'center',
+                      maxWidth: '100%'
+                    }
+                  },
+                  tssVal + ' TSS'
+                ),
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      fontSize: 9,
+                      fontWeight: 400,
+                      color: TSS_PANEL_SUB,
+                      lineHeight: 1.2,
+                      marginTop: 2,
+                      textAlign: 'center',
+                      maxWidth: '100%',
+                      wordBreak: 'break-all'
+                    }
+                  },
+                  gSub
+                )
+              )
+            );
+          }()
         );
       }
-      return (
-        <DashboardCard title="훈련 부하 트렌드 (TSS)">
-          <div className="h-[200px]">
-            <canvas ref={chartRef}></canvas>
-          </div>
-        </DashboardCard>
+
+      if (!data || data.length === 0) {
+        return React.createElement(
+          DashboardCard,
+          null,
+          tssHeaderAndPanel(),
+          React.createElement('div', { className: 'h-[200px] flex items-center justify-center text-gray-400 text-sm' }, '데이터가 없습니다')
+        );
+      }
+      return React.createElement(
+        DashboardCard,
+        null,
+        tssHeaderAndPanel(),
+        React.createElement(
+          'div',
+          {
+            className: 'min-h-0 w-full',
+            style: { display: 'flex', flexDirection: 'column', minHeight: 200, height: 'min(200px, 45vw)' }
+          },
+          React.createElement(
+            'div',
+            { style: { position: 'relative', width: '100%', minHeight: 0, flex: 1, touchAction: 'none' } },
+            React.createElement('canvas', { ref: chartRef })
+          )
+        )
       );
     }
     
