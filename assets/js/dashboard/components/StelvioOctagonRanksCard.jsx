@@ -582,7 +582,7 @@
    * 집계 레벨%: `n`은 **실집계 코호트 인원**. `heptagonUseNeffNPlusOne`일 때만 Neff=n+1(가상·타 부문). 전체·본인 부문은 n.
    * Neff≥100 → (r÷Neff)×100, Neff<100 → n₂=100÷Neff, ((r÷Neff)÷n₂)×100. 등급(동물)은 `heptagonBoardTierIdFromLevelPercent`.
    */
-  var HEPTAGON_BOARD_PCT_CUTS = [3, 7, 20, 40, 60, 90];
+  var HEPTAGON_BOARD_PCT_CUTS = [5, 10, 20, 40, 60, 80];
 
   function heptagonLevelPercentForRankN(boardRank, n, isVirtualCohort, filterCategory, userAgeCategory) {
     var Nc = n | 0;
@@ -608,10 +608,10 @@
     if (!isFinite(p)) {
       return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
     }
-    if (p <= 3) {
+    if (p <= 5) {
       return { id: 'HC', text: 'HC', labelShort: 'HC' };
     }
-    if (p <= 7) {
+    if (p <= 10) {
       return { id: 'C1', text: 'Cat 1', labelShort: 'Cat 1' };
     }
     if (p <= 20) {
@@ -623,7 +623,7 @@
     if (p <= 60) {
       return { id: 'C4', text: 'Cat 4', labelShort: 'Cat 4' };
     }
-    if (p <= 90) {
+    if (p <= 80) {
       return { id: 'C5', text: 'Cat 5', labelShort: 'Cat 5' };
     }
     return { id: 'C6', text: 'Cat 6', labelShort: 'Cat 6' };
@@ -1840,6 +1840,86 @@
     );
   }
 
+  /* ──────────────────────────────────────────────────────────────
+   * LevelProgressBar – 현재 레벨(1~7) × 세부 단계(1~10) 세로 막대
+   * pTotal: 백분위(낮을수록 상위). 레벨 내 상한·하한을 10등분하여
+   * 아래부터 위로 채워지는 블록으로 표시.
+   * ────────────────────────────────────────────────────────────── */
+  var LEVEL_BAR_DEFS = [
+    { id: 'HC', name: '레벨1', lower: 0,   upper: 5,   color: '#ff1a1a', bg: 'rgba(255,26,26,0.18)' },
+    { id: 'C1', name: '레벨2', lower: 5,   upper: 10,  color: '#ff6b3d', bg: 'rgba(255,107,61,0.18)' },
+    { id: 'C2', name: '레벨3', lower: 10,  upper: 20,  color: '#ffb020', bg: 'rgba(255,176,32,0.18)' },
+    { id: 'C3', name: '레벨4', lower: 20,  upper: 40,  color: '#e8c547', bg: 'rgba(232,197,71,0.18)' },
+    { id: 'C4', name: '레벨5', lower: 40,  upper: 60,  color: '#9fe870', bg: 'rgba(159,232,112,0.18)' },
+    { id: 'C5', name: '레벨6', lower: 60,  upper: 80,  color: '#94a3b8', bg: 'rgba(148,163,184,0.18)' },
+    { id: 'C6', name: '레벨7', lower: 80,  upper: 100, color: '#7c8aa0', bg: 'rgba(124,138,160,0.18)' }
+  ];
+
+  function computeLevelBarStep(summary) {
+    if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], step: 1 };
+    var tid = summary.tier.id;
+    var p = summary.pTotal != null && isFinite(summary.pTotal) ? summary.pTotal
+          : summary.pComprehensive != null && isFinite(summary.pComprehensive) ? summary.pComprehensive
+          : null;
+    var lvIdx = LEVEL_BAR_DEFS.findIndex(function(l) { return l.id === tid; });
+    if (lvIdx < 0) lvIdx = 6;
+    var lv = LEVEL_BAR_DEFS[lvIdx];
+    var step = 1;
+    if (p != null) {
+      var span = lv.upper - lv.lower;
+      if (span > 0) {
+        var ratio = (lv.upper - p) / span; /* 0=레벨 하한(최하), 1=레벨 상한(최상) */
+        ratio = Math.max(0, Math.min(1, ratio));
+        step = Math.max(1, Math.min(10, Math.ceil(ratio * 10)));
+      } else {
+        step = 10;
+      }
+    }
+    return { lv: lv, step: step };
+  }
+
+  function LevelProgressBar(props) {
+    var summary = props.summary;
+    if (!summary || !summary.tier) return null;
+    var result = computeLevelBarStep(summary);
+    var lv = result.lv;
+    var step = result.step;
+    var blocks = [];
+    for (var bi = 0; bi < 10; bi++) {
+      /* bi=0 → 최상단(비어있음), bi=9 → 최하단(가장 먼저 채워짐) */
+      var filled = bi >= (10 - step);
+      /* 채워진 블록: 아래로 갈수록 불투명, 위로 갈수록 조금 연함 */
+      var blockOpacity = filled ? (0.5 + ((9 - bi) / 9) * 0.5) : 1;
+      blocks.push(
+        <div
+          key={bi}
+          style={{
+            width: '28px',
+            height: '18px',
+            borderRadius: '4px',
+            background: filled ? lv.color : 'rgba(148,163,184,0.10)',
+            border: filled ? ('1px solid ' + lv.color) : '1px solid rgba(148,163,184,0.22)',
+            opacity: blockOpacity,
+            flexShrink: 0
+          }}
+        />
+      );
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: '4px', paddingBottom: '4px', gap: 0 }}>
+        <div style={{ fontSize: '9px', fontWeight: 700, color: lv.color, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+          {lv.name}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
+          {blocks}
+        </div>
+        <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
+          {step}<span style={{ color: '#cbd5e1' }}>/10</span>
+        </div>
+      </div>
+    );
+  }
+
   function StelvioOctagonRanksCard(props) {
     var p = props || {};
     var userProfile = p.userProfile;
@@ -2622,7 +2702,7 @@
           return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
         });
         return (
-          <svg viewBox="0 0 200 200" className="w-full max-w-[360px] mx-auto h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
+          <svg viewBox="0 0 200 200" className="w-full h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
             {grid.map(function(d, idx) {
               return (
                 <path
@@ -2860,18 +2940,21 @@
     } else {
       body = (
         <div>
-          <div className="stelvio-octagon-chart-shell relative w-full max-w-[360px] mx-auto h-[260px]">
-            {svg}
-            {tierForCard ? (
-              <OctagonTierCenterOverlay
-                summary={tierForCard}
-                onOpenDetail={onHeptagonOpenDetail}
-                heptagonCardTooltip={stelvioCardTooltip}
-                filterGenderLabel={labelForGender(gender)}
-                filterCategoryLabel={labelForCategory(category)}
-                cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
-              />
-            ) : null}
+          <div className="flex items-center justify-center gap-1 w-full max-w-[420px] mx-auto">
+            <div className="stelvio-octagon-chart-shell relative flex-1 h-[260px]">
+              {svg}
+              {tierForCard ? (
+                <OctagonTierCenterOverlay
+                  summary={tierForCard}
+                  onOpenDetail={onHeptagonOpenDetail}
+                  heptagonCardTooltip={stelvioCardTooltip}
+                  filterGenderLabel={labelForGender(gender)}
+                  filterCategoryLabel={labelForCategory(category)}
+                  cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
+                />
+              ) : null}
+            </div>
+            {tierForCard ? <LevelProgressBar summary={tierForCard} /> : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
