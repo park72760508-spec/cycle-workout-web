@@ -322,6 +322,7 @@ function PowerProfileMonthCurveChart(props) {
   }
   var dataKey = selItem.dataKey;
   var selColor = selItem.color;
+  var hrKeyForApi = 'hr' + selectedApi;
 
   var hasAnyWeek = data.length > 0 && data.some(function(r) {
     return (r.power1min || r.power5min || r.power10min || r.power20min || r.power40min || r.power60min) > 0;
@@ -407,6 +408,7 @@ function PowerProfileMonthCurveChart(props) {
   if (refXVal != null && selectedXIndex != null && data[selectedXIndex]) {
     var _mfbRow = data[selectedXIndex];
     var _mfwv = Math.round(Number(_mfbRow[dataKey]) || 0);
+    var _mfHr = Math.round(Number(_mfbRow[hrKeyForApi]) || 0);
     var _mfMm = monthPowerBadgeMmDd(_mfbRow);
     var _mfSub = selItem.label + ' | ' + _mfMm;
     if (_mfSub.length > 22) {
@@ -443,7 +445,7 @@ function PowerProfileMonthCurveChart(props) {
           }}
         >
           <div style={{ fontSize: 10, fontWeight: 700, color: PP_REF_LINE, lineHeight: 1.15, WebkitFontSmoothing: 'antialiased' }}>
-            {_mfwv} W
+            {_mfwv} W / {_mfHr > 0 ? _mfHr + ' bpm' : '— bpm'}
           </div>
           <div
             style={{
