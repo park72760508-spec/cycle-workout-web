@@ -123,11 +123,10 @@ function buildMonthHeartRateCurveData(intervalHR) {
 
 // ——— 최근 1개월 심박: 클릭 가이드 + 프로스티드 배지 (RiderPowerProfileTrendCharts PowerProfileMonthCurveChart와 동일 토큰) ———
 var HR_PP_REF_LINE = '#7c3aed';
-var HR_PP_REF_STROKE_W = 9;
+var HR_PP_REF_STROKE_W = 3;
 var HR_PP_REF_DASH = '6 4';
 var HR_MONTH_PLOT_M_TOP = 52;
 var HR_MONTH_PLOT_M_R = 12;
-var HR_MONTH_PLOT_Y_W = 36;
 var HR_PP_TINT_A_BG = 0.28;
 var HR_PP_TINT_A_BORDER = 0.58;
 var HR_PP_FROST = 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 100%)';
@@ -335,7 +334,8 @@ function HeartRateProfileMonthCurveChart(props) {
       ? data[selectedXIndex].name
       : null;
 
-  function monthHrDistTooltip(tipProps) {
+  /** 호버 전용 — 프로스티 판넬(선택 고정)과 룩을 같게 하면 Recharts 툴팁이 ‘점선 따라다니는 배지’로 보임 */
+  function monthHrChartHoverTip(tipProps) {
     var active = tipProps.active;
     var payload = tipProps.payload;
     if (!active || !payload || !payload.length) return null;
@@ -343,42 +343,21 @@ function HeartRateProfileMonthCurveChart(props) {
     if (!pl) return null;
     var b = Math.round(Number(pl[dataKey]) || 0);
     var mmdd2 = monthHrChartMmDd(pl);
-    var tB = hrPpHexToRgba(selColor, HR_PP_TINT_A_BG);
-    var tBr = hrPpHexToRgba(selColor, HR_PP_TINT_A_BORDER);
-    var tP = hrPpBadgeTextStyle(selColor);
     return (
       <div
-        className="rounded-xl px-3 py-2 text-xs z-50 text-center"
         style={{
-          border: '1px solid ' + tBr,
-          background: HR_PP_FROST + ', ' + tB,
-          backdropFilter: HR_PP_BLUR,
-          WebkitBackdropFilter: HR_PP_BLUR,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4)',
+          padding: '6px 10px',
+          fontSize: 12,
+          lineHeight: 1.3,
+          color: '#334155',
+          background: 'rgba(255,255,255,0.96)',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          textAlign: 'center',
         }}
       >
-        <div
-          className="font-bold tabular-nums text-[13px] leading-tight"
-          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
-        >
-          {b} bpm
-        </div>
-        <div
-          className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium"
-          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
-        >
-          <span
-            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-            style={{
-              backgroundColor: selColor,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.25)',
-            }}
-            aria-hidden
-          />
-          <span>
-            {selItem.label} | {mmdd2}
-          </span>
-        </div>
+        {b} bpm · {selItem.label} · {mmdd2}
       </div>
     );
   }
@@ -391,25 +370,34 @@ function HeartRateProfileMonthCurveChart(props) {
     var _mhBg = hrPpHexToRgba(selColor, HR_PP_TINT_A_BG);
     var _mhBd = hrPpHexToRgba(selColor, HR_PP_TINT_A_BORDER);
     var _mhTx = hrPpBadgeTextStyle(selColor);
-    // 플롯 상단·가로 중앙 고정 — 인라인 style (CDN Tailwind가 .jsx 소스를 스캔하지 않음)
     monthHrFixedSelectBadge = (
       <div
         style={{
           position: 'absolute',
-          zIndex: 30,
-          top: HR_MONTH_PLOT_M_TOP,
-          left: HR_MONTH_PLOT_Y_W,
-          right: HR_MONTH_PLOT_M_R,
+          left: 0,
+          right: 0,
+          top: 0,
+          zIndex: 50,
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
+          boxSizing: 'border-box',
           pointerEvents: 'none',
         }}
       >
         <div
-          className="flex h-10 w-full max-w-[10.5rem] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
           style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            minHeight: 40,
+            width: '100%',
             maxWidth: 'min(10.5rem, 95%)',
+            padding: '0 6px',
+            boxSizing: 'border-box',
+            borderRadius: 10,
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             border: '1.5px solid ' + _mhBd,
             background: HR_PP_FROST + ', ' + _mhBg,
@@ -419,18 +407,40 @@ function HeartRateProfileMonthCurveChart(props) {
           }}
         >
           <div
-            className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
-            style={{ color: _mhTx.color, textShadow: _mhTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+            style={{
+              fontWeight: 700,
+              fontSize: 12,
+              fontFeatureSettings: '"tnum"',
+              lineHeight: 1,
+              letterSpacing: '-0.02em',
+              color: _mhTx.color,
+              textShadow: _mhTx.textShadow,
+              WebkitFontSmoothing: 'antialiased',
+            }}
           >
             {_mhbv} bpm
           </div>
           <div
-            className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
-            style={{ color: _mhTx.color, textShadow: _mhTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              fontSize: 9,
+              fontWeight: 500,
+              lineHeight: 1.2,
+              color: _mhTx.color,
+              textShadow: _mhTx.textShadow,
+              WebkitFontSmoothing: 'antialiased',
+            }}
           >
             <span
-              className="inline-block w-2 h-2 rounded-full flex-shrink-0"
               style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: 8,
+                flexShrink: 0,
                 backgroundColor: selColor,
                 boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
               }}
@@ -519,10 +529,7 @@ function HeartRateProfileMonthCurveChart(props) {
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
             {Tooltip ? (
-              <Tooltip
-                content={monthHrDistTooltip}
-                cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
-              />
+              <Tooltip content={monthHrChartHoverTip} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 3' }} />
             ) : null}
             <Area
               type="monotone"

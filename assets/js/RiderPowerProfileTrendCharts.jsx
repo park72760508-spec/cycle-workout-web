@@ -201,14 +201,12 @@ function PowerProfileCurveChart(props) {
 
 // ========== 최근 1개월 파워 그래프 (랭킹보드 참가자 분포와 동일: 클릭 → 세로 점선 + Stelvio식 배지; 호버 → DistTooltip) ==========
 var PP_REF_LINE = '#7c3aed';
-/** Stelvio 참가자분포 "나의 위치" 점선과 동일(픽셀 고정, Tailwind 누락·SVG 가림에도 대응) */
-/** 선택 세로 점선: 랭킹 보라(#7c3aed) + 요청에 따라 기본 3px의 3배 */
-var PP_REF_STROKE_W = 9;
+/** Stelvio StelvioRankingDistributionChart(참가자분포) ReferenceLine: stroke 3, dash 6 4, #7c3aed */
+var PP_REF_STROKE_W = 3;
 var PP_REF_DASH = '6 4';
-/** 최근 1개월 AreaChart: 배지(HTML) 위치 = margin/ Y축과 수치 동기 — 반드시 인라인 style (CDN Tailwind는 JSX 소스를 안 봄) */
+/** 최근 1개월 AreaChart: margin(선택 점선은 Recharts) */
 var MONTH_PLOT_M_TOP = 52;
 var MONTH_PLOT_M_R = 12;
-var MONTH_PLOT_Y_W = 36;
 /** 배지/툴팁: 구간색 투명 + 강한 블러로 곡선이 흐릿히 비침( 본문 대비는 ppBadgeTextStyle·서리 그라데이션으로 유지) */
 var PP_TINT_A_BG = 0.28;
 var PP_TINT_A_BORDER = 0.58;
@@ -373,7 +371,8 @@ function PowerProfileMonthCurveChart(props) {
       ? data[selectedXIndex].name
       : null;
 
-  function monthPowerDistTooltip(tipProps) {
+  /** 호버 전용(마우스를 따라다님) — 프로스티 배지와 동일 룩을 쓰면 ‘점선 따라 배지’로 오해됨. 단순 흰 툴팁만 사용. */
+  function monthPowerChartHoverTip(tipProps) {
     var active = tipProps.active;
     var payload = tipProps.payload;
     if (!active || !payload || !payload.length) return null;
@@ -381,42 +380,21 @@ function PowerProfileMonthCurveChart(props) {
     if (!pl) return null;
     var w = Math.round(Number(pl[dataKey]) || 0);
     var mmdd2 = monthPowerBadgeMmDd(pl);
-    var tB = ppHexToRgba(selColor, PP_TINT_A_BG);
-    var tBr = ppHexToRgba(selColor, PP_TINT_A_BORDER);
-    var tP = ppBadgeTextStyle(selColor);
     return (
       <div
-        className="rounded-xl px-3 py-2 text-xs z-50 text-center"
         style={{
-          border: '1px solid ' + tBr,
-          background: PP_FROST + ', ' + tB,
-          backdropFilter: PP_BLUR,
-          WebkitBackdropFilter: PP_BLUR,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4)',
+          padding: '6px 10px',
+          fontSize: 12,
+          lineHeight: 1.3,
+          color: '#334155',
+          background: 'rgba(255,255,255,0.96)',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          textAlign: 'center',
         }}
       >
-        <div
-          className="font-bold tabular-nums text-[13px] leading-tight"
-          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
-        >
-          {w} W
-        </div>
-        <div
-          className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium"
-          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
-        >
-          <span
-            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-            style={{
-              backgroundColor: selColor,
-              boxShadow: '0 0 0 1px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.25)',
-            }}
-            aria-hidden
-          />
-          <span>
-            {selItem.label} | {mmdd2}
-          </span>
-        </div>
+        {w} W · {selItem.label} · {mmdd2}
       </div>
     );
   }
@@ -429,25 +407,35 @@ function PowerProfileMonthCurveChart(props) {
     var _mfBg = ppHexToRgba(selColor, PP_TINT_A_BG);
     var _mfBd = ppHexToRgba(selColor, PP_TINT_A_BORDER);
     var _mfTx = ppBadgeTextStyle(selColor);
-    // 플롯 상단·가로 중앙 고정(세로 점선 X·SVG와 완전 분리, 클릭 점선만 이동)
+    // 그래프 영역(래퍼) 맨 위 가로 중앙 — Recharts·점선과 완전 분리(고정), 서식=기존 프로스티 배지
     monthPowerFixedSelectBadge = (
       <div
         style={{
           position: 'absolute',
-          zIndex: 30,
-          top: MONTH_PLOT_M_TOP,
-          left: MONTH_PLOT_Y_W,
-          right: MONTH_PLOT_M_R,
+          left: 0,
+          right: 0,
+          top: 0,
+          zIndex: 50,
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
+          boxSizing: 'border-box',
           pointerEvents: 'none',
         }}
       >
         <div
-          className="flex h-10 w-full max-w-[10.5rem] flex-col items-center justify-center gap-0.5 rounded-[10px] px-1.5 box-border"
           style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            minHeight: 40,
+            width: '100%',
             maxWidth: 'min(10.5rem, 95%)',
+            padding: '0 6px',
+            boxSizing: 'border-box',
+            borderRadius: 10,
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
             border: '1.5px solid ' + _mfBd,
             background: PP_FROST + ', ' + _mfBg,
@@ -457,18 +445,40 @@ function PowerProfileMonthCurveChart(props) {
           }}
         >
           <div
-            className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
-            style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+            style={{
+              fontWeight: 700,
+              fontSize: 12,
+              fontFeatureSettings: '"tnum"',
+              lineHeight: 1,
+              letterSpacing: '-0.02em',
+              color: _mfTx.color,
+              textShadow: _mfTx.textShadow,
+              WebkitFontSmoothing: 'antialiased',
+            }}
           >
             {_mfwv} W
           </div>
           <div
-            className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
-            style={{ color: _mfTx.color, textShadow: _mfTx.textShadow, WebkitFontSmoothing: 'antialiased' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              fontSize: 9,
+              fontWeight: 500,
+              lineHeight: 1.2,
+              color: _mfTx.color,
+              textShadow: _mfTx.textShadow,
+              WebkitFontSmoothing: 'antialiased',
+            }}
           >
             <span
-              className="inline-block w-2 h-2 rounded-full flex-shrink-0"
               style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: 8,
+                flexShrink: 0,
                 backgroundColor: selColor,
                 boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
               }}
@@ -558,10 +568,7 @@ function PowerProfileMonthCurveChart(props) {
               <ReferenceLine y={cohortAvgPower} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
             ) : null}
             {Tooltip ? (
-              <Tooltip
-                content={monthPowerDistTooltip}
-                cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '4 4' }}
-              />
+              <Tooltip content={monthPowerChartHoverTip} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 3' }} />
             ) : null}
             <Area
               type="monotone"
