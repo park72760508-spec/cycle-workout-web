@@ -248,7 +248,7 @@ function getIntervalMMPFromLogs(logs, numDays, numIntervals) {
  * @param {Array} logs - 훈련 로그 배열
  * @param {number} numDays - 총 일수 (기본 30)
  * @param {number} numIntervals - 구간 수 (기본 6)
- * @returns {Array<{ name, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min }>}
+ * @returns {Array<{ name, endStr, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min }>}
  */
 function getIntervalHRFromLogs(logs, numDays, numIntervals) {
   numDays = numDays || 30;
@@ -268,6 +268,7 @@ function getIntervalHRFromLogs(logs, numDays, numIntervals) {
     const name = '~' + (end.getMonth() + 1) + '/' + end.getDate();
     out.push({
       name: name,
+      endStr: endStr,
       max_hr: agg.max_hr,
       max_hr_5sec: agg.max_hr_5sec,
       max_hr_1min: agg.max_hr_1min,

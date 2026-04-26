@@ -10,6 +10,7 @@
 var ReactObj = window.React || {};
 var useState = ReactObj.useState || null;
 var useEffect = ReactObj.useEffect || null;
+var useRef = ReactObj.useRef || null;
 
 // 고유 ID 생성 (여러 차트에서 gradient ID 충돌 방지)
 let _hrChartId = 0;
@@ -36,9 +37,10 @@ var MONTH_HR_CURVE_ITEMS = [
   { api: '60min', dataKey: 'hr60min', label: '60분', color: '#22c55e' }
 ];
 
-/** 성장 트렌드 차트와 동일: PR 원·라벨 (심박) */
-function growthStyleHrPrDot(R, prIdx, prBpm, lineColor) {
+/** PR 큰 점 + bpm — 좌/우/상단 끝 잘림 방지 (최근 1개월 파워와 동일 로직) */
+function growthStyleHrPrDot(R, prIdx, prBpm, lineColor, dataLen) {
   var smallFill = lineColor || '#ec4899';
+  var len = dataLen == null || dataLen < 1 ? 1 : dataLen;
   return function(dotProps) {
     if (!R || !dotProps || dotProps.cx == null || dotProps.cy == null) return null;
     var cx = dotProps.cx;
@@ -47,13 +49,28 @@ function growthStyleHrPrDot(R, prIdx, prBpm, lineColor) {
     if (prIdx < 0 || prBpm <= 0 || idx !== prIdx) {
       return R.createElement('circle', { cx: cx, cy: cy, r: 3, fill: smallFill, stroke: '#fff', strokeWidth: 1 });
     }
-    return R.createElement(
-      'g',
-      null,
-      R.createElement('text', { x: cx, y: cy - 20, textAnchor: 'middle', fill: '#be185d', fontSize: 9, fontWeight: 'bold' }, Math.round(prBpm) + ' bpm'),
-      R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: '#ec4899', stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 }),
-      R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR')
-    );
+    var wTxt = String(Math.round(prBpm)) + ' bpm';
+    var isFirst = prIdx === 0;
+    var isLast = prIdx === len - 1 && len > 1;
+    var anchor = 'middle';
+    var tx = cx;
+    if (isFirst) {
+      anchor = 'start';
+      tx = cx + 8;
+    } else if (isLast) {
+      anchor = 'end';
+      tx = cx - 8;
+    }
+    var labelAboveY = cy - 18;
+    var useLabelBelow = labelAboveY < 12;
+    var tLab = useLabelBelow ? cy + 20 : labelAboveY;
+    var tBpm = R.createElement('text', { x: tx, y: tLab, textAnchor: anchor, fill: '#be185d', fontSize: 9, fontWeight: 'bold' }, wTxt);
+    var cBig = R.createElement('circle', { cx: cx, cy: cy, r: 11, fill: smallFill, stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 });
+    var tPr = R.createElement('text', { x: cx, y: cy, textAnchor: 'middle', dominantBaseline: 'middle', fill: '#fff', fontSize: 8, fontWeight: 'bold' }, 'PR');
+    if (useLabelBelow) {
+      return R.createElement('g', null, cBig, tPr, tBpm);
+    }
+    return R.createElement('g', null, tBpm, cBig, tPr);
   };
 }
 
@@ -94,6 +111,7 @@ function buildMonthHeartRateCurveData(intervalHR) {
   return (intervalHR || []).map(function(row) {
     return {
       name: row.name,
+      endStr: row.endStr != null && String(row.endStr).length ? String(row.endStr) : null,
       hr1min: Number(row.max_hr_1min) || 0,
       hr5min: Number(row.max_hr_5min) || 0,
       hr10min: Number(row.max_hr_10min) || 0,
@@ -102,6 +120,71 @@ function buildMonthHeartRateCurveData(intervalHR) {
       hr60min: Number(row.max_hr_60min) || 0
     };
   });
+}
+
+// ——— 최근 1개월 심박: 클릭 가이드 + 프로스티드 배지 (RiderPowerProfileTrendCharts PowerProfileMonthCurveChart와 동일 토큰) ———
+var HR_PP_SEL_BADGE_HALF = 70;
+var HR_PP_SEL_BADGE_EDGE = 6;
+var HR_PP_REF_LINE = '#7c3aed';
+var HR_PP_TINT_A_BG = 0.28;
+var HR_PP_TINT_A_BORDER = 0.58;
+var HR_PP_FROST = 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 100%)';
+var HR_PP_BLUR = 'saturate(1.2) blur(16px)';
+
+function hrPpHexToRgbParts(hex) {
+  var h = String(hex || '').replace('#', '');
+  if (h.length === 3) {
+    h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  }
+  if (h.length !== 6) return { r: 100, g: 116, b: 139 };
+  var n = parseInt(h, 16);
+  if (isNaN(n)) return { r: 100, g: 116, b: 139 };
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function hrPpHexToRgba(hex, a) {
+  var c = hrPpHexToRgbParts(hex);
+  return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + a + ')';
+}
+
+function hrPpBadgeTextStyle(hex) {
+  var c = hrPpHexToRgbParts(hex);
+  var r = c.r / 255;
+  var g = c.g / 255;
+  var b = c.b / 255;
+  var L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (L > 0.55) {
+    return {
+      color: '#0a0f1a',
+      textShadow:
+        '0 0 6px #fff, 0 0 10px #fff, 0 0 1px #fff, 0 1px 2px rgba(255,255,255,0.95), 0 1px 3px rgba(0,0,0,0.15)',
+    };
+  }
+  return {
+    color: '#fff',
+    textShadow:
+      '0 0 1px rgba(0,0,0,1), 0 1px 2px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.45), 0 0 12px rgba(0,0,0,0.35)',
+  };
+}
+
+function monthHrChartMmDd(row) {
+  if (!row) return '—';
+  var es = row.endStr;
+  if (es && String(es).length >= 8) {
+    var p = String(es).split('-');
+    if (p.length >= 3) {
+      return String(p[1]).padStart(2, '0') + '-' + String(p[2]).padStart(2, '0');
+    }
+  }
+  var nm = row.name;
+  if (nm) {
+    var s = String(nm).replace(/^\s*~\s*/, '');
+    var m = s.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      return String(m[1]).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
+    }
+  }
+  return '—';
 }
 
 // ========== 전 구간 심박 커브 차트 ==========
@@ -174,12 +257,41 @@ function HeartRateProfileMonthCurveChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var ReferenceLine = Recharts && Recharts.ReferenceLine;
+  var Tooltip = Recharts && Recharts.Tooltip;
   var cid = nextHrChartId();
   var data = monthCurveData || [];
 
   var _selState = useState('1min');
   var selectedApi = _selState[0];
   var setSelectedApi = _selState[1];
+  var _xPick = useState(null);
+  var selectedXIndex = _xPick[0];
+  var setSelectedXIndex = _xPick[1];
+  var chartWrapRef = useRef ? useRef(null) : { current: null };
+  var _cw = useState(0);
+  var chartContainerW = _cw[0];
+  var setChartContainerW = _cw[1];
+  useEffect(
+    function() {
+      var el = chartWrapRef && chartWrapRef.current;
+      if (!el) return;
+      function measure() {
+        try {
+          var r = el.getBoundingClientRect();
+          if (r && r.width) setChartContainerW(Math.max(0, Math.floor(r.width)));
+        } catch (e) {}
+      }
+      measure();
+      var ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+      if (ro) ro.observe(el);
+      window.addEventListener('resize', measure);
+      return function() {
+        if (ro) ro.disconnect();
+        window.removeEventListener('resize', measure);
+      };
+    },
+    []
+  );
 
   var selItem = MONTH_HR_CURVE_ITEMS[0];
   for (var _si = 0; _si < MONTH_HR_CURVE_ITEMS.length; _si++) {
@@ -227,8 +339,6 @@ function HeartRateProfileMonthCurveChart(props) {
     yDomainMax = yDomainMin + 20;
   }
   var ReactForDot = window.React;
-  var fillGradId = cid + '-fillSel';
-  var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
 
   if (!Recharts || !hasData) {
     return (
@@ -238,6 +348,137 @@ function HeartRateProfileMonthCurveChart(props) {
         </div>
         <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
       </DashboardCard>
+    );
+  }
+
+  var fillGradId = cid + '-fillSel';
+  var activeRing = 'ring-2 ring-blue-600 ring-offset-1 border-blue-500';
+  var refXVal =
+    selectedXIndex != null && data[selectedXIndex] && data[selectedXIndex].name != null
+      ? data[selectedXIndex].name
+      : null;
+
+  function monthHrDistTooltip(tipProps) {
+    var active = tipProps.active;
+    var payload = tipProps.payload;
+    if (!active || !payload || !payload.length) return null;
+    var pl = payload[0].payload;
+    if (!pl) return null;
+    var b = Math.round(Number(pl[dataKey]) || 0);
+    var mmdd2 = monthHrChartMmDd(pl);
+    var tB = hrPpHexToRgba(selColor, HR_PP_TINT_A_BG);
+    var tBr = hrPpHexToRgba(selColor, HR_PP_TINT_A_BORDER);
+    var tP = hrPpBadgeTextStyle(selColor);
+    return (
+      <div
+        className="rounded-xl px-3 py-2 text-xs z-50 text-center"
+        style={{
+          border: '1px solid ' + tBr,
+          background: HR_PP_FROST + ', ' + tB,
+          backdropFilter: HR_PP_BLUR,
+          WebkitBackdropFilter: HR_PP_BLUR,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4)',
+        }}
+      >
+        <div
+          className="font-bold tabular-nums text-[13px] leading-tight"
+          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
+        >
+          {b} bpm
+        </div>
+        <div
+          className="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] font-medium"
+          style={{ color: tP.color, textShadow: tP.textShadow, WebkitFontSmoothing: 'antialiased' }}
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+            style={{
+              backgroundColor: selColor,
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.25)',
+            }}
+            aria-hidden
+          />
+          <span>
+            {selItem.label} | {mmdd2}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  function ClickVerticalHrBadge(lbProps) {
+    var viewBox = lbProps.viewBox;
+    if (!viewBox) return null;
+    var lineX = viewBox.x;
+    var half = HR_PP_SEL_BADGE_HALF;
+    var edge = HR_PP_SEL_BADGE_EDGE;
+    var cx = lineX;
+    var pv = lbProps.parentViewBox;
+    var areaLeft;
+    var areaW;
+    if (pv && typeof pv.width === 'number' && pv.width > 0 && typeof pv.x === 'number') {
+      areaLeft = pv.x;
+      areaW = pv.width;
+    } else {
+      var yAxisW = 36;
+      var marginR = 12;
+      areaLeft = yAxisW;
+      areaW = Math.max(0, chartContainerW - yAxisW - marginR);
+    }
+    var minCenter = areaLeft + half + edge;
+    var maxCenter = areaLeft + areaW - half - edge;
+    if (areaW > 0 && maxCenter > minCenter) {
+      cx = Math.min(maxCenter, Math.max(minCenter, lineX));
+    }
+    var row = selectedXIndex != null && data[selectedXIndex] ? data[selectedXIndex] : null;
+    if (!row) return null;
+    var bv = Math.round(Number(row[dataKey]) || 0);
+    var mmdd = monthHrChartMmDd(row);
+    var lab = selItem.label;
+    var tintBg = hrPpHexToRgba(selColor, HR_PP_TINT_A_BG);
+    var tintBd = hrPpHexToRgba(selColor, HR_PP_TINT_A_BORDER);
+    var txP = hrPpBadgeTextStyle(selColor);
+    return (
+      <g filter={'url(#' + cid + '-pp-sel-shadow)'}>
+        <foreignObject x={cx - half} y={6} width={half * 2} height="40" style={{ overflow: 'visible' }}>
+          <div
+            xmlns="http://www.w3.org/1999/xhtml"
+            className="flex h-[40px] w-full flex-col items-center justify-center gap-0.5 px-1.5 box-border"
+            style={{
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              borderRadius: 10,
+              border: '1.5px solid ' + tintBd,
+              background: HR_PP_FROST + ', ' + tintBg,
+              backdropFilter: HR_PP_BLUR,
+              WebkitBackdropFilter: HR_PP_BLUR,
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
+            }}
+          >
+            <div
+              className="font-bold text-[12px] tabular-nums leading-none tracking-tight"
+              style={{ color: txP.color, textShadow: txP.textShadow, WebkitFontSmoothing: 'antialiased' }}
+            >
+              {bv} bpm
+            </div>
+            <div
+              className="flex items-center justify-center gap-1 text-[9px] font-medium leading-tight"
+              style={{ color: txP.color, textShadow: txP.textShadow, WebkitFontSmoothing: 'antialiased' }}
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: selColor,
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 1px 2px rgba(0,0,0,0.25)',
+                }}
+                aria-hidden
+              />
+              <span>
+                {lab} | {mmdd}
+              </span>
+            </div>
+          </div>
+        </foreignObject>
+      </g>
     );
   }
 
@@ -252,7 +493,7 @@ function HeartRateProfileMonthCurveChart(props) {
               <button
                 key={it.api}
                 type="button"
-                onClick={function() { setSelectedApi(it.api); }}
+                onClick={function() { setSelectedApi(it.api); setSelectedXIndex(null); }}
                 className={
                   'relative flex items-center justify-center rounded-full min-w-[1.75rem] h-7 px-0.5 text-[9px] sm:text-[10px] font-bold text-white shadow-sm border transition ' +
                   (active ? activeRing : 'border-white/30 hover:brightness-95')
@@ -275,20 +516,49 @@ function HeartRateProfileMonthCurveChart(props) {
           </span>
         </div>
       </div>
-      <div className={(isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') + ' -mx-2'}>
+      <div
+        ref={chartWrapRef}
+        className={
+          (isFullWidth ? 'h-[min(180px,45vw)] sm:h-[180px]' : 'h-[min(140px,31.5vw)] sm:h-[140px]') +
+          ' -mx-2 min-h-0 w-full [&_.recharts-responsive-container]:leading-[0] [&_svg]:block'
+        }
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 26, right: 12, left: 0, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 52, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={selColor} stopOpacity={0.35} />
                 <stop offset="100%" stopColor={selColor} stopOpacity={0} />
               </linearGradient>
+              <filter id={cid + '-pp-sel-shadow'} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.12" />
+              </filter>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="name" interval={0} tickMargin={6} stroke="#6b7280" tick={(function() { var len = data.length; var fs = 11; return function(props) { var x = props.x, y = props.y, payload = props.payload, index = props.index; var isLast = index === len - 1; return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value); }; })()} />
+            <XAxis
+              dataKey="name"
+              interval={0}
+              tickMargin={6}
+              stroke="#6b7280"
+              tick={(function() {
+                var len = data.length;
+                var fs = 11;
+                return function(tickProps) {
+                  var x = tickProps.x;
+                  var y = tickProps.y;
+                  var payload = tickProps.payload;
+                  var index = tickProps.index;
+                  var isLast = index === len - 1;
+                  return React.createElement('text', { x: x, y: y, dy: 4, textAnchor: isLast ? 'end' : 'middle', fill: '#6b7280', fontSize: fs }, payload && payload.value);
+                };
+              })()}
+            />
             <YAxis width={36} tick={{ fontSize: 11 }} stroke="#6b7280" tickFormatter={function(v) { return String(v); }} domain={[yDomainMin, yDomainMax]} />
             {cohortAvgHr != null && cohortAvgHr > 0 && ReferenceLine ? (
               <ReferenceLine y={cohortAvgHr} stroke="#9ca3af" strokeWidth={2} strokeDasharray="6 4" />
+            ) : null}
+            {Tooltip ? (
+              <Tooltip content={monthHrDistTooltip} cursor={{ stroke: HR_PP_REF_LINE, strokeWidth: 1, strokeDasharray: '4 4' }} />
             ) : null}
             <Area
               type="monotone"
@@ -297,9 +567,25 @@ function HeartRateProfileMonthCurveChart(props) {
               fill={'url(#' + fillGradId + ')'}
               strokeWidth={2}
               name={selItem.label + ' 심박'}
-              dot={growthStyleHrPrDot(ReactForDot, prIdx, prBpm, selColor)}
+              dot={growthStyleHrPrDot(ReactForDot, prIdx, prBpm, selColor, data.length)}
               connectNulls
+              onClick={function(_d, i) {
+                if (i == null || !data[i]) return;
+                setSelectedXIndex(function(prev) {
+                  return prev === i ? null : i;
+                });
+              }}
             />
+            {refXVal != null && ReferenceLine ? (
+              <ReferenceLine
+                x={refXVal}
+                stroke={HR_PP_REF_LINE}
+                strokeWidth={3}
+                strokeDasharray="6 4"
+                isFront={true}
+                label={function(lp) { return React.createElement(ClickVerticalHrBadge, lp); }}
+              />
+            ) : null}
           </AreaChart>
         </ResponsiveContainer>
       </div>
