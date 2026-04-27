@@ -5697,6 +5697,12 @@ if (fs.existsSync(libPath)) {
     if (naverSubscription && naverSubscription.onIndoorLogCreatedReward) {
       exports.onIndoorLogCreatedReward = naverSubscription.onIndoorLogCreatedReward;
     }
+    if (naverSubscription && naverSubscription.verifyMeetingAttendance) {
+      exports.verifyMeetingAttendance = naverSubscription.verifyMeetingAttendance;
+    }
+    if (naverSubscription && naverSubscription.scheduledRideAttendanceVerification) {
+      exports.scheduledRideAttendanceVerification = naverSubscription.scheduledRideAttendanceVerification;
+    }
   } catch (e) {
     console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
   }
