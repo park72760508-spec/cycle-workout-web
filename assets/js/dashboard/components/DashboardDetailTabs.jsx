@@ -205,6 +205,22 @@
         return React.createElement(
           'div',
           { className: 'space-y-6' },
+          /* 훈련 부하 트렌드 (TSS) — 최근 훈련 탭 최상단 */
+          logsLoading ? React.createElement(
+            DashboardCard,
+            { title: '훈련 부하 트렌드 (TSS)' },
+            React.createElement('div', { className: 'h-[200px] flex flex-col items-center justify-center' },
+              React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
+              React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
+            )
+          ) : logsLoadError ? React.createElement(
+            DashboardCard,
+            { title: '훈련 부하 트렌드 (TSS)' },
+            React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
+          ) : TrainingLoadTssTrendChart && React.createElement(TrainingLoadTssTrendChart, {
+            data: weeklyTssTrendData,
+            weeklyGoalTss: Number(stats.weeklyGoal) > 0 ? Number(stats.weeklyGoal) : 225
+          }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: '훈련 트렌드 (최근 1개월)' },
@@ -255,21 +271,6 @@
             { title: '나의 성장 트렌드' },
             React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
           ) : GrowthTrendChart && React.createElement(GrowthTrendChart, { data: growthTrendData, userProfile: userProfile }),
-          logsLoading ? React.createElement(
-            DashboardCard,
-            { title: '훈련 부하 트렌드 (TSS)' },
-            React.createElement('div', { className: 'h-[200px] flex flex-col items-center justify-center' },
-              React.createElement('div', { className: 'w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3' }),
-              React.createElement('span', { className: 'text-sm text-gray-500' }, '로딩 중...')
-            )
-          ) : logsLoadError ? React.createElement(
-            DashboardCard,
-            { title: '훈련 부하 트렌드 (TSS)' },
-            React.createElement('div', { className: 'flex flex-col items-center justify-center py-6 text-gray-500 text-sm' }, '로그 로드 실패')
-          ) : TrainingLoadTssTrendChart && React.createElement(TrainingLoadTssTrendChart, {
-            data: weeklyTssTrendData,
-            weeklyGoalTss: Number(stats.weeklyGoal) > 0 ? Number(stats.weeklyGoal) : 225
-          }),
           logsLoading ? React.createElement(
             DashboardCard,
             { title: 'VO₂max 트렌드' },
