@@ -5657,10 +5657,7 @@ function OpenRidingDetail(props) {
   var reviewParticipantsStravaCumulativeKm = _revCum[0];
   var setReviewParticipantsStravaCumulativeKm = _revCum[1];
 
-  /* 참석 검증 결과 맵: { [userId]: "ATTENDED" | "MISSED" } — attendanceVerificationRan 이후 로드 */
-  var _attMap = useState(null);
-  var attendanceStatusMap = _attMap[0];
-  var setAttendanceStatusMap = _attMap[1];
+  /* 참석 검증 결과 맵: ride.attendanceResults 에서 직접 읽음 (별도 쿼리 불필요) */
 
   /** Snapshot updates change ride reference; review fetch effect deps use primitives only. */
   var rideYmdRv = ride ? getRideDateSeoulYmd(ride) : '';
@@ -5695,43 +5692,8 @@ function OpenRidingDetail(props) {
       setReviewMergedLog(null);
       setReviewMergedLogSource(null);
       setReviewParticipantsStravaCumulativeKm(null);
-      setAttendanceStatusMap(null);
     },
     [rideId]
-  );
-
-  /* 참가자 목록 펼침 + 검증 완료 시 meeting_participants에서 참석 결과 로드 */
-  useEffect(
-    function () {
-      if (!participantListExpanded || !attVerRan || !rideId) return undefined;
-      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
-      if (!db) return undefined;
-      var cancelled = false;
-      import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
-        .then(function (mod) {
-          if (cancelled) return;
-          var q = mod.query(
-            mod.collection(db, 'meeting_participants'),
-            mod.where('meetingId', '==', rideId)
-          );
-          return mod.getDocs(q).then(function (snap) {
-            if (cancelled) return;
-            var map = {};
-            snap.docs.forEach(function (d) {
-              var data = d.data();
-              var uid = String(data.userId || '').trim();
-              var status = String(data.status || '').trim();
-              if (uid && (status === 'ATTENDED' || status === 'MISSED')) {
-                map[uid] = status;
-              }
-            });
-            setAttendanceStatusMap(map);
-          });
-        })
-        .catch(function () {});
-      return function () { cancelled = true; };
-    },
-    [participantListExpanded, attVerRan, rideId]
   );
 
   useEffect(
@@ -6870,11 +6832,12 @@ function OpenRidingDetail(props) {
                   <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
                     {parts.map(function (uid, idx) {
                       var suf = participantListPhoneSuffix(uid);
-                      /* attendanceStatusMap이 로드됨(null이 아닌 객체)이면 검증 완료 기준 적용 */
-                      var mapLoaded = attendanceStatusMap !== null && typeof attendanceStatusMap === 'object';
-                      var attStatus = mapLoaded ? (attendanceStatusMap[String(uid)] || null) : null;
-                      /* attVerRan이고 맵이 로드됐는데 이 uid가 없으면 → Strava 미연동/토큰 만료로 SKIPPED */
-                      var attSkipped = attVerRan && mapLoaded && attStatus === null;
+                      /* ride.attendanceResults 맵에서 직접 읽기 (별도 쿼리 불필요) */
+                      var attResultsMap = attVerRan && ride.attendanceResults && typeof ride.attendanceResults === 'object'
+                        ? ride.attendanceResults : null;
+                      var attStatus = attResultsMap ? (attResultsMap[String(uid)] || null) : null;
+                      /* attVerRan이고 맵은 있는데 이 uid 결과가 없으면 → SKIPPED */
+                      var attSkipped = attVerRan && attResultsMap !== null && attStatus === null;
                       return (
                         <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
                           <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
