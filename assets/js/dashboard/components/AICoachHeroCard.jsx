@@ -149,10 +149,40 @@
         React.createElement('div', { className: 'flex flex-col items-center' },
           React.createElement('div', { className: 'mb-6' }, CircularEl),
           React.createElement('div', { className: 'text-center mb-1' },
-            React.createElement('span', {
-              className: 'text-sm font-semibold px-3 py-1 rounded-full',
+            React.createElement('button', {
+              type: 'button',
+              title: '클릭하여 AI 컨디션 분석 다시 실행',
+              onClick: function() {
+                try {
+                  var uid = String((userProfile && userProfile.id) || '');
+                  if (uid) {
+                    Object.keys(localStorage).forEach(function(k) {
+                      if (k.indexOf('stelvio_dashboard_ai_coach_') === 0 && k.indexOf('_' + uid + '_') !== -1) {
+                        localStorage.removeItem(k);
+                      }
+                    });
+                  }
+                } catch (e) {}
+                if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
+                if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
+              },
+              className: 'inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1 rounded-full border-none cursor-pointer transition-opacity hover:opacity-70 active:scale-95',
               style: { backgroundColor: colors.bg, color: colors.fill }
-            }, coachData.training_status || 'Building Base')
+            },
+              coachData.training_status || 'Building Base',
+              React.createElement('svg', {
+                xmlns: 'http://www.w3.org/2000/svg',
+                viewBox: '0 0 16 16',
+                fill: 'currentColor',
+                style: { width: 11, height: 11, opacity: 0.7, flexShrink: 0 }
+              },
+                React.createElement('path', {
+                  fillRule: 'evenodd',
+                  d: 'M13.836 2.477a.75.75 0 0 1 .75.75v3.182a.75.75 0 0 1-.75.75h-3.182a.75.75 0 0 1 0-1.5h1.37l-.84-.841a4.5 4.5 0 0 0-7.08 1.01.75.75 0 0 1-1.3-.75 6 6 0 0 1 9.44-1.348l.842.841V3.227a.75.75 0 0 1 .75-.75Zm-.911 7.5A.75.75 0 0 1 13.199 11a6 6 0 0 1-9.44 1.348l-.842-.841v1.175a.75.75 0 0 1-1.5 0V9.5a.75.75 0 0 1 .75-.75h3.182a.75.75 0 0 1 0 1.5H4.013l.841.841a4.5 4.5 0 0 0 7.08-1.011.75.75 0 0 1 1.39.897Z',
+                  clipRule: 'evenodd'
+                })
+              )
+            )
           ),
           (coachData.vo2max_estimate != null && coachData.vo2max_estimate > 0) && React.createElement('div', { className: 'text-xs text-gray-500 mb-6' },
             'VO₂max 추정: ' + coachData.vo2max_estimate + ' ml/kg/min'
