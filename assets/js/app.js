@@ -12553,9 +12553,14 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     
     const basisBlock = hasBasis ? `
 
-🎯 **[최우선] 오늘의 AI 컨디션 분석 추천 훈련 타입: "${basisRaw}"**
-- 반드시 **${basisCategory}** 카테고리에 부합하는 워크아웃만 3개 추천하세요. 이 타입을 벗어난 훈련은 추천하지 마세요.
-- 위 추천 타입을 기준으로, 아래 **훈련 목적·등급 가중**을 적용해 구체 워크아웃을 선정하세요.
+🎯 **[절대 준수 — 카테고리 고정] 오늘의 AI 컨디션 분석 결과: "${basisRaw}"**
+- 시스템이 컨디션 점수·TSS 부하율을 분석하여 오늘의 훈련 카테고리를 **"${basisCategory}"**로 이미 결정했습니다.
+- **이 카테고리 범위를 벗어난 워크아웃은 절대 추천하지 마세요.**
+  - Recovery → Z1~Z2 수준만 허용 (고강도/VO2Max/Threshold 추천 금지)
+  - Endurance → Z2~Z3 수준만 허용
+  - Tempo/SweetSpot → Z3~Z4 수준만 허용
+  - VO2Max/Threshold → Z4~Z5 수준만 허용
+- 위 카테고리 내에서 훈련 목적(${challenge})과 등급(${grade})을 적용해 구체적인 워크아웃 3개를 선정하세요.
 - 훈련 목적(challenge): **${challenge}**. ${challengeWeightNote}
 - 등급(grade): **${grade}**. ${gradeWeightNote}
 ` : '';
@@ -13029,9 +13034,9 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
         }],
         generationConfig: {
           maxOutputTokens: MAX_OUTPUT_TOKENS,
-          temperature: 0.7,
-          topP: 0.8,
-          topK: 40
+          temperature: 0.2,   // 0.7 → 0.2: 워크아웃 카테고리 일관성 확보
+          topP: 0.85,
+          topK: 20
         }
       });
     } catch (apiError) {

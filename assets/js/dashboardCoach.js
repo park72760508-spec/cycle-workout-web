@@ -44,6 +44,83 @@ function oneLogPerDayPreferStravaForCoach(logs) {
   return result;
 }
 
+/**
+ * conditionScore + TSS 부하율 + 최근 고강도 빈도를 기반으로
+ * 워크아웃 카테고리를 결정론적으로 선결정합니다.
+ * AI가 자유롭게 카테고리를 선택하지 못하도록 범위를 좁히는 역할.
+ *
+ * @param {number} conditionScore - 0~100
+ * @param {number} last7DaysTSS  - 최근 7일 TSS 합계
+ * @param {number} weeklyTSS     - 주간 평균 TSS (30일 기준)
+ * @param {Array}  recentLogs    - 중복 제거된 훈련 로그
+ * @returns {{ category: string, allowedWorkouts: string[], reason: string }}
+ */
+function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, weeklyTSS, recentLogs) {
+  // 최근 2일 내 고강도 훈련 횟수 (TSS 80 이상)
+  var recentHighIntensityCount = 0;
+  if (recentLogs && recentLogs.length > 0) {
+    var now = new Date();
+    var cutoffDates = [];
+    for (var di = 1; di <= 2; di++) {
+      var dd = new Date(now);
+      dd.setDate(dd.getDate() - di);
+      cutoffDates.push(
+        dd.getFullYear() + '-' +
+        String(dd.getMonth() + 1).padStart(2, '0') + '-' +
+        String(dd.getDate()).padStart(2, '0')
+      );
+    }
+    for (var li = 0; li < recentLogs.length; li++) {
+      var log = recentLogs[li];
+      var logDate = '';
+      if (log.completed_at) logDate = String(log.completed_at).split('T')[0];
+      else if (log.date) {
+        var ld = log.date;
+        if (ld && typeof ld.toDate === 'function') ld = ld.toDate();
+        logDate = ld ? String(ld instanceof Date ? ld.toISOString() : ld).split('T')[0] : '';
+      }
+      if (cutoffDates.indexOf(logDate) !== -1 && (Number(log.tss) || 0) >= 80) {
+        recentHighIntensityCount++;
+      }
+    }
+  }
+
+  // TSS 부하율: 최근 7일 / 주간 평균. 주간 평균이 0이면 1.0으로 처리
+  var tssLoadRatio = (weeklyTSS > 0) ? (last7DaysTSS / weeklyTSS) : 1.0;
+
+  // ── 규칙 기반 카테고리 결정 ──────────────────────────────────────
+  // 회복 우선: 컨디션 낮거나 / 부하 과다 / 연속 고강도
+  if (conditionScore < 62 || tssLoadRatio > 1.35 || recentHighIntensityCount >= 2) {
+    return {
+      category: 'recovery',
+      allowedWorkouts: ['Active Recovery (Z1)', 'Easy Endurance (Z2)'],
+      reason: '컨디션 점수(' + conditionScore + '점) 또는 최근 훈련 부하(7일 TSS ' + last7DaysTSS + '점)를 고려해 회복 훈련을 권장합니다.'
+    };
+  }
+  // 지구력: 컨디션 보통 또는 부하가 약간 높음
+  if (conditionScore < 73 || tssLoadRatio > 1.10) {
+    return {
+      category: 'endurance',
+      allowedWorkouts: ['Endurance (Z2)', 'Sweet Spot (Low)', 'Tempo (Z3)'],
+      reason: '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 지구력 훈련을 권장합니다.'
+    };
+  }
+  // 고강도: 컨디션 우수 + 부하 여유 있음
+  if (conditionScore >= 82 && tssLoadRatio <= 0.80) {
+    return {
+      category: 'high_intensity',
+      allowedWorkouts: ['VO2 Max (Z5)', 'Threshold (Z4)', 'Anaerobic Capacity (Z6)'],
+      reason: '컨디션이 우수(' + conditionScore + '점)하고 훈련 부하에 여유가 있어 고강도 훈련을 권장합니다.'
+    };
+  }
+  // 템포: 그 외 (일반적인 상태)
+  return {
+    category: 'tempo',
+    allowedWorkouts: ['Sweet Spot (Z3-Z4)', 'Threshold (Low, Z4)', 'Tempo Training (Z3)'],
+    reason: '안정적인 컨디션(' + conditionScore + '점)으로 템포/스위트스팟 훈련이 적합합니다.'
+  };
+}
+
 /** 저사양/모바일 감지: 타임아웃·재시도 연장용 */
 function isLowSpecOrMobile() {
   if (typeof window !== 'undefined' && typeof window.isMobile === 'function' && window.isMobile()) return true;
@@ -124,6 +201,12 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
         ? window.computeVo2maxEstimate(userProfile)
         : 40;
 
+  // ── 규칙 기반 워크아웃 카테고리 선결정 ─────────────────────────
+  // AI가 자유롭게 카테고리를 선택하지 못하도록 클라이언트 측에서 먼저 결정
+  var workoutDecision = determineDeterministicWorkoutCategory(
+    conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs
+  );
+
   // 시스템 프롬프트 가져오기
   const systemPrompt = window.GEMINI_COACH_SYSTEM_PROMPT || `
 Role: 당신은 'Stelvio AI'의 수석 사이클링 코치이자 데이터 분석가입니다.
@@ -169,7 +252,10 @@ Output Format (JSON Only):
     .replace(/\{\{last7DaysTSS\}\}/g, String(last7DaysTSS))
     .replace(/\{\{weeklyTSS\}\}/g, String(weeklyTSS))
     .replace(/\{\{conditionScore\}\}/g, String(conditionScoreForPrompt))
-    .replace(/\{\{calculatedVO2Max\}\}/g, String(calculatedVO2Max));
+    .replace(/\{\{calculatedVO2Max\}\}/g, String(calculatedVO2Max))
+    .replace(/\{\{determinedWorkoutCategory\}\}/g, workoutDecision.category)
+    .replace(/\{\{workoutCategoryReason\}\}/g, workoutDecision.reason)
+    .replace(/\{\{allowedWorkoutTypes\}\}/g, workoutDecision.allowedWorkouts.map(function(w){ return '"' + w + '"'; }).join(', '));
 
   // 모델 설정
   let modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
@@ -183,9 +269,9 @@ Output Format (JSON Only):
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
       maxOutputTokens: 8192,
-      temperature: 0.7,
-      topP: 0.8,
-      topK: 40
+      temperature: 0.2,   // 0.7 → 0.2: 추천 일관성 확보 (코치 코멘트는 랜덤성이 낮아야 신뢰도 유지)
+      topP: 0.85,
+      topK: 20
     }
   };
   const onChunk = opts.onChunk || null;
