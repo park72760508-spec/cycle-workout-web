@@ -6870,7 +6870,11 @@ function OpenRidingDetail(props) {
                   <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
                     {parts.map(function (uid, idx) {
                       var suf = participantListPhoneSuffix(uid);
-                      var attStatus = attendanceStatusMap != null ? (attendanceStatusMap[String(uid)] || null) : null;
+                      /* attendanceStatusMap이 로드됨(null이 아닌 객체)이면 검증 완료 기준 적용 */
+                      var mapLoaded = attendanceStatusMap !== null && typeof attendanceStatusMap === 'object';
+                      var attStatus = mapLoaded ? (attendanceStatusMap[String(uid)] || null) : null;
+                      /* attVerRan이고 맵이 로드됐는데 이 uid가 없으면 → Strava 미연동/토큰 만료로 SKIPPED */
+                      var attSkipped = attVerRan && mapLoaded && attStatus === null;
                       return (
                         <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
                           <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
@@ -6889,6 +6893,13 @@ function OpenRidingDetail(props) {
                               title="Strava 활동으로 참석이 확인되지 않았습니다"
                             >
                               ❌ 미참석
+                            </span>
+                          ) : attSkipped ? (
+                            <span
+                              className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-slate-50 border border-slate-200 px-1.5 py-0 text-[10px] font-medium text-slate-400 leading-4"
+                              title="Strava 연동 없음 또는 토큰 만료로 확인 불가"
+                            >
+                              ❓ 미확인
                             </span>
                           ) : null}
                         </li>
