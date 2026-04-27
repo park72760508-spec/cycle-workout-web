@@ -15834,13 +15834,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         });
         i = startIdx - 1;
       }
-      /* 오래된 순(좌→우)으로 정렬 후 tick·라벨 설정 */
+      /* 오래된 순(좌→우)으로 정렬 — 4주 모드는 모든 눈금에 날짜·값 표시 */
       out.reverse();
-      var totalBlocks = out.length;
-      out.forEach(function (block, bucketIdx) {
-        var showTick = bucketIdx % 2 === 0 || bucketIdx === totalBlocks - 1;
-        block.weekLabel = showTick ? tssWeekLabelFromSortKey(block.sortKey) : '';
-        block.showValueLabel = showTick;
+      out.forEach(function (block) {
+        block.weekLabel = tssWeekLabelFromSortKey(block.sortKey);
+        block.showValueLabel = true;
       });
       return out;
     }
@@ -15932,6 +15930,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           var goalLegendLabel = tssGranularity === 'month' ? '4주 목표 TSS' : '목표 TSS';
           var tssLegendLabel = tssGranularity === 'month' ? '4주 TSS 합계' : '1주 TSS 합계';
 
+          var isFourWeekMode = tssGranularity === 'month';
           var tssLabelPlugin = {
             id: 'tssValueLabels',
             afterDatasetsDraw: function (chart) {
@@ -15940,7 +15939,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               var dataset = chart.data && chart.data.datasets && chart.data.datasets[1];
               var values = dataset && dataset.data ? dataset.data : [];
               chart.ctx.save();
-              chart.ctx.font = '11px sans-serif';
+              chart.ctx.font = isFourWeekMode ? 'bold 11px sans-serif' : '11px sans-serif';
               chart.ctx.fillStyle = 'rgba(21, 128, 61, 0.92)';
               chart.ctx.textAlign = 'center';
               meta.data.forEach(function (point, idx) {
@@ -15949,9 +15948,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 if (!row || !row.showValueLabel) return;
                 var value = values[idx];
                 if (value == null || isNaN(value)) return;
+                var displayText = isFourWeekMode
+                  ? Math.round(value).toLocaleString('ko-KR')
+                  : String(Math.round(value));
                 var y = point.y - 10;
                 if (y < 0) y = point.y + 16;
-                chart.ctx.fillText(String(Math.round(value)), point.x, y);
+                chart.ctx.fillText(displayText, point.x, y);
               });
               chart.ctx.restore();
             }
