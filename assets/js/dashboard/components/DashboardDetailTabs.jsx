@@ -487,29 +487,50 @@
               type: 'button',
               role: 'tab',
               'aria-selected': isActive,
-              onClick: function() {
-                setActiveIndex(i);
-                setTimeout(function() {
-                  /* 탭 버튼 가로 스크롤 */
-                  var refs = tabRefs.current;
-                  if (refs && Array.isArray(refs)) {
-                    var targetIdx = i <= 1 ? 0 : 3;
-                    var el = refs[targetIdx];
-                    if (el && typeof el.scrollIntoView === 'function') {
-                      el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
+              onClick: (function(clickedI) {
+                return function() {
+                  setActiveIndex(clickedI);
+                  setTimeout(function() {
+                    /* 탭 버튼 가로 스크롤 */
+                    var refs = tabRefs.current;
+                    if (refs && Array.isArray(refs)) {
+                      var targetIdx = clickedI <= 1 ? 0 : 3;
+                      var el = refs[targetIdx];
+                      if (el && typeof el.scrollIntoView === 'function') {
+                        try {
+                          el.scrollIntoView({ inline: targetIdx === 0 ? 'start' : 'end', block: 'nearest', behavior: 'smooth' });
+                        } catch (e) { el.scrollIntoView(false); }
+                      }
                     }
-                  }
-                  /* 탭 컨테이너 최상단으로 세로 스크롤 */
-                  var container = containerRef.current;
-                  if (container) {
+                    /* 세로 스크롤: 탭 컨테이너 상단 — iOS/Android 호환 */
+                    var container = containerRef.current;
+                    if (!container) return;
+                    /* 1순위: scrollIntoView — iOS Safari 포함 모든 모바일 지원 */
+                    if (typeof container.scrollIntoView === 'function') {
+                      try {
+                        container.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                        return;
+                      } catch (e1) {
+                        try { container.scrollIntoView(true); return; } catch (e2) {}
+                      }
+                    }
+                    /* 2순위: window.scrollTo — iOS 구형은 options 미지원 → 수동 fallback */
+                    var scrollTop = window.pageYOffset
+                      || (document.documentElement ? document.documentElement.scrollTop : 0)
+                      || (document.body ? document.body.scrollTop : 0)
+                      || 0;
                     var rect = container.getBoundingClientRect();
-                    var scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-                    var targetY = scrollTop + rect.top - 8;
-                    if (targetY < scrollTop) targetY = scrollTop;
-                    window.scrollTo({ top: targetY, behavior: 'smooth' });
-                  }
-                }, 50);
-              },
+                    var targetY = Math.max(0, scrollTop + rect.top - 8);
+                    try {
+                      window.scrollTo({ top: targetY, behavior: 'smooth' });
+                    } catch (e3) {
+                      window.scrollTo(0, targetY);
+                      try { document.documentElement.scrollTop = targetY; } catch (e4) {}
+                      try { document.body.scrollTop = targetY; } catch (e5) {}
+                    }
+                  }, 80);
+                };
+              })(i),
               className:
                 'flex-shrink-0 px-4 py-2.5 text-sm transition-all duration-200 rounded-[10px] ' +
                 (isActive
