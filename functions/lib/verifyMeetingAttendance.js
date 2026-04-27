@@ -448,17 +448,20 @@ async function verifyOneParticipant(db, p, meetingMs, meetLat, meetLng, clientSe
  */
 async function findStravaActivityIdViaApi(accessToken, rideDateYmd) {
     try {
-        const parts = rideDateYmd.split('-').map(Number);
-        if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+        const parts = rideDateYmd.split("-").map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN))
+            return null;
         const [y, m, d] = parts;
         /* 서울 자정(KST 00:00) = UTC 전날 15:00 */
         const afterSec = Math.floor(Date.UTC(y, m - 1, d - 1, 15, 0, 0) / 1000);
         const beforeSec = Math.floor(Date.UTC(y, m - 1, d, 15, 0, 0) / 1000);
         const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterSec}&before=${beforeSec}&per_page=10`;
         const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-        if (!res.ok) return null;
-        const activities = await res.json();
-        if (!Array.isArray(activities) || activities.length === 0) return null;
+        if (!res.ok)
+            return null;
+        const activities = (await res.json());
+        if (!Array.isArray(activities) || activities.length === 0)
+            return null;
         const first = activities[0];
         return first?.id != null ? String(first.id) : null;
     }
@@ -491,7 +494,7 @@ async function verifyOneParticipantTimeOnly(db, p, rideYmd, meetingMs, clientSec
         }
     }
     if (!stravaActivityId) {
-        /* 토큰도 없고 활동도 없으면 SKIPPED, 토큰은 있는데 활동 없으면 MISSED */
+        /* 토큰도 없고 Firestore 로그도 없으면 SKIPPED, 그 외엔 MISSED */
         if (!accessToken) {
             return {
                 batchUpdate: null,
@@ -715,6 +718,16 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
         details,
     };
     if (rideSnap.exists && !meetingSnap.exists) {
+        /* 개인별 결과를 rides 문서에 직접 저장 → 클라이언트 별도 쿼리 불필요 */
+        const attendanceResults = {};
+        for (const d of result.details) {
+            if (d.userId) {
+                attendanceResults[d.userId] =
+                    d.outcome === 'ATTENDED' ? 'ATTENDED'
+                    : d.outcome === 'MISSED' ? 'MISSED'
+                    : 'SKIPPED';
+            }
+        }
         await rideRef.set({
             attendanceVerificationRan: true,
             attendanceVerificationAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -724,6 +737,7 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
                 missedCount: result.missedCount,
                 skippedCount: result.skippedCount,
             },
+            attendanceResults,
         }, { merge: true });
     }
     return result;
