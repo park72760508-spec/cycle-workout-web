@@ -12524,18 +12524,60 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     // 이력은 모두 사용하여 정확한 분석 (최대 30개)
     const limitedHistory = historySummary.slice(0, 30);
     
-    // 대시보드 '추천: X' 기반 추천 시 타입 → 카테고리 매핑
+    // ── 컨디션 점수 확보 ─────────────────────────────────────────────
+    // 1순위: 사용자가 직접 선택한 컨디션 점수 (options.userConditionScore)
+    // 2순위: computeConditionScore 공통 모듈
+    // 3순위: todayCondition 문자열 → 근사값 매핑
+    let effectiveConditionScore = userConditionScore;
+    if (effectiveConditionScore == null) {
+      if (typeof window.computeConditionScore === 'function') {
+        try {
+          const userForScore = { age: user.age, gender: user.gender, challenge: user.challenge, ftp: user.ftp, weight: user.weight };
+          const logsForScore = recentHistory.slice();
+          const deduped = typeof window.dedupeLogsForConditionScore === 'function'
+            ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
+          const csResult = window.computeConditionScore(userForScore, deduped, todayStr);
+          effectiveConditionScore = Math.max(50, Math.min(100, csResult.score));
+        } catch (e) { effectiveConditionScore = null; }
+      }
+    }
+    if (effectiveConditionScore == null) {
+      const conditionScoreMap = { '최상': 90, '좋음': 78, '보통': 65, '나쁨': 52 };
+      effectiveConditionScore = conditionScoreMap[todayCondition] || 65;
+    }
+
+    // ── 대시보드 코치 추천 기반 OR 규칙 기반 카테고리 결정 ──────────────
+    // 대시보드에서 coachData.recommended_workout이 전달된 경우 → 해당 카테고리 우선
+    // 직접 진입(워크아웃 화면 독립 실행) 시 → determineDeterministicWorkoutCategory 동일 규칙 적용
     const basisRaw = options.basisRecommendedWorkout ? String(options.basisRecommendedWorkout).trim() : '';
     let basisCategory = '';
+    let deterministicDecision = null;
+
     if (basisRaw) {
+      // 대시보드 코치에서 전달된 추천 타입 → 카테고리 매핑
       if (/Z1|Active Recovery|Recovery/i.test(basisRaw)) basisCategory = 'Recovery';
       else if (/Z2|Endurance/i.test(basisRaw)) basisCategory = 'Endurance';
       else if (/Z3|Tempo/i.test(basisRaw)) basisCategory = 'Tempo';
       else if (/Z4|Threshold/i.test(basisRaw)) basisCategory = 'Threshold';
       else if (/Z5|VO2max|VO2Max/i.test(basisRaw)) basisCategory = 'VO2Max';
       else if (/SweetSpot/i.test(basisRaw)) basisCategory = 'SweetSpot';
+    } else {
+      // 직접 진입: dashboardCoach.js와 동일한 규칙 기반 카테고리 선결정
+      if (typeof window.determineDeterministicWorkoutCategory === 'function') {
+        deterministicDecision = window.determineDeterministicWorkoutCategory(
+          effectiveConditionScore, last7DaysTSS, weeklyTSS, recentHistory
+        );
+        // deterministicDecision.category → basisCategory 매핑
+        const catMap = {
+          'recovery':       'Recovery',
+          'endurance':      'Endurance',
+          'tempo':          'Tempo',
+          'high_intensity': 'VO2Max'
+        };
+        basisCategory = catMap[deterministicDecision.category] || 'Endurance';
+      }
     }
-    const hasBasis = !!basisCategory && !!basisRaw;
+    const hasBasis = !!basisCategory;
     
     // 훈련 목적·등급 가중: Elite/PRO > Racing > GranFondo > Fitness. Grade 1·3 = 관리자(고급 워크아웃 선호)
     const gradeWeightNote = (grade === '1' || grade === '3')
@@ -12551,15 +12593,30 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
             ? '훈련 목적 IronMan: 안정적 파워 유지·근지구력 중심. Base/Endurance 60~70%, SweetSpot/Tempo 20~30%, VO2Max 5~10%. 스프린트·무산소 제외.'
             : '훈련 목적 Fitness: 지속 가능한 중강도 훈련에 가중.';
     
+    // basisBlock 라벨: 대시보드 코치 경유 vs 독립 진입 구분
+    const basisSourceLabel = basisRaw
+      ? `대시보드 AI 컨디션 분석 결과: "${basisRaw}"`
+      : (deterministicDecision
+          ? `규칙 기반 분석 결과 — 컨디션 ${effectiveConditionScore}점, 최근7일 TSS ${last7DaysTSS}점 / 주간평균 ${weeklyTSS}점`
+          : '');
+    const basisReasonLabel = deterministicDecision
+      ? deterministicDecision.reason
+      : '대시보드 AI 코치 추천 카테고리를 기반으로 세부 워크아웃을 선정합니다.';
+    const allowedZoneGuide = basisCategory === 'Recovery'
+      ? 'Z1~Z2 수준만 허용 (고강도/VO2Max/Threshold 추천 금지)'
+      : basisCategory === 'Endurance'
+        ? 'Z2~Z3 수준만 허용'
+        : (basisCategory === 'Tempo' || basisCategory === 'SweetSpot')
+          ? 'Z3~Z4 수준만 허용'
+          : 'Z4~Z5 수준만 허용 (Recovery/Endurance 추천 금지)';
+
     const basisBlock = hasBasis ? `
 
-🎯 **[절대 준수 — 카테고리 고정] 오늘의 AI 컨디션 분석 결과: "${basisRaw}"**
-- 시스템이 컨디션 점수·TSS 부하율을 분석하여 오늘의 훈련 카테고리를 **"${basisCategory}"**로 이미 결정했습니다.
+🎯 **[절대 준수 — 카테고리 고정] ${basisSourceLabel}**
+- 결정 근거: ${basisReasonLabel}
+- 시스템이 위 데이터를 분석하여 오늘의 훈련 카테고리를 **"${basisCategory}"**로 확정했습니다.
 - **이 카테고리 범위를 벗어난 워크아웃은 절대 추천하지 마세요.**
-  - Recovery → Z1~Z2 수준만 허용 (고강도/VO2Max/Threshold 추천 금지)
-  - Endurance → Z2~Z3 수준만 허용
-  - Tempo/SweetSpot → Z3~Z4 수준만 허용
-  - VO2Max/Threshold → Z4~Z5 수준만 허용
+  - ${basisCategory}: ${allowedZoneGuide}
 - 위 카테고리 내에서 훈련 목적(${challenge})과 등급(${grade})을 적용해 구체적인 워크아웃 3개를 선정하세요.
 - 훈련 목적(challenge): **${challenge}**. ${challengeWeightNote}
 - 등급(grade): **${grade}**. ${gradeWeightNote}
