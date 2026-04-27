@@ -240,12 +240,12 @@
               }, '다시 시도')
             )
           ) : TrainingTrendChart && React.createElement(TrainingTrendChart, { data: fitnessData }),
-          RiderTimeInZonesCharts && React.createElement(RiderTimeInZonesCharts, {
+          RiderHeartRateProfileTrendCharts && React.createElement(RiderHeartRateProfileTrendCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
             recentLogs: recentLogs
           }),
-          RiderHeartRateProfileTrendCharts && React.createElement(RiderHeartRateProfileTrendCharts, {
+          RiderTimeInZonesCharts && React.createElement(RiderTimeInZonesCharts, {
             DashboardCard: DashboardCard,
             userProfile: userProfile,
             recentLogs: recentLogs
