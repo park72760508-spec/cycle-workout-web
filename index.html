@@ -15930,7 +15930,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           setTssHoverIdx(lastIx);
 
           var goalLegendLabel = tssGranularity === 'month' ? '4주 목표 TSS' : '목표 TSS';
-          var tssLegendLabel = tssGranularity === 'month' ? '4주 TSS 합계' : '주간 TSS 합계';
+          var tssLegendLabel = tssGranularity === 'month' ? '4주 TSS 합계' : '1주 TSS 합계';
 
           var tssLabelPlugin = {
             id: 'tssValueLabels',
@@ -16149,7 +16149,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       ? 'bg-violet-600 text-white border-violet-600'
                       : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
                 },
-                '주단위'
+                '1주'
               ),
               React.createElement(
                 'button',
@@ -16164,7 +16164,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                       ? 'bg-violet-600 text-white border-violet-600'
                       : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
                 },
-                '월단위'
+                '4주'
               )
             )
           ),
@@ -16175,7 +16175,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var row = displayData[gi];
             var tssVal = Math.round(Number(row.tss) || 0);
             var mode = row.tssPanelMode || tssGranularity;
-            var subPre = mode === 'month' ? '월간' : '주간';
+            var subPre = mode === 'month' ? '4주' : '1주';
             var subRest =
               tssFormatMmDd(row.tssPanelStart) + ' ~ ' + tssFormatMmDd(row.tssPanelEnd);
             var gSub = subPre + ' | ' + subRest;
