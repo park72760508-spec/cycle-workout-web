@@ -698,6 +698,7 @@ export function createVerifyMeetingAttendance(stravaClientSecret: SecretParam) {
   return onCall(
     {
       region: "asia-northeast3",
+      cors: true,          /* stelvio.ai.kr 등 모든 오리진 허용 — CORS preflight 오류 방지 */
       secrets: [stravaClientSecret],
       timeoutSeconds: 540,
       memory: "512MiB",
