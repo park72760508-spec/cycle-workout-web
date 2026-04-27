@@ -15806,32 +15806,42 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var p = String(sk).split('-');
       return parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
     }
-    /** 30주 배열(과거→현재)을 4주 묶음으로 합산 — 좌측이 가장 오래된 블록 */
+    /**
+     * 주간 배열(과거→현재)을 오늘 기준으로 뒤에서부터 4주(28일)씩 역방향으로 묶어 합산.
+     * 가장 최근 블록이 항상 today-27 ~ today 가 되도록 보장.
+     */
     function tssAggregateFourWeekBlocks(weeklyRows) {
       if (!weeklyRows || weeklyRows.length === 0) return [];
-      var out = [];
-      var i = 0;
       var n = weeklyRows.length;
-      while (i < n) {
-        var endIdx = Math.min(i + 3, n - 1);
+      var out = [];
+      /* 뒤(오늘)에서 앞(과거)으로 4주씩 묶기 */
+      var i = n - 1;
+      while (i >= 0) {
+        var startIdx = Math.max(0, i - 3);
         var sum = 0;
         var j;
-        for (j = i; j <= endIdx; j++) sum += Number(weeklyRows[j].tss) || 0;
-        var first = weeklyRows[i];
-        var last = weeklyRows[endIdx];
-        var bucketIdx = out.length;
-        var showTick = bucketIdx % 2 === 0 || endIdx === n - 1;
+        for (j = startIdx; j <= i; j++) sum += Number(weeklyRows[j].tss) || 0;
+        var first = weeklyRows[startIdx];
+        var last = weeklyRows[i];
         out.push({
-          weekLabel: showTick ? tssWeekLabelFromSortKey(last.sortKey) : '',
+          weekLabel: '',        /* 역순 정렬 후 재설정 */
           tss: Math.round(sum),
           sortKey: last.sortKey,
-          showValueLabel: showTick,
+          showValueLabel: false,
           tssPanelMode: 'month',
           tssPanelStart: tssWeekStartIsoFromEndIso(first.sortKey),
           tssPanelEnd: last.sortKey
         });
-        i = endIdx + 1;
+        i = startIdx - 1;
       }
+      /* 오래된 순(좌→우)으로 정렬 후 tick·라벨 설정 */
+      out.reverse();
+      var totalBlocks = out.length;
+      out.forEach(function (block, bucketIdx) {
+        var showTick = bucketIdx % 2 === 0 || bucketIdx === totalBlocks - 1;
+        block.weekLabel = showTick ? tssWeekLabelFromSortKey(block.sortKey) : '';
+        block.showValueLabel = showTick;
+      });
       return out;
     }
     function tssEnrichWeeklyDisplayRows(weeklyRows) {
