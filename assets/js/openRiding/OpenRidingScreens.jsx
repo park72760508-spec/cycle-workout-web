@@ -5657,6 +5657,11 @@ function OpenRidingDetail(props) {
   var reviewParticipantsStravaCumulativeKm = _revCum[0];
   var setReviewParticipantsStravaCumulativeKm = _revCum[1];
 
+  /* 참석 검증 결과 맵: { [userId]: "ATTENDED" | "MISSED" } — attendanceVerificationRan 이후 로드 */
+  var _attMap = useState(null);
+  var attendanceStatusMap = _attMap[0];
+  var setAttendanceStatusMap = _attMap[1];
+
   /** Snapshot updates change ride reference; review fetch effect deps use primitives only. */
   var rideYmdRv = ride ? getRideDateSeoulYmd(ride) : '';
   var rideStatusRv = ride ? String(ride.rideStatus || 'active') : '';
@@ -5675,6 +5680,8 @@ function OpenRidingDetail(props) {
     ride && ride.distance != null && Number.isFinite(Number(ride.distance)) ? Number(ride.distance) : null;
   var hStableRv = openRidingHostPublicSummaryStableKey(ride && ride.hostPublicReviewSummary);
   var todayRv = getTodaySeoulYmd();
+  /* 참석 검증 완료 여부 (primitive — useEffect deps 안정) */
+  var attVerRan = !!(ride && ride.attendanceVerificationRan === true);
 
   useEffect(
     function () {
@@ -5688,8 +5695,43 @@ function OpenRidingDetail(props) {
       setReviewMergedLog(null);
       setReviewMergedLogSource(null);
       setReviewParticipantsStravaCumulativeKm(null);
+      setAttendanceStatusMap(null);
     },
     [rideId]
+  );
+
+  /* 참가자 목록 펼침 + 검증 완료 시 meeting_participants에서 참석 결과 로드 */
+  useEffect(
+    function () {
+      if (!participantListExpanded || !attVerRan || !rideId) return undefined;
+      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      if (!db) return undefined;
+      var cancelled = false;
+      import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
+        .then(function (mod) {
+          if (cancelled) return;
+          var q = mod.query(
+            mod.collection(db, 'meeting_participants'),
+            mod.where('meetingId', '==', rideId)
+          );
+          return mod.getDocs(q).then(function (snap) {
+            if (cancelled) return;
+            var map = {};
+            snap.docs.forEach(function (d) {
+              var data = d.data();
+              var uid = String(data.userId || '').trim();
+              var status = String(data.status || '').trim();
+              if (uid && (status === 'ATTENDED' || status === 'MISSED')) {
+                map[uid] = status;
+              }
+            });
+            setAttendanceStatusMap(map);
+          });
+        })
+        .catch(function () {});
+      return function () { cancelled = true; };
+    },
+    [participantListExpanded, attVerRan, rideId]
   );
 
   useEffect(
@@ -6816,18 +6858,39 @@ function OpenRidingDetail(props) {
               aria-labelledby="open-riding-participant-toggle"
             >
               <div>
-                <p className="text-xs font-medium text-slate-600 mb-1">참석 확정 ({parts.length}명)</p>
+                <p className="text-xs font-medium text-slate-600 mb-1">
+                  참석 확정 ({parts.length}명)
+                  {attVerRan ? (
+                    <span className="ml-1.5 text-[10px] font-normal text-slate-400">· Strava 참석 검증 완료</span>
+                  ) : null}
+                </p>
                 {parts.length === 0 ? (
                   <p className="text-xs text-slate-400">아직 없습니다.</p>
                 ) : (
                   <ol className="list-none text-sm text-slate-700 space-y-1.5 pl-0">
                     {parts.map(function (uid, idx) {
                       var suf = participantListPhoneSuffix(uid);
+                      var attStatus = attendanceStatusMap != null ? (attendanceStatusMap[String(uid)] || null) : null;
                       return (
-                        <li key={String(uid) + '-p'}>
+                        <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
                           <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
                           <span>{participantRowName(uid, '참가자')}</span>
                           {suf ? <span className="text-slate-600">{suf}</span> : null}
+                          {attStatus === 'ATTENDED' ? (
+                            <span
+                              className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-emerald-50 border border-emerald-200 px-1.5 py-0 text-[10px] font-medium text-emerald-700 leading-4"
+                              title="Strava 활동으로 참석이 확인되었습니다"
+                            >
+                              ✅ 참석
+                            </span>
+                          ) : attStatus === 'MISSED' ? (
+                            <span
+                              className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-red-50 border border-red-200 px-1.5 py-0 text-[10px] font-medium text-red-600 leading-4"
+                              title="Strava 활동으로 참석이 확인되지 않았습니다"
+                            >
+                              ❌ 미참석
+                            </span>
+                          ) : null}
                         </li>
                       );
                     })}
