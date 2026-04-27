@@ -117,6 +117,7 @@
         var initApp = appMod && appMod.initializeApp;
         var getAuthFn = authMod && authMod.getAuth;
         var setPersistenceFn = authMod && authMod.setPersistence;
+        var browserLocalPersistence = authMod && authMod.browserLocalPersistence;
         var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
         var initFirestore = firestoreMod && firestoreMod.initializeFirestore;
         if (typeof initApp !== 'function' || typeof getAuthFn !== 'function' || typeof initFirestore !== 'function') {
@@ -124,11 +125,17 @@
         }
         var appV9 = initApp(firebaseConfig, 'authV9');
         authV9 = getAuthFn(appV9);
-        if (typeof setPersistenceFn === 'function' && browserSessionPersistence) {
-          setPersistenceFn(authV9, browserSessionPersistence).catch(function(e) {
-            if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence 실패:', e && e.message);
-            else console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
-          });
+        /* 초기 persistence: "로그인 상태 유지" 선택 시 LOCAL, 미선택 시 SESSION
+         * enforceAuthPersistence()도 동일 키를 읽어 적용 */
+        if (typeof setPersistenceFn === 'function') {
+          var _wantsLocal = (function() { try { return localStorage.getItem('stelvio_auth_persist_local') === '1'; } catch(e) { return false; } })();
+          var _initPersistence = _wantsLocal ? browserLocalPersistence : browserSessionPersistence;
+          if (_initPersistence) {
+            setPersistenceFn(authV9, _initPersistence).catch(function(e) {
+              if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[Firebase v9] setPersistence 실패:', e && e.message);
+              else console.warn('[Firebase v9] setPersistence 실패:', e && e.message);
+            });
+          }
         }
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 Auth 초기화');
         else console.log('✅ Firebase v9 Auth 초기화');
@@ -12101,6 +12108,26 @@
         console.log('🔐 로그인 시도:', { email: email, phone: phone, formattedPhone: formattedPhone });
         
         try {
+            // 🔒 로그인 상태 유지 체크박스 → Firebase persistence 적용
+            var _rememberCb = document.getElementById('authRememberLogin');
+            var _wantsRemember = _rememberCb && _rememberCb.checked;
+            try { localStorage.setItem('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
+            try {
+              var _authModP = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+              var _setPersistP = _authModP && _authModP.setPersistence;
+              var _localP = _authModP && _authModP.browserLocalPersistence;
+              var _sessionP = _authModP && _authModP.browserSessionPersistence;
+              if (typeof _setPersistP === 'function') {
+                if (window.authV9) await _setPersistP(window.authV9, _wantsRemember ? _localP : _sessionP).catch(function(){});
+                if (window.auth && typeof window.auth.setPersistence === 'function' && window.firebase && window.firebase.auth && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
+                  await window.auth.setPersistence(_wantsRemember ? window.firebase.auth.Auth.Persistence.LOCAL : window.firebase.auth.Auth.Persistence.SESSION).catch(function(){});
+                }
+              }
+              console.log('[Auth] setPersistence:', _wantsRemember ? 'LOCAL (상태 유지)' : 'SESSION (이번 세션만)');
+            } catch(persistErr) {
+              console.warn('[Auth] setPersistence 실패 (무시):', persistErr && persistErr.message);
+            }
+
             // 🔒 Firebase v9/v8 분기: authV9가 undefined면 v9 호출 시 SDK 내부 구조분해 에러 발생 → v8 폴백
             var userCredential = null;
             var usedV9ForLogin = false;
