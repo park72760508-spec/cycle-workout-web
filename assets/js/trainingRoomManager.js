@@ -191,31 +191,42 @@ function pollForAuthV9(maxWaitMs) {
 }
 
 /**
- * Auth 로컬 영속성 강제 (Galaxy Tab Desktop Mode 등 저장소 이슈 완화)
- * setPersistence(LOCAL) 실패 시 무시 (제한된 환경).
+ * Auth 영속성 적용:
+ * "로그인 상태 유지" 체크 시 LOCAL (앱 재시작 후에도 유지),
+ * 미체크 시 SESSION (현재 세션만 유지 — 앱 종료 시 로그아웃).
+ * localStorage 'stelvio_auth_persist_local' 키로 선택 여부를 공유.
  */
 async function enforceAuthPersistence() {
+  var wantsLocal = (function() {
+    try { return localStorage.getItem('stelvio_auth_persist_local') === '1'; } catch(e) { return false; }
+  })();
+  var persistLabel = wantsLocal ? 'LOCAL (상태 유지)' : 'SESSION (세션만)';
   try {
     if (window.firebase && typeof window.firebase.auth === 'function') {
       const auth = window.firebase.auth();
       if (auth && typeof auth.setPersistence === 'function' && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
-        await auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION);
-        console.log('[Auth Ready] setPersistence(SESSION) applied (compat, 공용 기기 보안)');
+        var compatPersist = wantsLocal
+          ? window.firebase.auth.Auth.Persistence.LOCAL
+          : window.firebase.auth.Auth.Persistence.SESSION;
+        await auth.setPersistence(compatPersist);
+        console.log('[Auth Ready] setPersistence(' + persistLabel + ') applied (compat)');
       }
     }
   } catch (e) {
-    console.warn('[Auth Ready] setPersistence(SESSION) failed (compat):', e?.message);
+    console.warn('[Auth Ready] setPersistence failed (compat):', e?.message);
   }
   try {
     if (window.authV9) {
       var authMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
       var setPersistence = authMod && authMod.setPersistence;
+      var browserLocalPersistence = authMod && authMod.browserLocalPersistence;
       var browserSessionPersistence = authMod && authMod.browserSessionPersistence;
-      if (setPersistence && browserSessionPersistence) await setPersistence(window.authV9, browserSessionPersistence);
-      console.log('[Auth Ready] setPersistence(SESSION) applied (v9, 공용 기기 보안)');
+      var targetPersistence = wantsLocal ? browserLocalPersistence : browserSessionPersistence;
+      if (setPersistence && targetPersistence) await setPersistence(window.authV9, targetPersistence);
+      console.log('[Auth Ready] setPersistence(' + persistLabel + ') applied (v9)');
     }
   } catch (e) {
-    console.warn('[Auth Ready] setPersistence(SESSION) failed (v9):', e?.message);
+    console.warn('[Auth Ready] setPersistence failed (v9):', e?.message);
   }
 }
 
