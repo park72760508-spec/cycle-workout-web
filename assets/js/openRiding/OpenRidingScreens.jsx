@@ -5497,7 +5497,7 @@ function OpenRidingRideReviewSummaryContent(props) {
   if (participantsStravaCumulativeKm !== undefined) {
     var ckm = Number(participantsStravaCumulativeKm);
     cumRow = {
-      label: '함께 달린 거리',
+      label: '참석자 합산 거리',
       value:
         participantsStravaCumulativeKm != null && Number.isFinite(ckm)
           ? ckm.toFixed(1) + ' km'
@@ -5542,7 +5542,7 @@ function OpenRidingRideReviewSummaryContent(props) {
           {rows.map(function (r) {
             return (
               <tr key={r.label} className="border-b border-slate-100 last:border-b-0">
-                <th className="text-left py-2 px-3 font-medium text-slate-600 align-middle w-[42%]">{r.label}</th>
+                <th className="text-left py-2 px-3 font-medium text-slate-600 align-middle whitespace-nowrap w-[48%]">{r.label}</th>
                 <td className="py-2 px-3 text-slate-800 font-semibold text-right tabular-nums align-middle">{r.value}</td>
               </tr>
             );
