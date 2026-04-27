@@ -475,12 +475,41 @@ async function verifyOneParticipant(
 }
 
 /**
+ * Strava API로 직접 해당 서울 날짜의 활동 ID 조회 (Firestore 로그 미동기화 시 폴백).
+ * 서울 날짜 YYYY-MM-DD → UTC epoch 범위: 전날 15:00 UTC ~ 당일 15:00 UTC.
+ */
+async function findStravaActivityIdViaApi(
+  accessToken: string,
+  rideDateYmd: string
+): Promise<string | null> {
+  try {
+    const parts = rideDateYmd.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+    const [y, m, d] = parts;
+    /* 서울 자정(KST 00:00) = UTC 전날 15:00 */
+    const afterSec = Math.floor(Date.UTC(y, m - 1, d - 1, 15, 0, 0) / 1000);
+    const beforeSec = Math.floor(Date.UTC(y, m - 1, d, 15, 0, 0) / 1000);
+    const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterSec}&before=${beforeSec}&per_page=10`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return null;
+    const activities = (await res.json()) as Array<{ id?: number | string }>;
+    if (!Array.isArray(activities) || activities.length === 0) return null;
+    const first = activities[0];
+    return first?.id != null ? String(first.id) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 집결 좌표가 없을 때 시각만으로 참석 검증.
- * Strava 활동 시작 시각이 모임 시각 ±1시간 이내 → ATTENDED, 없거나 범위 초과 → MISSED.
+ * Strava 로그가 앱에 동기화되지 않은 경우 Strava API 직접 조회로 폴백.
+ * 활동 시작 시각이 모임 시각 ±1시간 이내 → ATTENDED, 없거나 범위 초과 → MISSED.
  */
 async function verifyOneParticipantTimeOnly(
   db: admin.firestore.Firestore,
   p: ParticipantDoc,
+  rideYmd: string | null,
   meetingMs: number,
   clientSecret: string,
   eventIdForDocs: string
@@ -491,19 +520,37 @@ async function verifyOneParticipantTimeOnly(
   const baseDetail = { userId: p.userId, participantDocId: p.docId } as const;
   const docMeta = { meetingId: eventIdForDocs, userId: p.userId };
 
-  if (!p.stravaActivityId) {
-    return {
-      batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
-      detail: { ...baseDetail, outcome: "MISSED", note: "NO_STRAVA_ACTIVITY_ID" },
-    };
-  }
-
+  /* 먼저 액세스 토큰 확보 (Strava API 폴백에도 필요) */
   let accessToken: string | null = null;
   try {
     accessToken = await getValidStravaAccessToken(db, p.userId, clientSecret);
   } catch (e) {
     console.warn(`[verifyMeetingAttendance] 토큰 조회 예외(시각검증) user=${p.userId}:`, (e as Error).message);
   }
+
+  /* 활동 ID: Firestore 로그 우선, 없으면 Strava API 직접 조회 */
+  let stravaActivityId = p.stravaActivityId;
+  if (!stravaActivityId && accessToken && rideYmd) {
+    stravaActivityId = await findStravaActivityIdViaApi(accessToken, rideYmd);
+    if (stravaActivityId) {
+      console.log(`[verifyMeetingAttendance] Strava API 폴백으로 활동 발견 user=${p.userId} activityId=${stravaActivityId}`);
+    }
+  }
+
+  if (!stravaActivityId) {
+    /* 토큰도 없고 Firestore 로그도 없으면 SKIPPED, 그 외엔 MISSED */
+    if (!accessToken) {
+      return {
+        batchUpdate: null,
+        detail: { ...baseDetail, outcome: "SKIPPED", note: "NO_STRAVA_ACCESS_TOKEN" },
+      };
+    }
+    return {
+      batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
+      detail: { ...baseDetail, outcome: "MISSED", note: "NO_STRAVA_ACTIVITY_FOUND" },
+    };
+  }
+
   if (!accessToken) {
     return {
       batchUpdate: null,
@@ -512,7 +559,7 @@ async function verifyOneParticipantTimeOnly(
   }
 
   try {
-    const start = await fetchStravaActivityStart(accessToken, p.stravaActivityId);
+    const start = await fetchStravaActivityStart(accessToken, stravaActivityId);
     if (!start) {
       return {
         batchUpdate: null,
@@ -625,6 +672,7 @@ export async function executeVerifyAttendanceForEventId(
   let startLL: { lat: number; lng: number } | null = null;
   let participants: ParticipantDoc[] = [];
   let noGeoMode = false; /* rides 문서에 집결 좌표가 없을 때 true → 시각만 검증 */
+  let ridesDateYmd: string | null = null; /* rides 날짜 (시각만 검증 폴백에 전달) */
 
   if (meetingSnap.exists) {
     const meetingData = meetingSnap.data() || {};
@@ -659,6 +707,7 @@ export async function executeVerifyAttendanceForEventId(
     if (!rideYmd) {
       throw new HttpsError("failed-precondition", "rides 문서의 date 필드가 유효하지 않습니다.");
     }
+    ridesDateYmd = rideYmd;
     if (!startLL) {
       /* 집결 좌표 없음 → 시각만 검증 모드로 전환 (에러 없이 계속 진행) */
       console.warn(`[verifyMeetingAttendance] rides/${meetingId}: 집결 좌표 없음 → 시각만 검증 모드로 진행`);
@@ -706,7 +755,7 @@ export async function executeVerifyAttendanceForEventId(
     participants.map((p) =>
       startLL
         ? verifyOneParticipant(db, p, meetingMs!, startLL.lat, startLL.lng, clientSecretTrim, meetingId)
-        : verifyOneParticipantTimeOnly(db, p, meetingMs!, clientSecretTrim, meetingId)
+        : verifyOneParticipantTimeOnly(db, p, ridesDateYmd, meetingMs!, clientSecretTrim, meetingId)
     )
   );
 
