@@ -442,6 +442,62 @@ async function verifyOneParticipant(db, p, meetingMs, meetLat, meetLng, clientSe
         };
     }
 }
+/**
+ * 집결 좌표가 없을 때 시각만으로 참석 검증.
+ * Strava 활동 시작 시각이 모임 시각 ±1시간 이내 → ATTENDED, 없거나 범위 초과 → MISSED.
+ */
+async function verifyOneParticipantTimeOnly(db, p, meetingMs, clientSecret, eventIdForDocs) {
+    const baseDetail = { userId: p.userId, participantDocId: p.docId };
+    const docMeta = { meetingId: eventIdForDocs, userId: p.userId };
+    if (!p.stravaActivityId) {
+        return {
+            batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
+            detail: { ...baseDetail, outcome: "MISSED", note: "NO_STRAVA_ACTIVITY_ID" },
+        };
+    }
+    let accessToken = null;
+    try {
+        accessToken = await getValidStravaAccessToken(db, p.userId, clientSecret);
+    }
+    catch (e) {
+        console.warn(`[verifyMeetingAttendance] 토큰 조회 예외(시각검증) user=${p.userId}:`, e.message);
+    }
+    if (!accessToken) {
+        return {
+            batchUpdate: null,
+            detail: { ...baseDetail, outcome: "SKIPPED", note: "NO_STRAVA_ACCESS_TOKEN" },
+        };
+    }
+    try {
+        const start = await fetchStravaActivityStart(accessToken, p.stravaActivityId);
+        if (!start) {
+            return {
+                batchUpdate: null,
+                detail: { ...baseDetail, outcome: "SKIPPED", note: "ACTIVITY_DETAIL_FAILED" },
+            };
+        }
+        const windowStart = meetingMs - MEETING_TIME_WINDOW_MS;
+        const windowEnd = meetingMs + MEETING_TIME_WINDOW_MS;
+        if (start.startMs >= windowStart && start.startMs <= windowEnd) {
+            return {
+                batchUpdate: { ref: p.ref, status: "ATTENDED", ...docMeta },
+                detail: { ...baseDetail, outcome: "ATTENDED", note: "TIME_ONLY_VERIFIED" },
+            };
+        }
+        return {
+            batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
+            detail: { ...baseDetail, outcome: "MISSED", note: "OUTSIDE_TIME_WINDOW" },
+        };
+    }
+    catch (e) {
+        const msg = e.message || "UNKNOWN";
+        console.warn(`[verifyMeetingAttendance] 시각검증 실패 user=${p.userId}:`, msg);
+        return {
+            batchUpdate: null,
+            detail: { ...baseDetail, outcome: "SKIPPED", note: `ERROR:${msg}` },
+        };
+    }
+}
 function getTodaySeoulYmdString() {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Seoul",
@@ -515,6 +571,7 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
     let meetingMs = null;
     let startLL = null;
     let participants = [];
+    let noGeoMode = false; /* rides 문서에 집결 좌표가 없을 때 true → 시각만 검증 */
     if (meetingSnap.exists) {
         const meetingData = meetingSnap.data() || {};
         hostUserId = String(meetingData.hostUserId || "").trim();
@@ -547,7 +604,9 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
             throw new https_1.HttpsError("failed-precondition", "rides 문서의 date 필드가 유효하지 않습니다.");
         }
         if (!startLL) {
-            throw new https_1.HttpsError("failed-precondition", "오픈 라이딩 참석 검증을 하려면 rides 문서에 집결 좌표가 필요합니다. 예: departureLatitude, departureLongitude (숫자) 또는 GeoPoint departureGeo.");
+            /* 집결 좌표 없음 → 시각만 검증 모드로 전환 (에러 없이 계속 진행) */
+            console.warn(`[verifyMeetingAttendance] rides/${meetingId}: 집결 좌표 없음 → 시각만 검증 모드로 진행`);
+            noGeoMode = true;
         }
         const uidList = (Array.isArray(rideData.participants) ? rideData.participants : [])
             .map((x) => String(x != null ? x : "").trim())
@@ -578,10 +637,12 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
     if (meetingMs == null) {
         throw new https_1.HttpsError("failed-precondition", "모임(또는 라이딩) 기준 시각을 계산할 수 없습니다.");
     }
-    if (!startLL) {
+    if (!startLL && !noGeoMode) {
         throw new https_1.HttpsError("failed-precondition", "집결 좌표(startLatLng 등)가 유효하지 않습니다.");
     }
-    const results = await Promise.all(participants.map((p) => verifyOneParticipant(db, p, meetingMs, startLL.lat, startLL.lng, clientSecretTrim, meetingId)));
+    const results = await Promise.all(participants.map((p) => startLL
+        ? verifyOneParticipant(db, p, meetingMs, startLL.lat, startLL.lng, clientSecretTrim, meetingId)
+        : verifyOneParticipantTimeOnly(db, p, meetingMs, clientSecretTrim, meetingId)));
     const batchUpdates = [];
     const details = [];
     let attendedCount = 0;
@@ -631,7 +692,7 @@ async function executeVerifyAttendanceForEventId(db, eventId, clientSecretTrim, 
 function createVerifyMeetingAttendance(stravaClientSecret) {
     return (0, https_1.onCall)({
         region: "asia-northeast3",
-        cors: true,        /* stelvio.ai.kr 등 모든 오리진 허용 — CORS preflight 오류 방지 */
+        cors: true, /* stelvio.ai.kr 등 모든 오리진 허용 — CORS preflight 오류 방지 */
         secrets: [stravaClientSecret],
         timeoutSeconds: 540,
         memory: "512MiB",
