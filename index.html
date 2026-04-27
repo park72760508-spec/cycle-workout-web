@@ -126,9 +126,21 @@
         var appV9 = initApp(firebaseConfig, 'authV9');
         authV9 = getAuthFn(appV9);
         /* 초기 persistence: "로그인 상태 유지" 선택 시 LOCAL, 미선택 시 SESSION
-         * enforceAuthPersistence()도 동일 키를 읽어 적용 */
+         * enforceAuthPersistence()도 동일 키를 읽어 적용.
+         * localStorage 소실 대비 cookie fallback 병행 */
         if (typeof setPersistenceFn === 'function') {
-          var _wantsLocal = (function() { try { return localStorage.getItem('stelvio_auth_persist_local') === '1'; } catch(e) { return false; } })();
+          var _wantsLocal = (function() {
+            try { var v = localStorage.getItem('stelvio_auth_persist_local'); if (v != null) return v === '1'; } catch(e) {}
+            try {
+              var _nameEQ = 'sl_stelvio_auth_persist_local=';
+              var _ca = document.cookie.split(';');
+              for (var _i = 0; _i < _ca.length; _i++) {
+                var _c = _ca[_i].trim();
+                if (_c.indexOf(_nameEQ) === 0) return decodeURIComponent(_c.substring(_nameEQ.length)) === '1';
+              }
+            } catch(e2) {}
+            return false;
+          })();
           var _initPersistence = _wantsLocal ? browserLocalPersistence : browserSessionPersistence;
           if (_initPersistence) {
             setPersistenceFn(authV9, _initPersistence).catch(function(e) {
@@ -11996,8 +12008,59 @@
 
     window.STELVIO_AUTH_REMEMBER_KEY = 'stelvio_remember_login_v1';
 
+    /* ── Cookie 보조 저장소 헬퍼 ──────────────────────────────────────────
+     * iOS는 저장공간 부족·ITP·Safari 데이터 삭제 등으로 localStorage가
+     * 앱 재시작 시 소실되는 경우가 있음. 쿠키는 이런 상황에서도 안정적.
+     * localStorage → 실패·비어있음 → cookie fallback 순서로 읽기/쓰기.
+     * ──────────────────────────────────────────────────────────────────── */
+    window._stelvioSetCookie = function(name, value, days) {
+      try {
+        var expires = '';
+        if (days) {
+          var d = new Date();
+          d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+          expires = '; expires=' + d.toUTCString();
+        }
+        document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Lax';
+      } catch(e) {}
+    };
+    window._stelvioGetCookie = function(name) {
+      try {
+        var nameEQ = name + '=';
+        var ca = document.cookie.split(';');
+        for (var i = 0; i < ca.length; i++) {
+          var c = ca[i].trim();
+          if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length));
+        }
+      } catch(e) {}
+      return null;
+    };
+    window._stelvioDelCookie = function(name) {
+      try { document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax'; } catch(e) {}
+    };
+    /* localStorage + cookie 동시 읽기: localStorage 우선, 없으면 cookie */
+    window._stelvioStorageGet = function(key) {
+      try {
+        var v = localStorage.getItem(key);
+        if (v != null) return v;
+      } catch(e) {}
+      return window._stelvioGetCookie('sl_' + key);
+    };
+    /* localStorage + cookie 동시 쓰기 (cookie 30일) */
+    window._stelvioStorageSet = function(key, value) {
+      try { localStorage.setItem(key, value); } catch(e) {}
+      window._stelvioSetCookie('sl_' + key, value, 30);
+    };
+    /* localStorage + cookie 동시 삭제 */
+    window._stelvioStorageDel = function(key) {
+      try { localStorage.removeItem(key); } catch(e) {}
+      window._stelvioDelCookie('sl_' + key);
+    };
+
     window.clearAuthRememberCredentials = function() {
-      try { localStorage.removeItem(window.STELVIO_AUTH_REMEMBER_KEY); } catch (e) {}
+      window._stelvioStorageDel(window.STELVIO_AUTH_REMEMBER_KEY);
+      /* persist 플래그도 함께 초기화 */
+      window._stelvioStorageSet('stelvio_auth_persist_local', '0');
     };
 
     window.restoreAuthRememberCredentials = function() {
@@ -12006,9 +12069,10 @@
       var cb = document.getElementById('authRememberLogin');
       if (!phoneInput || !passwordInput || !cb) return;
       try {
-        var raw = localStorage.getItem(window.STELVIO_AUTH_REMEMBER_KEY);
+        var raw = window._stelvioStorageGet(window.STELVIO_AUTH_REMEMBER_KEY);
         if (!raw) {
           cb.checked = false;
+          console.log('[AuthRemember] 저장된 자격증명 없음 (localStorage+cookie 모두 비어있음)');
           return;
         }
         var o = JSON.parse(raw);
@@ -12022,8 +12086,10 @@
         if (window.formatPhoneNumber) {
           phoneInput.value = window.formatPhoneNumber(phoneInput.value);
         }
+        console.log('[AuthRemember] 자격증명 복원 완료 (source:', window._stelvioGetCookie('sl_' + window.STELVIO_AUTH_REMEMBER_KEY) ? 'cookie' : 'localStorage', ')');
       } catch (err) {
         cb.checked = false;
+        console.warn('[AuthRemember] 자격증명 복원 실패:', err && err.message);
       }
     };
 
@@ -12039,11 +12105,14 @@
         if (normalized.length === 11 && normalized.indexOf('010') === 0) {
           phoneDisp = normalized.slice(0, 3) + '-' + normalized.slice(3, 7) + '-' + normalized.slice(7, 11);
         }
-        localStorage.setItem(
-          window.STELVIO_AUTH_REMEMBER_KEY,
-          JSON.stringify({ v: 1, phone: phoneDisp, password: String(password || '') })
-        );
-      } catch (e) {}
+        var payload = JSON.stringify({ v: 1, phone: phoneDisp, password: String(password || '') });
+        window._stelvioStorageSet(window.STELVIO_AUTH_REMEMBER_KEY, payload);
+        /* persist 플래그 동기화 */
+        window._stelvioStorageSet('stelvio_auth_persist_local', '1');
+        console.log('[AuthRemember] 자격증명 저장 (localStorage + cookie 30일)');
+      } catch (e) {
+        console.warn('[AuthRemember] 자격증명 저장 실패:', e && e.message);
+      }
     };
     
     /**
