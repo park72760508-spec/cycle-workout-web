@@ -1718,7 +1718,22 @@ function updateDashboard(data = null) {
     
     // 현재 파워값을 전역 변수에 저장 (바늘 애니메이션 루프에서 사용)
     currentPowerValue = powerValue;
-    
+
+    // W/kg 등급 상태 표시등 업데이트 (헤더 녹색 버튼 내 원형 도트)
+    (function updateIndivWkgDot() {
+        const dot = document.getElementById('indiv-wkg-dot');
+        if (!dot || typeof window.updateWkgStatusDot !== 'function') return;
+        const _wt = Number(
+            currentUserInfo.weight || window.userProfile?.weightKg ||
+            window.currentUser?.weightKg || window.currentUser?.weight
+        ) || 0;
+        const _pw = powerValue > 0
+            ? powerValue
+            : Number(userFTP || window.userProfile?.ftp || window.currentUser?.ftp || 0);
+        const _wkg = (_wt > 0 && _pw > 0) ? (_pw / _wt) : NaN;
+        window.updateWkgStatusDot(_wkg, dot);
+    })();
+
     // SVG text 요소는 textContent 사용 (innerText보다 안정적)
     // 텍스트는 즉시 업데이트 (바늘은 애니메이션 루프에서 부드럽게 이동)
     const powerEl = __indivEl('ui-current-power');

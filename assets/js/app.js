@@ -6175,6 +6175,28 @@ function updateUserPanelNeonByWkg(wkg) {
   panel.classList.add('neon-active', tier);
 }
 
+/**
+ * W/kg → 헤더 표시등(원형 도트) 등급 클래스 결정 및 적용
+ * 모바일 대시보드 / 블루투스 개인훈련 대시보드 공용
+ * @param {number} wkg  - 현재 W/kg 값
+ * @param {Element} dotEl - .wkg-status-dot 요소
+ */
+function updateWkgStatusDot(wkg, dotEl) {
+  if (!dotEl) return;
+  const grades = ['dot-pro', 'dot-elite', 'dot-advanced', 'dot-intermediate', 'dot-beginner', 'dot-novice'];
+  dotEl.classList.remove(...grades);
+  if (!Number.isFinite(wkg) || wkg <= 0) return;
+  let cls;
+  if      (wkg >= 5.0) cls = 'dot-pro';
+  else if (wkg >= 4.2) cls = 'dot-elite';
+  else if (wkg >= 3.7) cls = 'dot-advanced';
+  else if (wkg >= 3.2) cls = 'dot-intermediate';
+  else if (wkg >= 2.5) cls = 'dot-beginner';
+  else                 cls = 'dot-novice';
+  dotEl.classList.add(cls);
+}
+window.updateWkgStatusDot = updateWkgStatusDot;
+
 
 
 
@@ -15160,7 +15182,22 @@ function startMobileDashboardDataUpdate() {
     if (powerEl) {
       powerEl.textContent = Math.round(powerValue);
     }
-    
+
+    // W/kg 등급 상태 표시등 업데이트 (헤더 녹색 버튼 내 원형 도트)
+    (function updateMobileWkgDot() {
+      const dot = safeGetElement('mobile-wkg-dot');
+      if (!dot || typeof updateWkgStatusDot !== 'function') return;
+      const _wt = Number(
+        window.userProfile?.weightKg || window.user?.weightKg ||
+        window.currentUser?.weightKg || window.currentUser?.weight
+      ) || 0;
+      const _pw = powerValue > 0
+        ? powerValue
+        : Number(window.userProfile?.ftp || window.user?.ftp || window.currentUser?.ftp || 0);
+      const _wkg = (_wt > 0 && _pw > 0) ? (_pw / _wt) : NaN;
+      updateWkgStatusDot(_wkg, dot);
+    })();
+
     // 속도계 바늘 업데이트 (애니메이션 루프에서 부드럽게 이동)
     updateMobileGaugeNeedle(Math.round(powerValue));
     
