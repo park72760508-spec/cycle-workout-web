@@ -15342,7 +15342,26 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       var userWeight = p.userWeight || 0;
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
-      
+      // 선택 인덱스 ref: Chart.js 플러그인용 (재렌더 없이 업데이트)
+      const selectedIndexRef = useRef(-1);
+      // 선택 인덱스 state: 패널 표시용 (React 재렌더)
+      const [selectedPanel, setSelectedPanel] = useState(null);
+
+      // 초기 선택: watts 최댓값 바
+      useEffect(function() {
+        if (!data || !data.length) return;
+        var maxIdx = 0, maxW = 0;
+        data.forEach(function(d, i) { if ((d.watts || 0) > maxW) { maxW = d.watts; maxIdx = i; } });
+        selectedIndexRef.current = maxIdx;
+        setSelectedPanel({
+          index: maxIdx,
+          label: data[maxIdx].label || '',
+          wkg: data[maxIdx].wkg,
+          dateStr: data[maxIdx].dateStr || '-',
+          color: YEARLY_PR_ZONE_COLORS[maxIdx] || 'rgba(156,163,175,0.7)'
+        });
+      }, [data]);
+
       useEffect(function() {
         if (!data || data.length === 0) return;
         var ctx = chartRef.current && chartRef.current.getContext('2d');
@@ -15356,6 +15375,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         var maxWatts = Math.max.apply(null, wattsData.filter(function(w) { return w > 0; })) || 300;
         var yMax = Math.ceil(maxWatts * 1.15 / 50) * 50 || 350;
         var legendInCircle = ['Max', '1분', '5분', '10분', '20분', '40분', '60분'];
+
+        // Plugin: 세로 점선 가이드 + 원형 라벨 + W/kg + 날짜
         var prValuePlugin = {
           id: 'prBarLabels',
           afterDatasetsDraw: function(chart) {
@@ -15366,33 +15387,61 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var radius = 12;
             var circleY = bottom + radius + 4;
             var dateY = circleY + radius + 12;
+            var selIdx = selectedIndexRef.current;
+
+            // ① 세로 점선 가이드선 (선택된 바)
+            if (selIdx >= 0 && selIdx < meta.data.length) {
+              var selBar = meta.data[selIdx];
+              if (selBar && selBar.x != null) {
+                var guideColor = (YEARLY_PR_ZONE_COLORS[selIdx] || 'rgba(156,163,175,0.7)')
+                  .replace(/[\d.]+\)$/, '0.9)');
+                chart.ctx.save();
+                chart.ctx.setLineDash([6, 4]);
+                chart.ctx.strokeStyle = guideColor;
+                chart.ctx.lineWidth = 2;
+                chart.ctx.globalAlpha = 0.85;
+                chart.ctx.beginPath();
+                chart.ctx.moveTo(selBar.x, chartArea.top);
+                chart.ctx.lineTo(selBar.x, chartArea.bottom);
+                chart.ctx.stroke();
+                chart.ctx.restore();
+              }
+            }
+
+            // ② 바 위 W/kg 텍스트 + 원형 레이블 + 날짜
             chart.ctx.save();
-            chart.ctx.font = '11px sans-serif';
             chart.ctx.textAlign = 'center';
             meta.data.forEach(function(bar, i) {
               if (!bar || bar.x == null || bar.y == null) return;
               var d = data[i];
               if (!d) return;
+              var isSel = (i === selIdx);
+              var r = isSel ? radius + 2 : radius;
+              var color = YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+
+              // W/kg
               if (d.wkg != null && d.wkg > 0) {
-                chart.ctx.fillStyle = '#374151';
+                chart.ctx.fillStyle = isSel ? '#111827' : '#374151';
+                chart.ctx.font = isSel ? 'bold 12px sans-serif' : '11px sans-serif';
                 chart.ctx.fillText(d.wkg.toFixed(2), bar.x, bar.y - 6);
               }
-              var color = YEARLY_PR_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
-              var lab = legendInCircle[i] || '';
+
+              // 원형
               chart.ctx.beginPath();
-              chart.ctx.arc(bar.x, circleY, radius, 0, Math.PI * 2);
+              chart.ctx.arc(bar.x, circleY, r, 0, Math.PI * 2);
               chart.ctx.fillStyle = color;
               chart.ctx.fill();
-              chart.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-              chart.ctx.lineWidth = 1;
+              chart.ctx.strokeStyle = isSel ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.1)';
+              chart.ctx.lineWidth = isSel ? 2 : 1;
               chart.ctx.stroke();
               chart.ctx.fillStyle = '#1f2937';
               chart.ctx.font = 'bold 10px sans-serif';
-              chart.ctx.fillText(lab, bar.x, circleY + 3);
-              chart.ctx.fillStyle = '#6b7280';
-              chart.ctx.font = '11px sans-serif';
-              var dt = (d && d.dateStr) ? d.dateStr : '-';
-              chart.ctx.fillText(dt, bar.x, dateY);
+              chart.ctx.fillText(legendInCircle[i] || '', bar.x, circleY + 3);
+
+              // 날짜
+              chart.ctx.fillStyle = isSel ? '#374151' : '#6b7280';
+              chart.ctx.font = isSel ? 'bold 11px sans-serif' : '11px sans-serif';
+              chart.ctx.fillText((d.dateStr) ? d.dateStr : '-', bar.x, dateY);
             });
             if (chartArea) {
               chart.ctx.font = '10px sans-serif';
@@ -15402,6 +15451,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             chart.ctx.restore();
           }
         };
+
         chartInstanceRef.current = new Chart(ctx, {
           type: 'bar',
           data: {
@@ -15438,23 +15488,49 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 ticks: {
                   font: { size: 11 },
                   color: '#6b7280',
-                  callback: function(v) {
-                    return v === 0 ? '0W' : (v + '');
-                  }
+                  callback: function(v) { return v === 0 ? '0W' : (v + ''); }
                 }
               }
             }
           },
           plugins: [prValuePlugin]
         });
+
+        // 마우스/터치 이벤트: 바 hover·click 시 가이드선·패널 업데이트
+        var canvas = chartRef.current;
+        function handleBarInteraction(e) {
+          var chart = chartInstanceRef.current;
+          if (!chart || !data) return;
+          var nativeEvent = e.nativeEvent || e;
+          var els = chart.getElementsAtEventForMode(nativeEvent, 'nearest', { intersect: false, axis: 'x' }, true);
+          if (!els || !els.length) return;
+          var idx = els[0].index;
+          if (idx === selectedIndexRef.current) return;
+          selectedIndexRef.current = idx;
+          setSelectedPanel({
+            index: idx,
+            label: data[idx].label || '',
+            wkg: data[idx].wkg,
+            dateStr: data[idx].dateStr || '-',
+            color: YEARLY_PR_ZONE_COLORS[idx] || 'rgba(156,163,175,0.7)'
+          });
+          chart.update('none');
+        }
+        canvas.addEventListener('mousemove', handleBarInteraction);
+        canvas.addEventListener('click', handleBarInteraction);
+        canvas.addEventListener('touchstart', handleBarInteraction, { passive: true });
+
         return function cleanup() {
+          canvas.removeEventListener('mousemove', handleBarInteraction);
+          canvas.removeEventListener('click', handleBarInteraction);
+          canvas.removeEventListener('touchstart', handleBarInteraction);
           if (chartInstanceRef.current) {
             chartInstanceRef.current.destroy();
             chartInstanceRef.current = null;
           }
         };
       }, [data]);
-      
+
       if (!data || data.length === 0 || !data.some(function(d) { return d && d.watts > 0; })) {
         return (
           React.createElement(DashboardCard, { title: '년간 파워PR 그래프' },
@@ -15462,9 +15538,45 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           )
         );
       }
-      
+
+      // 패널 렌더 (선택된 바 정보)
+      var panelEl = null;
+      if (selectedPanel) {
+        var panelWkg = (selectedPanel.wkg != null && selectedPanel.wkg > 0)
+          ? selectedPanel.wkg.toFixed(2) + ' W/kg'
+          : '-';
+        var panelSub = selectedPanel.label + ' | ' + (selectedPanel.dateStr || '-');
+        panelEl = React.createElement('div', {
+          style: {
+            position: 'absolute', top: 0, left: 0, right: 0,
+            display: 'flex', justifyContent: 'center',
+            pointerEvents: 'none', zIndex: 10
+          }
+        },
+          React.createElement('div', {
+            style: {
+              background: 'rgba(255,255,255,0.96)',
+              border: '1.5px solid ' + selectedPanel.color,
+              borderRadius: 8,
+              padding: '4px 14px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.09)',
+              minWidth: 110
+            }
+          },
+            React.createElement('span', {
+              style: { fontSize: 12, fontWeight: 700, color: '#374151', letterSpacing: '-0.01em' }
+            }, panelWkg),
+            React.createElement('span', {
+              style: { fontSize: 11, color: '#6b7280', marginTop: 1 }
+            }, panelSub)
+          )
+        );
+      }
+
       return React.createElement(DashboardCard, { title: '년간 파워PR 그래프' },
-        React.createElement('div', { className: 'h-[240px]' },
+        React.createElement('div', { className: 'h-[240px]', style: { position: 'relative' } },
+          panelEl,
           React.createElement('canvas', { ref: chartRef })
         )
       );
