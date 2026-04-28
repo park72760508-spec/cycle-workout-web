@@ -1,6 +1,9 @@
 /**
  * STELVIO AI - 네이버 구독 자동화 메인 엔트리
- * 30분 단위 스케줄러, VPC Connector(고정 IP 34.64.250.77) 적용
+ * 30분 단위 스케줄러, Direct VPC Egress(고정 IP 34.64.250.77 / Cloud NAT) 적용
+ * [마이그레이션] VPC Connector(stelvio-connector) → Direct VPC Egress
+ *   - network: GCP VPC 네트워크 이름 (GCP Console > VPC networks 에서 확인)
+ *   - vpcEgress: 'ALL_TRAFFIC' → Cloud NAT를 통해 고정 IP로 아웃바운드
  */
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -420,8 +423,12 @@ export async function runNaverSubscriptionSync(
 /**
  * 30분마다 실행되는 스케줄러.
  * - Region: asia-northeast3 (서울)
- * - VPC Connector: stelvio-connector → 고정 IP(34.64.250.77)로 네이버 API 호출
+ * - Direct VPC Egress → Cloud NAT → 고정 IP(34.64.250.77)로 네이버 API 호출
  * - Client Secret: process.env.NAVER_CLIENT_SECRET 또는 Firebase Secret
+ *
+ * [중요] network 값을 실제 VPC 네트워크 이름으로 교체하세요.
+ *   확인 방법: GCP Console → VPC network → VPC networks → 네트워크 이름
+ *   (예: "default" 또는 커스텀 VPC명 "stelvio-vpc" 등)
  */
 export const naverSubscriptionSyncSchedule = onSchedule(
   {
@@ -429,8 +436,9 @@ export const naverSubscriptionSyncSchedule = onSchedule(
     timeZone: "Asia/Seoul",
     timeoutSeconds: 300,
     region: "asia-northeast3",
-    vpcConnector: "stelvio-connector",
-    vpcConnectorEgressSettings: "ALL_TRAFFIC",
+    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결 (Gen 2 전용, 비용 절감)
+    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
+    vpcEgress: "ALL_TRAFFIC", // 모든 아웃바운드를 VPC(Cloud NAT)로 라우팅 → 고정 IP 유지
     secrets: [navSecret, smtpPassSecret],
   },
   async () => {
@@ -473,8 +481,9 @@ const NAVER_SYNC_TEST_SECRET = process.env.NAVER_SYNC_TEST_SECRET || "stelvio-na
 export const naverSubscriptionSyncTest = onRequest(
   {
     region: "asia-northeast3",
-    vpcConnector: "stelvio-connector",
-    vpcConnectorEgressSettings: "ALL_TRAFFIC",
+    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
+    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
+    vpcEgress: "ALL_TRAFFIC",
     secrets: [navSecret, smtpPassSecret],
     cors: false,
   },
@@ -586,9 +595,10 @@ export const stravaWebhook = onRequest(
   {
     region: "asia-northeast3",
     cors: false,
-    /** 알리고(카카오) API: 네이버 결제 연동과 동일 VPC + 고정 NAT IP(34.64.250.77)로 아웃바운드 */
-    vpcConnector: "stelvio-connector",
-    vpcConnectorEgressSettings: "ALL_TRAFFIC",
+    /** 알리고(카카오) API: 네이버 결제 연동과 동일 Cloud NAT 고정 IP(34.64.250.77)로 아웃바운드 */
+    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
+    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
+    vpcEgress: "ALL_TRAFFIC",
     secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   },
   async (req, res) => {
@@ -652,9 +662,10 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
   {
     document: "users/{userId}/logs/{logId}",
     region: "asia-northeast3",
-    /** 알리고(카카오) API: stravaWebhook·네이버 스케줄과 동일 고정 IP(34.64.250.77) */
-    vpcConnector: "stelvio-connector",
-    vpcConnectorEgressSettings: "ALL_TRAFFIC",
+    /** 알리고(카카오) API: stravaWebhook·네이버 스케줄과 동일 Cloud NAT 고정 IP(34.64.250.77) */
+    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
+    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
+    vpcEgress: "ALL_TRAFFIC",
     secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   },
   async (event) => {
