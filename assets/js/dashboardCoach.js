@@ -203,9 +203,19 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
 
   // ── 규칙 기반 워크아웃 카테고리 선결정 ─────────────────────────
   // AI가 자유롭게 카테고리를 선택하지 못하도록 클라이언트 측에서 먼저 결정
-  var workoutDecision = determineDeterministicWorkoutCategory(
-    conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs
-  );
+  var workoutDecision;
+  try {
+    workoutDecision = determineDeterministicWorkoutCategory(
+      conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs
+    );
+  } catch (wdErr) {
+    console.warn('[callGeminiCoach] determineDeterministicWorkoutCategory 오류 (기본값 사용):', wdErr);
+    workoutDecision = {
+      category: 'endurance',
+      allowedWorkouts: ['Endurance (Z2)', 'Sweet Spot (Low)', 'Tempo (Z3)'],
+      reason: '카테고리 결정 중 오류가 발생하여 기본 지구력 훈련을 권장합니다.'
+    };
+  }
 
   // 시스템 프롬프트 가져오기
   const systemPrompt = window.GEMINI_COACH_SYSTEM_PROMPT || `
