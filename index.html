@@ -15542,8 +15542,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       // 패널 렌더 (선택된 바 정보)
       var panelEl = null;
       if (selectedPanel) {
-        var panelWkg = (selectedPanel.wkg != null && selectedPanel.wkg > 0)
-          ? selectedPanel.wkg.toFixed(2) + ' W/kg'
+        var _watts = (selectedPanel.index != null && data && data[selectedPanel.index]) ? (data[selectedPanel.index].watts || 0) : 0;
+        var panelWkg = (_watts > 0 || (selectedPanel.wkg != null && selectedPanel.wkg > 0))
+          ? (_watts > 0 ? _watts + 'W' : '') + (selectedPanel.wkg != null && selectedPanel.wkg > 0 ? (_watts > 0 ? '(' + selectedPanel.wkg.toFixed(1) + ')' : selectedPanel.wkg.toFixed(1)) : '')
           : '-';
         var panelSub = selectedPanel.label + ' | ' + (selectedPanel.dateStr || '-');
         panelEl = React.createElement('div', {
