@@ -3643,8 +3643,8 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 // ---------- 랭킹 사전 집계 (스케줄러) + ranking_aggregates (HTTP 빠른 읽기) ----------
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** [비용절감] 스케줄러 갱신 주기(2시간)보다 넉넉히 — API는 집계가 있으면 전체 스캔 대신 1회 읽기 */
-const RANKING_AGG_MAX_STALE_MS = 3 * 60 * 60 * 1000; // 3시간 (2시간 주기 + 여유)
-const RANKING_REBUILD_CRON = "0 */2 * * *"; // [비용절감] 6분→2시간: 하루 240→12회 (20배 절감)
+const RANKING_AGG_MAX_STALE_MS = 2 * 60 * 60 * 1000; // 2시간 (1시간 주기 + 여유, 심야 공백 감안)
+const RANKING_REBUILD_CRON = "0 9-23 * * *"; // [비용절감] 낮 시간대(KST 09~23시)만 실행: 하루 최대 15회, 심야 불필요한 실행 제거
 const RANKING_ONE_PASS_BATCH = 50;
 
 /**
@@ -4010,7 +4010,7 @@ async function runRebuildRankingAggregatesCore(db) {
   return { wrote, ms };
 }
 
-/** 6분마다 랭킹 집계 갱신 (사용자 요청 시 전체 스캔 대신 1 doc 읽기) */
+/** KST 09~23시 매 정시마다 랭킹 집계 갱신 (심야 제외, 사용자 요청 시 전체 스캔 대신 1 doc 읽기) */
 exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
