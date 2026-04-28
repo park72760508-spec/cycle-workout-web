@@ -110,7 +110,11 @@
           React.createElement('p', { className: 'text-sm text-gray-500 mb-6 max-w-xs mx-auto' }, '훈련 데이터를 분석해 오늘의 추천 워크아웃을 알려드립니다'),
           React.createElement('button', {
             type: 'button',
-            onClick: function() { if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true); },
+            onClick: function(e) {
+              if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+              if (e && typeof e.preventDefault === 'function') e.preventDefault();
+              if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
+            },
             className: 'px-6 py-3.5 rounded-xl font-semibold text-white transition-all active:scale-[0.98] shadow-md hover:shadow-lg border-none cursor-pointer',
             style: { background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.35)' }
           }, '컨디션 분석 하기')
@@ -152,7 +156,10 @@
             React.createElement('button', {
               type: 'button',
               title: '클릭하여 AI 컨디션 분석 다시 실행',
-              onClick: function() {
+              onClick: function(e) {
+                // 버블링 차단: PC 브라우저에서 상위 SPA 화면 전환 로직이 트리거되는 것 방지
+                if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (e && typeof e.preventDefault === 'function') e.preventDefault();
                 try {
                   var uid = String((userProfile && userProfile.id) || '');
                   if (uid) {
@@ -162,7 +169,7 @@
                       }
                     });
                   }
-                } catch (e) {}
+                } catch (e2) {}
                 if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
                 if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
               },
@@ -216,7 +223,9 @@
         React.createElement('div', { className: 'flex flex-col sm:flex-row gap-3' },
           React.createElement('button', {
             type: 'button',
-            onClick: function() {
+            onClick: function(e) {
+              if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+              if (e && typeof e.preventDefault === 'function') e.preventDefault();
               if (typeof window.runDashboardAIWorkoutRecommendation === 'function') {
                 window.runDashboardAIWorkoutRecommendation(userProfile, coachData);
               }
@@ -234,7 +243,9 @@
           ),
           hasError && React.createElement('button', {
             type: 'button',
-            onClick: function() {
+            onClick: function(e) {
+              if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+              if (e && typeof e.preventDefault === 'function') e.preventDefault();
               try {
                 var uid = String(userProfile.id || '');
                 if (uid) {
@@ -244,12 +255,12 @@
                     }
                   });
                 }
-              } catch (e) {}
+              } catch (e2) {}
               if (typeof setRetryCoach === 'function') setRetryCoach(function(prev) { return (prev || 0) + 1; });
               if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
             },
             className: 'py-3.5 px-5 rounded-2xl font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 active:scale-[0.98] min-h-[52px]'
-          }, '다시 분석')
+          }, '다시 분析')
         )
       )
     );
