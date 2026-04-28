@@ -1096,7 +1096,13 @@ function getTodayAfterBefore() {
 
 async function getStelvioLogDates(db, userId) {
   const dates = new Set();
-  const snapshot = await db.collection("users").doc(userId).collection("logs").get();
+  // [비용절감] 전체 로그 스캔 대신 최근 1년치만 조회 (Strava 비교는 최근 데이터만 필요)
+  const cutoffDate = new Date();
+  cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+  const cutoffStr = cutoffDate.toISOString().split("T")[0];
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("date", ">=", cutoffStr)
+    .get();
   snapshot.docs.forEach((doc) => {
     const log = doc.data();
     if (log.source === "strava") return;
@@ -1154,7 +1160,14 @@ async function getStelvioPointsForDate(db, userId, dateStr) {
 
 async function getExistingStravaActivityIds(db, userId) {
   const ids = new Set();
-  const snapshot = await db.collection("users").doc(userId).collection("logs").where("source", "==", "strava").get();
+  // [비용절감] 최근 1년치 Strava 로그만 조회 (중복 체크는 최근 데이터만 필요)
+  const cutoffDate = new Date();
+  cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+  const cutoffStr = cutoffDate.toISOString().split("T")[0];
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("source", "==", "strava")
+    .where("date", ">=", cutoffStr)
+    .get();
   snapshot.docs.forEach((doc) => {
     const data = doc.data();
     if (data.activity_id) ids.add(String(data.activity_id));
@@ -1166,7 +1179,14 @@ async function getExistingStravaActivityIds(db, userId) {
 async function getExistingStravaLogsMap(db, userId) {
   const ids = new Set();
   const docMap = new Map();
-  const snapshot = await db.collection("users").doc(userId).collection("logs").where("source", "==", "strava").get();
+  // [비용절감] 최근 1년치 Strava 로그만 조회 (MMP 보완도 최근 데이터 위주)
+  const cutoffDate = new Date();
+  cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+  const cutoffStr = cutoffDate.toISOString().split("T")[0];
+  const snapshot = await db.collection("users").doc(userId).collection("logs")
+    .where("source", "==", "strava")
+    .where("date", ">=", cutoffStr)
+    .get();
   snapshot.docs.forEach((doc) => {
     const data = doc.data();
     const actId = data.activity_id ? String(data.activity_id) : null;
@@ -2311,10 +2331,11 @@ async function hasWeeklyTssCheatDay(db, userId, startStr, endStr) {
 const WEEKLY_RANKING_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 const WEEKLY_TSS_BATCH_SIZE = 50; // 1000명 대비: 20배치로 완료
 
-/** 여러 사용자 주간 TSS 병렬 조회 (배치 단위로 실행해 Firestore 부하 완화) */
-async function getWeeklyRankingEntries(db, startStr, endStr) {
-  const usersSnap = await db.collection("users").get();
-  const docs = usersSnap.docs;
+/** 여러 사용자 주간 TSS 병렬 조회 (배치 단위로 실행해 Firestore 부하 완화)
+ * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+async function getWeeklyRankingEntries(db, startStr, endStr, usersSnap = null) {
+  const snap = usersSnap ?? await db.collection("users").get();
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -2377,58 +2398,53 @@ exports.getWeeklyRanking = onRequest(
       res.set("Cache-Control", "public, max-age=120");
       return res.status(200).json({ success: true, ranking: top10, startStr, endStr, myRank: myRank || undefined, precomputed: true });
     }
+    // [비용절감] 사전 집계 캐시 miss 시 구버전 캐시 doc에서 마지막 랭킹 반환 (전체 스캔 폴백 제거)
     const cacheRef = db.collection("cache").doc(usePrevWeek ? "weeklyRankingPrev" : "weeklyRanking");
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
-    const skipCacheForMyRank = !!userIdParam;
-    if (!skipCacheForMyRank && cacheSnap.exists) {
+    if (cacheSnap.exists) {
       const data = cacheSnap.data();
-      const cachedStart = data.startStr;
-      const cachedEnd = data.endStr;
+      const ranking = Array.isArray(data.ranking) ? data.ranking : [];
       const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
-      if (cachedStart === startStr && cachedEnd === endStr && updatedAt && nowMs - updatedAt < WEEKLY_RANKING_CACHE_TTL_MS) {
-        const ranking = Array.isArray(data.ranking) ? data.ranking : [];
-        res.set("Access-Control-Allow-Origin", "*");
-        res.set("Cache-Control", "public, max-age=120"); // 클라이언트 캐시 2분
-        return res.status(200).json({ success: true, ranking, startStr, endStr, cached: true });
+      const ageMin = updatedAt ? Math.round((nowMs - updatedAt) / 60000) : null;
+      let myRank = null;
+      if (userIdParam && Array.isArray(data.fullEntries)) {
+        const userIdx = data.fullEntries.findIndex((e) => e.userId === userIdParam);
+        if (userIdx >= 10) {
+          const e = data.fullEntries[userIdx];
+          myRank = {
+            rank: userIdx + 1,
+            userId: e.userId,
+            name: e.name,
+            totalTss: Math.round((e.totalTss || 0) * 100) / 100,
+            is_private: e.is_private === true,
+          };
+        }
       }
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cache-Control", "public, max-age=120");
+      return res.status(200).json({
+        success: true,
+        ranking,
+        startStr,
+        endStr,
+        myRank: myRank || undefined,
+        cached: true,
+        stale: true,
+        cacheAgeMin: ageMin,
+        rebuilding: true,
+      });
     }
-    const entries = await getWeeklyRankingEntries(db, startStr, endStr);
-    const top10 = entries.slice(0, 10).map((e, i) => ({
-      rank: i + 1,
-      userId: e.userId,
-      name: e.name,
-      totalTss: Math.round(e.totalTss * 100) / 100,
-      is_private: e.is_private === true,
-    }));
-    await cacheRef.set({
-      ranking: top10,
-      startStr,
-      endStr,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    await writeRankingAggregatePayload(db, weeklyAggKey, {
-      fullEntries: entries,
-      ranking: top10,
-      startStr,
-      endStr,
-    });
-    let myRank = null;
-    if (userIdParam) {
-      const userIdx = entries.findIndex((e) => e.userId === userIdParam);
-      if (userIdx >= 10) {
-        const e = entries[userIdx];
-        myRank = {
-          rank: userIdx + 1,
-          userId: e.userId,
-          name: e.name,
-          totalTss: Math.round(e.totalTss * 100) / 100,
-          is_private: e.is_private === true,
-        };
-      }
-    }
+    // 캐시 doc도 없는 경우: 초기 상태, 전체 스캔 대신 빈 랭킹 반환 (스케줄러가 곧 집계 예정)
     res.set("Access-Control-Allow-Origin", "*");
-    res.status(200).json({ success: true, ranking: top10, startStr, endStr, myRank: myRank || undefined });
+    res.status(200).json({
+      success: true,
+      ranking: [],
+      startStr,
+      endStr,
+      rebuilding: true,
+      message: "랭킹 집계 준비 중입니다. 잠시 후 다시 시도해주세요.",
+    });
   }
 );
 
@@ -3093,11 +3109,12 @@ async function getPeakHrForUser(db, userId, startStr, endStr, durationType) {
   return { hr: maxHr };
 }
 
-/** 전체 사용자 대상 duration별 피크 심박 산술평균 (랭킹과 동일 성별·리그 필터) */
-async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderFilter) {
+/** 전체 사용자 대상 duration별 피크 심박 산술평균 (랭킹과 동일 성별·리그 필터)
+ * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderFilter, usersSnap = null) {
   if (!DURATION_HR_FIELDS[durationType]) return null;
-  const usersSnap = await db.collection("users").get();
-  const docs = usersSnap.docs;
+  const snap = usersSnap ?? await db.collection("users").get();
+  const docs = snap.docs;
   let sum = 0;
   let n = 0;
   for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
@@ -3130,10 +3147,11 @@ async function getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, genderF
 /** 현재 사용자 조회 순서: 연령·선수부 리그 우선(동기부여·추월은 부문 내 상대), Supremo(전체)는 폴백 */
 const PEAK_RANKING_USER_LOOKUP_ORDER = ["Assoluto", "Bianco", "Rosa", "Infinito", "Leggenda", "Supremo"];
 
-/** 피크 파워 랭킹 엔트리 (기간·종목·성별·연령대별) */
-async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter) {
-  const usersSnap = await db.collection("users").get();
-  const docs = usersSnap.docs;
+/** 피크 파워 랭킹 엔트리 (기간·종목·성별·연령대별)
+ * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, genderFilter, usersSnap = null) {
+  const snap = usersSnap ?? await db.collection("users").get();
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += PEAK_POWER_BATCH_SIZE) {
     const batch = docs.slice(i, i + PEAK_POWER_BATCH_SIZE);
@@ -3177,10 +3195,11 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
   return { entries: withRank, byCategory };
 }
 
-/** 주간 TSS 랭킹 보드: 주간 마일리지 TOP10과 동일한 TSS 합산 규칙(getWeeklyTssForUser), 성별·리그 분류는 피크 파워와 동일 */
-async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilter) {
-  const usersSnap = await db.collection("users").get();
-  const docs = usersSnap.docs;
+/** 주간 TSS 랭킹 보드: 주간 마일리지 TOP10과 동일한 TSS 합산 규칙(getWeeklyTssForUser), 성별·리그 분류는 피크 파워와 동일
+ * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
+  const snap = usersSnap ?? await db.collection("users").get();
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -3223,10 +3242,11 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
   return { entries: withRank, byCategory };
 }
 
-/** 개인: 최근 30일(서울) 라이딩 거리 합 — 성별·리그 분류는 주간 TSS 랭킹과 동일 */
-async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, genderFilter) {
-  const usersSnap = await db.collection("users").get();
-  const docs = usersSnap.docs;
+/** 개인: 최근 30일(서울) 라이딩 거리 합 — 성별·리그 분류는 주간 TSS 랭킹과 동일
+ * [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, genderFilter, usersSnap = null) {
+  const snap = usersSnap ?? await db.collection("users").get();
+  const docs = snap.docs;
   const entries = [];
   for (let i = 0; i < docs.length; i += WEEKLY_TSS_BATCH_SIZE) {
     const batch = docs.slice(i, i + WEEKLY_TSS_BATCH_SIZE);
@@ -3622,9 +3642,9 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 
 // ---------- 랭킹 사전 집계 (스케줄러) + ranking_aggregates (HTTP 빠른 읽기) ----------
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
-/** 스케줄러 갱신 주기(6분)보다 넉넉히 — API는 집계가 있으면 전체 스캔 대신 1회 읽기 */
-const RANKING_AGG_MAX_STALE_MS = 45 * 60 * 1000;
-const RANKING_REBUILD_CRON = "*/6 * * * *";
+/** [비용절감] 스케줄러 갱신 주기(2시간)보다 넉넉히 — API는 집계가 있으면 전체 스캔 대신 1회 읽기 */
+const RANKING_AGG_MAX_STALE_MS = 3 * 60 * 60 * 1000; // 3시간 (2시간 주기 + 여유)
+const RANKING_REBUILD_CRON = "0 */2 * * *"; // [비용절감] 6분→2시간: 하루 240→12회 (20배 절감)
 const RANKING_ONE_PASS_BATCH = 50;
 
 /**
@@ -3730,7 +3750,8 @@ function genderKeyFromUserData(data) {
  * @returns {Promise<Record<string, Record<string, { entries: any[], byCategory: object, cohortAvgHrBpm: number|null }>>>}
  *         outer: gender "all"|"M"|"F", inner: durationType
  */
-async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr) {
+/** [비용절감] usersSnap을 외부에서 주입받아 중복 users.get() 방지 */
+async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap = null) {
   const genders = ["all", "M", "F"];
   const byGenderDur = {};
   genders.forEach((g) => {
@@ -3748,8 +3769,8 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
     }
   });
 
-  const usersSnap = await db.collection("users").get();
-  const docs = usersSnap.docs;
+  const snap = usersSnap ?? await db.collection("users").get();
+  const docs = snap.docs;
   for (let i = 0; i < docs.length; i += RANKING_ONE_PASS_BATCH) {
     const batch = docs.slice(i, i + RANKING_ONE_PASS_BATCH);
     await Promise.all(
@@ -3882,8 +3903,12 @@ async function runRebuildRankingAggregatesCore(db) {
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
   const { startStr: r365s, endStr: r365e } = getRolling365DaysRangeSeoul();
 
+  // [비용절감] users 컬렉션을 단 1회만 읽어 모든 랭킹 함수에 공유 주입 (기존 10회 → 1회)
+  const sharedUsersSnap = await db.collection("users").get();
+  console.log("[runRebuildRankingAggregatesCore] users snapshot fetched once, docs:", sharedUsersSnap.size);
+
   for (const gender of ["all", "M", "F"]) {
-    const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender);
+    const tss = await getWeeklyTssRankingBoardEntries(db, wStart, wEnd, gender, sharedUsersSnap);
     const keyTss = `peakRanking_weekly_tss_v2_${gender}_${wStart}_${wEnd}`;
     await writeRankingAggregatePayload(db, keyTss, {
       byCategory: tss.byCategory,
@@ -3893,7 +3918,7 @@ async function runRebuildRankingAggregatesCore(db) {
     });
     wrote++;
 
-    const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender);
+    const dist = await getRolling30dDistanceRankingBoardEntries(db, r30s, r30e, gender, sharedUsersSnap);
     const keyD = `peakRanking_personal_dist_30d_${gender}_${r30s}_${r30e}`;
     await writeRankingAggregatePayload(db, keyD, {
       byCategory: dist.byCategory,
@@ -3914,7 +3939,7 @@ async function runRebuildRankingAggregatesCore(db) {
   });
   wrote++;
 
-  const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r30s, r30e);
+  const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r30s, r30e, sharedUsersSnap);
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurMonthly[gender][durationType];
@@ -3930,7 +3955,7 @@ async function runRebuildRankingAggregatesCore(db) {
     }
   }
 
-  const allDurYear = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r365s, r365e);
+  const allDurYear = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r365s, r365e, sharedUsersSnap);
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurYear[gender][durationType];
@@ -3946,7 +3971,7 @@ async function runRebuildRankingAggregatesCore(db) {
     }
   }
 
-  const entriesCurrent = await getWeeklyRankingEntries(db, wStart, wEnd);
+  const entriesCurrent = await getWeeklyRankingEntries(db, wStart, wEnd, sharedUsersSnap);
   const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
     rank: i + 1,
     userId: e.userId,
@@ -3963,7 +3988,7 @@ async function runRebuildRankingAggregatesCore(db) {
   });
   wrote++;
 
-  const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE);
+  const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
   const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
     rank: i + 1,
     userId: e.userId,
