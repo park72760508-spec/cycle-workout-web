@@ -17885,7 +17885,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 10100200;
   backdrop-filter: blur(4px);
   /* Pull-to-refresh 방지 (오버레이, 스크롤은 유지) */
   overscroll-behavior-y: contain;
@@ -23927,7 +23927,7 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 10100200;
 }
 #bluetoothIndividualScreen .indiv-training-result-modal.indiv-hidden { display: none !important; }
 #bluetoothIndividualScreen .indiv-training-result-background {
