@@ -3484,7 +3484,14 @@ if (!window.showScreen) {
         window.__pullToRefreshBlockerCleanup();
         window.__pullToRefreshBlockerCleanup = null;
       }
-      
+
+      // [비용절감] bluetoothIndividualScreen 이탈 시 RTDB 리스너 일괄 해제
+      if (currentActiveScreen && currentActiveScreen.id === 'bluetoothIndividualScreen' && id !== 'bluetoothIndividualScreen') {
+        if (typeof window.detachBluetoothIndividualFirebaseListeners === 'function') {
+          window.detachBluetoothIndividualFirebaseListeners();
+        }
+      }
+
       document.querySelectorAll(".screen").forEach(s => {
         if (s.id !== 'splashScreen') {
           s.style.display = "none";

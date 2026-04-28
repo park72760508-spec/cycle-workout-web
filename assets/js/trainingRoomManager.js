@@ -816,7 +816,18 @@ async function loadTrainingRooms() {
         var fsMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
         var collection = fsMod && fsMod.collection;
         var getDocs = fsMod && fsMod.getDocs;
-        const roomsRef = collection(db, TRAINING_ROOMS_COLLECTION);
+        var query = fsMod && fsMod.query;
+        var where = fsMod && fsMod.where;
+        var orderBy = fsMod && fsMod.orderBy;
+        var limit = fsMod && fsMod.limit;
+        // [비용절감] inactive 제외 + 최신순 100개만 조회 (전체 스캔 방지)
+        const roomsRef = query(
+          collection(db, TRAINING_ROOMS_COLLECTION),
+          where('status', '!=', 'inactive'),
+          orderBy('status'),
+          orderBy('createdAt', 'desc'),
+          limit(100)
+        );
         const querySnapshot = await getDocs(roomsRef);
         return querySnapshot.docs
           .map(doc => {
@@ -824,18 +835,22 @@ async function loadTrainingRooms() {
             var o = { id: doc.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
             if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
             return o;
-          })
-          .filter(room => room.status !== 'inactive');
+          });
       } else {
-        const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION).get();
+        // [비용절감] inactive 제외 + 최신순 100개만 조회
+        const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION)
+          .where('status', '!=', 'inactive')
+          .orderBy('status')
+          .orderBy('createdAt', 'desc')
+          .limit(100)
+          .get();
         return querySnapshot.docs
           .map(doc => {
             var dd = doc.data() || {};
             var o = { id: doc.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
             if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
             return o;
-          })
-          .filter(room => room.status !== 'inactive');
+          });
       }
     };
 

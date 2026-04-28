@@ -1162,6 +1162,26 @@ async function loadUserInfoAndUpdateName() {
 
 // 사용자 이름 및 기타 메타데이터는 Firebase에서 한 번만 읽기 (통합 모드: 화면 표시 시 attachBluetoothIndividualFirebaseListeners 호출)
 let userDataLoaded = false;
+
+// [비용절감] RTDB .on() 리스너 참조 저장소 — 화면 이탈 시 .off() 호출로 누수 방지
+if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
+
+/**
+ * [비용절감] 등록된 모든 RTDB 실시간 리스너를 해제합니다.
+ * 화면 이탈(뒤로가기, 탭 전환) 시 반드시 호출해야 합니다.
+ */
+function detachBluetoothIndividualFirebaseListeners() {
+    if (Array.isArray(window.__btIndivFirebaseRefs)) {
+        window.__btIndivFirebaseRefs.forEach(function(ref) {
+            try { ref.off(); } catch(e) { /* ignore */ }
+        });
+        window.__btIndivFirebaseRefs = [];
+    }
+    window.__bluetoothIndividualFirebaseListenersAttached = false;
+    console.log('[BluetoothIndividual] RTDB 리스너 모두 해제 완료');
+}
+window.detachBluetoothIndividualFirebaseListeners = detachBluetoothIndividualFirebaseListeners;
+
 function attachBluetoothIndividualFirebaseListeners() {
     if (window.__bluetoothIndividualFirebaseListenersAttached) return;
     window.__bluetoothIndividualFirebaseListenersAttached = true;
@@ -1282,7 +1302,11 @@ function attachBluetoothIndividualFirebaseListeners() {
 
 // Firebase에서 사용자 정보 실시간 업데이트 감지 (추가 보강)
 // sessions/{sessionId}/users/{myTrackId}의 변경사항을 실시간으로 감지
-db.ref(`sessions/${sessionId}/users/${myTrackId}`).on('value', (snapshot) => {
+// [비용절감] ref 저장 → detachBluetoothIndividualFirebaseListeners()로 일괄 해제 가능
+const _refUserData = db.ref(`sessions/${sessionId}/users/${myTrackId}`);
+if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
+window.__btIndivFirebaseRefs.push(_refUserData);
+_refUserData.on('value', (snapshot) => {
     const data = snapshot.val();
     if (data && data.userName) {
         // 사용자 이름이 업데이트되면 즉시 반영
@@ -1367,7 +1391,11 @@ function getWorkoutIdSync() {
 window.getWorkoutId = getWorkoutId;
 window.getWorkoutIdSync = getWorkoutIdSync;
 
-db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
+// [비용절감] ref 저장 → detachBluetoothIndividualFirebaseListeners()로 일괄 해제 가능
+const _refStatus = db.ref(`sessions/${sessionId}/status`);
+if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
+window.__btIndivFirebaseRefs.push(_refStatus);
+_refStatus.on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
         // Firebase status 저장 (updateTargetPower에서 사용)
@@ -1615,7 +1643,11 @@ db.ref(`sessions/${sessionId}/status`).on('value', (snapshot) => {
 });
 
 // 4. 워크아웃 정보 구독 (세그먼트 그래프 표시용)
-db.ref(`sessions/${sessionId}/workoutPlan`).on('value', (snapshot) => {
+// [비용절감] ref 저장 → detachBluetoothIndividualFirebaseListeners()로 일괄 해제 가능
+const _refWorkoutPlan = db.ref(`sessions/${sessionId}/workoutPlan`);
+if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
+window.__btIndivFirebaseRefs.push(_refWorkoutPlan);
+_refWorkoutPlan.on('value', (snapshot) => {
     const segments = snapshot.val();
     if (segments && Array.isArray(segments) && segments.length > 0) {
         // 워크아웃 객체 생성
