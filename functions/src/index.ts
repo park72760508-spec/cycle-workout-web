@@ -431,6 +431,7 @@ export async function runNaverSubscriptionSync(
  *   (예: "default" 또는 커스텀 VPC명 "stelvio-vpc" 등)
  */
 export const naverSubscriptionSyncSchedule = onSchedule(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     schedule: "every 30 minutes",
     timeZone: "Asia/Seoul",
@@ -440,7 +441,7 @@ export const naverSubscriptionSyncSchedule = onSchedule(
     network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
     vpcEgress: "ALL_TRAFFIC", // 모든 아웃바운드를 VPC(Cloud NAT)로 라우팅 → 고정 IP 유지
     secrets: [navSecret, smtpPassSecret],
-  },
+  } as any,
   async () => {
     injectSmtpEnv();
     const runId = Date.now();
@@ -479,6 +480,7 @@ export const naverSubscriptionSyncSchedule = onSchedule(
 const NAVER_SYNC_TEST_SECRET = process.env.NAVER_SYNC_TEST_SECRET || "stelvio-naver-sync-test";
 
 export const naverSubscriptionSyncTest = onRequest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     region: "asia-northeast3",
     // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
@@ -486,7 +488,7 @@ export const naverSubscriptionSyncTest = onRequest(
     vpcEgress: "ALL_TRAFFIC",
     secrets: [navSecret, smtpPassSecret],
     cors: false,
-  },
+  } as any,
   async (req, res) => {
     const auth = req.headers["x-naver-sync-secret"] || req.query.secret;
     if (auth !== NAVER_SYNC_TEST_SECRET) {
@@ -592,6 +594,7 @@ async function processStravaActivityAsync(
  * - Strava가 2초 이내 200 응답을 요구하므로, POST 시 즉시 200 반환 후 비동기 처리
  */
 export const stravaWebhook = onRequest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     region: "asia-northeast3",
     cors: false,
@@ -600,7 +603,7 @@ export const stravaWebhook = onRequest(
     network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
     vpcEgress: "ALL_TRAFFIC",
     secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-  },
+  } as any,
   async (req, res) => {
     if (req.method === "GET") {
       // Strava 웹훅 등록 인증: hub.mode=subscribe, hub.verify_token 일치 시 hub.challenge 에코
@@ -659,6 +662,7 @@ export const stravaWebhook = onRequest(
  * - point_reward_v2_applied 플래그로 중복 적립 방지
  */
 export const onIndoorLogCreatedReward = onDocumentCreated(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     document: "users/{userId}/logs/{logId}",
     region: "asia-northeast3",
@@ -667,7 +671,7 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
     network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
     vpcEgress: "ALL_TRAFFIC",
     secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-  },
+  } as any,
   async (event) => {
     injectAligoEnv();
 

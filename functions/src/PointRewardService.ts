@@ -157,14 +157,6 @@ function computeSubscriptionExpiryBeforeAfterSeoul(
 }
 
 /** 한국형 날짜 포맷: YYYY년 MM월 DD일 (Seoul YMD 기준) */
-// formatDateKo는 buildAlimtalkMessage에서 toYmdSeoul(YYYY-MM-DD)로 대체됨 — 혹시 다른 곳에서 필요할 경우를 위해 유지
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function formatDateKo(value: string): string {
-  const ymd = toYmdSeoul(value);
-  if (!ymd) return "-";
-  const [y, m, d] = ymd.split("-");
-  return `${y}년 ${m}월 ${d}일`;
-}
 
 /** 휴대폰 숫자만 추출하여 알림톡 수신자 형태(11자리)로 정규화 */
 function normalizeReceiverPhone(phone: string): string {
