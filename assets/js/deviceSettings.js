@@ -257,6 +257,7 @@
     var rescanWrap = document.getElementById(RESCAN_WRAP_ID);
     if (modal) {
       modal.style.display = 'flex';
+      modal.style.zIndex = '10100200';
       modal.classList.remove('hidden');
       modal.classList.remove('device-scan-state-complete');
     }

@@ -16718,6 +16718,7 @@ function showMobileTrainingResultModal(status = null) {
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
+  modal.style.zIndex = '10100200';
   modal.style.visibility = 'visible';
   modal.classList.remove('hidden');
   

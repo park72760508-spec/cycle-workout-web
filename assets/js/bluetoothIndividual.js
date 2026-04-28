@@ -3717,6 +3717,7 @@ function showBluetoothTrainingResultModalSaving() {
     // 모달 표시
     modal.classList.remove(__indivHiddenClass);
     modal.style.display = 'flex';
+    modal.style.zIndex = '10100200';
     
     console.log('[Bluetooth 개인 훈련] 저장 중 모달 표시');
 }
@@ -3928,6 +3929,7 @@ function showBluetoothTrainingResultModal(status = null) {
     // 모달 표시
     modal.classList.remove(__indivHiddenClass);
     modal.style.display = 'flex';
+    modal.style.zIndex = '10100200';
     
     // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
     // 모바일 대시보드와 동일한 로직 적용
