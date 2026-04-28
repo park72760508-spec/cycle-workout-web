@@ -12532,7 +12532,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     if (effectiveConditionScore == null) {
       if (typeof window.computeConditionScore === 'function') {
         try {
-          const userForScore = { age: user.age, gender: user.gender, challenge: user.challenge, ftp: user.ftp, weight: user.weight };
+          // challenge: 이미 정규화된 변수 사용 (user.challenge raw 값 아님) → loadScore 일관성 보장
+          const userForScore = { age: user.age, gender: user.gender, challenge: challenge, ftp: Number(ftp) || 200, weight: Number(weight) || 70 };
           const logsForScore = recentHistory.slice();
           const deduped = typeof window.dedupeLogsForConditionScore === 'function'
             ? window.dedupeLogsForConditionScore(logsForScore) : logsForScore;
@@ -13249,14 +13250,15 @@ ${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basis
 
     recommendationData.recommendations = deduped;
     
-    // 컨디션 점수: 사용자 입력(컨디션별 강도 보정)이 있으면 우선 사용, 없으면 공통 모듈로 산출
-    if (userConditionScore != null && userConditionScore >= 55 && userConditionScore <= 95) {
+    // 컨디션 점수: 사용자 입력(컨디션별 강도 보정) 또는 대시보드 AI 분析 결과가 있으면 우선,
+    // 없으면 공통 모듈로 산출 (todayStr은 분析 시작 시점과 동일한 값 재사용 → 30일 창 일관성 보장)
+    if (userConditionScore != null && userConditionScore >= 50 && userConditionScore <= 100) {
       recommendationData.condition_score = userConditionScore;
     } else if (typeof window.computeConditionScore === 'function') {
       const userForScore = { age: user.age, gender: user.gender, challenge: challenge, ftp: Number(ftp) || 200, weight: Number(weight) || 70 };
       const logsForScore = typeof window.dedupeLogsForConditionScore === 'function' ? window.dedupeLogsForConditionScore(recentHistory) : recentHistory;
-      const today = new Date();
-      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      // todayStr: 새 Date() 생성 없이 analyzeAndRecommendWorkouts 진입 시 결정된 todayStr 재사용
+      // (별도 new Date() 사용 시 자정 경계에서 30일 창이 1일 달라질 수 있음)
       const csResult = window.computeConditionScore(userForScore, logsForScore, todayStr);
       recommendationData.condition_score = csResult.score;
     }
@@ -13656,6 +13658,15 @@ async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
     const options = {};
     if (coachData && coachData.recommended_workout) {
       options.basisRecommendedWorkout = String(coachData.recommended_workout).trim();
+    }
+    // 대시보드 AI 분析에서 이미 산출된 condition_score를 워크아웃 추천으로 그대로 전달:
+    // 두 화면이 서로 다른 로그 전처리/todayStr로 독자 계산하면 점수 차이가 발생하므로,
+    // 대시보드 분析 결과를 기준값으로 고정하여 일관성을 보장합니다.
+    if (coachData && coachData.condition_score != null && !coachData.error_reason) {
+      var dashScore = Number(coachData.condition_score);
+      if (dashScore >= 50 && dashScore <= 100) {
+        options.userConditionScore = dashScore;
+      }
     }
     showWorkoutRecommendationModal();
     await analyzeAndRecommendWorkouts(date, user, apiKey, options);

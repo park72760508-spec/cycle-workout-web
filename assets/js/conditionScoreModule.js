@@ -176,7 +176,17 @@
 
     var age = Number(user.age) || null;
     var gender = (user.gender && String(user.gender).trim()) || '';
-    var challenge = (user.challenge && String(user.challenge).trim()) || 'Fitness';
+    // challenge 정규화: 저장 방식(대/소문자)이 경로마다 다를 수 있으므로 내부에서 표준화
+    // 이렇게 하면 'racing'/'Racing'/'RACING' 모두 동일한 loadOptimal 구간 적용
+    var challengeRaw = (user.challenge && String(user.challenge).trim()) || '';
+    var challengeLower = challengeRaw.toLowerCase();
+    var challenge;
+    if (challengeLower === 'pro') challenge = 'PRO';
+    else if (challengeLower === 'elite') challenge = 'Elite';
+    else if (challengeLower === 'racing') challenge = 'Racing';
+    else if (challengeLower === 'granfondo') challenge = 'GranFondo';
+    else if (challengeLower === 'ironman') challenge = 'IronMan';
+    else challenge = 'Fitness';
     var ftp = Number(user.ftp) || 200;
 
     // --- 1. 일관성 (0~12): 주당 훈련 횟수
