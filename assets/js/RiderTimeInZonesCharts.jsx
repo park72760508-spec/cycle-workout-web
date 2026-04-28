@@ -87,6 +87,21 @@ function formatHoursForAxis(val) {
   return (val % 1 === 0 ? val : val.toFixed(1)) + '시간';
 }
 
+/** 초 → 표시용 레이블 (패널 2번째 줄) */
+function formatSecondsToTimeLabel(seconds) {
+  var s = Math.round(seconds || 0);
+  if (s <= 0) return '0분';
+  var h = Math.floor(s / 3600);
+  var m = Math.floor((s % 3600) / 60);
+  if (h > 0 && m > 0) return h + '시간 ' + m + '분';
+  if (h > 0) return h + '시간';
+  return m + '분';
+}
+
+/** 가이드선 점선 스타일 */
+var ZONE_REF_DASH = '6 4';
+var ZONE_REF_STROKE_W = 2;
+
 /** 파워존 데이터 기반 AI 분석 코멘트 (10줄 이내) + 보완점 */
 function generatePowerZoneAnalysisComment(data) {
   if (!data || !data.length) return '';
@@ -169,22 +184,17 @@ function PowerTimeInZonesChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var Cell = Recharts && Recharts.Cell;
+  var Tooltip = Recharts && Recharts.Tooltip;
+  var ReferenceLine = Recharts && Recharts.ReferenceLine;
+
+  // 선택된 존 인덱스 (가이드선·패널 표시용) — useState는 조건부 return 전에 호출
+  var _selState = React.useState(null);
+  var selectedIndex = _selState[0];
+  var setSelectedIndex = _selState[1];
 
   var total = (powerData || []).reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
   var hasData = total > 0;
   var zoneRanges = getPowerZoneRanges(ftp);
-
-  var powerTitle = titleOverride || '파워 영역별 누적시간';
-  if (!Recharts || !hasData) {
-    return (
-      <DashboardCard>
-        <div className="mb-1 min-w-0">
-          <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{powerTitle}</h3>
-        </div>
-        <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
-      </DashboardCard>
-    );
-  }
 
   var data = (powerData || []).map(function(d, i) {
     var range = zoneRanges[i];
@@ -198,29 +208,113 @@ function PowerTimeInZonesChart(props) {
     };
   });
 
+  // 초기 선택: 데이터 중 가장 큰 존
+  React.useEffect(function() {
+    if (!hasData || !data.length) return;
+    var maxIdx = 0;
+    var maxSec = 0;
+    data.forEach(function(d, i) { if (d.seconds > maxSec) { maxSec = d.seconds; maxIdx = i; } });
+    setSelectedIndex(maxIdx);
+  }, [hasData, (powerData || []).length]);
+
+  // 패널 데이터 계산
+  var selBar = (selectedIndex != null && data[selectedIndex]) ? data[selectedIndex] : null;
+  var selRange = selBar ? (zoneRanges[selectedIndex] ? zoneRanges[selectedIndex].range : '-') : null;
+  var selColor = selBar ? selBar.color : null;
+  var selName = selBar ? selBar.name : null;
+  var selTime = selBar ? formatSecondsToTimeLabel(selBar.seconds) : null;
+
+  // BarChart hover 핸들러
+  function applyPointerState(state) {
+    if (!state || state.activeTooltipIndex == null) return;
+    var idx = state.activeTooltipIndex;
+    if (idx >= 0 && idx < data.length) setSelectedIndex(idx);
+  }
+
+  var powerTitle = titleOverride || '파워 영역별 누적시간';
+  if (!Recharts || !hasData) {
+    return (
+      <DashboardCard>
+        <div className="mb-1 min-w-0">
+          <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{powerTitle}</h3>
+        </div>
+        <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
+      </DashboardCard>
+    );
+  }
+
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{powerTitle}</h3>
       </div>
-      <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
+      <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'} style={{ position: 'relative' }}>
+        {/* 선택된 존 패널 */}
+        {selBar && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 10 }}>
+            <div style={{
+              background: 'rgba(255,255,255,0.96)',
+              border: '1.5px solid ' + selColor,
+              borderRadius: 8,
+              padding: '4px 14px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.09)',
+              minWidth: 110
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', letterSpacing: '-0.01em' }}>
+                {selName} · {selRange}
+              </span>
+              <span style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>
+                누적 {selTime}
+              </span>
+            </div>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 28 }}>
+          <BarChart
+            data={data}
+            margin={{ top: 44, right: 16, left: 8, bottom: 28 }}
+            onMouseMove={applyPointerState}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var cat = (payload && (payload.value ?? payload.name ?? (payload.payload && (payload.payload.value ?? payload.payload.name)))) || '';
               var idx = data.findIndex(function(d) { return d.name === cat; });
               var z = zoneRanges[idx] || { label: cat, color: 'rgba(156,163,175,0.55)' };
+              var isSelected = idx === selectedIndex;
               return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')' },
-                React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
+                React.createElement('circle', { cx: 0, cy: 0, r: isSelected ? 12 : 10, fill: z.color, stroke: isSelected ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.1)', strokeWidth: isSelected ? 1.5 : 1 }),
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            <Bar dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'} radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
+            {Tooltip ? (
+              <Tooltip
+                content={function() { return null; }}
+                cursor={{ stroke: selColor || '#7c3aed', strokeWidth: 1.5, strokeDasharray: ZONE_REF_DASH, fill: 'rgba(0,0,0,0.03)' }}
+                isAnimationActive={false}
+              />
+            ) : null}
+            {selName && ReferenceLine ? (
+              <ReferenceLine
+                x={selName}
+                stroke={selColor || '#7c3aed'}
+                strokeWidth={ZONE_REF_STROKE_W}
+                strokeDasharray={ZONE_REF_DASH}
+                strokeOpacity={0.85}
+                isFront={true}
+                ifOverflow="visible"
+              />
+            ) : null}
+            <Bar
+              dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'}
+              radius={[6, 6, 0, 0]}
+              label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}
+              onClick={function(_d, index) { if (index >= 0 && index < data.length) setSelectedIndex(index); }}
+            >
               {data.map(function(entry, i) {
-                return <Cell key={i} fill={entry.color} />;
+                return <Cell key={i} fill={entry.color} fillOpacity={i === selectedIndex ? 1 : 0.72} />;
               })}
             </Bar>
           </BarChart>
@@ -256,22 +350,17 @@ function HRTimeInZonesChart(props) {
   var CartesianGrid = Recharts && Recharts.CartesianGrid;
   var ResponsiveContainer = Recharts && Recharts.ResponsiveContainer;
   var Cell = Recharts && Recharts.Cell;
+  var Tooltip = Recharts && Recharts.Tooltip;
+  var ReferenceLine = Recharts && Recharts.ReferenceLine;
+
+  // 선택된 존 인덱스 (가이드선·패널 표시용) — useState는 조건부 return 전에 호출
+  var _selState = React.useState(null);
+  var selectedIndex = _selState[0];
+  var setSelectedIndex = _selState[1];
 
   var total = (hrData || []).reduce(function(s, d) { return s + (d.seconds || 0); }, 0);
   var hasData = total > 0;
   var zoneRanges = getHRZoneRanges(maxHr);
-
-  var hrTitle = titleOverride || '심박 영역별 누적시간';
-  if (!Recharts || !hasData) {
-    return (
-      <DashboardCard>
-        <div className="mb-1 min-w-0">
-          <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{hrTitle}</h3>
-        </div>
-        <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
-      </DashboardCard>
-    );
-  }
 
   var data = (hrData || []).map(function(d, i) {
     var range = zoneRanges[i];
@@ -285,30 +374,114 @@ function HRTimeInZonesChart(props) {
     };
   });
 
+  // 초기 선택: 데이터 중 가장 큰 존
+  React.useEffect(function() {
+    if (!hasData || !data.length) return;
+    var maxIdx = 0;
+    var maxSec = 0;
+    data.forEach(function(d, i) { if (d.seconds > maxSec) { maxSec = d.seconds; maxIdx = i; } });
+    setSelectedIndex(maxIdx);
+  }, [hasData, (hrData || []).length]);
+
+  // 패널 데이터 계산
+  var selBar = (selectedIndex != null && data[selectedIndex]) ? data[selectedIndex] : null;
+  var selRange = selBar ? (zoneRanges[selectedIndex] ? zoneRanges[selectedIndex].range : '-') : null;
+  var selColor = selBar ? selBar.color : null;
+  var selName = selBar ? selBar.name : null;
+  var selTime = selBar ? formatSecondsToTimeLabel(selBar.seconds) : null;
+
+  // BarChart hover 핸들러
+  function applyPointerState(state) {
+    if (!state || state.activeTooltipIndex == null) return;
+    var idx = state.activeTooltipIndex;
+    if (idx >= 0 && idx < data.length) setSelectedIndex(idx);
+  }
+
+  var hrTitle = titleOverride || '심박 영역별 누적시간';
+  if (!Recharts || !hasData) {
+    return (
+      <DashboardCard>
+        <div className="mb-1 min-w-0">
+          <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{hrTitle}</h3>
+        </div>
+        <div className={(isFullWidth ? 'h-[min(200px,50vw)] sm:h-[200px]' : 'h-[min(160px,40vw)] sm:h-[160px]') + ' flex items-center justify-center text-gray-400 text-sm'}>데이터 없음</div>
+      </DashboardCard>
+    );
+  }
+
   return (
     <DashboardCard>
       <div className="mb-1 min-w-0">
         <h3 className={(titleClassName || 'text-sm font-semibold text-gray-800') + ' truncate'}>{hrTitle}</h3>
         {maxHrSourceCaption ? React.createElement('p', { className: 'text-xs text-gray-500 mt-0.5' }, maxHrSourceCaption) : null}
       </div>
-      <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'}>
+      <div className={(isFullWidth ? 'h-[min(220px,55vw)] sm:h-[220px]' : 'h-[min(180px,45vw)] sm:h-[180px]') + ' -mx-2'} style={{ position: 'relative' }}>
+        {/* 선택된 존 패널 */}
+        {selBar && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 10 }}>
+            <div style={{
+              background: 'rgba(255,255,255,0.96)',
+              border: '1.5px solid ' + selColor,
+              borderRadius: 8,
+              padding: '4px 14px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.09)',
+              minWidth: 110
+            }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', letterSpacing: '-0.01em' }}>
+                {selName} · {selRange}
+              </span>
+              <span style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>
+                누적 {selTime}
+              </span>
+            </div>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 28, right: 16, left: 8, bottom: 28 }}>
+          <BarChart
+            data={data}
+            margin={{ top: 44, right: 16, left: 8, bottom: 28 }}
+            onMouseMove={applyPointerState}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis type="category" dataKey="name" stroke="#6b7280" tickMargin={12} tick={function(props) {
               var x = props.x, y = props.y, payload = props.payload;
               var cat = (payload && (payload.value ?? payload.name ?? (payload.payload && (payload.payload.value ?? payload.payload.name)))) || '';
               var idx = data.findIndex(function(d) { return d.name === cat; });
               var z = zoneRanges[idx] || { label: cat, color: 'rgba(156,163,175,0.55)' };
+              var isSelected = idx === selectedIndex;
               return React.createElement('g', { transform: 'translate(' + x + ',' + y + ')' },
-                React.createElement('circle', { cx: 0, cy: 0, r: 10, fill: z.color, stroke: 'rgba(0,0,0,0.1)', strokeWidth: 1 }),
+                React.createElement('circle', { cx: 0, cy: 0, r: isSelected ? 12 : 10, fill: z.color, stroke: isSelected ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.1)', strokeWidth: isSelected ? 1.5 : 1 }),
                 React.createElement('text', { x: 0, y: 0, textAnchor: 'middle', dominantBaseline: 'middle', fontSize: 10, fontWeight: 600, fill: '#1f2937' }, z.label)
               );
             }} height={20} />
             <YAxis type="number" tickFormatter={yAxisUnit === 'h' ? formatHoursForAxis : formatMinutesForAxis} stroke="#6b7280" tick={{ fontSize: 12 }} width={44} />
-            <Bar dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'} radius={[6, 6, 0, 0]} label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}>
+            {Tooltip ? (
+              <Tooltip
+                content={function() { return null; }}
+                cursor={{ stroke: selColor || '#7c3aed', strokeWidth: 1.5, strokeDasharray: ZONE_REF_DASH, fill: 'rgba(0,0,0,0.03)' }}
+                isAnimationActive={false}
+              />
+            ) : null}
+            {selName && ReferenceLine ? (
+              <ReferenceLine
+                x={selName}
+                stroke={selColor || '#7c3aed'}
+                strokeWidth={ZONE_REF_STROKE_W}
+                strokeDasharray={ZONE_REF_DASH}
+                strokeOpacity={0.85}
+                isFront={true}
+                ifOverflow="visible"
+              />
+            ) : null}
+            <Bar
+              dataKey={yAxisUnit === 'h' ? 'hours' : 'minutes'}
+              radius={[6, 6, 0, 0]}
+              label={{ position: 'top', offset: 4, formatter: function(v, n, p) { var e = p && p.payload; return e && e.pct != null ? e.pct + '%' : ''; }, fontSize: 12, fontWeight: 600, fill: '#374151' }}
+              onClick={function(_d, index) { if (index >= 0 && index < data.length) setSelectedIndex(index); }}
+            >
               {data.map(function(entry, i) {
-                return <Cell key={i} fill={entry.color} />;
+                return <Cell key={i} fill={entry.color} fillOpacity={i === selectedIndex ? 1 : 0.72} />;
               })}
             </Bar>
           </BarChart>
