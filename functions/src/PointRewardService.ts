@@ -79,8 +79,24 @@ export interface StelvioIndoorAlimtalkSendResult {
 function toYmdSeoul(value: unknown): string {
   if (value == null || value === "") return "";
   if (typeof value === "string") {
-    const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return m[0];
+    const trimmed = value.trim();
+    // YYYY-MM-DD 형식 (정상)
+    const m1 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) return m1[0];
+    // MM-DD-YY 또는 MM-DD-YYYY 형식 → YYYY-MM-DD 로 변환
+    const m2 = trimmed.match(/^(\d{2})-(\d{2})-(\d{2,4})$/);
+    if (m2) {
+      const [, mm, dd, yy] = m2;
+      const yyyy = yy.length === 2 ? `20${yy}` : yy;
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    // MM/DD/YYYY 또는 MM/DD/YY 형식 → YYYY-MM-DD 로 변환
+    const m3 = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m3) {
+      const [, mm, dd, yy] = m3;
+      const yyyy = yy.length === 2 ? `20${yy}` : yy;
+      return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+    }
   }
   const ts = value as Timestamp;
   if (ts && typeof ts.toDate === "function") {
@@ -141,6 +157,8 @@ function computeSubscriptionExpiryBeforeAfterSeoul(
 }
 
 /** 한국형 날짜 포맷: YYYY년 MM월 DD일 (Seoul YMD 기준) */
+// formatDateKo는 buildAlimtalkMessage에서 toYmdSeoul(YYYY-MM-DD)로 대체됨 — 혹시 다른 곳에서 필요할 경우를 위해 유지
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatDateKo(value: string): string {
   const ymd = toYmdSeoul(value);
   if (!ymd) return "-";
@@ -216,9 +234,9 @@ function buildAlimtalkMessage(params: {
   expiryDateAfter: string;
   remPointsAfter: number;
 }): string {
-  // 샘플: #{expiry_date_before}=YYYY-MM-DD, #{expiry_date_after_kr}=한글일자
-  const beforeLine = toYmdSeoul(params.expiryDateBefore) || formatDateKo(params.expiryDateBefore);
-  const afterKr = formatDateKo(params.expiryDateAfter);
+  // 기존 만료일·변경 만료일 모두 YYYY-MM-DD 형식으로 통일
+  const beforeLine = toYmdSeoul(params.expiryDateBefore) || "-";
+  const afterLine  = toYmdSeoul(params.expiryDateAfter)  || "-";
   return `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
 안녕하세요 ${params.userName}님,
 오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
@@ -232,7 +250,7 @@ function buildAlimtalkMessage(params: {
 500 SP 자동 사용으로 인하여 구독 기간이 ${params.extendedDays}일 추가 연장되었습니다.
 
 기존 만료일 : ${beforeLine}
-변경 만료일 : ${afterKr}
+변경 만료일 : ${afterLine}
 
 ▶ 내 포인트 현황
 사용 후 잔여 포인트 : ${formatSpForKakaoTemplate(params.remPointsAfter)} SP
