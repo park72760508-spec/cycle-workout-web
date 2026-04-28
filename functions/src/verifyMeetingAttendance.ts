@@ -790,6 +790,16 @@ export async function executeVerifyAttendanceForEventId(
   };
 
   if (rideSnap.exists && !meetingSnap.exists) {
+    /* 개인별 결과를 rides 문서에 직접 저장 → 클라이언트 별도 쿼리 불필요 */
+    const attendanceResults: Record<string, string> = {};
+    for (const d of result.details) {
+      if (d.userId) {
+        attendanceResults[d.userId] =
+          d.outcome === "ATTENDED" ? "ATTENDED"
+          : d.outcome === "MISSED" ? "MISSED"
+          : "SKIPPED";
+      }
+    }
     await rideRef.set(
       {
         attendanceVerificationRan: true,
@@ -800,6 +810,7 @@ export async function executeVerifyAttendanceForEventId(
           missedCount: result.missedCount,
           skippedCount: result.skippedCount,
         },
+        attendanceResults,
       },
       { merge: true }
     );
