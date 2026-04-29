@@ -4157,7 +4157,8 @@ exports.rebuildRankingAggregates = onSchedule(
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {
-    schedule: "0 3 * * *",
+    /** rebuildRankingAggregates(매시 00분) 이후 집계 문서가 채워진 뒤 실행 → 헵타곤·랭킹보드 동일 소스·빠른 코호트 갱신 */
+    schedule: "20 0,6,9-23 * * *",
     timeZone: "Asia/Seoul",
     memory: "2GiB",
     timeoutSeconds: 540,
@@ -4170,6 +4171,8 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
         getLeagueCategory,
         getRolling30DaysRangeSeoul,
         admin,
+        readRankingAggregatePayloadIfFresh,
+        buildPeakPowerAllDurationsForRangeAllGendersOnePass,
       });
       console.log("[scheduledHeptagonCohortRanks] ok", r);
     } catch (e) {
