@@ -211,6 +211,17 @@ function diffCalendarDaysSeoulYmd(ymdBefore: string, ymdAfter: string): number {
   return Math.round((t1 - t0) / (24 * 60 * 60 * 1000));
 }
 
+/**
+ * 카카오 검수 알림톡 템플릿: 만료일 줄 형식 MM-DD-YY (예: 06-07-26).
+ * 내부 계산은 YYYY-MM-DD(서울) 유지, message_1 삽입 직전에만 변환.
+ */
+function formatSeoulYmdToAlimtalkMmDdYy(ymd: string): string {
+  const m = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return ymd.trim() || "-";
+  const [, yyyy, mm, dd] = m;
+  return `${mm}-${dd}-${yyyy.slice(-2)}`;
+}
+
 /** SP 표시: 부동소수 오차 제거(알림톡 본문이 검수 템플릿과 글자 단위로 일치해야 함) */
 function formatSpForKakaoTemplate(n: number): string {
   if (!Number.isFinite(n)) return "0";
@@ -220,7 +231,7 @@ function formatSpForKakaoTemplate(n: number): string {
 }
 
 /**
- * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지 포함)해야 발송 성공.
+ * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 MM-DD-YY 포함)해야 발송 성공.
  * 이모지(🚴‍♂️)는 승인서에 있으면 그대로 둔다(검수에 없는데 넣으면 거절).
  */
 function buildAlimtalkMessage(params: {
@@ -231,9 +242,10 @@ function buildAlimtalkMessage(params: {
   expiryDateAfter: string;
   remPointsAfter: number;
 }): string {
-  // 기존 만료일·변경 만료일 모두 YYYY-MM-DD 형식으로 통일
-  const beforeLine = toYmdSeoul(params.expiryDateBefore) || "-";
-  const afterLine  = toYmdSeoul(params.expiryDateAfter)  || "-";
+  const beforeYmd = toYmdSeoul(params.expiryDateBefore);
+  const afterYmd = toYmdSeoul(params.expiryDateAfter);
+  const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
+  const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
   return `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
 안녕하세요 ${params.userName}님,
 오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
