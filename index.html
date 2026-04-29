@@ -1110,6 +1110,23 @@
       display: none !important;
     }
 
+    /* editUserModal 내부 클릭 닫기 오버레이 — 전역 .modal-overlay 고z-index 재정의 */
+    #editUserModal .modal-overlay {
+      position: absolute !important;
+      top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+      background: transparent !important;
+      display: block !important;
+      z-index: 1 !important;
+      backdrop-filter: none !important;
+      width: auto !important;
+      height: auto !important;
+    }
+    #editUserModal .edit-user-modal-content,
+    #editUserModal .modal-content {
+      position: relative;
+      z-index: 10 !important;
+    }
+
     /* 사용자 정보 수정 모달 헤더 스타일 */
     #editUserModal .modal-header {
       display: flex;
@@ -1235,6 +1252,23 @@
       display: none !important;
       visibility: hidden !important;
       opacity: 0 !important;
+    }
+
+    /* completeUserInfoModal 내부 클릭 배경 — 전역 .modal-overlay 고z-index 재정의 */
+    #completeUserInfoModal .modal-overlay {
+      position: absolute !important;
+      top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+      background: transparent !important;
+      display: block !important;
+      z-index: 1 !important;
+      backdrop-filter: none !important;
+      width: auto !important;
+      height: auto !important;
+    }
+    #completeUserInfoModal .edit-user-modal-content,
+    #completeUserInfoModal .modal-content {
+      position: relative;
+      z-index: 10 !important;
     }
 
     /* 모달이 표시될 때 강제로 보이도록 */
