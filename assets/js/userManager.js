@@ -3405,7 +3405,11 @@ async function editUser(userId) {
     
     fillFormData();
     
-    // 모달 표시
+    // 모달 표시 — body 최상단으로 이동해 stacking context 문제 방지
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+    modal.style.setProperty('z-index', '10100300', 'important');
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
     
