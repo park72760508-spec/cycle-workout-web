@@ -2221,6 +2221,74 @@ exports.stravaSyncSunday = onSchedule(
   }
 );
 
+/**
+ * 수동/긴급: Asia/Seoul 기준 오늘(00:00~23:59) Strava 로그 재수집.
+ * 새벽 배치·웹훅 누락 보완 시 사용. stravaSyncSunday와 동일한 기간 로직 및 청크 팬아웃.
+ * 인증: X-Internal-Secret(STELVIO 내부, runStravaSyncChunk 동일) 또는 관리자(grade=1) Firebase Bearer.
+ */
+const manualStravaSyncTodaySeoulOptions = { cors: false, timeoutSeconds: 540 };
+if (STRAVA_CLIENT_SECRET) {
+  manualStravaSyncTodaySeoulOptions.secrets = [STRAVA_CLIENT_SECRET];
+}
+exports.manualStravaSyncTodaySeoul = onRequest(
+  manualStravaSyncTodaySeoulOptions,
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST only" });
+      return;
+    }
+    try {
+      const db = admin.firestore();
+      const rawSecret =
+        req.headers["x-internal-secret"] ||
+        req.headers["X-Internal-Secret"] ||
+        req.query.secret;
+      let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+
+      if (!authorized) {
+        const uid = await getUidFromRequest(req, res);
+        if (!uid) return;
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        if (grade !== "1") {
+          res.status(403).json({
+            success: false,
+            error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
+          });
+          return;
+        }
+        authorized = true;
+      }
+
+      const range = getTodayAfterBefore();
+      const getChunkUrl = async () => {
+        const snap = await db.collection("appConfig").doc("sync").get();
+        return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
+      };
+      await runStravaSyncWithFanOut(db, range, "[manualStravaSyncTodaySeoul]", getChunkUrl);
+      res.status(200).json({
+        success: true,
+        message:
+          "오늘(Asia/Seoul) 구간 Strava 동기화를 실행했습니다. Functions 로그 [manualStravaSyncTodaySeoul] / 청크 [stravaSyncChunk] 를 확인하세요.",
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+        afterUnix: range.afterUnix,
+        beforeUnix: range.beforeUnix,
+      });
+    } catch (err) {
+      console.error("[manualStravaSyncTodaySeoul]", err);
+      res.status(500).json({
+        success: false,
+        error: err && err.message ? err.message : String(err),
+      });
+    }
+  }
+);
+
 // ---------- 주간 마일리지 TOP10 랭킹 (Choose Your Path 입장 시 팝업) ----------
 /** 현재 주 월요일 00:00 ~ 오늘 23:59 (Asia/Seoul) 날짜 문자열 반환. weekOffset: 0=현재주, -1=전주 */
 function getWeekRangeSeoul(weekOffset = 0) {
