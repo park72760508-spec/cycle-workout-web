@@ -11,6 +11,57 @@ const HEPTAGON_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito"
 const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
 
+/** 랭킹보드 월간(실질 롤링30) 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates */
+function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
+  return `peakRanking_v2_monthly_${durationType}_${gender}_${startStr}_${endStr}`;
+}
+
+/**
+ * 사전 집계(ranking_aggregates)가 모두 있으면 21회 로그 스캔 없이 동일 byCategory 사용
+ * @param {Function} readFresh async (db, key) => payload | null  (readRankingAggregatePayloadIfFresh)
+ */
+async function tryLoadHeptagonPeakCacheFromAggregates(db, readFresh, startStr, endStr) {
+  if (!readFresh) return null;
+  const slots = [];
+  for (const g of HEPTAGON_GENDERS) {
+    for (const d of HEPTAGON_DURATIONS) {
+      slots.push({ g, d, cacheKey: peakMonthlyAggregateDocKey(d, g, startStr, endStr) });
+    }
+  }
+  const payloads = await Promise.all(slots.map((s) => readFresh(db, s.cacheKey)));
+  const cache = {};
+  for (let i = 0; i < slots.length; i++) {
+    const { g, d } = slots[i];
+    const payload = payloads[i];
+    if (!payload || !payload.byCategory) return null;
+    if (payload.startStr != null && payload.endStr != null
+      && (String(payload.startStr) !== startStr || String(payload.endStr) !== endStr)) {
+      return null;
+    }
+    if (!cache[g]) cache[g] = {};
+    cache[g][d] = {
+      byCategory: payload.byCategory,
+      entries: Array.isArray(payload.entries) ? payload.entries : [],
+    };
+  }
+  return cache;
+}
+
+/** buildPeakPowerAllDurationsForRangeAllGendersOnePass 결과 → 헵타곤 cache[g][d] 형식 */
+function mapAllDurToHeptagonCache(allDur) {
+  if (!allDur) return null;
+  const cache = {};
+  for (const g of HEPTAGON_GENDERS) {
+    cache[g] = {};
+    for (const d of HEPTAGON_DURATIONS) {
+      const pack = allDur[g] && allDur[g][d];
+      if (!pack || !pack.byCategory) return null;
+      cache[g][d] = { byCategory: pack.byCategory, entries: pack.entries || [] };
+    }
+  }
+  return cache;
+}
+
 /**
  * Supremo: 전 기간(전체) 집계. 그 외: 선택 부문 **소속**만(타 부문 열람용 가상 순위 제외).
  * Assoluto: ageCategory === Assoluto.
@@ -245,9 +296,17 @@ function computePTotalAndTierHeptagon(ranks, cohortNPerAxis) {
  * @param {Function} deps.getLeagueCategory
  * @param {Function} deps.getRolling30DaysRangeSeoul
  * @param {typeof import("firebase-admin")} admin
+ * @param {Function} [deps.readRankingAggregatePayloadIfFresh] ranking_aggregates 1회 읽기 (선택)
+ * @param {Function} [deps.buildPeakPowerAllDurationsForRangeAllGendersOnePass] 로그 1패스 집계 (선택)
  */
 async function runRebuildHeptagonCohortRanks(db, deps) {
-  const { getPeakPowerRankingEntries, getLeagueCategory, getRolling30DaysRangeSeoul } = deps;
+  const {
+    getPeakPowerRankingEntries,
+    getLeagueCategory,
+    getRolling30DaysRangeSeoul,
+    readRankingAggregatePayloadIfFresh,
+    buildPeakPowerAllDurationsForRangeAllGendersOnePass,
+  } = deps;
   const { admin } = deps;
   const t0 = Date.now();
   const { startStr, endStr } = getRolling30DaysRangeSeoul();
@@ -269,13 +328,25 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
     });
   }
 
-  const cache = {};
-  for (const g of HEPTAGON_GENDERS) {
-    cache[g] = {};
-    for (const d of HEPTAGON_DURATIONS) {
-      const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, d, g);
-      cache[g][d] = { byCategory, entries };
+  let peakSource = "legacy";
+  let cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readRankingAggregatePayloadIfFresh, startStr, endStr);
+  if (cache) {
+    peakSource = "aggregates";
+  } else if (typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function") {
+    const allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap);
+    cache = mapAllDurToHeptagonCache(allDur);
+    if (cache) peakSource = "onepass";
+  }
+  if (!cache) {
+    cache = {};
+    for (const g of HEPTAGON_GENDERS) {
+      cache[g] = {};
+      for (const d of HEPTAGON_DURATIONS) {
+        const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, d, g, usersSnap);
+        cache[g][d] = { byCategory, entries };
+      }
     }
+    peakSource = "legacy";
   }
 
   let wrote = 0;
@@ -391,8 +462,8 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   }
   await commitBatch();
   const ms = Date.now() - t0;
-  console.log("[runRebuildHeptagonCohortRanks] done", { monthKey, startStr, endStr, wrote, ms, users: userMeta.size });
-  return { monthKey, startStr, endStr, wrote, ms };
+  console.log("[runRebuildHeptagonCohortRanks] done", { monthKey, startStr, endStr, wrote, ms, users: userMeta.size, peakSource });
+  return { monthKey, startStr, endStr, wrote, ms, peakSource };
 }
 
 module.exports = {
