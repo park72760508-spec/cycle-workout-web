@@ -820,12 +820,10 @@ async function loadTrainingRooms() {
         var where = fsMod && fsMod.where;
         var orderBy = fsMod && fsMod.orderBy;
         var limit = fsMod && fsMod.limit;
-        // [비용절감] inactive 제외 + 최신순 100개만 조회 (전체 스캔 방지)
+        // [비용절감] inactive 제외 + 100개만 조회 (복합 인덱스 불필요 — 정렬은 클라이언트)
         const roomsRef = query(
           collection(db, TRAINING_ROOMS_COLLECTION),
           where('status', '!=', 'inactive'),
-          orderBy('status'),
-          orderBy('createdAt', 'desc'),
           limit(100)
         );
         const querySnapshot = await getDocs(roomsRef);
@@ -835,13 +833,16 @@ async function loadTrainingRooms() {
             var o = { id: doc.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
             if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
             return o;
+          })
+          .sort((a, b) => {
+            var ta = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : (a.createdAt || 0);
+            var tb = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : (b.createdAt || 0);
+            return tb - ta;
           });
       } else {
-        // [비용절감] inactive 제외 + 최신순 100개만 조회
+        // [비용절감] inactive 제외 + 100개만 조회 (복합 인덱스 불필요 — 정렬은 클라이언트)
         const querySnapshot = await db.collection(TRAINING_ROOMS_COLLECTION)
           .where('status', '!=', 'inactive')
-          .orderBy('status')
-          .orderBy('createdAt', 'desc')
           .limit(100)
           .get();
         return querySnapshot.docs
@@ -850,6 +851,11 @@ async function loadTrainingRooms() {
             var o = { id: doc.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
             if (dd && typeof dd === 'object') { for (var k in dd) { if (dd.hasOwnProperty(k)) o[k] = dd[k]; } }
             return o;
+          })
+          .sort((a, b) => {
+            var ta = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : (a.createdAt || 0);
+            var tb = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : (b.createdAt || 0);
+            return tb - ta;
           });
       }
     };
