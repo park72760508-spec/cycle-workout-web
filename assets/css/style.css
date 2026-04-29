@@ -22660,6 +22660,7 @@ body.bluetooth-individual-screen-active {
 }
 #mobileDashboardScreen .mobile-gauge-container svg text {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
+  pointer-events: none; /* 큰 파워 숫자 등이 컨트롤 버튼 히트를 가리지 않도록 */
 }
 
 /* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
@@ -22919,6 +22920,12 @@ body.bluetooth-individual-screen-active {
   stroke-width: 2px;
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 1)) 
           drop-shadow(0 0 12px rgba(255, 255, 255, 0.6));
+}
+
+/* 재생/일시정지: 투명 히트 원 확대 — 그룹 onclick 버블 수신, 모바일 중앙 탭 안정화 */
+#mobileDashboardScreen .svg-btn-hit-area {
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 /* 아이콘 이미지 스타일 보정 */
