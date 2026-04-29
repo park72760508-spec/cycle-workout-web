@@ -2443,8 +2443,14 @@ exports.getWeeklyRanking = onRequest(
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
     const weeklyAggKey = `weekly_ranking_full_${startStr}_${endStr}`;
     const weeklyAgg = await readRankingAggregatePayloadIfFresh(db, weeklyAggKey);
-    if (weeklyAgg && Array.isArray(weeklyAgg.fullEntries) && weeklyAgg.fullEntries.length > 0) {
-      const entries = weeklyAgg.fullEntries;
+    const aggMatchesWeek =
+      weeklyAgg &&
+      weeklyAgg.startStr === startStr &&
+      weeklyAgg.endStr === endStr &&
+      Array.isArray(weeklyAgg.fullEntries) &&
+      weeklyAgg.fullEntries.length > 0;
+
+    const buildWeeklyRankingResponse = (entries, precomputed) => {
       const top10 = entries.slice(0, 10).map((e, i) => ({
         rank: i + 1,
         userId: e.userId,
@@ -2468,46 +2474,91 @@ exports.getWeeklyRanking = onRequest(
       }
       res.set("Access-Control-Allow-Origin", "*");
       res.set("Cache-Control", "public, max-age=120");
-      return res.status(200).json({ success: true, ranking: top10, startStr, endStr, myRank: myRank || undefined, precomputed: true });
+      const rankBody = {
+        success: true,
+        ranking: top10,
+        startStr,
+        endStr,
+        myRank: myRank || undefined,
+      };
+      if (precomputed === true) rankBody.precomputed = true;
+      else if (precomputed === false) rankBody.liveComputed = true;
+      return res.status(200).json(rankBody);
+    };
+
+    if (aggMatchesWeek) {
+      return buildWeeklyRankingResponse(weeklyAgg.fullEntries, true);
     }
-    // [비용절감] 사전 집계 캐시 miss 시 구버전 캐시 doc에서 마지막 랭킹 반환 (전체 스캔 폴백 제거)
+
+    // 구버전 cache/* 문서는 startStr/endStr가 일치할 때만 사용 (집계 주간과 불일치 시 잘못된 주차 데이터 노출 방지)
     const cacheRef = db.collection("cache").doc(usePrevWeek ? "weeklyRankingPrev" : "weeklyRanking");
     const cacheSnap = await cacheRef.get();
     const nowMs = Date.now();
     if (cacheSnap.exists) {
-      const data = cacheSnap.data();
+      const data = cacheSnap.data() || {};
+      const legacyStart = data.startStr != null ? String(data.startStr) : "";
+      const legacyEnd = data.endStr != null ? String(data.endStr) : "";
       const ranking = Array.isArray(data.ranking) ? data.ranking : [];
-      const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
-      const ageMin = updatedAt ? Math.round((nowMs - updatedAt) / 60000) : null;
-      let myRank = null;
-      if (userIdParam && Array.isArray(data.fullEntries)) {
-        const userIdx = data.fullEntries.findIndex((e) => e.userId === userIdParam);
-        if (userIdx >= 10) {
-          const e = data.fullEntries[userIdx];
-          myRank = {
-            rank: userIdx + 1,
-            userId: e.userId,
-            name: e.name,
-            totalTss: Math.round((e.totalTss || 0) * 100) / 100,
-            is_private: e.is_private === true,
-          };
+      const legacyMatches = legacyStart === startStr && legacyEnd === endStr && ranking.length > 0;
+      if (legacyMatches) {
+        const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
+        const ageMin = updatedAt ? Math.round((nowMs - updatedAt) / 60000) : null;
+        let myRank = null;
+        if (userIdParam && Array.isArray(data.fullEntries)) {
+          const userIdx = data.fullEntries.findIndex((e) => e.userId === userIdParam);
+          if (userIdx >= 10) {
+            const e = data.fullEntries[userIdx];
+            myRank = {
+              rank: userIdx + 1,
+              userId: e.userId,
+              name: e.name,
+              totalTss: Math.round((e.totalTss || 0) * 100) / 100,
+              is_private: e.is_private === true,
+            };
+          }
         }
+        res.set("Access-Control-Allow-Origin", "*");
+        res.set("Cache-Control", "public, max-age=120");
+        return res.status(200).json({
+          success: true,
+          ranking,
+          startStr,
+          endStr,
+          myRank: myRank || undefined,
+          cached: true,
+          stale: true,
+          cacheAgeMin: ageMin,
+          rebuilding: true,
+        });
       }
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Cache-Control", "public, max-age=120");
-      return res.status(200).json({
-        success: true,
-        ranking,
-        startStr,
-        endStr,
-        myRank: myRank || undefined,
-        cached: true,
-        stale: true,
-        cacheAgeMin: ageMin,
-        rebuilding: true,
-      });
     }
-    // 캐시 doc도 없는 경우: 초기 상태, 전체 스캔 대신 빈 랭킹 반환 (스케줄러가 곧 집계 예정)
+
+    // 사전 집계 miss·구캐시 불일치: 요청 주간 구간으로 즉시 산출 (신규 주 월요일 아침·집계 stale 구간 등)
+    try {
+      const liveEntries = await getWeeklyRankingEntries(db, startStr, endStr);
+      if (liveEntries.length > 0) {
+        try {
+          await writeRankingAggregatePayload(db, weeklyAggKey, {
+            fullEntries: liveEntries,
+            ranking: liveEntries.slice(0, 10).map((e, i) => ({
+              rank: i + 1,
+              userId: e.userId,
+              name: e.name,
+              totalTss: Math.round(e.totalTss * 100) / 100,
+              is_private: e.is_private === true,
+            })),
+            startStr,
+            endStr,
+          });
+        } catch (writeErr) {
+          console.warn("[getWeeklyRanking] aggregate write after live compute:", writeErr && writeErr.message ? writeErr.message : writeErr);
+        }
+        return buildWeeklyRankingResponse(liveEntries, false);
+      }
+    } catch (liveErr) {
+      console.error("[getWeeklyRanking] live getWeeklyRankingEntries failed:", liveErr && liveErr.message ? liveErr.message : liveErr);
+    }
+
     res.set("Access-Control-Allow-Origin", "*");
     res.status(200).json({
       success: true,
