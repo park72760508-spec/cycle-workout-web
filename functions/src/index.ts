@@ -572,20 +572,24 @@ async function processStravaActivityAsync(
     return;
   }
 
-  const rewardService = new PointRewardService(db);
-  const rewardResult = await rewardService.processRidingReward(userId, userTss, true);
+  try {
+    const rewardService = new PointRewardService(db);
+    const rewardResult = await rewardService.processRidingReward(userId, userTss, true);
 
-  await logRef.set(
-    {
-      point_reward_v2_applied: true,
-      point_reward_v2_history_id: rewardResult.historyId,
-      point_reward_v2_alimtalk_sent: rewardResult.alimtalkSent,
-      point_reward_v2_alimtalk_skip: rewardResult.alimtalkSkip,
-      point_reward_v2_alimtalk_error: rewardResult.alimtalkError,
-      point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+    await logRef.set(
+      {
+        point_reward_v2_applied: true,
+        point_reward_v2_history_id: rewardResult.historyId,
+        point_reward_v2_alimtalk_sent: rewardResult.alimtalkSent,
+        point_reward_v2_alimtalk_skip: rewardResult.alimtalkSkip,
+        point_reward_v2_alimtalk_error: rewardResult.alimtalkError,
+        point_reward_v2_processed_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (rewardErr) {
+    console.error("[Strava Webhook] 로그 저장은 완료됨. 포인트/알림톡 처리 실패:", rewardErr);
+  }
 }
 
 /**
@@ -598,10 +602,11 @@ export const stravaWebhook = onRequest(
   {
     region: "asia-northeast3",
     cors: false,
-    /** 알리고(카카오) API: 네이버 결제 연동과 동일 Cloud NAT 고정 IP(34.64.250.77)로 아웃바운드 */
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC",
+    /**
+     * Strava OAuth·활동·Streams API는 공용 인터넷으로 나가야 안정적이다.
+     * Direct VPC Egress(고정 NAT)만 쓰면 Strava 쪽 TLS/라우팅 실패로 토큰 갱신·로그 저장이 끊길 수 있어
+     * 이 함수에는 network/vpcEgress를 넣지 않는다. (알리고는 기본 egress에서 동작; IP 화이트리스트가 NAT 전용이면 알림만 실패 가능 — 로그 수집은 우선)
+     */
     secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   } as any,
   async (req, res) => {
@@ -631,20 +636,22 @@ export const stravaWebhook = onRequest(
       res.status(200).send("EVENT_RECEIVED");
 
       const body = req.body;
-      const aspectType = body?.aspect_type;
-      const objectType = body?.object_type;
+      const aspectType = String(body?.aspect_type || "").toLowerCase();
+      const objectType = String(body?.object_type || "").toLowerCase();
       const ownerId = body?.owner_id;
       const objectId = body?.object_id;
 
-      if (
-        aspectType === "create" &&
+      /** 생성·갱신: 동일 활동 재조회·merge 저장 (공개 변경·제목 수정 등으로 update만 오는 경우 대비) — delete 비처리 */
+      const shouldFetchActivity =
         objectType === "activity" &&
         ownerId != null &&
-        objectId != null
-      ) {
+        objectId != null &&
+        (aspectType === "create" || aspectType === "update");
+
+      if (shouldFetchActivity) {
         // 비동기 처리: await 없이 백그라운드에서 실행 (2초 제한 회피)
         processStravaActivityAsync(db, ownerId, objectId).catch((err) => {
-          console.error("[Strava Webhook] processStravaActivity 실패:", err);
+          console.error("[Strava Webhook] Strava 활동 처리 실패:", err);
         });
       } else {
         console.log("[Strava Webhook] POST (미처리):", { aspectType, objectType, ownerId, objectId });
