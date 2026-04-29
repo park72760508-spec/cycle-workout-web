@@ -1918,8 +1918,9 @@
 
   /* ──────────────────────────────────────────────────────────────
    * LevelProgressBar – 현재 레벨(1~7) × 세부 단계(10칸) 세로 막대
-   * 채움: (구간 최대% − 레벨%) / (구간 폭%) × 10 → 반올림 · 0~10(아래부터).
-   * 집계 레벨%는 `pPctForBar`(카드 툴팁·n·순위와 동일) 우선; 없으면 pTotal·pComprehensive.
+   * 채움: (pCeil − p) / (pCeil − pFloor) × 10 반올림 · 0~10(아래부터).
+   * pFloor=해당 등급에 처음 들어오는 순위의 집계%(코호트·부문 반영). 1위·1.0%(레벨A)도 10칸까지 올라가게 함.
+   * `pPctForBar`(툴팁 레벨%) 우선; `barContext`로 코호트 n·가상 여부·부문 전달.
    * ────────────────────────────────────────────────────────────── */
   /* 레벨바 색상: 녹색 계열 (레벨A 진녹 → 레벨G 연녹/회녹) */
   var LEVEL_BAR_DEFS = [
@@ -1932,7 +1933,31 @@
     { id: 'C6', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
   ];
 
-  function computeLevelBarStep(summary, overrideTierId, pPctOverride) {
+  /**
+   * 집계 레벨%는 순위에 대해 단조(낮은 순위일수록 작은 %)이므로, tid 등급에 처음 진입하는 순위의 % = 해당 등급에서 이론상 최저(최상) %.
+   * 이 값을 바닥으로 두면 레벨A 1위·1.0%에서 10단계가 꽉 참.
+   */
+  function levelBarMinPercentForTierOnBoard(tierIdTarget, cohortNRaw, isVirtualCohort, filterCategory, userAgeCategory) {
+    var nC = cohortNRaw | 0;
+    if (nC < 1 || !tierIdTarget) {
+      return null;
+    }
+    var isVirt = isVirtualCohort === true;
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
+    var Neff = useNeff ? nC + 1 : nC;
+    if (Neff < 1) return null;
+    var rCap = Math.max(1, Neff | 0);
+    for (var rLoop = 1; rLoop <= rCap; rLoop++) {
+      var pr = heptagonLevelPercentForRankN(rLoop, nC, isVirt, filterCategory, userAgeCategory);
+      var oid = (heptagonBoardTierIdFromLevelPercent(pr) || {}).id;
+      if (oid === tierIdTarget) {
+        return pr;
+      }
+    }
+    return null;
+  }
+
+  function computeLevelBarStep(summary, overrideTierId, pPctOverride, barCtx) {
     if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 0 };
     /* overrideTierId: OctagonTierCenterOverlay·툴팁과 동일한 tid를 외부에서 주입 */
     var tid = overrideTierId || summary.tier.id;
@@ -1950,13 +1975,36 @@
     var lv = LEVEL_BAR_DEFS[lvIdx];
     var step = 0;
     if (p != null) {
-      var span = lv.upper - lv.lower;
-      if (span > 0) {
-        var ratio = (lv.upper - p) / span; /* 구간 최대%(나쁨)=바닥, 최소%(좋음)=꼭대기 */
+      var pCeil = lv.upper;
+      var pFloor = lv.lower;
+      var nTot = summary.cohortN != null && isFinite(summary.cohortN) ? summary.cohortN | 0 : 0;
+      var vmin = null;
+      if (barCtx && nTot >= 1 && tid) {
+        vmin = levelBarMinPercentForTierOnBoard(
+          tid,
+          nTot,
+          !!barCtx.isVirtualCohort,
+          barCtx.filterCategory,
+          barCtx.viewerAgeCategory != null ? String(barCtx.viewerAgeCategory) : ''
+        );
+      }
+      if (vmin != null && isFinite(vmin) && vmin < pCeil) {
+        pFloor = Math.max(lv.lower, Math.min(pCeil - 1e-6, vmin));
+      }
+      var span = pCeil - pFloor;
+      if (!(span > 0) || !isFinite(span)) {
+        var spanFb = lv.upper - lv.lower;
+        if (spanFb > 0 && isFinite(spanFb)) {
+          var rfb = (pCeil - p) / spanFb;
+          rfb = Math.max(0, Math.min(1, rfb));
+          step = Math.max(0, Math.min(10, Math.round(rfb * 10)));
+        } else {
+          step = 0;
+        }
+      } else {
+        var ratio = (pCeil - p) / span;
         ratio = Math.max(0, Math.min(1, ratio));
         step = Math.max(0, Math.min(10, Math.round(ratio * 10)));
-      } else {
-        step = 10;
       }
     }
     return { lv: lv, lvIdx: lvIdx, step: step };
@@ -1966,8 +2014,9 @@
     var summary = props.summary;
     var tierId = props.tierId; /* 배지와 동일한 effective tier ID (선택적) */
     var pPctForBar = props.pPctForBar;
+    var barContext = props.barContext;
     if (!summary || !summary.tier) return null;
-    var result = computeLevelBarStep(summary, tierId, pPctForBar);
+    var result = computeLevelBarStep(summary, tierId, pPctForBar, barContext);
     var lv = result.lv;
     var lvIdx = result.lvIdx;
     var step = result.step;
@@ -3092,6 +3141,11 @@
                   summary={tierForCard}
                   tierId={barTierId}
                   pPctForBar={pShow >= 0 ? pShow : undefined}
+                  barContext={{
+                    isVirtualCohort: tierForCard.heptagonBoardVirtualCohort === true,
+                    filterCategory: category,
+                    viewerAgeCategory: viewerAc
+                  }}
                 />
               );
             })() : null}
