@@ -4544,6 +4544,10 @@
 
   <!-- ========== 모바일 대시보드 화면 ========== -->
   <style>
+    /* 펄스는 장식만 — 터치/클릭은 아래 재생·일시정지 버튼으로 통과 */
+    #mobileDashboardScreen .mobile-start-pulse-wrap {
+      pointer-events: none;
+    }
     /* 모바일 개인훈련 대시보드: 시작 버튼 펄스 (세그먼트 마스코트와 동일 스타일, 사용자 이름 라벨 초록 #00d4aa) */
     #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring {
       transform-box: fill-box;
@@ -4677,7 +4681,9 @@
             </g>
             <g class="svg-btn-group" onclick="handleMobileToggle()">
               <circle class="svg-neon-circle" cx="100" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
-              <image id="imgMobileToggle" class="svg-btn-icon" x="92" y="213" width="16" height="16" href="assets/img/play0.png" />
+              <image id="imgMobileToggle" class="svg-btn-icon" x="92" y="213" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
+              <!-- 중앙 터치: 시각적 원보다 넉넉한 히트 영역(SVG 좌표 기준 r≈22, 모바일에서 중앙 탭 누락 방지) -->
+              <circle class="svg-btn-hit-area" cx="100" cy="221" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
             </g>
         
             <g class="svg-btn-group" onclick="handleMobileStop()">
