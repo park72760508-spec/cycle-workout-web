@@ -83,6 +83,14 @@
         { "fieldPath": "user_id", "order": "ASCENDING" },
         { "fieldPath": "completed_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
