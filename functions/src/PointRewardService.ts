@@ -1,5 +1,10 @@
 import * as admin from "firebase-admin";
 import type { Firestore, Timestamp } from "firebase-admin/firestore";
+import {
+  aligoApiFailureHint,
+  logAligoAuthShape,
+  scrubAligoCredential,
+} from "./aligoCredentials";
 
 const aligoapi = require("aligoapi");
 
@@ -297,17 +302,21 @@ export class PointRewardService {
     const appConfigSnap = await this.db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
     const appConfig = appConfigSnap.exists ? appConfigSnap.data() ?? {} : {};
 
-    const senderkey = String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || "").trim();
-    const tplCode = String(process.env.ALIGO_TPL_CODE || appConfig.tpl_code || "").trim();
-    const sender = String(process.env.ALIGO_SENDER || appConfig.sender || "").trim();
+    const senderkey = scrubAligoCredential(String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || ""));
+    const tplCode = scrubAligoCredential(String(process.env.ALIGO_TPL_CODE || appConfig.tpl_code || ""));
+    const sender = scrubAligoCredential(String(process.env.ALIGO_SENDER || appConfig.sender || ""));
 
-    const apikey = String(process.env.ALIGO_API_KEY || "").trim();
-    const userid = String(process.env.ALIGO_USER_ID || "").trim();
-    const token = String(process.env.ALIGO_TOKEN || "").trim();
+    const apikey = scrubAligoCredential(process.env.ALIGO_API_KEY);
+    const userid = scrubAligoCredential(process.env.ALIGO_USER_ID);
+    const token = scrubAligoCredential(process.env.ALIGO_TOKEN);
 
     if (!senderkey || !tplCode || !sender || !apikey || !userid || !token) {
-      throw new Error("알리고 설정이 누락되었습니다. (ALIGO_* env 또는 appConfig/aligo 확인 필요)");
+      throw new Error(
+        "알리고 설정이 누락되었습니다. (ALIGO_* env·Secret 또는 appConfig/aligo의 senderkey·tpl_code·sender 확인. API 인증 3종은 Secret ALIGO_API_KEY/USER_ID/TOKEN)"
+      );
     }
+
+    logAligoAuthShape("loadAligoConfig", apikey, userid, token);
 
     return {
       senderkey,
@@ -388,8 +397,9 @@ export class PointRewardService {
           "알 수 없는 응답"
       );
       const c = raw?.code ?? raw?.result_code;
-      console.error("[Aligo] alimtalkSend 비성공 응답:", detail);
-      throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}`);
+      const hint = aligoApiFailureHint(c, msg);
+      console.error("[Aligo] alimtalkSend 비성공 응답:", detail, hint || "");
+      throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}${hint}`);
     }
     const info = raw.info as
       | { mid?: string | number; scnt?: number; fcnt?: number; type?: string }

@@ -39,6 +39,7 @@ import {
 import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
 import { createVerifyMeetingAttendance, createScheduledRideAttendanceVerification } from "./verifyMeetingAttendance";
 import { PointRewardService, type StelvioMileageAppendResult } from "./PointRewardService";
+import { scrubAligoCredential } from "./aligoCredentials";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
 
@@ -76,14 +77,19 @@ function injectSmtpEnv(): void {
   }
 }
 
-/** 알리고 인증 Secret을 process.env로 주입 (PointRewardService가 동일 패턴으로 읽음) */
+/** 알리고 인증 Secret을 process.env로 주입 (PointRewardService가 동일 패턴으로 읽음). BOM·따옴표·개행 제거 */
 function injectAligoEnv(): void {
   try {
-    process.env.ALIGO_API_KEY = aligoApiKeySecret.value() || process.env.ALIGO_API_KEY;
-    process.env.ALIGO_USER_ID = aligoUserIdSecret.value() || process.env.ALIGO_USER_ID;
-    process.env.ALIGO_TOKEN = aligoTokenSecret.value() || process.env.ALIGO_TOKEN;
+    const k = scrubAligoCredential(aligoApiKeySecret.value());
+    const u = scrubAligoCredential(aligoUserIdSecret.value());
+    const t = scrubAligoCredential(aligoTokenSecret.value());
+    process.env.ALIGO_API_KEY = k || scrubAligoCredential(process.env.ALIGO_API_KEY);
+    process.env.ALIGO_USER_ID = u || scrubAligoCredential(process.env.ALIGO_USER_ID);
+    process.env.ALIGO_TOKEN = t || scrubAligoCredential(process.env.ALIGO_TOKEN);
   } catch {
-    // Secret 미설정 시 무시 (서비스 내부에서 설정 누락 에러 처리)
+    process.env.ALIGO_API_KEY = scrubAligoCredential(process.env.ALIGO_API_KEY);
+    process.env.ALIGO_USER_ID = scrubAligoCredential(process.env.ALIGO_USER_ID);
+    process.env.ALIGO_TOKEN = scrubAligoCredential(process.env.ALIGO_TOKEN);
   }
 }
 
