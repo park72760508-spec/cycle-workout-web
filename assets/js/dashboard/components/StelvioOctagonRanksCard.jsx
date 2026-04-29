@@ -1917,9 +1917,9 @@
   }
 
   /* ──────────────────────────────────────────────────────────────
-   * LevelProgressBar – 현재 레벨(1~7) × 세부 단계(1~10) 세로 막대
-   * pTotal: 백분위(낮을수록 상위). 레벨 내 상한·하한을 10등분하여
-   * 아래부터 위로 채워지는 블록으로 표시.
+   * LevelProgressBar – 현재 레벨(1~7) × 세부 단계(10칸) 세로 막대
+   * 채움: (구간 최대% − 레벨%) / (구간 폭%) × 10 → 반올림 · 0~10(아래부터).
+   * 집계 레벨%는 `pPctForBar`(카드 툴팁·n·순위와 동일) 우선; 없으면 pTotal·pComprehensive.
    * ────────────────────────────────────────────────────────────── */
   /* 레벨바 색상: 녹색 계열 (레벨A 진녹 → 레벨G 연녹/회녹) */
   var LEVEL_BAR_DEFS = [
@@ -1932,23 +1932,29 @@
     { id: 'C6', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
   ];
 
-  function computeLevelBarStep(summary, overrideTierId) {
-    if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 1 };
-    /* overrideTierId: OctagonTierCenterOverlay와 동일한 tid를 외부에서 주입 */
+  function computeLevelBarStep(summary, overrideTierId, pPctOverride) {
+    if (!summary || !summary.tier) return { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 0 };
+    /* overrideTierId: OctagonTierCenterOverlay·툴팁과 동일한 tid를 외부에서 주입 */
     var tid = overrideTierId || summary.tier.id;
-    var p = summary.pTotal != null && isFinite(summary.pTotal) ? summary.pTotal
-          : summary.pComprehensive != null && isFinite(summary.pComprehensive) ? summary.pComprehensive
-          : null;
+    var p = null;
+    if (pPctOverride != null && isFinite(Number(pPctOverride)) && Number(pPctOverride) >= 0) {
+      p = Number(pPctOverride);
+      if (p > 100) p = 100;
+    } else if (summary.pTotal != null && isFinite(summary.pTotal)) {
+      p = summary.pTotal;
+    } else if (summary.pComprehensive != null && isFinite(summary.pComprehensive)) {
+      p = summary.pComprehensive;
+    }
     var lvIdx = LEVEL_BAR_DEFS.findIndex(function(l) { return l.id === tid; });
     if (lvIdx < 0) lvIdx = 6;
     var lv = LEVEL_BAR_DEFS[lvIdx];
-    var step = 1;
+    var step = 0;
     if (p != null) {
       var span = lv.upper - lv.lower;
       if (span > 0) {
-        var ratio = (lv.upper - p) / span; /* 0=레벨 하한(최하), 1=레벨 상한(최상) */
+        var ratio = (lv.upper - p) / span; /* 구간 최대%(나쁨)=바닥, 최소%(좋음)=꼭대기 */
         ratio = Math.max(0, Math.min(1, ratio));
-        step = Math.max(1, Math.min(10, Math.ceil(ratio * 10)));
+        step = Math.max(0, Math.min(10, Math.round(ratio * 10)));
       } else {
         step = 10;
       }
@@ -1959,8 +1965,9 @@
   function LevelProgressBar(props) {
     var summary = props.summary;
     var tierId = props.tierId; /* 배지와 동일한 effective tier ID (선택적) */
+    var pPctForBar = props.pPctForBar;
     if (!summary || !summary.tier) return null;
-    var result = computeLevelBarStep(summary, tierId);
+    var result = computeLevelBarStep(summary, tierId, pPctForBar);
     var lv = result.lv;
     var lvIdx = result.lvIdx;
     var step = result.step;
@@ -3080,7 +3087,13 @@
               var barTierId = (pShow >= 0)
                 ? (heptagonBoardTierIdFromLevelPercent(pShow) || {}).id || tierForCard.tier.id
                 : tierForCard.tier.id;
-              return <LevelProgressBar summary={tierForCard} tierId={barTierId} />;
+              return (
+                <LevelProgressBar
+                  summary={tierForCard}
+                  tierId={barTierId}
+                  pPctForBar={pShow >= 0 ? pShow : undefined}
+                />
+              );
             })() : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
