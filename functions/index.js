@@ -2226,7 +2226,11 @@ exports.stravaSyncSunday = onSchedule(
  * 새벽 배치·웹훅 누락 보완 시 사용. stravaSyncSunday와 동일한 기간 로직 및 청크 팬아웃.
  * 인증: X-Internal-Secret(STELVIO 내부, runStravaSyncChunk 동일) 또는 관리자(grade=1) Firebase Bearer.
  */
-const manualStravaSyncTodaySeoulOptions = { cors: false, timeoutSeconds: 540 };
+const manualStravaSyncTodaySeoulOptions = {
+  region: "asia-northeast3",
+  cors: false,
+  timeoutSeconds: 540,
+};
 if (STRAVA_CLIENT_SECRET) {
   manualStravaSyncTodaySeoulOptions.secrets = [STRAVA_CLIENT_SECRET];
 }
