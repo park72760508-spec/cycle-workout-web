@@ -2666,6 +2666,7 @@ function OpenRidingCalendarMain(props) {
   var matchingDateKeys = hook.matchingDateKeys;
   var hostDateKeys = hook.hostDateKeys || new Set();
   var ridesMonth = hook.ridesMonth;
+  var ridesMyList = hook.ridesMyList || [];
   var loadingRides = hook.loadingRides;
 
   var _invitePh = useState('');
@@ -2766,13 +2767,13 @@ function OpenRidingCalendarMain(props) {
         seen[id] = true;
         rows.push({ r: r, kind: kind });
       }
-      ridesMonth.forEach(function (r) {
+      ridesMyList.forEach(function (r) {
         if (String(r.hostUserId || '') === uid) {
           addRow(r, 'host');
         }
       });
       if (phone) {
-        ridesMonth.forEach(function (r) {
+        ridesMyList.forEach(function (r) {
           if (String(r.hostUserId || '') === uid) return;
           var il = Array.isArray(r.invitedList) ? r.invitedList : [];
           if (!il.length) return;
@@ -2780,7 +2781,7 @@ function OpenRidingCalendarMain(props) {
           addRow(r, 'invited');
         });
       }
-      ridesMonth.forEach(function (r) {
+      ridesMyList.forEach(function (r) {
         if (isOpenRidingPastBySeoulDate(r)) return;
         if (String(r.hostUserId || '') === uid) return;
         var id = r != null && r.id != null ? String(r.id) : '';
@@ -2806,7 +2807,7 @@ function OpenRidingCalendarMain(props) {
         return { r: r, kind: kindById[String(r.id)] };
       });
     },
-    [ridesMonth, userId, inviteCheckPhone]
+    [ridesMyList, userId, inviteCheckPhone]
   );
 
   var _sel = useState(null);

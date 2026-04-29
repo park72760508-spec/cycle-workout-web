@@ -28,6 +28,7 @@ export function useOpenRiding(db, userId, anchorMonth) {
   const [prefs, setPrefs] = useState({ activeRegions: [], preferredLevels: [] });
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [ridesMonth, setRidesMonth] = useState([]);
+  const [ridesMyList, setRidesMyList] = useState([]);
   const [loadingRides, setLoadingRides] = useState(false);
   const [error, setError] = useState(null);
 
@@ -39,6 +40,17 @@ export function useOpenRiding(db, userId, anchorMonth) {
     const end = new Date(base.getFullYear(), base.getMonth() + 1, 0, 23, 59, 59, 999);
     return { start, end };
   }, [anchorMonth]);
+
+  /** 나의 라이딩 목록 전용: 오늘~+30일 범위 (고정, 마운트 시 1회 계산) */
+  const myListRange = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 30);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 마운트 시 1회 고정
 
   useEffect(() => {
     if (!db || !userId) {
@@ -78,6 +90,21 @@ export function useOpenRiding(db, userId, anchorMonth) {
     refreshMonth();
   }, [refreshMonth]);
 
+  /** 나의 라이딩 목록 전용: 오늘~+30일 데이터 fetch */
+  const refreshMyList = useCallback(async () => {
+    if (!db) return;
+    try {
+      const list = await fetchRidesInDateRange(db, myListRange.start, myListRange.end);
+      setRidesMyList(list);
+    } catch (e) {
+      setRidesMyList([]);
+    }
+  }, [db, myListRange.start, myListRange.end]);
+
+  useEffect(() => {
+    refreshMyList();
+  }, [refreshMyList]);
+
   const matchingDateKeys = useMemo(
     () => computeMatchingRideDates(ridesMonth, prefs),
     [ridesMonth, prefs]
@@ -102,6 +129,7 @@ export function useOpenRiding(db, userId, anchorMonth) {
     prefsLoaded,
     savePrefs,
     ridesMonth,
+    ridesMyList,
     loadingRides,
     error,
     matchingDateKeys,
