@@ -258,12 +258,13 @@ function formatRemPointsForMissionAlimtalk(n: number): string {
 }
 
 /**
- * 검수 시 저장된 이모지 바이트열과 맞추기: 🚴‍♂️ = U+1F6B4 U+200D U+2642 (FE0F 선택).
- * 일부 환경에서 FE0F 유무로 "템플릿과 일치하지 않음"이 난 사례가 있어 기본은 FE0F 고정.
+ * 검수 시 저장된 이모지 바이트열과 맞춤. 기본은 원본 그대로(FE0F 변형 선택자 강제 부착 없음 — 템플릿 검수 바이트와 충돌 방지).
+ * FE0F가 필요한 검수본만 `KAKAO_ALIMTALK_BICYCLE_EMOJI=fe0f`(또는 1/true/yes)로 선택 적용.
  * `KAKAO_ALIMTALK_BICYCLE_EMOJI=strip` → 검수본에서 이미 이모지를 뺀 경우에만 사용.
+ * `nof0f` → 이미 붙은 FE0F만 제거해 시퀀스 통일.
  */
 function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
-  const mode = String(process.env.KAKAO_ALIMTALK_BICYCLE_EMOJI || "fe0f").toLowerCase();
+  const mode = String(process.env.KAKAO_ALIMTALK_BICYCLE_EMOJI || "").toLowerCase();
   if (mode === "strip" || mode === "none" || mode === "0") {
     return message
       .replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "")
@@ -274,7 +275,10 @@ function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
   if (mode === "nof0f") {
     return message.replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "\u{1F6B4}\u200D\u2642");
   }
-  return message.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
+  if (mode === "fe0f" || mode === "1" || mode === "true" || mode === "yes") {
+    return message.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
+  }
+  return message;
 }
 
 /**
@@ -344,15 +348,19 @@ function maybeStripAlimtalkEmojiForTemplate(message: string): string {
 
 /**
  * Aligo 문서 [Notice] 2: "알림톡 내용(message)은 템플릿과 동일하게 개행문자를 입력하셔야 합니다."
- * 카카오 검수 시 저장된 개행이 CRLF(`\r\n`)인 경우가 많아, LF만 보내면 "템플릿과 일치하지 않음"이 난다.
- * `ALIGO_ALIMTALK_LF_ONLY=1` 이면 변환 생략(검수본이 LF일 때).
+ * 기본은 `buildAlimtalkMessage` 등에서 쓰는 LF(`\n`)를 그대로 둠(검수 승인 템플릿과 동일한 바이트 유지).
+ * 일부 템플릿만 CRLF(`\r\n`)로 등록된 경우에 한해 `ALIGO_ALIMTALK_CRLF_ONLY=1` 로만 줄바꿈을 CRLF로 통일.
+ *
+ * Firebase Functions: 알림톡 관련 플래그는 배포된 함수와 동일한 이름으로 설정한다.
+ * - Firebase CLI v2 환경 변수: 배포 시 `--set-env-vars KEY=VALUE` 또는 `firebase.json` / 콘솔의 함수 설정.
+ * - Secret이 아닌 토글 변수는 Plain env로 두고, 스테이징에서 템플릿 발송 테스트 후 프로덕션에 복제·고정하는 편이 안전하다.
  */
 function normalizeAlimtalkNewlinesForKakaoTemplate(message: string): string {
-  const lfOnly = String(process.env.ALIGO_ALIMTALK_LF_ONLY || "").toLowerCase();
-  if (lfOnly === "1" || lfOnly === "true" || lfOnly === "yes") {
-    return message;
+  const crlfOnly = String(process.env.ALIGO_ALIMTALK_CRLF_ONLY || "").toLowerCase();
+  if (crlfOnly === "1" || crlfOnly === "true" || crlfOnly === "yes") {
+    return message.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("\r\n");
   }
-  return message.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("\r\n");
+  return message;
 }
 
 /**
