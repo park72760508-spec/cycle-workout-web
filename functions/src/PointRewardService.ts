@@ -222,6 +222,21 @@ function formatSeoulYmdToAlimtalkMmDdYy(ymd: string): string {
   return `${mm}-${dd}-${yyyy.slice(-2)}`;
 }
 
+/**
+ * 카카오 템플릿 변수 `#{expiry_date_after_kr}` 대응: MM-DD-YY가 아닌 한국어 일자.
+ * 검수 예시가 `2026년 7월 22일` / `2026년 07월 22일` 등일 수 있어 env로 자리수 맞춤.
+ */
+function formatSeoulYmdToAlimtalkKrYmdLine(ymd: string): string {
+  const m = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return ymd.trim() || "-";
+  const [, yyyy, mm, dd] = m;
+  const pad = String(process.env.KAKAO_ALIMTALK_KR_DATE_ZERO_PAD || "").toLowerCase();
+  if (pad === "1" || pad === "true" || pad === "yes") {
+    return `${yyyy}년 ${mm}월 ${dd}일`;
+  }
+  return `${yyyy}년 ${parseInt(mm, 10)}월 ${parseInt(dd, 10)}일`;
+}
+
 /** SP 표시: 부동소수 오차 제거(알림톡 본문이 검수 템플릿과 글자 단위로 일치해야 함) */
 function formatSpForKakaoTemplate(n: number): string {
   if (!Number.isFinite(n)) return "0";
@@ -231,8 +246,40 @@ function formatSpForKakaoTemplate(n: number): string {
 }
 
 /**
- * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 MM-DD-YY 포함)해야 발송 성공.
- * 이모지(🚴‍♂️)는 승인서에 있으면 그대로 둔다(검수에 없는데 넣으면 거절).
+ * 잔여 포인트 줄: 검수 샘플이 정수면 `286.37`이 불일치를 유발할 수 있음.
+ * `KAKAO_ALIMTALK_SP_ALLOW_DECIMAL=1`이면 소수 둘째 자리까지(기존 로직).
+ */
+function formatRemPointsForMissionAlimtalk(n: number): string {
+  const allowDec = String(process.env.KAKAO_ALIMTALK_SP_ALLOW_DECIMAL || "").toLowerCase();
+  if (allowDec === "1" || allowDec === "true" || allowDec === "yes") {
+    return formatSpForKakaoTemplate(n);
+  }
+  return String(Math.round(Number.isFinite(n) ? n : 0));
+}
+
+/**
+ * 검수 시 저장된 이모지 바이트열과 맞추기: 🚴‍♂️ = U+1F6B4 U+200D U+2642 (FE0F 선택).
+ * 일부 환경에서 FE0F 유무로 "템플릿과 일치하지 않음"이 난 사례가 있어 기본은 FE0F 고정.
+ * `KAKAO_ALIMTALK_BICYCLE_EMOJI=strip` → 검수본에서 이미 이모지를 뺀 경우에만 사용.
+ */
+function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
+  const mode = String(process.env.KAKAO_ALIMTALK_BICYCLE_EMOJI || "fe0f").toLowerCase();
+  if (mode === "strip" || mode === "none" || mode === "0") {
+    return message
+      .replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "")
+      .replace(/\u{1F6B4}\u200D\u2642/gu, "")
+      .replace(/\u{1F6B4}/gu, "")
+      .replace(/  +/g, " ");
+  }
+  if (mode === "nof0f") {
+    return message.replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "\u{1F6B4}\u200D\u2642");
+  }
+  return message.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
+}
+
+/**
+ * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
+ * `#{expiry_date_after_kr}` 슬롯은 한국어 일자, `#{expiry_date_before}` 는 MM-DD-YY 를 쓰는 승인이 많음.
  */
 function buildAlimtalkMessage(params: {
   userName: string;
@@ -245,7 +292,13 @@ function buildAlimtalkMessage(params: {
   const beforeYmd = toYmdSeoul(params.expiryDateBefore);
   const afterYmd = toYmdSeoul(params.expiryDateAfter);
   const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
-  const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
+  const afterFmt = String(process.env.KAKAO_ALIMTALK_EXPIRY_AFTER_FORMAT || "kr").toLowerCase();
+  const afterLine =
+    afterYmd == null || afterYmd === ""
+      ? "-"
+      : afterFmt === "mmddyy" || afterFmt === "us"
+        ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd)
+        : formatSeoulYmdToAlimtalkKrYmdLine(afterYmd);
   return `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
 안녕하세요 ${params.userName}님,
 오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
@@ -262,7 +315,7 @@ function buildAlimtalkMessage(params: {
 변경 만료일 : ${afterLine}
 
 ▶ 내 포인트 현황
-사용 후 잔여 포인트 : ${formatSpForKakaoTemplate(params.remPointsAfter)} SP
+사용 후 잔여 포인트 : ${formatRemPointsForMissionAlimtalk(params.remPointsAfter)} SP
 
 오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!
 
@@ -371,6 +424,7 @@ export class PointRewardService {
     }
     const recvName = (displayName || "회원").trim() || "회원";
     let messageOut = maybeStripAlimtalkEmojiForTemplate(message);
+    messageOut = normalizeMissionAlimtalkBicycleEmoji(messageOut);
     messageOut = messageOut.normalize("NFC");
     messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
 
