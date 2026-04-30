@@ -260,7 +260,7 @@
               if (typeof setRunConditionAnalysis === 'function') setRunConditionAnalysis(true);
             },
             className: 'py-3.5 px-5 rounded-2xl font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 active:scale-[0.98] min-h-[52px]'
-          }, '다시 분析')
+          }, '다시 분석')
         )
       )
     );
