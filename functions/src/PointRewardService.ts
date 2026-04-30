@@ -253,7 +253,7 @@ function buildAlimtalkMessage(params: {
 이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
 
 ▶ 이번 라이딩 보상
-획득 포인트 : ${params.earnedPoints} SP
+획득 포인트 : ${formatSpForKakaoTemplate(params.earnedPoints)} SP
 
 ▶ 구독 연장 혜택 적용
 500 SP 자동 사용으로 인하여 구독 기간이 ${params.extendedDays}일 추가 연장되었습니다.
@@ -269,11 +269,22 @@ function buildAlimtalkMessage(params: {
 ※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
 }
 
-/** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 */
+/** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 (템플릿 본문도 이모지 없음이어야 함) */
 function maybeStripAlimtalkEmojiForTemplate(message: string): string {
   const strip = String(process.env.KAKAO_ALIMTALK_STRIP_EMOJI || "").toLowerCase();
   if (strip === "1" || strip === "true" || strip === "yes") {
-    return message.replace(/\p{Extended_Pictographic}/gu, "").replace(/\u200d/g, "");
+    return (
+      message
+        // ZWJ 이모지(🚴‍♂️)를 픽토그램만 지우면 ♂·공백만 남아 "템플릿과 일치하지 않음" 유발
+        .replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "")
+        .replace(/\u{1F6B4}\u200D\u2642/gu, "")
+        .replace(/\u{1F6B4}/gu, "")
+        .replace(/\p{Extended_Pictographic}/gu, "")
+        .replace(/\uFE0F/gu, "")
+        .replace(/\u200D/gu, "")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/  +/g, " ")
+    );
   }
   return message;
 }
@@ -360,6 +371,7 @@ export class PointRewardService {
     }
     const recvName = (displayName || "회원").trim() || "회원";
     let messageOut = maybeStripAlimtalkEmojiForTemplate(message);
+    messageOut = messageOut.normalize("NFC");
     messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
 
     const body: Record<string, string> = {
