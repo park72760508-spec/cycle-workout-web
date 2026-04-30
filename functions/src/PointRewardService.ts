@@ -258,32 +258,40 @@ function formatRemPointsForMissionAlimtalk(n: number): string {
 }
 
 /**
- * 검수 시 저장된 이모지 바이트열과 맞춤. 기본은 원본 그대로(FE0F 변형 선택자 강제 부착 없음 — 템플릿 검수 바이트와 충돌 방지).
- * FE0F가 필요한 검수본만 `KAKAO_ALIMTALK_BICYCLE_EMOJI=fe0f`(또는 1/true/yes)로 선택 적용.
- * `KAKAO_ALIMTALK_BICYCLE_EMOJI=strip` → 검수본에서 이미 이모지를 뺀 경우에만 사용.
- * `nof0f` → 이미 붙은 FE0F만 제거해 시퀀스 통일.
+ * 카카오 템플릿 에디터는 이모지 보관 시 `\uFE0F`를 떨어뜨리는 경우가 많아, 기본은 자전거 이모지(ZWJ 시퀀스)에서 FE0F를 제거해 검수 바이트와 맞춤.
+ * `KAKAO_ALIMTALK_BICYCLE_EMOJI=fe0f`(또는 1/true/yes) → 예외적으로 FE0F 부착.
+ * `strip` / `none` / `0` → 이모지 전체 제거(템플릿에 이모지가 없을 때).
+ * `nof0f` → 기본과 동일(FE0F 제거만, 호환 별칭).
  */
 function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
+  const stripFe0fFromBike = (s: string) =>
+    s.replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "\u{1F6B4}\u200D\u2642");
+
   const mode = String(process.env.KAKAO_ALIMTALK_BICYCLE_EMOJI || "").toLowerCase();
   if (mode === "strip" || mode === "none" || mode === "0") {
-    return message
-      .replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "")
+    return stripFe0fFromBike(message)
       .replace(/\u{1F6B4}\u200D\u2642/gu, "")
       .replace(/\u{1F6B4}/gu, "")
       .replace(/  +/g, " ");
   }
-  if (mode === "nof0f") {
-    return message.replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "\u{1F6B4}\u200D\u2642");
-  }
   if (mode === "fe0f" || mode === "1" || mode === "true" || mode === "yes") {
     return message.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
   }
-  return message;
+  return stripFe0fFromBike(message);
+}
+
+/** 빈 값·공백·단일 비(문자/숫자) 기호(예: `-`)는 recvname/본문 치환 시 검수 오류 유발 → 안전 폴백 */
+function safeAlimtalkDisplayName(raw: string): string {
+  const t = String(raw ?? "").trim();
+  if (!t) return "회원";
+  if (t.length === 1 && /[^\p{L}\p{N}]/u.test(t)) return "회원";
+  return t;
 }
 
 /**
  * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
  * `#{expiry_date_after_kr}` 슬롯은 한국어 일자, `#{expiry_date_before}` 는 MM-DD-YY 를 쓰는 승인이 많음.
+ * 개행은 백틱 멀티라인이 아니라 `.join('\n')`으로만 생성해 OS/에디터 CRLF 설정과 무관하게 LF 고정.
  */
 function buildAlimtalkMessage(params: {
   userName: string;
@@ -293,6 +301,13 @@ function buildAlimtalkMessage(params: {
   expiryDateAfter: string;
   remPointsAfter: number;
 }): string {
+  const displayName = safeAlimtalkDisplayName(params.userName);
+  const earnedSp = formatSpForKakaoTemplate(params.earnedPoints);
+  const extendedDaysStr = String(
+    Number.isFinite(params.extendedDays) ? Math.trunc(params.extendedDays) : 0
+  );
+  const remSp = formatRemPointsForMissionAlimtalk(params.remPointsAfter);
+
   const beforeYmd = toYmdSeoul(params.expiryDateBefore);
   const afterYmd = toYmdSeoul(params.expiryDateAfter);
   const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
@@ -303,27 +318,31 @@ function buildAlimtalkMessage(params: {
       : afterFmt === "mmddyy" || afterFmt === "us"
         ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd)
         : formatSeoulYmdToAlimtalkKrYmdLine(afterYmd);
-  return `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
-안녕하세요 ${params.userName}님,
-오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
 
-이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
-
-▶ 이번 라이딩 보상
-획득 포인트 : ${formatSpForKakaoTemplate(params.earnedPoints)} SP
-
-▶ 구독 연장 혜택 적용
-500 SP 자동 사용으로 인하여 구독 기간이 ${params.extendedDays}일 추가 연장되었습니다.
-
-기존 만료일 : ${beforeLine}
-변경 만료일 : ${afterLine}
-
-▶ 내 포인트 현황
-사용 후 잔여 포인트 : ${formatRemPointsForMissionAlimtalk(params.remPointsAfter)} SP
-
-오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!
-
-※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
+  const lines = [
+    "[STELVIO 라이딩 미션 달성 및 구독 연장 안내]",
+    `안녕하세요 ${displayName}님,`,
+    "오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️",
+    "",
+    "이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.",
+    "",
+    "▶ 이번 라이딩 보상",
+    `획득 포인트 : ${earnedSp} SP`,
+    "",
+    "▶ 구독 연장 혜택 적용",
+    `500 SP 자동 사용으로 인하여 구독 기간이 ${extendedDaysStr}일 추가 연장되었습니다.`,
+    "",
+    `기존 만료일 : ${beforeLine}`,
+    `변경 만료일 : ${afterLine}`,
+    "",
+    "▶ 내 포인트 현황",
+    `사용 후 잔여 포인트 : ${remSp} SP`,
+    "",
+    "오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!",
+    "",
+    "※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.",
+  ];
+  return lines.join("\n");
 }
 
 /** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 (템플릿 본문도 이모지 없음이어야 함) */
@@ -430,7 +449,7 @@ export class PointRewardService {
     if (!receiver) {
       throw new Error("알림톡 수신자 번호가 비어 있습니다.");
     }
-    const recvName = (displayName || "회원").trim() || "회원";
+    const recvName = safeAlimtalkDisplayName(displayName || "");
     let messageOut = maybeStripAlimtalkEmojiForTemplate(message);
     messageOut = normalizeMissionAlimtalkBicycleEmoji(messageOut);
     messageOut = messageOut.normalize("NFC");
