@@ -1521,14 +1521,62 @@
       return null;
     }
     var isBoardSupremoAll = String(boardG) === 'all' && String(boardC) === 'Supremo';
-    var isVirtPct = summary.heptagonBoardVirtualCohort === true;
-    var tid = summary.tier.id;
     var viewerAgeCategory = props.viewerAgeCategory != null ? String(props.viewerAgeCategory) : '';
     var ttModal = heptagonCohortTooltipFromSummary(summary, boardC, viewerAgeCategory);
-    var rUi = ttModal.ok && ttModal.rank != null ? ttModal.rank : '—';
-    var pT = ttModal.ok && ttModal.pPct >= 0 && isFinite(ttModal.pPct) ? ttModal.pPct : null;
-    var sumP = summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores)) ? Number(summary.sumPositionScores) : null;
-    var avgP = summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore)) ? Number(summary.avgPositionScore) : null;
+    var myBoardRow = null;
+    if (boardState && !boardState.loading && !boardState.err && boardState.rows && boardState.rows.length) {
+      for (var ri = 0; ri < boardState.rows.length; ri++) {
+        var rw = boardState.rows[ri];
+        if (rw && rw.isMe && rw.boardRank != null && isFinite(rw.boardRank)) {
+          myBoardRow = rw;
+          break;
+        }
+      }
+    }
+    var nEffModal = heptagonEffectiveCohortNFromBoardAndOvl(boardState, null);
+    var isVirtModal =
+      summary.heptagonBoardVirtualCohort === true
+        ? true
+        : summary.heptagonBoardVirtualCohort === false
+          ? false
+          : !!(viewerAgeCategory && !isUserInCohortForFilter(boardC, viewerAgeCategory));
+    var rUi;
+    var pT = null;
+    var sumP =
+      summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores))
+        ? Number(summary.sumPositionScores)
+        : null;
+    var avgP =
+      summary.avgPositionScore != null && isFinite(Number(summary.avgPositionScore))
+        ? Number(summary.avgPositionScore)
+        : null;
+    var tidLevel = summary.tier.id;
+    if (myBoardRow) {
+      var brM = Math.floor(Number(myBoardRow.boardRank));
+      rUi = brM;
+      if (myBoardRow.sumPositionScores != null && isFinite(myBoardRow.sumPositionScores)) {
+        sumP = Number(myBoardRow.sumPositionScores);
+        avgP = sumP / 7;
+      }
+      if (nEffModal >= 1) {
+        pT = heptagonLevelPercentForRankN(brM, nEffModal, isVirtModal, boardC, viewerAgeCategory);
+      }
+    } else {
+      rUi = ttModal.ok && ttModal.rank != null ? ttModal.rank : '—';
+      if (ttModal.ok && ttModal.pPct >= 0 && isFinite(ttModal.pPct)) {
+        pT = ttModal.pPct;
+      }
+    }
+    if (pT == null && ttModal.ok && ttModal.pPct >= 0 && isFinite(ttModal.pPct)) {
+      pT = ttModal.pPct;
+    }
+    if (pT != null && isFinite(pT) && pT >= 0) {
+      var tierObjL = heptagonBoardTierIdFromLevelPercent(pT);
+      if (tierObjL && tierObjL.id) {
+        tidLevel = tierObjL.id;
+      }
+    }
+    var isVirtPct = myBoardRow ? isVirtModal : ttModal.isVirtual === true;
     return (
       <div
         className="stelvio-heptagon-detail-modal"
@@ -1554,7 +1602,7 @@
               <h3 className="stelvio-heptagon-detail-modal__title" id="stelvio-heptagon-detail-title">STELVIO 헵타곤 · 항목별 순위</h3>
               <p className="stelvio-heptagon-detail-modal__meta">
                 <span>
-                  집계 필터 — 부문(카테고리): {categoryLabel} · 성별: {genderLabel} · {periodLabel}
+                  부문(카테고리): {categoryLabel} · 성별: {genderLabel} · {periodLabel}
                 </span>
               </p>
             </div>
@@ -1570,10 +1618,10 @@
           <div className="stelvio-heptagon-detail-modal__summary">
             <div
               className="stelvio-heptagon-detail-modal__summary-row"
-              title="3·7·20·40·60·90% 경계(레벨1~7). 집계 순위·레벨%·n은 이 화면에서 선택한 성별·부문(heptagon_cohort_ranks)과 동일. 본인 부문이면 집계(boardRank) 순위, 그 밖이면 환산 합 비교·삽입 순위"
+              title="카드·이 표와 동일 필터의 집계 순위%로 산출한 등급(레벨 1~7). 순위표 본인 행이 있으면 그 boardRank·n·가상(타 부문) 여부로 계산"
             >
               <span>레벨</span>
-              <strong>{tierLevelDisplayName(tid)}</strong>
+              <strong>{tierLevelDisplayName(tidLevel)}</strong>
             </div>
             <div
               className="stelvio-heptagon-detail-modal__summary-row"
@@ -1584,7 +1632,7 @@
               }
             >
               <span>{isBoardSupremoAll ? '종합(환산) 순위' : '집계 순위 (필터)'}</span>
-              <strong>{rUi !== '—' ? String(rUi) + '위' : '—'}</strong>
+              <strong>{rUi !== '—' && rUi != null ? String(rUi) + '위' : '—'}</strong>
             </div>
             {pT != null ? (
               <div
@@ -1602,7 +1650,11 @@
             {sumP != null ? (
               <div
                 className="stelvio-heptagon-detail-modal__summary-row"
-                title="7축 합(0~700)은 전면(Supremo) 랭크로만 산출된 합(모든 부문 문서에 동일)"
+                title={
+                  myBoardRow
+                    ? '이 표(동일 조건·월 환산) 본인 행의 환산점수 합 — 카드 카테고리 필터 순위표와 동일'
+                    : '요약 캐시·7축 합산값(표 본인 행이 아직 없을 때)'
+                }
               >
                 <span>7축 점수 합 (0~700)</span>
                 <strong>
