@@ -207,8 +207,10 @@ function searchUsersInMemoryLists(term, myUid, pushRow, getLen) {
   }
 }
 
-/** 검색 행 — 버튼·상태 표시용 */
-export function getFriendSearchRowStatus(uid, friends, outgoing, incoming) {
+/** 검색 행 — 버튼·상태 표시용
+ * @param {{ theyHaveMe?: boolean }} [opts] theyHaveMe: users/{상대}/friends/{나} 문서 존재
+ */
+export function getFriendSearchRowStatus(uid, friends, outgoing, incoming, opts) {
   const fu = String(uid || '').trim();
   if (!fu) return '—';
   if (
@@ -217,6 +219,9 @@ export function getFriendSearchRowStatus(uid, friends, outgoing, incoming) {
     })
   ) {
     return '이미 친구';
+  }
+  if (opts && opts.theyHaveMe) {
+    return '바로 친구 추가';
   }
   var oi;
   var o;
@@ -285,6 +290,23 @@ export async function searchUsersForFriendRequest(db, term, myUid) {
       const sample = buildSampleContactCandidatesForSuffix(digitsOnly);
       await firestoreQueryUsersByContactFields(db, sample, me, pushRow, getLen, errors);
     }
+  }
+
+  if (db && out.length > 0) {
+    await Promise.all(
+      out.map(async (row) => {
+        try {
+          const g = await getDoc(doc(db, 'users', row.uid, 'friends', me));
+          row.theyHaveMe = g.exists();
+        } catch (_e) {
+          row.theyHaveMe = false;
+        }
+      })
+    );
+  } else {
+    out.forEach((row) => {
+      row.theyHaveMe = false;
+    });
   }
 
   const after = getLen();
@@ -485,6 +507,102 @@ export async function acceptFriendRequest(db, fromUid, toUid, accepterProfile) {
   // 발신자는 친구 관리·초대 목록 로드 시 fetchFriendManagementSnapshot / loadFriendsForInviteMerge 가 자신 uid로 syncFriendsFromAcceptedRequests 를 수행함.
 }
 
+/**
+ * 상대 users/{theirUid}/friends/{myUid} 가 있을 때 내 목록에만 상대를 반영(요청 없이 또는 outgoing pending 상호 완성).
+ * @param {{ toDisplayName: string; toContact: string }} accepterProfile 수락 API용 내 공개 프로필
+ * @param {{ targetName?: string; targetContact?: string }} [targetPreview]
+ */
+export async function tryCompleteMutualFriend(db, myUid, theirUid, accepterProfile, targetPreview) {
+  const me = String(myUid || '').trim();
+  const them = String(theirUid || '').trim();
+  if (!db || !me || !them || me === them) throw new Error('INVALID');
+
+  const theirFriendsMe = doc(db, 'users', them, 'friends', me);
+  const theirSnap = await getDoc(theirFriendsMe);
+  if (!theirSnap.exists()) throw new Error('NOT_IN_THEIR_FRIENDS');
+
+  const incRef = doc(db, 'friendRequests', friendRequestDocId(them, me));
+  const outRef = doc(db, 'friendRequests', friendRequestDocId(me, them));
+  const [incSnap, outSnap] = await Promise.all([getDoc(incRef), getDoc(outRef)]);
+
+  if (incSnap.exists()) {
+    const ist = String(incSnap.data().status || '');
+    if (ist === 'pending' || ist === 'rejected') {
+      await acceptFriendRequest(db, them, me, accepterProfile);
+      return;
+    }
+  }
+
+  if (outSnap.exists()) {
+    const ost = String(outSnap.data().status || '');
+    if (ost === 'pending') {
+      const usnap = await getDoc(doc(db, 'users', them));
+      const ud = usnap.exists() ? usnap.data() : {};
+      const tnm = String(nameFromUserData(ud)).slice(0, 80) || '회원';
+      const tct = String(contactFromUserData(ud)).slice(0, 80);
+      const batch = writeBatch(db);
+      batch.update(outRef, {
+        status: 'accepted',
+        toDisplayName: tnm,
+        toContact: tct,
+        updatedAt: serverTimestamp()
+      });
+      batch.set(
+        doc(db, 'users', me, 'friends', them),
+        {
+          friendUid: them,
+          displayName: tnm,
+          contact: tct,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+      await batch.commit();
+      return;
+    }
+  }
+
+  const usnap = await getDoc(doc(db, 'users', them));
+  const ud = usnap.exists() ? usnap.data() : {};
+  const tpNm = targetPreview && targetPreview.targetName != null ? String(targetPreview.targetName).trim() : '';
+  const tpCt = targetPreview && targetPreview.targetContact != null ? String(targetPreview.targetContact).trim() : '';
+  const tnm = (tpNm || String(nameFromUserData(ud))).slice(0, 80) || '회원';
+  const tct = (tpCt || String(contactFromUserData(ud))).slice(0, 80);
+  await setDoc(
+    doc(db, 'users', me, 'friends', them),
+    {
+      friendUid: them,
+      displayName: tnm,
+      contact: tct,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * 내 등록 친구 삭제 + 수락된 friendRequests 문서 제거(동기화로 재등록 방지)
+ */
+export async function removeRegisteredFriend(db, myUid, friendUid) {
+  const me = String(myUid || '').trim();
+  const fu = String(friendUid || '').trim();
+  if (!db || !me || !fu || me === fu) throw new Error('INVALID');
+
+  const refsToDelete = [];
+  for (const rid of [friendRequestDocId(me, fu), friendRequestDocId(fu, me)]) {
+    const ref = doc(db, 'friendRequests', rid);
+    const snap = await getDoc(ref);
+    if (snap.exists() && String(snap.data().status || '') === 'accepted') {
+      refsToDelete.push(ref);
+    }
+  }
+
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'users', me, 'friends', fu));
+  refsToDelete.forEach((r) => batch.delete(r));
+  await batch.commit();
+}
+
 export async function rejectFriendRequest(db, fromUid, toUid) {
   const ref = doc(db, 'friendRequests', friendRequestDocId(fromUid, toUid));
   const snap = await getDoc(ref);
@@ -594,6 +712,8 @@ if (typeof window !== 'undefined') {
     cancelFriendRequest,
     deleteFriendRequestForSender,
     acceptFriendRequest,
+    tryCompleteMutualFriend,
+    removeRegisteredFriend,
     rejectFriendRequest,
     reopenFriendRequestToPending,
     syncFriendsFromAcceptedRequests,

@@ -7611,6 +7611,10 @@ function OpenRidingFriendsManage(props) {
   var _fad = useState(null);
   var friendAcceptDialog = _fad[0];
   var setFriendAcceptDialog = _fad[1];
+  /** 등록 친구 삭제 확인 */
+  var _frc = useState(null);
+  var friendRemoveConfirm = _frc[0];
+  var setFriendRemoveConfirm = _frc[1];
 
   function refresh() {
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
@@ -7733,29 +7737,40 @@ function OpenRidingFriendsManage(props) {
   function sendFriendRequestToCandidate(c) {
     if (!c || !c.uid) return;
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
-    if (typeof fr.sendFriendRequest !== 'function') return;
     var pr = profForSend();
     if (!pr.fromContact) {
       alert('프로필에 연락처를 등록한 뒤 친구 요청을 보낼 수 있습니다.');
       return;
     }
     setActionBusy(true);
-    fr.sendFriendRequest(firestore, userId, c.uid, pr, {
-      targetName: c.name,
-      targetContact: c.contact
-    }).then(function () {
-      return refresh();
-    }).catch(function (e) {
-      alert(e && e.message ? e.message : '요청 실패');
-    }).finally(function () {
+    var accepter = { toDisplayName: pr.fromDisplayName, toContact: pr.fromContact };
+    var preview = { targetName: c.name, targetContact: c.contact };
+    var chain;
+    if (c.theyHaveMe && typeof fr.tryCompleteMutualFriend === 'function') {
+      chain = fr.tryCompleteMutualFriend(firestore, userId, c.uid, accepter, preview);
+    } else if (typeof fr.sendFriendRequest === 'function') {
+      chain = fr.sendFriendRequest(firestore, userId, c.uid, pr, preview);
+    } else {
       setActionBusy(false);
-    });
+      return;
+    }
+    chain
+      .then(function () {
+        return refresh();
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '처리 실패');
+      })
+      .finally(function () {
+        setActionBusy(false);
+      });
   }
 
   function searchRowStatus(c) {
     var fr = typeof window !== 'undefined' ? window.openRidingFriendsService || {} : {};
     if (typeof fr.getFriendSearchRowStatus !== 'function') return '—';
-    return fr.getFriendSearchRowStatus(c.uid, bundle.friends, bundle.outgoing, bundle.incoming);
+    var opts = c && c.theyHaveMe ? { theyHaveMe: true } : undefined;
+    return fr.getFriendSearchRowStatus(c.uid, bundle.friends, bundle.outgoing, bundle.incoming, opts);
   }
 
   function privacyMask(contact) {
@@ -7796,12 +7811,18 @@ function OpenRidingFriendsManage(props) {
 
   function canClickFriendRequest(c) {
     var st = searchRowStatus(c);
-    return st === '친구 요청 가능' || st === '거절됨' || st === '요청 취소됨';
+    return (
+      st === '친구 요청 가능' ||
+      st === '거절됨' ||
+      st === '요청 취소됨' ||
+      st === '바로 친구 추가'
+    );
   }
 
   function searchStatusDisplay(st) {
     var s = String(st || '');
     if (s === '이미 친구') return '친구';
+    if (s === '바로 친구 추가') return '상대 등록됨';
     if (s === '친구 요청 가능') return '요청 가능';
     return s || '—';
   }
@@ -7955,6 +7976,7 @@ function OpenRidingFriendsManage(props) {
                       {searchCandidates.map(function (c) {
                         var rowSt = searchRowStatus(c);
                         var canReq = canClickFriendRequest(c);
+                        var reqLabel = rowSt === '바로 친구 추가' ? '친구 추가' : '친구 요청';
                         return (
                           <tr key={c.uid} className="border-b border-slate-100 align-top">
                             <td className="py-2 px-2">
@@ -7970,7 +7992,7 @@ function OpenRidingFriendsManage(props) {
                                   sendFriendRequestToCandidate(c);
                                 }}
                               >
-                                친구 요청
+                                {reqLabel}
                               </button>
                             </td>
                             <td className="py-2 px-1 text-center">
@@ -8039,15 +8061,17 @@ function OpenRidingFriendsManage(props) {
                   <table className="w-full table-fixed text-sm leading-snug text-left border-collapse border border-slate-100 rounded-lg overflow-hidden">
                     <thead>
                       <tr className="text-slate-600 bg-violet-50 border-b border-slate-100">
-                        <th className="py-2 pl-2 pr-1 font-medium w-[14%] whitespace-nowrap">순번</th>
-                        <th className="py-2 px-1 font-medium w-[18%] whitespace-nowrap">이름</th>
-                        <th className="py-2 pr-2 pl-1 font-medium w-[68%] whitespace-nowrap">연락처</th>
+                        <th className="py-2 pl-2 pr-1 font-medium w-[10%] whitespace-nowrap">순번</th>
+                        <th className="py-2 px-1 font-medium w-[20%] whitespace-nowrap">이름</th>
+                        <th className="py-2 px-1 font-medium w-[38%] whitespace-nowrap">연락처</th>
+                        <th className="py-2 pr-2 pl-1 font-medium w-[14%] text-center whitespace-nowrap">삭제</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bundle.friends.map(function (row, idx) {
                         var disp = row.displayName != null ? String(row.displayName) : '-';
                         var cont = row.contact != null ? String(row.contact) : '-';
+                        var fUid = String(row.friendUid != null ? row.friendUid : row.id != null ? row.id : '');
                         return (
                           <tr key={String(row.id || row.friendUid || idx)} className="border-b border-slate-50 last:border-b-0 align-middle">
                             <td className="py-2 pl-2 pr-1 text-slate-600 tabular-nums whitespace-nowrap align-middle">{idx + 1}</td>
@@ -8058,10 +8082,22 @@ function OpenRidingFriendsManage(props) {
                               {disp}
                             </td>
                             <td
-                              className="py-2 pr-2 pl-1 text-slate-700 tabular-nums whitespace-nowrap overflow-hidden text-ellipsis align-middle min-w-0"
+                              className="py-2 px-1 text-slate-700 tabular-nums whitespace-nowrap overflow-hidden text-ellipsis align-middle min-w-0"
                               title={cont}
                             >
                               {cont}
+                            </td>
+                            <td className="py-2 pr-2 pl-1 text-center align-middle">
+                              <button
+                                type="button"
+                                className="text-sm font-semibold px-2 py-1 rounded border border-red-200 text-red-700 bg-white hover:bg-red-50 whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+                                disabled={actionBusy || !fUid}
+                                onClick={function () {
+                                  setFriendRemoveConfirm({ friendUid: fUid, displayName: disp });
+                                }}
+                              >
+                                삭제
+                              </button>
                             </td>
                           </tr>
                         );
@@ -8350,6 +8386,71 @@ function OpenRidingFriendsManage(props) {
                     }
                     return null;
                   });
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {friendRemoveConfirm ? (
+        <div
+          className="open-riding-bomb-modal-backdrop fixed inset-0 z-[200060] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="open-riding-friend-remove-dialog-title"
+          onClick={function (ev) {
+            if (ev.target !== ev.currentTarget) return;
+            if (actionBusy) return;
+            setFriendRemoveConfirm(null);
+          }}
+        >
+          <div
+            className="open-riding-bomb-modal-panel w-full max-w-sm py-7 px-8 text-center"
+            onClick={function (e) {
+              e.stopPropagation();
+            }}
+          >
+            <h2 id="open-riding-friend-remove-dialog-title" className="text-base font-bold text-slate-800 m-0 mb-4 leading-tight">
+              친구 삭제
+            </h2>
+            <p className="stelvio-exit-confirm-message text-center m-0">
+              정말 삭제 하시겠습니까?
+            </p>
+            <div className="mt-6 flex flex-row flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-cancel inline-flex items-center justify-center min-w-[6rem] px-5"
+                disabled={actionBusy}
+                onClick={function () {
+                  if (actionBusy) return;
+                  setFriendRemoveConfirm(null);
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="open-riding-action-btn stelvio-exit-confirm-btn stelvio-exit-confirm-btn-ok inline-flex items-center justify-center min-w-[6rem] px-5"
+                disabled={actionBusy}
+                onClick={function () {
+                  if (!friendRemoveConfirm || !friendRemoveConfirm.friendUid) return;
+                  var fr = window.openRidingFriendsService || {};
+                  if (typeof fr.removeRegisteredFriend !== 'function') return;
+                  setActionBusy(true);
+                  fr.removeRegisteredFriend(firestore, userId, friendRemoveConfirm.friendUid)
+                    .then(function () {
+                      setFriendRemoveConfirm(null);
+                      return refresh();
+                    })
+                    .catch(function (e) {
+                      alert(e && e.message ? e.message : '삭제 실패');
+                    })
+                    .finally(function () {
+                      setActionBusy(false);
+                    });
                 }}
               >
                 확인
