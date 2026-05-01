@@ -20,8 +20,11 @@ const POINT_HISTORY_COLLECTION = "point_history";
 const APP_CONFIG_COLLECTION = "appConfig";
 const ALIGO_CONFIG_DOC = "aligo";
 
-/** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […]과 짝 */
+/** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […] 제목 텍스트와 동일(대괄호 없음) */
 const ALIMTALK_SUBJECT_KO = "STELVIO 라이딩 미션 달성 및 구독 연장 안내";
+/** 본문 첫 줄 검수 문구(대괄호 포함) — 승인 템플릿과 바이트 단위로 맞춤 */
+const ALIMTALK_MISSION_TITLE = ALIMTALK_SUBJECT_KO;
+const ALIMTALK_MISSION_HEADER_LINE = `[${ALIMTALK_MISSION_TITLE}]`;
 
 interface AligoConfig {
   senderkey: string;
@@ -258,14 +261,16 @@ function formatRemPointsForMissionAlimtalk(n: number): string {
 }
 
 /**
- * 카카오 템플릿 에디터는 이모지 보관 시 `\uFE0F`를 떨어뜨리는 경우가 많아, 기본은 자전거 이모지(ZWJ 시퀀스)에서 FE0F를 제거해 검수 바이트와 맞춤.
- * `KAKAO_ALIMTALK_BICYCLE_EMOJI=fe0f`(또는 1/true/yes) → 예외적으로 FE0F 부착.
+ * 승인 템플릿의 자전거 이모지(ZWJ 남성)는 `\u{1F6B4}\u200D\u2642\uFE0F`(VS16 포함) — 기본은 이와 동일하게 FE0F를 유지·보강.
+ * `KAKAO_ALIMTALK_BICYCLE_EMOJI=nof0f`(또는 `legacy`) → FE0F만 제거(구 버전 호환).
  * `strip` / `none` / `0` → 이모지 전체 제거(템플릿에 이모지가 없을 때).
- * `nof0f` → 기본과 동일(FE0F 제거만, 호환 별칭).
+ * `fe0f` / `1` / `true` / `yes` → 명시 플래그(기본과 동일).
  */
 function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
   const stripFe0fFromBike = (s: string) =>
     s.replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "\u{1F6B4}\u200D\u2642");
+  const ensureFe0fOnBike = (s: string) =>
+    s.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
 
   const mode = String(process.env.KAKAO_ALIMTALK_BICYCLE_EMOJI || "").toLowerCase();
   if (mode === "strip" || mode === "none" || mode === "0") {
@@ -274,10 +279,28 @@ function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
       .replace(/\u{1F6B4}/gu, "")
       .replace(/  +/g, " ");
   }
-  if (mode === "fe0f" || mode === "1" || mode === "true" || mode === "yes") {
-    return message.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
+  if (mode === "nof0f" || mode === "legacy") {
+    return stripFe0fFromBike(message);
   }
-  return stripFe0fFromBike(message);
+  return ensureFe0fOnBike(message);
+}
+
+/**
+ * 본문 첫 줄 `[STELVIO …]`가 API/정규화/로깅 과정에서 `]`만 남거나 `[`만 빠지는 등 훼손된 경우 승인 문구로 되돌림.
+ * BOM·CRLF 첫 줄의 `\r`만 정리하고, 그 외 본문은 변경하지 않음.
+ */
+function ensureMissionAlimtalkFirstLineCanonical(message: string): string {
+  const bomStripped = message.replace(/^\uFEFF/, "");
+  const idx = bomStripped.indexOf("\n");
+  const rawFirst = idx === -1 ? bomStripped : bomStripped.slice(0, idx);
+  const rest = idx === -1 ? "" : bomStripped.slice(idx);
+  const first = rawFirst.replace(/\r$/, "").trim();
+  const escapedTitle = ALIMTALK_MISSION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^\\[?\\s*${escapedTitle}\\s*\\]?$`, "u");
+  if (pattern.test(first)) {
+    return ALIMTALK_MISSION_HEADER_LINE + rest;
+  }
+  return bomStripped;
 }
 
 /** 빈 값·공백·단일 비(문자/숫자) 기호(예: `-`)는 recvname/본문 치환 시 검수 오류 유발 → 안전 폴백 */
@@ -320,9 +343,9 @@ function buildAlimtalkMessage(params: {
         : formatSeoulYmdToAlimtalkKrYmdLine(afterYmd);
 
   const lines = [
-    "[STELVIO 라이딩 미션 달성 및 구독 연장 안내]",
+    ALIMTALK_MISSION_HEADER_LINE,
     `안녕하세요 ${displayName}님,`,
-    "오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️",
+    `오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! \u{1F6B4}\u200D\u2642\uFE0F`,
     "",
     "이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.",
     "",
@@ -454,6 +477,7 @@ export class PointRewardService {
     messageOut = normalizeMissionAlimtalkBicycleEmoji(messageOut);
     messageOut = messageOut.normalize("NFC");
     messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
+    messageOut = ensureMissionAlimtalkFirstLineCanonical(messageOut);
 
     const body: Record<string, string> = {
       senderkey: cfg.senderkey,
