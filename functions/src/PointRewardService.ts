@@ -226,18 +226,14 @@ function formatSeoulYmdToAlimtalkMmDdYy(ymd: string): string {
 }
 
 /**
- * 카카오 템플릿 변수 `#{expiry_date_after_kr}` 대응: MM-DD-YY가 아닌 한국어 일자.
- * 검수 예시가 `2026년 7월 22일` / `2026년 07월 22일` 등일 수 있어 env로 자리수 맞춤.
+ * 카카오 템플릿 변수 `#{expiry_date_after_kr}` 대응: 한국어 일자.
+ * 월·일은 항상 두 자리 zero-padding (`2026년 06월 16일`)으로 알리고/검수 샘플과 통일.
  */
 function formatSeoulYmdToAlimtalkKrYmdLine(ymd: string): string {
   const m = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return ymd.trim() || "-";
   const [, yyyy, mm, dd] = m;
-  const pad = String(process.env.KAKAO_ALIMTALK_KR_DATE_ZERO_PAD || "").toLowerCase();
-  if (pad === "1" || pad === "true" || pad === "yes") {
-    return `${yyyy}년 ${mm}월 ${dd}일`;
-  }
-  return `${yyyy}년 ${parseInt(mm, 10)}월 ${parseInt(dd, 10)}일`;
+  return `${yyyy}년 ${mm}월 ${dd}일`;
 }
 
 /** SP 표시: 부동소수 오차 제거(알림톡 본문이 검수 템플릿과 글자 단위로 일치해야 함) */
@@ -314,7 +310,7 @@ function safeAlimtalkDisplayName(raw: string): string {
 /**
  * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
  * `#{expiry_date_after_kr}` 슬롯은 한국어 일자, `#{expiry_date_before}` 는 MM-DD-YY 를 쓰는 승인이 많음.
- * 개행은 백틱 멀티라인이 아니라 `.join('\n')`으로만 생성해 OS/에디터 CRLF 설정과 무관하게 LF 고정.
+ * 개행은 `.join('\n')`으로만 생성한 뒤, 전송 직전 `normalizeAlimtalkNewlinesForKakaoTemplate`에서 CRLF로 통일.
  */
 function buildAlimtalkMessage(params: {
   userName: string;
@@ -333,7 +329,7 @@ function buildAlimtalkMessage(params: {
 
   const beforeYmd = toYmdSeoul(params.expiryDateBefore);
   const afterYmd = toYmdSeoul(params.expiryDateAfter);
-  const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
+  const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkKrYmdLine(beforeYmd) : "-";
   const afterFmt = String(process.env.KAKAO_ALIMTALK_EXPIRY_AFTER_FORMAT || "kr").toLowerCase();
   const afterLine =
     afterYmd == null || afterYmd === ""
@@ -365,7 +361,7 @@ function buildAlimtalkMessage(params: {
     "",
     "※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.",
   ];
-  return lines.join("\n");
+  return lines.map((line) => String(line).trimEnd()).join("\n");
 }
 
 /** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 (템플릿 본문도 이모지 없음이어야 함) */
@@ -390,19 +386,13 @@ function maybeStripAlimtalkEmojiForTemplate(message: string): string {
 
 /**
  * Aligo 문서 [Notice] 2: "알림톡 내용(message)은 템플릿과 동일하게 개행문자를 입력하셔야 합니다."
- * 기본은 `buildAlimtalkMessage` 등에서 쓰는 LF(`\n`)를 그대로 둠(검수 승인 템플릿과 동일한 바이트 유지).
- * 일부 템플릿만 CRLF(`\r\n`)로 등록된 경우에 한해 `ALIGO_ALIMTALK_CRLF_ONLY=1` 로만 줄바꿈을 CRLF로 통일.
+ * 알리고 웹 콘솔 등록 템플릿과 맞추기 위해 본문 줄 끝은 항상 CRLF(`\r\n`)로 통일한다.
+ * (`ALIGO_ALIMTALK_CRLF_ONLY` 환경변수는 더 이상 참조하지 않는다.)
  *
  * Firebase Functions: 알림톡 관련 플래그는 배포된 함수와 동일한 이름으로 설정한다.
- * - Firebase CLI v2 환경 변수: 배포 시 `--set-env-vars KEY=VALUE` 또는 `firebase.json` / 콘솔의 함수 설정.
- * - Secret이 아닌 토글 변수는 Plain env로 두고, 스테이징에서 템플릿 발송 테스트 후 프로덕션에 복제·고정하는 편이 안전하다.
  */
 function normalizeAlimtalkNewlinesForKakaoTemplate(message: string): string {
-  const crlfOnly = String(process.env.ALIGO_ALIMTALK_CRLF_ONLY || "").toLowerCase();
-  if (crlfOnly === "1" || crlfOnly === "true" || crlfOnly === "yes") {
-    return message.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("\r\n");
-  }
-  return message;
+  return message.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("\r\n");
 }
 
 /**
@@ -476,8 +466,8 @@ export class PointRewardService {
     let messageOut = maybeStripAlimtalkEmojiForTemplate(message);
     messageOut = normalizeMissionAlimtalkBicycleEmoji(messageOut);
     messageOut = messageOut.normalize("NFC");
-    messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
     messageOut = ensureMissionAlimtalkFirstLineCanonical(messageOut);
+    messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
 
     const body: Record<string, string> = {
       senderkey: cfg.senderkey,
