@@ -243,49 +243,6 @@ function formatRemPointsForMissionAlimtalk(n: number): string {
   return String(Math.round(Number.isFinite(n) ? n : 0));
 }
 
-/**
- * 승인 템플릿의 자전거 이모지(ZWJ 남성)는 `\u{1F6B4}\u200D\u2642\uFE0F`(VS16 포함) — 기본은 이와 동일하게 FE0F를 유지·보강.
- * `KAKAO_ALIMTALK_BICYCLE_EMOJI=nof0f`(또는 `legacy`) → FE0F만 제거(구 버전 호환).
- * `strip` / `none` / `0` → 이모지 전체 제거(템플릿에 이모지가 없을 때).
- * `fe0f` / `1` / `true` / `yes` → 명시 플래그(기본과 동일).
- */
-function normalizeMissionAlimtalkBicycleEmoji(message: string): string {
-  const stripFe0fFromBike = (s: string) =>
-    s.replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "\u{1F6B4}\u200D\u2642");
-  const ensureFe0fOnBike = (s: string) =>
-    s.replace(/\u{1F6B4}\u200D\u2642(?!\uFE0F)/gu, "\u{1F6B4}\u200D\u2642\uFE0F");
-
-  const mode = String(process.env.KAKAO_ALIMTALK_BICYCLE_EMOJI || "").toLowerCase();
-  if (mode === "strip" || mode === "none" || mode === "0") {
-    return stripFe0fFromBike(message)
-      .replace(/\u{1F6B4}\u200D\u2642/gu, "")
-      .replace(/\u{1F6B4}/gu, "")
-      .replace(/  +/g, " ");
-  }
-  if (mode === "nof0f" || mode === "legacy") {
-    return stripFe0fFromBike(message);
-  }
-  return ensureFe0fOnBike(message);
-}
-
-/**
- * 본문 첫 줄 `[STELVIO …]`가 API/정규화/로깅 과정에서 `]`만 남거나 `[`만 빠지는 등 훼손된 경우 승인 문구로 되돌림.
- * BOM·CRLF 첫 줄의 `\r`만 정리하고, 그 외 본문은 변경하지 않음.
- */
-function ensureMissionAlimtalkFirstLineCanonical(message: string): string {
-  const bomStripped = message.replace(/^\uFEFF/, "");
-  const idx = bomStripped.indexOf("\n");
-  const rawFirst = idx === -1 ? bomStripped : bomStripped.slice(0, idx);
-  const rest = idx === -1 ? "" : bomStripped.slice(idx);
-  const first = rawFirst.replace(/\r$/, "").trim();
-  const escapedTitle = ALIMTALK_MISSION_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`^\\[?\\s*${escapedTitle}\\s*\\]?$`, "u");
-  if (pattern.test(first)) {
-    return ALIMTALK_MISSION_HEADER_LINE + rest;
-  }
-  return bomStripped;
-}
-
 /** 빈 값·공백·단일 비(문자/숫자) 기호(예: `-`)는 recvname/본문 치환 시 검수 오류 유발 → 안전 폴백 */
 function safeAlimtalkDisplayName(raw: string): string {
   const t = String(raw ?? "").trim();
@@ -297,7 +254,7 @@ function safeAlimtalkDisplayName(raw: string): string {
 /**
  * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
  * 기존/변경 만료일 줄 모두 승인 데이터와 동일하게 MM-DD-YY (`formatSeoulYmdToAlimtalkMmDdYy`).
- * 개행은 `.join('\n')`으로만 생성한 뒤, 전송 직전 `normalizeAlimtalkNewlinesForKakaoTemplate`에서 CRLF로 통일.
+ * `sendAlimtalk`에서는 본문 문자열을 추가 가공하지 않고 그대로 전달한다.
  */
 function buildAlimtalkMessage(params: {
   userName: string;
@@ -322,7 +279,7 @@ function buildAlimtalkMessage(params: {
   const lines = [
     ALIMTALK_MISSION_HEADER_LINE,
     `안녕하세요 ${displayName}님,`,
-    `오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! \u{1F6B4}\u200D\u2642\uFE0F`,
+    `오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️`,
     "",
     "이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.",
     "",
@@ -342,38 +299,7 @@ function buildAlimtalkMessage(params: {
     "",
     "※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.",
   ];
-  return lines.map((line) => String(line).trimEnd()).join("\n");
-}
-
-/** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 (템플릿 본문도 이모지 없음이어야 함) */
-function maybeStripAlimtalkEmojiForTemplate(message: string): string {
-  const strip = String(process.env.KAKAO_ALIMTALK_STRIP_EMOJI || "").toLowerCase();
-  if (strip === "1" || strip === "true" || strip === "yes") {
-    return (
-      message
-        // ZWJ 이모지(🚴‍♂️)를 픽토그램만 지우면 ♂·공백만 남아 "템플릿과 일치하지 않음" 유발
-        .replace(/\u{1F6B4}\u200D\u2642\uFE0F/gu, "")
-        .replace(/\u{1F6B4}\u200D\u2642/gu, "")
-        .replace(/\u{1F6B4}/gu, "")
-        .replace(/\p{Extended_Pictographic}/gu, "")
-        .replace(/\uFE0F/gu, "")
-        .replace(/\u200D/gu, "")
-        .replace(/[ \t]+\n/g, "\n")
-        .replace(/  +/g, " ")
-    );
-  }
-  return message;
-}
-
-/**
- * Aligo 문서 [Notice] 2: "알림톡 내용(message)은 템플릿과 동일하게 개행문자를 입력하셔야 합니다."
- * 알리고 웹 콘솔 등록 템플릿과 맞추기 위해 본문 줄 끝은 항상 CRLF(`\r\n`)로 통일한다.
- * (`ALIGO_ALIMTALK_CRLF_ONLY` 환경변수는 더 이상 참조하지 않는다.)
- *
- * Firebase Functions: 알림톡 관련 플래그는 배포된 함수와 동일한 이름으로 설정한다.
- */
-function normalizeAlimtalkNewlinesForKakaoTemplate(message: string): string {
-  return message.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("\r\n");
+  return lines.join("\n");
 }
 
 /**
@@ -444,11 +370,7 @@ export class PointRewardService {
       throw new Error("알림톡 수신자 번호가 비어 있습니다.");
     }
     const recvName = safeAlimtalkDisplayName(displayName || "");
-    let messageOut = maybeStripAlimtalkEmojiForTemplate(message);
-    messageOut = normalizeMissionAlimtalkBicycleEmoji(messageOut);
-    messageOut = messageOut.normalize("NFC");
-    messageOut = ensureMissionAlimtalkFirstLineCanonical(messageOut);
-    messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
+    const messageOut = message;
 
     const body: Record<string, string> = {
       senderkey: cfg.senderkey,
