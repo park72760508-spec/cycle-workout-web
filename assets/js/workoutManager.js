@@ -11,6 +11,15 @@ if (typeof window === 'undefined') {
   throw new Error('이 스크립트는 브라우저 환경에서만 실행할 수 있습니다.');
 }
 
+/** drawSegmentGraph / getSegmentRpmForPreview 등 캔버스 고빈도 로그 — window.__STELVIO_DRAW_SEGMENT_DEBUG 또는 DEBUG_MODE */
+function __stelvioDrawSegmentDebugLog() {
+  try {
+    return typeof window !== 'undefined' && (window.__STELVIO_DRAW_SEGMENT_DEBUG === true || window.DEBUG_MODE === true);
+  } catch (e) {
+    return false;
+  }
+}
+
 // HTML 이스케이프 함수 (XSS 방지)
 // HTML 이스케이프 함수 (XSS 방지)
 function escapeHtml(unsafe) {
@@ -856,48 +865,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 최소 120, 최대 200으로 제한
   maxRpm = Math.max(120, Math.min(200, maxRpm));
   
-  // 디버깅: RPM 값이 있는 세그먼트 확인
-  if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
-    console.log('[drawSegmentGraph] 전체 세그먼트 분석 시작:', {
-      totalSegments: segments.length,
-      canvasId
-    });
-    
-    // 모든 세그먼트의 target_type 확인
-    segments.forEach((seg, index) => {
-      const targetType = seg.target_type || 'ftp_pct';
-      const targetValue = seg.target_value;
-      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1}:`, {
-        targetType,
-        targetValue,
-        type: typeof targetValue,
-        segment: seg
-      });
-    });
-    
-    const rpmSegments = segments.filter(seg => {
-      const targetType = seg.target_type || 'ftp_pct';
-      return (targetType === 'dual' || targetType === 'cadence_rpm');
-    });
-    if (rpmSegments.length > 0) {
-      console.log('[drawSegmentGraph] RPM 세그먼트 발견:', {
-        count: rpmSegments.length,
-        maxRpm,
-        segments: rpmSegments.map((seg, idx) => {
-          const originalIndex = segments.indexOf(seg);
-          return {
-            originalIndex: originalIndex + 1,
-            targetType: seg.target_type,
-            targetValue: seg.target_value,
-            rpm: getSegmentRpmForPreview(seg),
-            fullSegment: seg
-          };
-        })
-      });
-    }
-    // RPM 세그먼트가 없는 것은 정상적인 경우이므로 경고 제거
-    // (모든 워크아웃이 RPM 세그먼트를 포함할 필요는 없음)
-  }
+  // RPM 세그먼트 필터링 (최대 RPM 계산에 이미 사용됨)
+  // RPM 세그먼트가 없는 것은 정상적인 경우이므로 별도 처리 불필요
   
   // FTP 가이드 라인 (부드러운 색상)
   const ftpPower = ftp;
@@ -1220,16 +1189,6 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const duration = seg.duration_sec || 0;
     if (duration <= 0) return;
     
-    // 디버깅: 각 세그먼트 정보 출력 (trainingSegmentGraph일 때만)
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} 처리 시작:`, {
-        index: index + 1,
-        targetType: seg.target_type,
-        targetValue: seg.target_value,
-        duration,
-        segment: seg
-      });
-    }
     
     // 세그먼트 타입 확인 (target_type)
     const targetType = seg.target_type || 'ftp_pct';
@@ -1605,50 +1564,45 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // dual 또는 cadence_rpm 타입일 때 RPM 점선 표시
     
-    // 디버깅: 모든 세그먼트의 targetType 확인
-    if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
-      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} targetType 확인:`, {
-        index: index + 1,
-        targetType,
-        isDual: targetType === 'dual',
-        isCadenceRpm: targetType === 'cadence_rpm',
-        condition: (targetType === 'dual' || targetType === 'cadence_rpm') && (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas'),
-        canvasId
-      });
-    }
     
     if ((targetType === 'dual' || targetType === 'cadence_rpm') && (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph')) {
-      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 시작:`, {
-        index: index + 1,
-        targetType,
-        targetValue: seg.target_value
-      });
+      if (__stelvioDrawSegmentDebugLog()) {
+        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 시작:`, {
+          index: index + 1,
+          targetType,
+          targetValue: seg.target_value
+        });
+      }
       
       const targetRpm = getSegmentRpmForPreview(seg);
       
       // 디버깅: dual 타입일 때 로그 출력
       if (targetType === 'dual') {
         const ftpPercent = getSegmentFtpPercentForPreview(seg);
-        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} dual 세그먼트:`, {
-          index: index + 1,
-          targetType,
-          targetValue: seg.target_value,
-          extractedFtpPercent: ftpPercent,
-          extractedRpm: targetRpm,
-          maxRpm,
-          canvasId,
-          willDraw: targetRpm > 0 && maxRpm > 0
-        });
+        if (__stelvioDrawSegmentDebugLog()) {
+          console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} dual 세그먼트:`, {
+            index: index + 1,
+            targetType,
+            targetValue: seg.target_value,
+            extractedFtpPercent: ftpPercent,
+            extractedRpm: targetRpm,
+            maxRpm,
+            canvasId,
+            willDraw: targetRpm > 0 && maxRpm > 0
+          });
+        }
       } else if (targetType === 'cadence_rpm') {
-        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} cadence_rpm 세그먼트:`, {
-          index: index + 1,
-          targetType,
-          targetValue: seg.target_value,
-          extractedRpm: targetRpm,
-          maxRpm,
-          canvasId,
-          willDraw: targetRpm > 0 && maxRpm > 0
-        });
+        if (__stelvioDrawSegmentDebugLog()) {
+          console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} cadence_rpm 세그먼트:`, {
+            index: index + 1,
+            targetType,
+            targetValue: seg.target_value,
+            extractedRpm: targetRpm,
+            maxRpm,
+            canvasId,
+            willDraw: targetRpm > 0 && maxRpm > 0
+          });
+        }
       }
       
       // Indoor Training 및 개인훈련 대시보드, 훈련 준비 화면: 스케일링 공식 사용하므로 maxRpm 불필요
@@ -1658,14 +1612,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         : (targetRpm > 0 && maxRpm > 0);
       
       if (shouldDrawRpm) {
-        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 실행:`, {
-          index: index + 1,
-          targetRpm,
-          maxRpm,
-          canvasId,
-          x,
-          barWidth
-        });
+        if (__stelvioDrawSegmentDebugLog()) {
+          console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 실행:`, {
+            index: index + 1,
+            targetRpm,
+            maxRpm,
+            canvasId,
+            x,
+            barWidth
+          });
+        }
         // RPM 값에 해당하는 Y 위치 계산
         // 개인훈련 대시보드 및 모바일 대시보드, Indoor Training, 훈련 준비 화면: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
         let rpmY;
@@ -1680,14 +1636,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           const rpmPower = ftp * (rpmFtpPercent / 100);
           rpmY = padding.top + chartHeight - (chartHeight * (rpmPower / maxTargetPower));
           
-          console.log(`[drawSegmentGraph] RPM 스케일링 적용 (${canvasId}):`, {
-            targetRpm,
-            rpmScaled,
-            rpmFtpPercent: `${rpmFtpPercent.toFixed(1)}%`,
-            rpmPower: `${rpmPower.toFixed(0)}W`,
-            ftp,
-            maxTargetPower
-          });
+          if (__stelvioDrawSegmentDebugLog()) {
+            console.log(`[drawSegmentGraph] RPM 스케일링 적용 (${canvasId}):`, {
+              targetRpm,
+              rpmScaled,
+              rpmFtpPercent: `${rpmFtpPercent.toFixed(1)}%`,
+              rpmPower: `${rpmPower.toFixed(0)}W`,
+              ftp,
+              maxTargetPower
+            });
+          }
         } else {
           // 기타 화면: 기존 로직 유지
           rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
@@ -2187,22 +2145,26 @@ function getSegmentRpmForPreview(seg) {
   const targetType = seg.target_type || 'ftp_pct';
   const targetValue = seg.target_value;
   
-  console.log('[getSegmentRpmForPreview] 호출:', {
-    targetType,
-    targetValue,
-    type: typeof targetValue,
-    fullSegment: seg
-  });
+  if (__stelvioDrawSegmentDebugLog()) {
+    console.log('[getSegmentRpmForPreview] 호출:', {
+      targetType,
+      targetValue,
+      type: typeof targetValue,
+      fullSegment: seg
+    });
+  }
   
   if (targetType === 'cadence_rpm') {
     // cadence_rpm 타입: target_value가 RPM 값
     const rpm = Number(targetValue);
-    console.log('[getSegmentRpmForPreview] cadence_rpm 처리:', {
-      targetValue,
-      parsed: rpm,
-      isNaN: isNaN(rpm),
-      result: isNaN(rpm) ? 0 : rpm
-    });
+    if (__stelvioDrawSegmentDebugLog()) {
+      console.log('[getSegmentRpmForPreview] cadence_rpm 처리:', {
+        targetValue,
+        parsed: rpm,
+        isNaN: isNaN(rpm),
+        result: isNaN(rpm) ? 0 : rpm
+      });
+    }
     // 디버깅: cadence_rpm 타입일 때 로그 출력
     if (isNaN(rpm) || rpm <= 0) {
       console.warn('[getSegmentRpmForPreview] cadence_rpm 타입에서 RPM 값 추출 실패:', {
@@ -2217,29 +2179,35 @@ function getSegmentRpmForPreview(seg) {
   } else if (targetType === 'dual') {
     // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
     const dualDelimRpm = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
-    console.log('[getSegmentRpmForPreview] dual 타입 처리 시작:', {
-      targetValue,
-      type: typeof targetValue,
-      isString: typeof targetValue === 'string',
-      includesDelim: !!dualDelimRpm
-    });
+    if (__stelvioDrawSegmentDebugLog()) {
+      console.log('[getSegmentRpmForPreview] dual 타입 처리 시작:', {
+        targetValue,
+        type: typeof targetValue,
+        isString: typeof targetValue === 'string',
+        includesDelim: !!dualDelimRpm
+      });
+    }
     
     if (dualDelimRpm && typeof targetValue === 'string') {
       const parts = targetValue.split(dualDelimRpm).map(s => s.trim()).filter(s => s.length > 0);
-      console.log('[getSegmentRpmForPreview] dual 문자열 분리:', {
-        original: targetValue,
-        parts,
-        partsLength: parts.length
-      });
+      if (__stelvioDrawSegmentDebugLog()) {
+        console.log('[getSegmentRpmForPreview] dual 문자열 분리:', {
+          original: targetValue,
+          parts,
+          partsLength: parts.length
+        });
+      }
       
       if (parts.length >= 2) {
         const rpm = Number(parts[1]);
-        console.log('[getSegmentRpmForPreview] dual RPM 추출:', {
-          parts,
-          rpmPart: parts[1],
-          parsed: rpm,
-          isValid: !isNaN(rpm) && rpm > 0
-        });
+        if (__stelvioDrawSegmentDebugLog()) {
+          console.log('[getSegmentRpmForPreview] dual RPM 추출:', {
+            parts,
+            rpmPart: parts[1],
+            parsed: rpm,
+            isValid: !isNaN(rpm) && rpm > 0
+          });
+        }
         if (!isNaN(rpm) && rpm > 0) {
           return rpm;
         }
@@ -4300,38 +4268,6 @@ function handleWorkoutCardClick(event, workoutId) {
   if (workoutId) selectWorkout(workoutId);
 }
 
-/**
- * 스피너·오버레이가 DOM에 그려지도록 다음 페인트(또는 2프레임) 이후에 이어질 작업 실행 (메인 스레드 점유 시 애니메이션 정지 방지)
- */
-function waitForNextPaint() {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(resolve);
-      });
-    } else {
-      setTimeout(resolve, 32);
-    }
-  });
-}
-
-/**
- * loadWorkouts 로딩 후 display:none → 워크아웃 첫 선택 시 display:flex로 다시 켤 때
- * .workout-loading-spinner의 animation: spin 이 재시작되지 않고 멈춘 것처럼 보이는 WebView/Safari/Chrome 이슈 대응
- */
-function restartWorkoutLoadingOverlaySpinner(overlay) {
-  if (!overlay) return;
-  const spin = overlay.querySelector('.workout-loading-spinner');
-  if (!spin) return;
-  try {
-    spin.style.animation = 'none';
-    void spin.offsetWidth;
-    spin.style.removeProperty('animation');
-  } catch (e) {
-    /* ignore */
-  }
-}
-
 async function selectWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -4352,13 +4288,10 @@ async function selectWorkout(workoutId) {
   var workoutLoadingProgress = document.getElementById('workoutLoadingProgress');
   if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'flex'; }
   if (workoutLoadingProgress) { workoutLoadingProgress.textContent = 'Workout Loading ....'; }
-  restartWorkoutLoadingOverlaySpinner(workoutLoadingOverlay);
-  await waitForNextPaint();
   
   try {
     console.log('Selecting workout with ID:', workoutId);
     const result = await apiGetWorkout(workoutId);
-    await waitForNextPaint();
     
     if (!result || !result.success) {
       console.error('Failed to get workout:', result?.error);

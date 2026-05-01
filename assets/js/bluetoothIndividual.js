@@ -8,6 +8,15 @@ function __indivEl(id) {
 }
 var __indivHiddenClass = __indivIdPrefix ? 'indiv-hidden' : 'hidden';
 
+/** 통합 블루투스 대시보드 고빈도 디버그 로그 — 기본 꺼짐. 콘솔에서 window.__STELVIO_BT_INDIV_VERBOSE = true 또는 DEBUG_MODE */
+function __stelvioBtIndivVerboseLog() {
+    try {
+        return typeof window !== 'undefined' && (window.__STELVIO_BT_INDIV_VERBOSE === true || window.DEBUG_MODE === true);
+    } catch (e) {
+        return false;
+    }
+}
+
 // Firebase status (updateTargetPower, updateSpeedometerSegmentInfo 등에서 사용, attachBluetoothIndividualFirebaseListeners 내부 리스너가 설정)
 var firebaseStatus = null;
 // 훈련 상태/세그먼트 추적 — attachBluetoothIndividualFirebaseListeners 내부 리스너가 설정, 전역 함수에서 참조
@@ -1715,23 +1724,24 @@ function updateDashboard(data = null) {
         data = window.liveData;
     }
     
-    // 디버깅 로그 (5초마다 한 번씩만 출력)
-    if (!window.lastDashboardLog || (Date.now() - window.lastDashboardLog) > 5000) {
-        window.lastDashboardLog = Date.now();
-        const connectedDevicesInfo = {
-            heartRate: window.connectedDevices?.heartRate ? (window.connectedDevices.heartRate.name || 'connected') : null,
-            powerMeter: window.connectedDevices?.powerMeter ? (window.connectedDevices.powerMeter.name || 'connected') : null,
-            trainer: window.connectedDevices?.trainer ? (window.connectedDevices.trainer.name || 'connected') : null
-        };
-        console.log('[BluetoothIndividual] updateDashboard 호출:', {
-            power: window.liveData?.power,
-            heartRate: window.liveData?.heartRate,
-            cadence: window.liveData?.cadence,
-            hasData: !!data,
-            connectedDevices: connectedDevicesInfo,
-            hasBluetoothJS: typeof window.connectHeartRate === 'function',
-            handleHeartRateDataExists: typeof window.handleHeartRateData === 'function'
-        });
+    if (__stelvioBtIndivVerboseLog()) {
+        if (!window.lastDashboardLog || (Date.now() - window.lastDashboardLog) > 5000) {
+            window.lastDashboardLog = Date.now();
+            const connectedDevicesInfo = {
+                heartRate: window.connectedDevices?.heartRate ? (window.connectedDevices.heartRate.name || 'connected') : null,
+                powerMeter: window.connectedDevices?.powerMeter ? (window.connectedDevices.powerMeter.name || 'connected') : null,
+                trainer: window.connectedDevices?.trainer ? (window.connectedDevices.trainer.name || 'connected') : null
+            };
+            console.log('[BluetoothIndividual] updateDashboard 호출:', {
+                power: window.liveData?.power,
+                heartRate: window.liveData?.heartRate,
+                cadence: window.liveData?.cadence,
+                hasData: !!data,
+                connectedDevices: connectedDevicesInfo,
+                hasBluetoothJS: typeof window.connectHeartRate === 'function',
+                handleHeartRateDataExists: typeof window.handleHeartRateData === 'function'
+            });
+        }
     }
     
     // 1. 텍스트 업데이트
@@ -1802,7 +1812,7 @@ function updateDashboard(data = null) {
     if (hrEl) {
         hrEl.textContent = Math.round(hr);
         // 디버깅 로그 (심박수가 업데이트될 때마다)
-        if (hr > 0 && (!window.lastHRLog || (Date.now() - window.lastHRLog) > 5000)) {
+        if (__stelvioBtIndivVerboseLog() && hr > 0 && (!window.lastHRLog || (Date.now() - window.lastHRLog) > 5000)) {
             window.lastHRLog = Date.now();
             console.log('[BluetoothIndividual] 심박수 업데이트:', hr, 'bpm (window.liveData.heartRate:', window.liveData?.heartRate, ')');
         }
@@ -2337,8 +2347,10 @@ function updateTargetPower() {
     if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower > 0) {
         // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
         const adjustedTargetPower = Math.round(firebaseTargetPower * individualIntensityAdjustment);
-        console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
-        console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
+        if (__stelvioBtIndivVerboseLog()) {
+            console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
+            console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
+        }
         
         // TARGET 라벨 업데이트 로직 (Firebase 값 사용 시)
         const targetLabelEl = __indivEl('ui-target-label');
@@ -2495,7 +2507,7 @@ function updateTargetPower() {
     if (firebaseStatus && firebaseStatus.segmentTargetType && firebaseStatus.segmentTargetValue !== undefined) {
         targetType = firebaseStatus.segmentTargetType;
         targetValue = firebaseStatus.segmentTargetValue;
-        console.log('[updateTargetPower] Firebase status에서 세그먼트 정보 사용:', { targetType, targetValue });
+        if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] Firebase status에서 세그먼트 정보 사용:', { targetType, targetValue });
     }
     
     // Firebase status에 세그먼트 정보가 없으면 getCurrentSegment() 사용
@@ -2504,7 +2516,7 @@ function updateTargetPower() {
         if (seg) {
             targetType = seg.target_type || 'ftp_pct';
             targetValue = seg.target_value;
-            console.log('[updateTargetPower] getCurrentSegment()에서 세그먼트 정보 사용:', { targetType, targetValue });
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] getCurrentSegment()에서 세그먼트 정보 사용:', { targetType, targetValue });
         }
     }
     
@@ -2563,15 +2575,17 @@ function updateTargetPower() {
     
     // target_type에 따라 계산 (Firebase status 또는 getCurrentSegment()에서 가져온 값 사용)
     
-    console.log('[updateTargetPower] 세그먼트 데이터로 계산 (Firebase targetPower 없음)');
-    console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex);
-    console.log('[updateTargetPower] target_type:', targetType, 'target_value:', targetValue, '타입:', typeof targetValue);
-    console.log('[updateTargetPower] 사용자 FTP 값:', ftp);
+    if (__stelvioBtIndivVerboseLog()) {
+        console.log('[updateTargetPower] 세그먼트 데이터로 계산 (Firebase targetPower 없음)');
+        console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex);
+        console.log('[updateTargetPower] target_type:', targetType, 'target_value:', targetValue, '타입:', typeof targetValue);
+        console.log('[updateTargetPower] 사용자 FTP 값:', ftp);
+    }
     
     if (targetType === 'ftp_pct') {
         const ftpPercent = Number(targetValue) || 100;
         targetPower = Math.round(ftp * (ftpPercent / 100));
-        console.log('[updateTargetPower] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
+        if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
     } else if (targetType === 'dual') {
         // dual 타입: 구분자 "~" 또는 "/" 파싱
         const dualDelim = typeof targetValue === 'string' ? (targetValue.includes('~') ? '~' : (targetValue.includes('/') ? '/' : null)) : null;
@@ -2632,7 +2646,7 @@ function updateTargetPower() {
         
         // 하한값을 목표 파워값으로 사용
         targetPower = Math.round(ftp * (minPercent / 100));
-        console.log('[updateTargetPower] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
+        if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
         
         // 상한값을 전역 변수에 저장 (updateTargetPowerArc에서 사용)
         const baseMaxPower = Math.round(ftp * (maxPercent / 100));
@@ -2653,9 +2667,11 @@ function updateTargetPower() {
         window.currentSegmentMinPower = adjustedTargetPower; // adjustedTargetPower는 이미 강도 조절이 적용된 값
     }
     
-    console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
-    console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
-    console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
+    if (__stelvioBtIndivVerboseLog()) {
+        console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
+        console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
+        console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
+    }
     
     // TARGET 라벨 업데이트 로직
     const targetLabelEl = __indivEl('ui-target-label');
@@ -2790,7 +2806,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
         if (status.segmentTargetType && status.segmentTargetValue !== undefined) {
             targetType = status.segmentTargetType;
             targetValue = status.segmentTargetValue;
-            console.log('[updateSpeedometerTargetForSegment] Firebase status 값 사용 - 타입:', targetType, '값:', targetValue);
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerTargetForSegment] Firebase status 값 사용 - 타입:', targetType, '값:', targetValue);
         } 
         // 2순위: window.currentWorkout에서 가져온 값 사용
         else {
@@ -2814,7 +2830,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             
             targetType = seg.target_type || 'ftp_pct';
             targetValue = seg.target_value;
-            console.log('[updateSpeedometerTargetForSegment] window.currentWorkout 값 사용 - 타입:', targetType, '값:', targetValue);
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerTargetForSegment] window.currentWorkout 값 사용 - 타입:', targetType, '값:', targetValue);
         }
         
         // targetValue가 null이면 기본값 사용
@@ -2854,7 +2870,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             targetPowerEl.textContent = targetRpm > 0 ? String(Math.round(targetRpm)) : '0';
             targetPowerEl.setAttribute('fill', '#ef4444'); // 빨강색
             
-            console.log('[updateSpeedometerTargetForSegment] cadence_rpm 타입 - RPM:', targetRpm);
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerTargetForSegment] cadence_rpm 타입 - RPM:', targetRpm);
             
         } else if (targetType === 'dual') {
             // dual 타입: FTP%와 RPM 모두 표시
@@ -2927,7 +2943,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
                 });
             }
             
-            console.log('[updateSpeedometerTargetForSegment] dual 타입 - FTP%:', ftpPercent, 'RPM:', targetRpm, 'Power:', adjustedTargetPower);
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerTargetForSegment] dual 타입 - FTP%:', ftpPercent, 'RPM:', targetRpm, 'Power:', adjustedTargetPower);
             
         } else if (targetType === 'ftp_pctz') {
             let minPercent = 60;
@@ -2984,7 +3000,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
                 });
             }
             
-            console.log('[updateSpeedometerTargetForSegment] ftp_pctz 타입 - 하한:', minPercent, '상한:', maxPercent, 'Power:', adjustedTargetPower);
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerTargetForSegment] ftp_pctz 타입 - 하한:', minPercent, '상한:', maxPercent, 'Power:', adjustedTargetPower);
             
         } else {
             // ftp_pct 타입 (기본)
@@ -3016,7 +3032,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
                 });
             }
             
-            console.log('[updateSpeedometerTargetForSegment] ftp_pct 타입 - FTP%:', ftpPercent, 'Power:', adjustedTargetPower);
+            if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerTargetForSegment] ftp_pct 타입 - FTP%:', ftpPercent, 'Power:', adjustedTargetPower);
         }
         
         // cadence_rpm 타입의 경우 목표 파워는 0이므로 ErgController 호출하지 않음
@@ -3131,7 +3147,7 @@ function updateSpeedometerSegmentInfo() {
         segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
         segmentInfoEl.setAttribute('font-size', segmentInfoFontSize); // 60% 축소
         
-        console.log('[updateSpeedometerSegmentInfo] 세그먼트 정보 업데이트:', segmentText, '타입:', targetType, '값:', targetValue);
+        if (__stelvioBtIndivVerboseLog()) console.log('[updateSpeedometerSegmentInfo] 세그먼트 정보 업데이트:', segmentText, '타입:', targetType, '값:', targetValue);
         
     } catch (error) {
         console.error('[updateSpeedometerSegmentInfo] 오류:', error);
@@ -3326,7 +3342,7 @@ function getCurrentSegment() {
     
     // 워크아웃 데이터 확인
     if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
-        console.log('[getCurrentSegment] 워크아웃 데이터가 없음');
+        if (__stelvioBtIndivVerboseLog()) console.log('[getCurrentSegment] 워크아웃 데이터가 없음');
         return null;
     }
     
@@ -3403,10 +3419,9 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
             const checkAndStartPulseAnimation = () => {
                 const currentState = window.currentTrainingState || 'idle';
                 if (currentState === 'running') {
-                    // 기존 인터벌이 있으면 제거
+                    // 이미 인터벌이 실행 중이면 재시작하지 않음 (핵심 최적화)
                     if (mascotAnimationInterval) {
-                        clearInterval(mascotAnimationInterval);
-                        mascotAnimationInterval = null;
+                        return;
                     }
                     
                     // 100ms마다 그래프를 다시 그려서 펄스 애니메이션 효과
@@ -3427,13 +3442,11 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
                             }
                         }
                     }, 100);
-                    console.log('[Bluetooth 개인 훈련] 마스코트 펄스 애니메이션 시작 (drawGraph 후, 상태:', currentState, ')');
                 } else {
                     // 훈련이 실행 중이 아니면 애니메이션 중지
                     if (mascotAnimationInterval) {
                         clearInterval(mascotAnimationInterval);
                         mascotAnimationInterval = null;
-                        console.log('[Bluetooth 개인 훈련] 마스코트 펄스 애니메이션 중지 (drawGraph 후, 상태:', currentState, ')');
                     }
                 }
             };
@@ -3569,7 +3582,7 @@ function updateGaugeTicksAndLabels() {
     const ticksHTML = generateGaugeTicks();
     if (ticksHTML) {
         ticksGroup.innerHTML = ticksHTML;
-        console.log('[BluetoothIndividual] 속도계 눈금 생성 완료:', ticksHTML.length, '문자');
+        if (__stelvioBtIndivVerboseLog()) console.log('[BluetoothIndividual] 속도계 눈금 생성 완료:', ticksHTML.length, '문자');
     }
     // generateGaugeTicks()는 항상 문자열을 반환하므로 else 경고는 불필요
     
@@ -3577,7 +3590,7 @@ function updateGaugeTicksAndLabels() {
     const labelsHTML = generateGaugeLabels();
     if (labelsHTML) {
         labelsGroup.innerHTML = labelsHTML;
-        console.log('[BluetoothIndividual] 속도계 레이블 생성 완료:', labelsHTML.length, '문자');
+        if (__stelvioBtIndivVerboseLog()) console.log('[BluetoothIndividual] 속도계 레이블 생성 완료:', labelsHTML.length, '문자');
     }
     // generateGaugeLabels()는 항상 문자열을 반환하므로 else 경고는 불필요
     
@@ -4286,8 +4299,7 @@ function updateTargetPowerArc() {
         }
     }
     
-    // 디버깅 로그 (선택사항)
-    if (achievementRatio > 0) {
+    if (__stelvioBtIndivVerboseLog() && achievementRatio > 0) {
         console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${window.currentSegmentMaxPower}W` : ''}`);
     }
 }
