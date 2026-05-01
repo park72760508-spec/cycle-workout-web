@@ -164,8 +164,6 @@ function computeSubscriptionExpiryBeforeAfterSeoul(
   return { before, after };
 }
 
-/** 한국형 날짜 포맷: YYYY년 MM월 DD일 (Seoul YMD 기준) */
-
 /** 휴대폰 숫자만 추출하여 알림톡 수신자 형태(11자리)로 정규화 */
 function normalizeReceiverPhone(phone: string): string {
   return (phone || "").replace(/\D/g, "");
@@ -223,17 +221,6 @@ function formatSeoulYmdToAlimtalkMmDdYy(ymd: string): string {
   if (!m) return ymd.trim() || "-";
   const [, yyyy, mm, dd] = m;
   return `${mm}-${dd}-${yyyy.slice(-2)}`;
-}
-
-/**
- * 카카오 템플릿 변수 `#{expiry_date_after_kr}` 대응: 한국어 일자.
- * 월·일은 항상 두 자리 zero-padding (`2026년 06월 16일`)으로 알리고/검수 샘플과 통일.
- */
-function formatSeoulYmdToAlimtalkKrYmdLine(ymd: string): string {
-  const m = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return ymd.trim() || "-";
-  const [, yyyy, mm, dd] = m;
-  return `${yyyy}년 ${mm}월 ${dd}일`;
 }
 
 /** SP 표시: 부동소수 오차 제거(알림톡 본문이 검수 템플릿과 글자 단위로 일치해야 함) */
@@ -309,7 +296,7 @@ function safeAlimtalkDisplayName(raw: string): string {
 
 /**
  * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
- * `#{expiry_date_after_kr}` 슬롯은 한국어 일자, `#{expiry_date_before}` 는 MM-DD-YY 를 쓰는 승인이 많음.
+ * 기존/변경 만료일 줄 모두 승인 데이터와 동일하게 MM-DD-YY (`formatSeoulYmdToAlimtalkMmDdYy`).
  * 개행은 `.join('\n')`으로만 생성한 뒤, 전송 직전 `normalizeAlimtalkNewlinesForKakaoTemplate`에서 CRLF로 통일.
  */
 function buildAlimtalkMessage(params: {
@@ -329,14 +316,8 @@ function buildAlimtalkMessage(params: {
 
   const beforeYmd = toYmdSeoul(params.expiryDateBefore);
   const afterYmd = toYmdSeoul(params.expiryDateAfter);
-  const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkKrYmdLine(beforeYmd) : "-";
-  const afterFmt = String(process.env.KAKAO_ALIMTALK_EXPIRY_AFTER_FORMAT || "kr").toLowerCase();
-  const afterLine =
-    afterYmd == null || afterYmd === ""
-      ? "-"
-      : afterFmt === "mmddyy" || afterFmt === "us"
-        ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd)
-        : formatSeoulYmdToAlimtalkKrYmdLine(afterYmd);
+  const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
+  const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
 
   const lines = [
     ALIMTALK_MISSION_HEADER_LINE,
