@@ -8371,10 +8371,10 @@
       } else if (stelvioIsGcRankingMode()) {
         var gcSc = (cu.gcScore != null ? Number(cu.gcScore) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userName + '님은 GC(헵타곤 환산) 전체 ' + globalRank + '위(' + gcSc + '점)입니다.';
+          msg = userName + '님은 GC(종합 랭킹) 전체 ' + globalRank + '위(' + gcSc + '점)입니다.';
         } else {
           var catPartGc = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + gcSc + '점)' : gcSc + '점';
-          msg = userName + '님은 GC(헵타곤 환산) ' + catPartGc + ', 전체 ' + globalRank + '위입니다.';
+          msg = userName + '님은 GC(종합 랭킹) ' + catPartGc + ', 전체 ' + globalRank + '위입니다.';
         }
       } else {
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
