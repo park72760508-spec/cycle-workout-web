@@ -6086,6 +6086,40 @@ body:has(#trainingDetailModal:not(.hidden)) {
   border-bottom: 1px solid #f3f4f6;
 }
 /* 랭킹 본문: 대시보드 AI 컨디션 코멘트와 동일 톤(text-sm/text-gray-700), 행 높이 최소화 */
+#stelvioRankingScreen .stelvio-ranking-star-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 6px 0 10px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
+}
+#stelvioRankingScreen .stelvio-ranking-star-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+#stelvioRankingScreen .stelvio-legend-star {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-legend-star--friend {
+  color: #16a34a;
+  text-shadow: 0 0 1px rgba(22, 163, 74, 0.35);
+}
+#stelvioRankingScreen .stelvio-legend-star--interest {
+  color: #9333ea;
+  text-shadow: 0 0 1px rgba(88, 28, 135, 0.35);
+}
 #stelvioRankingScreen .stelvio-category-body {
   padding: 4px 10px 6px;
 }
