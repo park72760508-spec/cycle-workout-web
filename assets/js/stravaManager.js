@@ -1306,9 +1306,11 @@ async function syncStravaData(startDate = null, endDate = null, opts = {}) {
  * MMP 포함 서버 동기화 (manualStravaSyncWithMmp Cloud Function 호출)
  * - 과거 1~6개월 또는 N일 Strava 활동 + 5/10/30분 파워(MMP) 계산·저장
  * - Firebase 로그인 필요 (Authorization Bearer 토큰)
- * @param {number} [months=1] - 동기화할 개월 수 (1~6). options.days 사용 시 무시
+ * @param {number} [months=1] - 동기화할 개월 수 (1~6). options.days / options.maxActivities 가 없을 때만 사용
  * @param {Object} [options] - 선택 옵션
- * @param {number} [options.days] - 동기화할 일 수 (예: 10 = 최근 10일). 지정 시 months 대신 사용
+ * @param {number} [options.days] - 동기화할 일 수. 지정 시 months 대신 사용 (maxActivities 없을 때)
+ * @param {number} [options.maxActivities] - 최근 windowMonths개월 안에서 최신 활동 최대 N개만 처리 (일 수 기준이 아님)
+ * @param {number} [options.windowMonths=3] - maxActivities 사용 시 Strava after 구간(개월)
  * @param {string} [options.overlayId] - 진행 오버레이 요소 ID
  * @param {string} [options.textId] - 진행 텍스트 요소 ID
  * @param {string} [options.progressMessage] - 표시할 메시지
@@ -1319,16 +1321,42 @@ async function syncStravaDataWithMmp(months = 1, options) {
   var textId = opts.textId || 'stravaSyncProgressText';
   var progressMessage = opts.progressMessage;
   var targetUsersVal = opts.targetUsers && String(opts.targetUsers).toLowerCase();
-  var daysVal = opts.days != null ? Math.max(1, parseInt(opts.days, 10) || 10) : null;
+  var maxActivitiesVal =
+    opts.maxActivities != null && opts.maxActivities !== ''
+      ? Math.max(1, Math.min(200, parseInt(String(opts.maxActivities), 10) || 30))
+      : null;
+  var windowMonthsVal =
+    opts.windowMonths != null && opts.windowMonths !== ''
+      ? Math.max(1, Math.min(12, parseInt(String(opts.windowMonths), 10) || 3))
+      : 3;
+  var daysVal =
+    maxActivitiesVal != null
+      ? null
+      : opts.days != null
+        ? Math.max(1, parseInt(opts.days, 10) || 10)
+        : null;
   var startDateVal = opts.startDate && String(opts.startDate).trim();
   var endDateVal = opts.endDate && String(opts.endDate).trim();
-  var monthsVal = (daysVal && daysVal > 0) ? 0 : (startDateVal && endDateVal ? 0 : Math.min(6, Math.max(1, parseInt(months, 10) || 1)));
+  var monthsVal =
+    startDateVal && endDateVal
+      ? 0
+      : daysVal && daysVal > 0
+        ? 0
+        : maxActivitiesVal != null
+          ? 0
+          : Math.min(6, Math.max(1, parseInt(months, 10) || 1));
   var btnId = opts.btnId || 'btnStravaMmpAllUsers';
   var btn = document.getElementById(btnId) || document.getElementById('btnStravaMmpAdmin');
   var originalText = btn ? btn.textContent : 'MMP 포함 동기화';
   var progressOverlay = document.getElementById(overlayId);
   var progressText = document.getElementById(textId);
-  var defaultMsg = (startDateVal && endDateVal) ? 'MMP 포함 동기화 중 (' + startDateVal + ' ~ ' + endDateVal + ')...' : (daysVal ? 'MMP 포함 동기화 중 (최근 ' + daysVal + '일)...' : 'MMP 포함 동기화 중 (' + monthsVal + '개월)...');
+  var defaultMsg = (startDateVal && endDateVal)
+    ? 'MMP 포함 동기화 중 (' + startDateVal + ' ~ ' + endDateVal + ')...'
+    : maxActivitiesVal != null
+      ? 'MMP 포함 동기화 중 (최근 ' + windowMonthsVal + '개월·최신 ' + maxActivitiesVal + '개 활동)...'
+      : daysVal
+        ? 'MMP 포함 동기화 중 (최근 ' + daysVal + '일)...'
+        : 'MMP 포함 동기화 중 (' + monthsVal + '개월)...';
   var msg = (typeof progressMessage === 'string' && progressMessage) ? progressMessage : defaultMsg;
 
   function showProgress(m) {
@@ -1363,6 +1391,8 @@ async function syncStravaDataWithMmp(months = 1, options) {
     var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/manualStravaSyncWithMmp?forceRecalcTimeInZones=true';
     if (startDateVal && endDateVal) {
       url += '&startDate=' + encodeURIComponent(startDateVal) + '&endDate=' + encodeURIComponent(endDateVal);
+    } else if (maxActivitiesVal != null) {
+      url += '&maxActivities=' + maxActivitiesVal + '&windowMonths=' + windowMonthsVal;
     } else if (daysVal) {
       url += '&days=' + daysVal;
     } else {
@@ -1422,7 +1452,7 @@ async function syncStravaDataWithMmp(months = 1, options) {
 /**
  * Strava 동기화 날짜 선택 모달 열기
  * grade=1: 관리자용 - 2개 버튼(모든 사용자 MMP, 관리자 MMP), 시작일/종료일 적용
- * grade=2,3: MMP 포함(최근 10일) 버튼만, 기간 선택 숨김
+ * grade=2,3: MMP 포함(최근 3개월·최신 30개 활동) 버튼만, 기간 선택 숨김
  */
 function openStravaSyncModal() {
   const modal = document.getElementById('stravaSyncModal');
@@ -1450,12 +1480,19 @@ function openStravaSyncModal() {
       if (adminHint) adminHint.style.display = '';
     } else {
       if (dateRangeSection) dateRangeSection.style.display = 'none';
-      if (descEl) descEl.textContent = '최근 10일 Strava 라이딩 데이터를 MMP와 함께 가져옵니다.';
+      if (descEl) {
+        descEl.textContent =
+          '최근 3개월 이내 Strava 활동 중 최신 30개(일 수가 아닌 활동 개수)까지 MMP와 함께 가져옵니다. 3개월 안에 활동이 30개 미만이면 있는 만큼만 수집합니다.';
+      }
       if (btnAllUsers) btnAllUsers.style.display = 'none';
       if (btnAdmin) {
         btnAdmin.style.display = '';
-        btnAdmin.textContent = 'MMP 포함 (최근 10일)';
-        btnAdmin.onclick = function () { if (typeof syncStravaDataWithMmp === 'function') syncStravaDataWithMmp(0, { days: 10 }); };
+        btnAdmin.textContent = 'MMP 포함 (최신 30개·3개월)';
+        btnAdmin.onclick = function () {
+          if (typeof syncStravaDataWithMmp === 'function') {
+            syncStravaDataWithMmp(0, { maxActivities: 30, windowMonths: 3 });
+          }
+        };
       }
       if (adminHint) adminHint.style.display = 'none';
     }
