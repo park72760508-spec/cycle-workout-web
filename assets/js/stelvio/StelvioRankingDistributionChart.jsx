@@ -26,6 +26,7 @@
     tss: 'TSS',
     personal_dist: '거리 30일',
     group_dist: '그룹 30일',
+    gc: 'GC',
     '1min': '1분',
     '5min': '5분',
     '10min': '10분',
@@ -109,12 +110,13 @@
     if (!row) return NaN;
     if (duration === 'tss') return Number(row.totalTss);
     if (duration === 'personal_dist' || duration === 'group_dist') return Number(row.totalKm);
+    if (duration === 'gc') return Number(row.gcScore);
     return Number(row.wkg);
   }
 
   function rankInCategoryByValue(categoryRows, myVal, duration) {
     if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
-    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' ? 1e-6 : 1e-9;
+    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' || duration === 'gc' ? 1e-6 : 1e-9;
     var strictlyGreater = 0;
     for (var i = 0; i < categoryRows.length; i++) {
       var row = categoryRows[i];
@@ -204,15 +206,18 @@
 
     var isTss = duration === 'tss';
     var isKmMode = duration === 'personal_dist' || duration === 'group_dist';
-    var isHistLike = isTss || isKmMode;
+    var isGcMode = duration === 'gc';
+    var isHistLike = isTss || isKmMode || isGcMode;
     var durLabel = isTss
       ? '주간 TSS'
       : isKmMode
-      ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
-      : STELVIO_DURATION_LABELS[duration] || duration;
+        ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
+        : isGcMode
+          ? 'GC 환산 점수'
+          : STELVIO_DURATION_LABELS[duration] || duration;
     /** 오픈 라이딩 등: 랭킹 행과 무관하게 프로필 FTP 기준 W/kg으로 세로 기준선만 고정 */
     var overrideMyWkg =
-      !isTss && !isKmMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
+      !isTss && !isKmMode && !isGcMode && p.overrideMyWkg != null ? Number(p.overrideMyWkg) : null;
     if (overrideMyWkg != null && (isNaN(overrideMyWkg) || !isFinite(overrideMyWkg))) overrideMyWkg = null;
 
     var chartWrapRef = useRef(null);
@@ -253,10 +258,11 @@
         return cohort.map(function (e) {
           if (isTss) return Number(e.totalTss);
           if (isKmMode) return Number(e.totalKm);
+          if (isGcMode) return Number(e.gcScore);
           return Number(e.wkg);
         });
       },
-      [cohort, isTss, isKmMode]
+      [cohort, isTss, isKmMode, isGcMode]
     );
 
     var binPack = useMemo(
@@ -280,6 +286,7 @@
     var openRidingTierBandWeightKg =
       !isTss &&
       !isKmMode &&
+      !isGcMode &&
       p.openRidingTierBandWeightKg != null &&
       isFinite(Number(p.openRidingTierBandWeightKg)) &&
       Number(p.openRidingTierBandWeightKg) > 0
@@ -312,7 +319,7 @@
     var openRidingTierStripOverlapPx = openRidingTierBandWeightKg && openRidingTierBandSegments.length > 0 ? 15 : 0;
 
     var myRaw = null;
-    if (overrideMyWkg != null && !isTss && !isKmMode) {
+    if (overrideMyWkg != null && !isTss && !isKmMode && !isGcMode) {
       myRaw = overrideMyWkg;
     }
     if (myRaw == null && currentUserId && cohort.length) {
@@ -323,14 +330,26 @@
         return e.userId === currentUserId;
       })[0];
       if (mine) {
-        myRaw = isTss ? Number(mine.totalTss) : isKmMode ? Number(mine.totalKm) : Number(mine.wkg);
+        myRaw = isTss ? Number(mine.totalTss) : isKmMode ? Number(mine.totalKm) : isGcMode ? Number(mine.gcScore) : Number(mine.wkg);
       }
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUserId && myRankSupremo && myRankSupremo.userId === currentUserId) {
-      myRaw = isTss ? Number(myRankSupremo.totalTss) : isKmMode ? Number(myRankSupremo.totalKm) : Number(myRankSupremo.wkg);
+      myRaw = isTss
+        ? Number(myRankSupremo.totalTss)
+        : isKmMode
+          ? Number(myRankSupremo.totalKm)
+          : isGcMode
+            ? Number(myRankSupremo.gcScore)
+            : Number(myRankSupremo.wkg);
     }
     if ((myRaw == null || isNaN(myRaw)) && currentUser && currentUser.userId === currentUserId) {
-      myRaw = isTss ? Number(currentUser.totalTss) : isKmMode ? Number(currentUser.totalKm) : Number(currentUser.wkg);
+      myRaw = isTss
+        ? Number(currentUser.totalTss)
+        : isKmMode
+          ? Number(currentUser.totalKm)
+          : isGcMode
+            ? Number(currentUser.gcScore)
+            : Number(currentUser.wkg);
     }
     if (
       (myRaw == null || isNaN(myRaw)) &&
@@ -347,7 +366,7 @@
     var userAgeCat = currentUser && currentUser.ageCategory;
     var displayRank = null;
 
-    if (overrideMyWkg != null && !isTss) {
+    if (overrideMyWkg != null && !isTss && !isGcMode) {
       displayRank = null;
     } else if (activeCategory === 'Supremo') {
       var globalR =
@@ -379,8 +398,10 @@
         ? isTss
           ? myRaw.toFixed(1) + ' TSS'
           : isKmMode
-          ? myRaw.toFixed(1) + ' km'
-          : myRaw.toFixed(2) + ' W/kg'
+            ? myRaw.toFixed(1) + ' km'
+            : isGcMode
+              ? myRaw.toFixed(1) + ' 점'
+              : myRaw.toFixed(2) + ' W/kg'
         : '';
 
     var refBadgeTitle = typeof p.overrideReferenceBadgeTitle === 'string' && p.overrideReferenceBadgeTitle.trim()
@@ -388,9 +409,9 @@
       : '나의 FTP';
     var refValueNote =
       typeof p.overrideReferenceValueNote === 'string' ? p.overrideReferenceValueNote : ' (프로필)';
-    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode ? refBadgeTitle : '나의 위치';
+    var badgeMain = overrideMyWkg != null && !isTss && !isKmMode && !isGcMode ? refBadgeTitle : '나의 위치';
     var badgeSub =
-      overrideMyWkg != null && !isTss && !isKmMode && valueFmt
+      overrideMyWkg != null && !isTss && !isKmMode && !isGcMode && valueFmt
         ? '· ' + valueFmt + (refValueNote || '')
         : displayRank != null && valueFmt
         ? '· ' + displayRank + '위 · ' + valueFmt
@@ -581,10 +602,7 @@
                     },
                   ]}
                 />
-                <Tooltip
-                  content={<DistTooltip />}
-                  cursor={{ stroke: BRONZE, strokeWidth: 1, strokeDasharray: '4 4' }}
-                />
+                <Tooltip content={<DistTooltip />} cursor={{ stroke: BRONZE, strokeWidth: 1, strokeDasharray: '4 4' }} />
                 <Area
                   type="natural"
                   dataKey="count"
