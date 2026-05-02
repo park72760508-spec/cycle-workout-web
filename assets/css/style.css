@@ -6469,6 +6469,19 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
+/* 친구 별: 부모 .stelvio-rank-row .stelvio-rank-name 의 color 상속 → 검정/회색처럼 보임 방지 */
+#stelvioRankingScreen .stelvio-rank-friend-star,
+#stelvioRankingScreen .stelvio-rank-name .stelvio-rank-friend-star {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  color: #16a34a !important;
+  -webkit-text-fill-color: #16a34a;
+  text-shadow: 0 0 1px rgba(22, 163, 74, 0.45);
+  flex-shrink: 0;
+  pointer-events: none;
+  user-select: none;
+}
 #stelvioRankingScreen .stelvio-rank-friend-star--solo {
   min-width: 1.25em;
   text-align: center;
