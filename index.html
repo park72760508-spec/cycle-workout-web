@@ -8539,13 +8539,13 @@
           h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
           h +=
             '<span class="stelvio-rank-name">' +
-            stelvioRankingStarButtonHtml(item.userId) +
             '<span class="stelvio-rank-name-text" title="' +
             rawName +
             '">' +
             name +
             '</span>' +
             badgePart +
+            stelvioRankingStarButtonHtml(item.userId) +
             '</span>';
           h += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
           h += '</div>';
@@ -8769,7 +8769,6 @@
         html += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
-          stelvioRankingStarButtonHtml(item.userId) +
           '<span class="stelvio-rank-name-text" title="' +
           rawName +
           '">' +
@@ -8777,6 +8776,7 @@
           '</span>' +
           globalPart +
           badgePart +
+          stelvioRankingStarButtonHtml(item.userId) +
           '</span>';
         html += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
         html += '</div>';
@@ -8812,13 +8812,13 @@
         html += '<span class="stelvio-rank-pos">' + mrDisp + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
-          stelvioRankingStarButtonHtml(mr.userId) +
           '<span class="stelvio-rank-name-text" title="' +
           mrRawName +
           '">' +
           mrName +
           '</span>' +
           mrBadgePart +
+          stelvioRankingStarButtonHtml(mr.userId) +
           '</span>';
         html += '<span class="stelvio-rank-wkg">' + mrVal + '</span>';
         html += '</div>';
