@@ -144,6 +144,7 @@
     if (!row) return NaN;
     if (duration === 'tss') return Number(row.totalTss);
     if (duration === 'personal_dist' || duration === 'group_dist') return Number(row.totalKm);
+    if (duration === 'gc') return Number(row.gcScore);
     return Number(row.wkg);
   }
 
@@ -155,7 +156,7 @@
    */
   function rankInCategoryByValue(categoryRows, myVal, duration) {
     if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
-    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' ? 1e-6 : 1e-9;
+    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' || duration === 'gc' ? 1e-6 : 1e-9;
     var strictlyGreater = 0;
     for (var i = 0; i < categoryRows.length; i++) {
       var row = categoryRows[i];
@@ -1606,14 +1607,6 @@
                 </span>
               </p>
             </div>
-            <button
-              type="button"
-              className="stelvio-heptagon-detail-modal__close"
-              onClick={onClose}
-              aria-label="닫기"
-            >
-              ×
-            </button>
           </div>
           <div className="stelvio-heptagon-detail-modal__summary">
             <div
@@ -1813,11 +1806,6 @@
           {sumP != null && !boardState.loading && !boardState.err && (!boardState.rows || !boardState.rows.length) ? (
             <p className="stelvio-heptagon-detail-modal__neighborload">표시할 순위가 없습니다. (동일 조건·집계 기준)</p>
           ) : null}
-          </div>
-          <div className="stelvio-heptagon-detail-modal__actions">
-            <button type="button" className="stelvio-heptagon-detail-modal__btn" onClick={onClose}>
-              닫기
-            </button>
           </div>
         </div>
       </div>
@@ -3170,6 +3158,20 @@
           <div className="flex items-center justify-center gap-1 w-full max-w-[420px] mx-auto">
             <div className="stelvio-octagon-chart-shell relative flex-1 h-[260px]">
               {svg}
+              {tierForCard && uid ? (function () {
+                var gcr = heptagonCardRankFromSummary(tierForCard, category, viewerAc);
+                return (
+                  <div
+                    className="pointer-events-none absolute left-0 right-0 bottom-1 z-[1] flex justify-center"
+                    aria-label={'GC 종합 순위 ' + (gcr != null ? gcr + '위' : '없음')}
+                  >
+                    <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm">
+                      <span className="font-bold tracking-tight text-violet-800">GC</span>
+                      <span className="tabular-nums text-slate-600">{gcr != null ? gcr + '위' : '—'}</span>
+                    </span>
+                  </div>
+                );
+              })() : null}
               {tierForCard ? (
                 <OctagonTierCenterOverlay
                   summary={tierForCard}
