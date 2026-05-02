@@ -6429,8 +6429,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   -webkit-tap-highlight-color: transparent;
 }
 #stelvioRankingScreen .stelvio-rank-star-btn--on {
-  color: #c4b5fd;
-  text-shadow: 0 0 0.5px rgba(124, 58, 237, 0.35);
+  color: #9333ea;
+  text-shadow: 0 0 1px rgba(88, 28, 135, 0.42);
 }
 #stelvioRankingScreen .stelvio-rank-star-btn:hover {
   opacity: 0.88;
