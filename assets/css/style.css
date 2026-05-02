@@ -6107,10 +6107,15 @@ body:has(#trainingDetailModal:not(.hidden)) {
   gap: 6px;
 }
 #stelvioRankingScreen .stelvio-legend-star {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1rem;
   line-height: 1;
   flex-shrink: 0;
+}
+#stelvioRankingScreen .stelvio-legend-star-svg {
+  display: block;
 }
 #stelvioRankingScreen .stelvio-legend-star--friend {
   color: #16a34a;
@@ -6455,6 +6460,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   vertical-align: middle;
 }
 #stelvioRankingScreen .stelvio-rank-star-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: auto;
   touch-action: manipulation;
   border: none;
@@ -6469,10 +6477,15 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
+#stelvioRankingScreen .stelvio-rank-star-svg {
+  display: block;
+}
 /* 친구 별: 부모 .stelvio-rank-row .stelvio-rank-name 의 color 상속 → 검정/회색처럼 보임 방지 */
 #stelvioRankingScreen .stelvio-rank-friend-star,
 #stelvioRankingScreen .stelvio-rank-name .stelvio-rank-friend-star {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1rem;
   line-height: 1;
   color: #16a34a !important;
