@@ -1599,8 +1599,18 @@
           }}
         >
           <div className="stelvio-heptagon-detail-modal__head">
-            <div>
-              <h3 className="stelvio-heptagon-detail-modal__title" id="stelvio-heptagon-detail-title">STELVIO 헵타곤 · 항목별 순위</h3>
+            <div className="stelvio-heptagon-detail-modal__head-block">
+              <div className="stelvio-heptagon-detail-modal__title-row">
+                <h3 className="stelvio-heptagon-detail-modal__title" id="stelvio-heptagon-detail-title">STELVIO 헵타곤 · 항목별 순위</h3>
+                <button
+                  type="button"
+                  className="stelvio-heptagon-detail-modal__close"
+                  aria-label="닫기"
+                  onClick={onClose}
+                >
+                  ×
+                </button>
+              </div>
               <p className="stelvio-heptagon-detail-modal__meta">
                 <span>
                   부문(카테고리): {categoryLabel} · 성별: {genderLabel} · {periodLabel}
