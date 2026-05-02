@@ -756,5 +756,5 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
 /** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
 export const verifyMeetingAttendance = createVerifyMeetingAttendance(stravaClientSecret);
 
-/** 서울 자정 5분 후: 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
+/** 서울 새벽 3:30: 전날 Strava 배치(02:00) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
 export const scheduledRideAttendanceVerification = createScheduledRideAttendanceVerification(stravaClientSecret);

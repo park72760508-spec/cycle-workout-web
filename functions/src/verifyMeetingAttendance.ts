@@ -408,7 +408,8 @@ async function verifyOneParticipant(
   meetLat: number,
   meetLng: number,
   clientSecret: string,
-  eventIdForDocs: string
+  eventIdForDocs: string,
+  stravaFallbackYmd: string | null
 ): Promise<{
   batchUpdate: AttendanceBatchWrite | null;
   detail: VerifyMeetingAttendanceUserDetail;
@@ -416,19 +417,34 @@ async function verifyOneParticipant(
   const baseDetail = { userId: p.userId, participantDocId: p.docId } as const;
   const docMeta = { meetingId: eventIdForDocs, userId: p.userId };
 
-  if (!p.stravaActivityId) {
-    return {
-      batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
-      detail: { ...baseDetail, outcome: "MISSED", note: "NO_STRAVA_ACTIVITY_ID" },
-    };
-  }
-
   let accessToken: string | null = null;
   try {
     accessToken = await getValidStravaAccessToken(db, p.userId, clientSecret);
   } catch (e) {
     console.warn(`[verifyMeetingAttendance] 토큰 조회 예외 user=${p.userId}:`, (e as Error).message);
   }
+
+  let activityId = p.stravaActivityId;
+  if (!activityId && stravaFallbackYmd && accessToken) {
+    activityId = await findStravaActivityIdViaApi(accessToken, stravaFallbackYmd);
+    if (activityId) {
+      console.log(`[verifyMeetingAttendance] Strava API 폴백(좌표검증) user=${p.userId} activityId=${activityId}`);
+    }
+  }
+
+  if (!activityId) {
+    if (!accessToken) {
+      return {
+        batchUpdate: null,
+        detail: { ...baseDetail, outcome: "SKIPPED", note: "NO_STRAVA_ACCESS_TOKEN" },
+      };
+    }
+    return {
+      batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
+      detail: { ...baseDetail, outcome: "MISSED", note: "NO_STRAVA_ACTIVITY_ID" },
+    };
+  }
+
   if (!accessToken) {
     return {
       batchUpdate: null,
@@ -437,7 +453,7 @@ async function verifyOneParticipant(
   }
 
   try {
-    const start = await fetchStravaActivityStart(accessToken, p.stravaActivityId);
+    const start = await fetchStravaActivityStart(accessToken, activityId);
     if (!start) {
       return {
         batchUpdate: null,
@@ -445,7 +461,7 @@ async function verifyOneParticipant(
       };
     }
 
-    const streams = await fetchActivityLatLngTimeStreams(accessToken, p.stravaActivityId);
+    const streams = await fetchActivityLatLngTimeStreams(accessToken, activityId);
     if (!streams || streams.latlng.length === 0) {
       return {
         batchUpdate: { ref: p.ref, status: "MISSED", ...docMeta },
@@ -588,6 +604,31 @@ async function verifyOneParticipantTimeOnly(
   }
 }
 
+/** epoch(ms) → Asia/Seoul 달력 YYYY-MM-DD (모임 시각 기준 Strava API 일자 폴백용) */
+function getSeoulYmdFromEpochMs(epochMs: number): string | null {
+  if (!Number.isFinite(epochMs)) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(epochMs));
+    let y = "";
+    let m = "";
+    let day = "";
+    for (const p of parts) {
+      if (p.type === "year") y = p.value;
+      if (p.type === "month") m = p.value;
+      if (p.type === "day") day = p.value;
+    }
+    if (y && m && day) return `${y}-${m}-${day}`;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 function getTodaySeoulYmdString(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -649,7 +690,7 @@ function commitInChunks(db: admin.firestore.Firestore, updates: AttendanceBatchW
 
 /**
  * meetings 또는 rides(eventId)에 대한 참석 검증 실행.
- * @param callerUid null 이면 방장 검사 생략(자정 스케줄러 전용). 문자열이면 해당 uid 가 방장과 일치해야 함.
+ * @param callerUid null 이면 방장 검사 생략(일괄 스케줄러 전용). 문자열이면 해당 uid 가 방장과 일치해야 함.
  */
 export async function executeVerifyAttendanceForEventId(
   db: admin.firestore.Firestore,
@@ -751,10 +792,14 @@ export async function executeVerifyAttendanceForEventId(
     throw new HttpsError("failed-precondition", "집결 좌표(startLatLng 등)가 유효하지 않습니다.");
   }
 
+  const stravaFallbackYmd: string | null = meetingSnap.exists
+    ? getSeoulYmdFromEpochMs(meetingMs!)
+    : ridesDateYmd;
+
   const results = await Promise.all(
     participants.map((p) =>
       startLL
-        ? verifyOneParticipant(db, p, meetingMs!, startLL.lat, startLL.lng, clientSecretTrim, meetingId)
+        ? verifyOneParticipant(db, p, meetingMs!, startLL.lat, startLL.lng, clientSecretTrim, meetingId, stravaFallbackYmd)
         : verifyOneParticipantTimeOnly(db, p, ridesDateYmd, meetingMs!, clientSecretTrim, meetingId)
     )
   );
@@ -855,12 +900,14 @@ export function createVerifyMeetingAttendance(stravaClientSecret: SecretParam) {
 }
 
 /**
- * 매일 서울 자정 직후: 전날 이전 일정의 rides 중 미검증 건에 대해 참석 검증(방장 없이 서버 실행)
+ * 매일 서울 새벽: stravaSyncPreviousDay(전날 로그 수집, 02:00)·청크 완료 여유를 둔 뒤,
+ * 금일 0시 이전 일정의 rides 중 미검증 건에 대해 참석 검증(방장 없이 서버 실행).
+ * 이전 자정+5분(00:05) 배치는 Strava 로그가 아직 Firestore에 없어 좌표 검증이 MISSED로 고착되는 경우가 많았음.
  */
 export function createScheduledRideAttendanceVerification(stravaClientSecret: SecretParam) {
   return onSchedule(
     {
-      schedule: "5 0 * * *",
+      schedule: "30 3 * * *",
       timeZone: "Asia/Seoul",
       region: "asia-northeast3",
       secrets: [stravaClientSecret],
