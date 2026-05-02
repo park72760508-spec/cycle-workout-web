@@ -7773,9 +7773,22 @@
       var uid = String(userId);
       var fav = stelvioRankingFavoriteUserSet.has(uid);
       var friend = stelvioRankingFriendUserSet.has(uid);
+      var friendTitle =
+        '\ub77c\uc774\ub529 \ubaa8\uc784 \uce5c\uad6c (\uad00\uc2ec \ud1a0\uae00\uc740 \uce5c\uad6c \ubaa9\ub85d\uc5d0\uc11c \uc0ad\uc81c \ud6c4 \uac00\ub2a5)';
+      if (friend) {
+        return (
+          '<span class="stelvio-rank-stars-wrap">' +
+          '<span class="stelvio-rank-friend-star stelvio-rank-friend-star--solo" title="' +
+          friendTitle +
+          '" aria-label="' +
+          friendTitle +
+          '">\u2605</span>' +
+          '</span>'
+        );
+      }
       var sym = fav ? '\u2605' : '\u2606';
       var cls = 'stelvio-rank-star-btn' + (fav ? ' stelvio-rank-star-btn--on' : '');
-      var h =
+      return (
         '<span class="stelvio-rank-stars-wrap">' +
         '<button type="button" class="' +
         cls +
@@ -7787,17 +7800,14 @@
         (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') +
         '">' +
         sym +
-        '</button>';
-      if (friend) {
-        h +=
-          '<span class="stelvio-rank-friend-star" title="\ub77c\uc774\ub529 \ubaa8\uc784 \uce5c\uad6c \ubaa9\ub85d" aria-label="\uce5c\uad6c \ub4f1\ub85d">\u2605</span>';
-      }
-      h += '</span>';
-      return h;
+        '</button>' +
+        '</span>'
+      );
     }
     function stelvioToggleRankingFavorite(userId) {
       if (!userId) return;
       var s = String(userId);
+      if (stelvioRankingFriendUserSet.has(s)) return;
       if (stelvioRankingFavoriteUserSet.has(s)) stelvioRankingFavoriteUserSet.delete(s);
       else stelvioRankingFavoriteUserSet.add(s);
       try {
