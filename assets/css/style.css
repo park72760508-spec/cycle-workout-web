@@ -6414,6 +6414,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   background: #f8fafc;
 }
 #stelvioRankingScreen .stelvio-rank-star-btn {
+  pointer-events: auto;
+  touch-action: manipulation;
   border: none;
   background: transparent;
   padding: 0 4px 0 0;
