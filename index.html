@@ -7642,7 +7642,6 @@
     var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
     var stelvioRankingFavoriteUserSet = new Set();
     var stelvioRankingFavoritesLsPrefix = 'stelvioRankingFavorites:';
-    var stelvioRankingListStarClickBound = false;
     var stelvioRankingByCategory = null;
     var stelvioRankingFullEntries = null;
     var stelvioRankingExpandState = {};
@@ -7809,6 +7808,52 @@
     }
     window.stelvioScrollRankingBoardToTopSmooth = stelvioScrollRankingBoardToTopSmooth;
 
+    /** 클릭 타겟이 ★/☆ 텍스트 노드일 때 closest 미지원 → 부모로 올라가며 [data-stelvio-rank-star] 탐색 */
+    function stelvioClosestRankStarButton(target) {
+      var el = target;
+      var i;
+      for (i = 0; i < 10 && el != null; i++) {
+        if (el.nodeType === 1 && el.getAttribute && el.getAttribute('data-stelvio-rank-star') != null) return el;
+        el = el.parentElement;
+      }
+      return null;
+    }
+    function stelvioRankingListBodyStarClickHandler(ev) {
+      var btn = stelvioClosestRankStarButton(ev.target);
+      if (!btn) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      var enc = btn.getAttribute('data-stelvio-rank-star');
+      if (!enc) return;
+      try {
+        var dec = decodeURIComponent(enc);
+        if (dec && typeof stelvioToggleRankingFavorite === 'function') stelvioToggleRankingFavorite(dec);
+      } catch (eStar) {}
+    }
+    /** DOM 순서·초기화 타이밍 대비: 랭킹 목록·헤더 토글 이벤트 1회만 연결 */
+    function stelvioEnsureRankingFavoriteUiListeners() {
+      var listBodyStar = document.getElementById('stelvioRankingListBody');
+      if (listBodyStar && !listBodyStar._stelvioStarDelegated) {
+        listBodyStar._stelvioStarDelegated = true;
+        listBodyStar.addEventListener('click', stelvioRankingListBodyStarClickHandler, true);
+      }
+      var filtAll = document.getElementById('stelvioRankingListFilterAll');
+      var filtInt = document.getElementById('stelvioRankingListFilterInterest');
+      if (filtAll && !filtAll._stelvioRankFiltBound) {
+        filtAll._stelvioRankFiltBound = true;
+        filtAll.addEventListener('click', function () {
+          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('all');
+        });
+      }
+      if (filtInt && !filtInt._stelvioRankFiltBound) {
+        filtInt._stelvioRankFiltBound = true;
+        filtInt.addEventListener('click', function () {
+          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('interest');
+        });
+      }
+    }
+    window.stelvioEnsureRankingFavoriteUiListeners = stelvioEnsureRankingFavoriteUiListeners;
+
     function stelvioResetRankingBoardFiltersToDefault() {
       stelvioRankingState.duration = 'tss';
       stelvioRankingState.gender = 'all';
@@ -7832,6 +7877,9 @@
       if (typeof showScreen === 'function') {
         showScreen('stelvioRankingScreen');
       }
+      requestAnimationFrame(function () {
+        stelvioEnsureRankingFavoriteUiListeners();
+      });
       requestAnimationFrame(function () {
         var s = document.getElementById('stelvioRankingScrollArea');
         if (s) s.scrollTop = 0;
@@ -8070,10 +8118,23 @@
     }
 
     function bindStelvioRankingEvents() {
-      var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
-      tabs.forEach(function(btn) {
-        btn.onclick = function() {
-          tabs.forEach(function(b) { b.classList.remove('active'); });
+      var chips = document.getElementById('stelvioDurationTabs');
+      if (chips && !chips._stelvioDurationTabsDelegated) {
+        chips._stelvioDurationTabsDelegated = true;
+        chips.addEventListener('click', function (ev) {
+          var el = ev.target;
+          var btn = null;
+          var i;
+          for (i = 0; i < 8 && el != null; i++) {
+            if (el.nodeType === 1 && el.classList && el.classList.contains('stelvio-duration-tab')) {
+              btn = el;
+              break;
+            }
+            el = el.parentElement;
+          }
+          if (!btn || !chips.contains(btn)) return;
+          var tabs = chips.querySelectorAll('.stelvio-duration-tab');
+          tabs.forEach(function (b) { b.classList.remove('active'); });
           btn.classList.add('active');
           stelvioRankingState.duration = btn.getAttribute('data-duration');
           if (stelvioRankingState.duration === 'group_dist') {
@@ -8088,38 +8149,17 @@
           stelvioApplyDurationModeUi();
           stelvioScrollRankingBoardToTopSmooth();
           fetchStelvioPeakPowerRanking();
-        };
+        });
+      }
+      stelvioEnsureRankingFavoriteUiListeners();
+    }
+    window.bindStelvioRankingEvents = bindStelvioRankingEvents;
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () {
+        bindStelvioRankingEvents();
       });
-      var listBodyStar = document.getElementById('stelvioRankingListBody');
-      if (listBodyStar && !stelvioRankingListStarClickBound) {
-        stelvioRankingListStarClickBound = true;
-        listBodyStar.addEventListener('click', function (ev) {
-          var btn = ev.target && ev.target.closest && ev.target.closest('[data-stelvio-rank-star]');
-          if (!btn) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          var enc = btn.getAttribute('data-stelvio-rank-star');
-          if (!enc) return;
-          try {
-            var dec = decodeURIComponent(enc);
-            if (dec && typeof stelvioToggleRankingFavorite === 'function') stelvioToggleRankingFavorite(dec);
-          } catch (eStar) {}
-        });
-      }
-      var filtAll = document.getElementById('stelvioRankingListFilterAll');
-      var filtInt = document.getElementById('stelvioRankingListFilterInterest');
-      if (filtAll && !filtAll._stelvioRankFiltBound) {
-        filtAll._stelvioRankFiltBound = true;
-        filtAll.addEventListener('click', function () {
-          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('all');
-        });
-      }
-      if (filtInt && !filtInt._stelvioRankFiltBound) {
-        filtInt._stelvioRankFiltBound = true;
-        filtInt.addEventListener('click', function () {
-          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('interest');
-        });
-      }
+    } else {
+      bindStelvioRankingEvents();
     }
 
     async function fetchStelvioPeakPowerRanking() {
