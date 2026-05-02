@@ -7641,6 +7641,7 @@
      */
     var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
     var stelvioRankingFavoriteUserSet = new Set();
+    var stelvioRankingFriendUserSet = new Set();
     var stelvioRankingFavoritesLsPrefix = 'stelvioRankingFavorites:';
     var stelvioRankingByCategory = null;
     var stelvioRankingFullEntries = null;
@@ -7664,6 +7665,31 @@
     };
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
+    async function stelvioRefreshRankingFriendSetFromFirestore() {
+      stelvioRankingFriendUserSet = new Set();
+      var myId = stelvioResolveRankingViewerUserId();
+      if (!myId) return;
+      try {
+        var fs = null;
+        if (window.firestore && typeof window.firestore.collection === 'function') {
+          fs = window.firestore;
+        } else if (typeof firebase !== 'undefined' && firebase.firestore && typeof firebase.firestore === 'function') {
+          fs = firebase.firestore();
+        }
+        if (!fs || typeof fs.collection !== 'function') return;
+        var snap = await fs.collection('users').doc(myId).collection('friends').get();
+        var s = new Set();
+        snap.forEach(function (docSnap) {
+          var d = docSnap.data() || {};
+          var fid = String(docSnap.id || d.friendUid || '').trim();
+          if (fid) s.add(fid);
+        });
+        stelvioRankingFriendUserSet = s;
+      } catch (eFr) {
+        if (typeof stelvioAdminWarn === 'function') stelvioAdminWarn('[StelvioRanking] 친구 목록 로드 실패:', eFr);
+      }
+    }
+    window.stelvioRefreshRankingFriendSetFromFirestore = stelvioRefreshRankingFriendSetFromFirestore;
     function stelvioRankingFavoritesStorageKey() {
       var uid = stelvioRankingCurrentUserId;
       if (!uid && window.currentUser && window.currentUser.id) uid = window.currentUser.id;
@@ -7728,6 +7754,7 @@
         if (!item || !item.userId) return false;
         var uid = String(item.userId);
         if (stelvioRankingFavoriteUserSet.has(uid)) return true;
+        if (stelvioRankingFriendUserSet.has(uid)) return true;
         if (myId && uid === myId) return true;
         return false;
       });
@@ -7745,13 +7772,28 @@
       if (!userId) return '';
       var uid = String(userId);
       var fav = stelvioRankingFavoriteUserSet.has(uid);
+      var friend = stelvioRankingFriendUserSet.has(uid);
       var sym = fav ? '\u2605' : '\u2606';
       var cls = 'stelvio-rank-star-btn' + (fav ? ' stelvio-rank-star-btn--on' : '');
-      return (
-        '<button type="button" class="' + cls + '" data-stelvio-rank-star="' +
+      var h =
+        '<span class="stelvio-rank-stars-wrap">' +
+        '<button type="button" class="' +
+        cls +
+        '" data-stelvio-rank-star="' +
         encodeURIComponent(uid) +
-        '" aria-label="' + (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') + '" title="' + (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') + '">' + sym + '</button>'
-      );
+        '" aria-label="' +
+        (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') +
+        '" title="' +
+        (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') +
+        '">' +
+        sym +
+        '</button>';
+      if (friend) {
+        h +=
+          '<span class="stelvio-rank-friend-star" title="\ub77c\uc774\ub529 \ubaa8\uc784 \uce5c\uad6c \ubaa9\ub85d" aria-label="\uce5c\uad6c \ub4f1\ub85d">\u2605</span>';
+      }
+      h += '</span>';
+      return h;
     }
     function stelvioToggleRankingFavorite(userId) {
       if (!userId) return;
@@ -7770,7 +7812,9 @@
     window.stelvioToggleRankingFavorite = stelvioToggleRankingFavorite;
     document.addEventListener('stelvio-auth-ready', function () {
       stelvioRefreshRankingFavoriteSetFromStorage();
-      if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+      stelvioRefreshRankingFriendSetFromFirestore().then(function () {
+        if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+      });
     });
     function stelvioSyncRankingListFilterToggleUi() {
       var allBtn = document.getElementById('stelvioRankingListFilterAll');
@@ -8218,6 +8262,7 @@
         stelvioRankingGapState = {};
         stelvioRankingCurrentUserId = uid;
         stelvioRefreshRankingFavoriteSetFromStorage();
+        await stelvioRefreshRankingFriendSetFromFirestore();
         stelvioMyRankSupremo = data.myRankSupremo || null;
         stelvioCurrentUser = data.currentUser || null;
         stelvioSyncCategorySelectUi();
@@ -8378,7 +8423,7 @@
       if (arr.length === 0 && !(cat === 'Supremo' && myRankSupremo)) {
         var emptyMsg =
           stelvioRankingState.listFilter === 'interest'
-            ? '\uad00\uc2ec \ub4f1\ub85d\ud55c \ud68c\uc6d0\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \u300c\uc804\uccb4\u300d\uc5d0\uc11c \ud589\uc758 \u2606\uc744 \ub20c\ub7ec \ucd94\uac00\ud558\uc138\uc694.'
+            ? '\uad00\uc2ec \ub610\ub294 \uce5c\uad6c\ub85c \ub4f1\ub85d\ud55c \ud68c\uc6d0\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \u300c\uc804\uccb4\u300d\uc5d0\uc11c \u2606(\uad00\uc2ec) \ub610\ub294 \ub77c\uc774\ub529 \ubaa8\uc784 \uce5c\uad6c \ub4f1\ub85d\uc73c\ub85c \ucd94\uac00\ud558\uc138\uc694.'
             : '\ud574\ub2f9 \uce74\ud14c\uace0\ub9ac\uc5d0 \ub7ad\ud0b9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.';
         bodyEl.innerHTML = '<p class="stelvio-ranking-empty">' + emptyMsg + '</p>';
         return;
