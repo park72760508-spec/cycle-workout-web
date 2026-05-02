@@ -7768,6 +7768,31 @@
       if (uid === stelvioResolveRankingViewerUserId()) return original;
       return null;
     }
+    /**
+     * 랭킹 별 아이콘: 유니코드 ★는 각이 센 편 → 부드러운 5각 실루엣 SVG(라운드 조인 윤곽 + 둥근 채움) 사용.
+     * 다른 선택지 예: (1) 이모지 ⭐ U+2B50 (2) 유니코드 ✦ U+2726 (3) 이 SVG — 현재 (3) 기본.
+     */
+    var STELVIO_RANK_STAR_PATH_SOFT =
+      'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z';
+    function stelvioRankingStarSvgHtml(filled) {
+      var vb = '0 0 20 20';
+      if (filled) {
+        return (
+          '<svg class="stelvio-rank-star-svg stelvio-rank-star-svg--filled" xmlns="http://www.w3.org/2000/svg" viewBox="' +
+          vb +
+          '" width="1.12em" height="1.12em" aria-hidden="true" focusable="false"><path fill="currentColor" stroke="none" d="' +
+          STELVIO_RANK_STAR_PATH_SOFT +
+          '"/></svg>'
+        );
+      }
+      return (
+        '<svg class="stelvio-rank-star-svg stelvio-rank-star-svg--outline" xmlns="http://www.w3.org/2000/svg" viewBox="' +
+        vb +
+        '" width="1.12em" height="1.12em" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" stroke-linecap="round" d="' +
+        STELVIO_RANK_STAR_PATH_SOFT +
+        '"/></svg>'
+      );
+    }
     function stelvioRankingStarButtonHtml(userId) {
       if (!userId) return '';
       var uid = String(userId);
@@ -7782,11 +7807,12 @@
           friendTitle +
           '" aria-label="' +
           friendTitle +
-          '">\u2605</span>' +
+          '">' +
+          stelvioRankingStarSvgHtml(true) +
+          '</span>' +
           '</span>'
         );
       }
-      var sym = fav ? '\u2605' : '\u2606';
       var cls = 'stelvio-rank-star-btn' + (fav ? ' stelvio-rank-star-btn--on' : '');
       return (
         '<span class="stelvio-rank-stars-wrap">' +
@@ -7799,7 +7825,7 @@
         '" title="' +
         (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') +
         '">' +
-        sym +
+        stelvioRankingStarSvgHtml(fav) +
         '</button>' +
         '</span>'
       );
@@ -20770,8 +20796,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div class="stelvio-category-body" id="stelvioRankingListBody"></div>
           </div>
           <div class="stelvio-ranking-star-legend" role="note" aria-label="순위 목록 별 표시 설명">
-            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--friend" aria-hidden="true">&#9733;</span><span>친구</span></span>
-            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--interest" aria-hidden="true">&#9733;</span><span>관심</span></span>
+            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--friend" aria-hidden="true"><svg class="stelvio-legend-star-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.05em" height="1.05em"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span><span>친구</span></span>
+            <span class="stelvio-ranking-star-legend-item"><span class="stelvio-legend-star stelvio-legend-star--interest" aria-hidden="true"><svg class="stelvio-legend-star-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.05em" height="1.05em"><path fill="currentColor" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></span><span>관심</span></span>
           </div>
           <div id="stelvio-distribution-chart-root" class="stelvio-distribution-chart-root" aria-live="polite"></div>
         </div>
