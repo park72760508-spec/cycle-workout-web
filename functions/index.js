@@ -4267,6 +4267,11 @@ function computeOvertakeMetrics(myData, rivalData, myWeightKg) {
 /** 동기부여 메시지 생성 */
 function buildMotivationMessage(currentUser, nextUser) {
   if (!currentUser || !nextUser || currentUser.rank >= nextUser.rank) return null;
+  if (currentUser.gcScore != null && nextUser.gcScore != null) {
+    const diff = Number(nextUser.gcScore) - Number(currentUser.gcScore);
+    if (!(diff > 0)) return null;
+    return `${currentUser.name}님 현재 ${currentUser.rank}위! 바로 앞 순위와의 환산 점수 차는 약 ${diff.toFixed(1)}점입니다.`;
+  }
   if (currentUser.totalKm != null && nextUser.totalKm != null) {
     return buildMotivationMessageKm(currentUser, nextUser);
   }
@@ -4280,6 +4285,53 @@ function buildMotivationMessage(currentUser, nextUser) {
   const requiredWatts = Math.ceil(diffWkg * weightKg);
   const targetWatts = (currentUser.watts || 0) + requiredWatts;
   return `${currentUser.name}님 현재 ${currentUser.rank}위! 앞선 사용자와의 차이는 ${diffWkg.toFixed(2)} W/kg로, ${requiredWatts}W 향상 시키면(목표 파워: ${targetWatts}W) 추월할 수 있습니다. 도전해 보세요!`;
+}
+
+/**
+ * GC(헵타곤 환산): `heptagon_cohort_ranks` — 대시보드·항목별 순위 모달과 동일 monthKey·필터.
+ */
+async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
+  const col = db.collection(heptagonCohortRanks.HEPTAGON_COHORT_COL);
+  const categories = heptagonCohortRanks.HEPTAGON_CATEGORIES;
+  const byCategory = { Supremo: [], Assoluto: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [] };
+  const genEntry = (d, fallbackRank) => {
+    const gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
+    let br = d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null;
+    if (br == null && d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank))) {
+      br = Math.floor(Number(d.comprehensiveRank));
+    }
+    if (br == null) br = fallbackRank;
+    const g =
+      filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+    return {
+      userId: String(d.userId),
+      name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
+      ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
+      gender: g,
+      is_private: d.is_private === true,
+      rank: br,
+      gcScore,
+    };
+  };
+  for (let ci = 0; ci < categories.length; ci++) {
+    const cat = categories[ci];
+    const snap = await col
+      .where("monthKey", "==", monthKey)
+      .where("filterCategory", "==", cat)
+      .where("filterGender", "==", filterGender)
+      .orderBy("sumPositionScores", "desc")
+      .limit(500)
+      .get();
+    let i = 0;
+    snap.forEach((doc) => {
+      const d = doc.data();
+      if (!d || !d.userId) return;
+      i += 1;
+      byCategory[cat].push(genEntry(d, i));
+    });
+  }
+  const entries = (byCategory.Supremo || []).slice();
+  return { byCategory, entries };
 }
 
 const PEAK_RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -4610,6 +4662,52 @@ exports.getPeakPowerRanking = onRequest(
         let nextUser = null;
         if (current && current.rank > 1) {
           nextUser = arrAll.find((e) => e.rank === current.rank - 1) || null;
+        }
+        if (current) {
+          out.currentUser = current;
+          out.motivationMessage = buildMotivationMessage(current, nextUser);
+        }
+      }
+      return res.status(200).json(out);
+    }
+
+    /** GC: 헵타곤 7축 환산 점수 합·종합 순위 — `heptagon_cohort_ranks` (월간·서울 달력 월 키) */
+    if (durationType === "gc") {
+      const monthKey = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }).slice(0, 7);
+      const fg = gender === "M" || gender === "F" ? gender : "all";
+      let byCategory;
+      let entries;
+      try {
+        const built = await buildStelvioGcRankingPayload(db, monthKey, fg);
+        byCategory = built.byCategory;
+        entries = built.entries;
+      } catch (eGc) {
+        console.warn("[getPeakPowerRanking gc]", eGc && eGc.message ? eGc.message : eGc);
+        return res.status(500).json({ success: false, error: "gc_ranking_failed" });
+      }
+      const rolling = getRolling30DaysRangeSeoul();
+      const out = {
+        success: true,
+        byCategory,
+        entries,
+        startStr: rolling.startStr,
+        endStr: rolling.endStr,
+        period: "monthly",
+        durationType: "gc",
+        gender: fg,
+        gcMonthKey: monthKey,
+      };
+      if (uid) {
+        let current = null;
+        let nextUser = null;
+        for (const c of PEAK_RANKING_USER_LOOKUP_ORDER) {
+          const arr = byCategory[c] || [];
+          const idx = arr.findIndex((e) => e.userId === uid);
+          if (idx >= 0) {
+            current = arr[idx];
+            nextUser = idx > 0 ? arr[idx - 1] : null;
+            break;
+          }
         }
         if (current) {
           out.currentUser = current;
