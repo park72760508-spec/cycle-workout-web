@@ -1709,7 +1709,8 @@ const STRAVA_API_CALL_LIMIT = 85;
 
 /**
  * 수동 Strava 동기화 (과거 1~6개월, MMP 포함).
- * months 파라미터로 기간 설정. DB 존재 시 파워만 업데이트, 미존재 시 전체 생성+TSS 정산.
+ * months / days / maxActivities+windowMonths / startDate~endDate 로 기간·건수 설정.
+ * maxActivities: Strava after~before 구간(기본 최근 windowMonths개월)에서 최신순 최대 N개 활동만 처리.
  * Rate Limit: 활동당 1초 대기, API 85회 도달 시 중단, hasMore 반환.
  */
 const manualStravaSyncWithMmpOptions = { cors: true, timeoutSeconds: 3600, memory: "1GiB" };
@@ -1736,10 +1737,13 @@ exports.manualStravaSyncWithMmp = onRequest(
     const forceRecalcTimeInZones = String(req.query?.forceRecalcTimeInZones || req.body?.forceRecalcTimeInZones || "").toLowerCase() === "true";
     const daysParam = req.query?.days || req.body?.days;
     const monthsParam = req.query?.months || req.body?.months;
+    const maxActivitiesParam = req.query?.maxActivities ?? req.body?.maxActivities;
+    const windowMonthsParam = req.query?.windowMonths ?? req.body?.windowMonths;
     const startDateParam = req.query?.startDate || req.body?.startDate;
     const endDateParam = req.query?.endDate || req.body?.endDate;
     const targetUsersParam = String(req.query?.targetUsers || req.body?.targetUsers || "").toLowerCase();
-    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "startDate=", startDateParam, "endDate=", endDateParam, "targetUsers=", targetUsersParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
+    let maxActivitiesCap = null;
+    console.log("[manualStravaSyncWithMmp] 요청 수신:", req.method, "months=", monthsParam, "days=", daysParam, "maxActivities=", maxActivitiesParam, "windowMonths=", windowMonthsParam, "startDate=", startDateParam, "endDate=", endDateParam, "targetUsers=", targetUsersParam, "forceRecalcTimeInZones=", forceRecalcTimeInZones);
 
     try {
     const uid = await getUidFromRequest(req, res);
@@ -1792,7 +1796,16 @@ exports.manualStravaSyncWithMmp = onRequest(
       const now = new Date();
       beforeUnix = Math.floor(now.getTime() / 1000);
       const afterDate = new Date(now);
-      if (daysParam != null && daysParam !== "") {
+      const isBulkTarget = targetUsersParam === "all" || targetUsersParam === "admin";
+      if (
+        !isBulkTarget &&
+        maxActivitiesParam != null &&
+        maxActivitiesParam !== ""
+      ) {
+        maxActivitiesCap = Math.max(1, Math.min(200, parseInt(String(maxActivitiesParam), 10) || 30));
+        const wm = Math.max(1, Math.min(12, parseInt(String(windowMonthsParam ?? "3"), 10) || 3));
+        afterDate.setMonth(afterDate.getMonth() - wm);
+      } else if (daysParam != null && daysParam !== "") {
         const days = Math.max(1, parseInt(daysParam, 10) || 10);
         afterDate.setDate(afterDate.getDate() - days);
       } else {
@@ -1860,8 +1873,17 @@ exports.manualStravaSyncWithMmp = onRequest(
       }
       if (!Array.isArray(pageActivities) || pageActivities.length === 0) break;
       allActivities.push(...pageActivities);
+      if (maxActivitiesCap != null && allActivities.length >= maxActivitiesCap) break;
       if (pageActivities.length < 200) break;
       page += 1;
+    }
+
+    const activitiesToProcess =
+      maxActivitiesCap != null ? allActivities.slice(0, maxActivitiesCap) : allActivities;
+    if (maxActivitiesCap != null) {
+      console.log(
+        `[manualStravaSyncWithMmp] userId=${uid} maxActivitiesCap=${maxActivitiesCap} fetched=${allActivities.length} process=${activitiesToProcess.length}`
+      );
     }
 
     const logsRef = db.collection("users").doc(uid).collection("logs");
@@ -1873,7 +1895,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     let createdCount = 0;
     let userTss = 0;
 
-    for (const act of allActivities) {
+    for (const act of activitiesToProcess) {
       if (apiCallCount >= STRAVA_API_CALL_LIMIT) break;
       const actId = String(act.id);
       let logDocRef = logsRef.doc(actId);
