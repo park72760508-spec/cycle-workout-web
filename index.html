@@ -7639,7 +7639,10 @@
     /**
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
      */
-    var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo' };
+    var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
+    var stelvioRankingFavoriteUserSet = new Set();
+    var stelvioRankingFavoritesLsPrefix = 'stelvioRankingFavorites:';
+    var stelvioRankingListStarClickBound = false;
     var stelvioRankingByCategory = null;
     var stelvioRankingFullEntries = null;
     var stelvioRankingExpandState = {};
@@ -7662,6 +7665,111 @@
     };
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체순위)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
+    function stelvioRankingFavoritesStorageKey() {
+      var uid = stelvioRankingCurrentUserId;
+      if (!uid && window.currentUser && window.currentUser.id) uid = window.currentUser.id;
+      if (!uid) {
+        try {
+          var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+          uid = u && u.id ? u.id : null;
+        } catch (e1) { uid = null; }
+      }
+      return stelvioRankingFavoritesLsPrefix + (uid || '_guest');
+    }
+    function stelvioRefreshRankingFavoriteSetFromStorage() {
+      try {
+        var raw = localStorage.getItem(stelvioRankingFavoritesStorageKey());
+        var arr = raw ? JSON.parse(raw) : [];
+        stelvioRankingFavoriteUserSet = new Set(
+          Array.isArray(arr) ? arr.map(function (x) { return String(x); }).filter(Boolean) : []
+        );
+      } catch (e2) {
+        stelvioRankingFavoriteUserSet = new Set();
+      }
+    }
+    function stelvioRankDisplayNumber(item, fallbackRank) {
+      if (item && item.rank != null && !isNaN(Number(item.rank))) return Number(item.rank);
+      return fallbackRank;
+    }
+    function stelvioFilterRowsByListInterest(rows) {
+      if (stelvioRankingState.listFilter !== 'interest') return (rows || []).slice();
+      return (rows || []).filter(function (item) {
+        return item && item.userId && stelvioRankingFavoriteUserSet.has(String(item.userId));
+      });
+    }
+    function stelvioEffectiveMyRankSupremo(original) {
+      if (!original) return null;
+      if (stelvioRankingState.listFilter !== 'interest') return original;
+      var uid = original.userId ? String(original.userId) : '';
+      return uid && stelvioRankingFavoriteUserSet.has(uid) ? original : null;
+    }
+    function stelvioRankingStarButtonHtml(userId) {
+      if (!userId) return '';
+      var uid = String(userId);
+      var fav = stelvioRankingFavoriteUserSet.has(uid);
+      var sym = fav ? '\u2605' : '\u2606';
+      var cls = 'stelvio-rank-star-btn' + (fav ? ' stelvio-rank-star-btn--on' : '');
+      return (
+        '<button type="button" class="' + cls + '" data-stelvio-rank-star="' +
+        encodeURIComponent(uid) +
+        '" aria-label="' + (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') + '" title="' + (fav ? '\uad00\uc2ec \ud574\uc81c' : '\uad00\uc2ec \ub4f1\ub85d') + '">' + sym + '</button>'
+      );
+    }
+    function stelvioToggleRankingFavorite(userId) {
+      if (!userId) return;
+      var s = String(userId);
+      if (stelvioRankingFavoriteUserSet.has(s)) stelvioRankingFavoriteUserSet.delete(s);
+      else stelvioRankingFavoriteUserSet.add(s);
+      try {
+        localStorage.setItem(stelvioRankingFavoritesStorageKey(), JSON.stringify(Array.from(stelvioRankingFavoriteUserSet)));
+      } catch (e3) {}
+      if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+    }
+    window.stelvioToggleRankingFavorite = stelvioToggleRankingFavorite;
+    function stelvioSyncRankingListFilterToggleUi() {
+      var allBtn = document.getElementById('stelvioRankingListFilterAll');
+      var intBtn = document.getElementById('stelvioRankingListFilterInterest');
+      var interestOn = stelvioRankingState.listFilter === 'interest';
+      if (allBtn) {
+        allBtn.classList.toggle('stelvio-ranking-filter-chip--active', !interestOn);
+        allBtn.setAttribute('aria-pressed', (!interestOn).toString());
+      }
+      if (intBtn) {
+        intBtn.classList.toggle('stelvio-ranking-filter-chip--active', interestOn);
+        intBtn.setAttribute('aria-pressed', interestOn.toString());
+      }
+    }
+    function stelvioOnRankingListFilterChange(mode) {
+      var m = mode === 'interest' ? 'interest' : 'all';
+      if (stelvioRankingState.listFilter === m) return;
+      stelvioRankingState.listFilter = m;
+      stelvioSyncRankingListFilterToggleUi();
+      stelvioScrollRankingBoardToTopSmooth();
+      if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+    }
+    window.stelvioOnRankingListFilterChange = stelvioOnRankingListFilterChange;
+    function stelvioChartPropsInterestFiltered(p) {
+      var out = {};
+      var k;
+      for (k in p) {
+        if (Object.prototype.hasOwnProperty.call(p, k)) out[k] = p[k];
+      }
+      var filt = function (rows) {
+        return stelvioFilterRowsByListInterest(rows || []);
+      };
+      if (out.byCategory && typeof out.byCategory === 'object') {
+        var bc = {};
+        for (k in out.byCategory) {
+          if (Object.prototype.hasOwnProperty.call(out.byCategory, k)) {
+            bc[k] = filt(out.byCategory[k]);
+          }
+        }
+        out.byCategory = bc;
+      }
+      if (Array.isArray(out.entries)) out.entries = filt(out.entries);
+      out.myRankSupremo = stelvioEffectiveMyRankSupremo(out.myRankSupremo);
+      return out;
+    }
     var stelvioBackToTopScrollHandler = null;
     /** 랭킹보드 내부 스크롤 영역 맨 위로 (부드럽게) */
     function stelvioScrollRankingBoardToTopSmooth() {
@@ -7689,9 +7797,12 @@
       if (gLab) gLab.textContent = '전체';
       stelvioSyncCategorySelectUi();
       stelvioApplyDurationModeUi();
+      stelvioRankingState.listFilter = 'all';
+      stelvioSyncRankingListFilterToggleUi();
     }
     function openStelvioRankingBoardModal() {
       stelvioResetRankingBoardFiltersToDefault();
+      stelvioRefreshRankingFavoriteSetFromStorage();
       if (typeof showScreen === 'function') {
         showScreen('stelvioRankingScreen');
       }
@@ -7918,7 +8029,7 @@
     }
     function refreshStelvioDistributionChartMounted() {
       if (typeof window.refreshStelvioDistributionChart !== 'function') return;
-      window.refreshStelvioDistributionChart({
+      var base = {
         entries: stelvioRankingFullEntries,
         byCategory: stelvioRankingByCategory,
         activeCategory: stelvioRankingState.activeCategory,
@@ -7926,7 +8037,10 @@
         currentUserId: stelvioRankingCurrentUserId,
         currentUser: stelvioCurrentUser,
         myRankSupremo: stelvioMyRankSupremo
-      });
+      };
+      window.refreshStelvioDistributionChart(
+        stelvioRankingState.listFilter === 'interest' ? stelvioChartPropsInterestFiltered(base) : base
+      );
     }
 
     function bindStelvioRankingEvents() {
@@ -7950,14 +8064,37 @@
           fetchStelvioPeakPowerRanking();
         };
       });
+      var listBodyStar = document.getElementById('stelvioRankingListBody');
+      if (listBodyStar && !stelvioRankingListStarClickBound) {
+        stelvioRankingListStarClickBound = true;
+        listBodyStar.addEventListener('click', function (ev) {
+          var btn = ev.target && ev.target.closest && ev.target.closest('[data-stelvio-rank-star]');
+          if (!btn) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          var enc = btn.getAttribute('data-stelvio-rank-star');
+          if (!enc) return;
+          try {
+            var dec = decodeURIComponent(enc);
+            if (dec && typeof stelvioToggleRankingFavorite === 'function') stelvioToggleRankingFavorite(dec);
+          } catch (eStar) {}
+        });
+      }
+      var filtAll = document.getElementById('stelvioRankingListFilterAll');
+      var filtInt = document.getElementById('stelvioRankingListFilterInterest');
+      if (filtAll && !filtAll._stelvioRankFiltBound) {
+        filtAll._stelvioRankFiltBound = true;
+        filtAll.addEventListener('click', function () {
+          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('all');
+        });
+      }
+      if (filtInt && !filtInt._stelvioRankFiltBound) {
+        filtInt._stelvioRankFiltBound = true;
+        filtInt.addEventListener('click', function () {
+          if (typeof stelvioOnRankingListFilterChange === 'function') stelvioOnRankingListFilterChange('interest');
+        });
+      }
     }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', bindStelvioRankingEvents);
-    } else {
-      bindStelvioRankingEvents();
-    }
-
-    async function fetchStelvioPeakPowerRanking() {
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
       if (loading) loading.classList.remove('hidden');
@@ -7991,6 +8128,7 @@
         stelvioRankingExpandState = {};
         stelvioRankingGapState = {};
         stelvioRankingCurrentUserId = uid;
+        stelvioRefreshRankingFavoriteSetFromStorage();
         stelvioMyRankSupremo = data.myRankSupremo || null;
         stelvioCurrentUser = data.currentUser || null;
         stelvioSyncCategorySelectUi();
@@ -8086,7 +8224,14 @@
         else if (stelvioIsTssRankingMode()) unitEl.textContent = 'TSS';
         else unitEl.textContent = 'W/kg';
       }
-      renderStelvioRankingOneCategory(cat, stelvioRankingByCategory, stelvioRankingCurrentUserId, stelvioMyRankSupremo, bodyEl);
+      renderStelvioRankingOneCategory(
+        cat,
+        stelvioRankingByCategory,
+        stelvioRankingCurrentUserId,
+        stelvioEffectiveMyRankSupremo(stelvioMyRankSupremo),
+        bodyEl
+      );
+      stelvioSyncRankingListFilterToggleUi();
       refreshStelvioDistributionChartMounted();
     }
 
@@ -8130,12 +8275,16 @@
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
-      var arr = byCategory[cat] || [];
+      var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
       var isAdmin = (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
       if (arr.length === 0 && !(cat === 'Supremo' && myRankSupremo)) {
-        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">해당 카테고리에 랭킹이 없습니다.</p>';
+        var emptyMsg =
+          stelvioRankingState.listFilter === 'interest'
+            ? '\uad00\uc2ec \ub4f1\ub85d\ud55c \ud68c\uc6d0\uc774 \uc5c6\uc2b5\ub2c8\ub2e4. \u300c\uc804\uccb4\u300d\uc5d0\uc11c \ud589\uc758 \u2606\uc744 \ub20c\ub7ec \ucd94\uac00\ud558\uc138\uc694.'
+            : '\ud574\ub2f9 \uce74\ud14c\uace0\ub9ac\uc5d0 \ub7ad\ud0b9\uc774 \uc5c6\uc2b5\ub2c8\ub2e4.';
+        bodyEl.innerHTML = '<p class="stelvio-ranking-empty">' + emptyMsg + '</p>';
         return;
       }
 
@@ -8205,12 +8354,22 @@
             (groupAttended ? ' stelvio-rank-group-attended' : '') +
             (groupUnjoined ? ' stelvio-rank-group-unjoined' : '') +
             extraRowClass;
+          var dispR = stelvioRankDisplayNumber(item, categoryRank);
           var h = '<div class="' + rowClass + '">';
-          if (categoryRank <= 3) {
-            h += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[categoryRank - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
+          if (dispR <= 3) {
+            h += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
           }
-          h += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
-          h += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span>' + badgePart + '</span>';
+          h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
+          h +=
+            '<span class="stelvio-rank-name">' +
+            stelvioRankingStarButtonHtml(item.userId) +
+            '<span class="stelvio-rank-name-text" title="' +
+            rawName +
+            '">' +
+            name +
+            '</span>' +
+            badgePart +
+            '</span>';
           h += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
           h += '</div>';
           return h;
@@ -8235,14 +8394,16 @@
           );
         }
         function renderRangeS(lo, hi) {
-          for (var ri = lo; ri <= hi; ri++) htmlS += buildSupremoRow(arr[ri], ri + 1, '');
+          for (var ri = lo; ri <= hi; ri++) {
+            htmlS += buildSupremoRow(arr[ri], stelvioRankDisplayNumber(arr[ri], ri + 1), '');
+          }
         }
 
         if (isExpired) {
           var displayArrS = (userIdxS >= 0 && userIdxS >= 3) ? arr.slice(0, 3).concat([arr[userIdxS]]) : arr.slice(0, 3);
           displayArrS.forEach(function(item, idx) {
             var categoryRank = (userIdxS >= 3 && idx === 3) ? (userIdxS + 1) : (idx + 1);
-            htmlS += buildSupremoRow(item, categoryRank, '');
+            htmlS += buildSupremoRow(item, stelvioRankDisplayNumber(item, categoryRank), '');
           });
           bodyEl.innerHTML = htmlS;
           return;
@@ -8250,13 +8411,15 @@
 
         if (userIdxS < 0 && myRankSupremo && arr.length > 0) {
           var topEndO = Math.min(TOP_N - 1, lastIdx);
-          for (var oi = 0; oi <= topEndO; oi++) htmlS += buildSupremoRow(arr[oi], oi + 1, '');
+          for (var oi = 0; oi <= topEndO; oi++) htmlS += buildSupremoRow(arr[oi], stelvioRankDisplayNumber(arr[oi], oi + 1), '');
           if (lastIdx > topEndO) {
             if (!supremoExpanded) {
               htmlS += dotsRowS();
               htmlS += expandGapRowS('expanded', true);
             } else {
-              for (var oj = topEndO + 1; oj <= lastIdx; oj++) htmlS += buildSupremoRow(arr[oj], oj + 1, '');
+              for (var oj = topEndO + 1; oj <= lastIdx; oj++) {
+                htmlS += buildSupremoRow(arr[oj], stelvioRankDisplayNumber(arr[oj], oj + 1), '');
+              }
               htmlS += expandGapRowS('expanded', false);
             }
           }
@@ -8276,13 +8439,15 @@
 
         if (myRank1s <= 0) {
           var topEnd0 = Math.min(TOP_N - 1, lastIdx);
-          for (var i0 = 0; i0 <= topEnd0; i0++) htmlS += buildSupremoRow(arr[i0], i0 + 1, '');
+          for (var i0 = 0; i0 <= topEnd0; i0++) htmlS += buildSupremoRow(arr[i0], stelvioRankDisplayNumber(arr[i0], i0 + 1), '');
           if (lastIdx > topEnd0) {
             if (!supremoExpanded) {
               htmlS += dotsRowS();
               htmlS += expandGapRowS('expanded', true);
             } else {
-              for (var e0 = topEnd0 + 1; e0 <= lastIdx; e0++) htmlS += buildSupremoRow(arr[e0], e0 + 1, '');
+              for (var e0 = topEnd0 + 1; e0 <= lastIdx; e0++) {
+                htmlS += buildSupremoRow(arr[e0], stelvioRankDisplayNumber(arr[e0], e0 + 1), '');
+              }
               htmlS += expandGapRowS('expanded', false);
             }
           }
@@ -8326,7 +8491,9 @@
         var needsExpandControl = hasMiddleGap || hasTail;
 
         if (supremoExpanded && needsExpandControl) {
-          for (var fullI = 0; fullI <= lastIdx; fullI++) htmlS += buildSupremoRow(arr[fullI], fullI + 1, '');
+          for (var fullI = 0; fullI <= lastIdx; fullI++) {
+            htmlS += buildSupremoRow(arr[fullI], stelvioRankDisplayNumber(arr[fullI], fullI + 1), '');
+          }
           htmlS += expandGapRowS('expanded', false);
           bodyEl.innerHTML = htmlS;
           return;
@@ -8385,6 +8552,7 @@
 
       displayArr.forEach(function(item, idx) {
         var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
+        var dispR = stelvioRankDisplayNumber(item, categoryRank);
         var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var isPrivate = item.is_private === true;
         var isCurrent = currentUserId && item.userId === currentUserId;
@@ -8420,9 +8588,19 @@
           (groupAttendedCat ? ' stelvio-rank-group-attended' : '') +
           (groupUnjoinedCat ? ' stelvio-rank-group-unjoined' : '');
         html += '<div class="' + rowClass + '">';
-        if (categoryRank <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[categoryRank - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
-        html += '<span class="stelvio-rank-pos">' + categoryRank + '위</span>';
-        html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + rawName + '">' + name + '</span>' + globalPart + badgePart + '</span>';
+        if (dispR <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
+        html += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
+        html +=
+          '<span class="stelvio-rank-name">' +
+          stelvioRankingStarButtonHtml(item.userId) +
+          '<span class="stelvio-rank-name-text" title="' +
+          rawName +
+          '">' +
+          name +
+          '</span>' +
+          globalPart +
+          badgePart +
+          '</span>';
         html += '<span class="stelvio-rank-wkg">' + valStr + '</span>';
         html += '</div>';
       });
@@ -8433,6 +8611,7 @@
           html += '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">....</span></span><span class="stelvio-rank-wkg"></span></div>';
         }
         var mr = arr[userIdx];
+        var mrDisp = stelvioRankDisplayNumber(mr, userIdx + 1);
         var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var mrName = mrRawName.length > maxNameLen ? mrRawName.substring(0, maxNameLen - 2) + '..' : mrRawName;
         var mrVal = stelvioFormatRankCell(mr);
@@ -8452,8 +8631,18 @@
           (mrGroupHost ? ' stelvio-rank-group-host' : '') +
           (mrGroupAttended ? ' stelvio-rank-group-attended' : '') +
           '">';
-        html += '<span class="stelvio-rank-pos">' + (userIdx + 1) + '위</span>';
-        html += '<span class="stelvio-rank-name"><span class="stelvio-rank-name-text" title="' + mrRawName + '">' + mrName + '</span>' + mrBadgePart + '</span>';
+        if (mrDisp <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[mrDisp - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
+        html += '<span class="stelvio-rank-pos">' + mrDisp + '위</span>';
+        html +=
+          '<span class="stelvio-rank-name">' +
+          stelvioRankingStarButtonHtml(mr.userId) +
+          '<span class="stelvio-rank-name-text" title="' +
+          mrRawName +
+          '">' +
+          mrName +
+          '</span>' +
+          mrBadgePart +
+          '</span>';
         html += '<span class="stelvio-rank-wkg">' + mrVal + '</span>';
         html += '</div>';
       }
@@ -20417,7 +20606,14 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <!-- ④ 랭킹 리스트 영역 (선택된 카테고리만 표시) -->
         <div id="stelvioRankingContent" class="stelvio-ranking-content">
           <div class="stelvio-category-card stelvio-ranking-list-card">
-            <div class="stelvio-category-header"><span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체순위)</span><span class="stelvio-category-header-unit">W/kg</span></div>
+            <div class="stelvio-category-header">
+              <span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체순위)</span>
+              <div class="stelvio-ranking-list-filter-toggle" role="group" aria-label="순위 목록 보기">
+                <button type="button" id="stelvioRankingListFilterAll" class="stelvio-ranking-filter-chip stelvio-ranking-filter-chip--active" aria-pressed="true">전체</button>
+                <button type="button" id="stelvioRankingListFilterInterest" class="stelvio-ranking-filter-chip" aria-pressed="false">관심</button>
+              </div>
+              <span class="stelvio-category-header-unit">W/kg</span>
+            </div>
             <div class="stelvio-category-body" id="stelvioRankingListBody"></div>
           </div>
           <div id="stelvio-distribution-chart-root" class="stelvio-distribution-chart-root" aria-live="polite"></div>
