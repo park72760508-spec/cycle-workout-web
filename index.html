@@ -2209,9 +2209,9 @@
       <h2 class="celebration-title" style="font-size: 1.8em; font-weight: bold; color: #fff; margin: 0 0 15px 0; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); line-height: 1.3;">가입 완료!</h2>
       <div class="celebration-message" id="register-celebration-message" style="font-size: 1.1em; color: #fff; line-height: 1.8; margin-bottom: 25px; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);">
         <strong id="register-celebration-name" style="font-size: 1.2em;">사용자</strong>님,<br>
-        STELVIO AI 캠프에 오신 것을 환영합니다<br><br>
-        <span style="font-size: 1.05em; font-weight: 600;">STELVIO AI 런칭 축하 특별 이벤트</span><br>
-        <span style="font-size: 1.1em; font-weight: 700; color: #ffeb3b; text-shadow: 0 0 10px rgba(255, 235, 59, 0.5);">3개월 무료이용권이 부여되었습니다.</span>
+        STELVIO AI 캠프에 오신 것을 환영합니다.<br><br>
+        STELVIO AI 분석 및 추천 워크아웃과 함께 성장을 경험해 보세요.<br><br>
+        <span style="font-size: 1.1em; font-weight: 700; color: #ffeb3b; text-shadow: 0 0 10px rgba(255, 235, 59, 0.5);"><strong id="register-celebration-name-2">사용자</strong>님이 흘린 땀방울이 헛되지 않도록, 목표하신 정상까지 STELVIO AI가 최고의 페이스메이커가 되어드리겠습니다.</span>
       </div>
       <button class="celebration-button" id="registerCelebrationCloseBtn" onclick="closeRegisterCelebration()" style="background: #fff; color: #667eea; border: none; border-radius: 12px; padding: 14px 32px; font-size: 1.1em; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: all 0.3s ease;">
         시작하기
@@ -13169,7 +13169,7 @@
         const now = new Date().toISOString();
         const defaultExpiryDate = (() => {
           const d = new Date();
-          d.setMonth(d.getMonth() + 3);
+          d.setMonth(d.getMonth() + 6);
           return d.toISOString().split('T')[0];
         })();
         
@@ -13302,9 +13302,11 @@
     function showRegisterCelebration(userName) {
       const modal = document.getElementById('registerCelebrationModal');
       const nameEl = document.getElementById('register-celebration-name');
+      const nameEl2 = document.getElementById('register-celebration-name-2');
       
       if (modal && nameEl) {
         nameEl.textContent = userName;
+        if (nameEl2) nameEl2.textContent = userName;
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
         console.log('🎉 가입 완료 축하 오버레이 표시');
