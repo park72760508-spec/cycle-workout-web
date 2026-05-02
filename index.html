@@ -8336,6 +8336,21 @@
       }
       hero.classList.remove('hidden');
       var globalRank = cu.rank || 0;
+      /* GC: API currentUser는 부문 행이라 rank가 부문 순위임 — 전체(Supremo) 순위는 별도 산출 */
+      if (stelvioIsGcRankingMode() && stelvioRankingByCategory && uidHero) {
+        var supArrGc = stelvioRankingByCategory.Supremo || [];
+        var supIdxGc = supArrGc.findIndex(function (e) {
+          return e && String(e.userId) === String(uidHero);
+        });
+        if (supIdxGc >= 0) {
+          var rowGc = supArrGc[supIdxGc];
+          if (rowGc.rank != null && !isNaN(Number(rowGc.rank))) {
+            globalRank = Math.floor(Number(rowGc.rank));
+          } else {
+            globalRank = supIdxGc + 1;
+          }
+        }
+      }
       var ageLabel = STELVIO_CATEGORY_LABELS[cu.ageCategory] || '';
       var categoryRank = 0;
       if (stelvioRankingByCategory && cu.ageCategory && cu.userId) {
@@ -8377,6 +8392,7 @@
           msg = userName + '님은 GC(종합 랭킹) ' + catPartGc + ', 전체 ' + globalRank + '위입니다.';
         }
       } else {
+        var wkg = (cu.wkg != null ? Number(cu.wkg) : 0).toFixed(2);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           msg = userName + '님은 ' + durLabel + ' 평균파워 전체 ' + globalRank + '위(' + wkg + ' W/kg)입니다.';
         } else {
