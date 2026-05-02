@@ -159,7 +159,15 @@ function installStelvioNonAdminConsoleFilter() {
     /비밀번호 재설정 전송 기능이 제거/i,
     /\[deviceSettings\]/i,
     /fetchAndProcessStravaData/i,
-    /\[App Download\]/i
+    /\[App Download\]/i,
+    /\[drawSegmentGraph\]/i,
+    /\[getSegmentRpmForPreview\]/i,
+    /\[updateTargetPower\]/i,
+    /\[updateSpeedometerSegmentInfo\]/i,
+    /\[BluetoothIndividual\] ✅ 사용자 이름 실시간 업데이트/i,
+    /\[getCurrentSegment\]/i,
+    /\[현재 세그먼트 정보\]/i,
+    /\[updateSpeedometerTargetForSegment\]/i
   ];
   function shouldSuppress(args) {
     if (typeof window.isStelvioSysConsoleAdmin === 'function' && window.isStelvioSysConsoleAdmin()) return false;
@@ -753,7 +761,7 @@ async function signInWithGoogle() {
     } else {
       // 신규 회원: 기존 Google Sheets 필드 구조로 문서 생성
       const now = new Date().toISOString();
-      // 최초 로그인 시에는 오늘 날짜로 설정 (3개월 연장은 사용자 정보 입력 완료 후 적용)
+      // 최초 로그인 시에는 오늘 날짜로 설정 (6개월 연장은 사용자 정보 입력 완료 후 적용)
       const todayDate = new Date().toISOString().split('T')[0];
 
       const newUserData = {
@@ -928,7 +936,7 @@ function initAuthStateListener() {
       } else {
         // 신규 회원: 문서 생성
         const now = new Date().toISOString();
-        // 최초 로그인 시에는 오늘 날짜로 설정 (3개월 연장은 사용자 정보 입력 완료 후 적용)
+        // 최초 로그인 시에는 오늘 날짜로 설정 (6개월 연장은 사용자 정보 입력 완료 후 적용)
         const todayDate = new Date().toISOString().split('T')[0];
         
         const newUserData = {
@@ -1529,7 +1537,7 @@ async function apiCreateUser(userData) {
     const now = new Date().toISOString();
     const defaultExpiryDate = (() => {
       const d = new Date();
-      d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+      d.setMonth(d.getMonth() + 6); // 오늘 + 6개월 (신규 가입 무료 구독 기본 만료)
       return d.toISOString().split('T')[0];
     })();
     
@@ -1841,7 +1849,7 @@ async function unifiedCreateUser(userData, source = 'profile') {
 
     if (!userData.expiry_date) {
       const d = new Date();
-      d.setMonth(d.getMonth() + 3);
+      d.setMonth(d.getMonth() + 6);
       userData.expiry_date = d.toISOString().slice(0, 10);
     }
 
@@ -1909,7 +1917,7 @@ function showUserWelcomeModal(userName) {
       <strong>${userName}</strong>님, STELVIO AI의 멤버가 되신 것을 축하합니다!
     </div>
     <div style="margin-bottom: 12px; font-size: 0.95em; line-height: 1.8;">
-      오늘부터 <span style="color: #1a1a1a; font-weight: 600;">3개월간 무료 체험</span>이 시작됩니다.<br>
+      오늘부터 <span style="color: #1a1a1a; font-weight: 600;">6개월간 무료 체험</span>이 시작됩니다.<br>
       이제 날씨와 공간의 제약 없이 마음껏 달리세요.
     </div>
     <div style="font-size: 0.95em; line-height: 1.8;">
@@ -3086,9 +3094,9 @@ function showAddUserForm(clearForm = true) {
       
       if (gradeEl) gradeEl.value = '2';
       if (expiryEl) {
-        // 기본값: 오늘 + 3개월
+        // 기본값: 오늘 + 6개월
         const defaultDate = new Date();
-        defaultDate.setMonth(defaultDate.getMonth() + 3);
+        defaultDate.setMonth(defaultDate.getMonth() + 6);
         expiryEl.value = defaultDate.toISOString().split('T')[0];
       }
       if (accPointsEl) accPointsEl.value = '';
@@ -3743,14 +3751,14 @@ async function completeUserInfo() {
   try {
     const contactDB = formatPhoneForDB(contactRaw);
     
-    // 3개월 무료 연장 적용 (사용자 정보 입력 완료 시)
+    // 6개월 무료 연장 적용 (사용자 정보 입력 완료 시)
     const extendedExpiryDate = (() => {
       const d = new Date();
-      d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+      d.setMonth(d.getMonth() + 6); // 오늘 + 6개월
       return d.toISOString().split('T')[0];
     })();
     
-    // 사용자 정보 업데이트 (3개월 연장 + 나이·성별 포함)
+    // 사용자 정보 업데이트 (6개월 연장 + 나이·성별 포함)
     const updateData = {
       contact: contactDB,
       ftp: ftpToUse,
@@ -3758,7 +3766,7 @@ async function completeUserInfo() {
       birth_year: birthYear,
       gender: gender,
       challenge: challenge,
-      expiry_date: normalizeExpiryDate(extendedExpiryDate) // 3개월 무료 연장 적용
+      expiry_date: normalizeExpiryDate(extendedExpiryDate) // 6개월 무료 연장 적용
     };
     
     const result = await apiUpdateUser(currentUser.uid, updateData);
