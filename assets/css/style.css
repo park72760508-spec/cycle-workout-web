@@ -6435,15 +6435,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
-#stelvioRankingScreen .stelvio-rank-friend-star {
-  display: inline-block;
-  font-size: 1rem;
-  line-height: 1;
-  color: #16a34a;
-  text-shadow: 0 0 1px rgba(22, 163, 74, 0.45);
-  flex-shrink: 0;
-  pointer-events: none;
-  user-select: none;
+#stelvioRankingScreen .stelvio-rank-friend-star--solo {
+  min-width: 1.25em;
+  text-align: center;
 }
 #stelvioRankingScreen .stelvio-rank-star-btn--on {
   color: #9333ea;
