@@ -2713,16 +2713,63 @@
               filterGender: gIn
             })
           : Promise.resolve({ ok: false, nTotal: 0 });
-      Promise.all([prCo, prCoS, prB, prN2])
+      /** 성별 M/F일 때 표시·정렬용 환산 합은 Supremo·전체(all) 문서와 동일(성별 전용 재환산 없음). */
+      var prSupAll =
+        gIn === 'M' || gIn === 'F'
+          ? window.queryStelvioHeptagonCohortBySumDesc({
+              monthKey: mk2,
+              filterCategory: 'Supremo',
+              filterGender: 'all',
+              limit: 500
+            })
+          : Promise.resolve({ ok: false, items: [] });
+      Promise.all([prCo, prCoS, prB, prN2, prSupAll])
         .then(function(quad) {
           var crA = quad[0];
           var crSA = quad[1];
           var resA = quad[2];
           var nResA = quad[3];
+          var resSupAll = quad[4];
           var nTot2 = nResA && nResA.ok && nResA.nTotal > 0 ? Math.floor(nResA.nTotal) : 0;
           if (resA && resA.ok) {
             var myD = crA && crA.ok && crA.exists && crA.data ? crA.data : null;
             var myDS = crSA && crSA.ok && crSA.exists && crSA.data ? crSA.data : null;
+            var supAllSumByUid = {};
+            if ((gIn === 'M' || gIn === 'F') && resSupAll && resSupAll.ok && resSupAll.items && resSupAll.items.length) {
+              for (var sxi = 0; sxi < resSupAll.items.length; sxi++) {
+                var sx = resSupAll.items[sxi];
+                if (!sx || sx.userId == null) {
+                  continue;
+                }
+                if (sx.sumPositionScores != null && isFinite(Number(sx.sumPositionScores))) {
+                  supAllSumByUid[String(sx.userId)] = Number(sx.sumPositionScores);
+                }
+              }
+            }
+            var items2 = resA.items || [];
+            if (Object.keys(supAllSumByUid).length) {
+              items2 = items2.map(function(it) {
+                if (!it || it.userId == null) {
+                  return it;
+                }
+                var sAll = supAllSumByUid[String(it.userId)];
+                if (sAll == null || !isFinite(sAll)) {
+                  return it;
+                }
+                return Object.assign({}, it, { sumPositionScores: sAll });
+              });
+              var sMe = supAllSumByUid[String(uidIn)];
+              if (sMe != null && isFinite(sMe)) {
+                if (myD) {
+                  myD = Object.assign({}, myD, { sumPositionScores: sMe });
+                }
+                if (myDS) {
+                  myDS = Object.assign({}, myDS, { sumPositionScores: sMe });
+                } else {
+                  myDS = { sumPositionScores: sMe, displayName: '—' };
+                }
+              }
+            }
             if (chartSupremoSumForVirtual != null && isFinite(Number(chartSupremoSumForVirtual))) {
               var sv = Number(chartSupremoSumForVirtual);
               if (myDS) {
@@ -2731,7 +2778,6 @@
                 myDS = { sumPositionScores: sv, displayName: '—' };
               }
             }
-            var items2 = resA.items || [];
             var nRe2 = reconcileHeptagonCohortNFromList(nTot2, items2);
             var built2 = buildHeptagonModalBoardRows(items2, uidIn, myD, myDS);
             var nReFromRows = nCohortFromHeptagonBoardRows({ rows: built2.rows, nCohort: 0, err: null });
