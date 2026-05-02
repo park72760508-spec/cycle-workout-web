@@ -4289,30 +4289,33 @@ function buildMotivationMessage(currentUser, nextUser) {
 
 /**
  * GC(헵타곤 환산): `heptagon_cohort_ranks` — 대시보드·항목별 순위 모달과 동일 monthKey·필터.
+ * 성별 M/F: 7축이 성별·부문 코호트 기준이라 Firestore의 M/F 문서 `sumPositionScores`는 전체와 다를 수 있음.
+ * 랭킹보드에서는 **전체(all)·Supremo의 환산 합**을 점수로 통일하고, 해당 성별 부문에서는 그 점수로만 정렬·순위 부여.
  */
 async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   const col = db.collection(heptagonCohortRanks.HEPTAGON_COHORT_COL);
   const categories = heptagonCohortRanks.HEPTAGON_CATEGORIES;
   const byCategory = { Supremo: [], Assoluto: [], Bianco: [], Rosa: [], Infinito: [], Leggenda: [] };
-  const genEntry = (d, fallbackRank) => {
-    const gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
-    let br = d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null;
-    if (br == null && d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank))) {
-      br = Math.floor(Number(d.comprehensiveRank));
-    }
-    if (br == null) br = fallbackRank;
-    const g =
-      filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
-    return {
-      userId: String(d.userId),
-      name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
-      ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
-      gender: g,
-      is_private: d.is_private === true,
-      rank: br,
-      gcScore,
-    };
-  };
+
+  const applyGenderScoreUnify = filterGender === "M" || filterGender === "F";
+  let supreAllScores = null;
+  if (applyGenderScoreUnify) {
+    supreAllScores = new Map();
+    const qAll = await col
+      .where("monthKey", "==", monthKey)
+      .where("filterCategory", "==", "Supremo")
+      .where("filterGender", "==", "all")
+      .orderBy("sumPositionScores", "desc")
+      .limit(2000)
+      .get();
+    qAll.forEach((doc) => {
+      const d = doc.data();
+      if (d && d.userId != null && d.sumPositionScores != null && isFinite(Number(d.sumPositionScores))) {
+        supreAllScores.set(String(d.userId), Number(d.sumPositionScores));
+      }
+    });
+  }
+
   for (let ci = 0; ci < categories.length; ci++) {
     const cat = categories[ci];
     const snap = await col
@@ -4322,13 +4325,43 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
       .orderBy("sumPositionScores", "desc")
       .limit(500)
       .get();
-    let i = 0;
+    const rows = [];
+    let seq = 0;
     snap.forEach((doc) => {
       const d = doc.data();
       if (!d || !d.userId) return;
-      i += 1;
-      byCategory[cat].push(genEntry(d, i));
+      seq += 1;
+      const uid = String(d.userId);
+      let gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
+      if (applyGenderScoreUnify && supreAllScores.has(uid)) {
+        gcScore = supreAllScores.get(uid);
+      }
+      let br = d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null;
+      if (br == null && d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank))) {
+        br = Math.floor(Number(d.comprehensiveRank));
+      }
+      if (br == null) br = seq;
+      const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+      rows.push({
+        userId: uid,
+        name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
+        ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
+        gender: g,
+        is_private: d.is_private === true,
+        rank: applyGenderScoreUnify ? seq : br,
+        gcScore,
+      });
     });
+    if (applyGenderScoreUnify) {
+      rows.sort((a, b) => {
+        if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
+        return String(a.userId).localeCompare(String(b.userId));
+      });
+      for (let ri = 0; ri < rows.length; ri++) {
+        rows[ri].rank = ri + 1;
+      }
+    }
+    byCategory[cat] = rows;
   }
   const entries = (byCategory.Supremo || []).slice();
   return { byCategory, entries };
