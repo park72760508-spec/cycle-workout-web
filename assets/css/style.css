@@ -6118,12 +6118,12 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: block;
 }
 #stelvioRankingScreen .stelvio-legend-star--friend {
-  color: #16a34a;
-  text-shadow: 0 0 1px rgba(22, 163, 74, 0.35);
+  color: #22c55e;
+  text-shadow: 0 0 1px rgba(34, 197, 94, 0.22);
 }
 #stelvioRankingScreen .stelvio-legend-star--interest {
-  color: #9333ea;
-  text-shadow: 0 0 1px rgba(88, 28, 135, 0.35);
+  color: #c084fc;
+  text-shadow: 0 0 1px rgba(192, 132, 252, 0.22);
 }
 #stelvioRankingScreen .stelvio-category-body {
   padding: 4px 10px 6px;
@@ -6493,9 +6493,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
   justify-content: center;
   font-size: 1rem;
   line-height: 1;
-  color: #16a34a !important;
-  -webkit-text-fill-color: #16a34a;
-  text-shadow: 0 0 1px rgba(22, 163, 74, 0.45);
+  color: #22c55e !important;
+  -webkit-text-fill-color: #22c55e;
+  text-shadow: 0 0 1px rgba(34, 197, 94, 0.28);
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
@@ -6505,8 +6505,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   text-align: center;
 }
 #stelvioRankingScreen .stelvio-rank-star-btn--on {
-  color: #9333ea;
-  text-shadow: 0 0 1px rgba(88, 28, 135, 0.42);
+  color: #c084fc;
+  text-shadow: 0 0 1px rgba(192, 132, 252, 0.28);
 }
 #stelvioRankingScreen .stelvio-rank-star-btn:not(.stelvio-rank-star-btn--on):hover {
   color: rgba(100, 116, 139, 0.24);
