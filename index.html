@@ -7663,7 +7663,7 @@
       'max': 'Max'
     };
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
-    var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체순위)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
+    var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
     function stelvioRankingFavoritesStorageKey() {
       var uid = stelvioRankingCurrentUserId;
       if (!uid && window.currentUser && window.currentUser.id) uid = window.currentUser.id;
@@ -7708,17 +7708,38 @@
       }
       return fallbackRank;
     }
+    function stelvioResolveRankingViewerUserId() {
+      var uid = stelvioRankingCurrentUserId;
+      if (!uid && window.currentUser && window.currentUser.id) uid = window.currentUser.id;
+      if (!uid) {
+        try {
+          var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+          uid = u && u.id ? u.id : null;
+        } catch (eRvu) {
+          uid = null;
+        }
+      }
+      return uid ? String(uid) : '';
+    }
     function stelvioFilterRowsByListInterest(rows) {
       if (stelvioRankingState.listFilter !== 'interest') return (rows || []).slice();
+      var myId = stelvioResolveRankingViewerUserId();
       return (rows || []).filter(function (item) {
-        return item && item.userId && stelvioRankingFavoriteUserSet.has(String(item.userId));
+        if (!item || !item.userId) return false;
+        var uid = String(item.userId);
+        if (stelvioRankingFavoriteUserSet.has(uid)) return true;
+        if (myId && uid === myId) return true;
+        return false;
       });
     }
     function stelvioEffectiveMyRankSupremo(original) {
       if (!original) return null;
       if (stelvioRankingState.listFilter !== 'interest') return original;
       var uid = original.userId ? String(original.userId) : '';
-      return uid && stelvioRankingFavoriteUserSet.has(uid) ? original : null;
+      if (!uid) return null;
+      if (stelvioRankingFavoriteUserSet.has(uid)) return original;
+      if (uid === stelvioResolveRankingViewerUserId()) return original;
+      return null;
     }
     function stelvioRankingStarButtonHtml(userId) {
       if (!userId) return '';
@@ -20682,7 +20703,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <div id="stelvioRankingContent" class="stelvio-ranking-content">
           <div class="stelvio-category-card stelvio-ranking-list-card">
             <div class="stelvio-category-header">
-              <span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체순위)</span>
+              <span class="stelvio-category-header-title" id="stelvioListCategoryTitle">Supremo (전체)</span>
               <div class="stelvio-ranking-list-filter-toggle" role="group" aria-label="순위 목록 보기">
                 <button type="button" id="stelvioRankingListFilterAll" class="stelvio-ranking-filter-chip stelvio-ranking-filter-chip--active" aria-pressed="true">전체</button>
                 <button type="button" id="stelvioRankingListFilterInterest" class="stelvio-ranking-filter-chip" aria-pressed="false">관심</button>
