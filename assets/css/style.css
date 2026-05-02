@@ -6473,8 +6473,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
-  /* 관심 미등록(outline 별): 테두리만 희미하게 — 채움 없을 때 시각적 무게 최소화 */
-  color: rgba(148, 163, 184, 0.38);
+  /* 관심 미등록(outline 별): 테두리만 희미하게 — 이전 대비 알파 약 50% 추가 완화 */
+  color: rgba(148, 163, 184, 0.19);
   vertical-align: middle;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
@@ -6509,7 +6509,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   text-shadow: 0 0 1px rgba(88, 28, 135, 0.42);
 }
 #stelvioRankingScreen .stelvio-rank-star-btn:not(.stelvio-rank-star-btn--on):hover {
-  color: rgba(100, 116, 139, 0.48);
+  color: rgba(100, 116, 139, 0.24);
 }
 #stelvioRankingScreen .stelvio-rank-star-btn--on:hover {
   opacity: 0.88;
