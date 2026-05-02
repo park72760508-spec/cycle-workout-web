@@ -2198,6 +2198,12 @@
     var heptagonModalRanks = _hmr[0];
     var setHeptagonModalRanks = _hmr[1];
     var heptagonPrevOpenRef = useRef(false);
+    /** `state.loading` 구간에 chart 가 null로 바뀌어도 직전 유효 합을 코호트 표 보정에 재사용 */
+    var chartSupremoSumStableRef = useRef(null);
+    /** 모달용(카드와 동일 성별 또는 가상 Supremo 합) 직전 유효값 */
+    var chartSupremoModalStableRef = useRef(null);
+    var heptagonCardBoardFetchSeqRef = useRef(0);
+    var heptagonModalBoardFetchSeqRef = useRef(0);
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -2229,6 +2235,21 @@
         return null;
       },
       [heptagonModalGender, gender, chartSupremoSumFromGlobalRanking, heptagonModalRanks]
+    );
+
+    if (chartSupremoSumFromGlobalRanking != null && isFinite(Number(chartSupremoSumFromGlobalRanking))) {
+      chartSupremoSumStableRef.current = Number(chartSupremoSumFromGlobalRanking);
+    }
+    if (chartSupremoSumForModalVirtualOvl != null && isFinite(Number(chartSupremoSumForModalVirtualOvl))) {
+      chartSupremoModalStableRef.current = Number(chartSupremoSumForModalVirtualOvl);
+    }
+
+    useEffect(
+      function() {
+        chartSupremoSumStableRef.current = null;
+        chartSupremoModalStableRef.current = null;
+      },
+      [uid]
     );
 
     useEffect(
@@ -2691,7 +2712,7 @@
       [heptagonDetailOpen, uid, heptagonModalGender, heptagonModalCategory, gender, category]
     );
 
-    function runHeptagonCohortBoardFetch(uidIn, gIn, cIn, setBoard, chartSupremoSumForVirtual) {
+    function runHeptagonCohortBoardFetch(uidIn, gIn, cIn, setBoard, chartSupremoSumForVirtual, boardKind) {
       if (!uidIn) {
         setBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
         return;
@@ -2700,6 +2721,9 @@
         setBoard({ loading: false, err: 'no-fn', rows: [], nCohort: 0, meInList: false });
         return;
       }
+      var seqRef = boardKind === 'modal' ? heptagonModalBoardFetchSeqRef : heptagonCardBoardFetchSeqRef;
+      seqRef.current += 1;
+      var fetchSeq = seqRef.current;
       setBoard({ loading: true, err: null, rows: [], nCohort: 0, meInList: false });
       var mk2 = currentMonthKeyKst();
       var prB = window.queryStelvioHeptagonCohortBySumDesc({
@@ -2755,6 +2779,9 @@
           : Promise.resolve({ ok: false, exists: false, data: null });
       Promise.all([prCo, prCoS, prB, prN2, prSupAll, prCoSAll])
         .then(function(quad) {
+          if (fetchSeq !== seqRef.current) {
+            return;
+          }
           var crA = quad[0];
           var crSA = quad[1];
           var resA = quad[2];
@@ -2794,10 +2821,14 @@
             var mySupAllSum = null;
             if (gIn === 'M' || gIn === 'F') {
               if (crSAll && crSAll.ok && crSAll.exists && crSAll.data && crSAll.data.sumPositionScores != null && isFinite(Number(crSAll.data.sumPositionScores))) {
-                mySupAllSum = Number(crSAll.data.sumPositionScores);
-              } else {
+                var rawAll = Number(crSAll.data.sumPositionScores);
+                if (rawAll > 0) {
+                  mySupAllSum = rawAll;
+                }
+              }
+              if (mySupAllSum == null) {
                 var sMeMap = supAllSumByUid[String(uidIn)];
-                if (sMeMap != null && isFinite(sMeMap)) {
+                if (sMeMap != null && isFinite(sMeMap) && sMeMap > 0) {
                   mySupAllSum = sMeMap;
                 }
               }
@@ -2812,7 +2843,7 @@
                 }
               }
             }
-            if (chartSupremoSumForVirtual != null && isFinite(Number(chartSupremoSumForVirtual))) {
+            if (chartSupremoSumForVirtual != null && isFinite(Number(chartSupremoSumForVirtual)) && Number(chartSupremoSumForVirtual) > 0) {
               var sv = Number(chartSupremoSumForVirtual);
               if (gIn === 'M' || gIn === 'F') {
                 var dSum0 = myD && myD.sumPositionScores != null ? Number(myD.sumPositionScores) : NaN;
@@ -2846,6 +2877,9 @@
           }
         })
         .catch(function() {
+          if (fetchSeq !== seqRef.current) {
+            return;
+          }
           setBoard({ loading: false, err: 'catch', rows: [], nCohort: 0, meInList: false });
         });
     }
@@ -2856,7 +2890,16 @@
           setHeptagonCardBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
           return;
         }
-        runHeptagonCohortBoardFetch(uid, gender, category, setHeptagonCardBoard, chartSupremoSumFromGlobalRanking);
+        var chartEff = chartSupremoSumFromGlobalRanking;
+        if (
+          (chartEff == null || !isFinite(Number(chartEff))) &&
+          chartSupremoSumStableRef.current != null &&
+          isFinite(Number(chartSupremoSumStableRef.current)) &&
+          Number(chartSupremoSumStableRef.current) > 0
+        ) {
+          chartEff = chartSupremoSumStableRef.current;
+        }
+        runHeptagonCohortBoardFetch(uid, gender, category, setHeptagonCardBoard, chartEff, 'card');
       },
       [uid, gender, category, chartSupremoSumFromGlobalRanking]
     );
@@ -2875,15 +2918,18 @@
           setHeptagonModalBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
           return;
         }
-        var chartS =
-          heptagonModalGender === gender
-            ? chartSupremoSumFromGlobalRanking
-            : heptagonModalRanks && heptagonModalRanks.tierSupremoForVirtual
-              ? heptagonModalRanks.tierSupremoForVirtual.sumPositionScores
-              : null;
-        runHeptagonCohortBoardFetch(uid, heptagonModalGender, heptagonModalCategory, setHeptagonModalBoard, chartS);
+        var chartS = chartSupremoSumForModalVirtualOvl;
+        if (
+          (chartS == null || !isFinite(Number(chartS))) &&
+          chartSupremoModalStableRef.current != null &&
+          isFinite(Number(chartSupremoModalStableRef.current)) &&
+          Number(chartSupremoModalStableRef.current) > 0
+        ) {
+          chartS = chartSupremoModalStableRef.current;
+        }
+        runHeptagonCohortBoardFetch(uid, heptagonModalGender, heptagonModalCategory, setHeptagonModalBoard, chartS, 'modal');
       },
-      [heptagonDetailOpen, uid, heptagonModalCategory, heptagonModalGender, gender, category, chartSupremoSumFromGlobalRanking, heptagonModalRanks]
+      [heptagonDetailOpen, uid, heptagonModalCategory, heptagonModalGender, gender, category, chartSupremoSumForModalVirtualOvl]
     );
 
     useEffect(
