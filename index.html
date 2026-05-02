@@ -8095,6 +8095,8 @@
         });
       }
     }
+
+    async function fetchStelvioPeakPowerRanking() {
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
       if (loading) loading.classList.remove('hidden');
@@ -8254,8 +8256,15 @@
 
     function handleStelvioRankingGapSet(cat, key, expanded) {
       if (typeof getViewerGrade !== 'function') return;
-      var _gg = getViewerGrade();
-      if (String(_gg) !== '1' && Number(_gg) !== 1) return;
+      var vg = getViewerGrade();
+      var can =
+        vg != null &&
+        vg !== '' &&
+        (String(vg).trim() === '1' ||
+          String(vg).trim() === '2' ||
+          String(vg).trim() === '3' ||
+          (!Number.isNaN(Number(vg)) && Number(vg) >= 1 && Number(vg) <= 3));
+      if (!can) return;
       var o = stelvioRankingGapState[cat] || {};
       o[key] = !!expanded;
       stelvioRankingGapState[cat] = o;
