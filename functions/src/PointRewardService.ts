@@ -254,7 +254,7 @@ function safeAlimtalkDisplayName(raw: string): string {
 /**
  * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
  * 기존/변경 만료일 줄 모두 승인 데이터와 동일하게 MM-DD-YY (`formatSeoulYmdToAlimtalkMmDdYy`).
- * 줄 합침은 승인 템플릿과 동일한 Windows 개행(CRLF)을 사용한다. `sendAlimtalk`에서 유입 개행을 CRLF로 최종 통일한다.
+ * 줄 합침은 JSON/카카오 검수 기준인 LF(\\n)만 사용한다. CR(\\r) 바이트가 섞이면 템플릿 바이트 검수 오류가 날 수 있다.
  */
 function buildAlimtalkMessage(params: {
   userName: string;
@@ -299,7 +299,7 @@ function buildAlimtalkMessage(params: {
     "",
     "※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.",
   ];
-  return lines.join("\r\n");
+  return lines.join("\n");
 }
 
 /**
@@ -371,7 +371,6 @@ export class PointRewardService {
     }
     const recvName = safeAlimtalkDisplayName(displayName || "");
     const messageOut = message;
-    const finalMessageOut = messageOut.replace(/\r?\n/g, "\r\n");
 
     const body: Record<string, string> = {
       senderkey: cfg.senderkey,
@@ -380,7 +379,7 @@ export class PointRewardService {
       receiver_1: receiver,
       recvname_1: recvName,
       subject_1: subject,
-      message_1: finalMessageOut,
+      message_1: messageOut,
       failover: "N",
     };
 
