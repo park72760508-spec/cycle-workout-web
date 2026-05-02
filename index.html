@@ -7687,8 +7687,26 @@
         stelvioRankingFavoriteUserSet = new Set();
       }
     }
-    function stelvioRankDisplayNumber(item, fallbackRank) {
-      if (item && item.rank != null && !isNaN(Number(item.rank))) return Number(item.rank);
+    /** Supremo(전체): API item.rank = 전체 순위. 그 외 카테고리: item.rank는 전체 기준으로 박혀 있으므로 부문 순위는 전체 목록 기준 재계산 */
+    function stelvioCategoryRankInFullList(byCategory, categoryKey, userId) {
+      if (!byCategory || !categoryKey || userId == null || userId === '') return null;
+      var full = byCategory[categoryKey] || [];
+      var uid = String(userId);
+      for (var ci = 0; ci < full.length; ci++) {
+        if (full[ci] && String(full[ci].userId) === uid) return ci + 1;
+      }
+      return null;
+    }
+    function stelvioRankDisplayNumber(item, fallbackRank, categoryKey, byCategory) {
+      var ck = categoryKey || 'Supremo';
+      if (ck === 'Supremo') {
+        if (item && item.rank != null && !isNaN(Number(item.rank))) return Number(item.rank);
+        return fallbackRank;
+      }
+      if (byCategory && item && item.userId != null) {
+        var cr = stelvioCategoryRankInFullList(byCategory, ck, item.userId);
+        if (cr != null) return cr;
+      }
       return fallbackRank;
     }
     function stelvioFilterRowsByListInterest(rows) {
@@ -7721,11 +7739,19 @@
       if (stelvioRankingFavoriteUserSet.has(s)) stelvioRankingFavoriteUserSet.delete(s);
       else stelvioRankingFavoriteUserSet.add(s);
       try {
-        localStorage.setItem(stelvioRankingFavoritesStorageKey(), JSON.stringify(Array.from(stelvioRankingFavoriteUserSet)));
+        localStorage.setItem(
+          stelvioRankingFavoritesStorageKey(),
+          JSON.stringify(Array.from(stelvioRankingFavoriteUserSet))
+        );
       } catch (e3) {}
+      stelvioRefreshRankingFavoriteSetFromStorage();
       if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
     }
     window.stelvioToggleRankingFavorite = stelvioToggleRankingFavorite;
+    document.addEventListener('stelvio-auth-ready', function () {
+      stelvioRefreshRankingFavoriteSetFromStorage();
+      if (stelvioRankingByCategory && typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+    });
     function stelvioSyncRankingListFilterToggleUi() {
       var allBtn = document.getElementById('stelvioRankingListFilterAll');
       var intBtn = document.getElementById('stelvioRankingListFilterInterest');
@@ -8363,7 +8389,7 @@
             (groupAttended ? ' stelvio-rank-group-attended' : '') +
             (groupUnjoined ? ' stelvio-rank-group-unjoined' : '') +
             extraRowClass;
-          var dispR = stelvioRankDisplayNumber(item, categoryRank);
+          var dispR = stelvioRankDisplayNumber(item, categoryRank, 'Supremo', byCategory);
           var h = '<div class="' + rowClass + '">';
           if (dispR <= 3) {
             h += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
@@ -8404,7 +8430,7 @@
         }
         function renderRangeS(lo, hi) {
           for (var ri = lo; ri <= hi; ri++) {
-            htmlS += buildSupremoRow(arr[ri], stelvioRankDisplayNumber(arr[ri], ri + 1), '');
+            htmlS += buildSupremoRow(arr[ri], stelvioRankDisplayNumber(arr[ri], ri + 1, 'Supremo', byCategory), '');
           }
         }
 
@@ -8412,7 +8438,7 @@
           var displayArrS = (userIdxS >= 0 && userIdxS >= 3) ? arr.slice(0, 3).concat([arr[userIdxS]]) : arr.slice(0, 3);
           displayArrS.forEach(function(item, idx) {
             var categoryRank = (userIdxS >= 3 && idx === 3) ? (userIdxS + 1) : (idx + 1);
-            htmlS += buildSupremoRow(item, stelvioRankDisplayNumber(item, categoryRank), '');
+            htmlS += buildSupremoRow(item, stelvioRankDisplayNumber(item, categoryRank, 'Supremo', byCategory), '');
           });
           bodyEl.innerHTML = htmlS;
           return;
@@ -8420,14 +8446,14 @@
 
         if (userIdxS < 0 && myRankSupremo && arr.length > 0) {
           var topEndO = Math.min(TOP_N - 1, lastIdx);
-          for (var oi = 0; oi <= topEndO; oi++) htmlS += buildSupremoRow(arr[oi], stelvioRankDisplayNumber(arr[oi], oi + 1), '');
+          for (var oi = 0; oi <= topEndO; oi++) htmlS += buildSupremoRow(arr[oi], stelvioRankDisplayNumber(arr[oi], oi + 1, 'Supremo', byCategory), '');
           if (lastIdx > topEndO) {
             if (!supremoExpanded) {
               htmlS += dotsRowS();
               htmlS += expandGapRowS('expanded', true);
             } else {
               for (var oj = topEndO + 1; oj <= lastIdx; oj++) {
-                htmlS += buildSupremoRow(arr[oj], stelvioRankDisplayNumber(arr[oj], oj + 1), '');
+                htmlS += buildSupremoRow(arr[oj], stelvioRankDisplayNumber(arr[oj], oj + 1, 'Supremo', byCategory), '');
               }
               htmlS += expandGapRowS('expanded', false);
             }
@@ -8448,14 +8474,14 @@
 
         if (myRank1s <= 0) {
           var topEnd0 = Math.min(TOP_N - 1, lastIdx);
-          for (var i0 = 0; i0 <= topEnd0; i0++) htmlS += buildSupremoRow(arr[i0], stelvioRankDisplayNumber(arr[i0], i0 + 1), '');
+          for (var i0 = 0; i0 <= topEnd0; i0++) htmlS += buildSupremoRow(arr[i0], stelvioRankDisplayNumber(arr[i0], i0 + 1, 'Supremo', byCategory), '');
           if (lastIdx > topEnd0) {
             if (!supremoExpanded) {
               htmlS += dotsRowS();
               htmlS += expandGapRowS('expanded', true);
             } else {
               for (var e0 = topEnd0 + 1; e0 <= lastIdx; e0++) {
-                htmlS += buildSupremoRow(arr[e0], stelvioRankDisplayNumber(arr[e0], e0 + 1), '');
+                htmlS += buildSupremoRow(arr[e0], stelvioRankDisplayNumber(arr[e0], e0 + 1, 'Supremo', byCategory), '');
               }
               htmlS += expandGapRowS('expanded', false);
             }
@@ -8501,7 +8527,7 @@
 
         if (supremoExpanded && needsExpandControl) {
           for (var fullI = 0; fullI <= lastIdx; fullI++) {
-            htmlS += buildSupremoRow(arr[fullI], stelvioRankDisplayNumber(arr[fullI], fullI + 1), '');
+            htmlS += buildSupremoRow(arr[fullI], stelvioRankDisplayNumber(arr[fullI], fullI + 1, 'Supremo', byCategory), '');
           }
           htmlS += expandGapRowS('expanded', false);
           bodyEl.innerHTML = htmlS;
@@ -8561,7 +8587,7 @@
 
       displayArr.forEach(function(item, idx) {
         var categoryRank = (isExpired && userIdx >= 3 && idx === 3) ? (userIdx + 1) : (idx + 1);
-        var dispR = stelvioRankDisplayNumber(item, categoryRank);
+        var dispR = stelvioRankDisplayNumber(item, categoryRank, cat, byCategory);
         var rawName = (item.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var isPrivate = item.is_private === true;
         var isCurrent = currentUserId && item.userId === currentUserId;
@@ -8620,7 +8646,7 @@
           html += '<div class="stelvio-rank-row stelvio-rank-dots-row"><span class="stelvio-rank-crown"></span><span class="stelvio-rank-pos"></span><span class="stelvio-rank-name"><span class="stelvio-rank-name-text">....</span></span><span class="stelvio-rank-wkg"></span></div>';
         }
         var mr = arr[userIdx];
-        var mrDisp = stelvioRankDisplayNumber(mr, userIdx + 1);
+        var mrDisp = stelvioRankDisplayNumber(mr, userIdx + 1, cat, byCategory);
         var mrRawName = (mr.name || '(이름 없음)').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         var mrName = mrRawName.length > maxNameLen ? mrRawName.substring(0, maxNameLen - 2) + '..' : mrRawName;
         var mrVal = stelvioFormatRankCell(mr);
