@@ -7639,7 +7639,7 @@
     /**
      * STELVIO 랭킹 보드 모달 (피크 파워 W/kg)
      */
-    var stelvioRankingState = { duration: 'tss', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
+    var stelvioRankingState = { duration: 'gc', gender: 'all', period: 'monthly', activeCategory: 'Supremo', listFilter: 'all' };
     var stelvioRankingFavoriteUserSet = new Set();
     var stelvioRankingFriendUserSet = new Set();
     var stelvioRankingFavoritesLsPrefix = 'stelvioRankingFavorites:';
@@ -7957,12 +7957,12 @@
     window.stelvioEnsureRankingFavoriteUiListeners = stelvioEnsureRankingFavoriteUiListeners;
 
     function stelvioResetRankingBoardFiltersToDefault() {
-      stelvioRankingState.duration = 'tss';
+      stelvioRankingState.duration = 'gc';
       stelvioRankingState.gender = 'all';
       stelvioRankingState.activeCategory = 'Supremo';
       var tabs = document.querySelectorAll('#stelvioDurationTabs .stelvio-duration-tab');
       tabs.forEach(function(btn) {
-        btn.classList.toggle('active', btn.getAttribute('data-duration') === 'tss');
+        btn.classList.toggle('active', btn.getAttribute('data-duration') === 'gc');
       });
       var gSel = document.getElementById('stelvioGenderSelect');
       if (gSel) gSel.value = 'all';
@@ -20740,7 +20740,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         <div class="stelvio-ranking-sticky">
           <div class="stelvio-duration-chips-wrap">
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
-              <button type="button" class="stelvio-duration-tab" data-duration="gc">GC</button>
+              <button type="button" class="stelvio-duration-tab active" data-duration="gc">GC</button>
               <button type="button" class="stelvio-duration-tab" data-duration="1min">1분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="5min">5분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="10min">10분</button>
@@ -20748,7 +20748,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <button type="button" class="stelvio-duration-tab" data-duration="40min">40분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="60min">60분</button>
               <button type="button" class="stelvio-duration-tab" data-duration="max">Max</button>
-              <button type="button" class="stelvio-duration-tab active" data-duration="tss">TSS</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
               <button type="button" class="stelvio-duration-tab" data-duration="group_dist">그룹</button>
             </div>
