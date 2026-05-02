@@ -1193,6 +1193,17 @@
     } else if (myCohortDataSupr && myCohortDataSupr.sumPositionScores != null && isFinite(Number(myCohortDataSupr.sumPositionScores))) {
       mySum = Number(myCohortDataSupr.sumPositionScores);
     }
+    if (
+      mySum === 0 &&
+      myCohortDataSupr &&
+      myCohortDataSupr.sumPositionScores != null &&
+      isFinite(Number(myCohortDataSupr.sumPositionScores))
+    ) {
+      var supNonZero = Number(myCohortDataSupr.sumPositionScores);
+      if (supNonZero > 0) {
+        mySum = supNonZero;
+      }
+    }
     if (mySum == null || !isFinite(mySum)) {
       return buildHeptagonModalBoardRowsByBoardRankOnly(
         leadersRaw,
@@ -2733,13 +2744,23 @@
               limit: 500
             })
           : Promise.resolve({ ok: false, items: [] });
-      Promise.all([prCo, prCoS, prB, prN2, prSupAll])
+      var prCoSAll =
+        (gIn === 'M' || gIn === 'F') && typeof window.getStelvioHeptagonCohortEntry === 'function'
+          ? window.getStelvioHeptagonCohortEntry({
+              userId: uidIn,
+              monthKey: mk2,
+              filterCategory: 'Supremo',
+              filterGender: 'all'
+            })
+          : Promise.resolve({ ok: false, exists: false, data: null });
+      Promise.all([prCo, prCoS, prB, prN2, prSupAll, prCoSAll])
         .then(function(quad) {
           var crA = quad[0];
           var crSA = quad[1];
           var resA = quad[2];
           var nResA = quad[3];
           var resSupAll = quad[4];
+          var crSAll = quad[5];
           var nTot2 = nResA && nResA.ok && nResA.nTotal > 0 ? Math.floor(nResA.nTotal) : 0;
           if (resA && resA.ok) {
             var myD = crA && crA.ok && crA.exists && crA.data ? crA.data : null;
@@ -2757,7 +2778,7 @@
               }
             }
             var items2 = resA.items || [];
-            if (Object.keys(supAllSumByUid).length) {
+            if ((gIn === 'M' || gIn === 'F') && Object.keys(supAllSumByUid).length) {
               items2 = items2.map(function(it) {
                 if (!it || it.userId == null) {
                   return it;
@@ -2768,20 +2789,41 @@
                 }
                 return Object.assign({}, it, { sumPositionScores: sAll });
               });
-              var sMe = supAllSumByUid[String(uidIn)];
-              if (sMe != null && isFinite(sMe)) {
+            }
+            /** 본인: 코호트 목록 상한(500) 밖이어도 Supremo·all 단건 문서로 전체 순위 환산 합 확보 */
+            var mySupAllSum = null;
+            if (gIn === 'M' || gIn === 'F') {
+              if (crSAll && crSAll.ok && crSAll.exists && crSAll.data && crSAll.data.sumPositionScores != null && isFinite(Number(crSAll.data.sumPositionScores))) {
+                mySupAllSum = Number(crSAll.data.sumPositionScores);
+              } else {
+                var sMeMap = supAllSumByUid[String(uidIn)];
+                if (sMeMap != null && isFinite(sMeMap)) {
+                  mySupAllSum = sMeMap;
+                }
+              }
+              if (mySupAllSum != null && isFinite(mySupAllSum)) {
                 if (myD) {
-                  myD = Object.assign({}, myD, { sumPositionScores: sMe });
+                  myD = Object.assign({}, myD, { sumPositionScores: mySupAllSum });
                 }
                 if (myDS) {
-                  myDS = Object.assign({}, myDS, { sumPositionScores: sMe });
+                  myDS = Object.assign({}, myDS, { sumPositionScores: mySupAllSum });
                 } else {
-                  myDS = { sumPositionScores: sMe, displayName: '—' };
+                  myDS = { sumPositionScores: mySupAllSum, displayName: '—' };
                 }
               }
             }
             if (chartSupremoSumForVirtual != null && isFinite(Number(chartSupremoSumForVirtual))) {
               var sv = Number(chartSupremoSumForVirtual);
+              if (gIn === 'M' || gIn === 'F') {
+                var dSum0 = myD && myD.sumPositionScores != null ? Number(myD.sumPositionScores) : NaN;
+                if (myD == null || !isFinite(dSum0) || dSum0 === 0) {
+                  if (myD) {
+                    myD = Object.assign({}, myD, { sumPositionScores: sv });
+                  } else {
+                    myD = { sumPositionScores: sv, displayName: '—' };
+                  }
+                }
+              }
               if (myDS) {
                 myDS = Object.assign({}, myDS, { sumPositionScores: sv });
               } else {
