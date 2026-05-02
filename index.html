@@ -8160,8 +8160,14 @@
         var lastIdx = arr.length - 1;
         var supremoExpanded = !!(stelvioRankingGapState.Supremo || {}).expanded;
         var _vgSup = typeof getViewerGrade === 'function' ? getViewerGrade() : null;
-        var canSupremoGapControls =
-          _vgSup != null && (String(_vgSup) === '1' || Number(_vgSup) === 1);
+        /* 전체(Supremo) 랭킹 접기/펼침: 구독·일반 회원(grade 1~3). 비공개 표시는 isAdmin(grade=1) 전용 로직 유지 */
+        var canSupremoGapControls = (function (vg) {
+          if (vg == null || vg === '') return false;
+          var s = String(vg).trim();
+          if (s === '1' || s === '2' || s === '3') return true;
+          var n = Number(vg);
+          return !Number.isNaN(n) && n >= 1 && n <= 3;
+        })(_vgSup);
         var catKey = 'Supremo';
 
         function buildSupremoRow(item, categoryRank, extraRowClass) {
