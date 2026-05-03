@@ -251,11 +251,6 @@ function safeAlimtalkDisplayName(raw: string): string {
   return t;
 }
 
-/**
- * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지·만료일 형식)해야 발송 성공.
- * 기존/변경 만료일 줄 모두 승인 데이터와 동일하게 MM-DD-YY (`formatSeoulYmdToAlimtalkMmDdYy`).
- * 줄 합침은 JSON/카카오 검수 기준인 LF(\\n)만 사용한다. CR(\\r) 바이트가 섞이면 템플릿 바이트 검수 오류가 날 수 있다.
- */
 function buildAlimtalkMessage(params: {
   userName: string;
   earnedPoints: number;
@@ -276,30 +271,31 @@ function buildAlimtalkMessage(params: {
   const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
   const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
 
-  const lines = [
-    ALIMTALK_MISSION_HEADER_LINE,
-    `안녕하세요 ${displayName}님,`,
-    `오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! \u{1F6B4}\u200D\u2642\uFE0F`,
-    "",
-    "이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.",
-    "",
-    "▶ 이번 라이딩 보상",
-    `획득 포인트 : ${earnedSp} SP`,
-    "",
-    "▶ 구독 연장 혜택 적용",
-    `500 SP 자동 사용으로 인하여 구독 기간이 ${extendedDaysStr}일 추가 연장되었습니다.`,
-    "",
-    `기존 만료일 : ${beforeLine}`,
-    `변경 만료일 : ${afterLine}`,
-    "",
-    "▶ 내 포인트 현황",
-    `사용 후 잔여 포인트 : ${remSp} SP`,
-    "",
-    "오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!",
-    "",
-    "※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.",
-  ];
-  return lines.join("\r\n");
+  // 승인된 템플릿 원본을 통문자열(Template Literal)로 작성하여 유니코드 변형 방지
+  const rawMessage = `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
+안녕하세요 ${displayName}님,
+오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! \u{1F6B4}\u200D\u2642\uFE0F
+
+이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
+
+▶ 이번 라이딩 보상
+획득 포인트 : ${earnedSp} SP
+
+▶ 구독 연장 혜택 적용
+500 SP 자동 사용으로 인하여 구독 기간이 ${extendedDaysStr}일 추가 연장되었습니다.
+
+기존 만료일 : ${beforeLine}
+변경 만료일 : ${afterLine}
+
+▶ 내 포인트 현황
+사용 후 잔여 포인트 : ${remSp} SP
+
+오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!
+
+※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
+
+  // Aligo 발송 규격인 CRLF(\r\n)로 최종 치환하여 반환
+  return rawMessage.replace(/\r?\n/g, "\r\n");
 }
 
 /**
