@@ -6805,8 +6805,9 @@ tr.stelvio-dashboard-current-grade td:last-child {
   box-sizing: border-box !important;
   /* manipulation/none 은 끝에서 스크롤이 덜컥 멈추거나 제스처가 늦게 붙는 체감이 날 수 있음 */
   touch-action: auto;
-  /* body/html overflow:hidden 인 앱에서 자식 스크롤 끝 제스처가 문서로 전달되며 락·끊김 체감 → 전파 차단 */
-  overscroll-behavior: none;
+  /* none(축약)은 자식 스크롤과 맞물려 첫 세로 제스처가 어색해질 수 있음 → 세로만 contain으로 문서 체인 차단 */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
 }
 #stelvioRankingScreen .stelvio-ranking-screen-scroll {
   flex: 1 1 0 !important;
@@ -6831,6 +6832,22 @@ tr.stelvio-dashboard-current-grade td:last-child {
 }
 #stelvioRankingScreen .stelvio-ranking-modal-content {
   overscroll-behavior-y: contain;
+}
+
+/*
+ * 랭킹: 첫 제스처에서만 "아래로 스와이프(콘텐츠 위로 스크롤)"이 먹지 않는 현상 완화
+ * - 가로 오버플로(기간 칩·필터 바)가 touch-action:auto일 때 세로 스크롤보다 제스처 판별을 잡아두는 경우
+ * - Recharts SVG가 브라우저 기본 세로 팬을 가로채는 경우 → 명시적으로 세로 팬 허용
+ */
+#stelvioRankingScreen .stelvio-duration-chips-wrap,
+#stelvioRankingScreen .stelvio-filter-bar-wrap {
+  touch-action: pan-x;
+}
+#stelvioRankingScreen .recharts-responsive-container,
+#stelvioRankingScreen .recharts-wrapper,
+#stelvioRankingScreen .recharts-surface,
+#stelvioRankingScreen .recharts-wrapper svg {
+  touch-action: pan-y !important;
 }
 
 /* STELVIO 랭킹 보드: 맨 위로 가기 플로팅 버튼 */
