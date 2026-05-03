@@ -6773,6 +6773,14 @@ tr.stelvio-dashboard-current-grade td:last-child {
   color: #ff6b35;
 }
 
+/* 랭킹: 전역 .screen 의 overscroll-behavior: contain 와 단일 내부 스크롤이 겹치면 터치·합성이 불규칙해질 수 있음 */
+#stelvioRankingScreen.screen {
+  overscroll-behavior: auto;
+}
+#stelvioRankingScreen .stelvio-ranking-body {
+  touch-action: pan-y;
+}
+
 /* STELVIO 랭킹 보드: 상단 끝에서 스크롤 Lock 방지 (모바일/터치) */
 /* STELVIO 랭킹 보드 전체 화면: 헤더 + 스크롤 본문 */
 #stelvioRankingScreen.stelvio-ranking-screen-root {
@@ -6805,9 +6813,8 @@ tr.stelvio-dashboard-current-grade td:last-child {
   padding-left: 20px !important;
   padding-right: 20px !important;
   box-sizing: border-box !important;
-  /* manipulation/none 은 끝에서 스크롤이 덜컥 멈추거나 제스처가 늦게 붙는 체감이 날 수 있음 */
-  touch-action: auto;
-  /* 바깥은 문서 체인 끊기만; contain은 내부 스크롤 top=0 근처와 겹쳐 잔상·락 체감 유발 가능 → auto */
+  /* 세로 제스처를 자식 스크롤로 일관되게 넘김 (pinch-zoom 은 목록에서 의도치 않은 확대 유발 가능) */
+  touch-action: pan-y;
   overscroll-behavior-x: none;
   overscroll-behavior-y: auto;
 }
@@ -6818,13 +6825,10 @@ tr.stelvio-dashboard-current-grade td:last-child {
   overflow-y: auto !important;
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
-  /* contain은 일부 모바일에서 상단·첫 제스처와 맞물려 세로 스크롤이 버벅이는 체감이 있어 auto — 바깥 화면이 overflow:hidden이라 문서 체인은 어차피 억제됨 */
-  overscroll-behavior-y: auto;
+  /* 오버스크롤은 이 박스 안에서만 — 바깥은 overflow:hidden, translateZ/isolation 는 합성·서브픽셀 잔상 유발 가능해 미사용 */
+  overscroll-behavior-y: contain;
   touch-action: pan-y;
   overflow-anchor: none;
-  isolation: isolate;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
   /* 세로 스크롤은 유지, 스크롤바만 비표시 */
   scrollbar-gutter: auto;
   scrollbar-width: none;
@@ -6836,23 +6840,22 @@ tr.stelvio-dashboard-current-grade td:last-child {
   height: 0;
 }
 #stelvioRankingScreen .stelvio-ranking-modal-content {
-  overscroll-behavior-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 /*
- * 랭킹: 첫 제스처에서만 "아래로 스와이프(콘텐츠 위로 스크롤)"이 먹지 않는 현상 완화
- * - 가로 오버플로(기간 칩·필터 바)가 touch-action:auto일 때 세로 스크롤보다 제스처 판별을 잡아두는 경우
- * - Recharts SVG가 브라우저 기본 세로 팬을 가로채는 경우 → 명시적으로 세로 팬 허용
+ * 가로 래퍼: pan-x 만 두면 WebView 에서 세로 스크롤 시작이 가로로 붙잡혀 불규칙 → pan-x pan-y
+ * 차트: 목록과 동일하게 양축 팬 허용
  */
 #stelvioRankingScreen .stelvio-duration-chips-wrap,
 #stelvioRankingScreen .stelvio-filter-bar-wrap {
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
 }
 #stelvioRankingScreen .recharts-responsive-container,
 #stelvioRankingScreen .recharts-wrapper,
 #stelvioRankingScreen .recharts-surface,
 #stelvioRankingScreen .recharts-wrapper svg {
-  touch-action: pan-y !important;
+  touch-action: pan-x pan-y !important;
 }
 
 /* STELVIO 랭킹 보드: 맨 위로 가기 플로팅 버튼 */
