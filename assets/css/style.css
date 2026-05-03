@@ -604,36 +604,26 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   z-index: 1000 !important;
 }
 
-/* 인도어 서브 그리드: 레이싱·기기설정 타일 (이미지만) */
-#indoorTrainingSubScreen .indoor-sub-btn-racing {
+/* 인도어 서브 그리드: 레이싱·기기설정 타일 — 기기설정과 동일 이미지 규격(크기·위치·반복) 공통 적용 */
+#indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing,
+#indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-device {
   border: 2px solid rgba(135, 206, 235, 0.6) !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-origin: padding-box !important;
+  position: relative;
+  overflow: hidden;
+}
+#indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing {
   background-image: url('https://stelvio.ai.kr/assets/img/s(03).png') !important;
-  background-size: 90% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  position: relative;
-  overflow: hidden;
 }
-#indoorTrainingSubScreen .indoor-sub-btn-racing::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(135, 206, 235, 0.3) !important;
-  z-index: 1;
-  pointer-events: none;
-}
-#indoorTrainingSubScreen .indoor-sub-btn-device {
-  border: 2px solid rgba(135, 206, 235, 0.6) !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
+#indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-device {
   background-image: url('https://stelvio.ai.kr/assets/img/s(04).png') !important;
-  background-size: 90% !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  position: relative;
-  overflow: hidden;
 }
-#indoorTrainingSubScreen .indoor-sub-btn-device::before {
+#indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing::before,
+#indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-device::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -12648,8 +12638,8 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   #basecampScreen .basecamp-btn-manual,
   #indoorTrainingSubScreen .basecamp-btn-indoor,
   #indoorTrainingSubScreen .basecamp-btn-solo,
-  #indoorTrainingSubScreen .indoor-sub-btn-racing,
-  #indoorTrainingSubScreen .indoor-sub-btn-device {
+  #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-racing,
+  #indoorTrainingSubScreen .btn-device.basecamp-btn.indoor-sub-btn-device {
     background-position: center calc(50% - 20%) !important; /* 상단으로 1/5 높이만큼 이동 */
   }
   .auth-title-image {
