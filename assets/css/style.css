@@ -267,6 +267,7 @@ body:has(#authScreen.active) {
 /* 베이스캠프 관련 화면 활성 시: html/body 배경을 그라데이션으로 — 위로 스크롤 시 하단 흰색 영역 노출 방지 */
 /* (openRidingRoomScreen 제외: 아래 별도 규칙 — html/body overflow:hidden이 모바일에서 .open-riding-app-body 스크롤을 잠금) */
 html:has(#basecampScreen.active),
+html:has(#indoorTrainingSubScreen.active),
 html:has(#deviceSettingScreen.active),
 html:has(#userManualScreen.active),
 html:has(#myCareerScreen.active),
@@ -274,6 +275,7 @@ html:has(#trainingRoomScreen.active),
 html:has(#playerListScreen.active),
 html:has(#bluetoothPlayerListScreen.active),
 body:has(#basecampScreen.active),
+body:has(#indoorTrainingSubScreen.active),
 body:has(#deviceSettingScreen.active),
 body:has(#userManualScreen.active),
 body:has(#myCareerScreen.active),
@@ -569,6 +571,212 @@ body.performance-dashboard-active .screen:not(#performanceDashboardScreen):not(#
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+}
+
+/* 인도어 훈련 서브: 베이스캠프와 동일 화면 동작 */
+#indoorTrainingSubScreen {
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+#indoorTrainingSubScreen.active {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: calc(100vh + env(safe-area-inset-bottom, 0px));
+  min-height: -webkit-fill-available;
+  height: var(--vvh, 100dvh) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: 0 !important;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
+}
+
+/* 베이스캠프 경로: 랭킹 / 인도어 훈련 진입 타일 */
+#basecampScreen .btn-device.basecamp-btn-ranking,
+#basecampScreen .basecamp-btn-ranking {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  color: #15803d !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/m(01).png') !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  padding-bottom: 12px !important;
+  min-height: 160px !important;
+}
+#basecampScreen .btn-device.basecamp-btn-ranking::before,
+#basecampScreen .basecamp-btn-ranking::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  pointer-events: none;
+}
+#basecampScreen .btn-device.basecamp-btn-ranking span,
+#basecampScreen .basecamp-btn-ranking span {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+#basecampScreen .btn-device.basecamp-btn-indoor-entry,
+#basecampScreen .basecamp-btn-indoor-entry {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  color: #15803d !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/m(03).png') !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  padding-bottom: 12px !important;
+  min-height: 160px !important;
+}
+#basecampScreen .btn-device.basecamp-btn-indoor-entry::before,
+#basecampScreen .basecamp-btn-indoor-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  pointer-events: none;
+}
+#basecampScreen .btn-device.basecamp-btn-indoor-entry span,
+#basecampScreen .basecamp-btn-indoor-entry span {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* 인도어 서브 그리드: 레이싱·기기설정 타일 (이미지만) */
+#indoorTrainingSubScreen .indoor-sub-btn-racing {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/s(03).png') !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+}
+#indoorTrainingSubScreen .indoor-sub-btn-racing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  pointer-events: none;
+}
+#indoorTrainingSubScreen .indoor-sub-btn-device {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/s(04).png') !important;
+  background-size: 90% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+}
+#indoorTrainingSubScreen .indoor-sub-btn-device::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  pointer-events: none;
+}
+
+#indoorTrainingSubScreen .connection-main-container {
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  flex-shrink: 0;
+}
+#indoorTrainingSubScreen.active > .connection-main-container {
+  min-height: 0;
+}
+#indoorTrainingSubScreen .connection-form-container {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+#indoorTrainingSubScreen .basecamp-path-title-wrap {
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  text-align: center;
+}
+#indoorTrainingSubScreen .connection-form-card .connection-device-section.basecamp-device-section {
+  padding-top: 0;
+}
+#indoorTrainingSubScreen .connection-device-section.basecamp-device-section .basecamp-path-grid {
+  --basecamp-cell: calc((100% - 3.75px) / 2);
+  width: 90% !important;
+  max-width: 90% !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, var(--basecamp-cell)) !important;
+  grid-template-rows: repeat(2, var(--basecamp-cell)) !important;
+  gap: 3.75px !important;
+  margin: 0 5% !important;
+  box-sizing: border-box !important;
+  justify-content: center;
+  aspect-ratio: 1 !important;
+}
+#indoorTrainingSubScreen .connection-device-section .indoor-sub-grid-btn {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  aspect-ratio: 1 !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  padding-bottom: 12px !important;
+}
+#indoorTrainingSubScreen .connection-device-section.basecamp-device-section {
+  background-color: #ffffff !important;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 베이스캠프 배경 이미지 - 흐리게 */
@@ -2072,9 +2280,29 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   min-width: 0;
 }
 
-/* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
+#indoorTrainingSubScreen .connection-device-section #indoorSubAuthBar {
+  width: 90% !important;
+  margin-left: 5% !important;
+  margin-right: 5% !important;
+  box-sizing: border-box !important;
+}
+#indoorTrainingSubScreen #indoorSubAuthBarRight.basecamp-auth-bar-right {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  box-sizing: border-box;
+}
+#indoorTrainingSubScreen .basecamp-auth-bar-welcome-line {
+  white-space: normal;
+  text-align: center;
+}
+
+/* basecampScreen·인도어 서브의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
 #basecampScreen .connection-device-section,
-#basecampScreen .connection-main-container {
+#basecampScreen .connection-main-container,
+#indoorTrainingSubScreen .connection-device-section,
+#indoorTrainingSubScreen .connection-main-container {
   /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
@@ -2875,6 +3103,7 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
 
 /* 베이스캠프 푸터 텍스트 - 진녹색 (강제 적용) */
 #basecampScreen .basecamp-footer p,
+#indoorTrainingSubScreen .basecamp-footer p,
 .basecamp-footer p {
   color: #006400 !important;
   font-size: 12px !important;
@@ -12443,10 +12672,15 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
     padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
   }
   
-  /* 베이스캠프 버튼 이미지 위치 조정 - 상단으로 1/5 높이만큼 이동 (INDOOR TRAINING, SOLO TRAINING, USER PROFILE만) */
-  #basecampScreen .basecamp-btn-indoor,
-  #basecampScreen .basecamp-btn-solo,
-  #basecampScreen .basecamp-btn-profile {
+  /* 베이스캠프·인도어 서브 버튼 이미지 위치 조정 - 상단으로 1/5 높이만큼 이동 (INDOOR TRAINING, SOLO TRAINING, USER PROFILE만) */
+  #basecampScreen .basecamp-btn-ranking,
+  #basecampScreen .basecamp-btn-indoor-entry,
+  #basecampScreen .basecamp-btn-career,
+  #basecampScreen .basecamp-btn-manual,
+  #indoorTrainingSubScreen .basecamp-btn-indoor,
+  #indoorTrainingSubScreen .basecamp-btn-solo,
+  #indoorTrainingSubScreen .indoor-sub-btn-racing,
+  #indoorTrainingSubScreen .indoor-sub-btn-device {
     background-position: center calc(50% - 20%) !important; /* 상단으로 1/5 높이만큼 이동 */
   }
   .auth-title-image {
