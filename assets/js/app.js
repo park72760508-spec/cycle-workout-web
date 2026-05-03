@@ -887,11 +887,6 @@ function showAuthScreen() {
     authScreen.style.setProperty('align-items', 'center', 'important');
     authScreen.style.setProperty('opacity', '1', 'important');
     authScreen.style.setProperty('visibility', 'visible', 'important');
-    /* body 스크롤 잠금 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤 */
-    if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes('authScreen') && window.__pullToRefreshBlockerCleanup) {
-      window.__pullToRefreshBlockerCleanup();
-      window.__pullToRefreshBlockerCleanup = null;
-    }
   }
 }
 
@@ -3386,14 +3381,9 @@ if (!window.screenHistory) {
   window.screenHistory = [];
 }
 
-// Pull-to-refresh 차단 적용 화면 ID 목록 (한 줄 추가로 확장 가능)
-if (!window.PULL_TO_REFRESH_BLOCKED_SCREENS) {
-  window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen', 'basecampScreen', 'indoorTrainingSubScreen', 'bluetoothIndividualScreen'];
-}
-
 /**
- * showScreen 없이 화면을 직접 표시한 뒤 호출 — body/document 스크롤 잠금 + PTR 블로커 적용 (Bluefy 등 당김 새로고침·줌 방지)
- * 직접 DOM으로 basecampScreen 등을 띄우는 경로(앱 로드 시, 신규 사용자 등록 후 등)에서 반드시 호출해야 동작 적용됨.
+ * showScreen 없이 화면을 직접 표시한 뒤 호출 — body/document 스크롤 잠금만 적용
+ * (과거 Pull-to-refresh JS 차단은 스크롤 제약으로 이어져 제거함; overscroll 은 CSS 로 보조)
  * @param {string} screenId - 예: 'basecampScreen'
  */
 function applyScrollContainmentForScreen(screenId) {
@@ -3404,16 +3394,7 @@ function applyScrollContainmentForScreen(screenId) {
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.height = '100%';
   }
-  if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(screenId) && screenId !== 'authScreen' && typeof enableForScreen === 'function') {
-    if (window.__pullToRefreshBlockerCleanup) {
-      window.__pullToRefreshBlockerCleanup();
-      window.__pullToRefreshBlockerCleanup = null;
-    }
-    window.__pullToRefreshBlockerCleanup = (screenId === 'basecampScreen' || screenId === 'indoorTrainingSubScreen')
-      ? enableForScreen(screenId, { documentCapture: true })
-      : enableForScreen(screenId);
-    console.log('✅ applyScrollContainmentForScreen:', screenId);
-  }
+  console.log('✅ applyScrollContainmentForScreen:', screenId);
 }
 window.applyScrollContainmentForScreen = applyScrollContainmentForScreen;
 
@@ -3477,13 +3458,8 @@ if (!window.showScreen) {
         return; // 화면 전환 자체를 차단
       }
       
-      // Pull-to-refresh 차단 적용 화면에서 나갈 때 클린업
       const currentActiveScreen = document.querySelector(".screen.active") ||
         Array.from(document.querySelectorAll(".screen")).find(s => s.style.display === "block" || window.getComputedStyle(s).display === "block");
-      if (currentActiveScreen && (window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(currentActiveScreen.id) && window.__pullToRefreshBlockerCleanup) {
-        window.__pullToRefreshBlockerCleanup();
-        window.__pullToRefreshBlockerCleanup = null;
-      }
 
       // [비용절감] bluetoothIndividualScreen 이탈 시 RTDB 리스너 일괄 해제
       if (currentActiveScreen && currentActiveScreen.id === 'bluetoothIndividualScreen' && id !== 'bluetoothIndividualScreen') {
@@ -3557,19 +3533,6 @@ if (!window.showScreen) {
               window.renderAccessStatsView();
             } catch (e) {}
           }, 0);
-        }
-        
-        // body 스크롤 잠금/고정 사용 안 함 — 모든 화면 인증과 동일하게 화면 단위 스크롤
-        if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && window.__pullToRefreshBlockerCleanup) {
-          window.__pullToRefreshBlockerCleanup();
-          window.__pullToRefreshBlockerCleanup = null;
-        }
-        if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && id !== 'authScreen' && typeof enableForScreen === 'function') {
-          // basecampScreen, bluetoothIndividualScreen: Bluefy 등에서 당김 새로고침·줌 방지 위해 document 캡처 단계 + 해당 화면 scrollTop 기준 차단
-          var useDocCapture = (id === 'basecampScreen' || id === 'indoorTrainingSubScreen' || id === 'bluetoothIndividualScreen');
-          window.__pullToRefreshBlockerCleanup = useDocCapture
-            ? enableForScreen(id, { documentCapture: true })
-            : enableForScreen(id);
         }
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
@@ -14950,7 +14913,7 @@ function teardownMobileDashboardPullToRefreshPrevention() {
   }
   if (refs.documentTouchMoveHandler) document.removeEventListener('touchmove', refs.documentTouchMoveHandler, { capture: true });
   if (refs.beforeUnloadHandler) window.removeEventListener('beforeunload', refs.beforeUnloadHandler);
-  
+
   // Firebase status 구독 해제
   if (window.mobileDashboardFirebaseStatusUnsubscribe) {
     if (typeof window.mobileDashboardFirebaseStatusUnsubscribe === 'function') {
