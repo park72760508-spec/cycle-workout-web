@@ -8086,7 +8086,7 @@
       if (btn) btn.classList.remove('stelvio-back-to-top-visible');
       if (stelvioBackToTopScrollHandler) {
         var scrollEl = document.getElementById('stelvioRankingScrollArea');
-        if (scrollEl) scrollEl.removeEventListener('scroll', stelvioBackToTopScrollHandler);
+        if (scrollEl) scrollEl.removeEventListener('scroll', stelvioBackToTopScrollHandler, { passive: true });
         stelvioBackToTopScrollHandler = null;
       }
     }
@@ -8095,14 +8095,14 @@
       var btn = document.getElementById('stelvioBackToTopBtn');
       if (!scrollEl || !btn) return;
       if (stelvioBackToTopScrollHandler) {
-        scrollEl.removeEventListener('scroll', stelvioBackToTopScrollHandler);
+        scrollEl.removeEventListener('scroll', stelvioBackToTopScrollHandler, { passive: true });
         stelvioBackToTopScrollHandler = null;
       }
       stelvioBackToTopScrollHandler = function() {
         if (scrollEl.scrollTop >= 300) btn.classList.add('stelvio-back-to-top-visible');
         else btn.classList.remove('stelvio-back-to-top-visible');
       };
-      scrollEl.addEventListener('scroll', stelvioBackToTopScrollHandler);
+      scrollEl.addEventListener('scroll', stelvioBackToTopScrollHandler, { passive: true });
     }
     function handleStelvioBackToTop() {
       var scrollEl = document.getElementById('stelvioRankingScrollArea');
