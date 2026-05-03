@@ -7727,6 +7727,10 @@
     /** 직전 getPeakPowerRanking 응답 기간 — 순위 등락 캐시 키(월·롤링 전환 시 이전 값과 섞이지 않게) */
     var stelvioRankingApiStartStr = '';
     var stelvioRankingApiEndStr = '';
+    /** 동시 fetch 호출 시 오래된 응답이 UI를 덮어쓰지 않도록 세대 번호 */
+    var stelvioRankingFetchGen = 0;
+    var STELVIO_RANKING_FETCH_TIMEOUT_MS = 35000;
+    var STELVIO_RANKING_FRIENDS_TIMEOUT_MS = 12000;
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
@@ -7754,7 +7758,15 @@
           fs = firebase.firestore();
         }
         if (!fs || typeof fs.collection !== 'function') return;
-        var snap = await fs.collection('users').doc(myId).collection('friends').get();
+        var friendsRef = fs.collection('users').doc(myId).collection('friends');
+        var snap = await Promise.race([
+          friendsRef.get(),
+          new Promise(function (_, reject) {
+            setTimeout(function () {
+              reject(new Error('stelvio-friends-timeout'));
+            }, STELVIO_RANKING_FRIENDS_TIMEOUT_MS);
+          }),
+        ]);
         var s = new Set();
         snap.forEach(function (docSnap) {
           var d = docSnap.data() || {};
@@ -8346,27 +8358,51 @@
     }
 
     async function fetchStelvioPeakPowerRanking() {
+      var myGen = ++stelvioRankingFetchGen;
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
       if (loading) loading.classList.remove('hidden');
       if (content) content.style.opacity = '0.5';
-      await new Promise(function (resolve) {
-        requestAnimationFrame(function () {
-          requestAnimationFrame(resolve);
-        });
-      });
-      var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
-      var genderParam = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
-      var params = new URLSearchParams({
-        period: stelvioRankingState.period,
-        duration: stelvioRankingState.duration,
-        gender: genderParam
-      });
-      if (uid) params.set('uid', uid);
+      var fetchTimer = null;
       try {
+        await new Promise(function (resolve) {
+          requestAnimationFrame(function () {
+            requestAnimationFrame(resolve);
+          });
+        });
+        if (myGen !== stelvioRankingFetchGen) return;
+
+        var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
+        var genderParam = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
+        var params = new URLSearchParams({
+          period: stelvioRankingState.period,
+          duration: stelvioRankingState.duration,
+          gender: genderParam
+        });
+        if (uid) params.set('uid', uid);
+
         var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
-        var res = await fetch(url, { method: 'GET', mode: 'cors' });
+        var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
+        if (fetchController) {
+          fetchOpts.signal = fetchController.signal;
+          fetchTimer = setTimeout(function () {
+            try {
+              fetchController.abort();
+            } catch (eAb) {}
+          }, STELVIO_RANKING_FETCH_TIMEOUT_MS);
+        }
+        var res = await fetch(url, fetchOpts);
+        if (fetchTimer) {
+          clearTimeout(fetchTimer);
+          fetchTimer = null;
+        }
+        if (myGen !== stelvioRankingFetchGen) return;
+        if (!res.ok) {
+          throw new Error('HTTP ' + res.status);
+        }
         var data = await res.json().catch(function() { return { success: false }; });
+        if (myGen !== stelvioRankingFetchGen) return;
         if (!data.success || !data.byCategory) {
           stelvioRankingFullEntries = null;
           stelvioRankingByCategory = null;
@@ -8384,21 +8420,38 @@
         stelvioRankingGapState = {};
         stelvioRankingCurrentUserId = uid;
         stelvioRefreshRankingFavoriteSetFromStorage();
-        await stelvioRefreshRankingFriendSetFromFirestore();
         stelvioMyRankSupremo = data.myRankSupremo || null;
         stelvioCurrentUser = data.currentUser || null;
         stelvioSyncCategorySelectUi();
         renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
         renderStelvioActiveCategory();
+        /* 친구 목록은 랭킹 API와 무관·모바일에서 Firestore get 무응답 시 로딩이 영구 표시되던 원인 — 비차단 + 세대 검사 */
+        stelvioRefreshRankingFriendSetFromFirestore()
+          .then(function () {
+            if (myGen !== stelvioRankingFetchGen) return;
+            if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+          })
+          .catch(function () {});
       } catch (e) {
+        if (fetchTimer) {
+          clearTimeout(fetchTimer);
+          fetchTimer = null;
+        }
+        if (myGen !== stelvioRankingFetchGen) return;
         console.warn('[StelvioRanking] 조회 실패:', e);
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
         stelvioRankingApiStartStr = '';
         stelvioRankingApiEndStr = '';
-        renderStelvioRankingError('연결에 실패했습니다. 나중에 다시 시도해 주세요.');
+        var errMsg =
+          e && (e.name === 'AbortError' || (e.message && String(e.message).indexOf('aborted') >= 0))
+            ? '요청 시간이 초과되었습니다. 네트워크 확인 후 다시 시도해 주세요.'
+            : '연결에 실패했습니다. 나중에 다시 시도해 주세요.';
+        renderStelvioRankingError(errMsg);
         refreshStelvioDistributionChartMounted();
       } finally {
+        if (fetchTimer) clearTimeout(fetchTimer);
+        if (myGen !== stelvioRankingFetchGen) return;
         stelvioApplyDurationModeUi();
         if (loading) loading.classList.add('hidden');
         if (content) content.style.opacity = '1';
