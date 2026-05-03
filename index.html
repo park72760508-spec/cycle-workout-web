@@ -8667,6 +8667,17 @@
     }
     window.handleStelvioRankingGapSet = handleStelvioRankingGapSet;
 
+    /** grade 2·3 전용: Supremo 펼침 시 상위 50 + 본인 주변 ±10만 표시(API 응답 전체 크기 불변, DOM만 제한). */
+    function stelvioIsSupremoTrafficLimitedGrade() {
+      if (typeof getViewerGrade !== 'function') return false;
+      var vg = getViewerGrade();
+      if (vg == null || vg === '') return false;
+      var s = String(vg).trim();
+      if (s === '2' || s === '3') return true;
+      var n = Number(vg);
+      return !Number.isNaN(n) && (n === 2 || n === 3);
+    }
+
     function stelvioFormatRankCell(item) {
       if (stelvioIsKmDistanceRanking()) {
         return (item.totalKm != null ? Number(item.totalKm) : 0).toFixed(1);
@@ -8800,6 +8811,62 @@
             '</div>'
           );
         }
+        /** grade 2·3: 카테고리 탭과 동일한 「펼쳐보기 +」 「접어보기 -」 행 */
+        function expandSupremoLimitedRow(forCollapsedState) {
+          var open = !!forCollapsedState;
+          if (open) {
+            return (
+              '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="event.stopPropagation();handleStelvioRankingGapSet(\'' +
+              catKey +
+              '\',\'expanded\',true)">' +
+              '<span class="stelvio-rank-expand-left"></span><span class="stelvio-rank-expand-center">펼쳐보기</span><span class="stelvio-rank-expand-right stelvio-rank-expand-plus">+</span></div>'
+            );
+          }
+          return (
+            '<div class="stelvio-rank-row stelvio-rank-expand-row" onclick="event.stopPropagation();handleStelvioRankingGapSet(\'' +
+            catKey +
+            '\',\'expanded\',false)">' +
+            '<span class="stelvio-rank-expand-left"></span><span class="stelvio-rank-expand-center">접어보기</span><span class="stelvio-rank-expand-right stelvio-rank-expand-minus">-</span></div>'
+          );
+        }
+        function supremoExpandControlRow(forCollapsedState) {
+          if (!canSupremoGapControls) return '';
+          if (stelvioIsSupremoTrafficLimitedGrade()) return expandSupremoLimitedRow(!!forCollapsedState);
+          return expandGapRowS('expanded', !!forCollapsedState);
+        }
+        function renderSupremoRunsFromIdxSet(idxSetObj) {
+          var sortedIdx = Object.keys(idxSetObj)
+            .map(function (x) { return Number(x); })
+            .filter(function (n) {
+              return !Number.isNaN(n);
+            })
+            .sort(function (a, b) {
+              return a - b;
+            });
+          var limRuns = [];
+          if (sortedIdx.length) {
+            var rs = sortedIdx[0];
+            var re = sortedIdx[0];
+            for (var si = 1; si < sortedIdx.length; si++) {
+              if (sortedIdx[si] === re + 1) re = sortedIdx[si];
+              else {
+                limRuns.push([rs, re]);
+                rs = re = sortedIdx[si];
+              }
+            }
+            limRuns.push([rs, re]);
+          }
+          for (var rr = 0; rr < limRuns.length; rr++) {
+            var loR = limRuns[rr][0];
+            var hiR = limRuns[rr][1];
+            if (rr > 0) {
+              var gapLo = limRuns[rr - 1][1] + 1;
+              var gapHi = loR - 1;
+              if (gapLo <= gapHi) htmlS += dotsRowS();
+            }
+            renderRangeS(loR, hiR);
+          }
+        }
         function renderRangeS(lo, hi) {
           for (var ri = lo; ri <= hi; ri++) {
             htmlS += buildSupremoRow(arr[ri], stelvioRankDisplayNumber(arr[ri], ri + 1, 'Supremo', byCategory), '');
@@ -8822,12 +8889,20 @@
           if (lastIdx > topEndO) {
             if (!supremoExpanded) {
               htmlS += dotsRowS();
-              htmlS += expandGapRowS('expanded', true);
+              htmlS += supremoExpandControlRow(true);
             } else {
-              for (var oj = topEndO + 1; oj <= lastIdx; oj++) {
-                htmlS += buildSupremoRow(arr[oj], stelvioRankDisplayNumber(arr[oj], oj + 1, 'Supremo', byCategory), '');
+              if (stelvioIsSupremoTrafficLimitedGrade()) {
+                var idxOff = {};
+                var capOff = Math.min(49, lastIdx);
+                for (var oj = topEndO + 1; oj <= capOff; oj++) idxOff[oj] = true;
+                renderSupremoRunsFromIdxSet(idxOff);
+                if (lastIdx > capOff) htmlS += dotsRowS();
+              } else {
+                for (var oj2 = topEndO + 1; oj2 <= lastIdx; oj2++) {
+                  htmlS += buildSupremoRow(arr[oj2], stelvioRankDisplayNumber(arr[oj2], oj2 + 1, 'Supremo', byCategory), '');
+                }
               }
-              htmlS += expandGapRowS('expanded', false);
+              htmlS += supremoExpandControlRow(false);
             }
           }
           htmlS += buildSupremoRow(myRankSupremo, Number(myRankSupremo.rank) || 1, ' stelvio-rank-my-supremo');
@@ -8850,12 +8925,20 @@
           if (lastIdx > topEnd0) {
             if (!supremoExpanded) {
               htmlS += dotsRowS();
-              htmlS += expandGapRowS('expanded', true);
+              htmlS += supremoExpandControlRow(true);
             } else {
-              for (var e0 = topEnd0 + 1; e0 <= lastIdx; e0++) {
-                htmlS += buildSupremoRow(arr[e0], stelvioRankDisplayNumber(arr[e0], e0 + 1, 'Supremo', byCategory), '');
+              if (stelvioIsSupremoTrafficLimitedGrade()) {
+                var idxNz = {};
+                var capNz = Math.min(49, lastIdx);
+                for (var e0 = topEnd0 + 1; e0 <= capNz; e0++) idxNz[e0] = true;
+                renderSupremoRunsFromIdxSet(idxNz);
+                if (lastIdx > capNz) htmlS += dotsRowS();
+              } else {
+                for (var e1 = topEnd0 + 1; e1 <= lastIdx; e1++) {
+                  htmlS += buildSupremoRow(arr[e1], stelvioRankDisplayNumber(arr[e1], e1 + 1, 'Supremo', byCategory), '');
+                }
               }
-              htmlS += expandGapRowS('expanded', false);
+              htmlS += supremoExpandControlRow(false);
             }
           }
           bodyEl.innerHTML = htmlS;
@@ -8898,10 +8981,23 @@
         var needsExpandControl = hasMiddleGap || hasTail;
 
         if (supremoExpanded && needsExpandControl) {
-          for (var fullI = 0; fullI <= lastIdx; fullI++) {
-            htmlS += buildSupremoRow(arr[fullI], stelvioRankDisplayNumber(arr[fullI], fullI + 1, 'Supremo', byCategory), '');
+          if (!stelvioIsSupremoTrafficLimitedGrade()) {
+            for (var fullI = 0; fullI <= lastIdx; fullI++) {
+              htmlS += buildSupremoRow(arr[fullI], stelvioRankDisplayNumber(arr[fullI], fullI + 1, 'Supremo', byCategory), '');
+            }
+            htmlS += supremoExpandControlRow(false);
+          } else {
+            var idxLim = {};
+            var top50End = Math.min(49, lastIdx);
+            for (var ti = 0; ti <= top50End; ti++) idxLim[ti] = true;
+            if (userIdxS >= 0) {
+              var loNx = Math.max(0, userIdxS - 10);
+              var hiNx = Math.min(lastIdx, userIdxS + 10);
+              for (var nix = loNx; nix <= hiNx; nix++) idxLim[nix] = true;
+            }
+            renderSupremoRunsFromIdxSet(idxLim);
+            htmlS += supremoExpandControlRow(false);
           }
-          htmlS += expandGapRowS('expanded', false);
           bodyEl.innerHTML = htmlS;
           return;
         }
@@ -8921,7 +9017,7 @@
 
         if (needsExpandControl && !supremoExpanded) {
           if (hasTail) htmlS += dotsRowS();
-          htmlS += expandGapRowS('expanded', true);
+          htmlS += supremoExpandControlRow(true);
         }
 
         bodyEl.innerHTML = htmlS;
