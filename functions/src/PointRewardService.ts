@@ -271,7 +271,7 @@ function buildAlimtalkMessage(params: {
   const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
   const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
 
-  // 승인된 템플릿 원본을 들여쓰기 없이 통문자열로 작성
+  // 완성된 문장으로 조립하되, 이모지는 알리고 DB에 저장된 깨진 형태(?‍♂️)를 유지
   const rawMessage = `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
 안녕하세요 ${displayName}님,
 오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! ?‍♂️
@@ -294,7 +294,6 @@ function buildAlimtalkMessage(params: {
 
 ※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
 
-  // Aligo 발송 규격인 CRLF(\r\n)로 최종 치환하여 반환
   return rawMessage.replace(/\r?\n/g, "\r\n");
 }
 
