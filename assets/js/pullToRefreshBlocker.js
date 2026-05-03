@@ -78,14 +78,13 @@
     }
 
     function onTouchMove(e) {
-      if (!e.touches || !e.touches.length) return;
+      if (!e.touches || !e.touches.length || !e.cancelable) return;
       var currentY = e.touches[0].clientY;
       var scrollTop = getEffectiveScrollTop(elForScroll, nestedScrollRoots);
       if (scrollTop <= 0 && currentY > touchStartY) {
         e.preventDefault();
         e.stopPropagation();
       }
-      touchStartY = currentY;
     }
 
     target.addEventListener('touchstart', onTouchStart, { passive: true, capture: capture });
