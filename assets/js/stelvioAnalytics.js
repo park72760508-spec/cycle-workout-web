@@ -55,6 +55,7 @@
 
   var TRACKED_SCREENS = {
     basecampScreen: true,
+    indoorTrainingSubScreen: true,
     deviceSettingScreen: true,
     workoutScreen: true,
     trainingJournalScreen: true,
@@ -71,6 +72,7 @@
 
   global.STELVIO_ANALYTICS_LABELS = {
     basecamp_unique: '접속자 수 (베이스캠프·계정당 1회/일)',
+    indoorTrainingSubScreen: '인도어 훈련 서브',
     deviceSettingScreen: '디바이스 설정',
     openRidingRoomScreen: '라이딩 벙',
     workoutScreen: '워크아웃',

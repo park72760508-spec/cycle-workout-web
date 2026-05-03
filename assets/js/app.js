@@ -3388,7 +3388,7 @@ if (!window.screenHistory) {
 
 // Pull-to-refresh 차단 적용 화면 ID 목록 (한 줄 추가로 확장 가능)
 if (!window.PULL_TO_REFRESH_BLOCKED_SCREENS) {
-  window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen', 'basecampScreen', 'bluetoothIndividualScreen'];
+  window.PULL_TO_REFRESH_BLOCKED_SCREENS = ['authScreen', 'basecampScreen', 'indoorTrainingSubScreen', 'bluetoothIndividualScreen'];
 }
 
 /**
@@ -3409,7 +3409,7 @@ function applyScrollContainmentForScreen(screenId) {
       window.__pullToRefreshBlockerCleanup();
       window.__pullToRefreshBlockerCleanup = null;
     }
-    window.__pullToRefreshBlockerCleanup = screenId === 'basecampScreen'
+    window.__pullToRefreshBlockerCleanup = (screenId === 'basecampScreen' || screenId === 'indoorTrainingSubScreen')
       ? enableForScreen(screenId, { documentCapture: true })
       : enableForScreen(screenId);
     console.log('✅ applyScrollContainmentForScreen:', screenId);
@@ -3566,7 +3566,7 @@ if (!window.showScreen) {
         }
         if ((window.PULL_TO_REFRESH_BLOCKED_SCREENS || []).includes(id) && id !== 'authScreen' && typeof enableForScreen === 'function') {
           // basecampScreen, bluetoothIndividualScreen: Bluefy 등에서 당김 새로고침·줌 방지 위해 document 캡처 단계 + 해당 화면 scrollTop 기준 차단
-          var useDocCapture = (id === 'basecampScreen' || id === 'bluetoothIndividualScreen');
+          var useDocCapture = (id === 'basecampScreen' || id === 'indoorTrainingSubScreen' || id === 'bluetoothIndividualScreen');
           window.__pullToRefreshBlockerCleanup = useDocCapture
             ? enableForScreen(id, { documentCapture: true })
             : enableForScreen(id);
@@ -6930,6 +6930,9 @@ function initializeCurrentScreen(screenId) {
       // if (typeof window.checkFtpSuggestionAndShow === 'function') {
       //   setTimeout(function () { window.checkFtpSuggestionAndShow(); }, 1500);
       // }
+      break;
+
+    case 'indoorTrainingSubScreen':
       break;
 
     case 'openRidingRoomScreen':
