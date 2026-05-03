@@ -582,11 +582,7 @@
             var startStr = y + '-' + pad2(m) + '-01';
             var endStr = y + '-' + pad2(m) + '-' + pad2(new Date(y, m, 0).getDate());
             if (mOff === 0) {
-              var endD = new Date(today);
-              var startD = new Date(endD);
-              startD.setDate(endD.getDate() - 29);
-              startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
-              endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
+              endStr = todayStr;
             }
             var inMonth = raw.filter(function(log) {
               var ds = parseDate(log.date);
@@ -622,7 +618,7 @@
               });
             });
             var vo2Val = (typeof window.calculateStelvioVO2Max === 'function') ? window.calculateStelvioVO2Max(userProfile, merged) : null;
-            vo2Rows.push({ monthLabel: m + '월' + (mOff === 0 ? '(현재)' : ''), vo2: vo2Val != null ? vo2Val : 0, sortKey: y + '-' + pad2(m) });
+            vo2Rows.push({ monthLabel: m + '월' + (mOff === 0 ? '(현재)' : ''), vo2: vo2Val != null ? vo2Val : null, sortKey: y + '-' + pad2(m) });
           }
           vo2Rows.sort(function(a, b) { return a.sortKey.localeCompare(b.sortKey); });
           if (isMounted) setVo2TrendData(vo2Rows);
