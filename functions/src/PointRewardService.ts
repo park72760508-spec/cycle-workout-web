@@ -271,10 +271,10 @@ function buildAlimtalkMessage(params: {
   const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
   const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
 
-  // 승인된 템플릿 원본을 통문자열(Template Literal)로 작성하여 유니코드 변형 방지
+  // 승인된 템플릿 원본을 들여쓰기 없이 통문자열로 작성
   const rawMessage = `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
 안녕하세요 ${displayName}님,
-오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! \u{1F6B4}\u200D\u2642\uFE0F
+오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
 
 이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
 
