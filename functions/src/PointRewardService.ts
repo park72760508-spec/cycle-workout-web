@@ -279,7 +279,7 @@ function buildAlimtalkMessage(params: {
   const lines = [
     ALIMTALK_MISSION_HEADER_LINE,
     `안녕하세요 ${displayName}님,`,
-    `오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️`,
+    `오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! \u{1F6B4}\u200D\u2642\uFE0F`,
     "",
     "이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.",
     "",
