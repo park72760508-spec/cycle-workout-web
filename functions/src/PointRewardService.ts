@@ -272,7 +272,7 @@ function buildAlimtalkMessage(params: {
   const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
 
   // 완성된 문장으로 조립하되, 이모지는 알리고 DB에 저장된 깨진 형태(?‍♂️)를 유지
-  const rawMessage = `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
+  const rawMessage = `${ALIMTALK_MISSION_HEADER_LINE}
 안녕하세요 ${displayName}님,
 오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! ?‍♂️
 
