@@ -503,11 +503,7 @@
             var startStr = y + '-' + pad2(m) + '-01';
             var endStr = y + '-' + pad2(m) + '-' + pad2(new Date(y, m, 0).getDate());
             if (mOff === 0) {
-              var endD = new Date(today);
-              var startD = new Date(endD);
-              startD.setDate(endD.getDate() - 29);
-              startStr = startD.getFullYear() + '-' + pad2(startD.getMonth() + 1) + '-' + pad2(startD.getDate());
-              endStr = endD.getFullYear() + '-' + pad2(endD.getMonth() + 1) + '-' + pad2(endD.getDate());
+              endStr = todayStr;
             }
             var monthW = [0, 0, 0, 0, 0, 0, 0];
             var monthH = [0, 0, 0, 0, 0, 0, 0];
