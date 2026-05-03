@@ -299,7 +299,7 @@ function buildAlimtalkMessage(params: {
     "",
     "※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.",
   ];
-  return lines.join("\n");
+  return lines.join("\r\n");
 }
 
 /**
@@ -370,7 +370,7 @@ export class PointRewardService {
       throw new Error("알림톡 수신자 번호가 비어 있습니다.");
     }
     const recvName = safeAlimtalkDisplayName(displayName || "");
-    const messageOut = message;
+    const messageOut = message.replace(/\r?\n/g, "\r\n");
 
     const body: Record<string, string> = {
       senderkey: cfg.senderkey,
