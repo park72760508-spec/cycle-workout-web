@@ -1504,7 +1504,11 @@ async function apiCreateUser(userData) {
       const onlyDigits = typeof unformatPhone === 'function' 
         ? unformatPhone(normalizedContact)
         : String(normalizedContact).replace(/\D+/g, '');
-      
+      if (onlyDigits.length !== 11) {
+        const msg = '전화번호 자리수를 확인해주세요';
+        if (typeof alert === 'function') alert(msg);
+        return { success: false, error: msg };
+      }
       if (onlyDigits && onlyDigits.length > 0) {
         // 전체 사용자 목록 조회하여 중복 확인
         const listRes = await apiGetUsers();
@@ -1816,12 +1820,13 @@ function onUserRegistrationSuccess(userData, source = 'auth') {
 
 function onUserRegistrationError(error, source = 'auth') {
   console.error(`User registration failed from ${source}:`, error);
-  
+  const errorMessage = error.message || '등록 중 오류가 발생했습니다';
+  if (errorMessage === '전화번호 자리수를 확인해주세요') {
+    return false;
+  }
   if (typeof showToast === 'function') {
-    const errorMessage = error.message || '등록 중 오류가 발생했습니다';
     showToast(`등록 실패: ${errorMessage} ❌`);
   }
-  
   return false;
 }
 
@@ -1834,6 +1839,11 @@ async function unifiedCreateUser(userData, source = 'profile') {
     const inputContact = String(userData.contact || '');
     const normalizedContact = standardizePhoneFormat(inputContact);
     const onlyDigits = unformatPhone(normalizedContact);
+    if (onlyDigits.length !== 11) {
+      const msg = '전화번호 자리수를 확인해주세요';
+      if (typeof alert === 'function') alert(msg);
+      throw new Error(msg);
+    }
     userData.contact = normalizedContact;
 
     const listRes = await apiGetUsers();

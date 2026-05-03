@@ -7690,7 +7690,8 @@ function validateNewUserPhone(phoneNumber) {
   const phoneInput = document.getElementById('newUserPhone');
   if (!phoneInput) return;
   
-  const isValidFormat = /^010-\d{4}-\d{4}$/.test(phoneNumber);
+  const digitsOnly = String(phoneNumber || '').replace(/\D/g, '');
+  const isValidFormat = digitsOnly.length === 11;
   
   if (isValidFormat) {
     phoneInput.classList.add('valid');
@@ -7732,8 +7733,9 @@ function handleNewUserSubmit(event) {
     showToast?.('모든 필수 항목을 입력해주세요! ❌');
     return;
   }
-  if (!/^010-\d{4}-\d{4}$/.test(formData.contact)) {
-    showToast?.('올바른 전화번호 형식을 입력해주세요! ❌');
+  const registerPhoneDigits = String(formData.contact || '').replace(/\D/g, '');
+  if (registerPhoneDigits.length !== 11) {
+    alert('전화번호 자리수를 확인해주세요');
     return;
   }
 
@@ -7756,7 +7758,9 @@ function handleNewUserSubmit(event) {
       }
     } catch (err) {
       // unifiedCreateUser에서 중복 시 에러: "이미 등록된 사용자입니다."
-      showToast?.(err?.message || '등록 실패');
+      if (err && err.message !== '전화번호 자리수를 확인해주세요') {
+        showToast?.(err?.message || '등록 실패');
+      }
     } finally {
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -7878,7 +7882,8 @@ function validateNewUserForm() {
   const submitBtn = document.querySelector('#newUserForm button[type="submit"]');
   if (!submitBtn) return;
   
-  const isValid = name && contact && ftp && weight && challenge && /^010-\d{4}-\d{4}$/.test(contact);
+  const contactDigits = String(contact || '').replace(/\D/g, '');
+  const isValid = name && contact && ftp && weight && challenge && contactDigits.length === 11;
   
   submitBtn.disabled = !isValid;
   submitBtn.style.opacity = isValid ? '1' : '0.6';
@@ -8425,9 +8430,14 @@ async function handleNewUserSubmit(event) {
     return;
   }
   
-  // 전화번호 정규화 및 검증
+  // 전화번호 정규화 및 검증 (숫자 11자리)
+  const registerDigitsEarly = String(formData.contact || '').replace(/\D/g, '');
+  if (registerDigitsEarly.length !== 11) {
+    alert('전화번호 자리수를 확인해주세요');
+    return;
+  }
   const normalizedPhone = normalizePhoneNumber(formData.contact);
-  if (!normalizedPhone || normalizedPhone.length < 11) {
+  if (!normalizedPhone) {
     if (typeof showToast === 'function') {
       showToast('올바른 전화번호를 입력해주세요! ❌');
     }
@@ -8520,7 +8530,7 @@ async function handleNewUserSubmit(event) {
     
   } catch (error) {
     console.error('❌ 사용자 등록 실패:', error);
-    if (typeof showToast === 'function') {
+    if (error && error.message !== '전화번호 자리수를 확인해주세요' && typeof showToast === 'function') {
       showToast('등록 실패: ' + error.message + ' ❌');
     }
   } finally {
@@ -8584,8 +8594,13 @@ async function handleNewUserSubmitWithDuplicateCheck(event) {
     return;
   }
   
+  const registerDigitsDup = String(formData.contact || '').replace(/\D/g, '');
+  if (registerDigitsDup.length !== 11) {
+    alert('전화번호 자리수를 확인해주세요');
+    return;
+  }
   const normalizedPhone = normalizePhoneNumber(formData.contact);
-  if (!normalizedPhone || normalizedPhone.length < 11) {
+  if (!normalizedPhone) {
     if (typeof showToast === 'function') {
       showToast('올바른 전화번호를 입력해주세요! ❌');
     }
@@ -8617,7 +8632,7 @@ async function handleNewUserSubmitWithDuplicateCheck(event) {
     
   } catch (error) {
     console.error('❌ 등록 실패:', error);
-    if (typeof showToast === 'function') {
+    if (error && error.message !== '전화번호 자리수를 확인해주세요' && typeof showToast === 'function') {
       showToast(error.message + ' ❌');
     }
   } finally {
