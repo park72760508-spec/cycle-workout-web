@@ -5377,6 +5377,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding-left: 16px;
   padding-right: 16px;
   border-bottom: 1px solid #e5e7eb;
+  /* 칩·필터 바 밖 sticky 영역에서의 세로 제스처가 내부 스크롤로 이어지도록 */
+  touch-action: pan-y;
 }
 .stelvio-duration-chips-wrap {
   overflow-x: auto;
@@ -6816,8 +6818,8 @@ tr.stelvio-dashboard-current-grade td:last-child {
   overflow-y: auto !important;
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
-  /* 이 영역 안에서만 오버스크롤 — 잠긴 body로 체인되지 않음 */
-  overscroll-behavior-y: contain;
+  /* contain은 일부 모바일에서 상단·첫 제스처와 맞물려 세로 스크롤이 버벅이는 체감이 있어 auto — 바깥 화면이 overflow:hidden이라 문서 체인은 어차피 억제됨 */
+  overscroll-behavior-y: auto;
   touch-action: pan-y;
   /* 세로 스크롤은 유지, 스크롤바만 비표시 */
   scrollbar-gutter: auto;
@@ -6830,7 +6832,7 @@ tr.stelvio-dashboard-current-grade td:last-child {
   height: 0;
 }
 #stelvioRankingScreen .stelvio-ranking-modal-content {
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
 }
 
 /*
