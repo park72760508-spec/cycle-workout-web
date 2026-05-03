@@ -7724,6 +7724,9 @@
     var stelvioRankingCurrentUserId = null;
     var stelvioMyRankSupremo = null;
     var stelvioCurrentUser = null;
+    /** 직전 getPeakPowerRanking 응답 기간 — 순위 등락 캐시 키(월·롤링 전환 시 이전 값과 섞이지 않게) */
+    var stelvioRankingApiStartStr = '';
+    var stelvioRankingApiEndStr = '';
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
       'personal_dist': '거리',
@@ -8367,12 +8370,16 @@
         if (!data.success || !data.byCategory) {
           stelvioRankingFullEntries = null;
           stelvioRankingByCategory = null;
+          stelvioRankingApiStartStr = '';
+          stelvioRankingApiEndStr = '';
           renderStelvioRankingError('데이터를 불러올 수 없습니다.');
           refreshStelvioDistributionChartMounted();
           return;
         }
         stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
         stelvioRankingByCategory = data.byCategory;
+        stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
+        stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
         stelvioRankingExpandState = {};
         stelvioRankingGapState = {};
         stelvioRankingCurrentUserId = uid;
@@ -8387,6 +8394,8 @@
         console.warn('[StelvioRanking] 조회 실패:', e);
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
+        stelvioRankingApiStartStr = '';
+        stelvioRankingApiEndStr = '';
         renderStelvioRankingError('연결에 실패했습니다. 나중에 다시 시도해 주세요.');
         refreshStelvioDistributionChartMounted();
       } finally {
@@ -8394,6 +8403,57 @@
         if (loading) loading.classList.add('hidden');
         if (content) content.style.opacity = '1';
       }
+    }
+
+    var STELVIO_RANK_DELTA_LS_PREFIX = 'stelvio_rank_prev_v1:';
+    function stelvioEscapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+    function stelvioRankDeltaStorageKey(uid, period, duration, gender, rangeStart) {
+      return STELVIO_RANK_DELTA_LS_PREFIX + [uid || '_', period || '', duration || '', gender || 'all', rangeStart || 'na'].join('|');
+    }
+    function stelvioReadStoredRank(key) {
+      try {
+        var s = localStorage.getItem(key);
+        if (s == null || s === '') return null;
+        var n = parseInt(s, 10);
+        return isFinite(n) && n >= 1 ? n : null;
+      } catch (eRd) {
+        return null;
+      }
+    }
+    function stelvioWriteStoredRank(key, rank) {
+      try {
+        var n = Math.floor(Number(rank));
+        if (isFinite(n) && n >= 1) localStorage.setItem(key, String(n));
+      } catch (eWr) {}
+    }
+    /** 이전 순위 대비: 숫자가 낮을수록 상승. delta = prev - curr */
+    function stelvioRankDeltaBadgeHtml(prevRank, currRank) {
+      if (currRank == null || !isFinite(Number(currRank)) || Math.floor(Number(currRank)) < 1) return '';
+      var curr = Math.floor(Number(currRank));
+      if (prevRank == null || !isFinite(Number(prevRank)) || Math.floor(Number(prevRank)) < 1) return '';
+      var prev = Math.floor(Number(prevRank));
+      var delta = prev - curr;
+      if (delta > 0) {
+        return ' <span class="stelvio-rank-delta stelvio-rank-delta--up" title="직전 조회 대비">(↑' + delta + ')</span>';
+      }
+      if (delta < 0) {
+        return ' <span class="stelvio-rank-delta stelvio-rank-delta--down" title="직전 조회 대비">(↓' + -delta + ')</span>';
+      }
+      return ' <span class="stelvio-rank-delta stelvio-rank-delta--flat" title="직전 조회 대비">(-)</span>';
+    }
+    function stelvioInjectRankDeltaAfterPrimaryRank(msg, globalRank, deltaHtml) {
+      if (!msg || !deltaHtml || globalRank < 1) return msg;
+      var g = String(Math.floor(globalRank));
+      var re = new RegExp('(전체 |최고 )(' + g + ')위');
+      var m = re.exec(msg);
+      if (!m) return msg;
+      return msg.slice(0, m.index + m[0].length) + deltaHtml + msg.slice(m.index + m[0].length);
     }
 
     function renderStelvioHeroCard(currentUser, myRankSupremo) {
@@ -8410,18 +8470,17 @@
       }
       hero.classList.remove('hidden');
       var globalRank = cu.rank || 0;
-      /* GC: API currentUser는 부문 행이라 rank가 부문 순위임 — 전체(Supremo) 순위는 별도 산출 */
-      if (stelvioIsGcRankingMode() && stelvioRankingByCategory && uidHero) {
-        var supArrGc = stelvioRankingByCategory.Supremo || [];
-        var supIdxGc = supArrGc.findIndex(function (e) {
+      if (stelvioRankingByCategory && uidHero) {
+        var supArrHero = stelvioRankingByCategory.Supremo || [];
+        var supIdxHero = supArrHero.findIndex(function (e) {
           return e && String(e.userId) === String(uidHero);
         });
-        if (supIdxGc >= 0) {
-          var rowGc = supArrGc[supIdxGc];
-          if (rowGc.rank != null && !isNaN(Number(rowGc.rank))) {
-            globalRank = Math.floor(Number(rowGc.rank));
+        if (supIdxHero >= 0) {
+          var rowSup = supArrHero[supIdxHero];
+          if (rowSup.rank != null && !isNaN(Number(rowSup.rank))) {
+            globalRank = Math.floor(Number(rowSup.rank));
           } else {
-            globalRank = supIdxGc + 1;
+            globalRank = supIdxHero + 1;
           }
         }
       }
@@ -8433,48 +8492,60 @@
         if (idx >= 0) categoryRank = idx + 1;
       }
       var msg;
+      var userNameEsc = stelvioEscapeHtml(userName);
       if (stelvioIsGroupDistanceRanking()) {
         var kmG = (cu.totalKm != null ? Number(cu.totalKm) : 0).toFixed(1);
-        var hostNm = (cu.name || '방장').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var hostNm = stelvioEscapeHtml(cu.name || '방장');
         if (uidHero && String(cu.userId || '') === String(uidHero)) {
-          msg = userName + '님은 그룹(방장) 거리 전체 ' + globalRank + '위(' + kmG + ' km)입니다.';
+          msg = userNameEsc + '님은 그룹(방장) 거리 전체 ' + globalRank + '위(' + kmG + ' km)입니다.';
         } else {
-          msg = userName + '님이 참석한 모임 중 최고 ' + globalRank + '위입니다. (' + hostNm + ' · ' + kmG + ' km)';
+          msg = userNameEsc + '님이 참석한 모임 중 최고 ' + globalRank + '위입니다. (' + hostNm + ' · ' + kmG + ' km)';
         }
       } else if (stelvioIsPersonalDistanceRanking()) {
         var kmP = (cu.totalKm != null ? Number(cu.totalKm) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userName + '님은 최근 30일 ' + durLabel + ' 전체 ' + globalRank + '위(' + kmP + ' km)입니다.';
+          msg = userNameEsc + '님은 최근 30일 ' + durLabel + ' 전체 ' + globalRank + '위(' + kmP + ' km)입니다.';
         } else {
           var catPartKm = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + kmP + ' km)' : kmP + ' km';
-          msg = userName + '님은 최근 30일 ' + durLabel + ' ' + catPartKm + ', 전체 ' + globalRank + '위입니다.';
+          msg = userNameEsc + '님은 최근 30일 ' + durLabel + ' ' + catPartKm + ', 전체 ' + globalRank + '위입니다.';
         }
       } else if (stelvioIsTssRankingMode()) {
         var tssVal = (cu.totalTss != null ? Number(cu.totalTss) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userName + '님은 주간 ' + durLabel + ' 전체 ' + globalRank + '위(' + tssVal + ' TSS)입니다.';
+          msg = userNameEsc + '님은 주간 ' + durLabel + ' 전체 ' + globalRank + '위(' + tssVal + ' TSS)입니다.';
         } else {
           var catPartTss = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + tssVal + ' TSS)' : tssVal + ' TSS';
-          msg = userName + '님은 주간 ' + durLabel + ' ' + catPartTss + ', 전체 ' + globalRank + '위입니다.';
+          msg = userNameEsc + '님은 주간 ' + durLabel + ' ' + catPartTss + ', 전체 ' + globalRank + '위입니다.';
         }
       } else if (stelvioIsGcRankingMode()) {
         var gcSc = (cu.gcScore != null ? Number(cu.gcScore) : 0).toFixed(1);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userName + '님은 GC(종합 랭킹) 전체 ' + globalRank + '위(' + gcSc + '점)입니다.';
+          msg = userNameEsc + '님은 GC(종합 랭킹) 전체 ' + globalRank + '위(' + gcSc + '점)입니다.';
         } else {
           var catPartGc = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + gcSc + '점)' : gcSc + '점';
-          msg = userName + '님은 GC(종합 랭킹) ' + catPartGc + ', 전체 ' + globalRank + '위입니다.';
+          msg = userNameEsc + '님은 GC(종합 랭킹) ' + catPartGc + ', 전체 ' + globalRank + '위입니다.';
         }
       } else {
         var wkg = (cu.wkg != null ? Number(cu.wkg) : 0).toFixed(2);
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
-          msg = userName + '님은 ' + durLabel + ' 평균파워 전체 ' + globalRank + '위(' + wkg + ' W/kg)입니다.';
+          msg = userNameEsc + '님은 ' + durLabel + ' 평균파워 전체 ' + globalRank + '위(' + wkg + ' W/kg)입니다.';
         } else {
           var catPart = categoryRank > 0 ? ageLabel + ' 부문에서 ' + categoryRank + '위(' + wkg + ' W/kg)' : wkg + ' W/kg';
-          msg = userName + '님은 ' + durLabel + ' 평균파워 ' + catPart + ', 전체 ' + globalRank + '위입니다.';
+          msg = userNameEsc + '님은 ' + durLabel + ' 평균파워 ' + catPart + ', 전체 ' + globalRank + '위입니다.';
         }
       }
-      textEl.textContent = msg;
+      if (uidHero && globalRank >= 1) {
+        var genderForKey = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
+        var rangeKey =
+          stelvioRankingApiStartStr ||
+          [stelvioRankingState.period || '', stelvioRankingState.duration || '', genderForKey || '', stelvioRankingApiEndStr || ''].join('_');
+        var rkKey = stelvioRankDeltaStorageKey(uidHero, stelvioRankingState.period, stelvioRankingState.duration, genderForKey, rangeKey);
+        var prevStored = stelvioReadStoredRank(rkKey);
+        var deltaHtml = stelvioRankDeltaBadgeHtml(prevStored, globalRank);
+        msg = stelvioInjectRankDeltaAfterPrimaryRank(msg, globalRank, deltaHtml);
+        stelvioWriteStoredRank(rkKey, globalRank);
+      }
+      textEl.innerHTML = msg;
     }
 
     function renderStelvioActiveCategory() {
