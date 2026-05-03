@@ -91,40 +91,9 @@
     );
   }
 
-  /** 과거 차트 배지용 (다른 카테고리 조회 시에만 순위 표기에 적용) */
-  function rankDisplayForChart(n) {
-    var r = Number(n);
-    if (r !== 2) return r;
-    return 3;
-  }
-
   function safeFloorRank(n) {
     var r = Number(n);
     return isFinite(r) && r >= 1 ? Math.floor(r) : null;
-  }
-
-  /**
-   * 선택 카테고리 배열에서 내 W/kg·TSS가 몇 위인지 (동점은 표준 경기 순위: 더 큰 값만 선행)
-   */
-  function rowMetricValue(row, duration) {
-    if (!row) return NaN;
-    if (duration === 'tss') return Number(row.totalTss);
-    if (duration === 'personal_dist' || duration === 'group_dist') return Number(row.totalKm);
-    if (duration === 'gc') return Number(row.gcScore);
-    return Number(row.wkg);
-  }
-
-  function rankInCategoryByValue(categoryRows, myVal, duration) {
-    if (!categoryRows || !categoryRows.length || myVal == null || isNaN(myVal) || !isFinite(myVal)) return null;
-    var eps = duration === 'tss' || duration === 'personal_dist' || duration === 'group_dist' || duration === 'gc' ? 1e-6 : 1e-9;
-    var strictlyGreater = 0;
-    for (var i = 0; i < categoryRows.length; i++) {
-      var row = categoryRows[i];
-      if (!row) continue;
-      var v = rowMetricValue(row, duration);
-      if (isFinite(v) && v > myVal + eps) strictlyGreater++;
-    }
-    return strictlyGreater + 1;
   }
 
   function mergeEntriesFromByCategory(bc) {
@@ -363,34 +332,34 @@
 
     var myX = myRaw != null && !isNaN(myRaw) ? Math.min(xMax, Math.max(xMin, myRaw)) : null;
 
-    var userAgeCat = currentUser && currentUser.ageCategory;
+    /** 배지 순위: 분포는 선택 부문(activeCategory)이어도 항상 전체(Supremo) 기준 */
     var displayRank = null;
 
     if (overrideMyWkg != null && !isTss && !isGcMode) {
       displayRank = null;
-    } else if (activeCategory === 'Supremo') {
-      var globalR =
-        currentUser && currentUser.rank != null
-          ? currentUser.rank
-          : myRankSupremo && myRankSupremo.rank != null
-          ? myRankSupremo.rank
-          : null;
-      displayRank = safeFloorRank(globalR);
-    } else if (userAgeCat && activeCategory === userAgeCat) {
-      var heroArr = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
-      var heroIdx = currentUserId
-        ? heroArr.findIndex(function (e) {
-            if (duration === 'group_dist') {
-              return e.userId === currentUserId || e.currentUserParticipated === true;
-            }
-            return e.userId === currentUserId;
-          })
-        : -1;
-      if (heroIdx >= 0) displayRank = heroIdx + 1;
     } else {
-      var compareArr = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
-      var rawRank = rankInCategoryByValue(compareArr, myRaw, duration);
-      if (rawRank != null) displayRank = rankDisplayForChart(rawRank);
+      var supArr0 = byCategory && byCategory.Supremo ? byCategory.Supremo : [];
+      var supIdx0 = -1;
+      if (currentUserId && supArr0.length) {
+        supIdx0 = supArr0.findIndex(function (e) {
+          if (!e) return false;
+          if (duration === 'group_dist') {
+            return e.userId === currentUserId || e.currentUserParticipated === true;
+          }
+          return String(e.userId) === String(currentUserId);
+        });
+      }
+      if (supIdx0 >= 0) {
+        var supRow = supArr0[supIdx0];
+        if (supRow.rank != null && !isNaN(Number(supRow.rank))) {
+          displayRank = safeFloorRank(supRow.rank);
+        } else {
+          displayRank = supIdx0 + 1;
+        }
+      }
+      if (displayRank == null && myRankSupremo && currentUserId && String(myRankSupremo.userId || '') === String(currentUserId)) {
+        displayRank = safeFloorRank(myRankSupremo.rank);
+      }
     }
 
     var valueFmt =
