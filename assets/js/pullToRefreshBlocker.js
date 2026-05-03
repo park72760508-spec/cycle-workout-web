@@ -7,6 +7,8 @@
  * 1) authScreen: enableForScreen('authScreen') + lockBodyScroll(true) → 요소 기준 차단, 내부 스크롤 가능
  * 2) app.js에서 다른 화면 추가: PULL_TO_REFRESH_BLOCKED_SCREENS에 ID만 추가
  * 3) 요소 직접 지정: enablePullToRefreshBlock(document.getElementById('myScreen')) → cleanup 반환
+ * 4) 바깥 화면은 overflow:hidden·고정이고 실제 스크롤이 내부 #scrollArea 인 경우:
+ *    nestedScrollRoots: ['#myScrollArea'] 를 넘겨 맨 위 판단 시 내부 scrollTop을 함께 봄 (아래로 당김 오차단 방지)
  */
 
 (function (global) {
@@ -27,15 +29,35 @@
   }
 
   /**
+   * primary가 맨 위(0)일 때 nestedScrollRoots 안 요소 중 하나라도 스크롤되어 있으면 "맨 위 아님"으로 취급
+   * @param {Element} primaryEl
+   * @param {Array<string|Element>|undefined} nestedScrollRoots
+   * @returns {number} 0 이면 둘 다 맨 위 → PTR 차단 후보
+   */
+  function getEffectiveScrollTop(primaryEl, nestedScrollRoots) {
+    var t = getScrollTop(primaryEl);
+    if (t > 0) return t;
+    if (!nestedScrollRoots || !nestedScrollRoots.length) return 0;
+    var i;
+    for (i = 0; i < nestedScrollRoots.length; i++) {
+      var item = nestedScrollRoots[i];
+      var nel = typeof item === 'string' ? document.querySelector(item) : item;
+      if (nel && getScrollTop(nel) > 0) return 1;
+    }
+    return 0;
+  }
+
+  /**
    * Pull-to-refresh 차단 활성화
    * - 스크롤이 맨 위일 때만 아래로 당기는 터치를 막아 브라우저 새로고침 방지
    * @param {Element|string} elementOrSelector - 대상 DOM 요소 또는 CSS 선택자
-   * @param {{ useCapture?: boolean, scrollElement?: Element }} options - useCapture: true면 document에 캡처 단계로 등록 (Bluefy 대응). scrollElement: 캡처 시 스크롤 위치 확인할 요소 (미지정 시 body)
+   * @param {{ useCapture?: boolean, scrollElement?: Element, nestedScrollRoots?: Array<string|Element> }} options - useCapture: true면 document에 캡처 단계로 등록 (Bluefy 대응). scrollElement: 캡처 시 스크롤 위치 확인할 요소 (미지정 시 body). nestedScrollRoots: 실제 스크롤이 자식에만 있을 때 선택자/요소 목록
    * @returns {function} cleanup - 호출 시 리스너 제거
    */
   function enablePullToRefreshBlock(elementOrSelector, options) {
     var useDocumentCapture = options && options.useCapture === true;
     var scrollElement = options && options.scrollElement;
+    var nestedScrollRoots = options && options.nestedScrollRoots;
     var target = useDocumentCapture ? document : (typeof elementOrSelector === 'string'
       ? document.querySelector(elementOrSelector)
       : elementOrSelector);
@@ -58,7 +80,7 @@
     function onTouchMove(e) {
       if (!e.touches || !e.touches.length) return;
       var currentY = e.touches[0].clientY;
-      var scrollTop = getScrollTop(elForScroll);
+      var scrollTop = getEffectiveScrollTop(elForScroll, nestedScrollRoots);
       if (scrollTop <= 0 && currentY > touchStartY) {
         e.preventDefault();
         e.stopPropagation();
@@ -78,19 +100,20 @@
   /**
    * 화면 ID로 Pull-to-refresh 차단 활성화 (한 줄로 적용용)
    * @param {string} screenId - 예: 'authScreen', 'basecampScreen'
-   * @param {{ documentCapture?: boolean }} options - documentCapture: true면 document 캡처 단계로 등록, 해당 화면 요소의 scrollTop으로 판단 (iOS Bluefy 권장)
+   * @param {{ documentCapture?: boolean, nestedScrollRoots?: Array<string|Element> }} options - documentCapture: true면 document 캡처 단계로 등록, 해당 화면 요소의 scrollTop으로 판단 (iOS Bluefy 권장). nestedScrollRoots: 실제 세로 스크롤 루트가 자식인 경우
    * @returns {function|undefined} cleanup 또는 undefined(요소 없음)
    */
   function enableForScreen(screenId, options) {
     var el = document.getElementById(screenId);
+    var nested = options && options.nestedScrollRoots;
     if (options && options.documentCapture && el) {
-      return enablePullToRefreshBlock(document, { useCapture: true, scrollElement: el });
+      return enablePullToRefreshBlock(document, { useCapture: true, scrollElement: el, nestedScrollRoots: nested });
     }
     if (options && options.documentCapture) {
-      return enablePullToRefreshBlock(document, { useCapture: true });
+      return enablePullToRefreshBlock(document, { useCapture: true, nestedScrollRoots: nested });
     }
     if (!el) return undefined;
-    return enablePullToRefreshBlock(el);
+    return enablePullToRefreshBlock(el, { nestedScrollRoots: nested });
   }
 
   /**
