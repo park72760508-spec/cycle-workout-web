@@ -3412,7 +3412,7 @@ function applyScrollContainmentForScreen(screenId) {
     window.__pullToRefreshBlockerCleanup = (screenId === 'basecampScreen' || screenId === 'indoorTrainingSubScreen')
       ? enableForScreen(screenId, { documentCapture: true })
       : screenId === 'stelvioRankingScreen'
-        ? enableForScreen(screenId, { nestedScrollRoots: ['.stelvio-ranking-screen-scroll'] })
+        ? enableForScreen(screenId, { nestedScrollRoots: ['#stelvioRankingScrollArea'] })
         : enableForScreen(screenId);
     console.log('✅ applyScrollContainmentForScreen:', screenId);
   }
@@ -3571,7 +3571,7 @@ if (!window.showScreen) {
           var useDocCapture = (id === 'basecampScreen' || id === 'indoorTrainingSubScreen' || id === 'bluetoothIndividualScreen');
           if (id === 'stelvioRankingScreen') {
             window.__pullToRefreshBlockerCleanup = enableForScreen(id, {
-              nestedScrollRoots: ['.stelvio-ranking-screen-scroll'],
+              nestedScrollRoots: ['#stelvioRankingScrollArea'],
             });
           } else {
             window.__pullToRefreshBlockerCleanup = useDocCapture

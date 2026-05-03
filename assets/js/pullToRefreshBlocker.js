@@ -28,6 +28,25 @@
     return el.scrollTop || 0;
   }
 
+  /** primary(화면 루트) 아래에서만 선택 — 문서 앞쪽 다른 노드가 잡히면 scrollTop=0 오판 → 아래로 스크롤 전부 preventDefault 되는 문제 방지 */
+  function resolveNestedElement(primaryEl, item) {
+    if (item && typeof item === 'object' && item.nodeType === 1) return item;
+    if (typeof item !== 'string') return null;
+    if (primaryEl && primaryEl.querySelector) {
+      try {
+        var scoped = primaryEl.querySelector(item);
+        if (scoped) return scoped;
+      } catch (eQ) {}
+    }
+    try {
+      return document.querySelector(item);
+    } catch (eQ2) {
+      return null;
+    }
+  }
+
+  var PULL_DOWN_BLOCK_PX = 10;
+
   /**
    * primary가 맨 위(0)일 때 nestedScrollRoots 안 요소 중 하나라도 스크롤되어 있으면 "맨 위 아님"으로 취급
    * @param {Element} primaryEl
@@ -37,14 +56,13 @@
   function getEffectiveScrollTop(primaryEl, nestedScrollRoots) {
     var t = getScrollTop(primaryEl);
     if (t > 0) return t;
-    if (!nestedScrollRoots || !nestedScrollRoots.length) return 0;
+    if (!nestedScrollRoots || !nestedScrollRoots.length) return t;
     var i;
     for (i = 0; i < nestedScrollRoots.length; i++) {
-      var item = nestedScrollRoots[i];
-      var nel = typeof item === 'string' ? document.querySelector(item) : item;
+      var nel = resolveNestedElement(primaryEl, nestedScrollRoots[i]);
       if (nel && getScrollTop(nel) > 0) return 1;
     }
-    return 0;
+    return t;
   }
 
   /**
@@ -81,9 +99,11 @@
       if (!e.touches || !e.touches.length || !e.cancelable) return;
       var currentY = e.touches[0].clientY;
       var scrollTop = getEffectiveScrollTop(elForScroll, nestedScrollRoots);
-      if (scrollTop <= 0 && currentY > touchStartY) {
+      if (
+        scrollTop <= 0 &&
+        currentY > touchStartY + PULL_DOWN_BLOCK_PX
+      ) {
         e.preventDefault();
-        e.stopPropagation();
       }
     }
 
