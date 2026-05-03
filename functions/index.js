@@ -3787,10 +3787,10 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 
 // ---------- 랭킹 사전 집계 (스케줄러) + ranking_aggregates (HTTP 빠른 읽기) ----------
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
-/** ranking_aggregates 읽기 허용 최대 경과 시간. 스케줄 공백(예: 06:00~09:00)에서도 직전 집계를 빠른 경로로 쓰기 위해 실행 간격보다 길게 둠 */
-const RANKING_AGG_MAX_STALE_MS = 7 * 60 * 60 * 1000; // 7시간 (0·6·9–23시 cron 최대 간격 6h + 여유)
-/** KST 자정·06시: 날짜·롤링 구간 키 갱신 직후 집계 부재로 탭 전환마다 전체 스캔 되던 구간 보완. 9–23시 시간당 유지 */
-const RANKING_REBUILD_CRON = "0 0,6,9-23 * * *"; // KST 00·06·09–23 매시 (자정·새벽 키 갱신 + 주간 낮 시간)
+/** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
+const RANKING_AGG_MAX_STALE_MS = 14 * 60 * 60 * 1000; // 14시간 (최대 간격 자정→정오 12h + 여유)
+/** KST 00 · 12 · 15 · 21 정시 집계 하루 4회 */
+const RANKING_REBUILD_CRON = "0 0,12,15,21 * * *";
 const RANKING_ONE_PASS_BATCH = 50;
 
 /**
@@ -4156,7 +4156,7 @@ async function runRebuildRankingAggregatesCore(db) {
   return { wrote, ms };
 }
 
-/** KST 09~23시 매 정시마다 랭킹 집계 갱신 (심야 제외, 사용자 요청 시 전체 스캔 대신 1 doc 읽기) */
+/** KST 00 · 12 · 15 · 21 매 정시 랭킹 집계 갱신 (하루 4회) */
 exports.rebuildRankingAggregates = onSchedule(
   {
     schedule: RANKING_REBUILD_CRON,
@@ -4179,8 +4179,8 @@ exports.rebuildRankingAggregates = onSchedule(
 const heptagonCohortRanks = require("./heptagonCohortRanks");
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {
-    /** rebuildRankingAggregates(매시 00분) 이후 집계 문서가 채워진 뒤 실행 → 헵타곤·랭킹보드 동일 소스·빠른 코호트 갱신 */
-    schedule: "20 0,6,9-23 * * *",
+    /** rebuildRankingAggregates(00·12·15·21 시각) 종료 후 집계 반영 분 → 헵타곤·랭킹보드 동일 소스 */
+    schedule: "20 0,12,15,21 * * *",
     timeZone: "Asia/Seoul",
     memory: "2GiB",
     timeoutSeconds: 540,
