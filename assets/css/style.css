@@ -5366,7 +5366,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding: 0 16px 16px;
 }
 
-/* ① 고정 필터 영역 (Sticky Header) */
+/* ① 고정 필터 영역 — sticky + 가로 스크롤 자식: top=0 경계 합성 시 1px 잔상 완화 */
 .stelvio-ranking-sticky {
   position: sticky;
   top: 0;
@@ -5377,8 +5377,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
   padding-left: 16px;
   padding-right: 16px;
   border-bottom: 1px solid #e5e7eb;
-  /* 칩·필터 바 밖 sticky 영역에서의 세로 제스처가 내부 스크롤로 이어지도록 */
   touch-action: pan-y;
+  background-clip: padding-box;
 }
 .stelvio-duration-chips-wrap {
   overflow-x: auto;
@@ -6807,9 +6807,9 @@ tr.stelvio-dashboard-current-grade td:last-child {
   box-sizing: border-box !important;
   /* manipulation/none 은 끝에서 스크롤이 덜컥 멈추거나 제스처가 늦게 붙는 체감이 날 수 있음 */
   touch-action: auto;
-  /* none(축약)은 자식 스크롤과 맞물려 첫 세로 제스처가 어색해질 수 있음 → 세로만 contain으로 문서 체인 차단 */
+  /* 바깥은 문서 체인 끊기만; contain은 내부 스크롤 top=0 근처와 겹쳐 잔상·락 체감 유발 가능 → auto */
   overscroll-behavior-x: none;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
 }
 #stelvioRankingScreen .stelvio-ranking-screen-scroll {
   flex: 1 1 0 !important;
@@ -6821,6 +6821,10 @@ tr.stelvio-dashboard-current-grade td:last-child {
   /* contain은 일부 모바일에서 상단·첫 제스처와 맞물려 세로 스크롤이 버벅이는 체감이 있어 auto — 바깥 화면이 overflow:hidden이라 문서 체인은 어차피 억제됨 */
   overscroll-behavior-y: auto;
   touch-action: pan-y;
+  overflow-anchor: none;
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   /* 세로 스크롤은 유지, 스크롤바만 비표시 */
   scrollbar-gutter: auto;
   scrollbar-width: none;
