@@ -2400,14 +2400,14 @@
               <img src="assets/img/stelvio.svg" alt="STELVIO" class="basecamp-path-title-logo" />
             </div>
             <div id="basecampPathGrid" class="grid-2 mb-15 basecamp-path-grid" style="gap: 3.75px;">
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
-                <span>그룹 훈련</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-ranking" id="btnBasecampRanking" onclick="if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();" aria-label="랭킹보드">
+                <span>랭킹보드</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="if (typeof showRPEModalForSoloTraining === 'function') { showRPEModalForSoloTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'solo'; showRPEModal('solo'); }">
-                <span>개인 훈련</span>
-              </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="if(typeof handleMyCareerClick==='function'){handleMyCareerClick();}else if(typeof showMyCareerScreenWithLoading==='function'){showMyCareerScreenWithLoading();}else if(typeof showScreen==='function'){showScreen('myCareerScreen');}" aria-label="나의 기록">
                 <span>나의 기록</span>
+              </button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor-entry" id="btnBasecampIndoorEntry" onclick="if (typeof showScreen === 'function') showScreen('indoorTrainingSubScreen');" aria-label="인도어 훈련">
+                <span>인도어 훈련</span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampOpenRiding" onclick="if (typeof navigateToRidingMoimFromBasecamp === 'function') navigateToRidingMoimFromBasecamp(); else if (typeof showScreen === 'function') showScreen('openRidingRoomScreen');" aria-label="라이딩 모임">
                 <span>라이딩 모임</span>
@@ -2456,6 +2456,83 @@
     </div>
   </div>
 
+  <!-- 인도어 훈련 서브 메인 (베이스캠프 구조 복제, 버튼은 이미지만) -->
+  <div id="indoorTrainingSubScreen" class="screen" style="display: none;">
+    <div class="basecamp-background-image"></div>
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card">
+          <div class="connection-header basecamp-header"></div>
+          <div class="connection-device-section basecamp-device-section">
+            <div class="indoor-sub-top-bar" style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+              <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="if (typeof showScreen === 'function') showScreen('basecampScreen');" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+              </button>
+              <h3 class="mb-0 basecamp-status-bar" style="flex: 1; margin: 0; text-align: center; font-size: 18px !important;">인도어 훈련</h3>
+              <span style="width: 2.5em; flex-shrink: 0;" aria-hidden="true"></span>
+            </div>
+            <div class="basecamp-path-title-wrap">
+              <img src="assets/img/stelvio.svg" alt="STELVIO" class="basecamp-path-title-logo" />
+            </div>
+            <div id="indoorSubPathGrid" class="grid-2 mb-15 basecamp-path-grid indoor-sub-path-grid" style="gap: 3.75px;">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor indoor-sub-grid-btn" id="btnIndoorSubGroup" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }" aria-label="그룹 훈련"></button>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-solo indoor-sub-grid-btn" id="btnIndoorSubSolo" onclick="if (typeof showRPEModalForSoloTraining === 'function') { showRPEModalForSoloTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'solo'; showRPEModal('solo'); }" aria-label="개인 훈련"></button>
+              <button type="button" class="btn btn-device basecamp-btn indoor-sub-grid-btn indoor-sub-btn-racing" id="btnIndoorSubRace" onclick="if (typeof showIndoorRacePcOnlyModal === 'function') showIndoorRacePcOnlyModal();" aria-label="레이싱 경기"></button>
+              <button type="button" class="btn btn-device basecamp-btn indoor-sub-grid-btn indoor-sub-btn-device" id="btnIndoorSubDevice" onclick="if (typeof openDeviceSettingScreenFrom === 'function') openDeviceSettingScreenFrom('indoorTrainingSubScreen'); else if (typeof showScreen === 'function') showScreen('deviceSettingScreen');" aria-label="기기설정"></button>
+            </div>
+            <div id="indoorSubAuthBar" style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; margin-bottom: 0; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+              <div id="indoorSubAuthBarLeft" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
+                <button type="button" id="btnIndoorSubAuthLogin" onclick="if(typeof handleLogin === 'function') handleLogin();" style="padding: 8px 14px; font-size: 14px; font-weight: 600; color: #0369a1; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; cursor: pointer;">로그인</button>
+                <span id="indoorSubAuthBarWarning" style="font-size: 13px; color: #0c4a6e; display: inline-flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.35;">
+                  <span>더 나은 경험을 위해</span>
+                  <span>로그인해 주세요.</span>
+                </span>
+              </div>
+              <div id="indoorSubAuthBarRight" class="basecamp-auth-bar-right" style="display: none;">
+                <span class="basecamp-auth-bar-spacer" aria-hidden="true"></span>
+                <div id="indoorSubAuthBarWelcome" class="basecamp-auth-bar-welcome">
+                  <span id="indoorSubAuthBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">새로운 목표를 향해,</span>
+                  <span id="indoorSubAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">힘차게 출발해 볼까요!</span>
+                </div>
+                <div class="basecamp-auth-bar-logout-wrap">
+                  <button type="button" id="btnIndoorSubAuthLogout" class="bluetooth-session-exit-btn" onclick="if(typeof handleLogout === 'function') handleLogout();" aria-label="로그아웃" title="로그아웃">
+                    <img src="assets/img/out.png" alt="로그아웃" style="width: 24px; height: 24px;" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="basecamp-footer">
+            <p>
+              <a
+                class="basecamp-footer-cafe-link"
+                href="https://cafe.naver.com/stelvio"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <img class="basecamp-footer-cafe-icon" src="assets/img/community.png" alt="" />
+                <span>STELVIO 카페 바로가기</span>
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indoor Race PC 전용 안내 -->
+  <div id="indoorRacePcOnlyModal" class="stelvio-coming-soon-modal indoor-race-pc-only-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10000070;" aria-modal="true" role="dialog" aria-labelledby="indoorRacePcOnlyTitle">
+    <div class="stelvio-coming-soon-overlay indoor-race-pc-only-overlay" onclick="if(typeof closeIndoorRacePcOnlyModal==='function')closeIndoorRacePcOnlyModal(false);"></div>
+    <div class="stelvio-coming-soon-content indoor-race-pc-only-content">
+      <p id="indoorRacePcOnlyTitle" class="stelvio-coming-soon-message indoor-race-pc-only-message">PC 전용 화면입니다.</p>
+      <div class="device-reset-confirm-buttons">
+        <button type="button" class="stelvio-coming-soon-btn device-reset-confirm-btn device-reset-confirm-ok" onclick="if(typeof closeIndoorRacePcOnlyModal==='function')closeIndoorRacePcOnlyModal(true);">확인</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 오픈 라이딩방 (헤더·뒤로가기는 React OpenRidingRoomApp에서 처리) -->
   <div id="openRidingRoomScreen" class="screen open-riding-room-screen-root" style="display: none;">
     <div id="open-riding-react-root" class="open-riding-react-root" aria-live="polite"></div>
@@ -2468,7 +2545,7 @@
       <div class="connection-form-container">
         <div class="connection-form-card basecamp-card device-setting-card">
           <div class="connection-header basecamp-header" style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
-            <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+            <button type="button" class="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all" onclick="if(typeof goBackFromDeviceSettingsScreen==='function')goBackFromDeviceSettingsScreen(); else showScreen('basecampScreen');" aria-label="뒤로 가기" style="width: 2.5em; flex-shrink: 0; padding: 8px; border-radius: 8px; background: transparent; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
               <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 24px; height: 24px; color: #4b5563;">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
               </svg>
@@ -8098,6 +8175,7 @@
         setTimeout(tryBindOpenRiding, 450);
         return;
       } else if (screenId === 'deviceSettingScreen') scrollEl = document.getElementById('deviceSettingScreen');
+      else if (screenId === 'indoorTrainingSubScreen') scrollEl = document.getElementById('indoorTrainingSubScreen');
       else if (screenId === 'scheduleListScreen' || screenId === 'scheduleCreateScreen' || screenId === 'scheduleDaysScreen' || screenId === 'scheduleCalendarScreen') {
         scrollEl = document.getElementById(screenId);
       }
@@ -13031,6 +13109,9 @@
       const left = document.getElementById('authBarLeft');
       const right = document.getElementById('authBarRight');
       const warning = document.getElementById('authBarWarning');
+      const subLeft = document.getElementById('indoorSubAuthBarLeft');
+      const subRight = document.getElementById('indoorSubAuthBarRight');
+      const subWarning = document.getElementById('indoorSubAuthBarWarning');
       if (!left || !right) return;
       if (user && user.email) {
         left.style.display = 'none';
@@ -13047,16 +13128,58 @@
         var line2 = document.getElementById('authBarWelcomeLine2');
         if (line1) line1.textContent = '환영합니다.';
         if (line2) line2.textContent = userName + '님';
+        if (subLeft) subLeft.style.display = 'none';
+        if (subRight) subRight.style.display = 'grid';
+        if (subWarning) subWarning.style.display = 'none';
+        var subL1 = document.getElementById('indoorSubAuthBarWelcomeLine1');
+        var subL2 = document.getElementById('indoorSubAuthBarWelcomeLine2');
+        if (subL1) subL1.textContent = '새로운 목표를 향해,';
+        if (subL2) subL2.textContent = '힘차게 출발해 볼까요!';
       } else {
         left.style.display = 'flex';
         right.style.display = 'none';
         if (warning) { warning.style.display = 'inline-flex'; }
+        if (subLeft) subLeft.style.display = 'flex';
+        if (subRight) subRight.style.display = 'none';
+        if (subWarning) subWarning.style.display = 'inline-flex';
       }
     }
     
     window.handleLogin = handleLogin;
     window.handleLogout = handleLogout;
     window.updateAuthBarUI = updateAuthBarUI;
+
+    window.__deviceSettingsReturnScreenId = null;
+    function openDeviceSettingScreenFrom(returnScreenId) {
+      window.__deviceSettingsReturnScreenId = returnScreenId || 'basecampScreen';
+      if (typeof showScreen === 'function') showScreen('deviceSettingScreen');
+    }
+    function goBackFromDeviceSettingsScreen() {
+      var id = window.__deviceSettingsReturnScreenId || 'basecampScreen';
+      window.__deviceSettingsReturnScreenId = null;
+      if (typeof showScreen === 'function') showScreen(id);
+    }
+    function showIndoorRacePcOnlyModal() {
+      var m = document.getElementById('indoorRacePcOnlyModal');
+      if (m) {
+        m.classList.remove('hidden');
+        m.style.display = 'flex';
+      }
+    }
+    function closeIndoorRacePcOnlyModal(proceedToRace) {
+      var m = document.getElementById('indoorRacePcOnlyModal');
+      if (m) {
+        m.classList.add('hidden');
+        m.style.display = 'none';
+      }
+      if (proceedToRace && typeof window.selectIndoorMode === 'function') {
+        window.selectIndoorMode('race');
+      }
+    }
+    window.openDeviceSettingScreenFrom = openDeviceSettingScreenFrom;
+    window.goBackFromDeviceSettingsScreen = goBackFromDeviceSettingsScreen;
+    window.showIndoorRacePcOnlyModal = showIndoorRacePcOnlyModal;
+    window.closeIndoorRacePcOnlyModal = closeIndoorRacePcOnlyModal;
     
     (function initAuthBar() {
       var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
@@ -20498,9 +20621,11 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
         
         // Profile Screen: 미니달력 제거됨 - initMiniCalendar 호출 생략
         // Choose Your Path(베이스캠프) 입장 시 Welcome 문구 갱신 + 주간 마일리지 TOP10 팝업 표시
+        if (screenId === 'basecampScreen' || screenId === 'indoorTrainingSubScreen') {
+          var authForBar = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+          if (typeof updateAuthBarUI === 'function' && authForBar && authForBar.currentUser) updateAuthBarUI(authForBar.currentUser);
+        }
         if (screenId === 'basecampScreen') {
-          var a = window.authV9 || window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (typeof updateAuthBarUI === 'function' && a && a.currentUser) updateAuthBarUI(a.currentUser);
           function tryShowWeeklyTop10() {
             if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return false;
             if (window.__showScreenRedirectedToAuth === true) return false;
