@@ -3021,59 +3021,41 @@ function getYearRangeSeoul(year) {
   return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
 }
 
+/**
+ * 서울 달력 YYYY-MM-DD에 delta일 가감 (Asia/Seoul 고정, 한국 DST 없음).
+ * Cloud Functions 런타임 타임존과 무관하게 start/end 와 listInclusiveYmdsSeoul 일수를 맞춤.
+ */
+function addDaysSeoulYmd(ymdStr, deltaDays) {
+  const msPerDay = 86400000;
+  const t = new Date(`${ymdStr}T12:00:00+09:00`).getTime() + deltaDays * msPerDay;
+  return new Date(t).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
 /** Asia/Seoul 달력 기준 오늘 포함 역산 최근 30일 (YYYY-MM-DD). 거리 등 비피크 랭킹용. */
 function getRolling30DaysRangeSeoul() {
-  const now = new Date();
-  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const today = new Date(y, m - 1, d);
-  const start = new Date(today);
-  start.setDate(today.getDate() - 29);
-  const pad = (n) => String(n).padStart(2, "0");
-  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -29);
   return { startStr, endStr };
 }
 
 /** Asia/Seoul 달력 기준 오늘 포함 역산 최근 28일(7×4주). GC·헵타곤·피크(rolling/monthly 탭) 공통 창 — 추가 로그 조회 없이 일 버킹만 사용. */
 function getRolling28DaysRangeSeoul() {
-  const now = new Date();
-  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const today = new Date(y, m - 1, d);
-  const start = new Date(today);
-  start.setDate(today.getDate() - 27);
-  const pad = (n) => String(n).padStart(2, "0");
-  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -27);
   return { startStr, endStr };
 }
 
 /** Asia/Seoul 달력 기준 오늘 포함 역산 최근 약 6개월(183일, YYYY-MM-DD). 1시간 항속·맞춤 필터 60분 피크와 동일. */
 function getRolling183DaysRangeSeoul() {
-  const now = new Date();
-  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const today = new Date(y, m - 1, d);
-  const start = new Date(today);
-  start.setDate(today.getDate() - 182);
-  const pad = (n) => String(n).padStart(2, "0");
-  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -182);
   return { startStr, endStr };
 }
 
 /** Asia/Seoul 달력 기준 오늘 포함 역산 최근 365일 (YYYY-MM-DD). 명예의 전당(연간 탭) 피크 집계용. */
 function getRolling365DaysRangeSeoul() {
-  const now = new Date();
-  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const [y, m, d] = todayStr.split("-").map(Number);
-  const today = new Date(y, m - 1, d);
-  const start = new Date(today);
-  start.setDate(today.getDate() - 364);
-  const pad = (n) => String(n).padStart(2, "0");
-  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
-  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  const endStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const startStr = addDaysSeoulYmd(endStr, -364);
   return { startStr, endStr };
 }
 
@@ -3935,9 +3917,14 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
         const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
         const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
         const bucketSnaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
-        const peakMap = dates.length === 28 && rankingDayRollup.splitInclusiveRangeIntoFourWeeks(startStr, endStr)
-          ? rankingDayRollup.computeFourWeekGcStylePeaksFromBucketSnaps(data, bucketSnaps, startStr, endStr)
-          : rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(data, bucketSnaps, startStr, endStr);
+        const canFourWeek = !!rankingDayRollup.splitInclusiveRangeIntoFourWeeks(startStr, endStr);
+        let peakMap = null;
+        if (canFourWeek) {
+          peakMap = rankingDayRollup.computeFourWeekGcStylePeaksFromBucketSnaps(data, bucketSnaps, startStr, endStr);
+        }
+        if (!peakMap) {
+          peakMap = rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(data, bucketSnaps, startStr, endStr);
+        }
         const hrMax = rankingDayRollup.maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr);
         for (const slot of genders) {
           if (slot === "M" && gKey !== "M") continue;
@@ -4382,6 +4369,7 @@ exports.getPeakPowerRanking = onRequest(
       return;
     }
     res.set("Access-Control-Allow-Origin", "*");
+    try {
     const period = req.query.period || "monthly";
     const durationType = req.query.duration || "5min";
     const gender = req.query.gender || "all";
@@ -4883,6 +4871,17 @@ exports.getPeakPowerRanking = onRequest(
       }
     }
     res.status(200).json(out);
+    } catch (errPeak) {
+      console.error("[getPeakPowerRanking] unhandled", errPeak && errPeak.stack ? errPeak.stack : errPeak);
+      res.set("Access-Control-Allow-Origin", "*");
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: "peak_ranking_internal",
+          message: errPeak && errPeak.message ? String(errPeak.message) : String(errPeak),
+        });
+      }
+    }
   }
 );
 
