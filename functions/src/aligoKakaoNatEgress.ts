@@ -3,20 +3,36 @@
 export const ALIGO_KAKAO_NAT_REGION = "asia-northeast3" as const;
 
 /**
- * Firebase Functions Gen2 Direct VPC egress (Cloud NAT 고정 출구와 정렬).
- * firebase-functions ^4 는 `network`·`vpcEgress` 플랫 필드를 매니페스트에 넣지 않아 배포 시 VPC가 빠졌을 수 있음.
- * ^7+: `vpcEgress` + `networkInterface` 가 Cloud Run `networkInterfaces` 로 전달됨 (공식 SDK).
+ * firebase-functions ^7: `vpcEgress` + `networkInterface` → Cloud Run 매니페스트 `vpc.networkInterfaces`.
  *
- * GCP 기본 VPC: 보통 네트워크 `default` + 리전별 서브넷 `default`(asia-northeast3 배포 시 동일 리전 매칭).
+ * 🔧 배포 분석 단계 오류 예:
+ *   Unexpected key `endpoints[..].vpc.networkInterfaces` … install a newer version of the Firebase CLI
+ * → 우선순위: `npm install -g firebase-tools@latest` (NetworkInterfaces 지원 버전 필요)
+ *
+ * 📌 최신 CLI를 바로 못 올릴 경우에만 배포 직전:
+ *    PowerShell: `$env:STELVIO_FUNCTIONS_USE_DIRECT_VPC='0'` 후 `firebase deploy`
+ *    (region만 포함 → Direct VPC 미적용, 고정 egress NAT 코드 경로 미반영 가능)
  */
-export const ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS = {
-  region: ALIGO_KAKAO_NAT_REGION,
-  vpcEgress: "ALL_TRAFFIC" as const,
-  networkInterface: {
-    network: "default",
-    subnetwork: "default",
-  },
+
+const omitDirectVpcForDeploy =
+  String(process.env.STELVIO_FUNCTIONS_USE_DIRECT_VPC || "").trim() === "0";
+
+export type AligoKakaoCloudFunctionVpcEgressOpts = {
+  readonly region: typeof ALIGO_KAKAO_NAT_REGION;
+  readonly vpcEgress?: "ALL_TRAFFIC";
+  readonly networkInterface?: { readonly network: string; readonly subnetwork: string };
 };
+
+export const ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS: AligoKakaoCloudFunctionVpcEgressOpts = omitDirectVpcForDeploy
+  ? { region: ALIGO_KAKAO_NAT_REGION }
+  : {
+      region: ALIGO_KAKAO_NAT_REGION,
+      vpcEgress: "ALL_TRAFFIC",
+      networkInterface: {
+        network: "default",
+        subnetwork: "default",
+      },
+    };
 
 /**
  * VPC+NAT 출구 진단용 공인 IPv4 (카카오톡 API 허용 IP 대조용; 알리고 kakaoapi와 동일 egress일 가능성이 큼).
