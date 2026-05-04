@@ -830,7 +830,7 @@ function applyInitialAuthRouting() {
     }
   }
 
-  setTimeout(function () {
+  function runPostAuthRoutingDeferred() {
     if (!window.currentUser && typeof initializeAuthenticationSystem === 'function') {
       try {
         initializeAuthenticationSystem();
@@ -853,7 +853,14 @@ function applyInitialAuthRouting() {
         /* ignore */
       }
     }
-  }, 200);
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(runPostAuthRoutingDeferred);
+    });
+  } else {
+    setTimeout(runPostAuthRoutingDeferred, 0);
+  }
 }
 
 window.dismissSplashFully = dismissSplashFully;
@@ -5145,8 +5152,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // 전역에 observer 저장 (나중에 정리용)
     window.splashObserver = splashObserver;
     
-    console.log("🎬 스플래시(정적 로고 2초) - 이후 초기 라우팅");
-    const totalDuration = 2000;
+    console.log("🎬 스플래시(짧은 표시 후 초기 라우팅)");
+    const totalDuration = 600;
 
     setTimeout(function splashTimerDone() {
       console.log("✅ 스플래시 완료 - 초기 라우팅");
@@ -7765,6 +7772,10 @@ if (typeof window.showToast !== 'function') {
 // ✅ 전체 함수를 아래로 교체:
 
 function initializeAuthenticationSystem() {
+  if (window.__stelvioAuthListenersBound__) {
+    return;
+  }
+  window.__stelvioAuthListenersBound__ = true;
   console.log('🔧 인증 시스템 이벤트 리스너 초기화 시작');
   
   // Google 로그인 버튼 확인 (새로운 인증 방식)
