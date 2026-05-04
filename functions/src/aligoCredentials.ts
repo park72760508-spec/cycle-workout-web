@@ -35,8 +35,18 @@ export function aligoApiFailureHint(code: unknown, message: string): string {
         "발송 서버 IP가 알리고에 미등록이면 별도 오류가 날 수 있음(고정 egress IP 등록)."
       );
     }
+    const ipish = m.includes("서버 IP") || m.includes("IP로");
+    if (ipish) {
+      return (
+        " [조치] 문구는 IP이나, code=-99는 동일 코드로 (1) 카카오톡 API userid·api_key·token 불일치·만료 " +
+        "(2) SMS용 키로 카카오 API 호출 (3) 실제 패킷 egress IP가 알리고 「카카오톡 API」 화이트리스트와 불일치 등이 겹칩니다. " +
+        "rides.meetupInviteAlimtalkSummary.diagSeenPublicIp 를 미션·네이버와 같은 NAT IP와 숫자로 비교하고, " +
+        "ALIGO_DEBUG_AUTH=1 로 Secret 길이를 확인하세요. 미션은 정상·모임만 실패면 템플릿(UH_5528)·tpl_code가 아니라 인증·NAT 경로 차이를 우선 의심합니다."
+      );
+    }
     return (
-      " [조치] code=-99: 알리고 카카오 API 인증 실패. userid·apikey·token·발송 IP 등록을 콘솔에서 점검."
+      " [조치] code=-99: 카카오톡 API 인증 실패(키·token·userid) 또는 발송 IP 미등록 가능. " +
+        "알리고 콘솔에서는 「카카오톡/API」 경로의 허용 IP·발급키·Identifier·token을 확인하세요."
     );
   }
   return "";

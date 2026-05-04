@@ -68,11 +68,6 @@ const meetupAlimRelaySecret = defineSecret("MEETUP_ALIM_RELAY_SECRET");
 /** 릴레이 함수 URL 미지정 시 asia-northeast3-{프로젝트}.cloudfunctions.net 패턴 */
 const meetupAlimRelayUrlParam = defineString("MEETUP_ALIM_RELAY_URL", { default: "" });
 
-/** 1/true이면 모임 알림톡 직전 공인 출구 IP 조회 → Cloud Logging + meetupInviteAlimtalkSummary.diagSeenPublicIp (-99·화이트리스트 대조용) */
-const meetupAlimtalkLogPublicEgressIp = defineString("MEETUP_ALIMTALK_LOG_PUBLIC_EGRESS_IP", {
-  default: "",
-});
-
 /** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
 function injectSmtpEnv(): void {
   try {
@@ -86,12 +81,7 @@ function injectSmtpEnv(): void {
   }
 }
 
-function shouldLogMeetupAlimtalkPublicEgressIp(): boolean {
-  const v = meetupAlimtalkLogPublicEgressIp.value()?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
-
-/** VPC 진단: 알리고 HTTP와 동일하게 보일 가능성이 높은 인바운드 공인 IP(화이트리스트 대조용) */
+/** VPC 릴레이 진단: ipify 공인 출구 IP (Cloud NAT 허용 IP와 숫자 대조용, 알리고 kakaoapi 와 동일 경로 가능성 높음) */
 async function fetchPublicIpForMeetupVpcDiagnostics(): Promise<string | null> {
   try {
     const ac = new AbortController();
@@ -870,11 +860,14 @@ export const meetupInviteAlimtalkHttpsRelay = onRequest(
       return;
     }
 
+    // 알리고 -99 분쟁 시: 미션 NAT IP와 숫자 비교해 릴레이 VPC 적용 여부 판별
     let diagSeenPublicIp: string | undefined;
-    if (shouldLogMeetupAlimtalkPublicEgressIp()) {
+    try {
       const dip = await fetchPublicIpForMeetupVpcDiagnostics();
       diagSeenPublicIp = dip ?? undefined;
-      console.log("[meetupInviteAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(실패)", rideId);
+      console.log("[meetupInviteAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(조회실패)", rideId);
+    } catch (_) {
+      /* ignore */
     }
 
     try {

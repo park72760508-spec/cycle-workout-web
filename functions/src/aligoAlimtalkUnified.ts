@@ -7,7 +7,7 @@
  * 발급키(apikey)·Identifier/userid(stelvioai 등)·발급 token·SenderKey·발신프로필(sender).
  * 차이는 tpl_code(subject·본문·선택 버튼 env) 만.
  *
- * (code=-99 에서 「인증되지 않는 서버 IP」는 보통 egress IP 미등록; 키가 틀리면 동일 코드로 다른 안내 문구가 붙기도 함.)
+ * (code=-99 은 카카오톡 API 측 「인증 실패」류 코드로, 알리고 응답 문구가 IP 중심이어도 키·token·userid 불일치로 동일 코드가 올 수 있음.)
  */
 import type { Firestore } from "firebase-admin/firestore";
 import { aligoApiFailureHint, logAligoAuthShape, scrubAligoCredential } from "./aligoCredentials";
