@@ -1808,13 +1808,32 @@ function onUserRegistrationSuccess(userData, source = 'auth') {
     if (typeof loadUsers === 'function') loadUsers();
   });
   
-  if (typeof showUserWelcomeModal === 'function') {
-    showUserWelcomeModal(userData.name);
-    window.userWelcomeModalShown = true;
-    window.userWelcomeModalUserName = userData.name;
-  } else if (typeof showToast === 'function') {
-    showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
+  // 가입 축하(환영) 모달보다 먼저 환경설정(Strava/API)을 노출 — 닫히면 app.js closeSettingsModal에서 축하 모달 진행
+  const welcomeName =
+    typeof userData.name === 'string' && userData.name.trim() !== ''
+      ? userData.name.trim()
+      : '회원';
+  window.__pendingWelcomeModalAfterRegistrationSettingsClose = welcomeName;
+
+  var openedSettings = false;
+  if (typeof window.openSettingsModal === 'function') {
+    try {
+      window.openSettingsModal();
+      openedSettings = true;
+    } catch (eRegSet) {}
   }
+
+  if (!openedSettings) {
+    window.__pendingWelcomeModalAfterRegistrationSettingsClose = null;
+    if (typeof showUserWelcomeModal === 'function') {
+      showUserWelcomeModal(userData.name || welcomeName);
+      window.userWelcomeModalShown = true;
+      window.userWelcomeModalUserName = userData.name || welcomeName;
+    } else if (typeof showToast === 'function') {
+      showToast(`${welcomeName}님 등록이 완료되었습니다! 🎉`);
+    }
+  }
+
   return true;
 }
 

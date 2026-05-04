@@ -13855,6 +13855,21 @@ function enqueueWeeklyTop10AfterMandatoryIntegratedDismiss() {
 window.enqueueWeeklyTop10AfterMandatoryIntegratedDismiss = enqueueWeeklyTop10AfterMandatoryIntegratedDismiss;
 
 /**
+ * 회원가입 직후 환경설정을 연 경우, 설정을 닫은 뒤 가입 축하(환영) 모달 표시
+ */
+function maybeShowPendingRegistrationWelcomeModal() {
+  try {
+    var n = window.__pendingWelcomeModalAfterRegistrationSettingsClose;
+    if (n == null || String(n).trim() === '') return;
+    window.__pendingWelcomeModalAfterRegistrationSettingsClose = null;
+    var nameStr = String(n).trim();
+    if (typeof window.showUserWelcomeModal === 'function') {
+      window.showUserWelcomeModal(nameStr);
+    }
+  } catch (eWel) {}
+}
+
+/**
  * 주간 TOP10이 사용자 닫기·suppress·코드 상 숨김 등 모든 경로로 닫혔을 때:
  * 미연결(Strava/API) 상태면 다음에 환경설정 재표시(연결 유도 플래그 정리 포함)
  */
@@ -13899,6 +13914,9 @@ function closeSettingsModal() {
   try {
     enqueueWeeklyTop10AfterMandatoryIntegratedDismiss();
   } catch (eTop) {}
+  try {
+    maybeShowPendingRegistrationWelcomeModal();
+  } catch (eWel2) {}
 }
 
 function openStravaSignupGuideModal() {
