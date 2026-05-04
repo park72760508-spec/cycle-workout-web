@@ -33,6 +33,20 @@ function normalizePhoneDigitsServer(input) {
   return d.slice(0, 15);
 }
 
+/** PointRewardService.getReceiverPhoneFromUserData 와 동일 필드 순서 */
+function getReceiverPhoneFromUserData(userData) {
+  if (!userData || typeof userData !== "object") return "";
+  return String(
+    userData.contact ??
+      userData.phoneNumber ??
+      userData.phone ??
+      userData.tel ??
+      userData.mobile ??
+      userData.phone_number ??
+      ""
+  ).trim();
+}
+
 /** 빈·이상 recvname 방지 (PointRewardService와 동일 의도) */
 function safeAlimtalkDisplayName(raw) {
   const t = String(raw ?? "").trim();
@@ -252,12 +266,52 @@ function resolveInviteDisplayName(inviteDisplayByPhone, normalizedPhoneDigits) {
   return "";
 }
 
+function resolveFriendUidFromInviteMap(inviteFriendUidByPhone, normalizedPhoneDigits) {
+  const map =
+    inviteFriendUidByPhone && typeof inviteFriendUidByPhone === "object"
+      ? inviteFriendUidByPhone
+      : {};
+  const keys = Object.keys(map);
+  if (keys.length === 0) return "";
+  const want = normalizedPhoneDigits;
+  if (map[want] != null) return String(map[want]).trim();
+  const w8 = want.length >= 8 ? want.slice(-8) : want;
+  for (const k of keys) {
+    const nk = normalizePhoneDigitsServer(k);
+    if (nk === want || (nk.length >= 8 && want.length >= 8 && nk.slice(-8) === w8)) {
+      return String(map[k] != null ? map[k] : "").trim();
+    }
+  }
+  return "";
+}
+
+/**
+ * 등록 친구 UID가 있으면 users 문서의 연락처로 수신 번호 결정, 없으면 invitedList 값 사용
+ */
+async function resolveMeetupInviteReceiverPhone(db, normalizedDigits, inviteFriendUidByPhone) {
+  const uid = resolveFriendUidFromInviteMap(inviteFriendUidByPhone, normalizedDigits);
+  if (uid) {
+    try {
+      const snap = await db.collection("users").doc(uid).get();
+      const d = snap.exists ? snap.data() : null;
+      if (d) {
+        const fromUser = normalizePhoneDigitsServer(getReceiverPhoneFromUserData(d));
+        if (fromUser.length >= 8) return { phone: fromUser, source: "users_profile" };
+      }
+    } catch (e) {
+      console.warn("[meetupAlimtalk] users 전화 해석 실패 uid=%s %s", uid, e && e.message ? e.message : e);
+    }
+  }
+  if (normalizedDigits.length >= 8) return { phone: normalizedDigits, source: "invite_list" };
+  return { phone: normalizedDigits, source: "invalid" };
+}
+
 /**
  * rides 문서 스냅샷 데이터로 초대 목록에게 알림톡 순차 발송
  * @param {import("firebase-admin/firestore").Firestore} db
  * @param {string} rideId
  * @param {Record<string, unknown>} rideData
- * @returns {Promise<{ skipped: boolean, reason?: string, attempts: Array<{phone: string, ok: boolean, error?: string}> }>}
+ * @returns {Promise<{ skipped: boolean, reason?: string, attempts: Array<{ phoneTail: string, phoneLookup: string, ok: boolean, error?: string }> }>}
  */
 async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
   const off = String(process.env.OPEN_RIDING_MEETUP_ALIMTALK || "1").toLowerCase();
@@ -295,10 +349,13 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
   const meetupLevel = String(rideData.level || "중급").trim();
   const ridingDistance = formatRidingDistanceKm(rideData.distance);
   const inviteDisplayByPhone = rideData.inviteDisplayByPhone;
+  const inviteFriendUidByPhone = rideData.inviteFriendUidByPhone;
 
   const attempts = [];
   for (let i = 0; i < phones.length; i++) {
     const phone = phones[i];
+    const resolved = await resolveMeetupInviteReceiverPhone(db, phone, inviteFriendUidByPhone);
+    const recvDigits = normalizePhoneDigitsServer(resolved.phone);
     const displayFromMap = resolveInviteDisplayName(inviteDisplayByPhone, phone);
     const userName = displayFromMap || "회원";
     const message = buildMeetupOpenAlimtalkMessage({
@@ -309,14 +366,30 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
       meetupLevel,
       ridingDistance,
     });
+    const attemptTail = recvDigits.length >= 4 ? recvDigits.slice(-4) : "?";
     try {
-      await sendOneMeetupOpenAlimtalk(cfg, phone, userName, message);
-      attempts.push({ phone: phone.replace(/\d{4}$/, "****"), ok: true });
-      console.log("[meetupAlimtalk] 전송 요청 완료 rideId=%s to=…%s", rideId, phone.slice(-4));
+      await sendOneMeetupOpenAlimtalk(cfg, recvDigits, userName, message);
+      attempts.push({
+        phoneTail: attemptTail,
+        phoneLookup: resolved.source,
+        ok: true,
+      });
+      console.log(
+        "[meetupAlimtalk] 전송 요청 완료 rideId=%s lookup=%s to=***%s (inviteKey …%s)",
+        rideId,
+        resolved.source,
+        attemptTail,
+        phone.slice(-4)
+      );
     } catch (err) {
       const m = err && err.message ? err.message : String(err);
-      attempts.push({ phone: phone.replace(/\d{4}$/, "****"), ok: false, error: m });
-      console.error("[meetupAlimtalk] 전송 실패 rideId=%s:", rideId, m);
+      attempts.push({
+        phoneTail: attemptTail,
+        phoneLookup: resolved.source,
+        ok: false,
+        error: m,
+      });
+      console.error("[meetupAlimtalk] 전송 실패 rideId=%s lookup=%s:", rideId, resolved.source, m);
     }
     if (i < phones.length - 1) {
       await new Promise((r) => setTimeout(r, 400));
