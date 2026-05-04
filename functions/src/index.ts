@@ -64,6 +64,11 @@ const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
 const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
 const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
 
+/** 1/true이면 모임 알림톡 직전 공인 출구 IP 조회 → Cloud Logging + meetupInviteAlimtalkSummary.diagSeenPublicIp (-99·화이트리스트 대조용) */
+const meetupAlimtalkLogPublicEgressIp = defineString("MEETUP_ALIMTALK_LOG_PUBLIC_EGRESS_IP", {
+  default: "",
+});
+
 /** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
 function injectSmtpEnv(): void {
   try {
@@ -74,6 +79,27 @@ function injectSmtpEnv(): void {
     process.env.ADMIN_EMAIL = adminEmail.value() || process.env.ADMIN_EMAIL;
   } catch {
     // Secret 미설정 시 무시 (emailService에서 SMTP 미설정으로 처리)
+  }
+}
+
+function shouldLogMeetupAlimtalkPublicEgressIp(): boolean {
+  const v = meetupAlimtalkLogPublicEgressIp.value()?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/** VPC 진단: 알리고 HTTP와 동일하게 보일 가능성이 높은 인바운드 공인 IP(화이트리스트 대조용) */
+async function fetchPublicIpForMeetupVpcDiagnostics(): Promise<string | null> {
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 12000);
+    const r = await fetch("https://api.ipify.org?format=json", { signal: ac.signal });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const j = (await r.json()) as { ip?: unknown };
+    const ip = typeof j.ip === "string" ? j.ip.trim() : "";
+    return ip.length > 0 ? ip : null;
+  } catch {
+    return null;
   }
 }
 
@@ -807,14 +833,27 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
 
     const rideRef = db.collection("rides").doc(rideId);
 
+    let diagSeenPublicIp: string | undefined;
+    if (shouldLogMeetupAlimtalkPublicEgressIp()) {
+      const dip = await fetchPublicIpForMeetupVpcDiagnostics();
+      diagSeenPublicIp = dip ?? undefined;
+      console.log(
+        "[onRideCreatedMeetupInviteAlimtalk] diagSeenPublicIp(알리고 code=-99 시 이 주소 화이트리스트 포함 여부 확인):",
+        dip ?? "(조회 실패)",
+        rideId
+      );
+    }
+
     try {
       const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
+      const diag = diagSeenPublicIp ? ({ diagSeenPublicIp } as Record<string, string>) : {};
       const summary = result.skipped
         ? {
             skipped: true,
             reason: result.reason || "unknown",
             error: result.error || null,
             delivery: "firestore_vpc",
+            ...diag,
           }
         : {
             skipped: false,
@@ -822,6 +861,7 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
             total: result.total || 0,
             attempts: result.attempts || [],
             delivery: "firestore_vpc",
+            ...diag,
           };
       await rideRef.set(
         {
@@ -841,6 +881,7 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
               skipped: false,
               error: msg,
               delivery: "firestore_vpc",
+              ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}),
             },
           },
           { merge: true }
