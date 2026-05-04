@@ -2776,6 +2776,22 @@ html.global-hub-glass-nav-active #trainingJournalScreen .journal-bottom-sheet-fo
   margin-bottom: 0 !important;
 }
 
+/* 나의 기록 — grade 2·3: 6칸만 표시 (대시보드·라이딩기록 / 워크아웃·훈련스케줄 / 사용자정보·환경설정), 랭킹·구독 숨김 */
+#myCareerScreen .connection-device-section.basecamp-device-section .my-career-grid-8.my-career-grid-lite {
+  grid-template-rows: repeat(3, var(--my-career-cell)) !important;
+}
+
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerRanking,
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerSubscribe {
+  display: none !important;
+}
+
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerDashboard { order: 1; }
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerJournal { order: 2; }
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerWorkout { order: 3; }
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerSchedule { order: 4; }
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerProfile { order: 5; }
+#myCareerScreen .my-career-grid-8.my-career-grid-lite #btnCareerLogo { order: 6; }
 
 /* My Career 8버튼 - basecamp-btn-career(min-height:160px 등) 덮어써서 그리드에 맞춤 */
 #myCareerScreen .connection-device-section .basecamp-btn-career {
