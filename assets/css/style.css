@@ -5653,6 +5653,24 @@ body:has(#trainingDetailModal:not(.hidden)) {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 /* 헵타곤 카드: 세로 레벨바 옆열 — 레벨 pill + 막대 */
+.stelvio-level-bar-cell {
+  flex-shrink: 0;
+}
+/* 세로 레벨 막대: 마지막으로 채운 칸 3회 밝게 깜빡임 */
+.stelvio-level-bar-cell--blink {
+  animation: stelvio-level-bar-last-blink 0.52s ease-in-out 3;
+}
+@keyframes stelvio-level-bar-last-blink {
+  0%,
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 0 0 transparent;
+  }
+  50% {
+    filter: brightness(1.38);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+  }
+}
 .stelvio-octagon-sidebar-col {
   display: flex;
   flex-direction: column;
