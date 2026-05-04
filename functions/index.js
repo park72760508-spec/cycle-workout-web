@@ -4168,6 +4168,20 @@ exports.rebuildRankingAggregates = onSchedule(
 
 // ---------- STELVIO 헵타곤·GC 랭킹: 전원 코호트 순위 → heptagon_cohort_ranks (일 1회 새벽 갱신, 조회는 스냅샷 읽기) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
+
+/** 스케줄·수동 배치 공통 — `scheduledHeptagonCohortRanks` / `manualRebuildHeptagonCohortRanks` */
+async function runHeptagonCohortRanksRebuildJob() {
+  const db = admin.firestore();
+  return heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
+    getPeakPowerRankingEntries,
+    getLeagueCategory,
+    getRolling28DaysRangeSeoul,
+    admin,
+    readRankingAggregatePayloadIfFresh,
+    buildPeakPowerAllDurationsForRangeAllGendersOnePass,
+  });
+}
+
 exports.scheduledHeptagonCohortRanks = onSchedule(
   {
     /** 매일 01:00 KST — 전날까지 반영된 rolling28 피크 집계를 바탕으로 스냅샷 재빌드(랭킹 GC는 이 문서만 읽음) */
@@ -4177,20 +4191,72 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
-    const db = admin.firestore();
     try {
-      const r = await heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
-        getPeakPowerRankingEntries,
-        getLeagueCategory,
-        getRolling28DaysRangeSeoul,
-        admin,
-        readRankingAggregatePayloadIfFresh,
-        buildPeakPowerAllDurationsForRangeAllGendersOnePass,
-      });
+      const r = await runHeptagonCohortRanksRebuildJob();
       console.log("[scheduledHeptagonCohortRanks] ok", r);
     } catch (e) {
       console.error("[scheduledHeptagonCohortRanks]", e && e.message ? e.message : e);
       throw e;
+    }
+  }
+);
+
+/**
+ * 수동: 헵타곤 코호트 스냅샷 + GC 랭킹용 `heptagon_cohort_ranks` 재빌드 (스케줄 본과 동일).
+ * 인증: `manualStravaSyncTodaySeoul` 과 동일 — `X-Internal-Secret`(INTERNAL_SYNC_SECRET) 또는 grade=1 Firebase Bearer.
+ * POST https://<region>-stelvio-ai.cloudfunctions.net/manualRebuildHeptagonCohortRanks
+ */
+exports.manualRebuildHeptagonCohortRanks = onRequest(
+  {
+    cors: false,
+    timeoutSeconds: 540,
+    memory: "2GiB",
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST only" });
+      return;
+    }
+    try {
+      const db = admin.firestore();
+      const rawSecret =
+        req.headers["x-internal-secret"] ||
+        req.headers["X-Internal-Secret"] ||
+        req.query.secret;
+      let authorized = rawSecret === INTERNAL_SYNC_SECRET;
+
+      if (!authorized) {
+        const uid = await getUidFromRequest(req, res);
+        if (!uid) return;
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
+        if (grade !== "1") {
+          res.status(403).json({
+            success: false,
+            error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
+          });
+          return;
+        }
+        authorized = true;
+      }
+
+      const r = await runHeptagonCohortRanksRebuildJob();
+      console.log("[manualRebuildHeptagonCohortRanks] ok", r);
+      res.status(200).json({
+        success: true,
+        message: "heptagon_cohort_ranks 스냅샷을 갱신했습니다. 랭킹 GC 조회는 이 데이터를 사용합니다.",
+        ...r,
+      });
+    } catch (err) {
+      console.error("[manualRebuildHeptagonCohortRanks]", err);
+      res.status(500).json({
+        success: false,
+        error: err && err.message ? err.message : String(err),
+      });
     }
   }
 );
