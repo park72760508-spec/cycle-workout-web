@@ -2204,6 +2204,8 @@
     var chartSupremoModalStableRef = useRef(null);
     var heptagonCardBoardFetchSeqRef = useRef(0);
     var heptagonModalBoardFetchSeqRef = useRef(0);
+    /** 성별·부문 변경 시 이전 헵타곤 피크 랭킹 패치 결과가 늦게 도착해도 무시 */
+    var octagonPeakReqRef = useRef(0);
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -2381,51 +2383,91 @@
           }
         }
 
+        octagonPeakReqRef.current += 1;
+        var peakReqId = octagonPeakReqRef.current;
+
+        /**
+         * 1차: 월간 카테고리 + 월간 Supremo만 동시 요청 (최대 14건). 연간(365d) 7건은 카드 레이더·등급의 첫 패인트에 불필요해
+         * 초기 블록을 줄이면 동일 호스트 6연결 제한 때문에 생기던 대기 시간이 줄어든다.
+         * HoF 플레이스홀더: 월간과 동일(내부 norm만 영향·현재 카드 SVG는 순위 표기 중심). 연간 수신 후 state·로컬 캐시 갱신.
+         */
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
-        Promise.all([
-          fetchRanksSet(uid, 'monthly', gender, category),
-          fetchRanksSet(uid, 'yearly', gender, category),
-          fetchRanksSet(uid, 'monthly', gender, 'Supremo')
-        ])
+        Promise.all([fetchRanksSet(uid, 'monthly', gender, category), fetchRanksSet(uid, 'monthly', gender, 'Supremo')])
           .then(function(results) {
-            var mRows = results[0];
-            var hRows = results[1];
-            var sRows = results[2];
-            var monthlyRanks = mRows.map(function(x) {
-              return x.rank;
-            });
-            var cohortSizePerAxis = mRows.map(function(x) {
-              return x.n;
-            });
-            var hofRanks = hRows.map(function(x) {
-              return x.rank;
-            });
-            setState(stateFromApiRows(mRows, hRows, sRows));
-            if (typeof window.setStelvioOctagonRanksCache === 'function') {
-              try {
-                var mwForCache = mRows.map(function(x) {
-                  return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
-                });
-                var hwForCache = hRows.map(function(x) {
-                  return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
-                });
-                window.setStelvioOctagonRanksCache(
-                  uid,
-                  gender,
-                  category,
-                  todayStr,
-                  monthlyRanks,
-                  cohortSizePerAxis,
-                  hofRanks,
-                  mwForCache,
-                  hwForCache
-                );
-              } catch (e) {
-                console.warn('[StelvioOctagon] cache write failed:', e && e.message);
-              }
+            if (peakReqId !== octagonPeakReqRef.current) {
+              return;
             }
+            var mRows = results[0];
+            var sRows = results[1];
+            /* 연간 패치 완료 전까지 monthly와 동일한 대역으로 두면 heptagonRadarDisplayNorms·state 구조 유지 */
+            setState(stateFromApiRows(mRows, mRows, sRows));
+
+            fetchRanksSet(uid, 'yearly', gender, category)
+              .then(function(hRows) {
+                if (peakReqId !== octagonPeakReqRef.current) {
+                  return;
+                }
+                setState(function(prev) {
+                  if (!prev || !prev.monthly || !prev.supremoMonthly) {
+                    return prev;
+                  }
+                  var sr = prev.supremoMonthly.ranks;
+                  var sc = prev.supremoMonthly.cohortSizePerAxis;
+                  var mwPrev = prev.monthly.wkg;
+                  return stateFromRanksArray(
+                    prev.monthly.ranks,
+                    prev.monthly.cohortSizePerAxis,
+                    hRows.map(function(x) {
+                      return x.rank;
+                    }),
+                    sr,
+                    sc,
+                    mwPrev,
+                    hRows.map(function(x) {
+                      return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                    })
+                  );
+                });
+                if (typeof window.setStelvioOctagonRanksCache !== 'function') {
+                  return;
+                }
+                try {
+                  var monthlyRanks = mRows.map(function(x) {
+                    return x.rank;
+                  });
+                  var cohortSizePerAxis = mRows.map(function(x) {
+                    return x.n;
+                  });
+                  var hofRanks = hRows.map(function(x) {
+                    return x.rank;
+                  });
+                  var mwForCache = mRows.map(function(x) {
+                    return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                  });
+                  var hwForCache = hRows.map(function(x) {
+                    return x.wkg != null && isFinite(x.wkg) ? x.wkg : null;
+                  });
+                  window.setStelvioOctagonRanksCache(
+                    uid,
+                    gender,
+                    category,
+                    todayStr,
+                    monthlyRanks,
+                    cohortSizePerAxis,
+                    hofRanks,
+                    mwForCache,
+                    hwForCache
+                  );
+                } catch (e) {
+                  console.warn('[StelvioOctagon] cache write failed:', e && e.message);
+                }
+              })
+              .catch(function() {});
           })
           .catch(function() {
+            if (peakReqId !== octagonPeakReqRef.current) {
+              return;
+            }
             setState({ loading: false, err: 'fetch', monthly: null, hof: null, supremoMonthly: null });
           });
       },
