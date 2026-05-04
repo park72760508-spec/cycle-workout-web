@@ -2203,28 +2203,106 @@
     var tierId = props.tierId; /* 배지와 동일한 effective tier ID (선택적) */
     var pPctForBar = props.pPctForBar;
     var barContext = props.barContext;
-    if (!summary || !summary.tier) return null;
-    var result = computeLevelBarStep(summary, tierId, pPctForBar, barContext);
+    var hasSummary = !!(summary && summary.tier);
+    var result = hasSummary ? computeLevelBarStep(summary, tierId, pPctForBar, barContext) : { lv: LEVEL_BAR_DEFS[6], lvIdx: 6, step: 0 };
     var lv = result.lv;
-    var lvIdx = result.lvIdx;
     var step = result.step;
+
+    var _animF = useState(0);
+    var animFilled = _animF[0];
+    var setAnimFilled = _animF[1];
+    var _blinkBi = useState(null);
+    var blinkBi = _blinkBi[0];
+    var setBlinkBi = _blinkBi[1];
+
+    var barCtxSig = '';
+    if (barContext && typeof barContext === 'object') {
+      barCtxSig =
+        String(barContext.filterCategory != null ? barContext.filterCategory : '') +
+        '|' +
+        String(barContext.viewerAgeCategory != null ? barContext.viewerAgeCategory : '') +
+        '|' +
+        String(barContext.isVirtualCohort === true ? '1' : '0');
+    }
+
+    var barAnimTimerRef = useRef(null);
+    var barBlinkClearRef = useRef(null);
+
+    useEffect(
+      function() {
+        if (barAnimTimerRef.current != null) {
+          clearInterval(barAnimTimerRef.current);
+          barAnimTimerRef.current = null;
+        }
+        if (barBlinkClearRef.current != null) {
+          clearTimeout(barBlinkClearRef.current);
+          barBlinkClearRef.current = null;
+        }
+        setBlinkBi(null);
+        if (!hasSummary) {
+          setAnimFilled(0);
+          return undefined;
+        }
+        var targetStep = step | 0;
+        setAnimFilled(0);
+        if (targetStep < 1) {
+          return undefined;
+        }
+        var tick = 0;
+        barAnimTimerRef.current = window.setInterval(function() {
+          tick += 1;
+          if (tick <= targetStep) {
+            setAnimFilled(tick);
+          }
+          if (tick >= targetStep) {
+            if (barAnimTimerRef.current != null) {
+              clearInterval(barAnimTimerRef.current);
+              barAnimTimerRef.current = null;
+            }
+            var topBiLast = 10 - targetStep;
+            setBlinkBi(topBiLast);
+            barBlinkClearRef.current = window.setTimeout(function() {
+              setBlinkBi(null);
+              barBlinkClearRef.current = null;
+            }, 1580);
+          }
+        }, 220);
+        return function() {
+          if (barAnimTimerRef.current != null) {
+            clearInterval(barAnimTimerRef.current);
+            barAnimTimerRef.current = null;
+          }
+          if (barBlinkClearRef.current != null) {
+            clearTimeout(barBlinkClearRef.current);
+            barBlinkClearRef.current = null;
+          }
+        };
+      },
+      [hasSummary, lv.id, step, tierId, pPctForBar, barCtxSig]
+    );
+
+    if (!hasSummary) {
+      return null;
+    }
+
     var blocks = [];
     for (var bi = 0; bi < 10; bi++) {
-      /* bi=0 → 최상단(비어있음), bi=9 → 최하단(가장 먼저 채워짐) */
-      var filled = bi >= (10 - step);
-      /* 채워진 블록: 아래로 갈수록 불투명, 위로 갈수록 조금 연함 */
+      /* bi=0 → 최상단, bi=9 → 최하단(먼저 채움); animFilled 단계부터 아래쪽만 채움 */
+      var filled = bi >= (10 - animFilled);
       var blockOpacity = filled ? (0.5 + ((9 - bi) / 9) * 0.5) : 1;
+      var blinkOn = blinkBi === bi && filled;
       blocks.push(
         <div
           key={bi}
+          className={blinkOn ? 'stelvio-level-bar-cell stelvio-level-bar-cell--blink' : 'stelvio-level-bar-cell'}
           style={{
             width: '28px',
             height: '18px',
             borderRadius: '4px',
             background: filled ? lv.color : 'rgba(16,185,129,0.06)',
-            border: filled ? ('1px solid ' + lv.color) : '1px solid rgba(16,185,129,0.20)',
+            border: filled ? '1px solid ' + lv.color : '1px solid rgba(16,185,129,0.20)',
             opacity: blockOpacity,
-            flexShrink: 0
+            transition: blinkOn ? 'none' : 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease'
           }}
         />
       );
@@ -2243,7 +2321,7 @@
           {blocks}
         </div>
         <div style={{ fontSize: '9px', color: darkGreen, marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
-          {step}<span style={{ color: darkGreen, opacity: 0.6 }}>/10</span>
+          {animFilled}<span style={{ color: darkGreen, opacity: 0.6 }}>/10</span>
         </div>
       </div>
     );
@@ -3510,6 +3588,16 @@
         <div className="h-[180px] flex items-center justify-center text-gray-500 text-sm">랭킹을 불러오지 못했습니다. 네트워크를 확인해 주세요.</div>
       );
     } else {
+      var legendHighlightTierId = null;
+      if (tierForCard) {
+        var hctLegend = stelvioCardTooltip || {};
+        var pShowLegend =
+          hctLegend.kind === 'ok' && hctLegend.pPct != null && isFinite(hctLegend.pPct) && hctLegend.pPct >= 0 ? hctLegend.pPct : -1;
+        legendHighlightTierId =
+          pShowLegend >= 0
+            ? (heptagonBoardTierIdFromLevelPercent(pShowLegend) || {}).id || tierForCard.tier.id
+            : tierForCard.tier.id;
+      }
       body = (
         <div>
           <div className="flex items-center justify-center gap-1 w-full max-w-[420px] mx-auto">
@@ -3575,22 +3663,33 @@
           >
             <div className="grid grid-cols-7 gap-x-0.5 sm:gap-x-1 gap-y-1.5 justify-items-center items-end text-[10px] text-gray-600">
               {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId) {
+                var isLegFocus = legendHighlightTierId == null || tLegendId === legendHighlightTierId;
                 return (
-                  <div key={'leg-img-' + tLegendId} className="flex items-end justify-center w-full pt-0.5">
+                  <div
+                    key={'leg-img-' + tLegendId}
+                    className={
+                      'stelvio-heptagon-tier-legend__img-wrap flex items-end justify-center w-full pt-0.5 ' +
+                      (isLegFocus ? 'stelvio-heptagon-tier-legend__img-wrap--focus' : 'stelvio-heptagon-tier-legend__img-wrap--dim')
+                    }
+                  >
                     <img
                       src={tierBadgeImageSrc(tLegendId)}
                       alt=""
-                      className="max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.3)] h-[calc(16px*1.3)]"
+                      className="stelvio-heptagon-tier-legend__img max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.3)] h-[calc(16px*1.3)]"
                       decoding="async"
                     />
                   </div>
                 );
               })}
               {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId2) {
+                var isCapFocus = legendHighlightTierId == null || tLegendId2 === legendHighlightTierId;
                 return (
                   <div
                     key={'leg-txt-' + tLegendId2}
-                    className="w-full max-w-[4.75rem] text-[8px] sm:text-[9px] text-slate-600 text-center leading-tight px-0.5"
+                    className={
+                      'stelvio-heptagon-tier-legend__cap w-full max-w-[4.75rem] text-[8px] sm:text-[9px] text-center leading-tight px-0.5 ' +
+                      (isCapFocus ? 'stelvio-heptagon-tier-legend__cap--focus' : 'stelvio-heptagon-tier-legend__cap--dim')
+                    }
                   >
                     {heptagonCardTierLegendCaption(tLegendId2)}
                   </div>
