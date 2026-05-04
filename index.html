@@ -21735,7 +21735,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboardCoach.js"></script>
   <script src="assets/js/dashboard/dashboardAICache.js"></script>
   <!-- Dashboard 리팩터링: 반드시 마지막에 로드하여 window.PerformanceDashboard 덮어쓰기 -->
-  <script src="assets/js/dashboard/useDashboardData.js"></script>
+  <!-- defer: React(react.production.min.js)가 defer이므로 동기 로드 시 훅 초기화가 먼저 돌아 경고 발생 -->
+  <script defer src="assets/js/dashboard/useDashboardData.js"></script>
   <script src="assets/js/dashboard/components/AICoachHeroCard.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel"></script>
   <script src="assets/js/dashboard/stelvioHeptagonRankLog.js"></script>
