@@ -5637,6 +5637,63 @@ body:has(#trainingDetailModal:not(.hidden)) {
   text-align: center;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
+/* 헵타곤 카드: 세로 레벨바 옆열 — 레벨 pill + 막대 */
+.stelvio-octagon-sidebar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: auto;
+  min-width: 38px;
+  max-width: 120px;
+  align-self: stretch;
+}
+.stelvio-octagon-tier-btn--leveltag-sidebar {
+  margin-top: 0;
+  margin-bottom: 6px;
+  width: 100%;
+  max-width: 7.75rem;
+}
+.stelvio-octagon-tier-level-name--sidebar-neon {
+  display: block;
+  width: 100%;
+  margin-top: 0;
+  max-width: 7.75rem;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(196, 181, 253, 0.9);
+  background: #7c3aed;
+  color: #fff;
+  font-size: clamp(0.58rem, 1.85vw, 0.72rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  animation: stelvio-tier-pill-neon-glow 2.4s ease-in-out infinite;
+}
+@keyframes stelvio-tier-pill-neon-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 2px rgba(167, 139, 250, 0.4),
+      0 0 8px rgba(124, 58, 237, 0.28),
+      0 0 1px rgba(255, 255, 255, 0.45) inset;
+    border-color: rgba(216, 201, 255, 0.55);
+    filter: brightness(0.94);
+  }
+  50% {
+    box-shadow:
+      0 0 7px rgba(192, 168, 255, 0.95),
+      0 0 18px rgba(124, 58, 237, 0.55),
+      0 0 2px rgba(255, 255, 255, 0.75) inset;
+    border-color: rgba(237, 233, 254, 0.98);
+    filter: brightness(1.06);
+  }
+}
 .stelvio-octagon-tier-img {
   display: block;
   width: 100%;
