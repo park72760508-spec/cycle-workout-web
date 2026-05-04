@@ -5622,6 +5622,21 @@ body:has(#trainingDetailModal:not(.hidden)) {
   width: 100%;
   line-height: 0;
 }
+/* 등급 배지 바로 아래 GC — 차트 배경 중앙 스택 내부(하단 고정 레이아웃 아님) */
+.stelvio-octagon-tier-gc {
+  pointer-events: none;
+  margin-top: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  line-height: 1;
+}
+.stelvio-octagon-tier-gc__pill {
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
 .stelvio-octagon-tier-level-name {
   display: inline-block;
   align-self: center;
