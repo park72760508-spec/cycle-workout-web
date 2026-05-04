@@ -162,6 +162,10 @@ async function loadAligoConfigForMeetupOpen(db) {
 
   logAligoAuthShape("loadAligoConfigForMeetupOpen", apikey, userid, token);
 
+  console.log(
+    `[meetupAlimtalk] 설정: tpl_code=${meetupTpl}(미션 tpl과 별도) • sender 존재=${!!sender} • 테스트모드(ALIGO_ALIMTALK_TEST_MODE)=${String(process.env.ALIGO_ALIMTALK_TEST_MODE || "").toUpperCase() || "미설정"}`
+  );
+
   return {
     senderkey,
     tpl_code: meetupTpl,
@@ -193,11 +197,10 @@ async function sendOneMeetupOpenAlimtalk(cfg, receiverPhone, recvName, message) 
   if (String(process.env.ALIGO_ALIMTALK_TEST_MODE || "").toUpperCase() === "Y") {
     body.testMode = "Y";
   }
-  const em = String(process.env.ALIGO_MEETUP_ALIMTALK_EMTITLE_1 || process.env.ALIGO_ALIMTALK_EMTITLE_1 || "").trim();
+  // 미션(UH_2120 등)용 ALIGO_ALIMTALK_EMTITLE_1 / BUTTON_1 폴백 금지 — 템플릿·버튼 개수 불일치 시 발송 실패·알리고 창 미표시 원인
+  const em = String(process.env.ALIGO_MEETUP_ALIMTALK_EMTITLE_1 || "").trim();
   if (em) body.emtitle_1 = em;
-  const btn = String(
-    process.env.ALIGO_MEETUP_OPEN_BUTTON_1 || process.env.ALIGO_ALIMTALK_BUTTON_1 || ""
-  ).trim();
+  const btn = String(process.env.ALIGO_MEETUP_OPEN_BUTTON_1 || "").trim();
   if (btn) body.button_1 = btn;
 
   const req = { body, headers: { "content-type": "application/json" } };
@@ -216,6 +219,12 @@ async function sendOneMeetupOpenAlimtalk(cfg, receiverPhone, recvName, message) 
     const hint = aligoApiFailureHint(c, msg);
     console.error("[meetupAlimtalk] alimtalkSend 실패:", detail, hint || "");
     throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}${hint}`);
+  }
+  const info = raw && raw.info ? raw.info : null;
+  if (info != null && info.mid != null) {
+    console.log(
+      `[meetupAlimtalk] 전송요청 수신 tpl=${cfg.tpl_code} type=${String(info.type ?? "AT")} mid=${String(info.mid)} scnt=${info.scnt ?? ""} fcnt=${info.fcnt ?? ""}`
+    );
   }
 }
 
