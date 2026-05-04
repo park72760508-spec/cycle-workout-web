@@ -6049,9 +6049,13 @@ const openRidingMeetupAlimtalk = require("./openRidingMeetupAlimtalk");
 exports.onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
   {
     document: "rides/{rideId}",
+    /** 알리고 code=-99 회피: onIndoorLogCreatedReward 과 동일 — Direct VPC egress + Cloud NAT 고정 IP */
+    region: "asia-northeast3",
     timeoutSeconds: 300,
     memory: "512MiB",
     secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    network: "default",
+    vpcEgress: "ALL_TRAFFIC",
   },
   async (event) => {
     const snap = event.data;
