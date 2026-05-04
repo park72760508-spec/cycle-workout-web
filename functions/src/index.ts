@@ -753,6 +753,94 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
   }
 );
 
+/**
+ * 오픈 라이딩 rides 생성 시 초대 대상에게 모임 오픈 알림톡.
+ * 알리고 발송 경로를 onIndoorLogCreatedReward 와 동일하게 유지(region·Direct VPC egress·Secrets·injectAligoEnv).
+ */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as {
+  sendMeetupInviteAlimtalksForNewRide: (
+    firestore: admin.firestore.Firestore,
+    rideId: string,
+    rideData: Record<string, unknown>
+  ) => Promise<{
+    skipped: boolean;
+    reason?: string;
+    error?: string;
+    attempts?: unknown[];
+    sent?: number;
+    total?: number;
+  }>;
+};
+
+export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  {
+    document: "rides/{rideId}",
+    region: "asia-northeast3",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    network: "default",
+    vpcEgress: "ALL_TRAFFIC",
+  } as any,
+  async (event) => {
+    injectAligoEnv();
+
+    const snap = event.data;
+    if (!snap?.exists) return;
+
+    const rideId = String((event.params as { rideId?: string }).rideId || "").trim();
+    const rideData = snap.data() as Record<string, unknown>;
+    if (String(rideData.rideStatus || "active") === "cancelled") return;
+
+    const invitedRaw = Array.isArray(rideData.invitedList) ? rideData.invitedList : [];
+    if (invitedRaw.length === 0) return;
+
+    try {
+      const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
+      const summary = result.skipped
+        ? { skipped: true, reason: result.reason || "unknown", error: result.error || null }
+        : {
+            skipped: false,
+            sent: result.sent || 0,
+            total: result.total || 0,
+            attempts: result.attempts || [],
+          };
+      await db
+        .collection("rides")
+        .doc(rideId)
+        .set(
+          {
+            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+            meetupInviteAlimtalkSummary: summary,
+          },
+          { merge: true }
+        );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[onRideCreatedMeetupInviteAlimtalk]", rideId, msg);
+      try {
+        await db
+          .collection("rides")
+          .doc(rideId)
+          .set(
+            {
+              meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+              meetupInviteAlimtalkSummary: {
+                skipped: false,
+                error: msg,
+              },
+            },
+            { merge: true }
+          );
+      } catch (e2) {
+        console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", e2);
+      }
+    }
+  }
+);
+
 /** 라이딩 모임 참석 검증 (Strava 스트림 + 집결지 반경 200m, 모임 시각 ±1h) — 방장 전용 Callable */
 export const verifyMeetingAttendance = createVerifyMeetingAttendance(stravaClientSecret);
 
