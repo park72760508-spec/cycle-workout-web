@@ -6199,6 +6199,9 @@ if (fs.existsSync(libPath)) {
     if (naverSubscription && naverSubscription.meetupInviteAlimtalkHttpsRelay) {
       exports.meetupInviteAlimtalkHttpsRelay = naverSubscription.meetupInviteAlimtalkHttpsRelay;
     }
+    if (naverSubscription && naverSubscription.missionSubscriptionAlimtalkHttpsRelay) {
+      exports.missionSubscriptionAlimtalkHttpsRelay = naverSubscription.missionSubscriptionAlimtalkHttpsRelay;
+    }
     if (naverSubscription && naverSubscription.onRideCreatedMeetupInviteAlimtalk) {
       exports.onRideCreatedMeetupInviteAlimtalk = naverSubscription.onRideCreatedMeetupInviteAlimtalk;
     }
