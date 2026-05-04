@@ -515,7 +515,7 @@ function fetchRankingForDurationRolling30(dur, userId, userWeightKg) {
 }
 
 /**
- * 파워 커브 목표 + duration별 코호트 평균 W/kg·심박(bpm). 기간: API period=rolling30 (= 오늘 기준 Seoul 최근 30일).
+ * 파워 커브 목표 + duration별 코호트 평균 W/kg·심박(bpm). 기간: API period=rolling30 (= 오늘 기준 Seoul 최근 28일 롤링, 서버에서 4주 피크 집계).
  */
 function fetchDashboardPeakRankingCohort(userId, userWeight) {
   const durations = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
