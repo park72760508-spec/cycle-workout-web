@@ -419,7 +419,9 @@
         ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' TSS'
         : isKmMode
         ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' km'
-        : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' W/kg';
+        : isGcMode
+          ? x0.toFixed(1) + ' ~ ' + x1.toFixed(1) + ' 점'
+          : x0.toFixed(2) + ' ~ ' + x1.toFixed(2) + ' 점';
       return (
         <div className="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2 shadow-lg shadow-indigo-500/10 text-xs z-50">
           <div className="font-semibold text-slate-700 mb-0.5">{rng}</div>
