@@ -3102,8 +3102,28 @@
           for (var gi = 0; gi < nAxis; gi++) gr.push(g);
           return pathFromPoints(radarPolygonPoints(gr, cx, cy, rMax));
         });
+        var fillGradId = 'stelvio-hept-fill-rad-' + String(uid || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 48);
+        if (!fillGradId || fillGradId === 'stelvio-hept-fill-rad_-') {
+          fillGradId = 'stelvio-hept-fill-rad-def';
+        }
         return (
           <svg viewBox="0 0 200 200" className="w-full h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
+            <defs>
+              <radialGradient
+                id={fillGradId}
+                gradientUnits="userSpaceOnUse"
+                cx={cx}
+                cy={cy}
+                r={rMax * 1.02}
+                fx={cx}
+                fy={cy}
+              >
+                <stop offset="0%" stopColor="rgb(245, 243, 255)" stopOpacity={0.95} />
+                <stop offset="38%" stopColor="rgb(196, 181, 253)" stopOpacity={0.72} />
+                <stop offset="72%" stopColor="rgb(139, 92, 246)" stopOpacity={0.62} />
+                <stop offset="100%" stopColor="rgb(91, 33, 182)" stopOpacity={0.78} />
+              </radialGradient>
+            </defs>
             {grid.map(function(d, idx) {
               return (
                 <path
@@ -3131,7 +3151,7 @@
             })}
             <path
               d={mPts}
-              fill="rgba(124, 58, 237, 0.22)"
+              fill={'url(#' + fillGradId + ')'}
               stroke="rgb(109, 40, 217)"
               strokeWidth="2.2"
               strokeLinejoin="round"
@@ -3161,7 +3181,7 @@
           </svg>
         );
       },
-      [state, tierForCard]
+      [state, tierForCard, uid]
     );
 
     var filterRow = null;
