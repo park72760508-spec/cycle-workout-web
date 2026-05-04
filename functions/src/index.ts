@@ -9,8 +9,6 @@ import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { onMessagePublished } from "firebase-functions/v2/pubsub";
-import { PubSub } from "@google-cloud/pubsub";
 import { defineSecret, defineString, defineInt } from "firebase-functions/params";
 import {
   getAccessToken,
@@ -100,9 +98,6 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-
-/** 모임 알림톡: Firestore 생성 트리거 → Pub/Sub → VPC 구독자에서 알리고 호출(code=-99 IP 회피) */
-const MEETUP_INVITE_ALIMTALK_TOPIC = "meetup-invite-alimtalk";
 
 /** 네이버 API 요구: KST(UTC+09:00) ISO 8601 + 밀리초(.SSS). 타임존 +09:00 명시 */
 function toKstIso8601(date: Date): string {
@@ -759,11 +754,9 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
 );
 
 /**
- * 오픈 라이딩 rides 생성 시 초대 대상에게 모임 오픈 알림톡 본 처리(알리고 HTTP).
- *
- * Gen2 Firestore 트리거는 VPC egress가 외부(알리고)까지 기대대로 적용되지 않아 code=-99 가 날 수 있음.
- * 그래서 rides 생성 트리거는 아래 주제로만 넘기고, 이 구독자는 스케줄/실내 포인트와 동일하게
- * Direct VPC egress + Cloud NAT 고정 IP로 알리고를 호출한다.
+ * 오픈 라이딩 rides 생성 시 초대 대상에게 모임 오픈 알림톡.
+ * UH_2120(미션)과 동일하게 Firestore 트리거 + Direct VPC egress(Cloud NAT 고정 IP)로 알리고 호출한다.
+ * (Pub/Sub 구독자는 VPC 미적용이라 code=-99가 날 수 있어 제거함.)
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as {
@@ -781,101 +774,21 @@ const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as 
   }>;
 };
 
-export const onMeetupInviteAlimtalkDeliver = onMessagePublished(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  {
-    topic: MEETUP_INVITE_ALIMTALK_TOPIC,
-    region: "asia-northeast3",
-    timeoutSeconds: 300,
-    memory: "512MiB",
-    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-    network: "default",
-    vpcEgress: "ALL_TRAFFIC",
-  } as any,
-  async (event) => {
-    injectAligoEnv();
-
-    let rideId = "";
-    try {
-      rideId = String(event.data.message.json?.rideId ?? "").trim();
-    } catch {
-      console.error("[onMeetupInviteAlimtalkDeliver] message json 파싱 실패");
-      return;
-    }
-    if (!rideId) {
-      console.error("[onMeetupInviteAlimtalkDeliver] rideId 없음");
-      return;
-    }
-
-    const rideRef = db.collection("rides").doc(rideId);
-    const rideSnap = await rideRef.get();
-    if (!rideSnap.exists) {
-      console.warn("[onMeetupInviteAlimtalkDeliver] ride 없음", rideId);
-      return;
-    }
-    const rideDataRaw = rideSnap.data();
-    if (!rideDataRaw) {
-      console.warn("[onMeetupInviteAlimtalkDeliver] ride 데이터 없음", rideId);
-      return;
-    }
-    const rideData = rideDataRaw as Record<string, unknown>;
-
-    /** 동일 라이드에 대한 Pub/Sub 재전달 시 이미 성공했으면 스킵(알림톡 중복 방지) */
-    const prevSum = rideData.meetupInviteAlimtalkSummary as { sent?: number } | undefined;
-    if (prevSum != null && typeof prevSum === "object" && Number(prevSum.sent) > 0) {
-      console.log("[onMeetupInviteAlimtalkDeliver] 이미 발송 성공 기록 있음 — 스킵", rideId);
-      return;
-    }
-
-    try {
-      const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
-      const summary = result.skipped
-        ? { skipped: true, reason: result.reason || "unknown", error: result.error || null }
-        : {
-            skipped: false,
-            sent: result.sent || 0,
-            total: result.total || 0,
-            attempts: result.attempts || [],
-          };
-      await rideRef.set(
-        {
-          meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-          meetupInviteAlimtalkSummary: summary,
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[onMeetupInviteAlimtalkDeliver]", rideId, msg);
-      try {
-        await rideRef.set(
-          {
-            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-            meetupInviteAlimtalkSummary: {
-              skipped: false,
-              error: msg,
-              delivery: "pubsub_worker",
-            },
-          },
-          { merge: true }
-        );
-      } catch (e2) {
-        console.error("[onMeetupInviteAlimtalkDeliver] 요약 기록 실패", e2);
-      }
-    }
-  }
-);
-
-/** rides 생성 시 Pub/Sub에만 적재(VPC 불필요). 실제 알리고 호출은 onMeetupInviteAlimtalkDeliver */
+/** rides 생성 직후: `onIndoorLogCreatedReward`와 동일 네트워크 옵션으로 알리고까지 직행 */
 export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     document: "rides/{rideId}",
     region: "asia-northeast3",
-    timeoutSeconds: 120,
-    memory: "256MiB",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    network: "default",
+    vpcEgress: "ALL_TRAFFIC",
+    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   } as any,
   async (event) => {
+    injectAligoEnv();
+
     const snap = event.data;
     if (!snap?.exists) return;
 
@@ -886,39 +799,52 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
     const invitedRaw = Array.isArray(rideData.invitedList) ? rideData.invitedList : [];
     if (invitedRaw.length === 0) return;
 
-    const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
-    const pubsub = projectId ? new PubSub({ projectId }) : new PubSub();
-    const topic = pubsub.topic(MEETUP_INVITE_ALIMTALK_TOPIC);
-    try {
-      const [exists] = await topic.exists();
-      if (!exists) {
-        await topic.create();
-      }
-    } catch (e) {
-      console.warn("[onRideCreatedMeetupInviteAlimtalk] topic 생성/확인(무시 가능):", (e as Error).message);
+    const prevSum = rideData.meetupInviteAlimtalkSummary as { sent?: number } | undefined;
+    if (prevSum != null && typeof prevSum === "object" && Number(prevSum.sent) > 0) {
+      console.log("[onRideCreatedMeetupInviteAlimtalk] 이미 발송 성공 기록 있음 — 스킵", rideId);
+      return;
     }
 
+    const rideRef = db.collection("rides").doc(rideId);
+
     try {
-      await topic.publishMessage({ json: { rideId } });
-      console.log("[onRideCreatedMeetupInviteAlimtalk] Pub/Sub 전달:", rideId, MEETUP_INVITE_ALIMTALK_TOPIC);
+      const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
+      const summary = result.skipped
+        ? {
+            skipped: true,
+            reason: result.reason || "unknown",
+            error: result.error || null,
+            delivery: "firestore_vpc",
+          }
+        : {
+            skipped: false,
+            sent: result.sent || 0,
+            total: result.total || 0,
+            attempts: result.attempts || [],
+            delivery: "firestore_vpc",
+          };
+      await rideRef.set(
+        {
+          meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+          meetupInviteAlimtalkSummary: summary,
+        },
+        { merge: true }
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[onRideCreatedMeetupInviteAlimtalk] Pub/Sub publish 실패", rideId, msg);
+      console.error("[onRideCreatedMeetupInviteAlimtalk]", rideId, msg);
       try {
-        await db
-          .collection("rides")
-          .doc(rideId)
-          .set(
-            {
-              meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-              meetupInviteAlimtalkSummary: {
-                skipped: true,
-                reason: "pubsub_publish_failed",
-                error: msg,
-              },
+        await rideRef.set(
+          {
+            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+            meetupInviteAlimtalkSummary: {
+              skipped: false,
+              error: msg,
+              delivery: "firestore_vpc",
             },
-            { merge: true }
-          );
+          },
+          { merge: true }
+        );
       } catch (e2) {
         console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", e2);
       }
