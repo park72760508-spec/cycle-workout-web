@@ -1050,24 +1050,31 @@ function initAuthStateListener() {
              window.location.href.includes('callback.html'));
           
           if (!isCallbackPage) {
-            if (typeof syncUsersFromDB === 'function') {
-              try {
-                await syncUsersFromDB();
-              } catch (syncError) {
-                console.warn('⚠️ 사용자 목록 동기화 실패 (무시):', syncError.message);
+            const heavySyncAfterAuth = async () => {
+              if (typeof syncUsersFromDB === 'function') {
+                try {
+                  await syncUsersFromDB();
+                } catch (syncError) {
+                  console.warn('⚠️ 사용자 목록 동기화 실패 (무시):', syncError.message);
+                }
               }
-            }
-            if (typeof loadUsers === 'function') {
-              try {
-                await loadUsers();
-              } catch (loadError) {
-                console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
+              if (typeof loadUsers === 'function') {
+                try {
+                  await loadUsers();
+                } catch (loadError) {
+                  console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
+                }
               }
-            }
-            if (typeof window.syncGeminiApiRegistrationFromLocalStorage === 'function') {
-              try {
-                window.syncGeminiApiRegistrationFromLocalStorage();
-              } catch (_) {}
+              if (typeof window.syncGeminiApiRegistrationFromLocalStorage === 'function') {
+                try {
+                  window.syncGeminiApiRegistrationFromLocalStorage();
+                } catch (_) {}
+              }
+            };
+            if (typeof window.requestIdleCallback === 'function') {
+              window.requestIdleCallback(() => heavySyncAfterAuth(), { timeout: 1800 });
+            } else {
+              setTimeout(() => heavySyncAfterAuth(), 0);
             }
           }
           
@@ -1150,12 +1157,18 @@ function initAuthStateListener() {
   });
 }
 
-// 페이지 로드 시 인증 상태 리스너 초기화
-if (typeof window !== 'undefined' && window.auth) {
+// 페이지 로드 시 인증 상태 리스너 초기화 (compat / v9 택1)
+if (typeof window !== 'undefined' && (window.auth || window.authV9)) {
   initAuthStateListener();
-  // initAuthStateListener() 내부에 이미 onAuthStateChanged가 있으므로 여기서는 추가하지 않음
+} else if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.readyState === 'loading') {
+  document.addEventListener(
+    'DOMContentLoaded',
+    function stelvioDeferInitAuthListenerOnce() {
+      if (window.auth || window.authV9) initAuthStateListener();
+    },
+    { once: true }
+  );
 }
-
 // ========== Firestore API 함수들 (기존 Google Sheets API 호환) ==========
 
 /**
