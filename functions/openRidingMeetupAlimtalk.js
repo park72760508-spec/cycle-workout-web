@@ -10,11 +10,12 @@
 
 "use strict";
 
-const aligoapi = require("aligoapi");
-const { scrubAligoCredential, logAligoAuthShape, aligoApiFailureHint } = require("./lib/aligoCredentials");
-
-const APP_CONFIG_COLLECTION = "appConfig";
-const ALIGO_CONFIG_DOC = "aligo";
+const {
+  ALIMTALK_TEMPLATE,
+  loadAligoAlimtalkConfig,
+  safeAlimtalkDisplayNameUnified,
+  sendAlimtalkUnified,
+} = require("./lib/aligoAlimtalkUnified");
 
 /** 알리고 subject_1 / 본문 첫 줄 검수 템플릿명(대괄호 없음) — 카카오 승인명과 동일 */
 const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 안내";
@@ -22,10 +23,6 @@ const MEETUP_HEADER_LINE = `[${MEETUP_ALIM_SUBJECT_KO}]`;
 
 /** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
 const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
-
-function normalizeReceiverPhone(phone) {
-  return String(phone || "").replace(/\D/g, "");
-}
 
 function normalizePhoneDigitsServer(input) {
   let d = String(input || "").replace(/\D/g, "");
@@ -45,25 +42,6 @@ function getReceiverPhoneFromUserData(userData) {
       userData.phone_number ??
       ""
   ).trim();
-}
-
-/** 빈·이상 recvname 방지 (PointRewardService와 동일 의도) */
-function safeAlimtalkDisplayName(raw) {
-  const t = String(raw ?? "").trim();
-  if (!t) return "회원";
-  if (t.length === 1 && /[^\p{L}\p{N}]/u.test(t)) return "회원";
-  return t;
-}
-
-function isAligoAlimtalkApiSuccess(data) {
-  if (data.code !== undefined && data.code !== null) {
-    const c = Number(data.code);
-    return c === 0 && !Number.isNaN(c);
-  }
-  if (data.result_code !== undefined && data.result_code !== null) {
-    return String(data.result_code) === "1";
-  }
-  return false;
 }
 
 /** Firestore Timestamp | Date | string → 서울 달력 YYYY-MM-DD */
@@ -115,7 +93,7 @@ function formatRidingDistanceKm(n) {
  * meetup_level: 폼에 저장된 문자열 그대로 (예: 중급(28~32km/h))
  */
 function buildMeetupOpenAlimtalkMessage(vars) {
-  const userName = safeAlimtalkDisplayName(vars.userName);
+  const userName = safeAlimtalkDisplayNameUnified(vars.userName);
   const meetupName = String(vars.meetupName || "").trim() || "라이딩 모임";
   const meetupDatetime = String(vars.meetupDatetime || "").trim();
   const meetingPlace = String(vars.meetingPlace || "").trim() || "-";
@@ -139,112 +117,6 @@ ${userName}님께서 요청하신 일정에 맞춰 안전하게 라이딩을 준
 ※ 본 메시지는 'STELVIO 오프라인 라이딩 모임 오픈 알림'을 사전 신청하신 회원님께만 발송되는 정보성 안내 메시지입니다.`;
 
   return raw.replace(/\r?\n/g, "\r\n");
-}
-
-/**
- * @param {import("firebase-admin/firestore").Firestore} db
- */
-async function loadAligoConfigForMeetupOpen(db) {
-  const appConfigSnap = await db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
-  const appConfig = appConfigSnap.exists ? appConfigSnap.data() || {} : {};
-
-  const senderkey = scrubAligoCredential(String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || ""));
-  const sender = scrubAligoCredential(String(process.env.ALIGO_SENDER || appConfig.sender || ""));
-  const meetupTpl = scrubAligoCredential(
-    String(
-      process.env.ALIGO_MEETUP_OPEN_TPL_CODE ||
-        appConfig.meetup_open_tpl_code ||
-        appConfig.meetupOpenTplCode ||
-        DEFAULT_MEETUP_OPEN_TPL_CODE
-    )
-  );
-
-  const apikey = scrubAligoCredential(process.env.ALIGO_API_KEY);
-  const userid = scrubAligoCredential(process.env.ALIGO_USER_ID);
-  const token = scrubAligoCredential(process.env.ALIGO_TOKEN);
-
-  if (!meetupTpl) {
-    throw new Error(
-      "오프라인 모임 알림톡 템플릿 코드가 없습니다. ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code 를 확인하세요."
-    );
-  }
-
-  const missing = [];
-  if (!senderkey) missing.push("senderkey(ALIGO_SENDER_KEY 또는 appConfig/aligo.senderkey)");
-  if (!sender) missing.push("sender(ALIGO_SENDER 또는 appConfig/aligo.sender)");
-  if (!apikey) missing.push("ALIGO_API_KEY(Secret, 함수 secrets 연결 필요)");
-  if (!userid) missing.push("ALIGO_USER_ID(Secret)");
-  if (!token) missing.push("ALIGO_TOKEN(Secret)");
-  if (missing.length) {
-    throw new Error(`알리고 기본 설정 누락: ${missing.join(" · ")}`);
-  }
-
-  logAligoAuthShape("loadAligoConfigForMeetupOpen", apikey, userid, token);
-
-  console.log(
-    `[meetupAlimtalk] 설정: tpl_code=${meetupTpl}(미션 tpl과 별도) • sender 존재=${!!sender} • 테스트모드(ALIGO_ALIMTALK_TEST_MODE)=${String(process.env.ALIGO_ALIMTALK_TEST_MODE || "").toUpperCase() || "미설정"}`
-  );
-
-  return {
-    senderkey,
-    tpl_code: meetupTpl,
-    sender,
-    apikey,
-    userid,
-    token,
-  };
-}
-
-async function sendOneMeetupOpenAlimtalk(cfg, receiverPhone, recvName, message) {
-  const receiver = normalizeReceiverPhone(receiverPhone);
-  if (!receiver) {
-    throw new Error("수신 번호 없음");
-  }
-  const messageOut = message.replace(/\r?\n/g, "\r\n");
-
-  const body = {
-    senderkey: cfg.senderkey,
-    tpl_code: cfg.tpl_code,
-    sender: cfg.sender,
-    receiver_1: receiver,
-    recvname_1: safeAlimtalkDisplayName(recvName || ""),
-    subject_1: MEETUP_ALIM_SUBJECT_KO,
-    message_1: messageOut,
-    failover: "N",
-  };
-
-  if (String(process.env.ALIGO_ALIMTALK_TEST_MODE || "").toUpperCase() === "Y") {
-    body.testMode = "Y";
-  }
-  // 미션(UH_2120 등)용 ALIGO_ALIMTALK_EMTITLE_1 / BUTTON_1 폴백 금지 — 템플릿·버튼 개수 불일치 시 발송 실패·알리고 창 미표시 원인
-  const em = String(process.env.ALIGO_MEETUP_ALIMTALK_EMTITLE_1 || "").trim();
-  if (em) body.emtitle_1 = em;
-  const btn = String(process.env.ALIGO_MEETUP_OPEN_BUTTON_1 || "").trim();
-  if (btn) body.button_1 = btn;
-
-  const req = { body, headers: { "content-type": "application/json" } };
-  const authData = { apikey: cfg.apikey, userid: cfg.userid, token: cfg.token };
-  const raw = await aligoapi.alimtalkSend(req, authData);
-
-  if (!isAligoAlimtalkApiSuccess(raw)) {
-    let detail = "";
-    try {
-      detail = JSON.stringify(raw);
-    } catch {
-      detail = String(raw);
-    }
-    const msg = String(raw?.message ?? raw?.Message ?? "알 수 없는 응답");
-    const c = raw?.code ?? raw?.result_code;
-    const hint = aligoApiFailureHint(c, msg);
-    console.error("[meetupAlimtalk] alimtalkSend 실패:", detail, hint || "");
-    throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}${hint}`);
-  }
-  const info = raw && raw.info ? raw.info : null;
-  if (info != null && info.mid != null) {
-    console.log(
-      `[meetupAlimtalk] 전송요청 수신 tpl=${cfg.tpl_code} type=${String(info.type ?? "AT")} mid=${String(info.mid)} scnt=${info.scnt ?? ""} fcnt=${info.fcnt ?? ""}`
-    );
-  }
 }
 
 /**
@@ -337,7 +209,7 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
 
   let cfg;
   try {
-    cfg = await loadAligoConfigForMeetupOpen(db);
+    cfg = await loadAligoAlimtalkConfig(db, ALIMTALK_TEMPLATE.MEETUP_OFFLINE_OPEN);
   } catch (e) {
     console.error("[meetupAlimtalk] 설정 로드 실패:", e && e.message ? e.message : e);
     return { skipped: true, reason: "aligo_config_error", error: e && e.message ? e.message : String(e), attempts: [] };
@@ -368,7 +240,14 @@ async function sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData) {
     });
     const attemptTail = recvDigits.length >= 4 ? recvDigits.slice(-4) : "?";
     try {
-      await sendOneMeetupOpenAlimtalk(cfg, recvDigits, userName, message);
+      await sendAlimtalkUnified(cfg, {
+        receiverPhone: recvDigits,
+        displayName: userName,
+        subject: MEETUP_ALIM_SUBJECT_KO,
+        message,
+        templateKind: ALIMTALK_TEMPLATE.MEETUP_OFFLINE_OPEN,
+        logTag: "[meetupAlimtalk]",
+      });
       attempts.push({
         phoneTail: attemptTail,
         phoneLookup: resolved.source,
