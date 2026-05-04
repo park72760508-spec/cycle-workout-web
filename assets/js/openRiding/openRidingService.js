@@ -381,6 +381,41 @@ function sanitizeInviteJoinedUidByPhone(v) {
   return out;
 }
 
+/** 초대 시 등록 친구 UID 맵 — sanitize 규칙은 inviteJoinedUidByPhone 과 동일 */
+function sanitizeInviteFriendUidByPhone(v) {
+  return sanitizeInviteJoinedUidByPhone(v);
+}
+
+/**
+ * invitedList 에 실제 포함된 번호키에 한해 초대 친구 UID 맵 구축 (불일치 키·뒤 8자리 보정)
+ * @param {string[]} invitedListNorm normalizePhoneDigits 적용된 초대 목록
+ * @param {unknown} sourceMap 클라이언트 입력 또는 기존+신규 병합 맵
+ */
+function buildInviteFriendUidMapForInvitedPhones(invitedListNorm, sourceMap) {
+  const src = sanitizeInviteFriendUidByPhone(sourceMap);
+  /** @type {Record<string, string>} */
+  const out = {};
+  const list = Array.isArray(invitedListNorm) ? invitedListNorm : [];
+  list.forEach((ph) => {
+    const key = normalizePhoneDigits(ph);
+    if (key.length < 8) return;
+    let uid = src[key];
+    if (!uid) {
+      const w8 = key.slice(-8);
+      Object.keys(src).some((fk) => {
+        const nk = normalizePhoneDigits(fk);
+        if (nk === key || (nk.length >= 8 && w8.length === 8 && nk.slice(-8) === w8)) {
+          uid = src[fk];
+          return true;
+        }
+        return false;
+      });
+    }
+    if (uid) out[key] = uid;
+  });
+  return out;
+}
+
 function mergeInviteJoinedUidOnJoin(inviteUidMap, phoneRaw, userId) {
   const base = sanitizeInviteJoinedUidByPhone(inviteUidMap);
   const key = normalizePhoneDigits(phoneRaw);
@@ -608,6 +643,7 @@ export async function createRide(db, hostUserId, input) {
     .map((x) => normalizePhoneDigits(typeof x === 'string' ? x : (x && x.phone) != null ? x.phone : x))
     .filter((d) => d.length >= 8);
   const inviteDisplayByPhone = sanitizeInviteDisplayByPhone(input.inviteDisplayByPhone);
+  const inviteFriendUidByPhone = buildInviteFriendUidMapForInvitedPhones(invitedList, input.inviteFriendUidByPhone);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
@@ -631,6 +667,7 @@ export async function createRide(db, hostUserId, input) {
     isPrivate,
     invitedList,
     inviteDisplayByPhone,
+    inviteFriendUidByPhone,
     rideJoinPassword: rideJoinPassword.length === 4 ? rideJoinPassword : '',
     participantContact,
     participantContactPublic,
@@ -687,6 +724,12 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   const existingIdp = sanitizeInviteDisplayByPhone(data.inviteDisplayByPhone);
   const fromForm = sanitizeInviteDisplayByPhone(input.inviteDisplayByPhone);
   const inviteDisplayByPhone = Object.assign({}, existingIdp, fromForm);
+  const friendUidMerged = Object.assign(
+    {},
+    sanitizeInviteFriendUidByPhone(data.inviteFriendUidByPhone),
+    sanitizeInviteFriendUidByPhone(input.inviteFriendUidByPhone)
+  );
+  const inviteFriendUidByPhone = buildInviteFriendUidMapForInvitedPhones(invitedList, friendUidMerged);
   const rideJoinPassword = isPrivate
     ? String(input.rideJoinPassword != null ? input.rideJoinPassword : '')
         .replace(/\D/g, '')
@@ -710,6 +753,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     isPrivate,
     invitedList,
     inviteDisplayByPhone,
+    inviteFriendUidByPhone,
     rideJoinPassword: isPrivate && rideJoinPassword.length === 4 ? rideJoinPassword : '',
     packRidingRules: normalizePackRidingRules(input.packRidingRules),
     updatedAt: serverTimestamp()

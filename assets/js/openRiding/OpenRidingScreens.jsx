@@ -480,6 +480,26 @@ function buildOpenRidingInviteDisplayMap(inviteSelected) {
   return out;
 }
 
+/** inviteSelected 에서 등록 친구 행만 — 정규화 전화 → 친구 UID (알림톡 수신번호 users 프로필 해석용) */
+function buildOpenRidingInviteFriendUidMap(inviteSelected) {
+  var out = {};
+  var norm =
+    typeof window !== 'undefined' &&
+    window.openRidingService &&
+    typeof window.openRidingService.normalizePhoneDigits === 'function'
+      ? window.openRidingService.normalizePhoneDigits
+      : function (s) {
+          return String(s || '').replace(/\D/g, '');
+        };
+  (inviteSelected || []).forEach(function (x) {
+    if (!x || !x.friendUid) return;
+    var k = norm(x.phone);
+    var uid = String(x.friendUid).trim().slice(0, 128);
+    if (k.length >= 8 && uid) out[k] = uid;
+  });
+  return out;
+}
+
 /** 라이딩 생성 폼 초대 행 { name, phone, key } — 표시명 기준 한글 가나다순 */
 function sortOpenRidingInviteRowsByDisplayNameKo(rows) {
   return (rows || []).slice().sort(function (a, b) {
@@ -4197,7 +4217,12 @@ function OpenRidingCreateForm(props) {
             rows.forEach(function (row) {
               if (!row || !row.key || keysP[row.key]) return;
               keysP[row.key] = true;
-              pending.push({ name: row.name, phone: row.phone, key: row.key });
+              pending.push({
+                name: row.name,
+                phone: row.phone,
+                key: row.key,
+                friendUid: row.friendUid != null ? String(row.friendUid).trim() : undefined
+              });
               added = true;
             });
             if (!added) return f;
@@ -4251,6 +4276,30 @@ function OpenRidingCreateForm(props) {
             !Array.isArray(ride.inviteDisplayByPhone)
               ? ride.inviteDisplayByPhone
               : {};
+          var fuidMap =
+            ride.inviteFriendUidByPhone &&
+            typeof ride.inviteFriendUidByPhone === 'object' &&
+            !Array.isArray(ride.inviteFriendUidByPhone)
+              ? ride.inviteFriendUidByPhone
+              : {};
+          function lookupInviteFriendUid(normKey) {
+            if (!normKey || normKey.length < 8) return undefined;
+            if (fuidMap[normKey] != null && String(fuidMap[normKey]).trim()) {
+              return String(fuidMap[normKey]).trim();
+            }
+            var w8 = normKey.slice(-8);
+            var fk = Object.keys(fuidMap);
+            for (var fi = 0; fi < fk.length; fi++) {
+              var nk = normFn(String(fk[fi]));
+              if (
+                nk === normKey ||
+                (nk.length >= 8 && nk.slice(-8) === w8)
+              ) {
+                return String(fuidMap[fk[fi]]).trim();
+              }
+            }
+            return undefined;
+          }
           var inviteSelected = il.map(function (phone) {
             var p = String(phone != null ? phone : '');
             var k = normFn(p);
@@ -4261,7 +4310,10 @@ function OpenRidingCreateForm(props) {
             } else if (!nm) {
               nm = '초대 대상';
             }
-            return { name: nm, phone: p, key: k };
+            var fUid = lookupInviteFriendUid(k);
+            var rowOut = { name: nm, phone: p, key: k };
+            if (fUid) rowOut.friendUid = fUid;
+            return rowOut;
           });
           setForm(
             Object.assign(
@@ -4575,6 +4627,7 @@ function OpenRidingCreateForm(props) {
           isPrivate: !!form.isPrivate,
           invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
           inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
+          inviteFriendUidByPhone: buildOpenRidingInviteFriendUidMap(form.inviteSelected),
           rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
           packRidingRules: packRidingRulesPayload
         });
@@ -4613,6 +4666,7 @@ function OpenRidingCreateForm(props) {
         isPrivate: !!form.isPrivate,
         invitedList: (form.inviteSelected || []).map(function (x) { return x.phone; }),
         inviteDisplayByPhone: buildOpenRidingInviteDisplayMap(form.inviteSelected),
+        inviteFriendUidByPhone: buildOpenRidingInviteFriendUidMap(form.inviteSelected),
         rideJoinPassword: form.isPrivate ? String(form.rideJoinPassword || '').replace(/\D/g, '').slice(0, 4) : '',
         packRidingRules: packRidingRulesPayload,
         /** createRide 내부와 동일하게 명시(캐시·구버전 서비스 대비) */
