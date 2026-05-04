@@ -4,7 +4,7 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import type { SecretParam } from "firebase-functions/lib/params/types";
+import type { SecretParam } from "firebase-functions/params";
 
 /** 집결지 반경 (미터) */
 const MEETING_START_RADIUS_M = 200;

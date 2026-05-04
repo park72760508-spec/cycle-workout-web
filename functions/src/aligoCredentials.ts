@@ -40,8 +40,9 @@ export function aligoApiFailureHint(code: unknown, message: string): string {
       return (
         " [조치] 문구는 IP이나, code=-99는 동일 코드로 (1) 카카오톡 API userid·api_key·token 불일치·만료 " +
         "(2) SMS용 키로 카카오 API 호출 (3) 실제 패킷 egress IP가 알리고 「카카오톡 API」 화이트리스트와 불일치 등이 겹칩니다. " +
-        "rides.meetupInviteAlimtalkSummary.diagSeenPublicIp 를 미션·네이버와 같은 NAT IP와 숫자로 비교하고, " +
-        "ALIGO_DEBUG_AUTH=1 로 Secret 길이를 확인하세요. 미션은 정상·모임만 실패면 템플릿(UH_5528)·tpl_code가 아니라 인증·NAT 경로 차이를 우선 의심합니다."
+        "rides.meetupInviteAlimtalkSummary.diagSeenPublicIp(진단)·미션 측 diag를 NAT 허용 IP와 비교하고, " +
+        "`meetupInviteAlimtalkHttpsRelay`에 Gen2 Direct VPC(networkInterface+vpcEgress)·firebase-functions/SDK 최신 빌드로 배포됐는지 확인하세요(구형 SDK에선 VPC 옵션이 빠져 34.96.x처럼 기본 egress만 나올 수 있음). " +
+        "ALIGO_DEBUG_AUTH=1 로 Secret 길이 확인. 미션은 정상·모임만 실패면 템플릿(UH_5528)·tpl_code가 아니라 인증·NAT 경로 차이를 우선 의심합니다."
       );
     }
     return (

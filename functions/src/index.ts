@@ -1,9 +1,8 @@
 /**
  * STELVIO AI - 네이버 구독 자동화 메인 엔트리
  * 30분 단위 스케줄러, Direct VPC Egress(고정 IP 34.64.250.77 / Cloud NAT) 적용
- * [마이그레이션] VPC Connector(stelvio-connector) → Direct VPC Egress
- *   - network: GCP VPC 네트워크 이름 (GCP Console > VPC networks 에서 확인)
- *   - vpcEgress: 'ALL_TRAFFIC' → Cloud NAT를 통해 고정 IP로 아웃바운드
+ * [마이그레이션] VPC Connector(stelvio-connector) → Direct VPC Egress (firebase-functions ^7 의 networkInterface+vpcEgress)
+ * 공통 옵션: `aligoKakaoNatEgress.ts` ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS
  */
 import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
@@ -39,6 +38,16 @@ import {
 import { sendFailureEmail, sendRevokeFailureReport, sendSmtpTestEmail } from "./emailService";
 import { createVerifyMeetingAttendance, createScheduledRideAttendanceVerification } from "./verifyMeetingAttendance";
 import { PointRewardService, type StelvioMileageAppendResult } from "./PointRewardService";
+import {
+  ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
+  fetchAligoKakaoEgressPublicIpDiagnostics,
+  warnIfDiagPublicIpMismatch,
+} from "./aligoKakaoNatEgress";
+import {
+  ALIMTALK_TEMPLATE,
+  loadAligoAlimtalkConfig,
+  sendAlimtalkUnified,
+} from "./aligoAlimtalkUnified";
 import { scrubAligoCredential } from "./aligoCredentials";
 
 const NAVER_CLIENT_ID = "6DPEyhnioC5AQfO2hsuUeq";
@@ -68,6 +77,13 @@ const meetupAlimRelaySecret = defineSecret("MEETUP_ALIM_RELAY_SECRET");
 /** 릴레이 함수 URL 미지정 시 asia-northeast3-{프로젝트}.cloudfunctions.net 패턴 */
 const meetupAlimRelayUrlParam = defineString("MEETUP_ALIM_RELAY_URL", { default: "" });
 
+/** Strava 웹훅(VPC 미적용) → 미션·구독 연장 알림만 NAT 고정 출구 HTTPS 릴레이 (실내 로그 트리거와 동일 egress) */
+const missionAlimRelaySecret = defineSecret("MISSION_ALIM_RELAY_SECRET");
+const missionAlimRelayUrlParam = defineString("MISSION_ALIM_RELAY_URL", { default: "" });
+
+/** 선택: 진단 공인 IP가 이 값과 다르면 경고 로그 (예: 34.64.250.77) */
+const aligoNatEgressExpectIpv4 = defineString("ALIGO_NAT_EGRESS_EXPECT_IPV4", { default: "" });
+
 /** SMTP 환경 변수를 process.env에 주입 (emailService가 읽을 수 있도록). 호출 시점에 실행 */
 function injectSmtpEnv(): void {
   try {
@@ -78,22 +94,6 @@ function injectSmtpEnv(): void {
     process.env.ADMIN_EMAIL = adminEmail.value() || process.env.ADMIN_EMAIL;
   } catch {
     // Secret 미설정 시 무시 (emailService에서 SMTP 미설정으로 처리)
-  }
-}
-
-/** VPC 릴레이 진단: ipify 공인 출구 IP (Cloud NAT 허용 IP와 숫자 대조용, 알리고 kakaoapi 와 동일 경로 가능성 높음) */
-async function fetchPublicIpForMeetupVpcDiagnostics(): Promise<string | null> {
-  try {
-    const ac = new AbortController();
-    const t = setTimeout(() => ac.abort(), 12000);
-    const r = await fetch("https://api.ipify.org?format=json", { signal: ac.signal });
-    clearTimeout(t);
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ip?: unknown };
-    const ip = typeof j.ip === "string" ? j.ip.trim() : "";
-    return ip.length > 0 ? ip : null;
-  } catch {
-    return null;
   }
 }
 
@@ -457,17 +457,13 @@ export async function runNaverSubscriptionSync(
  *   (예: "default" 또는 커스텀 VPC명 "stelvio-vpc" 등)
  */
 export const naverSubscriptionSyncSchedule = onSchedule(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     schedule: "every 30 minutes",
     timeZone: "Asia/Seoul",
     timeoutSeconds: 300,
-    region: "asia-northeast3",
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결 (Gen 2 전용, 비용 절감)
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC", // 모든 아웃바운드를 VPC(Cloud NAT)로 라우팅 → 고정 IP 유지
+    ...ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     secrets: [navSecret, smtpPassSecret],
-  } as any,
+  },
   async () => {
     injectSmtpEnv();
     const runId = Date.now();
@@ -506,15 +502,11 @@ export const naverSubscriptionSyncSchedule = onSchedule(
 const NAVER_SYNC_TEST_SECRET = process.env.NAVER_SYNC_TEST_SECRET || "stelvio-naver-sync-test";
 
 export const naverSubscriptionSyncTest = onRequest(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
-    region: "asia-northeast3",
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC",
+    ...ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     secrets: [navSecret, smtpPassSecret],
     cors: false,
-  } as any,
+  },
   async (req, res) => {
     const auth = req.headers["x-naver-sync-secret"] || req.query.secret;
     if (auth !== NAVER_SYNC_TEST_SECRET) {
@@ -599,7 +591,31 @@ async function processStravaActivityAsync(
   }
 
   try {
-    const rewardService = new PointRewardService(db);
+    let relayUrl = missionAlimRelayUrlParam.value()?.trim();
+    const pid = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+    if (!relayUrl && pid.length > 0) {
+      relayUrl = `https://asia-northeast3-${pid}.cloudfunctions.net/missionSubscriptionAlimtalkHttpsRelay`.trim();
+    }
+
+    let relaySecret = "";
+    try {
+      relaySecret = scrubAligoCredential(missionAlimRelaySecret.value());
+    } catch {
+      relaySecret = "";
+    }
+
+    const missionRelayOpts =
+      relayUrl && relaySecret
+        ? ({ missionAlimVpcRelay: { url: relayUrl, secret: relaySecret } } as const)
+        : undefined;
+
+    if (!missionRelayOpts) {
+      console.warn(
+        "[Strava Webhook] MISSION_ALIM_RELAY_SECRET 미설정 또는 URL 없음 — 구독 연장 알림톡은 이 함수 기본 egress로 직접 알리고 호출됩니다(카카오 API 화이트리스트 IP가 NAT 전용이면 -99 가능)."
+      );
+    }
+
+    const rewardService = new PointRewardService(db, missionRelayOpts);
     const rewardResult = await rewardService.processRidingReward(userId, userTss, true);
 
     await logRef.set(
@@ -631,9 +647,18 @@ export const stravaWebhook = onRequest(
     /**
      * Strava OAuth·활동·Streams API는 공용 인터넷으로 나가야 안정적이다.
      * Direct VPC Egress(고정 NAT)만 쓰면 Strava 쪽 TLS/라우팅 실패로 토큰 갱신·로그 저장이 끊길 수 있어
-     * 이 함수에는 network/vpcEgress를 넣지 않는다. (알리고는 기본 egress에서 동작; IP 화이트리스트가 NAT 전용이면 알림만 실패 가능 — 로그 수집은 우선)
+     * 이 함수에는 network/vpcEgress를 넣지 않는다.
+     *
+     * 구독 연장 알림톡(UH_2120): Secret `MISSION_ALIM_RELAY_SECRET` 설정 시 `missionSubscriptionAlimtalkHttpsRelay`(VPC+NAT)로 위임 —
+     * 실내 로그 트리거(onIndoorLogCreatedReward)와 동일 출구 정렬. 미설정 시 이 함수 기본 egress로 알리고 직접 호출(화이트리스트 불일치 시 -99 가능).
      */
-    secrets: [stravaClientSecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    secrets: [
+      stravaClientSecret,
+      aligoApiKeySecret,
+      aligoUserIdSecret,
+      aligoTokenSecret,
+      missionAlimRelaySecret,
+    ],
   } as any,
   async (req, res) => {
     if (req.method === "GET") {
@@ -698,11 +723,7 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     document: "users/{userId}/logs/{logId}",
-    region: "asia-northeast3",
-    /** 알리고(카카오) API: stravaWebhook·네이버 스케줄과 동일 Cloud NAT 고정 IP(34.64.250.77) */
-    // [Direct VPC Egress] VPC Connector 대신 직접 VPC 연결
-    network: "default", // ← 실제 VPC 네트워크 이름으로 교체 필요
-    vpcEgress: "ALL_TRAFFIC",
+    ...ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   } as any,
   async (event) => {
@@ -795,19 +816,106 @@ const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as 
 };
 
 /**
+ * 라이딩 미션·구독 연장(UH_2120) 알림톡 — Strava 웹훅 전용 HTTPS 릴레이.
+ * `onIndoorLogCreatedReward`(실내)·모임 릴레이와 동일 Direct VPC egress로 알리고 kakaoapi 호출하여 NAT 고정 IP 정렬.
+ */
+export const missionSubscriptionAlimtalkHttpsRelay = onRequest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  {
+    ...ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
+    timeoutSeconds: 120,
+    memory: "512MiB",
+    cors: false,
+    secrets: [missionAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+  } as any,
+  async (req, res): Promise<void> => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    let expectedRelay: string;
+    try {
+      expectedRelay = scrubAligoCredential(missionAlimRelaySecret.value());
+    } catch {
+      res.status(500).json({ ok: false, error: "MISSION_ALIM_RELAY_SECRET 없음" });
+      return;
+    }
+    const gotRelay = String(req.headers["x-mission-alim-relay-secret"] ?? "").trim();
+    if (!expectedRelay || gotRelay !== expectedRelay) {
+      res.status(403).json({ ok: false, error: "Forbidden" });
+      return;
+    }
+
+    injectAligoEnv();
+
+    let receiverPhone = "";
+    let displayName = "";
+    let subject = "";
+    let message = "";
+    try {
+      const body =
+        typeof req.body === "object" && req.body !== null
+          ? (req.body as {
+              receiverPhone?: unknown;
+              displayName?: unknown;
+              subject?: unknown;
+              message?: unknown;
+            })
+          : {};
+      receiverPhone = String(body.receiverPhone ?? "").trim();
+      displayName = String(body.displayName ?? "").trim();
+      subject = String(body.subject ?? "").trim();
+      message = String(body.message ?? "").trim();
+    } catch {
+      res.status(400).json({ ok: false, error: "INVALID_BODY" });
+      return;
+    }
+    if (!receiverPhone || !subject || !message) {
+      res.status(400).json({ ok: false, error: "MISSING_FIELDS" });
+      return;
+    }
+
+    let diagSeenPublicIp: string | undefined;
+    try {
+      const dip = await fetchAligoKakaoEgressPublicIpDiagnostics();
+      diagSeenPublicIp = dip ?? undefined;
+      warnIfDiagPublicIpMismatch(dip, aligoNatEgressExpectIpv4.value(), "missionSubscriptionAlimtalkHttpsRelay");
+      console.log("[missionSubscriptionAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(조회실패)");
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      const cfg = await loadAligoAlimtalkConfig(db, ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION);
+      await sendAlimtalkUnified(cfg, {
+        receiverPhone,
+        displayName,
+        subject,
+        message,
+        templateKind: ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION,
+        logTag: "[PointReward Aligo vpc-relay]",
+      });
+      res.status(200).json({ ok: true, ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}) });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[missionSubscriptionAlimtalkHttpsRelay]", msg);
+      res.status(500).json({ ok: false, error: msg, ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}) });
+    }
+  }
+);
+
+/**
  * 모임 알림톡 전용 HTTPS 릴레이 (VPC + ALL_TRAFFIC egress).
  * 알리고 code=-99 시: rides....diagSeenPublicIp 에 찍힌 공인 IP를 카카오톡 API 허용 목록에 넣을 것.
- * (미션용 Firestore 트리거와 NAT 풀·우선순위가 달라 공인 IP가 별도일 수 있음 — 예: 34.64.250.77 만 등록 시 릴레이는 34.96.x 대역으로 나갈 수 있음)
+ * (VPC 미적용 egress는 34.96.x처럼 Google 기본 출구와 유사하게 보입니다. firebase-functions 예전 버전에서는 `network` 플래트 옵션이 배포 매니페스트에서 빠져 NAT가 적용되지 않을 수 있습니다 — 현재 레포는 `networkInterface`+`vpcEgress`(SDK ^7.2)로 배포합니다.)
  */
 export const meetupInviteAlimtalkHttpsRelay = onRequest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
-    region: "asia-northeast3",
+    ...ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
     timeoutSeconds: 300,
     memory: "512MiB",
     cors: false,
-    network: "default",
-    vpcEgress: "ALL_TRAFFIC",
     secrets: [meetupAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   } as any,
   async (req, res): Promise<void> => {
@@ -865,8 +973,9 @@ export const meetupInviteAlimtalkHttpsRelay = onRequest(
     // 알리고 -99 분쟁 시: 미션 NAT IP와 숫자 비교해 릴레이 VPC 적용 여부 판별
     let diagSeenPublicIp: string | undefined;
     try {
-      const dip = await fetchPublicIpForMeetupVpcDiagnostics();
+      const dip = await fetchAligoKakaoEgressPublicIpDiagnostics();
       diagSeenPublicIp = dip ?? undefined;
+      warnIfDiagPublicIpMismatch(dip, aligoNatEgressExpectIpv4.value(), "meetupInviteAlimtalkHttpsRelay");
       console.log("[meetupInviteAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(조회실패)", rideId);
     } catch (_) {
       /* ignore */
