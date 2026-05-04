@@ -4203,8 +4203,10 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
 
 /**
  * 수동: 헵타곤 코호트 스냅샷 + GC 랭킹용 `heptagon_cohort_ranks` 재빌드 (스케줄 본과 동일).
- * 인증: `manualStravaSyncTodaySeoul` 과 동일 — `X-Internal-Secret`(INTERNAL_SYNC_SECRET) 또는 grade=1 Firebase Bearer.
- * POST https://<region>-stelvio-ai.cloudfunctions.net/manualRebuildHeptagonCohortRanks
+ * 인증:
+ * - POST: `X-Internal-Secret`(INTERNAL_SYNC_SECRET) 또는 `?secret=` 또는 grade=1 Firebase Bearer.
+ * - GET: `?secret=INTERNAL_SYNC_SECRET` 만 허용 (주소창·즐겨찾기용 — 시크릿이 URL/이력에 남음).
+ * GET/POST https://<region>-stelvio-ai.cloudfunctions.net/manualRebuildHeptagonCohortRanks
  */
 exports.manualRebuildHeptagonCohortRanks = onRequest(
   {
@@ -4217,8 +4219,43 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
       res.status(204).send("");
       return;
     }
+
+    const runOk = async () => {
+      const r = await runHeptagonCohortRanksRebuildJob();
+      console.log("[manualRebuildHeptagonCohortRanks] ok", r);
+      res.status(200).json({
+        success: true,
+        message: "heptagon_cohort_ranks 스냅샷을 갱신했습니다. 랭킹 GC 조회는 이 데이터를 사용합니다.",
+        ...r,
+      });
+    };
+
+    if (req.method === "GET") {
+      if (req.query.secret !== INTERNAL_SYNC_SECRET) {
+        res.status(403).json({
+          success: false,
+          error:
+            "주소창은 GET 요청만 보냅니다. 내부용 시크릿이 필요합니다: URL에 ?secret=(INTERNAL_SYNC_SECRET과 동일 값) 추가, 또는 POST로 X-Internal-Secret 헤더를 보내세요.",
+        });
+        return;
+      }
+      try {
+        await runOk();
+      } catch (err) {
+        console.error("[manualRebuildHeptagonCohortRanks]", err);
+        res.status(500).json({
+          success: false,
+          error: err && err.message ? err.message : String(err),
+        });
+      }
+      return;
+    }
+
     if (req.method !== "POST") {
-      res.status(405).json({ success: false, error: "POST only" });
+      res.status(405).json({
+        success: false,
+        error: "GET(?secret=) 또는 POST 로 호출하세요. Bearer 관리자는 POST 전용입니다.",
+      });
       return;
     }
     try {
@@ -4244,13 +4281,7 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
         authorized = true;
       }
 
-      const r = await runHeptagonCohortRanksRebuildJob();
-      console.log("[manualRebuildHeptagonCohortRanks] ok", r);
-      res.status(200).json({
-        success: true,
-        message: "heptagon_cohort_ranks 스냅샷을 갱신했습니다. 랭킹 GC 조회는 이 데이터를 사용합니다.",
-        ...r,
-      });
+      await runOk();
     } catch (err) {
       console.error("[manualRebuildHeptagonCohortRanks]", err);
       res.status(500).json({
@@ -6003,6 +6034,71 @@ exports.migrateStelvioLogActivityType = onRequest(
     }
     if (batchCount > 0) await batch.commit();
     res.status(200).json({ success: true, updated });
+  }
+);
+
+// ---------- 오픈 라이딩 모임: rides 생성 시 초대 연락처에 카카오 알림톡(오픈 안내) ----------
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const openRidingMeetupAlimtalk = require("./openRidingMeetupAlimtalk");
+
+exports.onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
+  {
+    document: "rides/{rideId}",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const rideId = event.params.rideId;
+    const rideData = snap.data();
+    if (!rideData) return;
+    if (String(rideData.rideStatus || "active") === "cancelled") return;
+
+    const invitedRaw = Array.isArray(rideData.invitedList) ? rideData.invitedList : [];
+    if (invitedRaw.length === 0) return;
+
+    const db = admin.firestore();
+    try {
+      const result = await openRidingMeetupAlimtalk.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
+      const summary = result.skipped
+        ? { skipped: true, reason: result.reason || "unknown", error: result.error || null }
+        : {
+            skipped: false,
+            sent: result.sent || 0,
+            total: result.total || 0,
+            attempts: result.attempts || [],
+          };
+      await db
+        .collection("rides")
+        .doc(rideId)
+        .set(
+          {
+            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+            meetupInviteAlimtalkSummary: summary,
+          },
+          { merge: true }
+        );
+    } catch (e) {
+      console.error("[onRideCreatedMeetupInviteAlimtalk]", rideId, e && e.message ? e.message : e);
+      try {
+        await db
+          .collection("rides")
+          .doc(rideId)
+          .set(
+            {
+              meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+              meetupInviteAlimtalkSummary: {
+                skipped: false,
+                error: e && e.message ? e.message : String(e),
+              },
+            },
+            { merge: true }
+          );
+      } catch (e2) {
+        console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", e2);
+      }
+    }
   }
 );
 
