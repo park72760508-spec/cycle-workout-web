@@ -6042,76 +6042,6 @@ exports.migrateStelvioLogActivityType = onRequest(
   }
 );
 
-// ---------- 오픈 라이딩 모임: rides 생성 시 초대 연락처에 카카오 알림톡(오픈 안내) ----------
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const openRidingMeetupAlimtalk = require("./openRidingMeetupAlimtalk");
-
-exports.onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
-  {
-    document: "rides/{rideId}",
-    /** 알리고 code=-99 회피: onIndoorLogCreatedReward 과 동일 — Direct VPC egress + Cloud NAT 고정 IP */
-    region: "asia-northeast3",
-    timeoutSeconds: 300,
-    memory: "512MiB",
-    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-    network: "default",
-    vpcEgress: "ALL_TRAFFIC",
-  },
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const rideId = event.params.rideId;
-    const rideData = snap.data();
-    if (!rideData) return;
-    if (String(rideData.rideStatus || "active") === "cancelled") return;
-
-    const invitedRaw = Array.isArray(rideData.invitedList) ? rideData.invitedList : [];
-    if (invitedRaw.length === 0) return;
-
-    const db = admin.firestore();
-    try {
-      const result = await openRidingMeetupAlimtalk.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
-      const summary = result.skipped
-        ? { skipped: true, reason: result.reason || "unknown", error: result.error || null }
-        : {
-            skipped: false,
-            sent: result.sent || 0,
-            total: result.total || 0,
-            attempts: result.attempts || [],
-          };
-      await db
-        .collection("rides")
-        .doc(rideId)
-        .set(
-          {
-            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-            meetupInviteAlimtalkSummary: summary,
-          },
-          { merge: true }
-        );
-    } catch (e) {
-      console.error("[onRideCreatedMeetupInviteAlimtalk]", rideId, e && e.message ? e.message : e);
-      try {
-        await db
-          .collection("rides")
-          .doc(rideId)
-          .set(
-            {
-              meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-              meetupInviteAlimtalkSummary: {
-                skipped: false,
-                error: e && e.message ? e.message : String(e),
-              },
-            },
-            { merge: true }
-          );
-      } catch (e2) {
-        console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", e2);
-      }
-    }
-  }
-);
-
 // ---------- Strava Webhook 비동기 처리 (processStravaActivity는 lib에서 호출) ----------
 exports.processStravaActivity = processStravaActivity;
 
@@ -6193,6 +6123,9 @@ if (fs.existsSync(libPath)) {
     }
     if (naverSubscription && naverSubscription.stravaWebhook) {
       exports.stravaWebhook = naverSubscription.stravaWebhook;
+    }
+    if (naverSubscription && naverSubscription.onRideCreatedMeetupInviteAlimtalk) {
+      exports.onRideCreatedMeetupInviteAlimtalk = naverSubscription.onRideCreatedMeetupInviteAlimtalk;
     }
     if (naverSubscription && naverSubscription.onIndoorLogCreatedReward) {
       exports.onIndoorLogCreatedReward = naverSubscription.onIndoorLogCreatedReward;
