@@ -1117,6 +1117,9 @@
     return m[tierId] || '레벨G';
   }
 
+  /** STELVIO 헵타곤 카드 하단 등급 범례(이미지 1행 + 레벨 문구 1행). HC=A … C6=G */
+  var HEPTAGON_CARD_TIER_LEGEND_IDS = ['HC', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+
   /**
    * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
    */
@@ -3540,6 +3543,35 @@
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded" style={{ background: 'rgba(124, 58, 237, 0.45)', border: '1px solid #6d28d9' }} />
               <span>최근 30일 피크 파워</span>
+            </div>
+          </div>
+          <div
+            className="stelvio-heptagon-tier-legend mt-2 mb-1 px-1 w-full max-w-[420px] mx-auto"
+            role="group"
+            aria-label="등급 A~G 및 레벨 범례"
+          >
+            <div className="grid grid-cols-7 gap-x-0.5 sm:gap-x-1 gap-y-1 justify-items-center items-end text-[10px] text-gray-600">
+              {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId) {
+                return (
+                  <div key={'leg-img-' + tLegendId} className="flex items-end justify-center w-full pt-0.5">
+                    <img
+                      src={tierBadgeImageSrc(tLegendId)}
+                      alt=""
+                      width={12}
+                      height={8}
+                      className="w-3 h-2 max-w-none object-contain object-bottom pointer-events-none"
+                      decoding="async"
+                    />
+                  </div>
+                );
+              })}
+              {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId2) {
+                return (
+                  <div key={'leg-txt-' + tLegendId2} className="w-full text-[9px] text-slate-600 whitespace-nowrap text-center leading-tight">
+                    {tierLevelDisplayName(tLegendId2)}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
