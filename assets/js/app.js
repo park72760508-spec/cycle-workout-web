@@ -7008,6 +7008,12 @@ function initializeCurrentScreen(screenId) {
       if (typeof window.initMyCareerGridIcons === 'function') {
         window.initMyCareerGridIcons();
       }
+      if (typeof window.applyCareerSubscribeButtonState === 'function') {
+        window.applyCareerSubscribeButtonState();
+      }
+      if (typeof window.applyMyCareerScreenLayoutByGrade === 'function') {
+        window.applyMyCareerScreenLayoutByGrade();
+      }
       if (typeof window.checkAndShowDynamicFtpForMyCareer === 'function') {
         setTimeout(window.checkAndShowDynamicFtpForMyCareer, 1000);
       } else {
