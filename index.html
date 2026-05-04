@@ -7742,7 +7742,10 @@
     var stelvioRankingApiEndStr = '';
     /** 동시 fetch 호출 시 오래된 응답이 UI를 덮어쓰지 않도록 세대 번호 */
     var stelvioRankingFetchGen = 0;
+    /** 피크/W/kg 등 — Cloud Function 응답 일반 */
     var STELVIO_RANKING_FETCH_TIMEOUT_MS = 35000;
+    /** GC: 롤링 28일·7축 즉시 집계로 서버 처리·콜드스타트 시 35초 초과 가능 */
+    var STELVIO_RANKING_FETCH_TIMEOUT_GC_MS = 120000;
     var STELVIO_RANKING_FRIENDS_TIMEOUT_MS = 12000;
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
@@ -8395,6 +8398,8 @@
         if (uid) params.set('uid', uid);
 
         var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
+        var rankingFetchTimeoutMs =
+          stelvioRankingState.duration === 'gc' ? STELVIO_RANKING_FETCH_TIMEOUT_GC_MS : STELVIO_RANKING_FETCH_TIMEOUT_MS;
         var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
         var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
         if (fetchController) {
@@ -8403,7 +8408,7 @@
             try {
               fetchController.abort();
             } catch (eAb) {}
-          }, STELVIO_RANKING_FETCH_TIMEOUT_MS);
+          }, rankingFetchTimeoutMs);
         }
         var res = await fetch(url, fetchOpts);
         if (fetchTimer) {
@@ -8451,7 +8456,14 @@
           fetchTimer = null;
         }
         if (myGen !== stelvioRankingFetchGen) return;
-        console.warn('[StelvioRanking] 조회 실패:', e);
+        var isAbort =
+          e &&
+          (e.name === 'AbortError' ||
+            (typeof DOMException !== 'undefined' && e instanceof DOMException && e.name === 'AbortError') ||
+            (e.message && String(e.message).toLowerCase().indexOf('abort') >= 0));
+        if (!isAbort) {
+          console.warn('[StelvioRanking] 조회 실패:', e);
+        }
         stelvioRankingFullEntries = null;
         stelvioRankingByCategory = null;
         stelvioRankingApiStartStr = '';
