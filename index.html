@@ -21692,12 +21692,33 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       }
     }
     window.openStelvioSubscribeStoreUrl = openStelvioSubscribeStoreUrl;
+    function applyCareerSubscribeButtonState() {
+      var btn = document.getElementById('btnCareerSubscribe');
+      if (!btn) return;
+      var g = getGradeForSubscribe();
+      var lock = g === '2' || g === '3';
+      btn.disabled = lock;
+      btn.setAttribute('aria-disabled', lock ? 'true' : 'false');
+      btn.title = lock ? '구독 서비스는 향후 오픈 예정입니다' : '구독하기';
+    }
+    window.applyCareerSubscribeButtonState = applyCareerSubscribeButtonState;
+    function applyMyCareerScreenLayoutByGrade() {
+      var grid = document.querySelector('#myCareerScreen .my-career-grid-8');
+      if (!grid) return;
+      var g = getGradeForSubscribe();
+      var lite = g === '2' || g === '3';
+      grid.classList.toggle('my-career-grid-lite', lite);
+    }
+    window.applyMyCareerScreenLayoutByGrade = applyMyCareerScreenLayoutByGrade;
     function bindSubscribeButtons() {
       var btn = document.getElementById('btnCareerSubscribe');
       var goBtn = document.getElementById('btnSubscribeOverlayGo');
       var closeBtn = document.getElementById('btnSubscribeOverlayClose');
       var comingSoonOk = document.getElementById('btnSubscribeComingSoonOk');
-      if (btn) btn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); openSubscribeOverlay(); });
+      if (btn) btn.addEventListener('click', function(e) {
+        if (btn.disabled) { e.preventDefault(); e.stopPropagation(); return; }
+        e.preventDefault(); e.stopPropagation(); openSubscribeOverlay();
+      });
       if (goBtn) goBtn.addEventListener('click', function(e) {
         if (e && typeof e.preventDefault === 'function') e.preventDefault();
         var grade = getGradeForSubscribe();
@@ -21712,6 +21733,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       });
       if (closeBtn) closeBtn.addEventListener('click', function() { closeSubscribeOverlay(); });
       if (comingSoonOk) comingSoonOk.addEventListener('click', function() { closeSubscribeComingSoonModal(); });
+      applyCareerSubscribeButtonState();
+      applyMyCareerScreenLayoutByGrade();
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', bindSubscribeButtons);
