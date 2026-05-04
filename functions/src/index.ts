@@ -795,7 +795,9 @@ const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as 
 };
 
 /**
- * 모임 알림톡 전용 HTTPS 릴레이 (VPC + 알리고 전용 egress).
+ * 모임 알림톡 전용 HTTPS 릴레이 (VPC + ALL_TRAFFIC egress).
+ * 알리고 code=-99 시: rides....diagSeenPublicIp 에 찍힌 공인 IP를 카카오톡 API 허용 목록에 넣을 것.
+ * (미션용 Firestore 트리거와 NAT 풀·우선순위가 달라 공인 IP가 별도일 수 있음 — 예: 34.64.250.77 만 등록 시 릴레이는 34.96.x 대역으로 나갈 수 있음)
  */
 export const meetupInviteAlimtalkHttpsRelay = onRequest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
