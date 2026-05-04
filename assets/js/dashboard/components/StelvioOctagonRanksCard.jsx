@@ -1980,6 +1980,8 @@
         ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
         : '';
     var cohortOvlLoading = props.cohortOvlLoading === true || hct.kind === 'board_loading';
+    var gcRank = props.gcRank;
+    var showGcBadge = gcRank !== undefined;
     useEffect(
       function() {
         setImgError(false);
@@ -2057,6 +2059,17 @@
               </button>
             ) : null}
           </div>
+          {showGcBadge ? (
+            <div
+              className="stelvio-octagon-tier-gc"
+              aria-label={'GC 종합 순위 ' + (gcRank != null ? gcRank + '위' : '없음')}
+            >
+              <span className="stelvio-octagon-tier-gc__pill inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm whitespace-nowrap">
+                <span className="font-bold tracking-tight text-violet-800">GC</span>
+                <span className="tabular-nums text-slate-600">{gcRank != null ? gcRank + '위' : '—'}</span>
+              </span>
+            </div>
+          ) : null}
           <div
             className={
               'stelvio-octagon-tier-hint ' +
@@ -3465,6 +3478,16 @@
                 filterGenderLabel={labelForGender(gender)}
                 filterCategoryLabel={labelForCategory(category)}
                 cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
+                gcRank={
+                  uid
+                    ? gcHeptagonRankForBadge(
+                        stelvioCardTooltip,
+                        heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache,
+                        category,
+                        viewerAc
+                      )
+                    : undefined
+                }
               />
             </div>
             <p className="text-xs text-center text-slate-500 mt-0 px-2">최신 헵타곤 순위를 동기화하는 중… (직전 저장값 표시)</p>
@@ -3492,20 +3515,6 @@
           <div className="flex items-center justify-center gap-1 w-full max-w-[420px] mx-auto">
             <div className="stelvio-octagon-chart-shell relative flex-1 h-[260px]">
               {svg}
-              {tierForCard && uid ? (function () {
-                var gcr = gcHeptagonRankForBadge(stelvioCardTooltip, tierForCard, category, viewerAc);
-                return (
-                  <div
-                    className="pointer-events-none absolute left-0 right-0 bottom-1 z-[1] flex justify-center"
-                    aria-label={'GC 종합 순위 ' + (gcr != null ? gcr + '위' : '없음')}
-                  >
-                    <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm whitespace-nowrap">
-                      <span className="font-bold tracking-tight text-violet-800">GC</span>
-                      <span className="tabular-nums text-slate-600">{gcr != null ? gcr + '위' : '—'}</span>
-                    </span>
-                  </div>
-                );
-              })() : null}
               {tierForCard ? (
                 <OctagonTierCenterOverlay
                   summary={tierForCard}
@@ -3517,6 +3526,7 @@
                   detachedLevelPill={true}
                   pctHintOpen={tierPctHintOpen}
                   setPctHintOpen={setTierPctHintOpen}
+                  gcRank={uid ? gcHeptagonRankForBadge(stelvioCardTooltip, tierForCard, category, viewerAc) : undefined}
                 />
               ) : null}
             </div>
