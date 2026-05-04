@@ -1122,13 +1122,13 @@
 
   function heptagonCardTierLegendCaption(tierId) {
     var m = {
-      HC: '레벨A >> ~5%',
-      C1: '레벨B >> ~10%',
-      C2: '레벨C >> ~20%',
-      C3: '레벨D >> ~40%',
-      C4: '레벨E >> ~60%',
-      C5: '레벨F >> ~80%',
-      C6: '레벨G >> 80%~'
+      HC: '~5%',
+      C1: '~10%',
+      C2: '~20%',
+      C3: '~40%',
+      C4: '~60%',
+      C5: '~80%',
+      C6: '80%~'
     };
     return m[tierId] || m.C6;
   }
