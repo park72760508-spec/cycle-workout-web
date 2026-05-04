@@ -11377,7 +11377,8 @@
   </script>
   
   <!-- ========== 라이딩 일지 React 리팩터링 (useJournalData + JournalCalendarWidget + JournalDailySummary) ========== -->
-  <script src="assets/js/journal/useJournalData.js"></script>
+  <!-- defer: 헤더의 React(react.production.min.js)도 defer 이므로, 동기 로드 시 React 미준비 상태에서 훅이 먼저 실행되어 경고가 남 -->
+  <script defer src="assets/js/journal/useJournalData.js"></script>
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx" type="text/babel"></script>
   <script src="assets/js/journal/JournalDetailBottomSheet.jsx" type="text/babel"></script>
