@@ -3,8 +3,11 @@
  * - 라이딩 미션 달성·구독 연장(UH_2120 등, ALIGO_TPL_CODE / tpl_code)
  * - 오프라인 라이딩 모임 오픈(UH_5528 등, MEETUP_OPEN_TPL 코드)
  *
- * 채널·API·senderkey/apikey 패턴은 동일하고 템플릿 코드·subject·본문·env 옵션만 다르다.
- * (code=-99 IP 이슈는 트리거 종류가 아니라 VPC egress로 해결 — 본 모듈은 HTTP 페이로드만 통일)
+ * UH_2120 과 UH_5528 모두 다음이 동일해야 함(알리고 콘솔 카카오톡 API 키 1세트):
+ * 발급키(apikey)·Identifier/userid(stelvioai 등)·발급 token·SenderKey·발신프로필(sender).
+ * 차이는 tpl_code(subject·본문·선택 버튼 env) 만.
+ *
+ * (code=-99 에서 「인증되지 않는 서버 IP」는 보통 egress IP 미등록; 키가 틀리면 동일 코드로 다른 안내 문구가 붙기도 함.)
  */
 import type { Firestore } from "firebase-admin/firestore";
 import { aligoApiFailureHint, logAligoAuthShape, scrubAligoCredential } from "./aligoCredentials";
@@ -67,11 +70,34 @@ export async function loadAligoAlimtalkConfig(
   const appConfigSnap = await db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
   const appConfig = appConfigSnap.exists ? appConfigSnap.data() ?? {} : {};
 
-  const senderkey = scrubAligoCredential(String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || ""));
+  const senderkey = scrubAligoCredential(
+    String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || (appConfig as { senderKey?: unknown }).senderKey || "")
+  );
   const sender = scrubAligoCredential(String(process.env.ALIGO_SENDER || appConfig.sender || ""));
-  const apikey = scrubAligoCredential(process.env.ALIGO_API_KEY);
-  const userid = scrubAligoCredential(process.env.ALIGO_USER_ID);
-  const token = scrubAligoCredential(process.env.ALIGO_TOKEN);
+
+  /** 발급키·token은 Secret만 (Firestore 비저장 원칙). Identifier(stelvioai 등)만 env 빈값일 때 appConfig identifier/userId 폴백 */
+  const useridCfg = scrubAligoCredential(
+    String(
+      (appConfig as { userid?: unknown }).userid ??
+        (appConfig as { userId?: unknown }).userId ??
+        (appConfig as { identifier?: unknown }).identifier ??
+        ""
+    )
+  );
+
+  const apikeyEnv = scrubAligoCredential(process.env.ALIGO_API_KEY);
+  const useridEnv = scrubAligoCredential(process.env.ALIGO_USER_ID);
+  const tokenEnv = scrubAligoCredential(process.env.ALIGO_TOKEN);
+
+  const apikey = apikeyEnv;
+  const userid = useridEnv || useridCfg;
+  const token = tokenEnv;
+
+  if (useridEnv && useridCfg && useridEnv.toLowerCase() !== useridCfg.toLowerCase()) {
+    console.warn(
+      `[loadAligoAlimtalkConfig] ALIGO_USER_ID(Secret)와 appConfig/aligo 의 identifier/userid 불일치 — Secret값으로 발송합니다. kind=${kind}`
+    );
+  }
 
   let tplCode = "";
   if (kind === ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION) {
@@ -96,10 +122,10 @@ export async function loadAligoAlimtalkConfig(
   const missing: string[] = [];
   if (!senderkey) missing.push("senderkey(ALIGO_SENDER_KEY 또는 appConfig/aligo.senderkey)");
   if (!sender) missing.push("sender(ALIGO_SENDER 또는 appConfig/aligo.sender)");
-  if (!tplCode) missing.push("tpl_code(ALIGO_TPL_CODE 또는 appConfig/aligo.tpl_code)");
-  if (!apikey) missing.push("ALIGO_API_KEY(Secret)");
-  if (!userid) missing.push("ALIGO_USER_ID(Secret)");
-  if (!token) missing.push("ALIGO_TOKEN(Secret)");
+  if (!tplCode) missing.push("tpl_code(ALIGO_TPL_CODE 또는 appConfig/aligo.tpl_code 등)");
+  if (!apikey) missing.push("ALIGO_API_KEY(Secret, 카카오톡 API 발급키)");
+  if (!userid) missing.push("ALIGO_USER_ID(Secret 또는 appConfig/aligo.identifier) — 예: stelvioai");
+  if (!token) missing.push("ALIGO_TOKEN(Secret, 카카오톡 API token)");
   if (missing.length) {
     throw new Error(`알리고 설정 누락 [${kind}]: ${missing.join(" · ")}`);
   }
