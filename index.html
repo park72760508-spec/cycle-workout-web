@@ -293,6 +293,9 @@
       }
       return null;
     };
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-v9-firebase-user-api-ready'));
+    } catch (eReady) {}
     })();
   </script>
   
@@ -13007,14 +13010,41 @@
             
             // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱). iPhone 8: v9 비동기 초기화 대기
             try {
-              var getUserByUidFn = window.getUserByUid;
-              if (typeof getUserByUidFn !== 'function') {
-                for (var waitCount = 0; waitCount < 15; waitCount++) {
-                  await new Promise(function(r) { setTimeout(r, 300); });
-                  getUserByUidFn = window.getUserByUid;
-                  if (typeof getUserByUidFn === 'function') break;
-                }
+              /** Firestore 모듈·getUserByUid 부착까지: 이벤트 + 짧은 폴링(기존 300ms×15=최대 4.5초 간헐 지연 완화) */
+              async function waitForGetUserByUidReady(maxMs) {
+                var ms = maxMs != null ? maxMs : 3200;
+                if (typeof window.getUserByUid === 'function') return;
+                await new Promise(function (resolve, reject) {
+                  var settled = false;
+                  var deadline = Date.now() + ms;
+                  function cleanup(iv, to) {
+                    clearInterval(iv);
+                    clearTimeout(to);
+                    try { window.removeEventListener('stelvio-v9-firebase-user-api-ready', onEvt); } catch (eR) {}
+                  }
+                  function settle(ok) {
+                    if (settled) return;
+                    settled = true;
+                    cleanup(iv, to);
+                    if (ok) resolve();
+                    else reject(new Error('시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.'));
+                  }
+                  function onEvt() {
+                    if (typeof window.getUserByUid === 'function') settle(true);
+                  }
+                  window.addEventListener('stelvio-v9-firebase-user-api-ready', onEvt);
+                  var iv = setInterval(function () {
+                    if (typeof window.getUserByUid === 'function') settle(true);
+                    else if (Date.now() >= deadline) settle(false);
+                  }, 40);
+                  var to = setTimeout(function () {
+                    settle(typeof window.getUserByUid === 'function');
+                  }, ms);
+                });
               }
+              await waitForGetUserByUidReady(3200);
+
+              var getUserByUidFn = window.getUserByUid;
               if (typeof getUserByUidFn !== 'function') {
                 throw new Error('시스템 초기화 중입니다. 잠시 후 다시 시도해주세요.');
               }
