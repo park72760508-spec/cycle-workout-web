@@ -1,10 +1,11 @@
 /**
  * 오픈 라이딩 모임 생성 시 — 초대된 연락처(라이딩 친구)에게 카카오 알림톡(알리고) 발송.
- * 템플릿: [STELVIO 오프라인 라이딩 모임 오픈 안내] (검수 문구와 치환값 일치)
+ * 카카오 채널: @stelvio_ai · 승인 템플릿 코드: UH_5528 · 템플릿명: [STELVIO 오프라인 라이딩 모임 안내]
+ * 대체문자: 미사용(failover N)
  *
- * 환경: ALIGO_MEETUP_OPEN_TPL_CODE (필수, 미션 알림과 별도 카카오 템플릿 코드)
- *       그 외 ALIGO_SENDER_KEY, ALIGO_SENDER, ALIGO_API_KEY, ALIGO_USER_ID, ALIGO_TOKEN
- *       선택: OPEN_RIDING_MEETUP_ALIMTALK=0 으로 비활성화
+ * tpl_code 기본값 UH_5528 — 다른 값이 필요하면 ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code
+ * 그 외 ALIGO_SENDER_KEY, ALIGO_SENDER, ALIGO_API_KEY, ALIGO_USER_ID, ALIGO_TOKEN
+ * 선택: OPEN_RIDING_MEETUP_ALIMTALK=0 으로 비활성화
  */
 
 "use strict";
@@ -15,8 +16,12 @@ const { scrubAligoCredential, logAligoAuthShape, aligoApiFailureHint } = require
 const APP_CONFIG_COLLECTION = "appConfig";
 const ALIGO_CONFIG_DOC = "aligo";
 
-const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 오픈 안내";
+/** 알리고 subject_1 / 본문 첫 줄 검수 템플릿명(대괄호 없음) — 카카오 승인명과 동일 */
+const MEETUP_ALIM_SUBJECT_KO = "STELVIO 오프라인 라이딩 모임 안내";
 const MEETUP_HEADER_LINE = `[${MEETUP_ALIM_SUBJECT_KO}]`;
+
+/** 승인 템플릿 코드(운영 기본). env·Firestore로 덮어쓰기 가능 */
+const DEFAULT_MEETUP_OPEN_TPL_CODE = "UH_5528";
 
 function normalizeReceiverPhone(phone) {
   return String(phone || "").replace(/\D/g, "");
@@ -136,7 +141,7 @@ async function loadAligoConfigForMeetupOpen(db) {
       process.env.ALIGO_MEETUP_OPEN_TPL_CODE ||
         appConfig.meetup_open_tpl_code ||
         appConfig.meetupOpenTplCode ||
-        ""
+        DEFAULT_MEETUP_OPEN_TPL_CODE
     )
   );
 
@@ -146,7 +151,7 @@ async function loadAligoConfigForMeetupOpen(db) {
 
   if (!meetupTpl) {
     throw new Error(
-      "오프라인 모임 오픈 알림톡 템플릿 코드가 없습니다. ALIGO_MEETUP_OPEN_TPL_CODE env 또는 appConfig/aligo.meetup_open_tpl_code 를 설정하세요."
+      "오프라인 모임 알림톡 템플릿 코드가 없습니다. ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code 를 확인하세요."
     );
   }
   if (!senderkey || !sender || !apikey || !userid || !token) {
@@ -312,4 +317,5 @@ module.exports = {
   sendMeetupInviteAlimtalksForNewRide,
   buildMeetupOpenAlimtalkMessage,
   MEETUP_ALIM_SUBJECT_KO,
+  DEFAULT_MEETUP_OPEN_TPL_CODE,
 };
