@@ -7523,6 +7523,11 @@
       if (modal) {
         modal.classList.add('hidden');
       }
+      try {
+        if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
+          window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
+        }
+      } catch (eReopenApi) {}
     }
 
     /**
@@ -7585,7 +7590,12 @@
      * @param {boolean} [force] - true면 '오늘 그만 보기' 무시 (나의 기록 랭킹보드 버튼 등)
      */
     async function fetchAndShowWeeklyTop10Modal(force) {
-      if (!force && isWeeklyTop10SuppressActive()) return;
+      if (!force && isWeeklyTop10SuppressActive()) {
+        if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
+          window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
+        }
+        return;
+      }
       const modal = document.getElementById('weeklyTop10Modal');
       const body = document.getElementById('weeklyTop10Body');
       if (!modal || !body) return;
@@ -7614,6 +7624,9 @@
           data = await res.json().catch(function() { return { success: false }; });
           if (!data.success || !Array.isArray(data.ranking) || data.ranking.length === 0) {
             modal.classList.add('hidden');
+            if (typeof window.finalizeMandatoryIntegratedWeeklyTop10Dismiss === 'function') {
+              window.finalizeMandatoryIntegratedWeeklyTop10Dismiss();
+            }
             if (typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
             return;
           }
@@ -20845,6 +20858,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             var authUid = (typeof window.auth !== 'undefined' && window.auth.currentUser && window.auth.currentUser.uid) ||
               (typeof window.authV9 !== 'undefined' && window.authV9.currentUser && window.authV9.currentUser.uid);
             var isAuth = (cur && (cur.id || cur.uid)) || authUid;
+
+            /** Strava 또는 Gemini(API_sts) 미연결: 인증 직후 TOP10보다 환경설정 먼저 — 닫히면 주간 마일리지 TOP10 표시 */
+            if (typeof window.userNeedsMandatoryIntegratedSetup === 'function' && cur && window.userNeedsMandatoryIntegratedSetup(cur)) {
+              window.__deferWeeklyTop10UntilIntegratedDismiss = true;
+              var smIntegrated = document.getElementById('settingsModal');
+              if (typeof openSettingsModal === 'function' && (!smIntegrated || smIntegrated.style.display !== 'flex')) {
+                openSettingsModal();
+              }
+              return false;
+            }
+
             if (isAuth && typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
               window.fetchAndShowWeeklyTop10Modal();
               window.__basecampShownAfterAuth = false;
