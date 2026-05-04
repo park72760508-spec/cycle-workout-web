@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PointRewardService = void 0;
 const admin = __importStar(require("firebase-admin"));
+const aligoCredentials_1 = require("./aligoCredentials");
 const aligoapi = require("aligoapi");
 /** 포인트 계산 비율: 기본 1 TSS = 1 SP */
 const POINTS_PER_TSS = Number(process.env.POINTS_PER_TSS || "1");
@@ -46,8 +47,11 @@ const USERS_COLLECTION = "users";
 const POINT_HISTORY_COLLECTION = "point_history";
 const APP_CONFIG_COLLECTION = "appConfig";
 const ALIGO_CONFIG_DOC = "aligo";
-/** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […]과 짝 */
+/** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […] 제목 텍스트와 동일(대괄호 없음) */
 const ALIMTALK_SUBJECT_KO = "STELVIO 라이딩 미션 달성 및 구독 연장 안내";
+/** 본문 첫 줄 검수 문구(대괄호 포함) — 승인 템플릿과 바이트 단위로 맞춤 */
+const ALIMTALK_MISSION_TITLE = ALIMTALK_SUBJECT_KO;
+const ALIMTALK_MISSION_HEADER_LINE = `[${ALIMTALK_MISSION_TITLE}]`;
 /** Firestore/문자/Date → Asia/Seoul 달력 YYYY-MM-DD (Strava·실내 `saveTrainingSession`과 동일 스킴) */
 function toYmdSeoul(value) {
     if (value == null || value === "")
@@ -127,14 +131,6 @@ function computeSubscriptionExpiryBeforeAfterSeoul(userExpiryRaw, extensionDays)
     const after = extensionDays > 0 ? addCalendarDaysYmdSeoul(before, extensionDays) : before;
     return { before, after };
 }
-/** 한국형 날짜 포맷: YYYY년 MM월 DD일 (Seoul YMD 기준) */
-function formatDateKo(value) {
-    const ymd = toYmdSeoul(value);
-    if (!ymd)
-        return "-";
-    const [y, m, d] = ymd.split("-");
-    return `${y}년 ${m}월 ${d}일`;
-}
 /** 휴대폰 숫자만 추출하여 알림톡 수신자 형태(11자리)로 정규화 */
 function normalizeReceiverPhone(phone) {
     return (phone || "").replace(/\D/g, "");
@@ -184,6 +180,17 @@ function diffCalendarDaysSeoulYmd(ymdBefore, ymdAfter) {
         return 0;
     return Math.round((t1 - t0) / (24 * 60 * 60 * 1000));
 }
+/**
+ * 카카오 검수 알림톡 템플릿: 만료일 줄 형식 MM-DD-YY (예: 06-07-26).
+ * 내부 계산은 YYYY-MM-DD(서울) 유지, message_1 삽입 직전에만 변환.
+ */
+function formatSeoulYmdToAlimtalkMmDdYy(ymd) {
+    const m = ymd.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m)
+        return ymd.trim() || "-";
+    const [, yyyy, mm, dd] = m;
+    return `${mm}-${dd}-${yyyy.slice(-2)}`;
+}
 /** SP 표시: 부동소수 오차 제거(알림톡 본문이 검수 템플릿과 글자 단위로 일치해야 함) */
 function formatSpForKakaoTemplate(n) {
     if (!Number.isFinite(n))
@@ -194,54 +201,57 @@ function formatSpForKakaoTemplate(n) {
     return rounded.toFixed(2);
 }
 /**
- * 카카오/알리고 승인 템플릿 본문과 동일(줄바꿈·이모지 포함)해야 발송 성공.
- * 이모지(🚴‍♂️)는 승인서에 있으면 그대로 둔다(검수에 없는데 넣으면 거절).
+ * 잔여 포인트 줄: 검수 샘플이 정수면 `286.37`이 불일치를 유발할 수 있음.
+ * `KAKAO_ALIMTALK_SP_ALLOW_DECIMAL=1`이면 소수 둘째 자리까지(기존 로직).
  */
+function formatRemPointsForMissionAlimtalk(n) {
+    const allowDec = String(process.env.KAKAO_ALIMTALK_SP_ALLOW_DECIMAL || "").toLowerCase();
+    if (allowDec === "1" || allowDec === "true" || allowDec === "yes") {
+        return formatSpForKakaoTemplate(n);
+    }
+    return String(Math.round(Number.isFinite(n) ? n : 0));
+}
+/** 빈 값·공백·단일 비(문자/숫자) 기호(예: `-`)는 recvname/본문 치환 시 검수 오류 유발 → 안전 폴백 */
+function safeAlimtalkDisplayName(raw) {
+    const t = String(raw ?? "").trim();
+    if (!t)
+        return "회원";
+    if (t.length === 1 && /[^\p{L}\p{N}]/u.test(t))
+        return "회원";
+    return t;
+}
 function buildAlimtalkMessage(params) {
-    // 기존 만료일·변경 만료일 모두 YYYY-MM-DD 형식으로 통일
-    const beforeLine = toYmdSeoul(params.expiryDateBefore) || "-";
-    const afterLine = toYmdSeoul(params.expiryDateAfter) || "-";
-    return `[STELVIO 라이딩 미션 달성 및 구독 연장 안내]
-안녕하세요 ${params.userName}님,
-오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! 🚴‍♂️
+    const displayName = safeAlimtalkDisplayName(params.userName);
+    const earnedSp = formatSpForKakaoTemplate(params.earnedPoints);
+    const extendedDaysStr = String(Number.isFinite(params.extendedDays) ? Math.trunc(params.extendedDays) : 0);
+    const remSp = formatRemPointsForMissionAlimtalk(params.remPointsAfter);
+    const beforeYmd = toYmdSeoul(params.expiryDateBefore);
+    const afterYmd = toYmdSeoul(params.expiryDateAfter);
+    const beforeLine = beforeYmd ? formatSeoulYmdToAlimtalkMmDdYy(beforeYmd) : "-";
+    const afterLine = afterYmd ? formatSeoulYmdToAlimtalkMmDdYy(afterYmd) : "-";
+    // 완성된 문장으로 조립하되, 이모지는 알리고 DB에 저장된 깨진 형태(?‍♂️)를 유지
+    const rawMessage = `${ALIMTALK_MISSION_HEADER_LINE}
+안녕하세요 ${displayName}님,
+오늘도 STELVIO와 함께 멋진 라이딩 미션을 완료하셨습니다! ?‍♂️
 
 이번 라이딩(TSS) 달성 보상으로 포인트가 적립되었으며, 보유하신 포인트가 기준치에 도달하여 구독 기간이 자동으로 연장되었습니다.
 
 ▶ 이번 라이딩 보상
-획득 포인트 : ${params.earnedPoints} SP
+획득 포인트 : ${earnedSp} SP
 
 ▶ 구독 연장 혜택 적용
-500 SP 자동 사용으로 인하여 구독 기간이 ${params.extendedDays}일 추가 연장되었습니다.
+500 SP 자동 사용으로 인하여 구독 기간이 ${extendedDaysStr}일 추가 연장되었습니다.
 
 기존 만료일 : ${beforeLine}
 변경 만료일 : ${afterLine}
 
 ▶ 내 포인트 현황
-사용 후 잔여 포인트 : ${formatSpForKakaoTemplate(params.remPointsAfter)} SP
+사용 후 잔여 포인트 : ${remSp} SP
 
 오늘 흘린 땀방울이 성장의 밑거름이 됩니다. 다음 훈련에서 뵙겠습니다!
 
 ※ 이 메시지는 고객님이 참여하신 STELVIO 라이딩 미션(이벤트) 달성에 따라 지급된 포인트 안내 메시지입니다.`;
-}
-/** 검수 템플릿에 이모지가 없으면 ALIGO/Kakao에서 거절될 수 있음 → env로 제거 가능 */
-function maybeStripAlimtalkEmojiForTemplate(message) {
-    const strip = String(process.env.KAKAO_ALIMTALK_STRIP_EMOJI || "").toLowerCase();
-    if (strip === "1" || strip === "true" || strip === "yes") {
-        return message.replace(/\p{Extended_Pictographic}/gu, "").replace(/\u200d/g, "");
-    }
-    return message;
-}
-/**
- * Aligo 문서 [Notice] 2: "알림톡 내용(message)은 템플릿과 동일하게 개행문자를 입력하셔야 합니다."
- * 카카오 검수 시 저장된 개행이 CRLF(`\r\n`)인 경우가 많아, LF만 보내면 "템플릿과 일치하지 않음"이 난다.
- * `ALIGO_ALIMTALK_LF_ONLY=1` 이면 변환 생략(검수본이 LF일 때).
- */
-function normalizeAlimtalkNewlinesForKakaoTemplate(message) {
-    const lfOnly = String(process.env.ALIGO_ALIMTALK_LF_ONLY || "").toLowerCase();
-    if (lfOnly === "1" || lfOnly === "true" || lfOnly === "yes") {
-        return message;
-    }
-    return message.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").join("\r\n");
+    return rawMessage.replace(/\r?\n/g, "\r\n");
 }
 /**
  * POST /akv10/alimtalk/send/ 응답: 성공 시 `code` 는 Integer 0, message 예: "성공적으로 전송요청 하였습니다."
@@ -265,15 +275,16 @@ class PointRewardService {
     async loadAligoConfig() {
         const appConfigSnap = await this.db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
         const appConfig = appConfigSnap.exists ? appConfigSnap.data() ?? {} : {};
-        const senderkey = String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || "").trim();
-        const tplCode = String(process.env.ALIGO_TPL_CODE || appConfig.tpl_code || "").trim();
-        const sender = String(process.env.ALIGO_SENDER || appConfig.sender || "").trim();
-        const apikey = String(process.env.ALIGO_API_KEY || "").trim();
-        const userid = String(process.env.ALIGO_USER_ID || "").trim();
-        const token = String(process.env.ALIGO_TOKEN || "").trim();
+        const senderkey = (0, aligoCredentials_1.scrubAligoCredential)(String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || ""));
+        const tplCode = (0, aligoCredentials_1.scrubAligoCredential)(String(process.env.ALIGO_TPL_CODE || appConfig.tpl_code || ""));
+        const sender = (0, aligoCredentials_1.scrubAligoCredential)(String(process.env.ALIGO_SENDER || appConfig.sender || ""));
+        const apikey = (0, aligoCredentials_1.scrubAligoCredential)(process.env.ALIGO_API_KEY);
+        const userid = (0, aligoCredentials_1.scrubAligoCredential)(process.env.ALIGO_USER_ID);
+        const token = (0, aligoCredentials_1.scrubAligoCredential)(process.env.ALIGO_TOKEN);
         if (!senderkey || !tplCode || !sender || !apikey || !userid || !token) {
-            throw new Error("알리고 설정이 누락되었습니다. (ALIGO_* env 또는 appConfig/aligo 확인 필요)");
+            throw new Error("알리고 설정이 누락되었습니다. (ALIGO_* env·Secret 또는 appConfig/aligo의 senderkey·tpl_code·sender 확인. API 인증 3종은 Secret ALIGO_API_KEY/USER_ID/TOKEN)");
         }
+        (0, aligoCredentials_1.logAligoAuthShape)("loadAligoConfig", apikey, userid, token);
         return {
             senderkey,
             tpl_code: tplCode,
@@ -296,9 +307,8 @@ class PointRewardService {
         if (!receiver) {
             throw new Error("알림톡 수신자 번호가 비어 있습니다.");
         }
-        const recvName = (displayName || "회원").trim() || "회원";
-        let messageOut = maybeStripAlimtalkEmojiForTemplate(message);
-        messageOut = normalizeAlimtalkNewlinesForKakaoTemplate(messageOut);
+        const recvName = safeAlimtalkDisplayName(displayName || "");
+        const messageOut = message.replace(/\r?\n/g, "\r\n");
         const body = {
             senderkey: cfg.senderkey,
             tpl_code: cfg.tpl_code,
@@ -342,8 +352,9 @@ class PointRewardService {
                 raw.Message ??
                 "알 수 없는 응답");
             const c = raw?.code ?? raw?.result_code;
-            console.error("[Aligo] alimtalkSend 비성공 응답:", detail);
-            throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}`);
+            const hint = (0, aligoCredentials_1.aligoApiFailureHint)(c, msg);
+            console.error("[Aligo] alimtalkSend 비성공 응답:", detail, hint || "");
+            throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}${hint}`);
         }
         const info = raw.info;
         if (info && info.mid != null) {
