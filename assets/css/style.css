@@ -5671,6 +5671,47 @@ body:has(#trainingDetailModal:not(.hidden)) {
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
   }
 }
+/* STELVIO 헵타곤 범례: 현재 등급만 선명·나머지 딤 + 연한 오버레이 */
+.stelvio-heptagon-tier-legend__img-wrap {
+  position: relative;
+  border-radius: 5px;
+}
+.stelvio-heptagon-tier-legend__img-wrap--focus .stelvio-heptagon-tier-legend__img {
+  position: relative;
+  z-index: 1;
+  opacity: 1;
+  filter: none;
+}
+.stelvio-heptagon-tier-legend__img-wrap--dim .stelvio-heptagon-tier-legend__img {
+  position: relative;
+  z-index: 0;
+  opacity: 0.4;
+  filter: grayscale(40%) brightness(0.9);
+}
+.stelvio-heptagon-tier-legend__img-wrap--dim::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: calc(24px * 1.3 + 8px);
+  height: calc(16px * 1.3 + 6px);
+  border-radius: 7px;
+  background: rgba(248, 250, 252, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.5);
+  pointer-events: none;
+  z-index: 2;
+}
+.stelvio-heptagon-tier-legend__cap--focus {
+  color: #334155;
+  font-weight: 600;
+  opacity: 1;
+}
+.stelvio-heptagon-tier-legend__cap--dim {
+  color: #94a3b8;
+  font-weight: 400;
+  opacity: 0.5;
+}
 .stelvio-octagon-sidebar-col {
   display: flex;
   flex-direction: column;
