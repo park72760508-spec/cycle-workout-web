@@ -467,8 +467,8 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
 }
 
 /**
- * 랭킹보드 GC 탭: `heptagon_cohort_ranks` 문서 대신 **즉시** 동일 파이프라인으로 집계.
- * 대시보드 성장 추이·헵타곤(28일 롤링, 4주 중 3주 피크·페널티)과 항상 같은 소스·같은 기간.
+ * 즉시 GC 집계(디버그·비상용). 프로덕션 랭킹 GC는 `scheduledHeptagonCohortRanks` 스냅샷 + Firestore 읽기.
+ * 대시보드와 동일 파이프라인(28일 롤링, 4주 중 3주 피크·페널티).
  *
  * @param {string} filterGender `"all" | "M" | "F"` — getPeakPowerRanking gc 분기와 동일
  * @returns {{ byCategory: object, entries: Array, startStr: string, endStr: string, peakSource: string }}
