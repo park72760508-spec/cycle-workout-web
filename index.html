@@ -13,7 +13,8 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <!-- 👆 여기까지 추가 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- 오픈라이딩 지도 등에만 필요: 초기 렌더 블록 완화 (로드 후 media 전환) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" media="print" onload="this.media='all'" />
   <!-- API 키·시크릿: config.local.js (index.html과 같은 폴더에 두세요). 없으면 placeholder 사용 -->
   <script src="config.local.js"></script>
   <!-- Android 감지: 워크아웃 목록 스크롤 등 화면 제어 제한 해제용 (iPhone은 기존 유지) -->
@@ -63,37 +64,8 @@
       w.stelvioAdminWarn = mk('warn');
     })(window);
   </script>
-  
-  <!-- Performance Dashboard Dependencies (React, Tailwind, Chart.js, Babel) -->
-  <script>
-    // Tailwind / Babel CDN 경고 필터
-    (function() {
-      if (typeof console === 'undefined' || !console.warn) return;
-      var orig = console.warn;
-      console.warn = function() {
-        var msg = (arguments[0] && String(arguments[0])) || '';
-        if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
-            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1)) {
-          return;
-        }
-        return orig.apply(console, arguments);
-      };
-    })();
-  </script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="assets/js/vo2maxCalculator.js"></script>
-  <!-- Recharts는 PropTypes 사용 → React 18에는 없으므로 prop-types 패키지로 보완 -->
-  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
-  <script>
-    if (window.React && window.PropTypes) { window.React.PropTypes = window.PropTypes; }
-  </script>
-  <script src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
-  <script src="assets/js/useRiderAnalysis.js"></script>
-  <script src="assets/js/dynamicFtpCalculation.js"></script>
+  <!-- 대용량 대시보드용 스크립트(Tailwind/React/Babel/Chart/Recharts 등)는 <body> 스플래시 직후로 옮겨
+       head에서 본문 파싱·첫 페인트가 막히지 않도록 함 (인증 화면까지 체감 로딩 단축). -->
   
   <!-- Firebase v9 Modular SDK (전화번호 인증용) - iPhone 8/Safari iOS 호환: 동적 import, 구조분해 제거 -->
   <script type="module">
@@ -242,14 +214,15 @@
         console.warn('[App Download] Storage 메타데이터 조회 실패:', e && e.message ? e.message : e);
       }
     };
-    if (typeof document !== 'undefined' && document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        if (typeof window.updateAppDownloadLastUpdated === 'function') window.updateAppDownloadLastUpdated();
-      });
-    } else {
+    function scheduleDeferredAppDownloadLastUpdated() {
       setTimeout(function() {
         if (typeof window.updateAppDownloadLastUpdated === 'function') window.updateAppDownloadLastUpdated();
-      }, 0);
+      }, 5500);
+    }
+    if (typeof document !== 'undefined' && document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', scheduleDeferredAppDownloadLastUpdated);
+    } else {
+      scheduleDeferredAppDownloadLastUpdated();
     }
     
     // Strava 설정을 Firestore appConfig/strava에서 로드 (수동 config.local.js 대체)
@@ -277,7 +250,9 @@
       }
     };
     if (firestoreV9) {
-      window.loadStravaConfigFromFirestore().catch(function () {});
+      setTimeout(function() {
+        window.loadStravaConfigFromFirestore().catch(function () {});
+      }, 2500);
     }
     
     // 전화번호를 @stelvio.ai 도메인을 붙인 가짜 이메일로 변환
@@ -1894,7 +1869,7 @@
 </head>
 
 <body>
-  <!-- 스플래시: 흰 배경 + 중앙 로고 2초 후 인증 화면 -->
+  <!-- 스플래시: 흰 배경 + 중앙 로고(짧게) 후 인증/베이스캠프 라우팅 -->
   <div id="splashScreen" class="screen active">
     <div class="splash-container splash-container--simple">
       <img
@@ -1907,6 +1882,33 @@
       />
     </div>
   </div>
+
+  <!-- Performance Dashboard Dependencies: 스플래시 직후 로드 → head 대비 인증·첫 화면 노출이 빨라짐 -->
+  <script>
+    (function() {
+      if (typeof console === 'undefined' || !console.warn) return;
+      var orig = console.warn;
+      console.warn = function() {
+        var msg = (arguments[0] && String(arguments[0])) || '';
+        if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
+            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1)) {
+          return;
+        }
+        return orig.apply(console, arguments);
+      };
+    })();
+  </script>
+  <script defer src="https://cdn.tailwindcss.com"></script>
+  <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script defer src="assets/js/vo2maxCalculator.js"></script>
+  <script defer src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script defer src="assets/js/reactPropTypesBridge.js"></script>
+  <script defer src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
+  <script defer src="assets/js/useRiderAnalysis.js"></script>
+  <script defer src="assets/js/dynamicFtpCalculation.js"></script>
 
   <!-- 0) 사용자 인증 -->
 <!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
