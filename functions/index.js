@@ -4035,6 +4035,59 @@ async function applyGroupRankingParticipationForViewer(db, byCategory, entries, 
   }
 }
 
+/**
+ * 주간 마일리지 TOP10 전용 집계만 갱신 (피크 타임 15~23시 매시).
+ * `runRebuildRankingAggregatesCore` 전체 대비 부하가 작고, 운동 직후 TSS가 TOP10에 빨리 반영되도록 함.
+ * @param {FirebaseFirestore.Firestore} db
+ */
+async function refreshWeeklyMileageTop10AggregatesOnly(db) {
+  const t0 = Date.now();
+  const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
+  const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
+  const sharedUsersSnap = await db.collection("users").get();
+  console.log("[refreshWeeklyMileageTop10AggregatesOnly] start", {
+    userCount: sharedUsersSnap.size,
+    wStart,
+    wEnd,
+    wPrevS,
+    wPrevE,
+  });
+
+  const entriesCurrent = await getWeeklyRankingEntries(db, wStart, wEnd, sharedUsersSnap);
+  const top10Current = entriesCurrent.slice(0, 10).map((e, i) => ({
+    rank: i + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+  }));
+  const weeklyKey = `weekly_ranking_full_${wStart}_${wEnd}`;
+  await writeRankingAggregatePayload(db, weeklyKey, {
+    fullEntries: entriesCurrent,
+    ranking: top10Current,
+    startStr: wStart,
+    endStr: wEnd,
+  });
+
+  const entriesPrev = await getWeeklyRankingEntries(db, wPrevS, wPrevE, sharedUsersSnap);
+  const top10Prev = entriesPrev.slice(0, 10).map((e, i) => ({
+    rank: i + 1,
+    userId: e.userId,
+    name: e.name,
+    totalTss: Math.round(e.totalTss * 100) / 100,
+    is_private: e.is_private === true,
+  }));
+  const weeklyKeyPrev = `weekly_ranking_full_${wPrevS}_${wPrevE}`;
+  await writeRankingAggregatePayload(db, weeklyKeyPrev, {
+    fullEntries: entriesPrev,
+    ranking: top10Prev,
+    startStr: wPrevS,
+    endStr: wPrevE,
+  });
+
+  console.log("[refreshWeeklyMileageTop10AggregatesOnly] done", { ms: Date.now() - t0 });
+}
+
 /** @param {FirebaseFirestore.Firestore} db */
 async function runRebuildRankingAggregatesCore(db) {
   const t0 = Date.now();
@@ -4166,6 +4219,25 @@ exports.rebuildRankingAggregates = onSchedule(
       await runRebuildRankingAggregatesCore(db);
     } catch (e) {
       console.error("[rebuildRankingAggregates]", e && e.message ? e.message : e);
+      throw e;
+    }
+  }
+);
+
+/** KST 15~23시 매 정시 — 주간 마일리지 TOP10 집계만 갱신 (운동 직후 TSS 반영 지연 완화) */
+exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
+  {
+    schedule: "0 15-23 * * *",
+    timeZone: "Asia/Seoul",
+    memory: "1GiB",
+    timeoutSeconds: 540,
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      await refreshWeeklyMileageTop10AggregatesOnly(db);
+    } catch (e) {
+      console.error("[scheduledWeeklyTop10PeakRefresh]", e && e.message ? e.message : e);
       throw e;
     }
   }
