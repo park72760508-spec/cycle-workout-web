@@ -13793,6 +13793,98 @@ function refreshSettingsModalAdminExtras() {
 }
 window.refreshSettingsModalAdminExtras = refreshSettingsModalAdminExtras;
 
+/**
+ * 환경설정(통합 게이트)에서 닫힌 뒤에만 호출됨 — 조건 통과 시 주간 TOP10 실행 및 basecamp 플래그 초기화
+ */
+function enqueueWeeklyTop10AfterMandatoryIntegratedDismiss() {
+  try {
+    if (!window.__deferWeeklyTop10UntilIntegratedDismiss) return;
+    window.__deferWeeklyTop10UntilIntegratedDismiss = false;
+
+    function integratedTop10FollowupEligible() {
+      if (window._openDeviceSettingsFromBluetooth || window._openDeviceSettingsOnly) return false;
+      if (window.__showScreenRedirectedToAuth === true) return false;
+      if (window.__basecampShownAfterAuth !== true) return false;
+      var authScreen = document.getElementById('authScreen');
+      var authActive =
+        authScreen && (authScreen.classList.contains('active') || window.getComputedStyle(authScreen).display !== 'none');
+      if (authActive) return false;
+      var bc = document.getElementById('basecampScreen');
+      if (!bc || !bc.classList.contains('active')) return false;
+      var cu =
+        window.currentUser ||
+        (function () {
+          try {
+            return JSON.parse(localStorage.getItem('currentUser') || 'null');
+          } catch (e) {
+            return null;
+          }
+        })();
+      var authUid =
+        (typeof window.auth !== 'undefined' && window.auth.currentUser && window.auth.currentUser.uid) ||
+        (typeof window.authV9 !== 'undefined' && window.authV9.currentUser && window.authV9.currentUser.uid);
+      return !!((cu && (cu.id || cu.uid)) || authUid);
+    }
+
+    if (!integratedTop10FollowupEligible()) {
+      window.__integratedSetupReopenAfterTop10Dismiss = false;
+      return;
+    }
+
+    var cu =
+      window.currentUser ||
+      (function () {
+        try {
+          return JSON.parse(localStorage.getItem('currentUser') || 'null');
+        } catch (e) {
+          return null;
+        }
+      })();
+    window.__integratedSetupReopenAfterTop10Dismiss = !!(
+      typeof window.userNeedsMandatoryIntegratedSetup === 'function' &&
+      cu &&
+      window.userNeedsMandatoryIntegratedSetup(cu)
+    );
+
+    if (typeof window.fetchAndShowWeeklyTop10Modal === 'function') {
+      window.fetchAndShowWeeklyTop10Modal();
+    }
+    window.__basecampShownAfterAuth = false;
+  } catch (eEnqueue) {}
+}
+window.enqueueWeeklyTop10AfterMandatoryIntegratedDismiss = enqueueWeeklyTop10AfterMandatoryIntegratedDismiss;
+
+/**
+ * 주간 TOP10이 사용자 닫기·suppress·코드 상 숨김 등 모든 경로로 닫혔을 때:
+ * 미연결(Strava/API) 상태면 다음에 환경설정 재표시(연결 유도 플래그 정리 포함)
+ */
+function finalizeMandatoryIntegratedWeeklyTop10Dismiss() {
+  try {
+    if (!window.__integratedSetupReopenAfterTop10Dismiss) return;
+    window.__integratedSetupReopenAfterTop10Dismiss = false;
+    var cuTop =
+      window.currentUser ||
+      (function () {
+        try {
+          return JSON.parse(localStorage.getItem('currentUser') || 'null');
+        } catch (eTop) {
+          return null;
+        }
+      })();
+    if (
+      typeof window.userNeedsMandatoryIntegratedSetup === 'function' &&
+      cuTop &&
+      window.userNeedsMandatoryIntegratedSetup(cuTop)
+    ) {
+      window.__deferWeeklyTop10UntilIntegratedDismiss = true;
+      setTimeout(function () {
+        if (typeof window.openSettingsModal === 'function') window.openSettingsModal();
+      }, 250);
+    }
+  } catch (eFin) {}
+}
+window.finalizeMandatoryIntegratedWeeklyTop10Dismiss = finalizeMandatoryIntegratedWeeklyTop10Dismiss;
+
 function closeSettingsModal() {
   const modal = document.getElementById('settingsModal');
   if (modal) {
@@ -13804,6 +13896,9 @@ function closeSettingsModal() {
       window.syncGlobalHubGlassNavForActiveScreen();
     }
   } catch (eHub) {}
+  try {
+    enqueueWeeklyTop10AfterMandatoryIntegratedDismiss();
+  } catch (eTop) {}
 }
 
 function openStravaSignupGuideModal() {

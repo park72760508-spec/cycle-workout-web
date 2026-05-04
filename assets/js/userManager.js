@@ -2515,6 +2515,16 @@ function setProfileSearchUserCountText(userArray) {
 window.countProfileIntegrationStats = countProfileIntegrationStats;
 window.setProfileSearchUserCountText = setProfileSearchUserCountText;
 window.userHasGeminiApiRegistered = userHasGeminiApiRegistered;
+window.userHasStravaConnected = userHasStravaConnected;
+
+/**
+ * 베이스캠프 인증 후 강제 환경설정 게이트: Strava 토큰 없음 또는 Gemini/API_sts 미등록
+ */
+function userNeedsMandatoryIntegratedSetup(u) {
+  if (!u || typeof u !== 'object') return false;
+  return !userHasStravaConnected(u) || !userHasGeminiApiRegistered(u);
+}
+window.userNeedsMandatoryIntegratedSetup = userNeedsMandatoryIntegratedSetup;
 
 /**
  * 프로필 화면 사용자 카드 목록 렌더링 (loadUsers / searchProfileUsers 공용)
