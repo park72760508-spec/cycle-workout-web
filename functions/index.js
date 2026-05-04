@@ -6127,9 +6127,6 @@ if (fs.existsSync(libPath)) {
     if (naverSubscription && naverSubscription.onRideCreatedMeetupInviteAlimtalk) {
       exports.onRideCreatedMeetupInviteAlimtalk = naverSubscription.onRideCreatedMeetupInviteAlimtalk;
     }
-    if (naverSubscription && naverSubscription.onMeetupInviteAlimtalkDeliver) {
-      exports.onMeetupInviteAlimtalkDeliver = naverSubscription.onMeetupInviteAlimtalkDeliver;
-    }
     if (naverSubscription && naverSubscription.onIndoorLogCreatedReward) {
       exports.onIndoorLogCreatedReward = naverSubscription.onIndoorLogCreatedReward;
     }
