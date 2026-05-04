@@ -466,8 +466,153 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   return { monthKey, startStr, endStr, wrote, ms, peakSource };
 }
 
+/**
+ * 랭킹보드 GC 탭: `heptagon_cohort_ranks` 문서 대신 **즉시** 동일 파이프라인으로 집계.
+ * 대시보드 성장 추이·헵타곤(28일 롤링, 4주 중 3주 피크·페널티)과 항상 같은 소스·같은 기간.
+ *
+ * @param {string} filterGender `"all" | "M" | "F"` — getPeakPowerRanking gc 분기와 동일
+ * @returns {{ byCategory: object, entries: Array, startStr: string, endStr: string, peakSource: string }}
+ */
+async function buildLiveGcRankingPayload(db, filterGender, deps) {
+  const {
+    getPeakPowerRankingEntries,
+    getLeagueCategory,
+    getRolling28DaysRangeSeoul,
+    readRankingAggregatePayloadIfFresh,
+    buildPeakPowerAllDurationsForRangeAllGendersOnePass,
+  } = deps;
+
+  const { startStr, endStr } = getRolling28DaysRangeSeoul();
+
+  const usersSnap = await db.collection("users").get();
+  const userMeta = new Map();
+  for (const doc of usersSnap.docs) {
+    const data = doc.data();
+    const birthYear = data.birth_year ?? data.birthYear ?? data.birth?.year ?? null;
+    const challenge = data.challenge || "Fitness";
+    const leagueCategory = getLeagueCategory(challenge, birthYear);
+    if (!leagueCategory) continue;
+    userMeta.set(doc.id, {
+      displayName: (data.name || data.displayName || "(이름 없음)").toString().trim() || "(이름 없음)",
+      ageCategory: leagueCategory,
+      is_private: data.is_private === true,
+    });
+  }
+
+  let peakSource = "legacy";
+  let cache = await tryLoadHeptagonPeakCacheFromAggregates(db, readRankingAggregatePayloadIfFresh, startStr, endStr);
+  if (cache) {
+    peakSource = "aggregates";
+  } else if (typeof buildPeakPowerAllDurationsForRangeAllGendersOnePass === "function") {
+    const allDur = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr, endStr, usersSnap);
+    cache = mapAllDurToHeptagonCache(allDur);
+    if (cache) peakSource = "onepass";
+  }
+  if (!cache) {
+    cache = {};
+    for (const g of HEPTAGON_GENDERS) {
+      cache[g] = {};
+      for (const d of HEPTAGON_DURATIONS) {
+        const { entries, byCategory } = await getPeakPowerRankingEntries(db, startStr, endStr, d, g, usersSnap);
+        cache[g][d] = { byCategory, entries };
+      }
+    }
+    peakSource = "legacy";
+  }
+
+  const supRowByUser = {};
+  for (const filterG of HEPTAGON_GENDERS) {
+    const supMap = new Map();
+    for (const [userId, meta] of userMeta) {
+      if (!isUserInCohortForFilter("Supremo", meta.ageCategory)) {
+        continue;
+      }
+      const ranks = [];
+      const ns = [];
+      let ok = true;
+      for (const d of HEPTAGON_DURATIONS) {
+        const { byCategory } = cache[filterG][d];
+        const dr = computeDisplayRankForUser(byCategory, userId, "Supremo", meta.ageCategory);
+        if (dr == null || dr.rank == null || !isFinite(Number(dr.rank))) {
+          ok = false;
+          break;
+        }
+        ranks.push(Number(dr.rank));
+        ns.push(Number(dr.n) | 0);
+      }
+      if (!ok) continue;
+      const tier = computePTotalAndTierHeptagon(ranks, ns);
+      if (!tier) continue;
+      supMap.set(userId, {
+        userId,
+        displayName: meta.displayName,
+        ageCategory: meta.ageCategory,
+        is_private: meta.is_private,
+        ranks,
+        cohortNPerAxis: ns,
+        ...tier,
+      });
+    }
+    supRowByUser[filterG] = supMap;
+  }
+
+  const applyGenderScoreUnify = filterGender === "M" || filterGender === "F";
+  const supMapFg = supRowByUser[filterGender];
+  const supMapAll = supRowByUser.all;
+  const genderStr = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+
+  const byCategory = {
+    Supremo: [],
+    Assoluto: [],
+    Bianco: [],
+    Rosa: [],
+    Infinito: [],
+    Leggenda: [],
+  };
+
+  for (let ci = 0; ci < HEPTAGON_CATEGORIES.length; ci++) {
+    const cat = HEPTAGON_CATEGORIES[ci];
+    const rows = [];
+    for (const [userId, meta] of userMeta) {
+      if (!isUserInCohortForFilter(cat, meta.ageCategory)) continue;
+      const pre = supMapFg.get(userId);
+      if (!pre) continue;
+      rows.push({ ...pre });
+    }
+    const apiRows = [];
+    for (let ri = 0; ri < rows.length; ri++) {
+      const r = rows[ri];
+      let gcScore = r.sumPositionScores;
+      if (applyGenderScoreUnify && supMapAll.has(r.userId)) {
+        gcScore = supMapAll.get(r.userId).sumPositionScores;
+      }
+      apiRows.push({
+        userId: String(r.userId),
+        name: r.displayName,
+        ageCategory: r.ageCategory,
+        gender: genderStr,
+        is_private: r.is_private === true,
+        rank: 0,
+        gcScore,
+      });
+    }
+    apiRows.sort((a, b) => {
+      if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
+      return String(a.userId).localeCompare(String(b.userId));
+    });
+    for (let i = 0; i < apiRows.length; i++) {
+      apiRows[i].rank = i + 1;
+    }
+    byCategory[cat] = apiRows;
+  }
+
+  const entries = (byCategory.Supremo || []).slice();
+  return { byCategory, entries, startStr, endStr, peakSource };
+}
+
 module.exports = {
   runRebuildHeptagonCohortRanks,
+  buildLiveGcRankingPayload,
   HEPTAGON_COHORT_COL,
   HEPTAGON_GENDERS,
   HEPTAGON_CATEGORIES,
