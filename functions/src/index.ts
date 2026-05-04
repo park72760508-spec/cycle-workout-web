@@ -63,6 +63,10 @@ const stravaClientSecret = defineSecret("STRAVA_CLIENT_SECRET");
 const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
 const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
 const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
+/** Firestore 트리거 → HTTPS 릴레이 헤더 검증 (VPC는 릴레이만 적용해 알리고 IP=-99 방지) */
+const meetupAlimRelaySecret = defineSecret("MEETUP_ALIM_RELAY_SECRET");
+/** 릴레이 함수 URL 미지정 시 asia-northeast3-{프로젝트}.cloudfunctions.net 패턴 */
+const meetupAlimRelayUrlParam = defineString("MEETUP_ALIM_RELAY_URL", { default: "" });
 
 /** 1/true이면 모임 알림톡 직전 공인 출구 IP 조회 → Cloud Logging + meetupInviteAlimtalkSummary.diagSeenPublicIp (-99·화이트리스트 대조용) */
 const meetupAlimtalkLogPublicEgressIp = defineString("MEETUP_ALIMTALK_LOG_PUBLIC_EGRESS_IP", {
@@ -780,9 +784,9 @@ export const onIndoorLogCreatedReward = onDocumentCreated(
 );
 
 /**
- * 오픈 라이딩 rides 생성 시 초대 대상에게 모임 오픈 알림톡.
- * UH_2120(미션)과 동일하게 Firestore 트리거 + Direct VPC egress(Cloud NAT 고정 IP)로 알리고 호출한다.
- * (Pub/Sub 구독자는 VPC 미적용이라 code=-99가 날 수 있어 제거함.)
+ * 오픈 라이딩 rides 모임 초대 알림톡.
+ * rides 전용 Firestore 트리거는 VPC egress가 users 로그 생성 트리거와 실제 적용이 달라 알리고 code=-99가 날 수 있어,
+ * 트리거는 HTTPS 릴레이만 호출하고 알리고는 vpcEgress ALL_TRAFFIC 인 HTTPS 릴레이(onRequest)에서만 호출한다.
  */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as {
@@ -800,21 +804,141 @@ const openRidingMeetupAlimtalkJs = require("../openRidingMeetupAlimtalk.js") as 
   }>;
 };
 
-/** rides 생성 직후: `onIndoorLogCreatedReward`와 동일 네트워크 옵션으로 알리고까지 직행 */
+/**
+ * 모임 알림톡 전용 HTTPS 릴레이 (VPC + 알리고 전용 egress).
+ */
+export const meetupInviteAlimtalkHttpsRelay = onRequest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  {
+    region: "asia-northeast3",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    cors: false,
+    network: "default",
+    vpcEgress: "ALL_TRAFFIC",
+    secrets: [meetupAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+  } as any,
+  async (req, res): Promise<void> => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+    let expectedRelay: string;
+    try {
+      expectedRelay = scrubAligoCredential(meetupAlimRelaySecret.value());
+    } catch {
+      res.status(500).json({ ok: false, error: "MEETUP_ALIM_RELAY_SECRET 없음" });
+      return;
+    }
+    const gotRelay = String(req.headers["x-meetup-alim-relay-secret"] ?? "").trim();
+    if (!expectedRelay || gotRelay !== expectedRelay) {
+      res.status(403).json({ ok: false, error: "Forbidden" });
+      return;
+    }
+
+    injectAligoEnv();
+
+    let rideId = "";
+    try {
+      const body = typeof req.body === "object" && req.body !== null ? (req.body as { rideId?: unknown }) : {};
+      rideId = String(body.rideId ?? "").trim();
+    } catch {
+      res.status(400).json({ ok: false, error: "INVALID_BODY" });
+      return;
+    }
+    if (!rideId) {
+      res.status(400).json({ ok: false, error: "MISSING_RIDE_ID" });
+      return;
+    }
+
+    const rideRef = db.collection("rides").doc(rideId);
+    const rideSnap = await rideRef.get();
+    if (!rideSnap.exists) {
+      res.status(404).json({ ok: false, error: "RIDE_NOT_FOUND" });
+      return;
+    }
+    const rideDataRaw = rideSnap.data();
+    if (!rideDataRaw) {
+      res.status(404).json({ ok: false, error: "NO_RIDE_DATA" });
+      return;
+    }
+    const rideData = rideDataRaw as Record<string, unknown>;
+
+    const prevSum = rideData.meetupInviteAlimtalkSummary as { sent?: number } | undefined;
+    if (prevSum != null && typeof prevSum === "object" && Number(prevSum.sent) > 0) {
+      res.status(200).json({ ok: true, skipped: true, reason: "already_sent" });
+      return;
+    }
+
+    let diagSeenPublicIp: string | undefined;
+    if (shouldLogMeetupAlimtalkPublicEgressIp()) {
+      const dip = await fetchPublicIpForMeetupVpcDiagnostics();
+      diagSeenPublicIp = dip ?? undefined;
+      console.log("[meetupInviteAlimtalkHttpsRelay] diagSeenPublicIp:", dip ?? "(실패)", rideId);
+    }
+
+    try {
+      const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
+      const diag = diagSeenPublicIp ? ({ diagSeenPublicIp } as Record<string, string>) : {};
+      const summary = result.skipped
+        ? {
+            skipped: true,
+            reason: result.reason || "unknown",
+            error: result.error || null,
+            delivery: "https_relay_vpc",
+            ...diag,
+          }
+        : {
+            skipped: false,
+            sent: result.sent || 0,
+            total: result.total || 0,
+            attempts: result.attempts || [],
+            delivery: "https_relay_vpc",
+            ...diag,
+          };
+      await rideRef.set(
+        {
+          meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+          meetupInviteAlimtalkSummary: summary,
+        },
+        { merge: true }
+      );
+      res.status(200).json({ ok: true, skipped: result.skipped ?? false });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[meetupInviteAlimtalkHttpsRelay]", rideId, msg);
+      try {
+        await rideRef.set(
+          {
+            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+            meetupInviteAlimtalkSummary: {
+              skipped: false,
+              error: msg,
+              delivery: "https_relay_vpc",
+              ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}),
+            },
+          },
+          { merge: true }
+        );
+      } catch (e2) {
+        console.error("[meetupInviteAlimtalkHttpsRelay] 요약 기록 실패", e2);
+      }
+      res.status(500).json({ ok: false, error: msg });
+    }
+  }
+);
+
+/** rides 생성 → 내부 HTTPS 릴레이 호출만 (VPC 없음). 성공 시 meetup 요약은 릴레이가 rides 에 기록한다. */
 export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   {
     document: "rides/{rideId}",
     region: "asia-northeast3",
-    timeoutSeconds: 300,
-    memory: "512MiB",
-    network: "default",
-    vpcEgress: "ALL_TRAFFIC",
-    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
+    timeoutSeconds: 180,
+    memory: "256MiB",
+    secrets: [meetupAlimRelaySecret],
   } as any,
   async (event) => {
-    injectAligoEnv();
-
     const snap = event.data;
     if (!snap?.exists) return;
 
@@ -833,46 +957,73 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
 
     const rideRef = db.collection("rides").doc(rideId);
 
-    let diagSeenPublicIp: string | undefined;
-    if (shouldLogMeetupAlimtalkPublicEgressIp()) {
-      const dip = await fetchPublicIpForMeetupVpcDiagnostics();
-      diagSeenPublicIp = dip ?? undefined;
-      console.log(
-        "[onRideCreatedMeetupInviteAlimtalk] diagSeenPublicIp(알리고 code=-99 시 이 주소 화이트리스트 포함 여부 확인):",
-        dip ?? "(조회 실패)",
-        rideId
-      );
+    let relaySecretVal = "";
+    try {
+      relaySecretVal = scrubAligoCredential(meetupAlimRelaySecret.value());
+    } catch (eSec) {
+      console.error("[onRideCreatedMeetupInviteAlimtalk] MEETUP_ALIM_RELAY_SECRET 읽기 실패", rideId, eSec);
+      return;
+    }
+
+    const paramUrl = meetupAlimRelayUrlParam.value()?.trim();
+    const pid = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+    const fallbackUrl =
+      pid.length > 0 ? `https://asia-northeast3-${pid}.cloudfunctions.net/meetupInviteAlimtalkHttpsRelay`.trim() : "";
+    const relayUrl = (paramUrl || fallbackUrl || "").trim();
+
+    if (!relayUrl) {
+      console.error("[onRideCreatedMeetupInviteAlimtalk] 릴레이 URL 없음(PROJECT 또는 MEETUP_ALIM_RELAY_URL)", rideId);
+      try {
+        await rideRef.set(
+          {
+            meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+            meetupInviteAlimtalkSummary: {
+              skipped: false,
+              error: "릴레이 URL 미설정(GCLOUD_PROJECT / MEETUP_ALIM_RELAY_URL)",
+              delivery: "firestore_relay_invoke",
+            },
+          },
+          { merge: true }
+        );
+      } catch {
+        /* ignore */
+      }
+      return;
     }
 
     try {
-      const result = await openRidingMeetupAlimtalkJs.sendMeetupInviteAlimtalksForNewRide(db, rideId, rideData);
-      const diag = diagSeenPublicIp ? ({ diagSeenPublicIp } as Record<string, string>) : {};
-      const summary = result.skipped
-        ? {
-            skipped: true,
-            reason: result.reason || "unknown",
-            error: result.error || null,
-            delivery: "firestore_vpc",
-            ...diag,
-          }
-        : {
-            skipped: false,
-            sent: result.sent || 0,
-            total: result.total || 0,
-            attempts: result.attempts || [],
-            delivery: "firestore_vpc",
-            ...diag,
-          };
-      await rideRef.set(
-        {
-          meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-          meetupInviteAlimtalkSummary: summary,
+      const resp = await fetch(relayUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-meetup-alim-relay-secret": relaySecretVal,
         },
-        { merge: true }
-      );
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[onRideCreatedMeetupInviteAlimtalk]", rideId, msg);
+        body: JSON.stringify({ rideId }),
+      });
+      const bodyText = await resp.text().catch(() => "");
+      if (!resp.ok) {
+        console.error("[onRideCreatedMeetupInviteAlimtalk] 릴레이 HTTP 오류", rideId, resp.status, bodyText);
+        try {
+          await rideRef.set(
+            {
+              meetupInviteAlimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
+              meetupInviteAlimtalkSummary: {
+                skipped: false,
+                error: `릴레이 HTTP ${resp.status}: ${bodyText.slice(0, 800)}`,
+                delivery: "firestore_relay_invoke",
+              },
+            },
+            { merge: true }
+          );
+        } catch (eWr) {
+          console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", eWr);
+        }
+        return;
+      }
+      console.log("[onRideCreatedMeetupInviteAlimtalk] 릴레이 OK", rideId, bodyText.slice(0, 200));
+    } catch (eFetch) {
+      const msg = eFetch instanceof Error ? eFetch.message : String(eFetch);
+      console.error("[onRideCreatedMeetupInviteAlimtalk] 릴레이 fetch 실패", rideId, msg);
       try {
         await rideRef.set(
           {
@@ -880,14 +1031,13 @@ export const onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
             meetupInviteAlimtalkSummary: {
               skipped: false,
               error: msg,
-              delivery: "firestore_vpc",
-              ...(diagSeenPublicIp ? { diagSeenPublicIp } : {}),
+              delivery: "firestore_relay_invoke",
             },
           },
           { merge: true }
         );
-      } catch (e2) {
-        console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", e2);
+      } catch (eWr) {
+        console.error("[onRideCreatedMeetupInviteAlimtalk] 요약 기록 실패", eWr);
       }
     }
   }
