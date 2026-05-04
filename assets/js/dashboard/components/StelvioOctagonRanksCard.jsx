@@ -3570,9 +3570,7 @@
                     <img
                       src={tierBadgeImageSrc(tLegendId)}
                       alt=""
-                      width={24}
-                      height={16}
-                      className="w-6 h-4 max-w-none object-contain object-bottom pointer-events-none"
+                      className="max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.3)] h-[calc(16px*1.3)]"
                       decoding="async"
                     />
                   </div>
