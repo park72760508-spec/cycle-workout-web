@@ -983,6 +983,26 @@
   }
 
   /**
+   * GC 배지: 코호트 표·툴팁(`stelvioCardTooltip`)이 부문·필터와 동기화된 순위를 우선 사용.
+   * 머지 전 요약만 있을 때는 `heptagonCardRankFromSummary`로 폴백.
+   */
+  function gcHeptagonRankForBadge(toolTip, tierSummary, filterCategory, userAgeCategory) {
+    if (!tierSummary) {
+      return null;
+    }
+    if (
+      toolTip &&
+      (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+      toolTip.rank != null &&
+      isFinite(Number(toolTip.rank)) &&
+      Number(toolTip.rank) >= 1
+    ) {
+      return Math.floor(Number(toolTip.rank));
+    }
+    return heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
+  }
+
+  /**
    * 동일 조건·월(환산) 점수 집계: 순위·대상자 모수 n·가상 여부 → `heptagonLevelPercentForRankN` 레벨% (툴팁·힌트).
    */
   function heptagonCohortTooltipFromSummary(s, filterCategory, userAgeCategory) {
@@ -1833,18 +1853,9 @@
     );
   }
 
-  function OctagonTierCenterOverlay(props) {
-    var summary = props.summary;
-    var onOpenDetail = props.onOpenDetail;
-    var hct = props.heptagonCardTooltip || { kind: 'none' };
-    var filterGenderLabel = props.filterGenderLabel != null && String(props.filterGenderLabel).trim() !== '' ? String(props.filterGenderLabel).trim() : '';
-    var filterCategoryLabel = props.filterCategoryLabel != null && String(props.filterCategoryLabel).trim() !== '' ? String(props.filterCategoryLabel).trim() : '';
-    var _pct = useState(false);
-    var showPct = _pct[0];
-    var setShowPct = _pct[1];
-    var _img = useState(false);
-    var imgError = _img[0];
-    var setImgError = _img[1];
+  /** 중앙 배지·사이드 레벨 pill·힌트가 동일한 tid/문구를 쓰도록 묶음 */
+  function deriveOctagonTierUiForCard(summary, hct) {
+    hct = hct || { kind: 'none' };
     var rankForUi = null;
     var pShow = -1;
     var nCohortHint = null;
@@ -1865,27 +1876,112 @@
       nCohortLine = nCohortHint != null ? String(nCohortHint) : '…';
       virtLabel = '집계 동기화 중(%)';
     }
+    if (!summary || !summary.tier) {
+      return null;
+    }
+    var useCohortRankTier = hct.kind === 'ok' && pShow >= 0 && isFinite(pShow);
+    var cohortTierIdObj = useCohortRankTier ? heptagonBoardTierIdFromLevelPercent(pShow) : null;
+    var tid = cohortTierIdObj ? cohortTierIdObj.id : summary.tier.id;
+    var label = cohortTierIdObj
+      ? cohortTierIdObj.labelShort || cohortTierIdObj.text
+      : summary.tier.labelShort || summary.tier.text;
+    var levelName = tierLevelDisplayName(tid);
+    return {
+      rankForUi: rankForUi,
+      pShow: pShow,
+      nCohortHint: nCohortHint,
+      virtLabel: virtLabel,
+      nCohortLine: nCohortLine,
+      tid: tid,
+      label: label,
+      levelName: levelName,
+      cohortTierIdObj: cohortTierIdObj
+    };
+  }
+
+  /** 세로 레벨바 상단: 보라 pill(1줄) — 클릭 시 중앙 힌트 토글과 동기화 */
+  function OctagonTierLevelPillSidebar(props) {
+    var summary = props.summary;
+    var hct = props.heptagonCardTooltip || { kind: 'none' };
+    var filterGenderLabel =
+      props.filterGenderLabel != null && String(props.filterGenderLabel).trim() !== '' ? String(props.filterGenderLabel).trim() : '';
+    var filterCategoryLabel =
+      props.filterCategoryLabel != null && String(props.filterCategoryLabel).trim() !== '' ? String(props.filterCategoryLabel).trim() : '';
+    var showPct = props.showPct;
+    var setShowPct = props.setShowPct;
+    var du = deriveOctagonTierUiForCard(summary, hct);
+    if (!du) {
+      return null;
+    }
+    var filterContext =
+      filterGenderLabel && filterCategoryLabel
+        ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
+        : '';
+    var rankForUi = du.rankForUi;
+    var pShow = du.pShow;
+    var nCohortLine = du.nCohortLine;
+    var virtLabel = du.virtLabel;
+    var levelName = du.levelName;
+    return (
+      <button
+        type="button"
+        className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag stelvio-octagon-tier-btn--leveltag-sidebar"
+        aria-pressed={showPct}
+        aria-label={
+          filterContext +
+          (rankForUi != null
+            ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + nCohortLine + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+            : levelName + ', 동일 조건·월(환산) 점수 표(팝업과 동일) 로딩·동기화 후 표시. ') + '클릭: 힌트'
+        }
+        title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
+        onClick={function(e) {
+          e.stopPropagation();
+          setShowPct(!showPct);
+        }}
+      >
+        <span className="stelvio-octagon-tier-level-name stelvio-octagon-tier-level-name--sidebar-neon">{levelName}</span>
+      </button>
+    );
+  }
+
+  function OctagonTierCenterOverlay(props) {
+    var summary = props.summary;
+    var onOpenDetail = props.onOpenDetail;
+    var hct = props.heptagonCardTooltip || { kind: 'none' };
+    var filterGenderLabel = props.filterGenderLabel != null && String(props.filterGenderLabel).trim() !== '' ? String(props.filterGenderLabel).trim() : '';
+    var filterCategoryLabel = props.filterCategoryLabel != null && String(props.filterCategoryLabel).trim() !== '' ? String(props.filterCategoryLabel).trim() : '';
+    var detachedLevelPill = props.detachedLevelPill === true;
+    var controlledPct = props.pctHintOpen != null && typeof props.setPctHintOpen === 'function';
+    var _pct = useState(false);
+    var showPct = controlledPct ? props.pctHintOpen : _pct[0];
+    var setShowPct = controlledPct ? props.setPctHintOpen : _pct[1];
+    var _img = useState(false);
+    var imgError = _img[0];
+    var setImgError = _img[1];
+    var du = deriveOctagonTierUiForCard(summary, hct);
     var filterContext =
       filterGenderLabel && filterCategoryLabel
         ? '성별: ' + filterGenderLabel + ', 부문: ' + filterCategoryLabel + ' — '
         : '';
     var cohortOvlLoading = props.cohortOvlLoading === true || hct.kind === 'board_loading';
-    /** 집계 순위·n·레벨%(`hct.pPct`) → 등급·동물(7축 W/kg 티어가 아닌 동일 조건·월(환산) 점수 기준) */
-    var useCohortRankTier = hct.kind === 'ok' && pShow >= 0 && isFinite(pShow);
-    var cohortTierIdObj = useCohortRankTier ? heptagonBoardTierIdFromLevelPercent(pShow) : null;
-    var tid = cohortTierIdObj ? cohortTierIdObj.id : summary && summary.tier ? summary.tier.id : '';
     useEffect(
       function() {
         setImgError(false);
       },
-      [tid, pShow, rankForUi, nCohortHint, hct.kind]
+      [du ? du.tid : '', du ? du.pShow : NaN, du ? du.rankForUi : NaN, du ? du.nCohortHint : null, hct.kind]
     );
-    if (!summary || !summary.tier) return null;
+    if (!du) {
+      return null;
+    }
+    var rankForUi = du.rankForUi;
+    var pShow = du.pShow;
+    var nCohortHint = du.nCohortHint;
+    var virtLabel = du.virtLabel;
+    var nCohortLine = du.nCohortLine;
+    var tid = du.tid;
+    var label = du.label;
+    var levelName = du.levelName;
     var st = tierStyleForId(tid);
-    var label = cohortTierIdObj
-      ? cohortTierIdObj.labelShort || cohortTierIdObj.text
-      : summary.tier.labelShort || summary.tier.text;
-    var levelName = tierLevelDisplayName(tid);
     var src = tierBadgeImageSrc(tid);
 
     return (
@@ -1924,24 +2020,26 @@
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag"
-              aria-pressed={showPct}
-              aria-label={
-                filterContext +
-                (rankForUi != null
-                  ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + nCohortLine + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
-                  : levelName + ', 동일 조건·월(환산) 점수 표(팝업과 동일) 로딩·동기화 후 표시. ') + '클릭: 툴팁'
-              }
-              title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
-              onClick={function(e) {
-                e.stopPropagation();
-                setShowPct(!showPct);
-              }}
-            >
-              <span className="stelvio-octagon-tier-level-name">{levelName}</span>
-            </button>
+            {!detachedLevelPill ? (
+              <button
+                type="button"
+                className="stelvio-octagon-tier-btn stelvio-octagon-tier-btn--leveltag"
+                aria-pressed={showPct}
+                aria-label={
+                  filterContext +
+                  (rankForUi != null
+                    ? levelName + ', ' + String(rankForUi) + '위, 집계 모수 n=' + nCohortLine + ', ' + virtLabel + ', 레벨% ' + (pShow >= 0 ? pShow.toFixed(2) : '—') + '%. '
+                    : levelName + ', 동일 조건·월(환산) 점수 표(팝업과 동일) 로딩·동기화 후 표시. ') + '클릭: 툴팁'
+                }
+                title={filterContext + '동일 조건·월(환산) 점수 순위·n·레벨% (카드 필터 = 모달「동일 조건」) — 클릭: 힌트'}
+                onClick={function(e) {
+                  e.stopPropagation();
+                  setShowPct(!showPct);
+                }}
+              >
+                <span className="stelvio-octagon-tier-level-name">{levelName}</span>
+              </button>
+            ) : null}
           </div>
           <div
             className={
@@ -2104,11 +2202,14 @@
     }
     /* 상단·하단 텍스트 모두 진한 녹색(#065f46)으로 고정 */
     var darkGreen = '#065f46';
+    var hideTopTierLabel = props.hideTopTierLabel === true;
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: '4px', paddingBottom: '4px', gap: 0 }}>
-        <div style={{ fontSize: '9px', fontWeight: 700, color: darkGreen, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
-          {tierLevelDisplayName(lv.id)}
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: hideTopTierLabel ? '0px' : '4px', paddingBottom: '4px', gap: 0 }}>
+        {!hideTopTierLabel ? (
+          <div style={{ fontSize: '9px', fontWeight: 700, color: darkGreen, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+            {tierLevelDisplayName(lv.id)}
+          </div>
+        ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
           {blocks}
         </div>
@@ -2206,6 +2307,10 @@
     var heptagonModalBoardFetchSeqRef = useRef(0);
     /** 성별·부문 변경 시 이전 헵타곤 피크 랭킹 패치 결과가 늦게 도착해도 무시 */
     var octagonPeakReqRef = useRef(0);
+    /** 보라 레벨 pill(세로바 상단) ↔ 중앙 힌트 토글 공유 */
+    var _tierPctHint = useState(false);
+    var tierPctHintOpen = _tierPctHint[0];
+    var setTierPctHintOpen = _tierPctHint[1];
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -2252,6 +2357,13 @@
         chartSupremoModalStableRef.current = null;
       },
       [uid]
+    );
+
+    useEffect(
+      function() {
+        setTierPctHintOpen(false);
+      },
+      [uid, gender, category]
     );
 
     useEffect(
@@ -3365,13 +3477,13 @@
             <div className="stelvio-octagon-chart-shell relative flex-1 h-[260px]">
               {svg}
               {tierForCard && uid ? (function () {
-                var gcr = heptagonCardRankFromSummary(tierForCard, category, viewerAc);
+                var gcr = gcHeptagonRankForBadge(stelvioCardTooltip, tierForCard, category, viewerAc);
                 return (
                   <div
                     className="pointer-events-none absolute left-0 right-0 bottom-1 z-[1] flex justify-center"
                     aria-label={'GC 종합 순위 ' + (gcr != null ? gcr + '위' : '없음')}
                   >
-                    <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm">
+                    <span className="inline-flex items-baseline gap-1 rounded-full border border-slate-200/90 bg-white/90 px-2 py-0.5 text-[10px] text-slate-700 shadow-sm whitespace-nowrap">
                       <span className="font-bold tracking-tight text-violet-800">GC</span>
                       <span className="tabular-nums text-slate-600">{gcr != null ? gcr + '위' : '—'}</span>
                     </span>
@@ -3386,6 +3498,9 @@
                   filterGenderLabel={labelForGender(gender)}
                   filterCategoryLabel={labelForCategory(category)}
                   cohortOvlLoading={!!(stelvioCohortOvl && stelvioCohortOvl.loading === true)}
+                  detachedLevelPill={true}
+                  pctHintOpen={tierPctHintOpen}
+                  setPctHintOpen={setTierPctHintOpen}
                 />
               ) : null}
             </div>
@@ -3397,16 +3512,27 @@
                 ? (heptagonBoardTierIdFromLevelPercent(pShow) || {}).id || tierForCard.tier.id
                 : tierForCard.tier.id;
               return (
-                <LevelProgressBar
-                  summary={tierForCard}
-                  tierId={barTierId}
-                  pPctForBar={pShow >= 0 ? pShow : undefined}
-                  barContext={{
-                    isVirtualCohort: tierForCard.heptagonBoardVirtualCohort === true,
-                    filterCategory: category,
-                    viewerAgeCategory: viewerAc
-                  }}
-                />
+                <div className="stelvio-octagon-sidebar-col">
+                  <OctagonTierLevelPillSidebar
+                    summary={tierForCard}
+                    heptagonCardTooltip={stelvioCardTooltip}
+                    filterGenderLabel={labelForGender(gender)}
+                    filterCategoryLabel={labelForCategory(category)}
+                    showPct={tierPctHintOpen}
+                    setShowPct={setTierPctHintOpen}
+                  />
+                  <LevelProgressBar
+                    summary={tierForCard}
+                    tierId={barTierId}
+                    pPctForBar={pShow >= 0 ? pShow : undefined}
+                    hideTopTierLabel={true}
+                    barContext={{
+                      isVirtualCohort: tierForCard.heptagonBoardVirtualCohort === true,
+                      filterCategory: category,
+                      viewerAgeCategory: viewerAc
+                    }}
+                  />
+                </div>
               );
             })() : null}
           </div>
