@@ -1117,8 +1117,21 @@
     return m[tierId] || '레벨G';
   }
 
-  /** STELVIO 헵타곤 카드 하단 등급 범례(이미지 1행 + 레벨 문구 1행). HC=A … C6=G */
+  /** STELVIO 헵타곤 카드 하단 등급 범례(이미지 1행 + 레벨·순위% 문구 1행). HC=A … C6=G */
   var HEPTAGON_CARD_TIER_LEGEND_IDS = ['HC', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+
+  function heptagonCardTierLegendCaption(tierId) {
+    var m = {
+      HC: '레벨A >> ~5%',
+      C1: '레벨B >> ~10%',
+      C2: '레벨C >> ~20%',
+      C3: '레벨D >> ~40%',
+      C4: '레벨E >> ~60%',
+      C5: '레벨F >> ~80%',
+      C6: '레벨G >> 80%~'
+    };
+    return m[tierId] || m.C6;
+  }
 
   /**
    * index.html 랭킹 `buildSupremoRow` 와 동일: 비공개 + grade2 → 첫 글자** , grade1(관리자) → 풀명(길이 제한) + [비] 뱃지
@@ -3546,20 +3559,20 @@
             </div>
           </div>
           <div
-            className="stelvio-heptagon-tier-legend mt-2 mb-1 px-1 w-full max-w-[420px] mx-auto"
+            className="stelvio-heptagon-tier-legend mt-2 mb-1 px-1 w-full max-w-xl mx-auto"
             role="group"
-            aria-label="등급 A~G 및 레벨 범례"
+            aria-label="등급 A~G 및 순위 적용 % 범례"
           >
-            <div className="grid grid-cols-7 gap-x-0.5 sm:gap-x-1 gap-y-1 justify-items-center items-end text-[10px] text-gray-600">
+            <div className="grid grid-cols-7 gap-x-0.5 sm:gap-x-1 gap-y-1.5 justify-items-center items-end text-[10px] text-gray-600">
               {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId) {
                 return (
                   <div key={'leg-img-' + tLegendId} className="flex items-end justify-center w-full pt-0.5">
                     <img
                       src={tierBadgeImageSrc(tLegendId)}
                       alt=""
-                      width={12}
-                      height={8}
-                      className="w-3 h-2 max-w-none object-contain object-bottom pointer-events-none"
+                      width={24}
+                      height={16}
+                      className="w-6 h-4 max-w-none object-contain object-bottom pointer-events-none"
                       decoding="async"
                     />
                   </div>
@@ -3567,8 +3580,11 @@
               })}
               {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId2) {
                 return (
-                  <div key={'leg-txt-' + tLegendId2} className="w-full text-[9px] text-slate-600 whitespace-nowrap text-center leading-tight">
-                    {tierLevelDisplayName(tLegendId2)}
+                  <div
+                    key={'leg-txt-' + tLegendId2}
+                    className="w-full max-w-[4.75rem] text-[8px] sm:text-[9px] text-slate-600 text-center leading-tight px-0.5"
+                  >
+                    {heptagonCardTierLegendCaption(tLegendId2)}
                   </div>
                 );
               })}
