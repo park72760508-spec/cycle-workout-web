@@ -1,12 +1,12 @@
 import * as admin from "firebase-admin";
 import type { Firestore, Timestamp } from "firebase-admin/firestore";
 import {
-  aligoApiFailureHint,
-  logAligoAuthShape,
-  scrubAligoCredential,
-} from "./aligoCredentials";
-
-const aligoapi = require("aligoapi");
+  ALIMTALK_TEMPLATE,
+  loadAligoAlimtalkConfig,
+  normalizeReceiverPhoneDigits,
+  safeAlimtalkDisplayNameUnified,
+  sendAlimtalkUnified,
+} from "./aligoAlimtalkUnified";
 
 /** 포인트 계산 비율: 기본 1 TSS = 1 SP */
 const POINTS_PER_TSS = Number(process.env.POINTS_PER_TSS || "1");
@@ -17,23 +17,12 @@ const SUBSCRIPTION_DAYS_PER_THRESHOLD = Number(process.env.SUBSCRIPTION_DAYS_PER
 
 const USERS_COLLECTION = "users";
 const POINT_HISTORY_COLLECTION = "point_history";
-const APP_CONFIG_COLLECTION = "appConfig";
-const ALIGO_CONFIG_DOC = "aligo";
 
 /** 알리고/카카오 승인 알림톡 제목(subject_1) — 본문 첫째 줄 […] 제목 텍스트와 동일(대괄호 없음) */
 const ALIMTALK_SUBJECT_KO = "STELVIO 라이딩 미션 달성 및 구독 연장 안내";
 /** 본문 첫 줄 검수 문구(대괄호 포함) — 승인 템플릿과 바이트 단위로 맞춤 */
 const ALIMTALK_MISSION_TITLE = ALIMTALK_SUBJECT_KO;
 const ALIMTALK_MISSION_HEADER_LINE = `[${ALIMTALK_MISSION_TITLE}]`;
-
-interface AligoConfig {
-  senderkey: string;
-  tpl_code: string;
-  sender: string;
-  apikey: string;
-  userid: string;
-  token: string;
-}
 
 interface ProcessRidingRewardResult {
   userId: string;
@@ -164,11 +153,6 @@ function computeSubscriptionExpiryBeforeAfterSeoul(
   return { before, after };
 }
 
-/** 휴대폰 숫자만 추출하여 알림톡 수신자 형태(11자리)로 정규화 */
-function normalizeReceiverPhone(phone: string): string {
-  return (phone || "").replace(/\D/g, "");
-}
-
 function getReceiverPhoneFromUserData(userData: Record<string, unknown>): string {
   return String(
     userData.contact ??
@@ -243,14 +227,6 @@ function formatRemPointsForMissionAlimtalk(n: number): string {
   return String(Math.round(Number.isFinite(n) ? n : 0));
 }
 
-/** 빈 값·공백·단일 비(문자/숫자) 기호(예: `-`)는 recvname/본문 치환 시 검수 오류 유발 → 안전 폴백 */
-function safeAlimtalkDisplayName(raw: string): string {
-  const t = String(raw ?? "").trim();
-  if (!t) return "회원";
-  if (t.length === 1 && /[^\p{L}\p{N}]/u.test(t)) return "회원";
-  return t;
-}
-
 function buildAlimtalkMessage(params: {
   userName: string;
   earnedPoints: number;
@@ -259,7 +235,7 @@ function buildAlimtalkMessage(params: {
   expiryDateAfter: string;
   remPointsAfter: number;
 }): string {
-  const displayName = safeAlimtalkDisplayName(params.userName);
+  const displayName = safeAlimtalkDisplayNameUnified(params.userName);
   const earnedSp = formatSpForKakaoTemplate(params.earnedPoints);
   const extendedDaysStr = String(
     Number.isFinite(params.extendedDays) ? Math.trunc(params.extendedDays) : 0
@@ -297,61 +273,12 @@ function buildAlimtalkMessage(params: {
   return rawMessage.replace(/\r?\n/g, "\r\n");
 }
 
-/**
- * POST /akv10/alimtalk/send/ 응답: 성공 시 `code` 는 Integer 0, message 예: "성공적으로 전송요청 하였습니다."
- * (구 SMS 연동 result_code=1 는 본 API와 혼용되지 않음 — alimtalk 전용이면 code만 본다)
- */
-function isAligoAlimtalkApiSuccess(data: Record<string, unknown>): boolean {
-  if (data.code !== undefined && data.code !== null) {
-    const c = Number(data.code);
-    return c === 0 && !Number.isNaN(c);
-  }
-  if (data.result_code !== undefined && data.result_code !== null) {
-    return String(data.result_code) === "1";
-  }
-  return false;
-}
-
 export class PointRewardService {
   constructor(private readonly db: Firestore) {}
 
-  /** Strava Secret 패턴과 동일하게 env + appConfig(aligo) 조합으로 설정 로딩 */
-  private async loadAligoConfig(): Promise<AligoConfig> {
-    const appConfigSnap = await this.db.collection(APP_CONFIG_COLLECTION).doc(ALIGO_CONFIG_DOC).get();
-    const appConfig = appConfigSnap.exists ? appConfigSnap.data() ?? {} : {};
-
-    const senderkey = scrubAligoCredential(String(process.env.ALIGO_SENDER_KEY || appConfig.senderkey || ""));
-    const tplCode = scrubAligoCredential(String(process.env.ALIGO_TPL_CODE || appConfig.tpl_code || ""));
-    const sender = scrubAligoCredential(String(process.env.ALIGO_SENDER || appConfig.sender || ""));
-
-    const apikey = scrubAligoCredential(process.env.ALIGO_API_KEY);
-    const userid = scrubAligoCredential(process.env.ALIGO_USER_ID);
-    const token = scrubAligoCredential(process.env.ALIGO_TOKEN);
-
-    if (!senderkey || !tplCode || !sender || !apikey || !userid || !token) {
-      throw new Error(
-        "알리고 설정이 누락되었습니다. (ALIGO_* env·Secret 또는 appConfig/aligo의 senderkey·tpl_code·sender 확인. API 인증 3종은 Secret ALIGO_API_KEY/USER_ID/TOKEN)"
-      );
-    }
-
-    logAligoAuthShape("loadAligoConfig", apikey, userid, token);
-
-    return {
-      senderkey,
-      tpl_code: tplCode,
-      sender,
-      apikey,
-      userid,
-      token,
-    };
-  }
-
   /**
-   * aligoapi.alimtalkSend(req, auth) — body + auth( apikey, userid, token ) form 합쳐 POST
-   * 공식 필수: senderkey, tpl_code, sender, receiver_1, subject_1, message_1
-   * 선택: recvname_1, senddate, emtitle_1, button_1, failover, fsubject_1, fmessage_1, testMode
-   * failover=Y 일 때 fsubject_1, fmessage_1 필수 — 본 구현은 failover N(대체문자 없음)
-   * @see https://kakaoapi.aligo.in/akv10/alimtalk/send/
+   * 라이딩 미션 달성·구독 연장 알림톡(UH_2120 계열 tpl_code).
+   * @see aligoAlimtalkUnified.ts
    */
   private async sendAlimtalk(
     receiverPhone: string,
@@ -359,75 +286,15 @@ export class PointRewardService {
     subject: string,
     message: string
   ): Promise<void> {
-    const cfg = await this.loadAligoConfig();
-    const receiver = normalizeReceiverPhone(receiverPhone);
-    if (!receiver) {
-      throw new Error("알림톡 수신자 번호가 비어 있습니다.");
-    }
-    const recvName = safeAlimtalkDisplayName(displayName || "");
-    const messageOut = message.replace(/\r?\n/g, "\r\n");
-
-    const body: Record<string, string> = {
-      senderkey: cfg.senderkey,
-      tpl_code: cfg.tpl_code,
-      sender: cfg.sender,
-      receiver_1: receiver,
-      recvname_1: recvName,
-      subject_1: subject,
-      message_1: messageOut,
-      failover: "N",
-    };
-
-    if (String(process.env.ALIGO_ALIMTALK_TEST_MODE || "").toUpperCase() === "Y") {
-      body.testMode = "Y";
-    }
-    const em = String(process.env.ALIGO_ALIMTALK_EMTITLE_1 || "").trim();
-    if (em) {
-      body.emtitle_1 = em;
-    }
-    const btn = String(process.env.ALIGO_ALIMTALK_BUTTON_1 || "").trim();
-    if (btn) {
-      body.button_1 = btn;
-    }
-
-    /* aligoapi.formParse()는 Express req를 가정하여 obj.headers['content-type']에 직접 접근함.
-     * Firebase Functions 환경에서는 headers가 없으므로 직접 주입.
-     * 'application/json' 지정 → non-multipart 분기로 obj.body를 정상 파싱. */
-    const req = { body, headers: { 'content-type': 'application/json' } };
-    const authData = {
-      apikey: cfg.apikey,
-      userid: cfg.userid,
-      token: cfg.token,
-    };
-
-    const raw = (await aligoapi.alimtalkSend(req, authData)) as Record<string, unknown>;
-    if (!isAligoAlimtalkApiSuccess(raw)) {
-      let detail = "";
-      try {
-        detail = JSON.stringify(raw);
-      } catch {
-        detail = String(raw);
-      }
-      const msg = String(
-        (raw as { message?: string; Message?: string }).message ??
-          (raw as { Message?: string }).Message ??
-          "알 수 없는 응답"
-      );
-      const c = raw?.code ?? raw?.result_code;
-      const hint = aligoApiFailureHint(c, msg);
-      console.error("[Aligo] alimtalkSend 비성공 응답:", detail, hint || "");
-      throw new Error(`알림톡 API 실패(code=${String(c)}): ${msg}${hint}`);
-    }
-    const info = raw.info as
-      | { mid?: string | number; scnt?: number; fcnt?: number; type?: string }
-      | undefined;
-    if (info && info.mid != null) {
-      console.log(
-        `[Aligo] alimtalk 전송요청 수신 type=${String(info.type ?? "AT")} mid=${String(info.mid)} scnt=${
-          info.scnt ?? ""
-        } fcnt=${info.fcnt ?? ""}`
-      );
-    }
+    const cfg = await loadAligoAlimtalkConfig(this.db, ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION);
+    await sendAlimtalkUnified(cfg, {
+      receiverPhone,
+      displayName,
+      subject,
+      message,
+      templateKind: ALIMTALK_TEMPLATE.MISSION_SUBSCRIPTION,
+      logTag: "[PointReward Aligo]",
+    });
   }
 
   /**
@@ -678,7 +545,7 @@ export class PointRewardService {
     if (payload.extendedDays <= 0) {
       return { alimtalkSent: false, skipped: "no_subscription_extension" };
     }
-    if (!normalizeReceiverPhone(payload.receiverPhone)) {
+    if (!normalizeReceiverPhoneDigits(payload.receiverPhone)) {
       console.warn(
         `[PointReward] userId=${payload.userId} 구독 연장 알림톡 생략: users에 휴대전화 없음 (contact·phone·mobile 등)`
       );
