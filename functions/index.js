@@ -26,6 +26,8 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const rankingDayRollup = require("./rankingDayRollup");
+
 // CORS 설정: Firebase Functions v2 onCall - 허용할 출처 (localhost는 개발/테스트용)
 const CORS_ORIGINS = [
   "https://stelvio.ai.kr",
@@ -2341,85 +2343,42 @@ function getWeekRangeSeoul(weekOffset = 0) {
   return { startStr, endStr };
 }
 
-/** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) */
-async function getWeeklyTssForUser(db, userId, startStr, endStr) {
-  const snapshot = await db.collection("users").doc(userId).collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
-  const byDate = {};
-  snapshot.docs.forEach((doc) => {
-    const d = doc.data();
-    if (!isCyclingForMmp(d)) return; // Run, Swim, Walk, TrailRun 제외
-    const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
-    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
-    const tss = Number(d.tss) || 0;
-    const isStrava = String(d.source || "").toLowerCase() === "strava";
-    if (!byDate[dateStr]) byDate[dateStr] = { strava: 0, stelvio: 0 };
-    if (isStrava) byDate[dateStr].strava += tss;
-    else byDate[dateStr].stelvio += tss;
-  });
-  let total = 0;
-  Object.keys(byDate).forEach((dateStr) => {
-    const o = byDate[dateStr];
-    const dayTss = o.strava > 0 ? o.strava : o.stelvio;
-    if (dayTss >= TSS_PER_DAY_CHEAT_THRESHOLD) return; // 해당 날짜 합산 제외
-    total += dayTss;
-  });
-  return total;
+/** 사용자 로그에서 주간 TSS 합계 (날짜별: strava 우선, 없으면 stelvio) — ranking_day_totals 일 버킹 집계 */
+async function getWeeklyTssForUser(db, userId, startStr, endStr, userDataCached = null) {
+  try {
+    const userData = userDataCached
+      ?? (await db.collection("users").doc(userId).get()).data()
+      ?? {};
+    return await rankingDayRollup.weeklyTssSumFromDayBuckets(db, userId, userData, startStr, endStr);
+  } catch (e) {
+    console.warn("[getWeeklyTssForUser]", userId, e.message);
+    return 0;
+  }
 }
 
-/** 사용자 로그에서 기간 내 라이딩 거리 합계(km). 일별 Strava 합 우선·없으면 Stelvio 합(getWeeklyTssForUser와 동일 일별 규칙). isCyclingForMmp만 합산. */
-async function getRolling30dCyclingKmForUser(db, userId, startStr, endStr) {
-  const snapshot = await db.collection("users").doc(userId).collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
-  const byDate = {};
-  snapshot.docs.forEach((doc) => {
-    const d = doc.data();
-    if (!isCyclingForMmp(d)) return;
-    const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
-    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
-    const km = Number(d.distance_km != null ? d.distance_km : d.distance || 0) || 0;
-    const isStrava = String(d.source || "").toLowerCase() === "strava";
-    if (!byDate[dateStr]) byDate[dateStr] = { strava: 0, stelvio: 0 };
-    if (isStrava) byDate[dateStr].strava += km;
-    else byDate[dateStr].stelvio += km;
-  });
-  let total = 0;
-  Object.keys(byDate).forEach((dateStr) => {
-    const o = byDate[dateStr];
-    const dayKm = o.strava > 0 ? o.strava : o.stelvio;
-    total += dayKm;
-  });
-  return total;
+/** 사용자 로그에서 기간 내 라이딩 거리 합계(km) — ranking_day_totals 기반 */
+async function getRolling30dCyclingKmForUser(db, userId, startStr, endStr, userDataCached = null) {
+  try {
+    const userData = userDataCached
+      ?? (await db.collection("users").doc(userId).get()).data()
+      ?? {};
+    return await rankingDayRollup.rollingKmSumFromDayBuckets(db, userId, userData, startStr, endStr);
+  } catch (e) {
+    console.warn("[getRolling30dCyclingKmForUser]", userId, e.message);
+    return 0;
+  }
 }
 
 /** 해당 주간에 1일 500 이상 TSS가 있는지 여부 (포인트 적립 제외 판단용) */
 async function hasWeeklyTssCheatDay(db, userId, startStr, endStr) {
-  const snapshot = await db.collection("users").doc(userId).collection("logs")
-    .where("date", ">=", startStr)
-    .where("date", "<=", endStr)
-    .get();
-  const byDate = {};
-  snapshot.docs.forEach((doc) => {
-    const d = doc.data();
-    if (!isCyclingForMmp(d)) return; // Run, Swim, Walk, TrailRun 제외
-    const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
-    if (!dateStr || dateStr < startStr || dateStr > endStr) return;
-    const tss = Number(d.tss) || 0;
-    const isStrava = String(d.source || "").toLowerCase() === "strava";
-    if (!byDate[dateStr]) byDate[dateStr] = { strava: 0, stelvio: 0 };
-    if (isStrava) byDate[dateStr].strava += tss;
-    else byDate[dateStr].stelvio += tss;
-  });
-  for (const dateStr of Object.keys(byDate)) {
-    const o = byDate[dateStr];
-    const dayTss = o.strava > 0 ? o.strava : o.stelvio;
-    if (dayTss >= TSS_PER_DAY_CHEAT_THRESHOLD) return true;
+  try {
+    const us = await db.collection("users").doc(userId).get();
+    const userData = us.exists ? us.data() : {};
+    return await rankingDayRollup.cheatDayPresentFromBuckets(db, userId, userData, startStr, endStr);
+  } catch (e) {
+    console.warn("[hasWeeklyTssCheatDay]", userId, e.message);
+    return false;
   }
-  return false;
 }
 
 const WEEKLY_RANKING_CACHE_TTL_MS = 5 * 60 * 1000; // 5분
@@ -2438,7 +2397,7 @@ async function getWeeklyRankingEntries(db, startStr, endStr, usersSnap = null) {
         const userId = doc.id;
         const data = doc.data();
         const name = data.name || "(이름 없음)";
-        const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr);
+        const totalTss = await getWeeklyTssForUser(db, userId, startStr, endStr, data);
         const is_private = data.is_private === true;
         return totalTss > 0 ? { userId, name, totalTss, is_private } : null;
       })
@@ -3244,7 +3203,7 @@ async function getPeakHrForUser(db, userId, startStr, endStr, durationType) {
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
     if (!isCyclingForMmp(d)) return;
-    const dateStr = typeof d.date === "string" ? String(d.date).slice(0, 10) : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    const dateStr = normalizeLogDateToSeoulYmd(d.date);
     if (!dateStr || dateStr < startStr || dateStr > endStr) return;
     const hr = Number(d[field]) || 0;
     if (hr < 40 || hr > HR_MAX_BPM) return;
@@ -3363,7 +3322,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
         const challenge = data.challenge || "Fitness";
         const leagueCategory = getLeagueCategory(challenge, birthYear);
         if (!leagueCategory) return null;
-        const totalTssRaw = await getWeeklyTssForUser(db, userId, startStr, endStr);
+        const totalTssRaw = await getWeeklyTssForUser(db, userId, startStr, endStr, data);
         if (totalTssRaw <= 0) return null;
         const totalTss = Math.round(totalTssRaw * 100) / 100;
         return {
@@ -3410,7 +3369,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
         const challenge = data.challenge || "Fitness";
         const leagueCategory = getLeagueCategory(challenge, birthYear);
         if (!leagueCategory) return null;
-        const totalKmRaw = await getRolling30dCyclingKmForUser(db, userId, startStr, endStr);
+        const totalKmRaw = await getRolling30dCyclingKmForUser(db, userId, startStr, endStr, data);
         if (totalKmRaw <= 0) return null;
         const totalKm = Math.round(totalKmRaw * 100) / 100;
         return {
@@ -3843,9 +3802,7 @@ function computeUserPeaksAllDurationsFromSnapshot(userData, snapshot, startStr, 
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
     if (!isCyclingForMmp(d)) return;
-    const dateStr = typeof d.date === "string"
-      ? d.date
-      : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    const dateStr = normalizeLogDateToSeoulYmd(d.date);
     if (!dateStr || dateStr < startStr || dateStr > endStr) return;
     for (const dt of Object.keys(DURATION_FIELDS)) {
       const field = DURATION_FIELDS[dt];
@@ -3872,9 +3829,7 @@ function maxHrByDurationFromSnapshot(snapshot, startStr, endStr) {
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
     if (!isCyclingForMmp(d)) return;
-    const dateStr = typeof d.date === "string"
-      ? d.date
-      : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+    const dateStr = normalizeLogDateToSeoulYmd(d.date);
     if (!dateStr || dateStr < startStr || dateStr > endStr) return;
     for (const dt of Object.keys(DURATION_HR_FIELDS)) {
       const field = DURATION_HR_FIELDS[dt];
@@ -3930,12 +3885,12 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
         const leagueCategory = getLeagueCategory(challenge, birthYear);
         if (!leagueCategory) return;
 
-        const logSnap = await db.collection("users").doc(userId).collection("logs")
-          .where("date", ">=", startStr)
-          .where("date", "<=", endStr)
-          .get();
-        const peakMap = computeUserPeaksAllDurationsFromSnapshot(data, logSnap, startStr, endStr);
-        const hrMax = maxHrByDurationFromSnapshot(logSnap, startStr, endStr);
+        await rankingDayRollup.ensureRankingBucketsFilledForRange(db, userId, data, startStr, endStr);
+        const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
+        const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
+        const bucketSnaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
+        const peakMap = rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(data, bucketSnaps, startStr, endStr);
+        const hrMax = rankingDayRollup.maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr);
         for (const slot of genders) {
           if (slot === "M" && gKey !== "M") continue;
           if (slot === "F" && gKey !== "F") continue;
@@ -5020,9 +4975,6 @@ exports.onUserLogWritten = functions
   .runWith({ timeoutSeconds: 120 })
   .firestore.document("users/{userId}/logs/{logId}")
   .onWrite(async (change, context) => {
-    const snap = change.after;
-    if (!snap || !snap.exists) return;
-    const logData = snap.data();
     const userId = context.params.userId;
     const logId = context.params.logId;
     if (!userId || !logId) return;
@@ -5030,6 +4982,14 @@ exports.onUserLogWritten = functions
     const userSnap = await db.collection("users").doc(userId).get();
     if (!userSnap.exists) return;
     const userData = userSnap.data();
+    try {
+      await rankingDayRollup.reconcileRankingDayTotalsOnLogWrite(db, userId, userData, change);
+    } catch (e) {
+      console.warn("[onUserLogWritten] ranking_day_totals 버킹 실패:", userId, logId, e.message);
+    }
+    const snap = change.after;
+    if (!snap || !snap.exists) return;
+    const logData = snap.data();
     try {
       await upsertYearlyPeakFromLog(db, userId, userData, logData, logId);
     } catch (e) {
@@ -5499,7 +5459,7 @@ exports.getFtpSuggestion = onRequest(
     logsSnap.docs.forEach((doc) => {
       const d = doc.data();
       if (!isCyclingForMmp(d)) return; // Run 등 비사이클링 Strava 로그는 FTP 제안에서 제외
-      const dateStr = typeof d.date === "string" ? d.date : (d.date && d.date.toDate ? d.date.toDate().toISOString().slice(0, 10) : "");
+      const dateStr = normalizeLogDateToSeoulYmd(d.date);
       if (!dateStr) return;
       const tss = Number(d.tss) || 0;
       const np = Number(d.np) || Number(d.avg_power) || Number(d.weighted_watts) || 0;
