@@ -314,6 +314,97 @@ async function cheatDayPresentFromBuckets(db, userId, userData, startStr, endStr
   });
 }
 
+/**
+ * 롤링 28일 창인지 확인 후 7일 × 4주 구간 [start,end] 목록 생성 (실패 시 null)
+ */
+function splitInclusiveRangeIntoFourWeeks(startStr, endStr) {
+  const dates = listInclusiveYmdsSeoul(startStr, endStr);
+  if (!dates.length || dates.length !== 28) return null;
+  const ranges = [];
+  for (let w = 0; w < 4; w++) {
+    ranges.push({
+      startStr: dates[w * 7],
+      endStr: dates[w * 7 + 6],
+    });
+  }
+  return ranges;
+}
+
+/**
+ * GC / 헵타곤 피크: 4주 각 주 최대 W/kg → 상위 3주 평균 후 미달 주차 페널티
+ * @param {number[]} weeklyMaxWkgArr - 길이 4, 해당 주 무기록이면 0
+ * @returns {{ finalWkg: number, penaltyMultiplier: number }}
+ */
+function calculateGcRankingFromWeeklyMaxWkg(weeklyMaxWkgArr) {
+  const activeWeeks = (weeklyMaxWkgArr || [])
+    .filter((val) => Number(val) > 0)
+    .sort((a, b) => Number(b) - Number(a));
+  const topWeeks = activeWeeks.slice(0, 3);
+  const count = topWeeks.length;
+  if (count === 0) return { finalWkg: 0, penaltyMultiplier: 1 };
+  const sum = topWeeks.reduce((acc, val) => acc + Number(val), 0);
+  const average = sum / count;
+  let penaltyMultiplier = 1.0;
+  if (count === 2) penaltyMultiplier = 0.85;
+  if (count === 1) penaltyMultiplier = 0.70;
+  const finalScore = average * penaltyMultiplier;
+  const finalWkg = Math.round(finalScore * 100) / 100;
+  return { finalWkg, penaltyMultiplier };
+}
+
+function weekIndexForSeoulYmd(ymd, weekRanges) {
+  if (!ymd || !weekRanges || weekRanges.length !== 4) return -1;
+  for (let i = 0; i < 4; i++) {
+    if (ymd >= weekRanges[i].startStr && ymd <= weekRanges[i].endStr) return i;
+  }
+  return -1;
+}
+
+/**
+ * 일 버킷 스냅샷(28일)으로 duration별 상위 3주 평균 피크 W/kg 산출 — 로그 1패스 동치, 추가 읽기 없음.
+ */
+function computeFourWeekGcStylePeaksFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
+  const rawWeight = Number(userData.weight || userData.weightKg || 0);
+  if (rawWeight <= 0) return null;
+  const weightKg = Math.max(rawWeight, 45);
+  const weekRanges = splitInclusiveRangeIntoFourWeeks(startStr, endStr);
+  if (!weekRanges) return null;
+
+  /** @type Record<string, number[]> duration -> 4주 최대 W */
+  const maxWattsByDurWeek = {};
+  for (const dt of Object.keys(DURATION_FIELDS)) {
+    maxWattsByDurWeek[dt] = [0, 0, 0, 0];
+  }
+
+  bucketSnaps.forEach((snap) => {
+    if (!snap || !snap.exists) return;
+    const row = snap.data() || {};
+    const ymd = row.ymd || snap.id || "";
+    if (!ymd || ymd < startStr || ymd > endStr) return;
+    const wi = weekIndexForSeoulYmd(ymd, weekRanges);
+    if (wi < 0) return;
+    for (const dt of Object.keys(DURATION_FIELDS)) {
+      const field = DURATION_FIELDS[dt];
+      const watts = Number(row[field]) || 0;
+      if (watts <= maxWattsByDurWeek[dt][wi]) continue;
+      if (!validatePeakPowerRecord(dt, watts, weightKg)) continue;
+      maxWattsByDurWeek[dt][wi] = watts;
+    }
+  });
+
+  const peaks = {};
+  for (const dt of Object.keys(DURATION_FIELDS)) {
+    const weeklyWkg = maxWattsByDurWeek[dt].map((mw) =>
+      (mw > 0 ? Math.round((mw / weightKg) * 100) / 100 : 0)
+    );
+    const { finalWkg } = calculateGcRankingFromWeeklyMaxWkg(weeklyWkg);
+    if (!finalWkg || finalWkg <= 0) continue;
+    const watts = Math.round(finalWkg * weightKg);
+    peaks[dt] = { watts, wkg: finalWkg, weightKg };
+  }
+  return Object.keys(peaks).length ? { weightKg, peaks } : null;
+}
+
 /** 로그 스냅샷 대신 버킂 스냅샷 목록으로 computeUserPeaksAllDurationsFromSnapshot 동치 */
 function computeUserPeaksAllDurationsFromBucketSnaps(userData, bucketSnaps, startStr, endStr) {
   const rawWeight = Number(userData.weight || userData.weightKg || 0);
@@ -360,6 +451,9 @@ function maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr) {
   return out;
 }
 
+exports.splitInclusiveRangeIntoFourWeeks = splitInclusiveRangeIntoFourWeeks;
+exports.calculateGcRankingFromWeeklyMaxWkg = calculateGcRankingFromWeeklyMaxWkg;
+exports.computeFourWeekGcStylePeaksFromBucketSnaps = computeFourWeekGcStylePeaksFromBucketSnaps;
 exports.reconcileRankingDayTotalsOnLogWrite = reconcileRankingDayTotalsOnLogWrite;
 exports.reconcileUserRankingDayBucket = reconcileUserRankingDayBucket;
 exports.ensureRankingBucketsFilledForRange = ensureRankingBucketsFilledForRange;

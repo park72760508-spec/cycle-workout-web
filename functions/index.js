@@ -3021,7 +3021,7 @@ function getYearRangeSeoul(year) {
   return { startStr: `${y}-01-01`, endStr: `${y}-12-31` };
 }
 
-/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 30일 (YYYY-MM-DD). 월간 랭킹·rolling30 동일. 달력 월 리셋 없음. */
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 30일 (YYYY-MM-DD). 거리 등 비피크 랭킹용. */
 function getRolling30DaysRangeSeoul() {
   const now = new Date();
   const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -3029,6 +3029,20 @@ function getRolling30DaysRangeSeoul() {
   const today = new Date(y, m - 1, d);
   const start = new Date(today);
   start.setDate(today.getDate() - 29);
+  const pad = (n) => String(n).padStart(2, "0");
+  const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+  const endStr = `${y}-${pad(m)}-${pad(d)}`;
+  return { startStr, endStr };
+}
+
+/** Asia/Seoul 달력 기준 오늘 포함 역산 최근 28일(7×4주). GC·헵타곤·피크(rolling/monthly 탭) 공통 창 — 추가 로그 조회 없이 일 버킹만 사용. */
+function getRolling28DaysRangeSeoul() {
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const today = new Date(y, m - 1, d);
+  const start = new Date(today);
+  start.setDate(today.getDate() - 27);
   const pad = (n) => String(n).padStart(2, "0");
   const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
   const endStr = `${y}-${pad(m)}-${pad(d)}`;
@@ -3171,10 +3185,42 @@ async function getPeakPowerForUser(db, userId, userData, startStr, endStr, durat
     return { watts, wkg: wkgVal, weightKg };
   }
 
+  const weekRanges = rankingDayRollup.splitInclusiveRangeIntoFourWeeks(startStr, endStr);
+
   const snapshot = await db.collection("users").doc(userId).collection("logs")
     .where("date", ">=", startStr)
     .where("date", "<=", endStr)
     .get();
+
+  if (weekRanges) {
+    const maxWW = [0, 0, 0, 0];
+    snapshot.docs.forEach((doc) => {
+      const d = doc.data();
+      if (!isCyclingForMmp(d)) return;
+      const dateStr = normalizeLogDateToSeoulYmd(d.date);
+      if (!dateStr) return;
+      let wi = -1;
+      for (let i = 0; i < 4; i++) {
+        if (dateStr >= weekRanges[i].startStr && dateStr <= weekRanges[i].endStr) {
+          wi = i;
+          break;
+        }
+      }
+      if (wi < 0) return;
+      const watts = Number(d[field]) || 0;
+      if (watts <= 0) return;
+      if (!validatePeakPowerRecord(durationType, watts, weightKg)) return;
+      if (watts > maxWW[wi]) maxWW[wi] = watts;
+    });
+    const weeklyWkg = maxWW.map((mw) =>
+      (mw > 0 ? Math.round((mw / weightKg) * 100) / 100 : 0)
+    );
+    const { finalWkg } = rankingDayRollup.calculateGcRankingFromWeeklyMaxWkg(weeklyWkg);
+    if (finalWkg <= 0) return null;
+    const wattsOut = Math.round(finalWkg * weightKg);
+    return { watts: wattsOut, wkg: finalWkg, weightKg };
+  }
+
   let maxWatts = 0;
   snapshot.docs.forEach((doc) => {
     const d = doc.data();
@@ -3889,7 +3935,9 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
         const dates = rankingDayRollup.listInclusiveYmdsSeoul(startStr, endStr);
         const refs = dates.map((ymd) => rankingDayRollup.bucketRef(db, userId, ymd));
         const bucketSnaps = await rankingDayRollup.chunkedGetAll(db, refs, 30);
-        const peakMap = rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(data, bucketSnaps, startStr, endStr);
+        const peakMap = dates.length === 28 && rankingDayRollup.splitInclusiveRangeIntoFourWeeks(startStr, endStr)
+          ? rankingDayRollup.computeFourWeekGcStylePeaksFromBucketSnaps(data, bucketSnaps, startStr, endStr)
+          : rankingDayRollup.computeUserPeaksAllDurationsFromBucketSnaps(data, bucketSnaps, startStr, endStr);
         const hrMax = rankingDayRollup.maxHrByDurationFromBucketSnaps(bucketSnaps, startStr, endStr);
         for (const slot of genders) {
           if (slot === "M" && gKey !== "M") continue;
@@ -4001,6 +4049,7 @@ async function runRebuildRankingAggregatesCore(db) {
   let wrote = 0;
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
   const { startStr: wPrevS, endStr: wPrevE } = getWeekRangeSeoul(-1);
+  const { startStr: r28s, endStr: r28e } = getRolling28DaysRangeSeoul();
   const { startStr: r30s, endStr: r30e } = getRolling30DaysRangeSeoul();
   const { startStr: r365s, endStr: r365e } = getRolling365DaysRangeSeoul();
 
@@ -4040,16 +4089,16 @@ async function runRebuildRankingAggregatesCore(db) {
   });
   wrote++;
 
-  const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r30s, r30e, sharedUsersSnap);
+  const allDurMonthly = await buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, r28s, r28e, sharedUsersSnap);
   for (const gender of ["all", "M", "F"]) {
     for (const durationType of Object.keys(DURATION_FIELDS)) {
       const pack = allDurMonthly[gender][durationType];
-      const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r30s}_${r30e}`;
+      const ckey = `peakRanking_v2_monthly_${durationType}_${gender}_${r28s}_${r28e}`;
       await writeRankingAggregatePayload(db, ckey, {
         byCategory: pack.byCategory,
         entries: pack.entries,
-        startStr: r30s,
-        endStr: r30e,
+        startStr: r28s,
+        endStr: r28e,
         cohortAvgHrBpm: pack.cohortAvgHrBpm,
       });
       wrote++;
@@ -4146,7 +4195,7 @@ exports.scheduledHeptagonCohortRanks = onSchedule(
       const r = await heptagonCohortRanks.runRebuildHeptagonCohortRanks(db, {
         getPeakPowerRankingEntries,
         getLeagueCategory,
-        getRolling30DaysRangeSeoul,
+        getRolling28DaysRangeSeoul,
         admin,
         readRankingAggregatePayloadIfFresh,
         buildPeakPowerAllDurationsForRangeAllGendersOnePass,
@@ -4673,7 +4722,7 @@ exports.getPeakPowerRanking = onRequest(
         console.warn("[getPeakPowerRanking gc]", eGc && eGc.message ? eGc.message : eGc);
         return res.status(500).json({ success: false, error: "gc_ranking_failed" });
       }
-      const rolling = getRolling30DaysRangeSeoul();
+      const rolling = getRolling28DaysRangeSeoul();
       const out = {
         success: true,
         byCategory,
@@ -4715,7 +4764,7 @@ exports.getPeakPowerRanking = onRequest(
       startStr = r.startStr;
       endStr = r.endStr;
     } else if (period === "rolling30" || period === "monthly") {
-      const r = getRolling30DaysRangeSeoul();
+      const r = getRolling28DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
     } else {
@@ -4872,7 +4921,7 @@ exports.getOvertakeAnalysis = onRequest(
       startStr = r.startStr;
       endStr = r.endStr;
     } else {
-      const r = getRolling30DaysRangeSeoul();
+      const r = getRolling28DaysRangeSeoul();
       startStr = r.startStr;
       endStr = r.endStr;
     }

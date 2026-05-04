@@ -1,7 +1,7 @@
 /**
  * STELVIO 헵타곤: 코호트별(월·성별·부문) **전면(Supremo) 환산 점수 합**이 동일한 값으로 모든 부문에 저장되고,
  * 각 부문 코호트에서는 이 값만으로 **내림차순** 정렬해 `boardRank`를 부여한다(부문마다 별도 환산 합을 계산하지 않음).
- * - 기간: `getRolling30DaysRangeSeoul` (최근 30일, 서울)
+ * - 기간: `getRolling28DaysRangeSeoul` (최근 28일 = 7×4주, 서울) — 피크는 주차별 최고 후 상위 3주 평균·페널티
  * - 7축 `sumPositionScores`: 항상 `computeDisplayRankForUser(..., "Supremo", ...)` 랭크로만 산출
  */
 
@@ -11,7 +11,7 @@ const HEPTAGON_CATEGORIES = ["Supremo", "Assoluto", "Bianco", "Rosa", "Infinito"
 const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
 
-/** 랭킹보드 월간(실질 롤링30) 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates */
+/** 랭킹보드 월간 피크 집계 키와 동일 — getPeakPowerRanking / rebuildRankingAggregates (28일 롤링) */
 function peakMonthlyAggregateDocKey(durationType, gender, startStr, endStr) {
   return `peakRanking_v2_monthly_${durationType}_${gender}_${startStr}_${endStr}`;
 }
@@ -294,7 +294,7 @@ function computePTotalAndTierHeptagon(ranks, cohortNPerAxis) {
  * @param {object} deps
  * @param {Function} deps.getPeakPowerRankingEntries
  * @param {Function} deps.getLeagueCategory
- * @param {Function} deps.getRolling30DaysRangeSeoul
+ * @param {Function} deps.getRolling28DaysRangeSeoul
  * @param {typeof import("firebase-admin")} admin
  * @param {Function} [deps.readRankingAggregatePayloadIfFresh] ranking_aggregates 1회 읽기 (선택)
  * @param {Function} [deps.buildPeakPowerAllDurationsForRangeAllGendersOnePass] 로그 1패스 집계 (선택)
@@ -303,13 +303,13 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
   const {
     getPeakPowerRankingEntries,
     getLeagueCategory,
-    getRolling30DaysRangeSeoul,
+    getRolling28DaysRangeSeoul,
     readRankingAggregatePayloadIfFresh,
     buildPeakPowerAllDurationsForRangeAllGendersOnePass,
   } = deps;
   const { admin } = deps;
   const t0 = Date.now();
-  const { startStr, endStr } = getRolling30DaysRangeSeoul();
+  const { startStr, endStr } = getRolling28DaysRangeSeoul();
   const monthKey = getMonthKeyKstNow();
   const todayYmd = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
 
@@ -427,7 +427,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
           ref,
           {
             monthKey,
-            periodMode: "rolling30",
+            periodMode: "rolling28",
             rangeStart: startStr,
             rangeEnd: endStr,
             asOfSeoul: todayYmd,
