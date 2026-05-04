@@ -4,7 +4,9 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import type { SecretParam } from "firebase-functions/params";
+
+/** defineSecret('STRAVA_CLIENT_SECRET') 반환 — SecretParam 타입 경로에 의존하지 않음 */
+type StravaClientSecretParam = ReturnType<typeof import("firebase-functions/params").defineSecret>;
 
 /** 집결지 반경 (미터) */
 const MEETING_START_RADIUS_M = 200;
@@ -868,7 +870,7 @@ export async function executeVerifyAttendanceForEventId(
  * Callable 팩토리: Strava client secret 파라미터를 엔트리(index.ts)와 공유
  * - 호출자는 로그인 필수, 모임 `hostUserId` 와 동일한 uid 만 실행 가능
  */
-export function createVerifyMeetingAttendance(stravaClientSecret: SecretParam) {
+export function createVerifyMeetingAttendance(stravaClientSecret: StravaClientSecretParam) {
   return onCall(
     {
       region: "asia-northeast3",
@@ -904,7 +906,7 @@ export function createVerifyMeetingAttendance(stravaClientSecret: SecretParam) {
  * 금일 0시 이전 일정의 rides 중 미검증 건에 대해 참석 검증(방장 없이 서버 실행).
  * 이전 자정+5분(00:05) 배치는 Strava 로그가 아직 Firestore에 없어 좌표 검증이 MISSED로 고착되는 경우가 많았음.
  */
-export function createScheduledRideAttendanceVerification(stravaClientSecret: SecretParam) {
+export function createScheduledRideAttendanceVerification(stravaClientSecret: StravaClientSecretParam) {
   return onSchedule(
     {
       schedule: "30 3 * * *",
