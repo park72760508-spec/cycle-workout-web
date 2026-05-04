@@ -22,6 +22,11 @@ try {
   STRAVA_CLIENT_SECRET = null; // Secret 없음
 }
 
+/** 알리고 카카오 API — Secret Manager. 이 키를 읽으려면 각 함수 옵션에 `secrets`로 연결해야 함 (v2). */
+const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
+const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
+const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
@@ -6046,6 +6051,7 @@ exports.onRideCreatedMeetupInviteAlimtalk = onDocumentCreated(
     document: "rides/{rideId}",
     timeoutSeconds: 300,
     memory: "512MiB",
+    secrets: [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
   },
   async (event) => {
     const snap = event.data;

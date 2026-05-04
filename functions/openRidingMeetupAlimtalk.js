@@ -154,10 +154,15 @@ async function loadAligoConfigForMeetupOpen(db) {
       "오프라인 모임 알림톡 템플릿 코드가 없습니다. ALIGO_MEETUP_OPEN_TPL_CODE 또는 appConfig/aligo.meetup_open_tpl_code 를 확인하세요."
     );
   }
-  if (!senderkey || !sender || !apikey || !userid || !token) {
-    throw new Error(
-      "알리고 기본 설정 누락: senderkey·sender·ALIGO_API_KEY·ALIGO_USER_ID·ALIGO_TOKEN 을 확인하세요."
-    );
+
+  const missing = [];
+  if (!senderkey) missing.push("senderkey(ALIGO_SENDER_KEY 또는 appConfig/aligo.senderkey)");
+  if (!sender) missing.push("sender(ALIGO_SENDER 또는 appConfig/aligo.sender)");
+  if (!apikey) missing.push("ALIGO_API_KEY(Secret, 함수 secrets 연결 필요)");
+  if (!userid) missing.push("ALIGO_USER_ID(Secret)");
+  if (!token) missing.push("ALIGO_TOKEN(Secret)");
+  if (missing.length) {
+    throw new Error(`알리고 기본 설정 누락: ${missing.join(" · ")}`);
   }
 
   logAligoAuthShape("loadAligoConfigForMeetupOpen", apikey, userid, token);
