@@ -5,7 +5,8 @@
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const functions = require("firebase-functions");
+/** v1 전용(runWith · firestore.document). v7 패키지 루트는 v2라 runWith 미제공 → /v1 필요 */
+const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
