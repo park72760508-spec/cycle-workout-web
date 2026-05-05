@@ -7539,14 +7539,38 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   flex-shrink: 0;
 }
 
-/* 프로필 사진 — 포인트 배지와 같은 행 (원형 60px + 카메라 오버레이) */
+/* 프로필 사진 + 포인트 배지: 항상 1행 (줄바꿈 방지) */
 #profileScreen .stelvio-user-points-with-avatar {
   display: flex;
   flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px 10px;
   margin-top: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
+#profileScreen .stelvio-user-points-with-avatar .user-points {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#profileScreen .stelvio-user-points-with-avatar .point-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+#profileScreen .stelvio-user-points-with-avatar .point-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 5.5rem;
 }
 
 #profileScreen .stelvio-profile-card-avatar-btn {
@@ -7598,7 +7622,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   border-color: rgba(100, 116, 139, 0.35);
 }
 
-/* 포인트 배지 스타일 */
+/* 포인트 배지 스타일 (프로필 카드 일반; 1행 레이아웃은 .stelvio-user-points-with-avatar .user-points에서 오버라이드) */
 #profileScreen .user-card .user-points {
   display: flex;
   gap: 6px;
