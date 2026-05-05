@@ -30,13 +30,13 @@
 
   /** STELVIO 헵타곤(랭킹 상대%) — 등급은 7축 **포지션 점수**(1등=100…꼴등=0) 평균 → pTier(100-평균) + 아래. N≥100. N<100은 K·모수(코드: `stelvioOctagonPercentCutoffs`) */
   var STELVIO_OCTAGON_TIER_GUIDE_ROWS = [
-    { key: 'hc', label: '레벨A', range: '5% 이하', src: 'assets/img/hc.png' },
-    { key: 'c1', label: '레벨B', range: '5% 초과 ~ 10% 이하', src: 'assets/img/c1.png' },
-    { key: 'c2', label: '레벨C', range: '10% 초과 ~ 20% 이하', src: 'assets/img/c2.png' },
-    { key: 'c3', label: '레벨D', range: '20% 초과 ~ 40% 이하', src: 'assets/img/c3.png' },
-    { key: 'c4', label: '레벨E', range: '40% 초과 ~ 60% 이하', src: 'assets/img/c4.png' },
-    { key: 'c5', label: '레벨F', range: '60% 초과 ~ 80% 이하', src: 'assets/img/c5.png' },
-    { key: 'c6', label: '레벨G', range: '80% 초과', src: 'assets/img/c6.png' }
+    { key: 'hc', label: '레벨A', range: '5% 이하', src: 'assets/img/A.svg' },
+    { key: 'c1', label: '레벨B', range: '5% 초과 ~ 10% 이하', src: 'assets/img/B.svg' },
+    { key: 'c2', label: '레벨C', range: '10% 초과 ~ 20% 이하', src: 'assets/img/C.svg' },
+    { key: 'c3', label: '레벨D', range: '20% 초과 ~ 40% 이하', src: 'assets/img/D.svg' },
+    { key: 'c4', label: '레벨E', range: '40% 초과 ~ 60% 이하', src: 'assets/img/E.svg' },
+    { key: 'c5', label: '레벨F', range: '60% 초과 ~ 80% 이하', src: 'assets/img/F.svg' },
+    { key: 'c6', label: '레벨G', range: '80% 초과', src: 'assets/img/G.svg' }
   ];
 
   /** 프로필 카드에 있던 FTP/심박 존 테이블 — 대시보드「라이딩 지표」탭 상단 */

@@ -1107,8 +1107,8 @@
   }
 
   function tierBadgeImageSrc(tierId) {
-    var m = { HC: 'hc.png', C1: 'c1.png', C2: 'c2.png', C3: 'c3.png', C4: 'c4.png', C5: 'c5.png', C6: 'c6.png' };
-    return 'assets/img/' + (m[tierId] || 'c6.png');
+    var m = { HC: 'A.svg', C1: 'B.svg', C2: 'C.svg', C3: 'D.svg', C4: 'E.svg', C5: 'F.svg', C6: 'G.svg' };
+    return 'assets/img/' + (m[tierId] || 'G.svg');
   }
 
   /** 헵타곤 중앙 이미지 하단 표기용(레벨A=HC) */
