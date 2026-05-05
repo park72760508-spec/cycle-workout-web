@@ -1030,21 +1030,30 @@
   }
 
   /**
-   * GC 배지: 랭킹보드(GC)·`getStelvioHeptagonCohortEntry` 단건 `boardRank`와 정렬 우선순위를 맞춤.
-   * `stelvioCardTooltip`이 동일 조건 순위표(500명)·재정렬 결과(`source:'board'`)만 먼저 오면
-   * 순간적으로는 맞았다가 ovl 목록 종료 후 순위가 바뀐 것처럼 보일 수 있어, 해당 값은 **ovl 확정 후**에만 폴백합니다.
+   * GC 배지: `getPeakPowerRanking`(duration=gc)과 동일하게 **환산 합 순 정렬** 기준 순위.
+   * 동일 필터 순위표(`source:'board'`)가 있으면 Firestore 단건 `boardRank`보다 우선 — 랭킹보드 GC와 불일치 방지.
    */
   function gcHeptagonRankForBadge(ovl, toolTip, tierSummary, filterCategory, userAgeCategory) {
     if (!tierSummary) {
       return null;
     }
-    var ovr = stelvioOvlBoardRankNForDisplay(ovl, filterCategory, userAgeCategory);
-    if (ovr && ovr.br != null && isFinite(Number(ovr.br)) && Number(ovr.br) >= 1) {
-      return Math.floor(Number(ovr.br));
+    if (
+      toolTip &&
+      (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+      toolTip.source === 'board' &&
+      toolTip.rank != null &&
+      isFinite(Number(toolTip.rank)) &&
+      Number(toolTip.rank) >= 1
+    ) {
+      return Math.floor(Number(toolTip.rank));
     }
     var merged = heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
     if (merged != null) {
       return merged;
+    }
+    var ovr = stelvioOvlBoardRankNForDisplay(ovl, filterCategory, userAgeCategory);
+    if (ovr && ovr.br != null && isFinite(Number(ovr.br)) && Number(ovr.br) >= 1) {
+      return Math.floor(Number(ovr.br));
     }
     if (
       toolTip &&
@@ -1376,10 +1385,9 @@
       if (sb !== sa) return sb - sa;
       return String(a.userId).localeCompare(String(b.userId));
     });
+    /* Firestore boardRank는 스냅샷 값일 수 있음. 정렬 후 표시 순위는 1..N으로 통일(랭킹보드 GC `getPeakPowerRanking` 의 seq 규약과 동일). */
     for (var k = 0; k < work.length; k++) {
-      if (work[k].boardRank == null || !isFinite(work[k].boardRank)) {
-        work[k].boardRank = k + 1;
-      }
+      work[k].boardRank = k + 1;
     }
     return { rows: work, meInList: true };
   }
@@ -2278,8 +2286,8 @@
   }
 
   /**
-   * 범례 % 행 아래: A~G 균등 구간. 채움 블록은 우측(`right-0`) 고정 후 너비만 증가(왼쪽으로 늘어남).
-   * 막대 내부: 왼쪽(본인 등급 레벨 색·진하게) → 오른쪽(흰색). `linear-gradient(to right …)`.
+   * 범례 이미지 행 아래: A~G와 동일 7칸 폭. 상단은 구간 % 문구(칸마다 우측 정렬), 하단은 채움 막대.
+   * 채움은 우측(`right-0`) 고정 후 너비만 증가. 막대 내부 그라데이션: 왼쪽 등급색 → 오른쪽 흰색.
    */
   function HeptagonTierHorizontalGradientBar(props) {
     var summary = props.summary;
@@ -2294,8 +2302,7 @@
     var stepFrac = Math.max(0, Math.min(1, (computed.step | 0) / 10));
     var segW = 100 / 7;
     var widthPct = (6 - uIdx + stepFrac) * segW;
-    var gHex = HEPTAGON_TIER_FACE_HEX.C6;
-    var tierHex = HEPTAGON_TIER_FACE_HEX[tid] || gHex;
+    var tierHex = HEPTAGON_TIER_FACE_HEX[tid] || HEPTAGON_TIER_FACE_HEX.C6;
     var gradient = 'linear-gradient(to right, ' + tierHex + ' 0%, #ffffff 100%)';
 
     return (
@@ -2303,27 +2310,31 @@
         className="stelvio-heptagon-tier-hbar mx-auto mt-1 w-full max-w-xl px-1"
         role="img"
         aria-label={
-          '가로 채움 왼쪽 본인 ' +
+          '레벨 구간 %는 상단 칸별 표기, 하단은 본인 ' +
           tierLevelDisplayName(tid) +
-          '색으로 진하게, 오른쪽 흰색. 세로 레벨 단계 반영 약 ' +
+          ' 진행: 왼쪽 등급색·오른쪽 흰색, 단계 약 ' +
           Math.round(stepFrac * 100) +
           '%'
         }
       >
-        <div className="relative h-3 w-full overflow-hidden rounded-md border border-slate-200/85 bg-slate-50 shadow-inner">
-          <div
-            className="absolute top-0 bottom-0 right-0 rounded-l-sm rounded-r-md transition-[width] duration-500 ease-out"
-            style={{ width: String(Math.max(0, Math.min(100, widthPct))) + '%', background: gradient }}
-          />
-          <div className="pointer-events-none absolute inset-0 flex">
-            {[0, 1, 2, 3, 4, 5, 6].map(function(i) {
+        <div className="rounded-md border border-slate-200/85 bg-slate-50 shadow-inner px-0.5 sm:px-1 pt-1 pb-1">
+          <div className="flex w-full gap-x-0.5 sm:gap-x-1">
+            {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tidCap) {
               return (
                 <div
-                  key={'hseg-' + i}
-                  className="box-border flex-1 border-r border-slate-300/[0.45] last:border-r-0"
-                />
+                  key={'hbar-pct-' + tidCap}
+                  className="flex-1 min-w-0 text-right tabular-nums text-[9.6px] sm:text-[10.8px] text-slate-600 leading-tight pr-px"
+                >
+                  {heptagonCardTierLegendCaption(tidCap)}
+                </div>
               );
             })}
+          </div>
+          <div className="relative mt-1 h-3 w-full overflow-hidden rounded-sm bg-slate-100/80">
+            <div
+              className="absolute top-0 bottom-0 right-0 rounded-l-sm rounded-r-sm transition-[width] duration-500 ease-out"
+              style={{ width: String(Math.max(0, Math.min(100, widthPct))) + '%', background: gradient }}
+            />
           </div>
         </div>
       </div>
@@ -3739,16 +3750,6 @@
         <div className="h-[180px] flex items-center justify-center text-gray-500 text-sm">랭킹을 불러오지 못했습니다. 네트워크를 확인해 주세요.</div>
       );
     } else {
-      var legendHighlightTierId = null;
-      if (tierForCard) {
-        var hctLegend = stelvioCardTooltip || {};
-        var pShowLegend =
-          hctLegend.kind === 'ok' && hctLegend.pPct != null && isFinite(hctLegend.pPct) && hctLegend.pPct >= 0 ? hctLegend.pPct : -1;
-        legendHighlightTierId =
-          pShowLegend >= 0
-            ? (heptagonBoardTierIdFromLevelPercent(pShowLegend) || {}).id || tierForCard.tier.id
-            : tierForCard.tier.id;
-      }
       var barTierIdForBar = null;
       var pShowForBar = -1;
       var barCtxForBar = null;
@@ -3819,14 +3820,10 @@
           >
             <div className="grid grid-cols-7 gap-x-0.5 sm:gap-x-1 gap-y-1.5 justify-items-center items-end text-[10px] text-gray-600">
               {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId) {
-                var isLegFocus = legendHighlightTierId == null || tLegendId === legendHighlightTierId;
                 return (
                   <div
                     key={'leg-img-' + tLegendId}
-                    className={
-                      'stelvio-heptagon-tier-legend__img-wrap flex items-end justify-center w-full pt-0.5 ' +
-                      (isLegFocus ? 'stelvio-heptagon-tier-legend__img-wrap--focus' : 'stelvio-heptagon-tier-legend__img-wrap--dim')
-                    }
+                    className="stelvio-heptagon-tier-legend__img-wrap stelvio-heptagon-tier-legend__img-wrap--focus flex items-end justify-center w-full pt-0.5"
                   >
                     <img
                       src={tierBadgeImageSrc(tLegendId)}
@@ -3834,20 +3831,6 @@
                       className="stelvio-heptagon-tier-legend__img max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.56)] h-[calc(16px*1.56)]"
                       decoding="async"
                     />
-                  </div>
-                );
-              })}
-              {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tLegendId2) {
-                var isCapFocus = legendHighlightTierId == null || tLegendId2 === legendHighlightTierId;
-                return (
-                  <div
-                    key={'leg-txt-' + tLegendId2}
-                    className={
-                      'stelvio-heptagon-tier-legend__cap w-full max-w-[4.75rem] text-[9.6px] sm:text-[10.8px] text-center leading-tight px-0.5 ' +
-                      (isCapFocus ? 'stelvio-heptagon-tier-legend__cap--focus' : 'stelvio-heptagon-tier-legend__cap--dim')
-                    }
-                  >
-                    {heptagonCardTierLegendCaption(tLegendId2)}
                   </div>
                 );
               })}
