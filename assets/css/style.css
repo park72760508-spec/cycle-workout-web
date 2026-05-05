@@ -6730,6 +6730,26 @@ button.stelvio-rank-avatar-btn:focus-visible {
 .stelvio-rank-avatar-zoom-profile.hidden {
   display: none !important;
 }
+/* 랭킹 확대: 순위 API 로딩 중 녹색 원형 스피너 */
+.stelvio-rank-avatar-zoom-rank-spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(16, 185, 129, 0.22);
+  border-top-color: #10b981;
+  box-sizing: border-box;
+  animation: stelvio-rank-avatar-zoom-rank-spin 0.78s linear infinite;
+}
+.stelvio-rank-avatar-zoom-rank-spinner.hidden {
+  display: none !important;
+}
+@keyframes stelvio-rank-avatar-zoom-rank-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .stelvio-rank-avatar-zoom-profile p {
   margin: 0;
 }
