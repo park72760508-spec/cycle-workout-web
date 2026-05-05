@@ -1092,14 +1092,25 @@
     };
   }
 
+  /** 카드·레벨바·가로 트랙 공통 (레벨 A~G 표시 색) */
+  var HEPTAGON_TIER_FACE_HEX = {
+    HC: '#8B5CF6',
+    C1: '#EF4444',
+    C2: '#F97316',
+    C3: '#EAB308',
+    C4: '#22C55E',
+    C5: '#3B82F6',
+    C6: '#9CA3AF'
+  };
+
   var TIER_STYLE = {
-    HC: { color: '#ff1a1a', shadow: '0 0 12px #ff1a1a, 0 0 20px rgba(255,0,0,0.45)' },
-    C1: { color: '#ff6b3d', shadow: '0 0 12px rgba(255,107,61,0.85), 0 0 24px rgba(255,60,0,0.4)' },
-    C2: { color: '#ffb020', shadow: '0 0 10px rgba(255,176,32,0.7), 0 0 20px rgba(200,100,0,0.35)' },
-    C3: { color: '#e8c547', shadow: '0 0 8px rgba(232,197,71,0.6)' },
-    C4: { color: '#9fe870', shadow: '0 0 8px rgba(140,200,100,0.5)' },
-    C5: { color: '#94a3b8', shadow: '0 0 6px rgba(148,163,184,0.5)' },
-    C6: { color: '#7c8aa0', shadow: '0 0 4px rgba(100,110,120,0.4)' }
+    HC: { color: HEPTAGON_TIER_FACE_HEX.HC, shadow: '0 0 14px rgba(139,92,246,0.55), 0 0 26px rgba(139,92,246,0.25)' },
+    C1: { color: HEPTAGON_TIER_FACE_HEX.C1, shadow: '0 0 12px rgba(239,68,68,0.5), 0 0 22px rgba(239,68,68,0.2)' },
+    C2: { color: HEPTAGON_TIER_FACE_HEX.C2, shadow: '0 0 12px rgba(249,115,22,0.5), 0 0 22px rgba(249,115,22,0.22)' },
+    C3: { color: HEPTAGON_TIER_FACE_HEX.C3, shadow: '0 0 10px rgba(234,179,8,0.45), 0 0 18px rgba(234,179,8,0.2)' },
+    C4: { color: HEPTAGON_TIER_FACE_HEX.C4, shadow: '0 0 10px rgba(34,197,94,0.45), 0 0 18px rgba(34,197,94,0.2)' },
+    C5: { color: HEPTAGON_TIER_FACE_HEX.C5, shadow: '0 0 10px rgba(59,130,246,0.45), 0 0 18px rgba(59,130,246,0.2)' },
+    C6: { color: HEPTAGON_TIER_FACE_HEX.C6, shadow: '0 0 8px rgba(156,163,175,0.5), 0 0 14px rgba(100,116,139,0.25)' }
   };
 
   function tierStyleForId(id) {
@@ -2110,15 +2121,14 @@
    * pFloor=해당 등급에 처음 들어오는 순위의 집계%(코호트·부문 반영). 1위·1.0%(레벨A)도 10칸까지 올라가게 함.
    * `pPctForBar`(툴팁 레벨%) 우선; `barContext`로 코호트 n·가상 여부·부문 전달.
    * ────────────────────────────────────────────────────────────── */
-  /* 레벨바 색상: 녹색 계열 (레벨A 진녹 → 레벨G 연녹/회녹) */
   var LEVEL_BAR_DEFS = [
-    { id: 'HC', lower: 0,   upper: 5,   color: '#059669', bg: 'rgba(5,150,105,0.18)' },
-    { id: 'C1', lower: 5,   upper: 10,  color: '#10b981', bg: 'rgba(16,185,129,0.18)' },
-    { id: 'C2', lower: 10,  upper: 20,  color: '#34d399', bg: 'rgba(52,211,153,0.18)' },
-    { id: 'C3', lower: 20,  upper: 40,  color: '#6ee7b7', bg: 'rgba(110,231,183,0.18)' },
-    { id: 'C4', lower: 40,  upper: 60,  color: '#86efac', bg: 'rgba(134,239,172,0.18)' },
-    { id: 'C5', lower: 60,  upper: 80,  color: '#bbf7d0', bg: 'rgba(187,247,208,0.18)' },
-    { id: 'C6', lower: 80,  upper: 100, color: '#d1fae5', bg: 'rgba(209,250,229,0.18)' }
+    { id: 'HC', lower: 0, upper: 5, color: HEPTAGON_TIER_FACE_HEX.HC, bg: 'rgba(139,92,246,0.22)' },
+    { id: 'C1', lower: 5, upper: 10, color: HEPTAGON_TIER_FACE_HEX.C1, bg: 'rgba(239,68,68,0.2)' },
+    { id: 'C2', lower: 10, upper: 20, color: HEPTAGON_TIER_FACE_HEX.C2, bg: 'rgba(249,115,22,0.22)' },
+    { id: 'C3', lower: 20, upper: 40, color: HEPTAGON_TIER_FACE_HEX.C3, bg: 'rgba(234,179,8,0.22)' },
+    { id: 'C4', lower: 40, upper: 60, color: HEPTAGON_TIER_FACE_HEX.C4, bg: 'rgba(34,197,94,0.2)' },
+    { id: 'C5', lower: 60, upper: 80, color: HEPTAGON_TIER_FACE_HEX.C5, bg: 'rgba(59,130,246,0.2)' },
+    { id: 'C6', lower: 80, upper: 100, color: HEPTAGON_TIER_FACE_HEX.C6, bg: 'rgba(156,163,175,0.25)' }
   ];
 
   /**
@@ -2196,6 +2206,53 @@
       }
     }
     return { lv: lv, lvIdx: lvIdx, step: step };
+  }
+
+  /**
+   * 범례 % 행 아래: A~G 균등 구간. G(우)→본인 구간 방향으로 채움, 본인 칸은 세로 레벨바 step/10 만큼 우→좌.
+   * 채움 색: 레벨 G(#9CA3AF, 우) → 본인 등급색(좌) linear-gradient(to left, …).
+   */
+  function HeptagonTierHorizontalGradientBar(props) {
+    var summary = props.summary;
+    var tierId = props.tierId;
+    var pPctForBar = props.pPctForBar;
+    var barContext = props.barContext;
+    if (!summary || !summary.tier) return null;
+    var computed = computeLevelBarStep(summary, tierId, pPctForBar, barContext);
+    var tid = computed.lv.id;
+    var uIdx = HEPTAGON_CARD_TIER_LEGEND_IDS.indexOf(tid);
+    if (uIdx < 0) uIdx = 6;
+    var stepFrac = Math.max(0, Math.min(1, (computed.step | 0) / 10));
+    var segW = 100 / 7;
+    var widthPct = (6 - uIdx + stepFrac) * segW;
+    var gHex = HEPTAGON_TIER_FACE_HEX.C6;
+    var userHex = HEPTAGON_TIER_FACE_HEX[tid] || gHex;
+    var gradient = 'linear-gradient(to left, ' + gHex + ' 0%, ' + userHex + ' 100%)';
+
+    return (
+      <div
+        className="stelvio-heptagon-tier-hbar mx-auto mt-1 w-full max-w-xl px-1"
+        role="img"
+        aria-label={'레벨 G에서 본인 ' + tierLevelDisplayName(tid) + '까지 채움, 세로 레벨 단계 반영 약 ' + Math.round(stepFrac * 100) + '%'}
+      >
+        <div className="relative h-3 w-full overflow-hidden rounded-md border border-slate-200/85 bg-slate-50 shadow-inner">
+          <div
+            className="absolute top-0 bottom-0 right-0 rounded-l-sm rounded-r-md transition-[width] duration-500 ease-out"
+            style={{ width: String(Math.max(0, Math.min(100, widthPct))) + '%', background: gradient }}
+          />
+          <div className="pointer-events-none absolute inset-0 flex">
+            {[0, 1, 2, 3, 4, 5, 6].map(function(i) {
+              return (
+                <div
+                  key={'hseg-' + i}
+                  className="box-border flex-1 border-r border-slate-300/[0.45] last:border-r-0"
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   function LevelProgressBar(props) {
@@ -2299,29 +2356,28 @@
             width: '28px',
             height: '18px',
             borderRadius: '4px',
-            background: filled ? lv.color : 'rgba(16,185,129,0.06)',
-            border: filled ? '1px solid ' + lv.color : '1px solid rgba(16,185,129,0.20)',
+            background: filled ? lv.color : lv.bg,
+            border: filled ? '1px solid ' + lv.color : '1px solid rgba(148,163,184,0.38)',
             opacity: blockOpacity,
             transition: blinkOn ? 'none' : 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease'
           }}
         />
       );
     }
-    /* 상단·하단 텍스트 모두 진한 녹색(#065f46)으로 고정 */
-    var darkGreen = '#065f46';
+    var tierLabelMuted = '#334155';
     var hideTopTierLabel = props.hideTopTierLabel === true;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '38px', minHeight: '260px', paddingTop: hideTopTierLabel ? '0px' : '4px', paddingBottom: '4px', gap: 0 }}>
         {!hideTopTierLabel ? (
-          <div style={{ fontSize: '9px', fontWeight: 700, color: darkGreen, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, color: tierLabelMuted, marginBottom: '5px', letterSpacing: '-0.3px', whiteSpace: 'nowrap' }}>
             {tierLevelDisplayName(lv.id)}
           </div>
         ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, justifyContent: 'center' }}>
           {blocks}
         </div>
-        <div style={{ fontSize: '9px', color: darkGreen, marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
-          {animFilled}<span style={{ color: darkGreen, opacity: 0.6 }}>/10</span>
+        <div style={{ fontSize: '9px', color: tierLabelMuted, marginTop: '5px', fontVariantNumeric: 'tabular-nums' }}>
+          {animFilled}<span style={{ color: tierLabelMuted, opacity: 0.6 }}>/10</span>
         </div>
       </div>
     );
@@ -3598,6 +3654,23 @@
             ? (heptagonBoardTierIdFromLevelPercent(pShowLegend) || {}).id || tierForCard.tier.id
             : tierForCard.tier.id;
       }
+      var barTierIdForBar = null;
+      var pShowForBar = -1;
+      var barCtxForBar = null;
+      if (tierForCard) {
+        var hctBar0 = stelvioCardTooltip || {};
+        pShowForBar =
+          hctBar0.kind === 'ok' && hctBar0.pPct != null && isFinite(hctBar0.pPct) && hctBar0.pPct >= 0 ? hctBar0.pPct : -1;
+        barTierIdForBar =
+          pShowForBar >= 0
+            ? (heptagonBoardTierIdFromLevelPercent(pShowForBar) || {}).id || tierForCard.tier.id
+            : tierForCard.tier.id;
+        barCtxForBar = {
+          isVirtualCohort: tierForCard.heptagonBoardVirtualCohort === true,
+          filterCategory: category,
+          viewerAgeCategory: viewerAc
+        };
+      }
       body = (
         <div>
           <div className="flex items-center justify-center gap-1 w-full max-w-[420px] mx-auto">
@@ -3618,37 +3691,25 @@
                 />
               ) : null}
             </div>
-            {tierForCard ? (function() {
-              /* OctagonTierCenterOverlay가 표시하는 tid와 동일하게 계산 */
-              var hct = stelvioCardTooltip || {};
-              var pShow = hct.kind === 'ok' && hct.pPct != null && isFinite(hct.pPct) && hct.pPct >= 0 ? hct.pPct : -1;
-              var barTierId = (pShow >= 0)
-                ? (heptagonBoardTierIdFromLevelPercent(pShow) || {}).id || tierForCard.tier.id
-                : tierForCard.tier.id;
-              return (
-                <div className="stelvio-octagon-sidebar-col">
-                  <OctagonTierLevelPillSidebar
-                    summary={tierForCard}
-                    heptagonCardTooltip={stelvioCardTooltip}
-                    filterGenderLabel={labelForGender(gender)}
-                    filterCategoryLabel={labelForCategory(category)}
-                    showPct={tierPctHintOpen}
-                    setShowPct={setTierPctHintOpen}
-                  />
-                  <LevelProgressBar
-                    summary={tierForCard}
-                    tierId={barTierId}
-                    pPctForBar={pShow >= 0 ? pShow : undefined}
-                    hideTopTierLabel={true}
-                    barContext={{
-                      isVirtualCohort: tierForCard.heptagonBoardVirtualCohort === true,
-                      filterCategory: category,
-                      viewerAgeCategory: viewerAc
-                    }}
-                  />
-                </div>
-              );
-            })() : null}
+            {tierForCard && barTierIdForBar && barCtxForBar ? (
+              <div className="stelvio-octagon-sidebar-col">
+                <OctagonTierLevelPillSidebar
+                  summary={tierForCard}
+                  heptagonCardTooltip={stelvioCardTooltip}
+                  filterGenderLabel={labelForGender(gender)}
+                  filterCategoryLabel={labelForCategory(category)}
+                  showPct={tierPctHintOpen}
+                  setShowPct={setTierPctHintOpen}
+                />
+                <LevelProgressBar
+                  summary={tierForCard}
+                  tierId={barTierIdForBar}
+                  pPctForBar={pShowForBar >= 0 ? pShowForBar : undefined}
+                  hideTopTierLabel={true}
+                  barContext={barCtxForBar}
+                />
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap justify-center gap-3 text-xs text-gray-600 mt-1 mb-0 px-1">
             <div className="flex items-center gap-1.5">
@@ -3696,6 +3757,14 @@
                 );
               })}
             </div>
+            {tierForCard && barTierIdForBar && barCtxForBar ? (
+              <HeptagonTierHorizontalGradientBar
+                summary={tierForCard}
+                tierId={barTierIdForBar}
+                pPctForBar={pShowForBar >= 0 ? pShowForBar : undefined}
+                barContext={barCtxForBar}
+              />
+            ) : null}
           </div>
         </div>
       );
