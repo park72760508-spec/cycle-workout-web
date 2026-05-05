@@ -6608,25 +6608,30 @@ body:has(#trainingDetailModal:not(.hidden)) {
 
 .stelvio-rank-avatar {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(99, 102, 241, 0.35);
+  border: none;
   box-sizing: border-box;
   background: var(--bg-card, #edf0f4);
 }
 
 .stelvio-rank-avatar-img {
-  width: 30px;
-  height: 30px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
   vertical-align: top;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 button.stelvio-rank-avatar-btn {
   flex-shrink: 0;
+  width: 30px;
+  height: 30px;
   padding: 0;
   margin: 0;
   border: none;
@@ -6635,7 +6640,10 @@ button.stelvio-rank-avatar-btn {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   border-radius: 50%;
+  overflow: hidden;
   line-height: 0;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+  box-sizing: border-box;
 }
 button.stelvio-rank-avatar-btn:focus-visible {
   outline: 2px solid var(--accent, #2563eb);
@@ -6661,19 +6669,26 @@ button.stelvio-rank-avatar-btn:focus-visible {
 }
 .stelvio-rank-avatar-zoom-inner {
   pointer-events: auto;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.35),
+    0 16px 48px rgba(0, 0, 0, 0.5);
 }
 .stelvio-rank-avatar-zoom-img {
   width: min(72vw, 320px);
   height: min(72vw, 320px);
   max-width: 320px;
   max-height: 320px;
-  border-radius: 50%;
+  border-radius: 0;
   object-fit: cover;
   display: block;
-  border: 3px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  border: none;
   box-sizing: border-box;
   background: var(--bg-card, #edf0f4);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  image-rendering: auto;
 }
 
 /* 프로필 사진 크롭 모달 (Cropper.js, 다크 테마 변수) */
