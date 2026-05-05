@@ -8414,6 +8414,50 @@
       bindStelvioRankingEvents();
     }
 
+    /** 랭킹 API·집계 캐시에 profileImageUrl이 없을 때 로그인 사용자 행에 로컬 저장 URL 반영 */
+    function stelvioGetViewerStoredProfileImageUrl(viewerUid) {
+      if (!viewerUid) return '';
+      var u = String(viewerUid);
+      try {
+        if (window.currentUser && String(window.currentUser.id) === u) {
+          var c = window.currentUser.profileImageUrl;
+          if (c != null && String(c).trim()) return String(c).trim();
+        }
+      } catch (eV) {}
+      try {
+        var parsed = JSON.parse(localStorage.getItem('currentUser') || 'null');
+        if (parsed && String(parsed.id) === u) {
+          var p = parsed.profileImageUrl;
+          if (p != null && String(p).trim()) return String(p).trim();
+        }
+      } catch (eLs) {}
+      return '';
+    }
+    function stelvioMergeViewerProfileImageIntoRankingPayload(data, viewerUid) {
+      if (!data || !data.byCategory || !viewerUid) return;
+      var url = stelvioGetViewerStoredProfileImageUrl(viewerUid);
+      if (!url) return;
+      var uid = String(viewerUid);
+      var cats = ['Supremo', 'Assoluto', 'Bianco', 'Rosa', 'Infinito', 'Leggenda'];
+      for (var ci = 0; ci < cats.length; ci++) {
+        var rows = data.byCategory[cats[ci]] || [];
+        for (var ri = 0; ri < rows.length; ri++) {
+          var row = rows[ri];
+          if (row && String(row.userId) === uid) row.profileImageUrl = url;
+        }
+      }
+      var entries = data.entries;
+      if (Array.isArray(entries)) {
+        for (var ei = 0; ei < entries.length; ei++) {
+          var en = entries[ei];
+          if (en && String(en.userId) === uid) en.profileImageUrl = url;
+        }
+      }
+      if (data.currentUser && String(data.currentUser.userId || '') === uid) {
+        data.currentUser.profileImageUrl = url;
+      }
+    }
+
     async function fetchStelvioPeakPowerRanking() {
       var myGen = ++stelvioRankingFetchGen;
       var loading = document.getElementById('stelvioRankingLoading');
@@ -8468,6 +8512,11 @@
           renderStelvioRankingError('데이터를 불러올 수 없습니다.');
           refreshStelvioDistributionChartMounted();
           return;
+        }
+        if (uid) {
+          if (typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
+            stelvioMergeViewerProfileImageIntoRankingPayload(data, uid);
+          }
         }
         stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
         stelvioRankingByCategory = data.byCategory;
