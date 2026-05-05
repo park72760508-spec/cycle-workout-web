@@ -7803,6 +7803,10 @@
     };
     var STELVIO_CATEGORY_LABELS = { Supremo: '전체', Assoluto: '선수부', Bianco: '30대 이하', Rosa: '40대', Infinito: '50대', Leggenda: '60대 이상' };
     var STELVIO_CATEGORY_TITLES = { Supremo: 'Supremo (전체)', Assoluto: 'Assoluto (Elite/Pro선수)', Bianco: 'Bianco (30대 이하)', Rosa: 'Rosa (40대)', Infinito: 'Infinito (50대)', Leggenda: 'Leggenda (60대 이상)' };
+    /** 랭킹 아바타 확대 카드용: 명예외 동일 기간 필터 내 피크 구간 순위 표시 순서 */
+    var STELVIO_RANK_PROFILE_PEAK_DURS = ['max', '1min', '5min', '10min', '20min', '40min', '60min'];
+    var STELVIO_RANK_PROFILE_FETCH_CACHE = {};
+    var STELVIO_RANK_PROFILE_CACHE_MS = 45 * 1000;
     async function stelvioRefreshRankingFriendSetFromFirestore() {
       stelvioRankingFriendUserSet = new Set();
       var myId = stelvioResolveRankingViewerUserId();
@@ -8108,11 +8112,14 @@
       if (bdZ && !bdZ._stelvioAvatarZoomBackdropBound) {
         bdZ._stelvioAvatarZoomBackdropBound = true;
         bdZ.addEventListener('click', function (evBd) {
-          if (evBd.target === bdZ && typeof stelvioCloseRankAvatarZoom === 'function') stelvioCloseRankAvatarZoom();
+          if (!evBd.target.closest('.stelvio-rank-avatar-zoom-card') && typeof stelvioCloseRankAvatarZoom === 'function') {
+            stelvioCloseRankAvatarZoom();
+          }
         });
-        var zoomInner = bdZ.querySelector('.stelvio-rank-avatar-zoom-inner');
-        if (zoomInner) {
-          zoomInner.addEventListener('click', function (evIn) {
+        var zoomCard = bdZ.querySelector('.stelvio-rank-avatar-zoom-card');
+        if (zoomCard && !bdZ._stelvioAvatarZoomCardStop) {
+          bdZ._stelvioAvatarZoomCardStop = true;
+          zoomCard.addEventListener('click', function (evIn) {
             evIn.stopPropagation();
           });
         }
@@ -8131,13 +8138,227 @@
       ev.stopPropagation();
       var srcAttr = btn.getAttribute('data-stelvio-rank-zoom-src');
       if (!srcAttr || !String(srcAttr).trim()) return;
-      if (typeof stelvioOpenRankAvatarZoom === 'function') stelvioOpenRankAvatarZoom(String(srcAttr).trim());
+      var uidRaw = btn.getAttribute('data-stelvio-rank-user-id');
+      var oid = uidRaw ? String(uidRaw).trim() : '';
+      var oname = btn.getAttribute('data-stelvio-rank-overlay-name');
+      var oage = btn.getAttribute('data-stelvio-rank-age-cat');
+      if (typeof stelvioOpenRankAvatarZoom === 'function') {
+        stelvioOpenRankAvatarZoom(String(srcAttr).trim(), {
+          userId: oid,
+          overlayName: oname != null ? String(oname) : '',
+          ageCategory: oage != null ? String(oage) : ''
+        });
+      }
     }
-    function stelvioOpenRankAvatarZoom(imageSrc) {
+
+    async function stelvioRankProfileFetchPayload(period, duration, gender) {
+      var g = gender === 'M' || gender === 'F' ? gender : 'all';
+      var key = ['v2', period || '', duration || '', g].join('|');
+      var now = Date.now();
+      var hit = STELVIO_RANK_PROFILE_FETCH_CACHE[key];
+      if (hit && hit.data && hit.at && now - hit.at < STELVIO_RANK_PROFILE_CACHE_MS) return hit.data;
+      var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var toMs = Math.min(STELVIO_RANKING_FETCH_TIMEOUT_MS || 35000, 16000);
+      var to =
+        ctl &&
+        typeof setTimeout === 'function' &&
+        setTimeout(function () {
+          try {
+            ctl.abort();
+          } catch (eab) {}
+        }, toMs);
+      try {
+        var params = new URLSearchParams({ period: period, duration: duration, gender: g });
+        var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
+        var res = await fetch(url, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+          signal: ctl ? ctl.signal : undefined
+        });
+        if (to != null && typeof clearTimeout === 'function') clearTimeout(to);
+        if (!res.ok) return null;
+        var data = await res.json().catch(function () {
+          return null;
+        });
+        if (!data || !data.success || !data.byCategory) return null;
+        STELVIO_RANK_PROFILE_FETCH_CACHE[key] = { at: Date.now(), data: data };
+        return data;
+      } catch (efc) {
+        if (to != null && typeof clearTimeout === 'function') clearTimeout(to);
+        return null;
+      }
+    }
+
+    function stelvioRankProfileSupremoRow(data, userId) {
+      if (!data || !data.byCategory || !userId) return null;
+      var arr = data.byCategory.Supremo || [];
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && String(arr[i].userId) === String(userId)) return arr[i];
+      }
+      return null;
+    }
+
+    function stelvioRankProfileRankFromRow(row, idxFallback) {
+      if (!row) return null;
+      var r = row.rank;
+      if (r != null && !Number.isNaN(Number(r)) && Number(r) >= 1) return Math.floor(Number(r));
+      if (idxFallback != null && idxFallback >= 0) return idxFallback + 1;
+      return null;
+    }
+
+    function stelvioRankProfileRankInCat(data, userId, catKey) {
+      if (!data || !data.byCategory || !userId || !catKey || catKey === 'Supremo') return null;
+      var arr = data.byCategory[catKey] || [];
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && String(arr[i].userId) === String(userId)) {
+          return stelvioRankProfileRankFromRow(arr[i], i);
+        }
+      }
+      return null;
+    }
+
+    function stelvioRankProfileFormatRank(rankNum) {
+      return rankNum != null && Number(rankNum) >= 1 ? Math.floor(Number(rankNum)) + '\uc704' : '\u2014';
+    }
+
+    async function stelvioRankAvatarZoomLoadProfilePanels(userId, ageCategory, gen) {
+      var l1 = document.getElementById('stelvioRankAvatarZoomLine1');
+      var l2 = document.getElementById('stelvioRankAvatarZoomLine2');
+      var l3 = document.getElementById('stelvioRankAvatarZoomLine3');
+      var bd = document.getElementById('stelvioRankAvatarZoomBackdrop');
+      if (!l1 || !l2 || !l3 || !bd) return;
+
+      function dieIfStale() {
+        return !bd.classList.contains('hidden') && Number(bd.getAttribute('data-stelvio-rank-zoom-gen')) === Number(gen);
+      }
+
+      try {
+        var period = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.period : 'monthly';
+        var gender = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.gender : 'all';
+        var gSel = gender === 'group_dist' ? 'all' : gender;
+
+        var tasks = [stelvioRankProfileFetchPayload(period, 'gc', gSel)];
+        for (var di = 0; di < STELVIO_RANK_PROFILE_PEAK_DURS.length; di++) {
+          tasks.push(stelvioRankProfileFetchPayload(period, STELVIO_RANK_PROFILE_PEAK_DURS[di], gSel));
+        }
+        tasks.push(stelvioRankProfileFetchPayload(period, 'tss', gSel));
+        tasks.push(stelvioRankProfileFetchPayload(period, 'personal_dist', gSel));
+
+        var results = await Promise.all(tasks);
+        if (!dieIfStale()) return;
+
+        var gcData = results[0];
+        var gcSup = null;
+        if (gcData && gcData.byCategory && gcData.byCategory.Supremo) {
+          var sg = gcData.byCategory.Supremo || [];
+          for (var sgi = 0; sgi < sg.length; sgi++) {
+            if (sg[sgi] && String(sg[sgi].userId) === String(userId)) {
+              gcSup = stelvioRankProfileRankFromRow(sg[sgi], sgi);
+              break;
+            }
+          }
+        }
+
+        var catKey = ageCategory ? String(ageCategory).trim() : '';
+        var gcCatRank = gcData && catKey && catKey !== 'Supremo' ? stelvioRankProfileRankInCat(gcData, userId, catKey) : null;
+
+        var catLab = '';
+        try {
+          catLab = typeof STELVIO_CATEGORY_LABELS !== 'undefined' && STELVIO_CATEGORY_LABELS[catKey] ? STELVIO_CATEGORY_LABELS[catKey] : catKey;
+        } catch (eLbl) {}
+
+        var line2Parts = [];
+        for (var pi = 0; pi < STELVIO_RANK_PROFILE_PEAK_DURS.length; pi++) {
+          var dur = STELVIO_RANK_PROFILE_PEAK_DURS[pi];
+          var pData = results[1 + pi];
+          var pr = null;
+          if (pData && pData.byCategory && pData.byCategory.Supremo) {
+            var par = pData.byCategory.Supremo || [];
+            for (var pk = 0; pk < par.length; pk++) {
+              if (par[pk] && String(par[pk].userId) === String(userId)) {
+                pr = stelvioRankProfileRankFromRow(par[pk], pk);
+                break;
+              }
+            }
+          }
+          var labDur = '';
+          try {
+            labDur = typeof STELVIO_DURATION_LABELS !== 'undefined' && STELVIO_DURATION_LABELS[dur] ? STELVIO_DURATION_LABELS[dur] : dur;
+          } catch (edl) {}
+          line2Parts.push(labDur + ' ' + stelvioRankProfileFormatRank(pr));
+        }
+
+        var tssData = results[1 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
+        var pdData = results[2 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
+        var tssRow = stelvioRankProfileSupremoRow(tssData, userId);
+        var pdRow = stelvioRankProfileSupremoRow(pdData, userId);
+        var tssTxt = '\u2014';
+        var distTxt = '\u2014';
+        if (tssRow && tssRow.totalTss != null && !Number.isNaN(Number(tssRow.totalTss))) {
+          tssTxt = Number(tssRow.totalTss).toFixed(1) + ' TSS';
+        }
+        if (pdRow && pdRow.totalKm != null && !Number.isNaN(Number(pdRow.totalKm))) {
+          distTxt = Number(pdRow.totalKm).toFixed(1) + ' km';
+        }
+
+        if (!dieIfStale()) return;
+        var p1Mid = gcSup != null ? 'GC \uc804\uccb4 ' + stelvioRankProfileFormatRank(gcSup) : 'GC \uc804\uccb4 \u2014';
+        var p1Cat =
+          catKey && catKey !== 'Supremo' && gcCatRank != null
+            ? '(' + (catLab || catKey || '') + ' ' + stelvioRankProfileFormatRank(gcCatRank) + ')'
+            : '';
+        var firstName = bd.getAttribute('data-stelvio-rank-overlay-name') || '';
+        l1.textContent = firstName ? firstName + ' \u00b7 ' + p1Mid + (p1Cat ? ' ' + p1Cat : '') : p1Mid + (p1Cat ? ' ' + p1Cat : '');
+        l2.textContent = line2Parts.join(' \u00b7 ');
+        l3.textContent =
+          '\uc8fc\uac04 TSS: ' + tssTxt + ' \u00b7 \ucd5c\uadfc 30\uc77c \uac70\ub9ac: ' + distTxt;
+      } catch (eAll) {
+        if (dieIfStale()) {
+          l2.textContent = '\uc21c\uc704 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.';
+          l3.textContent = '';
+        }
+      }
+    }
+
+    function stelvioOpenRankAvatarZoom(imageSrc, meta) {
       var backdrop = document.getElementById('stelvioRankAvatarZoomBackdrop');
       var img = document.getElementById('stelvioRankAvatarZoomImg');
+      var profWrap = document.getElementById('stelvioRankAvatarZoomProfile');
+      var l1 = document.getElementById('stelvioRankAvatarZoomLine1');
+      var l2 = document.getElementById('stelvioRankAvatarZoomLine2');
+      var l3 = document.getElementById('stelvioRankAvatarZoomLine3');
       if (!backdrop || !img || !imageSrc) return;
+
+      meta = meta || {};
+
+      backdrop._stelvioRankAvatarZoomSeq = Number(backdrop._stelvioRankAvatarZoomSeq || 0) + 1;
+      var seq = backdrop._stelvioRankAvatarZoomSeq;
+      backdrop.setAttribute('data-stelvio-rank-zoom-gen', String(seq));
+      backdrop.setAttribute('data-stelvio-rank-overlay-name', meta.overlayName != null ? String(meta.overlayName) : '');
+
       img.src = imageSrc;
+
+      var uidTrim = meta.userId != null ? String(meta.userId).trim() : '';
+      if (profWrap && l1 && l2 && l3) {
+        if (uidTrim) {
+          profWrap.classList.remove('hidden');
+          l1.textContent =
+            meta.overlayName
+              ? String(meta.overlayName) + ' \u00b7 \ubd88\ub7ec\uc624\ub294 \uc911\u2026'
+              : '\ubd88\ub7ec\uc624\ub294 \uc911\u2026';
+          l2.textContent = '';
+          l3.textContent = '';
+          var ageTrim = meta.ageCategory != null ? String(meta.ageCategory).trim() : '';
+          stelvioRankAvatarZoomLoadProfilePanels(uidTrim, ageTrim, seq);
+        } else {
+          profWrap.classList.add('hidden');
+          l1.textContent = '';
+          l2.textContent = '';
+          l3.textContent = '';
+        }
+      }
+
       backdrop.classList.remove('hidden');
       backdrop.setAttribute('aria-hidden', 'false');
       if (backdrop._stelvioAvatarZoomEscKey) {
@@ -8150,6 +8371,7 @@
       backdrop._stelvioAvatarZoomEscKey = onEsc;
       document.addEventListener('keydown', onEsc);
     }
+
     function stelvioCloseRankAvatarZoom() {
       var backdrop = document.getElementById('stelvioRankAvatarZoomBackdrop');
       if (!backdrop) return;
@@ -8161,6 +8383,14 @@
       }
       var img = document.getElementById('stelvioRankAvatarZoomImg');
       if (img) img.removeAttribute('src');
+      var pw = document.getElementById('stelvioRankAvatarZoomProfile');
+      var q1 = document.getElementById('stelvioRankAvatarZoomLine1');
+      var q2 = document.getElementById('stelvioRankAvatarZoomLine2');
+      var q3 = document.getElementById('stelvioRankAvatarZoomLine3');
+      if (q1) q1.textContent = '';
+      if (q2) q2.textContent = '';
+      if (q3) q3.textContent = '';
+      if (pw) pw.classList.add('hidden');
     }
     window.stelvioOpenRankAvatarZoom = stelvioOpenRankAvatarZoom;
     window.stelvioCloseRankAvatarZoom = stelvioCloseRankAvatarZoom;
@@ -8883,16 +9113,33 @@
           ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
           : 'assets/img/profile-placeholder.svg';
       }
-      function stelvioRankingAvatarHtml(profileImageUrl) {
+      function stelvioRankingAvatarHtml(profileImageUrl, avatarMeta) {
+        avatarMeta = avatarMeta || {};
+        var uidRaw = avatarMeta.userId != null ? String(avatarMeta.userId).trim() : '';
+        var onRaw = avatarMeta.overlayName != null ? String(avatarMeta.overlayName) : '';
+        var acRaw = avatarMeta.ageCategory != null ? String(avatarMeta.ageCategory) : '';
         var raw =
           profileImageUrl != null && String(profileImageUrl).trim()
             ? String(profileImageUrl).trim()
             : stelvioRankingDefaultProfileImg();
         var src = stelvioRankingEscapeAttr(raw);
+        var dataUid = '';
+        if (uidRaw) {
+          dataUid =
+            ' data-stelvio-rank-user-id="' +
+            stelvioRankingEscapeAttr(uidRaw) +
+            '" data-stelvio-rank-overlay-name="' +
+            stelvioRankingEscapeAttr(onRaw) +
+            '" data-stelvio-rank-age-cat="' +
+            stelvioRankingEscapeAttr(acRaw) +
+            '"';
+        }
         return (
           '<button type="button" class="stelvio-rank-avatar-btn" data-stelvio-rank-zoom-src="' +
           src +
-          '" title="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30" aria-label="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30">' +
+          '"' +
+          dataUid +
+          ' title="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30" aria-label="\ud504\ub85c\ud544 \uc0ac\uc9c4 \ud06c\uac8c \ubcf4\uae30">' +
           '<span class="stelvio-rank-avatar" aria-hidden="true">' +
           '<img class="stelvio-rank-avatar-img" src="' +
           src +
@@ -8988,7 +9235,11 @@
           h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
           h +=
             '<span class="stelvio-rank-name">' +
-            stelvioRankingAvatarHtml(item.profileImageUrl) +
+            stelvioRankingAvatarHtml(item.profileImageUrl, {
+              userId: item.userId,
+              overlayName: name,
+              ageCategory: item.ageCategory
+            }) +
             '<span class="stelvio-rank-name-text" title="' +
             rawName +
             '">' +
@@ -9304,7 +9555,11 @@
         html += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
-          stelvioRankingAvatarHtml(item.profileImageUrl) +
+          stelvioRankingAvatarHtml(item.profileImageUrl, {
+            userId: item.userId,
+            overlayName: name,
+            ageCategory: item.ageCategory
+          }) +
           '<span class="stelvio-rank-name-text" title="' +
           rawName +
           '">' +
@@ -9348,7 +9603,11 @@
         html += '<span class="stelvio-rank-pos">' + mrDisp + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
-          stelvioRankingAvatarHtml(mr.profileImageUrl) +
+          stelvioRankingAvatarHtml(mr.profileImageUrl, {
+            userId: mr.userId,
+            overlayName: mrName,
+            ageCategory: mr.ageCategory
+          }) +
           '<span class="stelvio-rank-name-text" title="' +
           mrRawName +
           '">' +
@@ -21418,10 +21677,19 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
     <button type="button" id="stelvioBackToTopBtn" class="stelvio-back-to-top-btn" onclick="if(typeof handleStelvioBackToTop==='function')handleStelvioBackToTop();" aria-label="맨 위로 가기" title="맨 위로 가기">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
     </button>
-    <!-- 랭킹 순위표 프로필 썸네일 확대 (딤드 영역 탭 시 닫힘) -->
+    <!-- 랭킹 순위표 프로필 확대 (딤 바깥 탭 시 닫힘) -->
     <div id="stelvioRankAvatarZoomBackdrop" class="stelvio-rank-avatar-zoom-backdrop hidden" aria-hidden="true">
-      <div class="stelvio-rank-avatar-zoom-inner" role="dialog" aria-modal="true" aria-label="프로필 사진">
-        <img id="stelvioRankAvatarZoomImg" class="stelvio-rank-avatar-zoom-img" alt="프로필 사진" width="280" height="280" decoding="async" />
+      <div class="stelvio-rank-avatar-zoom-card" role="dialog" aria-modal="true" aria-label="\ub7ad\ud0b9 \ud504\ub85c\ud544">
+        <div class="stelvio-rank-avatar-zoom-photo-wrap">
+          <div class="stelvio-rank-avatar-zoom-inner">
+            <img id="stelvioRankAvatarZoomImg" class="stelvio-rank-avatar-zoom-img" alt="" width="280" height="280" decoding="async" />
+          </div>
+        </div>
+        <div id="stelvioRankAvatarZoomProfile" class="stelvio-rank-avatar-zoom-profile hidden">
+          <p id="stelvioRankAvatarZoomLine1" class="stelvio-rank-avatar-zoom-line1"></p>
+          <p id="stelvioRankAvatarZoomLine2" class="stelvio-rank-avatar-zoom-line2"></p>
+          <p id="stelvioRankAvatarZoomLine3" class="stelvio-rank-avatar-zoom-line3"></p>
+        </div>
       </div>
     </div>
   </div>
