@@ -16,6 +16,7 @@
 
   function destroyCropper() {
     var imgEl = el('stelvioProfileCropImg');
+    window.__stelvioProfileCropReady = false;
     if (window.__stelvioProfileCropper) {
       try {
         window.__stelvioProfileCropper.destroy();
@@ -28,6 +29,12 @@
       } catch (e2) {}
       _revokeUrl = null;
     }
+    try {
+      if (window.__stelvioCropReadyFallbackTimer) {
+        clearTimeout(window.__stelvioCropReadyFallbackTimer);
+        window.__stelvioCropReadyFallbackTimer = null;
+      }
+    } catch (eT) {}
     if (imgEl) imgEl.removeAttribute('src');
   }
 
@@ -43,30 +50,70 @@
 
   window.stelvioCloseProfileCropModal = closeCropModal;
 
+  function dataUrlToBlob(dataUrl) {
+    try {
+      var arr = String(dataUrl).split(',');
+      if (arr.length < 2) return null;
+      var mime = arr[0].match(/:(.*?);/);
+      mime = mime && mime[1] ? mime[1] : 'image/jpeg';
+      var bstr = atob(arr[1]);
+      var n = bstr.length;
+      var u8 = new Uint8Array(n);
+      for (var i = 0; i < n; i++) u8[i] = bstr.charCodeAt(i);
+      return new Blob([u8], { type: mime });
+    } catch (e) {
+      return null;
+    }
+  }
+
   function canvasToOptimizedBlob(canvas, quality) {
     var q = quality != null ? quality : 0.7;
     return new Promise(function (resolve) {
-      if (!canvas || typeof canvas.toBlob !== 'function') {
+      if (!canvas) {
         resolve(null);
         return;
       }
-      canvas.toBlob(
-        function (webpBlob) {
-          if (webpBlob && webpBlob.size > 0) {
-            resolve(webpBlob);
-            return;
+      function fromDataUrlWebpJpeg() {
+        try {
+          var webpDu = canvas.toDataURL('image/webp', q);
+          if (webpDu && webpDu.indexOf('image/webp') > 0) {
+            var b = dataUrlToBlob(webpDu);
+            if (b && b.size > 0) {
+              resolve(b);
+              return;
+            }
           }
-          canvas.toBlob(
-            function (jpegBlob) {
+        } catch (e1) {}
+        try {
+          var jq = Math.min(0.88, q + 0.12);
+          var jpegDu = canvas.toDataURL('image/jpeg', jq);
+          var b2 = dataUrlToBlob(jpegDu);
+          resolve(b2 && b2.size > 0 ? b2 : null);
+        } catch (e2) {
+          resolve(null);
+        }
+      }
+      if (typeof canvas.toBlob !== 'function') {
+        fromDataUrlWebpJpeg();
+        return;
+      }
+      canvas.toBlob(function (webpBlob) {
+        if (webpBlob && webpBlob.size > 0) {
+          resolve(webpBlob);
+          return;
+        }
+        canvas.toBlob(
+          function (jpegBlob) {
+            if (jpegBlob && jpegBlob.size > 0) {
               resolve(jpegBlob);
-            },
-            'image/jpeg',
-            Math.min(0.88, q + 0.12)
-          );
-        },
-        'image/webp',
-        q
-      );
+              return;
+            }
+            fromDataUrlWebpJpeg();
+          },
+          'image/jpeg',
+          Math.min(0.88, q + 0.12)
+        );
+      }, 'image/webp', q);
     });
   }
 
@@ -105,7 +152,18 @@
     var uid = window.__stelvioProfileCropTargetUid;
     var cropper = window.__stelvioProfileCropper;
     var saveBtn = el('stelvioProfileCropSave');
-    if (!uid || !cropper) return;
+    if (!uid) {
+      if (typeof showToast === 'function') showToast('로그인 상태를 확인할 수 없습니다.', 'warning');
+      return;
+    }
+    if (!cropper) {
+      if (typeof showToast === 'function') showToast('이미지를 불러오는 중입니다. 잠시 후 다시 눌러 주세요.', 'warning');
+      return;
+    }
+    if (!window.__stelvioProfileCropReady) {
+      if (typeof showToast === 'function') showToast('이미지가 준비될 때까지 잠시만 기다려 주세요.', 'warning');
+      return;
+    }
     if (saveBtn) {
       saveBtn.disabled = true;
       saveBtn.textContent = '저장 중...';
@@ -115,8 +173,17 @@
         width: 150,
         height: 150,
         imageSmoothingQuality: 'high',
+        fillColor: '#ffffff',
       });
-      if (!canvas || !canvas.getContext || !canvas.getContext('2d')) {
+      if (!canvas || !canvas.width || !canvas.height) {
+        canvas = cropper.getCroppedCanvas({
+          maxWidth: 150,
+          maxHeight: 150,
+          imageSmoothingQuality: 'high',
+          fillColor: '#ffffff',
+        });
+      }
+      if (!canvas || !canvas.width || !canvas.height || typeof canvas.getContext !== 'function' || !canvas.getContext('2d')) {
         throw new Error('이미지를 처리할 수 없습니다.');
       }
       var blob = await canvasToOptimizedBlob(canvas, 0.7);
@@ -134,10 +201,19 @@
         } catch (eLs) {}
       }
       var cardImg = document.querySelector('[data-stelvio-profile-img="' + uid + '"]');
-      if (cardImg) cardImg.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+      var bust = (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+      if (cardImg) cardImg.src = url + bust;
 
       closeCropModal();
       if (typeof showToast === 'function') showToast('프로필 사진이 저장되었습니다.');
+
+      if (typeof loadUsers === 'function') {
+        try {
+          await loadUsers();
+        } catch (eLu) {
+          console.warn('[ProfilePhoto] loadUsers 새로고침:', eLu);
+        }
+      }
     } catch (err) {
       console.warn('[ProfilePhoto]', err);
       var msg = err && err.message ? String(err.message) : '저장에 실패했습니다.';
@@ -164,6 +240,11 @@
     }
     if (!modal || !imgEl || !uid) return;
 
+    var saveBtnInit = el('stelvioProfileCropSave');
+    if (saveBtnInit) {
+      saveBtnInit.disabled = true;
+      saveBtnInit.textContent = '저장';
+    }
     destroyCropper();
     var url = URL.createObjectURL(f);
     _revokeUrl = url;
@@ -173,6 +254,22 @@
 
     requestAnimationFrame(function () {
       try {
+        try {
+          if (window.__stelvioCropReadyFallbackTimer) clearTimeout(window.__stelvioCropReadyFallbackTimer);
+        } catch (e0) {}
+        window.__stelvioCropReadyFallbackTimer = setTimeout(function () {
+          window.__stelvioCropReadyFallbackTimer = null;
+          if (
+            window.__stelvioProfileCropper &&
+            el('stelvioProfileCropModal') &&
+            !el('stelvioProfileCropModal').classList.contains('hidden')
+          ) {
+            window.__stelvioProfileCropReady = true;
+            var sbF = el('stelvioProfileCropSave');
+            if (sbF) sbF.disabled = false;
+          }
+        }, 3200);
+
         window.__stelvioProfileCropper = new window.Cropper(imgEl, {
           aspectRatio: 1,
           viewMode: 1,
@@ -184,6 +281,23 @@
           zoomable: true,
           zoomOnTouch: true,
           zoomOnWheel: true,
+          ready: function () {
+            try {
+              if (window.__stelvioCropReadyFallbackTimer) {
+                clearTimeout(window.__stelvioCropReadyFallbackTimer);
+                window.__stelvioCropReadyFallbackTimer = null;
+              }
+            } catch (eClr) {}
+            window.__stelvioProfileCropReady = true;
+            var sb = el('stelvioProfileCropSave');
+            if (
+              sb &&
+              el('stelvioProfileCropModal') &&
+              !el('stelvioProfileCropModal').classList.contains('hidden')
+            ) {
+              sb.disabled = false;
+            }
+          },
         });
       } catch (eC) {
         console.warn('[ProfilePhoto] Cropper init', eC);
@@ -212,9 +326,15 @@
     }
     if (saveBtn && !saveBtn.dataset.bound) {
       saveBtn.dataset.bound = '1';
-      saveBtn.addEventListener('click', function () {
-        onSaveCrop();
-      });
+      saveBtn.addEventListener(
+        'click',
+        function (ev) {
+          if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+          if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+          onSaveCrop();
+        },
+        true
+      );
     }
   }
 
