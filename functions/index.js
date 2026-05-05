@@ -45,14 +45,17 @@ function profileImageUrlFromUserData(data) {
 async function fetchProfileImageUrlsMapForUsers(db, userIds) {
   const urlById = new Map();
   const unique = [...new Set((userIds || []).map((x) => String(x).trim()).filter(Boolean))];
-  const CHUNK = 10;
-  for (let i = 0; i < unique.length; i += CHUNK) {
-    const chunk = unique.slice(i, i + CHUNK);
-    const refs = chunk.map((id) => db.collection("users").doc(id));
-    const snaps = await db.getAll(...refs);
-    for (let j = 0; j < chunk.length; j++) {
+  /** 순차 `getAll(≤10)`은 uid 수만 건 시 지연 과다 → 짧은 병렬 get으로 완만한 확장 유지 */
+  const CONCURRENCY = Math.min(
+    Number(process.env.RANK_PROFILE_IMAGE_FETCH_PARALLEL) || 40,
+    60
+  );
+  for (let i = 0; i < unique.length; i += CONCURRENCY) {
+    const slice = unique.slice(i, i + CONCURRENCY);
+    const snaps = await Promise.all(slice.map((id) => db.collection("users").doc(id).get()));
+    for (let j = 0; j < slice.length; j++) {
       const docSnap = snaps[j];
-      const id = chunk[j];
+      const id = slice[j];
       if (docSnap && docSnap.exists) urlById.set(id, profileImageUrlFromUserData(docSnap.data()));
       else urlById.set(id, null);
     }
@@ -4533,6 +4536,13 @@ function buildMotivationMessage(currentUser, nextUser) {
   return `${currentUser.name}님 현재 ${currentUser.rank}위! 앞선 사용자와의 차이는 ${diffWkg.toFixed(2)} W/kg로, ${requiredWatts}W 향상 시키면(목표 파워: ${targetWatts}W) 추월할 수 있습니다. 도전해 보세요!`;
 }
 
+/** GC 헵타곤: 부문·성별별 최대 포함 행(단일 Firestore 조회 한도 초과분은 페이지로 이어받음). */
+const GC_RANKING_MAX_ROWS_PER_CATEGORY = 10000;
+/** 한 번 페이지 조회 크기(Firestore 1 라운드트립당 문서 상한을 완만히 둠). */
+const GC_RANKING_FETCH_PAGE_SIZE = 2500;
+/** M/F 순위 통일용 Supremo·gender=all 참조 사용자 수 상한(부문 상한과 정렬 유지 위해 동일 크기). */
+const GC_RANKING_SUPERMO_ALL_FETCH_CAP = 10000;
+
 /**
  * GC(헵타곤 환산): `heptagon_cohort_ranks` 읽기. 행 순서·표시 순위는 `sumPositionScores` desc 쿼리 결과와 일치시킴
  * (`boardRank`는 스냅샷 필드라 점수만 먼저 갱신될 때 헵타곤 카드와 숫자가 어긋날 수 있음).
@@ -4558,64 +4568,91 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   let supreAllScores = null;
   if (applyGenderScoreUnify) {
     supreAllScores = new Map();
-    const qAll = await col
-      .where("monthKey", "==", monthKey)
-      .where("filterCategory", "==", "Supremo")
-      .where("filterGender", "==", "all")
-      .orderBy("sumPositionScores", "desc")
-      .limit(2000)
-      .get();
-    qAll.forEach((doc) => {
-      const d = doc.data();
-      captureSnapshotMeta(d);
-      if (d && d.userId != null && d.sumPositionScores != null && isFinite(Number(d.sumPositionScores))) {
-        supreAllScores.set(String(d.userId), Number(d.sumPositionScores));
+    let curLast = null;
+    let supFetched = 0;
+    while (supFetched < GC_RANKING_SUPERMO_ALL_FETCH_CAP) {
+      const need = GC_RANKING_SUPERMO_ALL_FETCH_CAP - supFetched;
+      let qAll = col
+        .where("monthKey", "==", monthKey)
+        .where("filterCategory", "==", "Supremo")
+        .where("filterGender", "==", "all")
+        .orderBy("sumPositionScores", "desc")
+        .limit(Math.min(GC_RANKING_FETCH_PAGE_SIZE, need));
+      if (curLast) qAll = qAll.startAfter(curLast);
+      const snapAll = await qAll.get();
+      if (!snapAll || snapAll.empty || !snapAll.docs.length) break;
+      for (let ai = 0; ai < snapAll.docs.length; ai++) {
+        const docSnap = snapAll.docs[ai];
+        const d = docSnap.data();
+        captureSnapshotMeta(d);
+        if (d && d.userId != null && d.sumPositionScores != null && isFinite(Number(d.sumPositionScores))) {
+          supreAllScores.set(String(d.userId), Number(d.sumPositionScores));
+        }
       }
-    });
+      supFetched += snapAll.docs.length;
+      if (snapAll.docs.length < Math.min(GC_RANKING_FETCH_PAGE_SIZE, need)) break;
+      curLast = snapAll.docs[snapAll.docs.length - 1];
+    }
   }
 
-  for (let ci = 0; ci < categories.length; ci++) {
-    const cat = categories[ci];
-    const snap = await col
-      .where("monthKey", "==", monthKey)
-      .where("filterCategory", "==", cat)
-      .where("filterGender", "==", filterGender)
-      .orderBy("sumPositionScores", "desc")
-      .limit(500)
-      .get();
-    const rows = [];
-    let seq = 0;
-    snap.forEach((doc) => {
-      const d = doc.data();
-      captureSnapshotMeta(d);
-      if (!d || !d.userId) return;
-      seq += 1;
-      const uid = String(d.userId);
-      let gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
-      if (applyGenderScoreUnify && supreAllScores.has(uid)) {
-        gcScore = supreAllScores.get(uid);
+  const categoryRowsLists = await Promise.all(
+    categories.map(async (cat) => {
+      const rows = [];
+      let seq = 0;
+      let cursor = null;
+      while (rows.length < GC_RANKING_MAX_ROWS_PER_CATEGORY) {
+        const room = GC_RANKING_MAX_ROWS_PER_CATEGORY - rows.length;
+        let q = col
+          .where("monthKey", "==", monthKey)
+          .where("filterCategory", "==", cat)
+          .where("filterGender", "==", filterGender)
+          .orderBy("sumPositionScores", "desc")
+          .limit(Math.min(GC_RANKING_FETCH_PAGE_SIZE, room));
+        if (cursor) q = q.startAfter(cursor);
+        const snap = await q.get();
+        if (!snap || snap.empty || !snap.docs.length) break;
+        for (let di = 0; di < snap.docs.length; di++) {
+          const docSnap = snap.docs[di];
+          const d = docSnap.data();
+          captureSnapshotMeta(d);
+          if (!d || !d.userId) continue;
+          seq += 1;
+          const uid = String(d.userId);
+          let gcScore = d.sumPositionScores != null && isFinite(Number(d.sumPositionScores)) ? Number(d.sumPositionScores) : 0;
+          if (applyGenderScoreUnify && supreAllScores.has(uid)) {
+            gcScore = supreAllScores.get(uid);
+          }
+          const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
+          rows.push({
+            userId: uid,
+            name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
+            ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
+            gender: g,
+            is_private: d.is_private === true,
+            rank: seq,
+            gcScore,
+          });
+        }
+        const got = snap.docs.length;
+        if (got < Math.min(GC_RANKING_FETCH_PAGE_SIZE, room)) break;
+        cursor = snap.docs[snap.docs.length - 1];
+        if (!cursor) break;
       }
-      const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
-      rows.push({
-        userId: uid,
-        name: (d.displayName && String(d.displayName).trim()) || "(이름 없음)",
-        ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
-        gender: g,
-        is_private: d.is_private === true,
-        rank: seq,
-        gcScore,
-      });
-    });
-    if (applyGenderScoreUnify) {
-      rows.sort((a, b) => {
-        if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
-        return String(a.userId).localeCompare(String(b.userId));
-      });
-      for (let ri = 0; ri < rows.length; ri++) {
-        rows[ri].rank = ri + 1;
+      if (applyGenderScoreUnify) {
+        rows.sort((a, b) => {
+          if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
+          return String(a.userId).localeCompare(String(b.userId));
+        });
+        for (let ri = 0; ri < rows.length; ri++) {
+          rows[ri].rank = ri + 1;
+        }
       }
-    }
-    byCategory[cat] = rows;
+      return { cat, rows };
+    })
+  );
+  for (let cri = 0; cri < categoryRowsLists.length; cri++) {
+    const pr = categoryRowsLists[cri];
+    byCategory[pr.cat] = pr.rows;
   }
   await hydrateRankingBoardProfileImages(db, byCategory);
   const entries = (byCategory.Supremo || []).slice();
