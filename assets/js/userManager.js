@@ -1645,6 +1645,7 @@ async function apiUpdateUser(id, userData) {
     if (userData.is_private != null) updateData.is_private = userData.is_private === true;
     if (userData.gemini_api_registered != null) updateData.gemini_api_registered = userData.gemini_api_registered === true;
     if (userData.API_sts != null) updateData.API_sts = userData.API_sts === true;
+    if (userData.profileImageUrl != null) updateData.profileImageUrl = String(userData.profileImageUrl);
 
     // Firestore 업데이트
     // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
@@ -2558,6 +2559,13 @@ function userNeedsMandatoryIntegratedSetup(u) {
 }
 window.userNeedsMandatoryIntegratedSetup = userNeedsMandatoryIntegratedSetup;
 
+function stelvioEscapeHtmlAttr(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
 /**
  * 프로필 화면 사용자 카드 목록 렌더링 (loadUsers / searchProfileUsers 공용)
  * @param {Array} usersToRender - 렌더할 사용자 배열
@@ -2621,6 +2629,26 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
         : hasAiKeyLocal || userHasGeminiApiRegistered(user);
     const aiDot = hasAiForUser ? 'background:#22c55e' : 'background:#d1d5db';
     const stravaDot = hasStrava ? 'background:#22c55e' : 'background:#d1d5db';
+    const defaultAv =
+      typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+        ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+        : 'assets/img/profile-placeholder.svg';
+    const profileUrlRaw =
+      user.profileImageUrl && String(user.profileImageUrl).trim()
+        ? String(user.profileImageUrl).trim()
+        : defaultAv;
+    const profileUrl = stelvioEscapeHtmlAttr(profileUrlRaw);
+    const canEditAvatar = !!(viewerId && String(user.id) === String(viewerId));
+    const avatarBlock = canEditAvatar
+      ? `<button type="button" class="stelvio-profile-card-avatar-btn" onclick="event.stopPropagation();typeof stelvioOpenProfilePhotoPicker==='function'&&stelvioOpenProfilePhotoPicker('${user.id}')" aria-label="프로필 사진 변경">
+              <span class="stelvio-profile-card-avatar-ring">
+                <img class="stelvio-profile-card-avatar-img" src="${profileUrl}" alt="" width="60" height="60" loading="lazy" decoding="async" data-stelvio-profile-img="${user.id}" />
+                <span class="stelvio-profile-card-avatar-camera" aria-hidden="true"></span>
+              </span>
+            </button>`
+      : `<span class="stelvio-profile-card-avatar-readonly"><span class="stelvio-profile-card-avatar-ring">
+              <img class="stelvio-profile-card-avatar-img" src="${profileUrl}" alt="" width="60" height="60" loading="lazy" decoding="async" />
+            </span></span>`;
 
     return `
       <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
@@ -2633,9 +2661,12 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId) {
                 <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
               </span>
             </div>
-            <div class="user-points">
+            <div class="stelvio-user-points-with-avatar">
+              ${avatarBlock}
+              <div class="user-points">
               <span class="point-badge point-accumulated" title="누적 포인트"><span class="point-icon">⭐</span><span class="point-value">${formatPoints(accPoints)}</span></span>
               <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
+            </div>
             </div>
           </div>
           <div class="user-actions" onclick="event.stopPropagation();">
