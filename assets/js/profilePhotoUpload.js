@@ -260,6 +260,16 @@
           console.warn('[ProfilePhoto] loadUsers 새로고침:', eLu);
         }
       }
+      if (typeof fetchStelvioPeakPowerRanking === 'function') {
+        var rankScreen = document.getElementById('stelvioRankingScreen');
+        if (rankScreen && rankScreen.classList.contains('active')) {
+          try {
+            fetchStelvioPeakPowerRanking();
+          } catch (eRk) {
+            console.warn('[ProfilePhoto] 랭킹보드 새로고침:', eRk);
+          }
+        }
+      }
     } catch (err) {
       console.warn('[ProfilePhoto]', err);
       var msg = err && err.message ? String(err.message) : '저장에 실패했습니다.';
