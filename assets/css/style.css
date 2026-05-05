@@ -6684,6 +6684,7 @@ button.stelvio-rank-avatar-btn:focus-visible {
     0 16px 48px rgba(0, 0, 0, 0.5);
 }
 .stelvio-rank-avatar-zoom-img {
+  /* 표시 최대 320px — 내보내기 픽셀(profilePhotoUpload PROFILE_RANK_ZOOM_CSS_MAX_PX)과 맞출 것 */
   width: min(72vw, 320px);
   height: min(72vw, 320px);
   max-width: 320px;
