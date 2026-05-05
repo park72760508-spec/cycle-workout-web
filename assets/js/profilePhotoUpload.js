@@ -1,5 +1,5 @@
 /**
- * 프로필 사진: Cropper.js(CDN) + Firebase Storage + Firestore profileImageUrl
+ * 프로필 사진: Cropper.js(CDN) + Firebase Storage + Firestore profileImageUrl (~400px WebP)
  * Cropper 설치 대안: npm install cropperjs
  */
 (function () {
@@ -215,16 +215,20 @@
       saveBtn.textContent = '저장 중...';
     }
     try {
+      /* 랭킹 확대·고해상도 디스플레이 대비: 과거 150px보다 크게 저장(용량은 WebP 최적화로 유지) */
+      var EXPORT_PX = 400;
       var canvas = cropper.getCroppedCanvas({
-        width: 150,
-        height: 150,
+        width: EXPORT_PX,
+        height: EXPORT_PX,
+        imageSmoothingEnabled: true,
         imageSmoothingQuality: 'high',
         fillColor: '#ffffff',
       });
       if (!canvas || !canvas.width || !canvas.height) {
         canvas = cropper.getCroppedCanvas({
-          maxWidth: 150,
-          maxHeight: 150,
+          maxWidth: EXPORT_PX,
+          maxHeight: EXPORT_PX,
+          imageSmoothingEnabled: true,
           imageSmoothingQuality: 'high',
           fillColor: '#ffffff',
         });
@@ -232,7 +236,7 @@
       if (!canvas || !canvas.width || !canvas.height || typeof canvas.getContext !== 'function' || !canvas.getContext('2d')) {
         throw new Error('이미지를 처리할 수 없습니다.');
       }
-      var blob = await canvasToOptimizedBlob(canvas, 0.7);
+      var blob = await canvasToOptimizedBlob(canvas, 0.82);
       if (!blob || blob.size < 16) throw new Error('압축 결과가 비어 있습니다.');
       var url = await uploadProfileImage(uid, blob);
       var apiFn = typeof window.apiUpdateUser === 'function' ? window.apiUpdateUser : null;
