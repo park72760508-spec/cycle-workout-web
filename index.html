@@ -15,6 +15,8 @@
   <!-- 👆 여기까지 추가 -->
   <!-- 오픈라이딩 지도 등에만 필요: 초기 렌더 블록 완화 (로드 후 media 전환) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" media="print" onload="this.media='all'" />
+  <!-- Cropper.js 원형 크롭용 (npm: npm install cropperjs) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <!-- API 키·시크릿: config.local.js (index.html과 같은 폴더에 두세요). 없으면 placeholder 사용 -->
   <script src="config.local.js"></script>
   <!-- Android 감지: 워크아웃 목록 스크롤 등 화면 제어 제한 해제용 (iPhone은 기존 유지) -->
@@ -3517,9 +3519,26 @@
         </div>
       </div>
     
-
     
+
   </div>
+
+  <!-- 프로필 사진 원형 크롭 모달 (Cropper.js — head에 CSS, npm: npm install cropperjs) -->
+  <div id="stelvioProfileCropModal" class="stelvio-profile-crop-modal hidden" aria-hidden="true" role="presentation" style="z-index: 10100450;">
+    <div class="stelvio-profile-crop-modal__backdrop" aria-hidden="true"></div>
+    <div class="stelvio-profile-crop-modal__panel" role="dialog" aria-modal="true" aria-labelledby="stelvioProfileCropTitle">
+      <h3 id="stelvioProfileCropTitle" class="stelvio-profile-crop-modal__title">프로필 사진</h3>
+      <p class="stelvio-profile-crop-modal__hint">한 손가락으로 이동·핀치로 확대/축소한 뒤 저장하세요.</p>
+      <div class="stelvio-profile-crop-modal__stage">
+        <img id="stelvioProfileCropImg" alt="" class="stelvio-profile-crop-modal__img" />
+      </div>
+      <div class="stelvio-profile-crop-modal__actions">
+        <button type="button" id="stelvioProfileCropCancel" class="stelvio-profile-crop-modal__btn stelvio-profile-crop-modal__btn--secondary">취소</button>
+        <button type="button" id="stelvioProfileCropSave" class="stelvio-profile-crop-modal__btn stelvio-profile-crop-modal__btn--primary">저장</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="stelvioProfileAvatarHiddenFile" accept="image/*" class="hidden" tabindex="-1" aria-hidden="true" />
 
   <!-- Privacy Policy 모달 (화면 밖 배치 - 훈련일지/프로필 등 어디서든 팝업 표시, 팝업창은 오버레이 위에 표시) -->
   <div id="privacyPolicyModal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 11000;">
@@ -5873,6 +5892,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutManager.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="assets/js/profilePhotoUpload.js"></script>
   <script src="assets/js/userManager.js"></script>
 
   <!-- 워크아웃 화면 상태 관리: 카테고리(상태A) / 워크아웃 리스트(상태B) 전환 -->
@@ -8735,6 +8756,32 @@
     function renderStelvioRankingOneCategory(cat, byCategory, currentUserId, myRankSupremo, bodyEl) {
       if (!bodyEl) return;
       var rankMedalSrc = ['assets/img/1st.png', 'assets/img/2nd.png', 'assets/img/3rd.png'];
+      function stelvioRankingEscapeAttr(s) {
+        return String(s || '')
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+          .replace(/</g, '&lt;');
+      }
+      function stelvioRankingDefaultProfileImg() {
+        return typeof window.STELVIO_DEFAULT_PROFILE_IMAGE_URL === 'string' && window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+          ? window.STELVIO_DEFAULT_PROFILE_IMAGE_URL
+          : 'assets/img/profile-placeholder.svg';
+      }
+      function stelvioRankingAvatarHtml(profileImageUrl) {
+        var raw =
+          profileImageUrl != null && String(profileImageUrl).trim()
+            ? String(profileImageUrl).trim()
+            : stelvioRankingDefaultProfileImg();
+        var src = stelvioRankingEscapeAttr(raw);
+        return (
+          '<span class="stelvio-rank-avatar" aria-hidden="true">' +
+          '<img class="stelvio-rank-avatar-img" src="' +
+          src +
+          '" alt="" width="30" height="30" loading="lazy" decoding="async" />' +
+          '</span>'
+        );
+      }
       var arr = stelvioFilterRowsByListInterest(byCategory[cat] || []);
       var cu = window.currentUser || (function(){ try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e){ return null; } })();
       var isExpired = typeof isUserExpired === 'function' && cu && isUserExpired(cu);
@@ -8817,11 +8864,12 @@
           var dispR = stelvioRankDisplayNumber(item, categoryRank, 'Supremo', byCategory);
           var h = '<div class="' + rowClass + '">';
           if (dispR <= 3) {
-            h += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
+            h += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
           }
           h += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
           h +=
             '<span class="stelvio-rank-name">' +
+            stelvioRankingAvatarHtml(item.profileImageUrl) +
             '<span class="stelvio-rank-name-text" title="' +
             rawName +
             '">' +
@@ -9133,10 +9181,11 @@
           (groupAttendedCat ? ' stelvio-rank-group-attended' : '') +
           (groupUnjoinedCat ? ' stelvio-rank-group-unjoined' : '');
         html += '<div class="' + rowClass + '">';
-        if (dispR <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
+        if (dispR <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[dispR - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
         html += '<span class="stelvio-rank-pos">' + dispR + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
+          stelvioRankingAvatarHtml(item.profileImageUrl) +
           '<span class="stelvio-rank-name-text" title="' +
           rawName +
           '">' +
@@ -9176,10 +9225,11 @@
           (mrGroupHost ? ' stelvio-rank-group-host' : '') +
           (mrGroupAttended ? ' stelvio-rank-group-attended' : '') +
           '">';
-        if (mrDisp <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[mrDisp - 1] + '" alt="" width="24" height="24" decoding="async" /></span>';
+        if (mrDisp <= 3) html += '<span class="stelvio-rank-crown"><img src="' + rankMedalSrc[mrDisp - 1] + '" alt="" width="24" height="24" loading="lazy" decoding="async" /></span>';
         html += '<span class="stelvio-rank-pos">' + mrDisp + '위</span>';
         html +=
           '<span class="stelvio-rank-name">' +
+          stelvioRankingAvatarHtml(mr.profileImageUrl) +
           '<span class="stelvio-rank-name-text" title="' +
           mrRawName +
           '">' +
