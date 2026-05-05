@@ -332,33 +332,76 @@
 
     var myX = myRaw != null && !isNaN(myRaw) ? Math.min(xMax, Math.max(xMin, myRaw)) : null;
 
-    /** 배지 순위: 분포는 선택 부문(activeCategory)이어도 항상 전체(Supremo) 기준 */
+    function rowMetricForRank(e) {
+      if (!e) return NaN;
+      if (isTss) return Number(e.totalTss);
+      if (isKmMode) return Number(e.totalKm);
+      if (isGcMode) return Number(e.gcScore);
+      return Number(e.wkg);
+    }
+
+    /** 배지 순위: 선택 부문(activeCategory)·동일 지표로 순위 표기 (Supremo=전체, 그 외=해당 부문 내) */
     var displayRank = null;
 
     if (overrideMyWkg != null && !isTss && !isGcMode) {
       displayRank = null;
-    } else {
-      var supArr0 = byCategory && byCategory.Supremo ? byCategory.Supremo : [];
-      var supIdx0 = -1;
-      if (currentUserId && supArr0.length) {
-        supIdx0 = supArr0.findIndex(function (e) {
-          if (!e) return false;
-          if (duration === 'group_dist') {
-            return e.userId === currentUserId || e.currentUserParticipated === true;
-          }
-          return String(e.userId) === String(currentUserId);
-        });
-      }
-      if (supIdx0 >= 0) {
-        var supRow = supArr0[supIdx0];
-        if (supRow.rank != null && !isNaN(Number(supRow.rank))) {
-          displayRank = safeFloorRank(supRow.rank);
-        } else {
-          displayRank = supIdx0 + 1;
+    } else if (currentUserId) {
+      if (activeCategory === 'Supremo') {
+        var supArr0 = byCategory && byCategory.Supremo ? byCategory.Supremo : [];
+        var supIdx0 = -1;
+        if (supArr0.length) {
+          supIdx0 = supArr0.findIndex(function (e) {
+            if (!e) return false;
+            if (duration === 'group_dist') {
+              return e.userId === currentUserId || e.currentUserParticipated === true;
+            }
+            return String(e.userId) === String(currentUserId);
+          });
         }
-      }
-      if (displayRank == null && myRankSupremo && currentUserId && String(myRankSupremo.userId || '') === String(currentUserId)) {
-        displayRank = safeFloorRank(myRankSupremo.rank);
+        if (supIdx0 >= 0) {
+          var supRow = supArr0[supIdx0];
+          if (supRow.rank != null && !isNaN(Number(supRow.rank))) {
+            displayRank = safeFloorRank(supRow.rank);
+          } else {
+            displayRank = supIdx0 + 1;
+          }
+        }
+        if (displayRank == null && myRankSupremo && String(myRankSupremo.userId || '') === String(currentUserId)) {
+          displayRank = safeFloorRank(myRankSupremo.rank);
+        }
+      } else {
+        var catArrR = byCategory && byCategory[activeCategory] ? byCategory[activeCategory] : [];
+        var catIdx = -1;
+        var cr;
+        for (var ri = 0; ri < catArrR.length; ri++) {
+          cr = catArrR[ri];
+          if (!cr) continue;
+          if (duration === 'group_dist') {
+            if (cr.userId === currentUserId || cr.currentUserParticipated === true) {
+              catIdx = ri;
+              break;
+            }
+          } else if (String(cr.userId) === String(currentUserId)) {
+            catIdx = ri;
+            break;
+          }
+        }
+        if (catIdx >= 0) {
+          var catRow = catArrR[catIdx];
+          if (catRow.rank != null && !isNaN(Number(catRow.rank))) {
+            displayRank = safeFloorRank(catRow.rank);
+          } else {
+            displayRank = catIdx + 1;
+          }
+        } else if (myRaw != null && !isNaN(myRaw) && catArrR.length) {
+          var epsR = isTss || isKmMode || isGcMode ? 1e-6 : 1e-9;
+          var gt = 0;
+          for (var gj = 0; gj < catArrR.length; gj++) {
+            var rv = rowMetricForRank(catArrR[gj]);
+            if (isFinite(rv) && rv > myRaw + epsR) gt++;
+          }
+          displayRank = gt + 1;
+        }
       }
     }
 
