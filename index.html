@@ -8019,6 +8019,12 @@
       var m = mode === 'interest' ? 'interest' : 'all';
       if (stelvioRankingState.listFilter === m) return;
       stelvioRankingState.listFilter = m;
+      /* 관심: Supremo는 펼침과 동일 효과(전체·친구 목록 한눈에). 연령대 탭은 아래 render에서 expandLimit 처리 */
+      if (m === 'interest') {
+        var gapSup = stelvioRankingGapState.Supremo || {};
+        gapSup.expanded = true;
+        stelvioRankingGapState.Supremo = gapSup;
+      }
       stelvioSyncRankingListFilterToggleUi();
       stelvioScrollRankingBoardToTopSmooth();
       if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
@@ -9181,6 +9187,7 @@
         var NEIGH = 3;
         var lastIdx = arr.length - 1;
         var supremoExpanded = !!(stelvioRankingGapState.Supremo || {}).expanded;
+        if (stelvioRankingState.listFilter === 'interest') supremoExpanded = true;
         var _vgSup = typeof getViewerGrade === 'function' ? getViewerGrade() : null;
         /* 전체(Supremo) 랭킹 접기/펼침: 구독·일반 회원(grade 1~3). 비공개 표시는 isAdmin(grade=1) 전용 로직 유지 */
         var canSupremoGapControls = (function (vg) {
@@ -9509,8 +9516,13 @@
           displayArr = arr.slice(0, 3);
         }
       } else if (arr.length > 10) {
-        expandLimit = stelvioRankingExpandState[cat] || 10;
-        displayArr = arr.slice(0, expandLimit);
+        if (stelvioRankingState.listFilter === 'interest') {
+          expandLimit = arr.length;
+          displayArr = arr.slice();
+        } else {
+          expandLimit = stelvioRankingExpandState[cat] || 10;
+          displayArr = arr.slice(0, expandLimit);
+        }
       }
 
       displayArr.forEach(function(item, idx) {
