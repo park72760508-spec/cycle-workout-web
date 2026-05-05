@@ -34,6 +34,13 @@ if (!admin.apps.length) {
 
 const rankingDayRollup = require("./rankingDayRollup");
 
+/** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
+function profileImageUrlFromUserData(data) {
+  if (!data || typeof data !== "object") return null;
+  const v = data.profileImageUrl;
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+}
+
 // CORS 설정: Firebase Functions v2 onCall - 허용할 출처 (localhost는 개발/테스트용)
 const CORS_ORIGINS = [
   "https://stelvio.ai.kr",
@@ -3319,6 +3326,7 @@ async function getPeakPowerRankingEntries(db, startStr, endStr, durationType, ge
           ageCategory: leagueCategory,
           gender,
           is_private: data.is_private === true,
+          profileImageUrl: profileImageUrlFromUserData(data),
         };
       })
     );
@@ -3366,6 +3374,7 @@ async function getWeeklyTssRankingBoardEntries(db, startStr, endStr, genderFilte
           ageCategory: leagueCategory,
           gender,
           is_private: data.is_private === true,
+          profileImageUrl: profileImageUrlFromUserData(data),
         };
       })
     );
@@ -3413,6 +3422,7 @@ async function getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, ge
           ageCategory: leagueCategory,
           gender,
           is_private: data.is_private === true,
+          profileImageUrl: profileImageUrlFromUserData(data),
         };
       })
     );
@@ -3759,6 +3769,16 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
     if (viewer && parts.includes(viewer)) agg.participated = true;
   }
   const entries = [];
+  const hostKeys = Array.from(byHost.keys());
+  const profileSnaps = await Promise.all(
+    hostKeys.map((hid) => db.collection("users").doc(hid).get().catch(() => null)),
+  );
+  const urlByHostId = new Map();
+  hostKeys.forEach((hid, i) => {
+    const sn = profileSnaps[i];
+    if (sn && sn.exists) urlByHostId.set(hid, profileImageUrlFromUserData(sn.data()));
+    else urlByHostId.set(hid, null);
+  });
   for (const [, v] of byHost) {
     entries.push({
       userId: v.hostUserId,
@@ -3770,6 +3790,7 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
       is_private: false,
       rankingKind: "group",
       currentUserParticipated: !!v.participated,
+      profileImageUrl: urlByHostId.get(v.hostUserId) || null,
     });
   }
   entries.sort((a, b) => b.totalKm - a.totalKm);
@@ -3955,6 +3976,7 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
             ageCategory: leagueCategory,
             gender: String(data.gender || data.sex || "").toLowerCase(),
             is_private: data.is_private === true,
+            profileImageUrl: profileImageUrlFromUserData(data),
           };
           for (const slot of genders) {
             if (slot === "M" && gKey !== "M") continue;
