@@ -6625,6 +6625,57 @@ body:has(#trainingDetailModal:not(.hidden)) {
   vertical-align: top;
 }
 
+button.stelvio-rank-avatar-btn {
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  border-radius: 50%;
+  line-height: 0;
+}
+button.stelvio-rank-avatar-btn:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+
+/* 랭킹 순위표: 프로필 사진 확대 오버레이 */
+.stelvio-rank-avatar-zoom-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: rgba(15, 18, 24, 0.78);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.stelvio-rank-avatar-zoom-backdrop.hidden {
+  display: none !important;
+}
+.stelvio-rank-avatar-zoom-inner {
+  pointer-events: auto;
+}
+.stelvio-rank-avatar-zoom-img {
+  width: min(72vw, 320px);
+  height: min(72vw, 320px);
+  max-width: 320px;
+  max-height: 320px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+  background: var(--bg-card, #edf0f4);
+}
+
 /* 프로필 사진 크롭 모달 (Cropper.js, 다크 테마 변수) */
 .stelvio-profile-crop-modal {
   position: fixed;
