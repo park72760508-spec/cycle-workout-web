@@ -2324,6 +2324,26 @@
     );
   }
 
+  /**
+   * 세로 레벨바 빈 칸: tier tint 배경의 알파를 절반으로(현재보다 50% 더 연하게).
+   */
+  function levelBarFadedEmptyBackground(tierBgCss) {
+    var s = tierBgCss != null ? String(tierBgCss).replace(/\s/g, '') : '';
+    var m =
+      /^rgba\(([\d.]+),([\d.]+),([\d.]+),([\d.]+)\)$/i.exec(s) ||
+      /^rgb\(([\d.]+),([\d.]+),([\d.]+)\)$/i.exec(s);
+    if (m) {
+      var rr = m[1];
+      var gg = m[2];
+      var bb = m[3];
+      var aa = m[4] != null ? parseFloat(m[4]) : 1;
+      if (!isFinite(aa)) aa = 1;
+      aa = Math.min(1, Math.max(0, aa * 0.5));
+      return 'rgba(' + rr + ',' + gg + ',' + bb + ',' + aa.toFixed(3) + ')';
+    }
+    return tierBgCss;
+  }
+
   function LevelProgressBar(props) {
     var summary = props.summary;
     var tierId = props.tierId; /* 배지와 동일한 effective tier ID (선택적) */
@@ -2425,8 +2445,8 @@
             width: '28px',
             height: '18px',
             borderRadius: '4px',
-            background: filled ? lv.color : lv.bg,
-            border: filled ? '1px solid ' + lv.color : '1px solid rgba(148,163,184,0.38)',
+            background: filled ? lv.color : levelBarFadedEmptyBackground(lv.bg),
+            border: filled ? '1px solid ' + lv.color : '1px solid rgba(148,163,184,0.19)',
             opacity: blockOpacity,
             transition: blinkOn ? 'none' : 'background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease'
           }}
