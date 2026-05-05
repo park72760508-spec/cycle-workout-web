@@ -290,9 +290,27 @@
       });
   }
 
+  /**
+   * 동일 GET URL에 대한 진행 중 요청 통합(Connection 수·실제 패킷 절약). 순위 계산 결과는 불변(getPeak 단일 응답).
+   */
+  var rankingPayloadInflight = Object.create(null);
+  function fetchRankingPayloadDedup(uid, duration, period, gender) {
+    var u = uid != null ? String(uid) : '';
+    var g = gender == null || gender === '' ? 'all' : String(gender);
+    var per = duration !== 'tss' ? period || 'monthly' : period || 'weekly';
+    var pk = String(duration) + '\n' + per + '\n' + g + '\n' + u;
+    var cur = rankingPayloadInflight[pk];
+    if (cur) return cur;
+    cur = fetchRankingPayload(uid, duration, period, gender).finally(function() {
+      if (rankingPayloadInflight[pk] === cur) delete rankingPayloadInflight[pk];
+    });
+    rankingPayloadInflight[pk] = cur;
+    return cur;
+  }
+
   /** 랭킹 API에서 나의 ageCategory(부문) 등 */
   function fetchRankingUserMeta(uid, gender) {
-    return fetchRankingPayload(uid, 'max', 'monthly', gender).then(function(data) {
+    return fetchRankingPayloadDedup(uid, 'max', 'monthly', gender).then(function(data) {
       var cu = data && data.currentUser;
       if (!cu) return { ageCategory: '', displayName: '' };
       return {
@@ -392,32 +410,61 @@
     return r;
   }
 
+  /** 한 축 JSON에서 부문별 { rank, n, wkg } — fetchRanksSet·트윈 요청 공통(getPeak 결과 불변). */
+  function axisStatsFromRankingPayload(data, uid, category, duration) {
+    var cu = data && data.currentUser;
+    var cuValid = cu && String(cu.userId) === String(uid);
+    var wk = cuValid && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
+    if (wk == null && data && data.byCategory) {
+      var allCats = Object.keys(data.byCategory);
+      for (var ci = 0; ci < allCats.length && wk == null; ci++) {
+        var catArr3 = data.byCategory[allCats[ci]] || [];
+        for (var cj = 0; cj < catArr3.length; cj++) {
+          var ce = catArr3[cj];
+          if (ce && String(ce.userId) === String(uid) && ce.wkg != null && isFinite(Number(ce.wkg))) {
+            wk = Number(ce.wkg);
+            break;
+          }
+        }
+      }
+    }
+    return {
+      rank: computeDisplayRankLikeDistribution(data, uid, category, duration),
+      n: cohortSizeForCategory(data, category),
+      wkg: wk
+    };
+  }
+
+  /**
+   * getPeak 단일 응답으로 부문 무관 동일 순위표 → 카테고리·Supremo를 한 번의 7요청으로 파생(기존 병렬 14요청과 동일 수치).
+   */
+  function fetchTwinCategoryPeakAxisRows(uid, period, gender, categoryMain) {
+    return Promise.all(
+      DURATIONS.map(function(d) {
+        return fetchRankingPayloadDedup(uid, d, period, gender).then(function(data) {
+          return {
+            main: axisStatsFromRankingPayload(data, uid, categoryMain, d),
+            supr: axisStatsFromRankingPayload(data, uid, 'Supremo', d)
+          };
+        });
+      })
+    ).then(function(pairs) {
+      return {
+        mRows: pairs.map(function(p) {
+          return p.main;
+        }),
+        sRows: pairs.map(function(p) {
+          return p.supr;
+        })
+      };
+    });
+  }
+
   function fetchRanksSet(uid, period, gender, category) {
     return Promise.all(
       DURATIONS.map(function(d) {
-        return fetchRankingPayload(uid, d, period, gender).then(function(data) {
-          var cu = data && data.currentUser;
-          var cuValid = cu && String(cu.userId) === String(uid);
-          var wk = cuValid && cu.wkg != null && isFinite(Number(cu.wkg)) ? Number(cu.wkg) : null;
-          /* W/kg 폴백: byCategory 전체를 탐색하여 uid와 일치하는 entry의 wkg 사용 */
-          if (wk == null && data && data.byCategory) {
-            var allCats = Object.keys(data.byCategory);
-            for (var ci = 0; ci < allCats.length && wk == null; ci++) {
-              var catArr3 = data.byCategory[allCats[ci]] || [];
-              for (var cj = 0; cj < catArr3.length; cj++) {
-                var ce = catArr3[cj];
-                if (ce && String(ce.userId) === String(uid) && ce.wkg != null && isFinite(Number(ce.wkg))) {
-                  wk = Number(ce.wkg);
-                  break;
-                }
-              }
-            }
-          }
-          return {
-            rank: computeDisplayRankLikeDistribution(data, uid, category, d),
-            n: cohortSizeForCategory(data, category),
-            wkg: wk
-          };
+        return fetchRankingPayloadDedup(uid, d, period, gender).then(function(data) {
+          return axisStatsFromRankingPayload(data, uid, category, d);
         });
       })
     );
@@ -983,11 +1030,33 @@
   }
 
   /**
-   * GC 배지: 코호트 표·툴팁(`stelvioCardTooltip`)이 부문·필터와 동기화된 순위를 우선 사용.
-   * 머지 전 요약만 있을 때는 `heptagonCardRankFromSummary`로 폴백.
+   * GC 배지: 랭킹보드(GC)·`getStelvioHeptagonCohortEntry` 단건 `boardRank`와 정렬 우선순위를 맞춤.
+   * `stelvioCardTooltip`이 동일 조건 순위표(500명)·재정렬 결과(`source:'board'`)만 먼저 오면
+   * 순간적으로는 맞았다가 ovl 목록 종료 후 순위가 바뀐 것처럼 보일 수 있어, 해당 값은 **ovl 확정 후**에만 폴백합니다.
    */
-  function gcHeptagonRankForBadge(toolTip, tierSummary, filterCategory, userAgeCategory) {
+  function gcHeptagonRankForBadge(ovl, toolTip, tierSummary, filterCategory, userAgeCategory) {
     if (!tierSummary) {
+      return null;
+    }
+    var ovr = stelvioOvlBoardRankNForDisplay(ovl, filterCategory, userAgeCategory);
+    if (ovr && ovr.br != null && isFinite(Number(ovr.br)) && Number(ovr.br) >= 1) {
+      return Math.floor(Number(ovr.br));
+    }
+    var merged = heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
+    if (merged != null) {
+      return merged;
+    }
+    if (
+      toolTip &&
+      (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+      toolTip.rank != null &&
+      isFinite(Number(toolTip.rank)) &&
+      Number(toolTip.rank) >= 1 &&
+      toolTip.source !== 'board'
+    ) {
+      return Math.floor(Number(toolTip.rank));
+    }
+    if (ovl && ovl.loading === true) {
       return null;
     }
     if (
@@ -999,7 +1068,7 @@
     ) {
       return Math.floor(Number(toolTip.rank));
     }
-    return heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
+    return null;
   }
 
   /**
@@ -2662,26 +2731,26 @@
         var peakReqId = octagonPeakReqRef.current;
 
         /**
-         * 1차: 월간 카테고리 + 월간 Supremo만 동시 요청 (최대 14건). 연간(365d) 7건은 카드 레이더·등급의 첫 패인트에 불필요해
-         * 초기 블록을 줄이면 동일 호스트 6연결 제한 때문에 생기던 대기 시간이 줄어든다.
-         * HoF 플레이스홀더: 월간과 동일(내부 norm만 영향·현재 카드 SVG는 순위 표기 중심). 연간 수신 후 state·로컬 캐시 갱신.
+         * 1차: 월간 7축 getPeak 응답에서 선택 부문·Supremo를 동시 파생(기존 14건 → 7건, 동일 순위·n·wkg).
+         * 연간 동일 7건은 첫 패인트 후 갱신(HoF norm·캐시). 동일 호스트 연결 점유 시간 절감.
          */
         setState({ loading: true, err: null, monthly: null, hof: null, supremoMonthly: null });
-        Promise.all([fetchRanksSet(uid, 'monthly', gender, category), fetchRanksSet(uid, 'monthly', gender, 'Supremo')])
-          .then(function(results) {
+        fetchTwinCategoryPeakAxisRows(uid, 'monthly', gender, category)
+          .then(function(pair) {
             if (peakReqId !== octagonPeakReqRef.current) {
               return;
             }
-            var mRows = results[0];
-            var sRows = results[1];
+            var mRows = pair.mRows;
+            var sRows = pair.sRows;
             /* 연간 패치 완료 전까지 monthly와 동일한 대역으로 두면 heptagonRadarDisplayNorms·state 구조 유지 */
             setState(stateFromApiRows(mRows, mRows, sRows));
 
-            fetchRanksSet(uid, 'yearly', gender, category)
-              .then(function(hRows) {
+            fetchTwinCategoryPeakAxisRows(uid, 'yearly', gender, category)
+              .then(function(yPair) {
                 if (peakReqId !== octagonPeakReqRef.current) {
                   return;
                 }
+                var hRows = yPair.mRows;
                 setState(function(prev) {
                   if (!prev || !prev.monthly || !prev.supremoMonthly) {
                     return prev;
@@ -2797,6 +2866,7 @@
             if (ovlL && ovlL.loading && nEff < 1) {
               return {
                 kind: 'board_partial',
+                source: 'board',
                 rank: mineBR.boardRank,
                 nCohort: 0,
                 pPct: -1,
@@ -2809,6 +2879,7 @@
               }
               return {
                 kind: 'board_partial',
+                source: 'board',
                 rank: mineBR.boardRank,
                 nCohort: 0,
                 pPct: -1,
@@ -2997,13 +3068,10 @@
           return;
         }
         setHeptagonModalRanks({ loading: true });
-        Promise.all([
-          fetchRanksSet(uid, 'monthly', heptagonModalGender, heptagonModalCategory),
-          fetchRanksSet(uid, 'monthly', heptagonModalGender, 'Supremo')
-        ])
+        fetchTwinCategoryPeakAxisRows(uid, 'monthly', heptagonModalGender, heptagonModalCategory)
           .then(function(pair) {
-            var mRows = pair[0];
-            var sRows = pair[1];
+            var mRows = pair.mRows;
+            var sRows = pair.sRows;
             var monthlyRanks = mRows.map(function(x) {
               return x.rank;
             });
@@ -3615,6 +3683,7 @@
                 gcRank={
                   uid
                     ? gcHeptagonRankForBadge(
+                        stelvioCohortOvl,
                         stelvioCardTooltip,
                         heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache,
                         category,
@@ -3687,7 +3756,7 @@
                   detachedLevelPill={true}
                   pctHintOpen={tierPctHintOpen}
                   setPctHintOpen={setTierPctHintOpen}
-                  gcRank={uid ? gcHeptagonRankForBadge(stelvioCardTooltip, tierForCard, category, viewerAc) : undefined}
+                  gcRank={uid ? gcHeptagonRankForBadge(stelvioCohortOvl, stelvioCardTooltip, tierForCard, category, viewerAc) : undefined}
                 />
               ) : null}
             </div>
@@ -3736,7 +3805,7 @@
                     <img
                       src={tierBadgeImageSrc(tLegendId)}
                       alt=""
-                      className="stelvio-heptagon-tier-legend__img max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.3)] h-[calc(16px*1.3)]"
+                      className="stelvio-heptagon-tier-legend__img max-w-none object-contain object-bottom pointer-events-none w-[calc(24px*1.56)] h-[calc(16px*1.56)]"
                       decoding="async"
                     />
                   </div>
@@ -3748,7 +3817,7 @@
                   <div
                     key={'leg-txt-' + tLegendId2}
                     className={
-                      'stelvio-heptagon-tier-legend__cap w-full max-w-[4.75rem] text-[8px] sm:text-[9px] text-center leading-tight px-0.5 ' +
+                      'stelvio-heptagon-tier-legend__cap w-full max-w-[4.75rem] text-[9.6px] sm:text-[10.8px] text-center leading-tight px-0.5 ' +
                       (isCapFocus ? 'stelvio-heptagon-tier-legend__cap--focus' : 'stelvio-heptagon-tier-legend__cap--dim')
                     }
                   >
