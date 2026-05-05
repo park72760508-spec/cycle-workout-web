@@ -41,7 +41,7 @@ function profileImageUrlFromUserData(data) {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 }
 
-/** uid 목록으로 users 문서 배치 조회 → profileImageUrl 맵 (랭킹 GC 등 스냅샷 행 보강용) */
+/** uid 목록으로 users 문서 배치 조회 → profileImageUrl 맵 (랭킹 스냅샷·집계 행 보강용) */
 async function fetchProfileImageUrlsMapForUsers(db, userIds) {
   const urlById = new Map();
   const unique = [...new Set((userIds || []).map((x) => String(x).trim()).filter(Boolean))];
@@ -60,7 +60,11 @@ async function fetchProfileImageUrlsMapForUsers(db, userIds) {
   return urlById;
 }
 
-async function hydrateGcRankingProfileImages(db, byCategory) {
+/**
+ * 랭킹 응답의 byCategory(및 선택적 entries)에 users.profileImageUrl 최신값 반영.
+ * 집계 캐시(ranking_aggregates 등)에는 필드가 없거나 오래된 경우가 있어 GC와 동일하게 HTTP 응답 직전에 보강.
+ */
+async function hydrateRankingBoardProfileImages(db, byCategory, entries) {
   if (!byCategory || typeof byCategory !== "object") return;
   const ids = [];
   for (const k of Object.keys(byCategory)) {
@@ -70,12 +74,24 @@ async function hydrateGcRankingProfileImages(db, byCategory) {
       if (r && r.userId) ids.push(String(r.userId));
     }
   }
+  if (Array.isArray(entries)) {
+    for (const r of entries) {
+      if (r && r.userId) ids.push(String(r.userId));
+    }
+  }
   if (!ids.length) return;
   const urlMap = await fetchProfileImageUrlsMapForUsers(db, ids);
   for (const k of Object.keys(byCategory)) {
     const rows = byCategory[k];
     if (!Array.isArray(rows)) continue;
     for (const r of rows) {
+      if (!r || !r.userId) continue;
+      const u = String(r.userId);
+      r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
+    }
+  }
+  if (Array.isArray(entries)) {
+    for (const r of entries) {
       if (!r || !r.userId) continue;
       const u = String(r.userId);
       r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
@@ -4605,7 +4621,7 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
     }
     byCategory[cat] = rows;
   }
-  await hydrateGcRankingProfileImages(db, byCategory);
+  await hydrateRankingBoardProfileImages(db, byCategory);
   const entries = (byCategory.Supremo || []).slice();
   return { byCategory, entries, snapshotRangeStart, snapshotRangeEnd, snapshotAsOfSeoul };
 }
@@ -4630,6 +4646,11 @@ exports.getPeakPowerRanking = onRequest(
     const month = req.query.month ? parseInt(req.query.month, 10) : new Date().getMonth() + 1;
 
     const db = admin.firestore();
+    /** 집계/캐시 본에는 프로필 URL이 빠져 있거나 옛값일 수 있음 → 응답 직전 users 기준 보강 (GC는 빌더에서 이미 보강) */
+    const finalizeRankingProfileUrls = async (payload) => {
+      if (!payload || !payload.byCategory) return;
+      await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
+    };
 
     /** 주간 TSS 랭킹 탭: 기간은 주간 마일리지 TOP10과 동일(월~오늘), 월간/명예 필터 미적용 */
     if (durationType === "tss") {
@@ -4664,6 +4685,7 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
@@ -4701,6 +4723,7 @@ exports.getPeakPowerRanking = onRequest(
               out.motivationMessage = buildMotivationMessage(current, nextUser);
             }
           }
+          await finalizeRankingProfileUrls(out);
           return res.status(200).json(out);
         }
       }
@@ -4732,6 +4755,7 @@ exports.getPeakPowerRanking = onRequest(
           out.motivationMessage = buildMotivationMessage(current, nextUser);
         }
       }
+      await finalizeRankingProfileUrls(out);
       return res.status(200).json(out);
     }
 
@@ -4769,6 +4793,7 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
@@ -4806,6 +4831,7 @@ exports.getPeakPowerRanking = onRequest(
               out.motivationMessage = buildMotivationMessage(current, nextUser);
             }
           }
+          await finalizeRankingProfileUrls(out);
           return res.status(200).json(out);
         }
       }
@@ -4836,6 +4862,7 @@ exports.getPeakPowerRanking = onRequest(
           out.motivationMessage = buildMotivationMessage(current, nextUser);
         }
       }
+      await finalizeRankingProfileUrls(out);
       return res.status(200).json(out);
     }
 
@@ -4875,6 +4902,7 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
       const cacheRef = db.collection("cache").doc(cacheKey);
@@ -4912,6 +4940,7 @@ exports.getPeakPowerRanking = onRequest(
               out.motivationMessage = buildMotivationMessage(current, nextUser);
             }
           }
+          await finalizeRankingProfileUrls(out);
           return res.status(200).json(out);
         }
       }
@@ -4945,6 +4974,7 @@ exports.getPeakPowerRanking = onRequest(
           out.motivationMessage = buildMotivationMessage(current, nextUser);
         }
       }
+      await finalizeRankingProfileUrls(out);
       return res.status(200).json(out);
     }
 
@@ -5049,6 +5079,7 @@ exports.getPeakPowerRanking = onRequest(
           out.motivationMessage = buildMotivationMessage(current, nextUser);
         }
       }
+      await finalizeRankingProfileUrls(out);
       return res.status(200).json(out);
     }
     const cacheRef = db.collection("cache").doc(cacheKey);
@@ -5080,6 +5111,7 @@ exports.getPeakPowerRanking = onRequest(
             out.motivationMessage = buildMotivationMessage(current, nextUser);
           }
         }
+        await finalizeRankingProfileUrls(out);
         return res.status(200).json(out);
       }
     }
@@ -5125,6 +5157,7 @@ exports.getPeakPowerRanking = onRequest(
         out.motivationMessage = buildMotivationMessage(current, nextUser);
       }
     }
+    await finalizeRankingProfileUrls(out);
     res.status(200).json(out);
     } catch (errPeak) {
       console.error("[getPeakPowerRanking] unhandled", errPeak && errPeak.stack ? errPeak.stack : errPeak);
