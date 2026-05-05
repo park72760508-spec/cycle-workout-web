@@ -41,6 +41,48 @@ function profileImageUrlFromUserData(data) {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 }
 
+/** uid 목록으로 users 문서 배치 조회 → profileImageUrl 맵 (랭킹 GC 등 스냅샷 행 보강용) */
+async function fetchProfileImageUrlsMapForUsers(db, userIds) {
+  const urlById = new Map();
+  const unique = [...new Set((userIds || []).map((x) => String(x).trim()).filter(Boolean))];
+  const CHUNK = 10;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const refs = chunk.map((id) => db.collection("users").doc(id));
+    const snaps = await db.getAll(...refs);
+    for (let j = 0; j < chunk.length; j++) {
+      const docSnap = snaps[j];
+      const id = chunk[j];
+      if (docSnap && docSnap.exists) urlById.set(id, profileImageUrlFromUserData(docSnap.data()));
+      else urlById.set(id, null);
+    }
+  }
+  return urlById;
+}
+
+async function hydrateGcRankingProfileImages(db, byCategory) {
+  if (!byCategory || typeof byCategory !== "object") return;
+  const ids = [];
+  for (const k of Object.keys(byCategory)) {
+    const rows = byCategory[k];
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) {
+      if (r && r.userId) ids.push(String(r.userId));
+    }
+  }
+  if (!ids.length) return;
+  const urlMap = await fetchProfileImageUrlsMapForUsers(db, ids);
+  for (const k of Object.keys(byCategory)) {
+    const rows = byCategory[k];
+    if (!Array.isArray(rows)) continue;
+    for (const r of rows) {
+      if (!r || !r.userId) continue;
+      const u = String(r.userId);
+      r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
+    }
+  }
+}
+
 // CORS 설정: Firebase Functions v2 onCall - 허용할 출처 (localhost는 개발/테스트용)
 const CORS_ORIGINS = [
   "https://stelvio.ai.kr",
@@ -4563,6 +4605,7 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
     }
     byCategory[cat] = rows;
   }
+  await hydrateGcRankingProfileImages(db, byCategory);
   const entries = (byCategory.Supremo || []).slice();
   return { byCategory, entries, snapshotRangeStart, snapshotRangeEnd, snapshotAsOfSeoul };
 }
