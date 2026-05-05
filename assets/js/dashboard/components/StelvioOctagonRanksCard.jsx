@@ -1108,6 +1108,12 @@
         return Math.floor(Number(rApi));
       }
     }
+    if (tierSummary && tierSummary.gcRankingBoardAligned === true) {
+      var rAligned = heptagonCardRankFromSummary(tierSummary, filterCategory, userAgeCategory);
+      if (rAligned != null && isFinite(Number(rAligned)) && Number(rAligned) >= 1) {
+        return Math.floor(Number(rAligned));
+      }
+    }
     if (!tierSummary) {
       return null;
     }
@@ -2687,6 +2693,10 @@
     var _gcApi = useState({ loading: false, data: null, err: null });
     var gcRankingApi = _gcApi[0];
     var setGcRankingApi = _gcApi[1];
+    /** GC 패치 세대(성별·uid 변경 후 이전 응답 무시) */
+    var gcFetchSeqRef = useRef(0);
+    /** 마지막 성공 GC 응답(fetch 실패/abort 시 상태 복원) */
+    var lastGcSuccessRef = useRef(null);
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -2706,12 +2716,25 @@
     useEffect(
       function() {
         if (!uid) {
+          gcFetchSeqRef.current += 1;
+          lastGcSuccessRef.current = null;
           setGcRankingApi({ loading: false, data: null, err: null });
           return;
         }
+        var seq = gcFetchSeqRef.current + 1;
+        gcFetchSeqRef.current = seq;
+        var uidStr = String(uid);
         var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
         setGcRankingApi(function(prev) {
-          return { loading: true, data: prev && prev.data ? prev.data : null, err: null };
+          var keep =
+            prev && prev.data && prev.data.success
+              ? prev.data
+              : lastGcSuccessRef.current &&
+                  lastGcSuccessRef.current.uid === uidStr &&
+                  lastGcSuccessRef.current.gender === gender
+                ? lastGcSuccessRef.current.payload
+                : null;
+          return { loading: true, data: keep, err: null };
         });
         var url = buildRankingUrl(uid, 'gc', 'monthly', gender);
         fetch(url, ac && ac.signal ? { method: 'GET', mode: 'cors', cache: 'no-store', signal: ac.signal } : { method: 'GET', mode: 'cors', cache: 'no-store' })
@@ -2719,10 +2742,45 @@
             return res.json();
           })
           .then(function(data) {
-            setGcRankingApi({ loading: false, data: data, err: null });
+            if (seq !== gcFetchSeqRef.current) {
+              return;
+            }
+            if (data && data.success) {
+              lastGcSuccessRef.current = { payload: data, uid: uidStr, gender: gender };
+              setGcRankingApi({ loading: false, data: data, err: null });
+              return;
+            }
+            setGcRankingApi(function(prev) {
+              var keep =
+                prev && prev.data && prev.data.success
+                  ? prev.data
+                  : lastGcSuccessRef.current &&
+                      lastGcSuccessRef.current.uid === uidStr &&
+                      lastGcSuccessRef.current.gender === gender
+                    ? lastGcSuccessRef.current.payload
+                    : null;
+              return { loading: false, data: keep, err: 'api' };
+            });
           })
-          .catch(function() {
-            setGcRankingApi({ loading: false, data: null, err: 'fetch' });
+          .catch(function(e) {
+            if (seq !== gcFetchSeqRef.current) {
+              return;
+            }
+            var isAbort =
+              e &&
+              (e.name === 'AbortError' ||
+                (typeof e.message === 'string' && e.message.indexOf('aborted') >= 0));
+            setGcRankingApi(function(prev) {
+              var keep =
+                prev && prev.data && prev.data.success
+                  ? prev.data
+                  : lastGcSuccessRef.current &&
+                      lastGcSuccessRef.current.uid === uidStr &&
+                      lastGcSuccessRef.current.gender === gender
+                    ? lastGcSuccessRef.current.payload
+                    : null;
+              return { loading: false, data: keep, err: isAbort ? null : 'fetch' };
+            });
           });
         return function() {
           if (ac) {
@@ -3051,6 +3109,27 @@
     /** 카드 필터 — 랭킹보드 GC API가 있으면 그 순위·n·%를 최우선(동일 산출), 없으면 기존 표/OVL/요약 */
     var stelvioCardTooltip = useMemo(
       function() {
+        if (uid && tierForCard && tierForCard.gcRankingBoardAligned === true) {
+          var rTierGc = heptagonCardRankFromSummary(tierForCard, category, viewerAc);
+          if (
+            rTierGc != null &&
+            tierForCard.cohortN != null &&
+            (tierForCard.cohortN | 0) >= 1 &&
+            tierForCard.pTier != null &&
+            isFinite(Number(tierForCard.pTier))
+          ) {
+            var nCof = tierForCard.cohortN | 0;
+            var isVcf = tierForCard.heptagonBoardVirtualCohort === true;
+            return {
+              kind: 'ok',
+              source: 'gc_tier',
+              rank: rTierGc,
+              nCohort: heptagonCohortNDisplay(nCof, category, viewerAc, isVcf),
+              pPct: Number(tierForCard.pTier),
+              isVirtual: isVcf
+            };
+          }
+        }
         if (uid && gcRankingApi.data && gcRankingApi.data.success) {
           var rGc0 = computeDisplayRankLikeDistribution(gcRankingApi.data, uid, category, 'gc');
           if (rGc0 != null && isFinite(Number(rGc0)) && Number(rGc0) >= 1) {
