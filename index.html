@@ -8286,7 +8286,7 @@
           try {
             labDur = typeof STELVIO_DURATION_LABELS !== 'undefined' && STELVIO_DURATION_LABELS[dur] ? STELVIO_DURATION_LABELS[dur] : dur;
           } catch (edl) {}
-          line2Parts.push(labDur + ' ' + stelvioRankProfileFormatRank(pr));
+          line2Parts.push(labDur + '(' + stelvioRankProfileFormatRank(pr) + ')');
         }
 
         var tssData = results[1 + STELVIO_RANK_PROFILE_PEAK_DURS.length];
