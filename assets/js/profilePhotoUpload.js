@@ -118,16 +118,58 @@
   }
 
   async function uploadProfileImage(uid, blob) {
+    var isWebp = blob.type && String(blob.type).indexOf('webp') >= 0;
+    var ext = isWebp ? '.webp' : '.jpg';
+    var ctype = isWebp ? 'image/webp' : 'image/jpeg';
+    var path = 'profile_images/' + uid + '_profile' + ext;
+    var uidStr = String(uid);
+
+    /* 기본 앱(compat) 로그인 세션으로 업로드 — 모듈러 Storage(authV9 전용)에 토큰이 없을 때 403 방지 */
+    try {
+      if (
+        typeof firebase !== 'undefined' &&
+        firebase.storage &&
+        window.auth &&
+        window.auth.currentUser &&
+        String(window.auth.currentUser.uid) === uidStr
+      ) {
+        if (typeof window.auth.currentUser.getIdToken === 'function') {
+          await window.auth.currentUser.getIdToken(true);
+        }
+        var storageRef = firebase.storage().ref(path);
+        var uploadTask = storageRef.put(blob, { contentType: ctype });
+        await new Promise(function (resolve, reject) {
+          uploadTask.on(
+            'state_changed',
+            function () {},
+            function (err) {
+              reject(err);
+            },
+            function () {
+              resolve();
+            }
+          );
+        });
+        return await uploadTask.snapshot.ref.getDownloadURL();
+      }
+    } catch (compatErr) {
+      console.warn('[ProfilePhoto] compat Storage 업로드 실패, authV9 모듈러로 재시도:', compatErr);
+    }
+
     var storageMod = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js');
     var bucketApp = window.firebaseStorageV9;
     if (!bucketApp) throw new Error('Firebase Storage가 초기화되지 않았습니다.');
     var refFn = storageMod.ref;
     var uploadBytesFn = storageMod.uploadBytes;
     var getDownloadURLFn = storageMod.getDownloadURL;
-    var isWebp = blob.type && String(blob.type).indexOf('webp') >= 0;
-    var ext = isWebp ? '.webp' : '.jpg';
-    var ctype = isWebp ? 'image/webp' : 'image/jpeg';
-    var path = 'profile_images/' + uid + '_profile' + ext;
+    if (
+      window.authV9 &&
+      window.authV9.currentUser &&
+      String(window.authV9.currentUser.uid) === uidStr &&
+      typeof window.authV9.currentUser.getIdToken === 'function'
+    ) {
+      await window.authV9.currentUser.getIdToken(true);
+    }
     var r = refFn(bucketApp, path);
     await uploadBytesFn(r, blob, { contentType: ctype });
     return getDownloadURLFn(r);
@@ -136,8 +178,12 @@
   window.stelvioOpenProfilePhotoPicker = function (targetUserId) {
     var uid = targetUserId != null ? String(targetUserId).trim() : '';
     if (!uid) return;
-    var authUser = window.authV9 && window.authV9.currentUser;
-    if (!authUser || String(authUser.uid) !== uid) {
+    var authUid = null;
+    if (window.authV9 && window.authV9.currentUser)
+      authUid = String(window.authV9.currentUser.uid);
+    else if (window.auth && window.auth.currentUser)
+      authUid = String(window.auth.currentUser.uid);
+    if (!authUid || authUid !== uid) {
       if (typeof showToast === 'function') showToast('본인 계정만 프로필 사진을 변경할 수 있습니다.', 'warning');
       return;
     }
