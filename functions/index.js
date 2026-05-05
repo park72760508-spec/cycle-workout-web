@@ -4534,8 +4534,9 @@ function buildMotivationMessage(currentUser, nextUser) {
 }
 
 /**
- * GC(헵타곤 환산): `heptagon_cohort_ranks` 일일 스냅샷 읽기 (`scheduledHeptagonCohortRanks`가 갱신).
- * 성별 M/F: 랭킹보드에서 전체(all)·Supremo 환산 합으로 점수 통일 후 해당 성별 부문 정렬.
+ * GC(헵타곤 환산): `heptagon_cohort_ranks` 읽기. 행 순서·표시 순위는 `sumPositionScores` desc 쿼리 결과와 일치시킴
+ * (`boardRank`는 스냅샷 필드라 점수만 먼저 갱신될 때 헵타곤 카드와 숫자가 어긋날 수 있음).
+ * 성별 M/F: 전체(all)·Supremo 환산 합으로 점수 통일 후 해당 성별 부문 재정렬·순위 부여.
  */
 async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
   const col = db.collection(heptagonCohortRanks.HEPTAGON_COHORT_COL);
@@ -4594,11 +4595,6 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
       if (applyGenderScoreUnify && supreAllScores.has(uid)) {
         gcScore = supreAllScores.get(uid);
       }
-      let br = d.boardRank != null && isFinite(Number(d.boardRank)) ? Math.floor(Number(d.boardRank)) : null;
-      if (br == null && d.comprehensiveRank != null && isFinite(Number(d.comprehensiveRank))) {
-        br = Math.floor(Number(d.comprehensiveRank));
-      }
-      if (br == null) br = seq;
       const g = filterGender === "F" ? "female" : filterGender === "M" ? "male" : "male";
       rows.push({
         userId: uid,
@@ -4606,7 +4602,7 @@ async function buildStelvioGcRankingPayload(db, monthKey, filterGender) {
         ageCategory: d.ageCategory != null ? String(d.ageCategory) : "",
         gender: g,
         is_private: d.is_private === true,
-        rank: applyGenderScoreUnify ? seq : br,
+        rank: seq,
         gcScore,
       });
     });
