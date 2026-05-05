@@ -1546,7 +1546,7 @@
           monthKey: monthKey,
           filterCategory: category,
           filterGender: gender,
-          limit: 500
+          limit: 10000
         })
       ]).then(function(triple) {
         var crS = triple[0];
@@ -3153,7 +3153,7 @@
         monthKey: mk2,
         filterCategory: cIn,
         filterGender: gIn,
-        limit: 500
+        limit: 10000
       });
       var prCo =
         typeof window.getStelvioHeptagonCohortEntry === 'function'
@@ -3188,7 +3188,7 @@
               monthKey: mk2,
               filterCategory: 'Supremo',
               filterGender: 'all',
-              limit: 500
+              limit: 10000
             })
           : Promise.resolve({ ok: false, items: [] });
       var prCoSAll =
