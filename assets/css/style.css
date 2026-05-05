@@ -6600,9 +6600,119 @@ body:has(#trainingDetailModal:not(.hidden)) {
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 6px;
   font-weight: 600;
   color: #1f2937;
   font-size: 0.9rem;
+}
+
+.stelvio-rank-avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-sizing: border-box;
+  background: var(--bg-card, #edf0f4);
+}
+
+.stelvio-rank-avatar-img {
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  display: block;
+  vertical-align: top;
+}
+
+/* 프로필 사진 크롭 모달 (Cropper.js, 다크 테마 변수) */
+.stelvio-profile-crop-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.stelvio-profile-crop-modal.hidden {
+  display: none !important;
+}
+.stelvio-profile-crop-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+}
+.stelvio-profile-crop-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 400px);
+  max-height: min(92vh, 620px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #252a30);
+  color: var(--text-primary, #e8eaed);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.stelvio-profile-crop-modal__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 14px 16px 4px;
+  color: var(--text-primary, #e8eaed);
+}
+.stelvio-profile-crop-modal__hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #9aa0a6);
+  margin: 0 16px 10px;
+  line-height: 1.4;
+}
+.stelvio-profile-crop-modal__stage {
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: 48vh;
+  background: var(--bg-main, #1a1d21);
+}
+.stelvio-profile-crop-modal__img {
+  display: block;
+  max-width: 100%;
+  max-height: 48vh;
+}
+.stelvio-profile-crop-modal .cropper-view-box,
+.stelvio-profile-crop-modal .cropper-face {
+  border-radius: 50%;
+}
+.stelvio-profile-crop-modal__actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.stelvio-profile-crop-modal__btn {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.stelvio-profile-crop-modal__btn--secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, #e8eaed);
+}
+.stelvio-profile-crop-modal__btn--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+.stelvio-profile-crop-modal__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .stelvio-rank-name-text {
   overflow: hidden;
@@ -6879,7 +6989,7 @@ body:has(#trainingDetailModal:not(.hidden)) {
   display: inline-flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 0;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -7426,6 +7536,65 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
 #profileScreen .user-card .profile-indicator-dot {
   display: inline-block;
   flex-shrink: 0;
+}
+
+/* 프로필 사진 — 포인트 배지와 같은 행 (원형 60px + 카메라 오버레이) */
+#profileScreen .stelvio-user-points-with-avatar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+#profileScreen .stelvio-profile-card-avatar-btn {
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#profileScreen .stelvio-profile-card-avatar-ring {
+  position: relative;
+  display: block;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(46, 116, 232, 0.38);
+  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+#profileScreen .stelvio-profile-card-avatar-img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  display: block;
+}
+
+/* 카메라 아이콘 (SVG data URL) */
+#profileScreen .stelvio-profile-card-avatar-camera {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(26, 29, 33, 0.88)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%23fff' viewBox='0 0 24 24'%3E%3Cpath d='M9 3L7 5H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2h-3l-2-2H9zm3 16a5 5 0 110-10 5 5 0 010 10z'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+#profileScreen .stelvio-profile-card-avatar-readonly .stelvio-profile-card-avatar-ring {
+  border-color: rgba(100, 116, 139, 0.35);
 }
 
 /* 포인트 배지 스타일 */
