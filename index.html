@@ -8228,6 +8228,18 @@
       return rankNum != null && Number(rankNum) >= 1 ? Math.floor(Number(rankNum)) + '\uc704' : '\u2014';
     }
 
+    function stelvioRankAvatarZoomSetRankSpinner(on) {
+      var sp = document.getElementById('stelvioRankAvatarZoomRankSpinner');
+      if (!sp) return;
+      if (on) {
+        sp.classList.remove('hidden');
+        sp.setAttribute('aria-busy', 'true');
+      } else {
+        sp.classList.add('hidden');
+        sp.setAttribute('aria-busy', 'false');
+      }
+    }
+
     async function stelvioRankAvatarZoomLoadProfilePanels(userId, ageCategory, gen) {
       var l1 = document.getElementById('stelvioRankAvatarZoomLine1');
       var l2 = document.getElementById('stelvioRankAvatarZoomLine2');
@@ -8240,6 +8252,7 @@
       }
 
       try {
+        stelvioRankAvatarZoomSetRankSpinner(true);
         var period = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.period : 'monthly';
         var gender = typeof stelvioRankingState !== 'undefined' ? stelvioRankingState.gender : 'all';
         var gSel = gender === 'group_dist' ? 'all' : gender;
@@ -8324,6 +8337,8 @@
           l2.textContent = '\uc21c\uc704 \uc815\ubcf4\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4. \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.';
           l3.textContent = '';
         }
+      } finally {
+        if (dieIfStale()) stelvioRankAvatarZoomSetRankSpinner(false);
       }
     }
 
@@ -8349,6 +8364,7 @@
       if (profWrap && l1 && l2 && l3) {
         if (uidTrim) {
           profWrap.classList.remove('hidden');
+          stelvioRankAvatarZoomSetRankSpinner(true);
           l1.textContent =
             meta.overlayName
               ? String(meta.overlayName) + ' \u00b7 \ubd88\ub7ec\uc624\ub294 \uc911\u2026'
@@ -8359,6 +8375,7 @@
           stelvioRankAvatarZoomLoadProfilePanels(uidTrim, ageTrim, seq);
         } else {
           profWrap.classList.add('hidden');
+          stelvioRankAvatarZoomSetRankSpinner(false);
           l1.textContent = '';
           l2.textContent = '';
           l3.textContent = '';
@@ -8397,6 +8414,7 @@
       if (q2) q2.textContent = '';
       if (q3) q3.textContent = '';
       if (pw) pw.classList.add('hidden');
+      stelvioRankAvatarZoomSetRankSpinner(false);
     }
     window.stelvioOpenRankAvatarZoom = stelvioOpenRankAvatarZoom;
     window.stelvioCloseRankAvatarZoom = stelvioCloseRankAvatarZoom;
@@ -21698,6 +21716,13 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           </div>
         </div>
         <div id="stelvioRankAvatarZoomProfile" class="stelvio-rank-avatar-zoom-profile hidden">
+          <div
+            id="stelvioRankAvatarZoomRankSpinner"
+            class="stelvio-rank-avatar-zoom-rank-spinner hidden"
+            aria-hidden="true"
+            aria-busy="false"
+            role="presentation"
+          ></div>
           <p id="stelvioRankAvatarZoomLine1" class="stelvio-rank-avatar-zoom-line1"></p>
           <p id="stelvioRankAvatarZoomLine2" class="stelvio-rank-avatar-zoom-line2"></p>
           <p id="stelvioRankAvatarZoomLine3" class="stelvio-rank-avatar-zoom-line3"></p>
