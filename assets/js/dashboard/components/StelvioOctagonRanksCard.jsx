@@ -1,9 +1,9 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: 축마다 30d·365d W/kg가 있으면 **동일 축** 정규화(롤링 365d≥30d)로 반지름; 없으면 순위→반지름 + 365d≥30d `max` 보정(순위만으로는 기간·코호트가 달라 보라·녹 역전 가능).
- * **집계 순위·레벨%·중앙 배지**: 카드(및 항목별 순위 모달)의 **선택 `gender`·`category`** 로 `heptagon_cohort_ranks` “동일 조건·월(환산) 점수”와 동기화. 7각형 W/kg 레이더는 **건드리지 않음**.
+ * **집계 순위·레벨%·중앙 배지·환산 합(0~700)**: 랭킹보드 GC 탭과 동일한 `getPeakPowerRanking?duration=gc`(성별·부문) 응답을 우선 적용. 없을 때만 `heptagon_cohort_ranks`·7축 합 병합. 7각형 W/kg 레이더는 **건드리지 않음**.
  * **레벨%** / **n 표기**: `heptagonUseNeffNPlusOne` — **가상·타 연령 부문**에만 Neff=n+1. **전체(Supremo)**·**본인 부문**은 집계 n만. Neff·n≥100 / Neff·n<100 식, r 1‥Neff.
- * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별).
+ * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별, duration≠gc).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
  */
 /* global React, useState, useEffect, useMemo, window */
@@ -835,6 +835,75 @@
   }
 
   /**
+   * 랭킹보드 GC·`getPeakPowerRanking`(duration=gc) 응답에서 본인 `gcScore`(= 환산점수 합, 서버·스냅샷과 동일).
+   */
+  function gcScoreFromPeakApi(gcData, uid) {
+    if (!gcData || !gcData.success || !uid) {
+      return null;
+    }
+    var cu = gcData.currentUser;
+    if (cu && String(cu.userId) === String(uid) && cu.gcScore != null && isFinite(Number(cu.gcScore))) {
+      return Number(cu.gcScore);
+    }
+    var cats = gcData.byCategory || {};
+    var keys = Object.keys(cats);
+    for (var i = 0; i < keys.length; i++) {
+      var arr = cats[keys[i]] || [];
+      for (var j = 0; j < arr.length; j++) {
+        var row = arr[j];
+        if (row && String(row.userId) === String(uid) && row.gcScore != null && isFinite(Number(row.gcScore))) {
+          return Number(row.gcScore);
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 랭킹보드 GC 탭과 동일 산출: 순위(`computeDisplayRankLikeDistribution`·gc)·모수 n·레벨%·`gcScore`·등급.
+   * 7축 레이더용 `positionScores100` 등은 `tierAfterOvl`에서 유지.
+   */
+  function applyGcRankingBoardMerge(tierAfterOvl, gcData, uid, filterCategory, userAgeCategory) {
+    if (!tierAfterOvl || !gcData || !gcData.success || !uid) {
+      return tierAfterOvl;
+    }
+    var gcs = gcScoreFromPeakApi(gcData, uid);
+    var rGc = computeDisplayRankLikeDistribution(gcData, uid, filterCategory, 'gc');
+    if (gcs == null || !isFinite(gcs) || rGc == null || !isFinite(rGc) || rGc < 1) {
+      return tierAfterOvl;
+    }
+    var catArr = gcData.byCategory && gcData.byCategory[filterCategory] ? gcData.byCategory[filterCategory] : [];
+    var nGc = catArr.length | 0;
+    if (nGc < 1) {
+      return tierAfterOvl;
+    }
+    var isVirt =
+      filterCategory !== 'Supremo' &&
+      userAgeCategory &&
+      String(filterCategory).trim() !== String(userAgeCategory).trim();
+    var rI = Math.floor(Number(rGc));
+    var pGc = heptagonLevelPercentForRankN(rI, nGc, isVirt, filterCategory, userAgeCategory);
+    var tierGcObj = heptagonBoardTierIdFromLevelPercent(pGc);
+    var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
+    var out = Object.assign({}, tierAfterOvl);
+    out.sumPositionScores = gcs;
+    out.avgPositionScore = gcs / 7;
+    out.pTier = pGc;
+    out.pTotal = pGc;
+    out.pComprehensive = pGc;
+    out.comprehensiveRank = rI;
+    out.rankAverage = rI;
+    out.cohortN = nGc;
+    out.heptagonBoardVirtualCohort = isVirt;
+    out.tier = tierGcObj;
+    out.heptagonCohortBoardRankApplied = true;
+    out.heptagonCohortBoardRank = rI;
+    out.gcRankingBoardAligned = true;
+    out.isLargeCohort = (useNeff ? nGc + 1 : nGc) >= 100;
+    return out;
+  }
+
+  /**
    * `loadStelvioCohortOvlData` / 동일 집계(카드 ovl)에서 순위·n — 리스트에 본인 행이 없어도 표·툴팁에 반영.
    * `applyCohortBoardMerge`와 동일한 rank·n·가상 여부(클램프) 사용.
    */
@@ -1030,10 +1099,15 @@
   }
 
   /**
-   * GC 배지: `getPeakPowerRanking`(duration=gc)과 동일하게 **환산 합 순 정렬** 기준 순위.
-   * 동일 필터 순위표(`source:'board'`)가 있으면 Firestore 단건 `boardRank`보다 우선 — 랭킹보드 GC와 불일치 방지.
+   * GC 배지: **랭킹보드 GC 탭과 동일** `getPeakPowerRanking`(duration=gc) 순위 우선, 그다음 순위표/요약/OVL.
    */
-  function gcHeptagonRankForBadge(ovl, toolTip, tierSummary, filterCategory, userAgeCategory) {
+  function gcHeptagonRankForBadge(uid, ovl, toolTip, tierSummary, filterCategory, userAgeCategory, gcPeakData) {
+    if (uid && gcPeakData && gcPeakData.success) {
+      var rApi = computeDisplayRankLikeDistribution(gcPeakData, uid, filterCategory, 'gc');
+      if (rApi != null && isFinite(Number(rApi)) && Number(rApi) >= 1) {
+        return Math.floor(Number(rApi));
+      }
+    }
     if (!tierSummary) {
       return null;
     }
@@ -2581,6 +2655,10 @@
     var _tierPctHint = useState(false);
     var tierPctHintOpen = _tierPctHint[0];
     var setTierPctHintOpen = _tierPctHint[1];
+    /** 랭킹보드 GC 탭과 동일 API(`getPeakPowerRanking`, duration=gc, monthly) */
+    var _gcApi = useState({ loading: false, data: null, err: null });
+    var gcRankingApi = _gcApi[0];
+    var setGcRankingApi = _gcApi[1];
 
     /** 전체(Supremo) 랭킹 7축·환산 합 — 본인 부문 외(가상) 순위 비교의 1순위(전체랭킹·대시보드 `fetchRanksSet` Supremo) */
     var chartSupremoSumFromGlobalRanking = useMemo(
@@ -2595,6 +2673,52 @@
         return Number(t0.sumPositionScores);
       },
       [state.loading, state.supremoMonthly]
+    );
+
+    useEffect(
+      function() {
+        if (!uid) {
+          setGcRankingApi({ loading: false, data: null, err: null });
+          return;
+        }
+        var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        setGcRankingApi(function(prev) {
+          return { loading: true, data: prev && prev.data ? prev.data : null, err: null };
+        });
+        var url = buildRankingUrl(uid, 'gc', 'monthly', gender);
+        fetch(url, ac && ac.signal ? { method: 'GET', mode: 'cors', cache: 'no-store', signal: ac.signal } : { method: 'GET', mode: 'cors', cache: 'no-store' })
+          .then(function(res) {
+            return res.json();
+          })
+          .then(function(data) {
+            setGcRankingApi({ loading: false, data: data, err: null });
+          })
+          .catch(function() {
+            setGcRankingApi({ loading: false, data: null, err: 'fetch' });
+          });
+        return function() {
+          if (ac) {
+            try {
+              ac.abort();
+            } catch (eab) {}
+          }
+        };
+      },
+      [uid, gender]
+    );
+
+    /**
+     * 코호트 표 삽입·OVL에 쓰는 환산 합: **GC API 점수 우선**(랭킹보드와 동일), 없으면 7축 Supremo 합.
+     */
+    var heptagonGcSumForSync = useMemo(
+      function() {
+        var g = uid && gcRankingApi.data && gcRankingApi.data.success ? gcScoreFromPeakApi(gcRankingApi.data, uid) : null;
+        if (g != null && isFinite(g) && g > 0) {
+          return g;
+        }
+        return chartSupremoSumFromGlobalRanking;
+      },
+      [uid, gcRankingApi.data, chartSupremoSumFromGlobalRanking]
     );
 
     /** 팝업이 카드와 다른 **성별**이면, 해당 성별 `fetchRanksSet(..., 'Supremo')` 기준 환산 합 */
@@ -2614,7 +2738,9 @@
       [heptagonModalGender, gender, chartSupremoSumFromGlobalRanking, heptagonModalRanks]
     );
 
-    if (chartSupremoSumFromGlobalRanking != null && isFinite(Number(chartSupremoSumFromGlobalRanking))) {
+    if (heptagonGcSumForSync != null && isFinite(Number(heptagonGcSumForSync))) {
+      chartSupremoSumStableRef.current = Number(heptagonGcSumForSync);
+    } else if (chartSupremoSumFromGlobalRanking != null && isFinite(Number(chartSupremoSumFromGlobalRanking))) {
       chartSupremoSumStableRef.current = Number(chartSupremoSumFromGlobalRanking);
     }
     if (chartSupremoSumForModalVirtualOvl != null && isFinite(Number(chartSupremoSumForModalVirtualOvl))) {
@@ -2676,7 +2802,7 @@
         var reqId = stelvioOvlReqRef.current;
         setStelvioCohortOvl({ loading: true });
         var mk = currentMonthKeyKst();
-        loadStelvioCohortOvlData(uid, mk, gender, category, viewerAc, chartSupremoSumFromGlobalRanking)
+        loadStelvioCohortOvlData(uid, mk, gender, category, viewerAc, heptagonGcSumForSync)
           .then(function(result) {
             if (stelvioOvlReqRef.current !== reqId) {
               return;
@@ -2709,7 +2835,7 @@
             setStelvioCohortOvl({ loading: false, err: true, skip: true });
           });
       },
-      [uid, gender, category, viewerAc, chartSupremoSumFromGlobalRanking]
+      [uid, gender, category, viewerAc, heptagonGcSumForSync]
     );
 
     useEffect(
@@ -2879,14 +3005,37 @@
         if (!tierSummaryComputed) {
           return null;
         }
-        return applyCohortBoardMerge(tierSummaryComputed, stelvioCohortOvl, category, viewerAc);
+        var merged = applyCohortBoardMerge(tierSummaryComputed, stelvioCohortOvl, category, viewerAc);
+        return applyGcRankingBoardMerge(merged, gcRankingApi.data, uid, category, viewerAc);
       },
-      [tierSummaryComputed, stelvioCohortOvl, category, viewerAc]
+      [tierSummaryComputed, stelvioCohortOvl, category, viewerAc, gcRankingApi.data, uid]
     );
 
-    /** 카드 필터 = 팝업「동일 조건」표 — 리스트 본인 순위·모수 n(표 또는 ovl nTotal) → 레벨% */
+    /** 카드 필터 — 랭킹보드 GC API가 있으면 그 순위·n·%를 최우선(동일 산출), 없으면 기존 표/OVL/요약 */
     var stelvioCardTooltip = useMemo(
       function() {
+        if (uid && gcRankingApi.data && gcRankingApi.data.success) {
+          var rGc0 = computeDisplayRankLikeDistribution(gcRankingApi.data, uid, category, 'gc');
+          if (rGc0 != null && isFinite(Number(rGc0)) && Number(rGc0) >= 1) {
+            var catArrGc0 = gcRankingApi.data.byCategory[category] || [];
+            var nGcAp0 = catArrGc0.length | 0;
+            if (nGcAp0 >= 1) {
+              var isVirtGc0 =
+                category !== 'Supremo' &&
+                viewerAc &&
+                String(category).trim() !== String(viewerAc).trim();
+              var pGcAp0 = heptagonLevelPercentForRankN(Math.floor(Number(rGc0)), nGcAp0, isVirtGc0, category, viewerAc);
+              return {
+                kind: 'ok',
+                source: 'gc_api',
+                rank: Math.floor(Number(rGc0)),
+                nCohort: heptagonCohortNDisplay(nGcAp0, category, viewerAc, isVirtGc0),
+                pPct: pGcAp0,
+                isVirtual: isVirtGc0
+              };
+            }
+          }
+        }
         if (uid) {
           if (heptagonCardBoard && heptagonCardBoard.loading) {
             return { kind: 'board_loading' };
@@ -2969,7 +3118,7 @@
         }
         return { kind: 'none' };
       },
-      [uid, heptagonCardBoard, stelvioCohortOvl, tierForCard, userProfile, category, viewerAc]
+      [uid, gcRankingApi.data, heptagonCardBoard, stelvioCohortOvl, tierForCard, userProfile, category, viewerAc]
     );
 
     var heptagonSummaryCacheMerged = useMemo(
@@ -2977,9 +3126,10 @@
         if (!heptagonSummaryCache) {
           return null;
         }
-        return applyCohortBoardMerge(heptagonSummaryCache, stelvioCohortOvl, category, viewerAc);
+        var m = applyCohortBoardMerge(heptagonSummaryCache, stelvioCohortOvl, category, viewerAc);
+        return applyGcRankingBoardMerge(m, gcRankingApi.data, uid, category, viewerAc);
       },
-      [heptagonSummaryCache, stelvioCohortOvl, category, viewerAc]
+      [heptagonSummaryCache, stelvioCohortOvl, category, viewerAc, gcRankingApi.data, uid]
     );
 
     var heptagonModalSummary =
@@ -3018,9 +3168,13 @@
         if (!heptagonModalBaseTier) {
           return null;
         }
-        return applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc);
+        var m = applyCohortBoardMerge(heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc);
+        if (heptagonModalGender !== gender) {
+          return m;
+        }
+        return applyGcRankingBoardMerge(m, gcRankingApi.data, uid, heptagonModalCategory, viewerAc);
       },
-      [heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc]
+      [heptagonModalBaseTier, heptCohortOvlForModalHeader, heptagonModalCategory, viewerAc, heptagonModalGender, gender, gcRankingApi.data, uid]
     );
 
     useEffect(
@@ -3313,7 +3467,7 @@
           setHeptagonCardBoard({ loading: false, err: null, rows: [], nCohort: 0, meInList: false });
           return;
         }
-        var chartEff = chartSupremoSumFromGlobalRanking;
+        var chartEff = heptagonGcSumForSync;
         if (
           (chartEff == null || !isFinite(Number(chartEff))) &&
           chartSupremoSumStableRef.current != null &&
@@ -3324,7 +3478,7 @@
         }
         runHeptagonCohortBoardFetch(uid, gender, category, setHeptagonCardBoard, chartEff, 'card');
       },
-      [uid, gender, category, chartSupremoSumFromGlobalRanking]
+      [uid, gender, category, heptagonGcSumForSync]
     );
 
     useEffect(
@@ -3721,11 +3875,13 @@
                 gcRank={
                   uid
                     ? gcHeptagonRankForBadge(
+                        uid,
                         stelvioCohortOvl,
                         stelvioCardTooltip,
                         heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache,
                         category,
-                        viewerAc
+                        viewerAc,
+                        gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null
                       )
                     : undefined
                 }
@@ -3784,7 +3940,19 @@
                   detachedLevelPill={true}
                   pctHintOpen={tierPctHintOpen}
                   setPctHintOpen={setTierPctHintOpen}
-                  gcRank={uid ? gcHeptagonRankForBadge(stelvioCohortOvl, stelvioCardTooltip, tierForCard, category, viewerAc) : undefined}
+                  gcRank={
+                    uid
+                      ? gcHeptagonRankForBadge(
+                          uid,
+                          stelvioCohortOvl,
+                          stelvioCardTooltip,
+                          tierForCard,
+                          category,
+                          viewerAc,
+                          gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null
+                        )
+                      : undefined
+                  }
                 />
               ) : null}
             </div>
