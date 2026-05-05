@@ -2286,8 +2286,8 @@
   }
 
   /**
-   * 범례 이미지 행 아래: A~G와 동일 7칸 폭. 상단은 구간 % 문구(칸마다 우측 정렬), 하단은 채움 막대.
-   * 채움은 우측(`right-0`) 고정 후 너비만 증가. 막대 내부 그라데이션: 왼쪽 등급색 → 오른쪽 흰색.
+   * 범례 이미지 행 아래: 단일 높이의 색상 막대 안에 레벨별 세로 구간선 · 구간 %(칸 우측=구분선 직좌측 표기)·세로 중앙 정렬.
+   * 채움 그라데이션은 우측 기준 폭 증가(왼쪽으로 진행). 그라데이션: 등급색 → 흰색(to right).
    */
   function HeptagonTierHorizontalGradientBar(props) {
     var summary = props.summary;
@@ -2310,31 +2310,32 @@
         className="stelvio-heptagon-tier-hbar mx-auto mt-1 w-full max-w-xl px-1"
         role="img"
         aria-label={
-          '레벨 구간 %는 상단 칸별 표기, 하단은 본인 ' +
+          '레벨 구간별 %는 막대 세로중앙·구분선 우측 칸 표기. 본인 ' +
           tierLevelDisplayName(tid) +
-          ' 진행: 왼쪽 등급색·오른쪽 흰색, 단계 약 ' +
+          ' 진행 채움 단계 약 ' +
           Math.round(stepFrac * 100) +
           '%'
         }
       >
-        <div className="rounded-md border border-slate-200/85 bg-slate-50 shadow-inner px-0.5 sm:px-1 pt-1 pb-1">
-          <div className="flex w-full gap-x-0.5 sm:gap-x-1">
+        <div className="relative w-full overflow-hidden rounded-md border border-slate-200/85 shadow-inner h-[2.125rem] sm:h-[2.25rem]">
+          <div className="pointer-events-none absolute inset-0 bg-slate-100/90 z-0" aria-hidden />
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 right-0 z-[1] rounded-l-sm transition-[width] duration-500 ease-out"
+            style={{ width: String(Math.max(0, Math.min(100, widthPct))) + '%', background: gradient }}
+          />
+          <div className="relative z-[2] flex h-full w-full min-h-0">
             {HEPTAGON_CARD_TIER_LEGEND_IDS.map(function(tidCap) {
               return (
                 <div
-                  key={'hbar-pct-' + tidCap}
-                  className="flex-1 min-w-0 text-right tabular-nums text-[9.6px] sm:text-[10.8px] text-slate-600 leading-tight pr-px"
+                  key={'hbar-seg-' + tidCap}
+                  className="flex min-w-0 flex-1 items-center justify-end border-r border-slate-400/55 pl-0.5 pr-0.5 sm:pr-1 last:border-r-0"
                 >
-                  {heptagonCardTierLegendCaption(tidCap)}
+                  <span className="tabular-nums text-[9.6px] sm:text-[10.8px] font-medium leading-none text-slate-800 [text-shadow:0_0_6px_rgba(255,255,255,0.95),0_0_2px_rgba(255,255,255,0.9)]">
+                    {heptagonCardTierLegendCaption(tidCap)}
+                  </span>
                 </div>
               );
             })}
-          </div>
-          <div className="relative mt-1 h-3 w-full overflow-hidden rounded-sm bg-slate-100/80">
-            <div
-              className="absolute top-0 bottom-0 right-0 rounded-l-sm rounded-r-sm transition-[width] duration-500 ease-out"
-              style={{ width: String(Math.max(0, Math.min(100, widthPct))) + '%', background: gradient }}
-            />
           </div>
         </div>
       </div>
