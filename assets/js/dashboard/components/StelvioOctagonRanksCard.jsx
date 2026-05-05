@@ -2279,7 +2279,7 @@
 
   /**
    * 범례 % 행 아래: A~G 균등 구간. 채움 블록은 우측(`right-0`) 고정 후 너비만 증가(왼쪽으로 늘어남).
-   * 그라데이션 순서(to left · 0%=우측, 100%=좌측): 흰색 → 본인 등급색 → 레벨 G색.
+   * 막대 내부: 왼쪽(본인 등급 레벨 색·진하게) → 오른쪽(흰색). `linear-gradient(to right …)`.
    */
   function HeptagonTierHorizontalGradientBar(props) {
     var summary = props.summary;
@@ -2296,21 +2296,16 @@
     var widthPct = (6 - uIdx + stepFrac) * segW;
     var gHex = HEPTAGON_TIER_FACE_HEX.C6;
     var tierHex = HEPTAGON_TIER_FACE_HEX[tid] || gHex;
-    var gradient =
-      'linear-gradient(to left, #ffffff 0%, ' +
-      tierHex +
-      ' 52%, ' +
-      gHex +
-      ' 100%)';
+    var gradient = 'linear-gradient(to right, ' + tierHex + ' 0%, #ffffff 100%)';
 
     return (
       <div
         className="stelvio-heptagon-tier-hbar mx-auto mt-1 w-full max-w-xl px-1"
         role="img"
         aria-label={
-          '가로 채움 우측 흰색, 중간 본인 ' +
+          '가로 채움 왼쪽 본인 ' +
           tierLevelDisplayName(tid) +
-          '색, 왼쪽 레벨 G색. 세로 레벨 단계 반영 약 ' +
+          '색으로 진하게, 오른쪽 흰색. 세로 레벨 단계 반영 약 ' +
           Math.round(stepFrac * 100) +
           '%'
         }
