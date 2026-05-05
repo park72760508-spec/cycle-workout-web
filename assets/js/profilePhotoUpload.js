@@ -1,5 +1,6 @@
 /**
- * 프로필 사진: Cropper.js(CDN) + Firebase Storage + Firestore profileImageUrl (~400px WebP)
+ * 프로필 사진: Cropper.js(CDN) + Firebase Storage + Firestore profileImageUrl
+ * 내보내기: 랭킹 확대 팝업(.stelvio-rank-avatar-zoom-img, max 320px) × devicePixelRatio에 맞춘 변 + 512KiB 규칙 내 WebP 우선 인코딩
  * Cropper 설치 대안: npm install cropperjs
  */
 (function () {
@@ -117,6 +118,76 @@
     });
   }
 
+  /** style.css `.stelvio-rank-avatar-zoom-img` max-width(px) 과 동일 — 해상도 맞춤 기준 */
+  var PROFILE_RANK_ZOOM_CSS_MAX_PX = 320;
+  /** Retina 등 DPR 고려 변 상한·하한 — 업로드·디코딩 부담 완화 */
+  var PROFILE_EXPORT_MAX_SIDE = 768;
+  var PROFILE_EXPORT_MIN_SIDE = 512;
+  /** docs/storage.rules 프로필 write `request.resource.size < 512 * 1024` 여유 */
+  var PROFILE_UPLOAD_MAX_BYTES = 500 * 1024;
+
+  function resolveProfileExportPx() {
+    var dpr =
+      typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+        ? window.devicePixelRatio
+        : 1;
+    var cappedDpr = Math.min(3, Math.max(1, dpr));
+    var need = Math.ceil(PROFILE_RANK_ZOOM_CSS_MAX_PX * cappedDpr);
+    if (need < PROFILE_EXPORT_MIN_SIDE) need = PROFILE_EXPORT_MIN_SIDE;
+    if (need > PROFILE_EXPORT_MAX_SIDE) need = PROFILE_EXPORT_MAX_SIDE;
+    return need;
+  }
+
+  function shrinkCanvasToMaxSide(src, maxSide) {
+    if (!src || !src.width || !src.height || !maxSide) return src;
+    var w = src.width;
+    var h = src.height;
+    var m = Math.max(w, h);
+    if (m <= maxSide) return src;
+    var scale = maxSide / m;
+    var nw = Math.max(2, Math.round(w * scale));
+    var nh = Math.max(2, Math.round(h * scale));
+    var c =
+      typeof document !== 'undefined' && document.createElement
+        ? document.createElement('canvas')
+        : null;
+    if (!c) return src;
+    c.width = nw;
+    c.height = nh;
+    var ctx = c.getContext('2d');
+    if (!ctx) return src;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, nw, nh);
+    return c;
+  }
+
+  /** Storage 용량 제한 준수: 품질 순차 조정 후 필요 시에만 추가 다운스케일(랭킹 썸네일·목록 표시에는 동일 URL 사용 — 브라우저 다운스케일) */
+  async function encodeProfileAvatarBlobForUpload(sourceCanvas) {
+    var MAX_BYTES = PROFILE_UPLOAD_MAX_BYTES;
+    var qualities = [0.8, 0.72, 0.65, 0.58, 0.52, 0.46];
+    var cur = sourceCanvas;
+    var round;
+    for (round = 0; round < 6; round++) {
+      var qi;
+      for (qi = 0; qi < qualities.length; qi++) {
+        var blobTry = await canvasToOptimizedBlob(cur, qualities[qi]);
+        if (blobTry && blobTry.size >= 16 && blobTry.size <= MAX_BYTES) return blobTry;
+      }
+      var maxSide = Math.max(cur.width, cur.height);
+      if (maxSide <= PROFILE_EXPORT_MIN_SIDE) break;
+      var nextSide = Math.max(PROFILE_EXPORT_MIN_SIDE, Math.floor(maxSide * 0.86));
+      var smaller = shrinkCanvasToMaxSide(cur, nextSide);
+      if (!smaller || smaller === cur) break;
+      cur = smaller;
+    }
+    var last = await canvasToOptimizedBlob(cur, 0.42);
+    if (!last || last.size < 16) throw new Error('이미지 압축에 실패했습니다.');
+    if (last.size > MAX_BYTES)
+      throw new Error('파일이 너무 큽니다(512KB 이하 필요). 다른 사진을 선택하거나 잘라 주세요.');
+    return last;
+  }
+
   async function uploadProfileImage(uid, blob) {
     var isWebp = blob.type && String(blob.type).indexOf('webp') >= 0;
     var ext = isWebp ? '.webp' : '.jpg';
@@ -215,19 +286,18 @@
       saveBtn.textContent = '저장 중...';
     }
     try {
-      /* 랭킹 확대·고해상도 디스플레이 대비: 과거 150px보다 크게 저장(용량은 WebP 최적화로 유지) */
-      var EXPORT_PX = 400;
+      var exportPx = resolveProfileExportPx();
       var canvas = cropper.getCroppedCanvas({
-        width: EXPORT_PX,
-        height: EXPORT_PX,
+        width: exportPx,
+        height: exportPx,
         imageSmoothingEnabled: true,
         imageSmoothingQuality: 'high',
         fillColor: '#ffffff',
       });
       if (!canvas || !canvas.width || !canvas.height) {
         canvas = cropper.getCroppedCanvas({
-          maxWidth: EXPORT_PX,
-          maxHeight: EXPORT_PX,
+          maxWidth: exportPx,
+          maxHeight: exportPx,
           imageSmoothingEnabled: true,
           imageSmoothingQuality: 'high',
           fillColor: '#ffffff',
@@ -236,7 +306,7 @@
       if (!canvas || !canvas.width || !canvas.height || typeof canvas.getContext !== 'function' || !canvas.getContext('2d')) {
         throw new Error('이미지를 처리할 수 없습니다.');
       }
-      var blob = await canvasToOptimizedBlob(canvas, 0.82);
+      var blob = await encodeProfileAvatarBlobForUpload(canvas);
       if (!blob || blob.size < 16) throw new Error('압축 결과가 비어 있습니다.');
       var url = await uploadProfileImage(uid, blob);
       var apiFn = typeof window.apiUpdateUser === 'function' ? window.apiUpdateUser : null;
