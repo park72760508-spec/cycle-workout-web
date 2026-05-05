@@ -6646,7 +6646,8 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 .stelvio-profile-crop-modal__panel {
   position: relative;
-  z-index: 1;
+  z-index: 2;
+  pointer-events: auto;
   width: min(100%, 400px);
   max-height: min(92vh, 620px);
   display: flex;
