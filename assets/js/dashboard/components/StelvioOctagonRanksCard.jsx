@@ -1099,9 +1099,24 @@
   }
 
   /**
-   * GC 배지: **랭킹보드 GC 탭과 동일** `getPeakPowerRanking`(duration=gc) 순위 우선, 그다음 순위표/요약/OVL.
+   * GC 배지: 기본은 **랭킹보드 GC 탭** `getPeakPowerRanking`(duration=gc) 순위.
+   * 부문·성별 **전체+전체(Supremo·all)** 에서만 툴팁과 같은 순위를 쓰면 코호트·GC 표기 불일치가 사라짐.
    */
-  function gcHeptagonRankForBadge(uid, ovl, toolTip, tierSummary, filterCategory, userAgeCategory, gcPeakData) {
+  function gcHeptagonRankForBadge(uid, ovl, toolTip, tierSummary, filterCategory, userAgeCategory, gcPeakData, filterGender) {
+    var isSupremoGenderAll =
+      String(filterCategory || '').trim() === 'Supremo' &&
+      String(filterGender != null ? filterGender : '').trim() === 'all';
+    if (isSupremoGenderAll) {
+      if (
+        toolTip &&
+        (toolTip.kind === 'ok' || toolTip.kind === 'board_partial') &&
+        toolTip.rank != null &&
+        isFinite(Number(toolTip.rank)) &&
+        Number(toolTip.rank) >= 1
+      ) {
+        return Math.floor(Number(toolTip.rank));
+      }
+    }
     if (uid && gcPeakData && gcPeakData.success) {
       var rApi = computeDisplayRankLikeDistribution(gcPeakData, uid, filterCategory, 'gc');
       if (rApi != null && isFinite(Number(rApi)) && Number(rApi) >= 1) {
@@ -4051,7 +4066,8 @@
                         heptagonSummaryCacheMerged != null ? heptagonSummaryCacheMerged : heptagonSummaryCache,
                         category,
                         viewerAc,
-                        gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null
+                        gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null,
+                        gender
                       )
                     : undefined
                 }
@@ -4119,7 +4135,8 @@
                           tierForCard,
                           category,
                           viewerAc,
-                          gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null
+                          gcRankingApi.data && gcRankingApi.data.success ? gcRankingApi.data : null,
+                          gender
                         )
                       : undefined
                   }
