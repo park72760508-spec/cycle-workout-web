@@ -220,8 +220,8 @@
     if (lim < 1) {
       lim = 200;
     }
-    if (lim > 500) {
-      lim = 500;
+    if (lim > 10000) {
+      lim = 10000;
     }
     return import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js')
       .then(function (mod) {
