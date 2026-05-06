@@ -3854,9 +3854,23 @@ function showBluetoothTrainingResultModal(status = null) {
         console.log('[Bluetooth 개인 훈련] startTime/endTime 사용:', { startTime, endTime, totalSeconds, duration_min });
     }
     
-    // TSS 및 NP 계산 (resultManager.js와 동일한 로직)
+    // TSS 및 NP 계산 — rTSS (trainingResultService / 인도어와 동일)
     let tss = 0;
     let np = 0;
+    const wKgRtss = (Number(window.currentUser && window.currentUser.weight) > 0)
+      ? Number(window.currentUser.weight)
+      : (window.STELVIO_RTSS_DEFAULT_WEIGHT_KG || 70);
+    function tssFromRtssOrLegacy(elapsedSec, avgP, npVal, userFtp) {
+      const ftpN = Number(userFtp) || 0;
+      const dur = Number(elapsedSec) || 0;
+      const npN = Number(npVal) || 0;
+      const ap = (Number(avgP) > 0) ? Number(avgP) : npN;
+      if (typeof window.calculateStelvioRevisedTSS === 'function' && ftpN > 0 && dur > 0 && npN > 0) {
+        return window.calculateStelvioRevisedTSS(dur, ap, npN, ftpN, wKgRtss);
+      }
+      const IF = ftpN > 0 ? (npN / ftpN) : 0;
+      return (dur / 3600) * (IF * IF) * 100;
+    }
     
     // trainingMetrics가 있으면 사용 (가장 정확)
     if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
@@ -3867,9 +3881,11 @@ function showBluetoothTrainingResultModal(status = null) {
         if (count > 0 && np4sum > 0) {
             np = Math.pow(np4sum / count, 0.25);
             const userFtp = window.currentUser?.ftp || userFTP || 200;
-            const IF = userFtp > 0 ? (np / userFtp) : 0;
-            tss = (elapsedSec / 3600) * (IF * IF) * 100;
-            console.log('[Bluetooth 개인 훈련] TSS 계산 (trainingMetrics):', { elapsedSec, np, IF, tss, userFtp });
+            const avgP = elapsedSec > 0 && window.trainingMetrics.joules
+              ? (window.trainingMetrics.joules / elapsedSec)
+              : (stats.avgPower || np);
+            tss = tssFromRtssOrLegacy(elapsedSec, avgP, np, userFtp);
+            console.log('[Bluetooth 개인 훈련] TSS 계산 (trainingMetrics, rTSS):', { elapsedSec, np, tss, userFtp });
         }
     }
     
@@ -3882,13 +3898,11 @@ function showBluetoothTrainingResultModal(status = null) {
             np = Math.round((stats.avgPower || 0) * 1.05);
         }
         
-        // IF 계산
-        const IF = userFtp > 0 ? (np / userFtp) : 0;
-        
         // TSS 계산: elapsedTime 우선 사용, 없으면 totalSeconds 사용
         const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
-        tss = (timeForTss / 3600) * (IF * IF) * 100;
-        console.log('[Bluetooth 개인 훈련] TSS 계산 (대체):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
+        const avgP = (stats.avgPower != null && stats.avgPower > 0) ? stats.avgPower : np;
+        tss = tssFromRtssOrLegacy(timeForTss, avgP, np, userFtp);
+        console.log('[Bluetooth 개인 훈련] TSS 계산 (대체, rTSS):', { totalSeconds, duration_min, timeForTss, np, tss, userFtp, avgPower: stats.avgPower });
     }
     
     // 값 반올림 및 최소값 보장

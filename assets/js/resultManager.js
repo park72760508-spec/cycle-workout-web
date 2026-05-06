@@ -226,9 +226,23 @@ async function saveTrainingResult(extra = {}) {
          });
        }
        
-       // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
+       // TSS 계산 — rTSS (인도어·Strava와 동일)
        tss = trainingResult.tss || 0;
        np = trainingResult.normalizedPower || 0;
+       const wKgRtssRm = (Number(window.currentUser && window.currentUser.weight) > 0)
+         ? Number(window.currentUser.weight)
+         : (window.STELVIO_RTSS_DEFAULT_WEIGHT_KG || 70);
+       function tssFromRtssRm(elapsedSec, avgP, npVal, userFtp) {
+         const ftpN = Number(userFtp) || 0;
+         const dur = Number(elapsedSec) || 0;
+         const npN = Number(npVal) || 0;
+         const ap = (Number(avgP) > 0) ? Number(avgP) : npN;
+         if (typeof window.calculateStelvioRevisedTSS === 'function' && ftpN > 0 && dur > 0 && npN > 0) {
+           return window.calculateStelvioRevisedTSS(dur, ap, npN, ftpN, wKgRtssRm);
+         }
+         const IF = ftpN > 0 ? (npN / ftpN) : 0;
+         return (dur / 3600) * (IF * IF) * 100;
+       }
        
        // trainingMetrics에서 계산된 값이 있으면 사용 (가장 정확)
        if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
@@ -240,13 +254,12 @@ async function saveTrainingResult(extra = {}) {
            // Normalized Power 계산
            np = Math.pow(np4sum / count, 0.25);
            
-           // Intensity Factor 계산
            const userFtp = window.currentUser?.ftp || 200;
-           const IF = userFtp > 0 ? (np / userFtp) : 0;
-           
-           // TSS 계산: (시간(시간) * IF^2 * 100)
-           tss = (elapsedSec / 3600) * (IF * IF) * 100;
-           console.log('[saveTrainingResult] TSS 계산 (trainingMetrics 사용):', { elapsedSec, np, IF, tss, userFtp });
+           const avgP = elapsedSec > 0 && window.trainingMetrics.joules
+             ? (window.trainingMetrics.joules / elapsedSec)
+             : (stats.avgPower || np);
+           tss = tssFromRtssRm(elapsedSec, avgP, np, userFtp);
+           console.log('[saveTrainingResult] TSS 계산 (trainingMetrics, rTSS):', { elapsedSec, np, tss, userFtp });
          }
        }
        
@@ -259,19 +272,15 @@ async function saveTrainingResult(extra = {}) {
            np = Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
          }
          
-         // IF 계산
-         const IF = userFtp > 0 ? (np / userFtp) : 0;
-         
-         // TSS 계산: (시간(시간) * IF^2 * 100)
          // totalSeconds가 계산된 값 사용 (elapsedTime 우선)
          const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
-         tss = (timeForTss / 3600) * (IF * IF) * 100;
-         console.log('[saveTrainingResult] TSS 계산 (대체 계산):', { 
+         const avgP = (stats.avgPower != null && stats.avgPower > 0) ? stats.avgPower : np;
+         tss = tssFromRtssRm(timeForTss, avgP, np, userFtp);
+         console.log('[saveTrainingResult] TSS 계산 (대체, rTSS):', { 
            totalSeconds, 
            duration_min, 
            timeForTss, 
            np, 
-           IF, 
            tss, 
            userFtp, 
            avgPower: stats.avgPower,
@@ -955,8 +964,11 @@ async function saveTrainingResult(extra = {}) {
       totalAchievement = achievements.length ? Math.round(avg(achievements)) : 0;
     }
 
-    // TSS 계산 (trainingMetrics가 있으면 사용, 없으면 근사값 계산)
+    // TSS 계산 (rTSS)
     let tss = 0;
+    const wKgSess = (Number(window.currentUser && window.currentUser.weight) > 0)
+      ? Number(window.currentUser.weight)
+      : (window.STELVIO_RTSS_DEFAULT_WEIGHT_KG || 70);
     if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
       const elapsedSec = window.trainingMetrics.elapsedSec;
       const np4sum = window.trainingMetrics.np4sum || 0;
@@ -965,16 +977,29 @@ async function saveTrainingResult(extra = {}) {
       if (count > 0 && np4sum > 0) {
         const np = Math.pow(np4sum / count, 0.25);
         const userFtp = window.currentUser?.ftp || 200;
-        const IF = userFtp > 0 ? (np / userFtp) : 0;
-        tss = (elapsedSec / 3600) * (IF * IF) * 100;
+        const ap = elapsedSec > 0 && window.trainingMetrics.joules
+          ? (window.trainingMetrics.joules / elapsedSec)
+          : avgPower;
+        if (typeof window.calculateStelvioRevisedTSS === 'function' && userFtp > 0) {
+          tss = window.calculateStelvioRevisedTSS(elapsedSec, ap > 0 ? ap : np, np, userFtp, wKgSess);
+        } else {
+          const IF = userFtp > 0 ? (np / userFtp) : 0;
+          tss = (elapsedSec / 3600) * (IF * IF) * 100;
+        }
       }
     } else {
       // 대체 계산: 평균 파워 기반
       const userFtp = window.currentUser?.ftp || 200;
       const np = Math.round(avgPower * 1.05); // NP 근사
-      const IF = userFtp > 0 ? (np / userFtp) : 0;
+      const ap = avgPower > 0 ? avgPower : np;
       const totalHours = totalMinutes / 60;
-      tss = totalHours * (IF * IF) * 100;
+      const durSec = Math.max(0, totalMinutes * 60);
+      if (typeof window.calculateStelvioRevisedTSS === 'function' && userFtp > 0 && durSec > 0) {
+        tss = window.calculateStelvioRevisedTSS(durSec, ap, np, userFtp, wKgSess);
+      } else {
+        const IF = userFtp > 0 ? (np / userFtp) : 0;
+        tss = totalHours * (IF * IF) * 100;
+      }
     }
     tss = Math.max(0, Math.round(tss * 100) / 100);
 

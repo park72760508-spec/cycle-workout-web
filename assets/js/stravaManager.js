@@ -228,8 +228,9 @@ async function fetchStravaActivityDetail(accessToken, activityId) {
 /**
  * Strava 활동에서 TSS 계산
  * Code.gs의 computeTssFromActivity를 프론트엔드로 마이그레이션
+ * @param {number} [weightKg] - 체중(kg), rTSS용
  */
-function computeTssFromActivity(activity, ftp) {
+function computeTssFromActivity(activity, ftp, weightKg) {
   const durationSec = Number(activity.moving_time) || 0;
   if (durationSec <= 0) return 0;
 
@@ -238,6 +239,15 @@ function computeTssFromActivity(activity, ftp) {
 
   ftp = Number(ftp) || 0;
   if (ftp <= 0) return 0;
+
+  const avgW = Number(activity.average_watts) || 0;
+  const avgForTss = avgW > 0 ? avgW : np;
+  const defW = (typeof window !== 'undefined' && window.STELVIO_RTSS_DEFAULT_WEIGHT_KG) || 70;
+  const wEff = (Number(weightKg) > 0) ? Number(weightKg) : defW;
+
+  if (typeof window !== 'undefined' && typeof window.calculateStelvioRevisedTSS === 'function') {
+    return Math.max(0, window.calculateStelvioRevisedTSS(durationSec, avgForTss, np, ftp, wEff));
+  }
 
   const ifVal = np / ftp;
   const tss = (durationSec * np * ifVal) / (ftp * 3600) * 100;
@@ -317,9 +327,10 @@ function extractStravaPedalingExtras(activity) {
  * @param {object} activity - Strava Activity 객체 (상세 또는 요약)
  * @param {string} userId - 사용자 ID
  * @param {number} ftpAtTime - 해당 시점의 FTP 값
+ * @param {number} [weightKg] - 체중(kg), rTSS 가중치용
  * @returns {object} 변환된 활동 데이터
  */
-function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
+function mapStravaActivityToSchema(activity, userId, ftpAtTime, weightKg) {
   if (!activity || !userId) {
     throw new Error('activity와 userId가 필요합니다.');
   }
@@ -356,6 +367,9 @@ function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
   
   // weighted_watts가 없으면 avg_watts를 대신 사용 (fallback)
   const np = weightedWatts !== null ? weightedWatts : (avgWatts !== null ? avgWatts : 0);
+  const avgForTss = (avgWatts !== null && avgWatts > 0) ? avgWatts : np;
+  const defW = (typeof window !== 'undefined' && window.STELVIO_RTSS_DEFAULT_WEIGHT_KG) || 70;
+  const wEff = (Number(weightKg) > 0) ? Number(weightKg) : defW;
   
   // IF (Intensity Factor) 계산
   let ifValue = null;
@@ -363,16 +377,17 @@ function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
     ifValue = Math.round((np / ftp) * 1000) / 1000; // 소수점 3자리
   }
 
-  // TSS (Training Stress Score) 계산
+  // TSS (rTSS)
   let tss = null;
-  if (ftp > 0 && np > 0 && durationSec > 0 && ifValue !== null) {
-    // TSS = (duration_sec * weighted_watts * if) / (ftp_at_time * 36)
-    tss = Math.round(((durationSec * np * ifValue) / (ftp * 36)) * 100) / 100;
-    tss = Math.max(0, tss);
-  } else if (ftp > 0 && np > 0 && durationSec > 0) {
-    // IF가 계산되지 않았지만 기본 TSS 계산 시도
-    const ifVal = np / ftp;
-    tss = Math.round(((durationSec * np * ifVal) / (ftp * 36)) * 100) / 100;
+  if (ftp > 0 && np > 0 && durationSec > 0) {
+    if (typeof window !== 'undefined' && typeof window.calculateStelvioRevisedTSS === 'function') {
+      tss = window.calculateStelvioRevisedTSS(durationSec, avgForTss, np, ftp, wEff);
+    } else if (ifValue !== null) {
+      tss = Math.round(((durationSec * np * ifValue) / (ftp * 36)) * 100) / 100;
+    } else {
+      const ifVal = np / ftp;
+      tss = Math.round(((durationSec * np * ifVal) / (ftp * 36)) * 100) / 100;
+    }
     tss = Math.max(0, tss);
   }
 
@@ -732,7 +747,7 @@ async function fetchAndProcessStravaData(options = {}) {
         // Strava 활동 데이터를 Target Schema에 맞게 변환
         let mappedActivity;
         try {
-          mappedActivity = mapStravaActivityToSchema(detailedActivity, userId, ftp);
+          mappedActivity = mapStravaActivityToSchema(detailedActivity, userId, ftp, userData.weight ?? userData.weightKg);
           console.log(`[fetchAndProcessStravaData] ✅ 활동 데이터 매핑 완료: ${actId}`);
         } catch (mapError) {
           console.error(`[fetchAndProcessStravaData] ❌ 활동 데이터 매핑 실패: ${actId} - ${mapError.message || mapError}`);
@@ -740,7 +755,7 @@ async function fetchAndProcessStravaData(options = {}) {
           const title = detailedActivity.name || '';
           const distanceKm = (Number(detailedActivity.distance) || 0) / 1000;
           const movingTime = Math.round(Number(detailedActivity.moving_time) || 0);
-          const tss = computeTssFromActivity(detailedActivity, ftp);
+          const tss = computeTssFromActivity(detailedActivity, ftp, userData.weight ?? userData.weightKg);
           
           mappedActivity = {
             activity_id: actId,

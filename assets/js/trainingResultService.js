@@ -24,36 +24,36 @@ import {
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
 /**
- * TSS (Training Stress Score) 계산
- * 공식: (duration_sec * NP * IF) / (FTP * 3600) * 100
- * 
+ * TSS (rTSS) 계산 — STELVIO 글로벌 개정 TSS. window.calculateStelvioRevisedTSS(stelvioRtss.js) 사용.
+ *
  * @param {number} durationSec - 훈련 시간(초)
  * @param {number} weightedWatts - Normalized Power (NP)
  * @param {number} ftp - Functional Threshold Power
- * @returns {number} 계산된 TSS (정수로 반올림)
+ * @param {number} [weightKg] - 체중(kg), 없으면 STELVIO_RTSS_DEFAULT_WEIGHT_KG
+ * @param {number} [avgPowerW] - 평균 파워(W), 없으면 NP와 동일 취급
+ * @returns {number} rTSS (소수 첫째 자리, 스크립트 미로드 시 레거시 정수에 준하는 값)
  */
-function calculateTSS(durationSec, weightedWatts, ftp) {
-  if (!ftp || ftp <= 0) {
+function calculateTSS(durationSec, weightedWatts, ftp, weightKg, avgPowerW) {
+  var dur = Number(durationSec) || 0;
+  var np = Number(weightedWatts);
+  var ftpN = Number(ftp);
+  var defW = (typeof window !== 'undefined' && window.STELVIO_RTSS_DEFAULT_WEIGHT_KG) || 70;
+  var w = (weightKg != null && Number(weightKg) > 0) ? Number(weightKg) : defW;
+  var avg = (avgPowerW != null && Number(avgPowerW) > 0) ? Number(avgPowerW) : np;
+
+  var rtssFn = typeof window !== 'undefined' && window.calculateStelvioRevisedTSS;
+  if (typeof rtssFn === 'function') {
+    return rtssFn(dur, avg, np, ftpN, w);
+  }
+
+  if (!ftpN || ftpN <= 0) {
     console.warn('[calculateTSS] FTP가 없거나 0입니다. 기본값 200 사용');
-    ftp = 200;
+    ftpN = 200;
   }
-  
-  if (!durationSec || durationSec <= 0) {
-    return 0;
-  }
-  
-  if (!weightedWatts || weightedWatts <= 0) {
-    return 0;
-  }
-  
-  // IF (Intensity Factor) = NP / FTP
-  const intensityFactor = weightedWatts / ftp;
-  
-  // TSS = (duration_sec * NP * IF) / (FTP * 3600) * 100
-  const tss = (durationSec * weightedWatts * intensityFactor) / (ftp * 3600) * 100;
-  
-  // 정수로 반올림하여 반환 (earned_points로 사용)
-  return Math.round(tss);
+  if (dur <= 0 || !np || np <= 0) return 0;
+  var intensityFactor = np / ftpN;
+  var tss = (dur * np * intensityFactor) / (ftpN * 3600) * 100;
+  return Math.round(tss * 10) / 10;
 }
 
 /** Asia/Seoul 달력 기준 YYYY-MM-DD (toISOString UTC·로컬 혼용으로 before/after가 겹치는 오류 방지) */
@@ -459,9 +459,13 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         expiry_date: currentExpiryDate?.toDate?.() || currentExpiryDate
       });
       
-      // 2. TSS 계산 (effectiveFTP 사용)
-      const tss = calculateTSS(durationSec, np, effectiveFTP);
-      const earnedPoints = tss; // TSS가 획득 포인트 (정수로 반올림)
+      const weightForRtss = (Number(userData.weight ?? userData.weightKg) > 0)
+        ? Number(userData.weight ?? userData.weightKg)
+        : ((typeof window !== 'undefined' && window.STELVIO_RTSS_DEFAULT_WEIGHT_KG) || 70);
+
+      // 2. TSS 계산 (effectiveFTP + rTSS)
+      const tss = calculateTSS(durationSec, np, effectiveFTP, weightForRtss, avgWatts);
+      const earnedPoints = Math.round(tss);
       
       console.log('[saveTrainingSession] TSS 계산 결과:', {
         tss,

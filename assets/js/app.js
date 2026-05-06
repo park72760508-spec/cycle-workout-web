@@ -5708,7 +5708,18 @@ function updateTrainingMetrics() {
 
     const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
     const IF = ftp ? (NP / ftp) : 0;
-    const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+    const wKg = (Number(window.currentUser && window.currentUser.weight) > 0)
+      ? Number(window.currentUser.weight)
+      : (window.STELVIO_RTSS_DEFAULT_WEIGHT_KG || 70);
+    const avgPower = trainingMetrics.elapsedSec > 0
+      ? (trainingMetrics.joules / trainingMetrics.elapsedSec)
+      : 0;
+    let TSS;
+    if (typeof window.calculateStelvioRevisedTSS === 'function' && ftp > 0 && NP > 0 && trainingMetrics.elapsedSec > 0) {
+      TSS = window.calculateStelvioRevisedTSS(trainingMetrics.elapsedSec, avgPower, NP, ftp, wKg);
+    } else {
+      TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+    }
     
     // 사이클링 운동 변환 (인체 효율 적용)
     // 1 kJ (Work) ≈ 1 kcal (Burned)
@@ -13379,6 +13390,15 @@ function estimateWorkoutTSS(workout, ftp) {
     totalWeight += dur;
   }
   var avgIF = totalWeight > 0 ? weightedIfSum / totalWeight : 0.65;
+  var ftpN = Number(ftp) || Number(window.currentUser && window.currentUser.ftp) || 0;
+  var wKg = (Number(window.currentUser && window.currentUser.weight) > 0)
+    ? Number(window.currentUser.weight)
+    : (window.STELVIO_RTSS_DEFAULT_WEIGHT_KG || 70);
+  if (typeof window.calculateStelvioRevisedTSS === 'function' && ftpN > 0) {
+    var npProxy = avgIF * ftpN;
+    var avgProxy = npProxy;
+    return Math.round(window.calculateStelvioRevisedTSS(totalSec, avgProxy, npProxy, ftpN, wKg));
+  }
   var hours = totalSec / 3600;
   var tss = hours * (avgIF * avgIF) * 100;
   return Math.round(tss);

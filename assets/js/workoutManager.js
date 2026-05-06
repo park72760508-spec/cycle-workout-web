@@ -3928,6 +3928,14 @@ function estimateWorkoutTSS(workout) {
     totalWeight += dur;
   }
   var avgIF = totalWeight > 0 ? weightedIfSum / totalWeight : 0.65;
+  var ftpN = Number(typeof window !== 'undefined' && window.currentUser && window.currentUser.ftp) || 0;
+  var wKg = (Number(typeof window !== 'undefined' && window.currentUser && window.currentUser.weight) > 0)
+    ? Number(window.currentUser.weight)
+    : ((typeof window !== 'undefined' && window.STELVIO_RTSS_DEFAULT_WEIGHT_KG) || 70);
+  if (typeof window !== 'undefined' && typeof window.calculateStelvioRevisedTSS === 'function' && ftpN > 0) {
+    var npProxy = avgIF * ftpN;
+    return Math.round(window.calculateStelvioRevisedTSS(totalSec, npProxy, npProxy, ftpN, wKg));
+  }
   var hours = totalSec / 3600;
   var tss = hours * (avgIF * avgIF) * 100;
   return Math.round(tss);
