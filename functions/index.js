@@ -701,16 +701,46 @@ function getStravaClientSecret() {
   return clientSecret;
 }
 
-function computeTssFromActivity(activity, ftp) {
+/** STELVIO rTSS: 프로필 체중 없을 때 가정 체중 (kJ 가드레일·W/kg 가중치용) */
+const STELVIO_RTSS_DEFAULT_WEIGHT_KG = 70;
+
+function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
+  const d = Number(durationSec);
+  const npN = Number(np);
+  const ftpN = Number(ftp);
+  const w = Number(weight);
+  const avgN = Number(avgPower);
+  if (!ftpN || !w || ftpN <= 0 || w <= 0) return 0;
+  if (npN <= 0 || avgN <= 0) return 0;
+  if (!d || d <= 0) return 0;
+  const ifFactor = npN / ftpN;
+  const baseTSS = ((d * npN * ifFactor) / (ftpN * 3600)) * 100;
+  const totalKJ = (avgN * d) / 1000;
+  if (totalKJ <= 0) return 0;
+  const wPerKg = ftpN / w;
+  let wFactor = Math.pow(3.0 / wPerKg, 0.15);
+  wFactor = Math.max(0.8, Math.min(1.2, wFactor));
+  let adjustedTSS = baseTSS * wFactor;
+  const tssPerKJ = adjustedTSS / totalKJ;
+  if (wPerKg < 2.5) {
+    if (tssPerKJ > 15.0) adjustedTSS = totalKJ * 15.0;
+  } else if (wPerKg > 4.0) {
+    if (tssPerKJ < 6.0) adjustedTSS = totalKJ * 6.0;
+  }
+  return Math.round(adjustedTSS * 10) / 10;
+}
+
+function computeTssFromActivity(activity, ftp, weightKg) {
   const durationSec = Number(activity.moving_time) || 0;
   if (durationSec <= 0) return 0;
   const np = Number(activity.weighted_average_watts) || Number(activity.average_watts) || 0;
   if (np <= 0) return 0;
   ftp = Number(ftp) || 0;
   if (ftp <= 0) return 0;
-  const ifVal = np / ftp;
-  const tss = (durationSec * np * ifVal) / (ftp * 3600) * 100;
-  return Math.max(0, Math.round(tss * 100) / 100);
+  const avgW = Number(activity.average_watts) || 0;
+  const avgForTss = avgW > 0 ? avgW : np;
+  const wEff = (Number(weightKg) > 0) ? Number(weightKg) : STELVIO_RTSS_DEFAULT_WEIGHT_KG;
+  return Math.max(0, calculateStelvioRevisedTSS(durationSec, avgForTss, np, ftp, wEff));
 }
 
 /** Strava API Rate Limit: 15분당 100회. 429 시 Retry-After(또는 60초) 대기, 최대 15분(900초)까지 대기 */
@@ -866,7 +896,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   }
 
   const activity = detailRes.activity;
-  const mapped = mapStravaActivityToLogSchema(activity, userId, ftp);
+  const mapped = mapStravaActivityToLogSchema(activity, userId, ftp, userData.weight ?? userData.weightKg);
 
   let max1minWatts = null;
   let max5minWatts = null;
@@ -1064,8 +1094,9 @@ function extractStravaPedalingExtrasFromActivity(activity) {
 /**
  * Strava 활동 → 로그 스키마 매핑 (수동 동기화 mapStravaActivityToSchema와 동일한 필드)
  * 상세 API 응답 기준으로 avg_hr, max_hr, avg_cadence, elevation_gain, kilojoules 등 포함.
+ * @param {number} [weightKg] - 체중(kg), rTSS
  */
-function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
+function mapStravaActivityToLogSchema(activity, userId, ftpAtTime, weightKg) {
   const title = activity.name || "";
   const startDateLocal = activity.start_date_local || activity.start_date || "";
   let dateStr = "";
@@ -1090,16 +1121,13 @@ function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
   const rpe = activity.perceived_exertion != null ? Number(activity.perceived_exertion) : null;
   const ftp = Number(ftpAtTime) || 0;
   const np = weightedWatts != null ? weightedWatts : (avgWatts != null ? avgWatts : 0);
+  const avgForTss = (avgWatts != null && avgWatts > 0) ? avgWatts : np;
+  const wEff = (Number(weightKg) > 0) ? Number(weightKg) : STELVIO_RTSS_DEFAULT_WEIGHT_KG;
   let ifValue = null;
   if (ftp > 0 && np > 0) ifValue = Math.round((np / ftp) * 1000) / 1000;
-  let tss = null;
-  if (ftp > 0 && np > 0 && durationSec > 0 && ifValue != null) {
-    tss = Math.round(((durationSec * np * ifValue) / (ftp * 36)) * 100) / 100;
-    tss = Math.max(0, tss);
-  } else if (ftp > 0 && np > 0 && durationSec > 0) {
-    const ifVal = np / ftp;
-    tss = Math.round(((durationSec * np * ifVal) / (ftp * 36)) * 100) / 100;
-    tss = Math.max(0, tss);
+  let tss = 0;
+  if (ftp > 0 && np > 0 && durationSec > 0) {
+    tss = Math.max(0, calculateStelvioRevisedTSS(durationSec, avgForTss, np, ftp, wEff));
   }
   let efficiencyFactor = null;
   if (np > 0 && avgHr != null && avgHr > 0) efficiencyFactor = Math.round((np / avgHr) * 100) / 100;
@@ -1134,7 +1162,7 @@ function mapStravaActivityToLogSchema(activity, userId, ftpAtTime) {
     rpe: rpe,
     ftp_at_time: ftp > 0 ? ftp : null,
     if: ifValue,
-    tss: tss != null ? tss : 0,
+    tss: tss,
     efficiency_factor: efficiencyFactor,
     time_in_zones: null,
     earned_points: 0,
@@ -1486,7 +1514,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     let detailedActivity = act;
     const detailRes = await fetchStravaActivityDetail(accessToken, actId);
     if (detailRes.success && detailRes.activity) detailedActivity = detailRes.activity;
-    const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp);
+    const mapped = mapStravaActivityToLogSchema(detailedActivity, userId, ftp, userData.weight ?? userData.weightKg);
     const streamsRes = await fetchStravaStreams(accessToken, actId);
     let max1minWatts = null;
     let max5minWatts = null;
@@ -2084,7 +2112,7 @@ exports.manualStravaSyncWithMmp = onRequest(
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         apiCallCount += 1;
         const activity = detailRes.activity;
-        const mapped = mapStravaActivityToLogSchema(activity, uid, ftp);
+        const mapped = mapStravaActivityToLogSchema(activity, uid, ftp, userData.weight ?? userData.weightKg);
         const rawWatts = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
         const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
         console.log(`[manualStravaSyncWithMmp] [Activity ID: ${actId}] Watts Array Length:`, wattsArray?.length || 0);
