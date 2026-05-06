@@ -1826,6 +1826,7 @@
   <!-- 한/영/숫자 폰트 통일: Noto Sans KR (안드로이드 등에서 영문·숫자 궁서체 fallback 방지) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://us-central1-stelvio-ai.cloudfunctions.net" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <!-- 외부 스타일 -->
@@ -7787,6 +7788,10 @@
     /** 동시 fetch 호출 시 오래된 응답이 UI를 덮어쓰지 않도록 세대 번호 */
     var stelvioRankingFetchGen = 0;
     var STELVIO_RANKING_FETCH_TIMEOUT_MS = 35000;
+    /** 동일 쿼리 재방문 시 즉시 표시 후 백그라운드 재검증(SWR) — 최종 데이터는 항상 최신 응답 기준 */
+    var STELVIO_RANKING_SWR_MAX_MS = 120000;
+    var stelvioRankingSwrCache = { key: '', body: null, ts: 0 };
+    var stelvioRankingPrefetchScheduled = false;
     var STELVIO_RANKING_FRIENDS_TIMEOUT_MS = 12000;
     var STELVIO_DURATION_LABELS = {
       'tss': 'TSS',
@@ -8688,6 +8693,57 @@
       );
     }
 
+    function scheduleStelvioRankingWarmCacheOnce() {
+      if (stelvioRankingPrefetchScheduled) return;
+      stelvioRankingPrefetchScheduled = true;
+      var run = function () {
+        var uid =
+          (window.currentUser && window.currentUser.id) ||
+          (function () {
+            try {
+              var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+              return u && u.id ? u.id : null;
+            } catch (eW) {
+              return null;
+            }
+          })();
+        var params = new URLSearchParams({
+          period: 'monthly',
+          duration: 'gc',
+          gender: 'all',
+        });
+        if (uid) params.set('uid', uid);
+        var key = params.toString();
+        var c = stelvioRankingSwrCache;
+        if (
+          c &&
+          c.key === key &&
+          c.body &&
+          c.body.success &&
+          c.body.byCategory &&
+          Date.now() - c.ts < STELVIO_RANKING_SWR_MAX_MS
+        ) {
+          return;
+        }
+        var warmUrl = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + key;
+        fetch(warmUrl, { method: 'GET', mode: 'cors', cache: 'no-store' })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (data && data.success && data.byCategory) {
+              stelvioRankingSwrCache = { key: key, body: data, ts: Date.now() };
+            }
+          })
+          .catch(function () {});
+      };
+      if (typeof requestIdleCallback !== 'undefined') {
+        requestIdleCallback(run, { timeout: 4500 });
+      } else {
+        setTimeout(run, 2200);
+      }
+    }
+
     function bindStelvioRankingEvents() {
       var chips = document.getElementById('stelvioDurationTabs');
       if (chips && !chips._stelvioDurationTabsDelegated) {
@@ -8723,6 +8779,7 @@
         });
       }
       stelvioEnsureRankingFavoriteUiListeners();
+      scheduleStelvioRankingWarmCacheOnce();
     }
     window.bindStelvioRankingEvents = bindStelvioRankingEvents;
     if (document.readyState === 'loading') {
@@ -8777,86 +8834,153 @@
       }
     }
 
+    function stelvioApplyPeakRankingFetchResult(data, myGen, uid) {
+      if (myGen !== stelvioRankingFetchGen) return;
+      if (!data || !data.success || !data.byCategory) {
+        stelvioRankingFullEntries = null;
+        stelvioRankingByCategory = null;
+        stelvioRankingApiStartStr = '';
+        stelvioRankingApiEndStr = '';
+        renderStelvioRankingError('데이터를 불러올 수 없습니다.');
+        refreshStelvioDistributionChartMounted();
+        return;
+      }
+      if (uid && typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
+        stelvioMergeViewerProfileImageIntoRankingPayload(data, uid);
+      }
+      stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
+      stelvioRankingByCategory = data.byCategory;
+      stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
+      stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
+      stelvioRankingExpandState = {};
+      stelvioRankingGapState = {};
+      stelvioRankingCurrentUserId = uid;
+      stelvioRefreshRankingFavoriteSetFromStorage();
+      stelvioMyRankSupremo = data.myRankSupremo || null;
+      stelvioCurrentUser = data.currentUser || null;
+      stelvioSyncCategorySelectUi();
+      renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
+      renderStelvioActiveCategory();
+      stelvioRefreshRankingFriendSetFromFirestore()
+        .then(function () {
+          if (myGen !== stelvioRankingFetchGen) return;
+          if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
+        })
+        .catch(function () {});
+    }
+
     async function fetchStelvioPeakPowerRanking() {
       var myGen = ++stelvioRankingFetchGen;
       var loading = document.getElementById('stelvioRankingLoading');
       var content = document.getElementById('stelvioRankingContent');
+      var fetchTimer = null;
+
+      var uid =
+        (window.currentUser && window.currentUser.id) ||
+        (function () {
+          try {
+            var u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            return u && u.id ? u.id : null;
+          } catch (eU) {
+            return null;
+          }
+        })();
+      var genderParam = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
+      var params = new URLSearchParams({
+        period: stelvioRankingState.period,
+        duration: stelvioRankingState.duration,
+        gender: genderParam,
+      });
+      if (uid) params.set('uid', uid);
+      var swrKey = params.toString();
+      var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + swrKey;
+
+      var nowMs = Date.now();
+      var swr = stelvioRankingSwrCache;
+      var swrHit =
+        swr &&
+        swr.key === swrKey &&
+        swr.body &&
+        swr.body.success &&
+        swr.body.byCategory &&
+        nowMs - swr.ts < STELVIO_RANKING_SWR_MAX_MS;
+
+      if (swrHit) {
+        if (loading) loading.classList.add('hidden');
+        if (content) content.style.opacity = '1';
+        try {
+          stelvioApplyPeakRankingFetchResult(JSON.parse(JSON.stringify(swr.body)), myGen, uid);
+        } catch (eClone) {
+          stelvioApplyPeakRankingFetchResult(swr.body, myGen, uid);
+        }
+        stelvioApplyDurationModeUi();
+        (async function stelvioRankingSwrRevalidate() {
+          var bgTimer = null;
+          var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
+          if (fetchController) {
+            fetchOpts.signal = fetchController.signal;
+            bgTimer = setTimeout(function () {
+              try {
+                fetchController.abort();
+              } catch (eA) {}
+            }, STELVIO_RANKING_FETCH_TIMEOUT_MS);
+          }
+          try {
+            var res = await fetch(url, fetchOpts);
+            if (bgTimer) {
+              clearTimeout(bgTimer);
+              bgTimer = null;
+            }
+            if (myGen !== stelvioRankingFetchGen) return;
+            if (!res.ok) return;
+            var dataFresh = await res.json().catch(function () {
+              return null;
+            });
+            if (!dataFresh || !dataFresh.success || !dataFresh.byCategory) return;
+            stelvioRankingSwrCache = { key: swrKey, body: dataFresh, ts: Date.now() };
+            stelvioApplyPeakRankingFetchResult(dataFresh, myGen, uid);
+          } catch (eBg) {
+            if (bgTimer) clearTimeout(bgTimer);
+          } finally {
+            if (myGen !== stelvioRankingFetchGen) return;
+            stelvioApplyDurationModeUi();
+          }
+        })();
+        return;
+      }
+
       if (loading) loading.classList.remove('hidden');
       if (content) content.style.opacity = '0.5';
-      var fetchTimer = null;
+
       try {
-        await new Promise(function (resolve) {
-          requestAnimationFrame(function () {
-            requestAnimationFrame(resolve);
-          });
-        });
-        if (myGen !== stelvioRankingFetchGen) return;
-
-        var uid = (window.currentUser && window.currentUser.id) || (function(){ try { var u = JSON.parse(localStorage.getItem('currentUser') || 'null'); return u && u.id ? u.id : null; } catch(e){ return null; } })();
-        var genderParam = stelvioRankingState.duration === 'group_dist' ? 'all' : stelvioRankingState.gender;
-        var params = new URLSearchParams({
-          period: stelvioRankingState.period,
-          duration: stelvioRankingState.duration,
-          gender: genderParam
-        });
-        if (uid) params.set('uid', uid);
-
-        var url = 'https://us-central1-stelvio-ai.cloudfunctions.net/getPeakPowerRanking?' + params.toString();
-        var fetchController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var fetchOpts = { method: 'GET', mode: 'cors', cache: 'no-store' };
-        if (fetchController) {
-          fetchOpts.signal = fetchController.signal;
+        var fetchController2 = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var fetchOpts2 = { method: 'GET', mode: 'cors', cache: 'no-store' };
+        if (fetchController2) {
+          fetchOpts2.signal = fetchController2.signal;
           fetchTimer = setTimeout(function () {
             try {
-              fetchController.abort();
+              fetchController2.abort();
             } catch (eAb) {}
           }, STELVIO_RANKING_FETCH_TIMEOUT_MS);
         }
-        var res = await fetch(url, fetchOpts);
+        var res2 = await fetch(url, fetchOpts2);
         if (fetchTimer) {
           clearTimeout(fetchTimer);
           fetchTimer = null;
         }
         if (myGen !== stelvioRankingFetchGen) return;
-        if (!res.ok) {
-          throw new Error('HTTP ' + res.status);
+        if (!res2.ok) {
+          throw new Error('HTTP ' + res2.status);
         }
-        var data = await res.json().catch(function() { return { success: false }; });
+        var data2 = await res2.json().catch(function () {
+          return { success: false };
+        });
         if (myGen !== stelvioRankingFetchGen) return;
-        if (!data.success || !data.byCategory) {
-          stelvioRankingFullEntries = null;
-          stelvioRankingByCategory = null;
-          stelvioRankingApiStartStr = '';
-          stelvioRankingApiEndStr = '';
-          renderStelvioRankingError('데이터를 불러올 수 없습니다.');
-          refreshStelvioDistributionChartMounted();
-          return;
+        if (data2 && data2.success && data2.byCategory) {
+          stelvioRankingSwrCache = { key: swrKey, body: data2, ts: Date.now() };
         }
-        if (uid) {
-          if (typeof stelvioMergeViewerProfileImageIntoRankingPayload === 'function') {
-            stelvioMergeViewerProfileImageIntoRankingPayload(data, uid);
-          }
-        }
-        stelvioRankingFullEntries = stelvioResolveRankingFullEntries(data);
-        stelvioRankingByCategory = data.byCategory;
-        stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
-        stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
-        stelvioRankingExpandState = {};
-        stelvioRankingGapState = {};
-        stelvioRankingCurrentUserId = uid;
-        stelvioRefreshRankingFavoriteSetFromStorage();
-        stelvioMyRankSupremo = data.myRankSupremo || null;
-        stelvioCurrentUser = data.currentUser || null;
-        stelvioSyncCategorySelectUi();
-        renderStelvioHeroCard(stelvioCurrentUser, stelvioMyRankSupremo);
-        renderStelvioActiveCategory();
-        /* 친구 목록은 랭킹 API와 무관·모바일에서 Firestore get 무응답 시 로딩이 영구 표시되던 원인 — 비차단 + 세대 검사 */
-        stelvioRefreshRankingFriendSetFromFirestore()
-          .then(function () {
-            if (myGen !== stelvioRankingFetchGen) return;
-            if (typeof renderStelvioActiveCategory === 'function') renderStelvioActiveCategory();
-          })
-          .catch(function () {});
+        stelvioApplyPeakRankingFetchResult(data2, myGen, uid);
       } catch (e) {
         if (fetchTimer) {
           clearTimeout(fetchTimer);
