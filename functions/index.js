@@ -45,19 +45,31 @@ function profileImageUrlFromUserData(data) {
 async function fetchProfileImageUrlsMapForUsers(db, userIds) {
   const urlById = new Map();
   const unique = [...new Set((userIds || []).map((x) => String(x).trim()).filter(Boolean))];
-  /** 순차 `getAll(≤10)`은 uid 수만 건 시 지연 과다 → 짧은 병렬 get으로 완만한 확장 유지 */
-  const CONCURRENCY = Math.min(
-    Number(process.env.RANK_PROFILE_IMAGE_FETCH_PARALLEL) || 40,
-    60
+  /** Firestore getAll은 한 번에 최대 10문서 — RTT·연결 수를 줄이기 위해 10묶음 병렬 여러 개 */
+  const CHUNK = 10;
+  const PARALLEL_GROUPS = Math.min(
+    Math.max(1, Number(process.env.RANK_PROFILE_IMAGE_GETALL_PARALLEL) || 6),
+    12
   );
-  for (let i = 0; i < unique.length; i += CONCURRENCY) {
-    const slice = unique.slice(i, i + CONCURRENCY);
-    const snaps = await Promise.all(slice.map((id) => db.collection("users").doc(id).get()));
-    for (let j = 0; j < slice.length; j++) {
-      const docSnap = snaps[j];
-      const id = slice[j];
-      if (docSnap && docSnap.exists) urlById.set(id, profileImageUrlFromUserData(docSnap.data()));
-      else urlById.set(id, null);
+  for (let i = 0; i < unique.length; i += CHUNK * PARALLEL_GROUPS) {
+    const wave = [];
+    for (let g = 0; g < PARALLEL_GROUPS && i + g * CHUNK < unique.length; g++) {
+      const slice = unique.slice(i + g * CHUNK, i + (g + 1) * CHUNK);
+      if (!slice.length) break;
+      const refs = slice.map((id) => db.collection("users").doc(id));
+      wave.push(
+        db.getAll(...refs).then((snaps) => ({ slice, snaps }))
+      );
+    }
+    const settled = await Promise.all(wave);
+    for (let w = 0; w < settled.length; w++) {
+      const { slice, snaps } = settled[w];
+      for (let j = 0; j < slice.length; j++) {
+        const id = slice[j];
+        const docSnap = snaps[j];
+        if (docSnap && docSnap.exists) urlById.set(id, profileImageUrlFromUserData(docSnap.data()));
+        else urlById.set(id, null);
+      }
     }
   }
   return urlById;
@@ -70,26 +82,31 @@ async function fetchProfileImageUrlsMapForUsers(db, userIds) {
 async function hydrateRankingBoardProfileImages(db, byCategory, entries) {
   if (!byCategory || typeof byCategory !== "object") return;
   const ids = [];
+  const pushIfNeedsHydration = (r) => {
+    if (!r || !r.userId) return;
+    const u = String(r.userId);
+    const cur = r.profileImageUrl;
+    if (typeof cur === "string" && cur.trim().length > 0) return;
+    ids.push(u);
+  };
   for (const k of Object.keys(byCategory)) {
     const rows = byCategory[k];
     if (!Array.isArray(rows)) continue;
-    for (const r of rows) {
-      if (r && r.userId) ids.push(String(r.userId));
-    }
+    for (const r of rows) pushIfNeedsHydration(r);
   }
   if (Array.isArray(entries)) {
-    for (const r of entries) {
-      if (r && r.userId) ids.push(String(r.userId));
-    }
+    for (const r of entries) pushIfNeedsHydration(r);
   }
   if (!ids.length) return;
   const urlMap = await fetchProfileImageUrlsMapForUsers(db, ids);
+  const hydratedUids = new Set(ids.map((x) => String(x).trim()).filter(Boolean));
   for (const k of Object.keys(byCategory)) {
     const rows = byCategory[k];
     if (!Array.isArray(rows)) continue;
     for (const r of rows) {
       if (!r || !r.userId) continue;
       const u = String(r.userId);
+      if (!hydratedUids.has(u)) continue;
       r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
     }
   }
@@ -97,6 +114,7 @@ async function hydrateRankingBoardProfileImages(db, byCategory, entries) {
     for (const r of entries) {
       if (!r || !r.userId) continue;
       const u = String(r.userId);
+      if (!hydratedUids.has(u)) continue;
       r.profileImageUrl = urlMap.has(u) ? urlMap.get(u) : null;
     }
   }
@@ -4762,6 +4780,8 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       const { entries, byCategory } = await getWeeklyTssRankingBoardEntries(db, startStr, endStr, gender);
+      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
+      await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
         byCategory,
         entries,
@@ -4769,7 +4789,6 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
 
       let out = { success: true, byCategory, startStr, endStr, period: "weekly", durationType: "tss", gender };
       if (uid) {
@@ -4870,6 +4889,8 @@ exports.getPeakPowerRanking = onRequest(
       }
 
       const { entries, byCategory } = await getRolling30dDistanceRankingBoardEntries(db, startStr, endStr, gender);
+      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
+      await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
         byCategory,
         entries,
@@ -4877,7 +4898,6 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      await writeRankingAggregatePayload(db, cacheKey, { byCategory, entries, startStr, endStr });
       const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling30", durationType: "personal_dist", gender };
       if (uid) {
         let current = null; let nextUser = null;
@@ -4945,12 +4965,14 @@ exports.getPeakPowerRanking = onRequest(
         const data = cacheSnap.data();
         const updatedAt = data.updatedAt && (data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt);
         if (updatedAt && nowMs - updatedAt < PEAK_RANKING_CACHE_TTL_MS) {
-          const byCategory = data.byCategory;
+          const byCategory = JSON.parse(JSON.stringify(data.byCategory || {}));
+          const entries = JSON.parse(JSON.stringify(Array.isArray(data.entries) ? data.entries : []));
+          await applyGroupRankingParticipationForViewer(db, byCategory, entries, startStr, endStr, uid);
           const arrAll = byCategory?.Supremo || [];
           const out = {
             success: true,
             byCategory,
-            entries: Array.isArray(data.entries) ? data.entries : [],
+            entries,
             startStr,
             endStr,
             period: "rolling30",
@@ -4978,7 +5000,12 @@ exports.getPeakPowerRanking = onRequest(
         }
       }
 
-      const { entries, byCategory } = await getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, uid);
+      const { entries, byCategory } = await getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, null);
+      const byCategoryAgg = JSON.parse(JSON.stringify(byCategory));
+      const entriesAgg = JSON.parse(JSON.stringify(entries));
+      await applyGroupRankingParticipationForViewer(db, byCategoryAgg, entriesAgg, startStr, endStr, null);
+      await writeRankingAggregatePayload(db, cacheKey, { byCategory: byCategoryAgg, entries: entriesAgg, startStr, endStr });
+      await hydrateRankingBoardProfileImages(db, byCategory, entries);
       await cacheRef.set({
         byCategory,
         entries,
@@ -4986,13 +5013,12 @@ exports.getPeakPowerRanking = onRequest(
         endStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      const byCategoryAgg = JSON.parse(JSON.stringify(byCategory));
-      const entriesAgg = JSON.parse(JSON.stringify(entries));
-      await applyGroupRankingParticipationForViewer(db, byCategoryAgg, entriesAgg, startStr, endStr, null);
-      await writeRankingAggregatePayload(db, cacheKey, { byCategory: byCategoryAgg, entries: entriesAgg, startStr, endStr });
-      const out = { success: true, byCategory, entries, startStr, endStr, period: "rolling30", durationType: "group_dist", gender: "all" };
+      const byCatOut = JSON.parse(JSON.stringify(byCategory));
+      const entriesOut = JSON.parse(JSON.stringify(entries));
+      await applyGroupRankingParticipationForViewer(db, byCatOut, entriesOut, startStr, endStr, uid);
+      const out = { success: true, byCategory: byCatOut, entries: entriesOut, startStr, endStr, period: "rolling30", durationType: "group_dist", gender: "all" };
       if (uid) {
-        const arrAll = byCategory.Supremo || [];
+        const arrAll = byCatOut.Supremo || [];
         const participated = arrAll.filter((e) => e.currentUserParticipated || e.userId === uid);
         let current = null;
         if (participated.length) {
@@ -5157,6 +5183,14 @@ exports.getPeakPowerRanking = onRequest(
     ) {
       cohortAvgHrBpm = await getCohortAvgPeakHrBpm(db, startStr, endStr, durationType, gender);
     }
+    await writeRankingAggregatePayload(db, cacheKey, {
+      byCategory,
+      entries,
+      startStr,
+      endStr,
+      cohortAvgHrBpm: cohortAvgHrBpm != null ? cohortAvgHrBpm : null,
+    });
+    await hydrateRankingBoardProfileImages(db, byCategory, entries);
     await cacheRef.set({
       byCategory,
       entries,
@@ -5164,13 +5198,6 @@ exports.getPeakPowerRanking = onRequest(
       endStr,
       cohortAvgHrBpm: cohortAvgHrBpm != null ? cohortAvgHrBpm : null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    await writeRankingAggregatePayload(db, cacheKey, {
-      byCategory,
-      entries,
-      startStr,
-      endStr,
-      cohortAvgHrBpm: cohortAvgHrBpm != null ? cohortAvgHrBpm : null,
     });
 
     let out = { success: true, byCategory, startStr, endStr, period, durationType, gender, cohortAvgHrBpm };
